@@ -4,6 +4,7 @@ import (
 	"embed"
 	"log"
 
+	"github.com/skipodotdev/skipo/internals/fonts"
 	"github.com/skipodotdev/skipo/internals/terminal"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -24,7 +25,8 @@ func main() {
 		Name:        "skipo",
 		Description: "Personal harness",
 		Services: []application.Service{
-			application.NewService(&terminal.Service{}),
+			application.NewService(terminal.New()),
+			application.NewService(fonts.New()),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

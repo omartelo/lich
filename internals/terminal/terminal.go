@@ -1,5 +1,7 @@
-// Package terminal spawns a PTY-backed shell and bridges its I/O to the frontend
-// over Wails events.
+// Package terminal spawns PTY-backed shell sessions and bridges their I/O to the
+// frontend over Wails events. Sessions are keyed by project ID and run
+// independently of the frontend, so navigating away from a project (or hiding
+// its terminal) never kills its shell.
 package terminal
 
 import (
@@ -13,24 +15,33 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// Event names bridging PTY I/O to the frontend.
+// Event name prefixes. The concrete event carries the session ID as a suffix
+// (e.g. "terminal:data:home") so each frontend terminal subscribes only to its
+// own stream instead of filtering a global broadcast.
 const (
-	// DataEvent carries base64-encoded PTY output. Output is base64-encoded
+	// dataEventPrefix carries base64-encoded PTY output. Output is base64-encoded
 	// because raw PTY bytes may split a multi-byte UTF-8 sequence mid-read, which
 	// the JSON event bridge would otherwise corrupt.
-	DataEvent = "terminal:data"
-	// ExitEvent is emitted once when the shell process exits.
-	ExitEvent = "terminal:exit"
+	dataEventPrefix = "terminal:data:"
+	// exitEventPrefix is emitted once when a session's shell process exits.
+	exitEventPrefix = "terminal:exit:"
 )
 
-// Service spawns a PTY-backed shell and bridges its I/O to the frontend.
-//
-// ponytail: single session per app window. Add a map[id]*session keyed by a
-// terminal ID if concurrent terminals (tabs/splits) are needed later.
-type Service struct {
-	mu   sync.Mutex
+// session is a single running PTY-backed shell.
+type session struct {
 	ptmx *os.File
 	cmd  *exec.Cmd
+}
+
+// Service manages PTY-backed shell sessions keyed by project ID.
+type Service struct {
+	mu       sync.Mutex
+	sessions map[string]*session
+}
+
+// New returns a ready-to-use terminal service.
+func New() *Service {
+	return &Service{sessions: make(map[string]*session)}
 }
 
 // defaultShell returns the user's login shell from $SHELL, falling back to a
@@ -42,41 +53,49 @@ func defaultShell() string {
 	return "/bin/sh"
 }
 
-// Start spawns the user's shell attached to a new PTY sized to cols x rows and
-// begins streaming its output to the frontend. Calling Start while a session is
+// Start spawns the user's shell for project id, attached to a new PTY sized to
+// cols x rows and rooted at cwd, then streams its output to the frontend. An
+// empty cwd defaults to the user's home directory. Starting a project that is
 // already running is a no-op.
-func (s *Service) Start(cols, rows int) error {
+func (s *Service) Start(id, cwd string, cols, rows int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.ptmx != nil {
+	if _, running := s.sessions[id]; running {
 		return nil
 	}
 
+	if cwd == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("failed to resolve home directory: %w", err)
+		}
+		cwd = home
+	}
+
 	cmd := exec.Command(defaultShell())
+	cmd.Dir = cwd
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
 
 	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: uint16(rows), Cols: uint16(cols)})
 	if err != nil {
-		return fmt.Errorf("failed to start pty: %w", err)
+		return fmt.Errorf("failed to start pty for %q: %w", id, err)
 	}
 
-	s.ptmx = ptmx
-	s.cmd = cmd
-
-	go s.stream(ptmx, cmd)
+	s.sessions[id] = &session{ptmx: ptmx, cmd: cmd}
+	go s.stream(id, ptmx, cmd)
 	return nil
 }
 
 // stream copies PTY output to the frontend until the PTY is closed, then reaps
-// the process, clears the session and emits the exit event.
-func (s *Service) stream(ptmx *os.File, cmd *exec.Cmd) {
+// the process, drops the session and emits its exit event.
+func (s *Service) stream(id string, ptmx *os.File, cmd *exec.Cmd) {
 	buf := make([]byte, 32*1024)
 	for {
 		n, err := ptmx.Read(buf)
 		if n > 0 {
 			encoded := base64.StdEncoding.EncodeToString(buf[:n])
-			application.Get().Event.Emit(DataEvent, encoded)
+			application.Get().Event.Emit(dataEventPrefix+id, encoded)
 		}
 		if err != nil {
 			break
@@ -85,20 +104,17 @@ func (s *Service) stream(ptmx *os.File, cmd *exec.Cmd) {
 	_ = cmd.Wait()
 
 	s.mu.Lock()
-	if s.ptmx == ptmx {
-		s.ptmx = nil
-		s.cmd = nil
+	if current, ok := s.sessions[id]; ok && current.ptmx == ptmx {
+		delete(s.sessions, id)
 	}
 	s.mu.Unlock()
 
-	application.Get().Event.Emit(ExitEvent)
+	application.Get().Event.Emit(exitEventPrefix + id)
 }
 
-// Write forwards keyboard input from the frontend to the PTY.
-func (s *Service) Write(data string) error {
-	s.mu.Lock()
-	ptmx := s.ptmx
-	s.mu.Unlock()
+// Write forwards keyboard input from the frontend to a project's PTY.
+func (s *Service) Write(id, data string) error {
+	ptmx := s.ptmxOf(id)
 	if ptmx == nil {
 		return nil
 	}
@@ -106,29 +122,42 @@ func (s *Service) Write(data string) error {
 	return err
 }
 
-// Resize updates the PTY window size when the frontend terminal is resized.
-func (s *Service) Resize(cols, rows int) error {
-	s.mu.Lock()
-	ptmx := s.ptmx
-	s.mu.Unlock()
+// Resize updates a project's PTY window size. The frontend only calls this for
+// the visible terminal; a hidden terminal is resized on the next time it is
+// shown.
+func (s *Service) Resize(id string, cols, rows int) error {
+	ptmx := s.ptmxOf(id)
 	if ptmx == nil {
 		return nil
 	}
 	return pty.Setsize(ptmx, &pty.Winsize{Rows: uint16(rows), Cols: uint16(cols)})
 }
 
-// Close terminates the running shell session, if any.
-func (s *Service) Close() error {
+// Close terminates a project's shell session, if any.
+func (s *Service) Close(id string) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.ptmx == nil {
+	sess, ok := s.sessions[id]
+	if ok {
+		delete(s.sessions, id)
+	}
+	s.mu.Unlock()
+
+	if !ok {
 		return nil
 	}
-	err := s.ptmx.Close()
-	s.ptmx = nil
-	if s.cmd != nil && s.cmd.Process != nil {
-		_ = s.cmd.Process.Kill()
+	err := sess.ptmx.Close()
+	if sess.cmd.Process != nil {
+		_ = sess.cmd.Process.Kill()
 	}
-	s.cmd = nil
 	return err
+}
+
+// ptmxOf returns the PTY for a session, or nil if it is not running.
+func (s *Service) ptmxOf(id string) *os.File {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if sess, ok := s.sessions[id]; ok {
+		return sess.ptmx
+	}
+	return nil
 }

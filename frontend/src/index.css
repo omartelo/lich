@@ -3,6 +3,24 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
 
+/* FiraCode Nerd Font Mono — bundled so the terminal renders powerline/icon
+   glyphs. The canvas renderer only uses fonts already loaded in the document,
+   so the terminal awaits document.fonts before opening. */
+@font-face {
+  font-family: "FiraCode Nerd Font Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("./assets/fonts/FiraCodeNerdFontMono-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "FiraCode Nerd Font Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url("./assets/fonts/FiraCodeNerdFontMono-Bold.woff2") format("woff2");
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
