@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
 import type { ReactNode } from "react"
-import { useNavigate } from "react-router-dom"
+import { useMatch, useNavigate } from "react-router-dom"
 import {
   Project,
   Service as ProjectService,
@@ -77,6 +77,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const sessionsRef = useRef(sessions)
   sessionsRef.current = sessions
   const navigate = useNavigate()
+  const activeProjectId = useMatch("/projects/:projectId")?.params.projectId
 
   const applyLoaded = useCallback((loaded: StoreProject[]) => {
     setProjects(loaded.map(toProject))
@@ -109,12 +110,19 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
   const closeProject = useCallback(
     (id: string) => {
+      const index = projects.findIndex((project) => project.id === id)
       setProjects((prev) => prev.filter((project) => project.id !== id))
       setSessions((prev) => removeProject(prev, id))
       void Store.CloseProject(id)
-      navigate("/")
+      // Closing a background tab leaves focus untouched; closing the active one
+      // falls back to the previous tab (then the next, then Home when none left).
+      if (activeProjectId !== id) {
+        return
+      }
+      const neighbor = projects[index - 1] ?? projects[index + 1]
+      navigate(neighbor ? `/projects/${neighbor.id}` : "/")
     },
-    [navigate],
+    [projects, activeProjectId, navigate],
   )
 
   const newSession = useCallback((projectId: string) => {
