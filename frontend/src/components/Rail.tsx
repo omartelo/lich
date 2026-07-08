@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom"
-import { House, Plus, Settings, Trash2 } from "lucide-react"
+import { Plus, Settings, Trash2 } from "lucide-react"
 import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { useProjects } from "@/lib/projects"
@@ -75,12 +75,6 @@ export function Rail() {
 
   return (
     <nav className="flex h-full w-[68px] flex-col items-center gap-2 border-r border-border bg-sidebar py-3">
-      <RailLink to="/" label="Home">
-        <House className="size-5" />
-      </RailLink>
-
-      <div className="my-1 h-px w-8 bg-border" />
-
       <div className="flex flex-1 flex-col items-center gap-2 overflow-y-auto">
         {projects.map((project) => (
           <ContextMenu key={project.id}>

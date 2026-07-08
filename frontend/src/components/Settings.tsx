@@ -1,100 +1,35 @@
-import { useEffect, useMemo, useState } from "react"
-import type { ReactNode } from "react"
+import { useState } from "react"
+import type { ComponentType } from "react"
 import { Search } from "lucide-react"
-import { Service as FontService } from "../../bindings/github.com/skipodotdev/skipo/internals/fonts"
-import { DEFAULT_FONT, useSettings } from "@/lib/settings"
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { TerminalSettings } from "@/components/settings/TerminalSettings"
+import { AppearanceSettings } from "@/components/settings/AppearanceSettings"
 import { cn } from "@/lib/utils"
 
-const CATEGORIES = [{ id: "terminal", label: "Terminal" }] as const
-type CategoryId = (typeof CATEGORIES)[number]["id"]
-
-// SettingRow is a single setting: label (and optional description) on the left,
-// the control on the right, separated from the next row by a hairline divider.
-function SettingRow({
-  label,
-  description,
-  children,
-}: {
+// SECTIONS is the settings registry: adding a category is one new file under
+// components/settings/ plus one entry here — the nav and the content pane both
+// derive from this list.
+const SECTIONS = [
+  { id: "appearance", label: "Appearance", Component: AppearanceSettings },
+  { id: "terminal", label: "Terminal", Component: TerminalSettings },
+] as const satisfies ReadonlyArray<{
+  id: string
   label: string
-  description?: string
-  children: ReactNode
-}) {
-  return (
-    <div className="flex items-center justify-between gap-6 border-b border-border py-4">
-      <div className="flex flex-col gap-0.5">
-        <span className="text-sm text-foreground">{label}</span>
-        {description && (
-          <span className="text-xs text-muted-foreground">{description}</span>
-        )}
-      </div>
-      <div className="shrink-0">{children}</div>
-    </div>
-  )
-}
+  Component: ComponentType
+}>
 
-function TerminalSettings() {
-  const { font, setFont } = useSettings()
-  const [families, setFamilies] = useState<string[]>([])
-
-  useEffect(() => {
-    void FontService.List()
-      .then((list) => setFamilies(list ?? []))
-      .catch(() => setFamilies([]))
-  }, [])
-
-  // Always offer the bundled default and the current selection, even if
-  // fontconfig does not list them (the bundled font is not OS-installed).
-  const options = useMemo(
-    () => Array.from(new Set([DEFAULT_FONT, font, ...families])),
-    [families, font],
-  )
-
-  return (
-    <div>
-      <h1 className="mb-6 text-2xl font-semibold text-foreground">Terminal</h1>
-      <div className="border-t border-border">
-        <SettingRow
-          label="Font"
-          description="Font family used to render the terminal."
-        >
-          <Select value={font} onValueChange={(value) => value && setFont(value)}>
-            <SelectTrigger className="w-64">
-              <SelectValue placeholder="Select a font" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {options.map((family) => (
-                  <SelectItem key={family} value={family}>
-                    {family}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </SettingRow>
-      </div>
-    </div>
-  )
-}
+type SectionId = (typeof SECTIONS)[number]["id"]
 
 // Settings is a full screen (not a modal): it fills the main area and sits on
 // top of the persistent terminals, which stay mounted and running behind it. A
 // category nav on the left mirrors the terminal Rail; content is on the right.
 export function Settings() {
-  const [active, setActive] = useState<CategoryId>("terminal")
+  const [active, setActive] = useState<SectionId>("terminal")
   const [query, setQuery] = useState("")
 
-  const filtered = CATEGORIES.filter((category) =>
-    category.label.toLowerCase().includes(query.toLowerCase()),
+  const filtered = SECTIONS.filter((section) =>
+    section.label.toLowerCase().includes(query.toLowerCase()),
   )
+  const ActiveSection = SECTIONS.find((section) => section.id === active)?.Component
 
   return (
     <div className="absolute inset-0 z-10 flex bg-background">
@@ -112,17 +47,17 @@ export function Settings() {
           </div>
         </div>
         <nav className="flex flex-col gap-0.5 px-2 pb-3">
-          {filtered.map((category) => (
+          {filtered.map((section) => (
             <button
-              key={category.id}
+              key={section.id}
               type="button"
-              onClick={() => setActive(category.id)}
+              onClick={() => setActive(section.id)}
               className={cn(
                 "rounded-md px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
-                active === category.id && "bg-accent text-accent-foreground",
+                active === section.id && "bg-accent text-accent-foreground",
               )}
             >
-              {category.label}
+              {section.label}
             </button>
           ))}
         </nav>
@@ -130,7 +65,7 @@ export function Settings() {
 
       <div className="flex-1 overflow-auto">
         <div className="mx-auto max-w-3xl px-8 py-8">
-          {active === "terminal" && <TerminalSettings />}
+          {ActiveSection && <ActiveSection />}
         </div>
       </div>
     </div>
