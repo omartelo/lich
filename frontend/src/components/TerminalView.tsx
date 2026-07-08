@@ -3,6 +3,7 @@ import { init, Terminal as Ghostty, FitAddon } from "ghostty-web"
 import { Events } from "@wailsio/runtime"
 import { Service } from "../../bindings/github.com/skipodotdev/skipo/internals/terminal"
 import { patchBlockGlyphs } from "@/lib/block-glyphs"
+import { patchFontMetrics } from "@/lib/font-metrics"
 import { useSettings } from "@/lib/settings"
 import type { ResolvedTheme } from "@/lib/settings"
 
@@ -139,6 +140,7 @@ export function TerminalView({ sessionId, projectId, cwd, visible }: TerminalVie
       term.open(container)
       if (term.renderer) {
         patchBlockGlyphs(term.renderer)
+        patchFontMetrics(term.renderer)
       }
       fit.fit()
       termRef.current = term
