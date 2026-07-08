@@ -3,6 +3,7 @@ import { init, Terminal as Ghostty, FitAddon } from "ghostty-web"
 import { Events } from "@wailsio/runtime"
 import { Service } from "../../bindings/github.com/skipodotdev/skipo/internals/terminal"
 import { useSettings } from "@/lib/settings"
+import type { ResolvedTheme } from "@/lib/settings"
 
 // Event name prefixes mirror the backend (internals/terminal); the concrete
 // event carries the project ID as a suffix.
@@ -10,6 +11,13 @@ const DATA_EVENT_PREFIX = "terminal:data:"
 const EXIT_EVENT_PREFIX = "terminal:exit:"
 
 const FONT_SIZE = 14
+
+// Terminal color schemes. Light keeps a high-contrast foreground so CLI output
+// stays legible against the pale background.
+const TERMINAL_COLORS: Record<ResolvedTheme, { background: string; foreground: string }> = {
+  dark: { background: "#06070f", foreground: "#e5e7eb" },
+  light: { background: "#ffffff", foreground: "#1f2328" },
+}
 
 // init loads the WASM module once and is shared across every terminal instance.
 let initPromise: Promise<void> | null = null
@@ -50,15 +58,17 @@ interface TerminalViewProps {
 }
 
 export function TerminalView({ projectId, cwd, visible }: TerminalViewProps) {
-  const { font } = useSettings()
+  const { font, resolvedTerminalTheme } = useSettings()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const termRef = useRef<Ghostty | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
   // Latest values for use inside long-lived async callbacks / listeners.
   const visibleRef = useRef(visible)
   const fontRef = useRef(font)
+  const themeRef = useRef(resolvedTerminalTheme)
   visibleRef.current = visible
   fontRef.current = font
+  themeRef.current = resolvedTerminalTheme
 
   // Create the terminal and its PTY session once per project. The session runs
   // in the background regardless of visibility and is only torn down when the
@@ -92,7 +102,7 @@ export function TerminalView({ projectId, cwd, visible }: TerminalViewProps) {
         fontFamily: `"${fontRef.current}", monospace`,
         cursorBlink: true,
         scrollback: 5000,
-        theme: { background: "#06070f", foreground: "#e5e7eb" },
+        theme: TERMINAL_COLORS[themeRef.current],
       })
       const fit = new FitAddon()
       term.loadAddon(fit)
@@ -155,6 +165,11 @@ export function TerminalView({ projectId, cwd, visible }: TerminalViewProps) {
     })()
   }, [font, projectId])
 
+  // Apply a terminal theme change live to the running terminal.
+  useEffect(() => {
+    termRef.current?.renderer?.setTheme(TERMINAL_COLORS[resolvedTerminalTheme])
+  }, [resolvedTerminalTheme])
+
   // On becoming visible, refit (window may have resized while hidden), sync the
   // PTY size and focus.
   useEffect(() => {
@@ -170,5 +185,5 @@ export function TerminalView({ projectId, cwd, visible }: TerminalViewProps) {
     term.focus()
   }, [visible, projectId])
 
-  return <div ref={containerRef} className="h-full w-full" />
+  return <div ref={containerRef} data-terminal className="h-full w-full" />
 }

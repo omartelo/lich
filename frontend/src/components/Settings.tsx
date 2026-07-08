@@ -29,7 +29,8 @@ export function Settings() {
   const filtered = SECTIONS.filter((section) =>
     section.label.toLowerCase().includes(query.toLowerCase()),
   )
-  const ActiveSection = SECTIONS.find((section) => section.id === active)?.Component
+  const activeSection = SECTIONS.find((section) => section.id === active)
+  const ActiveComponent = activeSection?.Component
 
   return (
     <div className="absolute inset-0 z-10 flex bg-background">
@@ -65,7 +66,16 @@ export function Settings() {
 
       <div className="flex-1 overflow-auto">
         <div className="mx-auto max-w-3xl px-8 py-8">
-          {ActiveSection && <ActiveSection />}
+          {activeSection && ActiveComponent && (
+            <>
+              <h1 className="mb-4 text-2xl font-semibold text-foreground">
+                {activeSection.label}
+              </h1>
+              <div className="divide-y divide-border">
+                <ActiveComponent />
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

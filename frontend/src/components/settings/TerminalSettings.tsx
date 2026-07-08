@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { SettingRow } from "./SettingRow"
+import { SettingBlock } from "./SettingBlock"
 
 export function TerminalSettings() {
   const { font, setFont } = useSettings()
@@ -29,29 +29,24 @@ export function TerminalSettings() {
   )
 
   return (
-    <div>
-      <h1 className="mb-6 text-2xl font-semibold text-foreground">Terminal</h1>
-      <div className="border-t border-border">
-        <SettingRow
-          label="Font"
-          description="Font family used to render the terminal."
-        >
-          <Select value={font} onValueChange={(value) => value && setFont(value)}>
-            <SelectTrigger className="w-64">
-              <SelectValue placeholder="Select a font" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {options.map((family) => (
-                  <SelectItem key={family} value={family}>
-                    {family}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </SettingRow>
-      </div>
-    </div>
+    <SettingBlock
+      title="Font"
+      description="Font family used to render the terminal."
+    >
+      <Select value={font} onValueChange={(value) => value && setFont(value)}>
+        <SelectTrigger className="w-64">
+          <SelectValue placeholder="Select a font" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {options.map((family) => (
+              <SelectItem key={family} value={family}>
+                {family}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </SettingBlock>
   )
 }
