@@ -1,6 +1,7 @@
 // Package project opens project directories through the OS file picker. Project
-// metadata (list, active) lives in the frontend; this service only turns a
-// picked directory into a stable identity the terminal sessions can key on.
+// metadata (list, active, sessions) lives in the frontend; this service only
+// turns a picked directory into a stable identity the frontend can group its
+// terminal sessions under.
 package project
 
 import (

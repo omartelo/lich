@@ -3,11 +3,13 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "pnpm@11.3.0",
   "scripts": {
     "dev": "vite",
     "build:dev": "tsc && vite build --minify false --mode development",
     "build": "tsc && vite build --mode production",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "bun test"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
