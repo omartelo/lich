@@ -1,10 +1,6 @@
 import { useMatch } from "react-router-dom"
 import { TerminalView } from "@/components/TerminalView"
-
-// Open projects. Fixed to a single "home" project (PTY in the user's home dir)
-// until the multi-project rail lands; every terminal here stays mounted so its
-// PTY survives navigation.
-export const PROJECTS = [{ id: "home", label: "home" }] as const
+import { useProjects } from "@/lib/projects"
 
 // TerminalHost keeps one persistent terminal per open project stacked in the
 // same area. The router only decides which one is visible — terminals are never
@@ -12,12 +8,13 @@ export const PROJECTS = [{ id: "home", label: "home" }] as const
 // use visibility:hidden (not display:none) so they retain layout size and fit()
 // stays correct.
 export function TerminalHost() {
+  const { projects } = useProjects()
   const match = useMatch("/projects/:id")
   const activeId = match?.params.id ?? null
 
   return (
     <>
-      {PROJECTS.map((project) => {
+      {projects.map((project) => {
         const visible = project.id === activeId
         return (
           <div
@@ -26,7 +23,11 @@ export function TerminalHost() {
             style={{ visibility: visible ? "visible" : "hidden" }}
             aria-hidden={!visible}
           >
-            <TerminalView projectId={project.id} visible={visible} />
+            <TerminalView
+              projectId={project.id}
+              cwd={project.path}
+              visible={visible}
+            />
           </div>
         )
       })}

@@ -45,10 +45,11 @@ function decodeBase64(data: string): Uint8Array {
 
 interface TerminalViewProps {
   projectId: string
+  cwd: string
   visible: boolean
 }
 
-export function TerminalView({ projectId, visible }: TerminalViewProps) {
+export function TerminalView({ projectId, cwd, visible }: TerminalViewProps) {
   const { font } = useSettings()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const termRef = useRef<Ghostty | null>(null)
@@ -119,7 +120,7 @@ export function TerminalView({ projectId, visible }: TerminalViewProps) {
       window.addEventListener("resize", onWindowResize)
       cleanups.push(() => window.removeEventListener("resize", onWindowResize))
 
-      await Service.Start(projectId, "", term.cols, term.rows)
+      await Service.Start(projectId, cwd, term.cols, term.rows)
       if (visibleRef.current) {
         term.focus()
       }
@@ -135,7 +136,7 @@ export function TerminalView({ projectId, visible }: TerminalViewProps) {
       termRef.current = null
       fitRef.current = null
     }
-  }, [projectId])
+  }, [projectId, cwd])
 
   // Apply a font change live to the running terminal.
   useEffect(() => {

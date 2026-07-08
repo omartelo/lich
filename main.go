@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/skipodotdev/skipo/internals/fonts"
+	"github.com/skipodotdev/skipo/internals/project"
 	"github.com/skipodotdev/skipo/internals/terminal"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -27,6 +28,7 @@ func main() {
 		Services: []application.Service{
 			application.NewService(terminal.New()),
 			application.NewService(fonts.New()),
+			application.NewService(project.New()),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
