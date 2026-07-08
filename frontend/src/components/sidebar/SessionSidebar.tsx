@@ -34,8 +34,14 @@ function readWidth(): number {
 // Resizing only changes this element's width; the terminal keeps its PTY in sync
 // on its own via a ResizeObserver, so the sidebar does not need to know about it.
 export function SessionSidebar() {
-  const { projects, sessions, newSession, closeSession, activateSession } =
-    useProjects()
+  const {
+    projects,
+    sessions,
+    newSession,
+    closeSession,
+    activateSession,
+    renameSession,
+  } = useProjects()
   const match = useMatch("/projects/:projectId")
   const projectId = match?.params.projectId
   const path = projects.find((p) => p.id === projectId)?.path ?? ""
@@ -107,6 +113,7 @@ export function SessionSidebar() {
             active={session.id === activeId}
             onSelect={() => activateSession(projectId, session.id)}
             onClose={() => closeSession(projectId, session.id)}
+            onRename={(label) => renameSession(projectId, session.id, label)}
           />
         ))}
       </div>

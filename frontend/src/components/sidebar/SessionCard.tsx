@@ -1,9 +1,16 @@
 import {useEffect, useRef, useState} from "react"
-import {GitBranch, X} from "lucide-react"
+import type {KeyboardEvent} from "react"
+import {GitBranch, Pencil, X} from "lucide-react"
 import {cn} from "@/lib/utils"
 import {displayPath} from "@/lib/paths"
 import {type Session} from "@/lib/sessions"
 import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu"
 
 interface SessionCardProps {
   session: Session
@@ -12,6 +19,7 @@ interface SessionCardProps {
   active: boolean
   onSelect: () => void
   onClose: () => void
+  onRename: (label: string) => void
 }
 
 // SessionCard is one session entry: a card showing the session label, the
@@ -24,9 +32,28 @@ export function SessionCard({
                               active,
                               onSelect,
                               onClose,
+                              onRename,
                             }: SessionCardProps) {
   const pathRef = useRef<HTMLSpanElement>(null)
   const [pathOverflow, setPathOverflow] = useState(false)
+  const [editing, setEditing] = useState(false)
+
+  // Commit the edited label: keep the old one if it is blank or unchanged.
+  const commit = (value: string) => {
+    setEditing(false)
+    const label = value.trim()
+    if (label && label !== session.label) {
+      onRename(label)
+    }
+  }
+
+  const onEditKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      commit(event.currentTarget.value)
+    } else if (event.key === "Escape") {
+      setEditing(false)
+    }
+  }
 
   // Fade the left (path start) only when the tail can't fit, so a path that
   // fits keeps its "~" crisp — matching how terminals hint at hidden prefix.
@@ -41,24 +68,41 @@ export function SessionCard({
   }, [path])
 
   return (
+    <ContextMenu>
     <Tooltip>
-      <TooltipTrigger
+      <ContextMenuTrigger
         render={
-          <button
-            type="button"
-            onClick={onSelect}
-            className={cn(
-              "group relative flex w-full flex-col items-start gap-0.5 rounded-lg border border-border/60 bg-card px-3 py-3 text-left transition-colors hover:bg-accent/60",
-              active &&
-              "border-accent-foreground/20 bg-accent text-accent-foreground",
-            )}
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                onClick={onSelect}
+                className={cn(
+                  "group relative flex w-full flex-col items-start gap-0.5 rounded-lg border border-border/60 bg-card px-3 py-3 text-left transition-colors hover:bg-accent/60",
+                  active &&
+                  "border-accent-foreground/20 bg-accent text-accent-foreground",
+                )}
+              />
+            }
           />
         }
       >
         <div className="flex w-full min-w-0 flex-col space-y-2">
-          <span className="w-full truncate pr-5 text-sm font-medium text-foreground">
-            {session.label}
-          </span>
+          {editing ? (
+            <input
+              autoFocus
+              defaultValue={session.label}
+              onFocus={(event) => event.currentTarget.select()}
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={onEditKeyDown}
+              onBlur={(event) => commit(event.currentTarget.value)}
+              className="w-full rounded-sm bg-transparent pr-5 text-sm font-medium text-foreground outline-none ring-1 ring-accent-foreground/30"
+            />
+          ) : (
+            <span className="w-full truncate pr-5 text-sm font-medium text-foreground">
+              {session.label}
+            </span>
+          )}
           {/* rtl anchors the tail (project folder) to the right so overflow is
               clipped on the left; the leading LRM keeps "~/" in logical order
               instead of letting bidi push it to the end. */}
@@ -91,8 +135,19 @@ export function SessionCard({
         >
           <X className="size-3"/>
         </span>
-      </TooltipTrigger>
+      </ContextMenuTrigger>
       <TooltipContent>{path}</TooltipContent>
     </Tooltip>
+      <ContextMenuContent>
+        <ContextMenuItem onClick={() => setEditing(true)}>
+          <Pencil/>
+          Rename
+        </ContextMenuItem>
+        <ContextMenuItem variant="destructive" onClick={onClose}>
+          <X/>
+          Close session
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }
