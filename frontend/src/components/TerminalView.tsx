@@ -85,15 +85,20 @@ export function TerminalView({ sessionId, projectId, cwd, visible }: TerminalVie
     let disposed = false
     const cleanups: Array<() => void> = []
 
-    // Refit the grid whenever the container changes size — window resize, sidebar
-    // drag, zoom. Guard on integer dimensions: fit() nudges the canvas, which can
-    // make the observer re-fire at sub-pixel deltas and loop into a flicker.
-    // Ignoring sub-1px changes breaks that loop. Coalesced to one refit per frame.
+    // Refit the grid when the container settles at a new size — window resize,
+    // sidebar drag, zoom. fit() is expensive (full WASM buffer + canvas realloc
+    // + redraw, for every mounted terminal) and each PTY resize makes the running
+    // TUI repaint, so refitting mid-drag starves pointer events and the drag lags
+    // behind the cursor. A trailing debounce keeps drags fluid: no terminal work
+    // while the size is still changing, one refit once it stops.
+    // Guard on integer dimensions: fit() nudges the canvas, which can make the
+    // observer re-fire at sub-pixel deltas and loop into a flicker.
     // Only the visible terminal pushes its new size to the PTY; hidden ones refit
     // but sync their PTY when shown.
+    const REFIT_DEBOUNCE_MS = 100
     let lastWidth = 0
     let lastHeight = 0
-    let refitFrame = 0
+    let refitTimer = 0
     const scheduleRefit = (entries: ResizeObserverEntry[]) => {
       const rect = entries[0]?.contentRect
       if (rect) {
@@ -105,11 +110,8 @@ export function TerminalView({ sessionId, projectId, cwd, visible }: TerminalVie
         lastWidth = width
         lastHeight = height
       }
-      if (refitFrame) {
-        return
-      }
-      refitFrame = requestAnimationFrame(() => {
-        refitFrame = 0
+      window.clearTimeout(refitTimer)
+      refitTimer = window.setTimeout(() => {
         const term = termRef.current
         if (!term) {
           return
@@ -118,7 +120,7 @@ export function TerminalView({ sessionId, projectId, cwd, visible }: TerminalVie
         if (visibleRef.current) {
           void Service.Resize(sessionId, term.cols, term.rows)
         }
-      })
+      }, REFIT_DEBOUNCE_MS)
     }
 
     void (async () => {
@@ -165,9 +167,7 @@ export function TerminalView({ sessionId, projectId, cwd, visible }: TerminalVie
       const resizeObserver = new ResizeObserver(scheduleRefit)
       resizeObserver.observe(container)
       cleanups.push(() => {
-        if (refitFrame) {
-          cancelAnimationFrame(refitFrame)
-        }
+        window.clearTimeout(refitTimer)
         resizeObserver.disconnect()
       })
 
