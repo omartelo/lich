@@ -3,11 +3,13 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "pnpm@11.3.0",
   "scripts": {
     "dev": "vite",
     "build:dev": "tsc && vite build --minify false --mode development",
     "build": "tsc && vite build --mode production",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -32,6 +34,7 @@
     "@vitejs/plugin-react": "^6.0.0",
     "tailwindcss": "^4.3.2",
     "typescript": "^5.2.2",
-    "vite": "^8.0.5"
+    "vite": "^8.0.5",
+    "vitest": "^4.1.10"
   }
 }

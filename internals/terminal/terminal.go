@@ -1,7 +1,7 @@
 // Package terminal spawns PTY-backed shell sessions and bridges their I/O to the
-// frontend over Wails events. Sessions are keyed by project ID and run
+// frontend over Wails events. Sessions are keyed by an opaque session ID and run
 // independently of the frontend, so navigating away from a project (or hiding
-// its terminal) never kills its shell.
+// its terminal) never kills its shell. A project may own several sessions.
 package terminal
 
 import (
@@ -33,7 +33,7 @@ type session struct {
 	cmd  *exec.Cmd
 }
 
-// Service manages PTY-backed shell sessions keyed by project ID.
+// Service manages PTY-backed shell sessions keyed by session ID.
 type Service struct {
 	mu       sync.Mutex
 	sessions map[string]*session
@@ -53,9 +53,9 @@ func defaultShell() string {
 	return "/bin/sh"
 }
 
-// Start spawns the user's shell for project id, attached to a new PTY sized to
+// Start spawns the user's shell for session id, attached to a new PTY sized to
 // cols x rows and rooted at cwd, then streams its output to the frontend. An
-// empty cwd defaults to the user's home directory. Starting a project that is
+// empty cwd defaults to the user's home directory. Starting a session that is
 // already running is a no-op.
 func (s *Service) Start(id, cwd string, cols, rows int) error {
 	s.mu.Lock()
@@ -112,7 +112,7 @@ func (s *Service) stream(id string, ptmx *os.File, cmd *exec.Cmd) {
 	application.Get().Event.Emit(exitEventPrefix + id)
 }
 
-// Write forwards keyboard input from the frontend to a project's PTY.
+// Write forwards keyboard input from the frontend to a session's PTY.
 func (s *Service) Write(id, data string) error {
 	ptmx := s.ptmxOf(id)
 	if ptmx == nil {
@@ -122,7 +122,7 @@ func (s *Service) Write(id, data string) error {
 	return err
 }
 
-// Resize updates a project's PTY window size. The frontend only calls this for
+// Resize updates a session's PTY window size. The frontend only calls this for
 // the visible terminal; a hidden terminal is resized on the next time it is
 // shown.
 func (s *Service) Resize(id string, cols, rows int) error {
@@ -133,7 +133,7 @@ func (s *Service) Resize(id string, cols, rows int) error {
 	return pty.Setsize(ptmx, &pty.Winsize{Rows: uint16(rows), Cols: uint16(cols)})
 }
 
-// Close terminates a project's shell session, if any.
+// Close terminates a session's shell, if any.
 func (s *Service) Close(id string) error {
 	s.mu.Lock()
 	sess, ok := s.sessions[id]

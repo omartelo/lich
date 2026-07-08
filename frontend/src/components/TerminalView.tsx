@@ -6,7 +6,7 @@ import { useSettings } from "@/lib/settings"
 import type { ResolvedTheme } from "@/lib/settings"
 
 // Event name prefixes mirror the backend (internals/terminal); the concrete
-// event carries the project ID as a suffix.
+// event carries the session ID as a suffix.
 const DATA_EVENT_PREFIX = "terminal:data:"
 const EXIT_EVENT_PREFIX = "terminal:exit:"
 
@@ -52,12 +52,12 @@ function decodeBase64(data: string): Uint8Array {
 }
 
 interface TerminalViewProps {
-  projectId: string
+  sessionId: string
   cwd: string
   visible: boolean
 }
 
-export function TerminalView({ projectId, cwd, visible }: TerminalViewProps) {
+export function TerminalView({ sessionId, cwd, visible }: TerminalViewProps) {
   const { font, resolvedTerminalTheme } = useSettings()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const termRef = useRef<Ghostty | null>(null)
@@ -70,9 +70,9 @@ export function TerminalView({ projectId, cwd, visible }: TerminalViewProps) {
   fontRef.current = font
   themeRef.current = resolvedTerminalTheme
 
-  // Create the terminal and its PTY session once per project. The session runs
-  // in the background regardless of visibility and is only torn down when the
-  // project is closed (this component unmounts) — never on navigation.
+  // Create the terminal and its PTY session once per session id. The session
+  // runs in the background regardless of visibility and is only torn down when
+  // it is closed (this component unmounts) — never on navigation.
   useEffect(() => {
     const container = containerRef.current
     if (!container) {
@@ -82,12 +82,40 @@ export function TerminalView({ projectId, cwd, visible }: TerminalViewProps) {
     let disposed = false
     const cleanups: Array<() => void> = []
 
-    const onWindowResize = () => {
-      const term = termRef.current
-      fitRef.current?.fit()
-      if (term && visibleRef.current) {
-        void Service.Resize(projectId, term.cols, term.rows)
+    // Refit the grid whenever the container changes size — window resize, sidebar
+    // drag, zoom. Guard on integer dimensions: fit() nudges the canvas, which can
+    // make the observer re-fire at sub-pixel deltas and loop into a flicker.
+    // Ignoring sub-1px changes breaks that loop. Coalesced to one refit per frame.
+    // Only the visible terminal pushes its new size to the PTY; hidden ones refit
+    // but sync their PTY when shown.
+    let lastWidth = 0
+    let lastHeight = 0
+    let refitFrame = 0
+    const scheduleRefit = (entries: ResizeObserverEntry[]) => {
+      const rect = entries[0]?.contentRect
+      if (rect) {
+        const width = Math.round(rect.width)
+        const height = Math.round(rect.height)
+        if (width === lastWidth && height === lastHeight) {
+          return
+        }
+        lastWidth = width
+        lastHeight = height
       }
+      if (refitFrame) {
+        return
+      }
+      refitFrame = requestAnimationFrame(() => {
+        refitFrame = 0
+        const term = termRef.current
+        if (!term) {
+          return
+        }
+        fitRef.current?.fit()
+        if (visibleRef.current) {
+          void Service.Resize(sessionId, term.cols, term.rows)
+        }
+      })
     }
 
     void (async () => {
@@ -111,26 +139,32 @@ export function TerminalView({ projectId, cwd, visible }: TerminalViewProps) {
       termRef.current = term
       fitRef.current = fit
 
-      const dataInput = term.onData((data) => Service.Write(projectId, data))
+      const dataInput = term.onData((data) => Service.Write(sessionId, data))
       const resizeInput = term.onResize(({ cols, rows }) => {
         if (visibleRef.current) {
-          void Service.Resize(projectId, cols, rows)
+          void Service.Resize(sessionId, cols, rows)
         }
       })
       cleanups.push(() => dataInput.dispose(), () => resizeInput.dispose())
 
-      const offData = Events.On(DATA_EVENT_PREFIX + projectId, (event) => {
+      const offData = Events.On(DATA_EVENT_PREFIX + sessionId, (event) => {
         term.write(decodeBase64(event.data as string))
       })
-      const offExit = Events.On(EXIT_EVENT_PREFIX + projectId, () => {
+      const offExit = Events.On(EXIT_EVENT_PREFIX + sessionId, () => {
         term.write("\r\n[process exited]\r\n")
       })
       cleanups.push(offData, offExit)
 
-      window.addEventListener("resize", onWindowResize)
-      cleanups.push(() => window.removeEventListener("resize", onWindowResize))
+      const resizeObserver = new ResizeObserver(scheduleRefit)
+      resizeObserver.observe(container)
+      cleanups.push(() => {
+        if (refitFrame) {
+          cancelAnimationFrame(refitFrame)
+        }
+        resizeObserver.disconnect()
+      })
 
-      await Service.Start(projectId, cwd, term.cols, term.rows)
+      await Service.Start(sessionId, cwd, term.cols, term.rows)
       if (visibleRef.current) {
         term.focus()
       }
@@ -141,12 +175,12 @@ export function TerminalView({ projectId, cwd, visible }: TerminalViewProps) {
       for (const cleanup of cleanups) {
         cleanup()
       }
-      void Service.Close(projectId)
+      void Service.Close(sessionId)
       termRef.current?.dispose()
       termRef.current = null
       fitRef.current = null
     }
-  }, [projectId, cwd])
+  }, [sessionId, cwd])
 
   // Apply a font change live to the running terminal.
   useEffect(() => {
@@ -160,10 +194,10 @@ export function TerminalView({ projectId, cwd, visible }: TerminalViewProps) {
       // Font metrics changed: recompute the grid and sync the visible PTY.
       fitRef.current?.fit()
       if (visibleRef.current) {
-        void Service.Resize(projectId, term.cols, term.rows)
+        void Service.Resize(sessionId, term.cols, term.rows)
       }
     })()
-  }, [font, projectId])
+  }, [font, sessionId])
 
   // Apply a terminal theme change live to the running terminal.
   useEffect(() => {
@@ -181,9 +215,9 @@ export function TerminalView({ projectId, cwd, visible }: TerminalViewProps) {
       return
     }
     fitRef.current?.fit()
-    void Service.Resize(projectId, term.cols, term.rows)
+    void Service.Resize(sessionId, term.cols, term.rows)
     term.focus()
-  }, [visible, projectId])
+  }, [visible, sessionId])
 
   return <div ref={containerRef} data-terminal className="h-full w-full" />
 }

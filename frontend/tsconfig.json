@@ -28,4 +28,5 @@
     }
   },
   "include": ["src", "bindings"],
+  "exclude": ["src/**/*.test.ts"],
 }

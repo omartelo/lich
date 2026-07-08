@@ -21,7 +21,7 @@ type SectionId = (typeof SECTIONS)[number]["id"]
 
 // Settings is a full screen (not a modal): it fills the main area and sits on
 // top of the persistent terminals, which stay mounted and running behind it. A
-// category nav on the left mirrors the terminal Rail; content is on the right.
+// category nav sits on the left; content is on the right.
 export function Settings() {
   const [active, setActive] = useState<SectionId>("terminal")
   const [query, setQuery] = useState("")
