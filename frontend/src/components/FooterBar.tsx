@@ -4,7 +4,7 @@ import {FileText, GitBranch, Folder, Plus} from "lucide-react"
 import {Service as ProjectService} from "../../bindings/github.com/omartelo/lich/internal/project"
 import {Service as TerminalService} from "../../bindings/github.com/omartelo/lich/internal/terminal"
 import {useProjects} from "@/lib/projects"
-import {activeSessionId} from "@/lib/sessions"
+import {activeSessionId, sessionsOf} from "@/lib/sessions"
 import {displayPath} from "@/lib/paths"
 import {useGitStatus} from "@/lib/useGitStatus"
 import {
@@ -27,14 +27,19 @@ function useNow(): Date {
 const two = (n: number): string => String(n).padStart(2, "0")
 
 // FooterBar is the Warp-style status strip: attach-file button and diff counters
-// on the left, git branch, project path and clock on the right. Git segments
-// only render while a project is active.
+// on the left, git branch, working directory and clock on the right. Git
+// segments only render while a project is active. Everything follows the active
+// session: a worktree session shows its checkout's path, branch and diff.
 export function FooterBar() {
   const {projects, sessions} = useProjects()
   const match = useMatch("/projects/:projectId")
   const projectId = match?.params.projectId ?? null
-  const path = projects.find((p) => p.id === projectId)?.path ?? ""
+  const projectPath = projects.find((p) => p.id === projectId)?.path ?? ""
   const sessionId = projectId ? activeSessionId(sessions, projectId) : ""
+  const session = projectId
+    ? sessionsOf(sessions, projectId).find((s) => s.id === sessionId)
+    : undefined
+  const path = session?.path || projectPath
   const status = useGitStatus(path)
   const now = useNow()
 

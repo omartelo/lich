@@ -53,6 +53,31 @@ describe("addSession", () => {
     expect(sessionsOf(state, P).map((s) => s.kind)).toEqual(["claude", "shell"])
   })
 
+  it("records a worktree path and labels the session after it", () => {
+    const state = addSession(buildState(1), P, "s2", "claude", "/wt/lucky-otter", "lucky-otter")
+    const created = sessionsOf(state, P)[1]
+    expect(created).toEqual({
+      id: "s2",
+      label: "lucky-otter",
+      kind: "claude",
+      path: "/wt/lucky-otter",
+    })
+  })
+
+  it("omits path and keeps the sequential label when no worktree is given", () => {
+    const created = sessionsOf(addSession(buildState(1), P, "s2"), P)[1]
+    expect(created.path).toBeUndefined()
+    expect(created.label).toBe("Session 2")
+  })
+
+  it("preserves path through close and rename of siblings", () => {
+    let state = addSession(buildState(1), P, "s2", "claude", "/wt/x", "x")
+    state = addSession(state, P, "s3")
+    state = closeSession(state, P, "s3")
+    state = renameSession(state, P, "s1", "renamed")
+    expect(sessionsOf(state, P).find((s) => s.id === "s2")?.path).toBe("/wt/x")
+  })
+
   it("does not mutate the input state", () => {
     const before = buildState(1)
     addSession(before, P, "s2")

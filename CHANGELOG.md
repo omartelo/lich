@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   theme.
 - Configurable hotkeys, including terminal-aware zoom.
 - Warp-style footer bar with git status and file attach.
+- Git worktree sessions: create a worktree from a local or remote base branch
+  (fetched and tracked) with an optional custom or auto-generated name, resume
+  an existing worktree, and open Claude Code directly in its checkout. Closing
+  the session asks whether to keep or remove the worktree; session cards and the
+  footer follow the worktree's path, branch, and diff.
 - Right-click context menu to rename or close a session.
 - Bundled FiraCode Nerd Font.
 - Configurable Claude Code binary path in settings.

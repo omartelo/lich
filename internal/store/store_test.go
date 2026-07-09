@@ -23,10 +23,10 @@ func TestLoadStateRestoresOpenProjectsAndSessions(t *testing.T) {
 	if err := svc.AddProject("p1", "alpha", "/tmp/alpha"); err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
-	if err := svc.AddSession("p1", "s1", "Session 1", "", 2); err != nil {
+	if err := svc.AddSession("p1", "s1", "Session 1", "", "", 2); err != nil {
 		t.Fatalf("AddSession: %v", err)
 	}
-	if err := svc.AddSession("p1", "s2", "Session 2", "", 3); err != nil {
+	if err := svc.AddSession("p1", "s2", "Session 2", "", "", 3); err != nil {
 		t.Fatalf("AddSession: %v", err)
 	}
 
@@ -52,15 +52,40 @@ func TestLoadStateRestoresOpenProjectsAndSessions(t *testing.T) {
 	}
 }
 
+// TestSessionPathPersistsAndDefaults proves a worktree session's path survives
+// a reload and that rows written before the column existed load as "".
+func TestSessionPathPersistsAndDefaults(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	if err := svc.AddSession("p1", "s1", "mellow-otter", "claude", "/data/wt/mellow-otter", 2); err != nil {
+		t.Fatalf("AddSession: %v", err)
+	}
+	// Row without the path column, as written before the migration.
+	if _, err := svc.db.Exec(
+		`INSERT INTO sessions (id, project_id, label, kind) VALUES ('s2', 'p1', 'Session 2', 'claude')`,
+	); err != nil {
+		t.Fatalf("insert legacy row: %v", err)
+	}
+
+	projects, err := svc.LoadState()
+	if err != nil {
+		t.Fatalf("LoadState: %v", err)
+	}
+	sessions := projects[0].Sessions
+	if sessions[0].Path != "/data/wt/mellow-otter" || sessions[1].Path != "" {
+		t.Errorf("paths = %q, %q; want /data/wt/mellow-otter, empty", sessions[0].Path, sessions[1].Path)
+	}
+}
+
 // TestSessionKindPersistsAndDefaults proves kind survives a reload and that an
 // empty kind falls back to "claude" (rows written before the column existed).
 func TestSessionKindPersistsAndDefaults(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	if err := svc.AddSession("p1", "s1", "Session 1", "shell", 2); err != nil {
+	if err := svc.AddSession("p1", "s1", "Session 1", "shell", "", 2); err != nil {
 		t.Fatalf("AddSession: %v", err)
 	}
-	if err := svc.AddSession("p1", "s2", "Session 2", "", 3); err != nil {
+	if err := svc.AddSession("p1", "s2", "Session 2", "", "", 3); err != nil {
 		t.Fatalf("AddSession: %v", err)
 	}
 
@@ -77,7 +102,7 @@ func TestSessionKindPersistsAndDefaults(t *testing.T) {
 func TestCloseProjectHidesButKeepsSessions(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "s1", "Session 1", "", 2)
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2)
 
 	if err := svc.CloseProject("p1"); err != nil {
 		t.Fatalf("CloseProject: %v", err)
@@ -102,8 +127,8 @@ func TestCloseProjectHidesButKeepsSessions(t *testing.T) {
 func TestDeleteSessionRemovesRowAndUpdatesActive(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "s1", "Session 1", "", 2)
-	_ = svc.AddSession("p1", "s2", "Session 2", "", 3)
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2)
+	_ = svc.AddSession("p1", "s2", "Session 2", "", "", 3)
 
 	if err := svc.DeleteSession("p1", "s2", "s1"); err != nil {
 		t.Fatalf("DeleteSession: %v", err)
@@ -122,8 +147,8 @@ func TestDeleteSessionRemovesRowAndUpdatesActive(t *testing.T) {
 func TestRenameAndActivateSession(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "s1", "Session 1", "", 2)
-	_ = svc.AddSession("p1", "s2", "Session 2", "", 3)
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2)
+	_ = svc.AddSession("p1", "s2", "Session 2", "", "", 3)
 
 	if err := svc.RenameSession("s1", "build"); err != nil {
 		t.Fatalf("RenameSession: %v", err)
@@ -191,11 +216,11 @@ func TestOpenFailsWhenParentIsAFile(t *testing.T) {
 func TestAddSessionRollsBackOnDuplicate(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	if err := svc.AddSession("p1", "s1", "Session 1", "", 2); err != nil {
+	if err := svc.AddSession("p1", "s1", "Session 1", "", "", 2); err != nil {
 		t.Fatalf("AddSession: %v", err)
 	}
 
-	if err := svc.AddSession("p1", "s1", "dup", "", 9); err == nil {
+	if err := svc.AddSession("p1", "s1", "dup", "", "", 9); err == nil {
 		t.Fatal("duplicate session id = nil error, want error")
 	}
 	projects, _ := svc.LoadState()
@@ -225,7 +250,7 @@ func TestOperationsOnClosedStoreReturnErrors(t *testing.T) {
 	}
 	assertErr("AddProject", svc.AddProject("p2", "b", "/b"))
 	assertErr("CloseProject", svc.CloseProject("p1"))
-	assertErr("AddSession", svc.AddSession("p1", "s1", "Session 1", "", 2))
+	assertErr("AddSession", svc.AddSession("p1", "s1", "Session 1", "", "", 2))
 	assertErr("DeleteSession", svc.DeleteSession("p1", "s1", ""))
 	assertErr("RenameSession", svc.RenameSession("s1", "x"))
 	assertErr("SetActiveSession", svc.SetActiveSession("p1", "s1"))
@@ -245,7 +270,7 @@ func TestOperationsOnClosedStoreReturnErrors(t *testing.T) {
 func TestDeleteProjectCascadesSessions(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "s1", "Session 1", "", 2)
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2)
 
 	// Direct row delete exercises the ON DELETE CASCADE foreign key (the
 	// future "forget project" path); close does not delete, so it is not used

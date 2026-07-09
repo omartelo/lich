@@ -32,15 +32,16 @@ func (s *Service) CloseProject(id string) error {
 // AddSession inserts a session, makes it the project's active one and records the
 // project's next label counter — all atomically, mirroring the frontend reducer.
 // Kind selects what the session's PTY runs ("claude" or "shell"); empty defaults
-// to "claude" so older callers keep the original behavior.
-func (s *Service) AddSession(projectID, sessionID, label, kind string, nextSeq int) error {
+// to "claude" so older callers keep the original behavior. Path is the session's
+// working directory when it lives in a git worktree; empty means the project's.
+func (s *Service) AddSession(projectID, sessionID, label, kind, path string, nextSeq int) error {
 	if kind == "" {
 		kind = "claude"
 	}
 	return s.tx(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(
-			`INSERT INTO sessions (id, project_id, label, kind) VALUES (?, ?, ?, ?)`,
-			sessionID, projectID, label, kind,
+			`INSERT INTO sessions (id, project_id, label, kind, path) VALUES (?, ?, ?, ?, ?)`,
+			sessionID, projectID, label, kind, path,
 		); err != nil {
 			return fmt.Errorf("insert session: %w", err)
 		}

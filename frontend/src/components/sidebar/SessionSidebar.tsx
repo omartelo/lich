@@ -1,7 +1,9 @@
-import { useRef, useState } from "react"
-import type { PointerEvent as ReactPointerEvent } from "react"
-import { useMatch } from "react-router-dom"
-import { Bot, Plus, Terminal } from "lucide-react"
+import {useRef, useState} from "react"
+import type {PointerEvent as ReactPointerEvent} from "react"
+import {useMatch} from "react-router-dom"
+import {Bot, GitBranch, Plus, Terminal} from "lucide-react"
+import {toast} from "sonner"
+import {Service as ProjectService} from "../../../bindings/github.com/omartelo/lich/internal/project"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,10 +11,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useProjects } from "@/lib/projects"
-import { activeSessionId, sessionsOf } from "@/lib/sessions"
-import { SessionCard } from "./SessionCard"
-import { useGitStatus } from "@/lib/useGitStatus"
+import {useProjects} from "@/lib/projects"
+import {activeSessionId, sessionsOf, type Session} from "@/lib/sessions"
+import {CloseWorktreeDialog} from "./CloseWorktreeDialog"
+import {SessionCard} from "./SessionCard"
+import {WorktreeDialog} from "./WorktreeDialog"
+import {useGitStatus} from "@/lib/useGitStatus"
 
 // Sidebar width bounds in rem, matching the Tailwind v4 spacing scale. State and
 // storage stay in rem; the pointer drag delta arrives in CSS pixels and is
@@ -45,6 +49,7 @@ export function SessionSidebar() {
     projects,
     sessions,
     newSession,
+    newWorktreeSession,
     closeSession,
     activateSession,
     renameSession,
@@ -55,6 +60,8 @@ export function SessionSidebar() {
   const git = useGitStatus(path)
   const [width, setWidth] = useState(readWidth)
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
+  const [worktreeOpen, setWorktreeOpen] = useState(false)
+  const [pendingClose, setPendingClose] = useState<Session | null>(null)
 
   if (!projectId) {
     return null
@@ -63,9 +70,56 @@ export function SessionSidebar() {
   const list = sessionsOf(sessions, projectId)
   const activeId = activeSessionId(sessions, projectId)
 
+  const createWorktree = async (name: string, base: string, baseIsRemote: boolean) => {
+    const wt = await ProjectService.CreateWorktree(path, projectId, name, base, baseIsRemote)
+    if (wt) {
+      newWorktreeSession(projectId, wt)
+    }
+    setWorktreeOpen(false)
+  }
+
+  const resumeWorktree = (wt: { name: string; path: string }) => {
+    newWorktreeSession(projectId, wt)
+    setWorktreeOpen(false)
+  }
+
+  // Closing a worktree session asks what to do with the checkout; regular
+  // sessions close immediately.
+  const requestClose = (session: Session) => {
+    if (session.path) {
+      setPendingClose(session)
+      return
+    }
+    closeSession(projectId, session.id)
+  }
+
+  const keepAndClose = () => {
+    if (pendingClose) {
+      closeSession(projectId, pendingClose.id)
+    }
+    setPendingClose(null)
+  }
+
+  const removeAndClose = () => {
+    const session = pendingClose
+    setPendingClose(null)
+    if (!session?.path) {
+      return
+    }
+    // Close first so the PTY running inside the worktree dies before git tries
+    // to remove it. A refused removal (dirty worktree) surfaces as a toast; the
+    // checkout stays on disk and reappears in the new-worktree picker.
+    closeSession(projectId, session.id)
+    ProjectService.RemoveWorktree(path, session.path).catch((err: unknown) => {
+      toast.error(
+        `Failed to remove worktree: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    })
+  }
+
   const startDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault()
-    dragRef.current = { startX: event.clientX, startWidth: width }
+    dragRef.current = {startX: event.clientX, startWidth: width}
     event.currentTarget.setPointerCapture(event.pointerId)
   }
 
@@ -94,7 +148,7 @@ export function SessionSidebar() {
   return (
     <aside
       className="relative flex shrink-0 flex-col border-r border-border bg-sidebar p-2"
-      style={{ width: `${width}rem` }}
+      style={{width: `${width}rem`}}
     >
       <div className="mb-2 flex items-center justify-between px-1">
         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -106,17 +160,24 @@ export function SessionSidebar() {
             aria-label="New session"
             className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
           >
-            <Plus className="size-4" />
+            <Plus className="size-4"/>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent align="start" className={"w-44"}>
             <DropdownMenuGroup>
               <DropdownMenuItem onClick={() => newSession(projectId, "claude")}>
-                <Bot />
+                <Bot/>
                 Claude Code
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => newSession(projectId, "shell")}>
-                <Terminal />
+                <Terminal/>
                 Terminal
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={!git?.branch}
+                onClick={() => setWorktreeOpen(true)}
+              >
+                <GitBranch/>
+                Worktree
               </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
@@ -128,14 +189,28 @@ export function SessionSidebar() {
             key={session.id}
             session={session}
             path={path}
-            git={git}
             active={session.id === activeId}
             onSelect={() => activateSession(projectId, session.id)}
-            onClose={() => closeSession(projectId, session.id)}
+            onClose={() => requestClose(session)}
             onRename={(label) => renameSession(projectId, session.id, label)}
           />
         ))}
       </div>
+
+      <WorktreeDialog
+        open={worktreeOpen}
+        onOpenChange={setWorktreeOpen}
+        projectPath={path}
+        currentBranch={git?.branch ?? ""}
+        onCreate={createWorktree}
+        onResume={resumeWorktree}
+      />
+      <CloseWorktreeDialog
+        session={pendingClose}
+        onCancel={() => setPendingClose(null)}
+        onKeep={keepAndClose}
+        onRemove={removeAndClose}
+      />
 
       <div
         role="separator"

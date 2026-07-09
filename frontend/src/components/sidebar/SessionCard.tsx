@@ -4,7 +4,7 @@ import {GitBranch, Pencil, X} from "lucide-react"
 import {cn} from "@/lib/utils"
 import {displayPath} from "@/lib/paths"
 import {type Session} from "@/lib/sessions"
-import {type GitStatus} from "@/lib/useGitStatus"
+import {useGitStatus} from "@/lib/useGitStatus"
 import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip"
 import {
   ContextMenu,
@@ -16,7 +16,6 @@ import {
 interface SessionCardProps {
   session: Session
   path: string
-  git: GitStatus | null
   active: boolean
   onSelect: () => void
   onClose: () => void
@@ -24,12 +23,11 @@ interface SessionCardProps {
 }
 
 // SessionCard is one session entry: a card showing the session label, the
-// project's working directory, and the current git branch with a diff badge
-// (when the project is a repo), with a close button on hover.
+// session's working directory, and that directory's git branch with a diff
+// badge (when it is a repo), with a close button on hover.
 export function SessionCard({
                               session,
                               path,
-                              git,
                               active,
                               onSelect,
                               onClose,
@@ -38,6 +36,10 @@ export function SessionCard({
   const pathRef = useRef<HTMLSpanElement>(null)
   const [pathOverflow, setPathOverflow] = useState(false)
   const [editing, setEditing] = useState(false)
+  // A worktree session lives in its own checkout: show that path and poll its
+  // git status, so the badge reflects the worktree's branch, not the project's.
+  const shownPath = session.path || path
+  const git = useGitStatus(shownPath)
 
   // Commit the edited label: keep the old one if it is blank or unchanged.
   const commit = (value: string) => {
@@ -66,7 +68,7 @@ export function SessionCard({
     const observer = new ResizeObserver(measure)
     observer.observe(el)
     return () => observer.disconnect()
-  }, [path])
+  }, [shownPath])
 
   return (
     <ContextMenu>
@@ -116,7 +118,7 @@ export function SessionCard({
                 "[mask-image:linear-gradient(to_right,transparent,black_1.25rem)]",
               )}
             >
-            {"\u200e" + displayPath(path)}
+            {"\u200e" + displayPath(shownPath)}
           </span>
             {git?.branch && (
               <span className="flex w-full items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -149,7 +151,7 @@ export function SessionCard({
           <X className="size-3"/>
         </span>
         </ContextMenuTrigger>
-        <TooltipContent>{path}</TooltipContent>
+        <TooltipContent>{shownPath}</TooltipContent>
       </Tooltip>
       <ContextMenuContent>
         <ContextMenuItem onClick={() => setEditing(true)}>

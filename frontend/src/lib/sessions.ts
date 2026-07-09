@@ -14,6 +14,9 @@ export interface Session {
   id: string
   label: string
   kind: SessionKind
+  // Working directory when the session lives in a git worktree; absent means
+  // the project's own path.
+  path?: string
 }
 
 export interface ProjectSessions {
@@ -39,18 +42,27 @@ export function createProjectSessions(
 }
 
 // addSession appends a session to a project and makes it active. If the project
-// has no entry yet, it is created with this session as the first.
+// has no entry yet, it is created with this session as the first. A worktree
+// session carries its own path and is labeled after the worktree instead of the
+// sequential default.
 export function addSession(
   state: SessionState,
   projectId: string,
   sessionId: string,
   kind: SessionKind = "claude",
+  path = "",
+  label?: string,
 ): SessionState {
   const current = state[projectId]
   if (!current) {
     return { ...state, [projectId]: createProjectSessions(sessionId, kind) }
   }
-  const session: Session = { id: sessionId, label: `Session ${current.nextSeq}`, kind }
+  const session: Session = {
+    id: sessionId,
+    label: label || `Session ${current.nextSeq}`,
+    kind,
+    ...(path ? { path } : {}),
+  }
   return {
     ...state,
     [projectId]: {

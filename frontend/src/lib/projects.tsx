@@ -31,6 +31,8 @@ interface ProjectsValue {
   closeProject: (id: string) => void
   /** Open a new session in a project and focus it. Kind defaults to Claude Code. */
   newSession: (projectId: string, kind?: SessionKind) => void
+  /** Open a Claude Code session rooted at a git worktree, labeled after it. */
+  newWorktreeSession: (projectId: string, wt: { name: string; path: string }) => void
   /** Permanently delete a session; deleting the last one recreates an empty one. */
   closeSession: (projectId: string, sessionId: string) => void
   /** Focus an existing session within a project. */
@@ -63,6 +65,7 @@ function buildSessionState(loaded: StoreProject[]): SessionState {
       id: s.id,
       label: s.label,
       kind: (s.kind === "shell" ? "shell" : "claude") as SessionKind,
+      ...(s.path ? { path: s.path } : {}),
     }))
     state[p.id] = {
       sessions,
@@ -109,7 +112,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     let loaded = (await Store.LoadState()) ?? []
     const mine = loaded.find((p) => p.id === picked.id)
     if (!mine || (mine.sessions ?? []).length === 0) {
-      await Store.AddSession(picked.id, newSessionId(), FIRST_LABEL, "claude", FIRST_NEXT_SEQ)
+      await Store.AddSession(picked.id, newSessionId(), FIRST_LABEL, "claude", "", FIRST_NEXT_SEQ)
       loaded = (await Store.LoadState()) ?? []
     }
     applyLoaded(loaded)
@@ -139,8 +142,20 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     const project = next[projectId]
     const created = project.sessions[project.sessions.length - 1]
     setSessions(next)
-    void Store.AddSession(projectId, sessionId, created.label, kind, project.nextSeq)
+    void Store.AddSession(projectId, sessionId, created.label, kind, "", project.nextSeq)
   }, [])
+
+  const newWorktreeSession = useCallback(
+    (projectId: string, wt: { name: string; path: string }) => {
+      const sessionId = newSessionId()
+      const next = addSession(sessionsRef.current, projectId, sessionId, "claude", wt.path, wt.name)
+      const project = next[projectId]
+      const created = project.sessions[project.sessions.length - 1]
+      setSessions(next)
+      void Store.AddSession(projectId, sessionId, created.label, "claude", wt.path, project.nextSeq)
+    },
+    [],
+  )
 
   // The new-session shortcut opens a session in the active project (mirrors the
   // "+" button). It fires even with terminal focus, so it stays reachable while
@@ -177,7 +192,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       const created = project.sessions[project.sessions.length - 1]
       setSessions(next)
       void Store.DeleteSession(projectId, sessionId, "").then(() =>
-        Store.AddSession(projectId, recreatedId, created.label, created.kind, project.nextSeq),
+        Store.AddSession(projectId, recreatedId, created.label, created.kind, "", project.nextSeq),
       )
       return
     }
@@ -214,6 +229,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         openProject,
         closeProject,
         newSession,
+        newWorktreeSession,
         closeSession,
         activateSession,
         renameSession,

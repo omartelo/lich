@@ -35,7 +35,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     id         TEXT NOT NULL PRIMARY KEY,
     project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     label      TEXT NOT NULL,
-    kind       TEXT NOT NULL DEFAULT 'claude'
+    kind       TEXT NOT NULL DEFAULT 'claude',
+    path       TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
 
@@ -57,10 +58,13 @@ type Service struct {
 
 // Session is a persisted terminal session (metadata only). Kind selects what
 // the PTY runs: "claude" (Claude Code binary) or "shell" (the user's shell).
+// Path is the session's working directory when it lives in a git worktree;
+// empty means the project's own path.
 type Session struct {
 	ID    string `json:"id"`
 	Label string `json:"label"`
 	Kind  string `json:"kind"`
+	Path  string `json:"path"`
 }
 
 // Project is a persisted project together with its restorable session state.
@@ -103,13 +107,19 @@ func open(path string) (*Service, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("apply schema: %w", err)
 	}
-	// Migration for databases created before the kind column existed. SQLite has
+	// Migrations for databases created before these columns existed. SQLite has
 	// no ADD COLUMN IF NOT EXISTS; a duplicate-column error means it is already
 	// applied.
-	if _, err := db.Exec(`ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'claude'`); err != nil &&
-		!strings.Contains(err.Error(), "duplicate column") {
-		_ = db.Close()
-		return nil, fmt.Errorf("migrate sessions.kind: %w", err)
+	migrations := []string{
+		`ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'claude'`,
+		`ALTER TABLE sessions ADD COLUMN path TEXT NOT NULL DEFAULT ''`,
+	}
+	for _, stmt := range migrations {
+		if _, err := db.Exec(stmt); err != nil &&
+			!strings.Contains(err.Error(), "duplicate column") {
+			_ = db.Close()
+			return nil, fmt.Errorf("migrate sessions: %w", err)
+		}
 	}
 	return &Service{db: db}, nil
 }
@@ -167,7 +177,7 @@ func (s *Service) LoadState() ([]Project, error) {
 // sessionsOf returns a project's sessions in insertion order.
 func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	rows, err := s.db.Query(
-		`SELECT id, label, kind FROM sessions WHERE project_id = ? ORDER BY rowid`,
+		`SELECT id, label, kind, path FROM sessions WHERE project_id = ? ORDER BY rowid`,
 		projectID,
 	)
 	if err != nil {
@@ -178,7 +188,7 @@ func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	sessions := []Session{}
 	for rows.Next() {
 		var sess Session
-		if err := rows.Scan(&sess.ID, &sess.Label, &sess.Kind); err != nil {
+		if err := rows.Scan(&sess.ID, &sess.Label, &sess.Kind, &sess.Path); err != nil {
 			return nil, fmt.Errorf("scan session: %w", err)
 		}
 		sessions = append(sessions, sess)
