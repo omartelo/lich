@@ -6,9 +6,14 @@
 // Every function here is pure — it returns a new state and never mutates the
 // input — which keeps the reducer logic testable without React or a PTY.
 
+// What a session's PTY runs: the Claude Code binary or the user's shell.
+// Values match the backend (store column + terminal.Start).
+export type SessionKind = "claude" | "shell"
+
 export interface Session {
   id: string
   label: string
+  kind: SessionKind
 }
 
 export interface ProjectSessions {
@@ -22,9 +27,12 @@ export interface ProjectSessions {
 export type SessionState = Record<string, ProjectSessions>
 
 // createProjectSessions seeds a project with its first session.
-export function createProjectSessions(firstSessionId: string): ProjectSessions {
+export function createProjectSessions(
+  firstSessionId: string,
+  kind: SessionKind = "claude",
+): ProjectSessions {
   return {
-    sessions: [{ id: firstSessionId, label: "Session 1" }],
+    sessions: [{ id: firstSessionId, label: "Session 1", kind }],
     activeId: firstSessionId,
     nextSeq: 2,
   }
@@ -36,12 +44,13 @@ export function addSession(
   state: SessionState,
   projectId: string,
   sessionId: string,
+  kind: SessionKind = "claude",
 ): SessionState {
   const current = state[projectId]
   if (!current) {
-    return { ...state, [projectId]: createProjectSessions(sessionId) }
+    return { ...state, [projectId]: createProjectSessions(sessionId, kind) }
   }
-  const session: Session = { id: sessionId, label: `Session ${current.nextSeq}` }
+  const session: Session = { id: sessionId, label: `Session ${current.nextSeq}`, kind }
   return {
     ...state,
     [projectId]: {

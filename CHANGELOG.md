@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bundled FiraCode Nerd Font.
 - Configurable Claude Code binary path in settings.
 - Toast feedback when copying from the terminal.
+- New-session dropdown on the sidebar "+": spawn a Claude Code session or a
+  plain shell terminal; the session type persists and restores with the
+  workspace.
 - Workspace persisted in SQLite; UI preferences in `localStorage`.
 
 ### Changed

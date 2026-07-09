@@ -58,6 +58,7 @@ export function TerminalHost() {
                 sessionId={session.id}
                 projectId={project.id}
                 cwd={project.path}
+                kind={session.kind}
                 visible={visible}
               />
             </div>

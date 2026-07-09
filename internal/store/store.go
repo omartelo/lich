@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -33,7 +34,8 @@ CREATE TABLE IF NOT EXISTS projects (
 CREATE TABLE IF NOT EXISTS sessions (
     id         TEXT NOT NULL PRIMARY KEY,
     project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    label      TEXT NOT NULL
+    label      TEXT NOT NULL,
+    kind       TEXT NOT NULL DEFAULT 'claude'
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
 
@@ -53,10 +55,12 @@ type Service struct {
 	db *sql.DB
 }
 
-// Session is a persisted terminal session (metadata only).
+// Session is a persisted terminal session (metadata only). Kind selects what
+// the PTY runs: "claude" (Claude Code binary) or "shell" (the user's shell).
 type Session struct {
 	ID    string `json:"id"`
 	Label string `json:"label"`
+	Kind  string `json:"kind"`
 }
 
 // Project is a persisted project together with its restorable session state.
@@ -98,6 +102,14 @@ func open(path string) (*Service, error) {
 	if _, err := db.Exec(schema); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("apply schema: %w", err)
+	}
+	// Migration for databases created before the kind column existed. SQLite has
+	// no ADD COLUMN IF NOT EXISTS; a duplicate-column error means it is already
+	// applied.
+	if _, err := db.Exec(`ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'claude'`); err != nil &&
+		!strings.Contains(err.Error(), "duplicate column") {
+		_ = db.Close()
+		return nil, fmt.Errorf("migrate sessions.kind: %w", err)
 	}
 	return &Service{db: db}, nil
 }
@@ -155,7 +167,7 @@ func (s *Service) LoadState() ([]Project, error) {
 // sessionsOf returns a project's sessions in insertion order.
 func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	rows, err := s.db.Query(
-		`SELECT id, label FROM sessions WHERE project_id = ? ORDER BY rowid`,
+		`SELECT id, label, kind FROM sessions WHERE project_id = ? ORDER BY rowid`,
 		projectID,
 	)
 	if err != nil {
@@ -166,7 +178,7 @@ func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	sessions := []Session{}
 	for rows.Next() {
 		var sess Session
-		if err := rows.Scan(&sess.ID, &sess.Label); err != nil {
+		if err := rows.Scan(&sess.ID, &sess.Label, &sess.Kind); err != nil {
 			return nil, fmt.Errorf("scan session: %w", err)
 		}
 		sessions = append(sessions, sess)

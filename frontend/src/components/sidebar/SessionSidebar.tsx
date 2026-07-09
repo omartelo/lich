@@ -1,7 +1,14 @@
 import { useRef, useState } from "react"
 import type { PointerEvent as ReactPointerEvent } from "react"
 import { useMatch } from "react-router-dom"
-import { Plus } from "lucide-react"
+import { Bot, Plus, Terminal } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { useProjects } from "@/lib/projects"
 import { activeSessionId, sessionsOf } from "@/lib/sessions"
 import { SessionCard } from "./SessionCard"
@@ -93,15 +100,27 @@ export function SessionSidebar() {
         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Sessions
         </span>
-        <button
-          type="button"
-          onClick={() => newSession(projectId)}
-          title="New session"
-          aria-label="New session"
-          className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-        >
-          <Plus className="size-4" />
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            title="New session"
+            aria-label="New session"
+            className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          >
+            <Plus className="size-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={() => newSession(projectId, "claude")}>
+                <Bot />
+                Claude Code
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => newSession(projectId, "shell")}>
+                <Terminal />
+                Terminal
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto">
         {list.map((session) => (

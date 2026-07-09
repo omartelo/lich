@@ -58,6 +58,12 @@ func New(bins BinResolver) *Service {
 // a custom path.
 const defaultBin = "claude"
 
+// defaultShell is spawned for "shell" sessions when $SHELL is unset.
+const defaultShell = "/bin/sh"
+
+// KindShell marks a session that runs the user's shell instead of Claude Code.
+const KindShell = "shell"
+
 // readBufSize is the chunk size read from a session's PTY per iteration.
 const readBufSize = 32 * 1024
 
@@ -69,12 +75,25 @@ func resolveBin(bin string) string {
 	return bin
 }
 
-// Start spawns the Claude Code binary for session id under project projectID,
-// attached to a new PTY sized to cols x rows and rooted at cwd, then streams its
-// output to the frontend. The binary is resolved from the project's settings
-// (falling back to "claude" via $PATH). An empty cwd defaults to the user's home
-// directory. Starting a session that is already running is a no-op.
-func (s *Service) Start(id, projectID, cwd string, cols, rows int) error {
+// resolveCommand picks the binary a session runs: the user's shell for "shell"
+// sessions, otherwise the configured Claude Code binary.
+func resolveCommand(kind, bin, shellEnv string) string {
+	if kind == KindShell {
+		if shellEnv == "" {
+			return defaultShell
+		}
+		return shellEnv
+	}
+	return resolveBin(bin)
+}
+
+// Start spawns the binary for session id under project projectID — the user's
+// shell when kind is "shell", otherwise the Claude Code binary resolved from the
+// project's settings (falling back to "claude" via $PATH) — attached to a new
+// PTY sized to cols x rows and rooted at cwd, then streams its output to the
+// frontend. An empty cwd defaults to the user's home directory. Starting a
+// session that is already running is a no-op.
+func (s *Service) Start(id, projectID, cwd, kind string, cols, rows int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -90,7 +109,7 @@ func (s *Service) Start(id, projectID, cwd string, cols, rows int) error {
 		cwd = home
 	}
 
-	cmd := exec.Command(resolveBin(s.bins.ClaudeBin(projectID)))
+	cmd := exec.Command(resolveCommand(kind, s.bins.ClaudeBin(projectID), os.Getenv("SHELL")))
 	cmd.Dir = cwd
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
 

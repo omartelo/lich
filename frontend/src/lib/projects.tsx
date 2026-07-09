@@ -15,6 +15,7 @@ import {
   renameSession as relabelSession,
   sessionsOf,
   setActiveSession,
+  type SessionKind,
   type SessionState,
 } from "./sessions"
 import { isRecordingTarget, matchesCombo } from "./hotkeys"
@@ -28,8 +29,8 @@ interface ProjectsValue {
   openProject: () => Promise<void>
   /** Close a project's tab (kept in the store so it can be reopened later). */
   closeProject: (id: string) => void
-  /** Open a new terminal session in a project and focus it. */
-  newSession: (projectId: string) => void
+  /** Open a new session in a project and focus it. Kind defaults to Claude Code. */
+  newSession: (projectId: string, kind?: SessionKind) => void
   /** Permanently delete a session; deleting the last one recreates an empty one. */
   closeSession: (projectId: string, sessionId: string) => void
   /** Focus an existing session within a project. */
@@ -58,7 +59,11 @@ const toProject = (p: StoreProject): Project => ({
 function buildSessionState(loaded: StoreProject[]): SessionState {
   const state: SessionState = {}
   for (const p of loaded) {
-    const sessions = (p.sessions ?? []).map((s) => ({ id: s.id, label: s.label }))
+    const sessions = (p.sessions ?? []).map((s) => ({
+      id: s.id,
+      label: s.label,
+      kind: (s.kind === "shell" ? "shell" : "claude") as SessionKind,
+    }))
     state[p.id] = {
       sessions,
       activeId: p.activeSessionId || sessions[0]?.id || "",
@@ -104,7 +109,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     let loaded = (await Store.LoadState()) ?? []
     const mine = loaded.find((p) => p.id === picked.id)
     if (!mine || (mine.sessions ?? []).length === 0) {
-      await Store.AddSession(picked.id, newSessionId(), FIRST_LABEL, FIRST_NEXT_SEQ)
+      await Store.AddSession(picked.id, newSessionId(), FIRST_LABEL, "claude", FIRST_NEXT_SEQ)
       loaded = (await Store.LoadState()) ?? []
     }
     applyLoaded(loaded)
@@ -128,13 +133,13 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     [projects, activeProjectId, navigate],
   )
 
-  const newSession = useCallback((projectId: string) => {
+  const newSession = useCallback((projectId: string, kind: SessionKind = "claude") => {
     const sessionId = newSessionId()
-    const next = addSession(sessionsRef.current, projectId, sessionId)
+    const next = addSession(sessionsRef.current, projectId, sessionId, kind)
     const project = next[projectId]
     const created = project.sessions[project.sessions.length - 1]
     setSessions(next)
-    void Store.AddSession(projectId, sessionId, created.label, project.nextSeq)
+    void Store.AddSession(projectId, sessionId, created.label, kind, project.nextSeq)
   }, [])
 
   // The new-session shortcut opens a session in the active project (mirrors the
@@ -172,7 +177,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       const created = project.sessions[project.sessions.length - 1]
       setSessions(next)
       void Store.DeleteSession(projectId, sessionId, "").then(() =>
-        Store.AddSession(projectId, recreatedId, created.label, project.nextSeq),
+        Store.AddSession(projectId, recreatedId, created.label, created.kind, project.nextSeq),
       )
       return
     }

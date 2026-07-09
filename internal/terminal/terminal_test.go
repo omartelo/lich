@@ -105,7 +105,7 @@ func TestStartIsNoopWhenAlreadyRunning(t *testing.T) {
 	sess := spawnSession(t)
 	svc.sessions["s1"] = sess
 
-	if err := svc.Start("s1", "p1", "", 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", "", "", 80, 24); err != nil {
 		t.Errorf("Start(running) = %v, want nil", err)
 	}
 	if svc.sessions["s1"] != sess {
@@ -121,6 +121,25 @@ func TestResolveBin(t *testing.T) {
 	}
 	if got := resolveBin("/opt/claude.sh"); got != "/opt/claude.sh" {
 		t.Errorf("resolveBin custom = %q, want %q", got, "/opt/claude.sh")
+	}
+}
+
+// TestResolveCommand proves kind selects between the user's shell and the
+// Claude Code binary, with fallbacks when either source is empty.
+func TestResolveCommand(t *testing.T) {
+	cases := []struct {
+		name, kind, bin, shell, want string
+	}{
+		{"claude default", "", "", "/bin/zsh", defaultBin},
+		{"claude custom bin", "claude", "/opt/claude.sh", "/bin/zsh", "/opt/claude.sh"},
+		{"shell from env", KindShell, "/opt/claude.sh", "/bin/zsh", "/bin/zsh"},
+		{"shell fallback", KindShell, "", "", defaultShell},
+	}
+	for _, tc := range cases {
+		if got := resolveCommand(tc.kind, tc.bin, tc.shell); got != tc.want {
+			t.Errorf("%s: resolveCommand(%q, %q, %q) = %q, want %q",
+				tc.name, tc.kind, tc.bin, tc.shell, got, tc.want)
+		}
 	}
 }
 

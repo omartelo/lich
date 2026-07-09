@@ -10,6 +10,7 @@ import { pauseRenderLoop, resumeRenderLoop } from "@/lib/render-pause"
 import { missingKeySequence } from "@/lib/term-keys"
 import { useSettings } from "@/lib/settings"
 import type { ResolvedTheme } from "@/lib/settings"
+import type { SessionKind } from "@/lib/sessions"
 
 // Event name prefixes mirror the backend (internal/terminal); the concrete
 // event carries the session ID as a suffix.
@@ -61,10 +62,11 @@ interface TerminalViewProps {
   sessionId: string
   projectId: string
   cwd: string
+  kind: SessionKind
   visible: boolean
 }
 
-export function TerminalView({ sessionId, projectId, cwd, visible }: TerminalViewProps) {
+export function TerminalView({ sessionId, projectId, cwd, kind, visible }: TerminalViewProps) {
   const { font, resolvedTerminalTheme } = useSettings()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const termRef = useRef<Ghostty | null>(null)
@@ -199,7 +201,7 @@ export function TerminalView({ sessionId, projectId, cwd, visible }: TerminalVie
         resizeObserver.disconnect()
       })
 
-      await Service.Start(sessionId, projectId, cwd, term.cols, term.rows)
+      await Service.Start(sessionId, projectId, cwd, kind, term.cols, term.rows)
       if (visibleRef.current) {
         term.focus()
       } else {
@@ -220,7 +222,7 @@ export function TerminalView({ sessionId, projectId, cwd, visible }: TerminalVie
       termRef.current = null
       fitRef.current = null
     }
-  }, [sessionId, projectId, cwd])
+  }, [sessionId, projectId, cwd, kind])
 
   // Apply a font change live to the running terminal.
   useEffect(() => {

@@ -24,9 +24,9 @@ function buildState(n: number): SessionState {
 }
 
 describe("createProjectSessions", () => {
-  it("seeds one active session labeled Session 1", () => {
+  it("seeds one active claude session labeled Session 1", () => {
     const project = createProjectSessions("s1")
-    expect(project.sessions).toEqual([{ id: "s1", label: "Session 1" }])
+    expect(project.sessions).toEqual([{ id: "s1", label: "Session 1", kind: "claude" }])
     expect(project.activeId).toBe("s1")
     expect(project.nextSeq).toBe(2)
   })
@@ -46,6 +46,11 @@ describe("addSession", () => {
       "Session 2",
     ])
     expect(activeSessionId(state, P)).toBe("s2")
+  })
+
+  it("records the requested kind, defaulting to claude", () => {
+    const state = addSession(addSession({}, P, "s1"), P, "s2", "shell")
+    expect(sessionsOf(state, P).map((s) => s.kind)).toEqual(["claude", "shell"])
   })
 
   it("does not mutate the input state", () => {
