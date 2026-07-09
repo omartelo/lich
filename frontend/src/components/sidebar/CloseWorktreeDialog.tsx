@@ -35,7 +35,7 @@ export function CloseWorktreeDialog({
           <DialogTitle>Close worktree session</DialogTitle>
           <DialogDescription className="break-words">
             Keep or remove the worktree at{" "}
-            <span className="font-mono">{session?.path}</span>? Removing deletes
+            <span className="break-all font-mono">{session?.path}</span>? Removing deletes
             the checkout but keeps its branch.
           </DialogDescription>
         </DialogHeader>
@@ -77,7 +77,7 @@ export function ForceRemoveWorktreeDialog({
         <DialogHeader>
           <DialogTitle>Worktree has uncommitted changes</DialogTitle>
           <DialogDescription className="break-words">
-            The worktree at <span className="font-mono">{session?.path}</span>{" "}
+            The worktree at <span className="break-all font-mono">{session?.path}</span>{" "}
             contains uncommitted changes. Removing it will discard them
             permanently. The branch is kept.
           </DialogDescription>
