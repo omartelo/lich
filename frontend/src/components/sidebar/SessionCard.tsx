@@ -124,7 +124,7 @@ export function SessionCard({
                 <GitBranch className="size-3 shrink-0"/>
                 <span className="truncate">{git.branch}</span>
               </span>
-                {git.files >= 0 ? (
+                {git.files > 0 && (
                   <span className="flex shrink-0 items-center gap-1 px-1 py-0.5 bg-muted-foreground/10 rounded">
                     <span className="font-medium text-sky-600 dark:text-sky-400">
                       +{git.added}
@@ -133,8 +133,6 @@ export function SessionCard({
                       -{git.deleted}
                     </span>
                   </span>
-                ) : (
-                  <></>
                 )}
             </span>
             )}

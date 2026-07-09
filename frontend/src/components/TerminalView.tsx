@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react"
 import { init, Terminal as Ghostty, FitAddon } from "ghostty-web"
 import { Events } from "@wailsio/runtime"
 import { Service } from "../../bindings/github.com/skipodotdev/skipo/internal/terminal"
+import { toast } from "sonner"
+import { copyToastMessage, COPY_TOAST_DURATION_MS } from "@/lib/copy-toast"
 import { patchBlockGlyphs } from "@/lib/block-glyphs"
 import { patchFontMetrics } from "@/lib/font-metrics"
 import { useSettings } from "@/lib/settings"
@@ -155,6 +157,20 @@ export function TerminalView({ sessionId, projectId, cwd, visible }: TerminalVie
         }
       })
       cleanups.push(() => dataInput.dispose(), () => resizeInput.dispose())
+
+      // ghostty-web copies the selection to the clipboard on mouse-up and
+      // double-click, then fires onSelectionChange; surface a toast so the copy
+      // is visible without hunting for where the selection was.
+      const selectionInput = term.onSelectionChange(() => {
+        const selection = term.getSelection()
+        if (selection.length > 0) {
+          toast(copyToastMessage(selection), {
+            id: "terminal-copy",
+            duration: COPY_TOAST_DURATION_MS,
+          })
+        }
+      })
+      cleanups.push(() => selectionInput.dispose())
 
       const offData = Events.On(DATA_EVENT_PREFIX + sessionId, (event) => {
         term.write(decodeBase64(event.data as string))
