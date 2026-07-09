@@ -1,0 +1,108 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  # linuxdeploy (used by `wails3 generate appimage`) is itself an AppImage;
+  # extracting instead of FUSE-mounting avoids needing libfuse2 on the runner.
+  APPIMAGE_EXTRACT_AND_RUN: "1"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config gcc libc6-dev libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: Install wails3 and task
+        run: |
+          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.116
+          go install github.com/go-task/task/v3/cmd/task@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Backend tests
+        run: go test ./...
+
+      - name: Frontend install + tests
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm test
+
+      - name: Build Linux packages
+        run: task linux:package
+
+      - name: Assemble release assets
+        run: |
+          # `wails3 tool package` emits unversioned names (lich.deb, lich.rpm,
+          # lich.pkg.tar.zst); rename every artifact to carry the tag + arch.
+          cd bin
+          tag="${GITHUB_REF_NAME}"
+          mv "lich-x86_64.AppImage" "lich-${tag}-x86_64.AppImage"
+          mv "lich.deb"             "lich-${tag}-amd64.deb"
+          mv "lich.rpm"             "lich-${tag}-x86_64.rpm"
+          mv "lich.pkg.tar.zst"     "lich-${tag}-x86_64.pkg.tar.zst"
+          sha256sum lich-${tag}-* > checksums.txt
+          cat checksums.txt
+
+      - name: Extract changelog notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v ver="$version" '
+            $0 ~ "^## \\[" ver "\\]" { grab = 1; next }
+            grab && /^## \[/ { exit }
+            grab { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "Release ${GITHUB_REF_NAME}" > notes.md
+          fi
+          cat notes.md
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            bin/lich-${GITHUB_REF_NAME}-* bin/checksums.txt \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file notes.md
+
+      - name: Upload workflow artifacts
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: lich-linux-packages
+          path: |
+            bin/*.AppImage
+            bin/*.deb
+            bin/*.rpm
+            bin/*.pkg.tar.zst
+            bin/checksums.txt
