@@ -4,10 +4,10 @@ import (
 	"embed"
 	"log"
 
-	"github.com/skipodotdev/skipo/internals/fonts"
-	"github.com/skipodotdev/skipo/internals/project"
-	"github.com/skipodotdev/skipo/internals/store"
-	"github.com/skipodotdev/skipo/internals/terminal"
+	"github.com/skipodotdev/skipo/internal/fonts"
+	"github.com/skipodotdev/skipo/internal/project"
+	"github.com/skipodotdev/skipo/internal/store"
+	"github.com/skipodotdev/skipo/internal/terminal"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
