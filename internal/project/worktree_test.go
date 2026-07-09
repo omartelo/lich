@@ -213,8 +213,8 @@ func TestCreateWorktreeRemoteBase(t *testing.T) {
 	}
 }
 
-// TestRemoveWorktree proves removal deletes a clean worktree and refuses a
-// dirty one, leaving it on disk.
+// TestRemoveWorktree proves removal deletes a clean worktree, refuses a dirty
+// one without force (leaving it on disk), and deletes it with force.
 func TestRemoveWorktree(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	repo, _ := initRepo(t)
@@ -224,7 +224,7 @@ func TestRemoveWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateWorktree: %v", err)
 	}
-	if err := svc.RemoveWorktree(repo, wt.Path); err != nil {
+	if err := svc.RemoveWorktree(repo, wt.Path, false); err != nil {
 		t.Fatalf("RemoveWorktree(clean): %v", err)
 	}
 	if _, err := os.Stat(wt.Path); !os.IsNotExist(err) {
@@ -238,10 +238,53 @@ func TestRemoveWorktree(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dirty.Path, "a.txt"), []byte("changed\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.RemoveWorktree(repo, dirty.Path); err == nil {
+	if err := svc.RemoveWorktree(repo, dirty.Path, false); err == nil {
 		t.Error("RemoveWorktree(dirty) = nil error, want refusal")
 	}
 	if _, err := os.Stat(dirty.Path); err != nil {
 		t.Errorf("dirty worktree should remain on disk: %v", err)
+	}
+	if err := svc.RemoveWorktree(repo, dirty.Path, true); err != nil {
+		t.Fatalf("RemoveWorktree(dirty, force): %v", err)
+	}
+	if _, err := os.Stat(dirty.Path); !os.IsNotExist(err) {
+		t.Errorf("dirty worktree still exists after forced remove")
+	}
+}
+
+// TestWorktreeDirty proves a fresh worktree reads clean, both modified and
+// untracked files read dirty, and a non-repo path errors.
+func TestWorktreeDirty(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	repo, _ := initRepo(t)
+
+	svc := New()
+	wt, err := svc.CreateWorktree(repo, "pid", "wt", "main", false)
+	if err != nil {
+		t.Fatalf("CreateWorktree: %v", err)
+	}
+	if dirty, err := svc.WorktreeDirty(wt.Path); err != nil || dirty {
+		t.Errorf("WorktreeDirty(clean) = %v, %v; want false, nil", dirty, err)
+	}
+
+	if err := os.WriteFile(filepath.Join(wt.Path, "new.txt"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if dirty, err := svc.WorktreeDirty(wt.Path); err != nil || !dirty {
+		t.Errorf("WorktreeDirty(untracked file) = %v, %v; want true, nil", dirty, err)
+	}
+
+	if err := os.Remove(filepath.Join(wt.Path, "new.txt")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(wt.Path, "a.txt"), []byte("changed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if dirty, err := svc.WorktreeDirty(wt.Path); err != nil || !dirty {
+		t.Errorf("WorktreeDirty(modified file) = %v, %v; want true, nil", dirty, err)
+	}
+
+	if _, err := svc.WorktreeDirty(t.TempDir()); err == nil {
+		t.Error("WorktreeDirty(non-repo) = nil error, want error")
 	}
 }

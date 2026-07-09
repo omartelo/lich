@@ -167,12 +167,28 @@ func (s *Service) CreateWorktree(projectPath, projectID, name, base string, base
 	return &Worktree{Name: name, Path: wtPath}, nil
 }
 
-// RemoveWorktree removes a worktree checkout. Without --force git refuses to
+// RemoveWorktree removes a worktree checkout. Without force git refuses to
 // delete a dirty worktree, which is the safety net the close-session flow
-// relies on. The branch is never deleted.
-func (s *Service) RemoveWorktree(projectPath, wtPath string) error {
-	_, err := runGit(projectPath, "worktree", "remove", wtPath)
+// relies on; force discards uncommitted changes after the user has confirmed.
+// The branch is never deleted either way.
+func (s *Service) RemoveWorktree(projectPath, wtPath string, force bool) error {
+	args := []string{"worktree", "remove"}
+	if force {
+		args = append(args, "--force")
+	}
+	args = append(args, wtPath)
+	_, err := runGit(projectPath, args...)
 	return err
+}
+
+// WorktreeDirty reports whether the worktree at wtPath has uncommitted changes
+// (modified or untracked files) — the state that makes a plain remove fail.
+func (s *Service) WorktreeDirty(wtPath string) (bool, error) {
+	out, err := runGit(wtPath, "status", "--porcelain")
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(out) != "", nil
 }
 
 // branchExists reports whether refs/heads/<name> exists in the repository.

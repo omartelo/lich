@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import {useProjects} from "@/lib/projects"
 import {activeSessionId, sessionsOf, type Session} from "@/lib/sessions"
-import {CloseWorktreeDialog} from "./CloseWorktreeDialog"
+import {CloseWorktreeDialog, ForceRemoveWorktreeDialog} from "./CloseWorktreeDialog"
 import {SessionCard} from "./SessionCard"
 import {WorktreeDialog} from "./WorktreeDialog"
 import {useGitStatus} from "@/lib/useGitStatus"
@@ -62,6 +62,7 @@ export function SessionSidebar() {
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
   const [worktreeOpen, setWorktreeOpen] = useState(false)
   const [pendingClose, setPendingClose] = useState<Session | null>(null)
+  const [pendingForce, setPendingForce] = useState<Session | null>(null)
 
   if (!projectId) {
     return null
@@ -100,21 +101,45 @@ export function SessionSidebar() {
     setPendingClose(null)
   }
 
-  const removeAndClose = () => {
+  // Close first so the PTY running inside the worktree dies before git tries
+  // to remove it. A refused removal surfaces as a toast; the checkout stays on
+  // disk and reappears in the new-worktree picker.
+  const closeAndRemove = (session: Session, force: boolean) => {
+    closeSession(projectId, session.id)
+    ProjectService.RemoveWorktree(path, session.path ?? "", force).catch(
+      (err: unknown) => {
+        toast.error(
+          `Failed to remove worktree: ${err instanceof Error ? err.message : String(err)}`,
+        )
+      },
+    )
+  }
+
+  const removeAndClose = async () => {
     const session = pendingClose
     setPendingClose(null)
     if (!session?.path) {
       return
     }
-    // Close first so the PTY running inside the worktree dies before git tries
-    // to remove it. A refused removal (dirty worktree) surfaces as a toast; the
-    // checkout stays on disk and reappears in the new-worktree picker.
-    closeSession(projectId, session.id)
-    ProjectService.RemoveWorktree(path, session.path).catch((err: unknown) => {
-      toast.error(
-        `Failed to remove worktree: ${err instanceof Error ? err.message : String(err)}`,
-      )
-    })
+    // A dirty worktree needs a second confirmation before --force discards its
+    // changes. A failed check falls through to the plain remove, whose own
+    // refusal surfaces as a toast.
+    const dirty = await ProjectService.WorktreeDirty(session.path).catch(
+      () => false,
+    )
+    if (dirty) {
+      setPendingForce(session)
+      return
+    }
+    closeAndRemove(session, false)
+  }
+
+  const forceRemoveAndClose = () => {
+    const session = pendingForce
+    setPendingForce(null)
+    if (session?.path) {
+      closeAndRemove(session, true)
+    }
   }
 
   const startDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -210,6 +235,11 @@ export function SessionSidebar() {
         onCancel={() => setPendingClose(null)}
         onKeep={keepAndClose}
         onRemove={removeAndClose}
+      />
+      <ForceRemoveWorktreeDialog
+        session={pendingForce}
+        onCancel={() => setPendingForce(null)}
+        onForceRemove={forceRemoveAndClose}
       />
 
       <div

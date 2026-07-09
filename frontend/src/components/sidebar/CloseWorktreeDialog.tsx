@@ -54,3 +54,43 @@ export function CloseWorktreeDialog({
     </Dialog>
   )
 }
+
+interface ForceRemoveWorktreeDialogProps {
+  /** The dirty worktree session pending forced removal, or null when hidden. */
+  session: Session | null
+  onCancel: () => void
+  /** Remove the worktree with --force, discarding its uncommitted changes. */
+  onForceRemove: () => void
+}
+
+// ForceRemoveWorktreeDialog is the second confirmation shown when the worktree
+// picked for removal has uncommitted changes: git refuses a plain remove, so
+// proceeding means --force and the changes are gone for good.
+export function ForceRemoveWorktreeDialog({
+  session,
+  onCancel,
+  onForceRemove,
+}: ForceRemoveWorktreeDialogProps) {
+  return (
+    <Dialog open={session !== null} onOpenChange={(open) => !open && onCancel()}>
+      <DialogContent className="sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Worktree has uncommitted changes</DialogTitle>
+          <DialogDescription className="break-words">
+            The worktree at <span className="font-mono">{session?.path}</span>{" "}
+            contains uncommitted changes. Removing it will discard them
+            permanently. The branch is kept.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={onForceRemove}>
+            Discard changes and remove
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
