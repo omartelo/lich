@@ -31,6 +31,7 @@ const (
 type session struct {
 	ptmx *os.File
 	cmd  *exec.Cmd
+	out  *coalescer
 }
 
 // BinResolver supplies the Claude Code binary path to spawn for a project. An
@@ -98,26 +99,33 @@ func (s *Service) Start(id, projectID, cwd string, cols, rows int) error {
 		return fmt.Errorf("failed to start pty for %q: %w", id, err)
 	}
 
-	s.sessions[id] = &session{ptmx: ptmx, cmd: cmd}
-	go s.stream(id, ptmx, cmd)
+	out := newCoalescer(func(data []byte) {
+		encoded := base64.StdEncoding.EncodeToString(data)
+		application.Get().Event.Emit(dataEventPrefix+id, encoded)
+	}, hiddenFlushInterval)
+	s.sessions[id] = &session{ptmx: ptmx, cmd: cmd, out: out}
+	go s.stream(id, ptmx, cmd, out)
 	return nil
 }
 
 // stream copies PTY output to the frontend until the PTY is closed, then reaps
-// the process, drops the session and emits its exit event.
-func (s *Service) stream(id string, ptmx *os.File, cmd *exec.Cmd) {
+// the process, drops the session and emits its exit event. Output goes through
+// the session's coalescer, which batches it while the terminal is hidden.
+func (s *Service) stream(id string, ptmx *os.File, cmd *exec.Cmd, out *coalescer) {
 	buf := make([]byte, readBufSize)
 	for {
 		n, err := ptmx.Read(buf)
 		if n > 0 {
-			encoded := base64.StdEncoding.EncodeToString(buf[:n])
-			application.Get().Event.Emit(dataEventPrefix+id, encoded)
+			out.Write(buf[:n])
 		}
 		if err != nil {
 			break
 		}
 	}
 	_ = cmd.Wait()
+	// Flush any batched output before the exit event so the frontend always
+	// sees the final bytes ahead of the exit banner.
+	out.Close()
 
 	s.mu.Lock()
 	if current, ok := s.sessions[id]; ok && current.ptmx == ptmx {
@@ -136,6 +144,20 @@ func (s *Service) Write(id, data string) error {
 	}
 	_, err := ptmx.Write([]byte(data))
 	return err
+}
+
+// SetVisible tells the session's output coalescer whether its terminal is on
+// screen. Hidden sessions batch output (~250ms per event); flipping to visible
+// flushes pending output immediately. Unknown sessions are a no-op.
+func (s *Service) SetVisible(id string, visible bool) error {
+	s.mu.Lock()
+	sess, ok := s.sessions[id]
+	s.mu.Unlock()
+	if !ok {
+		return nil
+	}
+	sess.out.SetVisible(visible)
+	return nil
 }
 
 // Resize updates a session's PTY window size. The frontend only calls this for

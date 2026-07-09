@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { copyToastMessage, COPY_TOAST_DURATION_MS } from "@/lib/copy-toast"
 import { patchBlockGlyphs } from "@/lib/block-glyphs"
 import { patchFontMetrics } from "@/lib/font-metrics"
+import { pauseRenderLoop, resumeRenderLoop } from "@/lib/render-pause"
 import { useSettings } from "@/lib/settings"
 import type { ResolvedTheme } from "@/lib/settings"
 
@@ -95,8 +96,8 @@ export function TerminalView({ sessionId, projectId, cwd, visible }: TerminalVie
     // while the size is still changing, one refit once it stops.
     // Guard on integer dimensions: fit() nudges the canvas, which can make the
     // observer re-fire at sub-pixel deltas and loop into a flicker.
-    // Only the visible terminal pushes its new size to the PTY; hidden ones refit
-    // but sync their PTY when shown.
+    // Only the visible terminal refits and syncs its PTY; hidden ones skip the
+    // work entirely and catch up via the unconditional refit on show.
     const REFIT_DEBOUNCE_MS = 100
     let lastWidth = 0
     let lastHeight = 0
@@ -115,13 +116,11 @@ export function TerminalView({ sessionId, projectId, cwd, visible }: TerminalVie
       window.clearTimeout(refitTimer)
       refitTimer = window.setTimeout(() => {
         const term = termRef.current
-        if (!term) {
+        if (!term || !visibleRef.current) {
           return
         }
         fitRef.current?.fit()
-        if (visibleRef.current) {
-          void Service.Resize(sessionId, term.cols, term.rows)
-        }
+        void Service.Resize(sessionId, term.cols, term.rows)
       }, REFIT_DEBOUNCE_MS)
     }
 
@@ -190,6 +189,11 @@ export function TerminalView({ sessionId, projectId, cwd, visible }: TerminalVie
       await Service.Start(sessionId, projectId, cwd, term.cols, term.rows)
       if (visibleRef.current) {
         term.focus()
+      } else {
+        // Navigated away while the WASM init was in flight: the session starts
+        // visible on the backend, so demote it and stop painting.
+        pauseRenderLoop(term)
+        void Service.SetVisible(sessionId, false)
       }
     })()
 
@@ -227,16 +231,23 @@ export function TerminalView({ sessionId, projectId, cwd, visible }: TerminalVie
     termRef.current?.renderer?.setTheme(TERMINAL_COLORS[resolvedTerminalTheme])
   }, [resolvedTerminalTheme])
 
-  // On becoming visible, refit (window may have resized while hidden), sync the
-  // PTY size and focus.
+  // Visibility drives the cost of a terminal. Hidden: stop the ~60fps render
+  // loop (writes keep updating the WASM buffer, so state stays current) and let
+  // the backend batch output events. Visible: resume rendering, flush batched
+  // output, refit (window may have resized while hidden), sync the PTY size and
+  // focus.
   useEffect(() => {
-    if (!visible) {
-      return
-    }
     const term = termRef.current
     if (!term) {
       return
     }
+    if (!visible) {
+      pauseRenderLoop(term)
+      void Service.SetVisible(sessionId, false)
+      return
+    }
+    resumeRenderLoop(term)
+    void Service.SetVisible(sessionId, true)
     fitRef.current?.fit()
     void Service.Resize(sessionId, term.cols, term.rows)
     term.focus()

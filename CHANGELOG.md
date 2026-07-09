@@ -48,5 +48,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Spawn session PTYs lazily on first view.
 - Lowered the git-status poll interval to 3 s.
+- Paused the ~60fps render loop of hidden terminals; only the visible terminal
+  paints (state keeps updating, so switching back repaints instantly).
+- Coalesced PTY output of hidden sessions in the backend to one event per 250 ms,
+  flushed immediately when the session is shown.
+- Skipped the resize-driven refit for hidden terminals; they refit once on show.
 
 [Unreleased]: https://github.com/omartelo/lich/commits/main

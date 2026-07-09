@@ -28,6 +28,36 @@ func TestOperationsOnUnknownSessionAreNoops(t *testing.T) {
 	if err := svc.Close("ghost"); err != nil {
 		t.Errorf("Close unknown = %v, want nil", err)
 	}
+	if err := svc.SetVisible("ghost", true); err != nil {
+		t.Errorf("SetVisible unknown = %v, want nil", err)
+	}
+}
+
+// TestSetVisibleReachesCoalescer proves the service routes visibility flips to
+// the session's coalescer: output buffered while hidden is flushed when the
+// session is made visible.
+func TestSetVisibleReachesCoalescer(t *testing.T) {
+	emit, emits := captureEmit(1)
+	out := newCoalescer(emit, time.Hour)
+	out.SetVisible(false)
+	out.Write([]byte("pending"))
+
+	svc := New(stubBins{})
+	sess := spawnSession(t)
+	sess.out = out
+	svc.sessions["s1"] = sess
+
+	if err := svc.SetVisible("s1", true); err != nil {
+		t.Fatalf("SetVisible = %v, want nil", err)
+	}
+	select {
+	case got := <-emits:
+		if string(got) != "pending" {
+			t.Errorf("flushed %q, want %q", got, "pending")
+		}
+	default:
+		t.Error("SetVisible(true) did not flush the coalescer")
+	}
 }
 
 // spawnSession starts /bin/cat under a PTY and returns a live session, keeping
