@@ -1,59 +1,103 @@
-# Welcome to Your New Wails3 Project!
+<div align="center">
+  <h1>lich</h1>
+  <p><strong>A personal harness for coding with AI agents.</strong></p>
+  <p>
+    <img alt="Go" src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white" />
+    <img alt="Wails" src="https://img.shields.io/badge/Wails-v3-DF0000" />
+    <img alt="Platform" src="https://img.shields.io/badge/platform-Linux-333" />
+  </p>
+</div>
 
-Congratulations on generating your Wails3 application! This README will guide you through the next steps to get your project up and running.
+## About
 
-## Getting Started
+`lich` is a **personal harness** — a desktop app that wraps a terminal-first
+workspace around AI coding agents like
+[Claude Code](https://www.anthropic.com/claude-code). Open several projects, run
+a session (or many) per project, and keep an eye on git state without leaving the
+window.
 
-1. Navigate to your project directory in the terminal.
+It is shaped by the author's taste for other harnesses — Warp and friends — and
+is deliberately bespoke: not a generic product, a tool built for one workflow.
+It's public because there's no reason to hide it, not because it's a supported
+release.
 
-2. To run your application in development mode, use the following command:
+> **Platform** — Linux is the only target that ships today (AppImage, `.deb`,
+> `.rpm`, Arch `.pkg.tar.zst`). macOS/Windows can be built from source but are
+> untested.
 
-   ```
-   wails3 dev
-   ```
+## Features
 
-   This will start your application and enable hot-reloading for both frontend and backend changes.
+- **Terminal-first, PTY-backed sessions** — real shells, multiple per project.
+- **Multi-project workspace** — open projects through the OS picker and switch
+  between them via a Discord-style rail with tabs.
+- **Live git at a glance** — session cards show the working directory, current
+  branch, a diff badge, and untracked-line count; a Warp-style footer bar carries
+  git status and file attach.
+- **Claude Code integration** — point lich at your `claude` binary and drive it
+  from any session.
 
-3. To build your application for production, use:
+## Install
 
-   ```
-   wails3 build
-   ```
+Grab the artifact for your packaging from the
+[Releases](https://github.com/omartelo/lich/releases) page. Every release ships a
+`checksums.txt` — verify with `sha256sum -c checksums.txt`.
 
-   This will create a production-ready executable in the `build` directory.
+**AppImage** (portable):
 
-## Exploring Wails3 Features
+```bash
+chmod +x lich-*-x86_64.AppImage
+./lich-*-x86_64.AppImage
+```
 
-Now that you have your project set up, it's time to explore the features that Wails3 offers:
+**Debian / Ubuntu:**
 
-1. **Check out the examples**: The best way to learn is by example. Visit the `examples` directory in the `v3/examples` directory to see various sample applications.
+```bash
+sudo dpkg -i lich-*-amd64.deb
+```
 
-2. **Run an example**: To run any of the examples, navigate to the example's directory and use:
+**Fedora / RHEL:**
 
-   ```
-   go run .
-   ```
+```bash
+sudo rpm -i lich-*-x86_64.rpm
+```
 
-   Note: Some examples may be under development during the alpha phase.
+**Arch:**
 
-3. **Explore the documentation**: Visit the [Wails3 documentation](https://v3.wails.io/) for in-depth guides and API references.
+```bash
+sudo pacman -U lich-*-x86_64.pkg.tar.zst
+```
 
-4. **Join the community**: Have questions or want to share your progress? Join the [Wails Discord](https://discord.gg/JDdSxwjhGf) or visit the [Wails discussions on GitHub](https://github.com/wailsapp/wails/discussions).
+## Build from source
 
-## Project Structure
+Prerequisites: **Go 1.25+**, **Node + pnpm**, **[Task](https://taskfile.dev)**,
+**[wails3](https://v3.wails.io/)**, and the Linux WebKit/GTK dev libraries
+(`libgtk-3-dev libwebkit2gtk-4.1-dev` on Debian/Ubuntu — CGO links against them).
 
-Take a moment to familiarize yourself with your project structure:
+```bash
+task dev      # hot-reload dev mode (Vite on :9245)
+task build    # production binary -> bin/lich
+task run      # run the binary
+```
 
-- `frontend/`: Contains your frontend code (HTML, CSS, JavaScript/TypeScript)
-- `main.go`: The entry point of your Go backend
-- `app.go`: Define your application structure and methods here
-- `wails.json`: Configuration file for your Wails project
+Package a Linux release locally:
 
-## Next Steps
+```bash
+task linux:package   # AppImage + .deb + .rpm + Arch .pkg.tar.zst in bin/
+```
 
-1. Modify the frontend in the `frontend/` directory to create your desired UI.
-2. Add backend functionality in `main.go`.
-3. Use `wails3 dev` to see your changes in real-time.
-4. When ready, build your application with `wails3 build`.
+## Configuration
 
-Happy coding with Wails3! If you encounter any issues or have questions, don't hesitate to consult the documentation or reach out to the Wails community.
+- **Claude Code binary** — set its path in Settings.
+- **Appearance & hotkeys** — configured in Settings; UI preferences persist in
+  `localStorage` under `lich.*` keys.
+- **Workspace** — projects and sessions persist in SQLite at
+  `<data-dir>/lich/lich.db`. Closing a session does not delete it.
+
+## Stack
+
+[Wails v3](https://v3.wails.io/) (Go 1.25 backend) with a React 18 / TypeScript /
+Vite frontend; Go→TS bindings are generated by Wails.
+
+## License
+
+[MIT](LICENSE) © 2026 omartelo
