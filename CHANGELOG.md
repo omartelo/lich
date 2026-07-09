@@ -43,6 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Derived cell height from the font bounding box.
 - Debounced terminal refit to keep window drags fluid.
 - Focus the previous tab when closing the active project.
+- Shift+Tab now reaches terminal apps as backtab (`ESC [ Z`) and Alt chords get
+  their ESC prefix — ghostty-web 0.4.0 drops both, and WebKitGTK reports
+  Shift+Tab as the `ISO_Left_Tab` keysym.
 
 ### Performance
 

@@ -7,6 +7,7 @@ import { copyToastMessage, COPY_TOAST_DURATION_MS } from "@/lib/copy-toast"
 import { patchBlockGlyphs } from "@/lib/block-glyphs"
 import { patchFontMetrics } from "@/lib/font-metrics"
 import { pauseRenderLoop, resumeRenderLoop } from "@/lib/render-pause"
+import { missingKeySequence } from "@/lib/term-keys"
 import { useSettings } from "@/lib/settings"
 import type { ResolvedTheme } from "@/lib/settings"
 
@@ -148,6 +149,18 @@ export function TerminalView({ sessionId, projectId, cwd, visible }: TerminalVie
       fit.fit()
       termRef.current = term
       fitRef.current = fit
+
+      // Sequences ghostty-web 0.4.0 gets wrong (Shift+Tab, Alt chords) are
+      // written to the PTY directly; returning true stops the terminal from
+      // sending its own broken encoding. See term-keys.ts.
+      term.attachCustomKeyEventHandler((event) => {
+        const seq = missingKeySequence(event)
+        if (seq === null) {
+          return false
+        }
+        void Service.Write(sessionId, seq)
+        return true
+      })
 
       const dataInput = term.onData((data) => Service.Write(sessionId, data))
       const resizeInput = term.onResize(({ cols, rows }) => {
