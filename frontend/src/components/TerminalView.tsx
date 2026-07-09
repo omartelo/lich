@@ -1,13 +1,13 @@
 import { useEffect, useRef } from "react"
 import { init, Terminal as Ghostty, FitAddon } from "ghostty-web"
 import { Events } from "@wailsio/runtime"
-import { Service } from "../../bindings/github.com/skipodotdev/skipo/internals/terminal"
+import { Service } from "../../bindings/github.com/skipodotdev/skipo/internal/terminal"
 import { patchBlockGlyphs } from "@/lib/block-glyphs"
 import { patchFontMetrics } from "@/lib/font-metrics"
 import { useSettings } from "@/lib/settings"
 import type { ResolvedTheme } from "@/lib/settings"
 
-// Event name prefixes mirror the backend (internals/terminal); the concrete
+// Event name prefixes mirror the backend (internal/terminal); the concrete
 // event carries the session ID as a suffix.
 const DATA_EVENT_PREFIX = "terminal:data:"
 const EXIT_EVENT_PREFIX = "terminal:exit:"

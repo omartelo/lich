@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react"
-import { Service as ProjectService } from "../../bindings/github.com/skipodotdev/skipo/internals/project"
+import { Service as ProjectService } from "../../bindings/github.com/skipodotdev/skipo/internal/project"
 
-// ponytail: 5s polling of two local git commands (milliseconds each); upgrade
-// path is a recursive fsnotify watcher + Wails event if real-time ever matters.
 const GIT_POLL_MS = 5_000
 
 export interface GitStatus {

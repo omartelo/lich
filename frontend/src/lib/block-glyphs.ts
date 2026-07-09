@@ -5,8 +5,6 @@
 // half-block art (e.g. the Claude Code logo) turns into stripes. Native
 // terminals synthesize these glyphs as rectangles; this module does the same by
 // wrapping the renderer's private renderCellText.
-// ponytail: covers block elements only; box-drawing lines (U+2500–U+257F) still
-// come from the font — synthesize them too if they ever look broken.
 
 const BLOCK_RANGE_START = 0x2580
 const BLOCK_RANGE_END = 0x259f

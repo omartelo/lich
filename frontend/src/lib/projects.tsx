@@ -4,9 +4,9 @@ import { useMatch, useNavigate } from "react-router-dom"
 import {
   Project,
   Service as ProjectService,
-} from "../../bindings/github.com/skipodotdev/skipo/internals/project"
-import { Service as Store } from "../../bindings/github.com/skipodotdev/skipo/internals/store"
-import type { Project as StoreProject } from "../../bindings/github.com/skipodotdev/skipo/internals/store/models"
+} from "../../bindings/github.com/skipodotdev/skipo/internal/project"
+import { Service as Store } from "../../bindings/github.com/skipodotdev/skipo/internal/store"
+import type { Project as StoreProject } from "../../bindings/github.com/skipodotdev/skipo/internal/store/models"
 import {
   activeSessionId,
   addSession,

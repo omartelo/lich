@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Service as Store } from "../../../bindings/github.com/skipodotdev/skipo/internals/store"
+import { Service as Store } from "../../../bindings/github.com/skipodotdev/skipo/internal/store"
 import { SettingBlock } from "./SettingBlock"
 
 // Global scope for a setting: an empty project id. Per-project overrides live

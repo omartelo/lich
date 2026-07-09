@@ -1,7 +1,7 @@
 import { NavLink } from "react-router-dom"
 import { X } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { Project } from "../../../bindings/github.com/skipodotdev/skipo/internals/project"
+import type { Project } from "../../../bindings/github.com/skipodotdev/skipo/internal/project"
 
 interface ProjectTabProps {
   project: Project
