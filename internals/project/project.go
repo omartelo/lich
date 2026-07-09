@@ -5,9 +5,11 @@
 package project
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -104,7 +106,39 @@ func (s *Service) Diff(path string) DiffStats {
 		stats.Added += added
 		stats.Deleted += deleted
 	}
+	// Untracked files are invisible to `git diff`; count their lines as
+	// additions, the way Warp and forge diff views present a fresh file.
+	if out, err := exec.Command("git", "-C", path, "ls-files", "--others", "--exclude-standard", "-z").Output(); err == nil {
+		for _, rel := range strings.Split(string(out), "\x00") {
+			if rel != "" {
+				stats.Added += countFileLines(filepath.Join(path, rel))
+			}
+		}
+	}
 	return stats
+}
+
+// countFileLines returns the line count of a text file, or 0 for binaries
+// (NUL byte in the first 8000 bytes, git's own heuristic) and unreadable files.
+// ponytail: reads the whole file with a 10MB cap — untracked source files are
+// small; stream in chunks if that assumption ever breaks.
+func countFileLines(name string) int {
+	const maxSize = 10 << 20
+	if info, err := os.Stat(name); err != nil || !info.Mode().IsRegular() || info.Size() > maxSize {
+		return 0
+	}
+	data, err := os.ReadFile(name)
+	if err != nil || len(data) == 0 {
+		return 0
+	}
+	if bytes.IndexByte(data[:min(len(data), 8000)], 0) >= 0 {
+		return 0
+	}
+	n := bytes.Count(data, []byte{'\n'})
+	if data[len(data)-1] != '\n' {
+		n++ // last line without trailing newline still counts
+	}
+	return n
 }
 
 func countLines(out []byte) int {

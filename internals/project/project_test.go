@@ -63,11 +63,22 @@ func TestDiff(t *testing.T) {
 		t.Errorf("Diff(edited file) = %+v, want {Files:1 Added:2 Deleted:1}", got)
 	}
 
-	if err := os.WriteFile(filepath.Join(repo, "new.txt"), []byte("x\n"), 0o644); err != nil {
+	// Untracked lines count as additions: 3 lines, the last without a trailing
+	// newline. On top of the tracked edit this makes Added 2+3.
+	if err := os.WriteFile(filepath.Join(repo, "new.txt"), []byte("x\ny\nz"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := svc.Diff(repo); got.Files != 2 {
-		t.Errorf("Diff(untracked added).Files = %d, want 2", got.Files)
+	got = svc.Diff(repo)
+	if got.Files != 2 || got.Added != 5 {
+		t.Errorf("Diff(untracked added) = %+v, want {Files:2 Added:5 Deleted:1}", got)
+	}
+
+	// Binary untracked files add no lines.
+	if err := os.WriteFile(filepath.Join(repo, "bin.dat"), []byte("a\x00b\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := svc.Diff(repo); got.Added != 5 {
+		t.Errorf("Diff(untracked binary).Added = %d, want 5", got.Added)
 	}
 
 	if got := svc.Diff(t.TempDir()); got != (DiffStats{}) {

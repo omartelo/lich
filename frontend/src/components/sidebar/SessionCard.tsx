@@ -4,6 +4,7 @@ import {GitBranch, Pencil, X} from "lucide-react"
 import {cn} from "@/lib/utils"
 import {displayPath} from "@/lib/paths"
 import {type Session} from "@/lib/sessions"
+import {type GitStatus} from "@/lib/useGitStatus"
 import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip"
 import {
   ContextMenu,
@@ -15,7 +16,7 @@ import {
 interface SessionCardProps {
   session: Session
   path: string
-  branch: string
+  git: GitStatus | null
   active: boolean
   onSelect: () => void
   onClose: () => void
@@ -23,12 +24,12 @@ interface SessionCardProps {
 }
 
 // SessionCard is one session entry: a card showing the session label, the
-// project's working directory, and the current git branch (when the project is
-// a repo), with a close button on hover.
+// project's working directory, and the current git branch with a diff badge
+// (when the project is a repo), with a close button on hover.
 export function SessionCard({
                               session,
                               path,
-                              branch,
+                              git,
                               active,
                               onSelect,
                               onClose,
@@ -69,75 +70,89 @@ export function SessionCard({
 
   return (
     <ContextMenu>
-    <Tooltip>
-      <ContextMenuTrigger
-        render={
-          <TooltipTrigger
-            render={
-              <button
-                type="button"
-                onClick={onSelect}
-                className={cn(
-                  "group relative flex w-full flex-col items-start gap-0.5 rounded-lg border border-border/60 bg-card px-3 py-3 text-left transition-colors hover:bg-accent/60",
-                  active &&
-                  "border-accent-foreground/20 bg-accent text-accent-foreground",
-                )}
-              />
-            }
-          />
-        }
-      >
-        <div className="flex w-full min-w-0 flex-col space-y-2">
-          {editing ? (
-            <input
-              autoFocus
-              defaultValue={session.label}
-              onFocus={(event) => event.currentTarget.select()}
-              onClick={(event) => event.stopPropagation()}
-              onKeyDown={onEditKeyDown}
-              onBlur={(event) => commit(event.currentTarget.value)}
-              className="w-full rounded-sm bg-transparent pr-5 text-sm font-medium text-foreground outline-none ring-1 ring-accent-foreground/30"
+      <Tooltip>
+        <ContextMenuTrigger
+          render={
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  onClick={onSelect}
+                  className={cn(
+                    "group relative flex w-full flex-col items-start gap-0.5 rounded-lg border border-border/60 bg-card px-3 py-3 text-left transition-colors hover:bg-accent/60",
+                    active &&
+                    "border-accent-foreground/20 bg-accent text-accent-foreground",
+                  )}
+                />
+              }
             />
-          ) : (
-            <span className="w-full truncate pr-5 text-sm font-medium text-foreground">
+          }
+        >
+          <div className="flex w-full min-w-0 flex-col space-y-2">
+            {editing ? (
+              <input
+                autoFocus
+                defaultValue={session.label}
+                onFocus={(event) => event.currentTarget.select()}
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={onEditKeyDown}
+                onBlur={(event) => commit(event.currentTarget.value)}
+                className="w-full rounded-sm bg-transparent pr-5 text-sm font-medium text-foreground outline-none ring-1 ring-accent-foreground/30"
+              />
+            ) : (
+              <span className="w-full truncate pr-5 text-sm font-medium text-foreground">
               {session.label}
             </span>
-          )}
-          {/* rtl anchors the tail (project folder) to the right so overflow is
+            )}
+            {/* rtl anchors the tail (project folder) to the right so overflow is
               clipped on the left; the leading LRM keeps "~/" in logical order
               instead of letting bidi push it to the end. */}
-          <span
-            ref={pathRef}
-            dir="rtl"
-            className={cn(
-              "block max-w-full overflow-hidden whitespace-nowrap text-left font-mono text-xs text-muted-foreground",
-              pathOverflow &&
-              "[mask-image:linear-gradient(to_right,transparent,black_1.25rem)]",
-            )}
-          >
+            <span
+              ref={pathRef}
+              dir="rtl"
+              className={cn(
+                "block max-w-full overflow-hidden whitespace-nowrap text-left font-mono text-xs text-muted-foreground",
+                pathOverflow &&
+                "[mask-image:linear-gradient(to_right,transparent,black_1.25rem)]",
+              )}
+            >
             {"\u200e" + displayPath(path)}
           </span>
-          {branch && (
-            <span className="flex max-w-full items-center gap-1 text-xs text-muted-foreground">
-              <GitBranch className="size-3 shrink-0"/>
-              <span className="truncate">{branch}</span>
+            {git?.branch && (
+              <span className="flex w-full items-center justify-between gap-2 text-xs text-muted-foreground">
+              <span className="flex min-w-0 items-center gap-1">
+                <GitBranch className="size-3 shrink-0"/>
+                <span className="truncate">{git.branch}</span>
+              </span>
+                {git.files >= 0 ? (
+                  <span className="flex shrink-0 items-center gap-1 px-1 py-0.5 bg-muted-foreground/10 rounded">
+                    <span className="font-medium text-sky-600 dark:text-sky-400">
+                      +{git.added}
+                    </span>
+                    <span className="font-medium text-pink-600 dark:text-pink-400">
+                      -{git.deleted}
+                    </span>
+                  </span>
+                ) : (
+                  <></>
+                )}
             </span>
-          )}
-        </div>
-        <span
-          role="button"
-          aria-label={`Close ${session.label}`}
-          onClick={(event) => {
-            event.stopPropagation()
-            onClose()
-          }}
-          className="absolute right-2 top-2 flex size-4 items-center justify-center rounded opacity-0 transition-opacity hover:bg-foreground/15 group-hover:opacity-100"
-        >
+            )}
+          </div>
+          <span
+            role="button"
+            aria-label={`Close ${session.label}`}
+            onClick={(event) => {
+              event.stopPropagation()
+              onClose()
+            }}
+            className="absolute right-2 top-2 flex size-4 items-center justify-center rounded opacity-0 transition-opacity hover:bg-foreground/15 group-hover:opacity-100"
+          >
           <X className="size-3"/>
         </span>
-      </ContextMenuTrigger>
-      <TooltipContent>{path}</TooltipContent>
-    </Tooltip>
+        </ContextMenuTrigger>
+        <TooltipContent>{path}</TooltipContent>
+      </Tooltip>
       <ContextMenuContent>
         <ContextMenuItem onClick={() => setEditing(true)}>
           <Pencil/>

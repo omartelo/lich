@@ -5,7 +5,7 @@ import { Plus } from "lucide-react"
 import { useProjects } from "@/lib/projects"
 import { activeSessionId, sessionsOf } from "@/lib/sessions"
 import { SessionCard } from "./SessionCard"
-import { useProjectBranch } from "./useProjectBranch"
+import { useGitStatus } from "@/lib/useGitStatus"
 
 // Sidebar width bounds in rem, matching the Tailwind v4 spacing scale. State and
 // storage stay in rem; the pointer drag delta arrives in CSS pixels and is
@@ -45,7 +45,7 @@ export function SessionSidebar() {
   const match = useMatch("/projects/:projectId")
   const projectId = match?.params.projectId
   const path = projects.find((p) => p.id === projectId)?.path ?? ""
-  const branch = useProjectBranch(path)
+  const git = useGitStatus(path)
   const [width, setWidth] = useState(readWidth)
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
 
@@ -109,7 +109,7 @@ export function SessionSidebar() {
             key={session.id}
             session={session}
             path={path}
-            branch={branch}
+            git={git}
             active={session.id === activeId}
             onSelect={() => activateSession(projectId, session.id)}
             onClose={() => closeSession(projectId, session.id)}
