@@ -6,7 +6,9 @@ import { toast } from "sonner"
 import { copyToastMessage, COPY_TOAST_DURATION_MS } from "@/lib/copy-toast"
 import { patchBlockGlyphs } from "@/lib/block-glyphs"
 import { patchFontMetrics } from "@/lib/font-metrics"
+import { patchGlyphAtlas } from "@/lib/glyph-atlas"
 import { pauseRenderLoop, resumeRenderLoop } from "@/lib/render-pause"
+import { patchRowPaint } from "@/lib/row-paint"
 import { isTextPasteChord, missingKeySequence } from "@/lib/term-keys"
 import { computeGrid } from "@/lib/term-fit"
 import { useSettings } from "@/lib/settings"
@@ -159,6 +161,8 @@ export function TerminalView({ sessionId, projectId, cwd, kind, visible }: Termi
       if (term.renderer) {
         patchBlockGlyphs(term.renderer)
         patchFontMetrics(term.renderer)
+        patchRowPaint(term.renderer)
+        patchGlyphAtlas(term.renderer)
       }
       fitTerminal(term, container)
       termRef.current = term

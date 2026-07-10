@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Terminal rendering is ~4× faster under heavy TUI load (nvim scroll worst-case
+  main-thread stall down from ~200-250ms to ~40-70ms; idle paint cost down ~8×).
+  Four changes: PTY output is now coalesced on the Go side for visible sessions
+  too (8ms batches; hidden stays at 250ms), blank cells skip `fillText`
+  entirely, cell backgrounds are painted as one `fillRect` per same-color run
+  instead of per cell, and plain glyphs are cached on offscreen sprites and
+  blitted with `drawImage` instead of re-rasterized with `fillText` every
+  frame. The remaining ceiling is ghostty-web's per-row WASM cell
+  materialization (`getLine`), which is only fixable upstream.
+
 ### Added
 
 - Git diff review panel: the footer's diff counters toggle a resizable split at

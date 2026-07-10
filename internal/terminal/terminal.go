@@ -121,7 +121,7 @@ func (s *Service) Start(id, projectID, cwd, kind string, cols, rows int) error {
 	out := newCoalescer(func(data []byte) {
 		encoded := base64.StdEncoding.EncodeToString(data)
 		application.Get().Event.Emit(dataEventPrefix+id, encoded)
-	}, hiddenFlushInterval)
+	}, visibleFlushInterval, hiddenFlushInterval)
 	s.sessions[id] = &session{ptmx: ptmx, cmd: cmd, out: out}
 	go s.stream(id, ptmx, cmd, out)
 	return nil
@@ -129,7 +129,8 @@ func (s *Service) Start(id, projectID, cwd, kind string, cols, rows int) error {
 
 // stream copies PTY output to the frontend until the PTY is closed, then reaps
 // the process, drops the session and emits its exit event. Output goes through
-// the session's coalescer, which batches it while the terminal is hidden.
+// the session's coalescer, which batches it on a short cadence while the
+// terminal is visible and a long one while it is hidden.
 func (s *Service) stream(id string, ptmx *os.File, cmd *exec.Cmd, out *coalescer) {
 	buf := make([]byte, readBufSize)
 	for {

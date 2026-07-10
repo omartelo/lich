@@ -9,6 +9,8 @@
 const BLOCK_RANGE_START = 0x2580
 const BLOCK_RANGE_END = 0x259f
 
+const FLAG_UNDERLINE = 4
+const FLAG_STRIKETHROUGH = 8
 const FLAG_INVERSE = 16
 const FLAG_INVISIBLE = 32
 const FLAG_FAINT = 128
@@ -99,12 +101,27 @@ interface RenderedCell {
   flags: number
   width: number
   grapheme_len: number
+  hyperlink_id: number
   fg_r: number
   fg_g: number
   fg_b: number
   bg_r: number
   bg_g: number
   bg_b: number
+}
+
+// isBlankCell reports whether renderCellText would draw no visible ink: a
+// space (or empty) cell without decorations. ghostty-web calls fillText even
+// for these — on a typical screen that's 30-60% of all cells, and fillText is
+// the single most expensive canvas call (~15µs in WebKit). The background pass
+// has already painted the cell, so skipping is free.
+function isBlankCell(cell: RenderedCell): boolean {
+  return (
+    cell.grapheme_len === 0 &&
+    (cell.codepoint === 0 || cell.codepoint === 32) &&
+    (cell.flags & (FLAG_UNDERLINE | FLAG_STRIKETHROUGH)) === 0 &&
+    cell.hyperlink_id === 0
+  )
 }
 
 interface PatchableRenderer {
@@ -149,14 +166,17 @@ function fillBlock(
 }
 
 /**
- * Wraps the renderer's renderCellText so block-element characters are drawn as
- * exact cell-filling rectangles instead of font glyphs. Everything else
- * delegates to the original implementation.
+ * Wraps the renderer's renderCellText so blank cells are skipped entirely and
+ * block-element characters are drawn as exact cell-filling rectangles instead
+ * of font glyphs. Everything else delegates to the original implementation.
  */
 export function patchBlockGlyphs(renderer: unknown): void {
   const target = renderer as PatchableRenderer
   const original = target.renderCellText.bind(target)
   target.renderCellText = (cell, x, y) => {
+    if (isBlankCell(cell)) {
+      return
+    }
     const glyph = cell.grapheme_len > 0 ? null : blockGlyph(cell.codepoint)
     if (!glyph) {
       original(cell, x, y)

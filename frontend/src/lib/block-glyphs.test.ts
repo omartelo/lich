@@ -70,6 +70,8 @@ describe("blockGlyph", () => {
   })
 })
 
+const FLAG_UNDERLINE = 4
+const FLAG_STRIKETHROUGH = 8
 const FLAG_INVERSE = 16
 const FLAG_INVISIBLE = 32
 const FLAG_FAINT = 128
@@ -83,12 +85,13 @@ interface FillCall {
   alpha: number
 }
 
-function makeCell(codepoint: number, flags = 0) {
+function makeCell(codepoint: number, flags = 0, hyperlinkId = 0) {
   return {
     codepoint,
     flags,
     width: 1,
     grapheme_len: 0,
+    hyperlink_id: hyperlinkId,
     fg_r: 255,
     fg_g: 100,
     fg_b: 0,
@@ -178,5 +181,27 @@ describe("patchBlockGlyphs", () => {
     renderer.renderCellText(makeCell(0x2588), 0, 0)
 
     expect(fillRects[0].fillStyle).toBe("#abcdef")
+  })
+
+  it("skips blank cells entirely (space and empty codepoint)", () => {
+    const { renderer, fillRects, textCalls } = makeRenderer()
+    patchBlockGlyphs(renderer)
+    renderer.renderCellText(makeCell(32), 0, 0)
+    renderer.renderCellText(makeCell(0), 1, 0)
+
+    expect(fillRects).toEqual([])
+    expect(textCalls).toEqual([])
+  })
+
+  it("still delegates decorated or linked spaces to the original", () => {
+    const { renderer, textCalls } = makeRenderer()
+    patchBlockGlyphs(renderer)
+    renderer.renderCellText(makeCell(32, FLAG_UNDERLINE), 0, 0)
+    renderer.renderCellText(makeCell(32, FLAG_STRIKETHROUGH), 1, 0)
+    renderer.renderCellText(makeCell(32, 0, 7), 2, 0)
+    const spaceCluster = { ...makeCell(32), grapheme_len: 1 }
+    renderer.renderCellText(spaceCluster, 3, 0)
+
+    expect(textCalls).toEqual([32, 32, 32, 32])
   })
 })

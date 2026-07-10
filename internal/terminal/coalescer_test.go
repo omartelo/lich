@@ -15,25 +15,37 @@ func captureEmit(buf int) (func([]byte), chan []byte) {
 	}, emits
 }
 
-func TestCoalescerVisibleEmitsImmediately(t *testing.T) {
+// TestCoalescerVisibleBatchesBurstOnShortTimer pairs a short visible interval
+// with an hour-long hidden one, so a flush also proves the timer picked the
+// visible cadence.
+func TestCoalescerVisibleBatchesBurstOnShortTimer(t *testing.T) {
 	emit, emits := captureEmit(1)
-	c := newCoalescer(emit, time.Hour)
+	c := newCoalescer(emit, 10*time.Millisecond, time.Hour)
 
-	c.Write([]byte("hello"))
+	c.Write([]byte("hel"))
+	c.Write([]byte("lo"))
+
+	select {
+	case got := <-emits:
+		t.Fatalf("visible write emitted %q before the flush interval", got)
+	default:
+	}
 
 	select {
 	case got := <-emits:
 		if string(got) != "hello" {
-			t.Fatalf("emitted %q, want %q", got, "hello")
+			t.Fatalf("flushed %q, want %q", got, "hello")
 		}
-	default:
-		t.Fatal("visible write did not emit immediately")
+	case <-time.After(time.Second):
+		t.Fatal("visible timer flush never happened")
 	}
 }
 
+// TestCoalescerHiddenBuffersThenFlushesOnTimer is the mirror image: an
+// hour-long visible interval with a short hidden one.
 func TestCoalescerHiddenBuffersThenFlushesOnTimer(t *testing.T) {
 	emit, emits := captureEmit(1)
-	c := newCoalescer(emit, 10*time.Millisecond)
+	c := newCoalescer(emit, time.Hour, 10*time.Millisecond)
 	c.SetVisible(false)
 
 	c.Write([]byte("foo"))
@@ -57,7 +69,7 @@ func TestCoalescerHiddenBuffersThenFlushesOnTimer(t *testing.T) {
 
 func TestCoalescerTimerRearmsPerBurst(t *testing.T) {
 	emit, emits := captureEmit(2)
-	c := newCoalescer(emit, 10*time.Millisecond)
+	c := newCoalescer(emit, time.Hour, 10*time.Millisecond)
 	c.SetVisible(false)
 
 	c.Write([]byte("first"))
@@ -78,7 +90,7 @@ func TestCoalescerTimerRearmsPerBurst(t *testing.T) {
 
 func TestCoalescerSetVisibleFlushesPending(t *testing.T) {
 	emit, emits := captureEmit(1)
-	c := newCoalescer(emit, time.Hour)
+	c := newCoalescer(emit, time.Hour, time.Hour)
 	c.SetVisible(false)
 
 	c.Write([]byte("pending"))
@@ -96,7 +108,7 @@ func TestCoalescerSetVisibleFlushesPending(t *testing.T) {
 
 func TestCoalescerSetVisibleWithEmptyPendingEmitsNothing(t *testing.T) {
 	emit, emits := captureEmit(1)
-	c := newCoalescer(emit, time.Hour)
+	c := newCoalescer(emit, time.Hour, time.Hour)
 	c.SetVisible(false)
 
 	c.SetVisible(true)
@@ -110,7 +122,7 @@ func TestCoalescerSetVisibleWithEmptyPendingEmitsNothing(t *testing.T) {
 
 func TestCoalescerOverflowForcesEarlyFlush(t *testing.T) {
 	emit, emits := captureEmit(1)
-	c := newCoalescer(emit, time.Hour)
+	c := newCoalescer(emit, time.Hour, time.Hour)
 	c.SetVisible(false)
 
 	c.Write(make([]byte, maxPendingBytes))
@@ -127,7 +139,7 @@ func TestCoalescerOverflowForcesEarlyFlush(t *testing.T) {
 
 func TestCoalescerCloseFlushesOnceAndSeals(t *testing.T) {
 	emit, emits := captureEmit(2)
-	c := newCoalescer(emit, time.Hour)
+	c := newCoalescer(emit, time.Hour, time.Hour)
 	c.SetVisible(false)
 
 	c.Write([]byte("tail"))
@@ -155,7 +167,7 @@ func TestCoalescerConcurrentWritesAndFlips(t *testing.T) {
 		mu.Lock()
 		emitted.Write(data)
 		mu.Unlock()
-	}, time.Millisecond)
+	}, time.Millisecond, time.Millisecond)
 
 	const writers, writes = 4, 100
 	var wg sync.WaitGroup

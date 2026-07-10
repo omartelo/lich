@@ -38,7 +38,7 @@ func TestOperationsOnUnknownSessionAreNoops(t *testing.T) {
 // session is made visible.
 func TestSetVisibleReachesCoalescer(t *testing.T) {
 	emit, emits := captureEmit(1)
-	out := newCoalescer(emit, time.Hour)
+	out := newCoalescer(emit, time.Hour, time.Hour)
 	out.SetVisible(false)
 	out.Write([]byte("pending"))
 
