@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Git diff review panel: the footer's diff counters toggle a resizable split at
+  the terminal's right showing the active session's uncommitted changes, one
+  collapsible card per file with syntax highlighting, line numbers, and hunk
+  separators (CodeMirror 6). Selecting lines and right-clicking injects
+  `@path` or `path:start-end` references into the session's PTY; per-file
+  buttons add the file as context or discard its changes after confirmation.
+  A full-screen mode overlays the terminal area.
 - PTY-backed terminal harness with multiple sessions per project.
 - Multi-project workspace: open projects through the OS picker and switch between
   them via a Discord-style rail with tabs.
@@ -21,8 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Git worktree sessions: create a worktree from a local or remote base branch
   (fetched and tracked) with an optional custom or auto-generated name, resume
   an existing worktree, and open Claude Code directly in its checkout. Closing
-  the session asks whether to keep or remove the worktree; session cards and the
-  footer follow the worktree's path, branch, and diff.
+  the session asks whether to keep or remove the worktree — removing one with
+  uncommitted changes asks a second confirmation before forcing — and session
+  cards and the footer follow the worktree's path, branch, and diff.
 - Right-click context menu to rename or close a session.
 - Bundled FiraCode Nerd Font.
 - Configurable Claude Code binary path in settings.
@@ -43,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Renamed the `internals` package to `internal`.
 - Translated `CLAUDE.md` to English.
 - Home paths render with a `~` prefix and an overflow fade on cards.
+- Switched the base color palette from zinc to neutral.
 
 ### Fixed
 
@@ -54,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Shift+Tab now reaches terminal apps as backtab (`ESC [ Z`) and Alt chords get
   their ESC prefix — ghostty-web 0.4.0 drops both, and WebKitGTK reports
   Shift+Tab as the `ISO_Left_Tab` keysym.
+- Long worktree paths wrap instead of overflowing the close dialogs.
 
 ### Performance
 
