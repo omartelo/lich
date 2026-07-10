@@ -7,6 +7,8 @@ import { copyToastMessage, COPY_TOAST_DURATION_MS } from "@/lib/copy-toast"
 import { patchBlockGlyphs } from "@/lib/block-glyphs"
 import { patchFontMetrics } from "@/lib/font-metrics"
 import { patchGlyphAtlas } from "@/lib/glyph-atlas"
+import { patchPooledGetLine } from "@/lib/getline-pool"
+import { patchScrollGate, patchScrollbackCache } from "@/lib/scrollback-perf"
 import { pauseRenderLoop, resumeRenderLoop } from "@/lib/render-pause"
 import { patchRowPaint } from "@/lib/row-paint"
 import { isTextPasteChord, missingKeySequence } from "@/lib/term-keys"
@@ -165,7 +167,12 @@ export function TerminalView({ sessionId, projectId, cwd, kind, visible }: Termi
         patchRowPaint(term.renderer)
         patchGlyphAtlas(term.renderer, countingCanvasFactory())
         instrumentRender(term.renderer)
+        // Gate wraps last so skipped frames never reach the instrumented
+        // render — term-perf keeps counting only real paints.
+        patchScrollGate(term.renderer)
       }
+      patchPooledGetLine(term.wasmTerm)
+      patchScrollbackCache(term)
       fitTerminal(term, container)
       termRef.current = term
 
