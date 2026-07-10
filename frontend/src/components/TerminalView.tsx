@@ -11,6 +11,7 @@ import { pauseRenderLoop, resumeRenderLoop } from "@/lib/render-pause"
 import { patchRowPaint } from "@/lib/row-paint"
 import { isTextPasteChord, missingKeySequence } from "@/lib/term-keys"
 import { computeGrid } from "@/lib/term-fit"
+import { countingCanvasFactory, instrumentRender, recordChunk } from "@/lib/term-perf"
 import { useSettings } from "@/lib/settings"
 import type { ResolvedTheme } from "@/lib/settings"
 import type { SessionKind } from "@/lib/sessions"
@@ -162,7 +163,8 @@ export function TerminalView({ sessionId, projectId, cwd, kind, visible }: Termi
         patchBlockGlyphs(term.renderer)
         patchFontMetrics(term.renderer)
         patchRowPaint(term.renderer)
-        patchGlyphAtlas(term.renderer)
+        patchGlyphAtlas(term.renderer, countingCanvasFactory())
+        instrumentRender(term.renderer)
       }
       fitTerminal(term, container)
       termRef.current = term
@@ -213,7 +215,11 @@ export function TerminalView({ sessionId, projectId, cwd, kind, visible }: Termi
       cleanups.push(() => selectionInput.dispose())
 
       const offData = Events.On(DATA_EVENT_PREFIX + sessionId, (event) => {
-        term.write(decodeBase64(event.data as string))
+        const t0 = performance.now()
+        const bytes = decodeBase64(event.data as string)
+        const t1 = performance.now()
+        term.write(bytes)
+        recordChunk(t1 - t0, performance.now() - t1, bytes.length)
       })
       const offExit = Events.On(EXIT_EVENT_PREFIX + sessionId, () => {
         term.write("\r\n[process exited]\r\n")
