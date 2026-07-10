@@ -20,6 +20,17 @@ describe("missingKeySequence", () => {
     expect(missingKeySequence(gtk)).toBe("\x1b[Z")
   })
 
+  it("maps Shift+Enter to ESC CR (newline in TUIs)", () => {
+    expect(missingKeySequence(key({ shiftKey: true, key: "Enter" }))).toBe("\x1b\r")
+  })
+
+  it("maps Ctrl+Backspace to ETB (delete word)", () => {
+    expect(missingKeySequence(key({ ctrlKey: true, key: "Backspace" }))).toBe("\x17")
+    expect(
+      missingKeySequence(key({ ctrlKey: true, shiftKey: true, key: "Backspace" })),
+    ).toBeNull()
+  })
+
   it("prefixes Alt+<char> with ESC", () => {
     expect(missingKeySequence(key({ altKey: true, key: "t" }))).toBe("\x1bt")
     expect(missingKeySequence(key({ altKey: true, shiftKey: true, key: "T" }))).toBe("\x1bT")
@@ -32,6 +43,7 @@ describe("missingKeySequence", () => {
   it("leaves keys the terminal already handles alone", () => {
     expect(missingKeySequence(key({ key: "Tab" }))).toBeNull() // plain tab
     expect(missingKeySequence(key({ key: "t" }))).toBeNull() // plain char
+    expect(missingKeySequence(key({ key: "Enter" }))).toBeNull() // plain enter
     expect(missingKeySequence(key({ ctrlKey: true, shiftKey: true, key: "Tab" }))).toBeNull()
     expect(missingKeySequence(key({ metaKey: true, altKey: true, key: "t" }))).toBeNull()
     expect(missingKeySequence(key({ altKey: true, key: "ArrowLeft" }))).toBeNull() // non-char
