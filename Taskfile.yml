@@ -34,6 +34,9 @@ tasks:
 
   dev:
     summary: Runs the application in development mode
+    env:
+      # Separate dev database (lich-dev.db) — see store.databasePath.
+      LICH_DEV: "1"
     cmds:
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
 

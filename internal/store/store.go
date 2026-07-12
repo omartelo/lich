@@ -124,13 +124,19 @@ func open(path string) (*Service, error) {
 	return &Service{db: db}, nil
 }
 
-// databasePath resolves the on-disk location of the database file.
+// databasePath resolves the on-disk location of the database file. LICH_DEV
+// (set by `task dev`) selects a separate database so development migrations
+// and experiments never touch the real workspace.
 func databasePath() (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("resolve config directory: %w", err)
 	}
-	return filepath.Join(dir, "lich", "lich.db"), nil
+	name := "lich.db"
+	if os.Getenv("LICH_DEV") != "" {
+		name = "lich-dev.db"
+	}
+	return filepath.Join(dir, "lich", name), nil
 }
 
 // Close releases the database connection.

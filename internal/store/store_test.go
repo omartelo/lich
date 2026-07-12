@@ -168,12 +168,24 @@ func TestRenameAndActivateSession(t *testing.T) {
 }
 
 func TestDatabasePath(t *testing.T) {
+	t.Setenv("LICH_DEV", "")
 	path, err := databasePath()
 	if err != nil {
 		t.Fatalf("databasePath: %v", err)
 	}
 	if filepath.Base(path) != "lich.db" || filepath.Base(filepath.Dir(path)) != "lich" {
 		t.Errorf("path = %q, want .../lich/lich.db", path)
+	}
+}
+
+func TestDatabasePathDev(t *testing.T) {
+	t.Setenv("LICH_DEV", "1")
+	path, err := databasePath()
+	if err != nil {
+		t.Fatalf("databasePath: %v", err)
+	}
+	if filepath.Base(path) != "lich-dev.db" {
+		t.Errorf("path = %q, want .../lich/lich-dev.db", path)
 	}
 }
 
