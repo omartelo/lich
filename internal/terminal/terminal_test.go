@@ -15,6 +15,30 @@ type stubBins struct{ bin string }
 
 func (s stubBins) ClaudeBin(string) string { return s.bin }
 
+// TestChildEnvStripsAppImageVars proves the AppImage runtime variables that break
+// mise/asdf shims are dropped while the real user environment is passed through.
+func TestChildEnvStripsAppImageVars(t *testing.T) {
+	in := []string{
+		"PATH=/usr/bin",
+		"ARGV0=lich.AppImage",
+		"APPIMAGE=/tmp/lich.AppImage",
+		"APPDIR=/tmp/.mount_lich",
+		"OWD=/home/user",
+		"HOME=/home/user",
+	}
+	got := strings.Join(childEnv(in), "\n")
+	for _, want := range []string{"PATH=/usr/bin", "HOME=/home/user"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("childEnv dropped %q", want)
+		}
+	}
+	for _, gone := range []string{"ARGV0", "APPIMAGE", "APPDIR", "OWD"} {
+		if strings.Contains(got, gone+"=") {
+			t.Errorf("childEnv leaked AppImage var %q", gone)
+		}
+	}
+}
+
 // TestOperationsOnUnknownSessionAreNoops proves Write/Resize/Close on a session
 // that was never started return nil instead of panicking on a missing PTY.
 func TestOperationsOnUnknownSessionAreNoops(t *testing.T) {
