@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `LICH_DEV` environment variable: when set, the app uses a separate SQLite
+  database (`lich-dev.db` instead of `lich.db`), keeping development work away
+  from the real workspace. `task dev` sets it automatically.
+
 ## [0.1.0] - 2026-07-12
 
 ### Changed
