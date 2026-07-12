@@ -49,14 +49,17 @@ jobs:
           go install github.com/go-task/task/v3/cmd/task@latest
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
-      - name: Backend tests
-        run: go test ./...
-
-      - name: Frontend install + tests
+      # Frontend first: the backend embeds frontend/dist (go:embed), so Go
+      # tests only compile once the frontend has been built.
+      - name: Frontend install + tests + build
         working-directory: frontend
         run: |
           pnpm install --frozen-lockfile
           pnpm test
+          pnpm build
+
+      - name: Backend tests
+        run: go test ./...
 
       - name: Build Linux packages
         run: task linux:package
