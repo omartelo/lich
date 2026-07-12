@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-07-12
+
 ### Changed
 
 - Terminal rendering is ~4× faster under heavy TUI load (nvim scroll worst-case
@@ -89,5 +91,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Coalesced PTY output of hidden sessions in the backend to one event per 250 ms,
   flushed immediately when the session is shown.
 - Skipped the resize-driven refit for hidden terminals; they refit once on show.
+- Shared one git-status poller per repository path with equality bailout: with
+  20+ session cards the idle burst of ~44 IPC calls and ~88 git subprocesses
+  every 3 s collapses to one fetch per path, and unchanged status no longer
+  re-renders anything.
+- Removed the per-cell defensive copy in ghostty-web's `getLine` (pool-backed
+  row references), gated rendering while scrolled with nothing dirty, and
+  memoized scrollback lines — reading scrollback now costs ~0 paint, and heavy
+  TUI throughput renders at ~40fps instead of ~25.
+- Terminal I/O now flows over a local binary WebSocket (random loopback port,
+  token-authenticated) instead of one Wails HTTP call per keystroke and one
+  `evaluate_javascript` per output chunk; falls back to the Wails paths
+  automatically if the socket drops.
+- Forced `GDK_BACKEND=x11` on Linux (only when unset): WebKitGTK under Wayland
+  fractional scaling rendered every damage frame at 2x and downsampled on the
+  CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
+  stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/commits/main
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/omartelo/lich/releases/tag/v0.1.0
