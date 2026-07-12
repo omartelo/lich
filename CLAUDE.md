@@ -52,8 +52,13 @@ workflow then runs on a Linux runner: it runs the test suites, builds the Linux
 packages with `task linux:package` (AppImage, `.deb`, `.rpm`, and the Arch
 `.pkg.tar.zst`), and publishes a GitHub Release with those artifacts plus a
 `checksums.txt`, taking the release notes from the matching `CHANGELOG.md`
-section. The Linux build needs CGO (WebKit2GTK), which is why it runs natively on
-a Linux runner rather than cross-compiling.
+section. The Linux build links against GTK4 + WebKitGTK 6.0 through CGO
+(`libgtk-4-dev libwebkitgtk-6.0-dev` on Debian/Ubuntu — the wails3 alpha2.116
+default; GTK3 only exists behind a `gtk3` build tag we don't use), which is why
+it runs natively on a Linux runner rather than cross-compiling. The workflow
+regenerates the gitignored Go→TS bindings (`task common:generate:bindings`) and
+builds the frontend **before** the Go tests — the backend `go:embed`s
+`frontend/dist`, so Go code doesn't compile without it.
 
 The release version comes from the git tag. `build/config.yml`'s `info.version`
 is packaging metadata only — there is no ldflags injection, so keep it in step
@@ -72,8 +77,22 @@ Before tagging:
 
 Deliberate limits and shortcuts, with the upgrade path when it matters:
 
-- **git status is polled per project every ~3 s** — there is no filesystem watch. Move to an fs watcher if the poll ever
-  costs too much.
+- **git status is polled every ~3 s** — one shared poller per repository path
+  (`frontend/src/lib/git-status-store.ts`), no filesystem watch. Unchanged status short-circuits (same reference, zero
+  re-renders). Move to an fs watcher if the poll ever costs too much.
 - **Persistence is hybrid**: UI preferences live in `localStorage` (`lich.*` keys), the workspace in SQLite (
   `<data-dir>/lich/lich.db`). Session order is not persisted, and closing a session does not delete its row (close ≠
   delete).
+- **`ghostty-web` is pinned to exactly `0.4.0`.** The terminal's performance rests on patches of library privates —
+  render-pause, block-glyphs, font-metrics, row-paint, glyph-atlas, getline-pool, scrollback-perf, all under
+  `frontend/src/lib/` and wired in `TerminalView.tsx`. Bumping the pin means revalidating every patched private; each
+  patch degrades to the slow original (never breaks) if a private moved.
+- **Terminal I/O rides a local WebSocket** — random loopback port + token auth, binary frames multiplexing all sessions
+  (`internal/terminal/transport.go` ↔ `frontend/src/lib/term-transport.ts`). It exists because each keystroke over the
+  Wails binding is an HTTP round-trip and each output chunk an `evaluate_javascript` call. Input and output fall back to
+  the Wails paths automatically whenever the socket is down.
+- **`GDK_BACKEND=x11` is forced on Linux** (`main.go`, only when unset — an explicit value wins): WebKitGTK under
+  Wayland fractional scaling renders every damage frame at 2x and downsamples on the CPU (~40ms/frame in a full-size
+  window). Under Xwayland the app sees an integer scale and the cost disappears.
+- **Webview RAM is ~1GB with 20+ sessions** (canvas + WASM buffer + 5000-line scrollback each). If it hurts: shrink
+  hidden-session canvases or reduce scrollback.

@@ -23,7 +23,9 @@ release.
 
 > **Platform** — Linux is the only target that ships today (AppImage, `.deb`,
 > `.rpm`, Arch `.pkg.tar.zst`). macOS/Windows can be built from source but are
-> untested.
+> untested. On Wayland the app runs through Xwayland (`GDK_BACKEND=x11` is
+> forced unless you set it yourself) — WebKitGTK repaints are far cheaper there
+> under fractional scaling.
 
 ## Features
 
@@ -71,7 +73,7 @@ sudo pacman -U lich-*-x86_64.pkg.tar.zst
 
 Prerequisites: **Go 1.25+**, **Node + pnpm**, **[Task](https://taskfile.dev)**,
 **[wails3](https://v3.wails.io/)**, and the Linux WebKit/GTK dev libraries
-(`libgtk-3-dev libwebkit2gtk-4.1-dev` on Debian/Ubuntu — CGO links against them).
+(`libgtk-4-dev libwebkitgtk-6.0-dev` on Debian/Ubuntu — CGO links against them).
 
 ```bash
 task dev      # hot-reload dev mode (Vite on :9245)
