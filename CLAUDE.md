@@ -96,3 +96,8 @@ Deliberate limits and shortcuts, with the upgrade path when it matters:
   window). Under Xwayland the app sees an integer scale and the cost disappears.
 - **Webview RAM is ~1GB with 20+ sessions** (canvas + WASM buffer + 5000-line scrollback each). If it hurts: shrink
   hidden-session canvases or reduce scrollback.
+- **The AppImage runs with the WebKit sandbox disabled** (`WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1` in its AppRun).
+  WebKitGTK is not relocatable: helper/bwrap paths are baked at compile time, so
+  `build/linux/appimage/fix-appimage.sh` binary-patches `libwebkit*` (`/usr` → `././`), fixes the helpers' exec bits
+  and repacks with appimagetool after `wails3 generate appimage`. The webview only renders the embedded frontend, so
+  the sandbox loss is acceptable; revisit if lich ever loads remote content.

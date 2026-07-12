@@ -119,6 +119,8 @@ tasks:
       - cp "{{.APP_BINARY}}" "{{.APP_NAME}}"
       - cp ../../appicon.png "{{.APP_NAME}}.png"
       - wails3 generate appimage -binary "{{.APP_NAME}}" -icon {{.ICON}} -desktopfile {{.DESKTOP_FILE}} -outputdir {{.OUTPUT_DIR}} -builddir {{.ROOT_DIR}}/build/linux/appimage/build
+      # wails3's AppImage aborts outside Debian/Ubuntu (webkit hardcoded paths) — patch the AppDir and repack
+      - ./fix-appimage.sh build/{{.APP_NAME}}-$(uname -m).AppDir "{{.APP_NAME}}" {{.OUTPUT_DIR}}/{{.APP_NAME}}-$(uname -m).AppImage
     vars:
       APP_NAME: '{{.APP_NAME}}'
       APP_BINARY: '../../../bin/{{.APP_NAME}}'
