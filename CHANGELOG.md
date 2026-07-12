@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-12
+
+### Fixed
+
+- The AppImage aborted on startup on any distro that is not Debian/Ubuntu
+  (`Failed to spawn child process ".../webkitgtk-6.0/WebKitNetworkProcess"`).
+  The bundled WebKitGTK hardcodes its helper paths at compile time, so the
+  packaging now binary-patches `libwebkit*` to resolve them inside the AppDir
+  (the same relocation tauri's bundler applies), marks the bundled
+  `WebKit*Process` helpers executable (wails3 copies them without the exec
+  bit), and disables the webkit sandbox, which would otherwise require the
+  host's `bwrap` at another baked path. See
+  `build/linux/appimage/fix-appimage.sh`.
+
 ### Added
 
 - `LICH_DEV` environment variable: when set, the app uses a separate SQLite
@@ -114,5 +128,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/omartelo/lich/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/omartelo/lich/releases/tag/v0.1.0
