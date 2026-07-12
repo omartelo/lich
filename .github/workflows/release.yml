@@ -49,6 +49,10 @@ jobs:
           go install github.com/go-task/task/v3/cmd/task@latest
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
+      # The Go→TS bindings are gitignored; the frontend build needs them.
+      - name: Generate bindings
+        run: task common:generate:bindings
+
       # Frontend first: the backend embeds frontend/dist (go:embed), so Go
       # tests only compile once the frontend has been built.
       - name: Frontend install + tests + build
