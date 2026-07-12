@@ -41,7 +41,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            pkg-config gcc libc6-dev libgtk-3-dev libwebkit2gtk-4.1-dev
+            pkg-config gcc libc6-dev libgtk-4-dev libwebkitgtk-6.0-dev
 
       - name: Install wails3 and task
         run: |
