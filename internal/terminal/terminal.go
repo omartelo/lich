@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 
 	"github.com/creack/pty"
@@ -95,6 +96,25 @@ func resolveCommand(kind, bin, shellEnv string) string {
 	return resolveBin(bin)
 }
 
+// appImageVars are set by the AppImage runtime and must not leak into the shell:
+// ARGV0 (the .AppImage's invocation name) makes mise/asdf-style shims misread the
+// shell as an invalid shim, and the rest are runtime internals a child never needs.
+var appImageVars = map[string]bool{"ARGV0": true, "APPIMAGE": true, "APPDIR": true, "OWD": true}
+
+// childEnv strips AppImage runtime variables from env so spawned shells inherit a
+// clean environment. Outside an AppImage none are present and env is returned as-is.
+func childEnv(env []string) []string {
+	out := make([]string, 0, len(env))
+	for _, kv := range env {
+		key, _, _ := strings.Cut(kv, "=")
+		if appImageVars[key] {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return out
+}
+
 // Start spawns the binary for session id under project projectID — the user's
 // shell when kind is "shell", otherwise the Claude Code binary resolved from the
 // project's settings (falling back to "claude" via $PATH) — attached to a new
@@ -119,7 +139,7 @@ func (s *Service) Start(id, projectID, cwd, kind string, cols, rows int) error {
 
 	cmd := exec.Command(resolveCommand(kind, s.bins.ClaudeBin(projectID), os.Getenv("SHELL")))
 	cmd.Dir = cwd
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+	cmd.Env = append(childEnv(os.Environ()), "TERM=xterm-256color")
 
 	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: uint16(rows), Cols: uint16(cols)})
 	if err != nil {
