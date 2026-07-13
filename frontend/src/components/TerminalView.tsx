@@ -10,6 +10,7 @@ import { patchGlyphAtlas } from "@/lib/glyph-atlas"
 import { patchPooledGetLine } from "@/lib/getline-pool"
 import { patchScrollGate, patchScrollbackCache } from "@/lib/scrollback-perf"
 import { ensureTransport, onSessionData, sendInput } from "@/lib/term-transport"
+import { registerLinkOpening } from "@/lib/term-links"
 import { pauseRenderLoop, resumeRenderLoop } from "@/lib/render-pause"
 import { patchRowPaint } from "@/lib/row-paint"
 import { isTextPasteChord, missingKeySequence } from "@/lib/term-keys"
@@ -174,6 +175,7 @@ export function TerminalView({ sessionId, projectId, cwd, kind, visible }: Termi
       }
       patchPooledGetLine(term.wasmTerm)
       patchScrollbackCache(term)
+      registerLinkOpening(term)
       fitTerminal(term, container)
       termRef.current = term
       ensureTransport()
