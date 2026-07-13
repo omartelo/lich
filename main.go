@@ -6,6 +6,7 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/omartelo/lich/internal/claudeplugin"
 	"github.com/omartelo/lich/internal/fonts"
 	"github.com/omartelo/lich/internal/project"
 	"github.com/omartelo/lich/internal/store"
@@ -66,6 +67,7 @@ func main() {
 			application.NewService(terminal.New(db, env)),
 			application.NewService(fonts.New()),
 			application.NewService(project.New()),
+			application.NewService(claudeplugin.New(db)),
 			application.NewService(db),
 		},
 		Assets: application.AssetOptions{
