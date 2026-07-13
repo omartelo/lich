@@ -15,6 +15,7 @@ import { pauseRenderLoop, resumeRenderLoop } from "@/lib/render-pause"
 import { patchRowPaint } from "@/lib/row-paint"
 import { isTextPasteChord, missingKeySequence } from "@/lib/term-keys"
 import { computeGrid } from "@/lib/term-fit"
+import { isStrayTerminalChild } from "@/lib/term-dom"
 import { countingCanvasFactory, instrumentRender, recordChunk } from "@/lib/term-perf"
 import { useSettings } from "@/lib/settings"
 import type { ResolvedTheme } from "@/lib/settings"
@@ -258,6 +259,23 @@ export function TerminalView({ sessionId, projectId, cwd, kind, visible }: Termi
         window.clearTimeout(refitTimer)
         resizeObserver.disconnect()
       })
+
+      // Remove nós editáveis parasitas que o WebKitGTK insere no container
+      // contenteditable do ghostty (paste de seleção primária por clique-do-meio
+      // no X11, drag-drop); eles furam o guard de beforeinput do ghostty e
+      // deslocam o canvas em fluxo, sobrando texto selecionável. Só o <canvas> +
+      // <textarea> do ghostty (já anexados no open() acima) podem viver aqui.
+      const domGuard = new MutationObserver((records) => {
+        for (const record of records) {
+          for (const node of record.addedNodes) {
+            if (isStrayTerminalChild(node)) {
+              ;(node as ChildNode).remove()
+            }
+          }
+        }
+      })
+      domGuard.observe(container, { childList: true })
+      cleanups.push(() => domGuard.disconnect())
 
       await Service.Start(sessionId, projectId, cwd, kind, term.cols, term.rows)
       if (visibleRef.current) {
