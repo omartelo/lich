@@ -37,23 +37,26 @@ export function ProjectClaudeCodeSettings() {
   }
 
   return (
-    <>
-      {projects.map((project) => (
-        <SettingBlock
-          key={project.id}
-          title={project.name}
-          description={project.path}
-        >
-          <input
-            value={bins[project.id] ?? ""}
-            onChange={(event) => persist(project.id, event.target.value)}
-            placeholder={globalBin || "claude"}
-            spellCheck={false}
-            aria-label={`Claude Code path for ${project.name}`}
-            className="h-9 w-96 max-w-full rounded-md border border-border bg-background px-3 font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
-          />
-        </SettingBlock>
-      ))}
-    </>
+    <SettingBlock
+      title="Custom path"
+      description="Per-project path to the Claude Code binary or a launcher script spawned in the project's terminals. Leave a project empty to inherit the global custom path."
+    >
+      <div className="space-y-5">
+        {projects.map((project) => (
+          <div key={project.id}>
+            <div className="text-sm font-medium text-foreground">{project.name}</div>
+            <p className="mb-2 mt-0.5 text-xs text-muted-foreground">{project.path}</p>
+            <input
+              value={bins[project.id] ?? ""}
+              onChange={(event) => persist(project.id, event.target.value)}
+              placeholder={globalBin || "claude"}
+              spellCheck={false}
+              aria-label={`Claude Code path for ${project.name}`}
+              className="h-9 w-96 max-w-full rounded-md border border-border bg-background px-3 font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+        ))}
+      </div>
+    </SettingBlock>
   )
 }
