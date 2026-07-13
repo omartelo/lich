@@ -13,7 +13,12 @@ import { ensureTransport, onSessionData, sendInput } from "@/lib/term-transport"
 import { registerLinkOpening } from "@/lib/term-links"
 import { pauseRenderLoop, resumeRenderLoop } from "@/lib/render-pause"
 import { patchRowPaint } from "@/lib/row-paint"
-import { isTextPasteChord, missingKeySequence } from "@/lib/term-keys"
+import {
+  altScreenWheelSequence,
+  isTextPasteChord,
+  missingKeySequence,
+  sgrWheelSequence,
+} from "@/lib/term-keys"
 import { computeGrid } from "@/lib/term-fit"
 import { isStrayTerminalChild } from "@/lib/term-dom"
 import { countingCanvasFactory, instrumentRender, recordChunk } from "@/lib/term-perf"
@@ -78,6 +83,30 @@ function fitTerminal(term: Ghostty, container: HTMLElement): void {
   const grid = computeGrid(container.clientWidth, container.clientHeight, cell)
   if (grid && (grid.cols !== term.cols || grid.rows !== term.rows)) {
     term.resize(grid.cols, grid.rows)
+  }
+}
+
+// pointerCell maps a wheel/mouse event to the 1-based terminal cell under the
+// pointer, for the coordinates an SGR mouse report carries. Falls back to the
+// top-left cell when metrics aren't ready; clamps into the grid so the report
+// never names a cell outside it.
+function pointerCell(
+  event: WheelEvent,
+  container: HTMLElement,
+  renderer: Ghostty["renderer"],
+  cols: number,
+  rows: number,
+): { col: number; row: number } {
+  const cell = renderer?.getMetrics()
+  if (!cell) {
+    return { col: 1, row: 1 }
+  }
+  const rect = container.getBoundingClientRect()
+  const col = Math.floor((event.clientX - rect.left) / cell.width) + 1
+  const row = Math.floor((event.clientY - rect.top) / cell.height) + 1
+  return {
+    col: Math.max(1, Math.min(cols, col)),
+    row: Math.max(1, Math.min(rows, row)),
   }
 }
 
@@ -209,6 +238,35 @@ export function TerminalView({ sessionId, projectId, cwd, kind, visible }: Termi
           return false
         }
         writeInput(seq)
+        return true
+      })
+
+      // ghostty-web reports no mouse events, so its alt-screen emulation turns
+      // the wheel into arrow keys. When the app enabled mouse tracking with SGR
+      // encoding (Claude Code, htop, vim), forward a real wheel event so it
+      // scrolls by its own line increment (smooth, no arrow-key warning).
+      // Otherwise fall back to PgUp/PgDn in the alt screen, and let ghostty
+      // scroll its own scrollback viewport everywhere else. See term-keys.ts.
+      term.attachCustomWheelEventHandler((event) => {
+        const wasm = term.wasmTerm
+        if (!wasm) {
+          return false
+        }
+        if (wasm.hasMouseTracking() && wasm.getMode(1006, false)) {
+          const { col, row } = pointerCell(event, container, term.renderer, term.cols, term.rows)
+          const seq = sgrWheelSequence(event.deltaY, col, row)
+          if (seq) {
+            writeInput(seq)
+          }
+          return true
+        }
+        if (!wasm.isAlternateScreen()) {
+          return false
+        }
+        const seq = altScreenWheelSequence(event.deltaY)
+        if (seq) {
+          writeInput(seq)
+        }
         return true
       })
 

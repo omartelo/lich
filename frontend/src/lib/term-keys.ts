@@ -55,6 +55,29 @@ export function missingKeySequence(event: TermKeyState): string | null {
   return null
 }
 
+// SGR mouse wheel report (DECSET 1006). Apps that turn on mouse tracking —
+// Claude Code, htop, vim with `mouse=a` — scroll on these by their own line
+// increment, which reads as smooth instead of a page jump. ghostty-web 0.4.0
+// reports no mouse events at all, so its alt-screen emulation turns the wheel
+// into arrow keys; forwarding this is what Claude Code actually asked for (and
+// why it warns about arrow keys). Button 64 = wheel up, 65 = down; press-only,
+// no release. col/row are the 1-based cell under the pointer. deltaY 0 (a pure
+// horizontal wheel) sends nothing.
+export function sgrWheelSequence(deltaY: number, col: number, row: number): string | null {
+  if (deltaY === 0) return null
+  const button = deltaY > 0 ? 65 : 64
+  return `\x1b[<${button};${col};${row}M`
+}
+
+// Fallback for TUIs without mouse tracking: in the alternate screen ghostty-web
+// still emulates the wheel as one arrow key per tick, which Claude Code rejects
+// as "arrow keys · use PgUp/PgDn to scroll". Page keys are what those TUIs
+// scroll their history with. deltaY > 0 → PgDn; upward → PgUp; 0 → nothing.
+export function altScreenWheelSequence(deltaY: number): string | null {
+  if (deltaY === 0) return null
+  return deltaY > 0 ? "\x1b[6~" : "\x1b[5~"
+}
+
 /**
  * Ctrl+Shift+V — the terminal-convention text-paste chord. Handled outside
  * missingKeySequence because pasting needs the async Wails clipboard read,
