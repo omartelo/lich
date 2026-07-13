@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { isTextPasteChord, missingKeySequence, type TermKeyState } from "./term-keys"
+import {
+  altScreenWheelSequence,
+  isTextPasteChord,
+  missingKeySequence,
+  sgrWheelSequence,
+  type TermKeyState,
+} from "./term-keys"
 
 const key = (over: Partial<TermKeyState>): TermKeyState => ({
   ctrlKey: false,
@@ -62,6 +68,18 @@ describe("missingKeySequence", () => {
     expect(isTextPasteChord(key({ ctrlKey: true, shiftKey: true, altKey: true, key: "V" }))).toBe(
       false,
     )
+  })
+
+  it("encodes the wheel as an SGR mouse report for mouse-tracking apps", () => {
+    expect(sgrWheelSequence(120, 4, 9)).toBe("\x1b[<65;4;9M") // down → button 65
+    expect(sgrWheelSequence(-3, 1, 1)).toBe("\x1b[<64;1;1M") // up → button 64
+    expect(sgrWheelSequence(0, 4, 9)).toBeNull() // pure horizontal wheel
+  })
+
+  it("maps the wheel to PgDn/PgUp in the alternate screen", () => {
+    expect(altScreenWheelSequence(120)).toBe("\x1b[6~") // down → PgDn
+    expect(altScreenWheelSequence(-3)).toBe("\x1b[5~") // up → PgUp
+    expect(altScreenWheelSequence(0)).toBeNull() // pure horizontal wheel
   })
 
   it("ignores AltGr composition", () => {
