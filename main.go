@@ -25,6 +25,11 @@ var assets embed.FS
 // main is the application's entry point. It creates the application, opens the
 // main window and blocks until the app exits.
 func main() {
+	// Snapshot the environment before the GDK_BACKEND tweak below: spawned
+	// terminal sessions must inherit what the user launched lich with, not our
+	// GTK workarounds (see terminal.childEnv).
+	env := os.Environ()
+
 	// WebKitGTK under Wayland fractional scaling renders every damage frame
 	// at 2x and downsamples it on the CPU — typing in a full-size window cost
 	// ~40ms/frame of engine time regardless of raster backend (measured
@@ -44,11 +49,21 @@ func main() {
 	}
 	defer db.Close()
 
+	// The Name becomes the GTK application ID (org.wails.<name> on D-Bus),
+	// which is single-instance: a second process with the same ID is treated
+	// as a remote instance and never gets a window. A distinct dev name lets
+	// `task dev` (LICH_DEV=1, see Taskfile.yml) open alongside an installed
+	// lich.
+	name := "lich"
+	if os.Getenv("LICH_DEV") != "" {
+		name = "lichdev"
+	}
+
 	app := application.New(application.Options{
-		Name:        "lich",
+		Name:        name,
 		Description: "Personal harness",
 		Services: []application.Service{
-			application.NewService(terminal.New(db)),
+			application.NewService(terminal.New(db, env)),
 			application.NewService(fonts.New()),
 			application.NewService(project.New()),
 			application.NewService(db),

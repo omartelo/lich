@@ -47,15 +47,24 @@ type Service struct {
 	mu       sync.Mutex
 	sessions map[string]*session
 	bins     BinResolver
+	// env is the environment every spawned session inherits: the launch
+	// environment cleaned of AppImage runtime leakage (see childEnv), plus TERM.
+	env []string
 	// ws is the local WebSocket transport for terminal I/O (see transport.go);
 	// nil when it failed to start, leaving the Wails event bridge as the path.
 	ws *transport
 }
 
 // New returns a ready-to-use terminal service that resolves the binary to spawn
-// through bins.
-func New(bins BinResolver) *Service {
-	s := &Service{sessions: make(map[string]*session), bins: bins}
+// through bins. env is the process environment to derive session environments
+// from — callers pass a snapshot taken before any os.Setenv tweaks (main.go
+// forces GDK_BACKEND on Linux) so those never leak into spawned shells.
+func New(bins BinResolver, env []string) *Service {
+	s := &Service{
+		sessions: make(map[string]*session),
+		bins:     bins,
+		env:      append(childEnv(env), "TERM=xterm-256color"),
+	}
 	ws, err := newTransport(func(id string, data []byte) { _ = s.writeBytes(id, data) })
 	if err == nil {
 		s.ws = ws
@@ -96,23 +105,90 @@ func resolveCommand(kind, bin, shellEnv string) string {
 	return resolveBin(bin)
 }
 
-// appImageVars are set by the AppImage runtime and must not leak into the shell:
-// ARGV0 (the .AppImage's invocation name) makes mise/asdf-style shims misread the
-// shell as an invalid shim, and the rest are runtime internals a child never needs.
-var appImageVars = map[string]bool{"ARGV0": true, "APPIMAGE": true, "APPDIR": true, "OWD": true}
+// appImageVars are injected by the AppImage runtime, AppImageLauncher or our
+// AppRun (build/linux/appimage/fix-appimage.sh) and must not leak into the
+// shell: ARGV0 (the .AppImage's invocation name) makes mise/asdf-style shims
+// misread the shell as an invalid shim, the WEBKIT_ pair would run any
+// WebKitGTK app launched from the terminal without its sandbox, and the rest
+// are runtime internals a child never needs.
+var appImageVars = map[string]bool{
+	"ARGV0":              true,
+	"APPIMAGE":           true,
+	"APPDIR":             true,
+	"OWD":                true,
+	"TARGET_APPIMAGE":    true,
+	"REDIRECT_APPIMAGE":  true,
+	"DESKTOPINTEGRATION": true,
+	"WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS": true,
+	"WEBKIT_DISABLE_DMABUF_RENDERER":           true,
+}
 
-// childEnv strips AppImage runtime variables from env so spawned shells inherit a
-// clean environment. Outside an AppImage none are present and env is returned as-is.
+// childEnv returns env cleaned of everything the AppImage runtime injected, so
+// spawned shells inherit the environment lich itself was launched with. Outside
+// an AppImage (no APPDIR — the deb/rpm/dev case) env is returned unchanged.
+// Inside one, appImageVars are dropped and every value is scrubbed of
+// colon-separated path entries under the AppImage mount — AppRun prepends the
+// mount to LD_LIBRARY_PATH, PATH and XDG_DATA_DIRS, and its bundled Ubuntu libs
+// break linkers and GTK apps run from the terminal. Entries the user set
+// survive verbatim, so a pre-existing LD_LIBRARY_PATH keeps working.
 func childEnv(env []string) []string {
+	appdir := ""
+	for _, kv := range env {
+		if v, ok := strings.CutPrefix(kv, "APPDIR="); ok {
+			appdir = v
+			break
+		}
+	}
+	if appdir == "" {
+		return env
+	}
 	out := make([]string, 0, len(env))
 	for _, kv := range env {
-		key, _, _ := strings.Cut(kv, "=")
+		key, value, _ := strings.Cut(kv, "=")
 		if appImageVars[key] {
 			continue
 		}
-		out = append(out, kv)
+		scrubbed, changed := scrubPathList(value, appdir)
+		switch {
+		case changed && scrubbed == "":
+			// The variable only pointed into the mount (AppRun's "${VAR:-}"
+			// expansion can also leave a dangling empty entry): drop it.
+		case changed:
+			out = append(out, key+"="+scrubbed)
+		default:
+			out = append(out, kv)
+		}
 	}
 	return out
+}
+
+// scrubPathList drops colon-separated entries of value that live under dir.
+// changed reports whether anything was dropped; values without such entries are
+// returned untouched, so non-path variables are never rewritten. When only
+// empty entries remain the returned value is "".
+func scrubPathList(value, dir string) (string, bool) {
+	if !strings.Contains(value, dir) {
+		return value, false
+	}
+	var kept []string
+	changed, nonEmpty := false, false
+	for entry := range strings.SplitSeq(value, ":") {
+		if entry == dir || strings.HasPrefix(entry, dir+"/") {
+			changed = true
+			continue
+		}
+		if entry != "" {
+			nonEmpty = true
+		}
+		kept = append(kept, entry)
+	}
+	if !changed {
+		return value, false
+	}
+	if !nonEmpty {
+		return "", true
+	}
+	return strings.Join(kept, ":"), true
 }
 
 // Start spawns the binary for session id under project projectID — the user's
@@ -139,7 +215,7 @@ func (s *Service) Start(id, projectID, cwd, kind string, cols, rows int) error {
 
 	cmd := exec.Command(resolveCommand(kind, s.bins.ClaudeBin(projectID), os.Getenv("SHELL")))
 	cmd.Dir = cwd
-	cmd.Env = append(childEnv(os.Environ()), "TERM=xterm-256color")
+	cmd.Env = s.env
 
 	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: uint16(rows), Cols: uint16(cols)})
 	if err != nil {

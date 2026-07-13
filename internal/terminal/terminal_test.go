@@ -39,10 +39,98 @@ func TestChildEnvStripsAppImageVars(t *testing.T) {
 	}
 }
 
+// TestChildEnvOutsideAppImageIsUntouched proves the deb/rpm/dev case: without
+// APPDIR nothing is dropped or rewritten, even values that look like mount
+// paths or AppImage-ish keys the user happens to have set.
+func TestChildEnvOutsideAppImageIsUntouched(t *testing.T) {
+	in := []string{
+		"HOME=/home/user",
+		"LD_LIBRARY_PATH=/opt/lib:/tmp/.mount_other/usr/lib",
+		"WEBKIT_DISABLE_DMABUF_RENDERER=1",
+	}
+	got := childEnv(in)
+	if strings.Join(got, "\n") != strings.Join(in, "\n") {
+		t.Errorf("childEnv without APPDIR rewrote env:\n%v\nwant\n%v", got, in)
+	}
+}
+
+// TestChildEnvScrubsMountPaths proves path lists lose only the entries under
+// the AppImage mount: user-set entries survive, values reduced to nothing are
+// dropped, and unrelated values are never rewritten.
+func TestChildEnvScrubsMountPaths(t *testing.T) {
+	const mount = "/tmp/.mount_lich"
+	in := []string{
+		"APPDIR=" + mount,
+		"WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1",
+		"WEBKIT_DISABLE_DMABUF_RENDERER=1",
+		"TARGET_APPIMAGE=/home/user/Applications/lich.AppImage",
+		"REDIRECT_APPIMAGE=/home/user/Applications/lich.AppImage",
+		"DESKTOPINTEGRATION=AppImageLauncher",
+		// AppRun's "${LD_LIBRARY_PATH:-}" on an unset var leaves a trailing
+		// empty entry; everything points into the mount, so the var must go.
+		"LD_LIBRARY_PATH=" + mount + "/usr/lib/x86_64-linux-gnu:" + mount + "/usr/lib:",
+		"PATH=" + mount + "/usr/bin:/usr/local/bin:/usr/bin",
+		"XDG_DATA_DIRS=" + mount + "/usr/share:/usr/local/share:/usr/share",
+		"GDK_PIXBUF_MODULE_FILE=" + mount + "/usr/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache",
+		"GREP_COLORS=ms=01;31:mc=01;31",
+		"HOME=/home/user",
+	}
+	got := strings.Join(childEnv(in), "\n")
+
+	for _, want := range []string{
+		"PATH=/usr/local/bin:/usr/bin",
+		"XDG_DATA_DIRS=/usr/local/share:/usr/share",
+		"GREP_COLORS=ms=01;31:mc=01;31",
+		"HOME=/home/user",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("childEnv output missing %q:\n%s", want, got)
+		}
+	}
+	for _, gone := range []string{
+		"LD_LIBRARY_PATH", "GDK_PIXBUF_MODULE_FILE", "WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS",
+		"WEBKIT_DISABLE_DMABUF_RENDERER", "TARGET_APPIMAGE", "REDIRECT_APPIMAGE",
+		"DESKTOPINTEGRATION", "APPDIR",
+	} {
+		if strings.Contains(got, gone+"=") {
+			t.Errorf("childEnv leaked %q:\n%s", gone, got)
+		}
+	}
+	if strings.Contains(got, mount) {
+		t.Errorf("childEnv leaked a mount path:\n%s", got)
+	}
+}
+
+// TestChildEnvKeepsUserLibraryPath proves a user's own LD_LIBRARY_PATH suffix
+// survives the scrub — AppRun prepends the mount to whatever was already set.
+func TestChildEnvKeepsUserLibraryPath(t *testing.T) {
+	in := []string{
+		"APPDIR=/tmp/.mount_lich",
+		"LD_LIBRARY_PATH=/tmp/.mount_lich/usr/lib:/opt/cuda/lib64",
+	}
+	got := strings.Join(childEnv(in), "\n")
+	if !strings.Contains(got, "LD_LIBRARY_PATH=/opt/cuda/lib64") {
+		t.Errorf("childEnv lost the user's LD_LIBRARY_PATH:\n%s", got)
+	}
+}
+
+// TestNewSessionEnv proves the service derives its session environment at
+// construction: cleaned of AppImage leakage and terminated by TERM.
+func TestNewSessionEnv(t *testing.T) {
+	svc := New(stubBins{}, []string{"APPDIR=/tmp/.mount_lich", "ARGV0=lich.AppImage", "HOME=/home/user"})
+	got := strings.Join(svc.env, "\n")
+	if strings.Contains(got, "ARGV0=") || strings.Contains(got, "APPDIR=") {
+		t.Errorf("session env leaked AppImage vars:\n%s", got)
+	}
+	if !strings.Contains(got, "HOME=/home/user") || !strings.Contains(got, "TERM=xterm-256color") {
+		t.Errorf("session env missing HOME or TERM:\n%s", got)
+	}
+}
+
 // TestOperationsOnUnknownSessionAreNoops proves Write/Resize/Close on a session
 // that was never started return nil instead of panicking on a missing PTY.
 func TestOperationsOnUnknownSessionAreNoops(t *testing.T) {
-	svc := New(stubBins{})
+	svc := New(stubBins{}, nil)
 	if err := svc.Write("ghost", "hi"); err != nil {
 		t.Errorf("Write unknown = %v, want nil", err)
 	}
@@ -66,7 +154,7 @@ func TestSetVisibleReachesCoalescer(t *testing.T) {
 	out.SetVisible(false)
 	out.Write([]byte("pending"))
 
-	svc := New(stubBins{})
+	svc := New(stubBins{}, nil)
 	sess := spawnSession(t)
 	sess.out = out
 	svc.sessions["s1"] = sess
@@ -105,7 +193,7 @@ func spawnSession(t *testing.T) *session {
 // TestWriteResizeCloseOnLiveSession drives a real session end to end: input is
 // written, the window is resized and Close reaps the shell and drops it.
 func TestWriteResizeCloseOnLiveSession(t *testing.T) {
-	svc := New(stubBins{})
+	svc := New(stubBins{}, nil)
 	svc.sessions["s1"] = spawnSession(t)
 
 	if err := svc.Write("s1", "hello"); err != nil {
@@ -125,7 +213,7 @@ func TestWriteResizeCloseOnLiveSession(t *testing.T) {
 // TestStartIsNoopWhenAlreadyRunning proves Start returns without spawning a
 // second shell for a session ID that is already tracked.
 func TestStartIsNoopWhenAlreadyRunning(t *testing.T) {
-	svc := New(stubBins{})
+	svc := New(stubBins{}, nil)
 	sess := spawnSession(t)
 	svc.sessions["s1"] = sess
 

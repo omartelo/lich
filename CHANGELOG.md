@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Settings gained a "Project" group with a per-project Claude Code binary
+  override. The backend already resolved project → global → `$PATH`; the
+  override just had no UI.
+
+### Fixed
+
+- Terminal sessions no longer inherit the AppImage's runtime environment.
+  Beyond the vars stripped in #3, `childEnv` now drops the AppImageLauncher
+  vars and the `WEBKIT_DISABLE_*` pair, and scrubs mount paths out of
+  `LD_LIBRARY_PATH`, `PATH`, `XDG_DATA_DIRS`, `GDK_PIXBUF_MODULE_FILE` (and any
+  future path list) — the bundled Ubuntu libs broke linkers and GTK apps
+  launched from a lich terminal. User-set entries survive; outside an AppImage
+  the environment passes through untouched.
+- The `GDK_BACKEND=x11` forced at startup no longer leaks into spawned
+  sessions: the session environment is snapshotted before the GTK tweak.
+- `task dev` now opens alongside an installed lich: dev instances register a
+  distinct GTK application ID (`lichdev`), so GTK single-instance no longer
+  swallows the dev window when the AppImage is running.
+
 ## [0.1.1] - 2026-07-12
 
 ### Fixed

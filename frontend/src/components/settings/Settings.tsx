@@ -4,20 +4,29 @@ import { Search } from "lucide-react"
 import { TerminalSettings } from "./TerminalSettings"
 import { AppearanceSettings } from "./AppearanceSettings"
 import { ClaudeCodeSettings } from "./ClaudeCodeSettings"
+import { ProjectClaudeCodeSettings } from "./ProjectClaudeCodeSettings"
 import { HotkeysSettings } from "./HotkeysSettings"
 import { cn } from "@/lib/utils"
 
 // SECTIONS is the settings registry: adding a category is one new file under
 // components/settings/ plus one entry here — the nav and the content pane both
-// derive from this list.
+// derive from this list. "app" sections apply globally; "project" sections hold
+// per-project overrides and render under a "Project" group header in the nav.
 const SECTIONS = [
-  { id: "appearance", label: "Appearance", Component: AppearanceSettings },
-  { id: "terminal", label: "Terminal", Component: TerminalSettings },
-  { id: "hotkeys", label: "Hotkeys", Component: HotkeysSettings },
-  { id: "claude-code", label: "Claude Code", Component: ClaudeCodeSettings },
+  { id: "appearance", label: "Appearance", group: "app", Component: AppearanceSettings },
+  { id: "terminal", label: "Terminal", group: "app", Component: TerminalSettings },
+  { id: "hotkeys", label: "Hotkeys", group: "app", Component: HotkeysSettings },
+  { id: "claude-code", label: "Claude Code", group: "app", Component: ClaudeCodeSettings },
+  {
+    id: "project-claude-code",
+    label: "Claude Code",
+    group: "project",
+    Component: ProjectClaudeCodeSettings,
+  },
 ] as const satisfies ReadonlyArray<{
   id: string
   label: string
+  group: "app" | "project"
   Component: ComponentType
 }>
 
@@ -33,8 +42,24 @@ export function Settings() {
   const filtered = SECTIONS.filter((section) =>
     section.label.toLowerCase().includes(query.toLowerCase()),
   )
+  const appSections = filtered.filter((section) => section.group === "app")
+  const projectSections = filtered.filter((section) => section.group === "project")
   const activeSection = SECTIONS.find((section) => section.id === active)
   const ActiveComponent = activeSection?.Component
+
+  const navButton = (section: (typeof SECTIONS)[number]) => (
+    <button
+      key={section.id}
+      type="button"
+      onClick={() => setActive(section.id)}
+      className={cn(
+        "rounded-md px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+        active === section.id && "bg-accent text-accent-foreground",
+      )}
+    >
+      {section.label}
+    </button>
+  )
 
   return (
     <div className="absolute inset-0 z-10 flex bg-background">
@@ -52,19 +77,13 @@ export function Settings() {
           </div>
         </div>
         <nav className="flex flex-col gap-0.5 px-2 pb-3">
-          {filtered.map((section) => (
-            <button
-              key={section.id}
-              type="button"
-              onClick={() => setActive(section.id)}
-              className={cn(
-                "rounded-md px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
-                active === section.id && "bg-accent text-accent-foreground",
-              )}
-            >
-              {section.label}
-            </button>
-          ))}
+          {appSections.map(navButton)}
+          {projectSections.length > 0 && (
+            <div className="mt-4 mb-1 px-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Project
+            </div>
+          )}
+          {projectSections.map(navButton)}
         </nav>
       </aside>
 
