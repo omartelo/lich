@@ -1,6 +1,6 @@
 import {useEffect, useState} from "react"
 import {useMatch} from "react-router-dom"
-import {FileText, GitBranch, Folder, Plus} from "lucide-react"
+import {FileText, GitBranch, Folder, Plus, Diff} from "lucide-react"
 import {Service as ProjectService} from "../../bindings/github.com/omartelo/lich/internal/project"
 import {Service as TerminalService} from "../../bindings/github.com/omartelo/lich/internal/terminal"
 import {useProjects} from "@/lib/projects"
@@ -90,7 +90,7 @@ export function FooterBar({diffOpen, onToggleDiff}: FooterBarProps) {
             }
           >
             {status.files === 0 ? (
-              <>± 0</>
+              <><Diff className="size-3.5"/> 0</>
             ) : (
               <>
                 <FileText className="size-3.5"/>
