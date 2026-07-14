@@ -89,6 +89,7 @@ type transport struct {
 	status      func(id, state string)
 	linkSession func(sessionID, claudeSessionID string) error
 	setTitle    func(sessionID, title string) error
+	touched     func(sessionID string)
 }
 
 // newTransport starts the listener on a random loopback port. input receives
@@ -96,12 +97,14 @@ type transport struct {
 // session's processing state reported by the Claude Code hook (see /hook);
 // linkSession records the Claude session id a PTY reports at start (see
 // /session-start); setTitle applies an auto-generated session label (see
-// /session-title).
+// /session-title); touched signals a session likely changed files on disk (see
+// /session-touched).
 func newTransport(
 	input func(id string, data []byte),
 	status func(id, state string),
 	linkSession func(sessionID, claudeSessionID string) error,
 	setTitle func(sessionID, title string) error,
+	touched func(sessionID string),
 ) (*transport, error) {
 	raw := make([]byte, tokenBytes)
 	if _, err := rand.Read(raw); err != nil {
@@ -118,12 +121,14 @@ func newTransport(
 		status:      status,
 		linkSession: linkSession,
 		setTitle:    setTitle,
+		touched:     touched,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", t.handle)
 	mux.HandleFunc("/hook", t.hook)
 	mux.HandleFunc("/session-start", t.sessionStart)
 	mux.HandleFunc("/session-title", t.sessionTitle)
+	mux.HandleFunc("/session-touched", t.sessionTouched)
 	// ponytail: server and listener live for the process lifetime, like the
 	// PTY sessions they serve; add Shutdown if the app ever needs teardown.
 	go func() { _ = http.Serve(listener, mux) }()
@@ -285,6 +290,51 @@ func parseSessionTitle(body []byte) (id, title string, err error) {
 		return "", "", errors.New("session-title missing title")
 	}
 	return req.SessionID, title, nil
+}
+
+// sessionTouched receives a POST from the Claude Code hook when a session likely
+// changed files on disk (a file-mutating tool ran) and forwards the session id
+// via the touched callback, which nudges an immediate git-status refresh. It is
+// a best-effort latency optimization over the frontend's steady poll, so a
+// failure is harmless — the poll still catches the change.
+func (t *transport) sessionTouched(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !t.authorized(r) {
+		http.Error(w, "invalid token", http.StatusUnauthorized)
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, hookBodyLimit))
+	if err != nil {
+		http.Error(w, "failed to read body", http.StatusBadRequest)
+		return
+	}
+	id, err := parseSessionTouched(body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if t.touched != nil {
+		t.touched(id)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// parseSessionTouched validates a touched POST body: just a non-empty lich
+// session id.
+func parseSessionTouched(body []byte) (id string, err error) {
+	var req struct {
+		SessionID string `json:"session_id"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		return "", fmt.Errorf("invalid session-touched body: %w", err)
+	}
+	if req.SessionID == "" {
+		return "", errors.New("session-touched missing session_id")
+	}
+	return req.SessionID, nil
 }
 
 // handle upgrades the single expected client. See authorized for the auth model.

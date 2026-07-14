@@ -62,3 +62,5 @@ stays safe to install globally.
   against the lich session for later features.
 - [session-title.md](session-title.md) — Claude's auto-generated `ai-title`,
   applied as the session card's label.
+- [session-touched.md](session-touched.md) — a session changed files, so its
+  git status refreshes immediately instead of on the next poll.

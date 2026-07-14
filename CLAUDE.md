@@ -80,7 +80,9 @@ Deliberate limits and shortcuts, with the upgrade path when it matters:
 
 - **git status is polled every ~3 s** — one shared poller per repository path
   (`frontend/src/lib/git-status-store.ts`), no filesystem watch. Unchanged status short-circuits (same reference, zero
-  re-renders). Move to an fs watcher if the poll ever costs too much.
+  re-renders). The lich plugin's `session-touched` hook nudges an immediate refresh after Claude edits files
+  (`refreshGitStatus` in `frontend/src/lib/useGitStatus.ts`, driven from `docs/hooks/session-touched.md`), but the poll
+  stays the baseline so it works without the plugin. Move to an fs watcher if the poll ever costs too much.
 - **Persistence is hybrid**: UI preferences live in `localStorage` (`lich.*` keys), the workspace in SQLite (
   `<data-dir>/lich/lich.db`). Session order is not persisted, and closing a session does not delete its row (close ≠
   delete).

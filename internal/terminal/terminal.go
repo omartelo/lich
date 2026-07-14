@@ -40,6 +40,9 @@ const (
 	// card even when that session lives in a background project whose card is not
 	// mounted — the per-session status event alone cannot reach an unmounted card.
 	attentionEventName = "session-attention"
+	// touchedEventName carries the id of a session that likely changed files on
+	// disk, nudging an immediate git-status refresh ahead of the steady poll.
+	touchedEventName = "session-touched"
 )
 
 // titleEvent is the payload of titleEventName: the session whose label changed
@@ -52,6 +55,12 @@ type titleEvent struct {
 // attentionEvent is the payload of attentionEventName: the session needing the
 // user.
 type attentionEvent struct {
+	ID string `json:"id"`
+}
+
+// touchedEvent is the payload of touchedEventName: the session whose files
+// likely changed.
+type touchedEvent struct {
 	ID string `json:"id"`
 }
 
@@ -113,6 +122,9 @@ func New(store Store, env []string) *Service {
 				application.Get().Event.Emit(titleEventName, titleEvent{ID: id, Label: title})
 			}
 			return nil
+		},
+		func(id string) {
+			application.Get().Event.Emit(touchedEventName, touchedEvent{ID: id})
 		},
 	)
 	if err == nil {

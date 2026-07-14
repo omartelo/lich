@@ -20,6 +20,13 @@ async function fetchGitStatus(path: string): Promise<GitStatus | null> {
 
 const store = createGitStatusStore(fetchGitStatus, GIT_POLL_MS)
 
+// refreshGitStatus fetches a path's git status immediately, ahead of its poll
+// tick — used by the session-touched hook signal to cut the up-to-3s lag on the
+// diff badge after Claude edits files. No-op when no card watches the path.
+export function refreshGitStatus(path: string): void {
+  store.refresh(path)
+}
+
 // useGitStatus subscribes to the shared per-path poller (see git-status-store):
 // all components watching the same directory share one fetch cycle, and an
 // unchanged status never re-renders them. Returns null until the first

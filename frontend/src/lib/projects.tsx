@@ -21,6 +21,7 @@ import {
   type SessionKind,
   type SessionState,
 } from "./sessions"
+import { refreshGitStatus } from "./useGitStatus"
 import { isRecordingTarget, matchesCombo } from "./hotkeys"
 import { useSettings } from "./settings"
 
@@ -80,7 +81,13 @@ const ATTENTION_EVENT = "session-attention"
 // How long the "needs you" toast stays before auto-dismissing.
 const ATTENTION_TOAST_MS = 10_000
 
-function isAttentionEvent(data: unknown): data is { id: string } {
+// Global event the backend emits when a session likely changed files on disk
+// (see terminal.touchedEventName). Payload: { id }. Nudges an immediate
+// git-status refresh ahead of the steady poll.
+const TOUCHED_EVENT = "session-touched"
+
+// Both session-attention and session-touched carry only a session id.
+function isIdEvent(data: unknown): data is { id: string } {
   return (
     typeof data === "object" &&
     data !== null &&
@@ -118,6 +125,8 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<SessionState>({})
   const sessionsRef = useRef(sessions)
   sessionsRef.current = sessions
+  const projectsRef = useRef(projects)
+  projectsRef.current = projects
   const navigate = useNavigate()
   const activeProjectId = useMatch("/projects/:projectId")?.params.projectId
   // Latest focused project id for the attention toast, read inside a once-only
@@ -273,7 +282,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   // already in focus, where the terminal itself shows the prompt.
   useEffect(() => {
     const off = Events.On(ATTENTION_EVENT, (event: { data: unknown }) => {
-      if (!isAttentionEvent(event.data)) {
+      if (!isIdEvent(event.data)) {
         return
       }
       const { id } = event.data
@@ -299,6 +308,32 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     })
     return () => off()
   }, [navigate, activateSession])
+
+  // A session that likely changed files on disk nudges an immediate git-status
+  // refresh for the path its card watches (its worktree, else the project's),
+  // ahead of the steady 3s poll. The poll still runs, so a user without the
+  // plugin keeps the same feedback — this only cuts the lag when the hook fires.
+  useEffect(() => {
+    const off = Events.On(TOUCHED_EVENT, (event: { data: unknown }) => {
+      if (!isIdEvent(event.data)) {
+        return
+      }
+      const { id } = event.data
+      const projectId = projectOfSession(sessionsRef.current, id)
+      if (!projectId) {
+        return
+      }
+      const session = sessionsRef.current[projectId]?.sessions.find(
+        (s) => s.id === id,
+      )
+      const project = projectsRef.current.find((p) => p.id === projectId)
+      const path = session?.path || project?.path
+      if (path) {
+        refreshGitStatus(path)
+      }
+    })
+    return () => off()
+  }, [])
 
   const renameSession = useCallback(
     (projectId: string, sessionId: string, label: string) => {
