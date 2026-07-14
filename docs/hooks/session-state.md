@@ -25,12 +25,19 @@ Responses: `204` ok · `401` invalid token · `400` invalid body.
 | Claude Code hook   | state     |
 |--------------------|-----------|
 | `UserPromptSubmit` | `busy`    |
-| `Stop`             | `done`    |
+| `PostToolUse`      | `busy`    |
 | `Notification`     | `waiting` |
+| `Stop`             | `done`    |
 
 `Notification` fires when Claude needs a permission decision or has been idle
-waiting for input — both mean "your turn". A later `UserPromptSubmit` (busy) or
-`Stop` (done) clears it. lich shows a toast (see below) only for `waiting`.
+waiting for input — both mean "your turn"; lich shows a toast (see below) only
+for `waiting`.
+
+`waiting` clears the moment Claude resumes. A typed reply raises
+`UserPromptSubmit`, but a **permission approval, plan approval or answered
+question does not** — those resume by running a tool, so `PostToolUse → busy` is
+what re-arms the spinner after them. Every tool re-reports `busy` (idempotent);
+`Stop → done` ends the turn.
 
 ## lich server side
 
@@ -63,5 +70,9 @@ waiting for input — both mean "your turn". A later `UserPromptSubmit` (busy) o
   not clear when the session leaves `waiting` (user handled it in the terminal).
   Fix path: track the toast id per session and dismiss it on the next
   busy/done.
+- `PostToolUse → busy` recovers from `waiting` only when Claude runs a tool. Deny
+  a permission and let Claude end the turn without another tool and the card
+  stays `waiting` until `Stop → done`. Rare, and it self-corrects on the next
+  turn.
 - Adding another state beyond `busy`/`done`/`waiting` is a contract change — see
   the versioning note in the README.
