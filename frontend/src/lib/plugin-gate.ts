@@ -8,6 +8,10 @@ import type {Status} from "../../bindings/github.com/omartelo/lich/internal/clau
 export const INSTALL_DISMISSED_KEY = "lich.pluginInstallDismissed"
 export const UPDATE_DISMISSED_KEY = "lich.pluginUpdateDismissed"
 
+// Value stored under INSTALL_DISMISSED_KEY: the install prompt is dismissed for
+// good, unlike the update one which stores the version it was dismissed for.
+export const DISMISSED_FLAG = "1"
+
 // PluginAction is what the gate should do: install prompt, update prompt (with
 // the target version), or nothing.
 export type PluginAction = {kind: "install"} | {kind: "update"; version: string} | {kind: "none"}

@@ -5,6 +5,7 @@ import {Bell, Check, GitBranch, LoaderCircle, Pencil, X} from "lucide-react"
 import {cn} from "@/lib/utils"
 import {displayPath} from "@/lib/paths"
 import {type Session} from "@/lib/sessions"
+import {statusEventName, toSessionStatus, type SessionStatus} from "@/lib/session-events"
 import {useGitStatus} from "@/lib/useGitStatus"
 import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip"
 import {
@@ -23,14 +24,6 @@ interface SessionCardProps {
   onRename: (label: string) => void
 }
 
-// Processing state reported by the lich Claude Code hook: a spinner while Claude
-// produces output, a check once its turn ends, a bell when it is blocked on the
-// user (permission prompt or idle input). null before the first report, and any
-// other value (the hook's "idle" on SessionEnd) clears back to null so a stale
-// indicator never lingers past a session or a /clear.
-type SessionStatus = "busy" | "done" | "waiting" | null
-const STATUS_EVENT_PREFIX = "session-status:"
-
 // SessionCard is one session entry: a card showing the session label, the
 // session's working directory, and that directory's git branch with a diff
 // badge (when it is a repo), with a close button on hover.
@@ -45,7 +38,11 @@ export function SessionCard({
   const pathRef = useRef<HTMLSpanElement>(null)
   const [pathOverflow, setPathOverflow] = useState(false)
   const [editing, setEditing] = useState(false)
-  const [status, setStatus] = useState<SessionStatus>(null)
+  // Processing state reported by the lich Claude Code hook: a spinner while
+  // Claude produces output, a check once its turn ends, a bell when it is
+  // blocked on the user. null before the first report, and whenever the hook
+  // reports a state with no indicator (see toSessionStatus).
+  const [status, setStatus] = useState<SessionStatus | null>(null)
   // A worktree session lives in its own checkout: show that path and poll its
   // git status, so the badge reflects the worktree's branch, not the project's.
   const shownPath = session.path || path
@@ -73,11 +70,8 @@ export function SessionCard({
   // track status. A backend-retained last state would survive project switches;
   // for now switching away mid-run can strand a spinner until the next turn.
   useEffect(() => {
-    const off = Events.On(STATUS_EVENT_PREFIX + session.id, (event: {data: unknown}) => {
-      const next = event.data
-      setStatus(
-        next === "busy" || next === "done" || next === "waiting" ? next : null,
-      )
+    const off = Events.On(statusEventName(session.id), (event: {data: unknown}) => {
+      setStatus(toSessionStatus(event.data))
     })
     return () => off()
   }, [session.id])

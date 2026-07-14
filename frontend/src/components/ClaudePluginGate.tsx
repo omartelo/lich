@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import {
   decidePluginAction,
+  DISMISSED_FLAG,
   INSTALL_DISMISSED_KEY,
   UPDATE_DISMISSED_KEY,
 } from "@/lib/plugin-gate"
@@ -41,7 +42,7 @@ export function ClaudePluginGate() {
       const status = await ClaudePlugin.Status()
       action = decidePluginAction(
         status,
-        localStorage.getItem(INSTALL_DISMISSED_KEY) === "1",
+        localStorage.getItem(INSTALL_DISMISSED_KEY) === DISMISSED_FLAG,
         localStorage.getItem(UPDATE_DISMISSED_KEY),
       )
     } catch {
@@ -89,7 +90,7 @@ export function ClaudePluginGate() {
   }
 
   const dismissForever = () => {
-    localStorage.setItem(INSTALL_DISMISSED_KEY, "1")
+    localStorage.setItem(INSTALL_DISMISSED_KEY, DISMISSED_FLAG)
     setInstallOpen(false)
   }
 

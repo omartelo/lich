@@ -21,6 +21,14 @@ import {
   type SessionKind,
   type SessionState,
 } from "./sessions"
+import {
+  ATTENTION_EVENT,
+  isIdEvent,
+  isTitleEvent,
+  shouldToastAttention,
+  TITLE_EVENT,
+  TOUCHED_EVENT,
+} from "./session-events"
 import { refreshGitStatus } from "./useGitStatus"
 import { isRecordingTarget, matchesCombo } from "./hotkeys"
 import { useSettings } from "./settings"
@@ -60,40 +68,11 @@ const toProject = (p: StoreProject): Project => ({
   path: p.path,
 })
 
-// Global event the backend emits when it auto-applies a session's ai-title as
-// its label (see terminal.titleEventName). Payload: { id, label }.
-const TITLE_EVENT = "session-title"
-
-function isTitleEvent(data: unknown): data is { id: string; label: string } {
-  return (
-    typeof data === "object" &&
-    data !== null &&
-    typeof (data as { id?: unknown }).id === "string" &&
-    typeof (data as { label?: unknown }).label === "string"
-  )
-}
-
-// Global event the backend emits when a session needs the user — a permission
-// prompt or an idle input request (see terminal.attentionEventName). Payload:
-// { id }. Drives the actionable toast that routes to the card.
-const ATTENTION_EVENT = "session-attention"
-
 // How long the "needs you" toast stays before auto-dismissing.
 const ATTENTION_TOAST_MS = 10_000
 
-// Global event the backend emits when a session likely changed files on disk
-// (see terminal.touchedEventName). Payload: { id }. Nudges an immediate
-// git-status refresh ahead of the steady poll.
-const TOUCHED_EVENT = "session-touched"
-
-// Both session-attention and session-touched carry only a session id.
-function isIdEvent(data: unknown): data is { id: string } {
-  return (
-    typeof data === "object" &&
-    data !== null &&
-    typeof (data as { id?: unknown }).id === "string"
-  )
-}
+// Shown when a toasted session has no label to name it by.
+const UNLABELED_SESSION = "A session"
 
 // buildSessionState rebuilds the in-memory session map from the persisted
 // projects returned by the store.
@@ -286,15 +265,13 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         return
       }
       const { id } = event.data
+      if (!shouldToastAttention(sessionsRef.current, id, activeProjectIdRef.current)) {
+        return
+      }
       const projectId = projectOfSession(sessionsRef.current, id)
-      if (!projectId) {
-        return
-      }
-      const project = sessionsRef.current[projectId]
-      if (projectId === activeProjectIdRef.current && project?.activeId === id) {
-        return
-      }
-      const label = project?.sessions.find((s) => s.id === id)?.label ?? "A session"
+      const label =
+        sessionsRef.current[projectId]?.sessions.find((s) => s.id === id)?.label ??
+        UNLABELED_SESSION
       toast(`${label} needs your input`, {
         duration: ATTENTION_TOAST_MS,
         action: {
