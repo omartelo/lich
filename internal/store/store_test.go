@@ -385,3 +385,139 @@ func TestDeleteProjectCascadesSessions(t *testing.T) {
 		t.Errorf("orphan sessions after cascade = %d, want 0", count)
 	}
 }
+
+// sessionIDs returns a project's session ids in stored order.
+func sessionIDs(t *testing.T, svc *Service, projectID string) []string {
+	t.Helper()
+	sessions, err := svc.sessionsOf(projectID)
+	if err != nil {
+		t.Fatalf("sessionsOf: %v", err)
+	}
+	ids := make([]string, len(sessions))
+	for i, s := range sessions {
+		ids[i] = s.ID
+	}
+	return ids
+}
+
+// openProjectIDs returns the open project ids in stored order.
+func openProjectIDs(t *testing.T, svc *Service) []string {
+	t.Helper()
+	projects, err := svc.LoadState()
+	if err != nil {
+		t.Fatalf("LoadState: %v", err)
+	}
+	ids := make([]string, len(projects))
+	for i, p := range projects {
+		ids[i] = p.ID
+	}
+	return ids
+}
+
+func equalIDs(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func TestReorderSessionsPersistsOrder(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2)
+	_ = svc.AddSession("p1", "s2", "Session 2", "", "", 3)
+	_ = svc.AddSession("p1", "s3", "Session 3", "", "", 4)
+
+	if err := svc.ReorderSessions("p1", []string{"s3", "s1", "s2"}); err != nil {
+		t.Fatalf("ReorderSessions: %v", err)
+	}
+	if got := sessionIDs(t, svc, "p1"); !equalIDs(got, []string{"s3", "s1", "s2"}) {
+		t.Errorf("session order = %v, want [s3 s1 s2]", got)
+	}
+}
+
+// A session opened after a drag must land at the end of the card list, not at
+// the top where the default position would put it.
+func TestAddSessionAppendsAfterReorder(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2)
+	_ = svc.AddSession("p1", "s2", "Session 2", "", "", 3)
+	_ = svc.ReorderSessions("p1", []string{"s2", "s1"})
+
+	_ = svc.AddSession("p1", "s3", "Session 3", "", "", 4)
+
+	if got := sessionIDs(t, svc, "p1"); !equalIDs(got, []string{"s2", "s1", "s3"}) {
+		t.Errorf("session order = %v, want [s2 s1 s3]", got)
+	}
+}
+
+// A session id from another project must not take a position in this one.
+func TestReorderSessionsIgnoresForeignSession(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddProject("p2", "beta", "/tmp/beta")
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2)
+	_ = svc.AddSession("p1", "s2", "Session 2", "", "", 3)
+	_ = svc.AddSession("p2", "other", "Session 1", "", "", 2)
+
+	if err := svc.ReorderSessions("p1", []string{"other", "s2", "s1"}); err != nil {
+		t.Fatalf("ReorderSessions: %v", err)
+	}
+	if got := sessionIDs(t, svc, "p2"); !equalIDs(got, []string{"other"}) {
+		t.Errorf("p2 sessions = %v, want [other] untouched", got)
+	}
+	if got := sessionIDs(t, svc, "p1"); !equalIDs(got, []string{"s2", "s1"}) {
+		t.Errorf("p1 order = %v, want [s2 s1]", got)
+	}
+}
+
+func TestReorderProjectsPersistsOrder(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddProject("p2", "beta", "/tmp/beta")
+	_ = svc.AddProject("p3", "gamma", "/tmp/gamma")
+
+	if err := svc.ReorderProjects([]string{"p3", "p1", "p2"}); err != nil {
+		t.Fatalf("ReorderProjects: %v", err)
+	}
+	if got := openProjectIDs(t, svc); !equalIDs(got, []string{"p3", "p1", "p2"}) {
+		t.Errorf("project order = %v, want [p3 p1 p2]", got)
+	}
+}
+
+// A project opened after a drag becomes the rightmost tab.
+func TestAddProjectAppendsAfterReorder(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddProject("p2", "beta", "/tmp/beta")
+	_ = svc.ReorderProjects([]string{"p2", "p1"})
+
+	_ = svc.AddProject("p3", "gamma", "/tmp/gamma")
+
+	if got := openProjectIDs(t, svc); !equalIDs(got, []string{"p2", "p1", "p3"}) {
+		t.Errorf("project order = %v, want [p2 p1 p3]", got)
+	}
+}
+
+// Reopening a closed project restores it to the tab slot it was dragged to,
+// rather than moving it to the end.
+func TestReopenProjectKeepsDraggedPosition(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddProject("p2", "beta", "/tmp/beta")
+	_ = svc.AddProject("p3", "gamma", "/tmp/gamma")
+	_ = svc.ReorderProjects([]string{"p3", "p1", "p2"})
+	_ = svc.CloseProject("p1")
+
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+
+	if got := openProjectIDs(t, svc); !equalIDs(got, []string{"p3", "p1", "p2"}) {
+		t.Errorf("project order = %v, want [p3 p1 p2]", got)
+	}
+}

@@ -6,11 +6,13 @@ import (
 )
 
 // AddProject persists a newly opened project and marks it open. Reopening a
-// previously closed project keeps its stored sessions, name and path intact —
-// only is_open flips back to 1.
+// previously closed project keeps its stored sessions, name, path and tab
+// position intact — only is_open flips back to 1. A brand-new project takes the
+// position after the last one, so it opens as the rightmost tab.
 func (s *Service) AddProject(id, name, path string) error {
 	_, err := s.db.Exec(
-		`INSERT INTO projects (id, name, path, is_open) VALUES (?, ?, ?, 1)
+		`INSERT INTO projects (id, name, path, is_open, position)
+		 VALUES (?, ?, ?, 1, (SELECT COALESCE(MAX(position), -1) + 1 FROM projects))
 		 ON CONFLICT(id) DO UPDATE SET is_open = 1, name = excluded.name, path = excluded.path`,
 		id, name, path,
 	)
@@ -34,14 +36,18 @@ func (s *Service) CloseProject(id string) error {
 // Kind selects what the session's PTY runs ("claude" or "shell"); empty defaults
 // to "claude" so older callers keep the original behavior. Path is the session's
 // working directory when it lives in a git worktree; empty means the project's.
+// The session takes the position after the project's last one, so it appends to
+// the card list even once the user has dragged the others around.
 func (s *Service) AddSession(projectID, sessionID, label, kind, path string, nextSeq int) error {
 	if kind == "" {
 		kind = "claude"
 	}
 	return s.tx(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(
-			`INSERT INTO sessions (id, project_id, label, kind, path) VALUES (?, ?, ?, ?, ?)`,
-			sessionID, projectID, label, kind, path,
+			`INSERT INTO sessions (id, project_id, label, kind, path, position)
+			 VALUES (?, ?, ?, ?, ?,
+			         (SELECT COALESCE(MAX(position), -1) + 1 FROM sessions WHERE project_id = ?))`,
+			sessionID, projectID, label, kind, path, projectID,
 		); err != nil {
 			return fmt.Errorf("insert session: %w", err)
 		}
@@ -118,6 +124,39 @@ func (s *Service) SetClaudeSession(sessionID, claudeSessionID string) error {
 		return fmt.Errorf("set claude session: %w", err)
 	}
 	return nil
+}
+
+// ReorderProjects records the tab order after a drag. It writes every project's
+// position from the full list the frontend rendered, so the stored order is
+// rewritten as a whole rather than patched around the moved tab.
+func (s *Service) ReorderProjects(ids []string) error {
+	return s.tx(func(tx *sql.Tx) error {
+		for position, id := range ids {
+			if _, err := tx.Exec(
+				`UPDATE projects SET position = ? WHERE id = ?`, position, id,
+			); err != nil {
+				return fmt.Errorf("reorder projects: %w", err)
+			}
+		}
+		return nil
+	})
+}
+
+// ReorderSessions records a project's card order after a drag, writing every
+// position from the full list. Scoped to the project so an id belonging to
+// another project's list can never take a position in this one.
+func (s *Service) ReorderSessions(projectID string, ids []string) error {
+	return s.tx(func(tx *sql.Tx) error {
+		for position, id := range ids {
+			if _, err := tx.Exec(
+				`UPDATE sessions SET position = ? WHERE id = ? AND project_id = ?`,
+				position, id, projectID,
+			); err != nil {
+				return fmt.Errorf("reorder sessions: %w", err)
+			}
+		}
+		return nil
+	})
 }
 
 // SetActiveSession records which session is focused within a project.

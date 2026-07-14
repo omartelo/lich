@@ -7,6 +7,7 @@ import {
   projectOfSession,
   removeProject,
   renameSession,
+  reorderSessions,
   sessionsOf,
   setActiveSession,
   type SessionState,
@@ -177,5 +178,39 @@ describe("removeProject", () => {
   it("is a no-op for an unknown project", () => {
     const state = buildState(1)
     expect(removeProject(state, "nope")).toBe(state)
+  })
+})
+
+describe("reorderSessions", () => {
+  it("rearranges the sessions to the given id order", () => {
+    const state = buildState(3)
+    const next = reorderSessions(state, P, ["s3", "s1", "s2"])
+    expect(sessionsOf(next, P).map((s) => s.id)).toEqual(["s3", "s1", "s2"])
+  })
+
+  it("leaves the active session and the label counter alone", () => {
+    const state = buildState(3)
+    const next = reorderSessions(state, P, ["s3", "s2", "s1"])
+    expect(activeSessionId(next, P)).toBe(activeSessionId(state, P))
+    expect(next[P].nextSeq).toBe(state[P].nextSeq)
+  })
+
+  it("ignores an unknown project", () => {
+    const state = buildState(2)
+    expect(reorderSessions(state, "nope", ["s2", "s1"])).toBe(state)
+  })
+
+  // A close racing the drag leaves the dragged order naming a session that is
+  // gone; persisting it would drop a survivor from the list.
+  it("ignores an order that no longer matches the session set", () => {
+    const state = buildState(3)
+    expect(reorderSessions(state, P, ["s3", "s1"])).toBe(state)
+    expect(reorderSessions(state, P, ["s3", "s2", "s1", "ghost"])).toBe(state)
+  })
+
+  it("does not mutate the input state", () => {
+    const state = buildState(3)
+    reorderSessions(state, P, ["s3", "s2", "s1"])
+    expect(sessionsOf(state, P).map((s) => s.id)).toEqual(["s1", "s2", "s3"])
   })
 })

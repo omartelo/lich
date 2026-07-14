@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS projects (
     path              TEXT    NOT NULL,
     is_open           INTEGER NOT NULL DEFAULT 1,
     next_seq          INTEGER NOT NULL DEFAULT 1,
-    active_session_id TEXT    NOT NULL DEFAULT ''
+    active_session_id TEXT    NOT NULL DEFAULT '',
+    position          INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -38,7 +39,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     kind              TEXT NOT NULL DEFAULT 'claude',
     path              TEXT NOT NULL DEFAULT '',
     claude_session_id TEXT NOT NULL DEFAULT '',
-    label_auto        INTEGER NOT NULL DEFAULT 1
+    label_auto        INTEGER NOT NULL DEFAULT 1,
+    position          INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
 
@@ -121,12 +123,14 @@ func open(path string) (*Service, error) {
 		`ALTER TABLE sessions ADD COLUMN path TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE sessions ADD COLUMN claude_session_id TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE sessions ADD COLUMN label_auto INTEGER NOT NULL DEFAULT 1`,
+		`ALTER TABLE sessions ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE projects ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 	}
 	for _, stmt := range migrations {
 		if _, err := db.Exec(stmt); err != nil &&
 			!strings.Contains(err.Error(), "duplicate column") {
 			_ = db.Close()
-			return nil, fmt.Errorf("migrate sessions: %w", err)
+			return nil, fmt.Errorf("migrate schema: %w", err)
 		}
 	}
 	return &Service{db: db}, nil
@@ -152,13 +156,16 @@ func (s *Service) Close() error {
 	return s.db.Close()
 }
 
-// LoadState returns the open projects (is_open = 1) with their sessions, ordered
-// by insertion (rowid). It is the single hydration call the frontend makes on
-// launch to restore the workspace.
+// LoadState returns the open projects (is_open = 1) with their sessions, in the
+// order the user dragged them into. It is the single hydration call the frontend
+// makes on launch to restore the workspace.
+//
+// Rows that predate the position column all carry the default 0, so the rowid
+// tiebreak keeps them in insertion order until a first drag assigns positions.
 func (s *Service) LoadState() ([]Project, error) {
 	rows, err := s.db.Query(
 		`SELECT id, name, path, next_seq, active_session_id
-		   FROM projects WHERE is_open = 1 ORDER BY rowid`,
+		   FROM projects WHERE is_open = 1 ORDER BY position, rowid`,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query projects: %w", err)
@@ -188,11 +195,12 @@ func (s *Service) LoadState() ([]Project, error) {
 	return projects, nil
 }
 
-// sessionsOf returns a project's sessions in insertion order.
+// sessionsOf returns a project's sessions in the order the user dragged them
+// into, falling back to insertion order for rows never reordered.
 func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	rows, err := s.db.Query(
 		`SELECT id, label, kind, path, claude_session_id
-		   FROM sessions WHERE project_id = ? ORDER BY rowid`,
+		   FROM sessions WHERE project_id = ? ORDER BY position, rowid`,
 		projectID,
 	)
 	if err != nil {

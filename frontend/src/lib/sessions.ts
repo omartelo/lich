@@ -6,6 +6,8 @@
 // Every function here is pure — it returns a new state and never mutates the
 // input — which keeps the reducer logic testable without React or a PTY.
 
+import { applyOrder } from "./reorder"
+
 // What a session's PTY runs: the Claude Code binary or the user's shell.
 // Values match the backend (store column + terminal.Start).
 export type SessionKind = "claude" | "shell"
@@ -139,6 +141,26 @@ export function renameSession(
       ),
     },
   }
+}
+
+// reorderSessions rearranges a project's sessions to match the given id order,
+// leaving the active session and the label counter alone — a drag only moves
+// cards. An id list that no longer names the project's exact session set (a
+// close raced the drag) is dropped, returning the input state unchanged.
+export function reorderSessions(
+  state: SessionState,
+  projectId: string,
+  ids: string[],
+): SessionState {
+  const current = state[projectId]
+  if (!current) {
+    return state
+  }
+  const sessions = applyOrder(current.sessions, ids)
+  if (!sessions) {
+    return state
+  }
+  return { ...state, [projectId]: { ...current, sessions } }
 }
 
 // removeProject drops a project and all its sessions.

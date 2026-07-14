@@ -15,8 +15,11 @@ import {activeSessionId, sessionsOf, type Session} from "@/lib/sessions"
 import {CloseWorktreeDialog, ForceRemoveWorktreeDialog} from "./CloseWorktreeDialog"
 import {SessionCard} from "./SessionCard"
 import {WorktreeDialog} from "./WorktreeDialog"
+import {DndContext, closestCenter} from "@dnd-kit/core"
+import {SortableContext, verticalListSortingStrategy} from "@dnd-kit/sortable"
 import {useGitStatus} from "@/lib/useGitStatus"
 import {usePanelWidth} from "@/lib/use-panel-width"
+import {useSortableList} from "@/lib/use-sortable-list"
 
 // SessionSidebar lists the active project's sessions and can be drag-resized
 // within a fixed pixel range. Width persists across restarts. It renders nothing
@@ -34,6 +37,7 @@ export function SessionSidebar() {
     closeSession,
     activateSession,
     renameSession,
+    reorderSessions,
   } = useProjects()
   const match = useMatch("/projects/:projectId")
   const projectId = match?.params.projectId
@@ -49,12 +53,17 @@ export function SessionSidebar() {
   const [worktreeOpen, setWorktreeOpen] = useState(false)
   const [pendingClose, setPendingClose] = useState<Session | null>(null)
   const [pendingForce, setPendingForce] = useState<Session | null>(null)
+  // Resolved ahead of the no-project bail below: hooks cannot sit behind it.
+  const list = sessionsOf(sessions, projectId ?? "")
+  const {sensors, onDragEnd} = useSortableList(
+    list.map((session) => session.id),
+    (ids) => reorderSessions(projectId ?? "", ids),
+  )
 
   if (!projectId) {
     return null
   }
 
-  const list = sessionsOf(sessions, projectId)
   const activeId = activeSessionId(sessions, projectId)
 
   const createWorktree = async (name: string, base: string, baseIsRemote: boolean) => {
@@ -167,17 +176,28 @@ export function SessionSidebar() {
         </DropdownMenu>
       </div>
       <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto">
-        {list.map((session) => (
-          <SessionCard
-            key={session.id}
-            session={session}
-            path={path}
-            active={session.id === activeId}
-            onSelect={() => activateSession(projectId, session.id)}
-            onClose={() => requestClose(session)}
-            onRename={(label) => renameSession(projectId, session.id, label)}
-          />
-        ))}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={onDragEnd}
+        >
+          <SortableContext
+            items={list.map((session) => session.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            {list.map((session) => (
+              <SessionCard
+                key={session.id}
+                session={session}
+                path={path}
+                active={session.id === activeId}
+                onSelect={() => activateSession(projectId, session.id)}
+                onClose={() => requestClose(session)}
+                onRename={(label) => renameSession(projectId, session.id, label)}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
       </div>
 
       <WorktreeDialog
