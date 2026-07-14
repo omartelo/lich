@@ -7,8 +7,8 @@ name: "lich"
 arch: ${GOARCH}
 platform: "linux"
 # Follows the git tag via $VERSION (injected by build/linux/Taskfile.yml) — no manual bump.
-# ponytail: exact-tag releases yield clean semver; a dev build between tags carries the
-# git-describe suffix as-is. Sanitize in the Taskfile if that ever needs to be a valid pkgver.
+# Exact-tag releases yield clean semver; a dev build between tags carries the git-describe
+# suffix as-is. Sanitize in the Taskfile if that ever needs to be a valid pkgver.
 version: "${VERSION}"
 section: "default"
 priority: "extra"

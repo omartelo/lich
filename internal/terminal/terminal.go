@@ -28,8 +28,8 @@ const (
 	// exitEventPrefix is emitted once when a session's shell process exits.
 	exitEventPrefix = "terminal:exit:"
 	// statusEventPrefix carries a session's Claude Code processing state
-	// ("busy"/"done"), reported by the lich hook running inside the PTY (see
-	// transport.hook and integrations/claude-plugin).
+	// ("busy"/"done"/"waiting"/"idle"), reported by the lich hook running inside
+	// the PTY (see transport.hook and docs/hooks/session-state.md).
 	statusEventPrefix = "session-status:"
 	// titleEventName carries an auto-applied session label ({id, label}).
 	// Unlike the per-session events above, it is a single global event because
