@@ -16,11 +16,13 @@ import {
   projectOfSession,
   removeProject,
   renameSession as relabelSession,
+  reorderSessions as rearrangeSessions,
   sessionsOf,
   setActiveSession,
   type SessionKind,
   type SessionState,
 } from "./sessions"
+import { applyOrder } from "./reorder"
 import {
   ATTENTION_EVENT,
   isIdEvent,
@@ -51,6 +53,10 @@ interface ProjectsValue {
   activateSession: (projectId: string, sessionId: string) => void
   /** Rename a session's display label. */
   renameSession: (projectId: string, sessionId: string, label: string) => void
+  /** Rearrange the project tabs to the given id order (drag-and-drop). */
+  reorderProjects: (ids: string[]) => void
+  /** Rearrange a project's session cards to the given id order (drag-and-drop). */
+  reorderSessions: (projectId: string, ids: string[]) => void
 }
 
 const ProjectsContext = createContext<ProjectsValue | null>(null)
@@ -312,6 +318,24 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     return () => off()
   }, [])
 
+  const reorderProjects = useCallback((ids: string[]) => {
+    const next = applyOrder(projectsRef.current, ids)
+    if (!next) {
+      return
+    }
+    setProjects(next)
+    void Store.ReorderProjects(ids)
+  }, [])
+
+  const reorderSessions = useCallback((projectId: string, ids: string[]) => {
+    const next = rearrangeSessions(sessionsRef.current, projectId, ids)
+    if (next === sessionsRef.current) {
+      return
+    }
+    setSessions(next)
+    void Store.ReorderSessions(projectId, ids)
+  }, [])
+
   const renameSession = useCallback(
     (projectId: string, sessionId: string, label: string) => {
       const next = relabelSession(sessionsRef.current, projectId, sessionId, label)
@@ -336,6 +360,8 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         closeSession,
         activateSession,
         renameSession,
+        reorderProjects,
+        reorderSessions,
       }}
     >
       {children}

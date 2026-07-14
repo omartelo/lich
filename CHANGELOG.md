@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Drag a session card or a project tab to reorder it. The list rearranges live
+  under the cursor and the new order is persisted, so it survives a restart;
+  releasing outside the list (or pressing Escape) leaves the order untouched.
+  Reordering also works from the keyboard: focus a card or tab, then Space and
+  the arrow keys.
+
 ## [0.3.0] - 2026-07-14
 
 ### Added

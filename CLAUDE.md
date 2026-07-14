@@ -84,8 +84,10 @@ Deliberate limits and shortcuts, with the upgrade path when it matters:
   (`refreshGitStatus` in `frontend/src/lib/useGitStatus.ts`, driven from `docs/hooks/session-touched.md`), but the poll
   stays the baseline so it works without the plugin. Move to an fs watcher if the poll ever costs too much.
 - **Persistence is hybrid**: UI preferences live in `localStorage` (`lich.*` keys), the workspace in SQLite (
-  `<data-dir>/lich/lich.db`). Session order is not persisted, and closing a session does not delete its row (close ≠
-  delete).
+  `<data-dir>/lich/lich.db`). Closing a session does not delete its row (close ≠ delete). Card and tab order is a
+  `position` column on `sessions`/`projects`, written whole on every drag (`ReorderSessions`/`ReorderProjects`) and read
+  back as `ORDER BY position, rowid` — rows predating the column all sit at the default 0, so the rowid tiebreak keeps
+  them in insertion order until a first drag.
 - **`ghostty-web` is pinned to exactly `0.4.0`.** The terminal's performance rests on patches of library privates —
   render-pause, block-glyphs, font-metrics, row-paint, glyph-atlas, getline-pool, scrollback-perf, all under
   `frontend/src/lib/` and wired in `TerminalView.tsx`. Bumping the pin means revalidating every patched private; each
@@ -97,6 +99,12 @@ Deliberate limits and shortcuts, with the upgrade path when it matters:
 - **`GDK_BACKEND=x11` is forced on Linux** (`main.go`, only when unset — an explicit value wins): WebKitGTK under
   Wayland fractional scaling renders every damage frame at 2x and downsamples on the CPU (~40ms/frame in a full-size
   window). Under Xwayland the app sees an integer scale and the cost disappears.
+- **Reordering (cards, tabs) rides dnd-kit's pointer sensors, never the HTML5 Drag and Drop API.** Under WebKitGTK the
+  HTML5 API hands the drag to the native GTK/X11 drag-and-drop, and a first pass built on it shipped a bug: `drop` and
+  `dragend` never fired back into the page, so nothing persisted and the stale preview leaked one project's cards into
+  another's sidebar. dnd-kit only listens to pointer events and animates with CSS transforms, so the DOM order never
+  changes mid-drag and no preview state exists to strand. `PointerSensor` needs its `activationConstraint.distance`
+  (`frontend/src/lib/use-sortable-list.ts`) or the sensor claims the press and plain clicks stop selecting a session.
 - **Webview RAM is ~1GB with 20+ sessions** (canvas + WASM buffer + 5000-line scrollback each). If it hurts: shrink
   hidden-session canvases or reduce scrollback.
 - **The AppImage runs with the WebKit sandbox disabled** (`WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1` in its AppRun).
