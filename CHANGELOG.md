@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Claude Code plugin integration. lich pairs with a companion Claude Code
+  plugin ([`omartelo/lich-plugin`](https://github.com/omartelo/lich-plugin)),
+  installed and updated from within the app: a one-click install modal when it
+  is missing, and an actionable toast when a newer plugin release ships. The
+  plugin reports session activity back over the existing loopback transport;
+  every contract is documented in `docs/hooks/`, which lich owns as the
+  canonical source and the plugin references.
+- Session cards reflect Claude Code state live — a spinner while Claude is
+  producing output, a check when the turn ends, and a bell when Claude is
+  blocked on you (a permission prompt or an idle input request). The bell also
+  raises an actionable toast that routes to the waiting session, reachable even
+  when it lives in a background project, and skipped for the session already on
+  screen. A stale indicator clears when the session ends or is `/clear`ed.
+- Sessions auto-name from Claude's own title. When Claude generates its session
+  summary (the `ai-title` shown in `claude --resume`), lich adopts it as the
+  card label — unless you have renamed the session, which always wins.
+- A session's git badge refreshes the moment Claude edits files, ahead of the
+  ~3s poll, so the diff counts and branch stay current without the lag. The
+  poll stays the baseline, so the badge works unchanged without the plugin.
+
 ### Changed
 
 - The Linux Arch package no longer hardcodes `pkgrel` in `nfpm.yaml`. nfpm

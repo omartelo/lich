@@ -4,6 +4,7 @@ import {
   addSession,
   closeSession,
   createProjectSessions,
+  projectOfSession,
   removeProject,
   renameSession,
   sessionsOf,
@@ -152,6 +153,17 @@ describe("renameSession", () => {
     const state = buildState(2)
     expect(renameSession(state, "nope", "s1", "x")).toBe(state)
     expect(renameSession(state, P, "ghost", "x")).toBe(state)
+  })
+})
+
+describe("projectOfSession", () => {
+  it("returns the id of the project owning the session", () => {
+    const state = buildState(3)
+    expect(projectOfSession(state, "s2")).toBe(P)
+  })
+
+  it("returns empty string when no project holds the session", () => {
+    expect(projectOfSession(buildState(2), "ghost")).toBe("")
   })
 })
 

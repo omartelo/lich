@@ -72,10 +72,50 @@ func (s *Service) DeleteSession(projectID, sessionID, activeID string) error {
 	})
 }
 
-// RenameSession updates a session's display label.
+// RenameSession updates a session's display label from an explicit user rename.
+// It clears label_auto so the automatic ai-title (SetSessionTitle) never stomps
+// a name the user chose.
 func (s *Service) RenameSession(sessionID, label string) error {
-	if _, err := s.db.Exec(`UPDATE sessions SET label = ? WHERE id = ?`, label, sessionID); err != nil {
+	if _, err := s.db.Exec(
+		`UPDATE sessions SET label = ?, label_auto = 0 WHERE id = ?`,
+		label, sessionID,
+	); err != nil {
 		return fmt.Errorf("rename session: %w", err)
+	}
+	return nil
+}
+
+// SetSessionTitle sets a session's label from the Claude Code ai-title reported
+// by the Stop hook, but only while the label is still automatic: a prior
+// RenameSession clears label_auto and makes this a no-op, so a user's own name
+// is never overwritten. Reports whether the label actually changed, so the
+// caller only pushes a UI update when it did.
+func (s *Service) SetSessionTitle(sessionID, title string) (bool, error) {
+	res, err := s.db.Exec(
+		`UPDATE sessions SET label = ? WHERE id = ? AND label_auto = 1`,
+		title, sessionID,
+	)
+	if err != nil {
+		return false, fmt.Errorf("set session title: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("set session title rows: %w", err)
+	}
+	return n > 0, nil
+}
+
+// SetClaudeSession records the Claude Code session id running inside a lich
+// session's PTY, reported by the SessionStart hook. A session whose row does not
+// exist yet (the hook racing session persistence) matches nothing and is not an
+// error — the id is simply dropped, which is acceptable for the features it
+// backs. Re-reporting (e.g. after a resume) overwrites with the latest id.
+func (s *Service) SetClaudeSession(sessionID, claudeSessionID string) error {
+	if _, err := s.db.Exec(
+		`UPDATE sessions SET claude_session_id = ? WHERE id = ?`,
+		claudeSessionID, sessionID,
+	); err != nil {
+		return fmt.Errorf("set claude session: %w", err)
 	}
 	return nil
 }

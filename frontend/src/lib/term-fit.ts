@@ -3,9 +3,9 @@
 // permanent band between the terminal and the window. computeGrid divides the
 // full container instead, filling edge to edge. Only a sub-cell remainder is
 // left (< 1 cell, unavoidable: partial cells can't render), landing on the
-// right/bottom since the canvas is top-left anchored.
-// ponytail: the overlay scrollbar now paints over the last column while
-// scrolled; reserve a gutter again only if that ever bothers.
+// right/bottom since the canvas is top-left anchored. The trade: the overlay
+// scrollbar now paints over the last column while scrolled; reserve a gutter
+// again only if that ever bothers.
 
 export interface CellSize {
   width: number

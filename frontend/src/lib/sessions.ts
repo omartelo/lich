@@ -161,3 +161,15 @@ export function sessionsOf(state: SessionState, projectId: string): Session[] {
 export function activeSessionId(state: SessionState, projectId: string): string {
   return state[projectId]?.activeId ?? ""
 }
+
+// projectOfSession returns the id of the project owning a session, or "" when no
+// project holds it. Backend events (e.g. the auto ai-title) carry only a session
+// id, so the provider uses this to locate the project the reducer needs.
+export function projectOfSession(state: SessionState, sessionId: string): string {
+  for (const [projectId, project] of Object.entries(state)) {
+    if (project.sessions.some((s) => s.id === sessionId)) {
+      return projectId
+    }
+  }
+  return ""
+}

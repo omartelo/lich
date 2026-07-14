@@ -32,11 +32,13 @@ CREATE TABLE IF NOT EXISTS projects (
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
-    id         TEXT NOT NULL PRIMARY KEY,
-    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    label      TEXT NOT NULL,
-    kind       TEXT NOT NULL DEFAULT 'claude',
-    path       TEXT NOT NULL DEFAULT ''
+    id                TEXT NOT NULL PRIMARY KEY,
+    project_id        TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    label             TEXT NOT NULL,
+    kind              TEXT NOT NULL DEFAULT 'claude',
+    path              TEXT NOT NULL DEFAULT '',
+    claude_session_id TEXT NOT NULL DEFAULT '',
+    label_auto        INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
 
@@ -59,12 +61,16 @@ type Service struct {
 // Session is a persisted terminal session (metadata only). Kind selects what
 // the PTY runs: "claude" (Claude Code binary) or "shell" (the user's shell).
 // Path is the session's working directory when it lives in a git worktree;
-// empty means the project's own path.
+// empty means the project's own path. ClaudeSessionID is the id Claude Code
+// assigns its own session, reported by the SessionStart hook; empty until the
+// hook fires (or for shell sessions), it is the key for future features that
+// need to reach a session's transcript or resume it.
 type Session struct {
-	ID    string `json:"id"`
-	Label string `json:"label"`
-	Kind  string `json:"kind"`
-	Path  string `json:"path"`
+	ID              string `json:"id"`
+	Label           string `json:"label"`
+	Kind            string `json:"kind"`
+	Path            string `json:"path"`
+	ClaudeSessionID string `json:"claudeSessionId"`
 }
 
 // Project is a persisted project together with its restorable session state.
@@ -113,6 +119,8 @@ func open(path string) (*Service, error) {
 	migrations := []string{
 		`ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'claude'`,
 		`ALTER TABLE sessions ADD COLUMN path TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE sessions ADD COLUMN claude_session_id TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE sessions ADD COLUMN label_auto INTEGER NOT NULL DEFAULT 1`,
 	}
 	for _, stmt := range migrations {
 		if _, err := db.Exec(stmt); err != nil &&
@@ -183,7 +191,8 @@ func (s *Service) LoadState() ([]Project, error) {
 // sessionsOf returns a project's sessions in insertion order.
 func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	rows, err := s.db.Query(
-		`SELECT id, label, kind, path FROM sessions WHERE project_id = ? ORDER BY rowid`,
+		`SELECT id, label, kind, path, claude_session_id
+		   FROM sessions WHERE project_id = ? ORDER BY rowid`,
 		projectID,
 	)
 	if err != nil {
@@ -194,7 +203,7 @@ func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	sessions := []Session{}
 	for rows.Next() {
 		var sess Session
-		if err := rows.Scan(&sess.ID, &sess.Label, &sess.Kind, &sess.Path); err != nil {
+		if err := rows.Scan(&sess.ID, &sess.Label, &sess.Kind, &sess.Path, &sess.ClaudeSessionID); err != nil {
 			return nil, fmt.Errorf("scan session: %w", err)
 		}
 		sessions = append(sessions, sess)

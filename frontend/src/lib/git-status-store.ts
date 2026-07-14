@@ -11,7 +11,9 @@ interface Entry {
   status: GitStatus | null
   listeners: Set<() => void>
   timer: ReturnType<typeof setInterval>
-  onVisible: () => void
+  // Fetches this path once, off the interval cadence. Reused for the
+  // visibilitychange re-fetch and the store's manual refresh(path).
+  refresh: () => void
 }
 
 const unchanged = (a: GitStatus | null, b: GitStatus | null): boolean =>
@@ -56,11 +58,11 @@ export function createGitStatusStore(fetch: GitStatusFetcher, pollMs: number) {
         status: null,
         listeners: new Set(),
         timer: setInterval(refresh, pollMs),
-        onVisible: refresh,
+        refresh,
       }
       entries.set(path, created)
       if (typeof document !== "undefined") {
-        document.addEventListener("visibilitychange", created.onVisible)
+        document.addEventListener("visibilitychange", created.refresh)
       }
       refresh()
       entry = created
@@ -73,7 +75,7 @@ export function createGitStatusStore(fetch: GitStatusFetcher, pollMs: number) {
       }
       clearInterval(entry.timer)
       if (typeof document !== "undefined") {
-        document.removeEventListener("visibilitychange", entry.onVisible)
+        document.removeEventListener("visibilitychange", entry.refresh)
       }
       entries.delete(path)
     }
@@ -82,5 +84,12 @@ export function createGitStatusStore(fetch: GitStatusFetcher, pollMs: number) {
   const get = (path: string): GitStatus | null =>
     entries.get(path)?.status ?? null
 
-  return {subscribe, get}
+  // refresh fetches a path now, ahead of its poll tick. A no-op when nothing is
+  // subscribed to that path (no card is showing it), so an event for a session
+  // in a background project costs no git call.
+  const refresh = (path: string): void => {
+    entries.get(path)?.refresh()
+  }
+
+  return {subscribe, get, refresh}
 }

@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
 import type { ReactNode } from "react"
+import { Events } from "@wailsio/runtime"
+import { toast } from "sonner"
 import { useMatch, useNavigate } from "react-router-dom"
 import {
   Project,
@@ -11,6 +13,7 @@ import {
   activeSessionId,
   addSession,
   closeSession as removeSession,
+  projectOfSession,
   removeProject,
   renameSession as relabelSession,
   sessionsOf,
@@ -18,6 +21,15 @@ import {
   type SessionKind,
   type SessionState,
 } from "./sessions"
+import {
+  ATTENTION_EVENT,
+  isIdEvent,
+  isTitleEvent,
+  shouldToastAttention,
+  TITLE_EVENT,
+  TOUCHED_EVENT,
+} from "./session-events"
+import { refreshGitStatus } from "./useGitStatus"
 import { isRecordingTarget, matchesCombo } from "./hotkeys"
 import { useSettings } from "./settings"
 
@@ -56,6 +68,12 @@ const toProject = (p: StoreProject): Project => ({
   path: p.path,
 })
 
+// How long the "needs you" toast stays before auto-dismissing.
+const ATTENTION_TOAST_MS = 10_000
+
+// Shown when a toasted session has no label to name it by.
+const UNLABELED_SESSION = "A session"
+
 // buildSessionState rebuilds the in-memory session map from the persisted
 // projects returned by the store.
 function buildSessionState(loaded: StoreProject[]): SessionState {
@@ -86,8 +104,14 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<SessionState>({})
   const sessionsRef = useRef(sessions)
   sessionsRef.current = sessions
+  const projectsRef = useRef(projects)
+  projectsRef.current = projects
   const navigate = useNavigate()
   const activeProjectId = useMatch("/projects/:projectId")?.params.projectId
+  // Latest focused project id for the attention toast, read inside a once-only
+  // event subscription without re-subscribing on every navigation.
+  const activeProjectIdRef = useRef(activeProjectId)
+  activeProjectIdRef.current = activeProjectId
   const { hotkeys } = useSettings()
 
   const applyLoaded = useCallback((loaded: StoreProject[]) => {
@@ -99,6 +123,28 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void Store.LoadState().then((loaded) => applyLoaded(loaded ?? []))
   }, [applyLoaded])
+
+  // The backend auto-applies the Claude ai-title as a session's label (only
+  // while the user has not renamed it) and emits this event with the change.
+  // Mirror it into local state so the card updates live; the store already
+  // persisted it, so this never writes back.
+  useEffect(() => {
+    const off = Events.On(TITLE_EVENT, (event: { data: unknown }) => {
+      if (!isTitleEvent(event.data)) {
+        return
+      }
+      const { id, label } = event.data
+      const projectId = projectOfSession(sessionsRef.current, id)
+      if (!projectId) {
+        return
+      }
+      const next = relabelSession(sessionsRef.current, projectId, id, label)
+      if (next !== sessionsRef.current) {
+        setSessions(next)
+      }
+    })
+    return () => off()
+  }, [])
 
   const openProject = useCallback(async () => {
     const picked = await ProjectService.Open()
@@ -207,6 +253,63 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     }
     setSessions(next)
     void Store.SetActiveSession(projectId, sessionId)
+  }, [])
+
+  // A session that needs the user (permission prompt or idle input) raises a
+  // global toast that routes to its card — reachable even when the session lives
+  // in a background project whose card is not mounted. Skipped for the session
+  // already in focus, where the terminal itself shows the prompt.
+  useEffect(() => {
+    const off = Events.On(ATTENTION_EVENT, (event: { data: unknown }) => {
+      if (!isIdEvent(event.data)) {
+        return
+      }
+      const { id } = event.data
+      if (!shouldToastAttention(sessionsRef.current, id, activeProjectIdRef.current)) {
+        return
+      }
+      const projectId = projectOfSession(sessionsRef.current, id)
+      const label =
+        sessionsRef.current[projectId]?.sessions.find((s) => s.id === id)?.label ??
+        UNLABELED_SESSION
+      toast(`${label} needs your input`, {
+        duration: ATTENTION_TOAST_MS,
+        action: {
+          label: "Open",
+          onClick: () => {
+            navigate(`/projects/${projectId}`)
+            activateSession(projectId, id)
+          },
+        },
+      })
+    })
+    return () => off()
+  }, [navigate, activateSession])
+
+  // A session that likely changed files on disk nudges an immediate git-status
+  // refresh for the path its card watches (its worktree, else the project's),
+  // ahead of the steady 3s poll. The poll still runs, so a user without the
+  // plugin keeps the same feedback — this only cuts the lag when the hook fires.
+  useEffect(() => {
+    const off = Events.On(TOUCHED_EVENT, (event: { data: unknown }) => {
+      if (!isIdEvent(event.data)) {
+        return
+      }
+      const { id } = event.data
+      const projectId = projectOfSession(sessionsRef.current, id)
+      if (!projectId) {
+        return
+      }
+      const session = sessionsRef.current[projectId]?.sessions.find(
+        (s) => s.id === id,
+      )
+      const project = projectsRef.current.find((p) => p.id === projectId)
+      const path = session?.path || project?.path
+      if (path) {
+        refreshGitStatus(path)
+      }
+    })
+    return () => off()
   }, [])
 
   const renameSession = useCallback(

@@ -1,9 +1,11 @@
 import {useEffect, useRef, useState} from "react"
 import type {KeyboardEvent} from "react"
-import {GitBranch, Pencil, X} from "lucide-react"
+import {Events} from "@wailsio/runtime"
+import {Bell, Check, GitBranch, LoaderCircle, Pencil, X} from "lucide-react"
 import {cn} from "@/lib/utils"
 import {displayPath} from "@/lib/paths"
 import {type Session} from "@/lib/sessions"
+import {statusEventName, toSessionStatus, type SessionStatus} from "@/lib/session-events"
 import {useGitStatus} from "@/lib/useGitStatus"
 import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip"
 import {
@@ -36,6 +38,11 @@ export function SessionCard({
   const pathRef = useRef<HTMLSpanElement>(null)
   const [pathOverflow, setPathOverflow] = useState(false)
   const [editing, setEditing] = useState(false)
+  // Processing state reported by the lich Claude Code hook: a spinner while
+  // Claude produces output, a check once its turn ends, a bell when it is
+  // blocked on the user. null before the first report, and whenever the hook
+  // reports a state with no indicator (see toSessionStatus).
+  const [status, setStatus] = useState<SessionStatus | null>(null)
   // A worktree session lives in its own checkout: show that path and poll its
   // git status, so the badge reflects the worktree's branch, not the project's.
   const shownPath = session.path || path
@@ -57,6 +64,17 @@ export function SessionCard({
       setEditing(false)
     }
   }
+
+  // The card is always mounted for every listed session (unlike TerminalView,
+  // which only mounts once a session is viewed), so it is the reliable place to
+  // track status. A backend-retained last state would survive project switches;
+  // for now switching away mid-run can strand a spinner until the next turn.
+  useEffect(() => {
+    const off = Events.On(statusEventName(session.id), (event: {data: unknown}) => {
+      setStatus(toSessionStatus(event.data))
+    })
+    return () => off()
+  }, [session.id])
 
   // Fade the left (path start) only when the tail can't fit, so a path that
   // fits keeps its "~" crisp — matching how terminals hint at hidden prefix.
@@ -102,9 +120,20 @@ export function SessionCard({
                 className="w-full rounded-sm bg-transparent pr-5 text-sm font-medium text-foreground outline-none ring-1 ring-accent-foreground/30"
               />
             ) : (
-              <span className="w-full truncate pr-5 text-sm font-medium text-foreground">
-              {session.label}
-            </span>
+              <span className="flex w-full min-w-0 items-center gap-1.5 pr-5">
+                {status === "busy" && (
+                  <LoaderCircle className="size-3 shrink-0 animate-spin text-muted-foreground"/>
+                )}
+                {status === "done" && (
+                  <Check className="size-3 shrink-0 text-emerald-500"/>
+                )}
+                {status === "waiting" && (
+                  <Bell className="size-3 shrink-0 text-amber-500"/>
+                )}
+                <span className="truncate text-sm font-medium text-foreground">
+                  {session.label}
+                </span>
+              </span>
             )}
             {/* rtl anchors the tail (project folder) to the right so overflow is
               clipped on the left; the leading LRM keeps "~/" in logical order

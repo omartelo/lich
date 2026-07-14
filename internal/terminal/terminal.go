@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -26,7 +27,42 @@ const (
 	dataEventPrefix = "terminal:data:"
 	// exitEventPrefix is emitted once when a session's shell process exits.
 	exitEventPrefix = "terminal:exit:"
+	// statusEventPrefix carries a session's Claude Code processing state
+	// ("busy"/"done"/"waiting"/"idle"), reported by the lich hook running inside
+	// the PTY (see transport.hook and docs/hooks/session-state.md).
+	statusEventPrefix = "session-status:"
+	// titleEventName carries an auto-applied session label ({id, label}).
+	// Unlike the per-session events above, it is a single global event because
+	// the provider that owns session state consumes it centrally, not per card.
+	titleEventName = "session-title"
+	// attentionEventName carries the id of a session that just needs the user
+	// (state "waiting"). It is global so the provider can toast and route to the
+	// card even when that session lives in a background project whose card is not
+	// mounted — the per-session status event alone cannot reach an unmounted card.
+	attentionEventName = "session-attention"
+	// touchedEventName carries the id of a session that likely changed files on
+	// disk, nudging an immediate git-status refresh ahead of the steady poll.
+	touchedEventName = "session-touched"
 )
+
+// titleEvent is the payload of titleEventName: the session whose label changed
+// and its new label.
+type titleEvent struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+}
+
+// attentionEvent is the payload of attentionEventName: the session needing the
+// user.
+type attentionEvent struct {
+	ID string `json:"id"`
+}
+
+// touchedEvent is the payload of touchedEventName: the session whose files
+// likely changed.
+type touchedEvent struct {
+	ID string `json:"id"`
+}
 
 // session is a single running PTY-backed shell.
 type session struct {
@@ -35,18 +71,21 @@ type session struct {
 	out  *coalescer
 }
 
-// BinResolver supplies the Claude Code binary path to spawn for a project. An
-// empty return spawns the default binary. The store implements it, reading the
-// per-project override or the global setting.
-type BinResolver interface {
+// Store is the persistence the terminal service depends on: the Claude Code
+// binary to spawn for a project (empty return spawns the default), and where to
+// record the Claude session id a PTY reports through the SessionStart hook. The
+// store implements both.
+type Store interface {
 	ClaudeBin(projectID string) string
+	SetClaudeSession(sessionID, claudeSessionID string) error
+	SetSessionTitle(sessionID, title string) (bool, error)
 }
 
 // Service manages PTY-backed shell sessions keyed by session ID.
 type Service struct {
 	mu       sync.Mutex
 	sessions map[string]*session
-	bins     BinResolver
+	store    Store
 	// env is the environment every spawned session inherits: the launch
 	// environment cleaned of AppImage runtime leakage (see childEnv), plus TERM.
 	env []string
@@ -56,20 +95,61 @@ type Service struct {
 }
 
 // New returns a ready-to-use terminal service that resolves the binary to spawn
-// through bins. env is the process environment to derive session environments
+// through store. env is the process environment to derive session environments
 // from — callers pass a snapshot taken before any os.Setenv tweaks (main.go
 // forces GDK_BACKEND on Linux) so those never leak into spawned shells.
-func New(bins BinResolver, env []string) *Service {
+func New(store Store, env []string) *Service {
 	s := &Service{
 		sessions: make(map[string]*session),
-		bins:     bins,
+		store:    store,
 		env:      append(childEnv(env), "TERM=xterm-256color"),
 	}
-	ws, err := newTransport(func(id string, data []byte) { _ = s.writeBytes(id, data) })
+	ws, err := newTransport(
+		func(id string, data []byte) { _ = s.writeBytes(id, data) },
+		func(id, state string) {
+			application.Get().Event.Emit(statusEventPrefix+id, state)
+			if state == statusWaiting {
+				application.Get().Event.Emit(attentionEventName, attentionEvent{ID: id})
+			}
+		},
+		store.SetClaudeSession,
+		func(id, title string) error {
+			applied, err := store.SetSessionTitle(id, title)
+			if err != nil {
+				return err
+			}
+			if applied {
+				application.Get().Event.Emit(titleEventName, titleEvent{ID: id, Label: title})
+			}
+			return nil
+		},
+		func(id string) {
+			application.Get().Event.Emit(touchedEventName, touchedEvent{ID: id})
+		},
+	)
 	if err == nil {
 		s.ws = ws
 	}
 	return s
+}
+
+// sessionEnv is the environment for one PTY: the shared base plus the loopback
+// coordinates a Claude Code hook needs to report this session's status back to
+// lich. LICH_SESSION_ID is per-session, so this returns a fresh slice rather
+// than aliasing (and appending to) the shared s.env. When the transport failed
+// to start there is nowhere to report, so the base env is used unchanged — a
+// hook spawned in this PTY sees no LICH_PORT and no-ops.
+func (s *Service) sessionEnv(id string) []string {
+	if s.ws == nil {
+		return s.env
+	}
+	env := make([]string, len(s.env), len(s.env)+3)
+	copy(env, s.env)
+	return append(env,
+		"LICH_PORT="+strconv.Itoa(s.ws.port),
+		"LICH_TOKEN="+s.ws.token,
+		"LICH_SESSION_ID="+id,
+	)
 }
 
 // defaultBin is the Claude Code binary spawned when the user has not configured
@@ -213,9 +293,9 @@ func (s *Service) Start(id, projectID, cwd, kind string, cols, rows int) error {
 		cwd = home
 	}
 
-	cmd := exec.Command(resolveCommand(kind, s.bins.ClaudeBin(projectID), os.Getenv("SHELL")))
+	cmd := exec.Command(resolveCommand(kind, s.store.ClaudeBin(projectID), os.Getenv("SHELL")))
 	cmd.Dir = cwd
-	cmd.Env = s.env
+	cmd.Env = s.sessionEnv(id)
 
 	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: uint16(rows), Cols: uint16(cols)})
 	if err != nil {

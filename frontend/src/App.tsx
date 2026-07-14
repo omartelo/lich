@@ -10,6 +10,7 @@ import { FooterBar } from "@/components/FooterBar"
 import { Home } from "@/components/Home"
 import { Settings } from "@/components/settings/Settings"
 import { Toaster } from "@/components/ui/sonner"
+import { ClaudePluginGate } from "@/components/ClaudePluginGate"
 
 // Layout is persistent across navigation: the project tabs, session sidebar and
 // TerminalHost stay mounted while the Outlet swaps screens (Home, Settings) on
@@ -56,6 +57,7 @@ function App() {
           </Routes>
         </ProjectsProvider>
       </HashRouter>
+      <ClaudePluginGate />
       <Toaster />
     </SettingsProvider>
   )

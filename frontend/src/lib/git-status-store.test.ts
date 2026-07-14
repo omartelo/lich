@@ -96,6 +96,31 @@ describe("createGitStatusStore", () => {
     expect(store.get("/repo")).toBeNull()
   })
 
+  it("refreshes a subscribed path immediately, ahead of the poll tick", async () => {
+    let files = 0
+    const fetch = vi.fn(async () => status(files))
+    const store = createGitStatusStore(fetch, POLL_MS)
+    const listener = vi.fn()
+    store.subscribe("/repo", listener)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fetch).toHaveBeenCalledTimes(1)
+
+    files = 7
+    store.refresh("/repo")
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(store.get("/repo")?.files).toBe(7)
+    expect(listener).toHaveBeenCalledTimes(2)
+  })
+
+  it("refresh is a no-op for a path no one subscribes to", async () => {
+    const fetch = vi.fn(async () => status(0))
+    const store = createGitStatusStore(fetch, POLL_MS)
+    store.refresh("/nobody-watches-this")
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
   it("drops an in-flight result after teardown", async () => {
     let resolve: (value: GitStatus | null) => void = () => {}
     const fetch = vi.fn(

@@ -19,8 +19,8 @@ const FLAG_FAINT = 128
 const BLOCK_RANGE_START = 0x2580
 const BLOCK_RANGE_END = 0x259f
 
-// ponytail: whole-cache reset on overflow; an LRU only earns its keep if a
-// real session ever cycles >4096 live glyph+color combos.
+// Overflow resets the whole cache; an LRU only earns its keep if a real session
+// ever cycles >4096 live glyph+color combos.
 const MAX_SPRITES = 4096
 
 interface AtlasCell {

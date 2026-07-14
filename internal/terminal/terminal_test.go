@@ -10,10 +10,14 @@ import (
 	"github.com/creack/pty"
 )
 
-// stubBins is a BinResolver returning a fixed path, for tests that never spawn.
+// stubBins is a Store returning a fixed binary path, for tests that never
+// spawn. Its persistence methods are no-ops — none of these tests exercise the
+// SessionStart or ai-title paths.
 type stubBins struct{ bin string }
 
-func (s stubBins) ClaudeBin(string) string { return s.bin }
+func (s stubBins) ClaudeBin(string) string                   { return s.bin }
+func (s stubBins) SetClaudeSession(_, _ string) error        { return nil }
+func (s stubBins) SetSessionTitle(_, _ string) (bool, error) { return false, nil }
 
 // TestChildEnvStripsAppImageVars proves the AppImage runtime variables that break
 // mise/asdf shims are dropped while the real user environment is passed through.
@@ -280,5 +284,38 @@ func TestPTYEcho(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("timed out reading PTY output")
+	}
+}
+
+// TestSessionEnvInjectsCoordinates proves a spawned PTY gets the loopback
+// coordinates a Claude Code hook needs, without aliasing the shared base env.
+func TestSessionEnvInjectsCoordinates(t *testing.T) {
+	s := &Service{env: []string{"A=1"}, ws: &transport{port: 4321, token: "tok"}}
+	env := s.sessionEnv("sess")
+
+	want := map[string]bool{
+		"A=1":                  true,
+		"LICH_PORT=4321":       true,
+		"LICH_TOKEN=tok":       true,
+		"LICH_SESSION_ID=sess": true,
+	}
+	for _, e := range env {
+		delete(want, e)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing env entries %v (got %v)", want, env)
+	}
+	if len(s.env) != 1 || s.env[0] != "A=1" {
+		t.Fatalf("shared base env was mutated: %v", s.env)
+	}
+}
+
+// TestSessionEnvNoTransport proves that without a transport there is nothing to
+// report to, so the base env is returned unchanged (the hook will no-op).
+func TestSessionEnvNoTransport(t *testing.T) {
+	s := &Service{env: []string{"A=1"}}
+	env := s.sessionEnv("sess")
+	if len(env) != 1 || env[0] != "A=1" {
+		t.Fatalf("expected base env unchanged, got %v", env)
 	}
 }
