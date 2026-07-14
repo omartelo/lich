@@ -25,7 +25,9 @@ interface SessionCardProps {
 
 // Processing state reported by the lich Claude Code hook: a spinner while Claude
 // produces output, a check once its turn ends, a bell when it is blocked on the
-// user (permission prompt or idle input). null before the first report.
+// user (permission prompt or idle input). null before the first report, and any
+// other value (the hook's "idle" on SessionEnd) clears back to null so a stale
+// indicator never lingers past a session or a /clear.
 type SessionStatus = "busy" | "done" | "waiting" | null
 const STATUS_EVENT_PREFIX = "session-status:"
 

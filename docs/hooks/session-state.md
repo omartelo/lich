@@ -16,7 +16,7 @@ Content-Type: application/json
 {"session_id": "<LICH_SESSION_ID>", "state": "<busy|done>"}
 ```
 
-States: `busy`, `done`, `waiting`. lich rejects anything else.
+States: `busy`, `done`, `waiting`, `idle`. lich rejects anything else.
 
 Responses: `204` ok · `401` invalid token · `400` invalid body.
 
@@ -28,10 +28,15 @@ Responses: `204` ok · `401` invalid token · `400` invalid body.
 | `PostToolUse`      | `busy`    |
 | `Notification`     | `waiting` |
 | `Stop`             | `done`    |
+| `SessionEnd`       | `idle`    |
 
 `Notification` fires when Claude needs a permission decision or has been idle
 waiting for input — both mean "your turn"; lich shows a toast (see below) only
 for `waiting`.
+
+`SessionEnd → idle` clears the card's indicator (no spinner/check/bell). It
+fires when the Claude session ends or is reset, so a stale state does not linger
+on a dead session, and a `/clear` starts the next session with a clean card.
 
 `waiting` clears the moment Claude resumes. A typed reply raises
 `UserPromptSubmit`, but a **permission approval, plan approval or answered
@@ -51,7 +56,7 @@ what re-arms the spinner after them. Every tool re-reports `busy` (idempotent);
   `session-attention` event (`{id}`).
 - **Render** — `frontend/src/components/sidebar/SessionCard.tsx`: subscribes to
   the per-session event and shows a spinner (`busy`), check (`done`) or bell
-  (`waiting`).
+  (`waiting`); any other value, including `idle`, clears the indicator.
 - **Toast + route** — `frontend/src/lib/projects.tsx`: subscribes to the global
   `session-attention` event and raises an actionable toast that navigates to the
   session's card. It is global so a session in a background project (whose card
@@ -74,5 +79,5 @@ what re-arms the spinner after them. Every tool re-reports `busy` (idempotent);
   a permission and let Claude end the turn without another tool and the card
   stays `waiting` until `Stop → done`. Rare, and it self-corrects on the next
   turn.
-- Adding another state beyond `busy`/`done`/`waiting` is a contract change — see
-  the versioning note in the README.
+- Adding another state beyond `busy`/`done`/`waiting`/`idle` is a contract
+  change — see the versioning note in the README.

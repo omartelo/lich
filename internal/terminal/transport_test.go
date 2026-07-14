@@ -163,6 +163,7 @@ func TestParseHookRequest(t *testing.T) {
 		{"busy", `{"session_id":"s1","state":"busy"}`, "s1", "busy", false},
 		{"done", `{"session_id":"s2","state":"done"}`, "s2", "done", false},
 		{"waiting", `{"session_id":"s3","state":"waiting"}`, "s3", "waiting", false},
+		{"idle", `{"session_id":"s4","state":"idle"}`, "s4", "idle", false},
 		{"missing id", `{"state":"busy"}`, "", "", true},
 		{"unknown state", `{"session_id":"s1","state":"cooking"}`, "", "", true},
 		{"empty state", `{"session_id":"s1"}`, "", "", true},
