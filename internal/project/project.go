@@ -71,10 +71,12 @@ func (s *Service) Branch(path string) string {
 }
 
 // PullRequest identifies the open GitHub pull request for a work tree's current
-// branch, as reported by the gh CLI.
+// branch, as reported by the gh CLI. State is one of gh's OPEN, CLOSED, MERGED;
+// only OPEN reaches the frontend (see parsePullRequest).
 type PullRequest struct {
 	Number int    `json:"number"`
 	URL    string `json:"url"`
+	State  string `json:"state"`
 }
 
 // prLookupTimeout caps the gh network call so a slow forge or hung auth prompt
@@ -88,7 +90,7 @@ const prLookupTimeout = 5 * time.Second
 func (s *Service) PullRequest(path string) *PullRequest {
 	ctx, cancel := context.WithTimeout(context.Background(), prLookupTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "gh", "pr", "view", "--json", "number,url")
+	cmd := exec.CommandContext(ctx, "gh", "pr", "view", "--json", "number,url,state")
 	cmd.Dir = path
 	out, err := cmd.Output()
 	if err != nil {
@@ -98,11 +100,15 @@ func (s *Service) PullRequest(path string) *PullRequest {
 }
 
 // parsePullRequest decodes gh's `pr view --json` output. It returns nil for
-// malformed JSON or a zero PR number (gh emits `{}` in some no-PR states), so a
-// bad payload hides the badge rather than showing "PR #0".
+// malformed JSON, a zero PR number (gh emits `{}` in some no-PR states), or a
+// non-OPEN state — gh reports the branch's PR even after it is merged or closed,
+// so without the state gate a merged PR would keep showing the badge.
 func parsePullRequest(out []byte) *PullRequest {
 	var pr PullRequest
-	if err := json.Unmarshal(out, &pr); err != nil || pr.Number == 0 || pr.URL == "" {
+	if err := json.Unmarshal(out, &pr); err != nil {
+		return nil
+	}
+	if pr.Number == 0 || pr.URL == "" || pr.State != "OPEN" {
 		return nil
 	}
 	return &pr

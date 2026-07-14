@@ -66,10 +66,13 @@ func TestParsePullRequest(t *testing.T) {
 		out  string
 		want *PullRequest
 	}{
-		{"valid", `{"number":7,"url":"https://github.com/o/r/pull/7"}`, &PullRequest{Number: 7, URL: "https://github.com/o/r/pull/7"}},
+		{"open", `{"number":7,"url":"https://github.com/o/r/pull/7","state":"OPEN"}`, &PullRequest{Number: 7, URL: "https://github.com/o/r/pull/7", State: "OPEN"}},
+		{"merged", `{"number":7,"url":"https://github.com/o/r/pull/7","state":"MERGED"}`, nil},
+		{"closed", `{"number":7,"url":"https://github.com/o/r/pull/7","state":"CLOSED"}`, nil},
+		{"missing state", `{"number":7,"url":"https://github.com/o/r/pull/7"}`, nil},
 		{"empty object", `{}`, nil},
-		{"zero number", `{"number":0,"url":"https://github.com/o/r/pull/0"}`, nil},
-		{"missing url", `{"number":7}`, nil},
+		{"zero number", `{"number":0,"url":"https://github.com/o/r/pull/0","state":"OPEN"}`, nil},
+		{"missing url", `{"number":7,"state":"OPEN"}`, nil},
 		{"malformed", `not json`, nil},
 		{"empty bytes", ``, nil},
 	}

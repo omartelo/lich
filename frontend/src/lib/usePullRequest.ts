@@ -6,12 +6,12 @@ export type {PullRequest}
 
 // usePullRequest resolves the open GitHub PR for a path's current branch via the
 // gh CLI. Unlike git status it is not polled: a PR is opened once and rarely
-// changes, and each lookup is a network round-trip. It refetches only when the
-// path or branch changes — enough to pick up a checkout or a freshly opened PR
-// on the next branch switch. Returns null while loading, on any error, or when
-// no PR exists, so the caller hides the badge. No poll: if a PR opened on the
-// current branch must appear without a branch switch, add a slow interval
-// (~30s) or a window-focus refetch.
+// changes, and each lookup is a network round-trip. It refetches when the path
+// or branch changes, and on window focus — so opening or merging a PR in the
+// browser is reflected the moment the user returns to lich, without a branch
+// switch. Returns null while loading, on any error, or when the branch has no
+// open PR (a merged or closed one is filtered server-side), so the caller hides
+// the badge.
 export function usePullRequest(path: string, branch: string): PullRequest | null {
   const [pr, setPr] = useState<PullRequest | null>(null)
   useEffect(() => {
@@ -20,15 +20,20 @@ export function usePullRequest(path: string, branch: string): PullRequest | null
       return
     }
     let alive = true
-    ProjectService.PullRequest(path)
-      .then((result) => {
-        if (alive) setPr(result)
-      })
-      .catch(() => {
-        if (alive) setPr(null)
-      })
+    const load = () => {
+      ProjectService.PullRequest(path)
+        .then((result) => {
+          if (alive) setPr(result)
+        })
+        .catch(() => {
+          if (alive) setPr(null)
+        })
+    }
+    load()
+    window.addEventListener("focus", load)
     return () => {
       alive = false
+      window.removeEventListener("focus", load)
     }
   }, [path, branch])
   return pr
