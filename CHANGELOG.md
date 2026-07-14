@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-14
+
 ### Added
 
 - Claude Code plugin integration. lich pairs with a companion Claude Code
@@ -28,9 +30,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A session's git badge refreshes the moment Claude edits files, ahead of the
   ~3s poll, so the diff counts and branch stay current without the lag. The
   poll stays the baseline, so the badge works unchanged without the plugin.
+- An open pull request for the active session's branch surfaces as a clickable
+  badge in the footer — `PR #N` with a pull-request icon — that opens the PR in
+  the OS browser. It resolves the PR through the `gh` CLI, shows only while the
+  PR is open (a merged or closed one clears it), and re-checks on window focus
+  so a merge done in the browser drops the badge on return. Hidden when `gh` is
+  absent or unauthenticated.
 
 ### Changed
 
+- The footer's diff toggle now renders as a bordered muted chip, with a diff
+  icon in its zero-change state, matching the new PR badge's look.
 - The Linux Arch package no longer hardcodes `pkgrel` in `nfpm.yaml`. nfpm
   defaults it to `1`, so the produced `.pkg.tar.zst` version is unchanged
   (`X.Y.Z-1`) — the field just isn't pinned in the repo anymore. `pkgrel` is
@@ -198,7 +208,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/omartelo/lich/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/omartelo/lich/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/omartelo/lich/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/omartelo/lich/releases/tag/v0.1.0
