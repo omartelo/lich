@@ -8,6 +8,7 @@ import {
   removeProject,
   renameSession,
   reorderSessions,
+  resumableSession,
   sessionsOf,
   setActiveSession,
   type SessionState,
@@ -23,6 +24,25 @@ function buildState(n: number): SessionState {
     state = addSession(state, P, `s${i}`)
   }
   return state
+}
+
+// withClaudeSession stamps a restored session's Claude session id onto the
+// state, the way hydration from the store does.
+function withClaudeSession(
+  state: SessionState,
+  sessionId: string,
+  claudeSessionId: string,
+  kind: "claude" | "shell" = "claude",
+): SessionState {
+  return {
+    ...state,
+    [P]: {
+      ...state[P],
+      sessions: state[P].sessions.map((s) =>
+        s.id === sessionId ? { ...s, kind, claudeSessionId } : s,
+      ),
+    },
+  }
 }
 
 describe("createProjectSessions", () => {
@@ -212,5 +232,34 @@ describe("reorderSessions", () => {
     const state = buildState(3)
     reorderSessions(state, P, ["s3", "s2", "s1"])
     expect(sessionsOf(state, P).map((s) => s.id)).toEqual(["s1", "s2", "s3"])
+  })
+})
+
+describe("resumableSession", () => {
+  it("returns a restored claude session carrying a claude session id", () => {
+    const state = withClaudeSession(buildState(2), "s1", "claude-abc")
+    expect(resumableSession(state, P, "s1")).toMatchObject({
+      id: "s1",
+      claudeSessionId: "claude-abc",
+    })
+  })
+
+  // A session created in this run has nothing to resume; only hydration from
+  // the store sets the id.
+  it("returns null for a session without a claude session id", () => {
+    expect(resumableSession(buildState(2), P, "s1")).toBeNull()
+  })
+
+  // Running Claude Code by hand inside a shell session lets the SessionStart
+  // hook stamp an id on its row — the shell still cannot reopen it.
+  it("returns null for a shell session even with a claude session id", () => {
+    const state = withClaudeSession(buildState(2), "s1", "claude-abc", "shell")
+    expect(resumableSession(state, P, "s1")).toBeNull()
+  })
+
+  it("returns null for unknown project and session ids", () => {
+    const state = withClaudeSession(buildState(2), "s1", "claude-abc")
+    expect(resumableSession(state, "nope", "s1")).toBeNull()
+    expect(resumableSession(state, P, "ghost")).toBeNull()
   })
 })

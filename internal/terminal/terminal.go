@@ -195,6 +195,21 @@ func resolveBin(bin string) string {
 	return bin
 }
 
+// resumeFlag is the Claude Code flag that reopens an existing session by id.
+const resumeFlag = "--resume"
+
+// resumeArgs returns the arguments that reopen the Claude session resume names,
+// or nil when the session must start fresh. A "shell" session never resumes:
+// its PTY runs the user's shell, which knows nothing about --resume, and a
+// stray claude_session_id can land on its row when the user ran Claude Code by
+// hand inside it.
+func resumeArgs(kind, resume string) []string {
+	if kind == KindShell || resume == "" {
+		return nil
+	}
+	return []string{resumeFlag, resume}
+}
+
 // resolveCommand picks the binary a session runs: the user's shell for "shell"
 // sessions, otherwise the configured Claude Code binary.
 func resolveCommand(kind, bin, shellEnv string) string {
@@ -295,7 +310,12 @@ func scrubPathList(value, dir string) (string, bool) {
 // PTY sized to cols x rows and rooted at cwd, then streams its output to the
 // frontend. An empty cwd defaults to the user's home directory. Starting a
 // session that is already running is a no-op.
-func (s *Service) Start(id, projectID, cwd, kind string, cols, rows int) error {
+//
+// A non-empty resume is a Claude session id to reopen (`--resume`), which the
+// frontend passes after the user accepted the prompt to continue the session
+// this card ran before the last restart. An id Claude no longer knows fails in
+// the PTY like any other bad invocation — the user sees Claude's own error.
+func (s *Service) Start(id, projectID, cwd, kind, resume string, cols, rows int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -311,7 +331,10 @@ func (s *Service) Start(id, projectID, cwd, kind string, cols, rows int) error {
 		cwd = home
 	}
 
-	cmd := exec.Command(resolveCommand(kind, s.store.ClaudeBin(projectID), os.Getenv("SHELL")))
+	cmd := exec.Command(
+		resolveCommand(kind, s.store.ClaudeBin(projectID), os.Getenv("SHELL")),
+		resumeArgs(kind, resume)...,
+	)
 	cmd.Dir = cwd
 	cmd.Env = s.sessionEnv(id)
 

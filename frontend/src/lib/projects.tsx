@@ -90,6 +90,7 @@ function buildSessionState(loaded: StoreProject[]): SessionState {
       label: s.label,
       kind: (s.kind === "shell" ? "shell" : "claude") as SessionKind,
       ...(s.path ? { path: s.path } : {}),
+      ...(s.claudeSessionId ? { claudeSessionId: s.claudeSessionId } : {}),
     }))
     state[p.id] = {
       sessions,

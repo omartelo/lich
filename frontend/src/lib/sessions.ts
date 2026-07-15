@@ -19,6 +19,11 @@ export interface Session {
   // Working directory when the session lives in a git worktree; absent means
   // the project's own path.
   path?: string
+  // The Claude Code session this card ran before the last restart, reported by
+  // the SessionStart hook and read back on hydration. Only ever set by the
+  // store: a session created in this run has none, and the hook's later report
+  // is not mirrored here — a running session has nothing to resume.
+  claudeSessionId?: string
 }
 
 export interface ProjectSessions {
@@ -174,6 +179,23 @@ export function removeProject(
   const next = { ...state }
   delete next[projectId]
   return next
+}
+
+// resumableSession returns the session whose PTY should ask before it spawns,
+// because it carries the Claude session it ran before the last restart. Null for
+// everything with nothing to resume: unknown ids, sessions created in this run,
+// and shell sessions — whose shell cannot reopen a Claude session even when a
+// hand-run Claude Code left an id on their row.
+export function resumableSession(
+  state: SessionState,
+  projectId: string,
+  sessionId: string,
+): Session | null {
+  const session = state[projectId]?.sessions.find((s) => s.id === sessionId)
+  if (!session || session.kind !== "claude" || !session.claudeSessionId) {
+    return null
+  }
+  return session
 }
 
 export function sessionsOf(state: SessionState, projectId: string): Session[] {
