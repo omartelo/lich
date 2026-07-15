@@ -15,6 +15,8 @@ interface ConfirmDialogProps {
   onCancel: () => void
   title: string
   description: ReactNode
+  /** Label of the dismiss button. Defaults to "Cancel". */
+  cancelLabel?: string
   /** The action buttons, rendered after the shared Cancel. */
   children: ReactNode
 }
@@ -28,6 +30,7 @@ export function ConfirmDialog({
   onCancel,
   title,
   description,
+  cancelLabel = "Cancel",
   children,
 }: ConfirmDialogProps) {
   return (
@@ -41,7 +44,7 @@ export function ConfirmDialog({
         </DialogHeader>
         <DialogFooter>
           <Button variant="ghost" onClick={onCancel}>
-            Cancel
+            {cancelLabel}
           </Button>
           {children}
         </DialogFooter>

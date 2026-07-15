@@ -101,6 +101,13 @@ export interface TerminalViewProps {
   projectId: string
   cwd: string
   kind: SessionKind
+  /**
+   * Claude session id to reopen (--resume) when the PTY spawns; "" starts
+   * fresh. Read once at mount: the host decides it before mounting us and it
+   * never changes for a given session, so it is deliberately not a dependency
+   * of the setup effect — a change there would kill and respawn the PTY.
+   */
+  resume: string
   visible: boolean
 }
 
@@ -110,7 +117,14 @@ interface LiveTerminal {
   dispose(): void
 }
 
-export function TerminalView({ sessionId, projectId, cwd, kind, visible }: TerminalViewProps) {
+export function TerminalView({
+  sessionId,
+  projectId,
+  cwd,
+  kind,
+  resume,
+  visible,
+}: TerminalViewProps) {
   const { font, resolvedTerminalTheme } = useSettings()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const liveRef = useRef<LiveTerminal | null>(null)
@@ -320,7 +334,7 @@ export function TerminalView({ sessionId, projectId, cwd, kind, visible }: Termi
         resizeObserver.disconnect()
       })
 
-      await Service.Start(sessionId, projectId, cwd, kind, live.term.cols, live.term.rows)
+      await Service.Start(sessionId, projectId, cwd, kind, resume, live.term.cols, live.term.rows)
       if (visibleRef.current) {
         live.term.focus()
       } else {

@@ -2,8 +2,9 @@
 
 Reports the Claude Code session id running inside a lich session's PTY, so lich
 can persist the link between its own session (the card) and Claude's session.
-That id is the key for later features that need to reach a session's transcript
-or resume it; nothing in the UI changes today.
+That id is what lets a restored card offer to resume the conversation it ran
+before the last restart, and the key for later features that need to reach a
+session's transcript.
 
 See [README.md](README.md) for the shared transport (`LICH_PORT` / `LICH_TOKEN`
 / `LICH_SESSION_ID`) and the client rules every hook follows.
@@ -42,6 +43,11 @@ holds the id of the Claude session currently in the card.
 - **Persistence** — `internal/store/mutations.go`, `Service.SetClaudeSession`:
   `UPDATE sessions SET claude_session_id`. Surfaced on `store.Session`
   (`claudeSessionId`) and returned by `LoadState`.
+- **Consumer** — the resume prompt. `LoadState` hydrates the id onto the
+  frontend session (`resumableSession` in `frontend/src/lib/sessions.ts`), and
+  the first time a restored card is opened `TerminalHost` asks before spawning:
+  accepting passes the id to `terminal.Start`, which spawns `claude --resume
+  <id>`.
 
 ## Known ceilings
 
@@ -50,9 +56,9 @@ holds the id of the Claude session currently in the card.
   dropped — not an error. In practice Claude's boot is slower than the local
   insert, so this is not observed; if it ever bites, retry from the hook or
   re-report on a later event.
-- **`claude_session_id` is stored, not surfaced.** No feature reads it yet; it
-  exists so future work (transcript access, resume, the `ai-title` naming hook)
-  has the link ready.
+- **A card without the plugin never offers a resume.** The id only exists
+  because this hook reported it, so the prompt is a plugin-gated feature: the
+  session simply starts fresh, as before.
 - **Not the transcript path.** The path is reconstructable from the id and cwd;
   storing it too is a contract change — add a field only when a feature needs
   it, per the versioning note in the README.

@@ -66,8 +66,16 @@ async function call<T>(method: string, args: unknown[]): Promise<T> {
 }
 
 export const Terminal = {
-  Start: (id: string, projectID: string, cwd: string, kind: string, cols: number, rows: number) =>
-    call<null>("terminal.Start", [id, projectID, cwd, kind, cols, rows]),
+  /** resume: a Claude session id to reopen (--resume); "" starts fresh. */
+  Start: (
+    id: string,
+    projectID: string,
+    cwd: string,
+    kind: string,
+    resume: string,
+    cols: number,
+    rows: number,
+  ) => call<null>("terminal.Start", [id, projectID, cwd, kind, resume, cols, rows]),
   Write: (id: string, data: string) => call<null>("terminal.Write", [id, data]),
   Resize: (id: string, cols: number, rows: number) =>
     call<null>("terminal.Resize", [id, cols, rows]),

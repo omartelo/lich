@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Reopening a session card that ran Claude Code before the last restart now asks
+  whether to resume that conversation. Accepting spawns `claude --resume` on the
+  session id the `SessionStart` hook recorded, so the card picks up where it
+  stopped; declining starts an empty session as before. The prompt is asked once
+  per card, the first time it is opened after a restart, and never for a shell
+  card or one created in this run.
 - A project tab badges what its sessions are doing while you work elsewhere: a
   bell when one is blocked waiting on you, a spinner while one is running, a
   check when a turn finished. The active tab never badges — its cards already

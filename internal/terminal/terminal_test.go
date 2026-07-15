@@ -2,7 +2,10 @@ package terminal
 
 import (
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -224,11 +227,64 @@ func TestStartIsNoopWhenAlreadyRunning(t *testing.T) {
 	sess := spawnSession(t)
 	svc.sessions["s1"] = sess
 
-	if err := svc.Start("s1", "p1", "", "", 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", "", "", "", 80, 24); err != nil {
 		t.Errorf("Start(running) = %v, want nil", err)
 	}
 	if svc.sessions["s1"] != sess {
 		t.Error("Start replaced the running session")
+	}
+}
+
+// stayAliveBin writes a script that outlives Start, so the spawned session is
+// still in the map when the test inspects it. A binary that exits on an
+// unknown flag would race stream()'s cleanup.
+func stayAliveBin(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "fake-claude")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nsleep 30\n"), 0o755); err != nil {
+		t.Fatalf("write stub bin: %v", err)
+	}
+	return path
+}
+
+// TestStartPassesResumeToTheProcess proves the resume id reaches the spawned
+// binary's argv — the wiring resumeArgs' unit test cannot see.
+func TestStartPassesResumeToTheProcess(t *testing.T) {
+	bin := stayAliveBin(t)
+	svc := New(stubBins{bin: bin}, nil, events.New())
+	t.Cleanup(func() { _ = svc.Close("s1") })
+
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "abc-123", 80, 24); err != nil {
+		t.Fatalf("Start = %v, want nil", err)
+	}
+
+	svc.mu.Lock()
+	got := svc.sessions["s1"].cmd.Args
+	svc.mu.Unlock()
+
+	want := []string{bin, resumeFlag, "abc-123"}
+	if !slices.Equal(got, want) {
+		t.Errorf("spawned argv = %v, want %v", got, want)
+	}
+}
+
+// TestStartWithoutResumeSpawnsBare proves a session with no id to resume spawns
+// the binary alone, with no dangling flag.
+func TestStartWithoutResumeSpawnsBare(t *testing.T) {
+	bin := stayAliveBin(t)
+	svc := New(stubBins{bin: bin}, nil, events.New())
+	t.Cleanup(func() { _ = svc.Close("s1") })
+
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", 80, 24); err != nil {
+		t.Fatalf("Start = %v, want nil", err)
+	}
+
+	svc.mu.Lock()
+	got := svc.sessions["s1"].cmd.Args
+	svc.mu.Unlock()
+
+	if !slices.Equal(got, []string{bin}) {
+		t.Errorf("spawned argv = %v, want %v", got, []string{bin})
 	}
 }
 
@@ -258,6 +314,28 @@ func TestResolveCommand(t *testing.T) {
 		if got := resolveCommand(tc.kind, tc.bin, tc.shell); got != tc.want {
 			t.Errorf("%s: resolveCommand(%q, %q, %q) = %q, want %q",
 				tc.name, tc.kind, tc.bin, tc.shell, got, tc.want)
+		}
+	}
+}
+
+// TestResumeArgs proves a Claude session resumes only when an id is given, and
+// that a shell session never grows a --resume flag its shell cannot parse.
+func TestResumeArgs(t *testing.T) {
+	cases := []struct {
+		name, kind, resume string
+		want               []string
+	}{
+		{"claude fresh", "claude", "", nil},
+		{"claude resume", "claude", "abc-123", []string{resumeFlag, "abc-123"}},
+		{"default kind resumes", "", "abc-123", []string{resumeFlag, "abc-123"}},
+		{"shell never resumes", KindShell, "abc-123", nil},
+		{"shell fresh", KindShell, "", nil},
+	}
+	for _, tc := range cases {
+		got := resumeArgs(tc.kind, tc.resume)
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("%s: resumeArgs(%q, %q) = %v, want %v",
+				tc.name, tc.kind, tc.resume, got, tc.want)
 		}
 	}
 }
