@@ -3,10 +3,14 @@
 // rasterizer (llvmpipe/SwiftShader) and be slower than the patched canvas-2d
 // pipeline we already have? Two signals:
 //
-// - the WebGL2 RENDERER/VENDOR strings (llvmpipe-class names mean software);
+// - the WebGL2 RENDERER/VENDOR strings (llvmpipe-class names mean software).
+//   Caveat: WebKit masks both as "Apple GPU (Apple Inc.)" for fingerprinting
+//   protection — WebKitGTK on Linux included — so the strings usually carry
+//   no identity at all and the verdict leans on the numbers;
 // - a fill-rate microbench, WebGL fullscreen-quad draws vs canvas-2d
 //   fillRect, in Mpx/s. Hardware GPUs land orders of magnitude above
-//   llvmpipe, so the numbers disambiguate an unclear renderer string.
+//   llvmpipe (measured: ~39 Gpx/s on an i7-13th-gen laptop's webview vs
+//   ~1-2 Gpx/s llvmpipe-class), so the numbers decide.
 //
 // Auto-runs once in dev a few seconds after boot (console.info + optional
 // report callback for a toast); always exposed as window.__gpuProbe for
