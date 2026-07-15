@@ -98,7 +98,8 @@ Deliberate limits and shortcuts, with the upgrade path when it matters:
   the Wails paths automatically whenever the socket is down.
 - **`GDK_BACKEND=x11` is forced on Linux** (`main.go`, only when unset — an explicit value wins): WebKitGTK under
   Wayland fractional scaling renders every damage frame at 2x and downsamples on the CPU (~40ms/frame in a full-size
-  window). Under Xwayland the app sees an integer scale and the cost disappears.
+  window). Under Xwayland the app sees an integer scale and the cost disappears. Longer term this whole ceiling class
+  is scheduled to die: the shell direction is system Chromium in `--app` mode (see `docs/chromium-shell.md`).
 - **Reordering (cards, tabs) rides dnd-kit's pointer sensors, never the HTML5 Drag and Drop API.** Under WebKitGTK the
   HTML5 API hands the drag to the native GTK/X11 drag-and-drop, and a first pass built on it shipped a bug: `drop` and
   `dragend` never fired back into the page, so nothing persisted and the stale preview leaked one project's cards into
