@@ -43,7 +43,9 @@ tasks:
           (cd frontend && pnpm install --frozen-lockfile && pnpm run build)
           (cd frontend && pnpm run dev) &
           VITE_PID=$!
-          trap 'kill $VITE_PID 2>/dev/null || true' EXIT INT TERM
+          # Task's embedded shell (mvdan/sh) only knows the EXIT trap; Ctrl+C
+          # reaches the whole process group (Vite included) on its own.
+          trap 'kill $VITE_PID 2>/dev/null || true' EXIT
           sleep 1.5
           LICH_DEV=1 LICH_DEV_URL="http://127.0.0.1:{{.VITE_PORT}}" LICH_LISTEN_PORT=47822 go run .
 
