@@ -40,9 +40,21 @@ Non-negotiable rules. A violation means the work is not done.
 1. **Test coverage ≥ 80%.** Backend (Go) and frontend (React/TS). Without a test, the feature is not ready. Run the
    suite before marking any task done; if it fails, fix it first. OS/framework boundaries (the PTY, the Chromium
    launcher/zenity subprocesses, WebSocket wiring, the `main` bootstrap, xterm.js internals) are a documented
-   exception: cover the pure logic, never mock the framework just to inflate the number.
+   exception: cover the pure logic and leave the boundary itself alone (invariant 2 owns why).
 
-2. **Clean code.**
+2. **Tests answer to the contract, never the other way round.** A test earns its keep by failing when the product
+   breaks. Never weaken, skip, delete or rewrite one to buy a green run or a coverage number, and never mock the
+   framework to inflate it — a suite bought that way lies, and a lying suite is worse than a red one. A test may
+   change for exactly two reasons: the contract changed, or the test asserts something the contract never promised
+   (that is a broken test — name the real contract in the diff and say why the old assertion was wrong). "The
+   assertion was in my way" is not one of them. When in doubt, change the product, not the test.
+
+3. **A flake is a bug, and it has a root cause.** Never re-run CI until it goes green, never mark work done on a
+   suite that passes "most of the time", and never dismiss a failure as "unrelated" without proving it. Reproduce it
+   (`go test -count=200 -run TestX ./pkg/`), find the cause, fix that, and measure the failure rate before and after
+   — a fix you cannot show as a rate change is a guess.
+
+4. **Clean code.**
     - Small, focused functions (< 50 lines), one responsibility.
     - Cohesive files (200–400 lines typical, 800 max). Many small files > few large ones.
     - No deep nesting (> 4 levels) — use early returns.

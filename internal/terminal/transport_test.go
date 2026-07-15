@@ -115,6 +115,29 @@ func TestTransportInputReachesService(t *testing.T) {
 	}
 }
 
+// sendWhenRegistered retries send until it reports a connected client, and says
+// whether it ever did.
+//
+// Dial returning only means the client read the handshake response: the server
+// registers the connection after websocket.Accept returns, in its own handler
+// goroutine, so send can still find no client for a moment. Production wants
+// exactly that — an unregistered client makes send report false and the output
+// falls back to the /events bridge — which leaves the window unobservable from
+// out here, and asserting on the first send is a coin flip. Frames dropped
+// before registration are the same fallback, so only the send that lands is
+// delivered to the client.
+func sendWhenRegistered(t *testing.T, tr *transport, id string, data []byte) bool {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if tr.send(id, data) {
+			return true
+		}
+		time.Sleep(time.Millisecond)
+	}
+	return false
+}
+
 func TestTransportSendAndFallback(t *testing.T) {
 	tr, err := newTransport(func(string, []byte) {}, nil, nil, nil, nil)
 	if err != nil {
@@ -129,10 +152,8 @@ func TestTransportSendAndFallback(t *testing.T) {
 		t.Fatalf("dial: %v", err)
 	}
 	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "") }()
-	// The server registers the client during the handshake, so send is ready
-	// as soon as Dial returns.
-	if !tr.send("sess", []byte("output")) {
-		t.Fatal("send must succeed with a connected client")
+	if !sendWhenRegistered(t, tr, "sess", []byte("output")) {
+		t.Fatal("send never saw the connected client")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
