@@ -8,6 +8,7 @@ import { toast } from "sonner"
 import { System, Terminal as Service } from "@/lib/rpc"
 import { onAppEvent } from "@/lib/app-events"
 import { ensureTransport, onSessionData, sendInput } from "@/lib/term-transport"
+import { chordSequence } from "@/lib/term-keys"
 import { makeReplayBuffer } from "@/lib/replay-buffer"
 import { recordChunk } from "@/lib/term-perf"
 import { copyToastMessage, COPY_TOAST_DURATION_MS } from "@/lib/copy-toast"
@@ -141,6 +142,24 @@ export function TerminalView({ sessionId, projectId, cwd, kind, visible }: Termi
         void Service.Write(sessionId, data)
       }
     }
+
+    // Chords xterm encodes differently from what our TUIs expect go straight
+    // to the PTY (see term-keys.ts). Returning false makes xterm skip the
+    // event; preventDefault stops the browser default too — load-bearing for
+    // Ctrl+V, whose default action would paste text into the terminal.
+    term.attachCustomKeyEventHandler((event) => {
+      if (event.type !== "keydown") {
+        return true
+      }
+      const seq = chordSequence(event)
+      if (seq === null) {
+        return true
+      }
+      event.preventDefault()
+      writeInput(seq)
+      return false
+    })
+
     const dataInput = term.onData(writeInput)
     const resizeInput = term.onResize(({ cols, rows }) => {
       if (visibleRef.current) {

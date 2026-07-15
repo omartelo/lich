@@ -1,0 +1,42 @@
+import {describe, expect, it} from "vitest"
+import {chordSequence, type TermKeyState} from "./term-keys"
+
+function key(overrides: Partial<TermKeyState>): TermKeyState {
+  return {ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, key: "", ...overrides}
+}
+
+describe("chordSequence", () => {
+  it("maps Ctrl+Backspace to ETB (erase word)", () => {
+    expect(chordSequence(key({ctrlKey: true, key: "Backspace"}))).toBe("\x17")
+  })
+
+  it("leaves plain and modified Backspace to xterm", () => {
+    expect(chordSequence(key({key: "Backspace"}))).toBeNull()
+    expect(chordSequence(key({ctrlKey: true, shiftKey: true, key: "Backspace"}))).toBeNull()
+    expect(chordSequence(key({altKey: true, key: "Backspace"}))).toBeNull()
+  })
+
+  it("maps Ctrl+V to SYN so TUIs see the keypress", () => {
+    expect(chordSequence(key({ctrlKey: true, key: "v", code: "KeyV"}))).toBe("\x16")
+    expect(chordSequence(key({ctrlKey: true, key: "V", code: "KeyV"}))).toBe("\x16")
+  })
+
+  it("leaves Ctrl+Shift+V (native text paste) alone", () => {
+    expect(chordSequence(key({ctrlKey: true, shiftKey: true, key: "V", code: "KeyV"}))).toBeNull()
+  })
+
+  it("maps Shift+Enter to ESC+CR (insert newline)", () => {
+    expect(chordSequence(key({shiftKey: true, key: "Enter"}))).toBe("\x1b\r")
+  })
+
+  it("leaves Enter with other modifiers alone", () => {
+    expect(chordSequence(key({key: "Enter"}))).toBeNull()
+    expect(chordSequence(key({ctrlKey: true, shiftKey: true, key: "Enter"}))).toBeNull()
+    expect(chordSequence(key({altKey: true, shiftKey: true, key: "Enter"}))).toBeNull()
+  })
+
+  it("ignores unrelated keys", () => {
+    expect(chordSequence(key({ctrlKey: true, key: "c", code: "KeyC"}))).toBeNull()
+    expect(chordSequence(key({key: "a", code: "KeyA"}))).toBeNull()
+  })
+})
