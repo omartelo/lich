@@ -15,7 +15,7 @@ func TestDiscardFileTracked(t *testing.T) {
 	}
 	git("add", "a.txt")
 
-	if err := New().DiscardFile(repo, "a.txt"); err != nil {
+	if err := New(nil).DiscardFile(repo, "a.txt"); err != nil {
 		t.Fatalf("DiscardFile: %v", err)
 	}
 	got, err := os.ReadFile(filepath.Join(repo, "a.txt"))
@@ -43,7 +43,7 @@ func TestDiscardFileNew(t *testing.T) {
 	}
 
 	for _, rel := range []string{"staged.txt", "loose.txt"} {
-		if err := New().DiscardFile(repo, rel); err != nil {
+		if err := New(nil).DiscardFile(repo, rel); err != nil {
 			t.Fatalf("DiscardFile(%s): %v", rel, err)
 		}
 		if _, err := os.Stat(filepath.Join(repo, rel)); !os.IsNotExist(err) {
@@ -60,7 +60,7 @@ func TestDiscardFileNew(t *testing.T) {
 func TestDiscardFileRejectsEscape(t *testing.T) {
 	repo, _ := initRepo(t)
 	for _, rel := range []string{"../outside.txt", "/etc/passwd", "a/../../b"} {
-		if err := New().DiscardFile(repo, rel); err == nil {
+		if err := New(nil).DiscardFile(repo, rel); err == nil {
 			t.Errorf("DiscardFile(%q): want error, got nil", rel)
 		}
 	}

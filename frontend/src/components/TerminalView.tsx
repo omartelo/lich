@@ -225,15 +225,21 @@ export function TerminalView({ sessionId, projectId, cwd, kind, visible }: Termi
       // written to the PTY directly; returning true stops the terminal from
       // sending its own broken encoding. See term-keys.ts.
       term.attachCustomKeyEventHandler((event) => {
-        // Ctrl+Shift+V pastes text via the Wails clipboard (the webview's
-        // paste event handles text only). Plain Ctrl+V reaches the PTY as SYN
-        // through missingKeySequence, like a real terminal.
+        // Ctrl+Shift+V pastes text from the clipboard. navigator.clipboard
+        // needs a secure context — real in the Chromium shell (localhost),
+        // absent under the wails:// origin, where the Wails clipboard picks
+        // up. Plain Ctrl+V reaches the PTY as SYN through missingKeySequence,
+        // like a real terminal.
         if (isTextPasteChord(event)) {
-          void Clipboard.Text().then((text) => {
-            if (text) {
-              term.paste(text)
-            }
-          })
+          const read =
+            navigator.clipboard?.readText?.() ?? Promise.reject(new Error("no clipboard api"))
+          void read
+            .catch(() => Clipboard.Text())
+            .then((text) => {
+              if (text) {
+                term.paste(text)
+              }
+            })
           return true
         }
         const seq = missingKeySequence(event)

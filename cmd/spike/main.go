@@ -31,6 +31,8 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/creack/pty"
+
+	"github.com/omartelo/lich/internal/chromium"
 )
 
 func main() {
@@ -89,24 +91,12 @@ func waitForSignal() {
 // runBrowser launches the --app window on a throwaway profile and blocks
 // until the user closes it; the browser process exiting is the app lifecycle.
 func runBrowser(url string, extraArgs []string) error {
-	browser, err := findBrowser(exec.LookPath)
-	if err != nil {
-		return err
-	}
 	dataDir, err := os.MkdirTemp("", "lich-spike-*")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(dataDir)
-
-	cmd := exec.Command(browser, browserArgs(url, dataDir, extraArgs)...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	log.Printf("[spike] launching %s", browser)
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-	return cmd.Wait()
+	return chromium.Run(url, dataDir, extraArgs)
 }
 
 // wsHandler bridges one PTY per connection: binary frames carry PTY output

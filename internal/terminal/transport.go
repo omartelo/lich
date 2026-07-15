@@ -11,6 +11,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -114,9 +115,20 @@ func newTransport(
 	if _, err := rand.Read(raw); err != nil {
 		return nil, fmt.Errorf("failed to generate transport token: %w", err)
 	}
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	// The port is random by default; LICH_LISTEN_PORT pins it. The Chromium
+	// shell needs a stable port (main.go defaults it there): the page's origin
+	// is host:port, and the frontend's localStorage (lich.* settings) only
+	// survives restarts when the origin does. Distinct from LICH_PORT, which
+	// is the per-session hook-contract variable pointing at THIS listener —
+	// reusing it would make a lich launched from inside a lich session try to
+	// bind its parent's port.
+	addr := "127.0.0.1:0"
+	if port := os.Getenv("LICH_LISTEN_PORT"); port != "" {
+		addr = "127.0.0.1:" + port
+	}
+	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to listen for transport: %w", err)
+		return nil, fmt.Errorf("failed to listen for transport on %s: %w", addr, err)
 	}
 	t := &transport{
 		port:        listener.Addr().(*net.TCPAddr).Port,
@@ -151,6 +163,14 @@ func (t *transport) mount(pattern string, handler http.Handler) {
 		}
 		handler.ServeHTTP(w, r)
 	}))
+}
+
+// mountPublic adds a handler without the token check — for the static
+// frontend assets the Chromium shell loads before it knows the token (which
+// rides the page URL). Loopback-only like everything else; the RPC, terminal
+// and event surfaces stay token-gated.
+func (t *transport) mountPublic(pattern string, handler http.Handler) {
+	t.mux.Handle(pattern, handler)
 }
 
 // authorized reports whether the request carries the transport's connect token.

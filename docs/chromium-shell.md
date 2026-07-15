@@ -51,20 +51,29 @@ Why lich is ~80% there already:
 - The lich-plugin hooks (`docs/hooks/`) already talk to the same transport —
   unaffected.
 
-Remaining work (the actual migration):
+Migration progress:
 
-1. **RPC-ify the Wails bindings** (~20 calls: terminal `Start/Write/Resize/
-   SetVisible/Close`, projects/sessions CRUD, git status, plugin gate...) onto
-   the existing WS (or plain HTTP on the same listener). The Wails
-   `Events.On` fallback path dies; the WS becomes the only channel.
-2. **Native folder picker** → `github.com/ncruces/zenity` (zenity /
-   xdg-desktop-portal under the hood).
-3. **Clipboard** → `navigator.clipboard` (localhost is a secure context in
-   Chromium); the Wails clipboard binding dies.
-4. **Lifecycle**: launch, crash/restart of the browser process, single-
-   instance lock, `--class`/icon for the WM.
-5. **Packaging**: AppImage/deb/rpm keep shipping only the Go binary; drop
+1. **RPC-ify the Wails bindings** — DONE (phase 1): `internal/rpc` dispatcher
+   on `POST /rpc/<service>.<Method>`, `internal/events` hub on `/events`,
+   frontend facades in `lib/rpc.ts` / `lib/app-events.ts`. The Wails bridge
+   remains only as the events fallback and the endpoint bootstrap.
+2. **Chromium shell** — DONE (phase 2): `LICH_SHELL=chromium ./lich` serves
+   the embedded frontend on the loopback listener (public mount; RPC/WS stay
+   token-gated) and opens the system Chromium via `internal/chromium` on a
+   persistent profile (`~/.config/lich/chromium-profile` — localStorage lives
+   there, so the listener port is pinned to 47821, `LICH_LISTEN_PORT`
+   overrides; NOT `LICH_PORT`, which is the per-session hook variable).
+   Window closed = app exit. Extra flags: `lich -- --ozone-platform=wayland`.
+   Folder/file pickers go through zenity (`project.ZenityPicker`); clipboard
+   paste prefers `navigator.clipboard` with the Wails clipboard as fallback.
+   Known gap: no single-instance lock yet — run one at a time.
+3. **Terminal swap to xterm.js/WebGL** — phase 3, next: promote the POC to
+   the real terminal, port the key/wheel helpers worth keeping, waveterm-
+   style serialize+destroy for hidden sessions.
+4. **Packaging**: AppImage/deb/rpm ship only the Go binary; drop
    `fix-appimage.sh` and the bundled WebKitGTK entirely.
+5. **Cleanup**: default the shell to Chromium, delete the Wails path, the
+   ghostty patches and the GDK_BACKEND hack.
 
 What dies with WebKitGTK (all "Known Ceilings" entries): forced
 `GDK_BACKEND=x11`, the sandbox-disabled AppImage, the contenteditable DOM

@@ -17,8 +17,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // Project identifies an opened project directory.
@@ -28,22 +26,28 @@ type Project struct {
 	Path string `json:"path"`
 }
 
-// Service opens project directories via the native file picker.
-type Service struct{}
+// Picker shows native file/directory choosers. Two implementations exist:
+// the Wails dialog (webview shell) and zenity (Chromium shell, no Wails app
+// to ask) — main.go picks by shell. Both return "" on user cancel.
+type Picker interface {
+	PickDirectory(title string) (string, error)
+	PickFile(title string) (string, error)
+}
 
-// New returns a ready-to-use project service.
-func New() *Service {
-	return &Service{}
+// Service opens project directories via the native file picker.
+type Service struct {
+	picker Picker
+}
+
+// New returns a project service using the given picker.
+func New(picker Picker) *Service {
+	return &Service{picker: picker}
 }
 
 // Open shows the native directory picker and returns the chosen project, or nil
 // if the user cancels the dialog.
 func (s *Service) Open() (*Project, error) {
-	path, err := application.Get().Dialog.OpenFile().
-		CanChooseDirectories(true).
-		CanChooseFiles(false).
-		SetTitle("Open Project").
-		PromptForSingleSelection()
+	path, err := s.picker.PickDirectory("Open Project")
 	if err != nil {
 		return nil, fmt.Errorf("open dialog failed: %w", err)
 	}
@@ -117,11 +121,7 @@ func parsePullRequest(out []byte) *PullRequest {
 // PickFile shows the native file picker and returns the chosen file path, or ""
 // if the user cancels the dialog.
 func (s *Service) PickFile() (string, error) {
-	path, err := application.Get().Dialog.OpenFile().
-		CanChooseFiles(true).
-		CanChooseDirectories(false).
-		SetTitle("Attach File").
-		PromptForSingleSelection()
+	path, err := s.picker.PickFile("Attach File")
 	if err != nil {
 		return "", fmt.Errorf("open dialog failed: %w", err)
 	}

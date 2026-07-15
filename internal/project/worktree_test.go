@@ -58,7 +58,7 @@ func TestListBranches(t *testing.T) {
 	git("branch", "extra")
 	addLocalOrigin(t, git)
 
-	svc := New()
+	svc := New(nil)
 	got, err := svc.ListBranches(repo)
 	if err != nil {
 		t.Fatalf("ListBranches: %v", err)
@@ -130,7 +130,7 @@ func TestCreateWorktree(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", data)
 	repo, _ := initRepo(t)
 
-	svc := New()
+	svc := New(nil)
 	wt, err := svc.CreateWorktree(repo, "pid", "feat/x", "main", false)
 	if err != nil {
 		t.Fatalf("CreateWorktree: %v", err)
@@ -161,7 +161,7 @@ func TestCreateWorktreeErrors(t *testing.T) {
 	repo, git := initRepo(t)
 	git("branch", "taken")
 
-	svc := New()
+	svc := New(nil)
 	tests := []struct {
 		name    string
 		wtName  string
@@ -199,7 +199,7 @@ func TestCreateWorktreeRemoteBase(t *testing.T) {
 	repo, git := initRepo(t)
 	addLocalOrigin(t, git)
 
-	svc := New()
+	svc := New(nil)
 	wt, err := svc.CreateWorktree(repo, "pid", "from-remote", "origin/feature", true)
 	if err != nil {
 		t.Fatalf("CreateWorktree(remote base): %v", err)
@@ -219,7 +219,7 @@ func TestRemoveWorktree(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	repo, _ := initRepo(t)
 
-	svc := New()
+	svc := New(nil)
 	wt, err := svc.CreateWorktree(repo, "pid", "gone", "main", false)
 	if err != nil {
 		t.Fatalf("CreateWorktree: %v", err)
@@ -258,7 +258,7 @@ func TestWorktreeDirty(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	repo, _ := initRepo(t)
 
-	svc := New()
+	svc := New(nil)
 	wt, err := svc.CreateWorktree(repo, "pid", "wt", "main", false)
 	if err != nil {
 		t.Fatalf("CreateWorktree: %v", err)

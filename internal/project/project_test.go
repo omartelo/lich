@@ -48,7 +48,7 @@ func TestBranch(t *testing.T) {
 		t.Skipf("git init unavailable: %v (%s)", err, out)
 	}
 
-	svc := New()
+	svc := New(nil)
 	if got := svc.Branch(repo); got != "trunk" {
 		t.Errorf("Branch(repo) = %q, want trunk", got)
 	}
@@ -108,7 +108,7 @@ func TestDiff(t *testing.T) {
 		t.Skipf("git init unavailable: %v (%s)", err, out)
 	}
 
-	svc := New()
+	svc := New(nil)
 	file := filepath.Join(repo, "a.txt")
 	if err := os.WriteFile(file, []byte("one\ntwo\n"), 0o644); err != nil {
 		t.Fatal(err)

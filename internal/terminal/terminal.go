@@ -150,6 +150,15 @@ func (s *Service) Mount(pattern string, handler http.Handler) {
 	s.ws.mount(pattern, handler)
 }
 
+// MountPublic exposes a tokenless handler on the transport listener — the
+// static frontend the Chromium shell loads before it knows the token.
+func (s *Service) MountPublic(pattern string, handler http.Handler) {
+	if s.ws == nil {
+		return
+	}
+	s.ws.mountPublic(pattern, handler)
+}
+
 // sessionEnv is the environment for one PTY: the shared base plus the loopback
 // coordinates a Claude Code hook needs to report this session's status back to
 // lich. LICH_SESSION_ID is per-session, so this returns a fresh slice rather

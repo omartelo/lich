@@ -15,11 +15,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Reordering also works from the keyboard: focus a card or tab, then Space and
   the arrow keys.
 
+### Added
+
+- Experimental Chromium shell (`LICH_SHELL=chromium`): the app opens in the
+  system Chromium's `--app` mode instead of the WebKitGTK webview, eliminating
+  the compositor paint jank (see `docs/chromium-shell.md`). Off by default;
+  requires a chromium/chrome on PATH and zenity for the folder picker.
+
 ### Changed
 
 - Diff counters (+added/−deleted) now use one palette everywhere: green for
   additions, red for deletions. Session cards and the footer previously showed
   them in blue/pink while the review panel used green/red.
+- Backend services are now reachable over the loopback listener (HTTP RPC +
+  event socket); the frontend no longer depends on the Wails binding bridge.
 - Hidden sessions no longer hold a canvas backing store (several MB each at
   window size). The bitmap is released when a session leaves the screen and
   transparently reallocated on the next paint when it returns, cutting webview
