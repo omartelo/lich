@@ -218,3 +218,14 @@
   background: color-mix(in oklch, currentColor 25%, transparent);
   border-radius: 3px;
 }
+
+/* Desktop app: the page itself never scrolls. Without this, Chromium's
+   classic (width-taking, dark) scrollbars appear the moment anything
+   overflows 100vw/100vh by a pixel — w-screen includes the scrollbar width,
+   so one scrollbar begets the other — and render as a permanent dark stripe
+   along the window edge. WebKitGTK hid the same layout overflow behind
+   overlay scrollbars. */
+html,
+body {
+  overflow: hidden;
+}
