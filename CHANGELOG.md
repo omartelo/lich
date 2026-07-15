@@ -42,6 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   window size). The bitmap is released when a session leaves the screen and
   transparently reallocated on the next paint when it returns, cutting webview
   memory with many open sessions.
+- Spawned shells keep a user-set `WEBKIT_DISABLE_*` variable when running from
+  the AppImage — it was stripped as packaging leakage back when lich's own
+  AppImage set it; nothing does since the WebKitGTK shell was removed.
 
 ## [0.3.0] - 2026-07-14
 

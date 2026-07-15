@@ -1,10 +1,9 @@
-// Package events routes app events (session status, attention, titles,
-// touched — anything the backend pushes to the UI) to exactly one channel: a
-// local WebSocket client on /events when one is connected (the Chromium shell
-// path of docs/chromium-shell.md), or a fallback emitter (the Wails event
-// bridge) otherwise. Routing backend-side keeps the frontend free to listen
-// on both channels without double delivery — the same contract the terminal
-// data transport already follows.
+// Package events pushes app events (session status, attention, titles,
+// touched — anything the backend pushes to the UI) to the local WebSocket
+// client on /events (see docs/chromium-shell.md). While no client is
+// connected events are dropped — the window owns the connection, so nobody
+// is listening anyway. It is also the delivery channel terminal I/O falls
+// back to when the dedicated /ws transport is down.
 package events
 
 import (
@@ -19,7 +18,7 @@ import (
 )
 
 // writeTimeout bounds a send to the local client; a stalled write drops the
-// connection so events fall back to the fallback emitter.
+// connection instead of blocking every subsequent emit.
 const writeTimeout = 5 * time.Second
 
 // Envelope is one pushed event as it crosses the /events socket.
@@ -29,26 +28,20 @@ type Envelope struct {
 }
 
 type Hub struct {
-	mu       sync.Mutex
-	conn     *websocket.Conn
-	fallback func(name string, data any)
+	mu   sync.Mutex
+	conn *websocket.Conn
 }
 
-// New returns a hub that falls back to emit (may be nil — events are then
-// dropped while no client is connected, acceptable only in tests).
-func New(fallback func(name string, data any)) *Hub {
-	return &Hub{fallback: fallback}
+func New() *Hub {
+	return &Hub{}
 }
 
-// Emit pushes one event through the connected client or the fallback.
+// Emit pushes one event to the connected client; without one it is dropped.
 func (h *Hub) Emit(name string, data any) {
 	h.mu.Lock()
 	conn := h.conn
 	h.mu.Unlock()
 	if conn == nil {
-		if h.fallback != nil {
-			h.fallback(name, data)
-		}
 		return
 	}
 	payload, err := json.Marshal(Envelope{Name: name, Data: data})
@@ -60,9 +53,6 @@ func (h *Hub) Emit(name string, data any) {
 	defer cancel()
 	if err := conn.Write(ctx, websocket.MessageText, payload); err != nil {
 		h.drop(conn)
-		if h.fallback != nil {
-			h.fallback(name, data)
-		}
 	}
 }
 

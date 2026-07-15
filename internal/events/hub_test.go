@@ -11,27 +11,13 @@ import (
 	"github.com/coder/websocket"
 )
 
-func TestEmitFallsBackWithoutClient(t *testing.T) {
-	var gotName string
-	var gotData any
-	hub := New(func(name string, data any) {
-		gotName = name
-		gotData = data
-	})
-	hub.Emit("session-attention", map[string]string{"id": "s1"})
-	if gotName != "session-attention" || gotData == nil {
-		t.Fatalf("fallback not used: %q %v", gotName, gotData)
-	}
-}
-
-func TestEmitDropsSilentlyWithoutFallback(t *testing.T) {
-	hub := New(nil)
+func TestEmitDropsWithoutClient(t *testing.T) {
+	hub := New()
 	hub.Emit("session-touched", nil) // must not panic
 }
 
-func TestEmitPrefersConnectedClient(t *testing.T) {
-	fallbacks := 0
-	hub := New(func(string, any) { fallbacks++ })
+func TestEmitDeliversToConnectedClient(t *testing.T) {
+	hub := New()
 	server := httptest.NewServer(hub)
 	defer server.Close()
 
@@ -55,14 +41,10 @@ func TestEmitPrefersConnectedClient(t *testing.T) {
 	if err := json.Unmarshal(payload, &env); err != nil || env.Name != "session-title" {
 		t.Fatalf("envelope: %s (%v)", payload, err)
 	}
-	if fallbacks != 0 {
-		t.Fatalf("fallback used with client connected: %d", fallbacks)
-	}
 }
 
-func TestEmitFallsBackAfterClientGone(t *testing.T) {
-	fallbacks := 0
-	hub := New(func(string, any) { fallbacks++ })
+func TestEmitDropsDeadClient(t *testing.T) {
+	hub := New()
 	server := httptest.NewServer(hub)
 	defer server.Close()
 
@@ -76,16 +58,20 @@ func TestEmitFallsBackAfterClientGone(t *testing.T) {
 	waitForAttach(t, hub)
 	_ = conn.CloseNow()
 
-	// The write to a dead peer may take one emit to surface; both must land
-	// in the fallback eventually.
+	// The write to a dead peer may take one emit to surface; the hub must
+	// eventually detach the connection instead of retrying it forever.
 	deadline := time.Now().Add(5 * time.Second)
-	for fallbacks == 0 && time.Now().Before(deadline) {
+	for time.Now().Before(deadline) {
 		hub.Emit("session-touched", map[string]string{"id": "s1"})
+		hub.mu.Lock()
+		detached := hub.conn == nil
+		hub.mu.Unlock()
+		if detached {
+			return
+		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if fallbacks == 0 {
-		t.Fatal("never fell back after client closed")
-	}
+	t.Fatal("dead client never detached")
 }
 
 func waitForAttach(t *testing.T, hub *Hub) {

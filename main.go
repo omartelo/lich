@@ -50,7 +50,7 @@ func main() {
 
 	// App events ride the /events socket; no client connected means no
 	// listener yet (the window is still starting) and the event is dropped.
-	hub := events.New(nil)
+	hub := events.New()
 	term := terminal.New(db, env, hub)
 	proj := project.New(project.ZenityPicker{})
 

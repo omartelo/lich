@@ -132,12 +132,6 @@
   * {
     @apply border-border outline-ring/50;
     }
-  /* ghostty-web marks its container contenteditable for input capture; hide the
-     native caret WebKitGTK paints beside the canvas (full-height blinking bar).
-     The terminal draws its own cursor. */
-  [data-terminal] {
-    caret-color: transparent;
-    }
   body {
     @apply bg-background text-foreground;
     }
@@ -223,8 +217,7 @@
    classic (width-taking, dark) scrollbars appear the moment anything
    overflows 100vw/100vh by a pixel — w-screen includes the scrollbar width,
    so one scrollbar begets the other — and render as a permanent dark stripe
-   along the window edge. WebKitGTK hid the same layout overflow behind
-   overlay scrollbars. */
+   along the window edge. */
 html,
 body {
   overflow: hidden;

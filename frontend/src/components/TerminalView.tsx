@@ -407,7 +407,6 @@ export function TerminalView({ sessionId, projectId, cwd, kind, visible }: Termi
   return (
     <div
       ref={containerRef}
-      data-terminal
       className="h-full w-full"
       style={{ backgroundColor: TERMINAL_COLORS[resolvedTerminalTheme].background }}
     />

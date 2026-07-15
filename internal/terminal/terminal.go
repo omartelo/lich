@@ -1,5 +1,6 @@
 // Package terminal spawns PTY-backed shell sessions and bridges their I/O to the
-// frontend over Wails events. Sessions are keyed by an opaque session ID and run
+// frontend over the local WebSocket transport (transport.go), falling back to
+// the /events channel. Sessions are keyed by an opaque session ID and run
 // independently of the frontend, so navigating away from a project (or hiding
 // its terminal) never kills its shell. A project may own several sessions.
 package terminal
@@ -88,14 +89,13 @@ type Service struct {
 	mu       sync.Mutex
 	sessions map[string]*session
 	store    Store
-	// hub routes app events to the shell (events WS when connected, Wails
-	// event bridge otherwise); see internal/events.
+	// hub pushes app events to the window over /events; see internal/events.
 	hub *events.Hub
 	// env is the environment every spawned session inherits: the launch
 	// environment cleaned of AppImage runtime leakage (see childEnv), plus TERM.
 	env []string
 	// ws is the local WebSocket transport for terminal I/O (see transport.go);
-	// nil when it failed to start, leaving the Wails event bridge as the path.
+	// nil when it failed to start, leaving /events and the RPC as the path.
 	ws *transport
 }
 
@@ -211,11 +211,9 @@ func resolveCommand(kind, bin, shellEnv string) string {
 	return resolveBin(bin)
 }
 
-// appImageVars are injected by the AppImage runtime, AppImageLauncher or our
-// AppRun (build/linux/appimage/fix-appimage.sh) and must not leak into the
-// shell: ARGV0 (the .AppImage's invocation name) makes mise/asdf-style shims
-// misread the shell as an invalid shim, the WEBKIT_ pair would run any
-// WebKitGTK app launched from the terminal without its sandbox, and the rest
+// appImageVars are injected by the AppImage runtime or AppImageLauncher and
+// must not leak into the shell: ARGV0 (the .AppImage's invocation name) makes
+// mise/asdf-style shims misread the shell as an invalid shim, and the rest
 // are runtime internals a child never needs.
 var appImageVars = map[string]bool{
 	"ARGV0":              true,
@@ -225,18 +223,16 @@ var appImageVars = map[string]bool{
 	"TARGET_APPIMAGE":    true,
 	"REDIRECT_APPIMAGE":  true,
 	"DESKTOPINTEGRATION": true,
-	"WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS": true,
-	"WEBKIT_DISABLE_DMABUF_RENDERER":           true,
 }
 
 // childEnv returns env cleaned of everything the AppImage runtime injected, so
 // spawned shells inherit the environment lich itself was launched with. Outside
 // an AppImage (no APPDIR — the deb/rpm/dev case) env is returned unchanged.
 // Inside one, appImageVars are dropped and every value is scrubbed of
-// colon-separated path entries under the AppImage mount — AppRun prepends the
-// mount to LD_LIBRARY_PATH, PATH and XDG_DATA_DIRS, and its bundled Ubuntu libs
-// break linkers and GTK apps run from the terminal. Entries the user set
-// survive verbatim, so a pre-existing LD_LIBRARY_PATH keeps working.
+// colon-separated path entries under the AppImage mount — our AppRun adds
+// none, but wrappers like AppImageLauncher may prepend the mount to path
+// lists, and a mount path in a child's PATH dies with the parent. Entries the
+// user set survive verbatim, so a pre-existing LD_LIBRARY_PATH keeps working.
 func childEnv(env []string) []string {
 	appdir := ""
 	for _, kv := range env {
@@ -375,7 +371,7 @@ func (s *Service) Write(id, data string) error {
 }
 
 // writeBytes delivers input bytes to a session's PTY; unknown sessions are a
-// no-op. It is the shared sink for the Wails binding and the WebSocket
+// no-op. It is the shared sink for the RPC Write and the WebSocket
 // transport's input frames.
 func (s *Service) writeBytes(id string, data []byte) error {
 	ptmx := s.ptmxOf(id)
