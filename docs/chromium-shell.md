@@ -76,20 +76,27 @@ Migration progress:
    WebKitGTK workarounds were not ported (they patched ghostty-web 0.4.0
    bugs); ghostty itself stays reachable via
    localStorage.setItem("lich.terminal", "ghostty") until phase 5.
-4. **De-Wails the build** — DONE (phase 4): `-tags nowails` produces a binary
-   with zero Wails/GTK/WebKitGTK linkage — pure Go, fully static under
-   `CGO_ENABLED=0` (modernc sqlite, creack/pty, coder/websocket, zenity are
-   all CGO-free). `task build:chromium` builds it (`bin/lich-chromium`,
-   Chromium shell unconditionally; `LICH_SHELL` is ignored — there is nothing
-   else to run). The Wails path lives in `shell_wails.go` / the picker in
-   `picker_wails.go`, both behind `!nowails`. Formal packaging (nfpm/
-   AppImage swap, dropping `fix-appimage.sh` and the bundled WebKitGTK) lands
-   with phase 5 — doing it now would mean maintaining two release pipelines
-   for one transition window.
-5. **Cleanup**: default the shell to Chromium, delete the Wails path, the
-   ghostty patches and the GDK_BACKEND hack; release pipeline ships the
-   static binary (AppImage becomes a trivial wrapper, .deb/.rpm/.pkg just
-   carry one file).
+4. **De-Wails the build** — DONE (phase 4, folded into 5): the binary is pure
+   Go, fully static under `CGO_ENABLED=0` (modernc sqlite, creack/pty,
+   coder/websocket, zenity are all CGO-free).
+5. **Cleanup** — DONE (phase 5): the Wails path, the wailsapp dependency, the
+   generated bindings, the ghostty-web terminal with its entire
+   private-patching layer, the `GDK_BACKEND=x11` hack and the measurement
+   spike are deleted. Chromium is the only shell; service shapes are
+   hand-owned in `frontend/src/lib/api-types.ts`. The release pipeline ships
+   the static binary: nfpm directly for .deb/.rpm/.pkg.tar.zst (chromium and
+   zenity are *recommends*, never hard deps) and
+   `build/linux/make-appimage.sh` wraps it in an AppImage with nothing
+   bundled — `fix-appimage.sh` and the WebKitGTK payload are gone.
+   Development runs through `task dev`: Vite HMR + backend, the window
+   pointed at the dev server via `LICH_DEV_URL`, with a separate DB, listener
+   port (47822) and Chromium profile so the daily-driver install stays
+   untouched.
+
+**The migration is complete.** This document remains as the decision record;
+option 2 (embedded CEF via `energye/energy`) stays deferred with the same
+trigger — the project growing distribution needs a system-browser dependency
+can't serve.
 
 What dies with WebKitGTK (all "Known Ceilings" entries): forced
 `GDK_BACKEND=x11`, the sandbox-disabled AppImage, the contenteditable DOM

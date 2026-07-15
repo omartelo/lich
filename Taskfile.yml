@@ -1,74 +1,82 @@
 version: '3'
 
+# lich is a pure-Go binary (no CGO) serving its embedded frontend to a system
+# Chromium --app window — see docs/chromium-shell.md. Linux-only.
+
 vars:
   APP_NAME: "lich"
   BIN_DIR: "bin"
-  PACKAGE_MANAGER: '{{.PACKAGE_MANAGER | default "pnpm"}}'
-  VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
-  # Target OS for build/package/run. Defaults to the host OS, and is overridden
-  # by `wails3 build GOOS=...` (or the GOOS env var) for cross-compilation. The
-  # tasks below dispatch to the matching platform Taskfile via this variable.
-  GOOS: '{{.GOOS | default OS}}'
-
-includes:
-  common: ./build/Taskfile.yml
-  windows: ./build/windows/Taskfile.yml
-  darwin: ./build/darwin/Taskfile.yml
-  linux: ./build/linux/Taskfile.yml
+  VITE_PORT: '{{.LICH_VITE_PORT | default 9245}}'
+  # Package version follows the git tag (env VERSION overrides) — no manual bump.
+  VERSION:
+    sh: echo "${VERSION:-$(git describe --tags --always 2>/dev/null | sed 's/^v//')}"
+  GO_BUILD_FLAGS: '-trimpath -ldflags "-s -w"'
 
 tasks:
+  build:frontend:
+    summary: Installs frontend deps and builds frontend/dist (embedded by Go)
+    cmds:
+      - cmd: cd frontend && pnpm install --frozen-lockfile && pnpm run build
+
   build:
-    summary: Builds the application
+    summary: Builds the static lich binary
+    deps: [build:frontend]
     cmds:
-      - task: "{{.GOOS}}:build"
-
-  build:chromium:
-    summary: Builds the Chromium-shell binary — pure Go, no Wails/GTK/WebKitGTK linkage (docs/chromium-shell.md phase 4)
-    cmds:
-      - task: common:generate:bindings
-      - cmd: cd frontend && {{.PACKAGE_MANAGER}} install && {{.PACKAGE_MANAGER}} run build
-      - cmd: CGO_ENABLED=0 go build -tags nowails -trimpath -ldflags "-s -w" -o {{.BIN_DIR}}/lich-chromium .
-      - cmd: echo "built {{.BIN_DIR}}/lich-chromium (static, chromium shell only)"
-
-  package:
-    summary: Packages a production build of the application
-    cmds:
-      - task: "{{.GOOS}}:package"
+      - cmd: CGO_ENABLED=0 go build {{.GO_BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}} .
 
   run:
-    summary: Runs the application
+    summary: Builds and runs the application
+    deps: [build]
     cmds:
-      - task: "{{.GOOS}}:run"
+      - cmd: ./{{.BIN_DIR}}/{{.APP_NAME}}
 
   dev:
-    summary: Runs the application in development mode
+    summary: Development mode — Vite HMR + backend, window pointed at the dev server
+    cmds:
+      # frontend/dist must exist for go:embed to compile, even though the
+      # window loads the Vite server; build it once, then serve with HMR.
+      # Dev isolation: separate DB (LICH_DEV, store.databasePath), separate
+      # listener port and Chromium profile (LICH_DEV_URL side effect), so a
+      # daily-driver lich keeps running untouched.
+      - cmd: |
+          set -e
+          (cd frontend && pnpm install --frozen-lockfile && pnpm run build)
+          (cd frontend && pnpm run dev) &
+          VITE_PID=$!
+          trap 'kill $VITE_PID 2>/dev/null || true' EXIT INT TERM
+          sleep 1.5
+          LICH_DEV=1 LICH_DEV_URL="http://127.0.0.1:{{.VITE_PORT}}" LICH_LISTEN_PORT=47822 go run .
+
+  test:
+    summary: Backend and frontend suites
+    cmds:
+      - cmd: go test ./...
+      - cmd: cd frontend && pnpm test
+
+  package:
+    summary: Builds the Linux packages (AppImage, deb, rpm, archlinux) into bin/
+    deps: [build]
+    cmds:
+      - task: package:appimage
+      - task: package:nfpm
+        vars: { FORMAT: deb, TARGET: '{{.APP_NAME}}.deb' }
+      - task: package:nfpm
+        vars: { FORMAT: rpm, TARGET: '{{.APP_NAME}}.rpm' }
+      - task: package:nfpm
+        vars: { FORMAT: archlinux, TARGET: '{{.APP_NAME}}.pkg.tar.zst' }
+
+  package:nfpm:
+    internal: true
+    preconditions:
+      - sh: command -v nfpm
+        msg: "nfpm is required: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest"
     env:
-      # Separate dev database (lich-dev.db) — see store.databasePath.
-      LICH_DEV: "1"
+      VERSION: '{{.VERSION}}'
+      GOARCH: amd64
     cmds:
-      - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
+      - cmd: nfpm package -f build/linux/nfpm/nfpm.yaml -p {{.FORMAT}} -t {{.BIN_DIR}}/{{.TARGET}}
 
-  setup:docker:
-    summary: Builds Docker image for cross-compilation (~800MB download)
+  package:appimage:
+    summary: Wraps the static binary in an AppImage (no bundled libs — nothing to bundle)
     cmds:
-      - task: common:setup:docker
-
-  build:server:
-    summary: Builds the application in server mode (no GUI, HTTP server only)
-    cmds:
-      - task: common:build:server
-
-  run:server:
-    summary: Runs the application in server mode
-    cmds:
-      - task: common:run:server
-
-  build:docker:
-    summary: Builds a Docker image for server mode deployment
-    cmds:
-      - task: common:build:docker
-
-  run:docker:
-    summary: Builds and runs the Docker image
-    cmds:
-      - task: common:run:docker
+      - cmd: ./build/linux/make-appimage.sh {{.BIN_DIR}}/{{.APP_NAME}} {{.BIN_DIR}}

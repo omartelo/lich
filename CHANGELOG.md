@@ -15,18 +15,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Reordering also works from the keyboard: focus a card or tab, then Space and
   the arrow keys.
 
-### Added
+### Changed (BREAKING — new shell)
 
-- Experimental Chromium shell (`LICH_SHELL=chromium`): the app opens in the
-  system Chromium's `--app` mode instead of the WebKitGTK webview, eliminating
-  the compositor paint jank (see `docs/chromium-shell.md`). Off by default;
-  requires a chromium/chrome on PATH and zenity for the folder picker.
+- lich now opens in the system Chromium's `--app` mode instead of the
+  WebKitGTK webview, eliminating the compositor paint jank for good (decision
+  record: `docs/chromium-shell.md`). The Wails toolkit, the bundled WebKitGTK
+  and the `GDK_BACKEND=x11` workaround are gone; the binary is pure static Go.
+  New runtime requirements: a Chromium-family browser on PATH and zenity for
+  the folder picker. UI preferences (theme, font, hotkeys) reset once — they
+  now live in the Chromium profile; the workspace (projects/sessions, SQLite)
+  carries over untouched.
 - The terminal is now xterm.js with the WebGL (GPU) renderer, replacing the
   patched ghostty-web canvas pipeline — noticeably smoother TUI scrolling and
-  streaming. Hidden sessions no longer keep a terminal at all: their state is
-  serialized and replayed on return, cutting memory with many open sessions.
-  The old terminal remains reachable via
-  `localStorage.setItem("lich.terminal", "ghostty")` for one release.
+  streaming, and correct Shift+Tab/Alt-chord/mouse handling without patches.
+  Hidden sessions no longer keep a terminal at all: their state is serialized
+  and replayed on return, cutting memory with many open sessions.
 
 ### Changed
 

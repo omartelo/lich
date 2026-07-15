@@ -10,8 +10,8 @@ permissions:
   contents: write
 
 env:
-  # linuxdeploy (used by `wails3 generate appimage`) is itself an AppImage;
-  # extracting instead of FUSE-mounting avoids needing libfuse2 on the runner.
+  # appimagetool is itself an AppImage; extracting instead of FUSE-mounting
+  # avoids needing libfuse2 on the runner.
   APPIMAGE_EXTRACT_AND_RUN: "1"
 
 jobs:
@@ -19,6 +19,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # git describe needs the tag history for the package version.
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -37,21 +40,16 @@ jobs:
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 
-      - name: Install system dependencies
+      # The binary is pure Go (CGO_ENABLED=0) — no GTK/WebKitGTK, no C
+      # toolchain. Packaging needs nfpm and appimagetool only.
+      - name: Install task, nfpm and appimagetool
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config gcc libc6-dev libgtk-4-dev libwebkitgtk-6.0-dev
-
-      - name: Install wails3 and task
-        run: |
-          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.116
           go install github.com/go-task/task/v3/cmd/task@latest
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
-
-      # The Go→TS bindings are gitignored; the frontend build needs them.
-      - name: Generate bindings
-        run: task common:generate:bindings
+          sudo curl -fsSL -o /usr/local/bin/appimagetool \
+            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          sudo chmod +x /usr/local/bin/appimagetool
 
       # Frontend first: the backend embeds frontend/dist (go:embed), so Go
       # tests only compile once the frontend has been built.
@@ -66,18 +64,17 @@ jobs:
         run: go test ./...
 
       - name: Build Linux packages
-        run: task linux:package
+        run: task package
 
       - name: Assemble release assets
         run: |
-          # `wails3 tool package` emits unversioned names (lich.deb, lich.rpm,
-          # lich.pkg.tar.zst); rename every artifact to carry the tag + arch.
           cd bin
           tag="${GITHUB_REF_NAME}"
           mv "lich-x86_64.AppImage" "lich-${tag}-x86_64.AppImage"
           mv "lich.deb"             "lich-${tag}-amd64.deb"
           mv "lich.rpm"             "lich-${tag}-x86_64.rpm"
           mv "lich.pkg.tar.zst"     "lich-${tag}-x86_64.pkg.tar.zst"
+          cp lich "lich-${tag}-linux-amd64"
           sha256sum lich-${tag}-* > checksums.txt
           cat checksums.txt
 
@@ -114,4 +111,5 @@ jobs:
             bin/*.deb
             bin/*.rpm
             bin/*.pkg.tar.zst
+            bin/lich
             bin/checksums.txt
