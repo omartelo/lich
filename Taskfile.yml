@@ -56,10 +56,9 @@ tasks:
       - cmd: cd frontend && pnpm test
 
   package:
-    summary: Builds the Linux packages (AppImage, deb, rpm, archlinux) into bin/
+    summary: Builds the Linux packages (deb, rpm, archlinux) into bin/
     deps: [build]
     cmds:
-      - task: package:appimage
       - task: package:nfpm
         vars: { FORMAT: deb, TARGET: '{{.APP_NAME}}.deb' }
       - task: package:nfpm
@@ -77,8 +76,3 @@ tasks:
       GOARCH: amd64
     cmds:
       - cmd: nfpm package -f build/linux/nfpm/nfpm.yaml -p {{.FORMAT}} -t {{.BIN_DIR}}/{{.TARGET}}
-
-  package:appimage:
-    summary: Wraps the static binary in an AppImage (no bundled libs — nothing to bundle)
-    cmds:
-      - cmd: ./build/linux/make-appimage.sh {{.BIN_DIR}}/{{.APP_NAME}} {{.BIN_DIR}}

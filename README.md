@@ -41,37 +41,40 @@ release.
 
 ## Install
 
-Grab the artifact for your packaging from the
-[Releases](https://github.com/omartelo/lich/releases) page. Every release ships a
-`checksums.txt` — verify with `sha256sum -c checksums.txt`.
-
-The packages only *recommend* chromium and zenity — install them yourself if
-your package manager skips recommendations.
-
-**AppImage** (portable):
+One-liner — detects your distro, verifies the checksum and installs the native
+package through your package manager:
 
 ```bash
-chmod +x lich-*-x86_64.AppImage
-./lich-*-x86_64.AppImage
+curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh
 ```
 
-**Debian / Ubuntu:**
+Or grab the artifact for your packaging from the
+[Releases](https://github.com/omartelo/lich/releases) page (every release ships
+a `checksums.txt` — verify with `sha256sum -c checksums.txt`):
 
 ```bash
-sudo dpkg -i lich-*-amd64.deb
+sudo apt-get install ./lich-*-amd64.deb        # Debian / Ubuntu
+sudo dnf install ./lich-*-x86_64.rpm           # Fedora / RHEL
+sudo pacman -U lich-*-x86_64.pkg.tar.zst       # Arch
 ```
 
-**Fedora / RHEL:**
+The bare static binary (`lich-*-linux-amd64`) also ships with every release —
+drop it anywhere on PATH.
+
+### Runtime dependencies
+
+lich opens its window in a Chromium-family browser and uses zenity for the
+folder picker — neither is bundled:
 
 ```bash
-sudo rpm -i lich-*-x86_64.rpm
+sudo apt-get install chromium zenity   # Debian / Ubuntu (any chromium variant works)
+sudo dnf install chromium zenity       # Fedora / RHEL
+sudo pacman -S chromium zenity         # Arch
 ```
 
-**Arch:**
-
-```bash
-sudo pacman -U lich-*-x86_64.pkg.tar.zst
-```
+apt and dnf pull both automatically (the packages *recommend* them); pacman has
+no recommends, so on Arch install them yourself. Any of chromium,
+google-chrome or brave satisfies the browser requirement.
 
 ## Build from source
 
@@ -87,11 +90,10 @@ task test     # Go + frontend suites
 ```
 
 Package a Linux release locally (needs
-[nfpm](https://nfpm.goreleaser.com/) and
-[appimagetool](https://github.com/AppImage/appimagetool/releases)):
+[nfpm](https://nfpm.goreleaser.com/)):
 
 ```bash
-task package   # AppImage + .deb + .rpm + Arch .pkg.tar.zst in bin/
+task package   # .deb + .rpm + Arch .pkg.tar.zst in bin/
 ```
 
 ## Configuration

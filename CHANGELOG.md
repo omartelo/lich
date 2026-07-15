@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   releasing outside the list (or pressing Escape) leaves the order untouched.
   Reordering also works from the keyboard: focus a card or tab, then Space and
   the arrow keys.
+- `install.sh` — one-liner install (`curl ... | sh`) that detects the distro,
+  downloads the matching package from the latest release, verifies its
+  checksum and installs it through the native package manager, then checks
+  the runtime dependencies (Chromium-family browser, zenity) are present.
 
 ### Changed (BREAKING — new shell)
 
@@ -42,9 +46,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   window size). The bitmap is released when a session leaves the screen and
   transparently reallocated on the next paint when it returns, cutting webview
   memory with many open sessions.
-- Spawned shells keep a user-set `WEBKIT_DISABLE_*` variable when running from
-  the AppImage — it was stripped as packaging leakage back when lich's own
-  AppImage set it; nothing does since the WebKitGTK shell was removed.
+- Spawned shells keep a user-set `WEBKIT_DISABLE_*` variable — it was stripped
+  as packaging leakage back when lich's own AppImage set it; nothing does
+  since the WebKitGTK shell was removed.
+
+### Removed
+
+- The AppImage artifact. It cannot declare dependencies, and lich needs a
+  system Chromium and zenity at runtime either way — a "portable" AppImage
+  that isn't self-contained betrays the format. Install via `install.sh`
+  (detects the distro, verifies checksums, installs the native package) or
+  grab the `.deb`/`.rpm`/`.pkg.tar.zst` directly; the bare static binary
+  also ships with every release.
 
 ## [0.3.0] - 2026-07-14
 

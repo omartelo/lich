@@ -26,7 +26,7 @@ task dev      # dev mode: Vite HMR + backend; separate DB, port and Chromium pro
 task build    # frontend build + static Go binary → bin/lich
 task run      # build + run
 task test     # go test ./... + frontend vitest
-task package  # AppImage, .deb, .rpm, .pkg.tar.zst into bin/ (needs nfpm + appimagetool)
+task package  # .deb, .rpm, .pkg.tar.zst into bin/ (needs nfpm)
 ```
 
 Frontend in isolation: `cd frontend && pnpm run build` (runs `tsc` + `vite build`).
@@ -56,8 +56,8 @@ Non-negotiable rules. A violation means the work is not done.
 ## Release Checklist
 
 Releases are cut by pushing a `vX.Y.Z` tag. The `.github/workflows/release.yml` workflow runs the test suites, builds
-the frontend, then `task package` produces the Linux artifacts (AppImage, `.deb`, `.rpm`, Arch `.pkg.tar.zst`, plus
-the raw static binary) and publishes a GitHub Release with a `checksums.txt`, taking the release notes from the
+the frontend, then `task package` produces the Linux artifacts (`.deb`, `.rpm`, Arch `.pkg.tar.zst`, plus the raw
+static binary) and publishes a GitHub Release with a `checksums.txt`, taking the release notes from the
 matching `CHANGELOG.md` section. The binary is pure Go — the workflow needs no C toolchain; frontend build comes
 first because the backend `go:embed`s `frontend/dist`.
 
@@ -99,6 +99,8 @@ Deliberate limits and shortcuts, with the upgrade path when it matters:
   `activationConstraint.distance` (`frontend/src/lib/use-sortable-list.ts`) or the sensor claims the press and plain
   clicks stop selecting a session. dnd-kit over the HTML5 DnD API because it also gives the keyboard path and never
   mutates DOM order mid-drag.
-- **The AppImage is a plain wrapper** around the static binary (`build/linux/make-appimage.sh`) — no bundled libs, no
-  sandbox tricks. It requires a system Chromium at runtime, like every other install format (soft dependency:
-  packages only *recommend* chromium/zenity).
+- **No AppImage.** It cannot express dependencies, and a "portable" artifact that still needs a system Chromium
+  betrays the format; bundling Chromium is a non-starter (sandbox needs SUID/user-namespaces — blocked on FUSE
+  mounts and by Ubuntu 24.04's AppArmor — plus ~200MB and owning Chromium security patches). Install formats are
+  `.deb`/`.rpm`/`.pkg.tar.zst` (deps as Recommends; pacman has no Recommends, only optdepends) plus `install.sh`.
+  If bundling ever matters, that's option 2 (CEF) of `docs/chromium-shell.md`, not an AppImage.
