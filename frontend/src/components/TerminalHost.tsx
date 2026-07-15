@@ -1,8 +1,18 @@
 import { useEffect, useState } from "react"
 import { useMatch } from "react-router-dom"
 import { TerminalView } from "@/components/TerminalView"
+import { XtermTerminalView } from "@/components/XtermTerminalView"
 import { useProjects } from "@/lib/projects"
 import { activeSessionId, sessionsOf } from "@/lib/sessions"
+import { isXtermPocEnabled } from "@/lib/xterm-poc"
+
+// Evaluated once at load: the xterm.js POC flag swaps the terminal component
+// for every session (see lib/xterm-poc.ts). Flip + reload to compare.
+const TerminalComponent = isXtermPocEnabled(
+  typeof localStorage !== "undefined" ? localStorage : null,
+)
+  ? XtermTerminalView
+  : TerminalView
 
 // TerminalHost keeps one persistent terminal per session, across every open
 // project, stacked in the same area. The router picks the active project and the
@@ -54,7 +64,7 @@ export function TerminalHost() {
               style={{ visibility: visible ? "visible" : "hidden" }}
               aria-hidden={!visible}
             >
-              <TerminalView
+              <TerminalComponent
                 sessionId={session.id}
                 projectId={project.id}
                 cwd={session.path || project.path}

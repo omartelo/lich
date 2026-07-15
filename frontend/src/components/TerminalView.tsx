@@ -32,11 +32,12 @@ import type { SessionKind } from "@/lib/sessions"
 const DATA_EVENT_PREFIX = "terminal:data:"
 const EXIT_EVENT_PREFIX = "terminal:exit:"
 
-const FONT_SIZE = 14
+export const FONT_SIZE = 14
 
 // Terminal color schemes. Light keeps a high-contrast foreground so CLI output
-// stays legible against the pale background.
-const TERMINAL_COLORS: Record<ResolvedTheme, { background: string; foreground: string }> = {
+// stays legible against the pale background. Shared with XtermTerminalView so
+// the POC renders under identical visuals.
+export const TERMINAL_COLORS: Record<ResolvedTheme, { background: string; foreground: string }> = {
   dark: { background: "#06070f", foreground: "#e5e7eb" },
   light: { background: "#ffffff", foreground: "#1f2328" },
 }
@@ -51,7 +52,7 @@ function ensureInit(): Promise<void> {
 // draws with fonts already loaded in the document. Bundled fonts (@font-face)
 // need this; system fonts resolve through the webview's fontconfig and load
 // as no-ops, so failures are ignored.
-async function ensureFontLoaded(font: string): Promise<void> {
+export async function ensureFontLoaded(font: string): Promise<void> {
   try {
     await Promise.all([
       document.fonts.load(`${FONT_SIZE}px "${font}"`),
@@ -64,7 +65,7 @@ async function ensureFontLoaded(font: string): Promise<void> {
 
 // decodeBase64 turns the base64 PTY payload back into bytes. The backend encodes
 // output so multi-byte UTF-8 sequences survive the JSON event bridge intact.
-function decodeBase64(data: string): Uint8Array {
+export function decodeBase64(data: string): Uint8Array {
   const binary = atob(data)
   const bytes = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i++) {
@@ -111,7 +112,7 @@ function pointerCell(
   }
 }
 
-interface TerminalViewProps {
+export interface TerminalViewProps {
   sessionId: string
   projectId: string
   cwd: string
