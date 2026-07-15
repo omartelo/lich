@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { ILink } from "ghostty-web"
-import { Browser } from "@wailsio/runtime"
+import { System } from "./rpc"
 import { openInBrowser } from "./term-links"
 
-vi.mock("@wailsio/runtime", () => ({ Browser: { OpenURL: vi.fn() } }))
+vi.mock("./rpc", () => ({ System: { OpenExternal: vi.fn() } }))
 
-const openURL = vi.mocked(Browser.OpenURL)
+const openExternal = vi.mocked(System.OpenExternal)
 
 function makeLink(text = "https://example.com"): ILink {
   return { text, range: {} as ILink["range"], activate: () => {} }
@@ -15,22 +15,22 @@ function click(overrides: Partial<MouseEvent> = {}): MouseEvent {
   return { ctrlKey: false, metaKey: false, ...overrides } as MouseEvent
 }
 
-afterEach(() => openURL.mockClear())
+afterEach(() => openExternal.mockClear())
 
 describe("openInBrowser", () => {
   it("opens the URL in the OS browser on Ctrl-click", () => {
     openInBrowser(makeLink()).activate(click({ ctrlKey: true }))
-    expect(openURL).toHaveBeenCalledWith("https://example.com")
+    expect(openExternal).toHaveBeenCalledWith("https://example.com")
   })
 
   it("opens on Cmd-click too", () => {
     openInBrowser(makeLink("https://a.dev")).activate(click({ metaKey: true }))
-    expect(openURL).toHaveBeenCalledWith("https://a.dev")
+    expect(openExternal).toHaveBeenCalledWith("https://a.dev")
   })
 
   it("does nothing on a plain click without a modifier", () => {
     openInBrowser(makeLink()).activate(click())
-    expect(openURL).not.toHaveBeenCalled()
+    expect(openExternal).not.toHaveBeenCalled()
   })
 
   it("preserves the detected link's text and range", () => {

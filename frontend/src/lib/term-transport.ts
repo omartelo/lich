@@ -6,7 +6,7 @@
 // session; when it is down, callers fall back to the Wails paths, which the
 // backend keeps serving.
 
-import {Service} from "../../bindings/github.com/omartelo/lich/internal/terminal"
+import {endpoint} from "./rpc"
 import {decodeFrame, encodeFrame} from "./term-frame"
 
 const RECONNECT_MS = 1_000
@@ -29,11 +29,8 @@ export function ensureTransport(): void {
 
 async function connect(): Promise<void> {
   try {
-    const info = await Service.Transport()
-    if (!info.port) {
-      return
-    }
-    const ws = new WebSocket(`ws://127.0.0.1:${info.port}/ws?token=${info.token}`)
+    const info = await endpoint()
+    const ws = new WebSocket(`${info.base.replace(/^http/, "ws")}/ws?token=${info.token}`)
     ws.binaryType = "arraybuffer"
     ws.onopen = () => {
       ready = true

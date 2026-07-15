@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Service as Store } from "../../../bindings/github.com/omartelo/lich/internal/store"
+import { Store } from "@/lib/rpc"
 import { useProjects } from "@/lib/projects"
 import { Input } from "@/components/ui/input"
 import { SettingBlock } from "./SettingBlock"

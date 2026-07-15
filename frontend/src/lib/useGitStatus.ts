@@ -1,5 +1,5 @@
 import {useCallback, useSyncExternalStore} from "react"
-import {Service as ProjectService} from "../../bindings/github.com/omartelo/lich/internal/project"
+import {ProjectService} from "./rpc"
 import {createGitStatusStore, type GitStatus} from "./git-status-store"
 
 export type {GitStatus}

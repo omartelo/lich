@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react"
 import { init, Terminal as Ghostty } from "ghostty-web"
-import { Clipboard, Events } from "@wailsio/runtime"
-import { Service } from "../../bindings/github.com/omartelo/lich/internal/terminal"
+import { Clipboard } from "@wailsio/runtime"
+import { Terminal as Service } from "@/lib/rpc"
+import { onAppEvent } from "@/lib/app-events"
 import { toast } from "sonner"
 import { copyToastMessage, COPY_TOAST_DURATION_MS } from "@/lib/copy-toast"
 import { patchBlockGlyphs } from "@/lib/block-glyphs"
@@ -294,21 +295,21 @@ export function TerminalView({ sessionId, projectId, cwd, kind, visible }: Termi
       })
       cleanups.push(() => selectionInput.dispose())
 
-      const offData = Events.On(DATA_EVENT_PREFIX + sessionId, (event) => {
+      const offData = onAppEvent(DATA_EVENT_PREFIX + sessionId, (data) => {
         const t0 = performance.now()
-        const bytes = decodeBase64(event.data as string)
+        const bytes = decodeBase64(data as string)
         const t1 = performance.now()
         term.write(bytes)
         recordChunk(t1 - t0, performance.now() - t1, bytes.length)
       })
-      // Output arrives here while the WebSocket is up, on the Wails event
+      // Output arrives here while the WebSocket is up, on the app event
       // above while it is down; the backend routes each chunk to exactly one.
       const offWsData = onSessionData(sessionId, (payload) => {
         const t0 = performance.now()
         term.write(payload)
         recordChunk(0, performance.now() - t0, payload.length)
       })
-      const offExit = Events.On(EXIT_EVENT_PREFIX + sessionId, () => {
+      const offExit = onAppEvent(EXIT_EVENT_PREFIX + sessionId, () => {
         term.write("\r\n[process exited]\r\n")
       })
       cleanups.push(offData, offWsData, offExit)

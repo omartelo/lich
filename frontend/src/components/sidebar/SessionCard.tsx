@@ -1,6 +1,6 @@
 import {useEffect, useRef, useState} from "react"
 import type {KeyboardEvent} from "react"
-import {Events} from "@wailsio/runtime"
+import {onAppEvent} from "@/lib/app-events"
 import {Bell, Check, GitBranch, LoaderCircle, Pencil, X} from "lucide-react"
 import {useSortable} from "@dnd-kit/sortable"
 import {CSS} from "@dnd-kit/utilities"
@@ -84,8 +84,8 @@ export function SessionCard({
   // track status. A backend-retained last state would survive project switches;
   // for now switching away mid-run can strand a spinner until the next turn.
   useEffect(() => {
-    const off = Events.On(statusEventName(session.id), (event: {data: unknown}) => {
-      setStatus(toSessionStatus(event.data))
+    const off = onAppEvent(statusEventName(session.id), (data) => {
+      setStatus(toSessionStatus(data))
     })
     return () => off()
   }, [session.id])

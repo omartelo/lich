@@ -15,7 +15,7 @@ import {
   INSTALL_DISMISSED_KEY,
   UPDATE_DISMISSED_KEY,
 } from "@/lib/plugin-gate"
-import {Service as ClaudePlugin} from "../../bindings/github.com/omartelo/lich/internal/claudeplugin"
+import {ClaudePlugin} from "@/lib/rpc"
 import {errorText} from "@/lib/utils"
 
 const RESTART_HINT = "restart your Claude sessions to apply."

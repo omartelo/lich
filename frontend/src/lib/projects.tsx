@@ -1,14 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
 import type { ReactNode } from "react"
-import { Events } from "@wailsio/runtime"
 import { toast } from "sonner"
 import { useMatch, useNavigate } from "react-router-dom"
-import {
-  Project,
-  Service as ProjectService,
-} from "../../bindings/github.com/omartelo/lich/internal/project"
-import { Service as Store } from "../../bindings/github.com/omartelo/lich/internal/store"
+import type { Project } from "../../bindings/github.com/omartelo/lich/internal/project"
 import type { Project as StoreProject } from "../../bindings/github.com/omartelo/lich/internal/store/models"
+import { ProjectService, Store } from "./rpc"
+import { onAppEvent } from "./app-events"
 import {
   activeSessionId,
   addSession,
@@ -135,11 +132,11 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   // Mirror it into local state so the card updates live; the store already
   // persisted it, so this never writes back.
   useEffect(() => {
-    const off = Events.On(TITLE_EVENT, (event: { data: unknown }) => {
-      if (!isTitleEvent(event.data)) {
+    const off = onAppEvent(TITLE_EVENT, (data) => {
+      if (!isTitleEvent(data)) {
         return
       }
-      const { id, label } = event.data
+      const { id, label } = data
       const projectId = projectOfSession(sessionsRef.current, id)
       if (!projectId) {
         return
@@ -266,11 +263,11 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   // in a background project whose card is not mounted. Skipped for the session
   // already in focus, where the terminal itself shows the prompt.
   useEffect(() => {
-    const off = Events.On(ATTENTION_EVENT, (event: { data: unknown }) => {
-      if (!isIdEvent(event.data)) {
+    const off = onAppEvent(ATTENTION_EVENT, (data) => {
+      if (!isIdEvent(data)) {
         return
       }
-      const { id } = event.data
+      const { id } = data
       if (!shouldToastAttention(sessionsRef.current, id, activeProjectIdRef.current)) {
         return
       }
@@ -297,11 +294,11 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   // ahead of the steady 3s poll. The poll still runs, so a user without the
   // plugin keeps the same feedback — this only cuts the lag when the hook fires.
   useEffect(() => {
-    const off = Events.On(TOUCHED_EVENT, (event: { data: unknown }) => {
-      if (!isIdEvent(event.data)) {
+    const off = onAppEvent(TOUCHED_EVENT, (data) => {
+      if (!isIdEvent(data)) {
         return
       }
-      const { id } = event.data
+      const { id } = data
       const projectId = projectOfSession(sessionsRef.current, id)
       if (!projectId) {
         return

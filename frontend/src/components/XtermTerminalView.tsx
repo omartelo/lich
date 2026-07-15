@@ -2,8 +2,8 @@ import { useEffect, useRef } from "react"
 import { Terminal } from "@xterm/xterm"
 import { WebglAddon } from "@xterm/addon-webgl"
 import { FitAddon } from "@xterm/addon-fit"
-import { Events } from "@wailsio/runtime"
-import { Service } from "../../bindings/github.com/omartelo/lich/internal/terminal"
+import { Terminal as Service } from "@/lib/rpc"
+import { onAppEvent } from "@/lib/app-events"
 import { ensureTransport, onSessionData, sendInput } from "@/lib/term-transport"
 import { recordChunk } from "@/lib/term-perf"
 import { useSettings } from "@/lib/settings"
@@ -98,9 +98,9 @@ export function XtermTerminalView({ sessionId, projectId, cwd, kind, visible }: 
       // xterm parses asynchronously (internal write buffer), so writeMs here
       // includes queue wait + parse, where ghostty's write is a synchronous
       // WASM parse. Frame cost lands in term-perf's shared rAF/stall metrics.
-      const offData = Events.On(DATA_EVENT_PREFIX + sessionId, (event) => {
+      const offData = onAppEvent(DATA_EVENT_PREFIX + sessionId, (data) => {
         const t0 = performance.now()
-        const bytes = decodeBase64(event.data as string)
+        const bytes = decodeBase64(data as string)
         const t1 = performance.now()
         term.write(bytes, () => recordChunk(t1 - t0, performance.now() - t1, bytes.length))
       })
@@ -108,7 +108,7 @@ export function XtermTerminalView({ sessionId, projectId, cwd, kind, visible }: 
         const t0 = performance.now()
         term.write(payload, () => recordChunk(0, performance.now() - t0, payload.length))
       })
-      const offExit = Events.On(EXIT_EVENT_PREFIX + sessionId, () => {
+      const offExit = onAppEvent(EXIT_EVENT_PREFIX + sessionId, () => {
         term.write("\r\n[process exited]\r\n")
       })
       cleanups.push(offData, offWsData, offExit)
