@@ -1,19 +1,8 @@
 import { useEffect, useState } from "react"
 import { useMatch } from "react-router-dom"
 import { TerminalView } from "@/components/TerminalView"
-import { XtermTerminalView } from "@/components/XtermTerminalView"
 import { useProjects } from "@/lib/projects"
 import { activeSessionId, sessionsOf } from "@/lib/sessions"
-import { useGhosttyTerminal } from "@/lib/terminal-choice"
-
-// Evaluated once at load: xterm.js + WebGL is the terminal; the legacy
-// ghostty-web pipeline stays reachable via lib/terminal-choice.ts until
-// phase 5 of docs/chromium-shell.md deletes it.
-const TerminalComponent = useGhosttyTerminal(
-  typeof localStorage !== "undefined" ? localStorage : null,
-)
-  ? TerminalView
-  : XtermTerminalView
 
 // TerminalHost keeps one persistent terminal per session, across every open
 // project, stacked in the same area. The router picks the active project and the
@@ -65,7 +54,7 @@ export function TerminalHost() {
               style={{ visibility: visible ? "visible" : "hidden" }}
               aria-hidden={!visible}
             >
-              <TerminalComponent
+              <TerminalView
                 sessionId={session.id}
                 projectId={project.id}
                 cwd={session.path || project.path}

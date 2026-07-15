@@ -1,6 +1,6 @@
 import {describe, expect, it} from "vitest"
 import {decidePluginAction} from "./plugin-gate"
-import type {Status} from "../../bindings/github.com/omartelo/lich/internal/claudeplugin"
+import type {Status} from "./plugin-gate"
 
 const status = (over: Partial<Status>): Status => ({
   installed: false,

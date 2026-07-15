@@ -2,7 +2,7 @@ import {useEffect, useRef, useState} from "react"
 import type {ReactNode} from "react"
 import {ChevronRight} from "lucide-react"
 import {ProjectService} from "@/lib/rpc"
-import type {Branches, Worktree} from "../../../bindings/github.com/omartelo/lich/internal/project/models"
+import type {Branches, Worktree} from "@/lib/api-types"
 import {Button} from "@/components/ui/button"
 import {
   Dialog,

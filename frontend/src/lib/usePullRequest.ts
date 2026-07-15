@@ -1,6 +1,6 @@
 import {useEffect, useState} from "react"
 import {ProjectService} from "./rpc"
-import type {PullRequest} from "../../bindings/github.com/omartelo/lich/internal/project/models"
+import type {PullRequest} from "./api-types"
 
 export type {PullRequest}
 

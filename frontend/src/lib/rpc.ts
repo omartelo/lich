@@ -1,36 +1,29 @@
-// RPC client for the Go services over the loopback listener (internal/rpc),
-// replacing the Wails binding bridge so the same bundle runs in the Wails
-// webview and the Chromium --app shell (docs/chromium-shell.md).
+// RPC client for the Go services over the loopback listener (internal/rpc).
+// The page is served by that listener, so the endpoint rides the page URL:
+// ?token=... (auth) and, under the Vite dev server only, &backend=<port> —
+// dev splits the page origin from the RPC listener (see `task dev`).
 //
-// Endpoint discovery is the only shell-specific part:
-// - Chromium shell: the page is served BY the listener — same origin, token
-//   arrives in the page URL (?token=...).
-// - Wails webview: one binding call (terminal Service.Transport) bootstraps
-//   port + token; every later call goes over HTTP.
-//
-// Each facade mirrors its binding's method names and signatures, so a call
-// site swaps only the import. Types come from the generated binding models
-// (type-only imports, erased at build).
+// Each facade mirrors its Go service's method names and signatures; shapes
+// live in lib/api-types.ts.
 
-import { Service as TerminalBinding } from "../../bindings/github.com/omartelo/lich/internal/terminal"
 import type {
   Branches,
   DiffStats,
+  PluginStatus,
   Project,
   PullRequest,
+  StoredProject,
   Worktree,
-} from "../../bindings/github.com/omartelo/lich/internal/project/models"
-import type { Project as StoredProject } from "../../bindings/github.com/omartelo/lich/internal/store/models"
-import type { Status as PluginStatus } from "../../bindings/github.com/omartelo/lich/internal/claudeplugin/models"
+} from "./api-types"
 
 export interface Endpoint {
   base: string
   token: string
 }
 
-let cached: Promise<Endpoint> | null = null
+let cached: Endpoint | null = null
 
-// endpointFromLocation reads the Chromium-shell coordinates off the page URL.
+// endpointFromLocation reads the backend coordinates off the page URL.
 // Exported for tests; production callers use endpoint().
 export function endpointFromLocation(href: string): Endpoint | null {
   try {
@@ -39,25 +32,27 @@ export function endpointFromLocation(href: string): Endpoint | null {
     if (!token || !url.host) {
       return null
     }
-    return { base: `${url.protocol}//${url.host}`, token }
+    const backend = url.searchParams.get("backend")
+    const base = backend ? `http://127.0.0.1:${backend}` : `${url.protocol}//${url.host}`
+    return { base, token }
   } catch {
     return null
   }
 }
 
-export function endpoint(): Promise<Endpoint> {
-  return (cached ??= (async () => {
+export function endpoint(): Endpoint {
+  if (!cached) {
     const fromUrl = endpointFromLocation(window.location.href)
-    if (fromUrl) {
-      return fromUrl
+    if (!fromUrl) {
+      throw new Error("no backend endpoint in page URL (missing ?token=) — launch through the lich binary")
     }
-    const info = await TerminalBinding.Transport()
-    return { base: `http://127.0.0.1:${info.port}`, token: info.token }
-  })())
+    cached = fromUrl
+  }
+  return cached
 }
 
 async function call<T>(method: string, args: unknown[]): Promise<T> {
-  const { base, token } = await endpoint()
+  const { base, token } = endpoint()
   const response = await fetch(`${base}/rpc/${method}?token=${token}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

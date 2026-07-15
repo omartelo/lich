@@ -3,7 +3,7 @@ import { X } from "lucide-react"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { cn } from "@/lib/utils"
-import type { Project } from "../../../bindings/github.com/omartelo/lich/internal/project"
+import type { Project } from "@/lib/api-types"
 
 interface ProjectTabProps {
   project: Project

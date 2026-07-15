@@ -1,11 +1,7 @@
-// App-event subscription that works in both shells. The backend hub
-// (internal/events) delivers each event to exactly one channel — the /events
-// WebSocket when connected, the Wails event bridge otherwise — so listening
-// on both here never double-fires. In the Chromium shell the Wails runtime is
-// absent and its registration fails silently; in the Wails webview the socket
-// may be down and the bridge carries the traffic. Callers see one API.
+// App-event subscription over the backend hub's /events WebSocket
+// (internal/events). Auto-connects on first subscription and reconnects on
+// drop; events emitted while no client is connected are dropped by the hub.
 
-import { Events } from "@wailsio/runtime"
 import { endpoint } from "./rpc"
 
 const RECONNECT_MS = 1_000
@@ -46,26 +42,23 @@ function ensureSocket(): void {
   void connect()
 }
 
-async function connect(): Promise<void> {
+function connect(): void {
   try {
-    const { base, token } = await endpoint()
+    const { base, token } = endpoint()
     const wsBase = base.replace(/^http/, "ws")
     const socket = new WebSocket(`${wsBase}/events?token=${token}`)
     socket.onmessage = (event) => {
       dispatchEnvelope(handlers, event.data as string)
     }
     socket.onclose = () => {
-      setTimeout(() => void connect(), RECONNECT_MS)
+      setTimeout(connect, RECONNECT_MS)
     }
   } catch {
-    setTimeout(() => void connect(), RECONNECT_MS)
+    setTimeout(connect, RECONNECT_MS)
   }
 }
 
-/**
- * Subscribes to one app event on both channels; returns the unsubscribe.
- * Mirrors Events.On's payload shape (the event's data field).
- */
+/** Subscribes to one app event; returns the unsubscribe. */
 export function onAppEvent(name: string, callback: Callback): () => void {
   ensureSocket()
   let set = handlers.get(name)
@@ -74,18 +67,7 @@ export function onAppEvent(name: string, callback: Callback): () => void {
     handlers.set(name, set)
   }
   set.add(callback)
-
-  // Wails bridge side; absent in the Chromium shell, where registration
-  // throws and the socket is the only channel.
-  let offWails: (() => void) | null = null
-  try {
-    offWails = Events.On(name, (event: { data: unknown }) => callback(event.data))
-  } catch {
-    offWails = null
-  }
-
   return () => {
     handlers.get(name)?.delete(callback)
-    offWails?.()
   }
 }

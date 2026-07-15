@@ -2,8 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import type { ReactNode } from "react"
 import { toast } from "sonner"
 import { useMatch, useNavigate } from "react-router-dom"
-import type { Project } from "../../bindings/github.com/omartelo/lich/internal/project"
-import type { Project as StoreProject } from "../../bindings/github.com/omartelo/lich/internal/store/models"
+import type { Project } from "./api-types"
+import type { StoredProject as StoreProject } from "./api-types"
 import { ProjectService, Store } from "./rpc"
 import { onAppEvent } from "./app-events"
 import {
@@ -208,9 +208,8 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
   // The new-session shortcut opens a session in the active project (mirrors the
   // "+" button). It fires even with terminal focus, so it stays reachable while
-  // working in a terminal — but the terminal (ghostty-web) stops modifier chords
-  // from bubbling, so this listens on the capture phase (top-down, before the
-  // terminal sees the key) and stops propagation so the PTY never receives it.
+  // working in a terminal — the capture-phase listener sees the chord before
+  // the terminal does and stops propagation so the PTY never receives it.
   // Bails while a hotkey is being recorded so rebinding does not trigger it.
   useEffect(() => {
     if (!activeProjectId) {
