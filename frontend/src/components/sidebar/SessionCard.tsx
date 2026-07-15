@@ -1,13 +1,12 @@
 import {useEffect, useRef, useState} from "react"
 import type {KeyboardEvent} from "react"
-import {onAppEvent} from "@/lib/app-events"
 import {Bell, Check, GitBranch, LoaderCircle, Pencil, X} from "lucide-react"
 import {useSortable} from "@dnd-kit/sortable"
 import {CSS} from "@dnd-kit/utilities"
 import {cn} from "@/lib/utils"
 import {displayPath} from "@/lib/paths"
 import {type Session} from "@/lib/sessions"
-import {statusEventName, toSessionStatus, type SessionStatus} from "@/lib/session-events"
+import {useSessionStatus} from "@/lib/useSessionStatus"
 import {useGitStatus} from "@/lib/useGitStatus"
 import {DiffStat} from "@/components/DiffStat"
 import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip"
@@ -46,7 +45,7 @@ export function SessionCard({
   // Claude produces output, a check once its turn ends, a bell when it is
   // blocked on the user. null before the first report, and whenever the hook
   // reports a state with no indicator (see toSessionStatus).
-  const [status, setStatus] = useState<SessionStatus | null>(null)
+  const status = useSessionStatus(session.id)
   // A worktree session lives in its own checkout: show that path and poll its
   // git status, so the badge reflects the worktree's branch, not the project's.
   const shownPath = session.path || path
@@ -78,17 +77,6 @@ export function SessionCard({
       setEditing(false)
     }
   }
-
-  // The card is always mounted for every listed session (unlike TerminalView,
-  // which only mounts once a session is viewed), so it is the reliable place to
-  // track status. A backend-retained last state would survive project switches;
-  // for now switching away mid-run can strand a spinner until the next turn.
-  useEffect(() => {
-    const off = onAppEvent(statusEventName(session.id), (data) => {
-      setStatus(toSessionStatus(data))
-    })
-    return () => off()
-  }, [session.id])
 
   // Fade the left (path start) only when the tail can't fit, so a path that
   // fits keeps its "~" crisp — matching how terminals hint at hidden prefix.

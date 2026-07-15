@@ -5,13 +5,15 @@ import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortabl
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { useProjects } from "@/lib/projects"
+import { sessionsOf } from "@/lib/sessions"
 import { useSortableList } from "@/lib/use-sortable-list"
 import { ProjectTab } from "./ProjectTab"
 
 // ProjectTabs is the top strip: open projects as tabs (drag to reorder), a
 // button to open another, and settings pinned to the right.
 export function ProjectTabs() {
-  const { projects, openProject, closeProject, reorderProjects } = useProjects()
+  const { projects, sessions, openProject, closeProject, reorderProjects } =
+    useProjects()
   const ids = projects.map((project) => project.id)
   const { sensors, onDragEnd } = useSortableList(ids, reorderProjects)
 
@@ -28,6 +30,7 @@ export function ProjectTabs() {
               <ProjectTab
                 key={project.id}
                 project={project}
+                sessionIds={sessionsOf(sessions, project.id).map((s) => s.id)}
                 onClose={() => closeProject(project.id)}
               />
             ))}

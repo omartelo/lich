@@ -1,9 +1,9 @@
 import {describe, expect, it} from "vitest"
 import {
   isIdEvent,
+  isStatusEvent,
   isTitleEvent,
   shouldToastAttention,
-  statusEventName,
   toSessionStatus,
 } from "./session-events"
 import {addSession, createProjectSessions, setActiveSession, type SessionState} from "./sessions"
@@ -23,9 +23,18 @@ function buildState(): SessionState {
   return state
 }
 
-describe("statusEventName", () => {
-  it("suffixes the prefix with the session id", () => {
-    expect(statusEventName("abc")).toBe("session-status:abc")
+describe("isStatusEvent", () => {
+  it("accepts a payload carrying an id and a state", () => {
+    expect(isStatusEvent({id: "abc", state: "busy"})).toBe(true)
+  })
+
+  it("rejects a payload missing either field or typed wrong", () => {
+    expect(isStatusEvent({id: "abc"})).toBe(false)
+    expect(isStatusEvent({state: "busy"})).toBe(false)
+    expect(isStatusEvent({id: "abc", state: 42})).toBe(false)
+    expect(isStatusEvent({id: 1, state: "busy"})).toBe(false)
+    expect(isStatusEvent(null)).toBe(false)
+    expect(isStatusEvent("busy")).toBe(false)
   })
 })
 

@@ -1,21 +1,27 @@
 import { NavLink } from "react-router-dom"
-import { X } from "lucide-react"
+import { Bell, Check, LoaderCircle, X } from "lucide-react"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { cn } from "@/lib/utils"
+import { useProjectStatus } from "@/lib/useSessionStatus"
 import type { Project } from "@/lib/api-types"
 
 interface ProjectTabProps {
   project: Project
+  sessionIds: readonly string[]
   onClose: () => void
 }
 
 // ProjectTab is a browser-style tab: the project name, active underline, and a
 // close affordance that appears on hover. The tab is its own drag grip for
 // reordering the strip.
-export function ProjectTab({ project, onClose }: ProjectTabProps) {
+export function ProjectTab({ project, sessionIds, onClose }: ProjectTabProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: project.id })
+  // What the project's sessions are up to while you are looking elsewhere. The
+  // active tab never badges: its cards are already on screen saying the same
+  // thing, in more detail and per session.
+  const status = useProjectStatus(sessionIds)
 
   return (
     <div
@@ -35,18 +41,34 @@ export function ProjectTab({ project, onClose }: ProjectTabProps) {
           )
         }
       >
-        <span className="truncate">{project.name}</span>
-        <span
-          role="button"
-          aria-label={`Close ${project.name}`}
-          onClick={(event) => {
-            event.preventDefault()
-            onClose()
-          }}
-          className="flex size-4 shrink-0 items-center justify-center rounded opacity-0 transition-opacity hover:bg-foreground/15 group-hover:opacity-100"
-        >
-          <X className="size-3" />
-        </span>
+        {({ isActive }) => {
+          const badge = isActive ? null : status
+          return (
+            <>
+              {badge === "busy" && (
+                <LoaderCircle className="size-3 shrink-0 animate-spin" />
+              )}
+              {badge === "done" && (
+                <Check className="size-3 shrink-0 text-emerald-500" />
+              )}
+              {badge === "waiting" && (
+                <Bell className="size-3 shrink-0 text-amber-500" />
+              )}
+              <span className="truncate">{project.name}</span>
+              <span
+                role="button"
+                aria-label={`Close ${project.name}`}
+                onClick={(event) => {
+                  event.preventDefault()
+                  onClose()
+                }}
+                className="flex size-4 shrink-0 items-center justify-center rounded opacity-0 transition-opacity hover:bg-foreground/15 group-hover:opacity-100"
+              >
+                <X className="size-3" />
+              </span>
+            </>
+          )
+        }}
       </NavLink>
     </div>
   )
