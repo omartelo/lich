@@ -1,7 +1,6 @@
 // Package system holds the few OS integrations the frontend needs that are
 // not tied to any domain service — today only opening a URL in the user's
-// default browser (replacing the Wails Browser runtime, so it works in any
-// shell; see docs/chromium-shell.md).
+// default browser via xdg-open.
 package system
 
 import (
@@ -23,7 +22,7 @@ func New() *Service {
 
 // OpenExternal opens an http(s) URL in the default browser. Scheme-gated so a
 // crafted terminal escape can never turn a click into a file:// or custom
-// scheme launch — the same policy the Wails Browser runtime applied.
+// scheme launch.
 func (s *Service) OpenExternal(rawURL string) error {
 	if err := ValidateExternalURL(rawURL); err != nil {
 		return err

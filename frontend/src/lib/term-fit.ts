@@ -1,8 +1,7 @@
 // xterm's FitAddon reserves a scrollbar gutter (DEFAULT_SCROLL_BAR_WIDTH or
 // overviewRuler.width) before dividing the width into cells, so the grid
 // never reaches the right edge — a permanent band between the terminal and
-// the window (the ghostty-era FitAddon had the same habit, 15px fixed).
-// computeGrid divides the full container instead, filling edge to edge. Only
+// the window. computeGrid divides the full container instead, edge to edge. Only
 // a sub-cell remainder is left (< 1 cell, unavoidable: partial cells can't
 // render), landing on the right/bottom since the canvas is top-left anchored
 // and painted over by the container's terminal-colored background. The

@@ -1,7 +1,6 @@
 // Shapes shared with the Go services over the loopback RPC (internal/rpc).
-// Formerly generated Wails bindings; hand-owned since the Wails shell was
-// deleted (docs/chromium-shell.md phase 5). Field names mirror the Go structs'
-// JSON tags — keep them in sync when a service struct changes.
+// Hand-owned, no codegen: field names mirror the Go structs' JSON tags — keep
+// them in sync when a service struct changes.
 
 /** internal/project.Project — an opened project directory's identity. */
 export interface Project {

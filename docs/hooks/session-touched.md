@@ -37,7 +37,7 @@ the hook's stdin payload if a single script filters instead of per-tool matchers
 - **Endpoint** — `internal/terminal/transport.go`, `transport.sessionTouched`:
   validates the token and body (`parseSessionTouched`), then forwards the
   session id.
-- **UI push** — `internal/terminal/terminal.go`: emits the global Wails event
+- **UI push** — `internal/terminal/terminal.go`: emits the global app event
   `session-touched` (`{id}`).
 - **Refresh** — `frontend/src/lib/projects.tsx`: resolves the session id to the
   path its card watches (its worktree, else the project path) and calls

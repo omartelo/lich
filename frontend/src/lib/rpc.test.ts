@@ -9,8 +9,7 @@ describe("endpointFromLocation", () => {
     })
   })
 
-  it("returns null without a token (Wails webview URLs)", () => {
-    expect(endpointFromLocation("wails://wails.localhost/")).toBeNull()
+  it("returns null without a token", () => {
     expect(endpointFromLocation("http://127.0.0.1:9245/")).toBeNull()
   })
 

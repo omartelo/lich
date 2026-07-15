@@ -19,22 +19,18 @@ import (
 	"github.com/coder/websocket"
 )
 
-// The Wails event bridge costs one engine round-trip per crossing: every
-// Service.Write is an HTTP fetch through the WebKit network process, and every
-// data event is an evaluate_javascript call with a base64 payload. During
-// interactive typing that adds up to ~60 crossings/s of native dispatch
-// overhead that saturates the webview main thread (measured 2026-07-10:
-// ~40ms stall trains while typing, all JS callbacks innocent). This transport
-// replaces both directions for terminal I/O with one local WebSocket carrying
-// binary frames; everything else stays on the Wails bridge. When no client is
-// connected (or a write fails) senders fall back to the event bridge, so the
-// app works unchanged without it.
+// Terminal I/O rides one local WebSocket carrying binary frames, instead of
+// one RPC POST per keystroke and one JSON event per output chunk — per-message
+// overhead at interactive rates (~60 crossings/s while typing) is the hot
+// path this avoids. When no client is connected (or a write fails) output
+// falls back to the /events channel and input to the RPC, so the app works
+// degraded but unbroken.
 //
 // Frame format, both directions: [1 byte id length][session id][payload].
 
 const (
 	// wsWriteTimeout bounds a send to the local client; a stalled write drops
-	// the connection so output falls back to the event bridge.
+	// the connection so output falls back to the /events channel.
 	wsWriteTimeout = 5 * time.Second
 	// wsReadLimit bounds one input frame; keystrokes and pastes are far
 	// smaller, and the frontend chunks nothing above this.
@@ -174,8 +170,8 @@ func (t *transport) mountPublic(pattern string, handler http.Handler) {
 }
 
 // authorized reports whether the request carries the transport's connect token.
-// The webview's origin is the wails scheme (or the Vite dev server), never this
-// listener's host, so the origin is not checked — the random token is the auth.
+// The origin is not checked — in dev the page comes from the Vite server, not
+// this listener — the random token is the auth.
 func (t *transport) authorized(r *http.Request) bool {
 	provided := r.URL.Query().Get("token")
 	return subtle.ConstantTimeCompare([]byte(provided), []byte(t.token)) == 1

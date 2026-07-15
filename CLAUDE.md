@@ -58,8 +58,8 @@ Non-negotiable rules. A violation means the work is not done.
 Releases are cut by pushing a `vX.Y.Z` tag. The `.github/workflows/release.yml` workflow runs the test suites, builds
 the frontend, then `task package` produces the Linux artifacts (AppImage, `.deb`, `.rpm`, Arch `.pkg.tar.zst`, plus
 the raw static binary) and publishes a GitHub Release with a `checksums.txt`, taking the release notes from the
-matching `CHANGELOG.md` section. The binary is pure Go — the workflow needs no C toolchain, no GTK/WebKitGTK; frontend
-build comes first because the backend `go:embed`s `frontend/dist`.
+matching `CHANGELOG.md` section. The binary is pure Go — the workflow needs no C toolchain; frontend build comes
+first because the backend `go:embed`s `frontend/dist`.
 
 The package version comes from the git tag: the Taskfile computes `VERSION` via `git describe` (env `VERSION`
 overrides) and injects it into `build/linux/nfpm/nfpm.yaml`.
@@ -97,8 +97,8 @@ Deliberate limits and shortcuts, with the upgrade path when it matters:
   Add a lock + focus-existing-window protocol if it ever matters.
 - **Reordering (cards, tabs) rides dnd-kit's pointer sensors.** `PointerSensor` needs its
   `activationConstraint.distance` (`frontend/src/lib/use-sortable-list.ts`) or the sensor claims the press and plain
-  clicks stop selecting a session. (Historical note: the HTML5 DnD API was unusable under the old WebKitGTK shell;
-  dnd-kit stays because it also gives the keyboard path and never mutates DOM order mid-drag.)
+  clicks stop selecting a session. dnd-kit over the HTML5 DnD API because it also gives the keyboard path and never
+  mutates DOM order mid-drag.
 - **The AppImage is a plain wrapper** around the static binary (`build/linux/make-appimage.sh`) — no bundled libs, no
   sandbox tricks. It requires a system Chromium at runtime, like every other install format (soft dependency:
   packages only *recommend* chromium/zenity).

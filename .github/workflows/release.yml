@@ -40,8 +40,8 @@ jobs:
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 
-      # The binary is pure Go (CGO_ENABLED=0) — no GTK/WebKitGTK, no C
-      # toolchain. Packaging needs nfpm and appimagetool only.
+      # The binary is pure Go (CGO_ENABLED=0) — no C toolchain, no system
+      # libraries. Packaging needs nfpm and appimagetool only.
       - name: Install task, nfpm and appimagetool
         run: |
           go install github.com/go-task/task/v3/cmd/task@latest

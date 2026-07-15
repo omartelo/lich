@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Wraps the static lich binary in an AppImage. There is nothing to bundle —
-# no GTK, no WebKit (docs/chromium-shell.md phase 5) — so the AppDir is just
+# Wraps the static lich binary in an AppImage. The binary is pure static Go
+# (docs/chromium-shell.md), so there is nothing to bundle: the AppDir is just
 # the binary, the .desktop file and the icon, packed with appimagetool.
 set -euo pipefail
 

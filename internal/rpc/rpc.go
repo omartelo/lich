@@ -1,16 +1,14 @@
 // Package rpc exposes the app's Go services to the frontend over plain HTTP
-// on the local transport listener, replacing the Wails binding bridge so the
-// same frontend runs in any shell (the Wails webview today, the Chromium
-// --app window of docs/chromium-shell.md next). One POST per call:
+// on the local transport listener — the Chromium --app window has no binding
+// bridge of its own (docs/chromium-shell.md). One POST per call:
 //
 //	POST /rpc/<service>.<Method>?token=...   body: JSON array of arguments
 //	→ 200 with the method's JSON result (null when it only returns error)
 //	→ 4xx/5xx with {"error": "..."} otherwise
 //
-// Dispatch is reflection over explicitly registered services — the same
-// pattern net/rpc and the Wails binding layer use — so a new service method
-// is exposed by registration alone. Token auth is applied by the transport
-// mount, not here.
+// Dispatch is reflection over explicitly registered services — the net/rpc
+// pattern — so a new service method is exposed by registration alone. Token
+// auth is applied by the transport mount, not here.
 package rpc
 
 import (
@@ -51,8 +49,8 @@ func (h *Handler) Deny(method string) {
 	h.denied[method] = true
 }
 
-// ServeHTTP handles one call. CORS is wide open on purpose: the Wails webview
-// origin (wails://) is never this listener's origin, and the random token —
+// ServeHTTP handles one call. CORS is wide open on purpose: in dev the page's
+// origin is the Vite server, not this listener, and the random token —
 // enforced by the transport mount — is the actual auth, as with /ws.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")

@@ -51,7 +51,7 @@ while the label is still automatic (see below), so a stable title is idempotent.
   `RenameSession` clears `label_auto`, so a manual name is never stomped.
   Returns whether the label actually changed.
 - **Live update** — `internal/terminal/terminal.go`: when the label changed,
-  emits the global Wails event `session-title` (`{id, label}`);
+  emits the global app event `session-title` (`{id, label}`);
   `frontend/src/lib/projects.tsx` mirrors it into session state so the card
   updates without a reload.
 

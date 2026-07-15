@@ -26,9 +26,8 @@ type Project struct {
 	Path string `json:"path"`
 }
 
-// Picker shows native file/directory choosers. Two implementations exist:
-// the Wails dialog (webview shell) and zenity (Chromium shell, no Wails app
-// to ask) — main.go picks by shell. Both return "" on user cancel.
+// Picker shows native file/directory choosers — zenity in production
+// (picker.go), fakes in tests. Returns "" on user cancel.
 type Picker interface {
 	PickDirectory(title string) (string, error)
 	PickFile(title string) (string, error)

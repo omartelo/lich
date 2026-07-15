@@ -1,6 +1,6 @@
 // Key chords xterm.js encodes differently from what our TUIs expect. The
-// sequences (validated in the ghostty era) go straight to the PTY through
-// attachCustomKeyEventHandler, bypassing xterm's own encoder:
+// sequences go straight to the PTY through attachCustomKeyEventHandler,
+// bypassing xterm's own encoder:
 //
 // - Ctrl+Backspace: xterm sends BS (\x08), a single-char erase. Send ETB
 //   (\x17, readline's unix-word-rubout) so line editors erase the word.
@@ -12,8 +12,8 @@
 //   is what TUIs (Claude Code) accept as "insert newline" without
 //   kitty-protocol negotiation.
 //
-// Everything else the old ghostty layer patched (Shift+Tab → CSI Z, Alt
-// chords, SGR wheel reports) xterm.js encodes correctly on its own.
+// Everything else (Shift+Tab → CSI Z, Alt chords, SGR wheel reports)
+// xterm.js encodes correctly on its own — only the three above need help.
 
 // The subset of KeyboardEvent the matcher needs — lets tests pass plain
 // objects.

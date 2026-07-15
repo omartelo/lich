@@ -7,8 +7,7 @@ import (
 )
 
 // ZenityPicker shells out to zenity/qarma (github.com/ncruces/zenity) — the
-// Chromium shell path, where no Wails application exists. Cancel maps to
-// ("", nil), matching the Wails dialog contract.
+// Chromium shell has no native dialog of its own. Cancel maps to ("", nil).
 type ZenityPicker struct{}
 
 func (ZenityPicker) PickDirectory(title string) (string, error) {
