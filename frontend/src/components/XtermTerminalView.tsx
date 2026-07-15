@@ -50,6 +50,13 @@ export function XtermTerminalView({ sessionId, projectId, cwd, kind, visible }: 
   const { font, resolvedTerminalTheme } = useSettings()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const liveRef = useRef<LiveTerminal | null>(null)
+  // False until the mount effect's async setup builds the first terminal.
+  // The visibility effect must not create one before that: on first mount it
+  // runs while the font load is still in flight, and an unguarded show would
+  // plant an orphan, unwired terminal in the container — the real one then
+  // stacks below it (a black dead canvas on top, the prompt clipped at the
+  // bottom of the window).
+  const startedRef = useRef(false)
   // Snapshot + queued output of a hidden (destroyed) terminal.
   const serializedRef = useRef<string | null>(null)
   const replayRef = useRef(makeReplayBuffer())
@@ -205,6 +212,7 @@ export function XtermTerminalView({ sessionId, projectId, cwd, kind, visible }: 
 
       const live = createTerminal(container)
       liveRef.current = live
+      startedRef.current = true
       ensureTransport()
 
       const offData = onAppEvent(DATA_EVENT_PREFIX + sessionId, (data) => {
@@ -260,6 +268,11 @@ export function XtermTerminalView({ sessionId, projectId, cwd, kind, visible }: 
   // in the snapshot + replay buffer + backend), visible rebuilds it, refits,
   // syncs the PTY size and focuses.
   useEffect(() => {
+    if (!startedRef.current) {
+      // First mount: the async setup owns terminal creation and reads
+      // visibleRef when it finishes.
+      return
+    }
     if (!visible) {
       if (liveRef.current) {
         hideTerminal()
