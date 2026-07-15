@@ -1,30 +1,30 @@
 import { useEffect, useRef } from "react"
-import { init, Terminal as Ghostty } from "ghostty-web"
-import { Clipboard, Events } from "@wailsio/runtime"
-import { Service } from "../../bindings/github.com/omartelo/lich/internal/terminal"
+import { Terminal } from "@xterm/xterm"
+import { WebglAddon } from "@xterm/addon-webgl"
+import { SerializeAddon } from "@xterm/addon-serialize"
+import { WebLinksAddon } from "@xterm/addon-web-links"
 import { toast } from "sonner"
-import { copyToastMessage, COPY_TOAST_DURATION_MS } from "@/lib/copy-toast"
-import { patchBlockGlyphs } from "@/lib/block-glyphs"
-import { patchFontMetrics } from "@/lib/font-metrics"
-import { patchGlyphAtlas } from "@/lib/glyph-atlas"
-import { patchPooledGetLine } from "@/lib/getline-pool"
-import { patchScrollGate, patchScrollbackCache } from "@/lib/scrollback-perf"
+import { System, Terminal as Service } from "@/lib/rpc"
+import { onAppEvent } from "@/lib/app-events"
 import { ensureTransport, onSessionData, sendInput } from "@/lib/term-transport"
-import { registerLinkOpening } from "@/lib/term-links"
-import { pauseRenderLoop, resumeRenderLoop } from "@/lib/render-pause"
-import { patchRowPaint } from "@/lib/row-paint"
-import {
-  altScreenWheelSequence,
-  isTextPasteChord,
-  missingKeySequence,
-  sgrWheelSequence,
-} from "@/lib/term-keys"
+import { chordSequence } from "@/lib/term-keys"
+import { makeReplayBuffer } from "@/lib/replay-buffer"
+import { recordChunk } from "@/lib/term-perf"
+import { copyToastMessage, COPY_TOAST_DURATION_MS } from "@/lib/copy-toast"
 import { computeGrid } from "@/lib/term-fit"
-import { isStrayTerminalChild } from "@/lib/term-dom"
-import { countingCanvasFactory, instrumentRender, recordChunk } from "@/lib/term-perf"
 import { useSettings } from "@/lib/settings"
 import type { ResolvedTheme } from "@/lib/settings"
 import type { SessionKind } from "@/lib/sessions"
+import "@xterm/xterm/css/xterm.css"
+
+// The terminal: xterm.js 6 + the WebGL renderer, in the Chromium shell
+// (docs/chromium-shell.md).
+//
+// Hidden sessions follow the waveterm model: the xterm instance is serialized
+// and destroyed (no buffer, no canvas, no renderer), PTY output queues in a
+// capped replay buffer, and showing the session recreates the terminal from
+// the serialized snapshot plus the queued tail. The component itself stays
+// mounted — its lifecycle is the PTY's (unmount closes the session).
 
 // Event name prefixes mirror the backend (internal/terminal); the concrete
 // event carries the session ID as a suffix.
@@ -32,6 +32,37 @@ const DATA_EVENT_PREFIX = "terminal:data:"
 const EXIT_EVENT_PREFIX = "terminal:exit:"
 
 const FONT_SIZE = 14
+const REFIT_DEBOUNCE_MS = 100
+const COPY_DEBOUNCE_MS = 150
+const SCROLLBACK_LINES = 5000
+
+// cellDimensions reads the renderer's measured cell size — the same private
+// API FitAddon relies on ("TODO: Remove reliance" upstream). Null before the
+// first render measure or if xterm ever moves the private; refit then skips,
+// keeping the current grid (degrades, never breaks).
+function cellDimensions(term: Terminal): { width: number; height: number } | null {
+  const core = (term as unknown as { _core?: { _renderService?: { dimensions?: { css?: { cell?: { width: number; height: number } } } } } })._core
+  const cell = core?._renderService?.dimensions?.css?.cell
+  if (!cell || !cell.width || !cell.height) {
+    return null
+  }
+  return cell
+}
+
+// fitTerminal resizes the grid to fill the container edge to edge (replacing
+// xterm's FitAddon, which reserves a scrollbar gutter on the right — see
+// term-fit.ts). No-op when metrics or size aren't ready, or the grid already
+// fits.
+function fitTerminal(term: Terminal, container: HTMLElement): void {
+  const cell = cellDimensions(term)
+  if (!cell) {
+    return
+  }
+  const grid = computeGrid(container.clientWidth, container.clientHeight, cell)
+  if (grid && (grid.cols !== term.cols || grid.rows !== term.rows)) {
+    term.resize(grid.cols, grid.rows)
+  }
+}
 
 // Terminal color schemes. Light keeps a high-contrast foreground so CLI output
 // stays legible against the pale background.
@@ -40,16 +71,9 @@ const TERMINAL_COLORS: Record<ResolvedTheme, { background: string; foreground: s
   light: { background: "#ffffff", foreground: "#1f2328" },
 }
 
-// init loads the WASM module once and is shared across every terminal instance.
-let initPromise: Promise<void> | null = null
-function ensureInit(): Promise<void> {
-  return (initPromise ??= init())
-}
-
-// ensureFontLoaded blocks until a font is available. The canvas renderer only
-// draws with fonts already loaded in the document. Bundled fonts (@font-face)
-// need this; system fonts resolve through the webview's fontconfig and load
-// as no-ops, so failures are ignored.
+// ensureFontLoaded blocks until a font is available. The renderer measures
+// cell metrics at open, so bundled fonts (@font-face) must be loaded first;
+// system fonts resolve as no-ops and failures fall back to monospace.
 async function ensureFontLoaded(font: string): Promise<void> {
   try {
     await Promise.all([
@@ -61,8 +85,8 @@ async function ensureFontLoaded(font: string): Promise<void> {
   }
 }
 
-// decodeBase64 turns the base64 PTY payload back into bytes. The backend encodes
-// output so multi-byte UTF-8 sequences survive the JSON event bridge intact.
+// decodeBase64 turns the base64 PTY payload back into bytes. The backend
+// encodes output so multi-byte UTF-8 sequences survive the JSON envelope.
 function decodeBase64(data: string): Uint8Array {
   const binary = atob(data)
   const bytes = new Uint8Array(binary.length)
@@ -72,45 +96,7 @@ function decodeBase64(data: string): Uint8Array {
   return bytes
 }
 
-// fitTerminal resizes the grid to fill the container edge to edge (replacing
-// ghostty-web's FitAddon, which reserves a fixed 15px right gutter). No-op when
-// metrics or size aren't ready yet, or the grid is already the right size.
-function fitTerminal(term: Ghostty, container: HTMLElement): void {
-  const cell = term.renderer?.getMetrics()
-  if (!cell) {
-    return
-  }
-  const grid = computeGrid(container.clientWidth, container.clientHeight, cell)
-  if (grid && (grid.cols !== term.cols || grid.rows !== term.rows)) {
-    term.resize(grid.cols, grid.rows)
-  }
-}
-
-// pointerCell maps a wheel/mouse event to the 1-based terminal cell under the
-// pointer, for the coordinates an SGR mouse report carries. Falls back to the
-// top-left cell when metrics aren't ready; clamps into the grid so the report
-// never names a cell outside it.
-function pointerCell(
-  event: WheelEvent,
-  container: HTMLElement,
-  renderer: Ghostty["renderer"],
-  cols: number,
-  rows: number,
-): { col: number; row: number } {
-  const cell = renderer?.getMetrics()
-  if (!cell) {
-    return { col: 1, row: 1 }
-  }
-  const rect = container.getBoundingClientRect()
-  const col = Math.floor((event.clientX - rect.left) / cell.width) + 1
-  const row = Math.floor((event.clientY - rect.top) / cell.height) + 1
-  return {
-    col: Math.max(1, Math.min(cols, col)),
-    row: Math.max(1, Math.min(rows, row)),
-  }
-}
-
-interface TerminalViewProps {
+export interface TerminalViewProps {
   sessionId: string
   projectId: string
   cwd: string
@@ -118,11 +104,26 @@ interface TerminalViewProps {
   visible: boolean
 }
 
+interface LiveTerminal {
+  term: Terminal
+  serialize: SerializeAddon
+  dispose(): void
+}
+
 export function TerminalView({ sessionId, projectId, cwd, kind, visible }: TerminalViewProps) {
   const { font, resolvedTerminalTheme } = useSettings()
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const termRef = useRef<Ghostty | null>(null)
-  // Latest values for use inside long-lived async callbacks / listeners.
+  const liveRef = useRef<LiveTerminal | null>(null)
+  // False until the mount effect's async setup builds the first terminal.
+  // The visibility effect must not create one before that: on first mount it
+  // runs while the font load is still in flight, and an unguarded show would
+  // plant an orphan, unwired terminal in the container — the real one then
+  // stacks below it (a black dead canvas on top, the prompt clipped at the
+  // bottom of the window).
+  const startedRef = useRef(false)
+  // Snapshot + queued output of a hidden (destroyed) terminal.
+  const serializedRef = useRef<string | null>(null)
+  const replayRef = useRef(makeReplayBuffer())
   const visibleRef = useRef(visible)
   const fontRef = useRef(font)
   const themeRef = useRef(resolvedTerminalTheme)
@@ -130,9 +131,137 @@ export function TerminalView({ sessionId, projectId, cwd, kind, visible }: Termi
   fontRef.current = font
   themeRef.current = resolvedTerminalTheme
 
+  // createTerminal builds a live terminal in the container, wired for input,
+  // resize and copy-on-select. Shared by mount and every show-after-hide.
+  const createTerminal = (container: HTMLDivElement): LiveTerminal => {
+    const term = new Terminal({
+      fontSize: FONT_SIZE,
+      fontFamily: `"${fontRef.current}", monospace`,
+      cursorBlink: true,
+      scrollback: SCROLLBACK_LINES,
+      allowProposedApi: true,
+      theme: TERMINAL_COLORS[themeRef.current],
+    })
+    const serialize = new SerializeAddon()
+    term.loadAddon(serialize)
+    term.loadAddon(
+      new WebLinksAddon((event, uri) => {
+        if (event.ctrlKey || event.metaKey) {
+          void System.OpenExternal(uri)
+        }
+      }),
+    )
+    term.open(container)
+
+    // WebGL is the renderer; context loss falls back to xterm's DOM renderer.
+    const webgl = new WebglAddon()
+    webgl.onContextLoss(() => {
+      console.warn("[terminal] WebGL context lost, DOM renderer from here on")
+      webgl.dispose()
+    })
+    term.loadAddon(webgl)
+    fitTerminal(term, container)
+
+    const writeInput = (data: string) => {
+      if (!sendInput(sessionId, data)) {
+        void Service.Write(sessionId, data)
+      }
+    }
+
+    // Chords xterm encodes differently from what our TUIs expect go straight
+    // to the PTY (see term-keys.ts). Returning false makes xterm skip the
+    // event; preventDefault stops the browser default too — load-bearing for
+    // Ctrl+V, whose default action would paste text into the terminal.
+    term.attachCustomKeyEventHandler((event) => {
+      if (event.type !== "keydown") {
+        return true
+      }
+      const seq = chordSequence(event)
+      if (seq === null) {
+        return true
+      }
+      event.preventDefault()
+      writeInput(seq)
+      return false
+    })
+
+    const dataInput = term.onData(writeInput)
+    const resizeInput = term.onResize(({ cols, rows }) => {
+      if (visibleRef.current) {
+        void Service.Resize(sessionId, cols, rows)
+      }
+    })
+
+    // Copy-on-select with a toast. Debounced: drag-selection fires
+    // onSelectionChange per cell.
+    let copyTimer = 0
+    const selection = term.onSelectionChange(() => {
+      window.clearTimeout(copyTimer)
+      copyTimer = window.setTimeout(() => {
+        const text = term.getSelection()
+        if (text.length === 0) {
+          return
+        }
+        void navigator.clipboard?.writeText?.(text)
+        toast(copyToastMessage(text), {
+          id: "terminal-copy",
+          duration: COPY_TOAST_DURATION_MS,
+        })
+      }, COPY_DEBOUNCE_MS)
+    })
+
+    return {
+      term,
+      serialize,
+      dispose() {
+        window.clearTimeout(copyTimer)
+        dataInput.dispose()
+        resizeInput.dispose()
+        selection.dispose()
+        term.dispose()
+      },
+    }
+  }
+
+  // hide serializes the live terminal and destroys it; output then queues in
+  // the replay buffer until show.
+  const hideTerminal = () => {
+    const live = liveRef.current
+    if (!live) {
+      return
+    }
+    serializedRef.current = live.serialize.serialize()
+    live.dispose()
+    liveRef.current = null
+  }
+
+  // show rebuilds the terminal from the snapshot plus the queued tail.
+  const showTerminal = () => {
+    const container = containerRef.current
+    if (liveRef.current || !container) {
+      return
+    }
+    const live = createTerminal(container)
+    if (replayRef.current.truncated()) {
+      // The queue overflowed while hidden; the head of what remains may be a
+      // partial ANSI sequence. The snapshot is stale relative to it either
+      // way, so start clean from the tail.
+      serializedRef.current = null
+      live.term.clear()
+    }
+    if (serializedRef.current) {
+      live.term.write(serializedRef.current)
+    }
+    for (const chunk of replayRef.current.drain()) {
+      live.term.write(chunk)
+    }
+    serializedRef.current = null
+    liveRef.current = live
+  }
+
   // Create the terminal and its PTY session once per session id. The session
-  // runs in the background regardless of visibility and is only torn down when
-  // it is closed (this component unmounts) — never on navigation.
+  // runs in the background regardless of visibility and is only torn down
+  // when it is closed (this component unmounts) — never on navigation.
   useEffect(() => {
     const container = containerRef.current
     if (!container) {
@@ -142,206 +271,62 @@ export function TerminalView({ sessionId, projectId, cwd, kind, visible }: Termi
     let disposed = false
     const cleanups: Array<() => void> = []
 
-    // Refit the grid when the container settles at a new size — window resize,
-    // sidebar drag, zoom. fit() is expensive (full WASM buffer + canvas realloc
-    // + redraw, for every mounted terminal) and each PTY resize makes the running
-    // TUI repaint, so refitting mid-drag starves pointer events and the drag lags
-    // behind the cursor. A trailing debounce keeps drags fluid: no terminal work
-    // while the size is still changing, one refit once it stops.
-    // Guard on integer dimensions: fit() nudges the canvas, which can make the
-    // observer re-fire at sub-pixel deltas and loop into a flicker.
-    // Only the visible terminal refits and syncs its PTY; hidden ones skip the
-    // work entirely and catch up via the unconditional refit on show.
-    const REFIT_DEBOUNCE_MS = 100
-    let lastWidth = 0
-    let lastHeight = 0
-    let refitTimer = 0
-    const scheduleRefit = (entries: ResizeObserverEntry[]) => {
-      const rect = entries[0]?.contentRect
-      if (rect) {
-        const width = Math.round(rect.width)
-        const height = Math.round(rect.height)
-        if (width === lastWidth && height === lastHeight) {
-          return
-        }
-        lastWidth = width
-        lastHeight = height
+    // Output sink: the live terminal when one exists, the replay buffer
+    // while the session is hidden and the terminal destroyed.
+    const feed = (bytes: Uint8Array, decodeMs: number) => {
+      const live = liveRef.current
+      if (live) {
+        const t0 = performance.now()
+        live.term.write(bytes, () => recordChunk(decodeMs, performance.now() - t0, bytes.length))
+        return
       }
-      window.clearTimeout(refitTimer)
-      refitTimer = window.setTimeout(() => {
-        const term = termRef.current
-        if (!term || !visibleRef.current) {
-          return
-        }
-        fitTerminal(term, container)
-        void Service.Resize(sessionId, term.cols, term.rows)
-      }, REFIT_DEBOUNCE_MS)
+      replayRef.current.push(bytes)
     }
 
     void (async () => {
-      await ensureInit()
       await ensureFontLoaded(fontRef.current)
       if (disposed) {
         return
       }
 
-      const term = new Ghostty({
-        fontSize: FONT_SIZE,
-        fontFamily: `"${fontRef.current}", monospace`,
-        cursorBlink: true,
-        scrollback: 5000,
-        theme: TERMINAL_COLORS[themeRef.current],
-      })
-      term.open(container)
-      if (term.renderer) {
-        patchBlockGlyphs(term.renderer)
-        patchFontMetrics(term.renderer)
-        patchRowPaint(term.renderer)
-        patchGlyphAtlas(term.renderer, countingCanvasFactory())
-        instrumentRender(term.renderer)
-        // Gate wraps last so skipped frames never reach the instrumented
-        // render — term-perf keeps counting only real paints.
-        patchScrollGate(term.renderer)
-      }
-      patchPooledGetLine(term.wasmTerm)
-      patchScrollbackCache(term)
-      registerLinkOpening(term)
-      fitTerminal(term, container)
-      termRef.current = term
+      const live = createTerminal(container)
+      liveRef.current = live
+      startedRef.current = true
       ensureTransport()
 
-      // Input goes over the local WebSocket when it is up; otherwise the
-      // Wails binding. Both land in the same PTY write on the backend.
-      const writeInput = (data: string) => {
-        if (!sendInput(sessionId, data)) {
-          void Service.Write(sessionId, data)
-        }
-      }
-
-      // Sequences ghostty-web 0.4.0 gets wrong (Shift+Tab, Alt chords) are
-      // written to the PTY directly; returning true stops the terminal from
-      // sending its own broken encoding. See term-keys.ts.
-      term.attachCustomKeyEventHandler((event) => {
-        // Ctrl+Shift+V pastes text via the Wails clipboard (the webview's
-        // paste event handles text only). Plain Ctrl+V reaches the PTY as SYN
-        // through missingKeySequence, like a real terminal.
-        if (isTextPasteChord(event)) {
-          void Clipboard.Text().then((text) => {
-            if (text) {
-              term.paste(text)
-            }
-          })
-          return true
-        }
-        const seq = missingKeySequence(event)
-        if (seq === null) {
-          return false
-        }
-        writeInput(seq)
-        return true
-      })
-
-      // ghostty-web reports no mouse events, so its alt-screen emulation turns
-      // the wheel into arrow keys. When the app enabled mouse tracking with SGR
-      // encoding (Claude Code, htop, vim), forward a real wheel event so it
-      // scrolls by its own line increment (smooth, no arrow-key warning).
-      // Otherwise fall back to PgUp/PgDn in the alt screen, and let ghostty
-      // scroll its own scrollback viewport everywhere else. See term-keys.ts.
-      term.attachCustomWheelEventHandler((event) => {
-        const wasm = term.wasmTerm
-        if (!wasm) {
-          return false
-        }
-        if (wasm.hasMouseTracking() && wasm.getMode(1006, false)) {
-          const { col, row } = pointerCell(event, container, term.renderer, term.cols, term.rows)
-          const seq = sgrWheelSequence(event.deltaY, col, row)
-          if (seq) {
-            writeInput(seq)
-          }
-          return true
-        }
-        if (!wasm.isAlternateScreen()) {
-          return false
-        }
-        const seq = altScreenWheelSequence(event.deltaY)
-        if (seq) {
-          writeInput(seq)
-        }
-        return true
-      })
-
-      const dataInput = term.onData(writeInput)
-      const resizeInput = term.onResize(({ cols, rows }) => {
-        if (visibleRef.current) {
-          void Service.Resize(sessionId, cols, rows)
-        }
-      })
-      cleanups.push(() => dataInput.dispose(), () => resizeInput.dispose())
-
-      // ghostty-web copies the selection to the clipboard on mouse-up and
-      // double-click, then fires onSelectionChange; surface a toast so the copy
-      // is visible without hunting for where the selection was.
-      const selectionInput = term.onSelectionChange(() => {
-        const selection = term.getSelection()
-        if (selection.length > 0) {
-          toast(copyToastMessage(selection), {
-            id: "terminal-copy",
-            duration: COPY_TOAST_DURATION_MS,
-          })
-        }
-      })
-      cleanups.push(() => selectionInput.dispose())
-
-      const offData = Events.On(DATA_EVENT_PREFIX + sessionId, (event) => {
+      const offData = onAppEvent(DATA_EVENT_PREFIX + sessionId, (data) => {
         const t0 = performance.now()
-        const bytes = decodeBase64(event.data as string)
-        const t1 = performance.now()
-        term.write(bytes)
-        recordChunk(t1 - t0, performance.now() - t1, bytes.length)
+        const bytes = decodeBase64(data as string)
+        feed(bytes, performance.now() - t0)
       })
-      // Output arrives here while the WebSocket is up, on the Wails event
-      // above while it is down; the backend routes each chunk to exactly one.
-      const offWsData = onSessionData(sessionId, (payload) => {
-        const t0 = performance.now()
-        term.write(payload)
-        recordChunk(0, performance.now() - t0, payload.length)
-      })
-      const offExit = Events.On(EXIT_EVENT_PREFIX + sessionId, () => {
-        term.write("\r\n[process exited]\r\n")
+      const offWsData = onSessionData(sessionId, (payload) => feed(payload, 0))
+      const offExit = onAppEvent(EXIT_EVENT_PREFIX + sessionId, () => {
+        feed(new TextEncoder().encode("\r\n[process exited]\r\n"), 0)
       })
       cleanups.push(offData, offWsData, offExit)
 
-      const resizeObserver = new ResizeObserver(scheduleRefit)
+      let refitTimer = 0
+      const resizeObserver = new ResizeObserver(() => {
+        window.clearTimeout(refitTimer)
+        refitTimer = window.setTimeout(() => {
+          if (visibleRef.current && liveRef.current) {
+            fitTerminal(liveRef.current.term, container)
+          }
+        }, REFIT_DEBOUNCE_MS)
+      })
       resizeObserver.observe(container)
       cleanups.push(() => {
         window.clearTimeout(refitTimer)
         resizeObserver.disconnect()
       })
 
-      // Remove nós editáveis parasitas que o WebKitGTK insere no container
-      // contenteditable do ghostty (paste de seleção primária por clique-do-meio
-      // no X11, drag-drop); eles furam o guard de beforeinput do ghostty e
-      // deslocam o canvas em fluxo, sobrando texto selecionável. Só o <canvas> +
-      // <textarea> do ghostty (já anexados no open() acima) podem viver aqui.
-      const domGuard = new MutationObserver((records) => {
-        for (const record of records) {
-          for (const node of record.addedNodes) {
-            if (isStrayTerminalChild(node)) {
-              ;(node as ChildNode).remove()
-            }
-          }
-        }
-      })
-      domGuard.observe(container, { childList: true })
-      cleanups.push(() => domGuard.disconnect())
-
-      await Service.Start(sessionId, projectId, cwd, kind, term.cols, term.rows)
+      await Service.Start(sessionId, projectId, cwd, kind, live.term.cols, live.term.rows)
       if (visibleRef.current) {
-        term.focus()
+        live.term.focus()
       } else {
-        // Navigated away while the WASM init was in flight: the session starts
-        // visible on the backend, so demote it and stop painting.
-        pauseRenderLoop(term)
+        // Navigated away while the font load was in flight: enter the hidden
+        // state (serialize + destroy) and demote the backend session.
+        hideTerminal()
         void Service.SetVisible(sessionId, false)
       }
     })()
@@ -352,60 +337,78 @@ export function TerminalView({ sessionId, projectId, cwd, kind, visible }: Termi
         cleanup()
       }
       void Service.Close(sessionId)
-      termRef.current?.dispose()
-      termRef.current = null
+      liveRef.current?.dispose()
+      liveRef.current = null
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, projectId, cwd, kind])
 
-  // Apply a font change live to the running terminal.
+  // Visibility is the terminal's lifecycle: hidden destroys it (state lives
+  // in the snapshot + replay buffer + backend), visible rebuilds it, refits,
+  // syncs the PTY size and focuses.
   useEffect(() => {
-    const term = termRef.current
-    if (!term) {
+    if (!startedRef.current) {
+      // First mount: the async setup owns terminal creation and reads
+      // visibleRef when it finishes.
+      return
+    }
+    if (!visible) {
+      if (liveRef.current) {
+        hideTerminal()
+        void Service.SetVisible(sessionId, false)
+      }
+      return
+    }
+    showTerminal()
+    const live = liveRef.current
+    if (!live) {
+      return
+    }
+    void Service.SetVisible(sessionId, true)
+    if (containerRef.current) {
+      fitTerminal(live.term, containerRef.current)
+    }
+    void Service.Resize(sessionId, live.term.cols, live.term.rows)
+    live.term.focus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, sessionId])
+
+  // Font changes apply to the live terminal; a hidden one picks the ref up
+  // on recreation.
+  useEffect(() => {
+    const live = liveRef.current
+    if (!live) {
       return
     }
     void (async () => {
       await ensureFontLoaded(font)
-      term.renderer?.setFontFamily(font)
-      // Font metrics changed: recompute the grid and sync the visible PTY.
-      const container = containerRef.current
-      if (container) {
-        fitTerminal(term, container)
+      live.term.options.fontFamily = `"${font}", monospace`
+      if (containerRef.current) {
+        fitTerminal(live.term, containerRef.current)
       }
       if (visibleRef.current) {
-        void Service.Resize(sessionId, term.cols, term.rows)
+        void Service.Resize(sessionId, live.term.cols, live.term.rows)
       }
     })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [font, sessionId])
 
-  // Apply a terminal theme change live to the running terminal.
+  // Theme changes likewise.
   useEffect(() => {
-    termRef.current?.renderer?.setTheme(TERMINAL_COLORS[resolvedTerminalTheme])
+    const live = liveRef.current
+    if (live) {
+      live.term.options.theme = TERMINAL_COLORS[resolvedTerminalTheme]
+    }
   }, [resolvedTerminalTheme])
 
-  // Visibility drives the cost of a terminal. Hidden: stop the ~60fps render
-  // loop (writes keep updating the WASM buffer, so state stays current) and let
-  // the backend batch output events. Visible: resume rendering, flush batched
-  // output, refit (window may have resized while hidden), sync the PTY size and
-  // focus.
-  useEffect(() => {
-    const term = termRef.current
-    if (!term) {
-      return
-    }
-    if (!visible) {
-      pauseRenderLoop(term)
-      void Service.SetVisible(sessionId, false)
-      return
-    }
-    resumeRenderLoop(term)
-    void Service.SetVisible(sessionId, true)
-    const container = containerRef.current
-    if (container) {
-      fitTerminal(term, container)
-    }
-    void Service.Resize(sessionId, term.cols, term.rows)
-    term.focus()
-  }, [visible, sessionId])
-
-  return <div ref={containerRef} data-terminal className="h-full w-full" />
+  // The container carries the terminal's own background: the sub-cell
+  // remainder of the grid fit and the ruler gutter then blend into the
+  // terminal instead of showing the app background as a right-edge stripe.
+  return (
+    <div
+      ref={containerRef}
+      className="h-full w-full"
+      style={{ backgroundColor: TERMINAL_COLORS[resolvedTerminalTheme].background }}
+    />
+  )
 }

@@ -3,7 +3,8 @@
 // is trivially testable; the component wires it to Status(), the dialog, and the
 // toast.
 
-import type {Status} from "../../bindings/github.com/omartelo/lich/internal/claudeplugin"
+import type {PluginStatus as Status} from "./api-types"
+export type {Status}
 
 export const INSTALL_DISMISSED_KEY = "lich.pluginInstallDismissed"
 export const UPDATE_DISMISSED_KEY = "lich.pluginUpdateDismissed"

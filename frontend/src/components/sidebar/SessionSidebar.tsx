@@ -2,7 +2,7 @@ import {useState} from "react"
 import {useMatch} from "react-router-dom"
 import {Bot, GitBranch, Plus, Terminal} from "lucide-react"
 import {toast} from "sonner"
-import {Service as ProjectService} from "../../../bindings/github.com/omartelo/lich/internal/project"
+import {ProjectService} from "@/lib/rpc"
 import {Button} from "@/components/ui/button"
 import {
   DropdownMenu,

@@ -1,11 +1,12 @@
-// ghostty-web's FitAddon subtracts a fixed 15px scrollbar gutter from the width
-// before dividing into cells, so the grid never reaches the right edge — a
-// permanent band between the terminal and the window. computeGrid divides the
-// full container instead, filling edge to edge. Only a sub-cell remainder is
-// left (< 1 cell, unavoidable: partial cells can't render), landing on the
-// right/bottom since the canvas is top-left anchored. The trade: the overlay
-// scrollbar now paints over the last column while scrolled; reserve a gutter
-// again only if that ever bothers.
+// xterm's FitAddon reserves a scrollbar gutter (DEFAULT_SCROLL_BAR_WIDTH or
+// overviewRuler.width) before dividing the width into cells, so the grid
+// never reaches the right edge — a permanent band between the terminal and
+// the window. computeGrid divides the full container instead, edge to edge. Only
+// a sub-cell remainder is left (< 1 cell, unavoidable: partial cells can't
+// render), landing on the right/bottom since the canvas is top-left anchored
+// and painted over by the container's terminal-colored background. The
+// overlay scrollbar paints over the last column while scrolled; reserve a
+// gutter again only if that ever bothers.
 
 export interface CellSize {
   width: number

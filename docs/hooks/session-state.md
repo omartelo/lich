@@ -51,7 +51,7 @@ what re-arms the spinner after them. Every tool re-reports `busy` (idempotent);
 - **Endpoint** — `internal/terminal/transport.go`, `transport.hook`: validates
   the token and body (`parseHookRequest`) on the same loopback listener as
   terminal I/O, then forwards `(session_id, state)`.
-- **UI push** — `internal/terminal/terminal.go`: emits the Wails event
+- **UI push** — `internal/terminal/terminal.go`: emits the app event
   `session-status:<id>` with the state, and for `waiting` also the global
   `session-attention` event (`{id}`).
 - **Render** — `frontend/src/components/sidebar/SessionCard.tsx`: subscribes to

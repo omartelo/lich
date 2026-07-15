@@ -11,6 +11,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -18,22 +19,18 @@ import (
 	"github.com/coder/websocket"
 )
 
-// The Wails event bridge costs one engine round-trip per crossing: every
-// Service.Write is an HTTP fetch through the WebKit network process, and every
-// data event is an evaluate_javascript call with a base64 payload. During
-// interactive typing that adds up to ~60 crossings/s of native dispatch
-// overhead that saturates the webview main thread (measured 2026-07-10:
-// ~40ms stall trains while typing, all JS callbacks innocent). This transport
-// replaces both directions for terminal I/O with one local WebSocket carrying
-// binary frames; everything else stays on the Wails bridge. When no client is
-// connected (or a write fails) senders fall back to the event bridge, so the
-// app works unchanged without it.
+// Terminal I/O rides one local WebSocket carrying binary frames, instead of
+// one RPC POST per keystroke and one JSON event per output chunk — per-message
+// overhead at interactive rates (~60 crossings/s while typing) is the hot
+// path this avoids. When no client is connected (or a write fails) output
+// falls back to the /events channel and input to the RPC, so the app works
+// degraded but unbroken.
 //
 // Frame format, both directions: [1 byte id length][session id][payload].
 
 const (
 	// wsWriteTimeout bounds a send to the local client; a stalled write drops
-	// the connection so output falls back to the event bridge.
+	// the connection so output falls back to the /events channel.
 	wsWriteTimeout = 5 * time.Second
 	// wsReadLimit bounds one input frame; keystrokes and pastes are far
 	// smaller, and the frontend chunks nothing above this.
@@ -88,6 +85,7 @@ type transport struct {
 	conn        *websocket.Conn
 	port        int
 	token       string
+	mux         *http.ServeMux
 	input       func(id string, data []byte)
 	status      func(id, state string)
 	linkSession func(sessionID, claudeSessionID string) error
@@ -113,9 +111,20 @@ func newTransport(
 	if _, err := rand.Read(raw); err != nil {
 		return nil, fmt.Errorf("failed to generate transport token: %w", err)
 	}
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	// The port is random by default; LICH_LISTEN_PORT pins it. The Chromium
+	// shell needs a stable port (main.go defaults it there): the page's origin
+	// is host:port, and the frontend's localStorage (lich.* settings) only
+	// survives restarts when the origin does. Distinct from LICH_PORT, which
+	// is the per-session hook-contract variable pointing at THIS listener —
+	// reusing it would make a lich launched from inside a lich session try to
+	// bind its parent's port.
+	addr := "127.0.0.1:0"
+	if port := os.Getenv("LICH_LISTEN_PORT"); port != "" {
+		addr = "127.0.0.1:" + port
+	}
+	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to listen for transport: %w", err)
+		return nil, fmt.Errorf("failed to listen for transport on %s: %w", addr, err)
 	}
 	t := &transport{
 		port:        listener.Addr().(*net.TCPAddr).Port,
@@ -132,15 +141,37 @@ func newTransport(
 	mux.HandleFunc("/session-start", t.sessionStart)
 	mux.HandleFunc("/session-title", t.sessionTitle)
 	mux.HandleFunc("/session-touched", t.sessionTouched)
+	t.mux = mux
 	// Server and listener live for the process lifetime, like the PTY sessions
 	// they serve; add Shutdown if the app ever needs teardown.
 	go func() { _ = http.Serve(listener, mux) }()
 	return t, nil
 }
 
+// mount adds a handler to the transport listener behind the same token check
+// every endpoint uses. ServeMux registration is safe after Serve started, so
+// callers wire extra surfaces (RPC, the events push socket) post-construction.
+func (t *transport) mount(pattern string, handler http.Handler) {
+	t.mux.Handle(pattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !t.authorized(r) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		handler.ServeHTTP(w, r)
+	}))
+}
+
+// mountPublic adds a handler without the token check — for the static
+// frontend assets the Chromium shell loads before it knows the token (which
+// rides the page URL). Loopback-only like everything else; the RPC, terminal
+// and event surfaces stay token-gated.
+func (t *transport) mountPublic(pattern string, handler http.Handler) {
+	t.mux.Handle(pattern, handler)
+}
+
 // authorized reports whether the request carries the transport's connect token.
-// The webview's origin is the wails scheme (or the Vite dev server), never this
-// listener's host, so the origin is not checked — the random token is the auth.
+// The origin is not checked — in dev the page comes from the Vite server, not
+// this listener — the random token is the auth.
 func (t *transport) authorized(r *http.Request) bool {
 	provided := r.URL.Query().Get("token")
 	return subtle.ConstantTimeCompare([]byte(provided), []byte(t.token)) == 1

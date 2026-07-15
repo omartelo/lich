@@ -1,12 +1,10 @@
-// Local WebSocket transport for terminal I/O, replacing the Wails bridge for
-// the hot path: every Service.Write is an HTTP fetch through the WebKit
-// network process and every data event an evaluate_javascript call — ~60
-// engine crossings/s while typing, measured as ~40ms main-thread stall trains
-// (2026-07-10). One binary-frame socket carries input and output for every
-// session; when it is down, callers fall back to the Wails paths, which the
-// backend keeps serving.
+// Local WebSocket transport for terminal I/O — the hot path. One binary-frame
+// socket carries input and output for every session, instead of one RPC POST
+// per keystroke and one JSON event per output chunk; when it is down, input
+// falls back to the RPC and output to the /events channel, which the backend
+// keeps serving.
 
-import {Service} from "../../bindings/github.com/omartelo/lich/internal/terminal"
+import {endpoint} from "./rpc"
 import {decodeFrame, encodeFrame} from "./term-frame"
 
 const RECONNECT_MS = 1_000
@@ -17,8 +15,8 @@ let starting = false
 const handlers = new Map<string, (payload: Uint8Array) => void>()
 
 // ensureTransport starts the singleton connection; safe to call from every
-// terminal mount. A backend without a transport (port 0) leaves the Wails
-// bridge as the permanent path.
+// terminal mount. A backend without a transport (port 0) leaves the RPC and
+// /events fallback as the permanent path.
 export function ensureTransport(): void {
   if (starting) {
     return
@@ -29,11 +27,8 @@ export function ensureTransport(): void {
 
 async function connect(): Promise<void> {
   try {
-    const info = await Service.Transport()
-    if (!info.port) {
-      return
-    }
-    const ws = new WebSocket(`ws://127.0.0.1:${info.port}/ws?token=${info.token}`)
+    const info = await endpoint()
+    const ws = new WebSocket(`${info.base.replace(/^http/, "ws")}/ws?token=${info.token}`)
     ws.binaryType = "arraybuffer"
     ws.onopen = () => {
       ready = true
@@ -71,7 +66,7 @@ export function sendInput(sessionId: string, data: string): boolean {
 
 // onSessionData registers the output sink for one session. The backend routes
 // output through the socket only while it is connected, so subscribing here
-// alongside the Wails event never double-delivers.
+// alongside the /events channel never double-delivers.
 export function onSessionData(
   sessionId: string,
   callback: (payload: Uint8Array) => void,

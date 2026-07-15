@@ -16,10 +16,9 @@ const DRAG_THRESHOLD_PX = 5
 // reorderable surfaces (session cards, project tabs). It reports the new id
 // order once, when a drag actually lands somewhere new.
 //
-// dnd-kit rides pointer events, so the drag never reaches the native GTK/X11
-// drag-and-drop the webview would otherwise hand it to — and it animates with
-// CSS transforms rather than reordering the DOM, so no rearranged-list state has
-// to exist while a drag is in flight.
+// dnd-kit rides pointer events instead of the HTML5 DnD API — and it animates
+// with CSS transforms rather than reordering the DOM, so no rearranged-list
+// state has to exist while a drag is in flight.
 export function useSortableList(ids: string[], onCommit: (ids: string[]) => void) {
   const sensors = useSensors(
     useSensor(PointerSensor, {

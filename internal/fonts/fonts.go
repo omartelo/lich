@@ -1,7 +1,7 @@
 // Package fonts enumerates the operating system's installed font families so the
-// frontend can offer them as terminal fonts. The WebKit webview resolves fonts
-// through the same fontconfig database on Linux, so any family listed here is
-// renderable by name in the canvas terminal without bundling it.
+// frontend can offer them as terminal fonts. Chromium resolves fonts through
+// the same fontconfig database on Linux, so any family listed here is
+// renderable by name in the terminal without bundling it.
 package fonts
 
 import (

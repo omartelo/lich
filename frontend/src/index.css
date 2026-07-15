@@ -132,12 +132,6 @@
   * {
     @apply border-border outline-ring/50;
     }
-  /* ghostty-web marks its container contenteditable for input capture; hide the
-     native caret WebKitGTK paints beside the canvas (full-height blinking bar).
-     The terminal draws its own cursor. */
-  [data-terminal] {
-    caret-color: transparent;
-    }
   body {
     @apply bg-background text-foreground;
     }
@@ -205,3 +199,26 @@
 .dark .tok-typeName, .dark .tok-className, .dark .tok-namespace { color: oklch(0.8 0.09 200); }
 .dark .tok-propertyName { color: oklch(0.75 0.1 255); }
 .dark .tok-variableName.tok-definition { color: oklch(0.75 0.1 255); }
+/* xterm viewport scrollbar, discreet: today's dark native scrollbar reads as
+   a stripe between the terminal and the window edge. Thin overlay thumb,
+   transparent track; the overview ruler (TerminalView) marks scroll position. */
+.xterm-viewport::-webkit-scrollbar {
+  width: 6px;
+}
+.xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+.xterm-viewport::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, currentColor 25%, transparent);
+  border-radius: 3px;
+}
+
+/* Desktop app: the page itself never scrolls. Without this, Chromium's
+   classic (width-taking, dark) scrollbars appear the moment anything
+   overflows 100vw/100vh by a pixel — w-screen includes the scrollbar width,
+   so one scrollbar begets the other — and render as a permanent dark stripe
+   along the window edge. */
+html,
+body {
+  overflow: hidden;
+}

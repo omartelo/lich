@@ -23,7 +23,7 @@ func TestDiffText(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, err := New().DiffText(repo)
+	out, err := New(nil).DiffText(repo)
 	if err != nil {
 		t.Fatalf("DiffText: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestDiffTextNoHead(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, err := New().DiffText(repo)
+	out, err := New(nil).DiffText(repo)
 	if err != nil {
 		t.Fatalf("DiffText: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestDiffTextNoHead(t *testing.T) {
 // non-repository path an error.
 func TestDiffTextClean(t *testing.T) {
 	repo, _ := initRepo(t)
-	out, err := New().DiffText(repo)
+	out, err := New(nil).DiffText(repo)
 	if err != nil {
 		t.Fatalf("DiffText: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestDiffTextClean(t *testing.T) {
 		t.Errorf("clean repo diff = %q, want empty", out)
 	}
 
-	if _, err := New().DiffText(t.TempDir()); err == nil {
+	if _, err := New(nil).DiffText(t.TempDir()); err == nil {
 		t.Error("non-repo path: want error, got nil")
 	}
 }
@@ -91,7 +91,7 @@ func TestDiffTextBinaryUntracked(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, err := New().DiffText(repo)
+	out, err := New(nil).DiffText(repo)
 	if err != nil {
 		t.Fatalf("DiffText: %v", err)
 	}

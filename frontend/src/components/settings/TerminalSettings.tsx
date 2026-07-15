@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { Service as FontService } from "../../../bindings/github.com/omartelo/lich/internal/fonts"
+import { Fonts as FontService } from "@/lib/rpc"
 import { DEFAULT_FONT, useSettings } from "@/lib/settings"
 import {
   Select,

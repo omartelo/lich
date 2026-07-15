@@ -1,8 +1,7 @@
 // Dev-only diagnostics for the terminal paint pipeline: per-second console
-// report of event/decode/write cost, ghostty render time, glyph-atlas cache
-// misses and main-thread rAF stalls. Inert in production builds — every entry
-// point is guarded by import.meta.env.DEV, so the reporter never starts and
-// the bundler drops the dead branches.
+// report of event/decode/write cost and main-thread rAF stalls. Inert in
+// production builds — every entry point is guarded by import.meta.env.DEV, so
+// the reporter never starts and the bundler drops the dead branches.
 
 const stats = {
   events: 0,
@@ -11,19 +10,15 @@ const stats = {
   writeMs: 0,
   stalls: 0,
   worstMs: 0,
-  renders: 0,
-  renderMs: 0,
-  worstRenderMs: 0,
-  sprites: 0,
   rafMs: 0,
   rafN: 0,
   rafWorstMs: 0,
 }
 let started = false
 
-// wrapRaf measures every requestAnimationFrame callback so rAF work (ghostty
-// render loops, scrollbar fades) can be separated from engine work (paint,
-// GC, IPC dispatch) inside a stall: raf≈stall means the callback is guilty,
+// wrapRaf measures every requestAnimationFrame callback so rAF work (xterm's
+// renderer, scrollbar fades) can be separated from engine work (paint, GC,
+// IPC dispatch) inside a stall: raf≈stall means the callback is guilty,
 // raf≪stall means the engine is. Loops that started before the wrap pick it
 // up on their next self-rescheduled frame.
 function wrapRaf(): void {
@@ -39,40 +34,8 @@ function wrapRaf(): void {
     })
 }
 
-// instrumentRender wraps a ghostty renderer's render() so paint cost shows up
-// in the per-second report — it runs inside ghostty's own rAF, invisible to
-// the decode/write timings.
-export function instrumentRender(renderer: object): void {
-  if (!import.meta.env.DEV) {
-    return
-  }
-  start()
-  const target = renderer as { render: (...args: unknown[]) => void }
-  const original = target.render.bind(target)
-  target.render = (...args: unknown[]) => {
-    const t0 = performance.now()
-    original(...args)
-    const dt = performance.now() - t0
-    stats.renders++
-    stats.renderMs += dt
-    stats.worstRenderMs = Math.max(stats.worstRenderMs, dt)
-  }
-}
-
-// countingCanvasFactory wraps the glyph-atlas sprite factory so cache misses
-// (= sprite creations) show up in the report. High sprites/s means the atlas
-// is thrashing (e.g. a TUI animating colors every frame).
-export function countingCanvasFactory(): () => HTMLCanvasElement {
-  if (!import.meta.env.DEV) {
-    return () => document.createElement("canvas")
-  }
-  return () => {
-    stats.sprites++
-    return document.createElement("canvas")
-  }
-}
-
 // recordChunk logs one data event's cost; the first call starts the reporter.
+// For xterm, writeMs includes queue wait + parse (its write is asynchronous).
 export function recordChunk(decodeMs: number, writeMs: number, bytes: number): void {
   if (!import.meta.env.DEV) {
     return
@@ -92,7 +55,7 @@ function start(): void {
   wrapRaf()
 
   // rAF gap watcher: frames >33ms are main-thread stalls not accounted for by
-  // decode/write — eval of the event payload, ghostty paint, GC, React.
+  // decode/write — eval of the event payload, terminal paint, GC, React.
   // Stall timestamps (ms, absolute) expose the cadence: ~3000ms spacing points
   // at the git poll, irregular spacing at GC or one-off work.
   let last = performance.now()
@@ -112,16 +75,13 @@ function start(): void {
   requestAnimationFrame(tick)
 
   setInterval(() => {
-    if (stats.events === 0 && stats.stalls === 0 && stats.renders === 0) {
+    if (stats.events === 0 && stats.stalls === 0) {
       return
     }
     // eslint-disable-next-line no-console
     console.log(
       `[term-perf] ev/s=${stats.events} KB/s=${(stats.bytes / 1024).toFixed(0)} ` +
         `decode=${stats.decodeMs.toFixed(1)}ms write=${stats.writeMs.toFixed(1)}ms ` +
-        `render=${stats.renderMs.toFixed(1)}ms n=${stats.renders} ` +
-        `maxRender=${stats.worstRenderMs.toFixed(0)}ms ` +
-        `sprites/s=${stats.sprites} ` +
         `raf=${stats.rafMs.toFixed(0)}ms rafN=${stats.rafN} ` +
         `rafWorst=${stats.rafWorstMs.toFixed(0)}ms ` +
         `stalls=${stats.stalls} worst=${stats.worstMs.toFixed(0)}ms` +
@@ -134,10 +94,6 @@ function start(): void {
     stats.writeMs = 0
     stats.stalls = 0
     stats.worstMs = 0
-    stats.renders = 0
-    stats.renderMs = 0
-    stats.worstRenderMs = 0
-    stats.sprites = 0
     stats.rafMs = 0
     stats.rafN = 0
     stats.rafWorstMs = 0

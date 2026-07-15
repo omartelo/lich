@@ -1,21 +1,19 @@
-# Feel free to remove those if you don't want/need to use them.
-# Make sure to check the documentation at https://nfpm.goreleaser.com
-#
-# The lines below are called `modelines`. See `:help modeline`
+# nfpm config for the lich packages (deb, rpm, archlinux) — invoked directly
+# by the root Taskfile (`task package`). The binary is static pure Go; the
+# only runtime needs are a Chromium-family browser and zenity, both soft
+# (recommends where the format supports it) so installs never block.
 
 name: "lich"
 arch: ${GOARCH}
 platform: "linux"
-# Follows the git tag via $VERSION (injected by build/linux/Taskfile.yml) — no manual bump.
-# Exact-tag releases yield clean semver; a dev build between tags carries the git-describe
-# suffix as-is. Sanitize in the Taskfile if that ever needs to be a valid pkgver.
+# Follows the git tag via $VERSION (injected by the Taskfile) — no manual bump.
 version: "${VERSION}"
 section: "default"
 priority: "extra"
-maintainer: ${GIT_COMMITTER_NAME} <${GIT_COMMITTER_EMAIL}>
+maintainer: "omartelo <meopedevts@proton.me>"
 description: "A personal harness for AI-assisted development"
 vendor: "lich"
-homepage: "https://wails.io"
+homepage: "https://github.com/omartelo/lich"
 license: "MIT"
 
 contents:
@@ -26,57 +24,15 @@ contents:
   - src: "./build/linux/lich.desktop"
     dst: "/usr/share/applications/lich.desktop"
 
-# Default dependencies for the GTK4 + WebKitGTK 6.0 stack (Ubuntu 24.04+ / Debian 13+)
-depends:
-  - libgtk-4-1
-  - libwebkitgtk-6.0-4
+recommends:
+  - chromium
+  - zenity
 
-# Distribution-specific overrides for different package formats
 overrides:
-  # RPM packages for Fedora / RHEL / AlmaLinux / Rocky Linux
-  rpm:
-    depends:
-      - gtk4
-      - webkitgtk6.0
+  deb:
+    recommends:
+      - chromium | chromium-browser | google-chrome-stable
+      - zenity
 
-  # Arch Linux packages
-  archlinux:
-    depends:
-      - gtk4
-      - webkitgtk-6.0
-
-# scripts section to ensure desktop database is updated after install
 scripts:
   postinstall: "./build/linux/nfpm/scripts/postinstall.sh"
-  # You can also add preremove, postremove if needed
-  # preremove: "./build/linux/nfpm/scripts/preremove.sh"
-  # postremove: "./build/linux/nfpm/scripts/postremove.sh"
-
-# If you build your app with -tags gtk3 (legacy WebKit2GTK 4.1 stack — supported through v3.0.x, removed in v3.1),
-# replace the depends/overrides above with these:
-#
-# depends:
-#   - libgtk-3-0
-#   - libwebkit2gtk-4.1-0
-# overrides:
-#   rpm:
-#     depends:
-#       - gtk3
-#       - webkit2gtk4.1
-#   archlinux:
-#     depends:
-#       - gtk3
-#       - webkit2gtk-4.1
-#
-# replaces:
-#   - foobar
-# provides:
-#   - bar
-# recommends:
-#   - whatever
-# suggests:
-#   - something-else
-# conflicts:
-#   - not-foo
-#   - not-bar
-# changelog: "changelog.yaml"

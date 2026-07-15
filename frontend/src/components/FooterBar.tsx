@@ -1,8 +1,6 @@
 import {useEffect, useState} from "react"
-import {Browser} from "@wailsio/runtime"
 import {FileText, GitBranch, Folder, Plus, Diff, GitPullRequestArrow} from "lucide-react"
-import {Service as ProjectService} from "../../bindings/github.com/omartelo/lich/internal/project"
-import {Service as TerminalService} from "../../bindings/github.com/omartelo/lich/internal/terminal"
+import {ProjectService, System, Terminal as TerminalService} from "@/lib/rpc"
 import {useActiveSession} from "@/lib/useActiveSession"
 import {displayPath} from "@/lib/paths"
 import {useGitStatus} from "@/lib/useGitStatus"
@@ -104,7 +102,7 @@ export function FooterBar({diffOpen, onToggleDiff}: FooterBarProps) {
             render={
               <button
                 type="button"
-                onClick={() => void Browser.OpenURL(pr.url)}
+                onClick={() => void System.OpenExternal(pr.url)}
                 className="flex items-center gap-1.5 rounded-md border border-border bg-muted px-1.5 py-1 transition-colors hover:bg-accent hover:text-accent-foreground"
               />
             }

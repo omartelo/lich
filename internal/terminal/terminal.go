@@ -1,5 +1,6 @@
 // Package terminal spawns PTY-backed shell sessions and bridges their I/O to the
-// frontend over Wails events. Sessions are keyed by an opaque session ID and run
+// frontend over the local WebSocket transport (transport.go), falling back to
+// the /events channel. Sessions are keyed by an opaque session ID and run
 // independently of the frontend, so navigating away from a project (or hiding
 // its terminal) never kills its shell. A project may own several sessions.
 package terminal
@@ -7,6 +8,7 @@ package terminal
 import (
 	"encoding/base64"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
@@ -14,7 +16,8 @@ import (
 	"sync"
 
 	"github.com/creack/pty"
-	"github.com/wailsapp/wails/v3/pkg/application"
+
+	"github.com/omartelo/lich/internal/events"
 )
 
 // Event name prefixes. The concrete event carries the session ID as a suffix
@@ -86,11 +89,13 @@ type Service struct {
 	mu       sync.Mutex
 	sessions map[string]*session
 	store    Store
+	// hub pushes app events to the window over /events; see internal/events.
+	hub *events.Hub
 	// env is the environment every spawned session inherits: the launch
 	// environment cleaned of AppImage runtime leakage (see childEnv), plus TERM.
 	env []string
 	// ws is the local WebSocket transport for terminal I/O (see transport.go);
-	// nil when it failed to start, leaving the Wails event bridge as the path.
+	// nil when it failed to start, leaving /events and the RPC as the path.
 	ws *transport
 }
 
@@ -98,18 +103,20 @@ type Service struct {
 // through store. env is the process environment to derive session environments
 // from — callers pass a snapshot taken before any os.Setenv tweaks (main.go
 // forces GDK_BACKEND on Linux) so those never leak into spawned shells.
-func New(store Store, env []string) *Service {
+// hub receives every app event the service pushes to the UI.
+func New(store Store, env []string, hub *events.Hub) *Service {
 	s := &Service{
 		sessions: make(map[string]*session),
 		store:    store,
+		hub:      hub,
 		env:      append(childEnv(env), "TERM=xterm-256color"),
 	}
 	ws, err := newTransport(
 		func(id string, data []byte) { _ = s.writeBytes(id, data) },
 		func(id, state string) {
-			application.Get().Event.Emit(statusEventPrefix+id, state)
+			hub.Emit(statusEventPrefix+id, state)
 			if state == statusWaiting {
-				application.Get().Event.Emit(attentionEventName, attentionEvent{ID: id})
+				hub.Emit(attentionEventName, attentionEvent{ID: id})
 			}
 		},
 		store.SetClaudeSession,
@@ -119,18 +126,37 @@ func New(store Store, env []string) *Service {
 				return err
 			}
 			if applied {
-				application.Get().Event.Emit(titleEventName, titleEvent{ID: id, Label: title})
+				hub.Emit(titleEventName, titleEvent{ID: id, Label: title})
 			}
 			return nil
 		},
 		func(id string) {
-			application.Get().Event.Emit(touchedEventName, touchedEvent{ID: id})
+			hub.Emit(touchedEventName, touchedEvent{ID: id})
 		},
 	)
 	if err == nil {
 		s.ws = ws
 	}
 	return s
+}
+
+// Mount exposes an extra handler (the RPC dispatcher, the events push socket)
+// on the transport listener, behind its token. No-op when the transport
+// failed to start — those surfaces then simply don't exist, like /ws.
+func (s *Service) Mount(pattern string, handler http.Handler) {
+	if s.ws == nil {
+		return
+	}
+	s.ws.mount(pattern, handler)
+}
+
+// MountPublic exposes a tokenless handler on the transport listener — the
+// static frontend the Chromium shell loads before it knows the token.
+func (s *Service) MountPublic(pattern string, handler http.Handler) {
+	if s.ws == nil {
+		return
+	}
+	s.ws.mountPublic(pattern, handler)
 }
 
 // sessionEnv is the environment for one PTY: the shared base plus the loopback
@@ -185,11 +211,9 @@ func resolveCommand(kind, bin, shellEnv string) string {
 	return resolveBin(bin)
 }
 
-// appImageVars are injected by the AppImage runtime, AppImageLauncher or our
-// AppRun (build/linux/appimage/fix-appimage.sh) and must not leak into the
-// shell: ARGV0 (the .AppImage's invocation name) makes mise/asdf-style shims
-// misread the shell as an invalid shim, the WEBKIT_ pair would run any
-// WebKitGTK app launched from the terminal without its sandbox, and the rest
+// appImageVars are injected by the AppImage runtime or AppImageLauncher and
+// must not leak into the shell: ARGV0 (the .AppImage's invocation name) makes
+// mise/asdf-style shims misread the shell as an invalid shim, and the rest
 // are runtime internals a child never needs.
 var appImageVars = map[string]bool{
 	"ARGV0":              true,
@@ -199,18 +223,16 @@ var appImageVars = map[string]bool{
 	"TARGET_APPIMAGE":    true,
 	"REDIRECT_APPIMAGE":  true,
 	"DESKTOPINTEGRATION": true,
-	"WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS": true,
-	"WEBKIT_DISABLE_DMABUF_RENDERER":           true,
 }
 
 // childEnv returns env cleaned of everything the AppImage runtime injected, so
 // spawned shells inherit the environment lich itself was launched with. Outside
 // an AppImage (no APPDIR — the deb/rpm/dev case) env is returned unchanged.
 // Inside one, appImageVars are dropped and every value is scrubbed of
-// colon-separated path entries under the AppImage mount — AppRun prepends the
-// mount to LD_LIBRARY_PATH, PATH and XDG_DATA_DIRS, and its bundled Ubuntu libs
-// break linkers and GTK apps run from the terminal. Entries the user set
-// survive verbatim, so a pre-existing LD_LIBRARY_PATH keeps working.
+// colon-separated path entries under the AppImage mount — our AppRun adds
+// none, but wrappers like AppImageLauncher may prepend the mount to path
+// lists, and a mount path in a child's PATH dies with the parent. Entries the
+// user set survive verbatim, so a pre-existing LD_LIBRARY_PATH keeps working.
 func childEnv(env []string) []string {
 	appdir := ""
 	for _, kv := range env {
@@ -307,7 +329,7 @@ func (s *Service) Start(id, projectID, cwd, kind string, cols, rows int) error {
 			return
 		}
 		encoded := base64.StdEncoding.EncodeToString(data)
-		application.Get().Event.Emit(dataEventPrefix+id, encoded)
+		s.hub.Emit(dataEventPrefix+id, encoded)
 	}, visibleFlushInterval, hiddenFlushInterval)
 	s.sessions[id] = &session{ptmx: ptmx, cmd: cmd, out: out}
 	go s.stream(id, ptmx, cmd, out)
@@ -340,7 +362,7 @@ func (s *Service) stream(id string, ptmx *os.File, cmd *exec.Cmd, out *coalescer
 	}
 	s.mu.Unlock()
 
-	application.Get().Event.Emit(exitEventPrefix + id)
+	s.hub.Emit(exitEventPrefix+id, nil)
 }
 
 // Write forwards keyboard input from the frontend to a session's PTY.
@@ -349,7 +371,7 @@ func (s *Service) Write(id, data string) error {
 }
 
 // writeBytes delivers input bytes to a session's PTY; unknown sessions are a
-// no-op. It is the shared sink for the Wails binding and the WebSocket
+// no-op. It is the shared sink for the RPC Write and the WebSocket
 // transport's input frames.
 func (s *Service) writeBytes(id string, data []byte) error {
 	ptmx := s.ptmxOf(id)

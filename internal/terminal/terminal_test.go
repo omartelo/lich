@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/creack/pty"
+
+	"github.com/omartelo/lich/internal/events"
 )
 
 // stubBins is a Store returning a fixed binary path, for tests that never
@@ -65,7 +67,7 @@ func TestChildEnvScrubsMountPaths(t *testing.T) {
 	const mount = "/tmp/.mount_lich"
 	in := []string{
 		"APPDIR=" + mount,
-		"WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1",
+		// User-set, not runtime-injected: must survive even inside an AppImage.
 		"WEBKIT_DISABLE_DMABUF_RENDERER=1",
 		"TARGET_APPIMAGE=/home/user/Applications/lich.AppImage",
 		"REDIRECT_APPIMAGE=/home/user/Applications/lich.AppImage",
@@ -86,14 +88,15 @@ func TestChildEnvScrubsMountPaths(t *testing.T) {
 		"XDG_DATA_DIRS=/usr/local/share:/usr/share",
 		"GREP_COLORS=ms=01;31:mc=01;31",
 		"HOME=/home/user",
+		"WEBKIT_DISABLE_DMABUF_RENDERER=1",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("childEnv output missing %q:\n%s", want, got)
 		}
 	}
 	for _, gone := range []string{
-		"LD_LIBRARY_PATH", "GDK_PIXBUF_MODULE_FILE", "WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS",
-		"WEBKIT_DISABLE_DMABUF_RENDERER", "TARGET_APPIMAGE", "REDIRECT_APPIMAGE",
+		"LD_LIBRARY_PATH", "GDK_PIXBUF_MODULE_FILE",
+		"TARGET_APPIMAGE", "REDIRECT_APPIMAGE",
 		"DESKTOPINTEGRATION", "APPDIR",
 	} {
 		if strings.Contains(got, gone+"=") {
@@ -121,7 +124,7 @@ func TestChildEnvKeepsUserLibraryPath(t *testing.T) {
 // TestNewSessionEnv proves the service derives its session environment at
 // construction: cleaned of AppImage leakage and terminated by TERM.
 func TestNewSessionEnv(t *testing.T) {
-	svc := New(stubBins{}, []string{"APPDIR=/tmp/.mount_lich", "ARGV0=lich.AppImage", "HOME=/home/user"})
+	svc := New(stubBins{}, []string{"APPDIR=/tmp/.mount_lich", "ARGV0=lich.AppImage", "HOME=/home/user"}, events.New())
 	got := strings.Join(svc.env, "\n")
 	if strings.Contains(got, "ARGV0=") || strings.Contains(got, "APPDIR=") {
 		t.Errorf("session env leaked AppImage vars:\n%s", got)
@@ -134,7 +137,7 @@ func TestNewSessionEnv(t *testing.T) {
 // TestOperationsOnUnknownSessionAreNoops proves Write/Resize/Close on a session
 // that was never started return nil instead of panicking on a missing PTY.
 func TestOperationsOnUnknownSessionAreNoops(t *testing.T) {
-	svc := New(stubBins{}, nil)
+	svc := New(stubBins{}, nil, events.New())
 	if err := svc.Write("ghost", "hi"); err != nil {
 		t.Errorf("Write unknown = %v, want nil", err)
 	}
@@ -158,7 +161,7 @@ func TestSetVisibleReachesCoalescer(t *testing.T) {
 	out.SetVisible(false)
 	out.Write([]byte("pending"))
 
-	svc := New(stubBins{}, nil)
+	svc := New(stubBins{}, nil, events.New())
 	sess := spawnSession(t)
 	sess.out = out
 	svc.sessions["s1"] = sess
@@ -176,8 +179,8 @@ func TestSetVisibleReachesCoalescer(t *testing.T) {
 	}
 }
 
-// spawnSession starts /bin/cat under a PTY and returns a live session, keeping
-// the process off the Wails event singleton that stream() needs.
+// spawnSession starts /bin/cat under a PTY and returns a live session without
+// going through Start, so no stream() goroutine emits events.
 func spawnSession(t *testing.T) *session {
 	t.Helper()
 	cmd := exec.Command("/bin/cat")
@@ -197,7 +200,7 @@ func spawnSession(t *testing.T) *session {
 // TestWriteResizeCloseOnLiveSession drives a real session end to end: input is
 // written, the window is resized and Close reaps the shell and drops it.
 func TestWriteResizeCloseOnLiveSession(t *testing.T) {
-	svc := New(stubBins{}, nil)
+	svc := New(stubBins{}, nil, events.New())
 	svc.sessions["s1"] = spawnSession(t)
 
 	if err := svc.Write("s1", "hello"); err != nil {
@@ -217,7 +220,7 @@ func TestWriteResizeCloseOnLiveSession(t *testing.T) {
 // TestStartIsNoopWhenAlreadyRunning proves Start returns without spawning a
 // second shell for a session ID that is already tracked.
 func TestStartIsNoopWhenAlreadyRunning(t *testing.T) {
-	svc := New(stubBins{}, nil)
+	svc := New(stubBins{}, nil, events.New())
 	sess := spawnSession(t)
 	svc.sessions["s1"] = sess
 
