@@ -21,14 +21,17 @@ import {
 } from "./sessions"
 import { applyOrder } from "./reorder"
 import {
-  ATTENTION_EVENT,
   isIdEvent,
+  isStatusEvent,
   isTitleEvent,
   shouldToastAttention,
+  STATUS_EVENT,
   TITLE_EVENT,
+  toSessionStatus,
   TOUCHED_EVENT,
 } from "./session-events"
 import { refreshGitStatus } from "./useGitStatus"
+import { markSessionSeen } from "./useSessionStatus"
 import { isRecordingTarget, matchesCombo } from "./hotkeys"
 import { useSettings } from "./settings"
 
@@ -261,9 +264,13 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   // global toast that routes to its card — reachable even when the session lives
   // in a background project whose card is not mounted. Skipped for the session
   // already in focus, where the terminal itself shows the prompt.
+  //
+  // Driven off the raw event rather than the status store on purpose: the store
+  // collapses a repeat state into no notification, which would swallow the toast
+  // for a second waiting report. One toast per report is the contract here.
   useEffect(() => {
-    const off = onAppEvent(ATTENTION_EVENT, (data) => {
-      if (!isIdEvent(data)) {
+    const off = onAppEvent(STATUS_EVENT, (data) => {
+      if (!isStatusEvent(data) || toSessionStatus(data.state) !== "waiting") {
         return
       }
       const { id } = data
@@ -287,6 +294,24 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     })
     return () => off()
   }, [navigate, activateSession])
+
+  // Opening a project puts its cards on screen, so its sessions' statuses count
+  // as seen — and the cleanup marks them again on the way out, with the project
+  // being left. Without that second pass, a turn that finished while you sat in
+  // the project would badge the tab you just walked away from. A turn still
+  // running keeps its tab badged either way: only "done" reads this.
+  useEffect(() => {
+    if (!activeProjectId) {
+      return
+    }
+    const markSeen = () => {
+      for (const session of sessionsOf(sessionsRef.current, activeProjectId)) {
+        markSessionSeen(session.id)
+      }
+    }
+    markSeen()
+    return markSeen
+  }, [activeProjectId])
 
   // A session that likely changed files on disk nudges an immediate git-status
   // refresh for the path its card watches (its worktree, else the project's),

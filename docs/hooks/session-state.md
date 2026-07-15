@@ -51,26 +51,37 @@ what re-arms the spinner after them. Every tool re-reports `busy` (idempotent);
 - **Endpoint** — `internal/terminal/transport.go`, `transport.hook`: validates
   the token and body (`parseHookRequest`) on the same loopback listener as
   terminal I/O, then forwards `(session_id, state)`.
-- **UI push** — `internal/terminal/terminal.go`: emits the app event
-  `session-status:<id>` with the state, and for `waiting` also the global
-  `session-attention` event (`{id}`).
-- **Render** — `frontend/src/components/sidebar/SessionCard.tsx`: subscribes to
-  the per-session event and shows a spinner (`busy`), check (`done`) or bell
+- **UI push** — `internal/terminal/terminal.go`: emits the global app event
+  `session-status` (`{id, state}`). Global rather than per-session because its
+  consumers outlive any one card.
+- **Store** — `frontend/src/lib/session-status-store.ts`: one subscription taken
+  at page load keeps the last state of every session, keyed by id. The card
+  cannot hold it: the sidebar only renders cards for the active project, so
+  switching projects unmounts them, and a status reported meanwhile would be lost.
+- **Render** — `frontend/src/components/sidebar/SessionCard.tsx`: reads the store
+  (`useSessionStatus`) and shows a spinner (`busy`), check (`done`) or bell
   (`waiting`); any other value, including `idle`, clears the indicator.
-- **Toast + route** — `frontend/src/lib/projects.tsx`: subscribes to the global
-  `session-attention` event and raises an actionable toast that navigates to the
-  session's card. It is global so a session in a background project (whose card
-  is not mounted) still surfaces; it is skipped for the session already focused.
+- **Tab badge** — `frontend/src/components/tabs/ProjectTab.tsx`: reduces a
+  project's sessions to one indicator (`useProjectStatus`, ranking `waiting` over
+  `busy` over `done`), shown only while the project is not the active one. A
+  `done` stops badging once the project has been on screen; `busy` and `waiting`
+  badge for as long as they hold, being live states rather than notifications.
+- **Toast + route** — `frontend/src/lib/projects.tsx`: raises an actionable toast
+  that navigates to the session's card when a report says `waiting`, skipped for
+  the session already focused. It reads the raw event rather than the store: the
+  store collapses a repeat state into no notification, which would swallow a
+  toast.
 
 ## Known ceilings
 
 - `UserPromptSubmit` → busy, `Stop` → done. An interrupt (Esc) that skips `Stop`
   can leave a spinner until the next turn resets it.
-- Status is not retained by lich: a card that unmounts and remounts (switching
-  projects mid-run) misses the event and can strand a spinner — and, after the
-  toast routes you to a background session, its freshly mounted card shows no
-  bell because the `waiting` event already fired. Fix path: keep the last state
-  per session in Go and hand it to the card on mount.
+- Status is retained in the page, not in Go: a reload starts the store empty, so
+  a session Claude is already working on shows no indicator until its next
+  report. The PTY is backend-owned and survives the reload, so it does keep
+  running. Same for the ~1s the `/events` socket takes to reconnect — the hub
+  drops what it emits with no client attached. Fix path: keep the last state per
+  session in Go and hand it to the store on connect.
 - The attention toast auto-dismisses on a timer (`ATTENTION_TOAST_MS`); it does
   not clear when the session leaves `waiting` (user handled it in the terminal).
   Fix path: track the toast id per session and dismiss it on the next

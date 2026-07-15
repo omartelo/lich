@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A project tab badges what its sessions are doing while you work elsewhere: a
+  bell when one is blocked waiting on you, a spinner while one is running, a
+  check when a turn finished. The active tab never badges — its cards already
+  say the same thing, per session. The check clears once the project has been on
+  screen; the bell and the spinner stay while they are true, so a tab you leave
+  mid-run keeps saying so.
+
+### Fixed
+
+- A session card kept its status indicator (spinner, check, bell) when its
+  project was not the one on screen. Switching projects mid-run unmounted the
+  card and dropped the state along with it, so coming back showed no spinner for
+  a session Claude was still working on; the state now lives in a store that
+  outlives the card. A session that starts needing your input while in the
+  background also shows its bell once the toast routes you to it.
+
 ## [0.4.0] - 2026-07-15
 
 ### Added

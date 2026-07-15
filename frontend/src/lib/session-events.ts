@@ -7,22 +7,16 @@
 
 import {projectOfSession, type SessionState} from "./sessions"
 
-// Per-session event carrying a session's Claude Code processing state (see
-// terminal.statusEventPrefix). Suffixed with the session id. Payload: the raw
-// state string.
-export const STATUS_EVENT_PREFIX = "session-status:"
-
-export const statusEventName = (sessionId: string): string =>
-  STATUS_EVENT_PREFIX + sessionId
+// Global event carrying a session's Claude Code processing state (see
+// terminal.statusEventName). Payload: { id, state }. Global rather than
+// per-session so one subscription taken at load covers every session: a card is
+// only mounted while its project is active, and a name suffixed with the session
+// id can only reach a subscriber that exists when it is emitted.
+export const STATUS_EVENT = "session-status"
 
 // Global event the backend emits when it auto-applies a session's ai-title as
 // its label (see terminal.titleEventName). Payload: { id, label }.
 export const TITLE_EVENT = "session-title"
-
-// Global event the backend emits when a session needs the user — a permission
-// prompt or an idle input request (see terminal.attentionEventName). Payload:
-// { id }.
-export const ATTENTION_EVENT = "session-attention"
 
 // Global event the backend emits when a session likely changed files on disk
 // (see terminal.touchedEventName). Payload: { id }.
@@ -47,13 +41,17 @@ export function toSessionStatus(data: unknown): SessionStatus | null {
     : null
 }
 
-// Both session-attention and session-touched carry only a session id.
+// session-touched carries only a session id.
 export function isIdEvent(data: unknown): data is {id: string} {
   return (
     typeof data === "object" &&
     data !== null &&
     typeof (data as {id?: unknown}).id === "string"
   )
+}
+
+export function isStatusEvent(data: unknown): data is {id: string; state: string} {
+  return isIdEvent(data) && typeof (data as {state?: unknown}).state === "string"
 }
 
 export function isTitleEvent(data: unknown): data is {id: string; label: string} {

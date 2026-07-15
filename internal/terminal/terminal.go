@@ -20,9 +20,12 @@ import (
 	"github.com/omartelo/lich/internal/events"
 )
 
-// Event name prefixes. The concrete event carries the session ID as a suffix
-// (e.g. "terminal:data:home") so each frontend terminal subscribes only to its
-// own stream instead of filtering a global broadcast.
+// Event names. A terminal I/O event carries the session ID as a suffix (e.g.
+// "terminal:data:home") so each frontend terminal subscribes only to its own
+// stream instead of filtering a global broadcast. The session events below are
+// global and carry the id in their payload: their consumers outlive any one
+// card, and a per-session name can only reach a subscriber that exists when it
+// is emitted.
 const (
 	// dataEventPrefix carries base64-encoded PTY output. Output is base64-encoded
 	// because raw PTY bytes may split a multi-byte UTF-8 sequence mid-read, which
@@ -30,35 +33,31 @@ const (
 	dataEventPrefix = "terminal:data:"
 	// exitEventPrefix is emitted once when a session's shell process exits.
 	exitEventPrefix = "terminal:exit:"
-	// statusEventPrefix carries a session's Claude Code processing state
-	// ("busy"/"done"/"waiting"/"idle"), reported by the lich hook running inside
-	// the PTY (see transport.hook and docs/hooks/session-state.md).
-	statusEventPrefix = "session-status:"
+	// statusEventName carries a session's Claude Code processing state
+	// ({id, state} — "busy"/"done"/"waiting"/"idle"), reported by the lich hook
+	// running inside the PTY (see transport.hook and docs/hooks/session-state.md).
+	// The frontend keeps it in a store keyed by id (session-status-store.ts)
+	// rather than in the card, which is only mounted while its project is active.
+	statusEventName = "session-status"
 	// titleEventName carries an auto-applied session label ({id, label}).
-	// Unlike the per-session events above, it is a single global event because
-	// the provider that owns session state consumes it centrally, not per card.
 	titleEventName = "session-title"
-	// attentionEventName carries the id of a session that just needs the user
-	// (state "waiting"). It is global so the provider can toast and route to the
-	// card even when that session lives in a background project whose card is not
-	// mounted — the per-session status event alone cannot reach an unmounted card.
-	attentionEventName = "session-attention"
 	// touchedEventName carries the id of a session that likely changed files on
 	// disk, nudging an immediate git-status refresh ahead of the steady poll.
 	touchedEventName = "session-touched"
 )
+
+// statusEvent is the payload of statusEventName: the session whose Claude Code
+// processing state changed, and the new state.
+type statusEvent struct {
+	ID    string `json:"id"`
+	State string `json:"state"`
+}
 
 // titleEvent is the payload of titleEventName: the session whose label changed
 // and its new label.
 type titleEvent struct {
 	ID    string `json:"id"`
 	Label string `json:"label"`
-}
-
-// attentionEvent is the payload of attentionEventName: the session needing the
-// user.
-type attentionEvent struct {
-	ID string `json:"id"`
 }
 
 // touchedEvent is the payload of touchedEventName: the session whose files
@@ -114,10 +113,7 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 	ws, err := newTransport(
 		func(id string, data []byte) { _ = s.writeBytes(id, data) },
 		func(id, state string) {
-			hub.Emit(statusEventPrefix+id, state)
-			if state == statusWaiting {
-				hub.Emit(attentionEventName, attentionEvent{ID: id})
-			}
+			hub.Emit(statusEventName, statusEvent{ID: id, State: state})
 		},
 		store.SetClaudeSession,
 		func(id, title string) error {

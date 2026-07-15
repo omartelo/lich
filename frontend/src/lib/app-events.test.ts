@@ -10,8 +10,11 @@ function registryWith(name: string, cb: Callback): Map<string, Set<Callback>> {
 describe("dispatchEnvelope", () => {
   it("routes the envelope data to the named handlers", () => {
     const cb = vi.fn()
-    dispatchEnvelope(registryWith("session-attention", cb), '{"name":"session-attention","data":{"id":"s1"}}')
-    expect(cb).toHaveBeenCalledWith({id: "s1"})
+    dispatchEnvelope(
+      registryWith("session-status", cb),
+      '{"name":"session-status","data":{"id":"s1","state":"busy"}}',
+    )
+    expect(cb).toHaveBeenCalledWith({id: "s1", state: "busy"})
   })
 
   it("delivers undefined data for payload-less events", () => {
