@@ -16,5 +16,15 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      input: {
+        // spike.html is the Chromium shell spike window (cmd/spike); see
+        // docs/chromium-shell.md. Remove with it.
+        index: path.resolve(__dirname, "index.html"),
+        spike: path.resolve(__dirname, "spike.html"),
+      },
+    },
+  },
   plugins: [react(), tailwindcss(), wails("./bindings")],
 });

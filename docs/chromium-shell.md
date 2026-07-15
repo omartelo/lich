@@ -74,12 +74,27 @@ by the same spike, the entire ghostty-web private-patching layer
 Trade-offs accepted: the window belongs to Chromium (no native menus — unused
 anyway; icon/class via flags), and the Chromium version tracks the system.
 
-### Spike (next step, ~1 day)
+### Spike (shipped — `cmd/spike`)
 
-Serve `frontend/dist` over loopback, launch `chromium --app`, terminal via the
-existing WS (xterm.js + WebGL, POC component), everything else stubbed.
-Measure the same scenarios (nvim scroll, Claude Code streaming) with
-`term-perf`. Jank gone → commit to the migration above.
+One disposable binary: serves `frontend/dist` over loopback, opens
+`spike.html` (a standalone xterm.js + WebGL terminal, no Wails/React) in the
+system Chromium's `--app` mode, and bridges one PTY per WebSocket connection
+— deliberately uncoalesced, one send per PTY read (the waveterm firehose).
+A stats overlay reports `fps / stalls / worst` (rAF gaps, same vocabulary as
+term-perf) every second.
+
+```sh
+cd frontend && pnpm build && cd ..
+go run ./cmd/spike                             # picks chromium/chrome on PATH
+go run ./cmd/spike -no-browser                 # just prints the URL
+go run ./cmd/spike -- --ozone-platform=wayland # extra Chromium flags
+```
+
+Run the same scenarios as the WebKitGTK build (nvim scroll, Claude Code
+streaming, `yes`), watch the overlay. Jank gone → commit to the migration
+above. Files to delete when the decision lands: `cmd/spike/`,
+`frontend/spike.html`, `frontend/src/spike/`, the `spike` input in
+`frontend/vite.config.ts`.
 
 ## Option 2 — embedded CEF via `energye/energy` (deferred)
 
