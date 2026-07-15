@@ -4,15 +4,16 @@ import { TerminalView } from "@/components/TerminalView"
 import { XtermTerminalView } from "@/components/XtermTerminalView"
 import { useProjects } from "@/lib/projects"
 import { activeSessionId, sessionsOf } from "@/lib/sessions"
-import { isXtermPocEnabled } from "@/lib/xterm-poc"
+import { useGhosttyTerminal } from "@/lib/terminal-choice"
 
-// Evaluated once at load: the xterm.js POC flag swaps the terminal component
-// for every session (see lib/xterm-poc.ts). Flip + reload to compare.
-const TerminalComponent = isXtermPocEnabled(
+// Evaluated once at load: xterm.js + WebGL is the terminal; the legacy
+// ghostty-web pipeline stays reachable via lib/terminal-choice.ts until
+// phase 5 of docs/chromium-shell.md deletes it.
+const TerminalComponent = useGhosttyTerminal(
   typeof localStorage !== "undefined" ? localStorage : null,
 )
-  ? XtermTerminalView
-  : TerminalView
+  ? TerminalView
+  : XtermTerminalView
 
 // TerminalHost keeps one persistent terminal per session, across every open
 // project, stacked in the same area. The router picks the active project and the

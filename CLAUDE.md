@@ -88,10 +88,11 @@ Deliberate limits and shortcuts, with the upgrade path when it matters:
   `position` column on `sessions`/`projects`, written whole on every drag (`ReorderSessions`/`ReorderProjects`) and read
   back as `ORDER BY position, rowid` — rows predating the column all sit at the default 0, so the rowid tiebreak keeps
   them in insertion order until a first drag.
-- **`ghostty-web` is pinned to exactly `0.4.0`.** The terminal's performance rests on patches of library privates —
-  render-pause, block-glyphs, font-metrics, row-paint, glyph-atlas, getline-pool, scrollback-perf, all under
-  `frontend/src/lib/` and wired in `TerminalView.tsx`. Bumping the pin means revalidating every patched private; each
-  patch degrades to the slow original (never breaks) if a private moved.
+- **The terminal is xterm.js 6 + WebGL (`XtermTerminalView.tsx`).** Hidden sessions are serialized and destroyed,
+  their PTY output queues in a 2MB replay buffer (`frontend/src/lib/replay-buffer.ts`) and show rebuilds from
+  snapshot + tail. `ghostty-web` (pinned `0.4.0`, private-patched: render-pause, block-glyphs, font-metrics,
+  row-paint, glyph-atlas, getline-pool, scrollback-perf, hidden-canvas) remains as an escape hatch via
+  `localStorage lich.terminal = "ghostty"` and is deleted in phase 5 of `docs/chromium-shell.md`.
 - **Terminal I/O rides a local WebSocket** — random loopback port + token auth, binary frames multiplexing all sessions
   (`internal/terminal/transport.go` ↔ `frontend/src/lib/term-transport.ts`). It exists because each keystroke over the
   Wails binding is an HTTP round-trip and each output chunk an `evaluate_javascript` call. Input and output fall back to

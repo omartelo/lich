@@ -67,9 +67,15 @@ Migration progress:
    Folder/file pickers go through zenity (`project.ZenityPicker`); clipboard
    paste prefers `navigator.clipboard` with the Wails clipboard as fallback.
    Known gap: no single-instance lock yet — run one at a time.
-3. **Terminal swap to xterm.js/WebGL** — phase 3, next: promote the POC to
-   the real terminal, port the key/wheel helpers worth keeping, waveterm-
-   style serialize+destroy for hidden sessions.
+3. **Terminal swap to xterm.js/WebGL** — DONE (phase 3): XtermTerminalView is
+   the terminal in both shells (links via @xterm/addon-web-links +
+   system.OpenExternal, copy-on-select toast, live font/theme). Hidden
+   sessions are serialized (@xterm/addon-serialize) and destroyed; PTY output
+   queues in a 2MB replay buffer (lib/replay-buffer.ts) and show rebuilds
+   from snapshot + tail — the waveterm model, frontend edition. The ghostty
+   WebKitGTK workarounds were not ported (they patched ghostty-web 0.4.0
+   bugs); ghostty itself stays reachable via
+   localStorage.setItem("lich.terminal", "ghostty") until phase 5.
 4. **Packaging**: AppImage/deb/rpm ship only the Go binary; drop
    `fix-appimage.sh` and the bundled WebKitGTK entirely.
 5. **Cleanup**: default the shell to Chromium, delete the Wails path, the
