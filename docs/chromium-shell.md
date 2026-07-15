@@ -1,7 +1,9 @@
 # Decision: move the shell from WebKitGTK to Chromium
 
-**Status: direction decided (2026-07-15) — option 1 first; option 2 revisited
-if the project grows. Not started; the spike is the next step.**
+**Status: spike VALIDATED (2026-07-15) on the reference machine — "é outro
+terminal", paint jank gone under Chromium with the identical terminal stack
+and an uncoalesced transport. The migration below is greenlit; option 2 is
+still deferred until the project grows.**
 
 ## Why
 
