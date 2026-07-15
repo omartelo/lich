@@ -19,8 +19,6 @@ import (
 	"github.com/omartelo/lich/internal/store"
 	"github.com/omartelo/lich/internal/system"
 	"github.com/omartelo/lich/internal/terminal"
-
-	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // The frontend is embedded into the binary and served to whichever shell is
@@ -45,7 +43,10 @@ func main() {
 	// workarounds (see terminal.childEnv).
 	env := os.Environ()
 
-	chromiumShell := os.Getenv("LICH_SHELL") == "chromium"
+	// The Wails webview is the default shell where this build carries it;
+	// LICH_SHELL=chromium opts into the Chromium shell, and a nowails build
+	// (no Wails/GTK linkage at all) has only the Chromium shell.
+	chromiumShell := os.Getenv("LICH_SHELL") == "chromium" || !wailsShellAvailable
 
 	if chromiumShell {
 		// Stable origin for localStorage; set before terminal.New starts the
@@ -82,20 +83,13 @@ func main() {
 	if chromiumShell {
 		hub = events.New(nil)
 	} else {
-		// application.Get() resolves lazily at emit time, after app is created.
-		hub = events.New(func(name string, data any) {
-			application.Get().Event.Emit(name, data)
-		})
+		hub = events.New(eventFallback())
 	}
 	term := terminal.New(db, env, hub)
 
 	// Native pickers: the Wails dialog needs the Wails app; the Chromium
 	// shell asks through zenity.
-	var picker project.Picker = project.WailsPicker{}
-	if chromiumShell {
-		picker = project.ZenityPicker{}
-	}
-	proj := project.New(picker)
+	proj := project.New(shellPicker(chromiumShell))
 
 	// Every service is also reachable over loopback HTTP (see internal/rpc),
 	// so the frontend runs identically in both shells. store.Close manages
@@ -150,62 +144,6 @@ func runChromium(term *terminal.Service) {
 		extra = args[1:]
 	}
 	if err := chromium.Run(url, profileDir, extra); err != nil {
-		log.Fatal(err)
-	}
-}
-
-// runWails is the webview shell: the Wails application owns the window, the
-// dialogs and the event bridge, exactly as before the Chromium migration.
-func runWails(
-	term *terminal.Service,
-	proj *project.Service,
-	fontSvc *fonts.Service,
-	plugin *claudeplugin.Service,
-	db *store.Service,
-) {
-	// The Name becomes the GTK application ID (org.wails.<name> on D-Bus),
-	// which is single-instance: a second process with the same ID is treated
-	// as a remote instance and never gets a window. A distinct dev name lets
-	// `task dev` (LICH_DEV=1, see Taskfile.yml) open alongside an installed
-	// lich.
-	name := "lich"
-	if os.Getenv("LICH_DEV") != "" {
-		name = "lichdev"
-	}
-
-	app := application.New(application.Options{
-		Name:        name,
-		Description: "Personal harness",
-		Services: []application.Service{
-			application.NewService(term),
-			application.NewService(fontSvc),
-			application.NewService(proj),
-			application.NewService(plugin),
-			application.NewService(db),
-		},
-		Assets: application.AssetOptions{
-			Handler: application.AssetFileServerFS(assets),
-		},
-		Mac: application.MacOptions{
-			ApplicationShouldTerminateAfterLastWindowClosed: true,
-		},
-	})
-
-	// Window sized to the golden ratio (1000 / 618 ≈ 1.618).
-	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:  "lich",
-		Width:  1000,
-		Height: 618,
-		Mac: application.MacWindow{
-			InvisibleTitleBarHeight: 50,
-			Backdrop:                application.MacBackdropTranslucent,
-			TitleBar:                application.MacTitleBarHiddenInset,
-		},
-		BackgroundColour: application.NewRGB(6, 7, 15),
-		URL:              "/",
-	})
-
-	if err := app.Run(); err != nil {
 		log.Fatal(err)
 	}
 }

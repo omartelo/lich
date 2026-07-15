@@ -22,6 +22,14 @@ tasks:
     cmds:
       - task: "{{.GOOS}}:build"
 
+  build:chromium:
+    summary: Builds the Chromium-shell binary — pure Go, no Wails/GTK/WebKitGTK linkage (docs/chromium-shell.md phase 4)
+    cmds:
+      - task: common:generate:bindings
+      - cmd: cd frontend && {{.PACKAGE_MANAGER}} install && {{.PACKAGE_MANAGER}} run build
+      - cmd: CGO_ENABLED=0 go build -tags nowails -trimpath -ldflags "-s -w" -o {{.BIN_DIR}}/lich-chromium .
+      - cmd: echo "built {{.BIN_DIR}}/lich-chromium (static, chromium shell only)"
+
   package:
     summary: Packages a production build of the application
     cmds:
