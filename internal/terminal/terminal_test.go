@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/creack/pty"
+
+	"github.com/omartelo/lich/internal/events"
 )
 
 // stubBins is a Store returning a fixed binary path, for tests that never
@@ -121,7 +123,7 @@ func TestChildEnvKeepsUserLibraryPath(t *testing.T) {
 // TestNewSessionEnv proves the service derives its session environment at
 // construction: cleaned of AppImage leakage and terminated by TERM.
 func TestNewSessionEnv(t *testing.T) {
-	svc := New(stubBins{}, []string{"APPDIR=/tmp/.mount_lich", "ARGV0=lich.AppImage", "HOME=/home/user"})
+	svc := New(stubBins{}, []string{"APPDIR=/tmp/.mount_lich", "ARGV0=lich.AppImage", "HOME=/home/user"}, events.New(nil))
 	got := strings.Join(svc.env, "\n")
 	if strings.Contains(got, "ARGV0=") || strings.Contains(got, "APPDIR=") {
 		t.Errorf("session env leaked AppImage vars:\n%s", got)
@@ -134,7 +136,7 @@ func TestNewSessionEnv(t *testing.T) {
 // TestOperationsOnUnknownSessionAreNoops proves Write/Resize/Close on a session
 // that was never started return nil instead of panicking on a missing PTY.
 func TestOperationsOnUnknownSessionAreNoops(t *testing.T) {
-	svc := New(stubBins{}, nil)
+	svc := New(stubBins{}, nil, events.New(nil))
 	if err := svc.Write("ghost", "hi"); err != nil {
 		t.Errorf("Write unknown = %v, want nil", err)
 	}
@@ -158,7 +160,7 @@ func TestSetVisibleReachesCoalescer(t *testing.T) {
 	out.SetVisible(false)
 	out.Write([]byte("pending"))
 
-	svc := New(stubBins{}, nil)
+	svc := New(stubBins{}, nil, events.New(nil))
 	sess := spawnSession(t)
 	sess.out = out
 	svc.sessions["s1"] = sess
@@ -197,7 +199,7 @@ func spawnSession(t *testing.T) *session {
 // TestWriteResizeCloseOnLiveSession drives a real session end to end: input is
 // written, the window is resized and Close reaps the shell and drops it.
 func TestWriteResizeCloseOnLiveSession(t *testing.T) {
-	svc := New(stubBins{}, nil)
+	svc := New(stubBins{}, nil, events.New(nil))
 	svc.sessions["s1"] = spawnSession(t)
 
 	if err := svc.Write("s1", "hello"); err != nil {
@@ -217,7 +219,7 @@ func TestWriteResizeCloseOnLiveSession(t *testing.T) {
 // TestStartIsNoopWhenAlreadyRunning proves Start returns without spawning a
 // second shell for a session ID that is already tracked.
 func TestStartIsNoopWhenAlreadyRunning(t *testing.T) {
-	svc := New(stubBins{}, nil)
+	svc := New(stubBins{}, nil, events.New(nil))
 	sess := spawnSession(t)
 	svc.sessions["s1"] = sess
 

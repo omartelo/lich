@@ -7,9 +7,12 @@ import (
 	"runtime"
 
 	"github.com/omartelo/lich/internal/claudeplugin"
+	"github.com/omartelo/lich/internal/events"
 	"github.com/omartelo/lich/internal/fonts"
 	"github.com/omartelo/lich/internal/project"
+	"github.com/omartelo/lich/internal/rpc"
 	"github.com/omartelo/lich/internal/store"
+	"github.com/omartelo/lich/internal/system"
 	"github.com/omartelo/lich/internal/terminal"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -50,6 +53,29 @@ func main() {
 	}
 	defer db.Close()
 
+	// App events route through the hub: the /events socket when a shell is
+	// connected to it, the Wails event bridge otherwise (today's default).
+	// application.Get() resolves lazily at emit time, after app is created.
+	hub := events.New(func(name string, data any) {
+		application.Get().Event.Emit(name, data)
+	})
+	term := terminal.New(db, env, hub)
+
+	// Every service is also reachable over loopback HTTP (see internal/rpc),
+	// so the frontend runs identically in the Wails webview and the Chromium
+	// shell (docs/chromium-shell.md). store.Close manages the DB lifecycle and
+	// stays Go-only.
+	dispatcher := rpc.New()
+	dispatcher.Register("terminal", term)
+	dispatcher.Register("fonts", fonts.New())
+	dispatcher.Register("project", project.New())
+	dispatcher.Register("claudeplugin", claudeplugin.New(db))
+	dispatcher.Register("store", db)
+	dispatcher.Register("system", system.New())
+	dispatcher.Deny("store.Close")
+	term.Mount("/rpc/", dispatcher)
+	term.Mount("/events", hub)
+
 	// The Name becomes the GTK application ID (org.wails.<name> on D-Bus),
 	// which is single-instance: a second process with the same ID is treated
 	// as a remote instance and never gets a window. A distinct dev name lets
@@ -64,7 +90,7 @@ func main() {
 		Name:        name,
 		Description: "Personal harness",
 		Services: []application.Service{
-			application.NewService(terminal.New(db, env)),
+			application.NewService(term),
 			application.NewService(fonts.New()),
 			application.NewService(project.New()),
 			application.NewService(claudeplugin.New(db)),

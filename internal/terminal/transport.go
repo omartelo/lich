@@ -88,6 +88,7 @@ type transport struct {
 	conn        *websocket.Conn
 	port        int
 	token       string
+	mux         *http.ServeMux
 	input       func(id string, data []byte)
 	status      func(id, state string)
 	linkSession func(sessionID, claudeSessionID string) error
@@ -132,10 +133,24 @@ func newTransport(
 	mux.HandleFunc("/session-start", t.sessionStart)
 	mux.HandleFunc("/session-title", t.sessionTitle)
 	mux.HandleFunc("/session-touched", t.sessionTouched)
+	t.mux = mux
 	// Server and listener live for the process lifetime, like the PTY sessions
 	// they serve; add Shutdown if the app ever needs teardown.
 	go func() { _ = http.Serve(listener, mux) }()
 	return t, nil
+}
+
+// mount adds a handler to the transport listener behind the same token check
+// every endpoint uses. ServeMux registration is safe after Serve started, so
+// callers wire extra surfaces (RPC, the events push socket) post-construction.
+func (t *transport) mount(pattern string, handler http.Handler) {
+	t.mux.Handle(pattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !t.authorized(r) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		handler.ServeHTTP(w, r)
+	}))
 }
 
 // authorized reports whether the request carries the transport's connect token.

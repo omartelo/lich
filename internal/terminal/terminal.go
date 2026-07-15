@@ -7,6 +7,7 @@ package terminal
 import (
 	"encoding/base64"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
@@ -14,7 +15,8 @@ import (
 	"sync"
 
 	"github.com/creack/pty"
-	"github.com/wailsapp/wails/v3/pkg/application"
+
+	"github.com/omartelo/lich/internal/events"
 )
 
 // Event name prefixes. The concrete event carries the session ID as a suffix
@@ -86,6 +88,9 @@ type Service struct {
 	mu       sync.Mutex
 	sessions map[string]*session
 	store    Store
+	// hub routes app events to the shell (events WS when connected, Wails
+	// event bridge otherwise); see internal/events.
+	hub *events.Hub
 	// env is the environment every spawned session inherits: the launch
 	// environment cleaned of AppImage runtime leakage (see childEnv), plus TERM.
 	env []string
@@ -98,18 +103,20 @@ type Service struct {
 // through store. env is the process environment to derive session environments
 // from — callers pass a snapshot taken before any os.Setenv tweaks (main.go
 // forces GDK_BACKEND on Linux) so those never leak into spawned shells.
-func New(store Store, env []string) *Service {
+// hub receives every app event the service pushes to the UI.
+func New(store Store, env []string, hub *events.Hub) *Service {
 	s := &Service{
 		sessions: make(map[string]*session),
 		store:    store,
+		hub:      hub,
 		env:      append(childEnv(env), "TERM=xterm-256color"),
 	}
 	ws, err := newTransport(
 		func(id string, data []byte) { _ = s.writeBytes(id, data) },
 		func(id, state string) {
-			application.Get().Event.Emit(statusEventPrefix+id, state)
+			hub.Emit(statusEventPrefix+id, state)
 			if state == statusWaiting {
-				application.Get().Event.Emit(attentionEventName, attentionEvent{ID: id})
+				hub.Emit(attentionEventName, attentionEvent{ID: id})
 			}
 		},
 		store.SetClaudeSession,
@@ -119,18 +126,28 @@ func New(store Store, env []string) *Service {
 				return err
 			}
 			if applied {
-				application.Get().Event.Emit(titleEventName, titleEvent{ID: id, Label: title})
+				hub.Emit(titleEventName, titleEvent{ID: id, Label: title})
 			}
 			return nil
 		},
 		func(id string) {
-			application.Get().Event.Emit(touchedEventName, touchedEvent{ID: id})
+			hub.Emit(touchedEventName, touchedEvent{ID: id})
 		},
 	)
 	if err == nil {
 		s.ws = ws
 	}
 	return s
+}
+
+// Mount exposes an extra handler (the RPC dispatcher, the events push socket)
+// on the transport listener, behind its token. No-op when the transport
+// failed to start — those surfaces then simply don't exist, like /ws.
+func (s *Service) Mount(pattern string, handler http.Handler) {
+	if s.ws == nil {
+		return
+	}
+	s.ws.mount(pattern, handler)
 }
 
 // sessionEnv is the environment for one PTY: the shared base plus the loopback
@@ -307,7 +324,7 @@ func (s *Service) Start(id, projectID, cwd, kind string, cols, rows int) error {
 			return
 		}
 		encoded := base64.StdEncoding.EncodeToString(data)
-		application.Get().Event.Emit(dataEventPrefix+id, encoded)
+		s.hub.Emit(dataEventPrefix+id, encoded)
 	}, visibleFlushInterval, hiddenFlushInterval)
 	s.sessions[id] = &session{ptmx: ptmx, cmd: cmd, out: out}
 	go s.stream(id, ptmx, cmd, out)
@@ -340,7 +357,7 @@ func (s *Service) stream(id string, ptmx *os.File, cmd *exec.Cmd, out *coalescer
 	}
 	s.mu.Unlock()
 
-	application.Get().Event.Emit(exitEventPrefix + id)
+	s.hub.Emit(exitEventPrefix+id, nil)
 }
 
 // Write forwards keyboard input from the frontend to a session's PTY.
