@@ -41,40 +41,15 @@ release.
 
 ## Install
 
-One-liner — detects your distro, verifies the checksum and installs the native
-package through your package manager:
+Detects your distro, verifies the checksum and installs the native package and
+its dependencies through your package manager:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh
 ```
 
-Or grab the artifact for your packaging from the
-[Releases](https://github.com/omartelo/lich/releases) page (every release ships
-a `checksums.txt` — verify with `sha256sum -c checksums.txt`):
-
-```bash
-sudo apt-get install ./lich-*-amd64.deb        # Debian / Ubuntu
-sudo dnf install ./lich-*-x86_64.rpm           # Fedora / RHEL
-sudo pacman -U lich-*-x86_64.pkg.tar.zst       # Arch
-```
-
-The bare static binary (`lich-*-linux-amd64`) also ships with every release —
-drop it anywhere on PATH.
-
-### Runtime dependencies
-
-lich opens its window in a Chromium-family browser and uses zenity for the
-folder picker — neither is bundled:
-
-```bash
-sudo apt-get install chromium zenity   # Debian / Ubuntu (any chromium variant works)
-sudo dnf install chromium zenity       # Fedora / RHEL
-sudo pacman -S chromium zenity         # Arch
-```
-
-apt and dnf pull both automatically (the packages *recommend* them); pacman has
-no recommends, so on Arch install them yourself. Any of chromium,
-google-chrome or brave satisfies the browser requirement.
+**Manual** — per-distro packages, runtime dependencies and the static binary:
+[INSTALL.md](INSTALL.md).
 
 ## Build from source
 
