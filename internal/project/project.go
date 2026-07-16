@@ -17,7 +17,19 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/omartelo/lich/internal/winexec"
 )
+
+// command builds an exec.Cmd for a child console tool (git, gh) with its
+// console window suppressed on Windows — lich's GUI-subsystem binary would
+// otherwise pop one per spawn (winexec.Hide). Used across this package instead
+// of exec.Command so no polling call site can forget it.
+func command(name string, args ...string) *exec.Cmd {
+	cmd := exec.Command(name, args...)
+	winexec.Hide(cmd)
+	return cmd
+}
 
 // Project identifies an opened project directory.
 type Project struct {
@@ -66,7 +78,7 @@ func newProject(path string) *Project {
 // the current state on call, so a checkout made after opening is not reflected
 // until the branch is resolved again.
 func (s *Service) Branch(path string) string {
-	out, err := exec.Command("git", "-C", path, "symbolic-ref", "--short", "HEAD").Output()
+	out, err := command("git", "-C", path, "symbolic-ref", "--short", "HEAD").Output()
 	if err != nil {
 		return ""
 	}
@@ -95,6 +107,7 @@ func (s *Service) PullRequest(path string) *PullRequest {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "gh", "pr", "view", "--json", "number,url,state")
 	cmd.Dir = path
+	winexec.Hide(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		return nil
@@ -139,10 +152,10 @@ type DiffStats struct {
 // Branch's contract.
 func (s *Service) Diff(path string) DiffStats {
 	var stats DiffStats
-	if out, err := exec.Command("git", "-C", path, "status", "--porcelain").Output(); err == nil {
+	if out, err := command("git", "-C", path, "status", "--porcelain").Output(); err == nil {
 		stats.Files = countLines(out)
 	}
-	out, err := exec.Command("git", "-C", path, "diff", "--numstat", "HEAD").Output()
+	out, err := command("git", "-C", path, "diff", "--numstat", "HEAD").Output()
 	if err != nil {
 		return stats
 	}
@@ -159,7 +172,7 @@ func (s *Service) Diff(path string) DiffStats {
 	}
 	// Untracked files are invisible to `git diff`; count their lines as
 	// additions, the way Warp and forge diff views present a fresh file.
-	if out, err := exec.Command("git", "-C", path, "ls-files", "--others", "--exclude-standard", "-z").Output(); err == nil {
+	if out, err := command("git", "-C", path, "ls-files", "--others", "--exclude-standard", "-z").Output(); err == nil {
 		for _, rel := range strings.Split(string(out), "\x00") {
 			if rel != "" {
 				stats.Added += countFileLines(filepath.Join(path, rel))
