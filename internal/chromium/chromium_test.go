@@ -70,6 +70,52 @@ func TestWindowsBrowserCandidatesEmptyEnv(t *testing.T) {
 	}
 }
 
+// TestDarwinBrowserCandidates proves the macOS list expands each browser under
+// both the system and per-user Applications roots, prefers chrome > chromium >
+// edge > brave, and ends with the bare PATH names.
+func TestDarwinBrowserCandidates(t *testing.T) {
+	got := darwinBrowserCandidates(func(k string) string {
+		if k == "HOME" {
+			return "/Users/u"
+		}
+		return ""
+	})
+
+	want := []string{
+		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+		"/Users/u/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+		"/Applications/Chromium.app/Contents/MacOS/Chromium",
+		"/Users/u/Applications/Chromium.app/Contents/MacOS/Chromium",
+		"/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+		"/Users/u/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+		"/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+		"/Users/u/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+		"chromium",
+		"google-chrome",
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("candidates = %v, want %v", got, want)
+	}
+}
+
+// TestDarwinBrowserCandidatesNoHome proves a missing HOME drops the per-user
+// root but still leaves the system paths and PATH names, so FindBrowser never
+// iterates an empty list.
+func TestDarwinBrowserCandidatesNoHome(t *testing.T) {
+	got := darwinBrowserCandidates(func(string) string { return "" })
+	want := []string{
+		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+		"/Applications/Chromium.app/Contents/MacOS/Chromium",
+		"/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+		"/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+		"chromium",
+		"google-chrome",
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("candidates = %v, want %v", got, want)
+	}
+}
+
 func TestArgs(t *testing.T) {
 	args := Args("http://127.0.0.1:47821/?token=x", "/home/u/.config/lich/chromium-profile", "lichdev", []string{"--ozone-platform=wayland"})
 	for _, want := range []string{

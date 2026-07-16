@@ -49,6 +49,32 @@ func windowsBrowserCandidates(getenv func(string) string) []string {
 	return append(out, "chrome", "msedge")
 }
 
+// darwinBrowserCandidates builds the macOS candidate list: chrome, then
+// chromium, then edge, then brave, each as its .app executable under the
+// system (/Applications) and per-user (~/Applications) install roots, with
+// bare PATH names last for a Homebrew-formula install. Paths are joined with a
+// literal slash so the pure logic tests the same on any OS. Kept out of the
+// build-tagged file for exactly that reason.
+func darwinBrowserCandidates(getenv func(string) string) []string {
+	apps := []string{
+		"Google Chrome.app/Contents/MacOS/Google Chrome",
+		"Chromium.app/Contents/MacOS/Chromium",
+		"Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+		"Brave Browser.app/Contents/MacOS/Brave Browser",
+	}
+	roots := []string{"/Applications"}
+	if home := getenv("HOME"); home != "" {
+		roots = append(roots, home+"/Applications")
+	}
+	var out []string
+	for _, app := range apps {
+		for _, root := range roots {
+			out = append(out, root+"/"+app)
+		}
+	}
+	return append(out, "chromium", "google-chrome")
+}
+
 // Args builds the --app invocation. The dedicated user-data-dir is
 // load-bearing twice over: without it Chromium adopts the window into an
 // already-running instance (the spawned process exits immediately, breaking

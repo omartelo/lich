@@ -15,10 +15,11 @@ product, it is a bespoke tool. Linux first; an experimental Windows build ships 
   small seams, never by runtime checks — the PTY is the model (`internal/terminal`'s `startPTY`: creack/pty on Unix,
   ConPTY on Windows, where npm's `claude.cmd` shim runs through `cmd.exe /c`).
 - **Shell**: system Chromium-family browser launched in `--app` mode (`internal/chromium`), persistent profile under
-  the user config dir (`~/.config/lich/chromium-profile`; `%AppData%\lich` on Windows). Window closed = app exit.
-  Runtime needs: a Chromium-family browser — chromium/chrome/brave on PATH on Linux, plus zenity for the folder
-  picker; chrome/edge/brave via their conventional install paths on Windows (picker is native win32, and Edge being
-  everywhere guarantees a window).
+  the user config dir (`~/.config/lich/chromium-profile`; `%AppData%\lich` on Windows; `~/Library/Application
+  Support/lich` on macOS — all via `os.UserConfigDir`). Window closed = app exit. Runtime needs: a Chromium-family
+  browser — chromium/chrome/brave on PATH on Linux, plus zenity for the folder picker; chrome/edge/brave via their
+  conventional install paths on Windows (picker is native win32, and Edge being everywhere guarantees a window);
+  Chrome/Chromium/Edge/Brave in their `.app` bundles on macOS (picker is osascript, built in).
 - **Frontend**: React 18 + TypeScript + Vite. Terminal is xterm.js 6 + `@xterm/addon-webgl`. Service shapes are
   hand-owned in `frontend/src/lib/api-types.ts` (mirrors of the Go structs' JSON tags — keep in sync).
 - **Build/tasks**: [Task](https://taskfile.dev) — see Commands.
@@ -151,3 +152,13 @@ Deliberate limits and shortcuts, with the upgrade path when it matters:
   before the tag can narrow), and the shell session is `COMSPEC`/cmd.exe — no PowerShell preference yet. The build
   is GUI subsystem (`-H=windowsgui`): no console rides along, stdout/stderr go nowhere, and
   `%AppData%\lich\lich.log` is the diagnostic surface — "double-clicked and nothing happened" means read the log.
+- **macOS is experimental.** What holds it up: the codebase is pure Go and cross-compiles for darwin, and because
+  macOS is Unix the terminal (creack/pty), shell and folder picker (osascript, via ncruces/zenity) already run
+  through the shared `!windows` seams — the only macOS-specific code is `candidates_darwin.go`, which finds
+  Chrome/Chromium/Edge/Brave in their `.app` bundles under `/Applications` and `~/Applications` (macOS installs
+  never land on PATH). The backend suite — the real PTY tests included — runs on a `macos-latest` (Apple Silicon)
+  runner every release, and both-arch raw binaries (`darwin-arm64`, `darwin-amd64`) ship as assets. What's missing:
+  no code signing or notarization (Gatekeeper quarantines an unsigned binary — right-click-Open or
+  `xattr -d com.apple.quarantine com.apple.provenance` until an Apple Developer cert + notarization ship), no
+  `.dmg`/Homebrew packaging (raw binaries only, like the portable Windows exe), and the window path has not been
+  hand-smoke-tested on real hardware yet.

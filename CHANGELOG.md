@@ -32,6 +32,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   npm's `claude.cmd` shim is spawned through `cmd.exe /c`. Releases now ship a
   `windows-amd64.exe` asset built — and backend-tested — on a Windows runner
   in parallel with the Linux packages.
+- Experimental macOS build (`lich-*-darwin-arm64`, `lich-*-darwin-amd64`,
+  `task build:mac`). macOS is Unix, so the terminal (creack/pty), the shell and
+  the native folder picker already work through the shared seams; only the
+  Chromium launcher gained a macOS list, finding Chrome/Chromium/Edge/Brave in
+  their `.app` bundles under `/Applications` and `~/Applications` (they never
+  land on PATH). Releases now ship both-arch darwin binaries, built and
+  backend-tested — the PTY included, on a real macOS runner — alongside the
+  Linux and Windows jobs. Unsigned: Gatekeeper quarantines them until
+  notarization ships (see the README/Known Ceilings).
 
 ### Changed
 

@@ -140,8 +140,66 @@ jobs:
           name: lich-windows
           path: bin/lich-*
 
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install task
+        run: |
+          go install github.com/go-task/task/v3/cmd/task@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      # dist must exist before the backend suite (go:embed). macOS is Unix, so
+      # this runs the real PTY tests on Apple Silicon; frontend tests already
+      # gate the linux job.
+      - name: Frontend install + build
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Backend tests (macos)
+        run: bash .github/scripts/go-test-summary.sh macos
+
+      - name: Build macOS binaries
+        run: task build:mac
+
+      - name: Assemble macOS assets
+        run: |
+          cd bin
+          tag="${GITHUB_REF_NAME//\//-}"
+          mv lich-darwin-arm64 "lich-${tag}-darwin-arm64"
+          mv lich-darwin-amd64 "lich-${tag}-darwin-amd64"
+          ls -la lich-${tag}-*
+
+      - name: Upload macOS assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: lich-macos
+          path: bin/lich-*
+
   release:
-    needs: [linux, windows]
+    needs: [linux, windows, mac]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
