@@ -6,10 +6,18 @@ import (
 	"testing"
 )
 
+// TestFindBrowserPicksFirstHit proves missing candidates are skipped and
+// preference order decides among the installed ones — against whichever
+// candidate list this OS compiles in.
 func TestFindBrowserPicksFirstHit(t *testing.T) {
+	candidates := browserCandidates()
+	if len(candidates) < 2 {
+		t.Fatal("candidate list too short to prove ordering")
+	}
+	hits := map[string]bool{candidates[1]: true, candidates[len(candidates)-1]: true}
 	lookPath := func(name string) (string, error) {
-		if name == "google-chrome-stable" || name == "brave" {
-			return "/usr/bin/" + name, nil
+		if hits[name] {
+			return "/resolved/" + name, nil
 		}
 		return "", errors.New("not found")
 	}
@@ -17,8 +25,8 @@ func TestFindBrowserPicksFirstHit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindBrowser: %v", err)
 	}
-	if got != "/usr/bin/google-chrome-stable" {
-		t.Fatalf("want first candidate in preference order, got %q", got)
+	if want := "/resolved/" + candidates[1]; got != want {
+		t.Fatalf("FindBrowser = %q, want the earliest installed candidate %q", got, want)
 	}
 }
 
@@ -26,6 +34,39 @@ func TestFindBrowserErrorsWhenNoneInstalled(t *testing.T) {
 	lookPath := func(string) (string, error) { return "", errors.New("not found") }
 	if _, err := FindBrowser(lookPath); err == nil {
 		t.Fatal("want error when no browser is on PATH")
+	}
+}
+
+// TestWindowsBrowserCandidates proves the Windows list expands only the
+// install roots present in the environment, prefers chrome > edge > brave,
+// and always ends with the bare PATH names as a last resort.
+func TestWindowsBrowserCandidates(t *testing.T) {
+	env := map[string]string{
+		"ProgramFiles":      `C:\Program Files`,
+		"ProgramFiles(x86)": `C:\Program Files (x86)`,
+	}
+	got := windowsBrowserCandidates(func(k string) string { return env[k] })
+
+	want := []string{
+		`C:\Program Files\Google\Chrome\Application\chrome.exe`,
+		`C:\Program Files (x86)\Google\Chrome\Application\chrome.exe`,
+		`C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`,
+		`C:\Program Files\Microsoft\Edge\Application\msedge.exe`,
+		`C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe`,
+		"chrome",
+		"msedge",
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("candidates = %v, want %v", got, want)
+	}
+}
+
+// TestWindowsBrowserCandidatesEmptyEnv proves a bare environment still leaves
+// the PATH names, so FindBrowser never iterates an empty list.
+func TestWindowsBrowserCandidatesEmptyEnv(t *testing.T) {
+	got := windowsBrowserCandidates(func(string) string { return "" })
+	if !slices.Equal(got, []string{"chrome", "msedge"}) {
+		t.Fatalf("candidates = %v, want PATH names only", got)
 	}
 }
 

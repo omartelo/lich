@@ -101,7 +101,12 @@ func parseWorktreeBlock(block string) (Worktree, bool) {
 	for line := range strings.SplitSeq(block, "\n") {
 		switch {
 		case strings.HasPrefix(line, "worktree "):
-			wt.Path = strings.TrimPrefix(line, "worktree ")
+			// git prints forward slashes even on Windows; Clean folds the
+			// path into the platform's native form so it compares equal to
+			// the paths CreateWorktree builds with filepath.Join.
+			if p := strings.TrimPrefix(line, "worktree "); p != "" {
+				wt.Path = filepath.Clean(p)
+			}
 		case strings.HasPrefix(line, "branch refs/heads/"):
 			wt.Name = strings.TrimPrefix(line, "branch refs/heads/")
 		case line == "bare" || line == "detached":

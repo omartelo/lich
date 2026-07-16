@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Experimental Windows build (`lich.exe`, `task build:windows`). Terminal
+  sessions run under ConPTY, the window opens in Chrome or Edge (found via
+  their conventional install paths), shell cards fall back to `COMSPEC`, and
+  npm's `claude.cmd` shim is spawned through `cmd.exe /c`. Releases now ship a
+  `windows-amd64.exe` asset built — and backend-tested — on a Windows runner
+  in parallel with the Linux packages.
+
 ## [0.5.0] - 2026-07-15
 
 ### Added

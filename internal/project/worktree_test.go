@@ -31,6 +31,10 @@ func initRepo(t *testing.T) (string, func(args ...string) string) {
 		}
 		return strings.TrimSpace(string(out))
 	}
+	// Byte-exact file content is part of the assertions (DiscardFile restores
+	// HEAD bytes); pin autocrlf so neither Git for Windows' default nor the
+	// machine's global config rewrites line endings on checkout.
+	git("config", "core.autocrlf", "false")
 	if err := os.WriteFile(filepath.Join(repo, "a.txt"), []byte("one\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -81,13 +85,29 @@ func TestListBranches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListBranches after create: %v", err)
 	}
-	if len(got.Worktrees) != 1 || got.Worktrees[0] != (Worktree{Name: "resume-me", Path: wt.Path}) {
+	if len(got.Worktrees) != 1 {
+		t.Fatalf("Worktrees = %v, want one entry", got.Worktrees)
+	}
+	if got.Worktrees[0].Name != "resume-me" ||
+		canonPath(t, got.Worktrees[0].Path) != canonPath(t, wt.Path) {
 		t.Errorf("Worktrees = %v, want [{resume-me %s}]", got.Worktrees, wt.Path)
 	}
 
 	if _, err := svc.ListBranches(t.TempDir()); err == nil {
 		t.Error("ListBranches(non-repo) = nil error, want error")
 	}
+}
+
+// canonPath resolves platform aliasing — Windows 8.3 short names (the CI
+// runner's TEMP), symlinked temp dirs — so a path reported by git and one
+// built by Go compare equal when they name the same directory.
+func canonPath(t *testing.T, p string) string {
+	t.Helper()
+	resolved, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		return filepath.Clean(p)
+	}
+	return resolved
 }
 
 // TestParseWorktrees proves the porcelain parser skips the main worktree and
@@ -103,14 +123,15 @@ func TestParseWorktrees(t *testing.T) {
 			"main plus linked",
 			"worktree /repo\nHEAD abc\nbranch refs/heads/main\n\n" +
 				"worktree /wt/feat\nHEAD def\nbranch refs/heads/feat\n",
-			[]Worktree{{Name: "feat", Path: "/wt/feat"}},
+			// The parser folds paths into the platform's native form.
+			[]Worktree{{Name: "feat", Path: filepath.FromSlash("/wt/feat")}},
 		},
 		{
 			"detached and bare skipped",
 			"worktree /repo\nbare\n\n" +
 				"worktree /wt/pin\nHEAD abc\ndetached\n\n" +
 				"worktree /wt/ok\nHEAD def\nbranch refs/heads/ok\n",
-			[]Worktree{{Name: "ok", Path: "/wt/ok"}},
+			[]Worktree{{Name: "ok", Path: filepath.FromSlash("/wt/ok")}},
 		},
 		{"empty", "", []Worktree{}},
 	}

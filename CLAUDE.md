@@ -5,16 +5,20 @@
 `lich` is a **personal harness** — a desktop app whose Go backend serves an embedded React frontend to a system
 Chromium window in `--app` mode (no Electron, no webview toolkit; see `docs/chromium-shell.md` for the full decision
 record). It is shaped by the author's experience with and taste for other harnesses on the market; it is not a generic
-product, it is a bespoke tool. Linux-only.
+product, it is a bespoke tool. Linux first; an experimental Windows build ships alongside it (see Known Ceilings).
 
 ## Stack
 
 - **Backend**: Go 1.25, pure Go (CGO_ENABLED=0, fully static binary). Services exposed to the frontend over loopback
   HTTP RPC (`internal/rpc`) + WebSockets (terminal I/O in `internal/terminal/transport.go`, app events in
-  `internal/events`), all on one token-authenticated listener.
+  `internal/events`), all on one token-authenticated listener. OS-specific code is selected by build tags behind
+  small seams, never by runtime checks — the PTY is the model (`internal/terminal`'s `startPTY`: creack/pty on Unix,
+  ConPTY on Windows, where npm's `claude.cmd` shim runs through `cmd.exe /c`).
 - **Shell**: system Chromium-family browser launched in `--app` mode (`internal/chromium`), persistent profile under
-  `~/.config/lich/chromium-profile`. Window closed = app exit. Runtime needs: chromium/chrome on PATH, zenity for the
-  folder picker.
+  the user config dir (`~/.config/lich/chromium-profile`; `%AppData%\lich` on Windows). Window closed = app exit.
+  Runtime needs: a Chromium-family browser — chromium/chrome/brave on PATH on Linux, plus zenity for the folder
+  picker; chrome/edge/brave via their conventional install paths on Windows (picker is native win32, and Edge being
+  everywhere guarantees a window).
 - **Frontend**: React 18 + TypeScript + Vite. Terminal is xterm.js 6 + `@xterm/addon-webgl`. Service shapes are
   hand-owned in `frontend/src/lib/api-types.ts` (mirrors of the Go structs' JSON tags — keep in sync).
 - **Build/tasks**: [Task](https://taskfile.dev) — see Commands.
@@ -22,11 +26,12 @@ product, it is a bespoke tool. Linux-only.
 ## Commands
 
 ```bash
-task dev      # dev mode: Vite HMR + backend; separate DB, port and Chromium profile
-task build    # frontend build + static Go binary → bin/lich
-task run      # build + run
-task test     # go test ./... + frontend vitest
-task package  # .deb, .rpm, .pkg.tar.zst into bin/ (needs nfpm)
+task dev            # dev mode: Vite HMR + backend; separate DB, port and Chromium profile
+task build          # frontend build + static Go binary → bin/lich
+task build:windows  # cross-compiles bin/lich.exe (experimental)
+task run            # build + run
+task test           # go test ./... + frontend vitest
+task package        # .deb, .rpm, .pkg.tar.zst into bin/ (needs nfpm)
 ```
 
 Frontend in isolation: `cd frontend && pnpm run build` (runs `tsc` + `vite build`).
@@ -67,11 +72,13 @@ Non-negotiable rules. A violation means the work is not done.
 
 ## Release Checklist
 
-Releases are cut by pushing a `vX.Y.Z` tag. The `.github/workflows/release.yml` workflow runs the test suites, builds
-the frontend, then `task package` produces the Linux artifacts (`.deb`, `.rpm`, Arch `.pkg.tar.zst`, plus the raw
-static binary) and publishes a GitHub Release with a `checksums.txt`, taking the release notes from the
-matching `CHANGELOG.md` section. The binary is pure Go — the workflow needs no C toolchain; frontend build comes
-first because the backend `go:embed`s `frontend/dist`.
+Releases are cut by pushing a `vX.Y.Z` tag. The `.github/workflows/release.yml` workflow fans out into two parallel
+jobs — `linux` (frontend tests, backend tests, then `task package`: `.deb`, `.rpm`, Arch `.pkg.tar.zst`, plus the raw
+static binary) and `windows` (`task build:windows`, then the backend suite on a real Windows runner) — and a
+`release` job fans in, checksums every asset into one `checksums.txt` and publishes the GitHub Release, taking the
+notes from the matching `CHANGELOG.md` section. The binary is pure Go — no C toolchain anywhere; each job builds the
+frontend first because the backend `go:embed`s `frontend/dist`. A `workflow_dispatch` run from any branch exercises
+the whole pipeline (artifacts included) without publishing — use it to validate CI changes before a tag.
 
 The package version comes from the git tag: the Taskfile computes `VERSION` via `git describe` (env `VERSION`
 overrides) and injects it into `build/linux/nfpm/nfpm.yaml`.
@@ -116,3 +123,9 @@ Deliberate limits and shortcuts, with the upgrade path when it matters:
   mounts and by Ubuntu 24.04's AppArmor — plus ~200MB and owning Chromium security patches). Install formats are
   `.deb`/`.rpm`/`.pkg.tar.zst` (deps as Recommends; pacman has no Recommends, only optdepends) plus `install.sh`.
   If bundling ever matters, that's option 2 (CEF) of `docs/chromium-shell.md`, not an AppImage.
+- **Windows is experimental.** What holds it up: the backend suite runs on a Windows CI runner every release, and the
+  window/terminal path was smoke-tested by hand. What's missing: no installer or package (a bare unsigned `.exe`, so
+  SmartScreen warns — run it from a terminal, its console carries the logs), no Windows PTY tests
+  (`terminal_test.go` is `!windows`; conpty-backed spawn tests are the gap to close before the tag can narrow), and
+  the shell session is `COMSPEC`/cmd.exe — no PowerShell preference yet. The console subsystem build is deliberate
+  while the port is young: errors stay visible; `-H=windowsgui` is the flip when it stabilizes.

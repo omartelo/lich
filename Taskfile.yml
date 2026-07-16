@@ -1,7 +1,8 @@
 version: '3'
 
 # lich is a pure-Go binary (no CGO) serving its embedded frontend to a system
-# Chromium --app window — see docs/chromium-shell.md. Linux-only.
+# Chromium --app window — see docs/chromium-shell.md. Linux first; an
+# experimental Windows build cross-compiles via build:windows.
 
 vars:
   APP_NAME: "lich"
@@ -23,6 +24,12 @@ tasks:
     deps: [build:frontend]
     cmds:
       - cmd: CGO_ENABLED=0 go build {{.GO_BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}} .
+
+  build:windows:
+    summary: Cross-compiles the Windows binary (experimental — untested runtime)
+    deps: [build:frontend]
+    cmds:
+      - cmd: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build {{.GO_BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}.exe .
 
   run:
     summary: Builds and runs the application

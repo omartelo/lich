@@ -211,7 +211,9 @@ func TestClaudeConfigDir(t *testing.T) {
 
 	t.Run("falls back to home", func(t *testing.T) {
 		t.Setenv("CLAUDE_CONFIG_DIR", "")
+		// os.UserHomeDir reads HOME on Unix and USERPROFILE on Windows.
 		t.Setenv("HOME", "/home/someone")
+		t.Setenv("USERPROFILE", "/home/someone")
 		if got := claudeConfigDir(); got != filepath.Join("/home/someone", ".claude") {
 			t.Fatalf("claudeConfigDir() = %q, want %q", got, "/home/someone/.claude")
 		}
@@ -220,6 +222,7 @@ func TestClaudeConfigDir(t *testing.T) {
 	t.Run("empty when home is unresolvable", func(t *testing.T) {
 		t.Setenv("CLAUDE_CONFIG_DIR", "")
 		t.Setenv("HOME", "")
+		t.Setenv("USERPROFILE", "")
 		if got := claudeConfigDir(); got != "" {
 			t.Fatalf("claudeConfigDir() = %q, want %q", got, "")
 		}
