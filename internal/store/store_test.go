@@ -1,6 +1,7 @@
 package store
 
 import (
+	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
@@ -519,5 +520,66 @@ func TestReopenProjectKeepsDraggedPosition(t *testing.T) {
 
 	if got := openProjectIDs(t, svc); !equalIDs(got, []string{"p3", "p1", "p2"}) {
 		t.Errorf("project order = %v, want [p3 p1 p2]", got)
+	}
+}
+
+// TestOpenMigratesPreMigrationDatabase proves open() applies the ADD COLUMN
+// migrations to a database created before those columns existed — the path
+// where a migration actually succeeds (err == nil). A current-schema database
+// never reaches it: every ALTER there is a duplicate-column no-op, which is why
+// only this test kills the mutant that flips migrate's `err != nil` to
+// `err == nil` (that inversion dereferences a nil error here and panics).
+func TestOpenMigratesPreMigrationDatabase(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+
+	// The schema as it stood before the migrations: sessions without
+	// kind/path/claude_session_id/label_auto/position, projects without
+	// position.
+	const oldSchema = `
+CREATE TABLE projects (
+    id                TEXT    PRIMARY KEY,
+    name              TEXT    NOT NULL,
+    path              TEXT    NOT NULL,
+    is_open           INTEGER NOT NULL DEFAULT 1,
+    next_seq          INTEGER NOT NULL DEFAULT 1,
+    active_session_id TEXT    NOT NULL DEFAULT ''
+);
+CREATE TABLE sessions (
+    id         TEXT NOT NULL PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    label      TEXT NOT NULL
+);`
+
+	seed, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open seed db: %v", err)
+	}
+	if _, err := seed.Exec(oldSchema); err != nil {
+		t.Fatalf("seed old schema: %v", err)
+	}
+	_ = seed.Close()
+
+	svc, err := open(path)
+	if err != nil {
+		t.Fatalf("open pre-migration db: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.Close() })
+
+	// The columns the migrations added must now be usable end to end.
+	if err := svc.AddProject("p1", "alpha", "/tmp/alpha"); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if err := svc.AddSession("p1", "s1", "mellow-otter", "shell", "/data/wt", 2); err != nil {
+		t.Fatalf("AddSession: %v", err)
+	}
+	got, err := svc.LoadState()
+	if err != nil {
+		t.Fatalf("LoadState: %v", err)
+	}
+	if len(got) != 1 || len(got[0].Sessions) != 1 {
+		t.Fatalf("state after migration = %+v", got)
+	}
+	if s := got[0].Sessions[0]; s.Kind != "shell" || s.Path != "/data/wt" {
+		t.Errorf("migrated session = %+v, want kind=shell path=/data/wt", s)
 	}
 }
