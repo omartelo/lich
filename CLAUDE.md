@@ -37,6 +37,22 @@ task package:windows  # bin/lich-setup.exe installer (needs Inno Setup 6 — CI/
 
 Frontend in isolation: `cd frontend && pnpm run build` (runs `tsc` + `vite build`).
 
+## Local Gate (before every commit / PR)
+
+Run the whole check locally before pushing a commit or opening a PR — never lean
+on CI to find what a local run catches in seconds:
+
+- `gofmt -l .` clean (fix with `gofmt -w .`) and `go vet ./...` clean.
+- `go test ./...` (backend) and `cd frontend && pnpm test` (frontend) green —
+  or `task test` for both at once.
+- `cd frontend && pnpm build` succeeds (tsc typecheck + vite).
+
+CI mirrors exactly these: `ci.yml` runs them on every PR and push to `main`,
+`release.yml` on a tag. Both render pass/fail counts and coverage into the
+Actions job summary (`.github/scripts/*-test-summary.sh`), so the numbers are
+visible per run rather than buried in the log. A red test fails the job — the
+summary is transparency, never a substitute for the gate.
+
 ---
 
 ## Hard Invariants

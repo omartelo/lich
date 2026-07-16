@@ -46,15 +46,19 @@ jobs:
 
       # Frontend first: the backend embeds frontend/dist (go:embed), so Go
       # tests only compile once the frontend has been built.
-      - name: Frontend install + tests + build
+      - name: Frontend install + build
         working-directory: frontend
         run: |
           pnpm install --frozen-lockfile
-          pnpm test
           pnpm build
 
+      # Both suites emit pass/fail counts + coverage into the job summary and
+      # still fail the job on a red test (shared with ci.yml).
+      - name: Frontend tests
+        run: bash .github/scripts/web-test-summary.sh
+
       - name: Backend tests
-        run: go test ./...
+        run: bash .github/scripts/go-test-summary.sh linux
 
       - name: Build Linux packages
         run: task package
@@ -120,7 +124,7 @@ jobs:
         run: task package:windows
 
       - name: Backend tests (windows)
-        run: go test ./...
+        run: bash .github/scripts/go-test-summary.sh windows
 
       - name: Assemble Windows assets
         run: |

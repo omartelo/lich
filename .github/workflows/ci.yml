@@ -1,0 +1,61 @@
+name: ci
+
+# Fast per-PR gate: format/vet + both suites, with pass/fail counts and
+# coverage rendered into the job summary. Windows backend is validated at
+# release time (release.yml); a PR runs the linux path only for quick feedback.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      # dist must exist before any Go step: the backend go:embeds frontend/dist,
+      # so it will not even compile without it. build also runs tsc (typecheck).
+      - name: Frontend install + build
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt: these files need formatting:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: Frontend tests
+        run: bash .github/scripts/web-test-summary.sh
+
+      - name: Backend tests
+        run: bash .github/scripts/go-test-summary.sh linux

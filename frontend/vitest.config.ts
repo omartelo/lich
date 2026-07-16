@@ -13,5 +13,16 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
+    coverage: {
+      provider: "v8",
+      reporter: ["text-summary", "json-summary"],
+      reportsDirectory: "coverage",
+      // The suite owns the pure logic layer (`.ts`: lib, hooks, stores); the
+      // `.tsx` components are the DOM/xterm boundary invariant #1 exempts, so
+      // they stay out of the denominator — including them would report a
+      // misleadingly low number against a suite that never targeted them.
+      include: ["src/**/*.ts"],
+      exclude: ["src/**/*.test.ts", "src/**/*.d.ts"],
+    },
   },
 })
