@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Windows no longer floods the desktop with console windows. lich's Windows
+  binary runs in the GUI subsystem (no console of its own), so every console
+  tool it shells out to — `git`, `gh`, `claude` — spawned a fresh console window
+  per call; with git status polled every few seconds per session and the PR
+  lookup firing on every window focus, the screen filled with windows and the
+  machine became unusable. Child console processes are now created with
+  `CREATE_NO_WINDOW` (`internal/winexec`), a no-op on every other OS.
 - The session card and footer diff badge showed `+0 −0` in a repository with no
   commits, even though the review panel rendered the full diff: `git diff
   --numstat HEAD` errors without a HEAD and skipped the untracked-file count. It
