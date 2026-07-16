@@ -24,6 +24,12 @@ tasks:
     cmds:
       - cmd: CGO_ENABLED=0 go build {{.GO_BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}} .
 
+  build:windows:
+    summary: Cross-compiles the Windows binary (experimental — untested runtime)
+    deps: [build:frontend]
+    cmds:
+      - cmd: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build {{.GO_BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}.exe .
+
   run:
     summary: Builds and runs the application
     deps: [build]

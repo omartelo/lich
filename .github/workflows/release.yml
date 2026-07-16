@@ -10,7 +10,8 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  # linux and windows build in parallel; release fans in and publishes.
+  linux:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -58,15 +59,98 @@ jobs:
       - name: Build Linux packages
         run: task package
 
-      - name: Assemble release assets
+      - name: Assemble Linux assets
         run: |
           cd bin
-          tag="${GITHUB_REF_NAME}"
+          # workflow_dispatch runs land here with a branch name; slashes would
+          # break the file names.
+          tag="${GITHUB_REF_NAME//\//-}"
           mv "lich.deb"             "lich-${tag}-amd64.deb"
           mv "lich.rpm"             "lich-${tag}-x86_64.rpm"
           mv "lich.pkg.tar.zst"     "lich-${tag}-x86_64.pkg.tar.zst"
           cp lich "lich-${tag}-linux-amd64"
-          sha256sum lich-${tag}-* > checksums.txt
+          ls -la lich-${tag}-*
+
+      - name: Upload Linux assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: lich-linux
+          path: bin/lich-*
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        # bash (git-bash) keeps the steps byte-identical to the linux job's.
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install task
+        run: |
+          go install github.com/go-task/task/v3/cmd/task@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      # build:windows runs the frontend install+build dep, which go:embed
+      # needs before the backend suite can even compile — hence build first,
+      # tests right after. Frontend tests already gate the linux job; running
+      # them twice buys nothing.
+      - name: Build Windows binary
+        run: task build:windows
+
+      - name: Backend tests (windows)
+        run: go test ./...
+
+      - name: Assemble Windows assets
+        run: |
+          cd bin
+          tag="${GITHUB_REF_NAME//\//-}"
+          mv lich.exe "lich-${tag}-windows-amd64.exe"
+          ls -la lich-${tag}-*
+
+      - name: Upload Windows assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: lich-windows
+          path: bin/lich-*
+
+  release:
+    needs: [linux, windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout only for CHANGELOG.md — the notes come from it.
+      - uses: actions/checkout@v4
+
+      - name: Download build assets
+        uses: actions/download-artifact@v4
+        with:
+          path: bin
+          merge-multiple: true
+
+      - name: Checksums
+        run: |
+          cd bin
+          sha256sum lich-* > checksums.txt
           cat checksums.txt
 
       - name: Extract changelog notes
@@ -83,23 +167,10 @@ jobs:
           cat notes.md
 
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            bin/lich-${GITHUB_REF_NAME}-* bin/checksums.txt \
+            bin/lich-* bin/checksums.txt \
             --title "$GITHUB_REF_NAME" \
             --notes-file notes.md
-
-      - name: Upload workflow artifacts
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
-        with:
-          name: lich-linux-packages
-          path: |
-            bin/*.deb
-            bin/*.rpm
-            bin/*.pkg.tar.zst
-            bin/lich
-            bin/checksums.txt
