@@ -64,6 +64,16 @@ tasks:
       - cmd: go test ./...
       - cmd: cd frontend && pnpm test
 
+  mutation:
+    summary: 'Mutation tests via gremlins (config: .gremlins.yaml). Scope with -- ./pkg/'
+    preconditions:
+      - sh: command -v gremlins
+        msg: "gremlins is required: go install github.com/go-gremlins/gremlins/cmd/gremlins@latest"
+    cmds:
+      # No path → whole module (slow: single-worker, terminal spawns real PTYs).
+      # Scope a run with: task mutation -- ./internal/store/
+      - cmd: gremlins unleash {{.CLI_ARGS}}
+
   package:
     summary: Builds the Linux packages (deb, rpm, archlinux) into bin/
     deps: [build]
