@@ -108,6 +108,24 @@ func TestInitRotatesOversizedLog(t *testing.T) {
 	}
 }
 
+// failingWriter always errors, standing in for the dead stderr of a
+// windowsgui process.
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) {
+	return 0, os.ErrInvalid
+}
+
+// TestBestEffortSwallowsMirrorFailure proves a dead mirror destination never
+// fails the write — the exact contract the file half of the log depends on
+// when the Windows GUI build has no console.
+func TestBestEffortSwallowsMirrorFailure(t *testing.T) {
+	n, err := bestEffort{failingWriter{}}.Write([]byte("record"))
+	if err != nil || n != len("record") {
+		t.Fatalf("Write = (%d, %v), want (%d, nil)", n, err, len("record"))
+	}
+}
+
 // TestInitSurvivesUnwritableDir proves logging still works on stderr when the
 // file half cannot exist: an error comes back, the closer is nil, and the
 // default logger is usable.

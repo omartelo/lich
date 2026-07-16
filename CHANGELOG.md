@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The Windows binary is now a GUI-subsystem build: launching `lich.exe` no
+  longer drags a console window along, and closing that console can no longer
+  kill the app by accident. Logs live in `%AppData%\lich\lich.log` — the
+  console mirror became best-effort so a missing stderr never poisons the
+  file half of the log.
+
 ### Added
 
 - lich keeps a persistent log: `<config-dir>/lich/lich.log` (`lich-dev.log`
