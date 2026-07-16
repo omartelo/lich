@@ -142,20 +142,24 @@ func (s *Service) Diff(path string) DiffStats {
 	if out, err := exec.Command("git", "-C", path, "status", "--porcelain").Output(); err == nil {
 		stats.Files = countLines(out)
 	}
-	out, err := exec.Command("git", "-C", path, "diff", "--numstat", "HEAD").Output()
-	if err != nil {
-		return stats
+	// A repository without commits has no HEAD; diff against git's empty tree,
+	// same as DiffText. Errors here must not skip the untracked block below.
+	base := "HEAD"
+	if _, err := runGit(path, "rev-parse", "--verify", "HEAD"); err != nil {
+		base = emptyTreeHash
 	}
-	for line := range strings.Lines(string(out)) {
-		cols := strings.Fields(line)
-		if len(cols) < 3 {
-			continue
+	if out, err := exec.Command("git", "-C", path, "diff", "--numstat", base).Output(); err == nil {
+		for line := range strings.Lines(string(out)) {
+			cols := strings.Fields(line)
+			if len(cols) < 3 {
+				continue
+			}
+			// Binary files report "-" for both counts; Atoi fails and adds zero.
+			added, _ := strconv.Atoi(cols[0])
+			deleted, _ := strconv.Atoi(cols[1])
+			stats.Added += added
+			stats.Deleted += deleted
 		}
-		// Binary files report "-" for both counts; Atoi fails and adds zero.
-		added, _ := strconv.Atoi(cols[0])
-		deleted, _ := strconv.Atoi(cols[1])
-		stats.Added += added
-		stats.Deleted += deleted
 	}
 	// Untracked files are invisible to `git diff`; count their lines as
 	// additions, the way Warp and forge diff views present a fresh file.

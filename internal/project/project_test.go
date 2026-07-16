@@ -150,3 +150,21 @@ func TestDiff(t *testing.T) {
 		t.Errorf("Diff(non-repo) = %+v, want zero", got)
 	}
 }
+
+// TestDiffNoCommits covers a freshly `git init`'d repo with no HEAD: numstat
+// against HEAD fails, and the untracked additions must still be counted rather
+// than the whole stat collapsing to +0 -0.
+func TestDiffNoCommits(t *testing.T) {
+	repo := t.TempDir()
+	if out, err := exec.Command("git", "init", repo).CombinedOutput(); err != nil {
+		t.Skipf("git init unavailable: %v (%s)", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "new.txt"), []byte("x\ny\nz\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := New(nil).Diff(repo)
+	if got.Files != 1 || got.Added != 3 || got.Deleted != 0 {
+		t.Errorf("Diff(no-commit repo) = %+v, want {Files:1 Added:3 Deleted:0}", got)
+	}
+}
