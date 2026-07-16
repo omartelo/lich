@@ -248,3 +248,9 @@ export function newLineRange(
   }
   return start === Infinity ? null : {start, end}
 }
+
+// formatLineRef renders a range for a file reference: a single-line selection
+// reads as "19", not "19-19".
+export function formatLineRef(r: NewLineRange): string {
+  return r.start === r.end ? `${r.start}` : `${r.start}-${r.end}`
+}

@@ -2,6 +2,7 @@ import {describe, expect, it} from "vitest"
 import {
   buildFileDoc,
   discardTargets,
+  formatLineRef,
   gutterNumber,
   newLineRange,
   parseDiff,
@@ -192,6 +193,16 @@ describe("newLineRange", () => {
 
   it("ignores separators inside the selection", () => {
     expect(newLineRange(meta, 5, 6)).toEqual({start: 4, end: 4})
+  })
+})
+
+describe("formatLineRef", () => {
+  it("collapses a single-line selection", () => {
+    expect(formatLineRef({start: 19, end: 19})).toBe("19")
+  })
+
+  it("keeps a multi-line range", () => {
+    expect(formatLineRef({start: 19, end: 24})).toBe("19-24")
   })
 })
 

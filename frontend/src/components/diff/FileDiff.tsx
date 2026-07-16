@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/tooltip"
 import {
   buildFileDoc,
+  formatLineRef,
   newLineRange,
   type DiffFile,
   type FileDoc,
@@ -154,11 +155,11 @@ function DiffBody({doc, path, onInject}: DiffBodyProps) {
         </ContextMenuItem>
         <ContextMenuItem
           disabled={range === null}
-          onClick={() => range && onInject(`${path}:${range.start}-${range.end} `)}
+          onClick={() => range && onInject(`${path}:${formatLineRef(range)} `)}
         >
           {range === null
             ? "Inject lines"
-            : `Inject lines ${range.start}-${range.end}`}
+            : `Inject lines ${formatLineRef(range)}`}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
