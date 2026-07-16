@@ -10,8 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/creack/pty"
-
 	"github.com/omartelo/lich/internal/events"
 )
 
@@ -187,17 +185,17 @@ func TestSetVisibleReachesCoalescer(t *testing.T) {
 func spawnSession(t *testing.T) *session {
 	t.Helper()
 	cmd := exec.Command("/bin/cat")
-	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: 24, Cols: 80})
+	p, err := startPTY(cmd, 80, 24)
 	if err != nil {
-		t.Fatalf("pty.StartWithSize: %v", err)
+		t.Fatalf("startPTY: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = ptmx.Close()
+		_ = p.Close()
 		if cmd.Process != nil {
 			_ = cmd.Process.Kill()
 		}
 	})
-	return &session{ptmx: ptmx, cmd: cmd}
+	return &session{pty: p, cmd: cmd}
 }
 
 // TestWriteResizeCloseOnLiveSession drives a real session end to end: input is
@@ -215,7 +213,7 @@ func TestWriteResizeCloseOnLiveSession(t *testing.T) {
 	if err := svc.Close("s1"); err != nil {
 		t.Errorf("Close = %v, want nil", err)
 	}
-	if svc.ptmxOf("s1") != nil {
+	if svc.ptyOf("s1") != nil {
 		t.Error("session still present after Close")
 	}
 }
@@ -340,21 +338,22 @@ func TestResumeArgs(t *testing.T) {
 	}
 }
 
-// TestPTYEcho proves the core assumption of the service: a process spawns under
-// a PTY and its output is readable. If creack/pty breaks, this fails.
+// TestPTYEcho proves the core assumption of the service: a process spawns
+// under a PTY and its output is readable. If this platform's startPTY breaks,
+// this fails.
 func TestPTYEcho(t *testing.T) {
 	const marker = "lich-pty-test"
 
 	cmd := exec.Command("/bin/sh", "-c", "echo "+marker)
-	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: 24, Cols: 80})
+	p, err := startPTY(cmd, 80, 24)
 	if err != nil {
-		t.Fatalf("pty.StartWithSize: %v", err)
+		t.Fatalf("startPTY: %v", err)
 	}
-	t.Cleanup(func() { _ = ptmx.Close() })
+	t.Cleanup(func() { _ = p.Close() })
 
 	done := make(chan string, 1)
 	go func() {
-		out, _ := io.ReadAll(ptmx)
+		out, _ := io.ReadAll(p)
 		done <- string(out)
 	}()
 

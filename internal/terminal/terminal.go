@@ -15,8 +15,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/creack/pty"
-
 	"github.com/omartelo/lich/internal/events"
 )
 
@@ -68,9 +66,9 @@ type touchedEvent struct {
 
 // session is a single running PTY-backed shell.
 type session struct {
-	ptmx *os.File
-	cmd  *exec.Cmd
-	out  *coalescer
+	pty ptyHandle
+	cmd *exec.Cmd
+	out *coalescer
 }
 
 // Store is the persistence the terminal service depends on: the Claude Code
@@ -338,7 +336,7 @@ func (s *Service) Start(id, projectID, cwd, kind, resume string, cols, rows int)
 	cmd.Dir = cwd
 	cmd.Env = s.sessionEnv(id)
 
-	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: uint16(rows), Cols: uint16(cols)})
+	p, err := startPTY(cmd, cols, rows)
 	if err != nil {
 		return fmt.Errorf("failed to start pty for %q: %w", id, err)
 	}
@@ -350,8 +348,8 @@ func (s *Service) Start(id, projectID, cwd, kind, resume string, cols, rows int)
 		encoded := base64.StdEncoding.EncodeToString(data)
 		s.hub.Emit(dataEventPrefix+id, encoded)
 	}, visibleFlushInterval, hiddenFlushInterval)
-	s.sessions[id] = &session{ptmx: ptmx, cmd: cmd, out: out}
-	go s.stream(id, ptmx, cmd, out)
+	s.sessions[id] = &session{pty: p, cmd: cmd, out: out}
+	go s.stream(id, p, cmd, out)
 	return nil
 }
 
@@ -359,10 +357,10 @@ func (s *Service) Start(id, projectID, cwd, kind, resume string, cols, rows int)
 // the process, drops the session and emits its exit event. Output goes through
 // the session's coalescer, which batches it on a short cadence while the
 // terminal is visible and a long one while it is hidden.
-func (s *Service) stream(id string, ptmx *os.File, cmd *exec.Cmd, out *coalescer) {
+func (s *Service) stream(id string, p ptyHandle, cmd *exec.Cmd, out *coalescer) {
 	buf := make([]byte, readBufSize)
 	for {
-		n, err := ptmx.Read(buf)
+		n, err := p.Read(buf)
 		if n > 0 {
 			out.Write(buf[:n])
 		}
@@ -376,7 +374,7 @@ func (s *Service) stream(id string, ptmx *os.File, cmd *exec.Cmd, out *coalescer
 	out.Close()
 
 	s.mu.Lock()
-	if current, ok := s.sessions[id]; ok && current.ptmx == ptmx {
+	if current, ok := s.sessions[id]; ok && current.pty == p {
 		delete(s.sessions, id)
 	}
 	s.mu.Unlock()
@@ -393,11 +391,11 @@ func (s *Service) Write(id, data string) error {
 // no-op. It is the shared sink for the RPC Write and the WebSocket
 // transport's input frames.
 func (s *Service) writeBytes(id string, data []byte) error {
-	ptmx := s.ptmxOf(id)
-	if ptmx == nil {
+	p := s.ptyOf(id)
+	if p == nil {
 		return nil
 	}
-	_, err := ptmx.Write(data)
+	_, err := p.Write(data)
 	return err
 }
 
@@ -419,11 +417,11 @@ func (s *Service) SetVisible(id string, visible bool) error {
 // the visible terminal; a hidden terminal is resized on the next time it is
 // shown.
 func (s *Service) Resize(id string, cols, rows int) error {
-	ptmx := s.ptmxOf(id)
-	if ptmx == nil {
+	p := s.ptyOf(id)
+	if p == nil {
 		return nil
 	}
-	return pty.Setsize(ptmx, &pty.Winsize{Rows: uint16(rows), Cols: uint16(cols)})
+	return p.Resize(cols, rows)
 }
 
 // Close terminates a session's shell, if any.
@@ -438,19 +436,19 @@ func (s *Service) Close(id string) error {
 	if !ok {
 		return nil
 	}
-	err := sess.ptmx.Close()
+	err := sess.pty.Close()
 	if sess.cmd.Process != nil {
 		_ = sess.cmd.Process.Kill()
 	}
 	return err
 }
 
-// ptmxOf returns the PTY for a session, or nil if it is not running.
-func (s *Service) ptmxOf(id string) *os.File {
+// ptyOf returns the PTY for a session, or nil if it is not running.
+func (s *Service) ptyOf(id string) ptyHandle {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if sess, ok := s.sessions[id]; ok {
-		return sess.ptmx
+		return sess.pty
 	}
 	return nil
 }
