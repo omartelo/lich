@@ -6,8 +6,6 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
-	"path/filepath"
-	"strings"
 
 	"github.com/UserExistsError/conpty"
 	"golang.org/x/sys/windows"
@@ -40,12 +38,7 @@ func commandLine(bin string, args []string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve %q: %w", bin, err)
 	}
-	argv := append([]string{path}, args...)
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".cmd", ".bat":
-		argv = append([]string{"cmd.exe", "/c"}, argv...)
-	}
-	return windows.ComposeCommandLine(argv), nil
+	return windows.ComposeCommandLine(wrapArgv(path, args)), nil
 }
 
 // windowsPTY adapts a ConPTY to the seam. The embedded type already carries

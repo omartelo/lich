@@ -1,5 +1,10 @@
 package terminal
 
+import (
+	"path/filepath"
+	"strings"
+)
+
 // ptySpec describes the child process a session's PTY runs. It carries
 // everything the platform needs to spawn: ConPTY has no exec.Cmd (CreateProcess
 // wants one command-line string plus explicit dir/env — see go#62708), so the
@@ -25,4 +30,20 @@ type ptyHandle interface {
 	Resize(cols, rows int) error
 	Wait() error
 	Close() error
+}
+
+// wrapArgv builds the argv for an already-resolved binary path. npm ships
+// Claude Code as claude.cmd, and Windows' CreateProcess runs neither .cmd nor
+// .bat directly — only cmd.exe can — so a script binary is prefixed with
+// `cmd.exe /c`; native executables pass through unchanged. It lives here, not
+// in the Windows PTY file, so the decision stays pure and testable off-Windows
+// (filepath.Ext is lexical); the OS boundaries — LookPath and
+// ComposeCommandLine — stay in pty_windows.go.
+func wrapArgv(path string, args []string) []string {
+	argv := append([]string{path}, args...)
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".cmd", ".bat":
+		argv = append([]string{"cmd.exe", "/c"}, argv...)
+	}
+	return argv
 }

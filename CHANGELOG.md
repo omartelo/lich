@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- An open pull request now badges the session card too, not just the footer. The
+  same `PR #N` chip the footer shows for the active session appears on every card
+  whose branch has an open PR, so one is visible per session without selecting
+  the card first; clicking it opens the PR in the browser. Reuses the footer's PR
+  lookup, is hidden when `gh` is absent or unauthenticated, and clears when the
+  PR merges or closes.
 - Windows releases now ship an installer (`lich-*-windows-amd64-setup.exe`,
   Inno Setup): per-user install under `%LocalAppData%\Programs\lich` with no
   admin prompt, Start Menu entry, a proper "Installed apps" registration with
@@ -38,6 +44,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scrollbar is replaced by a thin translucent thumb (diff, settings, sidebar,
   tabs) via a single global `::-webkit-scrollbar` rule; the terminal keeps its
   existing 6px overlay.
+
+### Fixed
+
+- A single-line selection in the diff review panel built a file reference with a
+  redundant end (`path:19-19`). It now collapses to `path:19`, keeping the
+  `start-end` range form only when the selection spans more than one line — for
+  both the injected PTY reference and the context-menu label.
 
 ## [0.5.0] - 2026-07-15
 
