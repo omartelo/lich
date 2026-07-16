@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-16
+
 ### Added
 
 - An open pull request now badges the session card too, not just the footer. The
@@ -39,8 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   their `.app` bundles under `/Applications` and `~/Applications` (they never
   land on PATH). Releases now ship both-arch darwin binaries, built and
   backend-tested — the PTY included, on a real macOS runner — alongside the
-  Linux and Windows jobs. Unsigned: Gatekeeper quarantines them until
-  notarization ships (see the README/Known Ceilings).
+  Linux and Windows jobs. Unsigned: Gatekeeper quarantines the binary until
+  notarization ships — right-click-Open, or clear the quarantine attribute, to
+  run it.
 
 ### Changed
 
@@ -342,7 +345,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/omartelo/lich/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/omartelo/lich/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/omartelo/lich/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/omartelo/lich/compare/v0.2.0...v0.3.0
