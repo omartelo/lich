@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-16
+
 ### Added
 
 - The session card tooltip is now a rich mini-card: full label, working path,
@@ -367,7 +369,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/omartelo/lich/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/omartelo/lich/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/omartelo/lich/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/omartelo/lich/compare/v0.3.0...v0.4.0
