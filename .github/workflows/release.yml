@@ -105,17 +105,19 @@ jobs:
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 
-      - name: Install task
+      - name: Install task and Inno Setup
         run: |
           go install github.com/go-task/task/v3/cmd/task@latest
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          choco install innosetup -y --no-progress
 
-      # build:windows runs the frontend install+build dep, which go:embed
-      # needs before the backend suite can even compile — hence build first,
-      # tests right after. Frontend tests already gate the linux job; running
-      # them twice buys nothing.
-      - name: Build Windows binary
-        run: task build:windows
+      # package:windows chains the whole build (frontend install+build, exe,
+      # installer) — and the frontend build is what go:embed needs before the
+      # backend suite can even compile, hence build first, tests right after.
+      # Frontend tests already gate the linux job; running them twice buys
+      # nothing.
+      - name: Build Windows binary + installer
+        run: task package:windows
 
       - name: Backend tests (windows)
         run: go test ./...
@@ -124,7 +126,8 @@ jobs:
         run: |
           cd bin
           tag="${GITHUB_REF_NAME//\//-}"
-          mv lich.exe "lich-${tag}-windows-amd64.exe"
+          mv lich.exe       "lich-${tag}-windows-amd64.exe"
+          mv lich-setup.exe "lich-${tag}-windows-amd64-setup.exe"
           ls -la lich-${tag}-*
 
       - name: Upload Windows assets

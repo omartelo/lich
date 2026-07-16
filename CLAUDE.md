@@ -26,12 +26,13 @@ product, it is a bespoke tool. Linux first; an experimental Windows build ships 
 ## Commands
 
 ```bash
-task dev            # dev mode: Vite HMR + backend; separate DB, port and Chromium profile
-task build          # frontend build + static Go binary → bin/lich
-task build:windows  # cross-compiles bin/lich.exe (experimental)
-task run            # build + run
-task test           # go test ./... + frontend vitest
-task package        # .deb, .rpm, .pkg.tar.zst into bin/ (needs nfpm)
+task dev              # dev mode: Vite HMR + backend; separate DB, port and Chromium profile
+task build            # frontend build + static Go binary → bin/lich
+task build:windows    # cross-compiles bin/lich.exe (experimental)
+task run              # build + run
+task test             # go test ./... + frontend vitest
+task package          # .deb, .rpm, .pkg.tar.zst into bin/ (needs nfpm)
+task package:windows  # bin/lich-setup.exe installer (needs Inno Setup 6 — CI/Windows)
 ```
 
 Frontend in isolation: `cd frontend && pnpm run build` (runs `tsc` + `vite build`).
@@ -74,7 +75,8 @@ Non-negotiable rules. A violation means the work is not done.
 
 Releases are cut by pushing a `vX.Y.Z` tag. The `.github/workflows/release.yml` workflow fans out into two parallel
 jobs — `linux` (frontend tests, backend tests, then `task package`: `.deb`, `.rpm`, Arch `.pkg.tar.zst`, plus the raw
-static binary) and `windows` (`task build:windows`, then the backend suite on a real Windows runner) — and a
+static binary) and `windows` (`task package:windows`: exe + Inno Setup installer, then the backend suite on a real
+Windows runner) — and a
 `release` job fans in, checksums every asset into one `checksums.txt` and publishes the GitHub Release, taking the
 notes from the matching `CHANGELOG.md` section. The binary is pure Go — no C toolchain anywhere; each job builds the
 frontend first because the backend `go:embed`s `frontend/dist`. A `workflow_dispatch` run from any branch exercises
@@ -123,9 +125,13 @@ Deliberate limits and shortcuts, with the upgrade path when it matters:
   mounts and by Ubuntu 24.04's AppArmor — plus ~200MB and owning Chromium security patches). Install formats are
   `.deb`/`.rpm`/`.pkg.tar.zst` (deps as Recommends; pacman has no Recommends, only optdepends) plus `install.sh`.
   If bundling ever matters, that's option 2 (CEF) of `docs/chromium-shell.md`, not an AppImage.
-- **Windows is experimental.** What holds it up: the backend suite runs on a Windows CI runner every release, and the
-  window/terminal path was smoke-tested by hand. What's missing: no installer or package (a bare unsigned `.exe`, so
-  SmartScreen warns), no Windows PTY tests (`terminal_test.go` is `!windows`; conpty-backed spawn tests are the gap
-  to close before the tag can narrow), and the shell session is `COMSPEC`/cmd.exe — no PowerShell preference yet.
-  The build is GUI subsystem (`-H=windowsgui`): no console rides along, stdout/stderr go nowhere, and
+- **Windows is experimental.** What holds it up: the backend suite runs on a Windows CI runner every release, the
+  window/terminal path was smoke-tested by hand, and releases ship an Inno Setup installer
+  (`build/windows/lich.iss` — per-user, Start Menu, Installed-apps entry, uninstaller; the exe icon is
+  `rsrc_windows_amd64.syso` at the repo root, regenerated from `build/appicon.png` via `rsrc` if the icon ever
+  changes). What's missing: no code signing (SmartScreen warns until download reputation accrues — a paid
+  certificate is the fix if it ever matters), no winget manifest (the follow-up once a release with the installer
+  is out), no Windows PTY tests (`terminal_test.go` is `!windows`; conpty-backed spawn tests are the gap to close
+  before the tag can narrow), and the shell session is `COMSPEC`/cmd.exe — no PowerShell preference yet. The build
+  is GUI subsystem (`-H=windowsgui`): no console rides along, stdout/stderr go nowhere, and
   `%AppData%\lich\lich.log` is the diagnostic surface — "double-clicked and nothing happened" means read the log.

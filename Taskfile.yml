@@ -75,6 +75,17 @@ tasks:
       - task: package:nfpm
         vars: { FORMAT: archlinux, TARGET: '{{.APP_NAME}}.pkg.tar.zst' }
 
+  package:windows:
+    summary: Builds the Windows installer (lich-setup.exe) — needs Inno Setup 6
+    deps: [build:windows]
+    preconditions:
+      - sh: command -v iscc
+        msg: "iscc (Inno Setup 6) is required — on Windows: choco install innosetup"
+    env:
+      VERSION: '{{.VERSION}}'
+    cmds:
+      - cmd: iscc build/windows/lich.iss
+
   package:nfpm:
     internal: true
     preconditions:

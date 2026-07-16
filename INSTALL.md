@@ -1,6 +1,7 @@
 # Installing lich
 
-lich is Linux-only, x86_64. Every artifact comes from the
+lich targets Linux x86_64 first; an experimental Windows x64 build ships
+alongside it. Every artifact comes from the
 [Releases](https://github.com/omartelo/lich/releases) page.
 
 Pick your system:
@@ -9,11 +10,14 @@ Pick your system:
 - [Fedora / RHEL](#fedora--rhel)
 - [Arch](#arch)
 - [Static binary (any distro)](#static-binary)
+- [Windows (experimental)](#windows-experimental)
 - [Verifying checksums](#verifying-checksums)
 
-**Runtime dependencies** — lich opens its window in a Chromium-family browser
-and uses zenity for the folder picker; neither is bundled. Any of `chromium`,
-`google-chrome` or `brave` satisfies the browser requirement.
+**Runtime dependencies** — lich opens its window in a Chromium-family browser;
+none is bundled. On Linux any of `chromium`, `google-chrome` or `brave`
+satisfies it, and `zenity` provides the folder picker. On Windows, Chrome,
+Edge or Brave are found via their conventional install paths (Edge ships with
+Windows) and the folder picker is native.
 
 ## Debian / Ubuntu
 
@@ -73,6 +77,22 @@ install -Dm755 lich-*-linux-amd64 ~/.local/bin/lich
 
 You still need the runtime dependencies — install `chromium` (or another
 Chromium-family browser) and `zenity` through your package manager.
+
+## Windows (experimental)
+
+Download `lich-*-windows-amd64-setup.exe` from the releases page and run it.
+The install is per-user (no admin prompt): lich lands in
+`%LocalAppData%\Programs\lich`, shows up in the Start Menu and in Settings →
+Installed apps, and uninstalls from there like any other application.
+
+The installer is not code-signed, so SmartScreen will warn on first run —
+"More info" → "Run anyway". Verify the download against `checksums.txt` first
+(see below).
+
+lich runs windowless on Windows; diagnostics live in `%AppData%\lich\lich.log`.
+
+The bare `lich-*-windows-amd64.exe` is also published for a portable,
+no-install run — same binary the installer ships.
 
 ## Verifying checksums
 
