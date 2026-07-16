@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The session card tooltip is now a rich mini-card: full label, working path,
+  branch, open-PR badge and diff stat, opening to the right and themed to match
+  the card. A long label clipped in the card is readable on hover without
+  widening the sidebar. It reuses the git and PR data the card already computes.
+
 ### Fixed
 
 - Windows no longer floods the desktop with console windows. lich's Windows
@@ -16,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lookup firing on every window focus, the screen filled with windows and the
   machine became unusable. Child console processes are now created with
   `CREATE_NO_WINDOW` (`internal/winexec`), a no-op on every other OS.
+- The session card and footer diff badge showed `+0 −0` in a repository with no
+  commits, even though the review panel rendered the full diff: `git diff
+  --numstat HEAD` errors without a HEAD and skipped the untracked-file count. It
+  now diffs against git's empty tree when HEAD is missing, and a numstat failure
+  no longer skips counting untracked additions.
 
 ## [0.6.0] - 2026-07-16
 
