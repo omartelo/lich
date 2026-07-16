@@ -33,6 +33,16 @@ tasks:
       # nowhere — the persistent lich.log is the diagnostic surface.
       - cmd: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -H=windowsgui" -o {{.BIN_DIR}}/{{.APP_NAME}}.exe .
 
+  build:mac:
+    summary: Cross-compiles the macOS binaries — arm64 + amd64 (experimental)
+    deps: [build:frontend]
+    cmds:
+      # Both arches: Apple Silicon (arm64) and Intel (amd64). Pure Go, so both
+      # cross-compile from any host. Unsigned — Gatekeeper quarantines until
+      # notarization ships (see CLAUDE.md Known Ceilings).
+      - cmd: CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build {{.GO_BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}-darwin-arm64 .
+      - cmd: CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build {{.GO_BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}-darwin-amd64 .
+
   run:
     summary: Builds and runs the application
     deps: [build]
