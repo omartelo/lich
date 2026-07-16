@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -28,7 +27,7 @@ type Branches struct {
 // deliberately swallow errors for polling, failures here carry git's stderr in
 // the message so the frontend can show it verbatim.
 func runGit(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd := command("git", append([]string{"-C", dir}, args...)...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -198,7 +197,7 @@ func (s *Service) WorktreeDirty(wtPath string) (bool, error) {
 
 // branchExists reports whether refs/heads/<name> exists in the repository.
 func branchExists(projectPath, name string) bool {
-	err := exec.Command("git", "-C", projectPath, "show-ref", "--verify", "--quiet", "refs/heads/"+name).Run()
+	err := command("git", "-C", projectPath, "show-ref", "--verify", "--quiet", "refs/heads/"+name).Run()
 	return err == nil
 }
 

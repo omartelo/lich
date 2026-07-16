@@ -41,7 +41,7 @@ func (s *Service) DiffText(path string) (string, error) {
 // untrackedFiles lists paths unknown to git, relative to the work tree root.
 // Errors yield an empty list — the tracked diff is still worth returning.
 func untrackedFiles(path string) []string {
-	out, err := exec.Command("git", "-C", path, "ls-files", "--others", "--exclude-standard", "-z").Output()
+	out, err := command("git", "-C", path, "ls-files", "--others", "--exclude-standard", "-z").Output()
 	if err != nil {
 		return nil
 	}
@@ -61,7 +61,7 @@ func untrackedDiff(dir, rel string) string {
 	if info, err := os.Stat(filepath.Join(dir, rel)); err != nil || !info.Mode().IsRegular() || info.Size() > maxUntrackedDiffSize {
 		return ""
 	}
-	cmd := exec.Command("git", "-C", dir, "diff", "--no-index", "--", os.DevNull, rel)
+	cmd := command("git", "-C", dir, "diff", "--no-index", "--", os.DevNull, rel)
 	out, err := cmd.Output()
 	var exitErr *exec.ExitError
 	if err != nil && (!errors.As(err, &exitErr) || exitErr.ExitCode() != 1) {
