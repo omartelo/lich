@@ -199,6 +199,25 @@
 .dark .tok-typeName, .dark .tok-className, .dark .tok-namespace { color: oklch(0.8 0.09 200); }
 .dark .tok-propertyName { color: oklch(0.75 0.1 255); }
 .dark .tok-variableName.tok-definition { color: oklch(0.75 0.1 255); }
+/* App-wide scrollbar, discreet: post-Chromium the native dark scrollbar reads
+   as a heavy stripe. Chromium-only shell, so ::-webkit-scrollbar is guaranteed.
+   Thin thumb from currentColor, transparent track — every overflow container
+   (diff, settings, sidebar, tabs) inherits it. */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, currentColor 25%, transparent);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklch, currentColor 40%, transparent);
+}
+
 /* xterm viewport scrollbar, discreet: today's dark native scrollbar reads as
    a stripe between the terminal and the window edge. Thin overlay thumb,
    transparent track; the overview ruler (TerminalView) marks scroll position. */
