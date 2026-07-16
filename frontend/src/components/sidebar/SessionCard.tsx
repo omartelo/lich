@@ -206,7 +206,33 @@ export function SessionCard({
             <X className="size-3"/>
           </span>
           </ContextMenuTrigger>
-          <TooltipContent>{shownPath}</TooltipContent>
+          <TooltipContent
+            side="right"
+            className="max-w-xs border border-border bg-card text-foreground"
+          >
+            <div className="flex flex-col gap-1.5">
+              <span className="font-medium">{session.label}</span>
+              <span className="font-mono text-muted-foreground">{shownPath}</span>
+              {git?.branch && (
+                <span className="flex flex-wrap items-center gap-2 text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <GitBranch className="size-3 shrink-0" />
+                    {git.branch}
+                  </span>
+                  {pr && (
+                    <span className="flex items-center gap-1">
+                      <GitPullRequestArrow className="size-3 shrink-0" />#{pr.number}
+                    </span>
+                  )}
+                  {git.files > 0 && (
+                    <span className="flex items-center gap-1.5">
+                      <DiffStat added={git.added} deleted={git.deleted} />
+                    </span>
+                  )}
+                </span>
+              )}
+            </div>
+          </TooltipContent>
         </Tooltip>
         <ContextMenuContent>
           <ContextMenuItem onClick={() => setEditing(true)}>
