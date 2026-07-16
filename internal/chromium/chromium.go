@@ -11,26 +11,42 @@ import (
 	"os/exec"
 )
 
-// Candidate binaries, in preference order. Any Chromium gives the same
-// compositor; the preference only picks the most conventional install.
-var browserCandidates = []string{
-	"chromium",
-	"chromium-browser",
-	"google-chrome-stable",
-	"google-chrome",
-	"brave",
-}
-
-// FindBrowser returns the first Chromium-family binary on PATH. lookPath is
-// injectable for tests (production passes exec.LookPath).
+// FindBrowser returns the first Chromium-family binary that resolves, trying
+// this OS's candidates (candidates_unix.go / candidates_windows.go) in
+// preference order. lookPath is injectable for tests (production passes
+// exec.LookPath, which also accepts the absolute paths the Windows list uses).
 func FindBrowser(lookPath func(name string) (string, error)) (string, error) {
-	for _, name := range browserCandidates {
+	candidates := browserCandidates()
+	for _, name := range candidates {
 		if path, err := lookPath(name); err == nil {
 			return path, nil
 		}
 	}
-	return "", errors.New("no chromium-family browser found on PATH (tried " +
-		fmt.Sprint(browserCandidates) + "); install chromium")
+	return "", errors.New("no chromium-family browser found (tried " +
+		fmt.Sprint(candidates) + "); install chromium, chrome or edge")
+}
+
+// windowsBrowserCandidates builds the Windows candidate list: chrome, then
+// edge (present on every Windows), then brave, each under the install roots
+// Windows exposes as environment variables, with bare PATH names last.
+// Paths are joined with a literal backslash so the pure logic tests the same
+// on any OS. Kept out of the build-tagged file for exactly that reason.
+func windowsBrowserCandidates(getenv func(string) string) []string {
+	roots := []struct{ env, rel string }{
+		{"ProgramFiles", `Google\Chrome\Application\chrome.exe`},
+		{"ProgramFiles(x86)", `Google\Chrome\Application\chrome.exe`},
+		{"LocalAppData", `Google\Chrome\Application\chrome.exe`},
+		{"ProgramFiles(x86)", `Microsoft\Edge\Application\msedge.exe`},
+		{"ProgramFiles", `Microsoft\Edge\Application\msedge.exe`},
+		{"ProgramFiles", `BraveSoftware\Brave-Browser\Application\brave.exe`},
+	}
+	var out []string
+	for _, r := range roots {
+		if root := getenv(r.env); root != "" {
+			out = append(out, root+`\`+r.rel)
+		}
+	}
+	return append(out, "chrome", "msedge")
 }
 
 // Args builds the --app invocation. The dedicated user-data-dir is

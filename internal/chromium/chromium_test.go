@@ -29,6 +29,39 @@ func TestFindBrowserErrorsWhenNoneInstalled(t *testing.T) {
 	}
 }
 
+// TestWindowsBrowserCandidates proves the Windows list expands only the
+// install roots present in the environment, prefers chrome > edge > brave,
+// and always ends with the bare PATH names as a last resort.
+func TestWindowsBrowserCandidates(t *testing.T) {
+	env := map[string]string{
+		"ProgramFiles":      `C:\Program Files`,
+		"ProgramFiles(x86)": `C:\Program Files (x86)`,
+	}
+	got := windowsBrowserCandidates(func(k string) string { return env[k] })
+
+	want := []string{
+		`C:\Program Files\Google\Chrome\Application\chrome.exe`,
+		`C:\Program Files (x86)\Google\Chrome\Application\chrome.exe`,
+		`C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`,
+		`C:\Program Files\Microsoft\Edge\Application\msedge.exe`,
+		`C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe`,
+		"chrome",
+		"msedge",
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("candidates = %v, want %v", got, want)
+	}
+}
+
+// TestWindowsBrowserCandidatesEmptyEnv proves a bare environment still leaves
+// the PATH names, so FindBrowser never iterates an empty list.
+func TestWindowsBrowserCandidatesEmptyEnv(t *testing.T) {
+	got := windowsBrowserCandidates(func(string) string { return "" })
+	if !slices.Equal(got, []string{"chrome", "msedge"}) {
+		t.Fatalf("candidates = %v, want PATH names only", got)
+	}
+}
+
 func TestArgs(t *testing.T) {
 	args := Args("http://127.0.0.1:47821/?token=x", "/home/u/.config/lich/chromium-profile", "lichdev", []string{"--ozone-platform=wayland"})
 	for _, want := range []string{
