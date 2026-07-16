@@ -23,7 +23,7 @@ func FindBrowser(lookPath func(name string) (string, error)) (string, error) {
 		}
 	}
 	return "", errors.New("no chromium-family browser found (tried " +
-		fmt.Sprint(candidates) + "); install chromium, chrome or edge")
+		fmt.Sprint(candidates) + "); install chromium, chrome, edge, brave, or helium")
 }
 
 // windowsBrowserCandidates builds the Windows candidate list: chrome, then

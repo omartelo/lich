@@ -37,9 +37,10 @@ its CDP surface):
   `chromium --app=http://127.0.0.1:<port> --user-data-dir=<state-dir> --class=lich`.
 - Window closed → WebSocket drops → Go shuts down. No CDP needed for v1.
 - Still a single Go binary. **Zero Node, zero Electron, no new bundle weight.**
-  New runtime requirement: chromium/chrome installed (fine for a personal
-  harness on Arch; the launcher should probe `chromium`, `google-chrome`,
-  `chromium-browser` and fail with a clear message).
+  New runtime requirement: a Chromium-family browser installed (fine for a
+  personal harness on Arch; the launcher should probe `chromium`,
+  `google-chrome`, `helium-browser`, `chromium-browser` and fail with a clear
+  message).
 
 Why lich is ~80% there already:
 

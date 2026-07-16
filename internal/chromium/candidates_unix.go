@@ -11,6 +11,7 @@ func browserCandidates() []string {
 		"chromium-browser",
 		"google-chrome-stable",
 		"google-chrome",
+		"helium-browser",
 		"brave",
 	}
 }

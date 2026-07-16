@@ -16,7 +16,7 @@ product, it is a bespoke tool. Linux first; an experimental Windows build ships 
   ConPTY on Windows, where npm's `claude.cmd` shim runs through `cmd.exe /c`).
 - **Shell**: system Chromium-family browser launched in `--app` mode (`internal/chromium`), persistent profile under
   the user config dir (`~/.config/lich/chromium-profile`; `%AppData%\lich` on Windows). Window closed = app exit.
-  Runtime needs: a Chromium-family browser — chromium/chrome/brave on PATH on Linux, plus zenity for the folder
+  Runtime needs: a Chromium-family browser — chromium/chrome/helium-browser/brave on PATH on Linux, plus zenity for the folder
   picker; chrome/edge/brave via their conventional install paths on Windows (picker is native win32, and Edge being
   everywhere guarantees a window).
 - **Frontend**: React 18 + TypeScript + Vite. Terminal is xterm.js 6 + `@xterm/addon-webgl`. Service shapes are
