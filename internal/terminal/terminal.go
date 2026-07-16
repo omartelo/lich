@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -67,7 +66,6 @@ type touchedEvent struct {
 // session is a single running PTY-backed shell.
 type session struct {
 	pty ptyHandle
-	cmd *exec.Cmd
 	out *coalescer
 }
 
@@ -175,9 +173,6 @@ func (s *Service) sessionEnv(id string) []string {
 // defaultBin is the Claude Code binary spawned when the user has not configured
 // a custom path.
 const defaultBin = "claude"
-
-// defaultShell is spawned for "shell" sessions when $SHELL is unset.
-const defaultShell = "/bin/sh"
 
 // KindShell marks a session that runs the user's shell instead of Claude Code.
 const KindShell = "shell"
@@ -329,14 +324,14 @@ func (s *Service) Start(id, projectID, cwd, kind, resume string, cols, rows int)
 		cwd = home
 	}
 
-	cmd := exec.Command(
-		resolveCommand(kind, s.store.ClaudeBin(projectID), os.Getenv("SHELL")),
-		resumeArgs(kind, resume)...,
-	)
-	cmd.Dir = cwd
-	cmd.Env = s.sessionEnv(id)
-
-	p, err := startPTY(cmd, cols, rows)
+	p, err := startPTY(ptySpec{
+		bin:  resolveCommand(kind, s.store.ClaudeBin(projectID), userShell()),
+		args: resumeArgs(kind, resume),
+		dir:  cwd,
+		env:  s.sessionEnv(id),
+		cols: cols,
+		rows: rows,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to start pty for %q: %w", id, err)
 	}
@@ -348,8 +343,8 @@ func (s *Service) Start(id, projectID, cwd, kind, resume string, cols, rows int)
 		encoded := base64.StdEncoding.EncodeToString(data)
 		s.hub.Emit(dataEventPrefix+id, encoded)
 	}, visibleFlushInterval, hiddenFlushInterval)
-	s.sessions[id] = &session{pty: p, cmd: cmd, out: out}
-	go s.stream(id, p, cmd, out)
+	s.sessions[id] = &session{pty: p, out: out}
+	go s.stream(id, p, out)
 	return nil
 }
 
@@ -357,7 +352,7 @@ func (s *Service) Start(id, projectID, cwd, kind, resume string, cols, rows int)
 // the process, drops the session and emits its exit event. Output goes through
 // the session's coalescer, which batches it on a short cadence while the
 // terminal is visible and a long one while it is hidden.
-func (s *Service) stream(id string, p ptyHandle, cmd *exec.Cmd, out *coalescer) {
+func (s *Service) stream(id string, p ptyHandle, out *coalescer) {
 	buf := make([]byte, readBufSize)
 	for {
 		n, err := p.Read(buf)
@@ -368,7 +363,7 @@ func (s *Service) stream(id string, p ptyHandle, cmd *exec.Cmd, out *coalescer) 
 			break
 		}
 	}
-	_ = cmd.Wait()
+	_ = p.Wait()
 	// Flush any batched output before the exit event so the frontend always
 	// sees the final bytes ahead of the exit banner.
 	out.Close()
@@ -436,11 +431,7 @@ func (s *Service) Close(id string) error {
 	if !ok {
 		return nil
 	}
-	err := sess.pty.Close()
-	if sess.cmd.Process != nil {
-		_ = sess.cmd.Process.Kill()
-	}
-	return err
+	return sess.pty.Close()
 }
 
 // ptyOf returns the PTY for a session, or nil if it is not running.

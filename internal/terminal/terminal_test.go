@@ -1,9 +1,14 @@
+// The suite spawns /bin/cat and /bin/sh under real PTYs, so it is Unix-only;
+// the pure helpers it also covers (resumeArgs, childEnv, resolveCommand) are
+// platform-independent logic exercised here all the same. A Windows CI run
+// needs its own conpty-backed spawn tests before this tag can narrow.
+//go:build !windows
+
 package terminal
 
 import (
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -184,18 +189,12 @@ func TestSetVisibleReachesCoalescer(t *testing.T) {
 // going through Start, so no stream() goroutine emits events.
 func spawnSession(t *testing.T) *session {
 	t.Helper()
-	cmd := exec.Command("/bin/cat")
-	p, err := startPTY(cmd, 80, 24)
+	p, err := startPTY(ptySpec{bin: "/bin/cat", cols: 80, rows: 24})
 	if err != nil {
 		t.Fatalf("startPTY: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = p.Close()
-		if cmd.Process != nil {
-			_ = cmd.Process.Kill()
-		}
-	})
-	return &session{pty: p, cmd: cmd}
+	t.Cleanup(func() { _ = p.Close() })
+	return &session{pty: p}
 }
 
 // TestWriteResizeCloseOnLiveSession drives a real session end to end: input is
@@ -245,6 +244,18 @@ func stayAliveBin(t *testing.T) string {
 	return path
 }
 
+// spawnedArgs returns the argv of a session's spawned process. It reaches
+// through the seam to the Unix implementation — these tests only run where a
+// real PTY exists, and argv is not part of the ptyHandle contract.
+func spawnedArgs(t *testing.T, svc *Service, id string) []string {
+	t.Helper()
+	p, ok := svc.sessions[id].pty.(*unixPTY)
+	if !ok {
+		t.Fatalf("session %q pty is %T, want *unixPTY", id, svc.sessions[id].pty)
+	}
+	return p.cmd.Args
+}
+
 // TestStartPassesResumeToTheProcess proves the resume id reaches the spawned
 // binary's argv — the wiring resumeArgs' unit test cannot see.
 func TestStartPassesResumeToTheProcess(t *testing.T) {
@@ -257,7 +268,7 @@ func TestStartPassesResumeToTheProcess(t *testing.T) {
 	}
 
 	svc.mu.Lock()
-	got := svc.sessions["s1"].cmd.Args
+	got := spawnedArgs(t, svc, "s1")
 	svc.mu.Unlock()
 
 	want := []string{bin, resumeFlag, "abc-123"}
@@ -278,7 +289,7 @@ func TestStartWithoutResumeSpawnsBare(t *testing.T) {
 	}
 
 	svc.mu.Lock()
-	got := svc.sessions["s1"].cmd.Args
+	got := spawnedArgs(t, svc, "s1")
 	svc.mu.Unlock()
 
 	if !slices.Equal(got, []string{bin}) {
@@ -344,8 +355,12 @@ func TestResumeArgs(t *testing.T) {
 func TestPTYEcho(t *testing.T) {
 	const marker = "lich-pty-test"
 
-	cmd := exec.Command("/bin/sh", "-c", "echo "+marker)
-	p, err := startPTY(cmd, 80, 24)
+	p, err := startPTY(ptySpec{
+		bin:  "/bin/sh",
+		args: []string{"-c", "echo " + marker},
+		cols: 80,
+		rows: 24,
+	})
 	if err != nil {
 		t.Fatalf("startPTY: %v", err)
 	}
