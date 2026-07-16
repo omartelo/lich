@@ -1,0 +1,11 @@
+# Mutation-testing config for `task mutation` (go-gremlins/gremlins).
+#
+# workers: 1 is load-bearing. Gremlins defaults to one worker per CPU and runs
+# mutant test binaries in parallel; the SQLite-backed store tests then contend
+# and start timing out — every mutant reported TIMED OUT, efficacy 0%. That is
+# machine contention, not a weak suite (single-worker efficacy on internal/store
+# is ~97%). timeout-coefficient buys slow packages (terminal spawns real PTYs)
+# headroom before a genuine hang is declared timed out.
+unleash:
+  workers: 1
+  timeout-coefficient: 20
