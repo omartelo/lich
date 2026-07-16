@@ -1,6 +1,6 @@
 import {useEffect, useRef, useState} from "react"
 import type {KeyboardEvent} from "react"
-import {Bell, Check, GitBranch, LoaderCircle, Pencil, X} from "lucide-react"
+import {Bell, Check, GitBranch, GitPullRequestArrow, LoaderCircle, Pencil, X} from "lucide-react"
 import {useSortable} from "@dnd-kit/sortable"
 import {CSS} from "@dnd-kit/utilities"
 import {cn} from "@/lib/utils"
@@ -8,6 +8,8 @@ import {displayPath} from "@/lib/paths"
 import {type Session} from "@/lib/sessions"
 import {useSessionStatus} from "@/lib/useSessionStatus"
 import {useGitStatus} from "@/lib/useGitStatus"
+import {usePullRequest} from "@/lib/usePullRequest"
+import {System} from "@/lib/rpc"
 import {DiffStat} from "@/components/DiffStat"
 import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip"
 import {
@@ -50,6 +52,7 @@ export function SessionCard({
   // git status, so the badge reflects the worktree's branch, not the project's.
   const shownPath = session.path || path
   const git = useGitStatus(shownPath)
+  const pr = usePullRequest(shownPath, git?.branch ?? "")
   // Renaming disables the drag: the sensor would otherwise claim the pointer
   // before the input could be clicked into or its text selected.
   const {
@@ -167,11 +170,27 @@ export function SessionCard({
                   <GitBranch className="size-3 shrink-0"/>
                   <span className="truncate">{git.branch}</span>
                 </span>
-                  {git.files > 0 && (
-                    <span className="flex shrink-0 items-center gap-1 px-1 py-0.5 bg-muted-foreground/10 rounded">
-                      <DiffStat added={git.added} deleted={git.deleted}/>
-                    </span>
-                  )}
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    {pr && (
+                      <span
+                        role="button"
+                        aria-label={`Open pull request #${pr.number} on GitHub`}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          void System.OpenExternal(pr.url)
+                        }}
+                        className="flex items-center gap-1 px-1 py-0.5 bg-muted-foreground/10 rounded transition-colors hover:bg-accent hover:text-accent-foreground"
+                      >
+                        <GitPullRequestArrow className="size-3 shrink-0"/>
+                        #{pr.number}
+                      </span>
+                    )}
+                    {git.files > 0 && (
+                      <span className="flex items-center gap-1 px-1 py-0.5 bg-muted-foreground/10 rounded">
+                        <DiffStat added={git.added} deleted={git.deleted}/>
+                      </span>
+                    )}
+                  </span>
               </span>
               )}
             </div>
