@@ -125,7 +125,7 @@ Deliberate limits and shortcuts, with the upgrade path when it matters:
   If bundling ever matters, that's option 2 (CEF) of `docs/chromium-shell.md`, not an AppImage.
 - **Windows is experimental.** What holds it up: the backend suite runs on a Windows CI runner every release, and the
   window/terminal path was smoke-tested by hand. What's missing: no installer or package (a bare unsigned `.exe`, so
-  SmartScreen warns — run it from a terminal, its console carries the logs), no Windows PTY tests
-  (`terminal_test.go` is `!windows`; conpty-backed spawn tests are the gap to close before the tag can narrow), and
-  the shell session is `COMSPEC`/cmd.exe — no PowerShell preference yet. The console subsystem build is deliberate
-  while the port is young: errors stay visible; `-H=windowsgui` is the flip when it stabilizes.
+  SmartScreen warns), no Windows PTY tests (`terminal_test.go` is `!windows`; conpty-backed spawn tests are the gap
+  to close before the tag can narrow), and the shell session is `COMSPEC`/cmd.exe — no PowerShell preference yet.
+  The build is GUI subsystem (`-H=windowsgui`): no console rides along, stdout/stderr go nowhere, and
+  `%AppData%\lich\lich.log` is the diagnostic surface — "double-clicked and nothing happened" means read the log.

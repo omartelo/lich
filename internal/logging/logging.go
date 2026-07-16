@@ -31,7 +31,11 @@ func Init(dir string) (io.Closer, error) {
 	out := io.Writer(os.Stderr)
 	var closer io.Closer
 	if err == nil {
-		out = io.MultiWriter(os.Stderr, file)
+		// File first: it is the record of truth, and io.MultiWriter stops at
+		// the first failing writer. The console mirror is best-effort — the
+		// windowsgui build has no stderr at all, and its write failures must
+		// never poison the file half.
+		out = io.MultiWriter(file, bestEffort{os.Stderr})
 		closer = file
 	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(out, &slog.HandlerOptions{
@@ -39,6 +43,17 @@ func Init(dir string) (io.Closer, error) {
 		Level:     parseLevel(os.Getenv("LICH_LOG_LEVEL")),
 	})))
 	return closer, err
+}
+
+// bestEffort forwards writes and swallows failures — for mirror destinations
+// whose loss must not fail the write (a console that does not exist).
+type bestEffort struct {
+	w io.Writer
+}
+
+func (b bestEffort) Write(p []byte) (int, error) {
+	_, _ = b.w.Write(p)
+	return len(p), nil
 }
 
 // openLogFile opens the append-mode log file, first rotating the previous
