@@ -4,7 +4,7 @@
   <p>
     <img alt="Go" src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white" />
     <img alt="Shell" src="https://img.shields.io/badge/shell-Chromium%20--app-4285F4?logo=googlechrome&logoColor=white" />
-    <img alt="Platform" src="https://img.shields.io/badge/platform-Linux-333" />
+    <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-333" />
   </p>
 </div>
 
@@ -21,11 +21,15 @@ is deliberately bespoke: not a generic product, a tool built for one workflow.
 It's public because there's no reason to hide it, not because it's a supported
 release.
 
-> **Platform** — Linux only. lich is a single static Go binary that opens its
-> UI in your system's Chromium-family browser in `--app` mode (no Electron, no
-> bundled webview — decision record: `docs/chromium-shell.md`). At runtime it
-> needs a Chromium-family browser (chromium, google-chrome, helium-browser, brave, …) on PATH
-> and `zenity` for the folder picker.
+> **Platform** — Linux first; experimental macOS and Windows builds ship
+> alongside it. lich is a single static Go binary that opens its UI in your
+> system's Chromium-family browser in `--app` mode (no Electron, no bundled
+> webview — decision record: `docs/chromium-shell.md`). At runtime it needs a
+> Chromium-family browser: on **Linux**, chromium/google-chrome/helium-browser/brave on PATH
+> plus `zenity` for the folder picker; on **macOS**, Chrome/Chromium/Edge/Brave
+> in `/Applications` (the picker is built in); on **Windows**, Chrome/Edge/Brave
+> via their usual install paths. The macOS and Windows binaries are unsigned —
+> Gatekeeper and SmartScreen warn until notarization/signing ship.
 
 ## Features
 
