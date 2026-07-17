@@ -5,6 +5,23 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-07-17
+
+### Changed
+
+- Session cards now draw the processing status as a ring around the provider
+  icon instead of swapping the icon out for a status glyph, so a running
+  session keeps its agent's mark. The ring spins while busy, is solid emerald
+  when the turn ends and amber while blocked on you; an idle session shows the
+  bare icon. The fixed-size slot also removes the small layout shift the old
+  swap caused.
+
+### Fixed
+
+- The vertical rule before the top strip's settings gear (added in 0.8.0)
+  rendered as a half-height stub — a short line reaching only the middle of the
+  bar — and has been removed.
+
 ## [0.8.0] - 2026-07-17
 
 ### Added
@@ -426,6 +443,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
+[0.8.1]: https://github.com/omartelo/lich/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/omartelo/lich/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/omartelo/lich/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/omartelo/lich/compare/v0.5.0...v0.6.0
