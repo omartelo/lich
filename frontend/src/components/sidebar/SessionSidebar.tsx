@@ -15,6 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {Separator} from "@/components/ui/separator"
 import {useProjects} from "@/lib/projects"
 import {activeSessionId, sessionsOf, type Session} from "@/lib/sessions"
 import {CloseWorktreeDialog, ForceRemoveWorktreeDialog} from "./CloseWorktreeDialog"
@@ -177,10 +178,16 @@ export function SessionSidebar() {
                   {provider.name}
                 </DropdownMenuItem>
               ))}
+            </DropdownMenuGroup>
+            <Separator/>
+            <DropdownMenuGroup>
               <DropdownMenuItem onClick={() => newSession(projectId, "shell")}>
                 <Terminal/>
                 Terminal
               </DropdownMenuItem>
+            </DropdownMenuGroup>
+            <Separator/>
+            <DropdownMenuGroup>
               <DropdownMenuItem
                 disabled={!git?.branch}
                 onClick={() => setWorktreeOpen(true)}

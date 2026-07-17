@@ -19,6 +19,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
+import {Separator} from "@/components/ui/separator"
 
 interface SessionCardProps {
   session: Session
@@ -222,17 +223,17 @@ export function SessionCard({
               {git?.branch && (
                 <span className="flex flex-wrap items-center gap-2 text-muted-foreground">
                   <span className="flex items-center gap-1">
-                    <GitBranch className="size-3 shrink-0" />
+                    <GitBranch className="size-3 shrink-0"/>
                     {git.branch}
                   </span>
                   {pr && (
                     <span className="flex items-center gap-1">
-                      <GitPullRequestArrow className="size-3 shrink-0" />#{pr.number}
+                      <GitPullRequestArrow className="size-3 shrink-0"/>#{pr.number}
                     </span>
                   )}
                   {git.files > 0 && (
                     <span className="flex items-center gap-1.5">
-                      <DiffStat added={git.added} deleted={git.deleted} />
+                      <DiffStat added={git.added} deleted={git.deleted}/>
                     </span>
                   )}
                 </span>
@@ -245,6 +246,7 @@ export function SessionCard({
             <Pencil/>
             Rename
           </ContextMenuItem>
+          <Separator/>
           <ContextMenuItem variant="destructive" onClick={onClose}>
             <X/>
             Close session
