@@ -5,10 +5,19 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.0] - 2026-07-17
 
 ### Added
 
+- Settings is now a per-project card, not a global screen. It opens at
+  `/projects/:projectId/settings` as a "Settings" card in the project's session
+  sidebar (Warp-style): the sidebar stays visible, the project stays active
+  (hotkeys, toasts and status badges intact), and the Project group shows the
+  current project's overrides instead of listing every open project. It is a
+  pure UI concern — the persisted workspace is untouched.
+- A permanent **Home** tab, pinned first and non-closable, gives an
+  always-available plain shell rooted at the system home directory — a scratch
+  terminal, and the home the Linux self-update flow relaunches into.
 - lich is no longer Claude-only: Codex, opencode and Crush join Claude Code as
   selectable providers. lich detects which harnesses are installed on the
   machine, and a new Settings → **Providers** group lists them with an enable
@@ -40,6 +49,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Helium Browser is now accepted as a Linux Chromium-family shell. The launcher
   probes `helium-browser` alongside Chromium, Google Chrome and Brave, and the
   install/runtime dependency checks document it as a supported browser.
+
+### Changed
+
+- Menus and bars gained separators. The session card's context menu
+  (rename / close) and the New Session dropdown (providers · terminal ·
+  worktree) now use menu-native separators; a vertical rule precedes the
+  settings gear in the top strip, and one divides the git context from the
+  clock in the footer status bar (only while a project is active).
+
+### Fixed
+
+- A long worktree path overflowed the session card tooltip: a path is one
+  unbroken token (slashes are not break points), so `max-w-xs` could not wrap
+  it. It now wraps within the max width (`break-all`).
 
 ## [0.7.0] - 2026-07-16
 
@@ -403,7 +426,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.7.0...HEAD
+[0.8.0]: https://github.com/omartelo/lich/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/omartelo/lich/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/omartelo/lich/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/omartelo/lich/compare/v0.4.0...v0.5.0
