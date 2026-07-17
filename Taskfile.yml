@@ -11,7 +11,10 @@ vars:
   # Package version follows the git tag (env VERSION overrides) — no manual bump.
   VERSION:
     sh: echo "${VERSION:-$(git describe --tags --always 2>/dev/null | sed 's/^v//')}"
-  GO_BUILD_FLAGS: '-trimpath -ldflags "-s -w"'
+  # -X main.version stamps the git tag into the binary so the in-app update
+  # check knows what it is running (dev builds via `go run` stay "dev").
+  LDFLAGS: '-s -w -X main.version={{.VERSION}}'
+  GO_BUILD_FLAGS: '-trimpath -ldflags "{{.LDFLAGS}}"'
 
 tasks:
   build:frontend:
@@ -31,7 +34,7 @@ tasks:
     cmds:
       # GUI subsystem: no console window rides along. stdout/stderr go
       # nowhere — the persistent lich.log is the diagnostic surface.
-      - cmd: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -H=windowsgui" -o {{.BIN_DIR}}/{{.APP_NAME}}.exe .
+      - cmd: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "{{.LDFLAGS}} -H=windowsgui" -o {{.BIN_DIR}}/{{.APP_NAME}}.exe .
 
   build:mac:
     summary: Cross-compiles the macOS binaries — arm64 + amd64 (experimental)

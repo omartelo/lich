@@ -11,6 +11,7 @@ import { Home } from "@/components/Home"
 import { Settings } from "@/components/settings/Settings"
 import { Toaster } from "@/components/ui/sonner"
 import { ClaudePluginGate } from "@/components/ClaudePluginGate"
+import { AppUpdateGate } from "@/components/AppUpdateGate"
 
 // Layout is persistent across navigation: the project tabs, session sidebar and
 // TerminalHost stay mounted while the Outlet swaps screens (Home, Settings) on
@@ -55,6 +56,9 @@ function App() {
               <Route path="/settings" element={<Settings />} />
             </Route>
           </Routes>
+          {/* Inside ProjectsProvider + the router: the update flow opens a shell
+              session and navigates to it. */}
+          <AppUpdateGate />
         </ProjectsProvider>
       </HashRouter>
       <ClaudePluginGate />

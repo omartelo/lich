@@ -66,6 +66,32 @@ check_runtime_deps() {
   fi
 }
 
+# restart_running_lich asks a running lich to relaunch into the freshly
+# installed binary, so the user does not have to close and reopen it. It is
+# best-effort: the loopback port and token come from the lich session env (when
+# this runs inside a lich terminal) or from lich's runtime file; if lich is not
+# running, or the token no longer matches, the POST simply fails and is ignored.
+restart_running_lich() {
+  port="${LICH_PORT:-}"
+  token="${LICH_TOKEN:-}"
+  if [ -z "$port" ] || [ -z "$token" ]; then
+    rt="${XDG_CONFIG_HOME:-$HOME/.config}/lich/runtime.json"
+    [ -r "$rt" ] || return 0
+    # Parsing assumes lich's own compact json.Marshal output (no spaces); it is
+    # lich's file, written that way, so the greps below are safe.
+    pid="$(grep -o '"pid":[0-9]*' "$rt" | head -n1 | sed 's/.*://')"
+    # Skip a stale file left by a crashed lich: no live process, no restart.
+    [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null || return 0
+    port="$(grep -o '"port":[0-9]*' "$rt" | head -n1 | sed 's/.*://')"
+    token="$(sed -n 's/.*"token":"\([^"]*\)".*/\1/p' "$rt")"
+  fi
+  [ -n "$port" ] && [ -n "$token" ] || return 0
+  info "restarting lich"
+  # --max-time so a wedged old process never blocks the installer; the handler
+  # answers 204 before it tears down, so this returns immediately in practice.
+  curl -fsS --max-time 5 -X POST "http://127.0.0.1:${port}/restart?token=${token}" >/dev/null 2>&1 || true
+}
+
 main() {
   [ "$(uname -s)" = "Linux" ] || fail "lich is Linux-only"
   [ "$(uname -m)" = "x86_64" ] || fail "releases ship x86_64 only — build from source: https://github.com/${REPO}"
@@ -109,6 +135,7 @@ main() {
     arch) check_runtime_deps "sudo pacman -S chromium zenity" ;;
   esac
 
+  restart_running_lich
   info "done — run 'lich'"
 }
 

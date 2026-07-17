@@ -68,6 +68,17 @@ func (s *Service) Open() (*Project, error) {
 	return newProject(path), nil
 }
 
+// Home returns a project rooted at the user's home directory, without a picker.
+// The update flow opens an install terminal there when no project is in view, so
+// clicking Install never dead-ends on the Home screen.
+func (s *Service) Home() (*Project, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("resolve home dir: %w", err)
+	}
+	return newProject(home), nil
+}
+
 // newProject builds a project's stable identity from a chosen directory path.
 func newProject(path string) *Project {
 	return &Project{ID: projectID(path), Name: filepath.Base(path), Path: path}

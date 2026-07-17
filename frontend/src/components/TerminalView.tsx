@@ -9,6 +9,7 @@ import { onAppEvent } from "@/lib/app-events"
 import { ensureTransport, onSessionData, sendInput } from "@/lib/term-transport"
 import { chordSequence } from "@/lib/term-keys"
 import { makeReplayBuffer } from "@/lib/replay-buffer"
+import { takePaste } from "@/lib/paste-queue"
 import { recordChunk } from "@/lib/term-perf"
 import { copyToastMessage, COPY_TOAST_DURATION_MS } from "@/lib/copy-toast"
 import { computeGrid } from "@/lib/term-fit"
@@ -335,6 +336,13 @@ export function TerminalView({
       })
 
       await Service.Start(sessionId, projectId, cwd, kind, resume, live.term.cols, live.term.rows)
+      // Deliver any one-shot input queued for this session (the update flow's
+      // install command) now that the PTY exists. No trailing newline, so it
+      // sits at the prompt for the user to run.
+      const paste = takePaste(sessionId)
+      if (paste) {
+        void Service.Write(sessionId, paste)
+      }
       if (visibleRef.current) {
         live.term.focus()
       } else {

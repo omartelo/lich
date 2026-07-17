@@ -17,6 +17,7 @@ import {
 } from "@/lib/plugin-gate"
 import {ClaudePlugin} from "@/lib/rpc"
 import {errorText} from "@/lib/utils"
+import {runWithToast} from "@/lib/toast-async"
 
 const RESTART_HINT = "restart your Claude sessions to apply."
 
@@ -67,15 +68,13 @@ export function ClaudePluginGate() {
     })
   }
 
-  const runUpdate = async () => {
-    const pending = toast.loading("Updating lich plugin…")
-    try {
-      await ClaudePlugin.Update()
-      toast.success(`Plugin updated — ${RESTART_HINT}`, {id: pending})
-    } catch (error) {
-      toast.error(`Update failed: ${errorText(error)}`, {id: pending})
-    }
-  }
+  const runUpdate = () =>
+    runWithToast(
+      "Updating lich plugin…",
+      () => ClaudePlugin.Update(),
+      `Plugin updated — ${RESTART_HINT}`,
+      "Update failed",
+    )
 
   const runInstall = async () => {
     setInstalling(true)

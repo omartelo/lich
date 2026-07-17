@@ -132,7 +132,17 @@ Deliberate limits and shortcuts, with the upgrade path when it matters:
   (`internal/terminal/transport.go` ↔ `frontend/src/lib/term-transport.ts`). When the socket is down, output falls
   back to the `/events` channel and input to the RPC — slower, never broken.
 - **No single-instance lock**: two lich processes race the pinned listener port; the second fails with a clear error.
-  Add a lock + focus-existing-window protocol if it ever matters.
+  Add a lock + focus-existing-window protocol if it ever matters. (`runtime.json` in the config dir now carries
+  `{pid,port,token}` for the self-update restart channel — it is not a lock, but it is the natural base for one.)
+- **Self-update checks once, at startup** (`internal/appupdate` + `frontend/.../AppUpdateGate.tsx`), mirroring the
+  Claude-plugin gate — a long-running session does not notice a release mid-run. A periodic frontend poll (the
+  git-status-store pattern) is the upgrade path. Self-*apply* (download + checksum + in-place swap via
+  `minio/selfupdate`) is Windows/macOS only, where lich owns its binary; on Linux the binary is package-manager owned,
+  so the flow pastes the `install.sh` one-liner into a terminal and relaunches via `/restart` instead. The restart
+  (`internal/restart`) spawns a detached successor that retries the pinned port (`LICH_RESTART_WAIT`) while the old
+  process closes its window and exits — so the window blinks briefly, and if the successor cannot bind within ~10s it
+  gives up and the user reopens by hand. Auto-restart is Unix-only (setsid); a Windows/macOS self-apply asks for a
+  manual restart.
 - **Reordering (cards, tabs) rides dnd-kit's pointer sensors.** `PointerSensor` needs its
   `activationConstraint.distance` (`frontend/src/lib/use-sortable-list.ts`) or the sensor claims the press and plain
   clicks stop selecting a session. dnd-kit over the HTML5 DnD API because it also gives the keyboard path and never

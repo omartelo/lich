@@ -40,6 +40,24 @@ func TestNewProject(t *testing.T) {
 	}
 }
 
+func TestHome(t *testing.T) {
+	dir := t.TempDir()
+	// os.UserHomeDir reads HOME on Unix and USERPROFILE on Windows.
+	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
+
+	p, err := New(nil).Home()
+	if err != nil {
+		t.Fatalf("Home() error: %v", err)
+	}
+	if p.Path != dir {
+		t.Errorf("Path = %q, want %q", p.Path, dir)
+	}
+	if p.ID != projectID(dir) {
+		t.Errorf("ID = %q, want the stable id for %q", p.ID, dir)
+	}
+}
+
 // TestBranch proves Branch reads the checked-out branch of a git work tree and
 // returns "" for a directory that is not a repository.
 func TestBranch(t *testing.T) {
