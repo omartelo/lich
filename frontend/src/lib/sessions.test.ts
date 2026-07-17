@@ -4,6 +4,7 @@ import {
   addSession,
   closeSession,
   createProjectSessions,
+  isSessionKind,
   projectOfSession,
   removeProject,
   renameSession,
@@ -25,6 +26,20 @@ function buildState(n: number): SessionState {
   }
   return state
 }
+
+describe("isSessionKind", () => {
+  it("accepts every provider kind and the shell", () => {
+    for (const kind of ["claude", "codex", "opencode", "crush", "shell"]) {
+      expect(isSessionKind(kind)).toBe(true)
+    }
+  })
+
+  it("rejects unknown strings", () => {
+    for (const kind of ["", "bash", "gpt", "Claude", "worktree"]) {
+      expect(isSessionKind(kind)).toBe(false)
+    }
+  })
+})
 
 // withClaudeSession stamps a restored session's Claude session id onto the
 // state, the way hydration from the store does.

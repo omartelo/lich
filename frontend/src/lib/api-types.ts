@@ -73,3 +73,11 @@ export interface AppUpdateStatus {
   canSelfApply: boolean
   releaseUrl: string
 }
+
+/** internal/providers.Detected — a known provider and whether it is on PATH. */
+export interface DetectedProvider {
+  id: string
+  name: string
+  installed: boolean
+  path: string
+}

@@ -6,6 +6,7 @@ import {CSS} from "@dnd-kit/utilities"
 import {cn} from "@/lib/utils"
 import {displayPath} from "@/lib/paths"
 import {type Session} from "@/lib/sessions"
+import {ProviderIcon} from "@/lib/provider-icons"
 import {useSessionStatus} from "@/lib/useSessionStatus"
 import {useGitStatus} from "@/lib/useGitStatus"
 import {usePullRequest} from "@/lib/usePullRequest"
@@ -16,6 +17,7 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
 
@@ -145,6 +147,11 @@ export function SessionCard({
                   {status === "waiting" && (
                     <Bell className="size-3 shrink-0 text-amber-500"/>
                   )}
+                  {!status && (
+                    <span className="flex shrink-0 items-center text-muted-foreground">
+                      <ProviderIcon kind={session.kind} size={14}/>
+                    </span>
+                  )}
                   <span className="truncate text-sm font-medium text-foreground">
                     {session.label}
                   </span>
@@ -216,17 +223,17 @@ export function SessionCard({
               {git?.branch && (
                 <span className="flex flex-wrap items-center gap-2 text-muted-foreground">
                   <span className="flex items-center gap-1">
-                    <GitBranch className="size-3 shrink-0" />
+                    <GitBranch className="size-3 shrink-0"/>
                     {git.branch}
                   </span>
                   {pr && (
                     <span className="flex items-center gap-1">
-                      <GitPullRequestArrow className="size-3 shrink-0" />#{pr.number}
+                      <GitPullRequestArrow className="size-3 shrink-0"/>#{pr.number}
                     </span>
                   )}
                   {git.files > 0 && (
                     <span className="flex items-center gap-1.5">
-                      <DiffStat added={git.added} deleted={git.deleted} />
+                      <DiffStat added={git.added} deleted={git.deleted}/>
                     </span>
                   )}
                 </span>
@@ -239,6 +246,7 @@ export function SessionCard({
             <Pencil/>
             Rename
           </ContextMenuItem>
+          <ContextMenuSeparator/>
           <ContextMenuItem variant="destructive" onClick={onClose}>
             <X/>
             Close session

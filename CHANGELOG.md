@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- lich is no longer Claude-only: Codex, opencode and Crush join Claude Code as
+  selectable providers. lich detects which harnesses are installed on the
+  machine, and a new Settings → **Providers** group lists them with an enable
+  toggle (one not found on `$PATH` can't be enabled). Enabling a provider adds
+  it to the New Session menu — each with its own brand icon in place of the
+  generic bot — and reveals its settings: a custom binary path, global with a
+  per-project override, resolved the same way Claude's already was
+  (`provider.<id>.bin`; Claude keeps the legacy `claude.bin` key). Claude Code
+  stays enabled by default, so nothing changes until you opt one in. Non-Claude
+  sessions run their TUI in a PTY without the Claude-only extras (resume,
+  ai-title, live status badges); their cards show the provider's mark when idle.
 - lich now checks for its own updates on startup and surfaces a newer release
   in-app. The running binary learns its version at build time (`-X main.version`
   from the git tag), polls the GitHub releases for `omartelo/lich`, and — when a

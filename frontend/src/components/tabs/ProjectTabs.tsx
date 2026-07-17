@@ -4,6 +4,7 @@ import { DndContext, closestCenter } from "@dnd-kit/core"
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { Separator } from "@/components/ui/separator"
 import { useProjects } from "@/lib/projects"
 import { sessionsOf } from "@/lib/sessions"
 import { openSettings } from "@/lib/settings-card-store"
@@ -67,6 +68,8 @@ export function ProjectTabs() {
           <Plus className="size-4" />
         </Button>
       </div>
+
+      <Separator orientation="vertical" className="mx-1 h-5" />
 
       <Button
         variant="ghost"

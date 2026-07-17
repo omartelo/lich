@@ -23,7 +23,7 @@ import (
 // SessionStart or ai-title paths.
 type stubBins struct{ bin string }
 
-func (s stubBins) ClaudeBin(string) string                   { return s.bin }
+func (s stubBins) ProviderBin(_, _ string) string            { return s.bin }
 func (s stubBins) SetClaudeSession(_, _ string) error        { return nil }
 func (s stubBins) SetSessionTitle(_, _ string) (bool, error) { return false, nil }
 
@@ -297,13 +297,20 @@ func TestStartWithoutResumeSpawnsBare(t *testing.T) {
 	}
 }
 
-// TestResolveBin proves an empty custom path falls back to the default binary
-// while a configured path is passed through unchanged.
+// TestResolveBin proves an empty custom path falls back to the provider's
+// default binary (and to defaultBin for an unknown kind), while a configured
+// path is passed through unchanged.
 func TestResolveBin(t *testing.T) {
-	if got := resolveBin(""); got != defaultBin {
-		t.Errorf("resolveBin(%q) = %q, want %q", "", got, defaultBin)
+	if got := resolveBin("claude", ""); got != defaultBin {
+		t.Errorf("resolveBin(claude, %q) = %q, want %q", "", got, defaultBin)
 	}
-	if got := resolveBin("/opt/claude.sh"); got != "/opt/claude.sh" {
+	if got := resolveBin("codex", ""); got != "codex" {
+		t.Errorf("resolveBin(codex, %q) = %q, want codex", "", got)
+	}
+	if got := resolveBin("mystery", ""); got != defaultBin {
+		t.Errorf("resolveBin(unknown, %q) = %q, want %q", "", got, defaultBin)
+	}
+	if got := resolveBin("claude", "/opt/claude.sh"); got != "/opt/claude.sh" {
 		t.Errorf("resolveBin custom = %q, want %q", got, "/opt/claude.sh")
 	}
 }
@@ -314,8 +321,11 @@ func TestResolveCommand(t *testing.T) {
 	cases := []struct {
 		name, kind, bin, shell, want string
 	}{
-		{"claude default", "", "", "/bin/zsh", defaultBin},
+		{"claude default", "claude", "", "/bin/zsh", defaultBin},
 		{"claude custom bin", "claude", "/opt/claude.sh", "/bin/zsh", "/opt/claude.sh"},
+		{"codex default", "codex", "", "/bin/zsh", "codex"},
+		{"crush custom bin", "crush", "/opt/crush", "/bin/zsh", "/opt/crush"},
+		{"unknown kind falls back", "mystery", "", "/bin/zsh", defaultBin},
 		{"shell from env", KindShell, "/opt/claude.sh", "/bin/zsh", "/bin/zsh"},
 		{"shell fallback", KindShell, "", "", defaultShell},
 	}
@@ -327,8 +337,9 @@ func TestResolveCommand(t *testing.T) {
 	}
 }
 
-// TestResumeArgs proves a Claude session resumes only when an id is given, and
-// that a shell session never grows a --resume flag its shell cannot parse.
+// TestResumeArgs proves --resume is Claude-only: a claude session resumes when
+// an id is given, and neither a shell nor any other provider ever grows the flag
+// (it is Claude Code's, and a stray id must not reach codex/opencode/crush).
 func TestResumeArgs(t *testing.T) {
 	cases := []struct {
 		name, kind, resume string
@@ -336,7 +347,7 @@ func TestResumeArgs(t *testing.T) {
 	}{
 		{"claude fresh", "claude", "", nil},
 		{"claude resume", "claude", "abc-123", []string{resumeFlag, "abc-123"}},
-		{"default kind resumes", "", "abc-123", []string{resumeFlag, "abc-123"}},
+		{"codex never resumes", "codex", "abc-123", nil},
 		{"shell never resumes", KindShell, "abc-123", nil},
 		{"shell fresh", KindShell, "", nil},
 	}

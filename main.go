@@ -17,6 +17,7 @@ import (
 	"github.com/omartelo/lich/internal/fonts"
 	"github.com/omartelo/lich/internal/logging"
 	"github.com/omartelo/lich/internal/project"
+	"github.com/omartelo/lich/internal/providers"
 	"github.com/omartelo/lich/internal/restart"
 	"github.com/omartelo/lich/internal/rpc"
 	"github.com/omartelo/lich/internal/store"
@@ -88,6 +89,7 @@ func main() {
 	dispatcher.Register("appupdate", appupdate.New(version))
 	dispatcher.Register("store", db)
 	dispatcher.Register("system", system.New())
+	dispatcher.Register("providers", providers.New())
 	dispatcher.Deny("store.Close")
 	term.Mount("/rpc/", dispatcher)
 	term.Mount("/events", hub)

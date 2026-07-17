@@ -10,6 +10,7 @@ import {
   activeSessionId,
   addSession,
   closeSession as removeSession,
+  isSessionKind,
   projectOfSession,
   removeProject,
   renameSession as relabelSession,
@@ -94,7 +95,7 @@ function buildSessionState(loaded: StoreProject[]): SessionState {
     const sessions = (p.sessions ?? []).map((s) => ({
       id: s.id,
       label: s.label,
-      kind: (s.kind === "shell" ? "shell" : "claude") as SessionKind,
+      kind: isSessionKind(s.kind) ? s.kind : "claude",
       ...(s.path ? { path: s.path } : {}),
       ...(s.claudeSessionId ? { claudeSessionId: s.claudeSessionId } : {}),
     }))
