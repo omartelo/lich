@@ -6,6 +6,7 @@ import {displayPath} from "@/lib/paths"
 import {useGitStatus} from "@/lib/useGitStatus"
 import {usePullRequest} from "@/lib/usePullRequest"
 import {DiffStat} from "@/components/DiffStat"
+import {Separator} from "@/components/ui/separator"
 import {
   Tooltip,
   TooltipContent,
@@ -130,6 +131,9 @@ export function FooterBar({diffOpen, onToggleDiff}: FooterBarProps) {
             </TooltipTrigger>
             <TooltipContent>{path}</TooltipContent>
           </Tooltip>
+        )}
+        {(status?.branch || path) && (
+          <Separator orientation="vertical" className="h-4" />
         )}
         <span>{now.toDateString()}</span>
         <span>{`${two(now.getHours())}:${two(now.getMinutes())}`}</span>

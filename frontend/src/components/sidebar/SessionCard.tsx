@@ -17,9 +17,9 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
-import {Separator} from "@/components/ui/separator"
 
 interface SessionCardProps {
   session: Session
@@ -246,7 +246,7 @@ export function SessionCard({
             <Pencil/>
             Rename
           </ContextMenuItem>
-          <Separator/>
+          <ContextMenuSeparator/>
           <ContextMenuItem variant="destructive" onClick={onClose}>
             <X/>
             Close session
