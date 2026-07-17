@@ -54,6 +54,19 @@ jobs:
       - name: go vet
         run: go vet ./...
 
+      # Per-PR CI runs on Linux only; the Windows and macOS suites run at release
+      # time. Compile every OS's build here so a broken build tag — a _test.go
+      # that falls into the wrong OS's build, an OS-only file that stops
+      # compiling — fails the PR instead of a release tag. vet builds the
+      # _test.go files too, so it catches test-only tag mistakes `go build` misses.
+      - name: Cross-compile all targets
+        run: |
+          for os in linux darwin windows; do
+            echo "== $os =="
+            CGO_ENABLED=0 GOOS=$os go build ./...
+            CGO_ENABLED=0 GOOS=$os go vet ./...
+          done
+
       - name: Frontend tests
         run: bash .github/scripts/web-test-summary.sh
 
