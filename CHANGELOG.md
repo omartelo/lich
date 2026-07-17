@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- lich now checks for its own updates on startup and surfaces a newer release
+  in-app. The running binary learns its version at build time (`-X main.version`
+  from the git tag), polls the GitHub releases for `omartelo/lich`, and — when a
+  newer one exists — shows a toast. On Windows and macOS, where lich owns its
+  binary, one click downloads the release asset, verifies its SHA-256 against the
+  release `checksums.txt`, atomically swaps the binary in place
+  (`internal/appupdate`, via `minio/selfupdate`) and asks for a restart. On
+  Linux, where the binary belongs to the system package manager, the toast
+  instead offers to open the release page or paste the `install.sh` one-liner
+  into a terminal for the user to run (never executed automatically).
+- After the Linux installer replaces the binary, it can relaunch a running lich
+  for you: `install.sh` POSTs a new token-authenticated `/restart` endpoint,
+  which spawns a detached successor process and closes the current window so the
+  new binary takes over. It reaches lich through the session env
+  (`LICH_PORT`/`LICH_TOKEN`) when run inside a lich terminal, or a
+  `runtime.json` (pid/port/token) lich writes to its config dir when run from any
+  other terminal while lich is open.
+
 ## [0.7.0] - 2026-07-16
 
 ### Added

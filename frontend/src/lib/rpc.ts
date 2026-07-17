@@ -7,6 +7,7 @@
 // live in lib/api-types.ts.
 
 import type {
+  AppUpdateStatus,
   Branches,
   DiffStats,
   PluginStatus,
@@ -86,6 +87,9 @@ export const Terminal = {
 
 export const ProjectService = {
   Open: () => call<Project | null>("project.Open", []),
+  /** A project rooted at the user's home dir, no picker (the update flow's
+   * install terminal when no project is in view). */
+  Home: () => call<Project>("project.Home", []),
   PickFile: () => call<string>("project.PickFile", []),
   Branch: (path: string) => call<string>("project.Branch", [path]),
   Diff: (path: string) => call<DiffStats>("project.Diff", [path]),
@@ -148,6 +152,12 @@ export const ClaudePlugin = {
   Status: () => call<PluginStatus>("claudeplugin.Status", []),
   Install: () => call<null>("claudeplugin.Install", []),
   Update: () => call<null>("claudeplugin.Update", []),
+}
+
+export const AppUpdate = {
+  Status: () => call<AppUpdateStatus>("appupdate.Status", []),
+  /** Download, verify and swap the binary. Only valid where canSelfApply. */
+  Apply: () => call<null>("appupdate.Apply", []),
 }
 
 export const System = {

@@ -14,10 +14,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
+	"github.com/omartelo/lich/internal/semver"
 	"github.com/omartelo/lich/internal/winexec"
 )
 
@@ -35,10 +35,6 @@ const (
 	cmdTimeout  = 130 * time.Second
 	httpTimeout = 5 * time.Second
 	bodyLimit   = 1 << 20
-
-	// Release ranks order a pre-release below the release of the same version.
-	preReleaseRank = 0
-	releaseRank    = 1
 )
 
 // BinResolver supplies the Claude Code binary to shell out to. The store
@@ -91,7 +87,7 @@ func computeStatus(installed bool, installedVer, latestVer string) Status {
 		Installed:        installed,
 		InstalledVersion: installedVer,
 		LatestVersion:    latestVer,
-		UpdateAvailable:  installed && latestVer != "" && semverLess(installedVer, latestVer),
+		UpdateAvailable:  installed && latestVer != "" && semver.Less(installedVer, latestVer),
 	}
 }
 
@@ -199,45 +195,6 @@ func parseLatestTag(data []byte) string {
 		return ""
 	}
 	return strings.TrimPrefix(doc.TagName, "v")
-}
-
-// semverLess reports whether version a is strictly older than b. Missing or
-// non-numeric components sort as 0, and a pre-release sorts before the release
-// it qualifies (SemVer §11: 1.0.0-rc1 < 1.0.0) — the plugin does ship rc tags,
-// so an install made during an rc window must still see the stable as an update.
-//
-// Two different pre-releases of the same version compare equal (rc.1 vs rc.2 is
-// not ordered): that would need identifier-wise comparison, and the update check
-// only ever weighs an install against GitHub's "latest" release, which never
-// resolves to a pre-release.
-func semverLess(a, b string) bool {
-	pa, pb := parseSemver(a), parseSemver(b)
-	for i := range pa {
-		if pa[i] != pb[i] {
-			return pa[i] < pb[i]
-		}
-	}
-	return false
-}
-
-// parseSemver splits v into a comparable tuple: MAJOR, MINOR, PATCH, and a
-// release rank that keeps a pre-release below the release of the same version.
-func parseSemver(v string) [4]int {
-	v = strings.TrimPrefix(v, "v")
-	// Build metadata carries no precedence (SemVer §10), so drop it before the
-	// pre-release check — "+" may legally precede nothing else.
-	if i := strings.IndexByte(v, '+'); i >= 0 {
-		v = v[:i]
-	}
-	rank := releaseRank
-	if i := strings.IndexByte(v, '-'); i >= 0 {
-		v, rank = v[:i], preReleaseRank
-	}
-	out := [4]int{3: rank}
-	for i, part := range strings.SplitN(v, ".", 3) {
-		out[i], _ = strconv.Atoi(part)
-	}
-	return out
 }
 
 // claudeConfigDir resolves Claude Code's config directory: the CLAUDE_CONFIG_DIR
