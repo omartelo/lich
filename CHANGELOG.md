@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Helium Browser is now accepted as a Linux Chromium-family shell. The launcher
+  probes `helium-browser` alongside Chromium, Google Chrome and Brave, and the
+  install/runtime dependency checks document it as a supported browser.
+
 ## [0.7.0] - 2026-07-16
 
 ### Added
