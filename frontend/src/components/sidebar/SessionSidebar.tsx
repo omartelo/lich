@@ -1,9 +1,11 @@
 import {useState, useSyncExternalStore} from "react"
 import {useMatch, useNavigate} from "react-router-dom"
-import {Bot, GitBranch, Plus, Terminal} from "lucide-react"
+import {GitBranch, Plus, Terminal} from "lucide-react"
 import {toast} from "sonner"
 import {ProjectService} from "@/lib/rpc"
 import {closeSettings, isSettingsOpen, subscribeSettingsCard} from "@/lib/settings-card-store"
+import {enabledProviders, useProviders} from "@/lib/providers-store"
+import {ProviderIcon} from "@/lib/provider-icons"
 import {SettingsCard} from "./SettingsCard"
 import {Button} from "@/components/ui/button"
 import {
@@ -52,6 +54,7 @@ export function SessionSidebar() {
   const settingsOpen = useSyncExternalStore(subscribeSettingsCard, () =>
     isSettingsOpen(projectId ?? ""),
   )
+  const enabled = enabledProviders(useProviders())
   const path = projects.find((p) => p.id === projectId)?.path ?? ""
   const git = useGitStatus(path)
   const {width, handleProps} = usePanelWidth({
@@ -165,10 +168,15 @@ export function SessionSidebar() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className={"w-44"}>
             <DropdownMenuGroup>
-              <DropdownMenuItem onClick={() => newSession(projectId, "claude")}>
-                <Bot/>
-                Claude Code
-              </DropdownMenuItem>
+              {enabled.map((provider) => (
+                <DropdownMenuItem
+                  key={provider.id}
+                  onClick={() => newSession(projectId, provider.id)}
+                >
+                  <ProviderIcon kind={provider.id}/>
+                  {provider.name}
+                </DropdownMenuItem>
+              ))}
               <DropdownMenuItem onClick={() => newSession(projectId, "shell")}>
                 <Terminal/>
                 Terminal

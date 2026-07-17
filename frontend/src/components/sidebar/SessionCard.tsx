@@ -6,6 +6,7 @@ import {CSS} from "@dnd-kit/utilities"
 import {cn} from "@/lib/utils"
 import {displayPath} from "@/lib/paths"
 import {type Session} from "@/lib/sessions"
+import {ProviderIcon} from "@/lib/provider-icons"
 import {useSessionStatus} from "@/lib/useSessionStatus"
 import {useGitStatus} from "@/lib/useGitStatus"
 import {usePullRequest} from "@/lib/usePullRequest"
@@ -144,6 +145,11 @@ export function SessionCard({
                   )}
                   {status === "waiting" && (
                     <Bell className="size-3 shrink-0 text-amber-500"/>
+                  )}
+                  {!status && (
+                    <span className="flex shrink-0 items-center text-muted-foreground">
+                      <ProviderIcon kind={session.kind} size={14}/>
+                    </span>
                   )}
                   <span className="truncate text-sm font-medium text-foreground">
                     {session.label}
