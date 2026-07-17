@@ -212,7 +212,7 @@ export function SessionCard({
           >
             <div className="flex flex-col gap-1.5">
               <span className="font-medium">{session.label}</span>
-              <span className="font-mono text-muted-foreground">{shownPath}</span>
+              <span className="break-all font-mono text-muted-foreground">{shownPath}</span>
               {git?.branch && (
                 <span className="flex flex-wrap items-center gap-2 text-muted-foreground">
                   <span className="flex items-center gap-1">
