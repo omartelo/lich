@@ -6,7 +6,9 @@ import (
 	"fmt"
 )
 
-// claudeBinKey is the settings key holding the Claude Code binary path.
+// claudeBinKey is the settings key holding the Claude Code binary path. Claude
+// keeps this legacy key (rather than the "provider.<id>.bin" scheme the others
+// use) so overrides configured before the providers feature keep resolving.
 const claudeBinKey = "claude.bin"
 
 // globalScope is the sentinel project_id for settings that apply to every
@@ -44,19 +46,35 @@ func (s *Service) SetSetting(key, projectID, value string) error {
 	return nil
 }
 
-// ClaudeBin resolves the Claude Code binary path for a project: the project
+// binKey is the settings key holding a provider's custom binary path. Claude
+// uses the legacy "claude.bin"; every other provider is namespaced by id.
+func binKey(providerID string) string {
+	if providerID == "claude" {
+		return claudeBinKey
+	}
+	return "provider." + providerID + ".bin"
+}
+
+// ProviderBin resolves a provider's binary path for a project: the project
 // override wins, then the global value, then "" (letting the terminal fall back
-// to its default). It is the single call the terminal service makes when
-// spawning a session's PTY.
-func (s *Service) ClaudeBin(projectID string) string {
+// to the provider's default). It is the single call the terminal service makes
+// when spawning a session's PTY.
+func (s *Service) ProviderBin(providerID, projectID string) string {
+	key := binKey(providerID)
 	if projectID != globalScope {
-		if bin, err := s.GetSetting(claudeBinKey, projectID); err == nil && bin != "" {
+		if bin, err := s.GetSetting(key, projectID); err == nil && bin != "" {
 			return bin
 		}
 	}
-	bin, err := s.GetSetting(claudeBinKey, globalScope)
+	bin, err := s.GetSetting(key, globalScope)
 	if err != nil {
 		return ""
 	}
 	return bin
+}
+
+// ClaudeBin is ProviderBin for Claude Code, kept for the plugin service that
+// resolves the same binary outside the terminal's spawn path.
+func (s *Service) ClaudeBin(projectID string) string {
+	return s.ProviderBin("claude", projectID)
 }

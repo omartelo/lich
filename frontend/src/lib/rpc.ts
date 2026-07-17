@@ -9,6 +9,7 @@
 import type {
   AppUpdateStatus,
   Branches,
+  DetectedProvider,
   DiffStats,
   PluginStatus,
   Project,
@@ -162,4 +163,9 @@ export const AppUpdate = {
 
 export const System = {
   OpenExternal: (url: string) => call<null>("system.OpenExternal", [url]),
+}
+
+export const Providers = {
+  /** Every known provider with its install state (binary found on PATH). */
+  Detect: () => call<DetectedProvider[]>("providers.Detect", []),
 }

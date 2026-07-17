@@ -56,3 +56,27 @@ func TestClaudeBinResolution(t *testing.T) {
 		t.Errorf("p2 = %q, want global-claude", got)
 	}
 }
+
+func TestProviderBinResolution(t *testing.T) {
+	svc := newTestStore(t)
+
+	// A non-claude provider is keyed by "provider.<id>.bin", independent of the
+	// legacy claude.bin key, with the same project-over-global fallback.
+	if got := svc.ProviderBin("codex", "p1"); got != "" {
+		t.Errorf("unconfigured codex = %q, want \"\"", got)
+	}
+	_ = svc.SetSetting("provider.codex.bin", globalScope, "global-codex")
+	if got := svc.ProviderBin("codex", "p1"); got != "global-codex" {
+		t.Errorf("global codex = %q, want global-codex", got)
+	}
+	_ = svc.SetSetting("provider.codex.bin", "p1", "p1-codex")
+	if got := svc.ProviderBin("codex", "p1"); got != "p1-codex" {
+		t.Errorf("p1 codex override = %q, want p1-codex", got)
+	}
+
+	// Claude routes through the legacy key, so ProviderBin and ClaudeBin agree.
+	_ = svc.SetSetting(claudeBinKey, globalScope, "global-claude")
+	if got := svc.ProviderBin("claude", "p2"); got != "global-claude" {
+		t.Errorf("ProviderBin claude = %q, want global-claude", got)
+	}
+}

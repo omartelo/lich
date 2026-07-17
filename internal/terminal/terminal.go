@@ -16,6 +16,7 @@ import (
 	"sync"
 
 	"github.com/omartelo/lich/internal/events"
+	"github.com/omartelo/lich/internal/providers"
 )
 
 // Event names. A terminal I/O event carries the session ID as a suffix (e.g.
@@ -70,12 +71,12 @@ type session struct {
 	out *coalescer
 }
 
-// Store is the persistence the terminal service depends on: the Claude Code
-// binary to spawn for a project (empty return spawns the default), and where to
-// record the Claude session id a PTY reports through the SessionStart hook. The
-// store implements both.
+// Store is the persistence the terminal service depends on: the binary to spawn
+// for a provider in a project (empty return spawns the provider's default), and
+// where to record the Claude session id a PTY reports through the SessionStart
+// hook. The store implements both.
 type Store interface {
-	ClaudeBin(projectID string) string
+	ProviderBin(providerID, projectID string) string
 	SetClaudeSession(sessionID, claudeSessionID string) error
 	SetSessionTitle(sessionID, title string) (bool, error)
 }
@@ -185,41 +186,46 @@ func (s *Service) sessionEnv(id string) []string {
 	)
 }
 
-// defaultBin is the Claude Code binary spawned when the user has not configured
-// a custom path.
-const defaultBin = "claude"
+// defaultBin is the binary spawned when the session's kind is not a known
+// provider and no custom path is set — a safety net; real sessions always carry
+// a registered provider kind.
+const defaultBin = providers.Claude
 
-// KindShell marks a session that runs the user's shell instead of Claude Code.
+// KindShell marks a session that runs the user's shell instead of a provider.
 const KindShell = "shell"
 
 // readBufSize is the chunk size read from a session's PTY per iteration.
 const readBufSize = 32 * 1024
 
-// resolveBin returns the configured binary, or the default when it is empty.
-func resolveBin(bin string) string {
-	if bin == "" {
-		return defaultBin
+// resolveBin returns the configured binary, or the provider's default when it is
+// empty (falling back to defaultBin for an unknown kind).
+func resolveBin(kind, bin string) string {
+	if bin != "" {
+		return bin
 	}
-	return bin
+	if def := providers.DefaultBinary(kind); def != "" {
+		return def
+	}
+	return defaultBin
 }
 
 // resumeFlag is the Claude Code flag that reopens an existing session by id.
 const resumeFlag = "--resume"
 
-// resumeArgs returns the arguments that reopen the Claude session resume names,
-// or nil when the session must start fresh. A "shell" session never resumes:
-// its PTY runs the user's shell, which knows nothing about --resume, and a
-// stray claude_session_id can land on its row when the user ran Claude Code by
-// hand inside it.
+// resumeArgs returns the arguments that reopen a Claude session, or nil when the
+// session must start fresh. Resume is Claude-specific: "--resume" is Claude
+// Code's flag, so a shell or any other provider never grows it (the frontend
+// only ever passes a resume id for a claude session, but a stray one must not
+// reach codex/opencode/crush either).
 func resumeArgs(kind, resume string) []string {
-	if kind == KindShell || resume == "" {
+	if kind != providers.Claude || resume == "" {
 		return nil
 	}
 	return []string{resumeFlag, resume}
 }
 
 // resolveCommand picks the binary a session runs: the user's shell for "shell"
-// sessions, otherwise the configured Claude Code binary.
+// sessions, otherwise the provider binary for the session's kind.
 func resolveCommand(kind, bin, shellEnv string) string {
 	if kind == KindShell {
 		if shellEnv == "" {
@@ -227,7 +233,7 @@ func resolveCommand(kind, bin, shellEnv string) string {
 		}
 		return shellEnv
 	}
-	return resolveBin(bin)
+	return resolveBin(kind, bin)
 }
 
 // appImageVars are injected by the AppImage runtime or AppImageLauncher and
@@ -313,10 +319,10 @@ func scrubPathList(value, dir string) (string, bool) {
 }
 
 // Start spawns the binary for session id under project projectID — the user's
-// shell when kind is "shell", otherwise the Claude Code binary resolved from the
-// project's settings (falling back to "claude" via $PATH) — attached to a new
-// PTY sized to cols x rows and rooted at cwd, then streams its output to the
-// frontend. An empty cwd defaults to the user's home directory. Starting a
+// shell when kind is "shell", otherwise the provider binary for that kind
+// resolved from the project's settings (falling back to the provider's default
+// on $PATH) — attached to a new PTY sized to cols x rows and rooted at cwd, then
+// streams its output to the frontend. An empty cwd defaults to the user's home directory. Starting a
 // session that is already running is a no-op.
 //
 // A non-empty resume is a Claude session id to reopen (`--resume`), which the
@@ -340,7 +346,7 @@ func (s *Service) Start(id, projectID, cwd, kind, resume string, cols, rows int)
 	}
 
 	p, err := startPTY(ptySpec{
-		bin:  resolveCommand(kind, s.store.ClaudeBin(projectID), userShell()),
+		bin:  resolveCommand(kind, s.store.ProviderBin(kind, projectID), userShell()),
 		args: resumeArgs(kind, resume),
 		dir:  cwd,
 		env:  s.sessionEnv(id),
