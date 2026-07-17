@@ -14,7 +14,7 @@ Pick your system:
 - [Verifying checksums](#verifying-checksums)
 
 **Runtime dependencies** — lich opens its window in a Chromium-family browser;
-none is bundled. On Linux any of `chromium`, `google-chrome` or `brave`
+none is bundled. On Linux any of `chromium`, `google-chrome`, `helium-browser` or `brave`
 satisfies it, and `zenity` provides the folder picker. On Windows, Chrome,
 Edge or Brave are found via their conventional install paths (Edge ships with
 Windows) and the folder picker is native.

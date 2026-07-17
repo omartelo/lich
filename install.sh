@@ -49,11 +49,11 @@ as_root() {
 
 check_runtime_deps() {
   browser=""
-  for candidate in chromium chromium-browser google-chrome-stable google-chrome brave; do
+  for candidate in chromium chromium-browser google-chrome-stable google-chrome helium-browser brave; do
     if have "$candidate"; then browser="$candidate"; break; fi
   done
   missing=""
-  [ -n "$browser" ] || missing="a Chromium-family browser (chromium, google-chrome, brave, ...)"
+  [ -n "$browser" ] || missing="a Chromium-family browser (chromium, google-chrome, helium-browser, brave, ...)"
   if ! have zenity; then
     [ -z "$missing" ] || missing="${missing} and "
     missing="${missing}zenity"
