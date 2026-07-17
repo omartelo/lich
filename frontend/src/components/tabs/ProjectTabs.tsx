@@ -8,25 +8,30 @@ import { useProjects } from "@/lib/projects"
 import { sessionsOf } from "@/lib/sessions"
 import { useSortableList } from "@/lib/use-sortable-list"
 import { ProjectTab } from "./ProjectTab"
+import { HomeTab } from "./HomeTab"
 
-// ProjectTabs is the top strip: open projects as tabs (drag to reorder), a
-// button to open another, and settings pinned to the right.
+// ProjectTabs is the top strip: the pinned Home tab, open projects as tabs
+// (drag to reorder), a button to open another, and settings pinned to the right.
 export function ProjectTabs() {
-  const { projects, sessions, openProject, closeProject, reorderProjects } =
+  const { projects, sessions, homeId, openProject, closeProject, reorderProjects } =
     useProjects()
-  const ids = projects.map((project) => project.id)
+  // Home is pinned first and stays out of the drag list so it never reorders.
+  const rest = projects.filter((project) => project.id !== homeId)
+  const ids = rest.map((project) => project.id)
   const { sensors, onDragEnd } = useSortableList(ids, reorderProjects)
+  const showHome = homeId !== null && projects.some((p) => p.id === homeId)
 
   return (
     <div className="flex h-11 shrink-0 items-center gap-1 border-b border-border bg-sidebar px-2">
       <div className="flex flex-1 items-center gap-1 overflow-x-auto">
+        {showHome && homeId && <HomeTab projectId={homeId} />}
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
           onDragEnd={onDragEnd}
         >
           <SortableContext items={ids} strategy={horizontalListSortingStrategy}>
-            {projects.map((project) => (
+            {rest.map((project) => (
               <ProjectTab
                 key={project.id}
                 project={project}

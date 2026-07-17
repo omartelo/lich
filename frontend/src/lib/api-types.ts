@@ -63,3 +63,13 @@ export interface PluginStatus {
   latestVersion: string
   updateAvailable: boolean
 }
+
+/** internal/appupdate.Status — lich's own release/update state. */
+export interface AppUpdateStatus {
+  currentVersion: string
+  latestVersion: string
+  updateAvailable: boolean
+  /** true where lich can swap its own binary (Windows/macOS); false on Linux. */
+  canSelfApply: boolean
+  releaseUrl: string
+}

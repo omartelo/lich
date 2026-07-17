@@ -156,6 +156,16 @@ func (s *Service) MountPublic(pattern string, handler http.Handler) {
 	s.ws.mountPublic(pattern, handler)
 }
 
+// SetRestart wires the POST /restart endpoint to fn, the in-place relaunch the
+// update flow triggers after replacing the binary. No-op when the transport
+// failed to start — /restart then simply reports unavailable.
+func (s *Service) SetRestart(fn func() error) {
+	if s.ws == nil {
+		return
+	}
+	s.ws.setRestart(fn)
+}
+
 // sessionEnv is the environment for one PTY: the shared base plus the loopback
 // coordinates a Claude Code hook needs to report this session's status back to
 // lich. LICH_SESSION_ID is per-session, so this returns a fresh slice rather

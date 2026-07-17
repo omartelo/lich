@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { applyOrder } from "./reorder"
+import { applyOrder, pinFirst } from "./reorder"
 
 const ids = (items: { id: string }[]) => items.map((i) => i.id)
 const items = (...names: string[]) => names.map((id) => ({ id }))
@@ -43,5 +43,31 @@ describe("applyOrder", () => {
     const list = items("a", "b", "c")
     applyOrder(list, ["c", "b", "a"])
     expect(ids(list)).toEqual(["a", "b", "c"])
+  })
+})
+
+describe("pinFirst", () => {
+  it("moves the pinned id to the front", () => {
+    expect(pinFirst(["a", "b", "home"], "home")).toEqual(["home", "a", "b"])
+  })
+
+  it("adds the pinned id when the drop omitted it (the common case)", () => {
+    // ProjectTabs excludes Home from the drag list, so a drop names only a,b.
+    expect(pinFirst(["a", "b"], "home")).toEqual(["home", "a", "b"])
+  })
+
+  it("deduplicates rather than repeating the pinned id", () => {
+    expect(pinFirst(["home", "a"], "home")).toEqual(["home", "a"])
+  })
+
+  it("leaves ids untouched when nothing is pinned", () => {
+    expect(pinFirst(["a", "b"], null)).toEqual(["a", "b"])
+  })
+
+  it("produces a list applyOrder accepts against the full project set", () => {
+    const projects = items("home", "a", "b")
+    const full = pinFirst(["b", "a"], "home") // Home spliced back onto a reordered drop
+    const got = applyOrder(projects, full)
+    expect(got && ids(got)).toEqual(["home", "b", "a"])
   })
 })
