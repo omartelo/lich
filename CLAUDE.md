@@ -17,7 +17,7 @@ product, it is a bespoke tool. Linux first; an experimental Windows build ships 
 - **Shell**: system Chromium-family browser launched in `--app` mode (`internal/chromium`), persistent profile under
   the user config dir (`~/.config/lich/chromium-profile`; `%AppData%\lich` on Windows; `~/Library/Application
   Support/lich` on macOS — all via `os.UserConfigDir`). Window closed = app exit. Runtime needs: a Chromium-family
-  browser — chromium/chrome/helium-browser/brave on PATH on Linux, plus zenity for the folder picker; chrome/edge/brave via their
+  browser — chromium/chrome/brave on PATH on Linux, plus zenity for the folder picker; chrome/edge/brave via their
   conventional install paths on Windows (picker is native win32, and Edge being everywhere guarantees a window);
   Chrome/Chromium/Edge/Brave in their `.app` bundles on macOS (picker is osascript, built in).
 - **Frontend**: React 18 + TypeScript + Vite. Terminal is xterm.js 6 + `@xterm/addon-webgl`. Service shapes are

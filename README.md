@@ -25,7 +25,7 @@ release.
 > alongside it. lich is a single static Go binary that opens its UI in your
 > system's Chromium-family browser in `--app` mode (no Electron, no bundled
 > webview — decision record: `docs/chromium-shell.md`). At runtime it needs a
-> Chromium-family browser: on **Linux**, chromium/google-chrome/helium-browser/brave on PATH
+> Chromium-family browser: on **Linux**, chromium/google-chrome/brave on PATH
 > plus `zenity` for the folder picker; on **macOS**, Chrome/Chromium/Edge/Brave
 > in `/Applications` (the picker is built in); on **Windows**, Chrome/Edge/Brave
 > via their usual install paths. The macOS and Windows binaries are unsigned —
