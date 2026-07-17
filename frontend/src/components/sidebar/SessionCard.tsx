@@ -1,17 +1,17 @@
 import {useEffect, useRef, useState} from "react"
 import type {KeyboardEvent} from "react"
-import {Bell, Check, GitBranch, GitPullRequestArrow, LoaderCircle, Pencil, X} from "lucide-react"
+import {GitBranch, GitPullRequestArrow, Pencil, X} from "lucide-react"
 import {useSortable} from "@dnd-kit/sortable"
 import {CSS} from "@dnd-kit/utilities"
 import {cn} from "@/lib/utils"
 import {displayPath} from "@/lib/paths"
 import {type Session} from "@/lib/sessions"
-import {ProviderIcon} from "@/lib/provider-icons"
 import {useSessionStatus} from "@/lib/useSessionStatus"
 import {useGitStatus} from "@/lib/useGitStatus"
 import {usePullRequest} from "@/lib/usePullRequest"
 import {System} from "@/lib/rpc"
 import {DiffStat} from "@/components/DiffStat"
+import {SessionStatusIcon} from "./SessionStatusIcon"
 import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip"
 import {
   ContextMenu,
@@ -45,10 +45,11 @@ export function SessionCard({
   const pathRef = useRef<HTMLSpanElement>(null)
   const [pathOverflow, setPathOverflow] = useState(false)
   const [editing, setEditing] = useState(false)
-  // Processing state reported by the lich Claude Code hook: a spinner while
-  // Claude produces output, a check once its turn ends, a bell when it is
-  // blocked on the user. null before the first report, and whenever the hook
-  // reports a state with no indicator (see toSessionStatus).
+  // Processing state reported by the lich Claude Code hook, drawn as a ring
+  // around the provider icon: a spinning ring while Claude produces output,
+  // solid emerald once its turn ends, amber when it is blocked on the user.
+  // null before the first report, and whenever the hook reports a state with
+  // no indicator (see toSessionStatus) — then the icon shows ringless.
   const status = useSessionStatus(session.id)
   // A worktree session lives in its own checkout: show that path and poll its
   // git status, so the badge reflects the worktree's branch, not the project's.
@@ -138,20 +139,7 @@ export function SessionCard({
                 />
               ) : (
                 <span className="flex w-full min-w-0 items-center gap-1.5 pr-5">
-                  {status === "busy" && (
-                    <LoaderCircle className="size-3 shrink-0 animate-spin text-muted-foreground"/>
-                  )}
-                  {status === "done" && (
-                    <Check className="size-3 shrink-0 text-emerald-500"/>
-                  )}
-                  {status === "waiting" && (
-                    <Bell className="size-3 shrink-0 text-amber-500"/>
-                  )}
-                  {!status && (
-                    <span className="flex shrink-0 items-center text-muted-foreground">
-                      <ProviderIcon kind={session.kind} size={14}/>
-                    </span>
-                  )}
+                  <SessionStatusIcon kind={session.kind} status={status}/>
                   <span className="truncate text-sm font-medium text-foreground">
                     {session.label}
                   </span>
