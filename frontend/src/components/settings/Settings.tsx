@@ -1,5 +1,6 @@
 import { useState } from "react"
 import type { ComponentType } from "react"
+import { useParams } from "react-router-dom"
 import { Search } from "lucide-react"
 import { TerminalSettings } from "./TerminalSettings"
 import { AppearanceSettings } from "./AppearanceSettings"
@@ -28,15 +29,18 @@ const SECTIONS = [
   id: string
   label: string
   group: "app" | "project"
-  Component: ComponentType
+  Component: ComponentType<{ projectId?: string }>
 }>
 
 type SectionId = (typeof SECTIONS)[number]["id"]
 
-// Settings is a full screen (not a modal): it fills the main area and sits on
-// top of the persistent terminals, which stay mounted and running behind it. A
-// category nav sits on the left; content is on the right.
+// Settings is the per-project settings screen (not a modal): it fills the main
+// area and sits on top of the persistent terminals, which stay mounted and
+// running behind it, with the session sidebar kept beside it. The route carries
+// the project id, which the "project" sections use for that project's
+// overrides. A category nav sits on the left; content is on the right.
 export function Settings() {
+  const { projectId } = useParams()
   const [active, setActive] = useState<SectionId>("terminal")
   const [query, setQuery] = useState("")
 
@@ -96,7 +100,7 @@ export function Settings() {
                 {activeSection.label}
               </h1>
               <div className="divide-y divide-border">
-                <ActiveComponent />
+                <ActiveComponent projectId={projectId} />
               </div>
             </>
           )}

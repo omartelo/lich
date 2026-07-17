@@ -1,8 +1,10 @@
-import {useState} from "react"
-import {useMatch} from "react-router-dom"
+import {useState, useSyncExternalStore} from "react"
+import {useMatch, useNavigate} from "react-router-dom"
 import {Bot, GitBranch, Plus, Terminal} from "lucide-react"
 import {toast} from "sonner"
 import {ProjectService} from "@/lib/rpc"
+import {closeSettings, isSettingsOpen, subscribeSettingsCard} from "@/lib/settings-card-store"
+import {SettingsCard} from "./SettingsCard"
 import {Button} from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -41,8 +43,15 @@ export function SessionSidebar() {
     renameSession,
     reorderSessions,
   } = useProjects()
-  const match = useMatch("/projects/:projectId")
+  // Match the project subtree ("/*") so the sidebar stays mounted — and keeps
+  // resolving its project — while the per-project Settings screen is open.
+  const match = useMatch("/projects/:projectId/*")
   const projectId = match?.params.projectId
+  const onSettings = !!useMatch("/projects/:projectId/settings")
+  const navigate = useNavigate()
+  const settingsOpen = useSyncExternalStore(subscribeSettingsCard, () =>
+    isSettingsOpen(projectId ?? ""),
+  )
   const path = projects.find((p) => p.id === projectId)?.path ?? ""
   const git = useGitStatus(path)
   const {width, handleProps} = usePanelWidth({
@@ -176,6 +185,19 @@ export function SessionSidebar() {
         </DropdownMenu>
       </div>
       <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto">
+        {settingsOpen && (
+          <SettingsCard
+            active={onSettings}
+            onSelect={() => navigate(`/projects/${projectId}/settings`)}
+            onClose={() => {
+              closeSettings(projectId)
+              // Leaving settings drops back to the project's active terminal.
+              if (onSettings) {
+                navigate(`/projects/${projectId}`)
+              }
+            }}
+          />
+        )}
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -190,8 +212,15 @@ export function SessionSidebar() {
                 key={session.id}
                 session={session}
                 path={path}
-                active={session.id === activeId}
-                onSelect={() => activateSession(projectId, session.id)}
+                // A session is never highlighted while the Settings screen owns
+                // the view, so the Settings card reads as the active one.
+                active={session.id === activeId && !onSettings}
+                onSelect={() => {
+                  activateSession(projectId, session.id)
+                  // From the settings screen this returns to the terminal; on
+                  // the project route it is a no-op.
+                  navigate(`/projects/${projectId}`)
+                }}
                 onClose={() => requestClose(session)}
                 onRename={(label) => renameSession(projectId, session.id, label)}
               />

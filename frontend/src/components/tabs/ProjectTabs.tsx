@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom"
+import { useMatch, useNavigate } from "react-router-dom"
 import { Plus, Settings } from "lucide-react"
 import { DndContext, closestCenter } from "@dnd-kit/core"
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable"
@@ -6,15 +6,30 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { useProjects } from "@/lib/projects"
 import { sessionsOf } from "@/lib/sessions"
+import { openSettings } from "@/lib/settings-card-store"
 import { useSortableList } from "@/lib/use-sortable-list"
 import { ProjectTab } from "./ProjectTab"
 import { HomeTab } from "./HomeTab"
 
 // ProjectTabs is the top strip: the pinned Home tab, open projects as tabs
-// (drag to reorder), a button to open another, and settings pinned to the right.
+// (drag to reorder), a button to open another, and a settings button pinned to
+// the right that opens the current project's Settings card.
 export function ProjectTabs() {
   const { projects, sessions, homeId, openProject, closeProject, reorderProjects } =
     useProjects()
+  const navigate = useNavigate()
+  // The project the settings gear targets: whichever one is in view, falling
+  // back to Home when the app is on the bare landing screen.
+  const activeProjectId = useMatch("/projects/:projectId/*")?.params.projectId ?? homeId
+  const onSettings = !!useMatch("/projects/:projectId/settings")
+
+  const openProjectSettings = () => {
+    if (!activeProjectId) {
+      return
+    }
+    openSettings(activeProjectId)
+    navigate(`/projects/${activeProjectId}/settings`)
+  }
   // Home is pinned first and stays out of the drag list so it never reorders.
   const rest = projects.filter((project) => project.id !== homeId)
   const ids = rest.map((project) => project.id)
@@ -53,19 +68,20 @@ export function ProjectTabs() {
         </Button>
       </div>
 
-      <NavLink
-        to="/settings"
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        onClick={openProjectSettings}
+        disabled={!activeProjectId}
         title="Settings"
         aria-label="Settings"
-        className={({ isActive }) =>
-          cn(
-            "flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
-            isActive && "bg-accent text-accent-foreground",
-          )
-        }
+        className={cn(
+          "shrink-0 text-muted-foreground",
+          onSettings && "bg-accent text-accent-foreground",
+        )}
       >
         <Settings className="size-4" />
-      </NavLink>
+      </Button>
     </div>
   )
 }

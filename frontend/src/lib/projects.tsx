@@ -125,7 +125,9 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const homeIdRef = useRef<string | null>(null)
   homeIdRef.current = homeId
   const navigate = useNavigate()
-  const activeProjectId = useMatch("/projects/:projectId")?.params.projectId
+  // "/*" so a project stays the active one while its Settings screen is open
+  // (keeps the new-session hotkey, attention toasts and seen-tracking working).
+  const activeProjectId = useMatch("/projects/:projectId/*")?.params.projectId
   // Latest focused project id for the attention toast, read inside a once-only
   // event subscription without re-subscribing on every navigation.
   const activeProjectIdRef = useRef(activeProjectId)

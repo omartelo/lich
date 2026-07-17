@@ -53,7 +53,10 @@ function App() {
               {/* Terminals are rendered by TerminalHost; the route only selects
                   which one is visible, so this element is empty. */}
               <Route path="/projects/:projectId" element={null} />
-              <Route path="/settings" element={<Settings />} />
+              {/* Settings is a per-project screen: it carries the project id so
+                  it can show that project's overrides, and renders in the main
+                  area with the session sidebar kept beside it. */}
+              <Route path="/projects/:projectId/settings" element={<Settings />} />
             </Route>
           </Routes>
           {/* Inside ProjectsProvider + the router: the update flow opens a shell

@@ -10,29 +10,36 @@ import { SettingBlock } from "./SettingBlock"
 const GLOBAL_SCOPE = ""
 const CLAUDE_BIN_KEY = "claude.bin"
 
-export function ProjectClaudeCodeSettings() {
+// Per-project override for the current project (the one whose Settings screen is
+// open). Empty inherits the global custom path.
+export function ProjectClaudeCodeSettings({ projectId }: { projectId?: string }) {
   const { projects } = useProjects()
+  const project = projects.find((p) => p.id === projectId)
   const [globalBin, setGlobalBin] = useState("")
-  const [bins, setBins] = useState<Record<string, string>>({})
+  const [bin, setBin] = useState("")
 
   useEffect(() => {
     void Store.GetSetting(CLAUDE_BIN_KEY, GLOBAL_SCOPE).then(setGlobalBin)
-    for (const project of projects) {
-      void Store.GetSetting(CLAUDE_BIN_KEY, project.id).then((value) =>
-        setBins((prev) => ({ ...prev, [project.id]: value })),
-      )
-    }
-  }, [projects])
+  }, [])
 
-  const persist = (projectId: string, value: string) => {
-    setBins((prev) => ({ ...prev, [projectId]: value }))
-    void Store.SetSetting(CLAUDE_BIN_KEY, projectId, value.trim())
+  useEffect(() => {
+    if (!projectId) {
+      return
+    }
+    void Store.GetSetting(CLAUDE_BIN_KEY, projectId).then(setBin)
+  }, [projectId])
+
+  const persist = (value: string) => {
+    setBin(value)
+    if (projectId) {
+      void Store.SetSetting(CLAUDE_BIN_KEY, projectId, value.trim())
+    }
   }
 
-  if (projects.length === 0) {
+  if (!project) {
     return (
       <p className="py-5 text-sm text-muted-foreground">
-        No open projects. Open a project to configure its overrides.
+        No project selected.
       </p>
     )
   }
@@ -40,24 +47,18 @@ export function ProjectClaudeCodeSettings() {
   return (
     <SettingBlock
       title="Custom path"
-      description="Per-project path to the Claude Code binary or a launcher script spawned in the project's terminals. Leave a project empty to inherit the global custom path."
+      description="Path to the Claude Code binary or a launcher script spawned in this project's terminals. Leave empty to inherit the global custom path."
     >
-      <div className="space-y-5">
-        {projects.map((project) => (
-          <div key={project.id}>
-            <div className="text-sm font-medium text-foreground">{project.name}</div>
-            <p className="mb-2 mt-0.5 text-xs text-muted-foreground">{project.path}</p>
-            <Input
-              value={bins[project.id] ?? ""}
-              onChange={(event) => persist(project.id, event.target.value)}
-              placeholder={globalBin || "claude"}
-              spellCheck={false}
-              aria-label={`Claude Code path for ${project.name}`}
-              className="w-96 max-w-full font-mono"
-            />
-          </div>
-        ))}
-      </div>
+      <div className="text-sm font-medium text-foreground">{project.name}</div>
+      <p className="mb-2 mt-0.5 text-xs text-muted-foreground">{project.path}</p>
+      <Input
+        value={bin}
+        onChange={(event) => persist(event.target.value)}
+        placeholder={globalBin || "claude"}
+        spellCheck={false}
+        aria-label={`Claude Code path for ${project.name}`}
+        className="w-96 max-w-full font-mono"
+      />
     </SettingBlock>
   )
 }
