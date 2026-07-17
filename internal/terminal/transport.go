@@ -95,6 +95,8 @@ type transport struct {
 	touched     func(sessionID string)
 	// restart, when set, relaunches lich and closes this window; POST /restart
 	// triggers it (install.sh calls it after replacing the binary on disk).
+	// Guarded by mu: set via setRestart after the server goroutine is already
+	// running, and read by the request goroutine handling /restart.
 	restart func() error
 }
 
@@ -198,7 +200,10 @@ func (t *transport) restartApp(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid token", http.StatusUnauthorized)
 		return
 	}
-	if t.restart == nil {
+	t.mu.Lock()
+	fn := t.restart
+	t.mu.Unlock()
+	if fn == nil {
 		http.Error(w, "restart unavailable", http.StatusServiceUnavailable)
 		return
 	}
@@ -209,10 +214,20 @@ func (t *transport) restartApp(w http.ResponseWriter, r *http.Request) {
 	// Run after the response flushes: the successor is spawned and this window
 	// is closed, which unwinds the process. A failure only reaches the log.
 	go func() {
-		if err := t.restart(); err != nil {
+		if err := fn(); err != nil {
 			slog.Error("restart failed", "err", err)
 		}
 	}()
+}
+
+// setRestart records the relaunch callback under the same lock that guards the
+// transport's other mutable state (conn). The service's SetRestart calls it, and
+// it runs after the server goroutine is already serving, so the lock is what
+// establishes the happens-before with the /restart handler's read.
+func (t *transport) setRestart(fn func() error) {
+	t.mu.Lock()
+	t.restart = fn
+	t.mu.Unlock()
 }
 
 // mount adds a handler to the transport listener behind the same token check

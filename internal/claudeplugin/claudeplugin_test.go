@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -54,26 +53,6 @@ func TestParseInstalledVersion(t *testing.T) {
 			got, ok := parseInstalledVersion([]byte(tc.json), "lich@lich-plugin")
 			if got != tc.want || ok != tc.wantOK {
 				t.Fatalf("got (%q,%v), want (%q,%v)", got, ok, tc.want, tc.wantOK)
-			}
-		})
-	}
-}
-
-func TestParseLatestTag(t *testing.T) {
-	tests := []struct {
-		name string
-		json string
-		want string
-	}{
-		{"v prefix", `{"tag_name":"v0.2.0"}`, "0.2.0"},
-		{"no prefix", `{"tag_name":"1.4.2"}`, "1.4.2"},
-		{"missing", `{"name":"x"}`, ""},
-		{"malformed", `not json`, ""},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := parseLatestTag([]byte(tc.json)); got != tc.want {
-				t.Fatalf("got %q, want %q", got, tc.want)
 			}
 		})
 	}
@@ -200,54 +179,6 @@ func serveBody(t *testing.T, status int, body string) *Service {
 	}))
 	t.Cleanup(srv.Close)
 	return &Service{http: srv.Client(), latestURL: srv.URL}
-}
-
-func TestLatestVersion(t *testing.T) {
-	tests := []struct {
-		name   string
-		status int
-		body   string
-		want   string
-	}{
-		{"tag with v prefix", http.StatusOK, `{"tag_name":"v0.2.0"}`, "0.2.0"},
-		{"pre-release tag", http.StatusOK, `{"tag_name":"v0.2.0-rc.3"}`, "0.2.0-rc.3"},
-		{"malformed json", http.StatusOK, `{"tag_name":`, ""},
-		{"not found", http.StatusNotFound, `{"message":"Not Found"}`, ""},
-		{"server error", http.StatusInternalServerError, ``, ""},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := serveBody(t, tc.status, tc.body).latestVersion(); got != tc.want {
-				t.Fatalf("latestVersion() = %q, want %q", got, tc.want)
-			}
-		})
-	}
-}
-
-func TestLatestVersionNetworkFailure(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-	s := &Service{http: srv.Client(), latestURL: srv.URL}
-	srv.Close()
-
-	if got := s.latestVersion(); got != "" {
-		t.Fatalf("latestVersion() = %q, want %q for an unreachable server", got, "")
-	}
-}
-
-func TestLatestVersionCapsBody(t *testing.T) {
-	// The tag is valid but padded past bodyLimit: the cap truncates the body
-	// mid-JSON, so a parse failure here is what proves the read is bounded.
-	body := `{"tag_name":"v9.9.9","body":"` + strings.Repeat("x", bodyLimit*2) + `"}`
-	if got := serveBody(t, http.StatusOK, body).latestVersion(); got != "" {
-		t.Fatalf("latestVersion() = %q, want %q — body read past bodyLimit", got, "")
-	}
-}
-
-func TestLatestVersionBadURL(t *testing.T) {
-	s := &Service{http: &http.Client{}, latestURL: "://not a url"}
-	if got := s.latestVersion(); got != "" {
-		t.Fatalf("latestVersion() = %q, want %q for an unbuildable request", got, "")
-	}
 }
 
 func TestStatus(t *testing.T) {

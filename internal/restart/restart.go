@@ -21,6 +21,7 @@ const WaitEnv = "LICH_RESTART_WAIT"
 type Coordinator struct {
 	mu      sync.Mutex
 	window  *os.Process
+	started bool
 	exePath string
 	env     []string
 	// seams for tests; default to the build-tagged process primitives.
@@ -56,12 +57,20 @@ func (c *Coordinator) Do() error {
 	if c.exePath == "" {
 		return errors.New("restart: executable path unknown")
 	}
+	// Once only: a second /restart (two install.sh runs) must not spawn a second
+	// successor that would then lose the port race and burn the bind timeout.
+	c.mu.Lock()
+	if c.started {
+		c.mu.Unlock()
+		return nil
+	}
+	c.started = true
+	win := c.window
+	c.mu.Unlock()
+
 	if err := c.spawn(c.exePath, successorEnv(c.env)); err != nil {
 		return fmt.Errorf("restart: launch successor: %w", err)
 	}
-	c.mu.Lock()
-	win := c.window
-	c.mu.Unlock()
 	if win != nil {
 		if err := c.terminate(win); err != nil {
 			return fmt.Errorf("restart: close window: %w", err)

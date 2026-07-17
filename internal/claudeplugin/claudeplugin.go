@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -17,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/omartelo/lich/internal/ghrelease"
 	"github.com/omartelo/lich/internal/semver"
 	"github.com/omartelo/lich/internal/winexec"
 )
@@ -34,7 +34,6 @@ const (
 	// repo, which the CLI itself caps at 120s.
 	cmdTimeout  = 130 * time.Second
 	httpTimeout = 5 * time.Second
-	bodyLimit   = 1 << 20
 )
 
 // BinResolver supplies the Claude Code binary to shell out to. The store
@@ -165,36 +164,7 @@ func parseInstalledVersion(data []byte, key string) (string, bool) {
 // latestVersion fetches the newest released version from GitHub, or "" on any
 // failure — the caller treats an empty result as "no update known".
 func (s *Service) latestVersion() string {
-	req, err := http.NewRequest(http.MethodGet, s.latestURL, nil)
-	if err != nil {
-		return ""
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "lich")
-	resp, err := s.http.Do(req)
-	if err != nil {
-		return ""
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return ""
-	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, bodyLimit))
-	if err != nil {
-		return ""
-	}
-	return parseLatestTag(data)
-}
-
-// parseLatestTag reads the release tag and normalizes it to a bare semver.
-func parseLatestTag(data []byte) string {
-	var doc struct {
-		TagName string `json:"tag_name"`
-	}
-	if err := json.Unmarshal(data, &doc); err != nil {
-		return ""
-	}
-	return strings.TrimPrefix(doc.TagName, "v")
+	return ghrelease.LatestTag(s.http, s.latestURL)
 }
 
 // claudeConfigDir resolves Claude Code's config directory: the CLAUDE_CONFIG_DIR

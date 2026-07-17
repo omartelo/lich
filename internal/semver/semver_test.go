@@ -33,6 +33,12 @@ func TestLess(t *testing.T) {
 		{"1.0.0+build.5", "1.0.0", false},
 		{"1.0.0", "1.0.0+build.5", false},
 		{"1.0.0-rc1+build.5", "1.0.0", true},
+
+		// Garbage a git tag never produces, kept sane: a separator at index 0
+		// strips to empty numeric components rather than mis-parsing the digits
+		// after it (pins the IndexByte boundary — the '+' and '-' at position 0).
+		{"+5", "0.0.1", true},    // "+5" → build meta stripped → 0.0.0 < 0.0.1
+		{"-5", "0.0.0-x", false}, // "-5" → leading pre-release marker → 0.0.0-pre, equal
 	}
 	for _, tc := range tests {
 		if got := Less(tc.a, tc.b); got != tc.want {

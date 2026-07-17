@@ -22,7 +22,7 @@ func newRestartTransport(t *testing.T) *transport {
 func TestRestartTriggersCallback(t *testing.T) {
 	tr := newRestartTransport(t)
 	fired := make(chan struct{}, 1)
-	tr.restart = func() error { fired <- struct{}{}; return nil }
+	tr.setRestart(func() error { fired <- struct{}{}; return nil })
 
 	url := fmt.Sprintf("http://127.0.0.1:%d/restart?token=%s", tr.port, tr.token)
 	resp, err := http.Post(url, "application/json", nil)
@@ -43,7 +43,7 @@ func TestRestartTriggersCallback(t *testing.T) {
 func TestRestartRejectsBadToken(t *testing.T) {
 	tr := newRestartTransport(t)
 	fired := make(chan struct{}, 1)
-	tr.restart = func() error { fired <- struct{}{}; return nil }
+	tr.setRestart(func() error { fired <- struct{}{}; return nil })
 
 	url := fmt.Sprintf("http://127.0.0.1:%d/restart?token=wrong", tr.port)
 	resp, err := http.Post(url, "application/json", nil)
@@ -63,7 +63,7 @@ func TestRestartRejectsBadToken(t *testing.T) {
 
 func TestRestartRejectsGet(t *testing.T) {
 	tr := newRestartTransport(t)
-	tr.restart = func() error { return nil }
+	tr.setRestart(func() error { return nil })
 
 	url := fmt.Sprintf("http://127.0.0.1:%d/restart?token=%s", tr.port, tr.token)
 	resp, err := http.Get(url)

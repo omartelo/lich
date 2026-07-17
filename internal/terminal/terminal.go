@@ -163,7 +163,7 @@ func (s *Service) SetRestart(fn func() error) {
 	if s.ws == nil {
 		return
 	}
-	s.ws.restart = fn
+	s.ws.setRestart(fn)
 }
 
 // sessionEnv is the environment for one PTY: the shared base plus the loopback

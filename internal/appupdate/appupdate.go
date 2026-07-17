@@ -7,7 +7,6 @@ package appupdate
 
 import (
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,6 +17,7 @@ import (
 	"time"
 
 	"github.com/minio/selfupdate"
+	"github.com/omartelo/lich/internal/ghrelease"
 	"github.com/omartelo/lich/internal/semver"
 )
 
@@ -219,30 +219,7 @@ func parseChecksum(data []byte, asset string) string {
 // latestVersion fetches the newest released version from GitHub, or "" on any
 // failure — the caller treats an empty result as "no update known".
 func (s *Service) latestVersion() string {
-	resp, err := s.get(s.latestURL)
-	if err != nil {
-		return ""
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return ""
-	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, bodyLimit))
-	if err != nil {
-		return ""
-	}
-	return parseLatestTag(data)
-}
-
-// parseLatestTag reads the release tag and normalizes it to a bare semver.
-func parseLatestTag(data []byte) string {
-	var doc struct {
-		TagName string `json:"tag_name"`
-	}
-	if err := json.Unmarshal(data, &doc); err != nil {
-		return ""
-	}
-	return strings.TrimPrefix(doc.TagName, "v")
+	return ghrelease.LatestTag(s.http, s.latestURL)
 }
 
 // get issues a GET with lich's identifying headers.

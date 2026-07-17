@@ -73,6 +73,25 @@ func TestDoSpawnsThenTerminates(t *testing.T) {
 	}
 }
 
+func TestDoIsIdempotent(t *testing.T) {
+	spawns, terminates := 0, 0
+	c := &Coordinator{
+		exePath:   "/usr/local/bin/lich",
+		spawn:     func(string, []string) error { spawns++; return nil },
+		terminate: func(*os.Process) error { terminates++; return nil },
+	}
+	c.SetWindow(&os.Process{})
+
+	for range 3 {
+		if err := c.Do(); err != nil {
+			t.Fatalf("Do() = %v, want nil", err)
+		}
+	}
+	if spawns != 1 || terminates != 1 {
+		t.Fatalf("spawns=%d terminates=%d, want 1 and 1 — restart must fire once", spawns, terminates)
+	}
+}
+
 func TestDoWithoutWindowStillSpawns(t *testing.T) {
 	spawned := false
 	c := &Coordinator{

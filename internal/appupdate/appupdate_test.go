@@ -51,22 +51,6 @@ func TestParseChecksum(t *testing.T) {
 	}
 }
 
-func TestParseLatestTag(t *testing.T) {
-	tests := []struct {
-		json, want string
-	}{
-		{`{"tag_name":"v0.8.0"}`, "0.8.0"},
-		{`{"tag_name":"1.2.3"}`, "1.2.3"},
-		{`{"name":"x"}`, ""},
-		{`not json`, ""},
-	}
-	for _, tc := range tests {
-		if got := parseLatestTag([]byte(tc.json)); got != tc.want {
-			t.Errorf("parseLatestTag(%q) = %q, want %q", tc.json, got, tc.want)
-		}
-	}
-}
-
 func TestCanSelfApply(t *testing.T) {
 	writable := t.TempDir()
 	exe := filepath.Join(writable, "lich")
@@ -103,25 +87,6 @@ func serveBody(t *testing.T, status int, body string) *Service {
 		goos:      runtime.GOOS,
 		latestURL: srv.URL,
 		tagBase:   releaseTagBase,
-	}
-}
-
-func TestLatestVersion(t *testing.T) {
-	tests := []struct {
-		name       string
-		status     int
-		body, want string
-	}{
-		{"ok", http.StatusOK, `{"tag_name":"v0.8.0"}`, "0.8.0"},
-		{"malformed", http.StatusOK, `{`, ""},
-		{"not found", http.StatusNotFound, ``, ""},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := serveBody(t, tc.status, tc.body).latestVersion(); got != tc.want {
-				t.Fatalf("latestVersion() = %q, want %q", got, tc.want)
-			}
-		})
 	}
 }
 

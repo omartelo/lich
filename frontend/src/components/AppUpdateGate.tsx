@@ -2,11 +2,11 @@ import {useEffect, useRef} from "react"
 import {toast} from "sonner"
 import {useMatch, useNavigate} from "react-router-dom"
 import {Button} from "@/components/ui/button"
-import {decideUpdateAction, UPDATE_DISMISSED_KEY} from "@/lib/app-update-gate"
+import {decideUpdateAction, UPDATE_DISMISSED_KEY, type UpdateAction} from "@/lib/app-update-gate"
 import {AppUpdate, System} from "@/lib/rpc"
 import {useProjects} from "@/lib/projects"
 import {queuePaste} from "@/lib/paste-queue"
-import {errorText} from "@/lib/utils"
+import {runWithToast} from "@/lib/toast-async"
 
 const RESTART_HINT = "restart lich to apply."
 
@@ -37,7 +37,7 @@ export function AppUpdateGate() {
   }, [])
 
   const check = async () => {
-    let action
+    let action: UpdateAction
     try {
       const status = await AppUpdate.Status()
       action = decideUpdateAction(status, localStorage.getItem(UPDATE_DISMISSED_KEY))
@@ -63,15 +63,13 @@ export function AppUpdateGate() {
     })
   }
 
-  const runApply = async () => {
-    const pending = toast.loading("Downloading lich update…")
-    try {
-      await AppUpdate.Apply()
-      toast.success(`lich updated — ${RESTART_HINT}`, {id: pending})
-    } catch (error) {
-      toast.error(`Update failed: ${errorText(error)}`, {id: pending})
-    }
-  }
+  const runApply = () =>
+    runWithToast(
+      "Downloading lich update…",
+      () => AppUpdate.Apply(),
+      `lich updated — ${RESTART_HINT}`,
+      "Update failed",
+    )
 
   // Linux: three choices — paste the install command into a terminal, open the
   // release page, or dismiss for this version. sonner's default toast has only

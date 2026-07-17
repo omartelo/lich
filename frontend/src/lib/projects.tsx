@@ -19,7 +19,7 @@ import {
   type SessionKind,
   type SessionState,
 } from "./sessions"
-import { applyOrder } from "./reorder"
+import { applyOrder, pinFirst } from "./reorder"
 import {
   isIdEvent,
   isStatusEvent,
@@ -395,13 +395,11 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
   const reorderProjects = useCallback((ids: string[]) => {
     // Home is pinned first and rendered outside the drag list, so the drop only
-    // names the other projects. Splice it back in so applyOrder still accounts
-    // for every project (it bails on a mismatch) and Home keeps its spot.
+    // names the other projects; splice it back in (when present) so applyOrder
+    // still accounts for every project.
     const hid = homeIdRef.current
-    const full =
-      hid && projectsRef.current.some((p) => p.id === hid)
-        ? [hid, ...ids.filter((id) => id !== hid)]
-        : ids
+    const inProjects = hid !== null && projectsRef.current.some((p) => p.id === hid)
+    const full = pinFirst(ids, inProjects ? hid : null)
     const next = applyOrder(projectsRef.current, full)
     if (!next) {
       return
