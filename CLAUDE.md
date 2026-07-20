@@ -152,9 +152,10 @@ Deliberate limits and shortcuts, with the upgrade path when it matters:
   an external process cannot raise a window under Wayland. It is untested against a real window and may open a second
   app window on some Chromium builds (`focusRunning` in `main.go`); a per-platform window raise is the upgrade path if
   it matters.
-- **Self-update checks once, at startup** (`internal/appupdate` + `frontend/.../AppUpdateGate.tsx`), mirroring the
-  Claude-plugin gate — a long-running session does not notice a release mid-run. A periodic frontend poll (the
-  git-status-store pattern) is the upgrade path. Self-*apply* (download + checksum + in-place swap via
+- **Self-update checks at startup, then hourly** (`internal/appupdate` + `frontend/.../AppUpdateGate.tsx`) — a
+  `setInterval` poll in the gate, so a long-running session eventually notices a release mid-run; a session-scoped ref
+  keeps the poll from stacking a second toast for a release already shown (a genuinely newer one still toasts). Hourly
+  respects the unauthenticated GitHub API's 60-req/hour limit. Self-*apply* (download + checksum + in-place swap via
   `minio/selfupdate`) is Windows/macOS only, where lich owns its binary; on Linux the binary is package-manager owned,
   so the flow pastes the `install.sh` one-liner into a terminal and relaunches via `/restart` instead. The restart
   (`internal/restart`) spawns a detached successor that retries the pinned port (`LICH_RESTART_WAIT`) while the old

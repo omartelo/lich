@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The update check now repeats hourly, not just at startup.** A session left
+  open for a long time now notices a new lich release mid-run instead of only on
+  the next launch. The poll never stacks a second toast for a release it already
+  surfaced, and dismissing one still holds until a genuinely newer version
+  ships. Hourly keeps well within the unauthenticated GitHub API's rate limit.
+
 ### Added
 
 - **Launching lich twice now focuses the open window** instead of failing. The

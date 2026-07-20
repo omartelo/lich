@@ -10,15 +10,20 @@ import {runWithToast} from "@/lib/toast-async"
 
 const RESTART_HINT = "restart lich to apply."
 
+// How often to re-check for a release after startup, so a long-running session
+// eventually notices one. Hourly is plenty — releases are rare and the
+// unauthenticated GitHub API allows only 60 requests/hour per IP.
+const POLL_INTERVAL_MS = 60 * 60 * 1000
+
 // The one-liner from install.sh / the README. Pasted into a shell for the user
 // to run — never executed automatically.
 const INSTALL_CMD = "curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh"
 
-// AppUpdateGate checks on startup whether a newer lich release exists. Where the
-// binary is writable (Windows/macOS) it offers a one-click self-update; on Linux
-// the binary is package-manager owned, so it offers to paste the install command
-// into a terminal (the user runs it) or open the release page. Any failure is
-// silent — it must never block or break startup.
+// AppUpdateGate checks on startup, then hourly, whether a newer lich release
+// exists. Where the binary is writable (Windows/macOS) it offers a one-click
+// self-update; on Linux the binary is package-manager owned, so it offers to
+// paste the install command into a terminal (the user runs it) or open the
+// release page. Any failure is silent — it must never block or break startup.
 export function AppUpdateGate() {
   const {newSession, ensureHomeProject} = useProjects()
   const navigate = useNavigate()
@@ -27,13 +32,15 @@ export function AppUpdateGate() {
   // Ref so the toast handler reads the latest active project without re-running.
   const activeRef = useRef(activeProjectId)
   activeRef.current = activeProjectId
-  // Guard React strict-mode's double effect: the check runs once per start.
-  const checked = useRef(false)
+  // The version last toasted this session, so the hourly poll (and strict-mode's
+  // double effect) never stacks a second toast for the same release; a genuinely
+  // newer release still gets one.
+  const promptedVersion = useRef<string | null>(null)
 
   useEffect(() => {
-    if (checked.current) return
-    checked.current = true
     void check()
+    const id = setInterval(() => void check(), POLL_INTERVAL_MS)
+    return () => clearInterval(id)
   }, [])
 
   const check = async () => {
@@ -45,6 +52,8 @@ export function AppUpdateGate() {
       return
     }
     if (action.kind !== "update") return
+    if (promptedVersion.current === action.version) return
+    promptedVersion.current = action.version
     if (action.canSelfApply) {
       promptSelfApply(action.version)
     } else {
