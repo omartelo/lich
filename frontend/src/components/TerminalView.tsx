@@ -41,6 +41,17 @@ const REFIT_DEBOUNCE_MS = 100
 const COPY_DEBOUNCE_MS = 150
 const SCROLLBACK_LINES = 5000
 
+// Search match styling. Passing decorations is also what makes xterm's
+// SearchAddon compute the match count (onDidChangeResults reports -1 without
+// them); it highlights every match too, not just the active one. Amber reads on
+// both the light and dark terminal themes.
+const SEARCH_DECORATIONS = {
+  matchBackground: "#e3b34199",
+  activeMatchBackground: "#f59e0b",
+  matchOverviewRuler: "#e3b341",
+  activeMatchColorOverviewRuler: "#f59e0b",
+}
+
 // Claude Code's clipboard-image-paste chord is Ctrl+V on Linux/macOS but Alt+V
 // on Windows (see term-keys.ts); the host OS is the machine lich runs on.
 // navigator.platform is "Win32" on Windows Chromium — same signal HotkeysSettings
@@ -180,10 +191,11 @@ export function TerminalView({
       setSearchResults(null)
       return
     }
+    const options = { incremental, decorations: SEARCH_DECORATIONS }
     if (direction === "next") {
-      search.findNext(query, { incremental })
+      search.findNext(query, options)
     } else {
-      search.findPrevious(query, { incremental })
+      search.findPrevious(query, options)
     }
   }
 
@@ -543,7 +555,7 @@ export function TerminalView({
         style={{ backgroundColor: TERMINAL_COLORS[resolvedTerminalTheme].background }}
       />
       {searchOpen && (
-        <div className="absolute right-3 top-3 flex items-center gap-1 rounded-md border bg-popover p-1 text-popover-foreground shadow-lg">
+        <div className="absolute right-3 top-3 z-20 flex items-center gap-1 rounded-md border bg-popover p-1 text-popover-foreground shadow-lg">
           <Input
             autoFocus
             value={searchQuery}

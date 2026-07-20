@@ -10,11 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Search within a terminal — Ctrl+F.** Opens a find box in the top-right of
-  the terminal: type to jump to the next match as you go, Enter / Shift+Enter to
-  step forward and back, with a match counter, and Esc to close. Like VS Code's
-  terminal, Ctrl+F shadows the shell's own forward-char while the box is open;
-  Esc hands the key back to the shell. Pairs with reload-surviving scrollback —
-  there is now more history worth searching.
+  the terminal: type to jump to the next match as you go — every match
+  highlighted, with a live counter — Enter / Shift+Enter to step forward and
+  back, and Esc to close. Like VS Code's terminal, Ctrl+F shadows the shell's
+  own forward-char while the box is open; Esc hands the key back to the shell.
+  Pairs with reload-surviving scrollback — there is now more history worth
+  searching.
 - **Terminal scrollback now survives a full page reload.** Reloading the window
   used to leave every terminal blank until new output arrived — the shells kept
   running, but their recent history lived only in the page. The backend now
