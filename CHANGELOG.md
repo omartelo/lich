@@ -16,9 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a background project, so you can work in one project and jump to a
   notification from another without hunting for it. It is the persistent surface
   for the same signal the attention toast raises transiently (a toast is missed
-  if you are away). A running (`busy`) session is not queued, and a finished
-  turn drops off once its project has been on screen. The queue lives in the
-  page, so a full reload empties it until new events arrive.
+  if you are away). The session you are currently viewing is never queued — its
+  own terminal already shows the state — nor is a running (`busy`) one; a
+  finished turn drops off once it has been seen. The queue lives in the page, so
+  a full reload empties it until new events arrive.
 
 ## [0.10.0] - 2026-07-20
 
