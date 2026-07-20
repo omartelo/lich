@@ -6,12 +6,21 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/coder/websocket"
 )
+
+// TestMain drops LICH_LISTEN_PORT so every transport in this package binds a
+// random port: a test run spawned from inside a lich terminal inherits the
+// pinned port of the running instance and would collide with it.
+func TestMain(m *testing.M) {
+	os.Unsetenv("LICH_LISTEN_PORT")
+	os.Exit(m.Run())
+}
 
 func TestFrameRoundTrip(t *testing.T) {
 	frame, err := encodeFrame("sess-1", []byte("hello"))
