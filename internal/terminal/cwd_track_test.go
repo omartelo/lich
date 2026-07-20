@@ -8,9 +8,23 @@ package terminal
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
+
+// physical resolves path's symlinks, the form the kernel reports a process
+// cwd in. os.Getwd may return the logical path instead — t.Chdir sets $PWD,
+// and macOS reaches its temp dir through /var → /private/var — so both sides
+// of every comparison go through this.
+func physical(t *testing.T, path string) string {
+	t.Helper()
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(%q): %v", path, err)
+	}
+	return resolved
+}
 
 // waitEmit receives one emitted cwd or fails the test after a grace period.
 func waitEmit(t *testing.T, emits <-chan string) string {
@@ -31,7 +45,7 @@ func TestProcessCwdReadsSelf(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Getwd: %v", err)
 	}
-	if got := processCwd(os.Getpid()); got != wd {
+	if got := processCwd(os.Getpid()); physical(t, got) != physical(t, wd) {
 		t.Errorf("processCwd(self) = %q, want %q", got, wd)
 	}
 }
@@ -69,15 +83,14 @@ func TestPollCwdEmitsOnlyOnChange(t *testing.T) {
 	tick <- time.Time{}
 
 	t.Chdir(t.TempDir())
-	// Expect Getwd rather than the TempDir value: the kernel reports the
-	// physical path, and Getwd reads the same state (a symlinked /tmp or /var,
-	// Windows 8.3 short names would diverge from the literal TempDir string).
+	// Expect Getwd rather than the TempDir value (Windows may hand out 8.3
+	// short names), resolved to its physical form (see physical).
 	moved, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Getwd: %v", err)
 	}
 	tick <- time.Time{}
-	if got := waitEmit(t, emits); got != moved {
+	if got := waitEmit(t, emits); physical(t, got) != physical(t, moved) {
 		t.Errorf("emitted %q, want %q", got, moved)
 	}
 
