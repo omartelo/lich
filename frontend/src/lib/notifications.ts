@@ -21,13 +21,18 @@ interface ProjectRef {
 }
 
 // notificationsFrom resolves each pending status against the current projects
-// and sessions. A status whose session no longer exists (a closed session
-// leaves its last state in the store) is dropped: it has nowhere to route, the
-// same rule shouldToastAttention applies to an unknown session.
+// and sessions, dropping two kinds:
+//   - a status whose session no longer exists (a closed session leaves its last
+//     state in the store) — it has nowhere to route;
+//   - the focused session (the active session of the active project) — it is on
+//     screen, so its own terminal already shows the state; queuing it is the bug
+//     of notifying you about the very turn you are watching finish. This is the
+//     queue's half of the rule the toast applies via shouldToastAttention.
 export function notificationsFrom(
   pending: readonly PendingStatus[],
   projects: readonly ProjectRef[],
   sessions: SessionState,
+  activeProjectId: string | undefined,
 ): Notification[] {
   const result: Notification[] = []
   for (const item of pending) {
@@ -35,6 +40,11 @@ export function notificationsFrom(
     const project = projects.find((p) => p.id === projectId)
     const session = sessions[projectId]?.sessions.find((s) => s.id === item.id)
     if (!project || !session) {
+      continue
+    }
+    const focused =
+      projectId === activeProjectId && sessions[projectId].activeId === item.id
+    if (focused) {
       continue
     }
     result.push({

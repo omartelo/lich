@@ -1,5 +1,5 @@
 import {Bell, Check} from "lucide-react"
-import {useNavigate} from "react-router-dom"
+import {useMatch, useNavigate} from "react-router-dom"
 
 import {Button} from "@/components/ui/button"
 import {
@@ -29,7 +29,15 @@ function StatusIcon({status}: {status: SessionStatus}) {
 export function NotificationsButton() {
   const {projects, sessions, activateSession} = useProjects()
   const navigate = useNavigate()
-  const items = notificationsFrom(usePendingStatuses(), projects, sessions)
+  // The focused session (active project + its active session) is on screen, so
+  // it is dropped from the queue — same match the provider derives it from.
+  const activeProjectId = useMatch("/projects/:projectId/*")?.params.projectId
+  const items = notificationsFrom(
+    usePendingStatuses(),
+    projects,
+    sessions,
+    activeProjectId,
+  )
 
   const open = (projectId: string, sessionId: string) => {
     navigate(`/projects/${projectId}`)
