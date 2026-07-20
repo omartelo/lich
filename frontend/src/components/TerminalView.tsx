@@ -289,9 +289,14 @@ export function TerminalView({
     })
 
     // Copy-on-select with a toast. Debounced: drag-selection fires
-    // onSelectionChange per cell.
+    // onSelectionChange per cell. Skipped while the find box is open — there the
+    // selection is search jumping between matches, not the user copying, so it
+    // must not hijack the clipboard or raise a toast on every step.
     let copyTimer = 0
     const selection = term.onSelectionChange(() => {
+      if (searchOpenRef.current) {
+        return
+      }
       window.clearTimeout(copyTimer)
       copyTimer = window.setTimeout(() => {
         const text = term.getSelection()
