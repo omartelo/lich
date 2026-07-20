@@ -1,5 +1,5 @@
 import {describe, expect, it} from "vitest"
-import {chordSequence, type TermKeyState} from "./term-keys"
+import {chordSequence, isSearchOpenChord, type TermKeyState} from "./term-keys"
 
 function key(overrides: Partial<TermKeyState>): TermKeyState {
   return {ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, key: "", ...overrides}
@@ -43,5 +43,24 @@ describe("chordSequence", () => {
   it("ignores unrelated keys", () => {
     expect(chordSequence(key({ctrlKey: true, key: "c", code: "KeyC"}))).toBeNull()
     expect(chordSequence(key({key: "a", code: "KeyA"}))).toBeNull()
+  })
+})
+
+describe("isSearchOpenChord", () => {
+  it("matches Ctrl+F (either case)", () => {
+    expect(isSearchOpenChord(key({ctrlKey: true, key: "f"}))).toBe(true)
+    expect(isSearchOpenChord(key({ctrlKey: true, key: "F"}))).toBe(true)
+  })
+
+  it("rejects Ctrl+F carrying another modifier", () => {
+    expect(isSearchOpenChord(key({ctrlKey: true, shiftKey: true, key: "f"}))).toBe(false)
+    expect(isSearchOpenChord(key({ctrlKey: true, altKey: true, key: "f"}))).toBe(false)
+    expect(isSearchOpenChord(key({ctrlKey: true, metaKey: true, key: "f"}))).toBe(false)
+  })
+
+  it("rejects F without Ctrl and other Ctrl chords", () => {
+    expect(isSearchOpenChord(key({key: "f"}))).toBe(false)
+    expect(isSearchOpenChord(key({metaKey: true, key: "f"}))).toBe(false)
+    expect(isSearchOpenChord(key({ctrlKey: true, key: "g"}))).toBe(false)
   })
 })

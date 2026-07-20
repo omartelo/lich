@@ -24,6 +24,21 @@ export type TermKeyState = Pick<
   "ctrlKey" | "metaKey" | "shiftKey" | "altKey" | "key"
 > & { code?: string }
 
+// isSearchOpenChord reports Ctrl+F with no other modifier — the in-terminal
+// search trigger. It lives here beside chordSequence so all terminal key-chord
+// decisions stay in one tested place, but unlike those it is not a PTY sequence:
+// the caller opens the search box instead of writing to the shell (shadowing the
+// shell's forward-char, the same trade VS Code's terminal makes).
+export function isSearchOpenChord(event: TermKeyState): boolean {
+  return (
+    event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    !event.shiftKey &&
+    event.key.toLowerCase() === "f"
+  )
+}
+
 export function chordSequence(event: TermKeyState, isWindows = false): string | null {
   const ctrlOnly = event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey
   if (ctrlOnly && event.key === "Backspace") {
