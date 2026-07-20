@@ -6,7 +6,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {notificationsFrom} from "@/lib/notifications"
@@ -62,9 +61,12 @@ export function NotificationsButton() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
         {items.length === 0 ? (
-          <DropdownMenuLabel className="font-normal text-muted-foreground">
+          // Plain text, not DropdownMenuLabel: that is base-ui's Menu.GroupLabel
+          // and throws outside a Menu.Group (it writes the label id into the
+          // group context). The empty state is just a placeholder, not a label.
+          <div className="px-2 py-1.5 text-xs text-muted-foreground">
             No notifications
-          </DropdownMenuLabel>
+          </div>
         ) : (
           items.map((item) => (
             <DropdownMenuItem
