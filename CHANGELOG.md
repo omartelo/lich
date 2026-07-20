@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Launching lich twice now focuses the open window** instead of failing. The
+  second process detects the running instance holding the pinned port (via
+  `runtime.json` and a token-gated liveness ping) and hands its URL to Chromium,
+  which forwards to the running browser and brings its window to the front, then
+  exits cleanly. A genuine port conflict — a non-lich process on the port —
+  still fails with the same clear error as before. Window focus is best-effort:
+  Wayland forbids an external process from raising a window, so lich relies on
+  Chromium's own profile-lock IPC.
 - A **notification queue** in the top strip — a bell beside the settings gear —
   gathers every session needing attention across all projects into one
   count-badged list: a session blocked waiting on you, or a turn that finished

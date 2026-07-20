@@ -144,6 +144,7 @@ func newTransport(
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", t.handle)
+	mux.HandleFunc("/ping", t.ping)
 	mux.HandleFunc("/hook", t.hook)
 	mux.HandleFunc("/session-start", t.sessionStart)
 	mux.HandleFunc("/session-title", t.sessionTitle)
@@ -228,6 +229,19 @@ func (t *transport) setRestart(fn func() error) {
 	t.mu.Lock()
 	t.restart = fn
 	t.mu.Unlock()
+}
+
+// ping is the liveness probe a second lich launch uses to tell "a live lich
+// already holds my pinned port" from "the port is taken by something else": only
+// lich serves this behind the token, so a 204 proves the recorded instance is
+// alive and is lich (see internal/singleton). Token-gated like every endpoint
+// but /'s static assets.
+func (t *transport) ping(w http.ResponseWriter, r *http.Request) {
+	if !t.authorized(r) {
+		http.Error(w, "invalid token", http.StatusUnauthorized)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // mount adds a handler to the transport listener behind the same token check

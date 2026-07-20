@@ -143,9 +143,15 @@ Deliberate limits and shortcuts, with the upgrade path when it matters:
 - **Terminal I/O rides the loopback WebSocket** — token auth, binary frames multiplexing all sessions
   (`internal/terminal/transport.go` ↔ `frontend/src/lib/term-transport.ts`). When the socket is down, output falls
   back to the `/events` channel and input to the RPC — slower, never broken.
-- **No single-instance lock**: two lich processes race the pinned listener port; the second fails with a clear error.
-  Add a lock + focus-existing-window protocol if it ever matters. (`runtime.json` in the config dir now carries
-  `{pid,port,token}` for the self-update restart channel — it is not a lock, but it is the natural base for one.)
+- **Single instance via the pinned port; focus is best-effort.** The pinned listener bind *is* the lock — only one
+  process holds it. A second launch that cannot bind reads `runtime.json` (`{pid,port,token}`) and pings the recorded
+  instance's token-gated `/ping` (`internal/singleton`): a live lich on the same port means a duplicate launch, so it
+  focuses that window and exits 0 instead of erroring; anything else (a stray process on the port, a restart successor
+  that never got the port back) still logs and exits 1. Focus hands the running instance's URL to Chromium against the
+  shared profile, letting Chromium's profile-lock IPC forward to the running browser — the only *portable* raise, since
+  an external process cannot raise a window under Wayland. It is untested against a real window and may open a second
+  app window on some Chromium builds (`focusRunning` in `main.go`); a per-platform window raise is the upgrade path if
+  it matters.
 - **Self-update checks once, at startup** (`internal/appupdate` + `frontend/.../AppUpdateGate.tsx`), mirroring the
   Claude-plugin gate — a long-running session does not notice a release mid-run. A periodic frontend poll (the
   git-status-store pattern) is the upgrade path. Self-*apply* (download + checksum + in-place swap via

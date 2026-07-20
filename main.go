@@ -2,13 +2,13 @@ package main
 
 import (
 	"embed"
-	"encoding/json"
 	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/omartelo/lich/internal/appupdate"
 	"github.com/omartelo/lich/internal/chromium"
@@ -20,6 +20,7 @@ import (
 	"github.com/omartelo/lich/internal/providers"
 	"github.com/omartelo/lich/internal/restart"
 	"github.com/omartelo/lich/internal/rpc"
+	"github.com/omartelo/lich/internal/singleton"
 	"github.com/omartelo/lich/internal/store"
 	"github.com/omartelo/lich/internal/system"
 	"github.com/omartelo/lich/internal/terminal"
@@ -120,16 +121,16 @@ func main() {
 func runChromium(term *terminal.Service, configDir string, coord *restart.Coordinator) {
 	info := term.Transport()
 	if info.Port == 0 {
-		slog.Error("loopback listener failed to start — is the port free?",
-			"port", os.Getenv("LICH_LISTEN_PORT"))
-		os.Exit(1)
+		handleBindFailure(configDir) // never returns
 	}
 
 	// The runtime file lets install.sh reach a running lich for /restart when it
-	// runs outside a lich terminal (no LICH_PORT/LICH_TOKEN in the env). Removed
-	// on the clean window-close exit; a stale file from a crash is harmless (the
-	// token check rejects a mismatched or dead listener).
-	if path, err := writeRuntimeFile(configDir, info.Port, info.Token); err != nil {
+	// runs outside a lich terminal (no LICH_PORT/LICH_TOKEN in the env), and lets
+	// a second launch find this instance to focus it instead of dying (see
+	// handleBindFailure). Removed on the clean window-close exit; a stale file
+	// from a crash is harmless (the token check rejects a mismatched or dead
+	// listener).
+	if path, err := singleton.Write(configDir, info.Port, info.Token); err != nil {
 		slog.Warn("runtime file", "err", err)
 	} else {
 		defer func() { _ = os.Remove(path) }()
@@ -170,21 +171,46 @@ func runChromium(term *terminal.Service, configDir string, coord *restart.Coordi
 	slog.Info("window closed, exiting")
 }
 
-// writeRuntimeFile records this process's pid and loopback coordinates so a
-// script (install.sh) can reach lich for /restart without inheriting the
-// per-session hook env. Mode 0600: the token is a loopback credential.
-func writeRuntimeFile(configDir string, port int, token string) (string, error) {
-	path := filepath.Join(configDir, "lich", "runtime.json")
-	data, err := json.Marshal(struct {
-		PID   int    `json:"pid"`
-		Port  int    `json:"port"`
-		Token string `json:"token"`
-	}{os.Getpid(), port, token})
-	if err != nil {
-		return "", err
+// handleBindFailure runs when the pinned listener would not bind, and never
+// returns. A fresh launch whose port is held by another live lich is a duplicate
+// launch: focus that window and exit 0 — the user re-launching an app they
+// already have open should get the window, not an error. Anything else (a
+// restart successor that never got the port back, or a non-lich process sitting
+// on the port) is a real failure: log it and exit 1.
+func handleBindFailure(configDir string) {
+	port := os.Getenv("LICH_LISTEN_PORT")
+	// A restart successor legitimately expects the port to be busy for a moment
+	// (it retries the bind); a failure there is real, not a duplicate launch.
+	if os.Getenv(restart.WaitEnv) == "" {
+		want, _ := strconv.Atoi(port)
+		if running, _ := singleton.Detect(configDir, want, singleton.Ping); running != nil {
+			slog.Info("lich already running, focusing existing window",
+				"pid", running.PID, "port", running.Port)
+			focusRunning(configDir, running)
+			os.Exit(0)
+		}
 	}
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		return "", err
+	slog.Error("loopback listener failed to start — is the port free?", "port", port)
+	os.Exit(1)
+}
+
+// focusRunning brings the already-running lich's window to the front by handing
+// its URL to Chromium against the shared profile: Chromium's profile-lock IPC
+// forwards the command to the running browser (the same lock that stops a second
+// window spawning its own process — see chromium.Args) instead of opening a new
+// one. Best effort — a failure only means the user raises the window by hand.
+//
+// Skipped for the dev shell (its own profile/port). On some Chromium builds a
+// forwarded --app may open a second app window rather than focus; the dup-free
+// fix is a per-platform window raise, which Wayland forbids for an external
+// process, so Chromium's IPC is the portable lever we have.
+func focusRunning(configDir string, running *singleton.Info) {
+	if os.Getenv("LICH_DEV_URL") != "" {
+		return
 	}
-	return path, nil
+	profileDir := filepath.Join(configDir, "lich", "chromium-profile")
+	url := fmt.Sprintf("http://127.0.0.1:%d/?token=%s", running.Port, running.Token)
+	if err := chromium.Run(url, profileDir, "lich", nil, nil); err != nil {
+		slog.Warn("focus existing window", "err", err)
+	}
 }

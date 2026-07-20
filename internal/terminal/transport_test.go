@@ -219,6 +219,36 @@ func TestParseHookRequest(t *testing.T) {
 	}
 }
 
+func TestPingAnswersWithToken(t *testing.T) {
+	tr, err := newTransport(func(string, []byte) {}, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("newTransport: %v", err)
+	}
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/ping?token=%s", tr.port, tr.token))
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", resp.StatusCode)
+	}
+}
+
+func TestPingRejectsBadToken(t *testing.T) {
+	tr, err := newTransport(func(string, []byte) {}, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("newTransport: %v", err)
+	}
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/ping?token=wrong", tr.port))
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", resp.StatusCode)
+	}
+}
+
 func TestHookForwardsStatus(t *testing.T) {
 	got := make(chan string, 1)
 	tr, err := newTransport(func(string, []byte) {}, func(id, state string) {
