@@ -251,13 +251,10 @@ export function TerminalView({
       if (event.type !== "keydown") {
         return true
       }
-      // Ctrl+F opens in-terminal search (see isSearchOpenChord); Esc closes it
-      // and hands the key back to the PTY.
-      if (isSearchOpenChord(event)) {
-        event.preventDefault()
-        setSearchOpen(true)
-        return false
-      }
+      // Esc closes the search box and hands the key back to the PTY. Opening it
+      // (Ctrl+F) is caught by a window capture-phase listener in the mount
+      // effect — that is what beats Chromium's own Find accelerator in --app
+      // mode; xterm's handler here is too late (the accelerator already fired).
       if (searchOpenRef.current && event.key === "Escape") {
         event.preventDefault()
         closeSearch()
@@ -359,6 +356,21 @@ export function TerminalView({
 
     let disposed = false
     const cleanups: Array<() => void> = []
+
+    // Ctrl+F must be caught in the window capture phase to beat Chromium's Find
+    // accelerator in --app mode (the same pattern the zoom hotkeys use in
+    // settings.tsx); xterm's own key handler runs too late. Only the visible
+    // session's terminal claims it — one is visible at a time.
+    const onSearchKey = (event: KeyboardEvent) => {
+      if (!visibleRef.current || !isSearchOpenChord(event)) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      setSearchOpen(true)
+    }
+    window.addEventListener("keydown", onSearchKey, true)
+    cleanups.push(() => window.removeEventListener("keydown", onSearchKey, true))
 
     // Output sink: the live terminal when one exists, the replay buffer
     // while the session is hidden and the terminal destroyed.
