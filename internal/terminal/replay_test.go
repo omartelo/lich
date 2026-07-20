@@ -5,8 +5,6 @@ import (
 	"encoding/base64"
 	"strings"
 	"testing"
-
-	"github.com/omartelo/lich/internal/events"
 )
 
 func TestReplayBufferKeepsOutputInOrder(t *testing.T) {
@@ -60,12 +58,12 @@ func TestReplayBufferKeepsOneChunkLargerThanCap(t *testing.T) {
 	}
 }
 
+// A bare Service with a hand-built session exercises Replay without a PTY, so
+// this stays OS-agnostic (no !windows build tag): Replay only reads the tail.
 func TestServiceReplayEncodesTheTail(t *testing.T) {
-	svc := New(stubBins{}, nil, events.New())
-	sess := spawnSession(t)
-	sess.replay = newReplayBuffer(replayCapBytes)
-	sess.replay.append([]byte("scrollback"))
-	svc.sessions["s1"] = sess
+	b := newReplayBuffer(replayCapBytes)
+	b.append([]byte("scrollback"))
+	svc := &Service{sessions: map[string]*session{"s1": {replay: b}}}
 
 	encoded, err := svc.Replay("s1")
 	if err != nil {
@@ -81,7 +79,7 @@ func TestServiceReplayEncodesTheTail(t *testing.T) {
 }
 
 func TestServiceReplayUnknownSessionIsEmpty(t *testing.T) {
-	svc := New(stubBins{}, nil, events.New())
+	svc := &Service{sessions: map[string]*session{}}
 	got, err := svc.Replay("nope")
 	if err != nil {
 		t.Fatalf("Replay = %v, want nil", err)
