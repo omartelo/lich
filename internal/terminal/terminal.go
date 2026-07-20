@@ -80,11 +80,13 @@ type agentEvent struct {
 
 // session is a single running PTY-backed shell. done closes when the session
 // is reaped (by stream or Close — whichever removes it from the map), stopping
-// its cwd watcher.
+// its cwd watcher. replay holds a capped tail of the PTY's output so a
+// reconnecting frontend can reseed its scrollback after a page reload.
 type session struct {
-	pty  ptyHandle
-	out  *coalescer
-	done chan struct{}
+	pty    ptyHandle
+	out    *coalescer
+	done   chan struct{}
+	replay *replayBuffer
 }
 
 // Store is the persistence the terminal service depends on: the binary to spawn
@@ -389,8 +391,9 @@ func (s *Service) Start(id, projectID, cwd, kind, resume string, cols, rows int)
 		s.hub.Emit(dataEventPrefix+id, encoded)
 	}, visibleFlushInterval, hiddenFlushInterval)
 	done := make(chan struct{})
-	s.sessions[id] = &session{pty: p, out: out, done: done}
-	go s.stream(id, p, out)
+	replay := newReplayBuffer(replayCapBytes)
+	s.sessions[id] = &session{pty: p, out: out, done: done, replay: replay}
+	go s.stream(id, p, out, replay)
 	// The start directory and a cleared agent are reported unconditionally so
 	// a respawn overwrites whatever the previous PTY left in the frontend's
 	// stores (a provider session's own agent re-reports via its hook).
@@ -404,11 +407,12 @@ func (s *Service) Start(id, projectID, cwd, kind, resume string, cols, rows int)
 // the process, drops the session and emits its exit event. Output goes through
 // the session's coalescer, which batches it on a short cadence while the
 // terminal is visible and a long one while it is hidden.
-func (s *Service) stream(id string, p ptyHandle, out *coalescer) {
+func (s *Service) stream(id string, p ptyHandle, out *coalescer, replay *replayBuffer) {
 	buf := make([]byte, readBufSize)
 	for {
 		n, err := p.Read(buf)
 		if n > 0 {
+			replay.append(buf[:n])
 			out.Write(buf[:n])
 		}
 		if err != nil {
@@ -459,6 +463,21 @@ func (s *Service) SetVisible(id string, visible bool) error {
 	}
 	sess.out.SetVisible(visible)
 	return nil
+}
+
+// Replay returns the capped tail of a session's PTY output, base64-encoded, so a
+// reconnecting frontend can reseed its scrollback after a page reload discarded
+// the page-side buffer. Empty for an unknown session — a brand-new one has no
+// history yet. Base64 for the same reason the data event is: raw PTY bytes may
+// split a multi-byte UTF-8 sequence across the JSON envelope.
+func (s *Service) Replay(id string) (string, error) {
+	s.mu.Lock()
+	sess, ok := s.sessions[id]
+	s.mu.Unlock()
+	if !ok {
+		return "", nil
+	}
+	return base64.StdEncoding.EncodeToString(sess.replay.snapshot()), nil
 }
 
 // Resize updates a session's PTY window size. The frontend only calls this for

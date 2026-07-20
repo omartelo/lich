@@ -83,6 +83,8 @@ export const Terminal = {
     call<null>("terminal.Resize", [id, cols, rows]),
   SetVisible: (id: string, visible: boolean) =>
     call<null>("terminal.SetVisible", [id, visible]),
+  // Base64 tail of a session's output, to reseed scrollback after a reload.
+  Replay: (id: string) => call<string>("terminal.Replay", [id]),
   Close: (id: string) => call<null>("terminal.Close", [id]),
 }
 

@@ -315,6 +315,26 @@ export function TerminalView({
       startedRef.current = true
       ensureTransport()
 
+      // Reseed scrollback from the backend tail. A full page reload discards the
+      // page-side buffer, but the PTY — and its backend replay tail — lived on,
+      // so its recent output is written here before the live listeners are
+      // wired: the tail lands ahead of any live frame (correct order), and
+      // output produced during this round-trip is dropped rather than
+      // duplicated (term-transport drops frames for an unlistened session), a
+      // small seam gap like the replay buffer's overflow artifact. Empty for a
+      // brand-new session.
+      try {
+        const tail = await Service.Replay(sessionId)
+        if (disposed) {
+          return
+        }
+        if (tail && liveRef.current === live) {
+          live.term.write(decodeBase64(tail))
+        }
+      } catch {
+        // No tail is fine — the terminal just starts from live output.
+      }
+
       const offData = onAppEvent(DATA_EVENT_PREFIX + sessionId, (data) => {
         const t0 = performance.now()
         const bytes = decodeBase64(data as string)

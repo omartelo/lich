@@ -138,8 +138,14 @@ Deliberate limits and shortcuts, with the upgrade path when it matters:
   is a `position` column written whole on every drag and read back as `ORDER BY position, rowid`.
 - **Hidden sessions are serialized and destroyed** (waveterm model, frontend edition): PTY output queues in a 2MB
   replay buffer (`frontend/src/lib/replay-buffer.ts`); show rebuilds from snapshot + tail; queue overflow drops the
-  snapshot and starts clean from the tail (circular-buffer artifact contract). The replay state lives in the page —
-  a full page reload loses hidden-session scrollback; a backend-kept tail (waveterm's filestore) is the upgrade path.
+  snapshot and starts clean from the tail (circular-buffer artifact contract). That page-side buffer only bridges
+  hide→show within one page load; a **backend replay tail** (`internal/terminal/replay.go`, a 2MB in-memory ring per
+  running session, matching the frontend cap) survives a full page reload, when the PTY lives on but the page-side
+  scrollback is gone. On mount `TerminalView` fetches it via `terminal.Replay` and writes it before wiring the live
+  listeners — so the tail lands ahead of any live frame, and output produced during that round-trip is dropped
+  (a small seam gap, not a dup or a reorder — `term-transport` drops frames for an unlistened session). The ring is
+  in memory per session; waveterm's disk filestore is the upgrade path if session count or size ever makes that cost
+  matter.
 - **Terminal I/O rides the loopback WebSocket** — token auth, binary frames multiplexing all sessions
   (`internal/terminal/transport.go` ↔ `frontend/src/lib/term-transport.ts`). When the socket is down, output falls
   back to the `/events` channel and input to the RPC — slower, never broken.

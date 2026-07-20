@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Terminal scrollback now survives a full page reload.** Reloading the window
+  used to leave every terminal blank until new output arrived — the shells kept
+  running, but their recent history lived only in the page. The backend now
+  keeps a capped tail of each session's output and replays it into the terminal
+  on reconnect, so a reload restores what you were looking at. The tail is
+  bounded (2 MB per session), so very old scrollback still ages out.
+
 ### Changed
 
 - **The update check now repeats hourly, not just at startup.** A session left
