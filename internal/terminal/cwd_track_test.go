@@ -1,8 +1,13 @@
+// Exercises the live-cwd read on every platform that implements it: /proc on
+// Linux, proc_pidinfo on macOS, the PEB walk on Windows. Always against the
+// test process itself, whose cwd t.Chdir controls; expectations compare with
+// os.Getwd(), which reads the same kernel state processCwd does.
+//go:build linux || darwin || windows
+
 package terminal
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 )
@@ -19,7 +24,7 @@ func waitEmit(t *testing.T, emits <-chan string) string {
 	}
 }
 
-// TestProcessCwdReadsSelf proves the /proc read resolves a live process's
+// TestProcessCwdReadsSelf proves the platform read resolves a live process's
 // working directory — exercised against the test process itself.
 func TestProcessCwdReadsSelf(t *testing.T) {
 	wd, err := os.Getwd()
@@ -31,11 +36,11 @@ func TestProcessCwdReadsSelf(t *testing.T) {
 	}
 }
 
-// TestProcessCwdOfDeadPidIsEmpty proves an unreadable /proc entry degrades to
+// TestProcessCwdOfDeadPidIsEmpty proves an unresolvable process degrades to
 // "", which pollCwd skips instead of reporting.
 func TestProcessCwdOfDeadPidIsEmpty(t *testing.T) {
-	// PIDs are capped by /proc/sys/kernel/pid_max (< 2^22 by default); one far
-	// beyond it can never name a live process.
+	// Far beyond any real PID space (Linux pid_max < 2^22, macOS ~1e5); Windows
+	// simply finds no such process to open.
 	if got := processCwd(1 << 30); got != "" {
 		t.Errorf("processCwd(dead) = %q, want empty", got)
 	}
@@ -48,12 +53,6 @@ func TestPollCwdEmitsOnlyOnChange(t *testing.T) {
 	start, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Getwd: %v", err)
-	}
-	// /proc reports the resolved directory, so compare against the symlink-free
-	// form of the temp dir.
-	tmp, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatalf("EvalSymlinks: %v", err)
 	}
 
 	tick := make(chan time.Time)
@@ -69,10 +68,17 @@ func TestPollCwdEmitsOnlyOnChange(t *testing.T) {
 	// unbuffered, so each send returns only after the previous one was handled.
 	tick <- time.Time{}
 
-	t.Chdir(tmp)
+	t.Chdir(t.TempDir())
+	// Expect Getwd rather than the TempDir value: the kernel reports the
+	// physical path, and Getwd reads the same state (a symlinked /tmp or /var,
+	// Windows 8.3 short names would diverge from the literal TempDir string).
+	moved, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd: %v", err)
+	}
 	tick <- time.Time{}
-	if got := waitEmit(t, emits); got != tmp {
-		t.Errorf("emitted %q, want %q", got, tmp)
+	if got := waitEmit(t, emits); got != moved {
+		t.Errorf("emitted %q, want %q", got, moved)
 	}
 
 	// Same directory again: accepting this tick proves the change above

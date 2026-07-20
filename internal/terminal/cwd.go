@@ -24,8 +24,9 @@ type cwdEvent struct {
 const cwdPollInterval = 2 * time.Second
 
 // watchCwd reports the session child's working directory to the frontend
-// whenever it changes, until done closes. No-op on platforms without cwd
-// tracking (only Linux has /proc) and when the PTY reports no child PID.
+// whenever it changes, until done closes. Each platform brings its own read
+// (see the cwd_* files); on one without any, and when the PTY reports no
+// child PID, this is a no-op.
 func watchCwd(id string, pid int, initial string, done <-chan struct{}, hub *events.Hub) {
 	if !cwdTracked || pid <= 0 {
 		return

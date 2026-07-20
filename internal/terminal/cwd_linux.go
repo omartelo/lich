@@ -8,8 +8,8 @@ import (
 )
 
 // cwdTracked reports whether this platform can read a live process working
-// directory. Linux reads /proc; the seam degrades the card to its start path
-// elsewhere (macOS would need proc_pidinfo, Windows NtQueryInformationProcess).
+// directory; declared per platform so an unimplemented one (cwd_other.go)
+// skips the watcher entirely.
 const cwdTracked = true
 
 // processCwd returns pid's current working directory, or "" when it cannot be

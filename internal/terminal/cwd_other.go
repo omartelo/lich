@@ -1,8 +1,8 @@
-//go:build !linux
+//go:build !linux && !darwin && !windows
 
 package terminal
 
-// cwdTracked: see cwd_linux.go — no /proc here, so the card keeps showing the
+// cwdTracked: no live cwd read on this platform, so the card keeps showing the
 // directory the session started in.
 const cwdTracked = false
 

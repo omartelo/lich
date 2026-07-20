@@ -114,14 +114,18 @@ Before tagging:
 
 Deliberate limits and shortcuts, with the upgrade path when it matters:
 
-- **Session cwd is polled every ~2 s** from `/proc/<pid>/cwd` of the PTY child
+- **Session cwd is polled every ~2 s** from the PTY child
   (`internal/terminal/cwd.go`), emitted as `session-cwd` only on change and kept
   frontend-side in `session-cwd-store.ts` (never persisted; every PTY spawn
-  re-reports its start directory). Linux-only by build tag — macOS
-  (`proc_pidinfo`) and Windows (`NtQueryInformationProcess`) are the upgrade
-  path, until then those cards keep the start path. Reading the direct child
-  misses a nested shell's `cd`, which is fine: the card tracks the session's
-  shell, not arbitrary descendants.
+  re-reports its start directory). Per-platform reads behind the usual build-tag
+  seam: `/proc/<pid>/cwd` on Linux, `proc_pidinfo(PROC_PIDVNODEPATHINFO)` on
+  macOS (bound from libSystem x/sys-style — cgo_import_dynamic + asm trampoline,
+  still pure Go), and a PEB walk on Windows (`NtQueryInformationProcess` +
+  `ReadProcessMemory`; assumes the child matches our architecture — a 32-bit
+  child degrades to the start path). Any failed read degrades the card to the
+  directory the session started in. Reading the direct child misses a nested
+  shell's `cd`, which is fine: the card tracks the session's shell, not
+  arbitrary descendants.
 - **git status is polled every ~3 s** — one shared poller per repository path
   (`frontend/src/lib/git-status-store.ts`), no filesystem watch. Unchanged status short-circuits (same reference, zero
   re-renders). The lich plugin's `session-touched` hook nudges an immediate refresh after Claude edits files
