@@ -16,9 +16,14 @@ describe("chordSequence", () => {
     expect(chordSequence(key({altKey: true, key: "Backspace"}))).toBeNull()
   })
 
-  it("maps Ctrl+V to SYN so TUIs see the keypress", () => {
+  it("maps Ctrl+V to SYN so TUIs see the keypress (Linux/macOS)", () => {
     expect(chordSequence(key({ctrlKey: true, key: "v", code: "KeyV"}))).toBe("\x16")
     expect(chordSequence(key({ctrlKey: true, key: "V", code: "KeyV"}))).toBe("\x16")
+  })
+
+  it("maps Ctrl+V to Alt+V (ESC+v) on Windows — Claude Code's image-paste binding there", () => {
+    expect(chordSequence(key({ctrlKey: true, key: "v", code: "KeyV"}), true)).toBe("\x1bv")
+    expect(chordSequence(key({ctrlKey: true, key: "V", code: "KeyV"}), true)).toBe("\x1bv")
   })
 
   it("leaves Ctrl+Shift+V (native text paste) alone", () => {
