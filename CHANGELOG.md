@@ -7,11 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-07-20
+
+### Added
+
+- An **Open Terminal** item on an agent session's card context menu spawns a
+  plain shell rooted at that card's working directory — the live cwd when the
+  watcher has reported one, else the session's start path — so dropping a
+  terminal into the worktree an agent is running in no longer needs a manual
+  `cd`. Shown only for agent sessions (a shell card already is one); the new
+  shell is a full persisted session, like the `+ → Terminal` launcher.
+
 ### Changed
 
 - License changed from MIT to **AGPL-3.0-only**. lich stays open source, but
   any distributed or network-served derivative must publish its source under
   the same license. Releases up to and including v0.9.0 remain under MIT.
+
+### Fixed
+
+- On Windows, `Ctrl+V` did not attach a clipboard image in Claude Code: Claude
+  binds image paste to `Alt+V` (`ESC v`) there, not `Ctrl+V`, so lich's
+  universal `Ctrl+V → SYN` (`\x16`) chord reached Claude unmapped and did
+  nothing. `Ctrl+V` now emits the `Alt+V` sequence on Windows (Linux and macOS
+  keep `\x16`); text paste stays on `Ctrl+Shift+V`.
 
 ## [0.9.0] - 2026-07-20
 
@@ -480,7 +499,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/omartelo/lich/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/omartelo/lich/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/omartelo/lich/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/omartelo/lich/compare/v0.7.0...v0.8.0
