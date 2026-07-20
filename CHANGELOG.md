@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- License changed from MIT to **AGPL-3.0-only**. lich stays open source, but
+  any distributed or network-served derivative must publish its source under
+  the same license. Releases up to and including v0.9.0 remain under MIT.
+
 ## [0.9.0] - 2026-07-20
 
 ### Added
