@@ -37,6 +37,12 @@ const REFIT_DEBOUNCE_MS = 100
 const COPY_DEBOUNCE_MS = 150
 const SCROLLBACK_LINES = 5000
 
+// Claude Code's clipboard-image-paste chord is Ctrl+V on Linux/macOS but Alt+V
+// on Windows (see term-keys.ts); the host OS is the machine lich runs on.
+// navigator.platform is "Win32" on Windows Chromium — same signal HotkeysSettings
+// uses for isMac.
+const IS_WINDOWS = navigator.platform.toLowerCase().includes("win")
+
 // cellDimensions reads the renderer's measured cell size — the same private
 // API FitAddon relies on ("TODO: Remove reliance" upstream). Null before the
 // first render measure or if xterm ever moves the private; refit then skips,
@@ -191,7 +197,7 @@ export function TerminalView({
       if (event.type !== "keydown") {
         return true
       }
-      const seq = chordSequence(event)
+      const seq = chordSequence(event, IS_WINDOWS)
       if (seq === null) {
         return true
       }
