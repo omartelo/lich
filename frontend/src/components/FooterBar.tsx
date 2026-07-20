@@ -1,6 +1,7 @@
 import {useEffect, useState} from "react"
-import {FileText, GitBranch, Folder, Plus, Diff, GitPullRequestArrow} from "lucide-react"
+import {Code, FileText, GitBranch, Folder, Plus, Diff, GitPullRequestArrow} from "lucide-react"
 import {ProjectService, System, Terminal as TerminalService} from "@/lib/rpc"
+import type {DockTab} from "@/components/dock/RightDock"
 import {useActiveSession} from "@/lib/useActiveSession"
 import {displayPath} from "@/lib/paths"
 import {useGitStatus} from "@/lib/useGitStatus"
@@ -27,16 +28,17 @@ function useNow(): Date {
 const two = (n: number): string => String(n).padStart(2, "0")
 
 interface FooterBarProps {
-  diffOpen: boolean
-  onToggleDiff: () => void
+  dock: DockTab | null
+  onDock: (tab: DockTab) => void
 }
 
-// FooterBar is the Warp-style status strip: attach-file button and diff counters
-// on the left, git branch, working directory and clock on the right. Git
-// segments only render while a project is active. Everything follows the active
-// session: a worktree session shows its checkout's path, branch and diff. The
-// diff counters double as the toggle for the review panel.
-export function FooterBar({diffOpen, onToggleDiff}: FooterBarProps) {
+// FooterBar is the Warp-style status strip: attach-file button, a file-browser
+// toggle and diff counters on the left, git branch, working directory and clock
+// on the right. Git segments only render while a project is active. Everything
+// follows the active session: a worktree session shows its checkout's path,
+// branch and diff. The Files button and the diff counters toggle the dock's two
+// tabs.
+export function FooterBar({dock, onDock}: FooterBarProps) {
   const {sessionId, path} = useActiveSession()
   const status = useGitStatus(path)
   const pr = usePullRequest(path, status?.branch ?? "")
@@ -68,16 +70,36 @@ export function FooterBar({diffOpen, onToggleDiff}: FooterBarProps) {
         </TooltipTrigger>
         <TooltipContent>Attach file</TooltipContent>
       </Tooltip>
+      {path && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                onClick={() => onDock("files")}
+                aria-pressed={dock === "files"}
+                aria-label="Browse code"
+                className={`flex items-center justify-center rounded-md border border-border bg-muted p-1 transition-colors hover:bg-accent hover:text-accent-foreground ${
+                  dock === "files" ? "bg-accent text-accent-foreground" : ""
+                }`}
+              />
+            }
+          >
+            <Code className="size-3.5"/>
+          </TooltipTrigger>
+          <TooltipContent>Browse code</TooltipContent>
+        </Tooltip>
+      )}
       {status && (
         <Tooltip>
           <TooltipTrigger
             render={
               <button
                 type="button"
-                onClick={onToggleDiff}
-                aria-pressed={diffOpen}
+                onClick={() => onDock("review")}
+                aria-pressed={dock === "review"}
                 className={`flex items-center gap-1.5 rounded-md border border-border bg-muted px-1.5 py-1 transition-colors hover:bg-accent hover:text-accent-foreground ${
-                  diffOpen ? "bg-accent text-accent-foreground" : ""
+                  dock === "review" ? "bg-accent text-accent-foreground" : ""
                 }`}
               />
             }

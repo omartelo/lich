@@ -5,7 +5,7 @@ import { ProjectsProvider } from "@/lib/projects"
 import { ProjectTabs } from "@/components/tabs/ProjectTabs"
 import { SessionSidebar } from "@/components/sidebar/SessionSidebar"
 import { TerminalHost } from "@/components/TerminalHost"
-import { DiffPanel } from "@/components/diff/DiffPanel"
+import { RightDock, type DockTab } from "@/components/dock/RightDock"
 import { FooterBar } from "@/components/FooterBar"
 import { Home } from "@/components/Home"
 import { Settings } from "@/components/settings/Settings"
@@ -17,25 +17,32 @@ import { AppUpdateGate } from "@/components/AppUpdateGate"
 // TerminalHost stay mounted while the Outlet swaps screens (Home, Settings) on
 // top of the terminals.
 function Layout() {
-  const [diffOpen, setDiffOpen] = useState(false)
+  const [dock, setDock] = useState<DockTab | null>(null)
+  // Clicking a footer toggle opens that tab, or closes the dock if that tab is
+  // already showing.
+  const toggleDock = (tab: DockTab) =>
+    setDock((cur) => (cur === tab ? null : tab))
   return (
     <div className="flex h-screen w-screen flex-col bg-background">
       <ProjectTabs />
       <div className="flex flex-1 overflow-hidden">
         <SessionSidebar />
         <main className="flex flex-1 flex-col overflow-hidden">
-          {/* relative: DiffPanel overlays this area when in full screen. */}
+          {/* relative: RightDock overlays this area when in full screen. */}
           <div className="relative flex flex-1 overflow-hidden">
             <div className="relative flex-1 overflow-hidden">
               <TerminalHost />
               <Outlet />
             </div>
-            {diffOpen && <DiffPanel onClose={() => setDiffOpen(false)} />}
+            {dock && (
+              <RightDock
+                tab={dock}
+                onTab={setDock}
+                onClose={() => setDock(null)}
+              />
+            )}
           </div>
-          <FooterBar
-            diffOpen={diffOpen}
-            onToggleDiff={() => setDiffOpen((v) => !v)}
-          />
+          <FooterBar dock={dock} onDock={toggleDock} />
         </main>
       </div>
     </div>

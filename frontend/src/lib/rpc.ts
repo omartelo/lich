@@ -95,6 +95,9 @@ export const ProjectService = {
   Branch: (path: string) => call<string>("project.Branch", [path]),
   Diff: (path: string) => call<DiffStats>("project.Diff", [path]),
   DiffText: (path: string) => call<string>("project.DiffText", [path]),
+  /** Tracked files, repo-relative and slash-separated, sorted (git ls-files). */
+  Tree: (path: string) => call<string[] | null>("project.Tree", [path]),
+  ReadFile: (path: string, rel: string) => call<string>("project.ReadFile", [path, rel]),
   DiscardFile: (path: string, rel: string) => call<null>("project.DiscardFile", [path, rel]),
   ListBranches: (path: string) => call<Branches>("project.ListBranches", [path]),
   PullRequest: (path: string) => call<PullRequest | null>("project.PullRequest", [path]),
