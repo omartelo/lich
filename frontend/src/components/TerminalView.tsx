@@ -1,13 +1,17 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Terminal } from "@xterm/xterm"
 import { WebglAddon } from "@xterm/addon-webgl"
 import { SerializeAddon } from "@xterm/addon-serialize"
+import { SearchAddon } from "@xterm/addon-search"
 import { WebLinksAddon } from "@xterm/addon-web-links"
+import { ArrowDown, ArrowUp, X } from "lucide-react"
 import { toast } from "sonner"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { System, Terminal as Service } from "@/lib/rpc"
 import { onAppEvent } from "@/lib/app-events"
 import { ensureTransport, onSessionData, sendInput } from "@/lib/term-transport"
-import { chordSequence } from "@/lib/term-keys"
+import { chordSequence, isSearchOpenChord } from "@/lib/term-keys"
 import { makeReplayBuffer } from "@/lib/replay-buffer"
 import { takePaste } from "@/lib/paste-queue"
 import { recordChunk } from "@/lib/term-perf"
@@ -36,6 +40,17 @@ const FONT_SIZE = 14
 const REFIT_DEBOUNCE_MS = 100
 const COPY_DEBOUNCE_MS = 150
 const SCROLLBACK_LINES = 5000
+
+// Search match styling. Passing decorations is also what makes xterm's
+// SearchAddon compute the match count (onDidChangeResults reports -1 without
+// them); it highlights every match too, not just the active one. Amber reads on
+// both the light and dark terminal themes.
+const SEARCH_DECORATIONS = {
+  matchBackground: "#e3b34199",
+  activeMatchBackground: "#f59e0b",
+  matchOverviewRuler: "#e3b341",
+  activeMatchColorOverviewRuler: "#f59e0b",
+}
 
 // Claude Code's clipboard-image-paste chord is Ctrl+V on Linux/macOS but Alt+V
 // on Windows (see term-keys.ts); the host OS is the machine lich runs on.
@@ -121,7 +136,15 @@ export interface TerminalViewProps {
 interface LiveTerminal {
   term: Terminal
   serialize: SerializeAddon
+  search: SearchAddon
   dispose(): void
+}
+
+// SearchResults is the match position xterm's search addon reports: the active
+// match index (0-based, -1 when none) and the total count.
+interface SearchResults {
+  index: number
+  count: number
 }
 
 export function TerminalView({
@@ -152,6 +175,43 @@ export function TerminalView({
   fontRef.current = font
   themeRef.current = resolvedTerminalTheme
 
+  // In-terminal search (Ctrl+F). The open flag mirrors into a ref so the
+  // terminal's key handler — wired once at creation — reads the live value.
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [searchResults, setSearchResults] = useState<SearchResults | null>(null)
+  const searchOpenRef = useRef(searchOpen)
+  searchOpenRef.current = searchOpen
+
+  // runSearch jumps to the next/previous match; incremental keeps the current
+  // match under the cursor while the query is still being typed.
+  const runSearch = (query: string, direction: "next" | "prev", incremental = false) => {
+    const search = liveRef.current?.search
+    if (!search || query === "") {
+      setSearchResults(null)
+      return
+    }
+    const options = { incremental, decorations: SEARCH_DECORATIONS }
+    if (direction === "next") {
+      search.findNext(query, options)
+    } else {
+      search.findPrevious(query, options)
+    }
+  }
+
+  // closeSearch clears the highlighted match and returns focus to the terminal.
+  const closeSearch = () => {
+    setSearchOpen(false)
+    setSearchQuery("")
+    setSearchResults(null)
+    const live = liveRef.current
+    if (live) {
+      live.search.clearDecorations()
+      live.term.clearSelection()
+      live.term.focus()
+    }
+  }
+
   // createTerminal builds a live terminal in the container, wired for input,
   // resize and copy-on-select. Shared by mount and every show-after-hide.
   const createTerminal = (container: HTMLDivElement): LiveTerminal => {
@@ -173,6 +233,12 @@ export function TerminalView({
       }),
     )
     term.open(container)
+
+    const search = new SearchAddon()
+    term.loadAddon(search)
+    const searchResults = search.onDidChangeResults(({ resultIndex, resultCount }) =>
+      setSearchResults({ index: resultIndex, count: resultCount }),
+    )
 
     // WebGL is the renderer; context loss falls back to xterm's DOM renderer.
     const webgl = new WebglAddon()
@@ -197,6 +263,15 @@ export function TerminalView({
       if (event.type !== "keydown") {
         return true
       }
+      // Esc closes the search box and hands the key back to the PTY. Opening it
+      // (Ctrl+F) is caught by a window capture-phase listener in the mount
+      // effect — that is what beats Chromium's own Find accelerator in --app
+      // mode; xterm's handler here is too late (the accelerator already fired).
+      if (searchOpenRef.current && event.key === "Escape") {
+        event.preventDefault()
+        closeSearch()
+        return false
+      }
       const seq = chordSequence(event, IS_WINDOWS)
       if (seq === null) {
         return true
@@ -214,9 +289,14 @@ export function TerminalView({
     })
 
     // Copy-on-select with a toast. Debounced: drag-selection fires
-    // onSelectionChange per cell.
+    // onSelectionChange per cell. Skipped while the find box is open — there the
+    // selection is search jumping between matches, not the user copying, so it
+    // must not hijack the clipboard or raise a toast on every step.
     let copyTimer = 0
     const selection = term.onSelectionChange(() => {
+      if (searchOpenRef.current) {
+        return
+      }
       window.clearTimeout(copyTimer)
       copyTimer = window.setTimeout(() => {
         const text = term.getSelection()
@@ -234,11 +314,13 @@ export function TerminalView({
     return {
       term,
       serialize,
+      search,
       dispose() {
         window.clearTimeout(copyTimer)
         dataInput.dispose()
         resizeInput.dispose()
         selection.dispose()
+        searchResults.dispose()
         term.dispose()
       },
     }
@@ -291,6 +373,21 @@ export function TerminalView({
 
     let disposed = false
     const cleanups: Array<() => void> = []
+
+    // Ctrl+F must be caught in the window capture phase to beat Chromium's Find
+    // accelerator in --app mode (the same pattern the zoom hotkeys use in
+    // settings.tsx); xterm's own key handler runs too late. Only the visible
+    // session's terminal claims it — one is visible at a time.
+    const onSearchKey = (event: KeyboardEvent) => {
+      if (!visibleRef.current || !isSearchOpenChord(event)) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      setSearchOpen(true)
+    }
+    window.addEventListener("keydown", onSearchKey, true)
+    cleanups.push(() => window.removeEventListener("keydown", onSearchKey, true))
 
     // Output sink: the live terminal when one exists, the replay buffer
     // while the session is hidden and the terminal destroyed.
@@ -402,6 +499,9 @@ export function TerminalView({
     }
     if (!visible) {
       if (liveRef.current) {
+        if (searchOpenRef.current) {
+          closeSearch()
+        }
         hideTerminal()
         void Service.SetVisible(sessionId, false)
       }
@@ -453,10 +553,68 @@ export function TerminalView({
   // remainder of the grid fit and the ruler gutter then blend into the
   // terminal instead of showing the app background as a right-edge stripe.
   return (
-    <div
-      ref={containerRef}
-      className="h-full w-full"
-      style={{ backgroundColor: TERMINAL_COLORS[resolvedTerminalTheme].background }}
-    />
+    <div className="relative h-full w-full">
+      <div
+        ref={containerRef}
+        className="h-full w-full"
+        style={{ backgroundColor: TERMINAL_COLORS[resolvedTerminalTheme].background }}
+      />
+      {searchOpen && (
+        <div className="absolute right-3 top-3 z-20 flex items-center gap-1 rounded-md border bg-popover p-1 text-popover-foreground shadow-lg">
+          <Input
+            autoFocus
+            value={searchQuery}
+            placeholder="Find"
+            aria-label="Search terminal"
+            className="h-7 w-44 border-0 shadow-none focus-visible:ring-0"
+            onChange={(event) => {
+              const query = event.target.value
+              setSearchQuery(query)
+              runSearch(query, "next", true)
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault()
+                runSearch(searchQuery, event.shiftKey ? "prev" : "next")
+              } else if (event.key === "Escape") {
+                event.preventDefault()
+                closeSearch()
+              }
+            }}
+          />
+          <span className="min-w-10 px-1 text-center text-xs tabular-nums text-muted-foreground">
+            {searchResults && searchResults.count > 0
+              ? `${searchResults.index + 1}/${searchResults.count}`
+              : searchQuery
+                ? "0/0"
+                : ""}
+          </span>
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            aria-label="Previous match"
+            onClick={() => runSearch(searchQuery, "prev")}
+          >
+            <ArrowUp className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            aria-label="Next match"
+            onClick={() => runSearch(searchQuery, "next")}
+          >
+            <ArrowDown className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            aria-label="Close search"
+            onClick={closeSearch}
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )}
+    </div>
   )
 }
