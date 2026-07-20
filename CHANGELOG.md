@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A shell session's card now wears Claude's icon while a hand-run `claude` is
+  live inside it, reported by the plugin's SessionStart hook (so it needs the
+  lich plugin, like the status ring). The mark clears when Claude exits
+  (SessionEnd) and on every session respawn; the card's real kind — what a
+  respawn runs, what the resume prompt keys on — is untouched.
+
 - Session cards follow the terminal's working directory: a `cd` in the session
   moves the card's path line — and with it the git branch, diff badge and PR
   badge, which reflect whatever directory is shown. The backend polls the PTY
