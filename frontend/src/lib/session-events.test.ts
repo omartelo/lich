@@ -1,5 +1,6 @@
 import {describe, expect, it} from "vitest"
 import {
+  isCwdEvent,
   isIdEvent,
   isStatusEvent,
   isTitleEvent,
@@ -85,6 +86,19 @@ describe("isTitleEvent", () => {
     expect(isTitleEvent({label: "build"})).toBe(false)
     expect(isTitleEvent({id: "s1", label: 2})).toBe(false)
     expect(isTitleEvent(null)).toBe(false)
+  })
+})
+
+describe("isCwdEvent", () => {
+  it("accepts a payload carrying a string id and cwd", () => {
+    expect(isCwdEvent({id: "s1", cwd: "/home/user"})).toBe(true)
+  })
+
+  it("rejects a payload missing either half", () => {
+    expect(isCwdEvent({id: "s1"})).toBe(false)
+    expect(isCwdEvent({cwd: "/home/user"})).toBe(false)
+    expect(isCwdEvent({id: "s1", cwd: 2})).toBe(false)
+    expect(isCwdEvent(null)).toBe(false)
   })
 })
 

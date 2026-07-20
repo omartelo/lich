@@ -194,7 +194,7 @@ func spawnSession(t *testing.T) *session {
 		t.Fatalf("startPTY: %v", err)
 	}
 	t.Cleanup(func() { _ = p.Close() })
-	return &session{pty: p}
+	return &session{pty: p, done: make(chan struct{})}
 }
 
 // TestWriteResizeCloseOnLiveSession drives a real session end to end: input is

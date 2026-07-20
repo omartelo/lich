@@ -7,6 +7,7 @@ import {cn} from "@/lib/utils"
 import {displayPath} from "@/lib/paths"
 import {type Session} from "@/lib/sessions"
 import {useSessionStatus} from "@/lib/useSessionStatus"
+import {useSessionCwd} from "@/lib/useSessionCwd"
 import {useGitStatus} from "@/lib/useGitStatus"
 import {usePullRequest} from "@/lib/usePullRequest"
 import {System} from "@/lib/rpc"
@@ -51,9 +52,13 @@ export function SessionCard({
   // null before the first report, and whenever the hook reports a state with
   // no indicator (see toSessionStatus) — then the icon shows ringless.
   const status = useSessionStatus(session.id)
-  // A worktree session lives in its own checkout: show that path and poll its
-  // git status, so the badge reflects the worktree's branch, not the project's.
-  const shownPath = session.path || path
+  // The live working directory the backend's cwd watcher reports ("" until it
+  // does): a `cd` in the terminal moves the card with it. Falls back to the
+  // session's static start path — a worktree session lives in its own checkout,
+  // so that path (not the project's) is the fallback. Git status and the PR
+  // badge follow whatever is shown, so they reflect the directory's repo.
+  const liveCwd = useSessionCwd(session.id)
+  const shownPath = liveCwd || session.path || path
   const git = useGitStatus(shownPath)
   const pr = usePullRequest(shownPath, git?.branch ?? "")
   // Renaming disables the drag: the sensor would otherwise claim the pointer

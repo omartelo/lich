@@ -22,6 +22,11 @@ export const TITLE_EVENT = "session-title"
 // (see terminal.touchedEventName). Payload: { id }.
 export const TOUCHED_EVENT = "session-touched"
 
+// Global event the backend emits with a session's live working directory (see
+// terminal.cwdEventName): once with the directory the PTY starts in, then on
+// every change the cwd watcher observes. Payload: { id, cwd }.
+export const CWD_EVENT = "session-cwd"
+
 // The states a card renders an indicator for. The contract also defines "idle"
 // (SessionEnd), which maps to no indicator like any unknown value does.
 const RENDERED_STATUSES = ["busy", "done", "waiting"] as const
@@ -56,6 +61,10 @@ export function isStatusEvent(data: unknown): data is {id: string; state: string
 
 export function isTitleEvent(data: unknown): data is {id: string; label: string} {
   return isIdEvent(data) && typeof (data as {label?: unknown}).label === "string"
+}
+
+export function isCwdEvent(data: unknown): data is {id: string; cwd: string} {
+  return isIdEvent(data) && typeof (data as {cwd?: unknown}).cwd === "string"
 }
 
 // shouldToastAttention decides whether a session needing the user deserves the

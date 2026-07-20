@@ -65,10 +65,13 @@ type touchedEvent struct {
 	ID string `json:"id"`
 }
 
-// session is a single running PTY-backed shell.
+// session is a single running PTY-backed shell. done closes when the session
+// is reaped (by stream or Close — whichever removes it from the map), stopping
+// its cwd watcher.
 type session struct {
-	pty ptyHandle
-	out *coalescer
+	pty  ptyHandle
+	out  *coalescer
+	done chan struct{}
 }
 
 // Store is the persistence the terminal service depends on: the binary to spawn
@@ -364,8 +367,13 @@ func (s *Service) Start(id, projectID, cwd, kind, resume string, cols, rows int)
 		encoded := base64.StdEncoding.EncodeToString(data)
 		s.hub.Emit(dataEventPrefix+id, encoded)
 	}, visibleFlushInterval, hiddenFlushInterval)
-	s.sessions[id] = &session{pty: p, out: out}
+	done := make(chan struct{})
+	s.sessions[id] = &session{pty: p, out: out, done: done}
 	go s.stream(id, p, out)
+	// The start directory is reported unconditionally so a respawn overwrites
+	// whatever cwd the previous PTY left in the frontend's store.
+	s.hub.Emit(cwdEventName, cwdEvent{ID: id, Cwd: cwd})
+	go watchCwd(id, p.Pid(), cwd, done, s.hub)
 	return nil
 }
 
@@ -392,6 +400,7 @@ func (s *Service) stream(id string, p ptyHandle, out *coalescer) {
 	s.mu.Lock()
 	if current, ok := s.sessions[id]; ok && current.pty == p {
 		delete(s.sessions, id)
+		close(current.done)
 	}
 	s.mu.Unlock()
 
@@ -446,6 +455,7 @@ func (s *Service) Close(id string) error {
 	sess, ok := s.sessions[id]
 	if ok {
 		delete(s.sessions, id)
+		close(sess.done)
 	}
 	s.mu.Unlock()
 
