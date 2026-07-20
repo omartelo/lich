@@ -1,5 +1,6 @@
 import {describe, expect, it} from "vitest"
 import {
+  isAgentEvent,
   isCwdEvent,
   isIdEvent,
   isStatusEvent,
@@ -99,6 +100,20 @@ describe("isCwdEvent", () => {
     expect(isCwdEvent({cwd: "/home/user"})).toBe(false)
     expect(isCwdEvent({id: "s1", cwd: 2})).toBe(false)
     expect(isCwdEvent(null)).toBe(false)
+  })
+})
+
+describe("isAgentEvent", () => {
+  it("accepts a payload carrying a string id and agent, empty included", () => {
+    expect(isAgentEvent({id: "s1", agent: "claude"})).toBe(true)
+    expect(isAgentEvent({id: "s1", agent: ""})).toBe(true)
+  })
+
+  it("rejects a payload missing either half", () => {
+    expect(isAgentEvent({id: "s1"})).toBe(false)
+    expect(isAgentEvent({agent: "claude"})).toBe(false)
+    expect(isAgentEvent({id: "s1", agent: 2})).toBe(false)
+    expect(isAgentEvent(null)).toBe(false)
   })
 })
 

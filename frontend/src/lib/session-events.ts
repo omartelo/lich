@@ -27,6 +27,11 @@ export const TOUCHED_EVENT = "session-touched"
 // every change the cwd watcher observes. Payload: { id, cwd }.
 export const CWD_EVENT = "session-cwd"
 
+// Global event the backend emits when a provider CLI starts inside a session's
+// PTY (see terminal.agentEventName) — a hand-run `claude` in a shell session.
+// Payload: { id, agent }; an empty agent (every PTY spawn) clears the mark.
+export const AGENT_EVENT = "session-agent"
+
 // The states a card renders an indicator for. The contract also defines "idle"
 // (SessionEnd), which maps to no indicator like any unknown value does.
 const RENDERED_STATUSES = ["busy", "done", "waiting"] as const
@@ -65,6 +70,10 @@ export function isTitleEvent(data: unknown): data is {id: string; label: string}
 
 export function isCwdEvent(data: unknown): data is {id: string; cwd: string} {
   return isIdEvent(data) && typeof (data as {cwd?: unknown}).cwd === "string"
+}
+
+export function isAgentEvent(data: unknown): data is {id: string; agent: string} {
+  return isIdEvent(data) && typeof (data as {agent?: unknown}).agent === "string"
 }
 
 // shouldToastAttention decides whether a session needing the user deserves the

@@ -43,6 +43,12 @@ const (
 	// touchedEventName carries the id of a session that likely changed files on
 	// disk, nudging an immediate git-status refresh ahead of the steady poll.
 	touchedEventName = "session-touched"
+	// agentEventName carries which provider CLI is live inside a session's PTY
+	// ({id, agent}) — today only Claude reports it, through the session-start
+	// hook, so a shell card shows Claude's mark while Claude runs in it. An
+	// empty agent clears the mark; every PTY spawn emits that clear so a
+	// respawned session never wears a dead agent's icon.
+	agentEventName = "session-agent"
 )
 
 // statusEvent is the payload of statusEventName: the session whose Claude Code
@@ -63,6 +69,13 @@ type titleEvent struct {
 // likely changed.
 type touchedEvent struct {
 	ID string `json:"id"`
+}
+
+// agentEvent is the payload of agentEventName: the session and the provider
+// CLI now live in its PTY ("" when none is).
+type agentEvent struct {
+	ID    string `json:"id"`
+	Agent string `json:"agent"`
 }
 
 // session is a single running PTY-backed shell. done closes when the session
@@ -120,7 +133,15 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 		func(id, state string) {
 			hub.Emit(statusEventName, statusEvent{ID: id, State: state})
 		},
-		store.SetClaudeSession,
+		func(sessionID, claudeSessionID string) error {
+			if err := store.SetClaudeSession(sessionID, claudeSessionID); err != nil {
+				return err
+			}
+			// A SessionStart report is proof Claude is running in this PTY —
+			// whatever the card's kind, its icon can wear Claude's mark now.
+			hub.Emit(agentEventName, agentEvent{ID: sessionID, Agent: providers.Claude})
+			return nil
+		},
 		func(id, title string) error {
 			applied, err := store.SetSessionTitle(id, title)
 			if err != nil {
@@ -370,9 +391,11 @@ func (s *Service) Start(id, projectID, cwd, kind, resume string, cols, rows int)
 	done := make(chan struct{})
 	s.sessions[id] = &session{pty: p, out: out, done: done}
 	go s.stream(id, p, out)
-	// The start directory is reported unconditionally so a respawn overwrites
-	// whatever cwd the previous PTY left in the frontend's store.
+	// The start directory and a cleared agent are reported unconditionally so
+	// a respawn overwrites whatever the previous PTY left in the frontend's
+	// stores (a provider session's own agent re-reports via its hook).
 	s.hub.Emit(cwdEventName, cwdEvent{ID: id, Cwd: cwd})
+	s.hub.Emit(agentEventName, agentEvent{ID: id, Agent: ""})
 	go watchCwd(id, p.Pid(), cwd, done, s.hub)
 	return nil
 }
