@@ -64,19 +64,21 @@ export function PatchNotesDialog({notes, onClose}: PatchNotesDialogProps) {
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-lg">
-        <DialogHeader className="flex-row items-start gap-3 p-6 pb-4">
+        <DialogHeader className="flex-row items-start gap-3 p-6 pr-12 pb-4">
           <span className="grid size-10 flex-none place-items-center rounded-lg bg-emerald-500/15 text-emerald-500 ring-1 ring-emerald-500/30">
             <Sparkles className="size-5" />
           </span>
-          <div className="flex-1 pt-0.5">
-            <DialogTitle className="text-[1.0625rem]">What's new in lich</DialogTitle>
+          <div className="min-w-0 flex-1 pt-0.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <DialogTitle className="text-[1.0625rem]">What's new in lich</DialogTitle>
+              <span className="flex-none rounded-full border bg-accent px-2 py-0.5 text-xs font-medium tabular-nums">
+                v{notes.version}
+              </span>
+            </div>
             <DialogDescription className="mt-1">
               You updated to a new version — here's what changed.
             </DialogDescription>
           </div>
-          <span className="mt-0.5 rounded-full border bg-accent px-2 py-0.5 text-xs font-medium tabular-nums">
-            v{notes.version}
-          </span>
         </DialogHeader>
 
         <div className="max-h-[55vh] overflow-y-auto px-6">
