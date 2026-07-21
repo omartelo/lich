@@ -64,6 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **New app icon** — the purple meteor mark now ships across the Linux desktop
+  entry, the Windows executable and installer, and the packaged icons.
 - **The update check now repeats hourly, not just at startup.** A session left
   open for a long time now notices a new lich release mid-run instead of only on
   the next launch. The poll never stacks a second toast for a release it already
