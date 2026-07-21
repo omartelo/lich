@@ -169,7 +169,10 @@ Deliberate limits and shortcuts, with the upgrade path when it matters:
   keeps the poll from stacking a second toast for a release already shown (a genuinely newer one still toasts). Hourly
   respects the unauthenticated GitHub API's 60-req/hour limit. Self-*apply* (download + checksum + in-place swap via
   `minio/selfupdate`) is Windows/macOS only, where lich owns its binary; on Linux the binary is package-manager owned,
-  so the flow pastes the `install.sh` one-liner into a terminal and relaunches via `/restart` instead. The restart
+  so the flow pastes a distro-specific update command into a terminal instead (`appupdate.installCommand`, reported in
+  `Status`): Arch gets `yay -S lich-bin` plus an explicit `/restart` POST (yay knows nothing about lich, so the paste
+  chains the restart itself using the session's `LICH_PORT`/`LICH_TOKEN`); every other distro gets the `install.sh`
+  one-liner, which detects the distro and POSTs `/restart` on its own. The restart
   (`internal/restart`) spawns a detached successor that retries the pinned port (`LICH_RESTART_WAIT`) while the old
   process closes its window and exits — so the window blinks briefly, and if the successor cannot bind within ~10s it
   gives up and the user reopens by hand. After a Windows/macOS self-apply the toast carries a one-click **Restart**

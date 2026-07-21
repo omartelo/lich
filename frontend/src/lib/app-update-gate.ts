@@ -12,7 +12,7 @@ export const UPDATE_DISMISSED_KEY = "lich.appUpdateDismissed"
 // target version and how to apply it) or nothing.
 export type UpdateAction =
   | {kind: "none"}
-  | {kind: "update"; version: string; canSelfApply: boolean; releaseUrl: string}
+  | {kind: "update"; version: string; canSelfApply: boolean; releaseUrl: string; installCommand: string}
 
 // decideUpdateAction resolves the startup prompt. A newer release not yet
 // dismissed for that exact version → update; otherwise nothing.
@@ -26,6 +26,7 @@ export function decideUpdateAction(
       version: status.latestVersion,
       canSelfApply: status.canSelfApply,
       releaseUrl: status.releaseUrl,
+      installCommand: status.installCommand,
     }
   }
   return {kind: "none"}

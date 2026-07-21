@@ -13,10 +13,6 @@ import {errorText} from "@/lib/utils"
 // unauthenticated GitHub API allows only 60 requests/hour per IP.
 const POLL_INTERVAL_MS = 60 * 60 * 1000
 
-// The one-liner from install.sh / the README. Pasted into a shell for the user
-// to run — never executed automatically.
-const INSTALL_CMD = "curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh"
-
 // AppUpdateGate checks on startup, then hourly, whether a newer lich release
 // exists. Where the binary is writable (Windows/macOS) it offers a one-click
 // self-update; on Linux the binary is package-manager owned, so it offers to
@@ -55,7 +51,7 @@ export function AppUpdateGate() {
     if (action.canSelfApply) {
       promptSelfApply(action.version)
     } else {
-      promptInstall(action.version, action.releaseUrl)
+      promptInstall(action.version, action.releaseUrl, action.installCommand)
     }
   }
 
@@ -101,7 +97,7 @@ export function AppUpdateGate() {
   // Linux: three choices — paste the install command into a terminal, open the
   // release page, or dismiss for this version. sonner's default toast has only
   // two buttons, so this is a custom one styled with the popover tokens.
-  const promptInstall = (version: string, releaseUrl: string) => {
+  const promptInstall = (version: string, releaseUrl: string, installCommand: string) => {
     toast.custom(
       (id) => (
         <div className="flex flex-col gap-3 rounded-md border bg-popover p-4 text-sm text-popover-foreground shadow-lg">
@@ -111,7 +107,7 @@ export function AppUpdateGate() {
               size="sm"
               onClick={() => {
                 toast.dismiss(id)
-                void openInstall(releaseUrl)
+                void openInstall(releaseUrl, installCommand)
               }}
             >
               Install
@@ -147,7 +143,7 @@ export function AppUpdateGate() {
   // project in view; with none in view (the Home screen, e.g. right after
   // launch) a $HOME-rooted project is opened so Install never dead-ends. Falls
   // back to the release page only if even that fails (home dir unresolvable).
-  const openInstall = async (releaseUrl: string) => {
+  const openInstall = async (releaseUrl: string, installCommand: string) => {
     let projectId = activeRef.current
     if (!projectId) {
       try {
@@ -158,7 +154,7 @@ export function AppUpdateGate() {
       }
     }
     const sessionId = newSession(projectId, "shell")
-    queuePaste(sessionId, INSTALL_CMD)
+    queuePaste(sessionId, installCommand)
     navigate(`/projects/${projectId}`)
   }
 

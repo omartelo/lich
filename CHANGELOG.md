@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The in-app updater now updates Arch through the AUR.** On Arch (and its
+  derivatives) the update prompt pastes `yay -S lich-bin` instead of the
+  `install.sh` one-liner, keeping the install tracked by the user's AUR helper.
+  Since `yay` does not know how to relaunch lich, the pasted command chains an
+  explicit restart using the terminal session's own loopback credentials. Other
+  distros are unchanged.
+
 ### Fixed
 
 - **The app window now shows the lich icon.** The frontend served no favicon,
