@@ -114,10 +114,11 @@ Before tagging:
 
 Deliberate limits and shortcuts, with the upgrade path when it matters:
 
-- **Session cwd is polled every ~2 s** from the PTY child
+- **Session cwd is polled every ~300 ms** from the PTY child
   (`internal/terminal/cwd.go`), emitted as `session-cwd` only on change and kept
   frontend-side in `session-cwd-store.ts` (never persisted; every PTY spawn
-  re-reports its start directory). Per-platform reads behind the usual build-tag
+  re-reports its start directory). Both the session card and the footer bar
+  consume it, so a `cd` moves both. Per-platform reads behind the usual build-tag
   seam: `/proc/<pid>/cwd` on Linux, `proc_pidinfo(PROC_PIDVNODEPATHINFO)` on
   macOS (bound from libSystem x/sys-style — cgo_import_dynamic + asm trampoline,
   still pure Go), and a PEB walk on Windows (`NtQueryInformationProcess` +
