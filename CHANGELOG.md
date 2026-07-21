@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-07-21
+
+### Fixed
+
+- **The footer bar's working directory now follows `cd`.** It read the
+  session's static start path, so a `cd` in the terminal moved the session
+  card but left the footer stale. It now overlays the same live-cwd source the
+  card follows.
+
+### Changed
+
+- **The session cwd is polled every ~300 ms** (was every 2 s), so a `cd` shows
+  up in the card and footer promptly. Each read is one cheap syscall and emits
+  only on change, so a static directory still costs nothing.
+
 ## [0.11.0] - 2026-07-21
 
 ### Added
@@ -586,7 +601,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.11.1...HEAD
+[0.11.1]: https://github.com/omartelo/lich/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/omartelo/lich/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/omartelo/lich/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/omartelo/lich/compare/v0.8.1...v0.9.0

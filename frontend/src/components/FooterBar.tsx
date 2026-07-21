@@ -3,6 +3,7 @@ import {Code, FileText, GitBranch, Folder, Plus, Diff, GitPullRequestArrow} from
 import {ProjectService, System, Terminal as TerminalService} from "@/lib/rpc"
 import type {DockTab} from "@/components/dock/RightDock"
 import {useActiveSession} from "@/lib/useActiveSession"
+import {useSessionCwd} from "@/lib/useSessionCwd"
 import {displayPath} from "@/lib/paths"
 import {useGitStatus} from "@/lib/useGitStatus"
 import {usePullRequest} from "@/lib/usePullRequest"
@@ -39,7 +40,11 @@ interface FooterBarProps {
 // branch and diff. The Files button and the diff counters toggle the dock's two
 // tabs.
 export function FooterBar({dock, onDock}: FooterBarProps) {
-  const {sessionId, path} = useActiveSession()
+  const {sessionId, path: basePath} = useActiveSession()
+  // Overlay the backend's live cwd so a `cd` in the terminal moves the footer
+  // with it — same source the session card follows. Falls back to the session's
+  // static start path until the watcher reports.
+  const path = useSessionCwd(sessionId) || basePath
   const status = useGitStatus(path)
   const pr = usePullRequest(path, status?.branch ?? "")
   const now = useNow()

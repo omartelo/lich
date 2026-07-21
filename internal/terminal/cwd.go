@@ -19,9 +19,10 @@ type cwdEvent struct {
 }
 
 // cwdPollInterval is how often a session's child working directory is read.
-// Matches the spirit of the frontend's ~3s git-status poll: cheap enough to
-// never matter, fresh enough to feel live.
-const cwdPollInterval = 2 * time.Second
+// Sub-second so a `cd` shows up promptly; each read is one cheap syscall
+// (readlink on Linux, proc_pidinfo on macOS, a PEB walk on Windows) and emits
+// only on change, so a static directory costs nothing to re-render.
+const cwdPollInterval = 300 * time.Millisecond
 
 // watchCwd reports the session child's working directory to the frontend
 // whenever it changes, until done closes. Each platform brings its own read
