@@ -72,6 +72,8 @@ export interface AppUpdateStatus {
   /** true where lich can swap its own binary (Windows/macOS); false on Linux. */
   canSelfApply: boolean
   releaseUrl: string
+  /** shell command the UI pastes to update a package-manager install; "" where canSelfApply. */
+  installCommand: string
 }
 
 /** internal/patchnotes.Group — one "### Added/Changed/Fixed" block of a release. */

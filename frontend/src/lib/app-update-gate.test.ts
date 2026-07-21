@@ -8,6 +8,7 @@ const status = (over: Partial<AppUpdateStatus>): AppUpdateStatus => ({
   updateAvailable: true,
   canSelfApply: false,
   releaseUrl: "https://github.com/omartelo/lich/releases/tag/v0.8.0",
+  installCommand: "curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh",
   ...over,
 })
 
@@ -19,7 +20,13 @@ describe("decideUpdateAction", () => {
       version: "0.8.0",
       canSelfApply: false,
       releaseUrl: "https://github.com/omartelo/lich/releases/tag/v0.8.0",
+      installCommand: "curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh",
     })
+  })
+
+  it("carries the distro install command through", () => {
+    const action = decideUpdateAction(status({installCommand: "yay -S lich-bin"}), null)
+    expect(action).toMatchObject({kind: "update", installCommand: "yay -S lich-bin"})
   })
 
   it("carries canSelfApply through for the self-apply platforms", () => {

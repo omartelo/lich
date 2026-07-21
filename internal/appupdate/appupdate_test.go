@@ -135,6 +135,41 @@ func TestStatus(t *testing.T) {
 	})
 }
 
+func TestInstallCommand(t *testing.T) {
+	arch := "yay -S lich-bin" + restartChain
+
+	tests := []struct {
+		name      string
+		goos      string
+		osRelease string // written to a temp file; "" leaves osReleasePath missing
+		want      string
+	}{
+		{"windows self-apply", "windows", "", ""},
+		{"darwin self-apply", "darwin", "", ""},
+		{"arch by ID", "linux", "ID=arch\n", arch},
+		{"arch quoted ID", "linux", "ID=\"arch\"\n", arch},
+		{"arch derivative via ID_LIKE", "linux", "ID=manjaro\nID_LIKE=arch\n", arch},
+		{"debian uses install.sh", "linux", "ID=debian\n", installScript},
+		{"fedora uses install.sh", "linux", "ID=fedora\nID_LIKE=\"rhel centos\"\n", installScript},
+		{"missing os-release uses install.sh", "linux", "", installScript},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &Service{goos: tc.goos, osReleasePath: filepath.Join("/nonexistent-abc123", "os-release")}
+			if tc.osRelease != "" {
+				path := filepath.Join(t.TempDir(), "os-release")
+				if err := os.WriteFile(path, []byte(tc.osRelease), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				s.osReleasePath = path
+			}
+			if got := s.installCommand(); got != tc.want {
+				t.Errorf("installCommand() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestApplyRejectedWhenNotSelfApply(t *testing.T) {
 	s := New("0.7.0")
 	s.exePath = "" // forces canSelfApply false regardless of platform

@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -26,6 +27,21 @@ const (
 	latestReleaseURL = "https://api.github.com/repos/" + repo + "/releases/latest"
 	releaseBase      = "https://github.com/" + repo + "/releases/download/"
 	releaseTagBase   = "https://github.com/" + repo + "/releases/tag/"
+
+	// aurPackage is the AUR name Arch users update through their helper.
+	aurPackage = "lich-bin"
+	// installScript is the deb/rpm/other-distro update path: install.sh detects
+	// the distro, installs the matching package, and POSTs /restart itself.
+	installScript = "curl -fsSL https://raw.githubusercontent.com/" + repo + "/main/install.sh | sh"
+	// restartChain relaunches lich after an install that, unlike install.sh, does
+	// not know how. It POSTs the same /restart endpoint using the
+	// LICH_PORT/LICH_TOKEN every lich PTY session exports, so the token is never
+	// rendered into the pasted text — it stays a shell env reference expanded at
+	// run time, not a literal baked into scrollback.
+	restartChain = ` && curl -fsS --max-time 5 -X POST "http://127.0.0.1:$LICH_PORT/restart?token=$LICH_TOKEN"`
+	// defaultOSRelease is where the distro identity lives; a Service field points
+	// tests elsewhere.
+	defaultOSRelease = "/etc/os-release"
 
 	httpTimeout = 5 * time.Second
 	// bodyLimit caps the JSON/checksums reads; assetLimit caps the binary
@@ -49,6 +65,9 @@ type Service struct {
 	latestURL    string
 	downloadBase string
 	tagBase      string
+	// osReleasePath is read to pick the Linux install command; a field so tests
+	// drive the arch/non-arch branches off a fixture instead of the host's file.
+	osReleasePath string
 	// applyBinary swaps the running binary for the downloaded one. A field so a
 	// test drives Apply's download+verify orchestration without the real swap
 	// (which would replace the test binary); defaults to selfupdateApply.
@@ -60,14 +79,15 @@ type Service struct {
 func New(version string) *Service {
 	exe, _ := os.Executable() // "" if unresolved — canSelfApply then stays false.
 	return &Service{
-		http:         &http.Client{Timeout: httpTimeout},
-		version:      version,
-		exePath:      exe,
-		goos:         runtime.GOOS,
-		latestURL:    latestReleaseURL,
-		downloadBase: releaseBase,
-		tagBase:      releaseTagBase,
-		applyBinary:  selfupdateApply,
+		http:          &http.Client{Timeout: httpTimeout},
+		version:       version,
+		exePath:       exe,
+		goos:          runtime.GOOS,
+		latestURL:     latestReleaseURL,
+		downloadBase:  releaseBase,
+		tagBase:       releaseTagBase,
+		osReleasePath: defaultOSRelease,
+		applyBinary:   selfupdateApply,
 	}
 }
 
@@ -85,6 +105,9 @@ type Status struct {
 	UpdateAvailable bool   `json:"updateAvailable"`
 	CanSelfApply    bool   `json:"canSelfApply"`
 	ReleaseURL      string `json:"releaseUrl"`
+	// InstallCommand is the shell command the UI pastes (never auto-runs) to
+	// update a package-manager-owned install; empty on the self-apply platforms.
+	InstallCommand string `json:"installCommand"`
 }
 
 // Status reports whether a newer release exists and whether this install can
@@ -97,6 +120,7 @@ func (s *Service) Status() Status {
 		LatestVersion:   latest,
 		UpdateAvailable: semver.IsRelease(s.version) && latest != "" && semver.Less(s.version, latest),
 		CanSelfApply:    canSelfApply(s.goos, s.exePath),
+		InstallCommand:  s.installCommand(),
 	}
 	if latest != "" {
 		st.ReleaseURL = s.tagBase + "v" + latest
@@ -168,6 +192,43 @@ func canSelfApply(goos, exePath string) bool {
 		return false
 	}
 	return dirWritable(filepath.Dir(exePath))
+}
+
+// installCommand is the shell command the UI pastes to update this install, or
+// "" on the self-apply platforms (they swap the binary through the button).
+// Arch goes through its AUR helper plus an explicit restart — yay knows nothing
+// about lich's /restart — while every other distro uses install.sh, which
+// restarts itself.
+func (s *Service) installCommand() string {
+	if s.goos != "linux" {
+		return ""
+	}
+	data, _ := os.ReadFile(s.osReleasePath) // missing/unreadable → not arch → install.sh
+	if isArch(string(data)) {
+		// ponytail: assumes yay, the common AUR helper; a paru user edits the one
+		// word, since the command is pasted for review and never auto-run.
+		return "yay -S " + aurPackage + restartChain
+	}
+	return installScript
+}
+
+// isArch reports whether os-release content describes Arch or an Arch
+// derivative, mirroring install.sh's detect_family (ID first, then ID_LIKE so
+// derivatives map to their parent).
+func isArch(osRelease string) bool {
+	return osReleaseField(osRelease, "ID") == "arch" ||
+		slices.Contains(strings.Fields(osReleaseField(osRelease, "ID_LIKE")), "arch")
+}
+
+// osReleaseField returns the unquoted value of a KEY=value line in os-release
+// content, or "" when the key is absent.
+func osReleaseField(content, key string) string {
+	for line := range strings.SplitSeq(content, "\n") {
+		if rest, ok := strings.CutPrefix(strings.TrimSpace(line), key+"="); ok {
+			return strings.Trim(rest, `"'`)
+		}
+	}
+	return ""
 }
 
 // dirWritable reports whether a temp file can be created in dir — the real
