@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The app window now shows the lich icon.** The frontend served no favicon,
+  so the Chromium `--app` window fell back to a generic page icon in the
+  taskbar (most visible on Windows). The app icon now ships with the frontend
+  and is declared in the page head.
+
 ### Added
 
 - **lich is on the AUR.** `yay -S lich-bin` (or `paru -S lich-bin`) installs
