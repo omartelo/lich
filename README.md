@@ -52,6 +52,13 @@ its dependencies through your package manager:
 curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh
 ```
 
+**Arch** — from the AUR
+([lich-bin](https://aur.archlinux.org/packages/lich-bin)):
+
+```bash
+yay -S lich-bin
+```
+
 **Manual** — per-distro packages, runtime dependencies and the static binary:
 [INSTALL.md](INSTALL.md).
 
