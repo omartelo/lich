@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Pick which provider new sessions spawn by default.** lich was wired to open
+  Claude Code for the routines that don't ask — a new worktree, the new-session
+  hotkey, a project's first session. Settings › Providers now has a "Default
+  provider" picker over the enabled harnesses, so those routines spawn Codex,
+  opencode or Crush instead if you prefer. Disabling the chosen default falls
+  back to the first enabled provider; the per-session New Session menu still
+  picks a one-off provider as before.
 - **Command palette — Ctrl/Cmd+K.** One shortcut, from anywhere, to jump to any
   session across every project — or to a project — without hunting through the
   tabs (which only show the active project's sessions). Type to filter by

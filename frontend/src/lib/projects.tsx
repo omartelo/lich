@@ -23,6 +23,7 @@ import {
   type SessionState,
 } from "./sessions"
 import { applyOrder, pinFirst } from "./reorder"
+import { defaultProviderKind } from "./providers-store"
 import {
   isIdEvent,
   isStatusEvent,
@@ -205,7 +206,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     let loaded = (await Store.LoadState()) ?? []
     const mine = loaded.find((p) => p.id === picked.id)
     if (!mine || (mine.sessions ?? []).length === 0) {
-      await Store.AddSession(picked.id, newSessionId(), FIRST_LABEL, "claude", "", FIRST_NEXT_SEQ)
+      await Store.AddSession(picked.id, newSessionId(), FIRST_LABEL, defaultProviderKind(), "", FIRST_NEXT_SEQ)
       loaded = (await Store.LoadState()) ?? []
     }
     applyLoaded(loaded)
@@ -249,7 +250,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     [projects, activeProjectId, navigate],
   )
 
-  const newSession = useCallback((projectId: string, kind: SessionKind = "claude", path = "") => {
+  const newSession = useCallback((projectId: string, kind: SessionKind = defaultProviderKind(), path = "") => {
     const sessionId = newSessionId()
     const next = addSession(sessionsRef.current, projectId, sessionId, kind, path)
     const project = next[projectId]
@@ -262,11 +263,12 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const newWorktreeSession = useCallback(
     (projectId: string, wt: { name: string; path: string }) => {
       const sessionId = newSessionId()
-      const next = addSession(sessionsRef.current, projectId, sessionId, "claude", wt.path, wt.name)
+      const kind = defaultProviderKind()
+      const next = addSession(sessionsRef.current, projectId, sessionId, kind, wt.path, wt.name)
       const project = next[projectId]
       const created = project.sessions[project.sessions.length - 1]
       setSessions(next)
-      void Store.AddSession(projectId, sessionId, created.label, "claude", wt.path, project.nextSeq)
+      void Store.AddSession(projectId, sessionId, created.label, kind, wt.path, project.nextSeq)
     },
     [],
   )
@@ -330,7 +332,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       }
       if (sessionsOf(removed, projectId).length === 0) {
         const recreatedId = newSessionId()
-        const kind: SessionKind = projectId === homeIdRef.current ? "shell" : "claude"
+        const kind: SessionKind = projectId === homeIdRef.current ? "shell" : defaultProviderKind()
         const next = addSession(removed, projectId, recreatedId, kind)
         const project = next[projectId]
         const created = project.sessions[project.sessions.length - 1]

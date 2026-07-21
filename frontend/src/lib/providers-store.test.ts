@@ -6,6 +6,7 @@ import {
   enabledKey,
   enabledProviders,
   readEnabled,
+  resolveDefaultProvider,
   type ProviderState,
 } from "./providers-store"
 
@@ -49,6 +50,30 @@ describe("enabledProviders", () => {
   })
 })
 
+describe("resolveDefaultProvider", () => {
+  const p = (id: string, enabled: boolean): ProviderState => ({
+    id: id as ProviderState["id"],
+    name: id,
+    installed: true,
+    enabled,
+  })
+
+  it("uses the stored default when it names an enabled provider", () => {
+    const list = [p("claude", true), p("codex", true)]
+    expect(resolveDefaultProvider(list, "codex")).toBe("codex")
+  })
+
+  it("falls back to the first enabled provider when the default is disabled", () => {
+    const list = [p("claude", true), p("codex", false)]
+    expect(resolveDefaultProvider(list, "codex")).toBe("claude")
+  })
+
+  it("falls back to claude when nothing is enabled or loaded", () => {
+    expect(resolveDefaultProvider([], "")).toBe("claude")
+    expect(resolveDefaultProvider([p("codex", false)], "")).toBe("claude")
+  })
+})
+
 describe("createProvidersStore", () => {
   const detected: DetectedProvider[] = [
     { id: "claude", name: "Claude Code", installed: true, path: "/usr/bin/claude" },
@@ -56,14 +81,17 @@ describe("createProvidersStore", () => {
     { id: "mystery", name: "Mystery", installed: true, path: "/x" }, // unknown id
   ]
 
-  function build(enabledValues: Record<string, string> = {}) {
+  function build(enabledValues: Record<string, string> = {}, defaultValue = "") {
     const persistEnabled = vi.fn()
+    const persistDefault = vi.fn()
     const store = createProvidersStore({
       detect: async () => detected,
       getEnabled: async (id) => enabledValues[id] ?? "",
       persistEnabled,
+      getDefault: async () => defaultValue,
+      persistDefault,
     })
-    return { store, persistEnabled }
+    return { store, persistEnabled, persistDefault }
   }
 
   it("loads only known providers with their install + default enabled state", async () => {
@@ -106,10 +134,33 @@ describe("createProvidersStore", () => {
       detect,
       getEnabled: async () => "",
       persistEnabled: vi.fn(),
+      getDefault: async () => "",
+      persistDefault: vi.fn(),
     })
     store.ensureLoaded()
     store.ensureLoaded()
     await vi.waitFor(() => expect(store.getSnapshot().length).toBe(2))
     expect(detect).toHaveBeenCalledTimes(1)
+  })
+
+  it("loads the stored default provider", async () => {
+    const { store } = build({ codex: "1" }, "codex")
+    await store.load()
+    expect(store.getDefaultSnapshot()).toBe("codex")
+  })
+
+  it("setDefault updates the snapshot, notifies, and persists", async () => {
+    const { store, persistDefault } = build()
+    await store.load()
+    const seen = vi.fn()
+    const off = store.subscribe(seen)
+    store.setDefault("codex")
+    expect(store.getDefaultSnapshot()).toBe("codex")
+    expect(seen).toHaveBeenCalledTimes(1)
+    expect(persistDefault).toHaveBeenCalledWith("codex")
+    off()
+    store.setDefault("claude")
+    expect(seen).toHaveBeenCalledTimes(1) // unsubscribed
+    expect(persistDefault).toHaveBeenLastCalledWith("claude")
   })
 })
