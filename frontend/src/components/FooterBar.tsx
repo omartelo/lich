@@ -53,7 +53,7 @@ export function FooterBar({dock, onDock}: FooterBarProps) {
 
   return (
     <footer
-      className="flex h-9 shrink-0 items-center gap-4 border-t border-border bg-sidebar px-3 text-xs text-muted-foreground">
+      className="flex h-9 shrink-0 items-center gap-2 border-t border-border bg-sidebar px-3 text-xs text-muted-foreground">
       <Tooltip>
         <TooltipTrigger
           render={
@@ -85,7 +85,7 @@ export function FooterBar({dock, onDock}: FooterBarProps) {
               />
             }
           >
-            <Code className="size-3.5"/>
+            <Code className="size-4"/>
           </TooltipTrigger>
           <TooltipContent>Browse code</TooltipContent>
         </Tooltip>
@@ -155,7 +155,7 @@ export function FooterBar({dock, onDock}: FooterBarProps) {
           </Tooltip>
         )}
         {(status?.branch || path) && (
-          <Separator orientation="vertical" className="h-4" />
+          <Separator orientation="vertical" className="h-4"/>
         )}
         <span>{now.toDateString()}</span>
         <span>{`${two(now.getHours())}:${two(now.getMinutes())}`}</span>

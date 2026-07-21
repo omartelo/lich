@@ -64,6 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reopening the worktree brings it back and offers to continue the same Claude
   conversation right where it left off. Removing the worktree (rather than
   keeping it) still clears the session for good.
+- **Footer bar spacing tightened.** The items sit closer together and the Browse
+  code icon now matches the size of its neighbors.
 
 ### Fixed
 
