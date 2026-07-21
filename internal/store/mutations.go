@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 )
 
@@ -76,6 +77,94 @@ func (s *Service) DeleteSession(projectID, sessionID, activeID string) error {
 		}
 		return nil
 	})
+}
+
+// CloseSession parks a session instead of deleting it: is_open flips to 0, which
+// hides it from LoadState while keeping its row — and its Claude session id —
+// intact for a later resume. The project's active session moves to activeID (the
+// neighbor the frontend picked). The keep-the-worktree close uses this; a plain
+// close still DeleteSessions for good.
+func (s *Service) CloseSession(projectID, sessionID, activeID string) error {
+	return s.tx(func(tx *sql.Tx) error {
+		if _, err := tx.Exec(`UPDATE sessions SET is_open = 0 WHERE id = ?`, sessionID); err != nil {
+			return fmt.Errorf("close session %q: %w", sessionID, err)
+		}
+		if _, err := tx.Exec(
+			`UPDATE projects SET active_session_id = ? WHERE id = ?`,
+			activeID, projectID,
+		); err != nil {
+			return fmt.Errorf("update active session of %q: %w", projectID, err)
+		}
+		return nil
+	})
+}
+
+// ReopenWorktreeSession resumes a parked worktree session. It finds the parked
+// (is_open = 0) session for the worktree at path and re-adds it to the workspace
+// under a fresh id (newSessionID), carrying over the old label, kind and Claude
+// session id. The fresh id is deliberate: it makes the frontend treat the card
+// as never-spawned, so its resume prompt fires and the Claude conversation
+// continues instead of starting cold. Returns nil when nothing is parked at path
+// — the caller then opens a brand-new session.
+func (s *Service) ReopenWorktreeSession(projectID, path, newSessionID string) (*Session, error) {
+	var restored *Session
+	err := s.tx(func(tx *sql.Tx) error {
+		var old Session
+		row := tx.QueryRow(
+			`SELECT id, label, kind, claude_session_id
+			   FROM sessions
+			  WHERE project_id = ? AND path = ? AND is_open = 0
+			  ORDER BY rowid DESC LIMIT 1`,
+			projectID, path,
+		)
+		if err := row.Scan(&old.ID, &old.Label, &old.Kind, &old.ClaudeSessionID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil // nothing parked here; caller creates a new session
+			}
+			return fmt.Errorf("find parked session for %q: %w", path, err)
+		}
+		if _, err := tx.Exec(`DELETE FROM sessions WHERE id = ?`, old.ID); err != nil {
+			return fmt.Errorf("drop parked session %q: %w", old.ID, err)
+		}
+		if _, err := tx.Exec(
+			`INSERT INTO sessions (id, project_id, label, kind, path, claude_session_id, position)
+			 VALUES (?, ?, ?, ?, ?, ?,
+			         (SELECT COALESCE(MAX(position), -1) + 1 FROM sessions WHERE project_id = ?))`,
+			newSessionID, projectID, old.Label, old.Kind, path, old.ClaudeSessionID, projectID,
+		); err != nil {
+			return fmt.Errorf("reinsert session %q: %w", newSessionID, err)
+		}
+		if _, err := tx.Exec(
+			`UPDATE projects SET active_session_id = ? WHERE id = ?`,
+			newSessionID, projectID,
+		); err != nil {
+			return fmt.Errorf("activate reopened session on %q: %w", projectID, err)
+		}
+		restored = &Session{ID: newSessionID, Label: old.Label, Kind: old.Kind, Path: path, ClaudeSessionID: old.ClaudeSessionID}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return restored, nil
+}
+
+// PurgeWorktreeSessions deletes every session row for the worktree at path in a
+// project — the live one and any parked leftovers alike — so removing a worktree
+// never strands a hidden row that a later resume could resurrect against a
+// checkout that no longer exists. The empty-path guard is load-bearing: a
+// project's own sessions carry no path, so an unguarded delete would wipe them
+// all. Idempotent — no matching rows is not an error.
+func (s *Service) PurgeWorktreeSessions(projectID, path string) error {
+	if path == "" {
+		return nil
+	}
+	if _, err := s.db.Exec(
+		`DELETE FROM sessions WHERE project_id = ? AND path = ?`, projectID, path,
+	); err != nil {
+		return fmt.Errorf("purge worktree sessions for %q: %w", path, err)
+	}
+	return nil
 }
 
 // RenameSession updates a session's display label from an explicit user rename.

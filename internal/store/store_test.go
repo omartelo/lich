@@ -583,3 +583,130 @@ CREATE TABLE sessions (
 		t.Errorf("migrated session = %+v, want kind=shell path=/data/wt", s)
 	}
 }
+
+// TestCloseSessionParksAndReopenRestores proves a kept worktree session survives
+// close as a hidden (parked) row and comes back — under a fresh id, with its
+// Claude session id intact — when its worktree is resumed.
+func TestCloseSessionParksAndReopenRestores(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	if err := svc.AddSession("p1", "base", "Session 1", "claude", "", 2); err != nil {
+		t.Fatalf("AddSession base: %v", err)
+	}
+	if err := svc.AddSession("p1", "wt", "swift-rabbit", "claude", "/data/wt/swift-rabbit", 3); err != nil {
+		t.Fatalf("AddSession worktree: %v", err)
+	}
+	if err := svc.SetClaudeSession("wt", "claude-uuid-1"); err != nil {
+		t.Fatalf("SetClaudeSession: %v", err)
+	}
+
+	// Keep-close parks the worktree session: gone from the workspace, base active.
+	if err := svc.CloseSession("p1", "wt", "base"); err != nil {
+		t.Fatalf("CloseSession: %v", err)
+	}
+	projects, err := svc.LoadState()
+	if err != nil {
+		t.Fatalf("LoadState after close: %v", err)
+	}
+	if len(projects[0].Sessions) != 1 || projects[0].Sessions[0].ID != "base" {
+		t.Fatalf("sessions after park = %+v, want only base", projects[0].Sessions)
+	}
+	if projects[0].ActiveSessionID != "base" {
+		t.Errorf("active after park = %q, want base", projects[0].ActiveSessionID)
+	}
+
+	// Resuming the worktree brings the session back under a new id, preserving
+	// its label and Claude session id so the conversation can be continued.
+	restored, err := svc.ReopenWorktreeSession("p1", "/data/wt/swift-rabbit", "wt2")
+	if err != nil {
+		t.Fatalf("ReopenWorktreeSession: %v", err)
+	}
+	if restored == nil {
+		t.Fatal("ReopenWorktreeSession = nil, want the parked session")
+	}
+	if restored.ID != "wt2" || restored.Label != "swift-rabbit" ||
+		restored.Path != "/data/wt/swift-rabbit" || restored.ClaudeSessionID != "claude-uuid-1" {
+		t.Errorf("restored = %+v, want {wt2 swift-rabbit /data/wt/swift-rabbit claude-uuid-1}", restored)
+	}
+
+	projects, err = svc.LoadState()
+	if err != nil {
+		t.Fatalf("LoadState after reopen: %v", err)
+	}
+	if len(projects[0].Sessions) != 2 {
+		t.Fatalf("sessions after reopen = %+v, want base + wt2", projects[0].Sessions)
+	}
+	// The parked row is consumed, not duplicated: exactly one row for the path.
+	got := projects[0].Sessions[1]
+	if got.ID != "wt2" || got.ClaudeSessionID != "claude-uuid-1" {
+		t.Errorf("reopened session = %+v, want id=wt2 claude=claude-uuid-1", got)
+	}
+	if projects[0].ActiveSessionID != "wt2" {
+		t.Errorf("active after reopen = %q, want wt2", projects[0].ActiveSessionID)
+	}
+}
+
+// TestReopenWorktreeSessionNoParked proves resume returns nil when the worktree
+// has no parked session, so the caller opens a fresh one instead.
+func TestReopenWorktreeSessionNoParked(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "base", "Session 1", "claude", "", 2)
+
+	restored, err := svc.ReopenWorktreeSession("p1", "/data/wt/never-parked", "wt2")
+	if err != nil {
+		t.Fatalf("ReopenWorktreeSession: %v", err)
+	}
+	if restored != nil {
+		t.Errorf("restored = %+v, want nil (nothing parked)", restored)
+	}
+}
+
+// countSessions returns how many session rows exist for a path, parked or open —
+// LoadState hides parked rows, so the purge assertions read the table directly.
+func countSessions(t *testing.T, svc *Service, projectID, path string) int {
+	t.Helper()
+	var n int
+	if err := svc.db.QueryRow(
+		`SELECT COUNT(*) FROM sessions WHERE project_id = ? AND path = ?`, projectID, path,
+	).Scan(&n); err != nil {
+		t.Fatalf("count sessions for %q: %v", path, err)
+	}
+	return n
+}
+
+// TestPurgeWorktreeSessions proves removing a worktree drops every row for its
+// path (parked leftovers included), leaves other worktrees and the project's own
+// sessions alone, and that the empty-path guard never wipes pathless sessions.
+func TestPurgeWorktreeSessions(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "base", "Session 1", "claude", "", 2) // project's own, no path
+	_ = svc.AddSession("p1", "wtA", "foo", "claude", "/wt/foo", 3) // worktree foo
+	_ = svc.AddSession("p1", "wtB", "bar", "claude", "/wt/bar", 4) // worktree bar
+	if err := svc.CloseSession("p1", "wtA", "base"); err != nil {  // park foo (stale leftover)
+		t.Fatalf("CloseSession: %v", err)
+	}
+	_ = svc.AddSession("p1", "wtA2", "foo", "claude", "/wt/foo", 5) // live foo again, same path
+
+	if err := svc.PurgeWorktreeSessions("p1", "/wt/foo"); err != nil {
+		t.Fatalf("PurgeWorktreeSessions: %v", err)
+	}
+	if n := countSessions(t, svc, "p1", "/wt/foo"); n != 0 {
+		t.Errorf("rows for /wt/foo after purge = %d, want 0 (parked + live both gone)", n)
+	}
+	if n := countSessions(t, svc, "p1", "/wt/bar"); n != 1 {
+		t.Errorf("rows for /wt/bar after purge = %d, want 1 (untouched)", n)
+	}
+	if n := countSessions(t, svc, "p1", ""); n != 1 {
+		t.Errorf("pathless rows after purge = %d, want 1 (base untouched)", n)
+	}
+
+	// The empty-path guard must never sweep a project's own (pathless) sessions.
+	if err := svc.PurgeWorktreeSessions("p1", ""); err != nil {
+		t.Fatalf("PurgeWorktreeSessions(empty): %v", err)
+	}
+	if n := countSessions(t, svc, "p1", ""); n != 1 {
+		t.Errorf("pathless rows after empty-path purge = %d, want 1 (guard held)", n)
+	}
+}

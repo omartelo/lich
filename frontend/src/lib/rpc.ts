@@ -15,6 +15,7 @@ import type {
   Project,
   PullRequest,
   StoredProject,
+  StoredSession,
   Worktree,
 } from "./api-types"
 
@@ -137,6 +138,15 @@ export const Store = {
   ) => call<null>("store.AddSession", [projectID, sessionID, label, kind, path, nextSeq]),
   DeleteSession: (projectID: string, sessionID: string, activeID: string) =>
     call<null>("store.DeleteSession", [projectID, sessionID, activeID]),
+  /** Park a session (keep its row for a later resume) instead of deleting it. */
+  CloseSession: (projectID: string, sessionID: string, activeID: string) =>
+    call<null>("store.CloseSession", [projectID, sessionID, activeID]),
+  /** Resume a parked worktree session under a fresh id, or null when none. */
+  ReopenWorktreeSession: (projectID: string, path: string, newSessionID: string) =>
+    call<StoredSession | null>("store.ReopenWorktreeSession", [projectID, path, newSessionID]),
+  /** Drop every session row for a worktree path when the worktree is removed. */
+  PurgeWorktreeSessions: (projectID: string, path: string) =>
+    call<null>("store.PurgeWorktreeSessions", [projectID, path]),
   RenameSession: (sessionID: string, label: string) =>
     call<null>("store.RenameSession", [sessionID, label]),
   SetActiveSession: (projectID: string, sessionID: string) =>

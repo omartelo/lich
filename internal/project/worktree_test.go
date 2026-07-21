@@ -92,6 +92,12 @@ func TestListBranches(t *testing.T) {
 		canonPath(t, got.Worktrees[0].Path) != canonPath(t, wt.Path) {
 		t.Errorf("Worktrees = %v, want [{resume-me %s}]", got.Worktrees, wt.Path)
 	}
+	// resume-me is now checked out in a worktree, so it belongs only to the
+	// Worktrees group — it must not also appear in Local, where it would offer
+	// to spawn a new worktree off itself.
+	if !slices.Equal(got.Local, []string{"extra", "main"}) {
+		t.Errorf("Local after create = %v, want [extra main] (resume-me is a worktree, not a plain base)", got.Local)
+	}
 
 	if _, err := svc.ListBranches(t.TempDir()); err == nil {
 		t.Error("ListBranches(non-repo) = nil error, want error")
