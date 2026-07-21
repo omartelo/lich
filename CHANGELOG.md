@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A "what's new" popup after an update.** The first time you open lich on a
+  new version, a dialog summarizes what changed — the release's changelog
+  section, grouped into Added / Changed / Fixed, with a link to the full notes.
+  It fires once per release and never on a fresh install. The notes are read
+  from the changelog baked into the binary, so the popup works offline.
 - **Pick which provider new sessions spawn by default.** lich was wired to open
   Claude Code for the routines that don't ask — a new worktree, the new-session
   hotkey, a project's first session. Settings › Providers now has a "Default

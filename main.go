@@ -16,6 +16,7 @@ import (
 	"github.com/omartelo/lich/internal/events"
 	"github.com/omartelo/lich/internal/fonts"
 	"github.com/omartelo/lich/internal/logging"
+	"github.com/omartelo/lich/internal/patchnotes"
 	"github.com/omartelo/lich/internal/project"
 	"github.com/omartelo/lich/internal/providers"
 	"github.com/omartelo/lich/internal/restart"
@@ -31,6 +32,12 @@ import (
 
 //go:embed all:frontend/dist
 var assets embed.FS
+
+// changelog is embedded so the app can show a "what's new" popup after an
+// update, parsed for the running version's section (internal/patchnotes).
+//
+//go:embed CHANGELOG.md
+var changelog string
 
 // defaultListenPort pins the loopback listener so the page origin — and with
 // it the frontend's localStorage (lich.* settings) — survives restarts.
@@ -88,6 +95,7 @@ func main() {
 	dispatcher.Register("project", proj)
 	dispatcher.Register("claudeplugin", claudeplugin.New(db))
 	dispatcher.Register("appupdate", appupdate.New(version))
+	dispatcher.Register("patchnotes", patchnotes.New(version, changelog))
 	dispatcher.Register("store", db)
 	dispatcher.Register("system", system.New())
 	dispatcher.Register("providers", providers.New())

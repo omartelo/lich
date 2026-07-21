@@ -12,6 +12,7 @@ import { Settings } from "@/components/settings/Settings"
 import { Toaster } from "@/components/ui/sonner"
 import { ClaudePluginGate } from "@/components/ClaudePluginGate"
 import { AppUpdateGate } from "@/components/AppUpdateGate"
+import { PatchNotesGate } from "@/components/PatchNotesGate"
 import { CommandPalette } from "@/components/CommandPalette"
 
 // Layout is persistent across navigation: the project tabs, session sidebar and
@@ -76,6 +77,7 @@ function App() {
         </ProjectsProvider>
       </HashRouter>
       <ClaudePluginGate />
+      <PatchNotesGate />
       <Toaster />
     </SettingsProvider>
   )

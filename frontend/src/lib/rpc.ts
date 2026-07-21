@@ -11,6 +11,7 @@ import type {
   Branches,
   DetectedProvider,
   DiffStats,
+  PatchNotes as PatchNotesData,
   PluginStatus,
   Project,
   PullRequest,
@@ -174,6 +175,11 @@ export const AppUpdate = {
   Status: () => call<AppUpdateStatus>("appupdate.Status", []),
   /** Download, verify and swap the binary. Only valid where canSelfApply. */
   Apply: () => call<null>("appupdate.Apply", []),
+}
+
+export const PatchNotes = {
+  /** The running build's changelog section, for the "what's new" popup. */
+  Current: () => call<PatchNotesData>("patchnotes.Current", []),
 }
 
 export const System = {

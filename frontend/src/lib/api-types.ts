@@ -74,6 +74,20 @@ export interface AppUpdateStatus {
   releaseUrl: string
 }
 
+/** internal/patchnotes.Group — one "### Added/Changed/Fixed" block of a release. */
+export interface PatchNotesGroup {
+  label: string
+  /** Item text with markdown bold/code markers intact, rendered by the gate. */
+  items: string[]
+}
+
+/** internal/patchnotes.Notes — the running build's changelog section. */
+export interface PatchNotes {
+  version: string
+  /** null when no section matches (a dev build, or a version not in the changelog). */
+  groups: PatchNotesGroup[] | null
+}
+
 /** internal/providers.Detected — a known provider and whether it is on PATH. */
 export interface DetectedProvider {
   id: string
