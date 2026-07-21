@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A one-click Restart button after a Windows/macOS self-apply.** Once the
+  update is downloaded and swapped in, the toast now carries a **Restart**
+  button that relaunches lich in place instead of only telling you to restart
+  by hand. It drives the same `/restart` in-place relaunch the Linux installer
+  already uses; the button stays until you use it, since the new binary only
+  takes over on the next launch.
 - **lich is on the AUR.** `yay -S lich-bin` (or `paru -S lich-bin`) installs
   the released binary; every release now pushes the updated PKGBUILD to the
   AUR automatically.
