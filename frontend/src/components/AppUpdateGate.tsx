@@ -6,9 +6,7 @@ import {decideUpdateAction, UPDATE_DISMISSED_KEY, type UpdateAction} from "@/lib
 import {AppUpdate, System} from "@/lib/rpc"
 import {useProjects} from "@/lib/projects"
 import {queuePaste} from "@/lib/paste-queue"
-import {runWithToast} from "@/lib/toast-async"
-
-const RESTART_HINT = "restart lich to apply."
+import {errorText} from "@/lib/utils"
 
 // How often to re-check for a release after startup, so a long-running session
 // eventually notices one. Hourly is plenty — releases are rare and the
@@ -63,7 +61,7 @@ export function AppUpdateGate() {
 
   const dismiss = (version: string) => localStorage.setItem(UPDATE_DISMISSED_KEY, version)
 
-  // Windows/macOS: swap the binary in place, then ask for a restart.
+  // Windows/macOS: swap the binary in place, then offer a one-click restart.
   const promptSelfApply = (version: string) => {
     toast(`lich ${version} is available`, {
       duration: Infinity,
@@ -72,13 +70,33 @@ export function AppUpdateGate() {
     })
   }
 
-  const runApply = () =>
-    runWithToast(
-      "Downloading lich update…",
-      () => AppUpdate.Apply(),
-      `lich updated — ${RESTART_HINT}`,
-      "Update failed",
-    )
+  // Download + verify + swap, then a persistent toast whose Restart button
+  // relaunches lich in place. Kept persistent so the button stays available if
+  // the user doesn't restart right away.
+  const runApply = async () => {
+    const id = toast.loading("Downloading lich update…")
+    try {
+      await AppUpdate.Apply()
+    } catch (error) {
+      toast.error(`Update failed: ${errorText(error)}`, {id})
+      return
+    }
+    toast.success("lich updated", {
+      id,
+      duration: Infinity,
+      action: {label: "Restart", onClick: () => void runRestart()},
+    })
+  }
+
+  // A successful restart closes this window and opens a fresh one, so there is
+  // nothing to show on success — only a failure needs surfacing.
+  const runRestart = async () => {
+    try {
+      await AppUpdate.Restart()
+    } catch (error) {
+      toast.error(`Restart failed: ${errorText(error)}`)
+    }
+  }
 
   // Linux: three choices — paste the install command into a terminal, open the
   // release page, or dismiss for this version. sonner's default toast has only

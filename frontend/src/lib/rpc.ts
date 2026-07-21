@@ -69,6 +69,16 @@ async function call<T>(method: string, args: unknown[]): Promise<T> {
   return (await response.json()) as T
 }
 
+// post hits a bespoke (non-/rpc/) endpoint with the connect token. Only
+// /restart needs this today; every service facade goes through call().
+async function post(path: string): Promise<void> {
+  const {base, token} = endpoint()
+  const response = await fetch(`${base}${path}?token=${token}`, {method: "POST"})
+  if (!response.ok) {
+    throw new Error(`${path}: HTTP ${response.status}`)
+  }
+}
+
 export const Terminal = {
   /** resume: a Claude session id to reopen (--resume); "" starts fresh. */
   Start: (
@@ -175,6 +185,9 @@ export const AppUpdate = {
   Status: () => call<AppUpdateStatus>("appupdate.Status", []),
   /** Download, verify and swap the binary. Only valid where canSelfApply. */
   Apply: () => call<null>("appupdate.Apply", []),
+  /** In-place relaunch (POST /restart, not an RPC method): spawns a successor
+   * and closes this window. Resolves on the 204 sent before teardown. */
+  Restart: () => post("/restart"),
 }
 
 export const PatchNotes = {

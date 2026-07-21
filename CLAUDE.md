@@ -172,8 +172,11 @@ Deliberate limits and shortcuts, with the upgrade path when it matters:
   so the flow pastes the `install.sh` one-liner into a terminal and relaunches via `/restart` instead. The restart
   (`internal/restart`) spawns a detached successor that retries the pinned port (`LICH_RESTART_WAIT`) while the old
   process closes its window and exits — so the window blinks briefly, and if the successor cannot bind within ~10s it
-  gives up and the user reopens by hand. Auto-restart is Unix-only (setsid); a Windows/macOS self-apply asks for a
-  manual restart.
+  gives up and the user reopens by hand. After a Windows/macOS self-apply the toast carries a one-click **Restart**
+  button that drives the same `/restart` relaunch (`AppUpdate.Restart` in the frontend) — the successor detaches via
+  setsid on macOS and `DETACHED_PROCESS` on Windows, where the outgoing window is hard-killed (no graceful GUI signal),
+  so Chromium may flag an unclean shutdown on the next open. The button stays if the user skips it; the binary is
+  already swapped, so the old version just keeps running until the next launch.
 - **Reordering (cards, tabs) rides dnd-kit's pointer sensors.** `PointerSensor` needs its
   `activationConstraint.distance` (`frontend/src/lib/use-sortable-list.ts`) or the sensor claims the press and plain
   clicks stop selecting a session. dnd-kit over the HTML5 DnD API because it also gives the keyboard path and never
