@@ -2,7 +2,7 @@ import {useState, useSyncExternalStore} from "react"
 import {useMatch, useNavigate} from "react-router-dom"
 import {GitBranch, Plus, Terminal} from "lucide-react"
 import {toast} from "sonner"
-import {ProjectService} from "@/lib/rpc"
+import {ProjectService, Store} from "@/lib/rpc"
 import {closeSettings, isSettingsOpen, subscribeSettingsCard} from "@/lib/settings-card-store"
 import {enabledProviders, useProviders} from "@/lib/providers-store"
 import {ProviderIcon} from "@/lib/provider-icons"
@@ -41,7 +41,9 @@ export function SessionSidebar() {
     sessions,
     newSession,
     newWorktreeSession,
+    reopenWorktreeSession,
     closeSession,
+    keepSession,
     activateSession,
     renameSession,
     reorderSessions,
@@ -90,7 +92,7 @@ export function SessionSidebar() {
   }
 
   const resumeWorktree = (wt: { name: string; path: string }) => {
-    newWorktreeSession(projectId, wt)
+    void reopenWorktreeSession(projectId, wt)
     setWorktreeOpen(false)
   }
 
@@ -106,7 +108,7 @@ export function SessionSidebar() {
 
   const keepAndClose = () => {
     if (pendingClose) {
-      closeSession(projectId, pendingClose.id)
+      keepSession(projectId, pendingClose.id)
     }
     setPendingClose(null)
   }
@@ -116,6 +118,9 @@ export function SessionSidebar() {
   // disk and reappears in the new-worktree picker.
   const closeAndRemove = (session: Session, force: boolean) => {
     closeSession(projectId, session.id)
+    // The checkout is going away, so no parked row for it may linger — one would
+    // otherwise resurface a resume against a worktree that no longer exists.
+    void Store.PurgeWorktreeSessions(projectId, session.path ?? "")
     ProjectService.RemoveWorktree(path, session.path ?? "", force).catch(
       (err: unknown) => {
         toast.error(`Failed to remove worktree: ${errorText(err)}`)

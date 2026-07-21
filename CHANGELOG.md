@@ -57,6 +57,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the next launch. The poll never stacks a second toast for a release it already
   surfaced, and dismissing one still holds until a genuinely newer version
   ships. Hourly keeps well within the unauthenticated GitHub API's rate limit.
+- **Keeping a worktree now keeps its session, ready to resume.** Closing a
+  worktree session and choosing to keep the checkout used to throw the session
+  away — reopening the worktree later started a blank Claude with none of the
+  earlier conversation. lich now parks the session instead of deleting it, so
+  reopening the worktree brings it back and offers to continue the same Claude
+  conversation right where it left off. Removing the worktree (rather than
+  keeping it) still clears the session for good.
+
+### Fixed
+
+- **Reopening an existing worktree no longer spawns a new one from its branch.**
+  The new-worktree picker listed a worktree's branch twice — under "Worktrees",
+  where picking it reopens the worktree, and under "Local branches", where
+  picking it creates a new worktree off that branch — with the local list open
+  by default, so the obvious choice quietly made a second worktree from the
+  first. A branch already checked out in a worktree is now shown only under
+  "Worktrees", and that group is expanded by default, so selecting it resumes
+  the existing worktree.
 
 ## [0.10.0] - 2026-07-20
 

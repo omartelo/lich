@@ -15,8 +15,10 @@ import {
   removeProject,
   renameSession as relabelSession,
   reorderSessions as rearrangeSessions,
+  restoreSession,
   sessionsOf,
   setActiveSession,
+  type Session,
   type SessionKind,
   type SessionState,
 } from "./sessions"
@@ -54,8 +56,13 @@ interface ProjectsValue {
   newSession: (projectId: string, kind?: SessionKind, path?: string) => string
   /** Open a Claude Code session rooted at a git worktree, labeled after it. */
   newWorktreeSession: (projectId: string, wt: { name: string; path: string }) => void
+  /** Resume a worktree: reopen its parked session (continuing its Claude
+   * conversation) when one exists, else open a fresh session on it. */
+  reopenWorktreeSession: (projectId: string, wt: { name: string; path: string }) => Promise<void>
   /** Permanently delete a session; deleting the last one recreates an empty one. */
   closeSession: (projectId: string, sessionId: string) => void
+  /** Close a worktree session but park its row so it can be resumed later. */
+  keepSession: (projectId: string, sessionId: string) => void
   /** Focus an existing session within a project. */
   activateSession: (projectId: string, sessionId: string) => void
   /** Rename a session's display label. */
@@ -264,6 +271,28 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  const reopenWorktreeSession = useCallback(
+    async (projectId: string, wt: { name: string; path: string }) => {
+      // Bring back the parked session for this worktree if there is one, so its
+      // Claude conversation can be resumed; a fresh id means the terminal treats
+      // it as unspawned and asks before continuing. No parked row → start fresh.
+      const restored = await Store.ReopenWorktreeSession(projectId, wt.path, newSessionId())
+      if (!restored) {
+        newWorktreeSession(projectId, wt)
+        return
+      }
+      const session: Session = {
+        id: restored.id,
+        label: restored.label,
+        kind: isSessionKind(restored.kind) ? restored.kind : "claude",
+        path: restored.path,
+        ...(restored.claudeSessionId ? { claudeSessionId: restored.claudeSessionId } : {}),
+      }
+      setSessions(restoreSession(sessionsRef.current, projectId, session))
+    },
+    [newWorktreeSession],
+  )
+
   // The new-session shortcut opens a session in the active project (mirrors the
   // "+" button). It fires even with terminal focus, so it stays reachable while
   // working in a terminal — the capture-phase listener sees the chord before
@@ -285,28 +314,53 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("keydown", onKey, true)
   }, [activeProjectId, newSession, hotkeys])
 
-  const closeSession = useCallback((projectId: string, sessionId: string) => {
-    const removed = removeSession(sessionsRef.current, projectId, sessionId)
-    if (removed === sessionsRef.current) {
-      return
-    }
-    // A project always keeps at least one session; recreate when emptied. Home
-    // stays a shell so it never turns into a Claude session.
-    if (sessionsOf(removed, projectId).length === 0) {
-      const recreatedId = newSessionId()
-      const kind: SessionKind = projectId === homeIdRef.current ? "shell" : "claude"
-      const next = addSession(removed, projectId, recreatedId, kind)
-      const project = next[projectId]
-      const created = project.sessions[project.sessions.length - 1]
-      setSessions(next)
-      void Store.DeleteSession(projectId, sessionId, "").then(() =>
-        Store.AddSession(projectId, recreatedId, created.label, created.kind, "", project.nextSeq),
-      )
-      return
-    }
-    setSessions(removed)
-    void Store.DeleteSession(projectId, sessionId, activeSessionId(removed, projectId))
-  }, [])
+  // dropSession removes a session's card and persists that removal via `persist`
+  // — DeleteSession (gone for good) or CloseSession (parked for a later resume).
+  // A project always keeps at least one session; recreate when emptied. Home
+  // stays a shell so it never turns into a Claude session.
+  const dropSession = useCallback(
+    (
+      projectId: string,
+      sessionId: string,
+      persist: (activeID: string) => Promise<unknown>,
+    ) => {
+      const removed = removeSession(sessionsRef.current, projectId, sessionId)
+      if (removed === sessionsRef.current) {
+        return
+      }
+      if (sessionsOf(removed, projectId).length === 0) {
+        const recreatedId = newSessionId()
+        const kind: SessionKind = projectId === homeIdRef.current ? "shell" : "claude"
+        const next = addSession(removed, projectId, recreatedId, kind)
+        const project = next[projectId]
+        const created = project.sessions[project.sessions.length - 1]
+        setSessions(next)
+        void persist("").then(() =>
+          Store.AddSession(projectId, recreatedId, created.label, created.kind, "", project.nextSeq),
+        )
+        return
+      }
+      setSessions(removed)
+      void persist(activeSessionId(removed, projectId))
+    },
+    [],
+  )
+
+  const closeSession = useCallback(
+    (projectId: string, sessionId: string) =>
+      dropSession(projectId, sessionId, (activeID) =>
+        Store.DeleteSession(projectId, sessionId, activeID),
+      ),
+    [dropSession],
+  )
+
+  const keepSession = useCallback(
+    (projectId: string, sessionId: string) =>
+      dropSession(projectId, sessionId, (activeID) =>
+        Store.CloseSession(projectId, sessionId, activeID),
+      ),
+    [dropSession],
+  )
 
   const activateSession = useCallback((projectId: string, sessionId: string) => {
     const next = setActiveSession(sessionsRef.current, projectId, sessionId)
@@ -443,7 +497,9 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         closeProject,
         newSession,
         newWorktreeSession,
+        reopenWorktreeSession,
         closeSession,
+        keepSession,
         activateSession,
         renameSession,
         reorderProjects,

@@ -134,8 +134,13 @@ Deliberate limits and shortcuts, with the upgrade path when it matters:
 - **Persistence is hybrid**: UI preferences live in the page's `localStorage` (`lich.*` keys) — which physically lives
   in the Chromium profile and is keyed to the page origin, which is why the listener port is pinned (47821,
   `LICH_LISTEN_PORT` overrides; distinct from `LICH_PORT`, the per-session hook variable). The workspace lives in
-  SQLite (`<config-dir>/lich/lich.db`). Closing a session does not delete its row (close ≠ delete). Card and tab order
-  is a `position` column written whole on every drag and read back as `ORDER BY position, rowid`.
+  SQLite (`<config-dir>/lich/lich.db`). A plain session close deletes its row, but **keeping** a worktree parks its
+  session instead (`is_open = 0`, hidden from `LoadState`) so its `claude_session_id` survives to be resumed later;
+  resume re-adds the row under a *fresh* id (`ReopenWorktreeSession`) so the terminal treats it as unspawned and the
+  resume prompt fires, and removing the worktree purges any parked row for its path (`PurgeWorktreeSessions`) so a
+  stale one can never resurrect a resume against a gone checkout. A closed *project* is only hidden, never deleted, and
+  keeps all its sessions. Card and tab order is a `position` column written whole on every drag and read back as
+  `ORDER BY position, rowid`.
 - **Hidden sessions are serialized and destroyed** (waveterm model, frontend edition): PTY output queues in a 2MB
   replay buffer (`frontend/src/lib/replay-buffer.ts`); show rebuilds from snapshot + tail; queue overflow drops the
   snapshot and starts clean from the tail (circular-buffer artifact contract). That page-side buffer only bridges

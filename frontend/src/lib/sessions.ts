@@ -124,6 +124,33 @@ function neighborId(sessions: Session[], removedIndex: number): string {
   return next.id
 }
 
+// restoreSession re-adds a parked session — its own id, label and
+// claudeSessionId intact — to a project and focuses it, without advancing the
+// label counter: a resume brings back an existing session, it does not mint a
+// new numbered one. An id already present is just focused; an unknown project is
+// ignored.
+export function restoreSession(
+  state: SessionState,
+  projectId: string,
+  session: Session,
+): SessionState {
+  const current = state[projectId]
+  if (!current) {
+    return state
+  }
+  if (current.sessions.some((s) => s.id === session.id)) {
+    return setActiveSession(state, projectId, session.id)
+  }
+  return {
+    ...state,
+    [projectId]: {
+      ...current,
+      sessions: [...current.sessions, session],
+      activeId: session.id,
+    },
+  }
+}
+
 // setActiveSession focuses an existing session; unknown ids are ignored.
 export function setActiveSession(
   state: SessionState,
