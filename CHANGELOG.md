@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Command palette — Ctrl/Cmd+K.** One shortcut, from anywhere, to jump to any
+  session across every project — or to a project — without hunting through the
+  tabs (which only show the active project's sessions). Type to filter by
+  session label, project or path; ↑↓ to move, ↵ to open, Esc to close. Each
+  session row shows its project, path and live status (busy / waiting / done).
+  The shortcut is rebindable in Settings › Hotkeys, since Ctrl+K otherwise
+  shadows the shell's kill-line. Jump-only for now — running actions from it can
+  come later.
 - **Search within a terminal — Ctrl+F.** Opens a find box in the top-right of
   the terminal: type to jump to the next match as you go — every match
   highlighted, with a live counter — Enter / Shift+Enter to step forward and

@@ -3,7 +3,12 @@
 // platform primary modifier — Ctrl on Windows/Linux, Cmd on macOS — so a single
 // stored combo works on both.
 
-export type HotkeyId = "newSession" | "zoomIn" | "zoomOut" | "zoomReset"
+export type HotkeyId =
+  | "commandPalette"
+  | "newSession"
+  | "zoomIn"
+  | "zoomOut"
+  | "zoomReset"
 
 export interface Combo {
   mod: boolean
@@ -20,6 +25,7 @@ export interface HotkeyAction {
 
 // HOTKEY_ACTIONS drives the defaults and the settings UI list.
 export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
+  { id: "commandPalette", label: "Command palette", combo: { mod: true, shift: false, alt: false, key: "k" } },
   { id: "newSession", label: "New session", combo: { mod: true, shift: true, alt: false, key: "t" } },
   { id: "zoomIn", label: "Zoom in", combo: { mod: true, shift: false, alt: false, key: "+" } },
   { id: "zoomOut", label: "Zoom out", combo: { mod: true, shift: false, alt: false, key: "-" } },
