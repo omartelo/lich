@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-07-21
+
 ### Changed
 
 - **The in-app updater now updates Arch through the AUR.** On Arch (and its
@@ -629,7 +631,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.11.1...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/omartelo/lich/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/omartelo/lich/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/omartelo/lich/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/omartelo/lich/compare/v0.9.0...v0.10.0
