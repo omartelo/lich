@@ -1,0 +1,26 @@
+# Maintainer: omartelo <meopedevts@proton.me>
+# Rendered by .github/workflows/release.yml (@VERSION@ -> tag, checksums via
+# updpkgsums) and pushed to the AUR — edit this template, never the AUR copy.
+pkgname=lich-bin
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc="A personal harness for AI-assisted development"
+arch=('x86_64')
+url="https://github.com/omartelo/lich"
+license=('AGPL-3.0-only')
+provides=('lich')
+conflicts=('lich')
+optdepends=('chromium: app window (any Chromium-family browser works: chromium, google-chrome, brave)'
+            'zenity: native folder picker')
+source=("lich-v${pkgver}-linux-amd64::${url}/releases/download/v${pkgver}/lich-v${pkgver}-linux-amd64"
+        "lich-${pkgver}.desktop::https://raw.githubusercontent.com/omartelo/lich/v${pkgver}/build/linux/lich.desktop"
+        "lich-${pkgver}.png::https://raw.githubusercontent.com/omartelo/lich/v${pkgver}/build/appicon.png")
+sha256sums=('SKIP'
+            'SKIP'
+            'SKIP')
+
+package() {
+  install -Dm755 "lich-v${pkgver}-linux-amd64" "${pkgdir}/usr/bin/lich"
+  install -Dm644 "lich-${pkgver}.desktop" "${pkgdir}/usr/share/applications/lich.desktop"
+  install -Dm644 "lich-${pkgver}.png" "${pkgdir}/usr/share/icons/hicolor/128x128/apps/lich.png"
+}

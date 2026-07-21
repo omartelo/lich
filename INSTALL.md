@@ -52,7 +52,13 @@ sudo dnf install chromium zenity
 
 ## Arch
 
-Download the `.pkg.tar.zst` from the releases page, then install it:
+From the AUR ([lich-bin](https://aur.archlinux.org/packages/lich-bin)):
+
+```bash
+paru -S lich-bin   # or: yay -S lich-bin
+```
+
+Or download the `.pkg.tar.zst` from the releases page and install it:
 
 ```bash
 sudo pacman -U lich-*-x86_64.pkg.tar.zst
