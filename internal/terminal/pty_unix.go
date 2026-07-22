@@ -33,6 +33,8 @@ func (p *unixPTY) Resize(cols, rows int) error {
 	return pty.Setsize(p.File, winsize(cols, rows))
 }
 
+func (p *unixPTY) Pid() int { return p.cmd.Process.Pid }
+
 func (p *unixPTY) Wait() error { return p.cmd.Wait() }
 
 func (p *unixPTY) Close() error {

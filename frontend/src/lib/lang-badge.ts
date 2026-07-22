@@ -27,12 +27,19 @@ const BADGES: Record<string, LangBadge> = {
 
 const FALLBACK_CLASS = "bg-muted text-muted-foreground"
 
+// extname returns a path's lowercased extension without the dot, or "" for
+// extensionless files and dotfiles (a leading dot is not an extension). The one
+// source of extension parsing, shared by the badge and the file-tree icon.
+export function extname(path: string): string {
+  const base = path.slice(path.lastIndexOf("/") + 1)
+  const dot = base.lastIndexOf(".")
+  return dot > 0 ? base.slice(dot + 1).toLowerCase() : ""
+}
+
 // languageAbbr picks the badge for a path by extension; unknown extensions get
 // their first letters uppercased, extensionless files a neutral dot.
 export function languageAbbr(path: string): LangBadge {
-  const base = path.slice(path.lastIndexOf("/") + 1)
-  const dot = base.lastIndexOf(".")
-  const ext = dot > 0 ? base.slice(dot + 1).toLowerCase() : ""
+  const ext = extname(path)
   if (ext in BADGES) {
     return BADGES[ext]
   }

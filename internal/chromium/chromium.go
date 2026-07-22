@@ -31,7 +31,7 @@ func FindBrowser(lookPath func(name string) (string, error)) (string, error) {
 		}
 	}
 	return "", errors.New("no chromium-family browser found (tried " +
-		fmt.Sprint(candidates) + "); install chromium, chrome or edge")
+		fmt.Sprint(candidates) + "); install chromium, chrome, edge, brave, or helium")
 }
 
 // windowsBrowserCandidates builds the Windows candidate list: chrome, then
@@ -129,8 +129,10 @@ func writeExtension(dataDir string) (string, error) {
 
 // Run opens the window and blocks until the user closes it — the browser
 // process exiting is the app lifecycle. Extra args pass through to Chromium
-// (e.g. --ozone-platform=wayland).
-func Run(url, dataDir, class string, extra []string) error {
+// (e.g. --ozone-platform=wayland). onStart, when non-nil, receives the browser
+// process once launched, so the caller can close the window itself (the restart
+// flow terminates it to relaunch lich); it is called before the blocking wait.
+func Run(url, dataDir, class string, extra []string, onStart func(*os.Process)) error {
 	browser, err := FindBrowser(exec.LookPath)
 	if err != nil {
 		return err
@@ -147,6 +149,9 @@ func Run(url, dataDir, class string, extra []string) error {
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("launch %s: %w", browser, err)
+	}
+	if onStart != nil {
+		onStart(cmd.Process)
 	}
 	return cmd.Wait()
 }

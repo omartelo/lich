@@ -14,7 +14,7 @@ maintainer: "omartelo <meopedevts@proton.me>"
 description: "A personal harness for AI-assisted development"
 vendor: "lich"
 homepage: "https://github.com/omartelo/lich"
-license: "MIT"
+license: "AGPL-3.0-only"
 
 contents:
   - src: "./bin/lich"

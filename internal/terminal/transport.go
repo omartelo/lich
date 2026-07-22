@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/omartelo/lich/internal/restart"
 )
 
 // Terminal I/O rides one local WebSocket carrying binary frames, instead of
@@ -92,6 +93,11 @@ type transport struct {
 	linkSession func(sessionID, claudeSessionID string) error
 	setTitle    func(sessionID, title string) error
 	touched     func(sessionID string)
+	// restart, when set, relaunches lich and closes this window; POST /restart
+	// triggers it (install.sh calls it after replacing the binary on disk).
+	// Guarded by mu: set via setRestart after the server goroutine is already
+	// running, and read by the request goroutine handling /restart.
+	restart func() error
 }
 
 // newTransport starts the listener on a random loopback port. input receives
@@ -123,7 +129,7 @@ func newTransport(
 	if port := os.Getenv("LICH_LISTEN_PORT"); port != "" {
 		addr = "127.0.0.1:" + port
 	}
-	listener, err := net.Listen("tcp", addr)
+	listener, err := listen(addr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen for transport on %s: %w", addr, err)
 	}
@@ -138,10 +144,12 @@ func newTransport(
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", t.handle)
+	mux.HandleFunc("/ping", t.ping)
 	mux.HandleFunc("/hook", t.hook)
 	mux.HandleFunc("/session-start", t.sessionStart)
 	mux.HandleFunc("/session-title", t.sessionTitle)
 	mux.HandleFunc("/session-touched", t.sessionTouched)
+	mux.HandleFunc("/restart", t.restartApp)
 	t.mux = mux
 	// Server and listener live for the process lifetime, like the PTY sessions
 	// they serve; add Shutdown if the app ever needs teardown. Serve returning
@@ -152,6 +160,88 @@ func newTransport(
 		}
 	}()
 	return t, nil
+}
+
+// restartBindTimeout / restartBindInterval bound the wait a successor process
+// spends retrying the pinned port while the process it replaces still holds it.
+const (
+	restartBindTimeout  = 10 * time.Second
+	restartBindInterval = 200 * time.Millisecond
+)
+
+// listen binds addr. A normal launch binds once; a launch that succeeds a
+// restarting lich (restart.WaitEnv set) retries, because the outgoing process
+// holds the pinned port for a moment after it is told to exit.
+func listen(addr string) (net.Listener, error) {
+	if os.Getenv(restart.WaitEnv) == "" {
+		return net.Listen("tcp", addr)
+	}
+	deadline := time.Now().Add(restartBindTimeout)
+	for {
+		l, err := net.Listen("tcp", addr)
+		if err == nil {
+			return l, nil
+		}
+		if time.Now().After(deadline) {
+			return nil, err
+		}
+		time.Sleep(restartBindInterval)
+	}
+}
+
+// restartApp triggers an in-place relaunch: it authenticates and answers before
+// tearing down, since the restart closes this very window and process. The
+// caller (install.sh) ignores the body — the status code is for logs and tests.
+func (t *transport) restartApp(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !t.authorized(r) {
+		http.Error(w, "invalid token", http.StatusUnauthorized)
+		return
+	}
+	t.mu.Lock()
+	fn := t.restart
+	t.mu.Unlock()
+	if fn == nil {
+		http.Error(w, "restart unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+	// Run after the response flushes: the successor is spawned and this window
+	// is closed, which unwinds the process. A failure only reaches the log.
+	go func() {
+		if err := fn(); err != nil {
+			slog.Error("restart failed", "err", err)
+		}
+	}()
+}
+
+// setRestart records the relaunch callback under the same lock that guards the
+// transport's other mutable state (conn). The service's SetRestart calls it, and
+// it runs after the server goroutine is already serving, so the lock is what
+// establishes the happens-before with the /restart handler's read.
+func (t *transport) setRestart(fn func() error) {
+	t.mu.Lock()
+	t.restart = fn
+	t.mu.Unlock()
+}
+
+// ping is the liveness probe a second lich launch uses to tell "a live lich
+// already holds my pinned port" from "the port is taken by something else": only
+// lich serves this behind the token, so a 204 proves the recorded instance is
+// alive and is lich (see internal/singleton). Token-gated like every endpoint
+// but /'s static assets.
+func (t *transport) ping(w http.ResponseWriter, r *http.Request) {
+	if !t.authorized(r) {
+		http.Error(w, "invalid token", http.StatusUnauthorized)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // mount adds a handler to the transport listener behind the same token check

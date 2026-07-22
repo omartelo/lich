@@ -239,3 +239,29 @@ jobs:
             bin/lich-* bin/checksums.txt \
             --title "$GITHUB_REF_NAME" \
             --notes-file notes.md
+
+  # The AUR PKGBUILD sources point at the GitHub Release assets, so this runs
+  # only after `release` publishes them. updpkgsums fills the checksums by
+  # downloading those assets; the action then regenerates .SRCINFO and pushes
+  # to the lich-bin AUR repo over SSH.
+  aur:
+    needs: [release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Render PKGBUILD
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          sed "s/@VERSION@/${version}/" build/linux/aur/PKGBUILD.tpl > PKGBUILD
+
+      - name: Publish lich-bin to the AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v4.2.0
+        with:
+          pkgname: lich-bin
+          pkgbuild: ./PKGBUILD
+          updpkgsums: true
+          commit_username: omartelo
+          commit_email: meopedevts@proton.me
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "Update to ${{ github.ref_name }}"

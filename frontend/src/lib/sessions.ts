@@ -8,9 +8,21 @@
 
 import { applyOrder } from "./reorder"
 
-// What a session's PTY runs: the Claude Code binary or the user's shell.
-// Values match the backend (store column + terminal.Start).
-export type SessionKind = "claude" | "shell"
+// Provider ids that can back a session, mirrored from internal/providers.Registry
+// (Go) — keep in sync. A session's kind is one of these or the plain shell.
+export const PROVIDER_KINDS = ["claude", "codex", "opencode", "crush"] as const
+export type ProviderKind = (typeof PROVIDER_KINDS)[number]
+
+// What a session's PTY runs: a provider's CLI or the user's shell. Values match
+// the backend (store column + terminal.Start).
+export type SessionKind = ProviderKind | "shell"
+
+// isSessionKind narrows a persisted or otherwise untrusted string to a
+// SessionKind, so hydration can fall back on an unrecognized value instead of
+// carrying a bad kind into state.
+export function isSessionKind(value: string): value is SessionKind {
+  return value === "shell" || (PROVIDER_KINDS as readonly string[]).includes(value)
+}
 
 export interface Session {
   id: string
@@ -110,6 +122,33 @@ function neighborId(sessions: Session[], removedIndex: number): string {
   }
   const next = sessions[removedIndex] ?? sessions[removedIndex - 1]
   return next.id
+}
+
+// restoreSession re-adds a parked session — its own id, label and
+// claudeSessionId intact — to a project and focuses it, without advancing the
+// label counter: a resume brings back an existing session, it does not mint a
+// new numbered one. An id already present is just focused; an unknown project is
+// ignored.
+export function restoreSession(
+  state: SessionState,
+  projectId: string,
+  session: Session,
+): SessionState {
+  const current = state[projectId]
+  if (!current) {
+    return state
+  }
+  if (current.sessions.some((s) => s.id === session.id)) {
+    return setActiveSession(state, projectId, session.id)
+  }
+  return {
+    ...state,
+    [projectId]: {
+      ...current,
+      sessions: [...current.sessions, session],
+      activeId: session.id,
+    },
+  }
 }
 
 // setActiveSession focuses an existing session; unknown ids are ignored.

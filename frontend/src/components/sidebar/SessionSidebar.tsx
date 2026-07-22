@@ -1,14 +1,19 @@
-import {useState} from "react"
-import {useMatch} from "react-router-dom"
-import {Bot, GitBranch, Plus, Terminal} from "lucide-react"
+import {useState, useSyncExternalStore} from "react"
+import {useMatch, useNavigate} from "react-router-dom"
+import {GitBranch, Plus, Terminal} from "lucide-react"
 import {toast} from "sonner"
-import {ProjectService} from "@/lib/rpc"
+import {ProjectService, Store} from "@/lib/rpc"
+import {closeSettings, isSettingsOpen, subscribeSettingsCard} from "@/lib/settings-card-store"
+import {enabledProviders, useProviders} from "@/lib/providers-store"
+import {ProviderIcon} from "@/lib/provider-icons"
+import {SettingsCard} from "./SettingsCard"
 import {Button} from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {useProjects} from "@/lib/projects"
@@ -36,13 +41,23 @@ export function SessionSidebar() {
     sessions,
     newSession,
     newWorktreeSession,
+    reopenWorktreeSession,
     closeSession,
+    keepSession,
     activateSession,
     renameSession,
     reorderSessions,
   } = useProjects()
-  const match = useMatch("/projects/:projectId")
+  // Match the project subtree ("/*") so the sidebar stays mounted — and keeps
+  // resolving its project — while the per-project Settings screen is open.
+  const match = useMatch("/projects/:projectId/*")
   const projectId = match?.params.projectId
+  const onSettings = !!useMatch("/projects/:projectId/settings")
+  const navigate = useNavigate()
+  const settingsOpen = useSyncExternalStore(subscribeSettingsCard, () =>
+    isSettingsOpen(projectId ?? ""),
+  )
+  const enabled = enabledProviders(useProviders())
   const path = projects.find((p) => p.id === projectId)?.path ?? ""
   const git = useGitStatus(path)
   const {width, handleProps} = usePanelWidth({
@@ -77,7 +92,7 @@ export function SessionSidebar() {
   }
 
   const resumeWorktree = (wt: { name: string; path: string }) => {
-    newWorktreeSession(projectId, wt)
+    void reopenWorktreeSession(projectId, wt)
     setWorktreeOpen(false)
   }
 
@@ -93,7 +108,7 @@ export function SessionSidebar() {
 
   const keepAndClose = () => {
     if (pendingClose) {
-      closeSession(projectId, pendingClose.id)
+      keepSession(projectId, pendingClose.id)
     }
     setPendingClose(null)
   }
@@ -103,6 +118,9 @@ export function SessionSidebar() {
   // disk and reappears in the new-worktree picker.
   const closeAndRemove = (session: Session, force: boolean) => {
     closeSession(projectId, session.id)
+    // The checkout is going away, so no parked row for it may linger — one would
+    // otherwise resurface a resume against a worktree that no longer exists.
+    void Store.PurgeWorktreeSessions(projectId, session.path ?? "")
     ProjectService.RemoveWorktree(path, session.path ?? "", force).catch(
       (err: unknown) => {
         toast.error(`Failed to remove worktree: ${errorText(err)}`)
@@ -156,14 +174,25 @@ export function SessionSidebar() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className={"w-44"}>
             <DropdownMenuGroup>
-              <DropdownMenuItem onClick={() => newSession(projectId, "claude")}>
-                <Bot/>
-                Claude Code
-              </DropdownMenuItem>
+              {enabled.map((provider) => (
+                <DropdownMenuItem
+                  key={provider.id}
+                  onClick={() => newSession(projectId, provider.id)}
+                >
+                  <ProviderIcon kind={provider.id}/>
+                  {provider.name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator/>
+            <DropdownMenuGroup>
               <DropdownMenuItem onClick={() => newSession(projectId, "shell")}>
                 <Terminal/>
                 Terminal
               </DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator/>
+            <DropdownMenuGroup>
               <DropdownMenuItem
                 disabled={!git?.branch}
                 onClick={() => setWorktreeOpen(true)}
@@ -176,6 +205,19 @@ export function SessionSidebar() {
         </DropdownMenu>
       </div>
       <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto">
+        {settingsOpen && (
+          <SettingsCard
+            active={onSettings}
+            onSelect={() => navigate(`/projects/${projectId}/settings`)}
+            onClose={() => {
+              closeSettings(projectId)
+              // Leaving settings drops back to the project's active terminal.
+              if (onSettings) {
+                navigate(`/projects/${projectId}`)
+              }
+            }}
+          />
+        )}
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -190,10 +232,18 @@ export function SessionSidebar() {
                 key={session.id}
                 session={session}
                 path={path}
-                active={session.id === activeId}
-                onSelect={() => activateSession(projectId, session.id)}
+                // A session is never highlighted while the Settings screen owns
+                // the view, so the Settings card reads as the active one.
+                active={session.id === activeId && !onSettings}
+                onSelect={() => {
+                  activateSession(projectId, session.id)
+                  // From the settings screen this returns to the terminal; on
+                  // the project route it is a no-op.
+                  navigate(`/projects/${projectId}`)
+                }}
                 onClose={() => requestClose(session)}
                 onRename={(label) => renameSession(projectId, session.id, label)}
+                onOpenTerminal={(cwd) => newSession(projectId, "shell", cwd)}
               />
             ))}
           </SortableContext>

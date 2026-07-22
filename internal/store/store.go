@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     path              TEXT NOT NULL DEFAULT '',
     claude_session_id TEXT NOT NULL DEFAULT '',
     label_auto        INTEGER NOT NULL DEFAULT 1,
+    is_open           INTEGER NOT NULL DEFAULT 1,
     position          INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
@@ -123,6 +124,7 @@ func open(path string) (*Service, error) {
 		`ALTER TABLE sessions ADD COLUMN path TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE sessions ADD COLUMN claude_session_id TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE sessions ADD COLUMN label_auto INTEGER NOT NULL DEFAULT 1`,
+		`ALTER TABLE sessions ADD COLUMN is_open INTEGER NOT NULL DEFAULT 1`,
 		`ALTER TABLE sessions ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE projects ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 	}
@@ -200,7 +202,7 @@ func (s *Service) LoadState() ([]Project, error) {
 func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	rows, err := s.db.Query(
 		`SELECT id, label, kind, path, claude_session_id
-		   FROM sessions WHERE project_id = ? ORDER BY position, rowid`,
+		   FROM sessions WHERE project_id = ? AND is_open = 1 ORDER BY position, rowid`,
 		projectID,
 	)
 	if err != nil {

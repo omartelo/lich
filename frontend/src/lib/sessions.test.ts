@@ -4,10 +4,12 @@ import {
   addSession,
   closeSession,
   createProjectSessions,
+  isSessionKind,
   projectOfSession,
   removeProject,
   renameSession,
   reorderSessions,
+  restoreSession,
   resumableSession,
   sessionsOf,
   setActiveSession,
@@ -25,6 +27,20 @@ function buildState(n: number): SessionState {
   }
   return state
 }
+
+describe("isSessionKind", () => {
+  it("accepts every provider kind and the shell", () => {
+    for (const kind of ["claude", "codex", "opencode", "crush", "shell"]) {
+      expect(isSessionKind(kind)).toBe(true)
+    }
+  })
+
+  it("rejects unknown strings", () => {
+    for (const kind of ["", "bash", "gpt", "Claude", "worktree"]) {
+      expect(isSessionKind(kind)).toBe(false)
+    }
+  })
+})
 
 // withClaudeSession stamps a restored session's Claude session id onto the
 // state, the way hydration from the store does.
@@ -261,5 +277,41 @@ describe("resumableSession", () => {
     const state = withClaudeSession(buildState(2), "s1", "claude-abc")
     expect(resumableSession(state, "nope", "s1")).toBeNull()
     expect(resumableSession(state, P, "ghost")).toBeNull()
+  })
+})
+
+describe("restoreSession", () => {
+  const parked = {
+    id: "wt2",
+    label: "swift-rabbit",
+    kind: "claude" as const,
+    path: "/wt/swift-rabbit",
+    claudeSessionId: "claude-abc",
+  }
+
+  it("re-adds the session, focuses it, and keeps its claude session id", () => {
+    const state = restoreSession(buildState(2), P, parked)
+    const sessions = sessionsOf(state, P)
+    expect(sessions.map((s) => s.id)).toEqual(["s1", "s2", "wt2"])
+    expect(activeSessionId(state, P)).toBe("wt2")
+    expect(sessions[2].claudeSessionId).toBe("claude-abc")
+  })
+
+  it("does not advance the label counter (not a new numbered session)", () => {
+    const before = buildState(2)[P].nextSeq
+    const state = restoreSession(buildState(2), P, parked)
+    expect(state[P].nextSeq).toBe(before)
+  })
+
+  it("just focuses an id already present instead of duplicating it", () => {
+    const seeded = restoreSession(buildState(1), P, parked)
+    const again = restoreSession(setActiveSession(seeded, P, "s1"), P, parked)
+    expect(sessionsOf(again, P).map((s) => s.id)).toEqual(["s1", "wt2"])
+    expect(activeSessionId(again, P)).toBe("wt2")
+  })
+
+  it("ignores an unknown project", () => {
+    const state = buildState(1)
+    expect(restoreSession(state, "nope", parked)).toBe(state)
   })
 })

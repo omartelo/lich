@@ -27,9 +27,10 @@ failed to persist.
 
 ## Event → action mapping
 
-| Claude Code hook | action                                              |
-|------------------|-----------------------------------------------------|
-| `SessionStart`   | store `claude_session_id` on the lich session row   |
+| Claude Code hook | action                                                       |
+|------------------|--------------------------------------------------------------|
+| `SessionStart`   | store `claude_session_id` on the lich session row, and mark  |
+|                  | the card as running Claude (the `session-agent` app event)   |
 
 `SessionStart` fires on startup, resume, `/clear` and compaction. A resume
 reports the resumed session's id and overwrites the stored value — lich always
@@ -43,6 +44,15 @@ holds the id of the Claude session currently in the card.
 - **Persistence** — `internal/store/mutations.go`, `Service.SetClaudeSession`:
   `UPDATE sessions SET claude_session_id`. Surfaced on `store.Session`
   (`claudeSessionId`) and returned by `LoadState`.
+- **UI push** — after persisting, the same closure (`internal/terminal/terminal.go`,
+  `New`) emits the global app event `session-agent` (`{id, agent: "claude"}`):
+  a report is proof Claude runs in this PTY, so a shell card wears Claude's
+  icon while it does. The mark lives in
+  `frontend/src/lib/session-agent-store.ts`, never the store: it clears on the
+  session-state contract's `idle` (SessionEnd — Claude left) and on every PTY
+  spawn (the backend emits an empty agent), so it dies with the process that
+  earned it. The card's persisted kind — what a respawn runs, what the resume
+  prompt keys on — never changes.
 - **Consumer** — the resume prompt. `LoadState` hydrates the id onto the
   frontend session (`resumableSession` in `frontend/src/lib/sessions.ts`), and
   the first time a restored card is opened `TerminalHost` asks before spawning:

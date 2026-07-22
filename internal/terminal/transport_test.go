@@ -6,12 +6,21 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/coder/websocket"
 )
+
+// TestMain drops LICH_LISTEN_PORT so every transport in this package binds a
+// random port: a test run spawned from inside a lich terminal inherits the
+// pinned port of the running instance and would collide with it.
+func TestMain(m *testing.M) {
+	os.Unsetenv("LICH_LISTEN_PORT")
+	os.Exit(m.Run())
+}
 
 func TestFrameRoundTrip(t *testing.T) {
 	frame, err := encodeFrame("sess-1", []byte("hello"))
@@ -207,6 +216,36 @@ func TestParseHookRequest(t *testing.T) {
 				t.Fatalf("got (%q,%q), want (%q,%q)", req.SessionID, req.State, tc.wantID, tc.wantState)
 			}
 		})
+	}
+}
+
+func TestPingAnswersWithToken(t *testing.T) {
+	tr, err := newTransport(func(string, []byte) {}, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("newTransport: %v", err)
+	}
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/ping?token=%s", tr.port, tr.token))
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", resp.StatusCode)
+	}
+}
+
+func TestPingRejectsBadToken(t *testing.T) {
+	tr, err := newTransport(func(string, []byte) {}, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("newTransport: %v", err)
+	}
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/ping?token=wrong", tr.port))
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", resp.StatusCode)
 	}
 }
 

@@ -155,6 +155,11 @@ export function WorktreeDialog({
         const local = loaded.local ?? []
         const preferred = local.includes(currentBranch) ? currentBranch : local[0]
         setBase(preferred ? valueOf("local", preferred) : "")
+        // Existing worktrees are the resume targets; surface the group so a
+        // closed-but-kept worktree is one click away instead of behind a fold.
+        if ((loaded.worktrees ?? []).length > 0) {
+          setOpenGroups((prev) => ({...prev, worktrees: true}))
+        }
       })
       .catch((err: unknown) => {
         if (!stale) {

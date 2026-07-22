@@ -10,6 +10,24 @@ export type StatusEventSource = (
   handler: (data: unknown) => void,
 ) => () => void
 
+// A session needing attention: blocked waiting on the user, or a turn that
+// finished but has not been seen yet. The notification queue is a flat list of
+// these across every project (see pendingAll).
+export interface PendingStatus {
+  id: string
+  status: SessionStatus
+}
+
+function samePending(
+  a: readonly PendingStatus[],
+  b: readonly PendingStatus[],
+): boolean {
+  if (a.length !== b.length) {
+    return false
+  }
+  return a.every((item, i) => item.id === b[i].id && item.status === b[i].status)
+}
+
 interface Entry {
   status: SessionStatus | null
   // Whether the user has had a chance to see the current status, which only
@@ -55,6 +73,39 @@ export function createSessionStatusStore(source: StatusEventSource) {
     }
   }
 
+  // The notification queue, recomputed on every status change and handed to
+  // useSyncExternalStore. An unchanged set keeps the old array reference
+  // (samePending), so subscribers never re-render for a transition that leaves
+  // the queue identical — e.g. a session going busy, which the queue ignores.
+  const globalListeners = new Set<() => void>()
+  let pending: PendingStatus[] = []
+
+  const computePending = (): PendingStatus[] => {
+    const next: PendingStatus[] = []
+    for (const [id, entry] of entries) {
+      // "busy" is progress, not a notification; a seen "done" is already read.
+      if (entry.status === null || entry.status === "busy") {
+        continue
+      }
+      if (entry.status === "done" && entry.seen) {
+        continue
+      }
+      next.push({id, status: entry.status})
+    }
+    return next
+  }
+
+  const refreshPending = (): void => {
+    const next = computePending()
+    if (samePending(pending, next)) {
+      return
+    }
+    pending = next
+    for (const listener of globalListeners) {
+      listener()
+    }
+  }
+
   source((data) => {
     if (!isStatusEvent(data)) {
       return
@@ -70,6 +121,7 @@ export function createSessionStatusStore(source: StatusEventSource) {
     // A fresh report is by definition unseen, whether or not the last one was.
     entry.seen = false
     notify(entry)
+    refreshPending()
   })
 
   // markSeen records that a session's status has been on screen — its project
@@ -84,6 +136,7 @@ export function createSessionStatusStore(source: StatusEventSource) {
     if (entry.status === "done") {
       notify(entry)
     }
+    refreshPending()
   }
 
   // pendingOf reduces a project's sessions to the one status its tab should
@@ -114,5 +167,18 @@ export function createSessionStatusStore(source: StatusEventSource) {
   const get = (id: string): SessionStatus | null =>
     entries.get(id)?.status ?? null
 
-  return {subscribe, get, markSeen, pendingOf}
+  // subscribeAll fires whenever the notification queue changes (see pendingAll),
+  // as opposed to subscribe, which is scoped to one session.
+  const subscribeAll = (listener: () => void): (() => void) => {
+    globalListeners.add(listener)
+    return () => {
+      globalListeners.delete(listener)
+    }
+  }
+
+  // pendingAll returns the current queue. The reference is stable between
+  // changes, so it is safe to hand straight to useSyncExternalStore.
+  const pendingAll = (): PendingStatus[] => pending
+
+  return {subscribe, get, markSeen, pendingOf, subscribeAll, pendingAll}
 }

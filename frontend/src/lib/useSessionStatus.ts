@@ -1,7 +1,7 @@
 import {useCallback, useSyncExternalStore} from "react"
 import {onAppEvent} from "./app-events"
 import {STATUS_EVENT, type SessionStatus} from "./session-events"
-import {createSessionStatusStore} from "./session-status-store"
+import {createSessionStatusStore, type PendingStatus} from "./session-status-store"
 
 // Subscribed at import rather than on first use: that opens the /events socket
 // at page load, so a status reported before any card mounts still lands.
@@ -49,4 +49,11 @@ export function useProjectStatus(
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const snapshot = useCallback(() => store.pendingOf(sessionIds), [key])
   return useSyncExternalStore(subscribe, snapshot)
+}
+
+// usePendingStatuses returns every session needing attention across all
+// projects — the notification queue (see session-status-store.pendingAll).
+// subscribeAll and pendingAll are module-stable, so no memoization is needed.
+export function usePendingStatuses(): PendingStatus[] {
+  return useSyncExternalStore(store.subscribeAll, store.pendingAll)
 }

@@ -10,16 +10,20 @@ import {
   activeSessionId,
   addSession,
   closeSession as removeSession,
+  isSessionKind,
   projectOfSession,
   removeProject,
   renameSession as relabelSession,
   reorderSessions as rearrangeSessions,
+  restoreSession,
   sessionsOf,
   setActiveSession,
+  type Session,
   type SessionKind,
   type SessionState,
 } from "./sessions"
-import { applyOrder } from "./reorder"
+import { applyOrder, pinFirst } from "./reorder"
+import { defaultProviderKind } from "./providers-store"
 import {
   isIdEvent,
   isStatusEvent,
@@ -39,16 +43,27 @@ interface ProjectsValue {
   projects: Project[]
   /** Sessions keyed by project id, with the active session per project. */
   sessions: SessionState
+  /** The pinned Home tab's project id, or null until resolved at launch. */
+  homeId: string | null
   /** Show the OS directory picker, add the chosen project and navigate to it. */
   openProject: () => Promise<void>
+  /** Ensure a project rooted at $HOME exists (no picker) and return its id — the
+   * update flow's install terminal when no project is in view. */
+  ensureHomeProject: () => Promise<string>
   /** Close a project's tab (kept in the store so it can be reopened later). */
   closeProject: (id: string) => void
-  /** Open a new session in a project and focus it. Kind defaults to Claude Code. */
-  newSession: (projectId: string, kind?: SessionKind) => void
+  /** Open a new session in a project and focus it, returning its id. Kind
+   * defaults to Claude Code; path defaults to the project's own directory. */
+  newSession: (projectId: string, kind?: SessionKind, path?: string) => string
   /** Open a Claude Code session rooted at a git worktree, labeled after it. */
   newWorktreeSession: (projectId: string, wt: { name: string; path: string }) => void
+  /** Resume a worktree: reopen its parked session (continuing its Claude
+   * conversation) when one exists, else open a fresh session on it. */
+  reopenWorktreeSession: (projectId: string, wt: { name: string; path: string }) => Promise<void>
   /** Permanently delete a session; deleting the last one recreates an empty one. */
   closeSession: (projectId: string, sessionId: string) => void
+  /** Close a worktree session but park its row so it can be resumed later. */
+  keepSession: (projectId: string, sessionId: string) => void
   /** Focus an existing session within a project. */
   activateSession: (projectId: string, sessionId: string) => void
   /** Rename a session's display label. */
@@ -88,7 +103,7 @@ function buildSessionState(loaded: StoreProject[]): SessionState {
     const sessions = (p.sessions ?? []).map((s) => ({
       id: s.id,
       label: s.label,
-      kind: (s.kind === "shell" ? "shell" : "claude") as SessionKind,
+      kind: isSessionKind(s.kind) ? s.kind : "claude",
       ...(s.path ? { path: s.path } : {}),
       ...(s.claudeSessionId ? { claudeSessionId: s.claudeSessionId } : {}),
     }))
@@ -113,8 +128,15 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   sessionsRef.current = sessions
   const projectsRef = useRef(projects)
   projectsRef.current = projects
+  // The always-present Home tab's project id, resolved at launch — a pinned,
+  // non-closable shell at the system home dir.
+  const [homeId, setHomeId] = useState<string | null>(null)
+  const homeIdRef = useRef<string | null>(null)
+  homeIdRef.current = homeId
   const navigate = useNavigate()
-  const activeProjectId = useMatch("/projects/:projectId")?.params.projectId
+  // "/*" so a project stays the active one while its Settings screen is open
+  // (keeps the new-session hotkey, attention toasts and seen-tracking working).
+  const activeProjectId = useMatch("/projects/:projectId/*")?.params.projectId
   // Latest focused project id for the attention toast, read inside a once-only
   // event subscription without re-subscribing on every navigation.
   const activeProjectIdRef = useRef(activeProjectId)
@@ -126,9 +148,28 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     setSessions(buildSessionState(loaded))
   }, [])
 
-  // Restore the workspace once on launch.
+  // Restore the workspace once on launch, and seed the always-present Home tab:
+  // a plain shell rooted at the system home dir. It is a normal (persisted)
+  // project, so its sessions and terminals reuse all the usual machinery; the
+  // tab strip just pins it first, non-closable, with a Home icon.
   useEffect(() => {
-    void Store.LoadState().then((loaded) => applyLoaded(loaded ?? []))
+    void (async () => {
+      let loaded = (await Store.LoadState()) ?? []
+      const home = await ProjectService.Home().catch(() => null)
+      if (home) {
+        setHomeId(home.id)
+        const existing = loaded.find((p) => p.id === home.id)
+        if (!existing) {
+          await Store.AddProject(home.id, home.name, home.path)
+          await Store.AddSession(home.id, newSessionId(), FIRST_LABEL, "shell", "", FIRST_NEXT_SEQ)
+          loaded = (await Store.LoadState()) ?? []
+        } else if ((existing.sessions ?? []).length === 0) {
+          await Store.AddSession(home.id, newSessionId(), FIRST_LABEL, "shell", "", FIRST_NEXT_SEQ)
+          loaded = (await Store.LoadState()) ?? []
+        }
+      }
+      applyLoaded(loaded)
+    })()
   }, [applyLoaded])
 
   // The backend auto-applies the Claude ai-title as a session's label (only
@@ -165,15 +206,35 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     let loaded = (await Store.LoadState()) ?? []
     const mine = loaded.find((p) => p.id === picked.id)
     if (!mine || (mine.sessions ?? []).length === 0) {
-      await Store.AddSession(picked.id, newSessionId(), FIRST_LABEL, "claude", "", FIRST_NEXT_SEQ)
+      await Store.AddSession(picked.id, newSessionId(), FIRST_LABEL, defaultProviderKind(), "", FIRST_NEXT_SEQ)
       loaded = (await Store.LoadState()) ?? []
     }
     applyLoaded(loaded)
     navigate(`/projects/${picked.id}`)
   }, [applyLoaded, navigate])
 
+  // Add a $HOME-rooted project without the picker, idempotent by its stable id
+  // (the same directory always maps to the same project), and return its id. The
+  // update flow opens an install terminal here when nothing is in view; the
+  // caller adds the shell session so no default session is seeded.
+  const ensureHomeProject = useCallback(async (): Promise<string> => {
+    if (homeIdRef.current) {
+      return homeIdRef.current
+    }
+    const home = await ProjectService.Home()
+    setHomeId(home.id)
+    if (!projectsRef.current.some((p) => p.id === home.id)) {
+      setProjects((prev) => (prev.some((p) => p.id === home.id) ? prev : [...prev, home]))
+      await Store.AddProject(home.id, home.name, home.path)
+    }
+    return home.id
+  }, [])
+
   const closeProject = useCallback(
     (id: string) => {
+      if (id === homeIdRef.current) {
+        return // Home is permanent.
+      }
       const index = projects.findIndex((project) => project.id === id)
       setProjects((prev) => prev.filter((project) => project.id !== id))
       setSessions((prev) => removeProject(prev, id))
@@ -189,25 +250,49 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     [projects, activeProjectId, navigate],
   )
 
-  const newSession = useCallback((projectId: string, kind: SessionKind = "claude") => {
+  const newSession = useCallback((projectId: string, kind: SessionKind = defaultProviderKind(), path = "") => {
     const sessionId = newSessionId()
-    const next = addSession(sessionsRef.current, projectId, sessionId, kind)
+    const next = addSession(sessionsRef.current, projectId, sessionId, kind, path)
     const project = next[projectId]
     const created = project.sessions[project.sessions.length - 1]
     setSessions(next)
-    void Store.AddSession(projectId, sessionId, created.label, kind, "", project.nextSeq)
+    void Store.AddSession(projectId, sessionId, created.label, kind, path, project.nextSeq)
+    return sessionId
   }, [])
 
   const newWorktreeSession = useCallback(
     (projectId: string, wt: { name: string; path: string }) => {
       const sessionId = newSessionId()
-      const next = addSession(sessionsRef.current, projectId, sessionId, "claude", wt.path, wt.name)
+      const kind = defaultProviderKind()
+      const next = addSession(sessionsRef.current, projectId, sessionId, kind, wt.path, wt.name)
       const project = next[projectId]
       const created = project.sessions[project.sessions.length - 1]
       setSessions(next)
-      void Store.AddSession(projectId, sessionId, created.label, "claude", wt.path, project.nextSeq)
+      void Store.AddSession(projectId, sessionId, created.label, kind, wt.path, project.nextSeq)
     },
     [],
+  )
+
+  const reopenWorktreeSession = useCallback(
+    async (projectId: string, wt: { name: string; path: string }) => {
+      // Bring back the parked session for this worktree if there is one, so its
+      // Claude conversation can be resumed; a fresh id means the terminal treats
+      // it as unspawned and asks before continuing. No parked row → start fresh.
+      const restored = await Store.ReopenWorktreeSession(projectId, wt.path, newSessionId())
+      if (!restored) {
+        newWorktreeSession(projectId, wt)
+        return
+      }
+      const session: Session = {
+        id: restored.id,
+        label: restored.label,
+        kind: isSessionKind(restored.kind) ? restored.kind : "claude",
+        path: restored.path,
+        ...(restored.claudeSessionId ? { claudeSessionId: restored.claudeSessionId } : {}),
+      }
+      setSessions(restoreSession(sessionsRef.current, projectId, session))
+    },
+    [newWorktreeSession],
   )
 
   // The new-session shortcut opens a session in the active project (mirrors the
@@ -231,26 +316,53 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("keydown", onKey, true)
   }, [activeProjectId, newSession, hotkeys])
 
-  const closeSession = useCallback((projectId: string, sessionId: string) => {
-    const removed = removeSession(sessionsRef.current, projectId, sessionId)
-    if (removed === sessionsRef.current) {
-      return
-    }
-    // A project always keeps at least one session; recreate when emptied.
-    if (sessionsOf(removed, projectId).length === 0) {
-      const recreatedId = newSessionId()
-      const next = addSession(removed, projectId, recreatedId)
-      const project = next[projectId]
-      const created = project.sessions[project.sessions.length - 1]
-      setSessions(next)
-      void Store.DeleteSession(projectId, sessionId, "").then(() =>
-        Store.AddSession(projectId, recreatedId, created.label, created.kind, "", project.nextSeq),
-      )
-      return
-    }
-    setSessions(removed)
-    void Store.DeleteSession(projectId, sessionId, activeSessionId(removed, projectId))
-  }, [])
+  // dropSession removes a session's card and persists that removal via `persist`
+  // — DeleteSession (gone for good) or CloseSession (parked for a later resume).
+  // A project always keeps at least one session; recreate when emptied. Home
+  // stays a shell so it never turns into a Claude session.
+  const dropSession = useCallback(
+    (
+      projectId: string,
+      sessionId: string,
+      persist: (activeID: string) => Promise<unknown>,
+    ) => {
+      const removed = removeSession(sessionsRef.current, projectId, sessionId)
+      if (removed === sessionsRef.current) {
+        return
+      }
+      if (sessionsOf(removed, projectId).length === 0) {
+        const recreatedId = newSessionId()
+        const kind: SessionKind = projectId === homeIdRef.current ? "shell" : defaultProviderKind()
+        const next = addSession(removed, projectId, recreatedId, kind)
+        const project = next[projectId]
+        const created = project.sessions[project.sessions.length - 1]
+        setSessions(next)
+        void persist("").then(() =>
+          Store.AddSession(projectId, recreatedId, created.label, created.kind, "", project.nextSeq),
+        )
+        return
+      }
+      setSessions(removed)
+      void persist(activeSessionId(removed, projectId))
+    },
+    [],
+  )
+
+  const closeSession = useCallback(
+    (projectId: string, sessionId: string) =>
+      dropSession(projectId, sessionId, (activeID) =>
+        Store.DeleteSession(projectId, sessionId, activeID),
+      ),
+    [dropSession],
+  )
+
+  const keepSession = useCallback(
+    (projectId: string, sessionId: string) =>
+      dropSession(projectId, sessionId, (activeID) =>
+        Store.CloseSession(projectId, sessionId, activeID),
+      ),
+    [dropSession],
+  )
 
   const activateSession = useCallback((projectId: string, sessionId: string) => {
     const next = setActiveSession(sessionsRef.current, projectId, sessionId)
@@ -341,12 +453,18 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const reorderProjects = useCallback((ids: string[]) => {
-    const next = applyOrder(projectsRef.current, ids)
+    // Home is pinned first and rendered outside the drag list, so the drop only
+    // names the other projects; splice it back in (when present) so applyOrder
+    // still accounts for every project.
+    const hid = homeIdRef.current
+    const inProjects = hid !== null && projectsRef.current.some((p) => p.id === hid)
+    const full = pinFirst(ids, inProjects ? hid : null)
+    const next = applyOrder(projectsRef.current, full)
     if (!next) {
       return
     }
     setProjects(next)
-    void Store.ReorderProjects(ids)
+    void Store.ReorderProjects(full)
   }, [])
 
   const reorderSessions = useCallback((projectId: string, ids: string[]) => {
@@ -375,11 +493,15 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       value={{
         projects,
         sessions,
+        homeId,
         openProject,
+        ensureHomeProject,
         closeProject,
         newSession,
         newWorktreeSession,
+        reopenWorktreeSession,
         closeSession,
+        keepSession,
         activateSession,
         renameSession,
         reorderProjects,

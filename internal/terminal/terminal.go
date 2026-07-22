@@ -16,6 +16,7 @@ import (
 	"sync"
 
 	"github.com/omartelo/lich/internal/events"
+	"github.com/omartelo/lich/internal/providers"
 )
 
 // Event names. A terminal I/O event carries the session ID as a suffix (e.g.
@@ -42,6 +43,12 @@ const (
 	// touchedEventName carries the id of a session that likely changed files on
 	// disk, nudging an immediate git-status refresh ahead of the steady poll.
 	touchedEventName = "session-touched"
+	// agentEventName carries which provider CLI is live inside a session's PTY
+	// ({id, agent}) — today only Claude reports it, through the session-start
+	// hook, so a shell card shows Claude's mark while Claude runs in it. An
+	// empty agent clears the mark; every PTY spawn emits that clear so a
+	// respawned session never wears a dead agent's icon.
+	agentEventName = "session-agent"
 )
 
 // statusEvent is the payload of statusEventName: the session whose Claude Code
@@ -64,18 +71,30 @@ type touchedEvent struct {
 	ID string `json:"id"`
 }
 
-// session is a single running PTY-backed shell.
-type session struct {
-	pty ptyHandle
-	out *coalescer
+// agentEvent is the payload of agentEventName: the session and the provider
+// CLI now live in its PTY ("" when none is).
+type agentEvent struct {
+	ID    string `json:"id"`
+	Agent string `json:"agent"`
 }
 
-// Store is the persistence the terminal service depends on: the Claude Code
-// binary to spawn for a project (empty return spawns the default), and where to
-// record the Claude session id a PTY reports through the SessionStart hook. The
-// store implements both.
+// session is a single running PTY-backed shell. done closes when the session
+// is reaped (by stream or Close — whichever removes it from the map), stopping
+// its cwd watcher. replay holds a capped tail of the PTY's output so a
+// reconnecting frontend can reseed its scrollback after a page reload.
+type session struct {
+	pty    ptyHandle
+	out    *coalescer
+	done   chan struct{}
+	replay *replayBuffer
+}
+
+// Store is the persistence the terminal service depends on: the binary to spawn
+// for a provider in a project (empty return spawns the provider's default), and
+// where to record the Claude session id a PTY reports through the SessionStart
+// hook. The store implements both.
 type Store interface {
-	ClaudeBin(projectID string) string
+	ProviderBin(providerID, projectID string) string
 	SetClaudeSession(sessionID, claudeSessionID string) error
 	SetSessionTitle(sessionID, title string) (bool, error)
 }
@@ -116,7 +135,15 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 		func(id, state string) {
 			hub.Emit(statusEventName, statusEvent{ID: id, State: state})
 		},
-		store.SetClaudeSession,
+		func(sessionID, claudeSessionID string) error {
+			if err := store.SetClaudeSession(sessionID, claudeSessionID); err != nil {
+				return err
+			}
+			// A SessionStart report is proof Claude is running in this PTY —
+			// whatever the card's kind, its icon can wear Claude's mark now.
+			hub.Emit(agentEventName, agentEvent{ID: sessionID, Agent: providers.Claude})
+			return nil
+		},
 		func(id, title string) error {
 			applied, err := store.SetSessionTitle(id, title)
 			if err != nil {
@@ -156,6 +183,16 @@ func (s *Service) MountPublic(pattern string, handler http.Handler) {
 	s.ws.mountPublic(pattern, handler)
 }
 
+// SetRestart wires the POST /restart endpoint to fn, the in-place relaunch the
+// update flow triggers after replacing the binary. No-op when the transport
+// failed to start — /restart then simply reports unavailable.
+func (s *Service) SetRestart(fn func() error) {
+	if s.ws == nil {
+		return
+	}
+	s.ws.setRestart(fn)
+}
+
 // sessionEnv is the environment for one PTY: the shared base plus the loopback
 // coordinates a Claude Code hook needs to report this session's status back to
 // lich. LICH_SESSION_ID is per-session, so this returns a fresh slice rather
@@ -175,41 +212,46 @@ func (s *Service) sessionEnv(id string) []string {
 	)
 }
 
-// defaultBin is the Claude Code binary spawned when the user has not configured
-// a custom path.
-const defaultBin = "claude"
+// defaultBin is the binary spawned when the session's kind is not a known
+// provider and no custom path is set — a safety net; real sessions always carry
+// a registered provider kind.
+const defaultBin = providers.Claude
 
-// KindShell marks a session that runs the user's shell instead of Claude Code.
+// KindShell marks a session that runs the user's shell instead of a provider.
 const KindShell = "shell"
 
 // readBufSize is the chunk size read from a session's PTY per iteration.
 const readBufSize = 32 * 1024
 
-// resolveBin returns the configured binary, or the default when it is empty.
-func resolveBin(bin string) string {
-	if bin == "" {
-		return defaultBin
+// resolveBin returns the configured binary, or the provider's default when it is
+// empty (falling back to defaultBin for an unknown kind).
+func resolveBin(kind, bin string) string {
+	if bin != "" {
+		return bin
 	}
-	return bin
+	if def := providers.DefaultBinary(kind); def != "" {
+		return def
+	}
+	return defaultBin
 }
 
 // resumeFlag is the Claude Code flag that reopens an existing session by id.
 const resumeFlag = "--resume"
 
-// resumeArgs returns the arguments that reopen the Claude session resume names,
-// or nil when the session must start fresh. A "shell" session never resumes:
-// its PTY runs the user's shell, which knows nothing about --resume, and a
-// stray claude_session_id can land on its row when the user ran Claude Code by
-// hand inside it.
+// resumeArgs returns the arguments that reopen a Claude session, or nil when the
+// session must start fresh. Resume is Claude-specific: "--resume" is Claude
+// Code's flag, so a shell or any other provider never grows it (the frontend
+// only ever passes a resume id for a claude session, but a stray one must not
+// reach codex/opencode/crush either).
 func resumeArgs(kind, resume string) []string {
-	if kind == KindShell || resume == "" {
+	if kind != providers.Claude || resume == "" {
 		return nil
 	}
 	return []string{resumeFlag, resume}
 }
 
 // resolveCommand picks the binary a session runs: the user's shell for "shell"
-// sessions, otherwise the configured Claude Code binary.
+// sessions, otherwise the provider binary for the session's kind.
 func resolveCommand(kind, bin, shellEnv string) string {
 	if kind == KindShell {
 		if shellEnv == "" {
@@ -217,7 +259,7 @@ func resolveCommand(kind, bin, shellEnv string) string {
 		}
 		return shellEnv
 	}
-	return resolveBin(bin)
+	return resolveBin(kind, bin)
 }
 
 // appImageVars are injected by the AppImage runtime or AppImageLauncher and
@@ -303,10 +345,10 @@ func scrubPathList(value, dir string) (string, bool) {
 }
 
 // Start spawns the binary for session id under project projectID — the user's
-// shell when kind is "shell", otherwise the Claude Code binary resolved from the
-// project's settings (falling back to "claude" via $PATH) — attached to a new
-// PTY sized to cols x rows and rooted at cwd, then streams its output to the
-// frontend. An empty cwd defaults to the user's home directory. Starting a
+// shell when kind is "shell", otherwise the provider binary for that kind
+// resolved from the project's settings (falling back to the provider's default
+// on $PATH) — attached to a new PTY sized to cols x rows and rooted at cwd, then
+// streams its output to the frontend. An empty cwd defaults to the user's home directory. Starting a
 // session that is already running is a no-op.
 //
 // A non-empty resume is a Claude session id to reopen (`--resume`), which the
@@ -330,7 +372,7 @@ func (s *Service) Start(id, projectID, cwd, kind, resume string, cols, rows int)
 	}
 
 	p, err := startPTY(ptySpec{
-		bin:  resolveCommand(kind, s.store.ClaudeBin(projectID), userShell()),
+		bin:  resolveCommand(kind, s.store.ProviderBin(kind, projectID), userShell()),
 		args: resumeArgs(kind, resume),
 		dir:  cwd,
 		env:  s.sessionEnv(id),
@@ -348,8 +390,16 @@ func (s *Service) Start(id, projectID, cwd, kind, resume string, cols, rows int)
 		encoded := base64.StdEncoding.EncodeToString(data)
 		s.hub.Emit(dataEventPrefix+id, encoded)
 	}, visibleFlushInterval, hiddenFlushInterval)
-	s.sessions[id] = &session{pty: p, out: out}
-	go s.stream(id, p, out)
+	done := make(chan struct{})
+	replay := newReplayBuffer(replayCapBytes)
+	s.sessions[id] = &session{pty: p, out: out, done: done, replay: replay}
+	go s.stream(id, p, out, replay)
+	// The start directory and a cleared agent are reported unconditionally so
+	// a respawn overwrites whatever the previous PTY left in the frontend's
+	// stores (a provider session's own agent re-reports via its hook).
+	s.hub.Emit(cwdEventName, cwdEvent{ID: id, Cwd: cwd})
+	s.hub.Emit(agentEventName, agentEvent{ID: id, Agent: ""})
+	go watchCwd(id, p.Pid(), cwd, done, s.hub)
 	return nil
 }
 
@@ -357,11 +407,12 @@ func (s *Service) Start(id, projectID, cwd, kind, resume string, cols, rows int)
 // the process, drops the session and emits its exit event. Output goes through
 // the session's coalescer, which batches it on a short cadence while the
 // terminal is visible and a long one while it is hidden.
-func (s *Service) stream(id string, p ptyHandle, out *coalescer) {
+func (s *Service) stream(id string, p ptyHandle, out *coalescer, replay *replayBuffer) {
 	buf := make([]byte, readBufSize)
 	for {
 		n, err := p.Read(buf)
 		if n > 0 {
+			replay.append(buf[:n])
 			out.Write(buf[:n])
 		}
 		if err != nil {
@@ -376,6 +427,7 @@ func (s *Service) stream(id string, p ptyHandle, out *coalescer) {
 	s.mu.Lock()
 	if current, ok := s.sessions[id]; ok && current.pty == p {
 		delete(s.sessions, id)
+		close(current.done)
 	}
 	s.mu.Unlock()
 
@@ -413,6 +465,21 @@ func (s *Service) SetVisible(id string, visible bool) error {
 	return nil
 }
 
+// Replay returns the capped tail of a session's PTY output, base64-encoded, so a
+// reconnecting frontend can reseed its scrollback after a page reload discarded
+// the page-side buffer. Empty for an unknown session — a brand-new one has no
+// history yet. Base64 for the same reason the data event is: raw PTY bytes may
+// split a multi-byte UTF-8 sequence across the JSON envelope.
+func (s *Service) Replay(id string) (string, error) {
+	s.mu.Lock()
+	sess, ok := s.sessions[id]
+	s.mu.Unlock()
+	if !ok {
+		return "", nil
+	}
+	return base64.StdEncoding.EncodeToString(sess.replay.snapshot()), nil
+}
+
 // Resize updates a session's PTY window size. The frontend only calls this for
 // the visible terminal; a hidden terminal is resized on the next time it is
 // shown.
@@ -430,6 +497,7 @@ func (s *Service) Close(id string) error {
 	sess, ok := s.sessions[id]
 	if ok {
 		delete(s.sessions, id)
+		close(sess.done)
 	}
 	s.mu.Unlock()
 

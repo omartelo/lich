@@ -52,6 +52,13 @@ its dependencies through your package manager:
 curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh
 ```
 
+**Arch** — from the AUR
+([lich-bin](https://aur.archlinux.org/packages/lich-bin)):
+
+```bash
+yay -S lich-bin
+```
+
 **Manual** — per-distro packages, runtime dependencies and the static binary:
 [INSTALL.md](INSTALL.md).
 
@@ -93,4 +100,9 @@ the WebGL addon. See `docs/chromium-shell.md` for how it got this way.
 
 ## License
 
-[MIT](LICENSE) © 2026 omartelo
+[AGPL-3.0-only](LICENSE) © 2026 omartelo
+
+lich is free software: you can use, study, modify and redistribute it under
+the terms of the GNU Affero General Public License v3. Any distributed or
+network-served derivative must be released under the same license. Releases
+up to and including v0.9.0 remain MIT-licensed.

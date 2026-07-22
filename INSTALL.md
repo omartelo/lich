@@ -14,7 +14,7 @@ Pick your system:
 - [Verifying checksums](#verifying-checksums)
 
 **Runtime dependencies** — lich opens its window in a Chromium-family browser;
-none is bundled. On Linux any of `chromium`, `google-chrome` or `brave`
+none is bundled. On Linux any of `chromium`, `google-chrome`, `helium-browser` or `brave`
 satisfies it, and `zenity` provides the folder picker. On Windows, Chrome,
 Edge or Brave are found via their conventional install paths (Edge ships with
 Windows) and the folder picker is native.
@@ -52,7 +52,13 @@ sudo dnf install chromium zenity
 
 ## Arch
 
-Download the `.pkg.tar.zst` from the releases page, then install it:
+From the AUR ([lich-bin](https://aur.archlinux.org/packages/lich-bin)):
+
+```bash
+yay -S lich-bin   # or: paru -S lich-bin
+```
+
+Or download the `.pkg.tar.zst` from the releases page and install it:
 
 ```bash
 sudo pacman -U lich-*-x86_64.pkg.tar.zst

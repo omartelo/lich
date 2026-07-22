@@ -1,21 +1,25 @@
 import {useEffect, useRef, useState} from "react"
 import type {KeyboardEvent} from "react"
-import {Bell, Check, GitBranch, GitPullRequestArrow, LoaderCircle, Pencil, X} from "lucide-react"
+import {GitBranch, GitPullRequestArrow, Pencil, Terminal, X} from "lucide-react"
 import {useSortable} from "@dnd-kit/sortable"
 import {CSS} from "@dnd-kit/utilities"
 import {cn} from "@/lib/utils"
 import {displayPath} from "@/lib/paths"
 import {type Session} from "@/lib/sessions"
 import {useSessionStatus} from "@/lib/useSessionStatus"
+import {useSessionCwd} from "@/lib/useSessionCwd"
+import {useSessionAgent} from "@/lib/useSessionAgent"
 import {useGitStatus} from "@/lib/useGitStatus"
 import {usePullRequest} from "@/lib/usePullRequest"
 import {System} from "@/lib/rpc"
 import {DiffStat} from "@/components/DiffStat"
+import {SessionStatusIcon} from "./SessionStatusIcon"
 import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip"
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
 
@@ -26,6 +30,10 @@ interface SessionCardProps {
   onSelect: () => void
   onClose: () => void
   onRename: (label: string) => void
+  // Open a shell session rooted at this card's shown directory. Wired only for
+  // agent sessions, so the user can drop into a terminal in the worktree the
+  // agent is working in without cd-ing there by hand.
+  onOpenTerminal: (cwd: string) => void
 }
 
 // SessionCard is one session entry: a card showing the session label, the
@@ -39,18 +47,28 @@ export function SessionCard({
                               onSelect,
                               onClose,
                               onRename,
+                              onOpenTerminal,
                             }: SessionCardProps) {
   const pathRef = useRef<HTMLSpanElement>(null)
   const [pathOverflow, setPathOverflow] = useState(false)
   const [editing, setEditing] = useState(false)
-  // Processing state reported by the lich Claude Code hook: a spinner while
-  // Claude produces output, a check once its turn ends, a bell when it is
-  // blocked on the user. null before the first report, and whenever the hook
-  // reports a state with no indicator (see toSessionStatus).
+  // Processing state reported by the lich Claude Code hook, drawn as a ring
+  // around the provider icon: a spinning ring while Claude produces output,
+  // solid emerald once its turn ends, amber when it is blocked on the user.
+  // null before the first report, and whenever the hook reports a state with
+  // no indicator (see toSessionStatus) — then the icon shows ringless.
   const status = useSessionStatus(session.id)
-  // A worktree session lives in its own checkout: show that path and poll its
-  // git status, so the badge reflects the worktree's branch, not the project's.
-  const shownPath = session.path || path
+  // The provider CLI live inside the PTY right now — a hand-run `claude` in a
+  // shell session puts Claude's mark on the card while it runs; null falls
+  // back to the session's own kind.
+  const agent = useSessionAgent(session.id)
+  // The live working directory the backend's cwd watcher reports ("" until it
+  // does): a `cd` in the terminal moves the card with it. Falls back to the
+  // session's static start path — a worktree session lives in its own checkout,
+  // so that path (not the project's) is the fallback. Git status and the PR
+  // badge follow whatever is shown, so they reflect the directory's repo.
+  const liveCwd = useSessionCwd(session.id)
+  const shownPath = liveCwd || session.path || path
   const git = useGitStatus(shownPath)
   const pr = usePullRequest(shownPath, git?.branch ?? "")
   // Renaming disables the drag: the sensor would otherwise claim the pointer
@@ -136,15 +154,7 @@ export function SessionCard({
                 />
               ) : (
                 <span className="flex w-full min-w-0 items-center gap-1.5 pr-5">
-                  {status === "busy" && (
-                    <LoaderCircle className="size-3 shrink-0 animate-spin text-muted-foreground"/>
-                  )}
-                  {status === "done" && (
-                    <Check className="size-3 shrink-0 text-emerald-500"/>
-                  )}
-                  {status === "waiting" && (
-                    <Bell className="size-3 shrink-0 text-amber-500"/>
-                  )}
+                  <SessionStatusIcon kind={agent ?? session.kind} status={status}/>
                   <span className="truncate text-sm font-medium text-foreground">
                     {session.label}
                   </span>
@@ -216,17 +226,17 @@ export function SessionCard({
               {git?.branch && (
                 <span className="flex flex-wrap items-center gap-2 text-muted-foreground">
                   <span className="flex items-center gap-1">
-                    <GitBranch className="size-3 shrink-0" />
+                    <GitBranch className="size-3 shrink-0"/>
                     {git.branch}
                   </span>
                   {pr && (
                     <span className="flex items-center gap-1">
-                      <GitPullRequestArrow className="size-3 shrink-0" />#{pr.number}
+                      <GitPullRequestArrow className="size-3 shrink-0"/>#{pr.number}
                     </span>
                   )}
                   {git.files > 0 && (
                     <span className="flex items-center gap-1.5">
-                      <DiffStat added={git.added} deleted={git.deleted} />
+                      <DiffStat added={git.added} deleted={git.deleted}/>
                     </span>
                   )}
                 </span>
@@ -239,6 +249,13 @@ export function SessionCard({
             <Pencil/>
             Rename
           </ContextMenuItem>
+          {session.kind !== "shell" && (
+            <ContextMenuItem onClick={() => onOpenTerminal(shownPath)}>
+              <Terminal/>
+              Open Terminal
+            </ContextMenuItem>
+          )}
+          <ContextMenuSeparator/>
           <ContextMenuItem variant="destructive" onClick={onClose}>
             <X/>
             Close session

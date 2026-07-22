@@ -16,3 +16,15 @@ export function applyOrder<T extends { id: string }>(items: T[], ids: string[]):
   }
   return unclaimed.size === 0 && next.length === ids.length ? next : null
 }
+
+// pinFirst returns ids with pinned moved (or added) to the front, deduplicated;
+// a null pinned leaves ids untouched. The pinned Home tab lives outside the drag
+// list, so a reorder drop names only the other projects — splicing Home back to
+// the front keeps applyOrder accounting for every project (it bails on a
+// mismatch) while Home always sorts first.
+export function pinFirst(ids: string[], pinned: string | null): string[] {
+  if (pinned === null) {
+    return ids
+  }
+  return [pinned, ...ids.filter((id) => id !== pinned)]
+}

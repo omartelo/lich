@@ -114,6 +114,19 @@ Before tagging:
 
 Deliberate limits and shortcuts, with the upgrade path when it matters:
 
+- **Session cwd is polled every ~300 ms** from the PTY child
+  (`internal/terminal/cwd.go`), emitted as `session-cwd` only on change and kept
+  frontend-side in `session-cwd-store.ts` (never persisted; every PTY spawn
+  re-reports its start directory). Both the session card and the footer bar
+  consume it, so a `cd` moves both. Per-platform reads behind the usual build-tag
+  seam: `/proc/<pid>/cwd` on Linux, `proc_pidinfo(PROC_PIDVNODEPATHINFO)` on
+  macOS (bound from libSystem x/sys-style — cgo_import_dynamic + asm trampoline,
+  still pure Go), and a PEB walk on Windows (`NtQueryInformationProcess` +
+  `ReadProcessMemory`; assumes the child matches our architecture — a 32-bit
+  child degrades to the start path). Any failed read degrades the card to the
+  directory the session started in. Reading the direct child misses a nested
+  shell's `cd`, which is fine: the card tracks the session's shell, not
+  arbitrary descendants.
 - **git status is polled every ~3 s** — one shared poller per repository path
   (`frontend/src/lib/git-status-store.ts`), no filesystem watch. Unchanged status short-circuits (same reference, zero
   re-renders). The lich plugin's `session-touched` hook nudges an immediate refresh after Claude edits files
@@ -122,17 +135,51 @@ Deliberate limits and shortcuts, with the upgrade path when it matters:
 - **Persistence is hybrid**: UI preferences live in the page's `localStorage` (`lich.*` keys) — which physically lives
   in the Chromium profile and is keyed to the page origin, which is why the listener port is pinned (47821,
   `LICH_LISTEN_PORT` overrides; distinct from `LICH_PORT`, the per-session hook variable). The workspace lives in
-  SQLite (`<config-dir>/lich/lich.db`). Closing a session does not delete its row (close ≠ delete). Card and tab order
-  is a `position` column written whole on every drag and read back as `ORDER BY position, rowid`.
+  SQLite (`<config-dir>/lich/lich.db`). A plain session close deletes its row, but **keeping** a worktree parks its
+  session instead (`is_open = 0`, hidden from `LoadState`) so its `claude_session_id` survives to be resumed later;
+  resume re-adds the row under a *fresh* id (`ReopenWorktreeSession`) so the terminal treats it as unspawned and the
+  resume prompt fires, and removing the worktree purges any parked row for its path (`PurgeWorktreeSessions`) so a
+  stale one can never resurrect a resume against a gone checkout. A closed *project* is only hidden, never deleted, and
+  keeps all its sessions. Card and tab order is a `position` column written whole on every drag and read back as
+  `ORDER BY position, rowid`.
 - **Hidden sessions are serialized and destroyed** (waveterm model, frontend edition): PTY output queues in a 2MB
   replay buffer (`frontend/src/lib/replay-buffer.ts`); show rebuilds from snapshot + tail; queue overflow drops the
-  snapshot and starts clean from the tail (circular-buffer artifact contract). The replay state lives in the page —
-  a full page reload loses hidden-session scrollback; a backend-kept tail (waveterm's filestore) is the upgrade path.
+  snapshot and starts clean from the tail (circular-buffer artifact contract). That page-side buffer only bridges
+  hide→show within one page load; a **backend replay tail** (`internal/terminal/replay.go`, a 2MB in-memory ring per
+  running session, matching the frontend cap) survives a full page reload, when the PTY lives on but the page-side
+  scrollback is gone. On mount `TerminalView` fetches it via `terminal.Replay` and writes it before wiring the live
+  listeners — so the tail lands ahead of any live frame, and output produced during that round-trip is dropped
+  (a small seam gap, not a dup or a reorder — `term-transport` drops frames for an unlistened session). The ring is
+  in memory per session; waveterm's disk filestore is the upgrade path if session count or size ever makes that cost
+  matter.
 - **Terminal I/O rides the loopback WebSocket** — token auth, binary frames multiplexing all sessions
   (`internal/terminal/transport.go` ↔ `frontend/src/lib/term-transport.ts`). When the socket is down, output falls
   back to the `/events` channel and input to the RPC — slower, never broken.
-- **No single-instance lock**: two lich processes race the pinned listener port; the second fails with a clear error.
-  Add a lock + focus-existing-window protocol if it ever matters.
+- **Single instance via the pinned port; focus is best-effort.** The pinned listener bind *is* the lock — only one
+  process holds it. A second launch that cannot bind reads `runtime.json` (`{pid,port,token}`) and pings the recorded
+  instance's token-gated `/ping` (`internal/singleton`): a live lich on the same port means a duplicate launch, so it
+  focuses that window and exits 0 instead of erroring; anything else (a stray process on the port, a restart successor
+  that never got the port back) still logs and exits 1. Focus hands the running instance's URL to Chromium against the
+  shared profile, letting Chromium's profile-lock IPC forward to the running browser — the only *portable* raise, since
+  an external process cannot raise a window under Wayland. It is untested against a real window and may open a second
+  app window on some Chromium builds (`focusRunning` in `main.go`); a per-platform window raise is the upgrade path if
+  it matters.
+- **Self-update checks at startup, then hourly** (`internal/appupdate` + `frontend/.../AppUpdateGate.tsx`) — a
+  `setInterval` poll in the gate, so a long-running session eventually notices a release mid-run; a session-scoped ref
+  keeps the poll from stacking a second toast for a release already shown (a genuinely newer one still toasts). Hourly
+  respects the unauthenticated GitHub API's 60-req/hour limit. Self-*apply* (download + checksum + in-place swap via
+  `minio/selfupdate`) is Windows/macOS only, where lich owns its binary; on Linux the binary is package-manager owned,
+  so the flow pastes a distro-specific update command into a terminal instead (`appupdate.installCommand`, reported in
+  `Status`): Arch gets `yay -S lich-bin` plus an explicit `/restart` POST (yay knows nothing about lich, so the paste
+  chains the restart itself using the session's `LICH_PORT`/`LICH_TOKEN`); every other distro gets the `install.sh`
+  one-liner, which detects the distro and POSTs `/restart` on its own. The restart
+  (`internal/restart`) spawns a detached successor that retries the pinned port (`LICH_RESTART_WAIT`) while the old
+  process closes its window and exits — so the window blinks briefly, and if the successor cannot bind within ~10s it
+  gives up and the user reopens by hand. After a Windows/macOS self-apply the toast carries a one-click **Restart**
+  button that drives the same `/restart` relaunch (`AppUpdate.Restart` in the frontend) — the successor detaches via
+  setsid on macOS and `DETACHED_PROCESS` on Windows, where the outgoing window is hard-killed (no graceful GUI signal),
+  so Chromium may flag an unclean shutdown on the next open. The button stays if the user skips it; the binary is
+  already swapped, so the old version just keeps running until the next launch.
 - **Reordering (cards, tabs) rides dnd-kit's pointer sensors.** `PointerSensor` needs its
   `activationConstraint.distance` (`frontend/src/lib/use-sortable-list.ts`) or the sensor claims the press and plain
   clicks stop selecting a session. dnd-kit over the HTML5 DnD API because it also gives the keyboard path and never

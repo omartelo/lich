@@ -46,11 +46,30 @@ func runGit(dir string, args ...string) (string, error) {
 func (s *Service) ListBranches(path string) (Branches, error) {
 	branches := Branches{Local: []string{}, Remote: []string{}, Worktrees: []Worktree{}}
 
+	list, err := runGit(path, "worktree", "list", "--porcelain")
+	if err != nil {
+		return branches, err
+	}
+	branches.Worktrees = append(branches.Worktrees, parseWorktrees(list)...)
+
+	// A branch checked out in a linked worktree belongs only to the Worktrees
+	// group, where selecting it resumes that worktree. Drop it from Local so the
+	// same branch cannot also offer "create a new worktree off it" — the trap
+	// that spawned a fresh worktree from a checkout the user meant to reopen.
+	occupied := make(map[string]bool, len(branches.Worktrees))
+	for _, wt := range branches.Worktrees {
+		occupied[wt.Name] = true
+	}
+
 	local, err := runGit(path, "for-each-ref", "--format=%(refname:short)", "refs/heads")
 	if err != nil {
 		return branches, err
 	}
-	branches.Local = append(branches.Local, splitLines(local)...)
+	for _, name := range splitLines(local) {
+		if !occupied[name] {
+			branches.Local = append(branches.Local, name)
+		}
+	}
 
 	// Full refnames, not :short — the short form of refs/remotes/origin/HEAD is
 	// just "origin", which would dodge a suffix filter.
@@ -65,11 +84,6 @@ func (s *Service) ListBranches(path string) (Branches, error) {
 		}
 	}
 
-	list, err := runGit(path, "worktree", "list", "--porcelain")
-	if err != nil {
-		return branches, err
-	}
-	branches.Worktrees = append(branches.Worktrees, parseWorktrees(list)...)
 	return branches, nil
 }
 
