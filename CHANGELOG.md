@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   buttons, and clipped layouts once they compounded. Zoom chords are now matched
   on the physical key (`event.code`), which is the same on every layout, so the
   app is the only thing that zooms. The numpad keys work too.
+- **Zooming no longer leaves the window part-empty or cuts the layout off.** CSS
+  `zoom` scales rendered boxes but leaves `vh`/`vw` as physical viewport units,
+  so the `100vh`/`100vw` app root rendered at viewport × zoom: short of the window
+  when zoomed out, overflowing when zoomed in — and the page's `overflow: hidden`
+  cut the overflow instead of scrolling it. The root now divides the viewport by
+  the zoom factor first, and the dialogs and command palette that size themselves
+  in `vh` use the same corrected unit.
 
 ### Removed
 

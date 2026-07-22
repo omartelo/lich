@@ -170,8 +170,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   // Scale the whole app. `zoom` reflows layout (unlike transform: scale). It
   // also scales the terminal canvas (slightly soft off 100%); a chrome-only
   // wrapper excluding TerminalHost would avoid that if it becomes an issue.
+  //
+  // --app-zoom carries the same factor to CSS, where #root divides the viewport
+  // by it: `zoom` does not scale vh/vw, so an unadjusted 100vh/100vw root renders
+  // at viewport × zoom — short of the window when zoomed out, overflowing (and
+  // silently cut by the page's overflow:hidden) when zoomed in. See index.css.
   useEffect(() => {
     document.documentElement.style.zoom = String(zoom)
+    document.documentElement.style.setProperty("--app-zoom", String(zoom))
   }, [zoom])
 
   // Zoom via keyboard chords or Ctrl/Cmd + mouse wheel. Both listen on the

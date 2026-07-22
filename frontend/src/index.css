@@ -241,3 +241,24 @@ html,
 body {
   overflow: hidden;
 }
+
+/* The app root is sized against the viewport divided by the zoom factor
+   (--app-zoom, set alongside documentElement.style.zoom in settings.tsx).
+   CSS `zoom` scales rendered boxes but leaves vh/vw as physical viewport units,
+   so a plain 100vh/100vw root ends up at viewport × zoom: it falls short of the
+   window when zoomed out and overflows — cut, not scrolled, by the rule above —
+   when zoomed in. Dividing first cancels the zoom back to exactly one window.
+   Children take their size from #root (h-full), never from vh/vw. */
+#root {
+  width: calc(100vw / var(--app-zoom, 1));
+  height: calc(100vh / var(--app-zoom, 1));
+}
+
+/* One viewport-height unit corrected for the zoom, for the overlays that size
+   themselves against the window instead of against #root (dialogs, the command
+   palette). Reach for this instead of vh anywhere inside the app:
+   `max-h-[calc(70*var(--app-vh))]` reads as 70vh and stays 70% of the window at
+   any zoom, where a bare 70vh would be 70% × zoom. */
+:root {
+  --app-vh: calc(1vh / var(--app-zoom, 1));
+}

@@ -96,7 +96,7 @@ export function CommandPalette() {
     <DialogPrimitive.Root open={open} onOpenChange={(next) => (next ? setOpen(true) : close())}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-black/50 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0" />
-        <DialogPrimitive.Popup className="fixed left-1/2 top-[14vh] z-50 flex max-h-[70vh] w-full max-w-[640px] -translate-x-1/2 flex-col overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-2xl ring-1 ring-foreground/10 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0">
+        <DialogPrimitive.Popup className="fixed left-1/2 top-[calc(14*var(--app-vh))] z-50 flex max-h-[calc(70*var(--app-vh))] w-full max-w-[640px] -translate-x-1/2 flex-col overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-2xl ring-1 ring-foreground/10 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0">
           <DialogPrimitive.Title className="sr-only">Command palette</DialogPrimitive.Title>
 
           <div className="flex items-center gap-3 border-b px-4 py-3">

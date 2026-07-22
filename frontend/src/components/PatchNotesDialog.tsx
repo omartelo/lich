@@ -81,7 +81,7 @@ export function PatchNotesDialog({notes, onClose}: PatchNotesDialogProps) {
           </div>
         </DialogHeader>
 
-        <div className="max-h-[55vh] overflow-y-auto px-6">
+        <div className="max-h-[calc(55*var(--app-vh))] overflow-y-auto px-6">
           {groups.map((group) => (
             <div key={group.label} className="border-t py-3.5 first:border-t-0 first:pt-1">
               <div className="mb-2.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
