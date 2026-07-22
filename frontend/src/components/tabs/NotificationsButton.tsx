@@ -61,7 +61,7 @@ export function NotificationsButton() {
         {items.length > 0 && (
           <span
             aria-label={`${items.length} pending`}
-            className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium leading-none text-primary-foreground"
+            className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[0.625rem] font-medium leading-none text-primary-foreground"
           >
             {items.length}
           </span>

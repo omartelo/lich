@@ -25,7 +25,7 @@ function Layout() {
   const toggleDock = (tab: DockTab) =>
     setDock((cur) => (cur === tab ? null : tab))
   return (
-    <div className="flex h-full w-full flex-col bg-background">
+    <div className="flex h-screen w-screen flex-col bg-background">
       <ProjectTabs />
       <div className="flex flex-1 overflow-hidden">
         <SessionSidebar />

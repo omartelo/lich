@@ -225,7 +225,7 @@ function FilePreview({path, rel, onBack, onInject}: FilePreviewProps) {
         <span className="truncate font-mono" title={rel}>
           {rel}
         </span>
-        <span className="ml-auto shrink-0 rounded border border-border px-1 text-[9px] uppercase tracking-wide text-muted-foreground">
+        <span className="ml-auto shrink-0 rounded border border-border px-1 text-[0.5625rem] uppercase tracking-wide text-muted-foreground">
           read-only
         </span>
       </div>

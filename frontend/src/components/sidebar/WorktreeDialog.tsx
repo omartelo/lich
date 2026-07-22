@@ -66,7 +66,7 @@ function BranchGroup({title, count, open, onToggle, children}: BranchGroupProps)
         type="button"
         aria-expanded={open}
         onClick={onToggle}
-        className="sticky top-0 z-10 flex w-full items-center gap-1.5 border-y border-border bg-muted px-2.5 py-1.5 text-[10px] font-semibold tracking-wider text-muted-foreground uppercase outline-none first:border-t-0 hover:text-foreground"
+        className="sticky top-0 z-10 flex w-full items-center gap-1.5 border-y border-border bg-muted px-2.5 py-1.5 text-[0.625rem] font-semibold tracking-wider text-muted-foreground uppercase outline-none first:border-t-0 hover:text-foreground"
       >
         <ChevronRight className={cn("size-3 transition-transform", open && "rotate-90")}/>
         {title}
@@ -202,7 +202,7 @@ export function WorktreeDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Fixed-height dialog: the base-branch section takes the leftover row
         (minmax(0,1fr)) so its list scrolls instead of growing the modal. */}
-      <DialogContent className="h-[calc(85*var(--app-vh))] grid-rows-[auto_auto_minmax(0,1fr)_auto_auto] sm:max-w-2xl">
+      <DialogContent className="h-[85vh] grid-rows-[auto_auto_minmax(0,1fr)_auto_auto] sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>New worktree</DialogTitle>
           <DialogDescription>

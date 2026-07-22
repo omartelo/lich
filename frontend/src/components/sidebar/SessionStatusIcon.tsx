@@ -22,9 +22,9 @@ interface SessionStatusIconProps {
 // slot is a fixed size so the icon never shifts as the state changes.
 export function SessionStatusIcon({kind, status}: SessionStatusIconProps) {
   return (
-    <span className="relative flex size-[22px] shrink-0 items-center justify-center text-muted-foreground">
+    <span className="relative flex size-[1.375rem] shrink-0 items-center justify-center text-muted-foreground">
       {status && (
-        <span className={cn("absolute inset-0 rounded-full border-[1.5px]", RING[status])} />
+        <span className={cn("absolute inset-0 rounded-full border-[0.09375rem]", RING[status])} />
       )}
       <ProviderIcon kind={kind} size={14} />
     </span>

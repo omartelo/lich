@@ -62,7 +62,7 @@ export function FileDiff({file, onInject, onDiscard}: FileDiffProps) {
         >
           <Chevron className="size-3.5 shrink-0 text-muted-foreground"/>
           <span
-            className={`flex size-5 shrink-0 items-center justify-center rounded text-[9px] font-bold ${badge.className}`}
+            className={`flex size-5 shrink-0 items-center justify-center rounded text-[0.5625rem] font-bold ${badge.className}`}
           >
             {badge.abbr}
           </span>

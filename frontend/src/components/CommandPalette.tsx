@@ -96,7 +96,7 @@ export function CommandPalette() {
     <DialogPrimitive.Root open={open} onOpenChange={(next) => (next ? setOpen(true) : close())}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-black/50 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0" />
-        <DialogPrimitive.Popup className="fixed left-1/2 top-[calc(14*var(--app-vh))] z-50 flex max-h-[calc(70*var(--app-vh))] w-full max-w-[640px] -translate-x-1/2 flex-col overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-2xl ring-1 ring-foreground/10 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0">
+        <DialogPrimitive.Popup className="fixed left-1/2 top-[14vh] z-50 flex max-h-[70vh] w-full max-w-[40rem] -translate-x-1/2 flex-col overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-2xl ring-1 ring-foreground/10 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0">
           <DialogPrimitive.Title className="sr-only">Command palette</DialogPrimitive.Title>
 
           <div className="flex items-center gap-3 border-b px-4 py-3">
@@ -110,7 +110,7 @@ export function CommandPalette() {
               aria-label="Search sessions and projects"
               autoComplete="off"
               spellCheck={false}
-              className="flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground"
+              className="flex-1 bg-transparent text-[0.9375rem] outline-none placeholder:text-muted-foreground"
             />
           </div>
 
@@ -162,7 +162,7 @@ export function CommandPalette() {
 
 function GroupLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="px-3 pb-1 pt-3 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+    <div className="px-3 pb-1 pt-3 text-[0.65625rem] font-semibold uppercase tracking-wider text-muted-foreground">
       {children}
     </div>
   )
@@ -247,7 +247,7 @@ function ProjectRow({
         <span className="truncate text-sm">{project.name}</span>
         <span className="truncate font-mono text-xs text-muted-foreground">{project.path}</span>
       </span>
-      <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+      <span className="shrink-0 font-mono text-[0.625rem] text-muted-foreground">
         {sessionCount} {sessionCount === 1 ? "session" : "sessions"}
       </span>
     </Row>
@@ -261,7 +261,7 @@ function Hint({ keys, children }: { keys: string[]; children: React.ReactNode })
         {keys.map((k) => (
           <kbd
             key={k}
-            className="rounded border border-b-2 bg-muted px-1.5 py-0.5 font-mono text-[10px] leading-none text-muted-foreground"
+            className="rounded border border-b-2 bg-muted px-1.5 py-0.5 font-mono text-[0.625rem] leading-none text-muted-foreground"
           >
             {k}
           </kbd>

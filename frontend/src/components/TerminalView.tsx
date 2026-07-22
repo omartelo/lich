@@ -36,7 +36,9 @@ import "@xterm/xterm/css/xterm.css"
 const DATA_EVENT_PREFIX = "terminal:data:"
 const EXIT_EVENT_PREFIX = "terminal:exit:"
 
-const FONT_SIZE = 14
+// Size used only to ask the font loader for the face; the face is the same at
+// any size, and the terminal's real size is the terminalFontSize setting.
+const FONT_PROBE_SIZE = 14
 const REFIT_DEBOUNCE_MS = 100
 const COPY_DEBOUNCE_MS = 150
 const SCROLLBACK_LINES = 5000
@@ -99,8 +101,8 @@ const TERMINAL_COLORS: Record<ResolvedTheme, { background: string; foreground: s
 async function ensureFontLoaded(font: string): Promise<void> {
   try {
     await Promise.all([
-      document.fonts.load(`${FONT_SIZE}px "${font}"`),
-      document.fonts.load(`bold ${FONT_SIZE}px "${font}"`),
+      document.fonts.load(`${FONT_PROBE_SIZE}px "${font}"`),
+      document.fonts.load(`bold ${FONT_PROBE_SIZE}px "${font}"`),
     ])
   } catch {
     // Fall back to the system monospace face.
@@ -155,7 +157,7 @@ export function TerminalView({
   resume,
   visible,
 }: TerminalViewProps) {
-  const { font, resolvedTerminalTheme } = useSettings()
+  const { font, terminalFontSize, resolvedTerminalTheme } = useSettings()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const liveRef = useRef<LiveTerminal | null>(null)
   // False until the mount effect's async setup builds the first terminal.
@@ -170,9 +172,11 @@ export function TerminalView({
   const replayRef = useRef(makeReplayBuffer())
   const visibleRef = useRef(visible)
   const fontRef = useRef(font)
+  const fontSizeRef = useRef(terminalFontSize)
   const themeRef = useRef(resolvedTerminalTheme)
   visibleRef.current = visible
   fontRef.current = font
+  fontSizeRef.current = terminalFontSize
   themeRef.current = resolvedTerminalTheme
 
   // In-terminal search (Ctrl+F). The open flag mirrors into a ref so the
@@ -216,7 +220,7 @@ export function TerminalView({
   // resize and copy-on-select. Shared by mount and every show-after-hide.
   const createTerminal = (container: HTMLDivElement): LiveTerminal => {
     const term = new Terminal({
-      fontSize: FONT_SIZE,
+      fontSize: fontSizeRef.current,
       fontFamily: `"${fontRef.current}", monospace`,
       cursorBlink: true,
       scrollback: SCROLLBACK_LINES,
@@ -540,6 +544,23 @@ export function TerminalView({
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [font, sessionId])
+
+  // Text size likewise. Unlike the app zoom this does change the cell size, so
+  // the grid is refit and the PTY told about the new cols×rows.
+  useEffect(() => {
+    const live = liveRef.current
+    if (!live) {
+      return
+    }
+    live.term.options.fontSize = terminalFontSize
+    if (containerRef.current) {
+      fitTerminal(live.term, containerRef.current)
+    }
+    if (visibleRef.current) {
+      void Service.Resize(sessionId, live.term.cols, live.term.rows)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [terminalFontSize, sessionId])
 
   // Theme changes likewise.
   useEffect(() => {
