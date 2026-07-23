@@ -60,7 +60,7 @@ interface ProjectsValue {
   /** Resume a worktree: reopen its parked session (continuing its Claude
    * conversation) when one exists, else open a fresh session on it. */
   reopenWorktreeSession: (projectId: string, wt: { name: string; path: string }) => Promise<void>
-  /** Permanently delete a session; deleting the last one recreates an empty one. */
+  /** Permanently delete a session; deleting the last one leaves the project with none. */
   closeSession: (projectId: string, sessionId: string) => void
   /** Close a worktree session but park its row so it can be resumed later. */
   keepSession: (projectId: string, sessionId: string) => void
@@ -154,12 +154,10 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       const home = await ProjectService.Home().catch(() => null)
       if (home) {
         setHomeId(home.id)
-        const existing = loaded.find((p) => p.id === home.id)
-        if (!existing) {
+        // Seeded only on the very first launch: an existing Home left without
+        // sessions was emptied on purpose and keeps its empty screen.
+        if (!loaded.some((p) => p.id === home.id)) {
           await Store.AddProject(home.id, home.name, home.path)
-          await Store.AddSession(home.id, newSessionId(), FIRST_LABEL, "shell", "", FIRST_NEXT_SEQ)
-          loaded = (await Store.LoadState()) ?? []
-        } else if ((existing.sessions ?? []).length === 0) {
           await Store.AddSession(home.id, newSessionId(), FIRST_LABEL, "shell", "", FIRST_NEXT_SEQ)
           loaded = (await Store.LoadState()) ?? []
         }
@@ -197,15 +195,9 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     }
     await Store.AddProject(picked.id, picked.name, picked.path)
 
-    // Reload from the store to pick up any sessions a reopened project kept, and
-    // seed a first session when it is brand new (or was left empty).
-    let loaded = (await Store.LoadState()) ?? []
-    const mine = loaded.find((p) => p.id === picked.id)
-    if (!mine || (mine.sessions ?? []).length === 0) {
-      await Store.AddSession(picked.id, newSessionId(), FIRST_LABEL, defaultProviderKind(), "", FIRST_NEXT_SEQ)
-      loaded = (await Store.LoadState()) ?? []
-    }
-    applyLoaded(loaded)
+    // A reopened project keeps the sessions it was closed with, hence the reload.
+    // Nothing is seeded: a brand-new project lands on the empty screen.
+    applyLoaded((await Store.LoadState()) ?? [])
     navigate(`/projects/${picked.id}`)
   }, [applyLoaded, navigate])
 
@@ -314,8 +306,8 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
   // dropSession removes a session's card and persists that removal via `persist`
   // — DeleteSession (gone for good) or CloseSession (parked for a later resume).
-  // A project always keeps at least one session; recreate when emptied. Home
-  // stays a shell so it never turns into a Claude session.
+  // Closing the last one leaves the project sessionless: the EmptySessions screen
+  // then offers a new one, rather than a replacement PTY spawning unasked.
   const dropSession = useCallback(
     (
       projectId: string,
@@ -324,18 +316,6 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     ) => {
       const removed = removeSession(sessionsRef.current, projectId, sessionId)
       if (removed === sessionsRef.current) {
-        return
-      }
-      if (sessionsOf(removed, projectId).length === 0) {
-        const recreatedId = newSessionId()
-        const kind: SessionKind = projectId === homeIdRef.current ? "shell" : defaultProviderKind()
-        const next = addSession(removed, projectId, recreatedId, kind)
-        const project = next[projectId]
-        const created = project.sessions[project.sessions.length - 1]
-        setSessions(next)
-        void persist("").then(() =>
-          Store.AddSession(projectId, recreatedId, created.label, created.kind, "", project.nextSeq),
-        )
         return
       }
       setSessions(removed)

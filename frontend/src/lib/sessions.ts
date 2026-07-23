@@ -92,8 +92,8 @@ export function addSession(
 }
 
 // closeSession removes a session. When the active one is closed, focus moves to
-// a neighbor. The project entry is kept even when empty so nextSeq (and the
-// caller's recreate-on-empty policy) survive.
+// a neighbor. The project entry is kept even when empty so nextSeq survives: a
+// project emptied and then reopened keeps counting labels up.
 export function closeSession(
   state: SessionState,
   projectId: string,

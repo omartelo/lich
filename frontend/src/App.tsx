@@ -8,6 +8,7 @@ import { TerminalHost } from "@/components/TerminalHost"
 import { RightDock, type DockTab } from "@/components/dock/RightDock"
 import { FooterBar } from "@/components/FooterBar"
 import { Home } from "@/components/Home"
+import { EmptySessions } from "@/components/EmptySessions"
 import { Settings } from "@/components/settings/Settings"
 import { Toaster } from "@/components/ui/sonner"
 import { ClaudePluginGate } from "@/components/ClaudePluginGate"
@@ -58,8 +59,8 @@ function App() {
             <Route element={<Layout />}>
               <Route index element={<Home />} />
               {/* Terminals are rendered by TerminalHost; the route only selects
-                  which one is visible, so this element is empty. */}
-              <Route path="/projects/:projectId" element={null} />
+                  which one is visible. */}
+              <Route path="/projects/:projectId" element={<EmptySessions />} />
               {/* Settings is a per-project screen: it carries the project id so
                   it can show that project's overrides, and renders in the main
                   area with the session sidebar kept beside it. */}

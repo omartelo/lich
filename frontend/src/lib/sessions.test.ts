@@ -143,13 +143,13 @@ describe("closeSession", () => {
     expect(activeSessionId(state, P)).toBe("s2")
   })
 
-  it("empties the project but preserves nextSeq for recreate", () => {
+  it("empties the project but preserves nextSeq", () => {
     const state = closeSession(buildState(1), P, "s1")
     expect(sessionsOf(state, P)).toHaveLength(0)
     expect(activeSessionId(state, P)).toBe("")
-    // A recreate keeps counting up instead of reusing "Session 1".
-    const recreated = addSession(state, P, "s2")
-    expect(sessionsOf(recreated, P)[0].label).toBe("Session 2")
+    // The next session keeps counting up instead of reusing "Session 1".
+    const reopened = addSession(state, P, "s2")
+    expect(sessionsOf(reopened, P)[0].label).toBe("Session 2")
   })
 
   it("ignores unknown project or session ids", () => {
