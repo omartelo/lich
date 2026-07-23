@@ -7,6 +7,7 @@ import { AppearanceSettings } from "./AppearanceSettings"
 import { HotkeysSettings } from "./HotkeysSettings"
 import { ProvidersSettings } from "./ProvidersSettings"
 import { ProviderBinSettings } from "./ProviderBinSettings"
+import { WorktreeSetupSettings } from "./WorktreeSetupSettings"
 import { UpdatesSettings } from "./UpdatesSettings"
 import { enabledProviders, useProviders } from "@/lib/providers-store"
 import { Input } from "@/components/ui/input"
@@ -29,6 +30,7 @@ const BASE_SECTIONS: Section[] = [
   { id: "terminal", label: "Terminal", group: "app", render: () => <TerminalSettings /> },
   { id: "hotkeys", label: "Hotkeys", group: "app", render: () => <HotkeysSettings /> },
   { id: "providers", label: "Providers", group: "app", render: () => <ProvidersSettings /> },
+  { id: "worktree", label: "Worktree", group: "app", render: (id) => <WorktreeSetupSettings projectId={id} /> },
   { id: "updates", label: "Updates", group: "app", render: () => <UpdatesSettings /> },
 ]
 

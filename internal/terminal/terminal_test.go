@@ -18,12 +18,13 @@ import (
 	"github.com/omartelo/lich/internal/events"
 )
 
-// stubBins is a Store returning a fixed binary path, for tests that never
-// spawn. Its persistence methods are no-ops — none of these tests exercise the
-// SessionStart or ai-title paths.
-type stubBins struct{ bin string }
+// stubBins is a Store returning a fixed binary path and worktree setup script,
+// for tests that never spawn. Its persistence methods are no-ops — none of
+// these tests exercise the SessionStart or ai-title paths.
+type stubBins struct{ bin, setup string }
 
 func (s stubBins) ProviderBin(_, _ string) string            { return s.bin }
+func (s stubBins) WorktreeSetup(_ string) string             { return s.setup }
 func (s stubBins) SetProviderSession(_, _ string) error      { return nil }
 func (s stubBins) SetSessionTitle(_, _ string) (bool, error) { return false, nil }
 
@@ -224,7 +225,7 @@ func TestStartIsNoopWhenAlreadyRunning(t *testing.T) {
 	sess := spawnSession(t)
 	svc.sessions["s1"] = sess
 
-	if err := svc.Start("s1", "p1", "", "", "", 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", "", "", "", false, 80, 24); err != nil {
 		t.Errorf("Start(running) = %v, want nil", err)
 	}
 	if svc.sessions["s1"] != sess {
@@ -263,7 +264,7 @@ func TestStartPassesResumeToTheProcess(t *testing.T) {
 	svc := New(stubBins{bin: bin}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "abc-123", 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "abc-123", false, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 
@@ -284,7 +285,53 @@ func TestStartWithoutResumeSpawnsBare(t *testing.T) {
 	svc := New(stubBins{bin: bin}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", false, 80, 24); err != nil {
+		t.Fatalf("Start = %v, want nil", err)
+	}
+
+	svc.mu.Lock()
+	got := spawnedArgs(t, svc, "s1")
+	svc.mu.Unlock()
+
+	if !slices.Equal(got, []string{bin}) {
+		t.Errorf("spawned argv = %v, want %v", got, []string{bin})
+	}
+}
+
+// TestStartWithSetupWrapsTheSpawn proves the setup flag reroutes the spawn
+// through sh -c with the project's script ahead of the exec'd provider — the
+// wiring wrapSetup's unit test cannot see.
+func TestStartWithSetupWrapsTheSpawn(t *testing.T) {
+	bin := stayAliveBin(t)
+	svc := New(stubBins{bin: bin, setup: "echo setup-ran"}, nil, events.New())
+	t.Cleanup(func() { _ = svc.Close("s1") })
+
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", true, 80, 24); err != nil {
+		t.Fatalf("Start = %v, want nil", err)
+	}
+
+	svc.mu.Lock()
+	got := spawnedArgs(t, svc, "s1")
+	svc.mu.Unlock()
+
+	if len(got) != 3 || got[0] != "sh" || got[1] != "-c" {
+		t.Fatalf("spawned argv = %v, want sh -c <cmd>", got)
+	}
+	for _, want := range []string{"echo setup-ran", "exec " + shQuote(bin)} {
+		if !strings.Contains(got[2], want) {
+			t.Errorf("spawned command missing %q:\n%s", want, got[2])
+		}
+	}
+}
+
+// TestStartWithSetupButNoScriptSpawnsBare proves the flag is inert for a
+// project with no setup script configured — no sh indirection sneaks in.
+func TestStartWithSetupButNoScriptSpawnsBare(t *testing.T) {
+	bin := stayAliveBin(t)
+	svc := New(stubBins{bin: bin}, nil, events.New())
+	t.Cleanup(func() { _ = svc.Close("s1") })
+
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", true, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 

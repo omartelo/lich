@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A fresh worktree now sets itself up.** Creating a worktree copies the
+  gitignored `.env*` files over from the main checkout — a worktree starts
+  with tracked files only, so env files and local credentials were always
+  missing from a new checkout. A `.worktreeinclude` file at the repository
+  root overrides the patterns (globs, one per line; a slashless pattern
+  matches by basename at any depth). Wholly ignored directories
+  (`node_modules`, build output) are never copied — installing those is the
+  job of the new per-project **setup script** (Settings › Worktree), which
+  runs in the new worktree session's terminal ahead of the agent, so a
+  `pnpm install` happens where you can watch it. The session opens even if
+  the script fails, resuming a kept worktree never re-runs it, and Windows
+  skips the script wrap while the port stays experimental.
+
 ## [0.15.0] - 2026-07-23
 
 ### Added

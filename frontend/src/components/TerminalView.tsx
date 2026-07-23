@@ -14,6 +14,7 @@ import { ensureTransport, onSessionData, sendInput } from "@/lib/term-transport"
 import { chordSequence, isSearchOpenChord } from "@/lib/term-keys"
 import { makeReplayBuffer } from "@/lib/replay-buffer"
 import { takePaste } from "@/lib/paste-queue"
+import { takeSetup } from "@/lib/setup-queue"
 import { recordChunk } from "@/lib/term-perf"
 import { copyToastMessage, COPY_TOAST_DURATION_MS } from "@/lib/copy-toast"
 import { computeGrid } from "@/lib/term-fit"
@@ -466,7 +467,16 @@ export function TerminalView({
         resizeObserver.disconnect()
       })
 
-      await Service.Start(sessionId, projectId, cwd, kind, resume, live.term.cols, live.term.rows)
+      await Service.Start(
+        sessionId,
+        projectId,
+        cwd,
+        kind,
+        resume,
+        takeSetup(sessionId),
+        live.term.cols,
+        live.term.rows,
+      )
       if (disposed) {
         // Unmounted during the Start round-trip: the cleanup's Close raced
         // ahead of the spawn, so close again now that the PTY exists. The

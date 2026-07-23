@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -95,6 +96,7 @@ type session struct {
 // hook. The store implements both.
 type Store interface {
 	ProviderBin(providerID, projectID string) string
+	WorktreeSetup(projectID string) string
 	SetProviderSession(sessionID, providerSessionID string) error
 	SetSessionTitle(sessionID, title string) (bool, error)
 }
@@ -355,8 +357,13 @@ func scrubPathList(value, dir string) (string, bool) {
 // frontend passes after the user accepted the prompt to continue the session
 // this card ran before the last restart. An id Claude no longer knows fails in
 // the PTY like any other bad invocation — the user sees Claude's own error.
-func (s *Service) Start(id, projectID, cwd, kind, resume string, cols, rows int) error {
-	sess, cwd, err := s.spawnSession(id, projectID, cwd, kind, resume, cols, rows)
+//
+// setup is passed once, by the flow that just created this session's worktree:
+// it runs the project's worktree setup script (Settings › Project) in the PTY
+// before the provider, so a fresh checkout installs its dependencies in view.
+// A respawn or resume never sets it.
+func (s *Service) Start(id, projectID, cwd, kind, resume string, setup bool, cols, rows int) error {
+	sess, cwd, err := s.spawnSession(id, projectID, cwd, kind, resume, setup, cols, rows)
 	if err != nil || sess == nil {
 		return err
 	}
@@ -373,7 +380,7 @@ func (s *Service) Start(id, projectID, cwd, kind, resume string, cols, rows int)
 // registration. A nil session with a nil error means id was already running.
 // The returned cwd is the effective start directory (the input, or the
 // resolved home when it was empty).
-func (s *Service) spawnSession(id, projectID, cwd, kind, resume string, cols, rows int) (*session, string, error) {
+func (s *Service) spawnSession(id, projectID, cwd, kind, resume string, setup bool, cols, rows int) (*session, string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -389,14 +396,18 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume string, cols, ro
 		cwd = home
 	}
 
-	p, err := startPTY(ptySpec{
+	spec := ptySpec{
 		bin:  resolveCommand(kind, s.store.ProviderBin(kind, projectID), userShell()),
 		args: resumeArgs(kind, resume),
 		dir:  cwd,
 		env:  s.sessionEnv(id),
 		cols: cols,
 		rows: rows,
-	})
+	}
+	if setup {
+		spec = wrapSetup(spec, s.store.WorktreeSetup(projectID), runtime.GOOS)
+	}
+	p, err := startPTY(spec)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to start pty for %q: %w", id, err)
 	}
