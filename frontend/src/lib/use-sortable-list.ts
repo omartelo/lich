@@ -13,10 +13,6 @@ import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable"
 // session or navigating to the tab.
 const DRAG_THRESHOLD_PX = 5
 
-// Both sortable surfaces reorder along a single axis. Clamping the drag
-// transform to that axis keeps the dragged item inside its strip — a free
-// transform lets it overflow the container, which turns the overflow-auto
-// ancestor scrollable on the cross axis and dnd-kit's auto-scroll kicks in.
 export const horizontalAxis: Modifier = ({transform}) => ({...transform, y: 0})
 export const verticalAxis: Modifier = ({transform}) => ({...transform, x: 0})
 
