@@ -4,6 +4,7 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type Modifier,
 } from "@dnd-kit/core"
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable"
 
@@ -11,6 +12,13 @@ import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable"
 // the sensor claims the press outright and a plain click stops selecting the
 // session or navigating to the tab.
 const DRAG_THRESHOLD_PX = 5
+
+// Both sortable surfaces reorder along a single axis. Clamping the drag
+// transform to that axis keeps the dragged item inside its strip — a free
+// transform lets it overflow the container, which turns the overflow-auto
+// ancestor scrollable on the cross axis and dnd-kit's auto-scroll kicks in.
+export const horizontalAxis: Modifier = ({transform}) => ({...transform, y: 0})
+export const verticalAxis: Modifier = ({transform}) => ({...transform, x: 0})
 
 // useSortableList wires the sensors and the drop handler shared by the two
 // reorderable surfaces (session cards, project tabs). It reports the new id
