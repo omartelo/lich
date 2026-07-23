@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Dragging a tab or session card no longer scrolls its strip.** Reorder drags
+  are clamped to the strip's own axis, so pulling a project tab downward (or a
+  session card sideways) can't overflow the container and trigger dnd-kit's
+  auto-scroll on the cross axis. The dragged tab also reads as lifted — solid
+  background and shadow — instead of a see-through ghost over its neighbours.
+
 ### Changed
 
 - **A project may now sit with no session at all.** Closing the last one no

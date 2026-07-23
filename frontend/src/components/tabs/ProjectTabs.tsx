@@ -8,7 +8,7 @@ import {useProjects} from "@/lib/projects"
 import {sessionsOf} from "@/lib/sessions"
 import {openSettings} from "@/lib/settings-card-store"
 import {NotificationsButton} from "./NotificationsButton"
-import {useSortableList} from "@/lib/use-sortable-list"
+import {horizontalAxis, useSortableList} from "@/lib/use-sortable-list"
 import {ProjectTab} from "./ProjectTab"
 import {HomeTab} from "./HomeTab"
 
@@ -36,11 +36,12 @@ export function ProjectTabs() {
 
   return (
     <div className="flex h-11 shrink-0 items-center gap-1 border-b border-border bg-sidebar px-2">
-      <div className="flex flex-1 items-center gap-1 overflow-x-auto">
+      <div className="flex flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden">
         {showHome && homeId && <HomeTab projectId={homeId}/>}
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
+          modifiers={[horizontalAxis]}
           onDragEnd={onDragEnd}
         >
           <SortableContext items={ids} strategy={horizontalListSortingStrategy}>
