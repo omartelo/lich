@@ -240,6 +240,19 @@ export function sessionsOf(state: SessionState, projectId: string): Session[] {
   return state[projectId]?.sessions ?? []
 }
 
+// True only for the last session in a worktree checkout. Removing a checkout a
+// sibling session still occupies would throw away its work, so only the last
+// occupant gets offered the keep/remove prompt.
+export function isLastWorktreeSession(
+  sessions: Session[],
+  session: Session,
+): boolean {
+  if (!session.path) {
+    return false
+  }
+  return !sessions.some((s) => s.id !== session.id && s.path === session.path)
+}
+
 export function activeSessionId(state: SessionState, projectId: string): string {
   return state[projectId]?.activeId ?? ""
 }
