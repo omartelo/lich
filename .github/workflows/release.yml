@@ -9,6 +9,16 @@ on:
 permissions:
   contents: write
 
+# setup-go v7 exports GOTOOLCHAIN=local, which pins every go command to the
+# toolchain go.mod asks for and refuses to fetch another. The build steps below
+# `go install ...@latest` for task and nfpm, and those pull whatever is newest —
+# task 3.52 already requires a newer Go than our go.mod line — so `local` fails
+# the install outright. `auto` is what the older setup-go left in place: fetch a
+# newer toolchain when a tool demands one. Pinning the tool versions instead
+# would fix this at the root, but that is a policy change, not a runtime bump.
+env:
+  GOTOOLCHAIN: auto
+
 jobs:
   # linux and windows build in parallel; release fans in and publishes.
   linux:
