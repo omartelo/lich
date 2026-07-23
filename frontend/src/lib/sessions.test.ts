@@ -4,6 +4,7 @@ import {
   addSession,
   closeSession,
   createProjectSessions,
+  groupByWorktree,
   isLastWorktreeSession,
   isSessionKind,
   projectOfSession,
@@ -339,5 +340,41 @@ describe("isLastWorktreeSession", () => {
   it("is false while another session shares the same worktree path", () => {
     const s = wt("s1", "/wt/a")
     expect(isLastWorktreeSession([s, wt("s2", "/wt/a")], s)).toBe(false)
+  })
+})
+
+describe("groupByWorktree", () => {
+  const s = (id: string, path?: string): Session => ({
+    id,
+    label: id,
+    kind: "shell",
+    ...(path ? { path } : {}),
+  })
+
+  it("returns no groups for an empty list", () => {
+    expect(groupByWorktree([])).toEqual([])
+  })
+
+  it("keeps pathless sessions in the root group keyed by ''", () => {
+    const groups = groupByWorktree([s("s1"), s("s2")])
+    expect(groups).toHaveLength(1)
+    expect(groups[0].path).toBe("")
+    expect(groups[0].sessions.map((x) => x.id)).toEqual(["s1", "s2"])
+  })
+
+  it("buckets by checkout path in first-appearance order", () => {
+    const groups = groupByWorktree([s("s1"), s("wt1", "/wt/a"), s("wt2", "/wt/b")])
+    expect(groups.map((g) => g.path)).toEqual(["", "/wt/a", "/wt/b"])
+  })
+
+  it("merges interleaved paths into one group, preserving flat order", () => {
+    const groups = groupByWorktree([
+      s("a1", "/wt/a"),
+      s("b1", "/wt/b"),
+      s("a2", "/wt/a"),
+    ])
+    expect(groups.map((g) => g.path)).toEqual(["/wt/a", "/wt/b"])
+    expect(groups[0].sessions.map((x) => x.id)).toEqual(["a1", "a2"])
+    expect(groups[1].sessions.map((x) => x.id)).toEqual(["b1"])
   })
 })

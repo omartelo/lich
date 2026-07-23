@@ -18,15 +18,19 @@ import {
 } from "@/components/ui/dropdown-menu"
 import {useProjects} from "@/lib/projects"
 import {queueSetup} from "@/lib/setup-queue"
-import {activeSessionId, isLastWorktreeSession, sessionsOf, type Session} from "@/lib/sessions"
+import {
+  activeSessionId,
+  groupByWorktree,
+  isLastWorktreeSession,
+  sessionsOf,
+  type Session,
+} from "@/lib/sessions"
+import {baseName} from "@/lib/paths"
 import {CloseWorktreeDialog, ForceRemoveWorktreeDialog} from "./CloseWorktreeDialog"
-import {SessionCard} from "./SessionCard"
+import {SessionGroup} from "./SessionGroup"
 import {WorktreeDialog} from "./WorktreeDialog"
-import {DndContext, closestCenter} from "@dnd-kit/core"
-import {SortableContext, verticalListSortingStrategy} from "@dnd-kit/sortable"
 import {useGitStatus} from "@/lib/useGitStatus"
 import {usePanelWidth} from "@/lib/use-panel-width"
-import {useSortableList, verticalAxis} from "@/lib/use-sortable-list"
 import {errorText} from "@/lib/utils"
 
 // SessionSidebar lists the active project's sessions and can be drag-resized
@@ -73,16 +77,26 @@ export function SessionSidebar() {
   const [pendingForce, setPendingForce] = useState<Session | null>(null)
   // Resolved ahead of the no-project bail below: hooks cannot sit behind it.
   const list = sessionsOf(sessions, projectId ?? "")
-  const {sensors, onDragEnd} = useSortableList(
-    list.map((session) => session.id),
-    (ids) => reorderSessions(projectId ?? "", ids),
-  )
 
   if (!projectId) {
     return null
   }
 
-  const activeId = activeSessionId(sessions, projectId)
+  // No card is highlighted while the Settings screen owns the view, so the
+  // Settings card reads as the active one instead.
+  const activeId = onSettings ? "" : activeSessionId(sessions, projectId)
+  const groups = groupByWorktree(list)
+  const projectName = baseName(path)
+
+  // A drag reorders one group only; splice its new order back into the flat list
+  // in group order and persist the whole thing. reorderSessions bails on any
+  // id-set mismatch, so a close that raced the drop drops the stale order.
+  const commitGroupOrder = (groupPath: string, ids: string[]) => {
+    const flat = groups.flatMap((group) =>
+      group.path === groupPath ? ids : group.sessions.map((session) => session.id),
+    )
+    reorderSessions(projectId, flat)
+  }
 
   const createWorktree = async (name: string, base: string, baseIsRemote: boolean) => {
     const wt = await ProjectService.CreateWorktree(path, projectId, name, base, baseIsRemote)
@@ -219,37 +233,29 @@ export function SessionSidebar() {
             }}
           />
         )}
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          modifiers={[verticalAxis]}
-          onDragEnd={onDragEnd}
-        >
-          <SortableContext
-            items={list.map((session) => session.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            {list.map((session) => (
-              <SessionCard
-                key={session.id}
-                session={session}
-                path={path}
-                // A session is never highlighted while the Settings screen owns
-                // the view, so the Settings card reads as the active one.
-                active={session.id === activeId && !onSettings}
-                onSelect={() => {
-                  activateSession(projectId, session.id)
-                  // From the settings screen this returns to the terminal; on
-                  // the project route it is a no-op.
-                  navigate(`/projects/${projectId}`)
-                }}
-                onClose={() => requestClose(session)}
-                onRename={(label) => renameSession(projectId, session.id, label)}
-                onOpenTerminal={(cwd) => newSession(projectId, "shell", cwd)}
-              />
-            ))}
-          </SortableContext>
-        </DndContext>
+        {groups.map((group) => (
+          <SessionGroup
+            key={group.path || "__root__"}
+            path={group.path}
+            sessions={group.sessions}
+            projectPath={path}
+            projectName={projectName}
+            activeId={activeId}
+            // The divider only earns its place once a worktree splits the list;
+            // a lone group keeps the old flat, header-less look.
+            showHeader={groups.length > 1}
+            onReorder={(ids) => commitGroupOrder(group.path, ids)}
+            onSelect={(id) => {
+              activateSession(projectId, id)
+              // From the settings screen this returns to the terminal; on the
+              // project route it is a no-op.
+              navigate(`/projects/${projectId}`)
+            }}
+            onClose={(session) => requestClose(session)}
+            onRename={(id, label) => renameSession(projectId, id, label)}
+            onOpenTerminal={(cwd) => newSession(projectId, "shell", cwd)}
+          />
+        ))}
       </div>
 
       <WorktreeDialog

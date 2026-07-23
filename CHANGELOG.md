@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The session sidebar now groups by worktree.** With several worktrees open,
+  a flat list of cards made it hard to tell which terminal or provider belonged
+  to which checkout. Sessions sharing a worktree now sit under one static
+  divider titled with the worktree folder name, so the checkout each card
+  belongs to reads at a glance while the branch stays on the card. Grouping
+  keys off each session's checkout
+  path fixed at spawn, never its live cwd — a `cd` deeper into the tree never
+  moves a card to another group. A drag reorders within a group only, and a
+  project with no worktrees keeps its old flat, header-less list.
+
 ## [0.16.0] - 2026-07-23
 
 ### Added
