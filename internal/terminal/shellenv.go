@@ -54,10 +54,9 @@ func ResolveShellEnv(base []string) []string {
 }
 
 // parseShellEnvDump returns the KEY=VALUE lines env printed after the last
-// sentinel, or nil when the sentinel is absent (shell died before env ran).
-//
-// ponytail: line-based, so a value spanning a newline loses its tail. Switch the
-// dump to `env -0` and split on NUL if that ever bites.
+// sentinel, or nil when the sentinel is absent (shell died before env ran). It
+// is line-based, so a value spanning a newline loses its tail; switch the dump
+// to `env -0` and split on NUL if that ever bites.
 func parseShellEnvDump(sentinel, out string) []string {
 	idx := strings.LastIndex(out, sentinel)
 	if idx < 0 {
