@@ -114,9 +114,6 @@ export function SessionCard({
     <div
       ref={setNodeRef}
       style={{transform: CSS.Transform.toString(transform), transition}}
-      // pointer-events-none while dragging kills the :hover state — otherwise
-      // the pointer sits on the card the whole drag and hover:bg-accent/60
-      // turns its background translucent over the cards it slides across.
       className={cn(
         "relative",
         isDragging && "pointer-events-none z-10 rounded-lg shadow-md",
