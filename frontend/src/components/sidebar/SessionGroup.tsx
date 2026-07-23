@@ -76,7 +76,6 @@ export function SessionGroup({
                 key={session.id}
                 session={session}
                 path={projectPath}
-                inGroup={showHeader}
                 active={session.id === activeId}
                 onSelect={() => onSelect(session.id)}
                 onClose={() => onClose(session)}

@@ -27,10 +27,6 @@ interface SessionCardProps {
   session: Session
   path: string
   active: boolean
-  // True when the card sits under a worktree group header that already shows the
-  // path and branch. The card then drops both to avoid repeating them on every
-  // sibling, keeping only its per-session PR and diff badges.
-  inGroup?: boolean
   onSelect: () => void
   onClose: () => void
   onRename: (label: string) => void
@@ -45,7 +41,6 @@ export function SessionCard({
                               session,
                               path,
                               active,
-                              inGroup = false,
                               onSelect,
                               onClose,
                               onRename,
@@ -73,9 +68,6 @@ export function SessionCard({
   const shownPath = liveCwd || session.path || path
   const git = useGitStatus(shownPath)
   const pr = usePullRequest(shownPath, git?.branch ?? "")
-  // Under a group header the branch line is dropped; the badges row then renders
-  // only when there is a badge to show, instead of leaving an empty strip.
-  const hasBadges = Boolean(pr) || (git?.files ?? 0) > 0
   // Renaming disables the drag: the sensor would otherwise claim the pointer
   // before the input could be clicked into or its text selected.
   const {
@@ -169,34 +161,24 @@ export function SessionCard({
               )}
               {/* rtl anchors the tail (project folder) to the right so overflow is
                 clipped on the left; the leading LRM keeps "~/" in logical order
-                instead of letting bidi push it to the end. The group header
-                already shows the path, so a grouped card drops this line. */}
-              {!inGroup && (
-                <span
-                  ref={pathRef}
-                  dir="rtl"
-                  className={cn(
-                    "block max-w-full overflow-hidden whitespace-nowrap text-left font-mono text-xs text-muted-foreground",
-                    pathOverflow &&
-                    "[mask-image:linear-gradient(to_right,transparent,black_1.25rem)]",
-                  )}
-                >
-                  {"\u200e" + displayPath(shownPath)}
-                </span>
-              )}
-              {git?.branch && (!inGroup || hasBadges) && (
-                <span
-                  className={cn(
-                    "flex w-full items-center gap-2 text-xs text-muted-foreground",
-                    inGroup ? "justify-end" : "justify-between",
-                  )}
-                >
-                {!inGroup && (
-                  <span className="flex min-w-0 items-center gap-1">
-                    <GitBranch className="size-3 shrink-0"/>
-                    <span className="truncate">{git.branch}</span>
-                  </span>
+                instead of letting bidi push it to the end. */}
+              <span
+                ref={pathRef}
+                dir="rtl"
+                className={cn(
+                  "block max-w-full overflow-hidden whitespace-nowrap text-left font-mono text-xs text-muted-foreground",
+                  pathOverflow &&
+                  "[mask-image:linear-gradient(to_right,transparent,black_1.25rem)]",
                 )}
+              >
+              {"\u200e" + displayPath(shownPath)}
+            </span>
+              {git?.branch && (
+                <span className="flex w-full items-center justify-between gap-2 text-xs text-muted-foreground">
+                <span className="flex min-w-0 items-center gap-1">
+                  <GitBranch className="size-3 shrink-0"/>
+                  <span className="truncate">{git.branch}</span>
+                </span>
                   <span className="flex shrink-0 items-center gap-1.5">
                     {pr && (
                       <span
