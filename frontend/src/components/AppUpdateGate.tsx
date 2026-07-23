@@ -6,6 +6,7 @@ import {decideUpdateAction, UPDATE_DISMISSED_KEY, type UpdateAction} from "@/lib
 import {AppUpdate, System} from "@/lib/rpc"
 import {useProjects} from "@/lib/projects"
 import {queuePaste} from "@/lib/paste-queue"
+import {registerUpdateChecker} from "@/lib/update-check"
 import {errorText} from "@/lib/utils"
 
 // How often to re-check for a release after startup, so a long-running session
@@ -37,6 +38,20 @@ export function AppUpdateGate() {
     return () => clearInterval(id)
   }, [])
 
+  useEffect(() => {
+    registerUpdateChecker(checkNow)
+    return () => registerUpdateChecker(null)
+  })
+
+  const prompt = (action: UpdateAction & {kind: "update"}) => {
+    promptedVersion.current = action.version
+    if (action.canSelfApply) {
+      promptSelfApply(action.version)
+    } else {
+      promptInstall(action.version, action.releaseUrl, action.installCommand)
+    }
+  }
+
   const check = async () => {
     let action: UpdateAction
     try {
@@ -47,12 +62,17 @@ export function AppUpdateGate() {
     }
     if (action.kind !== "update") return
     if (promptedVersion.current === action.version) return
-    promptedVersion.current = action.version
-    if (action.canSelfApply) {
-      promptSelfApply(action.version)
-    } else {
-      promptInstall(action.version, action.releaseUrl, action.installCommand)
+    prompt(action)
+  }
+
+  // Manual check: prompts even for a dismissed or already-toasted version.
+  const checkNow = async () => {
+    const status = await AppUpdate.Status()
+    const action = decideUpdateAction(status, null)
+    if (action.kind === "update") {
+      prompt(action)
     }
+    return status
   }
 
   const dismiss = (version: string) => localStorage.setItem(UPDATE_DISMISSED_KEY, version)

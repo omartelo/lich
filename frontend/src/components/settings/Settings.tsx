@@ -7,6 +7,7 @@ import { AppearanceSettings } from "./AppearanceSettings"
 import { HotkeysSettings } from "./HotkeysSettings"
 import { ProvidersSettings } from "./ProvidersSettings"
 import { ProviderBinSettings } from "./ProviderBinSettings"
+import { UpdatesSettings } from "./UpdatesSettings"
 import { enabledProviders, useProviders } from "@/lib/providers-store"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
@@ -28,6 +29,7 @@ const BASE_SECTIONS: Section[] = [
   { id: "terminal", label: "Terminal", group: "app", render: () => <TerminalSettings /> },
   { id: "hotkeys", label: "Hotkeys", group: "app", render: () => <HotkeysSettings /> },
   { id: "providers", label: "Providers", group: "app", render: () => <ProvidersSettings /> },
+  { id: "updates", label: "Updates", group: "app", render: () => <UpdatesSettings /> },
 ]
 
 // Settings is the per-project settings screen (not a modal): it fills the main

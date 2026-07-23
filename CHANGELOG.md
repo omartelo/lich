@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **An Updates section in Settings.** It shows the running lich version with a
+  "Check for updates" button that forces the release check right now (the
+  automatic one still runs at startup and hourly), reopens the current
+  version's patch notes on demand, and shows the Claude Code plugin's installed
+  version with its own check, install and update actions.
+
 ## [0.14.0] - 2026-07-23
 
 ### Changed
