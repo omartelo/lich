@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **A project may now sit with no session at all.** Closing the last one no
+  longer spawns a replacement, and opening a project no longer seeds a first
+  session — both land on an empty screen, the same shape as the no-project-open
+  landing screen, with a button that opens a session when you want one. The
+  sidebar's "+" still picks the kind. An empty project stays empty across a
+  restart, Home included.
+
 ### Fixed
 
 - **Zoom now works on layouts with a dedicated "+" key** (German, for one).
