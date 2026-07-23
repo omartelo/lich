@@ -61,8 +61,6 @@ export interface PaletteResults {
   projects: Project[]
 }
 
-// filterPalette narrows sessions and projects to those matching query. A session
-// matches on its label, project name or path; a project on its name or path.
 export function filterPalette(
   query: string,
   allSessions: readonly PaletteSession[],

@@ -7,8 +7,6 @@ interface SegmentedOption<T extends string> {
   icon?: ReactNode
 }
 
-// SegmentedControl is a single-select row of equal-width option buttons; the
-// active option is outlined with the app accent. Used for theme pickers.
 export function SegmentedControl<T extends string>({
   value,
   onChange,

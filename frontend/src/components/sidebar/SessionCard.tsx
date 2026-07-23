@@ -36,10 +36,7 @@ interface SessionCardProps {
   onOpenTerminal: (cwd: string) => void
 }
 
-// SessionCard is one session entry: a card showing the session label, the
-// session's working directory, and that directory's git branch with a diff
-// badge (when it is a repo), with a close button on hover. The card itself is
-// the drag grip for reordering the list.
+// The card itself is the drag grip for reordering the list — no separate handle.
 export function SessionCard({
                               session,
                               path,
@@ -82,7 +79,6 @@ export function SessionCard({
     isDragging,
   } = useSortable({id: session.id, disabled: editing})
 
-  // Commit the edited label: keep the old one if it is blank or unchanged.
   const commit = (value: string) => {
     setEditing(false)
     const label = value.trim()

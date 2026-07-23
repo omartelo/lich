@@ -89,14 +89,10 @@ const toProject = (p: StoreProject): Project => ({
   path: p.path,
 })
 
-// How long the "needs you" toast stays before auto-dismissing.
 const ATTENTION_TOAST_MS = 10_000
 
-// Shown when a toasted session has no label to name it by.
 const UNLABELED_SESSION = "A session"
 
-// buildSessionState rebuilds the in-memory session map from the persisted
-// projects returned by the store.
 function buildSessionState(loaded: StoreProject[]): SessionState {
   const state: SessionState = {}
   for (const p of loaded) {

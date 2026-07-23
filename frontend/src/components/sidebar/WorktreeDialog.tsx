@@ -57,8 +57,6 @@ interface BranchGroupProps {
   children: ReactNode
 }
 
-// BranchGroup is one collapsible section of the list: a sticky header with a
-// chevron and item count, and the rows when expanded.
 function BranchGroup({title, count, open, onToggle, children}: BranchGroupProps) {
   return (
     <>

@@ -20,8 +20,6 @@ import { CommandPalette } from "@/components/CommandPalette"
 // top of the terminals.
 function Layout() {
   const [dock, setDock] = useState<DockTab | null>(null)
-  // Clicking a footer toggle opens that tab, or closes the dock if that tab is
-  // already showing.
   const toggleDock = (tab: DockTab) =>
     setDock((cur) => (cur === tab ? null : tab))
   return (

@@ -33,15 +33,13 @@ const BASE_SECTIONS: Section[] = [
 // Settings is the per-project settings screen (not a modal): it fills the main
 // area and sits on top of the persistent terminals, with the session sidebar
 // kept beside it. The route carries the project id, which the provider sections
-// use for that project's overrides. A category nav sits on the left; content is
-// on the right.
+// use for that project's overrides.
 export function Settings() {
   const { projectId } = useParams()
   const providers = useProviders()
   const [active, setActive] = useState("providers")
   const [query, setQuery] = useState("")
 
-  // One config section per enabled provider, appended after the base sections.
   const providerSections: Section[] = enabledProviders(providers).map((provider) => ({
     id: `provider-${provider.id}`,
     label: provider.name,

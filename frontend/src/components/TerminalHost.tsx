@@ -84,7 +84,7 @@ export function TerminalHost() {
         const projectActiveId = activeSessionId(sessions, project.id)
         return sessionsOf(sessions, project.id).map((session) => {
           if (!spawned.has(session.id)) {
-            return null // lazy: not viewed yet, no PTY spawned
+            return null
           }
           const visible =
             project.id === activeProjectId && session.id === projectActiveId

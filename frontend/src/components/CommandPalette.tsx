@@ -49,7 +49,6 @@ export function CommandPalette() {
   const results = useMemo(() => filterPalette(query, all, projects), [query, all, projects])
   const total = results.sessions.length + results.projects.length
 
-  // Reset the cursor to the top whenever the visible set changes.
   useEffect(() => setSelected(0), [query])
   const active = Math.min(selected, Math.max(0, total - 1))
 

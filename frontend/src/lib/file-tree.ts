@@ -18,8 +18,8 @@ export interface TreeNode {
 // and each group sorted case-insensitively — the order an explorer expects,
 // independent of git's byte order.
 //
-// ponytail: linear find per level, O(files · siblings); swap in a Map keyed by
-// name if a huge monorepo ever makes this lag.
+// Linear find per level, O(files · siblings); swap in a Map keyed by name if
+// a huge monorepo ever makes this lag.
 export function buildTree(paths: string[]): TreeNode[] {
   const root: TreeNode[] = []
   for (const path of paths) {

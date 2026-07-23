@@ -12,9 +12,6 @@ import {useSortableList} from "@/lib/use-sortable-list"
 import {ProjectTab} from "./ProjectTab"
 import {HomeTab} from "./HomeTab"
 
-// ProjectTabs is the top strip: the pinned Home tab, open projects as tabs
-// (drag to reorder), a button to open another, and a settings button pinned to
-// the right that opens the current project's Settings card.
 export function ProjectTabs() {
   const {projects, sessions, homeId, openProject, closeProject, reorderProjects} =
     useProjects()

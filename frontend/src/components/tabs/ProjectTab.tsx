@@ -12,9 +12,7 @@ interface ProjectTabProps {
   onClose: () => void
 }
 
-// ProjectTab is a browser-style tab: the project name, active underline, and a
-// close affordance that appears on hover. The tab is its own drag grip for
-// reordering the strip.
+// The tab is its own drag grip for reordering the strip — no separate handle.
 export function ProjectTab({ project, sessionIds, onClose }: ProjectTabProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: project.id })

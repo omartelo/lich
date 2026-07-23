@@ -10,7 +10,6 @@ export function queuePaste(sessionId: string, text: string): void {
   pending.set(sessionId, text)
 }
 
-// takePaste returns and clears the queued text for a session, or undefined.
 export function takePaste(sessionId: string): string | undefined {
   const text = pending.get(sessionId)
   if (text !== undefined) {

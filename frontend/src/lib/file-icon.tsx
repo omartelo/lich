@@ -59,8 +59,6 @@ interface FileIconProps {
   path: string
 }
 
-// FileIcon renders a file's language icon for the tree, or a neutral glyph for
-// extensions devicon doesn't cover (sql, toml, extensionless).
 export function FileIcon({path}: FileIconProps) {
   const def = ICONS[extname(path)]
   if (!def) {

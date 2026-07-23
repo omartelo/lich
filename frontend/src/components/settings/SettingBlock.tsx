@@ -1,8 +1,6 @@
 import type { ReactNode } from "react"
 
-// SettingBlock is a stacked setting: an icon+title heading, an optional
-// description, then the control below. It is the single layout for every
-// settings row, so all sections read the same.
+// The single layout for every settings row, so all sections read the same.
 export function SettingBlock({
   icon,
   title,

@@ -78,7 +78,6 @@ export interface ProvidersDeps {
   persistDefault: (id: string) => void
 }
 
-// createProvidersStore builds a subscribable provider store over injected RPC.
 export function createProvidersStore(deps: ProvidersDeps) {
   let providers: ProviderState[] = []
   let defaultId = ""
@@ -145,7 +144,6 @@ export function createProvidersStore(deps: ProvidersDeps) {
   }
 }
 
-// The app-wide singleton, wired to the real RPC.
 const store = createProvidersStore({
   detect: () => Providers.Detect(),
   getEnabled: (id) => Store.GetSetting(enabledKey(id), GLOBAL_SCOPE),
@@ -158,12 +156,10 @@ const store = createProvidersStore({
   },
 })
 
-// setProviderEnabled flips a provider's global flag and persists it.
 export function setProviderEnabled(id: ProviderKind, enabled: boolean): void {
   store.setEnabled(id, enabled)
 }
 
-// setProviderDefault records the provider new sessions spawn by default.
 export function setProviderDefault(id: ProviderKind): void {
   store.setDefault(id)
 }

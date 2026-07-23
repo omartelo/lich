@@ -18,8 +18,7 @@ interface SessionStatusIconProps {
   status: SessionStatus | null
 }
 
-// SessionStatusIcon is a session's provider mark wrapped in a status ring. The
-// slot is a fixed size so the icon never shifts as the state changes.
+// The slot is a fixed size so the icon never shifts as the state changes.
 export function SessionStatusIcon({kind, status}: SessionStatusIconProps) {
   return (
     <span className="relative flex size-[1.375rem] shrink-0 items-center justify-center text-muted-foreground">

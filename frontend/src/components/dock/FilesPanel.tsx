@@ -131,7 +131,7 @@ interface TreeRowProps {
 
 function TreeRow({node, depth, expanded, onToggle, onOpen}: TreeRowProps) {
   const isOpen = expanded.has(node.path)
-  // Indent by depth; the base padding keeps even top-level rows off the edge.
+  // The 0.5rem base keeps even top-level rows off the edge.
   const indent = {paddingLeft: `${depth * 0.75 + 0.5}rem`}
   if (node.type === "file") {
     // A chevron-width spacer keeps file names aligned under their folder's name;

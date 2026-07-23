@@ -48,7 +48,6 @@ export interface ProjectSessions {
 
 export type SessionState = Record<string, ProjectSessions>
 
-// createProjectSessions seeds a project with its first session.
 export function createProjectSessions(
   firstSessionId: string,
   kind: SessionKind = "claude",
@@ -207,7 +206,6 @@ export function reorderSessions(
   return { ...state, [projectId]: { ...current, sessions } }
 }
 
-// removeProject drops a project and all its sessions.
 export function removeProject(
   state: SessionState,
   projectId: string,

@@ -14,8 +14,7 @@ import type {PatchNotes} from "@/lib/api-types"
 
 const RELEASE_TAG_BASE = "https://github.com/omartelo/lich/releases/tag/v"
 
-// dotColor maps a changelog group to a semantic accent, kept separate from the
-// app accent: Added emerald, Changed amber, Fixed sky, anything else muted.
+// Semantic per-group accents, deliberately separate from the app accent.
 function dotColor(label: string): string {
   switch (label.toLowerCase()) {
     case "added":
@@ -57,8 +56,6 @@ interface PatchNotesDialogProps {
   onClose: () => void
 }
 
-// PatchNotesDialog shows the running build's changelog section after an update:
-// a grouped, scrollable "what's new" list with a link to the full release notes.
 export function PatchNotesDialog({notes, onClose}: PatchNotesDialogProps) {
   const groups = notes.groups ?? []
   return (

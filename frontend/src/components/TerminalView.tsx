@@ -88,8 +88,8 @@ function fitTerminal(term: Terminal, container: HTMLElement): void {
   }
 }
 
-// Terminal color schemes. Light keeps a high-contrast foreground so CLI output
-// stays legible against the pale background.
+// Light keeps a high-contrast foreground so CLI output stays legible against
+// the pale background.
 const TERMINAL_COLORS: Record<ResolvedTheme, { background: string; foreground: string }> = {
   dark: { background: "#06070f", foreground: "#e5e7eb" },
   light: { background: "#ffffff", foreground: "#1f2328" },

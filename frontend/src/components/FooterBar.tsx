@@ -34,12 +34,9 @@ interface FooterBarProps {
   onDock: (tab: DockTab) => void
 }
 
-// FooterBar is the Warp-style status strip: attach-file button, a file-browser
-// toggle and diff counters on the left, git branch, working directory and clock
-// on the right. Git segments only render while a project is active. Everything
-// follows the active session: a worktree session shows its checkout's path,
-// branch and diff. The Files button and the diff counters toggle the dock's two
-// tabs.
+// FooterBar is the Warp-style status strip. Git segments only render while a
+// project is active; everything follows the active session — a worktree session
+// shows its checkout's path, branch and diff.
 export function FooterBar({dock, onDock}: FooterBarProps) {
   const {sessionId, path: basePath} = useActiveSession()
   // Overlay the backend's live cwd so a `cd` in the terminal moves the footer

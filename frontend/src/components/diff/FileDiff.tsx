@@ -35,10 +35,8 @@ interface FileDiffProps {
   onDiscard: () => void
 }
 
-// FileDiff is one card of the review panel: a sticky header with a language
-// badge, the file name, +/- counts and per-file actions, and a read-only
-// CodeMirror diff below. The card must not clip overflow — a clipping
-// ancestor would break the sticky header.
+// The card must not clip overflow — a clipping ancestor would break the
+// sticky header.
 export function FileDiff({file, onInject, onDiscard}: FileDiffProps) {
   const doc = useMemo(() => buildFileDoc(file), [file])
   const [expanded, setExpanded] = useState(
@@ -99,8 +97,6 @@ interface HeaderActionProps {
   children: ReactNode
 }
 
-// HeaderAction is one tooltip-labeled icon button in a review-panel header,
-// styled after the footer's attach-file button.
 export function HeaderAction({label, onClick, children}: HeaderActionProps) {
   return (
     <Tooltip>
