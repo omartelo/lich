@@ -51,8 +51,9 @@ var version = "dev"
 
 func main() {
 	// Snapshot before any env tweaks: spawned terminal sessions must inherit
-	// what the user launched lich with (see terminal.childEnv).
-	env := os.Environ()
+	// what the user launched lich with (see terminal.childEnv). ResolveShellEnv
+	// recovers the rc-exported vars a GUI launch misses (see its doc).
+	env := terminal.ResolveShellEnv(os.Environ())
 
 	configDir, err := os.UserConfigDir()
 	if err != nil {
