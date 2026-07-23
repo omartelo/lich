@@ -25,7 +25,10 @@ export function ProjectTab({ project, sessionIds, onClose }: ProjectTabProps) {
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn("shrink-0", isDragging && "z-10 opacity-60")}
+      className={cn(
+        "shrink-0",
+        isDragging && "z-10 rounded-lg bg-accent shadow-md",
+      )}
       {...attributes}
       {...listeners}
     >

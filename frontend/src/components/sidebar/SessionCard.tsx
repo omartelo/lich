@@ -114,7 +114,10 @@ export function SessionCard({
     <div
       ref={setNodeRef}
       style={{transform: CSS.Transform.toString(transform), transition}}
-      className={cn("relative", isDragging && "z-10 opacity-60")}
+      className={cn(
+        "relative",
+        isDragging && "pointer-events-none z-10 rounded-lg shadow-md",
+      )}
       {...attributes}
       {...listeners}
     >

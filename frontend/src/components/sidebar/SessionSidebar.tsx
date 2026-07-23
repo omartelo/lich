@@ -25,7 +25,7 @@ import {DndContext, closestCenter} from "@dnd-kit/core"
 import {SortableContext, verticalListSortingStrategy} from "@dnd-kit/sortable"
 import {useGitStatus} from "@/lib/useGitStatus"
 import {usePanelWidth} from "@/lib/use-panel-width"
-import {useSortableList} from "@/lib/use-sortable-list"
+import {useSortableList, verticalAxis} from "@/lib/use-sortable-list"
 import {errorText} from "@/lib/utils"
 
 // SessionSidebar lists the active project's sessions and can be drag-resized
@@ -204,7 +204,7 @@ export function SessionSidebar() {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto">
+      <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto overflow-x-hidden">
         {settingsOpen && (
           <SettingsCard
             active={onSettings}
@@ -221,6 +221,7 @@ export function SessionSidebar() {
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
+          modifiers={[verticalAxis]}
           onDragEnd={onDragEnd}
         >
           <SortableContext
