@@ -7,15 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- **Dragging a tab or session card no longer scrolls its strip.** Reorder drags
-  are clamped to the strip's own axis, so pulling a project tab downward (or a
-  session card sideways) can't overflow the container and trigger dnd-kit's
-  auto-scroll on the cross axis. The dragged tab and session card also stay
-  solid instead of turning into a see-through ghost — the old opacity fade is
-  gone, and the card no longer sits in its translucent hover state (the pointer
-  rides it for the whole drag) while sliding across its neighbours.
+## [0.14.0] - 2026-07-23
 
 ### Changed
 
@@ -39,6 +31,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Dragging a tab or session card no longer scrolls its strip.** Reorder drags
+  are clamped to the strip's own axis, so pulling a project tab downward (or a
+  session card sideways) can't overflow the container and trigger dnd-kit's
+  auto-scroll on the cross axis. The dragged tab and session card also stay
+  solid instead of turning into a see-through ghost — the old opacity fade is
+  gone, and the card no longer sits in its translucent hover state (the pointer
+  rides it for the whole drag) while sliding across its neighbours.
 - **Zoom now works on layouts with a dedicated "+" key** (German, for one).
   The chords matched only the physical Equal/Minus keys, so on those layouts
   nothing claimed the press and Chromium's own zoom ran instead — the exact
@@ -53,7 +52,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   opens the terminal search box hidden beneath an open palette.
 - **A failing file picker now says so** with an error toast instead of
   failing silently.
-
 - **The self-update download no longer dies on a normal connection.** The
   binary download shared the 5-second timeout meant for small metadata reads,
   and that timeout covers the whole transfer — so on anything but a very fast
@@ -747,7 +745,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/omartelo/lich/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/omartelo/lich/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/omartelo/lich/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/omartelo/lich/compare/v0.11.0...v0.11.1
