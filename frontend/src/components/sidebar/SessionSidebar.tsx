@@ -17,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {useProjects} from "@/lib/projects"
-import {activeSessionId, sessionsOf, type Session} from "@/lib/sessions"
+import {activeSessionId, isLastWorktreeSession, sessionsOf, type Session} from "@/lib/sessions"
 import {CloseWorktreeDialog, ForceRemoveWorktreeDialog} from "./CloseWorktreeDialog"
 import {SessionCard} from "./SessionCard"
 import {WorktreeDialog} from "./WorktreeDialog"
@@ -96,10 +96,8 @@ export function SessionSidebar() {
     setWorktreeOpen(false)
   }
 
-  // Closing a worktree session asks what to do with the checkout; regular
-  // sessions close immediately.
   const requestClose = (session: Session) => {
-    if (session.path) {
+    if (isLastWorktreeSession(list, session)) {
       setPendingClose(session)
       return
     }

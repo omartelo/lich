@@ -4,6 +4,7 @@ import {
   addSession,
   closeSession,
   createProjectSessions,
+  isLastWorktreeSession,
   isSessionKind,
   projectOfSession,
   removeProject,
@@ -13,6 +14,7 @@ import {
   resumableSession,
   sessionsOf,
   setActiveSession,
+  type Session,
   type SessionState,
 } from "./sessions"
 
@@ -313,5 +315,29 @@ describe("restoreSession", () => {
   it("ignores an unknown project", () => {
     const state = buildState(1)
     expect(restoreSession(state, "nope", parked)).toBe(state)
+  })
+})
+
+describe("isLastWorktreeSession", () => {
+  const wt = (id: string, path?: string): Session => ({
+    id,
+    label: id,
+    kind: "shell",
+    ...(path ? { path } : {}),
+  })
+
+  it("is false for a project-rooted (pathless) session", () => {
+    const s = wt("s1")
+    expect(isLastWorktreeSession([s], s)).toBe(false)
+  })
+
+  it("is true when the session is the only occupant of its worktree", () => {
+    const s = wt("s1", "/wt/a")
+    expect(isLastWorktreeSession([s, wt("s2", "/wt/b")], s)).toBe(true)
+  })
+
+  it("is false while another session shares the same worktree path", () => {
+    const s = wt("s1", "/wt/a")
+    expect(isLastWorktreeSession([s, wt("s2", "/wt/a")], s)).toBe(false)
   })
 })
