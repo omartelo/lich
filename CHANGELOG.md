@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A session spawned directly on a provider now inherits your login shell's
+  environment.** lich is a GUI app, never started from a terminal, so its env
+  snapshot is the graphical session's — it never sourced `.zshrc`/`.bashrc`/
+  `config.fish`/`.profile`. A `shell` session hid this (the spawned `$SHELL`
+  sources its own rc), but a provider spawned directly (Claude Code, Codex, …)
+  saw only the launch env, so a `${VAR}` expansion in `.mcp.json` — e.g. an MCP
+  server's auth token exported in your rc — came up empty. lich now resolves the
+  shell env once at startup (`$SHELL -l -i -c` dump) and merges it over the
+  launch snapshot, so both provider and shell sessions get the full environment.
+  Best-effort: `$SHELL` unset or any failure keeps the launch env. Windows
+  without a `$SHELL` (env lives in the registry) is not covered.
+- **Closing a worktree session only prompts to remove the checkout when it is
+  the last one there.** A worktree can host more than one session — a provider
+  plus a hand-opened shell rooted at the same path — and closing the throwaway
+  shell offered to remove the whole checkout, so one accidental confirm discarded
+  the provider's work. The prompt is now gated on the closing session being the
+  last occupant of its worktree path; while a sibling still lives there, closing
+  just closes.
+
 ## [0.15.0] - 2026-07-23
 
 ### Added
