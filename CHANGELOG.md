@@ -42,7 +42,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the provider's work. The prompt is now gated on the closing session being the
   last occupant of its worktree path; while a sibling still lives there, closing
   just closes.
->>>>>>> origin/main
 
 ## [0.15.0] - 2026-07-23
 
