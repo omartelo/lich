@@ -55,8 +55,9 @@ interface ProjectsValue {
   /** Open a new session in a project and focus it, returning its id. Kind
    * defaults to Claude Code; path defaults to the project's own directory. */
   newSession: (projectId: string, kind?: SessionKind, path?: string) => string
-  /** Open a Claude Code session rooted at a git worktree, labeled after it. */
-  newWorktreeSession: (projectId: string, wt: { name: string; path: string }) => void
+  /** Open a Claude Code session rooted at a git worktree, labeled after it,
+   * returning its id. */
+  newWorktreeSession: (projectId: string, wt: { name: string; path: string }) => string
   /** Resume a worktree: reopen its parked session (continuing its Claude
    * conversation) when one exists, else open a fresh session on it. */
   reopenWorktreeSession: (projectId: string, wt: { name: string; path: string }) => Promise<void>
@@ -257,6 +258,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       const created = project.sessions[project.sessions.length - 1]
       setSessions(next)
       void Store.AddSession(projectId, sessionId, created.label, kind, wt.path, project.nextSeq)
+      return sessionId
     },
     [],
   )

@@ -80,3 +80,19 @@ func (s *Service) ProviderBin(providerID, projectID string) string {
 func (s *Service) ClaudeBin(projectID string) string {
 	return s.ProviderBin(providers.Claude, projectID)
 }
+
+// worktreeSetupKey is the settings key holding a project's worktree setup
+// script. Project-scoped only, no global fallback: a setup command is
+// repo-specific, so a global value would be wrong more often than useful.
+const worktreeSetupKey = "worktree.setup"
+
+// WorktreeSetup returns the project's worktree setup script, or "" when none
+// is configured. The terminal service resolves it when spawning the first
+// session of a freshly created worktree.
+func (s *Service) WorktreeSetup(projectID string) string {
+	script, err := s.GetSetting(worktreeSetupKey, projectID)
+	if err != nil {
+		return ""
+	}
+	return script
+}

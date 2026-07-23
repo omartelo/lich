@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {useProjects} from "@/lib/projects"
+import {queueSetup} from "@/lib/setup-queue"
 import {activeSessionId, isLastWorktreeSession, sessionsOf, type Session} from "@/lib/sessions"
 import {CloseWorktreeDialog, ForceRemoveWorktreeDialog} from "./CloseWorktreeDialog"
 import {SessionCard} from "./SessionCard"
@@ -86,7 +87,9 @@ export function SessionSidebar() {
   const createWorktree = async (name: string, base: string, baseIsRemote: boolean) => {
     const wt = await ProjectService.CreateWorktree(path, projectId, name, base, baseIsRemote)
     if (wt) {
-      newWorktreeSession(projectId, wt)
+      // A fresh checkout is the one moment the project's setup script runs;
+      // reopening an existing worktree never queues it.
+      queueSetup(newWorktreeSession(projectId, wt))
     }
     setWorktreeOpen(false)
   }

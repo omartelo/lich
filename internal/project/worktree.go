@@ -183,6 +183,7 @@ func (s *Service) CreateWorktree(projectPath, projectID, name, base string, base
 	if _, err := runGit(wtPath, "rev-parse", "--is-inside-work-tree"); err != nil {
 		return nil, fmt.Errorf("worktree created but unusable: %w", err)
 	}
+	seedWorktree(projectPath, wtPath)
 	return &Worktree{Name: name, Path: wtPath}, nil
 }
 

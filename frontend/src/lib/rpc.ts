@@ -80,16 +80,19 @@ async function post(path: string): Promise<void> {
 }
 
 export const Terminal = {
-  /** resume: a provider session id to reopen (--resume); "" starts fresh. */
+  /** resume: a provider session id to reopen (--resume); "" starts fresh.
+   * setup: run the project's worktree setup script ahead of the provider —
+   * passed once, by the first Start after the worktree is created. */
   Start: (
     id: string,
     projectID: string,
     cwd: string,
     kind: string,
     resume: string,
+    setup: boolean,
     cols: number,
     rows: number,
-  ) => call<null>("terminal.Start", [id, projectID, cwd, kind, resume, cols, rows]),
+  ) => call<null>("terminal.Start", [id, projectID, cwd, kind, resume, setup, cols, rows]),
   Write: (id: string, data: string) => call<null>("terminal.Write", [id, data]),
   Resize: (id: string, cols: number, rows: number) =>
     call<null>("terminal.Resize", [id, cols, rows]),
