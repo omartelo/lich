@@ -1,6 +1,6 @@
 // Package store is lich's persistence layer: a single SQLite database holding
 // open projects, their terminal sessions and backend-read settings (currently
-// the Claude Code binary path, global or per-project). It never stores chat or
+// the provider binary paths, global or per-project). It never stores chat or
 // terminal content — only the metadata needed to restore the workspace after a
 // restart.
 //
@@ -33,15 +33,15 @@ CREATE TABLE IF NOT EXISTS projects (
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
-    id                TEXT NOT NULL PRIMARY KEY,
-    project_id        TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    label             TEXT NOT NULL,
-    kind              TEXT NOT NULL DEFAULT 'claude',
-    path              TEXT NOT NULL DEFAULT '',
-    claude_session_id TEXT NOT NULL DEFAULT '',
-    label_auto        INTEGER NOT NULL DEFAULT 1,
-    is_open           INTEGER NOT NULL DEFAULT 1,
-    position          INTEGER NOT NULL DEFAULT 0
+    id                  TEXT NOT NULL PRIMARY KEY,
+    project_id          TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    label               TEXT NOT NULL,
+    kind                TEXT NOT NULL DEFAULT 'claude',
+    path                TEXT NOT NULL DEFAULT '',
+    provider_session_id TEXT NOT NULL DEFAULT '',
+    label_auto          INTEGER NOT NULL DEFAULT 1,
+    is_open             INTEGER NOT NULL DEFAULT 1,
+    position            INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
 
@@ -62,18 +62,19 @@ type Service struct {
 }
 
 // Session is a persisted terminal session (metadata only). Kind selects what
-// the PTY runs: "claude" (Claude Code binary) or "shell" (the user's shell).
-// Path is the session's working directory when it lives in a git worktree;
-// empty means the project's own path. ClaudeSessionID is the id Claude Code
-// assigns its own session, reported by the SessionStart hook; empty until the
-// hook fires (or for shell sessions), it is the key for future features that
-// need to reach a session's transcript or resume it.
+// the PTY runs: a provider id (see internal/providers) or "shell" (the user's
+// shell). Path is the session's working directory when it lives in a git
+// worktree; empty means the project's own path. ProviderSessionID is the id the
+// provider CLI assigns the conversation running in the PTY, reported by that
+// provider's session-start hook; empty until a hook fires (or for shell
+// sessions), it is the key for features that need to reach a session's
+// transcript or resume it. Only Claude Code reports one today.
 type Session struct {
-	ID              string `json:"id"`
-	Label           string `json:"label"`
-	Kind            string `json:"kind"`
-	Path            string `json:"path"`
-	ClaudeSessionID string `json:"claudeSessionId"`
+	ID                string `json:"id"`
+	Label             string `json:"label"`
+	Kind              string `json:"kind"`
+	Path              string `json:"path"`
+	ProviderSessionID string `json:"providerSessionId"`
 }
 
 // Project is a persisted project together with its restorable session state.
@@ -117,25 +118,39 @@ func open(path string) (*Service, error) {
 		return nil, fmt.Errorf("apply schema: %w", err)
 	}
 	// Migrations for databases created before these columns existed. SQLite has
-	// no ADD COLUMN IF NOT EXISTS; a duplicate-column error means it is already
-	// applied.
+	// no ADD COLUMN IF NOT EXISTS and no RENAME COLUMN IF EXISTS; the two errors
+	// tolerated below are exactly "the column is already there" and "there is
+	// nothing to rename", which is what an already-applied migration looks like.
+	//
+	// The rename/add pair covers all three shapes a database can be in: created
+	// fresh with provider_session_id (rename finds nothing, add is a duplicate),
+	// created with the old claude_session_id (rename carries the ids over, add is
+	// a duplicate), or predating the column entirely (rename finds nothing, add
+	// creates it).
 	migrations := []string{
 		`ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'claude'`,
 		`ALTER TABLE sessions ADD COLUMN path TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE sessions ADD COLUMN claude_session_id TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE sessions RENAME COLUMN claude_session_id TO provider_session_id`,
+		`ALTER TABLE sessions ADD COLUMN provider_session_id TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE sessions ADD COLUMN label_auto INTEGER NOT NULL DEFAULT 1`,
 		`ALTER TABLE sessions ADD COLUMN is_open INTEGER NOT NULL DEFAULT 1`,
 		`ALTER TABLE sessions ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE projects ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 	}
 	for _, stmt := range migrations {
-		if _, err := db.Exec(stmt); err != nil &&
-			!strings.Contains(err.Error(), "duplicate column") {
+		if _, err := db.Exec(stmt); err != nil && !migrationApplied(err) {
 			_ = db.Close()
 			return nil, fmt.Errorf("migrate schema: %w", err)
 		}
 	}
 	return &Service{db: db}, nil
+}
+
+// migrationApplied reports whether an ALTER TABLE failed because the migration
+// had already been applied — the column exists, or the one to rename is gone.
+func migrationApplied(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "duplicate column") || strings.Contains(msg, "no such column")
 }
 
 // databasePath resolves the on-disk location of the database file. LICH_DEV
@@ -201,7 +216,7 @@ func (s *Service) LoadState() ([]Project, error) {
 // into, falling back to insertion order for rows never reordered.
 func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	rows, err := s.db.Query(
-		`SELECT id, label, kind, path, claude_session_id
+		`SELECT id, label, kind, path, provider_session_id
 		   FROM sessions WHERE project_id = ? AND is_open = 1 ORDER BY position, rowid`,
 		projectID,
 	)
@@ -213,7 +228,7 @@ func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	sessions := []Session{}
 	for rows.Next() {
 		var sess Session
-		if err := rows.Scan(&sess.ID, &sess.Label, &sess.Kind, &sess.Path, &sess.ClaudeSessionID); err != nil {
+		if err := rows.Scan(&sess.ID, &sess.Label, &sess.Kind, &sess.Path, &sess.ProviderSessionID); err != nil {
 			return nil, fmt.Errorf("scan session: %w", err)
 		}
 		sessions = append(sessions, sess)

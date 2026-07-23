@@ -43,7 +43,7 @@ export interface StoredSession {
   label: string
   kind: string
   path: string
-  claudeSessionId: string
+  providerSessionId: string
 }
 
 /** internal/store.Project — a persisted project with its session state. */

@@ -90,7 +90,7 @@ type transport struct {
 	mux         *http.ServeMux
 	input       func(id string, data []byte)
 	status      func(id, state string)
-	linkSession func(sessionID, claudeSessionID string) error
+	linkSession func(sessionID, providerSessionID string) error
 	setTitle    func(sessionID, title string) error
 	touched     func(sessionID string)
 	// restart, when set, relaunches lich and closes this window; POST /restart
@@ -103,14 +103,14 @@ type transport struct {
 // newTransport starts the listener on a random loopback port. input receives
 // decoded input frames (keyboard data for a session's PTY); status receives a
 // session's processing state reported by the Claude Code hook (see /hook);
-// linkSession records the Claude session id a PTY reports at start (see
+// linkSession records the provider session id a PTY reports at start (see
 // /session-start); setTitle applies an auto-generated session label (see
 // /session-title); touched signals a session likely changed files on disk (see
 // /session-touched).
 func newTransport(
 	input func(id string, data []byte),
 	status func(id, state string),
-	linkSession func(sessionID, claudeSessionID string) error,
+	linkSession func(sessionID, providerSessionID string) error,
 	setTitle func(sessionID, title string) error,
 	touched func(sessionID string),
 ) (*transport, error) {
@@ -350,39 +350,46 @@ func parseHookRequest(body []byte) (hookRequest, error) {
 	return req, nil
 }
 
-// startRequest is a SessionStart POST body.
+// startRequest is a session-start POST body. LegacyClaudeSessionID accepts the
+// pre-multi-provider field name plugin releases before v0.3.0 send; parsing
+// folds it into ProviderSessionID, so nothing downstream sees two names. Drop it
+// once the install gate can no longer meet an older plugin.
 type startRequest struct {
-	SessionID       string `json:"session_id"`
-	ClaudeSessionID string `json:"claude_session_id"`
+	SessionID             string `json:"session_id"`
+	ProviderSessionID     string `json:"provider_session_id"`
+	LegacyClaudeSessionID string `json:"claude_session_id"`
 }
 
-// sessionStart receives the SessionStart POST from the Claude Code hook running
-// inside a spawned PTY and records the Claude session id against the lich
+// sessionStart receives the session-start POST from a provider's hook running
+// inside a spawned PTY and records the provider session id against the lich
 // session via the linkSession callback.
 func (t *transport) sessionStart(w http.ResponseWriter, r *http.Request) {
 	servePost(t, w, r, parseSessionStart, func(req startRequest) error {
 		if t.linkSession == nil {
 			return nil
 		}
-		if err := t.linkSession(req.SessionID, req.ClaudeSessionID); err != nil {
+		if err := t.linkSession(req.SessionID, req.ProviderSessionID); err != nil {
 			return fmt.Errorf("failed to record session: %w", err)
 		}
 		return nil
 	})
 }
 
-// parseSessionStart validates a SessionStart POST body: the lich session id and
-// the non-empty Claude session id it is reporting. Both must be present.
+// parseSessionStart validates a session-start POST body: the lich session id and
+// the non-empty provider session id it is reporting. Both must be present.
 func parseSessionStart(body []byte) (startRequest, error) {
 	var req startRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		return startRequest{}, fmt.Errorf("invalid session-start body: %w", err)
 	}
+	if req.ProviderSessionID == "" {
+		req.ProviderSessionID = req.LegacyClaudeSessionID
+	}
 	if req.SessionID == "" {
 		return startRequest{}, errors.New("session-start missing session_id")
 	}
-	if req.ClaudeSessionID == "" {
-		return startRequest{}, errors.New("session-start missing claude_session_id")
+	if req.ProviderSessionID == "" {
+		return startRequest{}, errors.New("session-start missing provider_session_id")
 	}
 	return req, nil
 }

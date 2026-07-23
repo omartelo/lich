@@ -91,11 +91,11 @@ type session struct {
 
 // Store is the persistence the terminal service depends on: the binary to spawn
 // for a provider in a project (empty return spawns the provider's default), and
-// where to record the Claude session id a PTY reports through the SessionStart
+// where to record the provider session id a PTY reports through its session-start
 // hook. The store implements both.
 type Store interface {
 	ProviderBin(providerID, projectID string) string
-	SetClaudeSession(sessionID, claudeSessionID string) error
+	SetProviderSession(sessionID, providerSessionID string) error
 	SetSessionTitle(sessionID, title string) (bool, error)
 }
 
@@ -135,8 +135,8 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 		func(id, state string) {
 			hub.Emit(statusEventName, statusEvent{ID: id, State: state})
 		},
-		func(sessionID, claudeSessionID string) error {
-			if err := store.SetClaudeSession(sessionID, claudeSessionID); err != nil {
+		func(sessionID, providerSessionID string) error {
+			if err := store.SetProviderSession(sessionID, providerSessionID); err != nil {
 				return err
 			}
 			// A SessionStart report is proof Claude is running in this PTY —

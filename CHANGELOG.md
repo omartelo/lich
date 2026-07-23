@@ -15,6 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   landing screen, with a button that opens a session when you want one. The
   sidebar's "+" still picks the kind. An empty project stays empty across a
   restart, Home included.
+- **The stored Claude session id is now a provider session id.** lich runs four
+  provider CLIs, but the column, the struct field, the store method and the
+  hook payload were all still named after Claude alone. The `sessions` table's
+  `claude_session_id` is renamed to `provider_session_id` on open (existing ids
+  carry over — the rename is the migration, nothing is stranded);
+  `store.Session.ClaudeSessionID` becomes `ProviderSessionID`
+  (`providerSessionId` over the wire), and `SetClaudeSession` becomes
+  `SetProviderSession`. The `/session-start` hook now takes
+  `provider_session_id` and still accepts the old `claude_session_id` so plugin
+  releases before v0.3.0 keep working — see `docs/hooks/session-start.md`.
+  Resume itself stays Claude-only: `--resume` is a Claude Code flag.
 
 ### Fixed
 

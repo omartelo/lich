@@ -31,7 +31,7 @@ export function ResumeSessionDialog({
         <>
           <span className="font-medium">{session?.label}</span> left a Claude
           Code session behind (
-          <span className="break-all font-mono">{session?.claudeSessionId}</span>
+          <span className="break-all font-mono">{session?.providerSessionId}</span>
           ). Resume it to pick the conversation up where it stopped, or start new
           for an empty one.
         </>

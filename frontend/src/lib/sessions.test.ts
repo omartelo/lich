@@ -47,7 +47,7 @@ describe("isSessionKind", () => {
 function withClaudeSession(
   state: SessionState,
   sessionId: string,
-  claudeSessionId: string,
+  providerSessionId: string,
   kind: "claude" | "shell" = "claude",
 ): SessionState {
   return {
@@ -55,7 +55,7 @@ function withClaudeSession(
     [P]: {
       ...state[P],
       sessions: state[P].sessions.map((s) =>
-        s.id === sessionId ? { ...s, kind, claudeSessionId } : s,
+        s.id === sessionId ? { ...s, kind, providerSessionId } : s,
       ),
     },
   }
@@ -256,7 +256,7 @@ describe("resumableSession", () => {
     const state = withClaudeSession(buildState(2), "s1", "claude-abc")
     expect(resumableSession(state, P, "s1")).toMatchObject({
       id: "s1",
-      claudeSessionId: "claude-abc",
+      providerSessionId: "claude-abc",
     })
   })
 
@@ -286,7 +286,7 @@ describe("restoreSession", () => {
     label: "swift-rabbit",
     kind: "claude" as const,
     path: "/wt/swift-rabbit",
-    claudeSessionId: "claude-abc",
+    providerSessionId: "claude-abc",
   }
 
   it("re-adds the session, focuses it, and keeps its claude session id", () => {
@@ -294,7 +294,7 @@ describe("restoreSession", () => {
     const sessions = sessionsOf(state, P)
     expect(sessions.map((s) => s.id)).toEqual(["s1", "s2", "wt2"])
     expect(activeSessionId(state, P)).toBe("wt2")
-    expect(sessions[2].claudeSessionId).toBe("claude-abc")
+    expect(sessions[2].providerSessionId).toBe("claude-abc")
   })
 
   it("does not advance the label counter (not a new numbered session)", () => {

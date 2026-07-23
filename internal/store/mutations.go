@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+
+	"github.com/omartelo/lich/internal/providers"
 )
 
 // AddProject persists a newly opened project and marks it open. Reopening a
@@ -34,14 +36,14 @@ func (s *Service) CloseProject(id string) error {
 
 // AddSession inserts a session, makes it the project's active one and records the
 // project's next label counter — all atomically, mirroring the frontend reducer.
-// Kind selects what the session's PTY runs ("claude" or "shell"); empty defaults
-// to "claude" so older callers keep the original behavior. Path is the session's
+// Kind selects what the session's PTY runs (a provider id or "shell"); empty
+// defaults to "claude" so older callers keep the original behavior. Path is the session's
 // working directory when it lives in a git worktree; empty means the project's.
 // The session takes the position after the project's last one, so it appends to
 // the card list even once the user has dragged the others around.
 func (s *Service) AddSession(projectID, sessionID, label, kind, path string, nextSeq int) error {
 	if kind == "" {
-		kind = "claude"
+		kind = providers.Claude
 	}
 	return s.tx(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(
@@ -80,7 +82,7 @@ func (s *Service) DeleteSession(projectID, sessionID, activeID string) error {
 }
 
 // CloseSession parks a session instead of deleting it: is_open flips to 0, which
-// hides it from LoadState while keeping its row — and its Claude session id —
+// hides it from LoadState while keeping its row — and its provider session id —
 // intact for a later resume. The project's active session moves to activeID (the
 // neighbor the frontend picked). The keep-the-worktree close uses this; a plain
 // close still DeleteSessions for good.
@@ -101,9 +103,9 @@ func (s *Service) CloseSession(projectID, sessionID, activeID string) error {
 
 // ReopenWorktreeSession resumes a parked worktree session. It finds the parked
 // (is_open = 0) session for the worktree at path and re-adds it to the workspace
-// under a fresh id (newSessionID), carrying over the old label, kind, Claude
+// under a fresh id (newSessionID), carrying over the old label, kind, provider
 // session id and label_auto flag. The fresh id is deliberate: it makes the frontend treat the card
-// as never-spawned, so its resume prompt fires and the Claude conversation
+// as never-spawned, so its resume prompt fires and the provider conversation
 // continues instead of starting cold. Returns nil when nothing is parked at path
 // — the caller then opens a brand-new session.
 func (s *Service) ReopenWorktreeSession(projectID, path, newSessionID string) (*Session, error) {
@@ -115,13 +117,13 @@ func (s *Service) ReopenWorktreeSession(projectID, path, newSessionID string) (*
 		// stomp the chosen name, breaking SetSessionTitle's contract.
 		var labelAuto int
 		row := tx.QueryRow(
-			`SELECT id, label, kind, claude_session_id, label_auto
+			`SELECT id, label, kind, provider_session_id, label_auto
 			   FROM sessions
 			  WHERE project_id = ? AND path = ? AND is_open = 0
 			  ORDER BY rowid DESC LIMIT 1`,
 			projectID, path,
 		)
-		if err := row.Scan(&old.ID, &old.Label, &old.Kind, &old.ClaudeSessionID, &labelAuto); err != nil {
+		if err := row.Scan(&old.ID, &old.Label, &old.Kind, &old.ProviderSessionID, &labelAuto); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil // nothing parked here; caller creates a new session
 			}
@@ -131,10 +133,10 @@ func (s *Service) ReopenWorktreeSession(projectID, path, newSessionID string) (*
 			return fmt.Errorf("drop parked session %q: %w", old.ID, err)
 		}
 		if _, err := tx.Exec(
-			`INSERT INTO sessions (id, project_id, label, kind, path, claude_session_id, label_auto, position)
+			`INSERT INTO sessions (id, project_id, label, kind, path, provider_session_id, label_auto, position)
 			 VALUES (?, ?, ?, ?, ?, ?, ?,
 			         (SELECT COALESCE(MAX(position), -1) + 1 FROM sessions WHERE project_id = ?))`,
-			newSessionID, projectID, old.Label, old.Kind, path, old.ClaudeSessionID, labelAuto, projectID,
+			newSessionID, projectID, old.Label, old.Kind, path, old.ProviderSessionID, labelAuto, projectID,
 		); err != nil {
 			return fmt.Errorf("reinsert session %q: %w", newSessionID, err)
 		}
@@ -144,7 +146,7 @@ func (s *Service) ReopenWorktreeSession(projectID, path, newSessionID string) (*
 		); err != nil {
 			return fmt.Errorf("activate reopened session on %q: %w", projectID, err)
 		}
-		restored = &Session{ID: newSessionID, Label: old.Label, Kind: old.Kind, Path: path, ClaudeSessionID: old.ClaudeSessionID}
+		restored = &Session{ID: newSessionID, Label: old.Label, Kind: old.Kind, Path: path, ProviderSessionID: old.ProviderSessionID}
 		return nil
 	})
 	if err != nil {
@@ -184,7 +186,7 @@ func (s *Service) RenameSession(sessionID, label string) error {
 	return nil
 }
 
-// SetSessionTitle sets a session's label from the Claude Code ai-title reported
+// SetSessionTitle sets a session's label from the provider's ai-title reported
 // by the Stop hook, but only while the label is still automatic: a prior
 // RenameSession clears label_auto and makes this a no-op, so a user's own name
 // is never overwritten. Reports whether the label actually changed, so the
@@ -204,17 +206,18 @@ func (s *Service) SetSessionTitle(sessionID, title string) (bool, error) {
 	return n > 0, nil
 }
 
-// SetClaudeSession records the Claude Code session id running inside a lich
-// session's PTY, reported by the SessionStart hook. A session whose row does not
-// exist yet (the hook racing session persistence) matches nothing and is not an
-// error — the id is simply dropped, which is acceptable for the features it
-// backs. Re-reporting (e.g. after a resume) overwrites with the latest id.
-func (s *Service) SetClaudeSession(sessionID, claudeSessionID string) error {
+// SetProviderSession records the provider conversation id running inside a lich
+// session's PTY, reported by the provider's session-start hook. A session whose
+// row does not exist yet (the hook racing session persistence) matches nothing
+// and is not an error — the id is simply dropped, which is acceptable for the
+// features it backs. Re-reporting (e.g. after a resume) overwrites with the
+// latest id.
+func (s *Service) SetProviderSession(sessionID, providerSessionID string) error {
 	if _, err := s.db.Exec(
-		`UPDATE sessions SET claude_session_id = ? WHERE id = ?`,
-		claudeSessionID, sessionID,
+		`UPDATE sessions SET provider_session_id = ? WHERE id = ?`,
+		providerSessionID, sessionID,
 	); err != nil {
-		return fmt.Errorf("set claude session on %q: %w", sessionID, err)
+		return fmt.Errorf("set provider session on %q: %w", sessionID, err)
 	}
 	return nil
 }

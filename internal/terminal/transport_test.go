@@ -300,16 +300,20 @@ func TestHookRejectsBadToken(t *testing.T) {
 
 func TestParseSessionStart(t *testing.T) {
 	tests := []struct {
-		name         string
-		body         string
-		wantID       string
-		wantClaudeID string
-		wantErr      bool
+		name           string
+		body           string
+		wantID         string
+		wantProviderID string
+		wantErr        bool
 	}{
-		{"ok", `{"session_id":"s1","claude_session_id":"uuid-1"}`, "s1", "uuid-1", false},
-		{"missing session id", `{"claude_session_id":"uuid-1"}`, "", "", true},
-		{"missing claude id", `{"session_id":"s1"}`, "", "", true},
-		{"empty claude id", `{"session_id":"s1","claude_session_id":""}`, "", "", true},
+		{"ok", `{"session_id":"s1","provider_session_id":"uuid-1"}`, "s1", "uuid-1", false},
+		{"legacy claude field", `{"session_id":"s1","claude_session_id":"uuid-2"}`, "s1", "uuid-2", false},
+		{"new field wins over legacy",
+			`{"session_id":"s1","provider_session_id":"uuid-1","claude_session_id":"uuid-2"}`,
+			"s1", "uuid-1", false},
+		{"missing session id", `{"provider_session_id":"uuid-1"}`, "", "", true},
+		{"missing provider id", `{"session_id":"s1"}`, "", "", true},
+		{"empty provider id", `{"session_id":"s1","provider_session_id":""}`, "", "", true},
 		{"bad json", `{`, "", "", true},
 	}
 	for _, tc := range tests {
@@ -324,9 +328,9 @@ func TestParseSessionStart(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if req.SessionID != tc.wantID || req.ClaudeSessionID != tc.wantClaudeID {
+			if req.SessionID != tc.wantID || req.ProviderSessionID != tc.wantProviderID {
 				t.Fatalf("got (%q,%q), want (%q,%q)",
-					req.SessionID, req.ClaudeSessionID, tc.wantID, tc.wantClaudeID)
+					req.SessionID, req.ProviderSessionID, tc.wantID, tc.wantProviderID)
 			}
 		})
 	}
@@ -343,7 +347,7 @@ func TestSessionStartLinksSession(t *testing.T) {
 	}
 	url := fmt.Sprintf("http://127.0.0.1:%d/session-start?token=%s", tr.port, tr.token)
 	resp, err := http.Post(url, "application/json",
-		strings.NewReader(`{"session_id":"sess","claude_session_id":"uuid-9"}`))
+		strings.NewReader(`{"session_id":"sess","provider_session_id":"uuid-9"}`))
 	if err != nil {
 		t.Fatalf("post: %v", err)
 	}
@@ -372,7 +376,7 @@ func TestSessionStartRejectsBadToken(t *testing.T) {
 	}
 	url := fmt.Sprintf("http://127.0.0.1:%d/session-start?token=wrong", tr.port)
 	resp, err := http.Post(url, "application/json",
-		strings.NewReader(`{"session_id":"s","claude_session_id":"u"}`))
+		strings.NewReader(`{"session_id":"s","provider_session_id":"u"}`))
 	if err != nil {
 		t.Fatalf("post: %v", err)
 	}
@@ -547,7 +551,7 @@ var hookEndpoints = []struct {
 	body string
 }{
 	{"/hook", `{"session_id":"s","state":"busy"}`},
-	{"/session-start", `{"session_id":"s","claude_session_id":"u"}`},
+	{"/session-start", `{"session_id":"s","provider_session_id":"u"}`},
 	{"/session-title", `{"session_id":"s","title":"t"}`},
 	{"/session-touched", `{"session_id":"s"}`},
 }
@@ -630,7 +634,7 @@ func TestStoreFailuresReport500(t *testing.T) {
 		{
 			name: "session-start link failure",
 			path: "/session-start",
-			body: `{"session_id":"s","claude_session_id":"u"}`,
+			body: `{"session_id":"s","provider_session_id":"u"}`,
 			tr: func() (*transport, error) {
 				return newTransport(func(string, []byte) {}, nil,
 					func(string, string) error { return boom }, nil, nil)

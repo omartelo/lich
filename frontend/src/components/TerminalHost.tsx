@@ -111,7 +111,7 @@ export function TerminalHost() {
         session={asking}
         onStartNew={() => asking && answerResume(asking, "")}
         onResume={() =>
-          asking && answerResume(asking, asking.claudeSessionId ?? "")
+          asking && answerResume(asking, asking.providerSessionId ?? "")
         }
       />
     </>

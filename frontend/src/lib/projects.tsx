@@ -101,7 +101,7 @@ function buildSessionState(loaded: StoreProject[]): SessionState {
       label: s.label,
       kind: isSessionKind(s.kind) ? s.kind : "claude",
       ...(s.path ? { path: s.path } : {}),
-      ...(s.claudeSessionId ? { claudeSessionId: s.claudeSessionId } : {}),
+      ...(s.providerSessionId ? { providerSessionId: s.providerSessionId } : {}),
     }))
     state[p.id] = {
       sessions,
@@ -276,7 +276,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         label: restored.label,
         kind: isSessionKind(restored.kind) ? restored.kind : "claude",
         path: restored.path,
-        ...(restored.claudeSessionId ? { claudeSessionId: restored.claudeSessionId } : {}),
+        ...(restored.providerSessionId ? { providerSessionId: restored.providerSessionId } : {}),
       }
       setSessions(restoreSession(sessionsRef.current, projectId, session))
     },

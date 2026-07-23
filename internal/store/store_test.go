@@ -100,38 +100,38 @@ func TestSessionKindPersistsAndDefaults(t *testing.T) {
 	}
 }
 
-// TestSetClaudeSessionPersistsAndDefaults proves the Claude session id survives
+// TestSetProviderSessionPersistsAndDefaults proves the provider session id survives
 // a reload, defaults to "" before the SessionStart hook reports it, and that a
 // re-report overwrites with the latest id.
-func TestSetClaudeSessionPersistsAndDefaults(t *testing.T) {
+func TestSetProviderSessionPersistsAndDefaults(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
 	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2)
 	_ = svc.AddSession("p1", "s2", "Session 2", "", "", 3)
 
-	if err := svc.SetClaudeSession("s1", "uuid-abc"); err != nil {
-		t.Fatalf("SetClaudeSession: %v", err)
+	if err := svc.SetProviderSession("s1", "uuid-abc"); err != nil {
+		t.Fatalf("SetProviderSession: %v", err)
 	}
 	// Re-report (e.g. after a resume) overwrites with the newest id.
-	if err := svc.SetClaudeSession("s1", "uuid-def"); err != nil {
-		t.Fatalf("SetClaudeSession re-report: %v", err)
+	if err := svc.SetProviderSession("s1", "uuid-def"); err != nil {
+		t.Fatalf("SetProviderSession re-report: %v", err)
 	}
 
 	sessions := mustLoadSessions(t, svc)
-	if sessions[0].ClaudeSessionID != "uuid-def" {
-		t.Errorf("s1 claude id = %q, want uuid-def", sessions[0].ClaudeSessionID)
+	if sessions[0].ProviderSessionID != "uuid-def" {
+		t.Errorf("s1 claude id = %q, want uuid-def", sessions[0].ProviderSessionID)
 	}
-	if sessions[1].ClaudeSessionID != "" {
-		t.Errorf("s2 claude id = %q, want empty", sessions[1].ClaudeSessionID)
+	if sessions[1].ProviderSessionID != "" {
+		t.Errorf("s2 claude id = %q, want empty", sessions[1].ProviderSessionID)
 	}
 }
 
-// TestSetClaudeSessionUnknownSessionNoop proves reporting for a session whose
+// TestSetProviderSessionUnknownSessionNoop proves reporting for a session whose
 // row does not exist (the hook racing persistence) is not an error.
-func TestSetClaudeSessionUnknownSessionNoop(t *testing.T) {
+func TestSetProviderSessionUnknownSessionNoop(t *testing.T) {
 	svc := newTestStore(t)
-	if err := svc.SetClaudeSession("ghost", "uuid-x"); err != nil {
-		t.Errorf("SetClaudeSession unknown = %v, want nil", err)
+	if err := svc.SetProviderSession("ghost", "uuid-x"); err != nil {
+		t.Errorf("SetProviderSession unknown = %v, want nil", err)
 	}
 }
 
@@ -349,7 +349,7 @@ func TestOperationsOnClosedStoreReturnErrors(t *testing.T) {
 	assertErr("AddSession", svc.AddSession("p1", "s1", "Session 1", "", "", 2))
 	assertErr("DeleteSession", svc.DeleteSession("p1", "s1", ""))
 	assertErr("RenameSession", svc.RenameSession("s1", "x"))
-	assertErr("SetClaudeSession", svc.SetClaudeSession("s1", "uuid"))
+	assertErr("SetProviderSession", svc.SetProviderSession("s1", "uuid"))
 	assertErr("SetActiveSession", svc.SetActiveSession("p1", "s1"))
 	if _, err := svc.SetSessionTitle("s1", "x"); err == nil {
 		t.Error("SetSessionTitle on closed store = nil error, want error")
@@ -533,7 +533,7 @@ func TestOpenMigratesPreMigrationDatabase(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "old.db")
 
 	// The schema as it stood before the migrations: sessions without
-	// kind/path/claude_session_id/label_auto/position, projects without
+	// kind/path/provider_session_id/label_auto/position, projects without
 	// position.
 	const oldSchema = `
 CREATE TABLE projects (
@@ -584,6 +584,66 @@ CREATE TABLE sessions (
 	}
 }
 
+// TestOpenRenamesClaudeSessionColumn proves the multi-provider rename carries
+// stored ids over instead of stranding them: a database still on the
+// claude_session_id column comes back with its values readable under
+// provider_session_id.
+func TestOpenRenamesClaudeSessionColumn(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "claude-column.db")
+
+	// The schema as it stood while the column was Claude-specific.
+	const claudeSchema = `
+CREATE TABLE projects (
+    id                TEXT    PRIMARY KEY,
+    name              TEXT    NOT NULL,
+    path              TEXT    NOT NULL,
+    is_open           INTEGER NOT NULL DEFAULT 1,
+    next_seq          INTEGER NOT NULL DEFAULT 1,
+    active_session_id TEXT    NOT NULL DEFAULT '',
+    position          INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE sessions (
+    id                TEXT NOT NULL PRIMARY KEY,
+    project_id        TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    label             TEXT NOT NULL,
+    kind              TEXT NOT NULL DEFAULT 'claude',
+    path              TEXT NOT NULL DEFAULT '',
+    claude_session_id TEXT NOT NULL DEFAULT '',
+    label_auto        INTEGER NOT NULL DEFAULT 1,
+    is_open           INTEGER NOT NULL DEFAULT 1,
+    position          INTEGER NOT NULL DEFAULT 0
+);
+INSERT INTO projects (id, name, path) VALUES ('p1', 'alpha', '/tmp/alpha');
+INSERT INTO sessions (id, project_id, label, claude_session_id)
+     VALUES ('s1', 'p1', 'Session 1', 'uuid-kept');`
+
+	seed, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open seed db: %v", err)
+	}
+	if _, err := seed.Exec(claudeSchema); err != nil {
+		t.Fatalf("seed claude schema: %v", err)
+	}
+	_ = seed.Close()
+
+	svc, err := open(path)
+	if err != nil {
+		t.Fatalf("open claude-column db: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.Close() })
+
+	got, err := svc.LoadState()
+	if err != nil {
+		t.Fatalf("LoadState: %v", err)
+	}
+	if len(got) != 1 || len(got[0].Sessions) != 1 {
+		t.Fatalf("state after rename = %+v", got)
+	}
+	if id := got[0].Sessions[0].ProviderSessionID; id != "uuid-kept" {
+		t.Errorf("provider session id = %q, want uuid-kept", id)
+	}
+}
+
 // TestCloseSessionParksAndReopenRestores proves a kept worktree session survives
 // close as a hidden (parked) row and comes back — under a fresh id, with its
 // Claude session id intact — when its worktree is resumed.
@@ -596,8 +656,8 @@ func TestCloseSessionParksAndReopenRestores(t *testing.T) {
 	if err := svc.AddSession("p1", "wt", "swift-rabbit", "claude", "/data/wt/swift-rabbit", 3); err != nil {
 		t.Fatalf("AddSession worktree: %v", err)
 	}
-	if err := svc.SetClaudeSession("wt", "claude-uuid-1"); err != nil {
-		t.Fatalf("SetClaudeSession: %v", err)
+	if err := svc.SetProviderSession("wt", "claude-uuid-1"); err != nil {
+		t.Fatalf("SetProviderSession: %v", err)
 	}
 
 	// Keep-close parks the worktree session: gone from the workspace, base active.
@@ -625,7 +685,7 @@ func TestCloseSessionParksAndReopenRestores(t *testing.T) {
 		t.Fatal("ReopenWorktreeSession = nil, want the parked session")
 	}
 	if restored.ID != "wt2" || restored.Label != "swift-rabbit" ||
-		restored.Path != "/data/wt/swift-rabbit" || restored.ClaudeSessionID != "claude-uuid-1" {
+		restored.Path != "/data/wt/swift-rabbit" || restored.ProviderSessionID != "claude-uuid-1" {
 		t.Errorf("restored = %+v, want {wt2 swift-rabbit /data/wt/swift-rabbit claude-uuid-1}", restored)
 	}
 
@@ -638,7 +698,7 @@ func TestCloseSessionParksAndReopenRestores(t *testing.T) {
 	}
 	// The parked row is consumed, not duplicated: exactly one row for the path.
 	got := projects[0].Sessions[1]
-	if got.ID != "wt2" || got.ClaudeSessionID != "claude-uuid-1" {
+	if got.ID != "wt2" || got.ProviderSessionID != "claude-uuid-1" {
 		t.Errorf("reopened session = %+v, want id=wt2 claude=claude-uuid-1", got)
 	}
 	if projects[0].ActiveSessionID != "wt2" {

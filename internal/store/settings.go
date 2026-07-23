@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+
+	"github.com/omartelo/lich/internal/providers"
 )
 
 // claudeBinKey is the settings key holding the Claude Code binary path. Claude
@@ -49,7 +51,7 @@ func (s *Service) SetSetting(key, projectID, value string) error {
 // binKey is the settings key holding a provider's custom binary path. Claude
 // uses the legacy "claude.bin"; every other provider is namespaced by id.
 func binKey(providerID string) string {
-	if providerID == "claude" {
+	if providerID == providers.Claude {
 		return claudeBinKey
 	}
 	return "provider." + providerID + ".bin"
@@ -76,5 +78,5 @@ func (s *Service) ProviderBin(providerID, projectID string) string {
 // ClaudeBin is ProviderBin for Claude Code, kept for the plugin service that
 // resolves the same binary outside the terminal's spawn path.
 func (s *Service) ClaudeBin(projectID string) string {
-	return s.ProviderBin("claude", projectID)
+	return s.ProviderBin(providers.Claude, projectID)
 }

@@ -80,7 +80,7 @@ async function post(path: string): Promise<void> {
 }
 
 export const Terminal = {
-  /** resume: a Claude session id to reopen (--resume); "" starts fresh. */
+  /** resume: a provider session id to reopen (--resume); "" starts fresh. */
   Start: (
     id: string,
     projectID: string,
@@ -168,7 +168,6 @@ export const Store = {
   GetSetting: (key: string, projectID: string) => call<string>("store.GetSetting", [key, projectID]),
   SetSetting: (key: string, projectID: string, value: string) =>
     call<null>("store.SetSetting", [key, projectID, value]),
-  ClaudeBin: (projectID: string) => call<string>("store.ClaudeBin", [projectID]),
 }
 
 export const Fonts = {
