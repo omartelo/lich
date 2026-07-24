@@ -64,7 +64,7 @@ function BranchGroup({title, count, open, onToggle, children}: BranchGroupProps)
         type="button"
         aria-expanded={open}
         onClick={onToggle}
-        className="sticky top-0 z-10 flex w-full items-center gap-1.5 border-y border-border bg-muted px-2.5 py-1.5 text-[0.625rem] font-semibold tracking-wider text-muted-foreground uppercase outline-none first:border-t-0 hover:text-foreground"
+        className="sticky top-0 z-10 flex w-full items-center gap-1.5 border-y border-border bg-popover px-2.5 py-1.5 text-[0.625rem] font-semibold tracking-wider text-muted-foreground uppercase outline-none first:border-t-0 hover:text-foreground"
       >
         <ChevronRight className={cn("size-3 transition-transform", open && "rotate-90")}/>
         {title}
