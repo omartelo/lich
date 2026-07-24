@@ -168,14 +168,14 @@ export function SessionSidebar() {
           render={
             <Button
               variant="ghost"
-              className="mb-2 w-full justify-start gap-2 bg-accent/50 text-foreground hover:bg-accent aria-expanded:bg-accent"
+              className="mb-2 w-full justify-start gap-2 text-foreground hover:bg-accent aria-expanded:bg-accent"
             />
           }
         >
           <Plus className="size-4 text-muted-foreground"/>
           New Session
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className={"w-44"}>
+        <DropdownMenuContent align="start" className="max-w-56">
           <DropdownMenuGroup>
             {enabled.map((provider) => (
               <DropdownMenuItem
@@ -193,9 +193,6 @@ export function SessionSidebar() {
               <Terminal/>
               Terminal
             </DropdownMenuItem>
-          </DropdownMenuGroup>
-          <DropdownMenuSeparator/>
-          <DropdownMenuGroup>
             <DropdownMenuItem
               disabled={!git?.branch}
               onClick={() => setWorktreeOpen(true)}
