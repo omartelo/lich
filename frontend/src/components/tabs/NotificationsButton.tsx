@@ -6,6 +6,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {notificationsFrom} from "@/lib/notifications"
@@ -61,19 +62,28 @@ export function NotificationsButton() {
         {items.length > 0 && (
           <span
             aria-label={`${items.length} pending`}
-            className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[0.625rem] font-medium leading-none text-primary-foreground"
-          >
-            {items.length}
-          </span>
+            className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-red-500 ring-2 ring-sidebar"
+          />
         )}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
+      <DropdownMenuContent align="end" className="w-72">
+        {/* Plain divs, not DropdownMenuLabel: that is base-ui's Menu.GroupLabel
+            and throws outside a Menu.Group (it writes the label id into the
+            group context). These are a header and a placeholder, not labels. */}
+        <div className="flex items-center justify-between px-2 py-1.5">
+          <span className="text-xs font-semibold tracking-wide text-foreground">
+            Notifications
+          </span>
+          {items.length > 0 && (
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {items.length}
+            </span>
+          )}
+        </div>
+        <DropdownMenuSeparator/>
         {items.length === 0 ? (
-          // Plain text, not DropdownMenuLabel: that is base-ui's Menu.GroupLabel
-          // and throws outside a Menu.Group (it writes the label id into the
-          // group context). The empty state is just a placeholder, not a label.
-          <div className="px-2 py-1.5 text-xs text-muted-foreground">
-            No notifications
+          <div className="px-2 py-6 text-center text-xs text-muted-foreground">
+            You&apos;re all caught up
           </div>
         ) : (
           items.map((item) => (
