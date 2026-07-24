@@ -1,6 +1,6 @@
 import {useEffect, useRef, useState} from "react"
-import type {ReactNode} from "react"
-import {ChevronRight} from "lucide-react"
+import type {KeyboardEvent} from "react"
+import {Search} from "lucide-react"
 import {ProjectService} from "@/lib/rpc"
 import type {Branches, Worktree} from "@/lib/api-types"
 import {Button} from "@/components/ui/button"
@@ -39,71 +39,69 @@ const splitValue = (value: string): [string, string] => {
   return [value.slice(0, sep), value.slice(sep + 1)]
 }
 
-type GroupKey = "worktrees" | "local" | "remote"
-
-// Local starts open (it holds the preselected current branch); the other groups
-// start collapsed so long branch lists don't bury each other.
-const DEFAULT_OPEN_GROUPS: Record<GroupKey, boolean> = {
-  worktrees: false,
-  local: true,
-  remote: false,
+// filterBranches narrows every group to the rows matching the search, so a repo
+// with dozens of remote branches collapses to the one being looked for.
+function filterBranches(branches: Branches | null, query: string) {
+  const needle = query.trim().toLowerCase()
+  const match = (name: string) => name.toLowerCase().includes(needle)
+  return {
+    worktrees: (branches?.worktrees ?? []).filter((w) => match(w.name)),
+    local: (branches?.local ?? []).filter(match),
+    remote: (branches?.remote ?? []).filter(match),
+  }
 }
 
-interface BranchGroupProps {
+// flatValues is the visible rows in display order, so arrow keys and the
+// filter's auto-select can walk them without caring which group they sit in.
+function flatValues(vis: ReturnType<typeof filterBranches>): string[] {
+  return [
+    ...vis.worktrees.map((w) => valueOf("worktree", w.path)),
+    ...vis.local.map((b) => valueOf("local", b)),
+    ...vis.remote.map((b) => valueOf("remote", b)),
+  ]
+}
+
+interface GroupProps {
   title: string
-  count: number
-  open: boolean
-  onToggle: () => void
-  children: ReactNode
+  items: ReadonlyArray<{ value: string; label: string }>
+  base: string
+  onSelect: (value: string) => void
 }
 
-function BranchGroup({title, count, open, onToggle, children}: BranchGroupProps) {
+function Group({title, items, base, onSelect}: GroupProps) {
+  if (items.length === 0) {
+    return null
+  }
   return (
-    <>
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={onToggle}
-        className="sticky top-0 z-10 flex w-full items-center gap-1.5 border-y border-border bg-popover px-2.5 py-1.5 text-[0.625rem] font-semibold tracking-wider text-muted-foreground uppercase outline-none first:border-t-0 hover:text-foreground"
-      >
-        <ChevronRight className={cn("size-3 transition-transform", open && "rotate-90")}/>
-        {title}
-        <span className="font-normal">({count})</span>
-      </button>
-      {open && children}
-    </>
-  )
-}
-
-interface BranchRowProps {
-  label: string
-  selected: boolean
-  onSelect: () => void
-}
-
-function BranchRow({label, selected, onSelect}: BranchRowProps) {
-  return (
-    <button
-      type="button"
-      role="option"
-      aria-selected={selected}
-      onClick={onSelect}
-      className={cn(
-        "flex w-full items-center py-1.5 pr-2.5 pl-4 text-left font-mono text-xs outline-none",
-        selected
-          ? "bg-accent text-accent-foreground"
-          : "text-foreground hover:bg-accent/50",
-      )}
-    >
-      <span className="truncate">{label}</span>
-    </button>
+    <div>
+      <div className="px-2 pb-1 pt-2 text-[0.625rem] font-semibold tracking-wider text-muted-foreground uppercase">
+        {title} <span className="font-normal">({items.length})</span>
+      </div>
+      {items.map((item) => (
+        <button
+          key={item.value}
+          type="button"
+          role="option"
+          aria-selected={base === item.value}
+          onClick={() => onSelect(item.value)}
+          className={cn(
+            "flex w-full items-center rounded-md px-2 py-1.5 text-left font-mono text-xs outline-none transition-colors",
+            base === item.value
+              ? "bg-accent text-accent-foreground"
+              : "hover:bg-accent/50",
+          )}
+        >
+          <span className="truncate">{item.label}</span>
+        </button>
+      ))}
+    </div>
   )
 }
 
 // WorktreeDialog collects a worktree name (blank = random adjective-noun) and a
-// base picked from an inline grouped list — existing worktrees to resume, then
-// local and remote branches (remote bases are fetched and tracked). It stays
-// open on failure so git's error is readable in place.
+// base picked from a searchable list — existing worktrees to resume, then local
+// and remote branches (remote bases are fetched and tracked). It stays open on
+// failure so git's error is readable in place.
 export function WorktreeDialog({
                                  open,
                                  onOpenChange,
@@ -115,22 +113,26 @@ export function WorktreeDialog({
   const [branches, setBranches] = useState<Branches | null>(null)
   const [name, setName] = useState("")
   const [base, setBase] = useState("")
+  const [filter, setFilter] = useState("")
   const [loadError, setLoadError] = useState("")
   const [submitError, setSubmitError] = useState("")
   const [submitting, setSubmitting] = useState(false)
-  const [openGroups, setOpenGroups] = useState(DEFAULT_OPEN_GROUPS)
   const listRef = useRef<HTMLDivElement>(null)
 
-  const toggleGroup = (key: GroupKey) =>
-    setOpenGroups((prev) => ({...prev, [key]: !prev[key]}))
+  const vis = filterBranches(branches, filter)
+  const flat = flatValues(vis)
+  const noMatches = branches !== null && flat.length === 0
+  const trimmed = name.trim()
+  const nameInvalid = trimmed !== "" && !isValidBranchName(trimmed)
+  const isResume = base.startsWith("worktree:")
 
-  // Bring the preselected base (current branch) into view once the list loads;
-  // it usually sits inside the Local group, below the fold.
+  // Keep the selected base in view as it changes — the preselected current
+  // branch after load, or the row arrow keys walk to.
   useEffect(() => {
     listRef.current
       ?.querySelector('[aria-selected="true"]')
-      ?.scrollIntoView({block: "center"})
-  }, [branches])
+      ?.scrollIntoView({block: "nearest"})
+  }, [base, branches])
 
   useEffect(() => {
     if (!open) {
@@ -139,10 +141,10 @@ export function WorktreeDialog({
     setBranches(null)
     setName("")
     setBase("")
+    setFilter("")
     setLoadError("")
     setSubmitError("")
     setSubmitting(false)
-    setOpenGroups(DEFAULT_OPEN_GROUPS)
     let stale = false
     ProjectService.ListBranches(projectPath)
       .then((loaded) => {
@@ -153,11 +155,6 @@ export function WorktreeDialog({
         const local = loaded.local ?? []
         const preferred = local.includes(currentBranch) ? currentBranch : local[0]
         setBase(preferred ? valueOf("local", preferred) : "")
-        // Existing worktrees are the resume targets; surface the group so a
-        // closed-but-kept worktree is one click away instead of behind a fold.
-        if ((loaded.worktrees ?? []).length > 0) {
-          setOpenGroups((prev) => ({...prev, worktrees: true}))
-        }
       })
       .catch((err: unknown) => {
         if (!stale) {
@@ -169,18 +166,45 @@ export function WorktreeDialog({
     }
   }, [open, projectPath, currentBranch])
 
-  const local = branches?.local ?? []
-  const remote = branches?.remote ?? []
-  const worktrees = branches?.worktrees ?? []
-  const empty = branches !== null && !local.length && !remote.length && !worktrees.length
-  const trimmed = name.trim()
-  const nameInvalid = trimmed !== "" && !isValidBranchName(trimmed)
-  const isResume = base.startsWith("worktree:")
+  // Typing a filter drops the current base only when it scrolls out of view, so
+  // "type develop, press Enter" lands on the top match without a click.
+  const onFilter = (value: string) => {
+    setFilter(value)
+    const next = flatValues(filterBranches(branches, value))
+    if (next.length > 0 && !next.includes(base)) {
+      setBase(next[0])
+    }
+  }
+
+  const move = (delta: number) => {
+    if (flat.length === 0) {
+      return
+    }
+    const idx = flat.indexOf(base)
+    const next = Math.min(Math.max((idx < 0 ? 0 : idx) + delta, 0), flat.length - 1)
+    setBase(flat[next])
+  }
+
+  const onSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault()
+      move(1)
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault()
+      move(-1)
+    } else if (event.key === "Enter") {
+      event.preventDefault()
+      if (!nameInvalid && base && !submitting) {
+        void submit()
+      }
+    }
+  }
 
   const submit = async () => {
     const [group, id] = splitValue(base)
     if (group === "worktree") {
-      const wt = worktrees.find((w: Worktree) => w.path === id)
+      const wt = vis.worktrees.find((w: Worktree) => w.path === id)
+        ?? branches?.worktrees?.find((w: Worktree) => w.path === id)
       if (wt) {
         onResume({name: wt.name, path: wt.path})
       }
@@ -239,66 +263,53 @@ export function WorktreeDialog({
               <span className="text-xs text-muted-foreground">Loading branches…</span>
             )}
           </div>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={filter}
+              onChange={(e) => onFilter(e.target.value)}
+              onKeyDown={onSearchKeyDown}
+              placeholder="Search branches…"
+              aria-label="Search base branches"
+              autoComplete="off"
+              spellCheck={false}
+              className="pl-8 font-mono"
+            />
+          </div>
           <div
             ref={listRef}
             role="listbox"
             aria-label="Base branch"
-            className="min-h-0 flex-1 overflow-y-auto rounded-md border border-input"
+            className="min-h-0 flex-1 overflow-y-auto rounded-md border border-input p-1"
           >
-            {worktrees.length > 0 && (
-              <BranchGroup
-                title="Worktrees"
-                count={worktrees.length}
-                open={openGroups.worktrees}
-                onToggle={() => toggleGroup("worktrees")}
-              >
-                {worktrees.map((wt: Worktree) => (
-                  <BranchRow
-                    key={wt.path}
-                    label={wt.name}
-                    selected={base === valueOf("worktree", wt.path)}
-                    onSelect={() => setBase(valueOf("worktree", wt.path))}
-                  />
-                ))}
-              </BranchGroup>
-            )}
-            {local.length > 0 && (
-              <BranchGroup
-                title="Local branches"
-                count={local.length}
-                open={openGroups.local}
-                onToggle={() => toggleGroup("local")}
-              >
-                {local.map((branch) => (
-                  <BranchRow
-                    key={branch}
-                    label={branch}
-                    selected={base === valueOf("local", branch)}
-                    onSelect={() => setBase(valueOf("local", branch))}
-                  />
-                ))}
-              </BranchGroup>
-            )}
-            {remote.length > 0 && (
-              <BranchGroup
-                title="Remote branches"
-                count={remote.length}
-                open={openGroups.remote}
-                onToggle={() => toggleGroup("remote")}
-              >
-                {remote.map((branch) => (
-                  <BranchRow
-                    key={branch}
-                    label={branch}
-                    selected={base === valueOf("remote", branch)}
-                    onSelect={() => setBase(valueOf("remote", branch))}
-                  />
-                ))}
-              </BranchGroup>
-            )}
-            {empty && (
-              <div className="px-2.5 py-2 text-xs text-muted-foreground">
-                No branches found
+            <Group
+              title="Worktrees"
+              items={vis.worktrees.map((wt) => ({value: valueOf("worktree", wt.path), label: wt.name}))}
+              base={base}
+              onSelect={setBase}
+            />
+            <Group
+              title="Local branches"
+              items={vis.local.map((branch) => ({value: valueOf("local", branch), label: branch}))}
+              base={base}
+              onSelect={setBase}
+            />
+            <Group
+              title="Remote branches"
+              items={vis.remote.map((branch) => ({value: valueOf("remote", branch), label: branch}))}
+              base={base}
+              onSelect={setBase}
+            />
+            {noMatches && (
+              <div className="px-2 py-6 text-center text-xs text-muted-foreground">
+                {filter.trim() ? (
+                  <>
+                    No branches match{" "}
+                    <span className="font-mono text-foreground/80">{filter.trim()}</span>
+                  </>
+                ) : (
+                  "No branches found"
+                )}
               </div>
             )}
           </div>
