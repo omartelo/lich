@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { displayPath } from "./paths"
+import { baseName, displayPath } from "./paths"
 
 describe("displayPath", () => {
   it("collapses a POSIX home prefix to ~", () => {
@@ -18,5 +18,24 @@ describe("displayPath", () => {
     expect(displayPath("/opt/app/data")).toBe("/opt/app/data")
     expect(displayPath("/home")).toBe("/home")
     expect(displayPath("")).toBe("")
+  })
+})
+
+describe("baseName", () => {
+  it("returns the final POSIX segment", () => {
+    expect(baseName("/home/me/try/skipo")).toBe("skipo")
+  })
+
+  it("ignores a trailing slash", () => {
+    expect(baseName("/home/me/try/skipo/")).toBe("skipo")
+  })
+
+  it("handles Windows separators", () => {
+    expect(baseName("C:\\Users\\me\\worktrees\\windows-port")).toBe("windows-port")
+  })
+
+  it("returns empty for a root or empty path", () => {
+    expect(baseName("/")).toBe("")
+    expect(baseName("")).toBe("")
   })
 })

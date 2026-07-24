@@ -240,6 +240,33 @@ export function sessionsOf(state: SessionState, projectId: string): Session[] {
   return state[projectId]?.sessions ?? []
 }
 
+// A worktree's sessions under one roof. `path` is the checkout root ("" for the
+// project's own directory); `sessions` keeps the group's flat relative order.
+export interface SessionGroup {
+  path: string
+  sessions: Session[]
+}
+
+// groupByWorktree buckets sessions by their static checkout path (session.path;
+// "" = the project root), keeping first-appearance order for the groups and flat
+// order within each. It keys off the spawn-time path, never a live cwd, so a `cd`
+// deeper into a checkout never moves a card to another group.
+export function groupByWorktree(sessions: Session[]): SessionGroup[] {
+  const groups: SessionGroup[] = []
+  const byPath = new Map<string, SessionGroup>()
+  for (const session of sessions) {
+    const path = session.path ?? ""
+    let group = byPath.get(path)
+    if (!group) {
+      group = { path, sessions: [] }
+      byPath.set(path, group)
+      groups.push(group)
+    }
+    group.sessions.push(session)
+  }
+  return groups
+}
+
 // True only for the last session in a worktree checkout. Removing a checkout a
 // sibling session still occupies would throw away its work, so only the last
 // occupant gets offered the keep/remove prompt.
