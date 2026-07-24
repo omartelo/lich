@@ -48,11 +48,11 @@ export function RightDock({tab, onTab, onClose}: RightDockProps) {
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-2">
         <Tabs value={tab} onValueChange={(value) => onTab(value as DockTab)} className={"h-8"}>
           <TabsList className="h-auto p-0.5 bg-transparent gap-1">
-            <TabsTrigger value="files" className="gap-1 px-2 py-0.5 text-xs hover:bg-muted">
+            <TabsTrigger value="files" className="gap-1 rounded-md px-2 py-0.5 text-xs hover:bg-accent/50 data-active:bg-accent data-active:text-accent-foreground dark:data-active:border-transparent dark:data-active:bg-accent dark:data-active:text-accent-foreground">
               <Code className="size-3.5"/>
               Code
             </TabsTrigger>
-            <TabsTrigger value="review" className="gap-1 px-2 py-0.5 text-xs hover:bg-muted">
+            <TabsTrigger value="review" className="gap-1 rounded-md px-2 py-0.5 text-xs hover:bg-accent/50 data-active:bg-accent data-active:text-accent-foreground dark:data-active:border-transparent dark:data-active:bg-accent dark:data-active:text-accent-foreground">
               <FileDiff className="size-3.5"/>
               Review
               {status && status.files > 0 && (
