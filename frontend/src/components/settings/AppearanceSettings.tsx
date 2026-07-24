@@ -86,7 +86,7 @@ export function AppearanceSettings() {
             >
               <ZoomOut />
             </Button>
-            <div className="min-w-16 rounded-lg border border-border px-3 py-1.5 text-center text-sm tabular-nums text-foreground">
+            <div className="flex h-9 min-w-16 items-center justify-center rounded-lg border border-border px-3 text-sm tabular-nums text-foreground">
               {Math.round(zoom * 100)}%
             </div>
             <Button
@@ -139,7 +139,7 @@ export function AppearanceSettings() {
             >
               <Minus />
             </Button>
-            <div className="min-w-16 rounded-lg border border-border px-3 py-1.5 text-center text-sm tabular-nums text-foreground">
+            <div className="flex h-9 min-w-16 items-center justify-center rounded-lg border border-border px-3 text-sm tabular-nums text-foreground">
               {terminalFontSize}px
             </div>
             <Button
