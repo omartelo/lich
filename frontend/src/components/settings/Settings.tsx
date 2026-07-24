@@ -2,7 +2,6 @@ import { useState } from "react"
 import type { ReactNode } from "react"
 import { useParams } from "react-router-dom"
 import { Search } from "lucide-react"
-import { TerminalSettings } from "./TerminalSettings"
 import { AppearanceSettings } from "./AppearanceSettings"
 import { HotkeysSettings } from "./HotkeysSettings"
 import { ProvidersSettings } from "./ProvidersSettings"
@@ -27,7 +26,6 @@ interface Section {
 // toggles; enabling a provider adds its own section below (see providerSections).
 const BASE_SECTIONS: Section[] = [
   { id: "appearance", label: "Appearance", group: "app", render: () => <AppearanceSettings /> },
-  { id: "terminal", label: "Terminal", group: "app", render: () => <TerminalSettings /> },
   { id: "hotkeys", label: "Hotkeys", group: "app", render: () => <HotkeysSettings /> },
   { id: "providers", label: "Providers", group: "app", render: () => <ProvidersSettings /> },
   { id: "worktree", label: "Worktree", group: "app", render: (id) => <WorktreeSetupSettings projectId={id} /> },

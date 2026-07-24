@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select"
 import { SettingBlock } from "./SettingBlock"
 
-export function TerminalSettings() {
+export function FontSetting() {
   const { font, setFont } = useSettings()
   const [families, setFamilies] = useState<string[]>([])
 
