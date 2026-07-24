@@ -37,7 +37,7 @@ export function ProjectTab({ project, sessionIds, onClose }: ProjectTabProps) {
         title={project.path}
         className={({ isActive }) =>
           cn(
-            "group flex h-8 max-w-52 items-center gap-2 rounded-md px-3 text-sm text-muted-foreground transition-colors hover:bg-accent/60",
+            "group flex h-8 max-w-52 items-center gap-2 rounded-md px-3 text-sm text-muted-foreground transition-colors hover:text-foreground",
             isActive && "bg-accent font-medium text-accent-foreground",
           )
         }

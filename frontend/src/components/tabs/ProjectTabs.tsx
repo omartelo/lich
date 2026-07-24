@@ -35,7 +35,7 @@ export function ProjectTabs() {
   const showHome = homeId !== null && projects.some((p) => p.id === homeId)
 
   return (
-    <div className="flex h-11 shrink-0 items-center gap-1 border-b border-border bg-sidebar px-2">
+    <div className="flex h-10 shrink-0 items-center gap-1 border-b border-border bg-sidebar px-2">
       <div className="flex flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden">
         {showHome && homeId && <HomeTab projectId={homeId}/>}
         <DndContext
