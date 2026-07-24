@@ -42,6 +42,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The light theme no longer glares.** Every surface was pure white, so panels
+  had no separation and the large terminal pane was blinding. Light is now a
+  soft light-gray canvas with near-white raised chrome, mirroring the dark
+  theme's depth: the ground (and terminal) sit darker than the sidebar, cards
+  and menus that lift above them, and the hover/selection fill is dark enough to
+  read again.
 - **A deletion line no longer bleeds through a diff file's sticky header.** The
   header's rounded corners let the red of a scrolled-under deletion peek out; it
   now sits flush and covers the content beneath it.

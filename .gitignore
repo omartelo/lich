@@ -7,3 +7,5 @@ bin
 frontend/dist
 frontend/node_modules
 frontend/coverage
+# tsc --build incremental cache
+*.tsbuildinfo

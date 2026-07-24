@@ -89,11 +89,11 @@ function fitTerminal(term: Terminal, container: HTMLElement): void {
   }
 }
 
-// Light keeps a high-contrast foreground so CLI output stays legible against
-// the pale background.
+// Light matches the app's light-gray canvas (--background) rather than pure
+// white, which glared; the dark foreground keeps CLI output high-contrast.
 const TERMINAL_COLORS: Record<ResolvedTheme, { background: string; foreground: string }> = {
   dark: { background: "#06070f", foreground: "#e5e7eb" },
-  light: { background: "#ffffff", foreground: "#1f2328" },
+  light: { background: "#e8e8ea", foreground: "#1f2328" },
 }
 
 // ensureFontLoaded blocks until a font is available. The renderer measures
