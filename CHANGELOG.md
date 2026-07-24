@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-07-24
+
 ### Added
 
 - **The session sidebar now groups by worktree.** With several worktrees open,
@@ -838,7 +840,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/omartelo/lich/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/omartelo/lich/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/omartelo/lich/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/omartelo/lich/compare/v0.13.0...v0.14.0
