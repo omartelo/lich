@@ -131,9 +131,8 @@ export function SessionCard({
                     type="button"
                     onClick={onSelect}
                     className={cn(
-                      "group relative flex w-full flex-col items-start gap-0.5 rounded-lg border border-border/60 bg-card px-3 py-3 text-left transition-colors hover:bg-accent/60",
-                      active &&
-                      "border-accent-foreground/20 bg-accent text-accent-foreground",
+                      "group relative flex w-full flex-col items-start gap-0.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-accent/60",
+                      active && "bg-accent text-accent-foreground",
                     )}
                   />
                 }
@@ -188,16 +187,14 @@ export function SessionCard({
                           event.stopPropagation()
                           void System.OpenExternal(pr.url)
                         }}
-                        className="flex items-center gap-1 px-1 py-0.5 bg-muted-foreground/10 rounded transition-colors hover:bg-accent hover:text-accent-foreground"
+                        className="flex items-center gap-1 rounded-sm transition-colors hover:text-foreground"
                       >
                         <GitPullRequestArrow className="size-3 shrink-0"/>
                         #{pr.number}
                       </span>
                     )}
                     {git.files > 0 && (
-                      <span className="flex items-center gap-1 px-1 py-0.5 bg-muted-foreground/10 rounded">
-                        <DiffStat added={git.added} deleted={git.deleted}/>
-                      </span>
+                      <DiffStat added={git.added} deleted={git.deleted}/>
                     )}
                   </span>
               </span>

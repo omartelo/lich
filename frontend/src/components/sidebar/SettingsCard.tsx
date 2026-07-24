@@ -17,8 +17,8 @@ export function SettingsCard({ active, onSelect, onClose }: SettingsCardProps) {
       type="button"
       onClick={onSelect}
       className={cn(
-        "group relative flex w-full items-center gap-2 rounded-lg border border-border/60 bg-card px-3 py-3 text-left text-sm font-medium text-foreground transition-colors hover:bg-accent/60",
-        active && "border-accent-foreground/20 bg-accent text-accent-foreground",
+        "group relative flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm font-medium text-foreground transition-colors hover:bg-accent/60",
+        active && "bg-accent text-accent-foreground",
       )}
     >
       <Settings className="size-4 shrink-0 text-muted-foreground" />
