@@ -1,7 +1,7 @@
 <div align="center">
   <img src="frontend/public/appicon.png" alt="lich" width="88" height="88" />
   <h1>lich</h1>
-  <p><strong>A personal harness for coding with AI agents.</strong></p>
+  <p><strong>A terminal-first harness for coding with AI agents.</strong></p>
   <p>
     Open your projects, run agents like Claude Code, Codex, opencode or Crush in
     real terminals, and keep git — worktrees and all — in view without leaving
