@@ -27,7 +27,7 @@ export function ProjectTab({ project, sessionIds, onClose }: ProjectTabProps) {
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
         "shrink-0",
-        isDragging && "z-10 rounded-lg bg-accent shadow-md",
+        isDragging && "z-10 rounded-md bg-accent shadow-md",
       )}
       {...attributes}
       {...listeners}
@@ -37,8 +37,8 @@ export function ProjectTab({ project, sessionIds, onClose }: ProjectTabProps) {
         title={project.path}
         className={({ isActive }) =>
           cn(
-            "group flex h-8 max-w-52 items-center gap-2 rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:bg-accent/60",
-            isActive && "bg-accent text-accent-foreground",
+            "group flex h-8 max-w-52 items-center gap-2 rounded-md px-3 text-sm text-muted-foreground transition-colors hover:bg-accent/60",
+            isActive && "bg-accent font-medium text-accent-foreground",
           )
         }
       >

@@ -17,7 +17,7 @@ export function HomeTab({ projectId }: HomeTabProps) {
       aria-label="Home"
       className={({ isActive }) =>
         cn(
-          "flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent/60",
+          "flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/60",
           isActive && "bg-accent text-accent-foreground",
         )
       }

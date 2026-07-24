@@ -66,6 +66,7 @@ export function ProjectTabs() {
           <Plus className="size-4"/>
         </Button>
       </div>
+      <div aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border"/>
       <NotificationsButton/>
       <Button
         variant="ghost"
