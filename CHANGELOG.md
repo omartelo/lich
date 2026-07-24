@@ -18,6 +18,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   path fixed at spawn, never its live cwd — a `cd` deeper into the tree never
   moves a card to another group. A drag reorders within a group only, and a
   project with no worktrees keeps its old flat, header-less list.
+- **Search the base branch when creating a worktree.** The New Worktree
+  dialog's base picker is now a filter: type to narrow the worktrees, local and
+  remote branches by name and pick with the arrow keys or the mouse — finding
+  `develop` or `main` in a repo with dozens of remote branches no longer means
+  scrolling a collapsed list.
+- **Collapse or expand every file in a review at once.** A toggle in the review
+  dock header folds the whole diff down to its file headers, or opens it all
+  back up, so a large changeset is quick to skim.
+
+### Changed
+
+- **The interface has been reskinned.** One idiom throughout — elements are
+  defined by spacing, hover and hairline seams instead of nested bordered
+  boxes: session and settings cards become borderless rows, review file diffs
+  become open surfaces separated by a hairline, footer and menu controls lose
+  their chip borders, and the segmented controls, tabs and dialogs tighten up.
+  The zinc palette and the window layout are unchanged.
+- **Notifications read cleaner.** The bell shows a small red dot instead of a
+  white count; the count moves into a titled dropdown, and the "needs your
+  input" toast gains an amber icon and the name of the project it came from —
+  and no longer lands on the top bar's corner buttons.
+
+### Fixed
+
+- **A deletion line no longer bleeds through a diff file's sticky header.** The
+  header's rounded corners let the red of a scrolled-under deletion peek out; it
+  now sits flush and covers the content beneath it.
 
 ## [0.16.0] - 2026-07-23
 
