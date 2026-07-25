@@ -11,9 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **The Pulls screen now lists the commits a pull request would land.** A new
   "Commits" tab, counted next to its name, shows every commit oldest first: the
-  subject line, who committed it and when, with the message body a click away
-  behind the row's toggle — the branch's story, which the diff and the file list
-  never tell. The commits ride along with the lookup the screen already makes,
+  subject line, who committed it and when, and clicking a row opens its message
+  body — the branch's story, which the diff and the file list never tell. The commits ride along with the lookup the screen already makes,
   so it costs no extra round-trip.
 
 ### Fixed

@@ -1,13 +1,13 @@
 import { useState } from "react"
-import { Ellipsis } from "lucide-react"
+import { ChevronRight } from "lucide-react"
 import { Notice } from "@/components/common/Notice"
 import type { PullRequestCommit } from "@/lib/api-types"
 import { cn } from "@/lib/utils"
 
 // PullsCommits is the "Commits" tab of the Pulls screen: every commit the pull
 // request would land, oldest first as gh lists them — the story of the branch,
-// which the diff never tells. A row is its subject line; the message body waits
-// behind the toggle, so a branch of fifteen commits stays a list you can scan.
+// which the diff never tells. A row is its subject line and clicking it opens
+// the message body, so a branch of fifteen commits stays a list you can scan.
 export function PullsCommits({ commits }: { commits: PullRequestCommit[] | null }) {
   if (!commits || commits.length === 0) {
     return <Notice className="px-6 py-5 text-sm">No commits.</Notice>
@@ -25,32 +25,37 @@ function CommitRow({ commit }: { commit: PullRequestCommit }) {
   const [open, setOpen] = useState(false)
   const body = commit.body.trim()
   return (
-    <div className="px-6 py-2">
-      <div className="flex items-center gap-2">
-        <span className="min-w-0 flex-1 truncate text-sm font-medium" title={commit.headline}>
-          {commit.headline}
+    <div>
+      {/* The whole row is the affordance — a body is read by clicking the commit
+          it belongs to, not a control beside it. A one-line commit has nothing
+          to open, so its row stays inert rather than offering an empty toggle. */}
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        disabled={body === ""}
+        aria-expanded={body === "" ? undefined : open}
+        className="flex w-full items-center gap-2 px-6 py-2 text-left transition-colors hover:bg-accent/50 disabled:cursor-default disabled:hover:bg-transparent"
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium" title={commit.headline}>
+            {commit.headline}
+          </span>
+          <span className="block text-xs text-muted-foreground">{commitMeta(commit)}</span>
         </span>
-        {body && (
-          <button
-            type="button"
-            onClick={() => setOpen(!open)}
-            aria-expanded={open}
-            aria-label={open ? "Hide commit description" : "Show commit description"}
+        {body !== "" && (
+          <ChevronRight
             className={cn(
-              "inline-flex shrink-0 items-center rounded-sm px-1 py-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-              open && "bg-accent text-accent-foreground",
+              "size-3.5 shrink-0 text-muted-foreground transition-transform",
+              open && "rotate-90",
             )}
-          >
-            <Ellipsis className="size-3.5" />
-          </button>
+          />
         )}
         <span className="shrink-0 font-mono text-xs text-muted-foreground" title={commit.oid}>
           {commit.oid.slice(0, 7)}
         </span>
-      </div>
-      <p className="text-xs text-muted-foreground">{commitMeta(commit)}</p>
+      </button>
       {open && (
-        <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
+        <p className="whitespace-pre-wrap px-6 pb-3 text-xs leading-relaxed text-muted-foreground">
           {body}
         </p>
       )}
