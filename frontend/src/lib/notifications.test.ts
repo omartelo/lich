@@ -1,22 +1,22 @@
-import {describe, expect, it} from "vitest"
+import { describe, expect, it } from "vitest"
 
-import {notificationsFrom} from "./notifications"
-import type {PendingStatus} from "./session-status-store"
-import type {SessionState} from "./sessions"
+import { notificationsFrom } from "./notifications"
+import type { PendingStatus } from "./session-status-store"
+import type { SessionState } from "./sessions"
 
 const projects = [
-  {id: "p1", name: "alpha"},
-  {id: "p2", name: "beta"},
+  { id: "p1", name: "alpha" },
+  { id: "p2", name: "beta" },
 ]
 
 const sessions: SessionState = {
   p1: {
-    sessions: [{id: "s1", label: "Fix the bug", kind: "claude"}],
+    sessions: [{ id: "s1", label: "Fix the bug", kind: "claude" }],
     activeId: "s1",
     nextSeq: 2,
   },
   p2: {
-    sessions: [{id: "s2", label: "Write docs", kind: "codex"}],
+    sessions: [{ id: "s2", label: "Write docs", kind: "codex" }],
     activeId: "s2",
     nextSeq: 2,
   },
@@ -28,8 +28,8 @@ const NONE_ACTIVE = undefined
 describe("notificationsFrom", () => {
   it("resolves each pending status to its project and label", () => {
     const pending: PendingStatus[] = [
-      {id: "s1", status: "waiting"},
-      {id: "s2", status: "done"},
+      { id: "s1", status: "waiting" },
+      { id: "s2", status: "done" },
     ]
     expect(notificationsFrom(pending, projects, sessions, NONE_ACTIVE)).toEqual([
       {
@@ -51,8 +51,8 @@ describe("notificationsFrom", () => {
 
   it("drops a status whose session no longer exists", () => {
     const pending: PendingStatus[] = [
-      {id: "s1", status: "waiting"},
-      {id: "closed", status: "done"},
+      { id: "s1", status: "waiting" },
+      { id: "closed", status: "done" },
     ]
     const result = notificationsFrom(pending, projects, sessions, NONE_ACTIVE)
     expect(result.map((n) => n.id)).toEqual(["s1"])
@@ -66,17 +66,17 @@ describe("notificationsFrom", () => {
       ...sessions,
       p1: {
         sessions: [
-          {id: "s1", label: "Fix the bug", kind: "claude"},
-          {id: "s1b", label: "Add tests", kind: "claude"},
+          { id: "s1", label: "Fix the bug", kind: "claude" },
+          { id: "s1b", label: "Add tests", kind: "claude" },
         ],
         activeId: "s1",
         nextSeq: 3,
       },
     }
     const pending: PendingStatus[] = [
-      {id: "s1", status: "done"}, // focused: on screen
-      {id: "s1b", status: "waiting"}, // same project, not on screen
-      {id: "s2", status: "done"}, // other project
+      { id: "s1", status: "done" }, // focused: on screen
+      { id: "s1b", status: "waiting" }, // same project, not on screen
+      { id: "s2", status: "done" }, // other project
     ]
     const result = notificationsFrom(pending, projects, twoInP1, "p1")
     expect(result.map((n) => n.id)).toEqual(["s1b", "s2"])

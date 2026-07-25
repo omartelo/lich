@@ -51,9 +51,7 @@ function newFile(oldPath: string, newPath: string): DiffFile {
 // stripPathPrefix turns "a/src/foo.ts" or "b/src/foo.ts" into "src/foo.ts",
 // leaving "/dev/null" untouched so status detection can key off it.
 function stripPathPrefix(path: string): string {
-  return path.startsWith("a/") || path.startsWith("b/")
-    ? path.slice(2)
-    : path
+  return path.startsWith("a/") || path.startsWith("b/") ? path.slice(2) : path
 }
 
 function parseHunkHeader(line: string): DiffHunk | null {
@@ -120,17 +118,17 @@ function appendHunkLine(
   counters: { old: number; new: number },
 ): void {
   if (line.startsWith("+")) {
-    hunk.lines.push({kind: "add", text: line, oldLine: null, newLine: counters.new})
+    hunk.lines.push({ kind: "add", text: line, oldLine: null, newLine: counters.new })
     counters.new += 1
     file.added += 1
   } else if (line.startsWith("-")) {
-    hunk.lines.push({kind: "del", text: line, oldLine: counters.old, newLine: null})
+    hunk.lines.push({ kind: "del", text: line, oldLine: counters.old, newLine: null })
     counters.old += 1
     file.deleted += 1
   } else if (line.startsWith("\\")) {
-    hunk.lines.push({kind: "meta", text: line, oldLine: null, newLine: null})
+    hunk.lines.push({ kind: "meta", text: line, oldLine: null, newLine: null })
   } else {
-    hunk.lines.push({kind: "context", text: line, oldLine: counters.old, newLine: counters.new})
+    hunk.lines.push({ kind: "context", text: line, oldLine: counters.old, newLine: counters.new })
     counters.old += 1
     counters.new += 1
   }
@@ -142,7 +140,7 @@ export function parseDiff(text: string): DiffFile[] {
   const files: DiffFile[] = []
   let file: DiffFile | null = null
   let hunk: DiffHunk | null = null
-  const counters = {old: 0, new: 0}
+  const counters = { old: 0, new: 0 }
 
   for (const line of text.split("\n")) {
     const started = DIFF_GIT.exec(line)
@@ -182,7 +180,7 @@ export interface FileDoc {
   lineMeta: DiffLine[]
 }
 
-const hunkSeparator: DiffLine = {kind: "meta", text: "", oldLine: null, newLine: null}
+const hunkSeparator: DiffLine = { kind: "meta", text: "", oldLine: null, newLine: null }
 
 export function buildFileDoc(file: DiffFile): FileDoc {
   const lines: string[] = []
@@ -200,10 +198,10 @@ export function buildFileDoc(file: DiffFile): FileDoc {
       lines.push(text)
       // lineMeta's text must equal the doc's, so decoration position math
       // (pos += text.length + 1) stays in step.
-      lineMeta.push({...line, text})
+      lineMeta.push({ ...line, text })
     }
   }
-  return {text: lines.join("\n"), lineMeta}
+  return { text: lines.join("\n"), lineMeta }
 }
 
 // discardTargets lists the repo-relative paths a "discard changes" on this
@@ -246,7 +244,7 @@ export function newLineRange(
       end = Math.max(end, meta.newLine)
     }
   }
-  return start === Infinity ? null : {start, end}
+  return start === Infinity ? null : { start, end }
 }
 
 // formatLineRef renders a range for a file reference: a single-line selection

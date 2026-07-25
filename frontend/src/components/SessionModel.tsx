@@ -1,6 +1,6 @@
-import {ProviderIcon} from "@/lib/provider-icons"
-import {formatModel} from "@/lib/model-name"
-import {useSessionUsage} from "@/lib/useSessionUsage"
+import { ProviderIcon } from "@/lib/provider-icons"
+import { formatModel } from "@/lib/model-name"
+import { useSessionUsage } from "@/lib/useSessionUsage"
 
 interface SessionModelProps {
   sessionId: string
@@ -12,14 +12,14 @@ interface SessionModelProps {
 // it reads its own data by id, so the slot can grow with more per-session detail
 // without touching FooterBar. Usage is Claude-only today, so the mark is
 // Claude's; a second provider that reports usage makes the kind dynamic here.
-export function SessionModel({sessionId}: SessionModelProps) {
+export function SessionModel({ sessionId }: SessionModelProps) {
   const usage = useSessionUsage(sessionId)
   if (!usage) {
     return null
   }
   return (
     <span className="flex items-center gap-1.5">
-      <ProviderIcon kind="claude" size={14}/>
+      <ProviderIcon kind="claude" size={14} />
       {formatModel(usage.model)}
       {usage.effort ? ` · ${usage.effort}` : ""}
     </span>

@@ -1,4 +1,4 @@
-import {isCwdEvent} from "./session-events"
+import { isCwdEvent } from "./session-events"
 
 // A subscription to the global cwd event, injected so the store is testable
 // without standing up the /events socket. Returns its unsubscribe.
@@ -21,7 +21,7 @@ export function createSessionCwdStore(source: CwdEventSource) {
   const entryOf = (id: string): Entry => {
     let entry = entries.get(id)
     if (!entry) {
-      entry = {cwd: "", listeners: new Set()}
+      entry = { cwd: "", listeners: new Set() }
       entries.set(id, entry)
     }
     return entry
@@ -55,5 +55,5 @@ export function createSessionCwdStore(source: CwdEventSource) {
   // to the session's static path.
   const get = (id: string): string => entries.get(id)?.cwd ?? ""
 
-  return {subscribe, get}
+  return { subscribe, get }
 }

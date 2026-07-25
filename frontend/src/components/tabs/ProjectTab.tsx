@@ -14,8 +14,9 @@ interface ProjectTabProps {
 
 // The tab is its own drag grip for reordering the strip — no separate handle.
 export function ProjectTab({ project, sessionIds, onClose }: ProjectTabProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: project.id })
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: project.id,
+  })
   // What the project's sessions are up to while you are looking elsewhere. The
   // active tab never badges: its cards are already on screen saying the same
   // thing, in more detail and per session.
@@ -25,10 +26,7 @@ export function ProjectTab({ project, sessionIds, onClose }: ProjectTabProps) {
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn(
-        "shrink-0",
-        isDragging && "z-10 rounded-md bg-accent shadow-md",
-      )}
+      className={cn("shrink-0", isDragging && "z-10 rounded-md bg-accent shadow-md")}
       {...attributes}
       {...listeners}
     >
@@ -46,15 +44,9 @@ export function ProjectTab({ project, sessionIds, onClose }: ProjectTabProps) {
           const badge = isActive ? null : status
           return (
             <>
-              {badge === "busy" && (
-                <LoaderCircle className="size-3 shrink-0 animate-spin" />
-              )}
-              {badge === "done" && (
-                <Check className="size-3 shrink-0 text-emerald-500" />
-              )}
-              {badge === "waiting" && (
-                <Bell className="size-3 shrink-0 text-amber-500" />
-              )}
+              {badge === "busy" && <LoaderCircle className="size-3 shrink-0 animate-spin" />}
+              {badge === "done" && <Check className="size-3 shrink-0 text-emerald-500" />}
+              {badge === "waiting" && <Bell className="size-3 shrink-0 text-amber-500" />}
               <span className="truncate">{project.name}</span>
               <span
                 role="button"

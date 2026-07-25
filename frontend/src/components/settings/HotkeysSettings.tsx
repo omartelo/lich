@@ -13,8 +13,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { SettingBlock } from "./SettingBlock"
 
-const isMac =
-  typeof navigator !== "undefined" && navigator.platform.toLowerCase().includes("mac")
+const isMac = typeof navigator !== "undefined" && navigator.platform.toLowerCase().includes("mac")
 
 // HotkeyRow shows the current combo as a capture button: click to record, press
 // the new combo to save, Escape to cancel. Key events are swallowed while

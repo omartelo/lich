@@ -13,8 +13,8 @@ import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable"
 // session or navigating to the tab.
 const DRAG_THRESHOLD_PX = 5
 
-export const horizontalAxis: Modifier = ({transform}) => ({...transform, y: 0})
-export const verticalAxis: Modifier = ({transform}) => ({...transform, x: 0})
+export const horizontalAxis: Modifier = ({ transform }) => ({ ...transform, y: 0 })
+export const verticalAxis: Modifier = ({ transform }) => ({ ...transform, x: 0 })
 
 // useSortableList wires the sensors and the drop handler shared by the two
 // reorderable surfaces (session cards, project tabs). It reports the new id

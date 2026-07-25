@@ -34,7 +34,9 @@ describe("matchesCombo", () => {
   })
 
   it("ignores key auto-repeat so a held chord fires once", () => {
-    expect(matchesCombo(key({ ctrlKey: true, shiftKey: true, key: "T", repeat: true }), newSession)).toBe(false)
+    expect(
+      matchesCombo(key({ ctrlKey: true, shiftKey: true, key: "T", repeat: true }), newSession),
+    ).toBe(false)
   })
 
   it("rejects when a modifier differs", () => {
@@ -96,8 +98,9 @@ describe("mergeHotkeys", () => {
   })
 
   it("ignores ids that are no longer actions (the old zoom hotkeys)", () => {
-    expect(mergeHotkeys({ zoomIn: { mod: true, shift: false, alt: false, key: "+" } }))
-      .toEqual(DEFAULT_HOTKEYS)
+    expect(mergeHotkeys({ zoomIn: { mod: true, shift: false, alt: false, key: "+" } })).toEqual(
+      DEFAULT_HOTKEYS,
+    )
   })
 
   it("drops malformed entries and non-objects", () => {

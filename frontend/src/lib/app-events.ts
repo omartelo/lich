@@ -13,10 +13,7 @@ let starting = false
 
 // dispatchEnvelope routes one raw /events message to the registered
 // callbacks. Exported for tests.
-export function dispatchEnvelope(
-  registry: Map<string, Set<Callback>>,
-  raw: string,
-): void {
+export function dispatchEnvelope(registry: Map<string, Set<Callback>>, raw: string): void {
   let envelope: { name?: string; data?: unknown }
   try {
     envelope = JSON.parse(raw) as { name?: string; data?: unknown }

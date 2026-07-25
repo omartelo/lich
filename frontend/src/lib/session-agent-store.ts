@@ -1,5 +1,5 @@
-import {isAgentEvent, isStatusEvent} from "./session-events"
-import {isSessionKind, type SessionKind} from "./sessions"
+import { isAgentEvent, isStatusEvent } from "./session-events"
+import { isSessionKind, type SessionKind } from "./sessions"
 
 // A subscription to one of the global session events, injected so the store is
 // testable without standing up the /events socket. Returns its unsubscribe.
@@ -31,7 +31,7 @@ export function createSessionAgentStore(
   const entryOf = (id: string): Entry => {
     let entry = entries.get(id)
     if (!entry) {
-      entry = {agent: null, listeners: new Set()}
+      entry = { agent: null, listeners: new Set() }
       entries.set(id, entry)
     }
     return entry
@@ -74,5 +74,5 @@ export function createSessionAgentStore(
 
   const get = (id: string): SessionKind | null => entries.get(id)?.agent ?? null
 
-  return {subscribe, get}
+  return { subscribe, get }
 }

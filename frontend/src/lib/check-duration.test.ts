@@ -1,5 +1,5 @@
-import {describe, expect, it} from "vitest"
-import {checkDuration} from "./check-duration"
+import { describe, expect, it } from "vitest"
+import { checkDuration } from "./check-duration"
 
 const start = "2026-07-25T10:00:00Z"
 const at = (iso: string) => Date.parse(iso)

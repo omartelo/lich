@@ -1,5 +1,5 @@
-import {afterEach, beforeEach, describe, expect, it, vi} from "vitest"
-import {lookupPullRequest} from "./pull-request-lookup"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { lookupPullRequest } from "./pull-request-lookup"
 
 // The RPC is the boundary here; stub it so the test asserts how many gh calls
 // the lookup actually makes. Each test uses its own checkout path, so the
@@ -11,7 +11,7 @@ vi.mock("./rpc", () => ({
   },
 }))
 
-const pr = {number: 7, url: "https://github.com/o/l/pull/7", state: "OPEN"}
+const pr = { number: 7, url: "https://github.com/o/l/pull/7", state: "OPEN" }
 
 beforeEach(() => {
   vi.useFakeTimers()

@@ -35,9 +35,7 @@ export function SegmentedControl<T extends string>({
             onClick={() => onChange(option.value)}
             className={cn(
               "flex items-center gap-1.5 rounded-[0.3125rem] px-3 py-1.5 text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-4",
-              active
-                ? "bg-accent text-foreground"
-                : "text-muted-foreground hover:text-foreground",
+              active ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground",
             )}
           >
             {option.icon}

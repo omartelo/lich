@@ -1,9 +1,9 @@
-import {useEffect, useRef, useState} from "react"
-import type {KeyboardEvent} from "react"
-import {Search} from "lucide-react"
-import {ProjectService} from "@/lib/rpc"
-import type {Branches, Worktree} from "@/lib/api-types"
-import {Button} from "@/components/ui/button"
+import { useEffect, useRef, useState } from "react"
+import type { KeyboardEvent } from "react"
+import { Search } from "lucide-react"
+import { ProjectService } from "@/lib/rpc"
+import type { Branches, Worktree } from "@/lib/api-types"
+import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogClose,
@@ -13,10 +13,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {Input} from "@/components/ui/input"
-import {Label} from "@/components/ui/label"
-import {isValidBranchName} from "@/lib/branch-name"
-import {cn, errorText} from "@/lib/utils"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { isValidBranchName } from "@/lib/branch-name"
+import { cn, errorText } from "@/lib/utils"
 
 interface WorktreeDialogProps {
   open: boolean
@@ -32,7 +32,7 @@ interface WorktreeDialogProps {
 
 // Row values carry their group so one string identifies the selection:
 // "local:main", "remote:origin/main", "worktree:/path/to/checkout".
-const valueOf = (group: string, id: string): string => `${group}:${id}`
+const rowValue = (group: string, id: string): string => `${group}:${id}`
 
 const splitValue = (value: string): [string, string] => {
   const sep = value.indexOf(":")
@@ -55,9 +55,9 @@ function filterBranches(branches: Branches | null, query: string) {
 // filter's auto-select can walk them without caring which group they sit in.
 function flatValues(vis: ReturnType<typeof filterBranches>): string[] {
   return [
-    ...vis.worktrees.map((w) => valueOf("worktree", w.path)),
-    ...vis.local.map((b) => valueOf("local", b)),
-    ...vis.remote.map((b) => valueOf("remote", b)),
+    ...vis.worktrees.map((w) => rowValue("worktree", w.path)),
+    ...vis.local.map((b) => rowValue("local", b)),
+    ...vis.remote.map((b) => rowValue("remote", b)),
   ]
 }
 
@@ -68,7 +68,7 @@ interface GroupProps {
   onSelect: (value: string) => void
 }
 
-function Group({title, items, base, onSelect}: GroupProps) {
+function Group({ title, items, base, onSelect }: GroupProps) {
   if (items.length === 0) {
     return null
   }
@@ -86,9 +86,7 @@ function Group({title, items, base, onSelect}: GroupProps) {
           onClick={() => onSelect(item.value)}
           className={cn(
             "flex w-full items-center rounded-md px-2 py-1.5 text-left font-mono text-xs outline-none transition-colors",
-            base === item.value
-              ? "bg-accent text-accent-foreground"
-              : "hover:bg-accent/50",
+            base === item.value ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
           )}
         >
           <span className="truncate">{item.label}</span>
@@ -103,13 +101,13 @@ function Group({title, items, base, onSelect}: GroupProps) {
 // and remote branches (remote bases are fetched and tracked). It stays open on
 // failure so git's error is readable in place.
 export function WorktreeDialog({
-                                 open,
-                                 onOpenChange,
-                                 projectPath,
-                                 currentBranch,
-                                 onCreate,
-                                 onResume,
-                               }: WorktreeDialogProps) {
+  open,
+  onOpenChange,
+  projectPath,
+  currentBranch,
+  onCreate,
+  onResume,
+}: WorktreeDialogProps) {
   const [branches, setBranches] = useState<Branches | null>(null)
   const [name, setName] = useState("")
   const [base, setBase] = useState("")
@@ -129,9 +127,7 @@ export function WorktreeDialog({
   // Keep the selected base in view as it changes — the preselected current
   // branch after load, or the row arrow keys walk to.
   useEffect(() => {
-    listRef.current
-      ?.querySelector('[aria-selected="true"]')
-      ?.scrollIntoView({block: "nearest"})
+    listRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" })
   }, [base, branches])
 
   useEffect(() => {
@@ -154,7 +150,7 @@ export function WorktreeDialog({
         setBranches(loaded)
         const local = loaded.local ?? []
         const preferred = local.includes(currentBranch) ? currentBranch : local[0]
-        setBase(preferred ? valueOf("local", preferred) : "")
+        setBase(preferred ? rowValue("local", preferred) : "")
       })
       .catch((err: unknown) => {
         if (!stale) {
@@ -203,10 +199,11 @@ export function WorktreeDialog({
   const submit = async () => {
     const [group, id] = splitValue(base)
     if (group === "worktree") {
-      const wt = vis.worktrees.find((w: Worktree) => w.path === id)
-        ?? branches?.worktrees?.find((w: Worktree) => w.path === id)
+      const wt =
+        vis.worktrees.find((w: Worktree) => w.path === id) ??
+        branches?.worktrees?.find((w: Worktree) => w.path === id)
       if (wt) {
-        onResume({name: wt.name, path: wt.path})
+        onResume({ name: wt.name, path: wt.path })
       }
       return
     }
@@ -284,19 +281,28 @@ export function WorktreeDialog({
           >
             <Group
               title="Worktrees"
-              items={vis.worktrees.map((wt) => ({value: valueOf("worktree", wt.path), label: wt.name}))}
+              items={vis.worktrees.map((wt) => ({
+                value: rowValue("worktree", wt.path),
+                label: wt.name,
+              }))}
               base={base}
               onSelect={setBase}
             />
             <Group
               title="Local branches"
-              items={vis.local.map((branch) => ({value: valueOf("local", branch), label: branch}))}
+              items={vis.local.map((branch) => ({
+                value: rowValue("local", branch),
+                label: branch,
+              }))}
               base={base}
               onSelect={setBase}
             />
             <Group
               title="Remote branches"
-              items={vis.remote.map((branch) => ({value: valueOf("remote", branch), label: branch}))}
+              items={vis.remote.map((branch) => ({
+                value: rowValue("remote", branch),
+                label: branch,
+              }))}
               base={base}
               onSelect={setBase}
             />
@@ -316,22 +322,13 @@ export function WorktreeDialog({
         </div>
 
         {(loadError || submitError) && (
-          <span className="text-xs break-words text-destructive">
-            {loadError || submitError}
-          </span>
+          <span className="text-xs break-words text-destructive">{loadError || submitError}</span>
         )}
 
         <DialogFooter>
-          <DialogClose render={<Button variant="ghost"/>}>Cancel</DialogClose>
-          <Button
-            onClick={() => void submit()}
-            disabled={nameInvalid || !base || submitting}
-          >
-            {submitting
-              ? "Creating…"
-              : isResume
-                ? "Open worktree"
-                : "Create worktree"}
+          <DialogClose render={<Button variant="ghost" />}>Cancel</DialogClose>
+          <Button onClick={() => void submit()} disabled={nameInvalid || !base || submitting}>
+            {submitting ? "Creating…" : isResume ? "Open worktree" : "Create worktree"}
           </Button>
         </DialogFooter>
       </DialogContent>

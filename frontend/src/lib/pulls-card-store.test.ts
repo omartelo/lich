@@ -1,6 +1,6 @@
-import {afterEach, describe, expect, it, vi} from "vitest"
-import {closePulls, isPullsOpen, openPulls, subscribePullsCard} from "./pulls-card-store"
-import {isSettingsOpen} from "./settings-card-store"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { closePulls, isPullsOpen, openPulls, subscribePullsCard } from "./pulls-card-store"
+import { isSettingsOpen } from "./settings-card-store"
 
 // The store is module-level (shared across tests): every test closes what it
 // opened so the next one starts from a clean slate.

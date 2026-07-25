@@ -1,5 +1,5 @@
-import {describe, expect, it, vi} from "vitest"
-import {dispatchEnvelope} from "./app-events"
+import { describe, expect, it, vi } from "vitest"
+import { dispatchEnvelope } from "./app-events"
 
 type Callback = (data: unknown) => void
 
@@ -14,7 +14,7 @@ describe("dispatchEnvelope", () => {
       registryWith("session-status", cb),
       '{"name":"session-status","data":{"id":"s1","state":"busy"}}',
     )
-    expect(cb).toHaveBeenCalledWith({id: "s1", state: "busy"})
+    expect(cb).toHaveBeenCalledWith({ id: "s1", state: "busy" })
   })
 
   it("delivers undefined data for payload-less events", () => {

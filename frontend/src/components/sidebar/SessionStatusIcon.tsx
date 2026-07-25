@@ -1,7 +1,7 @@
-import {cn} from "@/lib/utils"
-import {ProviderIcon} from "@/lib/provider-icons"
-import type {SessionKind} from "@/lib/sessions"
-import type {SessionStatus} from "@/lib/session-events"
+import { cn } from "@/lib/utils"
+import { ProviderIcon } from "@/lib/provider-icons"
+import type { SessionKind } from "@/lib/sessions"
+import type { SessionStatus } from "@/lib/session-events"
 
 // Ring drawn around the provider icon per processing state: a spinning ring
 // while Claude produces output, solid emerald once its turn ends, amber when
@@ -19,7 +19,7 @@ interface SessionStatusIconProps {
 }
 
 // The slot is a fixed size so the icon never shifts as the state changes.
-export function SessionStatusIcon({kind, status}: SessionStatusIconProps) {
+export function SessionStatusIcon({ kind, status }: SessionStatusIconProps) {
   return (
     <span className="relative flex size-[1.375rem] shrink-0 items-center justify-center text-muted-foreground">
       {status && (

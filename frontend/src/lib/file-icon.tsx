@@ -1,5 +1,5 @@
-import type {ComponentType} from "react"
-import {File} from "lucide-react"
+import type { ComponentType } from "react"
+import { File } from "lucide-react"
 // Deep per-icon imports, NOT the devicons-react barrel: the barrel is one CJS
 // module re-exporting every icon, so importing from it bundles all ~4000 of
 // them (~10MB). The package's exports map allows ./icons/*, so each icon is its
@@ -17,7 +17,7 @@ import RustOriginal from "devicons-react/icons/RustOriginal"
 import TypescriptOriginal from "devicons-react/icons/TypescriptOriginal"
 import XmlOriginal from "devicons-react/icons/XmlOriginal"
 import YamlOriginal from "devicons-react/icons/YamlOriginal"
-import {extname} from "./lang-badge"
+import { extname } from "./lang-badge"
 
 // devicons-react components spread extra props onto their <svg> and take a
 // `size` that sets both dimensions. Only the props this module passes are
@@ -32,24 +32,24 @@ type IconComponent = ComponentType<{
 // with no fill of their own (they render black and vanish on a dark ground), so
 // those ride the row's text color via fill=currentColor; every other icon keeps
 // its brand colors. Extensions absent here fall back to a neutral file glyph.
-const ICONS: Record<string, {Icon: IconComponent; mono?: boolean}> = {
-  ts: {Icon: TypescriptOriginal},
-  tsx: {Icon: TypescriptOriginal},
-  js: {Icon: JavascriptOriginal},
-  jsx: {Icon: JavascriptOriginal},
-  go: {Icon: GoOriginal},
-  css: {Icon: Css3Original},
-  html: {Icon: Html5Original},
-  json: {Icon: JsonOriginal},
-  kt: {Icon: KotlinOriginal},
-  kts: {Icon: KotlinOriginal},
-  md: {Icon: MarkdownOriginal, mono: true},
-  xml: {Icon: XmlOriginal},
-  yaml: {Icon: YamlOriginal},
-  yml: {Icon: YamlOriginal},
-  sh: {Icon: BashOriginal},
-  py: {Icon: PythonOriginal},
-  rs: {Icon: RustOriginal, mono: true},
+const ICONS: Record<string, { Icon: IconComponent; mono?: boolean }> = {
+  ts: { Icon: TypescriptOriginal },
+  tsx: { Icon: TypescriptOriginal },
+  js: { Icon: JavascriptOriginal },
+  jsx: { Icon: JavascriptOriginal },
+  go: { Icon: GoOriginal },
+  css: { Icon: Css3Original },
+  html: { Icon: Html5Original },
+  json: { Icon: JsonOriginal },
+  kt: { Icon: KotlinOriginal },
+  kts: { Icon: KotlinOriginal },
+  md: { Icon: MarkdownOriginal, mono: true },
+  xml: { Icon: XmlOriginal },
+  yaml: { Icon: YamlOriginal },
+  yml: { Icon: YamlOriginal },
+  sh: { Icon: BashOriginal },
+  py: { Icon: PythonOriginal },
+  rs: { Icon: RustOriginal, mono: true },
 }
 
 // ICON_PX matches the tree's size-3.5 (14px) folder icons so rows line up.
@@ -59,17 +59,11 @@ interface FileIconProps {
   path: string
 }
 
-export function FileIcon({path}: FileIconProps) {
+export function FileIcon({ path }: FileIconProps) {
   const def = ICONS[extname(path)]
   if (!def) {
-    return <File className="size-3.5 shrink-0 text-muted-foreground opacity-70"/>
+    return <File className="size-3.5 shrink-0 text-muted-foreground opacity-70" />
   }
-  const {Icon, mono} = def
-  return (
-    <Icon
-      size={ICON_PX}
-      fill={mono ? "currentColor" : undefined}
-      className="shrink-0"
-    />
-  )
+  const { Icon, mono } = def
+  return <Icon size={ICON_PX} fill={mono ? "currentColor" : undefined} className="shrink-0" />
 }

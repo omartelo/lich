@@ -1,18 +1,14 @@
-import {useEffect, useMemo, useRef, useState} from "react"
-import type {ReactNode} from "react"
-import {ChevronDown, ChevronRight, Paperclip, Undo2} from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import type { ReactNode } from "react"
+import { ChevronDown, ChevronRight, Paperclip, Undo2 } from "lucide-react"
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
-import {Checkbox} from "@/components/ui/checkbox"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   buildFileDoc,
   formatLineRef,
@@ -21,10 +17,10 @@ import {
   type FileDoc,
   type NewLineRange,
 } from "@/lib/diff"
-import {languageAbbr, splitPath} from "@/lib/lang-badge"
-import {cn} from "@/lib/utils"
-import {DiffStat} from "@/components/DiffStat"
-import {useDiffEditor} from "./useDiffEditor"
+import { languageAbbr, splitPath } from "@/lib/lang-badge"
+import { cn } from "@/lib/utils"
+import { DiffStat } from "@/components/DiffStat"
+import { useDiffEditor } from "./useDiffEditor"
 
 // Files whose rendered diff exceeds this many lines start collapsed, so one
 // giant lockfile doesn't swamp the panel (expanding is one click away).
@@ -55,11 +51,9 @@ interface FileDiffProps {
 
 // The card must not clip overflow — a clipping ancestor would break the
 // sticky header.
-export function FileDiff({file, onInject, onDiscard, bulk, viewed, onViewed}: FileDiffProps) {
+export function FileDiff({ file, onInject, onDiscard, bulk, viewed, onViewed }: FileDiffProps) {
   const doc = useMemo(() => buildFileDoc(file), [file])
-  const [expanded, setExpanded] = useState(
-    !file.binary && doc.lineMeta.length <= LARGE_FILE_LINES,
-  )
+  const [expanded, setExpanded] = useState(!file.binary && doc.lineMeta.length <= LARGE_FILE_LINES)
   // The nonce guard skips the initial mount so each file keeps its own
   // large-file default until the user actually triggers a bulk action.
   const lastNonce = useRef(bulk?.nonce)
@@ -71,7 +65,7 @@ export function FileDiff({file, onInject, onDiscard, bulk, viewed, onViewed}: Fi
   }, [bulk])
   const Chevron = expanded ? ChevronDown : ChevronRight
   const badge = languageAbbr(file.newPath)
-  const {dir, base} = splitPath(file.newPath)
+  const { dir, base } = splitPath(file.newPath)
 
   return (
     <section>
@@ -89,7 +83,7 @@ export function FileDiff({file, onInject, onDiscard, bulk, viewed, onViewed}: Fi
             viewed && "opacity-60",
           )}
         >
-          <Chevron className="size-3.5 shrink-0 text-muted-foreground"/>
+          <Chevron className="size-3.5 shrink-0 text-muted-foreground" />
           <span
             className={`flex size-5 shrink-0 items-center justify-center rounded text-[0.5625rem] font-bold ${badge.className}`}
           >
@@ -98,19 +92,17 @@ export function FileDiff({file, onInject, onDiscard, bulk, viewed, onViewed}: Fi
           <span className="truncate font-medium" title={file.newPath}>
             {file.status === "renamed" ? `${file.oldPath} → ${base}` : base}
           </span>
-          {dir && (
-            <span className="truncate text-muted-foreground">{dir}</span>
-          )}
+          {dir && <span className="truncate text-muted-foreground">{dir}</span>}
         </button>
         <span className="flex shrink-0 items-center gap-1.5">
-          <DiffStat added={file.added} deleted={file.deleted}/>
+          <DiffStat added={file.added} deleted={file.deleted} />
         </span>
         <HeaderAction label="Add file as context" onClick={() => onInject(`@${file.newPath} `)}>
-          <Paperclip className="size-3.5"/>
+          <Paperclip className="size-3.5" />
         </HeaderAction>
         {onDiscard && (
           <HeaderAction label="Discard Changes" onClick={onDiscard}>
-            <Undo2 className="size-3.5"/>
+            <Undo2 className="size-3.5" />
           </HeaderAction>
         )}
         {onViewed && (
@@ -136,7 +128,7 @@ export function FileDiff({file, onInject, onDiscard, bulk, viewed, onViewed}: Fi
         (file.binary ? (
           <p className="px-9 py-2 text-xs text-muted-foreground">Binary file</p>
         ) : (
-          <DiffBody doc={doc} path={file.newPath} onInject={onInject}/>
+          <DiffBody doc={doc} path={file.newPath} onInject={onInject} />
         ))}
     </section>
   )
@@ -148,7 +140,7 @@ interface HeaderActionProps {
   children: ReactNode
 }
 
-export function HeaderAction({label, onClick, children}: HeaderActionProps) {
+export function HeaderAction({ label, onClick, children }: HeaderActionProps) {
   return (
     <Tooltip>
       <TooltipTrigger
@@ -178,8 +170,8 @@ interface DiffBodyProps {
 // destroying the CodeMirror view instead of keeping it alive off-screen. The
 // isolate wrapper keeps CodeMirror's high-z-index gutter from painting over
 // the sticky card header.
-function DiffBody({doc, path, onInject}: DiffBodyProps) {
-  const {containerRef, getSelectedDocLines} = useDiffEditor(doc, path)
+function DiffBody({ doc, path, onInject }: DiffBodyProps) {
+  const { containerRef, getSelectedDocLines } = useDiffEditor(doc, path)
   const [range, setRange] = useState<NewLineRange | null>(null)
 
   // Resolve the selection when the menu opens, not on every selection change.
@@ -188,25 +180,19 @@ function DiffBody({doc, path, onInject}: DiffBodyProps) {
       return
     }
     const selected = getSelectedDocLines()
-    setRange(
-      selected ? newLineRange(doc.lineMeta, selected.from, selected.to) : null,
-    )
+    setRange(selected ? newLineRange(doc.lineMeta, selected.from, selected.to) : null)
   }
 
   return (
     <ContextMenu onOpenChange={onOpenChange}>
-      <ContextMenuTrigger render={<div className="isolate py-1" ref={containerRef}/>}/>
+      <ContextMenuTrigger render={<div className="isolate py-1" ref={containerRef} />} />
       <ContextMenuContent>
-        <ContextMenuItem onClick={() => onInject(`@${path} `)}>
-          Inject file
-        </ContextMenuItem>
+        <ContextMenuItem onClick={() => onInject(`@${path} `)}>Inject file</ContextMenuItem>
         <ContextMenuItem
           disabled={range === null}
           onClick={() => range && onInject(`${path}:${formatLineRef(range)} `)}
         >
-          {range === null
-            ? "Inject lines"
-            : `Inject lines ${formatLineRef(range)}`}
+          {range === null ? "Inject lines" : `Inject lines ${formatLineRef(range)}`}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

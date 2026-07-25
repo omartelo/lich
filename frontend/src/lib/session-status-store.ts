@@ -1,14 +1,8 @@
-import {
-  isStatusEvent,
-  toSessionStatus,
-  type SessionStatus,
-} from "./session-events"
+import { isStatusEvent, toSessionStatus, type SessionStatus } from "./session-events"
 
 // A subscription to the global status event, injected so the store is testable
 // without standing up the /events socket. Returns its unsubscribe.
-export type StatusEventSource = (
-  handler: (data: unknown) => void,
-) => () => void
+export type StatusEventSource = (handler: (data: unknown) => void) => () => void
 
 // A session needing attention: blocked waiting on the user, or a turn that
 // finished but has not been seen yet. The notification queue is a flat list of
@@ -18,10 +12,7 @@ export interface PendingStatus {
   status: SessionStatus
 }
 
-function samePending(
-  a: readonly PendingStatus[],
-  b: readonly PendingStatus[],
-): boolean {
+function samePending(a: readonly PendingStatus[], b: readonly PendingStatus[]): boolean {
   if (a.length !== b.length) {
     return false
   }
@@ -61,7 +52,7 @@ export function createSessionStatusStore(source: StatusEventSource) {
   const entryOf = (id: string): Entry => {
     let entry = entries.get(id)
     if (!entry) {
-      entry = {status: null, seen: false, listeners: new Set()}
+      entry = { status: null, seen: false, listeners: new Set() }
       entries.set(id, entry)
     }
     return entry
@@ -90,7 +81,7 @@ export function createSessionStatusStore(source: StatusEventSource) {
       if (entry.status === "done" && entry.seen) {
         continue
       }
-      next.push({id, status: entry.status})
+      next.push({ id, status: entry.status })
     }
     return next
   }
@@ -164,8 +155,7 @@ export function createSessionStatusStore(source: StatusEventSource) {
     }
   }
 
-  const get = (id: string): SessionStatus | null =>
-    entries.get(id)?.status ?? null
+  const get = (id: string): SessionStatus | null => entries.get(id)?.status ?? null
 
   // subscribeAll fires whenever the notification queue changes (see pendingAll),
   // as opposed to subscribe, which is scoped to one session.
@@ -180,5 +170,5 @@ export function createSessionStatusStore(source: StatusEventSource) {
   // changes, so it is safe to hand straight to useSyncExternalStore.
   const pendingAll = (): PendingStatus[] => pending
 
-  return {subscribe, get, markSeen, pendingOf, subscribeAll, pendingAll}
+  return { subscribe, get, markSeen, pendingOf, subscribeAll, pendingAll }
 }

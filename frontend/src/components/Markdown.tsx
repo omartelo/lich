@@ -1,7 +1,7 @@
-import ReactMarkdown, {type Components} from "react-markdown"
+import ReactMarkdown, { type Components } from "react-markdown"
 import remarkGfm from "remark-gfm"
-import {System} from "@/lib/rpc"
-import {cn} from "@/lib/utils"
+import { System } from "@/lib/rpc"
+import { cn } from "@/lib/utils"
 
 // mdProse styles react-markdown's output through lich tokens with descendant
 // selectors — one place, no per-element component map. Covers the GitHub dialect
@@ -35,7 +35,7 @@ const mdProse = cn(
 // http(s) gate refuses — swallow those here instead of firing a rejected call.
 const components: Components = {
   a(props) {
-    const {href, children} = props
+    const { href, children } = props
     return (
       <a
         href={href}
@@ -55,7 +55,7 @@ const components: Components = {
 // Markdown renders untrusted GitHub markdown (a PR body) as a styled React tree.
 // react-markdown ignores raw HTML by default — no sanitizer needed — and
 // remark-gfm adds tables, task lists, strikethrough and autolinks.
-export function Markdown({children, className}: {children: string; className?: string}) {
+export function Markdown({ children, className }: { children: string; className?: string }) {
   return (
     <div className={cn(mdProse, className)}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>

@@ -1,10 +1,10 @@
-import {useState} from "react"
-import {ChevronDown, ChevronRight, Folder, FolderOpen} from "lucide-react"
-import type {TreeNode} from "@/lib/file-tree"
-import type {DiffFile} from "@/lib/diff"
-import {FileIcon} from "@/lib/file-icon"
-import {DiffStat} from "@/components/DiffStat"
-import {cn} from "@/lib/utils"
+import { useState } from "react"
+import { ChevronDown, ChevronRight, Folder, FolderOpen } from "lucide-react"
+import type { TreeNode } from "@/lib/file-tree"
+import type { DiffFile } from "@/lib/diff"
+import { FileIcon } from "@/lib/file-icon"
+import { DiffStat } from "@/components/DiffStat"
+import { cn } from "@/lib/utils"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -120,19 +120,19 @@ function TreeRow({
   onSelect,
 }: TreeRowProps) {
   // The 0.5rem base keeps even top-level rows off the edge.
-  const indent = {paddingLeft: `${depth * 0.75 + 0.5}rem`}
+  const indent = { paddingLeft: `${depth * 0.75 + 0.5}rem` }
   if (node.type === "file") {
     const stat = stats?.get(node.path)
     // A chevron-width spacer keeps file names aligned under their folder's name;
     // FileIcon draws the language's real logo (devicon).
     const row = (
       <>
-        <span className="size-3.5 shrink-0" aria-hidden/>
-        <FileIcon path={node.path}/>
+        <span className="size-3.5 shrink-0" aria-hidden />
+        <FileIcon path={node.path} />
         <span className="min-w-0 truncate">{node.name}</span>
         {stat && (
           <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-2 tabular-nums">
-            <DiffStat added={stat.added} deleted={stat.deleted}/>
+            <DiffStat added={stat.added} deleted={stat.deleted} />
           </span>
         )}
       </>
@@ -170,9 +170,7 @@ function TreeRow({
           {row}
         </ContextMenuTrigger>
         <ContextMenuContent>
-          <ContextMenuItem onClick={() => onEditor(node.path)}>
-            Open in editor
-          </ContextMenuItem>
+          <ContextMenuItem onClick={() => onEditor(node.path)}>Open in editor</ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
     )
@@ -194,17 +192,13 @@ function TreeRow({
             />
           }
         >
-          <Chevron className="size-3.5 shrink-0 text-muted-foreground"/>
-          <FolderIcon className="size-3.5 shrink-0 text-muted-foreground"/>
+          <Chevron className="size-3.5 shrink-0 text-muted-foreground" />
+          <FolderIcon className="size-3.5 shrink-0 text-muted-foreground" />
           <span className="truncate">{node.name}</span>
         </ContextMenuTrigger>
         <ContextMenuContent>
-          <ContextMenuItem onClick={() => onSubtree(node, true)}>
-            Expand all
-          </ContextMenuItem>
-          <ContextMenuItem onClick={() => onSubtree(node, false)}>
-            Collapse all
-          </ContextMenuItem>
+          <ContextMenuItem onClick={() => onSubtree(node, true)}>Expand all</ContextMenuItem>
+          <ContextMenuItem onClick={() => onSubtree(node, false)}>Collapse all</ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
       {open &&

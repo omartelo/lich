@@ -29,9 +29,7 @@ export function ProvidersSettings() {
   const defaultProvider = useDefaultProvider()
 
   if (providers.length === 0) {
-    return (
-      <p className="py-5 text-sm text-muted-foreground">Detecting providers…</p>
-    )
+    return <p className="py-5 text-sm text-muted-foreground">Detecting providers…</p>
   }
 
   const enabled = enabledProviders(providers)

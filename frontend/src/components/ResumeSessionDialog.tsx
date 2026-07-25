@@ -16,11 +16,7 @@ interface ResumeSessionDialogProps {
 // (`--resume`) or start a new one. Dismissing is the same answer as "Start
 // new": the card has to end up with a terminal either way, and the spawn is
 // waiting on this.
-export function ResumeSessionDialog({
-  session,
-  onStartNew,
-  onResume,
-}: ResumeSessionDialogProps) {
+export function ResumeSessionDialog({ session, onStartNew, onResume }: ResumeSessionDialogProps) {
   return (
     <ConfirmDialog
       open={session !== null}
@@ -29,11 +25,9 @@ export function ResumeSessionDialog({
       title="Resume previous session?"
       description={
         <>
-          <span className="font-medium">{session?.label}</span> left a Claude
-          Code session behind (
+          <span className="font-medium">{session?.label}</span> left a Claude Code session behind (
           <span className="break-all font-mono">{session?.providerSessionId}</span>
-          ). Resume it to pick the conversation up where it stopped, or start new
-          for an empty one.
+          ). Resume it to pick the conversation up where it stopped, or start new for an empty one.
         </>
       }
     >

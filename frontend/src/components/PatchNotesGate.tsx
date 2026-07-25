@@ -1,8 +1,8 @@
-import {useEffect, useState} from "react"
-import {PatchNotesDialog} from "@/components/PatchNotesDialog"
-import {decidePatchNotes, PATCH_NOTES_SEEN_KEY} from "@/lib/patch-notes-gate"
-import {PatchNotes} from "@/lib/rpc"
-import type {PatchNotes as PatchNotesData} from "@/lib/api-types"
+import { useEffect, useState } from "react"
+import { PatchNotesDialog } from "@/components/PatchNotesDialog"
+import { decidePatchNotes, PATCH_NOTES_SEEN_KEY } from "@/lib/patch-notes-gate"
+import { PatchNotes } from "@/lib/rpc"
+import type { PatchNotes as PatchNotesData } from "@/lib/api-types"
 
 // PatchNotesGate shows lich's "what's new" popup once per release, right after
 // an update. On startup it fetches this build's changelog section and decides:

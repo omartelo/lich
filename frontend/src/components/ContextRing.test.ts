@@ -1,5 +1,5 @@
-import {describe, expect, it} from "vitest"
-import {contextColor} from "./ContextRing"
+import { describe, expect, it } from "vitest"
+import { contextColor } from "./ContextRing"
 
 describe("contextColor", () => {
   it("is muted below 80%", () => {

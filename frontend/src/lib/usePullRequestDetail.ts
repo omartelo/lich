@@ -1,9 +1,9 @@
-import {useCallback, useEffect, useRef, useState} from "react"
-import {ProjectService} from "./rpc"
-import type {PullRequestDetail} from "./api-types"
-import {errorText} from "./utils"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { ProjectService } from "./rpc"
+import type { PullRequestDetail } from "./api-types"
+import { errorText } from "./utils"
 
-export type {PullRequestDetail}
+export type { PullRequestDetail }
 
 // How often the detail is re-read while a check is still running. CI is the one
 // thing here that changes with nobody touching the repository, so it is the one
@@ -24,11 +24,7 @@ export interface PullRequestState {
 // window focus, and through refresh() so an in-app merge or a manual reload
 // updates the screen at once. detail is null with no error when the branch
 // simply has no open PR: the screen's empty state.
-export function usePullRequestDetail(
-  path: string,
-  branch: string,
-  head: string,
-): PullRequestState {
+export function usePullRequestDetail(path: string, branch: string, head: string): PullRequestState {
   const [detail, setDetail] = useState<PullRequestDetail | null>(null)
   // Starts true so the first paint — before the mount effect fires the lookup —
   // reads as loading, not as "this branch has no pull request".
@@ -84,5 +80,5 @@ export function usePullRequestDetail(
     return () => clearInterval(timer)
   }, [pending, refresh])
 
-  return {detail, loading, error, refresh}
+  return { detail, loading, error, refresh }
 }

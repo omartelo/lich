@@ -1,4 +1,4 @@
-import {createCardStore} from "./card-store"
+import { createCardStore } from "./card-store"
 
 // Tracks which projects have their Settings card parked in the sidebar, keyed by
 // project id. See card-store for the shape and the lifetime.

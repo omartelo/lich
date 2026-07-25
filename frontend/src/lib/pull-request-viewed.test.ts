@@ -1,4 +1,4 @@
-import {describe, expect, it, vi} from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import {
   fileFingerprint,
   isViewed,
@@ -6,7 +6,7 @@ import {
   subscribeViewed,
   viewedFiles,
 } from "./pull-request-viewed"
-import {parseDiff, type DiffFile} from "./diff"
+import { parseDiff, type DiffFile } from "./diff"
 
 // The store is module-level, so every test uses its own pull request URL.
 const pr = (name: string) => `https://github.com/o/l/pull/${name}`
@@ -14,9 +14,7 @@ const pr = (name: string) => `https://github.com/o/l/pull/${name}`
 // A real parsed diff, so the fingerprint is exercised against the shape the
 // screen actually hands it.
 const diffOf = (body: string): DiffFile =>
-  parseDiff(
-    `diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1,2 +1,2 @@\n${body}`,
-  )[0]
+  parseDiff(`diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1,2 +1,2 @@\n${body}`)[0]
 
 const original = diffOf(" keep\n-old\n+new\n")
 

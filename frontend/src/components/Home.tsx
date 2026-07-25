@@ -12,9 +12,7 @@ export function Home() {
       <FolderOpen className="size-12 text-muted-foreground" />
       <div className="text-center">
         <h1 className="text-lg font-semibold text-foreground">No project open</h1>
-        <p className="text-sm text-muted-foreground">
-          Open a folder to start a terminal session.
-        </p>
+        <p className="text-sm text-muted-foreground">Open a folder to start a terminal session.</p>
       </div>
       <Button onClick={() => void openProject()}>
         <FolderOpen data-icon="inline-start" />

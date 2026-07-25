@@ -1,5 +1,5 @@
-import {ProjectService} from "./rpc"
-import type {PullRequest} from "./api-types"
+import { ProjectService } from "./rpc"
+import type { PullRequest } from "./api-types"
 
 // How long an answer is reused. Every session card of a worktree, the footer
 // and the sidebar's pull request card ask about the same checkout, and each ask

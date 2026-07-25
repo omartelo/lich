@@ -49,6 +49,12 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm build
 
+      # biome is the frontend's gofmt + vet: formatting and lint in one pass.
+      # Warnings (the a11y backlog) are reported without failing; errors fail.
+      - name: Frontend format + lint
+        working-directory: frontend
+        run: pnpm check
+
       - name: gofmt
         run: |
           unformatted="$(gofmt -l .)"

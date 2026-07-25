@@ -1,6 +1,6 @@
-import type {ReactNode} from "react"
-import {ArrowUpRight, Sparkles} from "lucide-react"
-import {Button} from "@/components/ui/button"
+import type { ReactNode } from "react"
+import { ArrowUpRight, Sparkles } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
@@ -9,8 +9,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {System} from "@/lib/rpc"
-import type {PatchNotes} from "@/lib/api-types"
+import { System } from "@/lib/rpc"
+import type { PatchNotes } from "@/lib/api-types"
 
 const RELEASE_TAG_BASE = "https://github.com/omartelo/lich/releases/tag/v"
 
@@ -30,10 +30,12 @@ function dotColor(label: string): string {
 
 // renderInline renders a changelog item's markdown: **bold** lead-ins and
 // `code` spans. No full markdown parser — those two are all the CHANGELOG uses.
+// The split is positional and static for a given item, so the index is the key.
 function renderInline(text: string): ReactNode[] {
   return text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       return (
+        // biome-ignore lint/suspicious/noArrayIndexKey: static split, never reordered.
         <strong key={i} className="font-medium text-foreground">
           {part.slice(2, -2)}
         </strong>
@@ -41,6 +43,7 @@ function renderInline(text: string): ReactNode[] {
     }
     if (part.startsWith("`") && part.endsWith("`")) {
       return (
+        // biome-ignore lint/suspicious/noArrayIndexKey: static split, never reordered.
         <code key={i} className="rounded bg-accent px-1 py-0.5 font-mono text-[0.85em]">
           {part.slice(1, -1)}
         </code>
@@ -56,7 +59,7 @@ interface PatchNotesDialogProps {
   onClose: () => void
 }
 
-export function PatchNotesDialog({notes, onClose}: PatchNotesDialogProps) {
+export function PatchNotesDialog({ notes, onClose }: PatchNotesDialogProps) {
   const groups = notes.groups ?? []
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -88,6 +91,7 @@ export function PatchNotesDialog({notes, onClose}: PatchNotesDialogProps) {
               <ul className="flex flex-col gap-2.5">
                 {group.items.map((item, i) => (
                   <li
+                    // biome-ignore lint/suspicious/noArrayIndexKey: a release's notes are read-only and never reordered.
                     key={i}
                     className="relative pl-3.5 text-[0.8125rem] leading-relaxed text-muted-foreground before:absolute before:top-2 before:left-0 before:size-1 before:rounded-full before:bg-border"
                   >

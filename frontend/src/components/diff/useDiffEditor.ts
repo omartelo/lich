@@ -1,7 +1,7 @@
-import {useEffect, useRef} from "react"
-import type {RefObject} from "react"
-import {EditorState} from "@codemirror/state"
-import {EditorView} from "@codemirror/view"
+import { useEffect, useRef } from "react"
+import type { RefObject } from "react"
+import { EditorState } from "@codemirror/state"
+import { EditorView } from "@codemirror/view"
 import {
   buildLineDecorations,
   diffGutter,
@@ -10,7 +10,7 @@ import {
   selectedDocLines,
   type DocLineSelection,
 } from "@/lib/codemirror"
-import type {FileDoc} from "@/lib/diff"
+import type { FileDoc } from "@/lib/diff"
 
 export interface DiffEditor {
   containerRef: RefObject<HTMLDivElement>
@@ -51,5 +51,5 @@ export function useDiffEditor(doc: FileDoc, filename: string): DiffEditor {
   const getSelectedDocLines = (): DocLineSelection | null =>
     viewRef.current ? selectedDocLines(viewRef.current) : null
 
-  return {containerRef, getSelectedDocLines}
+  return { containerRef, getSelectedDocLines }
 }

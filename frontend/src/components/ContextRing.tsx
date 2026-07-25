@@ -1,4 +1,4 @@
-import {cn} from "@/lib/utils"
+import { cn } from "@/lib/utils"
 
 // contextColor is the semantic text colour for a context-window fill, shared by
 // the ring, the footer percent, and the tooltip bar so they always agree: muted
@@ -24,7 +24,7 @@ interface ContextRingProps {
 // radius 15.9155 makes the circumference exactly 100, so the arc's dash length
 // is the percent directly. Strokes use currentColor, so the caller sets the
 // colour (see contextColor) once for the ring and its adjacent text.
-export function ContextRing({percent, className}: ContextRingProps) {
+export function ContextRing({ percent, className }: ContextRingProps) {
   return (
     <svg
       viewBox="0 0 36 36"

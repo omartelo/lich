@@ -131,8 +131,7 @@ export function createGitStatusStore(fetch: GitStatusFetcher, cadence: PollCaden
     }
   }
 
-  const get = (path: string): GitStatus | null =>
-    entries.get(path)?.status ?? null
+  const get = (path: string): GitStatus | null => entries.get(path)?.status ?? null
 
   // refresh fetches a path now, ahead of its poll tick. A no-op when nothing is
   // subscribed to that path (no card is showing it), so an event for a session
@@ -141,5 +140,5 @@ export function createGitStatusStore(fetch: GitStatusFetcher, cadence: PollCaden
     entries.get(path)?.refresh()
   }
 
-  return {subscribe, get, refresh}
+  return { subscribe, get, refresh }
 }

@@ -78,7 +78,6 @@ function start(): void {
     if (stats.events === 0 && stats.stalls === 0) {
       return
     }
-    // eslint-disable-next-line no-console
     console.log(
       `[term-perf] ev/s=${stats.events} KB/s=${(stats.bytes / 1024).toFixed(0)} ` +
         `decode=${stats.decodeMs.toFixed(1)}ms write=${stats.writeMs.toFixed(1)}ms ` +

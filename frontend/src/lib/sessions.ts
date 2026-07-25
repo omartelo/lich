@@ -108,8 +108,7 @@ export function closeSession(
     return state
   }
   const sessions = current.sessions.filter((s) => s.id !== sessionId)
-  const activeId =
-    current.activeId === sessionId ? neighborId(sessions, index) : current.activeId
+  const activeId = current.activeId === sessionId ? neighborId(sessions, index) : current.activeId
   return { ...state, [projectId]: { ...current, sessions, activeId } }
 }
 
@@ -179,9 +178,7 @@ export function renameSession(
     ...state,
     [projectId]: {
       ...current,
-      sessions: current.sessions.map((s) =>
-        s.id === sessionId ? { ...s, label } : s,
-      ),
+      sessions: current.sessions.map((s) => (s.id === sessionId ? { ...s, label } : s)),
     },
   }
 }
@@ -206,10 +203,7 @@ export function reorderSessions(
   return { ...state, [projectId]: { ...current, sessions } }
 }
 
-export function removeProject(
-  state: SessionState,
-  projectId: string,
-): SessionState {
+export function removeProject(state: SessionState, projectId: string): SessionState {
   if (!(projectId in state)) {
     return state
   }
@@ -249,13 +243,13 @@ export function activeTarget(
   state: SessionState,
   projectId: string | null,
   projectPath: string,
-): {sessionId: string; path: string} {
+): { sessionId: string; path: string } {
   if (!projectId) {
-    return {sessionId: "", path: projectPath}
+    return { sessionId: "", path: projectPath }
   }
   const sessionId = activeSessionId(state, projectId)
   const session = sessionsOf(state, projectId).find((s) => s.id === sessionId)
-  return {sessionId, path: session?.path || projectPath}
+  return { sessionId, path: session?.path || projectPath }
 }
 
 // A worktree's sessions under one roof. `path` is the checkout root ("" for the
@@ -288,10 +282,7 @@ export function groupByWorktree(sessions: Session[]): SessionGroup[] {
 // True only for the last session in a worktree checkout. Removing a checkout a
 // sibling session still occupies would throw away its work, so only the last
 // occupant gets offered the keep/remove prompt.
-export function isLastWorktreeSession(
-  sessions: Session[],
-  session: Session,
-): boolean {
+export function isLastWorktreeSession(sessions: Session[], session: Session): boolean {
   if (!session.path) {
     return false
   }

@@ -1,5 +1,5 @@
-import {describe, expect, it} from "vitest"
-import {languageAbbr, splitPath} from "./lang-badge"
+import { describe, expect, it } from "vitest"
+import { languageAbbr, splitPath } from "./lang-badge"
 
 describe("languageAbbr", () => {
   it("maps known extensions", () => {
@@ -35,6 +35,6 @@ describe("splitPath", () => {
   })
 
   it("handles paths without a directory", () => {
-    expect(splitPath("main.go")).toEqual({dir: "", base: "main.go"})
+    expect(splitPath("main.go")).toEqual({ dir: "", base: "main.go" })
   })
 })

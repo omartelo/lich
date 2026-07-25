@@ -1,5 +1,5 @@
-import {describe, expect, it} from "vitest"
-import {decodeFrame, encodeFrame} from "./term-frame"
+import { describe, expect, it } from "vitest"
+import { decodeFrame, encodeFrame } from "./term-frame"
 
 describe("term-frame", () => {
   it("round-trips id and payload", () => {

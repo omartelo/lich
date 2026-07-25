@@ -4,6 +4,7 @@
 // on the common cases, never to be the authority.
 
 // Control chars, space, DEL and git's forbidden set: ~ ^ : ? * [ \
+// biome-ignore lint/suspicious/noControlCharactersInRegex: rejecting control characters is the point — git forbids them in a ref name.
 const INVALID_CHARS = /[\x00-\x20\x7f~^:?*[\\]/
 
 export function isValidBranchName(name: string): boolean {
@@ -23,9 +24,6 @@ export function isValidBranchName(name: string): boolean {
     .split("/")
     .every(
       (part) =>
-        part !== "" &&
-        !part.startsWith(".") &&
-        !part.endsWith(".") &&
-        !part.endsWith(".lock"),
+        part !== "" && !part.startsWith(".") && !part.endsWith(".") && !part.endsWith(".lock"),
     )
 }

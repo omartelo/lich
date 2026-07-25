@@ -50,7 +50,9 @@ export function endpoint(): Endpoint {
   if (!cached) {
     const fromUrl = endpointFromLocation(window.location.href)
     if (!fromUrl) {
-      throw new Error("no backend endpoint in page URL (missing ?token=) — launch through the lich binary")
+      throw new Error(
+        "no backend endpoint in page URL (missing ?token=) — launch through the lich binary",
+      )
     }
     cached = fromUrl
   }
@@ -74,8 +76,8 @@ async function call<T>(method: string, args: unknown[]): Promise<T> {
 // post hits a bespoke (non-/rpc/) endpoint with the connect token. Only
 // /restart needs this today; every service facade goes through call().
 async function post(path: string): Promise<void> {
-  const {base, token} = endpoint()
-  const response = await fetch(`${base}${path}?token=${token}`, {method: "POST"})
+  const { base, token } = endpoint()
+  const response = await fetch(`${base}${path}?token=${token}`, { method: "POST" })
   if (!response.ok) {
     throw new Error(`${path}: HTTP ${response.status}`)
   }
@@ -98,8 +100,7 @@ export const Terminal = {
   Write: (id: string, data: string) => call<null>("terminal.Write", [id, data]),
   Resize: (id: string, cols: number, rows: number) =>
     call<null>("terminal.Resize", [id, cols, rows]),
-  SetVisible: (id: string, visible: boolean) =>
-    call<null>("terminal.SetVisible", [id, visible]),
+  SetVisible: (id: string, visible: boolean) => call<null>("terminal.SetVisible", [id, visible]),
   // Base64 tail of a session's output, to reseed scrollback after a reload.
   Replay: (id: string) => call<string>("terminal.Replay", [id]),
   Close: (id: string) => call<null>("terminal.Close", [id]),
@@ -180,7 +181,8 @@ export const Store = {
   ReorderProjects: (ids: string[]) => call<null>("store.ReorderProjects", [ids]),
   ReorderSessions: (projectID: string, ids: string[]) =>
     call<null>("store.ReorderSessions", [projectID, ids]),
-  GetSetting: (key: string, projectID: string) => call<string>("store.GetSetting", [key, projectID]),
+  GetSetting: (key: string, projectID: string) =>
+    call<string>("store.GetSetting", [key, projectID]),
   SetSetting: (key: string, projectID: string, value: string) =>
     call<null>("store.SetSetting", [key, projectID, value]),
 }
@@ -214,8 +216,7 @@ export const System = {
   /** Open a work-tree file (repo-relative rel under dir) in $VISUAL/$EDITOR.
    * Returns "" when it launched a GUI editor detached, or a shell command line
    * to run in a terminal session when the editor is a terminal editor. */
-  OpenInEditor: (dir: string, rel: string) =>
-    call<string>("system.OpenInEditor", [dir, rel]),
+  OpenInEditor: (dir: string, rel: string) => call<string>("system.OpenInEditor", [dir, rel]),
 }
 
 export const Providers = {

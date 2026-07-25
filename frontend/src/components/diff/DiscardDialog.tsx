@@ -1,6 +1,6 @@
-import {Button} from "@/components/ui/button"
-import {ConfirmDialog} from "@/components/ConfirmDialog"
-import type {DiffFile} from "@/lib/diff"
+import { Button } from "@/components/ui/button"
+import { ConfirmDialog } from "@/components/ConfirmDialog"
+import type { DiffFile } from "@/lib/diff"
 
 interface DiscardDialogProps {
   /** The file whose changes are about to be reverted, or null when hidden. */
@@ -12,7 +12,7 @@ interface DiscardDialogProps {
 // DiscardDialog confirms reverting one file's uncommitted changes: a tracked
 // file goes back to HEAD, a new file is deleted from disk. Either way the
 // changes are gone for good.
-export function DiscardDialog({file, onCancel, onDiscard}: DiscardDialogProps) {
+export function DiscardDialog({ file, onCancel, onDiscard }: DiscardDialogProps) {
   return (
     <ConfirmDialog
       open={file !== null}
@@ -22,8 +22,8 @@ export function DiscardDialog({file, onCancel, onDiscard}: DiscardDialogProps) {
         <>
           Revert all uncommitted changes to{" "}
           <span className="break-all font-mono">{file?.newPath}</span>?
-          {file?.status === "added" && " The file will be deleted from disk."}{" "}
-          This cannot be undone.
+          {file?.status === "added" && " The file will be deleted from disk."} This cannot be
+          undone.
         </>
       }
     >

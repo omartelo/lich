@@ -1,5 +1,5 @@
-import {describe, expect, it, vi} from "vitest"
-import {createCardStore} from "./card-store"
+import { describe, expect, it, vi } from "vitest"
+import { createCardStore } from "./card-store"
 
 describe("card-store", () => {
   it("starts closed", () => {

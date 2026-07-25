@@ -5,12 +5,8 @@
 export function DiffStat({ added, deleted }: { added: number; deleted: number }) {
   return (
     <>
-      <span className="font-medium text-emerald-600 dark:text-emerald-400">
-        +{added}
-      </span>
-      <span className="font-medium text-red-600 dark:text-red-400">
-        -{deleted}
-      </span>
+      <span className="font-medium text-emerald-600 dark:text-emerald-400">+{added}</span>
+      <span className="font-medium text-red-600 dark:text-red-400">-{deleted}</span>
     </>
   )
 }

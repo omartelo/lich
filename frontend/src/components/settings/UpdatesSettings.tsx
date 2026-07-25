@@ -1,12 +1,12 @@
-import {useEffect, useState} from "react"
-import {LoaderCircle, Puzzle, RefreshCw, Sparkles} from "lucide-react"
-import {Button} from "@/components/ui/button"
-import {SettingBlock} from "./SettingBlock"
-import {PatchNotesDialog} from "@/components/PatchNotesDialog"
-import {ClaudePlugin, PatchNotes} from "@/lib/rpc"
-import {runUpdateCheck} from "@/lib/update-check"
-import {runWithToast} from "@/lib/toast-async"
-import type {PatchNotes as PatchNotesData, PluginStatus} from "@/lib/api-types"
+import { useEffect, useState } from "react"
+import { LoaderCircle, Puzzle, RefreshCw, Sparkles } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { SettingBlock } from "./SettingBlock"
+import { PatchNotesDialog } from "@/components/PatchNotesDialog"
+import { ClaudePlugin, PatchNotes } from "@/lib/rpc"
+import { runUpdateCheck } from "@/lib/update-check"
+import { runWithToast } from "@/lib/toast-async"
+import type { PatchNotes as PatchNotesData, PluginStatus } from "@/lib/api-types"
 
 export function UpdatesSettings() {
   const [notes, setNotes] = useState<PatchNotesData | null>(null)
@@ -18,8 +18,12 @@ export function UpdatesSettings() {
   const [pluginResult, setPluginResult] = useState("")
 
   useEffect(() => {
-    void PatchNotes.Current().then(setNotes).catch(() => {})
-    void ClaudePlugin.Status().then(setPlugin).catch(() => {})
+    void PatchNotes.Current()
+      .then(setNotes)
+      .catch(() => {})
+    void ClaudePlugin.Status()
+      .then(setPlugin)
+      .catch(() => {})
   }, [])
 
   const checkApp = async () => {
@@ -63,7 +67,9 @@ export function UpdatesSettings() {
   ) => {
     setPluginBusy(true)
     if (await runWithToast(progress, run, done, failed)) {
-      await ClaudePlugin.Status().then(setPlugin).catch(() => {})
+      await ClaudePlugin.Status()
+        .then(setPlugin)
+        .catch(() => {})
     }
     setPluginBusy(false)
   }
@@ -90,7 +96,9 @@ export function UpdatesSettings() {
       <SettingBlock
         icon={<Sparkles className="size-4" />}
         title="What's new"
-        description={notes?.groups ? `Patch notes for v${notes.version}.` : "No patch notes for this build."}
+        description={
+          notes?.groups ? `Patch notes for v${notes.version}.` : "No patch notes for this build."
+        }
       >
         <Button
           size="sm"

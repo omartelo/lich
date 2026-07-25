@@ -5,7 +5,7 @@
 // alone. Kept pure (no bindings, no React) so the provider and the card only
 // wire it up.
 
-import {projectOfSession, type SessionState} from "./sessions"
+import { projectOfSession, type SessionState } from "./sessions"
 
 // Global event carrying a session's Claude Code processing state (see
 // terminal.statusEventName). Payload: { id, state }. Global rather than
@@ -62,39 +62,33 @@ export function toSessionStatus(data: unknown): SessionStatus | null {
   if (typeof data !== "string") {
     return null
   }
-  return (RENDERED_STATUSES as readonly string[]).includes(data)
-    ? (data as SessionStatus)
-    : null
+  return (RENDERED_STATUSES as readonly string[]).includes(data) ? (data as SessionStatus) : null
 }
 
 // session-touched carries only a session id.
-export function isIdEvent(data: unknown): data is {id: string} {
+export function isIdEvent(data: unknown): data is { id: string } {
   return (
-    typeof data === "object" &&
-    data !== null &&
-    typeof (data as {id?: unknown}).id === "string"
+    typeof data === "object" && data !== null && typeof (data as { id?: unknown }).id === "string"
   )
 }
 
-export function isStatusEvent(data: unknown): data is {id: string; state: string} {
-  return isIdEvent(data) && typeof (data as {state?: unknown}).state === "string"
+export function isStatusEvent(data: unknown): data is { id: string; state: string } {
+  return isIdEvent(data) && typeof (data as { state?: unknown }).state === "string"
 }
 
-export function isTitleEvent(data: unknown): data is {id: string; label: string} {
-  return isIdEvent(data) && typeof (data as {label?: unknown}).label === "string"
+export function isTitleEvent(data: unknown): data is { id: string; label: string } {
+  return isIdEvent(data) && typeof (data as { label?: unknown }).label === "string"
 }
 
-export function isCwdEvent(data: unknown): data is {id: string; cwd: string} {
-  return isIdEvent(data) && typeof (data as {cwd?: unknown}).cwd === "string"
+export function isCwdEvent(data: unknown): data is { id: string; cwd: string } {
+  return isIdEvent(data) && typeof (data as { cwd?: unknown }).cwd === "string"
 }
 
-export function isAgentEvent(data: unknown): data is {id: string; agent: string} {
-  return isIdEvent(data) && typeof (data as {agent?: unknown}).agent === "string"
+export function isAgentEvent(data: unknown): data is { id: string; agent: string } {
+  return isIdEvent(data) && typeof (data as { agent?: unknown }).agent === "string"
 }
 
-export function isUsageEvent(
-  data: unknown,
-): data is {
+export function isUsageEvent(data: unknown): data is {
   id: string
   percent: number
   tokens: number
@@ -104,11 +98,11 @@ export function isUsageEvent(
 } {
   return (
     isIdEvent(data) &&
-    typeof (data as {percent?: unknown}).percent === "number" &&
-    typeof (data as {tokens?: unknown}).tokens === "number" &&
-    typeof (data as {window?: unknown}).window === "number" &&
-    typeof (data as {model?: unknown}).model === "string" &&
-    typeof (data as {effort?: unknown}).effort === "string"
+    typeof (data as { percent?: unknown }).percent === "number" &&
+    typeof (data as { tokens?: unknown }).tokens === "number" &&
+    typeof (data as { window?: unknown }).window === "number" &&
+    typeof (data as { model?: unknown }).model === "string" &&
+    typeof (data as { effort?: unknown }).effort === "string"
   )
 }
 

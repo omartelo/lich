@@ -28,10 +28,24 @@ React 18 + TypeScript + Vite, built to a static bundle that the Go binary embeds
 ```bash
 pnpm build        # tsc typecheck + vite build (the real gate)
 pnpm test         # vitest run
+pnpm check        # biome format + lint check (CI runs this; errors fail)
+pnpm format       # biome, writing the fixes
 ```
 
 Wart: `pnpm test`/`build` can trip an implicit install that dies on `ERR_PNPM_IGNORED_BUILDS`. When it does,
 run the binaries directly: `./node_modules/.bin/vitest run` or `pnpm exec vitest run`.
+
+## Formatting and lint — biome
+
+**biome** (`biome.jsonc`) is the frontend's gofmt + vet, in one binary. There is no prettier and no eslint;
+`eslint-disable` comments are dead here — the directive is `biome-ignore <rule>: <reason>`.
+
+- 2-space indent, double quotes, no semicolons, `lineWidth` 100 (measured as the least-churn width over the
+  source at adoption).
+- A few recommended rules are off on purpose, each with its reason in `biome.jsonc` — read it before turning
+  one back on. Import order is deliberately not enforced.
+- Warnings do not fail the gate; errors do. The standing warning backlog is the a11y one: `role="button"`
+  spans that take a click but no key, and the `role="separator"` resize handles.
 
 ## State — no state library
 

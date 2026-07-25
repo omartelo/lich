@@ -1,5 +1,5 @@
-import {describe, expect, it} from "vitest"
-import {queueSetup, takeSetup} from "./setup-queue"
+import { describe, expect, it } from "vitest"
+import { queueSetup, takeSetup } from "./setup-queue"
 
 describe("setup-queue", () => {
   it("returns the mark once, then clears it", () => {

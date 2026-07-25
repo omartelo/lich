@@ -1,14 +1,14 @@
-import {useCallback, useSyncExternalStore} from "react"
-import {ProjectService} from "./rpc"
-import {createGitStatusStore, type GitStatus, type PollCadence} from "./git-status-store"
+import { useCallback, useSyncExternalStore } from "react"
+import { ProjectService } from "./rpc"
+import { createGitStatusStore, type GitStatus, type PollCadence } from "./git-status-store"
 
-export type {GitStatus}
+export type { GitStatus }
 
 // A checkout being worked in is read every second, so an edit or a commit shows
 // up while the agent is still typing; after five quiet reads it falls back to
 // the old 3s, which is what an idle project costs today. The plugin's
 // session-touched hook still nudges an immediate read on top of this.
-const GIT_POLL: PollCadence = {fastMs: 1_000, slowMs: 3_000, idleTicks: 5}
+const GIT_POLL: PollCadence = { fastMs: 1_000, slowMs: 3_000, idleTicks: 5 }
 
 async function fetchGitStatus(path: string): Promise<GitStatus | null> {
   try {
@@ -16,7 +16,7 @@ async function fetchGitStatus(path: string): Promise<GitStatus | null> {
       ProjectService.Branch(path),
       ProjectService.Diff(path),
     ])
-    return {branch, ...diff}
+    return { branch, ...diff }
   } catch {
     return null
   }
@@ -38,11 +38,8 @@ export function refreshGitStatus(path: string): void {
 // instead of rendering misleading zeros.
 export function useGitStatus(path: string): GitStatus | null {
   const subscribe = useCallback(
-    (onChange: () => void) =>
-      path ? store.subscribe(path, onChange) : () => {},
+    (onChange: () => void) => (path ? store.subscribe(path, onChange) : () => {}),
     [path],
   )
-  return useSyncExternalStore(subscribe, () =>
-    path ? store.get(path) : null,
-  )
+  return useSyncExternalStore(subscribe, () => (path ? store.get(path) : null))
 }

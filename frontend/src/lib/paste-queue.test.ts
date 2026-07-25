@@ -1,5 +1,5 @@
-import {describe, expect, it} from "vitest"
-import {queuePaste, takePaste} from "./paste-queue"
+import { describe, expect, it } from "vitest"
+import { queuePaste, takePaste } from "./paste-queue"
 
 describe("paste-queue", () => {
   it("returns queued text once, then clears it", () => {

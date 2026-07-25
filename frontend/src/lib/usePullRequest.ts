@@ -1,8 +1,8 @@
-import {useEffect, useState} from "react"
-import {lookupPullRequest} from "./pull-request-lookup"
-import type {PullRequest} from "./api-types"
+import { useEffect, useState } from "react"
+import { lookupPullRequest } from "./pull-request-lookup"
+import type { PullRequest } from "./api-types"
 
-export type {PullRequest}
+export type { PullRequest }
 
 // usePullRequest resolves the open GitHub PR for a path's current branch via the
 // gh CLI. Unlike git status it is not polled — each lookup is a network

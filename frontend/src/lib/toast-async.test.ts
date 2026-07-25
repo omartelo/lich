@@ -1,5 +1,5 @@
-import {describe, expect, it, vi, beforeEach} from "vitest"
-import {runWithToast} from "./toast-async"
+import { describe, expect, it, vi, beforeEach } from "vitest"
+import { runWithToast } from "./toast-async"
 
 // Sonner is the framework boundary here; stub it so the test asserts the
 // control flow (action ran, success/error branch, return value) without a DOM.
@@ -27,7 +27,7 @@ describe("runWithToast", () => {
 
     expect(ok).toBe(true)
     expect(action).toHaveBeenCalledOnce()
-    expect(success).toHaveBeenCalledWith("done", {id: "toast-id"})
+    expect(success).toHaveBeenCalledWith("done", { id: "toast-id" })
     expect(error).not.toHaveBeenCalled()
   })
 
@@ -38,7 +38,7 @@ describe("runWithToast", () => {
     const ok = await runWithToast("loading…", action, "done", "failed")
 
     expect(ok).toBe(false)
-    expect(error).toHaveBeenCalledWith("failed: boom", {id: "toast-id"})
+    expect(error).toHaveBeenCalledWith("failed: boom", { id: "toast-id" })
     expect(success).not.toHaveBeenCalled()
   })
 })

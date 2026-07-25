@@ -103,6 +103,7 @@ export function CommandPalette() {
           <div className="flex items-center gap-3 border-b px-4 py-3">
             <Search className="size-4 shrink-0 text-muted-foreground" />
             <input
+              // biome-ignore lint/a11y/noAutofocus: the palette opens on a shortcut to be typed into.
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -197,7 +198,10 @@ function Row({ selected, onSelect, onRun, children }: RowProps) {
     >
       {children}
       <CornerDownLeft
-        className={cn("size-3.5 shrink-0 text-muted-foreground", selected ? "opacity-100" : "opacity-0")}
+        className={cn(
+          "size-3.5 shrink-0 text-muted-foreground",
+          selected ? "opacity-100" : "opacity-0",
+        )}
       />
     </button>
   )

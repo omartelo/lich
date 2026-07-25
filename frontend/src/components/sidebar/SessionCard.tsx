@@ -1,19 +1,19 @@
-import {useEffect, useRef, useState} from "react"
-import type {KeyboardEvent} from "react"
-import {GitBranch, GitPullRequestArrow, Pencil, Terminal, X} from "lucide-react"
-import {useSortable} from "@dnd-kit/sortable"
-import {CSS} from "@dnd-kit/utilities"
-import {cn} from "@/lib/utils"
-import {displayPath} from "@/lib/paths"
-import {type Session} from "@/lib/sessions"
-import {useSessionStatus} from "@/lib/useSessionStatus"
-import {useSessionCwd} from "@/lib/useSessionCwd"
-import {useSessionAgent} from "@/lib/useSessionAgent"
-import {useGitStatus} from "@/lib/useGitStatus"
-import {usePullRequest} from "@/lib/usePullRequest"
-import {DiffStat} from "@/components/DiffStat"
-import {SessionStatusIcon} from "./SessionStatusIcon"
-import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip"
+import { useEffect, useRef, useState } from "react"
+import type { KeyboardEvent } from "react"
+import { GitBranch, GitPullRequestArrow, Pencil, Terminal, X } from "lucide-react"
+import { useSortable } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
+import { cn } from "@/lib/utils"
+import { displayPath } from "@/lib/paths"
+import type { Session } from "@/lib/sessions"
+import { useSessionStatus } from "@/lib/useSessionStatus"
+import { useSessionCwd } from "@/lib/useSessionCwd"
+import { useSessionAgent } from "@/lib/useSessionAgent"
+import { useGitStatus } from "@/lib/useGitStatus"
+import { usePullRequest } from "@/lib/usePullRequest"
+import { DiffStat } from "@/components/DiffStat"
+import { SessionStatusIcon } from "./SessionStatusIcon"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -39,15 +39,15 @@ interface SessionCardProps {
 
 // The card itself is the drag grip for reordering the list — no separate handle.
 export function SessionCard({
-                              session,
-                              path,
-                              active,
-                              onSelect,
-                              onClose,
-                              onRename,
-                              onOpenTerminal,
-                              onPulls,
-                            }: SessionCardProps) {
+  session,
+  path,
+  active,
+  onSelect,
+  onClose,
+  onRename,
+  onOpenTerminal,
+  onPulls,
+}: SessionCardProps) {
   const pathRef = useRef<HTMLSpanElement>(null)
   const [pathOverflow, setPathOverflow] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -72,14 +72,10 @@ export function SessionCard({
   const pr = usePullRequest(shownPath, git?.branch ?? "", git?.head ?? "")
   // Renaming disables the drag: the sensor would otherwise claim the pointer
   // before the input could be clicked into or its text selected.
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({id: session.id, disabled: editing})
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: session.id,
+    disabled: editing,
+  })
 
   const commit = (value: string) => {
     setEditing(false)
@@ -115,11 +111,8 @@ export function SessionCard({
     // triggers that render it.
     <div
       ref={setNodeRef}
-      style={{transform: CSS.Transform.toString(transform), transition}}
-      className={cn(
-        "relative",
-        isDragging && "pointer-events-none z-10 rounded-lg shadow-md",
-      )}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn("relative", isDragging && "pointer-events-none z-10 rounded-lg shadow-md")}
       {...attributes}
       {...listeners}
     >
@@ -144,6 +137,7 @@ export function SessionCard({
             <div className="flex w-full min-w-0 flex-col space-y-2">
               {editing ? (
                 <input
+                  // biome-ignore lint/a11y/noAutofocus: the rename field replaces the label only once editing starts.
                   autoFocus
                   defaultValue={session.label}
                   onFocus={(event) => event.currentTarget.select()}
@@ -154,7 +148,7 @@ export function SessionCard({
                 />
               ) : (
                 <span className="flex w-full min-w-0 items-center gap-1.5 pr-5">
-                  <SessionStatusIcon kind={agent ?? session.kind} status={status}/>
+                  <SessionStatusIcon kind={agent ?? session.kind} status={status} />
                   <span className="truncate text-sm font-medium text-foreground">
                     {session.label}
                   </span>
@@ -169,17 +163,17 @@ export function SessionCard({
                 className={cn(
                   "block max-w-full overflow-hidden whitespace-nowrap text-left font-mono text-xs text-muted-foreground",
                   pathOverflow &&
-                  "[mask-image:linear-gradient(to_right,transparent,black_1.25rem)]",
+                    "[mask-image:linear-gradient(to_right,transparent,black_1.25rem)]",
                 )}
               >
-              {"\u200e" + displayPath(shownPath)}
-            </span>
+                {`\u200e${displayPath(shownPath)}`}
+              </span>
               {git?.branch && (
                 <span className="flex w-full items-center justify-between gap-2 text-xs text-muted-foreground">
-                <span className="flex min-w-0 items-center gap-1">
-                  <GitBranch className="size-3 shrink-0"/>
-                  <span className="truncate">{git.branch}</span>
-                </span>
+                  <span className="flex min-w-0 items-center gap-1">
+                    <GitBranch className="size-3 shrink-0" />
+                    <span className="truncate">{git.branch}</span>
+                  </span>
                   <span className="flex shrink-0 items-center gap-1.5">
                     {pr && (
                       <span
@@ -191,15 +185,12 @@ export function SessionCard({
                         }}
                         className="flex items-center gap-1 rounded-sm transition-colors hover:text-foreground"
                       >
-                        <GitPullRequestArrow className="size-3 shrink-0"/>
-                        #{pr.number}
+                        <GitPullRequestArrow className="size-3 shrink-0" />#{pr.number}
                       </span>
                     )}
-                    {git.files > 0 && (
-                      <DiffStat added={git.added} deleted={git.deleted}/>
-                    )}
+                    {git.files > 0 && <DiffStat added={git.added} deleted={git.deleted} />}
                   </span>
-              </span>
+                </span>
               )}
             </div>
             <span
@@ -211,8 +202,8 @@ export function SessionCard({
               }}
               className="absolute right-2 top-2 flex size-4 items-center justify-center rounded opacity-0 transition-opacity hover:bg-foreground/15 group-hover:opacity-100"
             >
-            <X className="size-3"/>
-          </span>
+              <X className="size-3" />
+            </span>
           </ContextMenuTrigger>
           <TooltipContent
             side="right"
@@ -224,17 +215,17 @@ export function SessionCard({
               {git?.branch && (
                 <span className="flex flex-wrap items-center gap-2 text-muted-foreground">
                   <span className="flex items-center gap-1">
-                    <GitBranch className="size-3 shrink-0"/>
+                    <GitBranch className="size-3 shrink-0" />
                     {git.branch}
                   </span>
                   {pr && (
                     <span className="flex items-center gap-1">
-                      <GitPullRequestArrow className="size-3 shrink-0"/>#{pr.number}
+                      <GitPullRequestArrow className="size-3 shrink-0" />#{pr.number}
                     </span>
                   )}
                   {git.files > 0 && (
                     <span className="flex items-center gap-1.5">
-                      <DiffStat added={git.added} deleted={git.deleted}/>
+                      <DiffStat added={git.added} deleted={git.deleted} />
                     </span>
                   )}
                 </span>
@@ -244,22 +235,22 @@ export function SessionCard({
         </Tooltip>
         <ContextMenuContent>
           <ContextMenuItem onClick={() => setEditing(true)}>
-            <Pencil/>
+            <Pencil />
             Rename
           </ContextMenuItem>
           {session.kind !== "shell" && (
             <ContextMenuItem onClick={() => onOpenTerminal(shownPath)}>
-              <Terminal/>
+              <Terminal />
               Open Terminal
             </ContextMenuItem>
           )}
           <ContextMenuItem onClick={onPulls}>
-            <GitPullRequestArrow/>
+            <GitPullRequestArrow />
             Pull request
           </ContextMenuItem>
-          <ContextMenuSeparator/>
+          <ContextMenuSeparator />
           <ContextMenuItem variant="destructive" onClick={onClose}>
-            <X/>
+            <X />
             Close session
           </ContextMenuItem>
         </ContextMenuContent>

@@ -1,5 +1,5 @@
-import {describe, expect, it} from "vitest"
-import {formatModel} from "./model-name"
+import { describe, expect, it } from "vitest"
+import { formatModel } from "./model-name"
 
 describe("formatModel", () => {
   it("drops the claude- prefix and dots the version", () => {

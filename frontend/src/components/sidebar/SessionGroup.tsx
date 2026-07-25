@@ -1,12 +1,12 @@
-import {useSyncExternalStore} from "react"
-import {DndContext, closestCenter} from "@dnd-kit/core"
-import {SortableContext, verticalListSortingStrategy} from "@dnd-kit/sortable"
-import {useSortableList, verticalAxis} from "@/lib/use-sortable-list"
-import {baseName} from "@/lib/paths"
-import type {Session} from "@/lib/sessions"
-import {SessionCard} from "./SessionCard"
-import {PullRequestCard} from "./PullRequestCard"
-import {isPullsOpen, subscribePullsCard} from "@/lib/pulls-card-store"
+import { useSyncExternalStore } from "react"
+import { DndContext, closestCenter } from "@dnd-kit/core"
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
+import { useSortableList, verticalAxis } from "@/lib/use-sortable-list"
+import { baseName } from "@/lib/paths"
+import type { Session } from "@/lib/sessions"
+import { SessionCard } from "./SessionCard"
+import { PullRequestCard } from "./PullRequestCard"
+import { isPullsOpen, subscribePullsCard } from "@/lib/pulls-card-store"
 
 interface SessionGroupProps {
   // "" for the project's own root, else the worktree checkout path.
@@ -55,7 +55,7 @@ export function SessionGroup({
   onClosePulls,
 }: SessionGroupProps) {
   const ids = sessions.map((session) => session.id)
-  const {sensors, onDragEnd} = useSortableList(ids, onReorder)
+  const { sensors, onDragEnd } = useSortableList(ids, onReorder)
   const name = path ? baseName(path) : projectName
   // The PR card keys off the group's real checkout — the project root for the
   // root group (empty path), else the worktree — so a root project on a feature
@@ -70,7 +70,7 @@ export function SessionGroup({
           <span className="min-w-0 truncate text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground/70">
             {name}
           </span>
-          <span className="h-px flex-1 bg-border"/>
+          <span className="h-px flex-1 bg-border" />
         </div>
       )}
       <DndContext

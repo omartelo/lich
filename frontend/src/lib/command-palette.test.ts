@@ -71,7 +71,9 @@ describe("filterPalette", () => {
   it("filters sessions by label, project name and path", () => {
     expect(filterPalette("flaky", all, projects).sessions.map((s) => s.sessionId)).toEqual(["s1"])
     expect(filterPalette("revu", all, projects).sessions.map((s) => s.sessionId)).toEqual(["s3"])
-    expect(filterPalette("frontend", all, projects).sessions.map((s) => s.sessionId)).toEqual(["s2"])
+    expect(filterPalette("frontend", all, projects).sessions.map((s) => s.sessionId)).toEqual([
+      "s2",
+    ])
   })
 
   it("filters projects by name and path", () => {

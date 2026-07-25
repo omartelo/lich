@@ -1,4 +1,4 @@
-import {describe, expect, it} from "vitest"
+import { describe, expect, it } from "vitest"
 import {
   buildFileDoc,
   discardTargets,
@@ -88,7 +88,7 @@ describe("parseDiff", () => {
       ["context", 3, 4],
     ])
     expect(second.newStart).toBe(11)
-    expect(second.lines[1]).toMatchObject({kind: "add", newLine: 11})
+    expect(second.lines[1]).toMatchObject({ kind: "add", newLine: 11 })
   })
 
   it("parses an untracked file rendered by --no-index", () => {
@@ -111,7 +111,7 @@ describe("parseDiff", () => {
     expect(file.status).toBe("renamed")
     expect(file.oldPath).toBe("old-name.ts")
     expect(file.newPath).toBe("new-name.ts")
-    expect(file.hunks[0].lines[1]).toMatchObject({kind: "add", newLine: 5})
+    expect(file.hunks[0].lines[1]).toMatchObject({ kind: "add", newLine: 5 })
   })
 
   it("flags binary files without hunks", () => {
@@ -144,7 +144,7 @@ describe("buildFileDoc", () => {
     const docLines = doc.text.split("\n")
     expect(docLines).toHaveLength(doc.lineMeta.length)
     expect(docLines[0]).toBe("const a = 1")
-    expect(doc.lineMeta[0]).toMatchObject({kind: "context", oldLine: 1, newLine: 1})
+    expect(doc.lineMeta[0]).toMatchObject({ kind: "context", oldLine: 1, newLine: 1 })
     expect(doc.lineMeta[1]).toMatchObject({
       kind: "del",
       oldLine: 2,
@@ -152,7 +152,7 @@ describe("buildFileDoc", () => {
     })
     expect(docLines[5]).toBe("")
     expect(doc.lineMeta[5].kind).toBe("meta")
-    expect(doc.lineMeta[7]).toMatchObject({kind: "add", newLine: 11})
+    expect(doc.lineMeta[7]).toMatchObject({ kind: "add", newLine: 11 })
   })
 
   it("omits no-newline markers from the doc", () => {
@@ -174,11 +174,11 @@ describe("newLineRange", () => {
   //            6 sep, 7 del, 8 add(11), 9 ctx(12)
 
   it("maps a pure-addition selection", () => {
-    expect(newLineRange(meta, 3, 4)).toEqual({start: 2, end: 3})
+    expect(newLineRange(meta, 3, 4)).toEqual({ start: 2, end: 3 })
   })
 
   it("collapses a single line to start === end", () => {
-    expect(newLineRange(meta, 3, 3)).toEqual({start: 2, end: 2})
+    expect(newLineRange(meta, 3, 3)).toEqual({ start: 2, end: 2 })
   })
 
   it("returns null for deleted/separator-only selections", () => {
@@ -188,21 +188,21 @@ describe("newLineRange", () => {
   })
 
   it("spans hunk boundaries with min/max of covered new lines", () => {
-    expect(newLineRange(meta, 3, 8)).toEqual({start: 2, end: 11})
+    expect(newLineRange(meta, 3, 8)).toEqual({ start: 2, end: 11 })
   })
 
   it("ignores separators inside the selection", () => {
-    expect(newLineRange(meta, 5, 6)).toEqual({start: 4, end: 4})
+    expect(newLineRange(meta, 5, 6)).toEqual({ start: 4, end: 4 })
   })
 })
 
 describe("formatLineRef", () => {
   it("collapses a single-line selection", () => {
-    expect(formatLineRef({start: 19, end: 19})).toBe("19")
+    expect(formatLineRef({ start: 19, end: 19 })).toBe("19")
   })
 
   it("keeps a multi-line range", () => {
-    expect(formatLineRef({start: 19, end: 24})).toBe("19-24")
+    expect(formatLineRef({ start: 19, end: 24 })).toBe("19-24")
   })
 })
 
@@ -213,10 +213,7 @@ describe("discardTargets", () => {
   })
 
   it("targets both sides of a rename, new path first", () => {
-    expect(discardTargets(parseDiff(renamedDiff)[0])).toEqual([
-      "new-name.ts",
-      "old-name.ts",
-    ])
+    expect(discardTargets(parseDiff(renamedDiff)[0])).toEqual(["new-name.ts", "old-name.ts"])
   })
 })
 

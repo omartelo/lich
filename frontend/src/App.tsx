@@ -22,8 +22,7 @@ import { CommandPalette } from "@/components/CommandPalette"
 // top of the terminals.
 function Layout() {
   const [dock, setDock] = useState<DockTab | null>(null)
-  const toggleDock = (tab: DockTab) =>
-    setDock((cur) => (cur === tab ? null : tab))
+  const toggleDock = (tab: DockTab) => setDock((cur) => (cur === tab ? null : tab))
   return (
     <div className="flex h-screen w-screen flex-col bg-background">
       <ProjectTabs />
@@ -36,13 +35,7 @@ function Layout() {
               <TerminalHost />
               <Outlet />
             </div>
-            {dock && (
-              <RightDock
-                tab={dock}
-                onTab={setDock}
-                onClose={() => setDock(null)}
-              />
-            )}
+            {dock && <RightDock tab={dock} onTab={setDock} onClose={() => setDock(null)} />}
           </div>
           <FooterBar dock={dock} onDock={toggleDock} />
         </main>

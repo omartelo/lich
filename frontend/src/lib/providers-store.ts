@@ -57,10 +57,7 @@ export function enabledProviders(list: ProviderState[]): ProviderState[] {
 // (nothing loaded yet, or every provider off). Mirrors enabledProviders in
 // ignoring install state — a disabled default falls back, a missing binary does
 // not, that shows up as a PTY error.
-export function resolveDefaultProvider(
-  list: ProviderState[],
-  defaultId: string,
-): ProviderKind {
+export function resolveDefaultProvider(list: ProviderState[], defaultId: string): ProviderKind {
   const enabled = enabledProviders(list)
   const chosen = enabled.find((p) => p.id === defaultId)
   return chosen?.id ?? enabled[0]?.id ?? "claude"
@@ -83,7 +80,11 @@ export function createProvidersStore(deps: ProvidersDeps) {
   let defaultId = ""
   let state: "idle" | "loading" | "ready" = "idle"
   const listeners = new Set<() => void>()
-  const emit = () => listeners.forEach((listener) => listener())
+  const emit = () => {
+    for (const listener of listeners) {
+      listener()
+    }
+  }
 
   const load = async (): Promise<void> => {
     const [detected, storedDefault] = await Promise.all([
@@ -91,12 +92,14 @@ export function createProvidersStore(deps: ProvidersDeps) {
       deps.getDefault(),
     ])
     providers = await Promise.all(
-      detected.filter((d) => isProviderKind(d.id)).map(async (d) => ({
-        id: d.id as ProviderKind,
-        name: d.name,
-        installed: d.installed,
-        enabled: readEnabled(d.id, await deps.getEnabled(d.id)),
-      })),
+      detected
+        .filter((d) => isProviderKind(d.id))
+        .map(async (d) => ({
+          id: d.id as ProviderKind,
+          name: d.name,
+          installed: d.installed,
+          enabled: readEnabled(d.id, await deps.getEnabled(d.id)),
+        })),
     )
     defaultId = storedDefault
     state = "ready"

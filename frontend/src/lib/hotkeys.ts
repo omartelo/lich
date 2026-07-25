@@ -6,9 +6,7 @@
 // Zoom is deliberately absent: those chords shadow Chromium's own accelerators,
 // which are bound to physical keys, so they are matched on event.code in
 // zoom-keys.ts instead of being character combos a user can rebind.
-export type HotkeyId =
-  | "commandPalette"
-  | "newSession"
+export type HotkeyId = "commandPalette" | "newSession"
 
 export interface Combo {
   mod: boolean
@@ -25,8 +23,16 @@ export interface HotkeyAction {
 
 // HOTKEY_ACTIONS drives the defaults and the settings UI list.
 export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
-  { id: "commandPalette", label: "Command palette", combo: { mod: true, shift: false, alt: false, key: "k" } },
-  { id: "newSession", label: "New session", combo: { mod: true, shift: true, alt: false, key: "t" } },
+  {
+    id: "commandPalette",
+    label: "Command palette",
+    combo: { mod: true, shift: false, alt: false, key: "k" },
+  },
+  {
+    id: "newSession",
+    label: "New session",
+    combo: { mod: true, shift: true, alt: false, key: "t" },
+  },
 ]
 
 export type Hotkeys = Record<HotkeyId, Combo>

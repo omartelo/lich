@@ -4,13 +4,7 @@ import type { ReactNode } from "react"
 // (Appearance holds both interface and terminal controls) reads as groups
 // rather than one flat list. Sibling groups are separated by the section's
 // own divide-y; blocks inside a group get their own hairlines.
-export function SettingGroup({
-  label,
-  children,
-}: {
-  label: string
-  children: ReactNode
-}) {
+export function SettingGroup({ label, children }: { label: string; children: ReactNode }) {
   return (
     <section className="pt-8 first:pt-0">
       <h2 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -41,9 +35,7 @@ export function SettingBlock({
           <span>{title}</span>
         </div>
         {description && (
-          <p className="mt-1 max-w-prose text-xs text-muted-foreground">
-            {description}
-          </p>
+          <p className="mt-1 max-w-prose text-xs text-muted-foreground">{description}</p>
         )}
       </div>
       {children}

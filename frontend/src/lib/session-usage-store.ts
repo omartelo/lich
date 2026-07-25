@@ -1,4 +1,4 @@
-import {isUsageEvent, type SessionUsage} from "./session-events"
+import { isUsageEvent, type SessionUsage } from "./session-events"
 
 // A subscription to the global usage event, injected so the store is testable
 // without standing up the /events socket. Returns its unsubscribe.
@@ -21,7 +21,7 @@ export function createSessionUsageStore(source: UsageEventSource) {
   const entryOf = (id: string): Entry => {
     let entry = entries.get(id)
     if (!entry) {
-      entry = {usage: null, listeners: new Set()}
+      entry = { usage: null, listeners: new Set() }
       entries.set(id, entry)
     }
     return entry
@@ -68,5 +68,5 @@ export function createSessionUsageStore(source: UsageEventSource) {
   // context badge at all.
   const get = (id: string): SessionUsage | null => entries.get(id)?.usage ?? null
 
-  return {subscribe, get}
+  return { subscribe, get }
 }

@@ -1,7 +1,7 @@
-import {describe, expect, it} from "vitest"
-import {clampRem, dragWidth, parseStoredWidth} from "./panel-width"
+import { describe, expect, it } from "vitest"
+import { clampRem, dragWidth, parseStoredWidth } from "./panel-width"
 
-const bounds = {minRem: 12, maxRem: 30}
+const bounds = { minRem: 12, maxRem: 30 }
 
 describe("clampRem", () => {
   it("passes values inside the bounds through", () => {
@@ -20,12 +20,9 @@ describe("parseStoredWidth", () => {
     expect(parseStoredWidth("99", bounds, 15)).toBe(30)
   })
 
-  it.each([null, "", "garbage", "-3", "0", "NaN"])(
-    "falls back to the default for %j",
-    (raw) => {
-      expect(parseStoredWidth(raw, bounds, 15)).toBe(15)
-    },
-  )
+  it.each([null, "", "garbage", "-3", "0", "NaN"])("falls back to the default for %j", (raw) => {
+    expect(parseStoredWidth(raw, bounds, 15)).toBe(15)
+  })
 })
 
 describe("dragWidth", () => {

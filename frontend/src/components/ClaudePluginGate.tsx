@@ -1,6 +1,6 @@
-import {useEffect, useRef, useState} from "react"
-import {toast} from "sonner"
-import {Button} from "@/components/ui/button"
+import { useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
+import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
@@ -13,11 +13,12 @@ import {
   decidePluginAction,
   DISMISSED_FLAG,
   INSTALL_DISMISSED_KEY,
+  type PluginAction,
   UPDATE_DISMISSED_KEY,
 } from "@/lib/plugin-gate"
-import {ClaudePlugin} from "@/lib/rpc"
-import {errorText} from "@/lib/utils"
-import {runWithToast} from "@/lib/toast-async"
+import { ClaudePlugin } from "@/lib/rpc"
+import { errorText } from "@/lib/utils"
+import { runWithToast } from "@/lib/toast-async"
 
 const RESTART_HINT = "restart your Claude sessions to apply."
 
@@ -39,7 +40,7 @@ export function ClaudePluginGate() {
   }, [])
 
   const check = async () => {
-    let action
+    let action: PluginAction
     try {
       const status = await ClaudePlugin.Status()
       action = decidePluginAction(
@@ -60,7 +61,7 @@ export function ClaudePluginGate() {
   const promptUpdate = (version: string) => {
     toast(`lich plugin ${version} is available`, {
       duration: Infinity,
-      action: {label: "Update", onClick: () => void runUpdate()},
+      action: { label: "Update", onClick: () => void runUpdate() },
       cancel: {
         label: "Later",
         onClick: () => localStorage.setItem(UPDATE_DISMISSED_KEY, version),
@@ -95,14 +96,17 @@ export function ClaudePluginGate() {
   }
 
   return (
-    <Dialog open={installOpen} onOpenChange={(open) => !open && !installing && setInstallOpen(false)}>
+    <Dialog
+      open={installOpen}
+      onOpenChange={(open) => !open && !installing && setInstallOpen(false)}
+    >
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Enable the Claude Code integration</DialogTitle>
           <DialogDescription>
-            Install the lich plugin for Claude Code to get the most out of lich.
-            It deepens the integration between your sessions and the app, and gains
-            new capabilities with each release.
+            Install the lich plugin for Claude Code to get the most out of lich. It deepens the
+            integration between your sessions and the app, and gains new capabilities with each
+            release.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

@@ -3,8 +3,8 @@
 // is trivially testable; the component wires it to Status(), the dialog, and the
 // toast.
 
-import type {PluginStatus as Status} from "./api-types"
-export type {Status}
+import type { PluginStatus as Status } from "./api-types"
+export type { Status }
 
 export const INSTALL_DISMISSED_KEY = "lich.pluginInstallDismissed"
 export const UPDATE_DISMISSED_KEY = "lich.pluginUpdateDismissed"
@@ -15,7 +15,10 @@ export const DISMISSED_FLAG = "1"
 
 // PluginAction is what the gate should do: install prompt, update prompt (with
 // the target version), or nothing.
-export type PluginAction = {kind: "install"} | {kind: "update"; version: string} | {kind: "none"}
+export type PluginAction =
+  | { kind: "install" }
+  | { kind: "update"; version: string }
+  | { kind: "none" }
 
 // decidePluginAction resolves the startup prompt. Not installed and not
 // permanently dismissed → install. Installed with a newer release not yet
@@ -26,10 +29,10 @@ export function decidePluginAction(
   updateDismissedVersion: string | null,
 ): PluginAction {
   if (!status.installed) {
-    return installDismissed ? {kind: "none"} : {kind: "install"}
+    return installDismissed ? { kind: "none" } : { kind: "install" }
   }
   if (status.updateAvailable && updateDismissedVersion !== status.latestVersion) {
-    return {kind: "update", version: status.latestVersion}
+    return { kind: "update", version: status.latestVersion }
   }
-  return {kind: "none"}
+  return { kind: "none" }
 }

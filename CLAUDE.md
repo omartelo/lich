@@ -41,6 +41,7 @@ Frontend in isolation: `cd frontend && pnpm run build` (runs `tsc` + `vite build
 ## Local Gate (before every commit / PR)
 
 - `gofmt -l .` clean (fix with `gofmt -w .`) and `go vet ./...` clean.
+- `cd frontend && pnpm check` clean — biome is the frontend's gofmt + vet (fix with `pnpm format`).
 - `go test ./...` (backend) and `cd frontend && pnpm test` (frontend) green — or `task test` for both.
 - `cd frontend && pnpm build` succeeds (tsc typecheck + vite).
 - Touched an OS seam or a `_test.go` build tag? Run the same cross-compile loop CI runs:

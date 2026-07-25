@@ -83,10 +83,7 @@ describe("addSession", () => {
 
   it("appends, focuses the new session and advances the label sequence", () => {
     const state = addSession(buildState(1), P, "s2")
-    expect(sessionsOf(state, P).map((s) => s.label)).toEqual([
-      "Session 1",
-      "Session 2",
-    ])
+    expect(sessionsOf(state, P).map((s) => s.label)).toEqual(["Session 1", "Session 2"])
     expect(activeSessionId(state, P)).toBe("s2")
   })
 
@@ -178,10 +175,7 @@ describe("setActiveSession", () => {
 describe("renameSession", () => {
   it("relabels the target session and leaves siblings untouched", () => {
     const state = renameSession(buildState(2), P, "s1", "build")
-    expect(sessionsOf(state, P).map((s) => s.label)).toEqual([
-      "build",
-      "Session 2",
-    ])
+    expect(sessionsOf(state, P).map((s) => s.label)).toEqual(["build", "Session 2"])
   })
 
   it("does not mutate the input state", () => {
@@ -324,7 +318,7 @@ describe("activeTarget", () => {
   const root = "/repo"
 
   it("falls back to the project root when the active session has no checkout", () => {
-    expect(activeTarget(buildState(2), P, root)).toEqual({sessionId: "s2", path: root})
+    expect(activeTarget(buildState(2), P, root)).toEqual({ sessionId: "s2", path: root })
   })
 
   it("resolves a worktree session to its checkout", () => {
@@ -341,11 +335,11 @@ describe("activeTarget", () => {
   })
 
   it("keeps the project root when there is no session at all", () => {
-    expect(activeTarget({}, P, root)).toEqual({sessionId: "", path: root})
+    expect(activeTarget({}, P, root)).toEqual({ sessionId: "", path: root })
   })
 
   it("is empty off a project route", () => {
-    expect(activeTarget(buildState(2), null, "")).toEqual({sessionId: "", path: ""})
+    expect(activeTarget(buildState(2), null, "")).toEqual({ sessionId: "", path: "" })
   })
 })
 
@@ -398,11 +392,7 @@ describe("groupByWorktree", () => {
   })
 
   it("merges interleaved paths into one group, preserving flat order", () => {
-    const groups = groupByWorktree([
-      s("a1", "/wt/a"),
-      s("b1", "/wt/b"),
-      s("a2", "/wt/a"),
-    ])
+    const groups = groupByWorktree([s("a1", "/wt/a"), s("b1", "/wt/b"), s("a2", "/wt/a")])
     expect(groups.map((g) => g.path)).toEqual(["/wt/a", "/wt/b"])
     expect(groups[0].sessions.map((x) => x.id)).toEqual(["a1", "a2"])
     expect(groups[1].sessions.map((x) => x.id)).toEqual(["b1"])

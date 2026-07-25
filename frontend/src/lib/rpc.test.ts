@@ -1,5 +1,5 @@
-import {describe, expect, it} from "vitest"
-import {endpointFromLocation} from "./rpc"
+import { describe, expect, it } from "vitest"
+import { endpointFromLocation } from "./rpc"
 
 describe("endpointFromLocation", () => {
   it("extracts base and token from a Chromium-shell URL", () => {

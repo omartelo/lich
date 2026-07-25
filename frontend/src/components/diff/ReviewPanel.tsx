@@ -1,12 +1,12 @@
-import {useCallback, useEffect, useState} from "react"
-import {toast} from "sonner"
-import {ProjectService, Terminal as TerminalService} from "@/lib/rpc"
-import {useActiveSession} from "@/lib/useActiveSession"
-import {discardTargets, parseDiff, type DiffFile} from "@/lib/diff"
-import {useGitStatus} from "@/lib/useGitStatus"
-import {errorText} from "@/lib/utils"
-import {DiscardDialog} from "./DiscardDialog"
-import {FileDiff, type DiffBulk} from "./FileDiff"
+import { useCallback, useEffect, useState } from "react"
+import { toast } from "sonner"
+import { ProjectService, Terminal as TerminalService } from "@/lib/rpc"
+import { useActiveSession } from "@/lib/useActiveSession"
+import { discardTargets, parseDiff, type DiffFile } from "@/lib/diff"
+import { useGitStatus } from "@/lib/useGitStatus"
+import { errorText } from "@/lib/utils"
+import { DiscardDialog } from "./DiscardDialog"
+import { FileDiff, type DiffBulk } from "./FileDiff"
 
 // ReviewPanel is the Review tab's body: the active session's uncommitted diff,
 // one collapsible file at a time. Context-menu actions write file/line
@@ -14,8 +14,8 @@ import {FileDiff, type DiffBulk} from "./FileDiff"
 // It follows the active session — a worktree session reviews its checkout, not
 // the project root. The dock (RightDock) owns the surrounding chrome: width,
 // full screen, the tab bar and the close button.
-export function ReviewPanel({bulk}: {bulk: DiffBulk}) {
-  const {sessionId, path} = useActiveSession()
+export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
+  const { sessionId, path } = useActiveSession()
   const status = useGitStatus(path)
   const [files, setFiles] = useState<DiffFile[] | null>(null)
   const [failed, setFailed] = useState(false)
@@ -92,7 +92,7 @@ interface PanelBodyProps {
   bulk: DiffBulk
 }
 
-function PanelBody({files, failed, onInject, onDiscard, bulk}: PanelBodyProps) {
+function PanelBody({ files, failed, onInject, onDiscard, bulk }: PanelBodyProps) {
   if (failed) {
     return <PanelNotice>Not a git repository</PanelNotice>
   }
@@ -117,6 +117,6 @@ function PanelBody({files, failed, onInject, onDiscard, bulk}: PanelBodyProps) {
   )
 }
 
-function PanelNotice({children}: {children: string}) {
+function PanelNotice({ children }: { children: string }) {
   return <p className="px-3 py-4 text-xs text-muted-foreground">{children}</p>
 }

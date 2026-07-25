@@ -1,12 +1,12 @@
-import {afterEach, beforeEach, describe, expect, it, vi} from "vitest"
-import {createGitStatusStore, type GitStatus} from "./git-status-store"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { createGitStatusStore, type GitStatus } from "./git-status-store"
 
 // A cadence with a wide gap between fast and slow, so a test can tell which
 // one a tick used.
 const FAST_MS = 1_000
 const SLOW_MS = 10_000
 const IDLE_TICKS = 3
-const CADENCE = {fastMs: FAST_MS, slowMs: SLOW_MS, idleTicks: IDLE_TICKS}
+const CADENCE = { fastMs: FAST_MS, slowMs: SLOW_MS, idleTicks: IDLE_TICKS }
 
 const status = (files: number, head = "abc123"): GitStatus => ({
   branch: "main",
@@ -38,9 +38,7 @@ describe("createGitStatusStore", () => {
   })
 
   it("polls each distinct path separately", async () => {
-    const fetch = vi.fn(async (path: string) =>
-      path === "/a" ? status(1) : status(2),
-    )
+    const fetch = vi.fn(async (path: string) => (path === "/a" ? status(1) : status(2)))
     const store = createGitStatusStore(fetch, CADENCE)
     store.subscribe("/a", () => {})
     store.subscribe("/b", () => {})
@@ -174,9 +172,7 @@ describe("createGitStatusStore", () => {
 
   it("a stale fetch resolving late cannot overwrite a fresher one", async () => {
     const resolvers: Array<(value: GitStatus | null) => void> = []
-    const fetch = vi.fn(
-      () => new Promise<GitStatus | null>((r) => resolvers.push(r)),
-    )
+    const fetch = vi.fn(() => new Promise<GitStatus | null>((r) => resolvers.push(r)))
     const store = createGitStatusStore(fetch, CADENCE)
     const listener = vi.fn()
     store.subscribe("/repo", listener) // fetch #1 — the slow poll
@@ -193,9 +189,7 @@ describe("createGitStatusStore", () => {
 
   it("drops an in-flight result after teardown", async () => {
     let resolve: (value: GitStatus | null) => void = () => {}
-    const fetch = vi.fn(
-      () => new Promise<GitStatus | null>((r) => (resolve = r)),
-    )
+    const fetch = vi.fn(() => new Promise<GitStatus | null>((r) => (resolve = r)))
     const store = createGitStatusStore(fetch, CADENCE)
     const listener = vi.fn()
     const unsubscribe = store.subscribe("/repo", listener)

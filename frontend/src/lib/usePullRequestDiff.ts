@@ -1,7 +1,7 @@
-import {useCallback, useEffect, useRef, useState} from "react"
-import {ProjectService} from "./rpc"
-import {parseDiff, type DiffFile} from "./diff"
-import {errorText} from "./utils"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { ProjectService } from "./rpc"
+import { parseDiff, type DiffFile } from "./diff"
+import { errorText } from "./utils"
 
 export interface PullRequestDiffState {
   files: DiffFile[] | null
@@ -47,5 +47,5 @@ export function usePullRequestDiff(path: string, head: string): PullRequestDiffS
     }
   }, [refresh, head])
 
-  return {files, error}
+  return { files, error }
 }

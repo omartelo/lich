@@ -1,22 +1,22 @@
-import {useCallback, useEffect, useState} from "react"
-import {ChevronLeft} from "lucide-react"
-import {ProjectService, System, Terminal as TerminalService} from "@/lib/rpc"
-import {useActiveSession} from "@/lib/useActiveSession"
-import {useProjects} from "@/lib/projects"
-import {queuePaste} from "@/lib/paste-queue"
-import {useGitStatus} from "@/lib/useGitStatus"
-import {buildTree, type TreeNode} from "@/lib/file-tree"
-import {FileTree} from "@/components/FileTree"
-import {formatLineRef, parseDiff, type DiffFile} from "@/lib/diff"
-import {errorText} from "@/lib/utils"
-import type {DocLineSelection} from "@/lib/codemirror"
+import { useCallback, useEffect, useState } from "react"
+import { ChevronLeft } from "lucide-react"
+import { ProjectService, System, Terminal as TerminalService } from "@/lib/rpc"
+import { useActiveSession } from "@/lib/useActiveSession"
+import { useProjects } from "@/lib/projects"
+import { queuePaste } from "@/lib/paste-queue"
+import { useGitStatus } from "@/lib/useGitStatus"
+import { buildTree, type TreeNode } from "@/lib/file-tree"
+import { FileTree } from "@/components/FileTree"
+import { formatLineRef, parseDiff, type DiffFile } from "@/lib/diff"
+import { errorText } from "@/lib/utils"
+import type { DocLineSelection } from "@/lib/codemirror"
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
-import {useFileEditor} from "./useFileEditor"
+import { useFileEditor } from "./useFileEditor"
 
 // FilesPanel is the Files tab of the right dock: a read-only tree of the active
 // session's tracked files, master-detail with an in-dock preview. It follows the
@@ -25,8 +25,8 @@ import {useFileEditor} from "./useFileEditor"
 // terminal it belongs to. It never edits; clicks only navigate and inject
 // path/line references into the session's PTY.
 export function FilesPanel() {
-  const {projectId, sessionId, path} = useActiveSession()
-  const {newSession, activateSession} = useProjects()
+  const { projectId, sessionId, path } = useActiveSession()
+  const { newSession, activateSession } = useProjects()
   const status = useGitStatus(path)
   const [tree, setTree] = useState<TreeNode[] | null>(null)
   const [stats, setStats] = useState<Map<string, DiffFile>>(new Map())
@@ -89,30 +89,17 @@ export function FilesPanel() {
           return
         }
         const id = newSession(projectId, "shell", path)
-        queuePaste(id, command + "\n")
+        queuePaste(id, `${command}\n`)
         activateSession(projectId, id)
       })
       .catch(() => undefined)
   }
 
   if (open !== null) {
-    return (
-      <FilePreview
-        path={path}
-        rel={open}
-        onBack={() => setOpen(null)}
-        onInject={inject}
-      />
-    )
+    return <FilePreview path={path} rel={open} onBack={() => setOpen(null)} onInject={inject} />
   }
   return (
-    <TreeBody
-      tree={tree}
-      stats={stats}
-      failed={failed}
-      onOpen={setOpen}
-      onEditor={openInEditor}
-    />
+    <TreeBody tree={tree} stats={stats} failed={failed} onOpen={setOpen} onEditor={openInEditor} />
   )
 }
 
@@ -138,7 +125,7 @@ interface TreeBodyProps {
   onEditor: (rel: string) => void
 }
 
-function TreeBody({tree, stats, failed, onOpen, onEditor}: TreeBodyProps) {
+function TreeBody({ tree, stats, failed, onOpen, onEditor }: TreeBodyProps) {
   if (failed) {
     return <Notice>Not a git repository</Notice>
   }
@@ -166,7 +153,7 @@ interface FilePreviewProps {
   onInject: (text: string) => void
 }
 
-function FilePreview({path, rel, onBack, onInject}: FilePreviewProps) {
+function FilePreview({ path, rel, onBack, onInject }: FilePreviewProps) {
   const [text, setText] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -199,7 +186,7 @@ function FilePreview({path, rel, onBack, onInject}: FilePreviewProps) {
           aria-label="Back to file tree"
           className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
         >
-          <ChevronLeft className="size-4"/>
+          <ChevronLeft className="size-4" />
         </button>
         <span className="truncate font-mono" title={rel}>
           {rel}
@@ -214,7 +201,7 @@ function FilePreview({path, rel, onBack, onInject}: FilePreviewProps) {
         ) : text === null ? (
           <Notice>Loading…</Notice>
         ) : (
-          <PreviewBody text={text} rel={rel} onInject={onInject}/>
+          <PreviewBody text={text} rel={rel} onInject={onInject} />
         )}
       </div>
     </div>
@@ -230,8 +217,8 @@ interface PreviewBodyProps {
 // PreviewBody renders the file in a read-only CodeMirror view whose selection
 // drives the same inject context menu as the diff review — file lines map
 // straight through (doc line === file line), so the range needs no remap.
-function PreviewBody({text, rel, onInject}: PreviewBodyProps) {
-  const {containerRef, getSelectedLines} = useFileEditor(text, rel)
+function PreviewBody({ text, rel, onInject }: PreviewBodyProps) {
+  const { containerRef, getSelectedLines } = useFileEditor(text, rel)
   const [range, setRange] = useState<DocLineSelection | null>(null)
 
   // Resolve the selection when the menu opens, not on every selection change.
@@ -241,14 +228,12 @@ function PreviewBody({text, rel, onInject}: PreviewBodyProps) {
     }
   }
 
-  const lineRef = range && formatLineRef({start: range.from, end: range.to})
+  const lineRef = range && formatLineRef({ start: range.from, end: range.to })
   return (
     <ContextMenu onOpenChange={onOpenChange}>
-      <ContextMenuTrigger render={<div className="isolate py-1" ref={containerRef}/>}/>
+      <ContextMenuTrigger render={<div className="isolate py-1" ref={containerRef} />} />
       <ContextMenuContent>
-        <ContextMenuItem onClick={() => onInject(`@${rel} `)}>
-          Inject file
-        </ContextMenuItem>
+        <ContextMenuItem onClick={() => onInject(`@${rel} `)}>Inject file</ContextMenuItem>
         <ContextMenuItem
           disabled={lineRef === null}
           onClick={() => lineRef && onInject(`${rel}:${lineRef} `)}
@@ -260,6 +245,6 @@ function PreviewBody({text, rel, onInject}: PreviewBodyProps) {
   )
 }
 
-function Notice({children}: {children: string}) {
+function Notice({ children }: { children: string }) {
   return <p className="px-3 py-4 text-xs text-muted-foreground">{children}</p>
 }

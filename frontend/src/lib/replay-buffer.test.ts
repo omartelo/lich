@@ -1,5 +1,5 @@
-import {describe, expect, it} from "vitest"
-import {makeReplayBuffer} from "./replay-buffer"
+import { describe, expect, it } from "vitest"
+import { makeReplayBuffer } from "./replay-buffer"
 
 function chunk(size: number, fill = 0): Uint8Array {
   return new Uint8Array(size).fill(fill)

@@ -1,5 +1,5 @@
-import {describe, expect, it} from "vitest"
-import {buildTree, type TreeNode} from "./file-tree"
+import { describe, expect, it } from "vitest"
+import { buildTree, type TreeNode } from "./file-tree"
 
 // names flattens a node list to "type:path" strings in order, so a test reads
 // the whole shape and ordering in one assertion.
@@ -10,11 +10,7 @@ function names(nodes: TreeNode[]): string[] {
 describe("buildTree", () => {
   it("nests paths by their slash segments", () => {
     const tree = buildTree(["internal/rpc/rpc.go"])
-    expect(names(tree)).toEqual([
-      "dir:internal",
-      "dir:internal/rpc",
-      "file:internal/rpc/rpc.go",
-    ])
+    expect(names(tree)).toEqual(["dir:internal", "dir:internal/rpc", "file:internal/rpc/rpc.go"])
   })
 
   it("merges siblings under a shared directory", () => {

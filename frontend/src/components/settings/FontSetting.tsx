@@ -29,10 +29,7 @@ export function FontSetting() {
   )
 
   return (
-    <SettingBlock
-      title="Font"
-      description="Font family used to render the terminal."
-    >
+    <SettingBlock title="Font" description="Font family used to render the terminal.">
       <Select value={font} onValueChange={(value) => value && setFont(value)}>
         <SelectTrigger className="w-64">
           <SelectValue placeholder="Select a font" />

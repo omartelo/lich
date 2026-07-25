@@ -1,4 +1,4 @@
-import type {DiffFile} from "./diff"
+import type { DiffFile } from "./diff"
 
 // Which files of a pull request the reviewer has ticked off, so a long review
 // keeps its place while the user jumps to the Overview tab and back. Keyed by

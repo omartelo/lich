@@ -1,7 +1,7 @@
-import {useEffect, useRef} from "react"
-import type {RefObject} from "react"
-import {EditorState} from "@codemirror/state"
-import {EditorView, lineNumbers} from "@codemirror/view"
+import { useEffect, useRef } from "react"
+import type { RefObject } from "react"
+import { EditorState } from "@codemirror/state"
+import { EditorView, lineNumbers } from "@codemirror/view"
 import {
   loadLanguage,
   readOnlyCodeExtensions,
@@ -47,5 +47,5 @@ export function useFileEditor(text: string, filename: string): FileEditor {
   const getSelectedLines = (): DocLineSelection | null =>
     viewRef.current ? selectedDocLines(viewRef.current) : null
 
-  return {containerRef, getSelectedLines}
+  return { containerRef, getSelectedLines }
 }

@@ -1,7 +1,7 @@
-import {useCallback, useSyncExternalStore} from "react"
-import {onAppEvent} from "./app-events"
-import {CWD_EVENT} from "./session-events"
-import {createSessionCwdStore} from "./session-cwd-store"
+import { useCallback, useSyncExternalStore } from "react"
+import { onAppEvent } from "./app-events"
+import { CWD_EVENT } from "./session-events"
+import { createSessionCwdStore } from "./session-cwd-store"
 
 // Subscribed at import rather than on first use: that opens the /events socket
 // at page load, so a cwd reported before any card mounts still lands.

@@ -1,8 +1,8 @@
-import {useCallback, useSyncExternalStore} from "react"
-import {onAppEvent} from "./app-events"
-import {AGENT_EVENT, STATUS_EVENT} from "./session-events"
-import {createSessionAgentStore} from "./session-agent-store"
-import type {SessionKind} from "./sessions"
+import { useCallback, useSyncExternalStore } from "react"
+import { onAppEvent } from "./app-events"
+import { AGENT_EVENT, STATUS_EVENT } from "./session-events"
+import { createSessionAgentStore } from "./session-agent-store"
+import type { SessionKind } from "./sessions"
 
 // Subscribed at import rather than on first use: that opens the /events socket
 // at page load, so an agent reported before any card mounts still lands.

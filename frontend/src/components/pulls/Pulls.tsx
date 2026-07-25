@@ -1,6 +1,6 @@
-import {useState, type ReactNode} from "react"
-import {useNavigate, useParams} from "react-router-dom"
-import {toast} from "sonner"
+import { useState, type ReactNode } from "react"
+import { useNavigate, useParams } from "react-router-dom"
+import { toast } from "sonner"
 import {
   Check,
   ChevronDown,
@@ -14,17 +14,17 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react"
-import {ProjectService, Store, System, Terminal as TerminalService} from "@/lib/rpc"
-import type {ChecksRollup, MergeMethod, PullRequestDetail} from "@/lib/api-types"
-import {useProjects} from "@/lib/projects"
-import {baseName} from "@/lib/paths"
-import {closePulls} from "@/lib/pulls-card-store"
-import {activeTarget, sessionsOf} from "@/lib/sessions"
-import {useGitStatus} from "@/lib/useGitStatus"
-import {usePullRequestDetail} from "@/lib/usePullRequestDetail"
-import {cn, errorText} from "@/lib/utils"
-import {Markdown} from "@/components/Markdown"
-import {Button} from "@/components/ui/button"
+import { ProjectService, Store, System, Terminal as TerminalService } from "@/lib/rpc"
+import type { ChecksRollup, MergeMethod, PullRequestDetail } from "@/lib/api-types"
+import { useProjects } from "@/lib/projects"
+import { baseName } from "@/lib/paths"
+import { closePulls } from "@/lib/pulls-card-store"
+import { activeTarget, sessionsOf } from "@/lib/sessions"
+import { useGitStatus } from "@/lib/useGitStatus"
+import { usePullRequestDetail } from "@/lib/usePullRequestDetail"
+import { cn, errorText } from "@/lib/utils"
+import { Markdown } from "@/components/Markdown"
+import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
@@ -40,10 +40,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {Input} from "@/components/ui/input"
-import {Label} from "@/components/ui/label"
-import {PullsChecks} from "./PullsChecks"
-import {PullsFiles} from "./PullsFiles"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { PullsChecks } from "./PullsChecks"
+import { PullsFiles } from "./PullsFiles"
 
 // Pulls is the per-project pull-request screen: it fills the main area on top of
 // the persistent terminals (like Settings), showing the active session's branch
@@ -51,15 +51,15 @@ import {PullsFiles} from "./PullsFiles"
 // resolves its path from the route's project id plus the active session (the
 // exact-match useActiveSession returns empty on this subroute).
 export function Pulls() {
-  const {projectId} = useParams()
+  const { projectId } = useParams()
   const navigate = useNavigate()
-  const {projects, sessions, closeSession} = useProjects()
+  const { projects, sessions, closeSession } = useProjects()
   const projectPath = projects.find((p) => p.id === projectId)?.path ?? ""
-  const {sessionId, path} = activeTarget(sessions, projectId ?? null, projectPath)
+  const { sessionId, path } = activeTarget(sessions, projectId ?? null, projectPath)
   const status = useGitStatus(path)
   const branch = status?.branch ?? ""
   const head = status?.head ?? ""
-  const {detail, loading, error, refresh} = usePullRequestDetail(path, branch, head)
+  const { detail, loading, error, refresh } = usePullRequestDetail(path, branch, head)
 
   const inject = (text: string) => {
     if (sessionId) {
@@ -106,7 +106,7 @@ export function Pulls() {
     }
     toast.success(merged, {
       duration: 10_000,
-      action: {label: "Remove worktree", onClick: () => void removeWorktree()},
+      action: { label: "Remove worktree", onClick: () => void removeWorktree() },
     })
   }
 
@@ -129,7 +129,7 @@ export function Pulls() {
   } else if (loading) {
     body = <Notice>Loading…</Notice>
   } else {
-    body = <EmptyState path={path} branch={branch} onOpened={refresh}/>
+    body = <EmptyState path={path} branch={branch} onOpened={refresh} />
   }
 
   return <div className="absolute inset-0 z-10 flex flex-col bg-background">{body}</div>
@@ -156,7 +156,14 @@ interface PullRequestViewProps {
   onInject: (text: string) => void
 }
 
-function PullRequestView({path, head, detail, onRefresh, onMerged, onInject}: PullRequestViewProps) {
+function PullRequestView({
+  path,
+  head,
+  detail,
+  onRefresh,
+  onMerged,
+  onInject,
+}: PullRequestViewProps) {
   const [merging, setMerging] = useState(false)
   const [edit, setEdit] = useState<EditState | null>(null)
   const [tab, setTab] = useState<"overview" | "files" | "checks">("overview")
@@ -212,9 +219,9 @@ function PullRequestView({path, head, detail, onRefresh, onMerged, onInject}: Pu
                 <DropdownMenuTrigger
                   render={
                     <Button size="sm" disabled={merging || blocked !== null}>
-                      <GitMerge/>
+                      <GitMerge />
                       {merging ? "Merging…" : "Merge"}
-                      <ChevronDown/>
+                      <ChevronDown />
                     </Button>
                   }
                 />
@@ -228,7 +235,7 @@ function PullRequestView({path, head, detail, onRefresh, onMerged, onInject}: Pu
                   <DropdownMenuItem onClick={() => void merge("rebase")}>
                     Rebase and merge
                   </DropdownMenuItem>
-                  <DropdownMenuSeparator/>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => openEdit("squash")}>
                     Squash and merge, edit message…
                   </DropdownMenuItem>
@@ -241,10 +248,10 @@ function PullRequestView({path, head, detail, onRefresh, onMerged, onInject}: Pu
             {/* HEAD moving refetches on its own; this covers what it can't see —
                 a review, a check finishing, a PR opened from the terminal. */}
             <Button variant="ghost" size="sm" onClick={onRefresh} aria-label="Refresh">
-              <RefreshCw/>
+              <RefreshCw />
             </Button>
             <Button variant="ghost" size="sm" onClick={() => void System.OpenExternal(detail.url)}>
-              <ExternalLink/>
+              <ExternalLink />
               Open
             </Button>
           </div>
@@ -257,11 +264,11 @@ function PullRequestView({path, head, detail, onRefresh, onMerged, onInject}: Pu
               detail.isDraft ? "text-amber-500" : "text-emerald-500",
             )}
           >
-            <GitPullRequestArrow className="size-3.5"/>
+            <GitPullRequestArrow className="size-3.5" />
             {detail.isDraft ? "Draft" : "Open"}
           </span>
           <span className="flex items-center gap-1.5 font-mono text-muted-foreground">
-            <GitBranch className="size-3.5"/>
+            <GitBranch className="size-3.5" />
             {detail.headRefName} → {detail.baseRefName}
           </span>
           {/* The counter is where the eye lands when CI is red; make it the way
@@ -272,12 +279,12 @@ function PullRequestView({path, head, detail, onRefresh, onMerged, onInject}: Pu
               onClick={() => setTab("checks")}
               className="rounded-sm transition-opacity hover:opacity-80"
             >
-              <ChecksStat checks={detail.checks}/>
+              <ChecksStat checks={detail.checks} />
             </button>
           ) : (
-            <ChecksStat checks={detail.checks}/>
+            <ChecksStat checks={detail.checks} />
           )}
-          <MergeableStat mergeable={detail.mergeable} base={detail.baseRefName}/>
+          <MergeableStat mergeable={detail.mergeable} base={detail.baseRefName} />
         </div>
 
         <div role="tablist" className="mt-4 flex gap-1">
@@ -301,11 +308,11 @@ function PullRequestView({path, head, detail, onRefresh, onMerged, onInject}: Pu
 
       <div role="tabpanel" className="flex-1 overflow-hidden">
         {tab === "files" ? (
-          <PullsFiles path={path} head={head} pullRequest={detail.url} onInject={onInject}/>
+          <PullsFiles path={path} head={head} pullRequest={detail.url} onInject={onInject} />
         ) : (
           <div className="h-full overflow-y-auto">
             {tab === "checks" ? (
-              <PullsChecks checks={detail.checkRuns}/>
+              <PullsChecks checks={detail.checkRuns} />
             ) : (
               <div className="max-w-3xl px-6 py-5">
                 {detail.body.trim() !== "" ? (
@@ -332,7 +339,15 @@ function PullRequestView({path, head, detail, onRefresh, onMerged, onInject}: Pu
   )
 }
 
-function TabButton({active, onClick, children}: {active: boolean; onClick: () => void; children: ReactNode}) {
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: ReactNode
+}) {
   return (
     <button
       type="button"
@@ -359,7 +374,13 @@ interface MergeMessageDialogProps {
   onConfirm: () => void
 }
 
-function MergeMessageDialog({edit, merging, onChange, onCancel, onConfirm}: MergeMessageDialogProps) {
+function MergeMessageDialog({
+  edit,
+  merging,
+  onChange,
+  onCancel,
+  onConfirm,
+}: MergeMessageDialogProps) {
   return (
     <Dialog open onOpenChange={(next) => !next && onCancel()}>
       <DialogContent className="sm:max-w-lg">
@@ -373,7 +394,7 @@ function MergeMessageDialog({edit, merging, onChange, onCancel, onConfirm}: Merg
             <Input
               id="merge-subject"
               value={edit.subject}
-              onChange={(e) => onChange({...edit, subject: e.target.value})}
+              onChange={(e) => onChange({ ...edit, subject: e.target.value })}
               autoFocus
             />
           </div>
@@ -382,7 +403,7 @@ function MergeMessageDialog({edit, merging, onChange, onCancel, onConfirm}: Merg
             <textarea
               id="merge-body"
               value={edit.body}
-              onChange={(e) => onChange({...edit, body: e.target.value})}
+              onChange={(e) => onChange({ ...edit, body: e.target.value })}
               rows={6}
               placeholder="Optional"
               className="min-h-24 w-full resize-y rounded-md border border-input bg-transparent px-2.5 py-1.5 text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
@@ -394,7 +415,7 @@ function MergeMessageDialog({edit, merging, onChange, onCancel, onConfirm}: Merg
             Cancel
           </Button>
           <Button onClick={onConfirm} disabled={merging || edit.subject.trim() === ""}>
-            <GitMerge/>
+            <GitMerge />
             {merging ? "Merging…" : edit.method === "squash" ? "Squash and merge" : "Merge"}
           </Button>
         </DialogFooter>
@@ -412,25 +433,41 @@ const toneClass: Record<Tone, string> = {
   muted: "text-muted-foreground",
 }
 
-function Stat({icon: Icon, tone, children}: {icon: LucideIcon; tone: Tone; children: ReactNode}) {
+function Stat({
+  icon: Icon,
+  tone,
+  children,
+}: {
+  icon: LucideIcon
+  tone: Tone
+  children: ReactNode
+}) {
   return (
     <span className={cn("flex items-center gap-1.5 font-medium", toneClass[tone])}>
-      <Icon className="size-3.5"/>
+      <Icon className="size-3.5" />
       {children}
     </span>
   )
 }
 
-function ChecksStat({checks}: {checks: ChecksRollup}) {
-  const {passed, failed, pending, total} = checks
+function ChecksStat({ checks }: { checks: ChecksRollup }) {
+  const { passed, failed, pending, total } = checks
   if (total === 0) {
     return null
   }
   if (failed > 0) {
-    return <Stat icon={X} tone="fail">{failed} of {total} checks failing</Stat>
+    return (
+      <Stat icon={X} tone="fail">
+        {failed} of {total} checks failing
+      </Stat>
+    )
   }
   if (pending > 0) {
-    return <Stat icon={Clock} tone="pending">{pending} of {total} checks running</Stat>
+    return (
+      <Stat icon={Clock} tone="pending">
+        {pending} of {total} checks running
+      </Stat>
+    )
   }
   return (
     <Stat icon={Check} tone="pass">
@@ -439,14 +476,26 @@ function ChecksStat({checks}: {checks: ChecksRollup}) {
   )
 }
 
-function MergeableStat({mergeable, base}: {mergeable: string; base: string}) {
+function MergeableStat({ mergeable, base }: { mergeable: string; base: string }) {
   if (mergeable === "CONFLICTING") {
-    return <Stat icon={X} tone="fail">Conflicts with {base}</Stat>
+    return (
+      <Stat icon={X} tone="fail">
+        Conflicts with {base}
+      </Stat>
+    )
   }
   if (mergeable === "MERGEABLE") {
-    return <Stat icon={GitMerge} tone="pass">Mergeable</Stat>
+    return (
+      <Stat icon={GitMerge} tone="pass">
+        Mergeable
+      </Stat>
+    )
   }
-  return <Stat icon={CircleDashed} tone="muted">Checking mergeability…</Stat>
+  return (
+    <Stat icon={CircleDashed} tone="muted">
+      Checking mergeability…
+    </Stat>
+  )
 }
 
 interface EmptyStateProps {
@@ -455,7 +504,7 @@ interface EmptyStateProps {
   onOpened: () => void
 }
 
-function EmptyState({path, branch, onOpened}: EmptyStateProps) {
+function EmptyState({ path, branch, onOpened }: EmptyStateProps) {
   const [opening, setOpening] = useState(false)
   const openPR = async () => {
     setOpening(true)
@@ -470,27 +519,26 @@ function EmptyState({path, branch, onOpened}: EmptyStateProps) {
   }
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-      <GitPullRequestArrow className="size-8 text-muted-foreground"/>
+      <GitPullRequestArrow className="size-8 text-muted-foreground" />
       <p className="text-sm text-muted-foreground">
         {branch ? (
           <>
-            No open pull request for{" "}
-            <span className="font-medium text-foreground">{branch}</span>.
+            No open pull request for <span className="font-medium text-foreground">{branch}</span>.
           </>
         ) : (
           "No open pull request."
         )}
       </p>
       <Button variant="outline" size="sm" onClick={() => void openPR()} disabled={opening}>
-        <GitPullRequestArrow/>
+        <GitPullRequestArrow />
         {opening ? "Opening…" : "Open pull request"}
-        <ExternalLink/>
+        <ExternalLink />
       </Button>
     </div>
   )
 }
 
-function Notice({children}: {children: ReactNode}) {
+function Notice({ children }: { children: ReactNode }) {
   return (
     <div className="flex flex-1 items-center justify-center p-8">
       <p className="text-sm text-muted-foreground">{children}</p>

@@ -22,11 +22,7 @@ export interface GridSize {
 // pixel size. Returns null when either dimension is unusable (zero cell metrics
 // before the font loads, or a zero-size container while hidden/unmounted), so
 // callers skip the resize rather than proposing a degenerate grid.
-export function computeGrid(
-  width: number,
-  height: number,
-  cell: CellSize,
-): GridSize | null {
+export function computeGrid(width: number, height: number, cell: CellSize): GridSize | null {
   if (width <= 0 || height <= 0 || cell.width <= 0 || cell.height <= 0) {
     return null
   }

@@ -28,7 +28,12 @@ const BASE_SECTIONS: Section[] = [
   { id: "appearance", label: "Appearance", group: "app", render: () => <AppearanceSettings /> },
   { id: "hotkeys", label: "Hotkeys", group: "app", render: () => <HotkeysSettings /> },
   { id: "providers", label: "Providers", group: "app", render: () => <ProvidersSettings /> },
-  { id: "worktree", label: "Worktree", group: "app", render: (id) => <WorktreeSetupSettings projectId={id} /> },
+  {
+    id: "worktree",
+    label: "Worktree",
+    group: "app",
+    render: (id) => <WorktreeSetupSettings projectId={id} />,
+  },
   { id: "updates", label: "Updates", group: "app", render: () => <UpdatesSettings /> },
 ]
 

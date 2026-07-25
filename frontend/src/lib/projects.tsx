@@ -240,15 +240,18 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     [projects, activeProjectId, navigate],
   )
 
-  const newSession = useCallback((projectId: string, kind: SessionKind = defaultProviderKind(), path = "") => {
-    const sessionId = newSessionId()
-    const next = addSession(sessionsRef.current, projectId, sessionId, kind, path)
-    const project = next[projectId]
-    const created = project.sessions[project.sessions.length - 1]
-    setSessions(next)
-    void Store.AddSession(projectId, sessionId, created.label, kind, path, project.nextSeq)
-    return sessionId
-  }, [])
+  const newSession = useCallback(
+    (projectId: string, kind: SessionKind = defaultProviderKind(), path = "") => {
+      const sessionId = newSessionId()
+      const next = addSession(sessionsRef.current, projectId, sessionId, kind, path)
+      const project = next[projectId]
+      const created = project.sessions[project.sessions.length - 1]
+      setSessions(next)
+      void Store.AddSession(projectId, sessionId, created.label, kind, path, project.nextSeq)
+      return sessionId
+    },
+    [],
+  )
 
   const newWorktreeSession = useCallback(
     (projectId: string, wt: { name: string; path: string }) => {
@@ -312,11 +315,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   // Closing the last one leaves the project sessionless: the EmptySessions screen
   // then offers a new one, rather than a replacement PTY spawning unasked.
   const dropSession = useCallback(
-    (
-      projectId: string,
-      sessionId: string,
-      persist: (activeID: string) => Promise<unknown>,
-    ) => {
+    (projectId: string, sessionId: string, persist: (activeID: string) => Promise<unknown>) => {
       const removed = removeSession(sessionsRef.current, projectId, sessionId)
       if (removed === sessionsRef.current) {
         return
@@ -432,9 +431,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       if (!projectId) {
         return
       }
-      const session = sessionsRef.current[projectId]?.sessions.find(
-        (s) => s.id === id,
-      )
+      const session = sessionsRef.current[projectId]?.sessions.find((s) => s.id === id)
       const project = projectsRef.current.find((p) => p.id === projectId)
       const path = session?.path || project?.path
       if (path) {
@@ -468,17 +465,14 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     void Store.ReorderSessions(projectId, ids)
   }, [])
 
-  const renameSession = useCallback(
-    (projectId: string, sessionId: string, label: string) => {
-      const next = relabelSession(sessionsRef.current, projectId, sessionId, label)
-      if (next === sessionsRef.current) {
-        return
-      }
-      setSessions(next)
-      void Store.RenameSession(sessionId, label)
-    },
-    [],
-  )
+  const renameSession = useCallback((projectId: string, sessionId: string, label: string) => {
+    const next = relabelSession(sessionsRef.current, projectId, sessionId, label)
+    if (next === sessionsRef.current) {
+      return
+    }
+    setSessions(next)
+    void Store.RenameSession(sessionId, label)
+  }, [])
 
   const value = useMemo(
     () => ({

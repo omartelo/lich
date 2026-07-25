@@ -1,4 +1,4 @@
-import {describe, expect, it} from "vitest"
+import { describe, expect, it } from "vitest"
 import {
   isAgentEvent,
   isCwdEvent,
@@ -9,7 +9,7 @@ import {
   shouldToastAttention,
   toSessionStatus,
 } from "./session-events"
-import {addSession, createProjectSessions, setActiveSession, type SessionState} from "./sessions"
+import { addSession, createProjectSessions, setActiveSession, type SessionState } from "./sessions"
 
 const ACTIVE = "project-active"
 const BACKGROUND = "project-background"
@@ -28,14 +28,14 @@ function buildState(): SessionState {
 
 describe("isStatusEvent", () => {
   it("accepts a payload carrying an id and a state", () => {
-    expect(isStatusEvent({id: "abc", state: "busy"})).toBe(true)
+    expect(isStatusEvent({ id: "abc", state: "busy" })).toBe(true)
   })
 
   it("rejects a payload missing either field or typed wrong", () => {
-    expect(isStatusEvent({id: "abc"})).toBe(false)
-    expect(isStatusEvent({state: "busy"})).toBe(false)
-    expect(isStatusEvent({id: "abc", state: 42})).toBe(false)
-    expect(isStatusEvent({id: 1, state: "busy"})).toBe(false)
+    expect(isStatusEvent({ id: "abc" })).toBe(false)
+    expect(isStatusEvent({ state: "busy" })).toBe(false)
+    expect(isStatusEvent({ id: "abc", state: 42 })).toBe(false)
+    expect(isStatusEvent({ id: 1, state: "busy" })).toBe(false)
     expect(isStatusEvent(null)).toBe(false)
     expect(isStatusEvent("busy")).toBe(false)
   })
@@ -61,18 +61,18 @@ describe("toSessionStatus", () => {
     expect(toSessionStatus(undefined)).toBeNull()
     expect(toSessionStatus(null)).toBeNull()
     expect(toSessionStatus(42)).toBeNull()
-    expect(toSessionStatus({state: "busy"})).toBeNull()
+    expect(toSessionStatus({ state: "busy" })).toBeNull()
   })
 })
 
 describe("isIdEvent", () => {
   it("accepts a payload carrying a string id", () => {
-    expect(isIdEvent({id: "s1"})).toBe(true)
+    expect(isIdEvent({ id: "s1" })).toBe(true)
   })
 
   it("rejects a missing, non-string or non-object payload", () => {
     expect(isIdEvent({})).toBe(false)
-    expect(isIdEvent({id: 1})).toBe(false)
+    expect(isIdEvent({ id: 1 })).toBe(false)
     expect(isIdEvent(null)).toBe(false)
     expect(isIdEvent("s1")).toBe(false)
   })
@@ -80,40 +80,40 @@ describe("isIdEvent", () => {
 
 describe("isTitleEvent", () => {
   it("accepts a payload carrying a string id and label", () => {
-    expect(isTitleEvent({id: "s1", label: "build"})).toBe(true)
+    expect(isTitleEvent({ id: "s1", label: "build" })).toBe(true)
   })
 
   it("rejects a payload missing either half", () => {
-    expect(isTitleEvent({id: "s1"})).toBe(false)
-    expect(isTitleEvent({label: "build"})).toBe(false)
-    expect(isTitleEvent({id: "s1", label: 2})).toBe(false)
+    expect(isTitleEvent({ id: "s1" })).toBe(false)
+    expect(isTitleEvent({ label: "build" })).toBe(false)
+    expect(isTitleEvent({ id: "s1", label: 2 })).toBe(false)
     expect(isTitleEvent(null)).toBe(false)
   })
 })
 
 describe("isCwdEvent", () => {
   it("accepts a payload carrying a string id and cwd", () => {
-    expect(isCwdEvent({id: "s1", cwd: "/home/user"})).toBe(true)
+    expect(isCwdEvent({ id: "s1", cwd: "/home/user" })).toBe(true)
   })
 
   it("rejects a payload missing either half", () => {
-    expect(isCwdEvent({id: "s1"})).toBe(false)
-    expect(isCwdEvent({cwd: "/home/user"})).toBe(false)
-    expect(isCwdEvent({id: "s1", cwd: 2})).toBe(false)
+    expect(isCwdEvent({ id: "s1" })).toBe(false)
+    expect(isCwdEvent({ cwd: "/home/user" })).toBe(false)
+    expect(isCwdEvent({ id: "s1", cwd: 2 })).toBe(false)
     expect(isCwdEvent(null)).toBe(false)
   })
 })
 
 describe("isAgentEvent", () => {
   it("accepts a payload carrying a string id and agent, empty included", () => {
-    expect(isAgentEvent({id: "s1", agent: "claude"})).toBe(true)
-    expect(isAgentEvent({id: "s1", agent: ""})).toBe(true)
+    expect(isAgentEvent({ id: "s1", agent: "claude" })).toBe(true)
+    expect(isAgentEvent({ id: "s1", agent: "" })).toBe(true)
   })
 
   it("rejects a payload missing either half", () => {
-    expect(isAgentEvent({id: "s1"})).toBe(false)
-    expect(isAgentEvent({agent: "claude"})).toBe(false)
-    expect(isAgentEvent({id: "s1", agent: 2})).toBe(false)
+    expect(isAgentEvent({ id: "s1" })).toBe(false)
+    expect(isAgentEvent({ agent: "claude" })).toBe(false)
+    expect(isAgentEvent({ id: "s1", agent: 2 })).toBe(false)
     expect(isAgentEvent(null)).toBe(false)
   })
 })
@@ -130,16 +130,18 @@ describe("isUsageEvent", () => {
 
   it("accepts a payload carrying id, percent, tokens, window, model and effort", () => {
     expect(isUsageEvent(full)).toBe(true)
-    expect(isUsageEvent({...full, percent: 0, tokens: 0, effort: ""})).toBe(true)
+    expect(isUsageEvent({ ...full, percent: 0, tokens: 0, effort: "" })).toBe(true)
   })
 
   it("rejects a payload missing a field or typed wrong", () => {
-    expect(isUsageEvent({id: "s1", percent: 42, tokens: 84000, window: 200000, model: "x"})).toBe(false)
-    expect(isUsageEvent({...full, window: undefined})).toBe(false)
-    expect(isUsageEvent({...full, model: 5})).toBe(false)
-    expect(isUsageEvent({...full, effort: 3})).toBe(false)
-    expect(isUsageEvent({...full, id: undefined})).toBe(false)
-    expect(isUsageEvent({...full, percent: "42"})).toBe(false)
+    expect(isUsageEvent({ id: "s1", percent: 42, tokens: 84000, window: 200000, model: "x" })).toBe(
+      false,
+    )
+    expect(isUsageEvent({ ...full, window: undefined })).toBe(false)
+    expect(isUsageEvent({ ...full, model: 5 })).toBe(false)
+    expect(isUsageEvent({ ...full, effort: 3 })).toBe(false)
+    expect(isUsageEvent({ ...full, id: undefined })).toBe(false)
+    expect(isUsageEvent({ ...full, percent: "42" })).toBe(false)
     expect(isUsageEvent(null)).toBe(false)
   })
 })

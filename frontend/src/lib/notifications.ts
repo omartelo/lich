@@ -2,8 +2,8 @@
 // live project state to become routable rows. Kept pure (no React) so the queue
 // logic is testable without the status-store singleton or a render.
 
-import {projectOfSession, type SessionState} from "./sessions"
-import type {PendingStatus} from "./session-status-store"
+import { projectOfSession, type SessionState } from "./sessions"
+import type { PendingStatus } from "./session-status-store"
 
 // A pending status resolved to the project and label the queue renders and
 // routes to.
@@ -42,8 +42,7 @@ export function notificationsFrom(
     if (!project || !session) {
       continue
     }
-    const focused =
-      projectId === activeProjectId && sessions[projectId].activeId === item.id
+    const focused = projectId === activeProjectId && sessions[projectId].activeId === item.id
     if (focused) {
       continue
     }

@@ -66,7 +66,13 @@ const IS_WINDOWS = navigator.platform.toLowerCase().includes("win")
 // first render measure or if xterm ever moves the private; refit then skips,
 // keeping the current grid (degrades, never breaks).
 function cellDimensions(term: Terminal): { width: number; height: number } | null {
-  const core = (term as unknown as { _core?: { _renderService?: { dimensions?: { css?: { cell?: { width: number; height: number } } } } } })._core
+  const core = (
+    term as unknown as {
+      _core?: {
+        _renderService?: { dimensions?: { css?: { cell?: { width: number; height: number } } } }
+      }
+    }
+  )._core
   const cell = core?._renderService?.dimensions?.css?.cell
   if (!cell || !cell.width || !cell.height) {
     return null
@@ -510,7 +516,6 @@ export function TerminalView({
       liveRef.current?.dispose()
       liveRef.current = null
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, projectId, cwd, kind])
 
   // Visibility is the terminal's lifecycle: hidden destroys it (state lives
@@ -543,7 +548,6 @@ export function TerminalView({
     }
     void Service.Resize(sessionId, live.term.cols, live.term.rows)
     live.term.focus()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, sessionId])
 
   // Font family and size need no live-update path: changing them means being
@@ -613,12 +617,7 @@ export function TerminalView({
           >
             <ArrowDown className="h-3.5 w-3.5" />
           </Button>
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            aria-label="Close search"
-            onClick={closeSearch}
-          >
+          <Button size="icon-xs" variant="ghost" aria-label="Close search" onClick={closeSearch}>
             <X className="h-3.5 w-3.5" />
           </Button>
         </div>

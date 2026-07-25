@@ -1,5 +1,5 @@
-import {toast} from "sonner"
-import {errorText} from "./utils"
+import { toast } from "sonner"
+import { errorText } from "./utils"
 
 // runWithToast runs an async action behind a single toast: a loading spinner
 // that resolves in place to a success message or, on a thrown error,
@@ -15,10 +15,10 @@ export async function runWithToast(
   const id = toast.loading(loading)
   try {
     await action()
-    toast.success(success, {id})
+    toast.success(success, { id })
     return true
   } catch (error) {
-    toast.error(`${failure}: ${errorText(error)}`, {id})
+    toast.error(`${failure}: ${errorText(error)}`, { id })
     return false
   }
 }

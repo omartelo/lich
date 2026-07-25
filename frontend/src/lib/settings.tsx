@@ -1,10 +1,4 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-} from "react"
+import { createContext, useCallback, useContext, useEffect, useState } from "react"
 import type { ReactNode } from "react"
 import {
   DEFAULT_HOTKEYS,
@@ -64,10 +58,7 @@ export const TERMINAL_FONT_SIZE_STEP = 1
 export const DEFAULT_TERMINAL_FONT_SIZE = 14
 
 export function clampTerminalFontSize(value: number): number {
-  const bounded = Math.min(
-    TERMINAL_FONT_SIZE_MAX,
-    Math.max(TERMINAL_FONT_SIZE_MIN, value),
-  )
+  const bounded = Math.min(TERMINAL_FONT_SIZE_MAX, Math.max(TERMINAL_FONT_SIZE_MIN, value))
   return Math.round(bounded)
 }
 
@@ -135,16 +126,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [font, setFontState] = useState<string>(
     () => localStorage.getItem(FONT_STORAGE_KEY) ?? DEFAULT_FONT,
   )
-  const [terminalFontSize, setTerminalFontSizeState] =
-    useState<number>(readTerminalFontSize)
+  const [terminalFontSize, setTerminalFontSizeState] = useState<number>(readTerminalFontSize)
   const [theme, setThemeState] = useState<Theme>(readTheme)
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>("light")
   const [zoom, setZoomState] = useState<number>(readZoom)
-  const [terminalTheme, setTerminalThemeState] =
-    useState<TerminalTheme>(readTerminalTheme)
+  const [terminalTheme, setTerminalThemeState] = useState<TerminalTheme>(readTerminalTheme)
   const [hotkeys, setHotkeys] = useState<Hotkeys>(loadHotkeys)
-  const [showContextUsage, setShowContextUsageState] =
-    useState<boolean>(readContextUsage)
+  const [showContextUsage, setShowContextUsageState] = useState<boolean>(readContextUsage)
 
   const setFont = useCallback((next: string) => {
     setFontState(next)

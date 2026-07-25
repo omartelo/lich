@@ -1,0 +1,65 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.5/schema.json",
+  "files": {
+    "includes": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts", "vitest.config.ts"]
+  },
+  // The style the codebase already mostly held, so adopting the tool is a
+  // reflow, not a restyle: 2-space indent, double quotes, no semicolons.
+  // lineWidth 100 measured as the least-churn width over the existing source.
+  "formatter": {
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "semicolons": "asNeeded",
+      "quoteStyle": "double",
+      "jsxQuoteStyle": "double",
+      "arrowParentheses": "always",
+      "trailingCommas": "all",
+      "bracketSpacing": true
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "correctness": {
+        // Narrow dependency lists are the app's pattern, not an oversight: the
+        // git-status poll drives invalidation off status counts, gates run once
+        // per launch, and the latest project/session is read through a ref.
+        // Every hit of this rule so far has been deliberate.
+        "useExhaustiveDependencies": "off"
+      },
+      "complexity": {
+        // `!x || !x.y` states the guard; `!x?.y` folds two conditions into one
+        // read. Equivalent, and the explicit form is the one kept here.
+        "useOptionalChain": "off"
+      },
+      "a11y": {
+        // Reported, not enforced: the fixes are DOM changes, and the offenders
+        // are the duplicated close-affordance and resize handle that the
+        // component extraction collapses into one place to fix.
+        "useFocusableInteractive": "warn",
+        "useKeyWithClickEvents": "warn",
+        "useSemanticElements": "warn",
+        "useAriaPropsForRole": "warn",
+        "useAriaPropsSupportedByRole": "warn"
+      }
+    }
+  },
+  // Import order is an opinion of its own; keep it out of the format pass.
+  "assist": {
+    "actions": { "source": { "organizeImports": "off" } }
+  },
+  "overrides": [
+    {
+      // shadcn primitives are CLI output adapted to DESIGN.md, not hand-written
+      // (see CLAUDE.md). Their `import * as React` is what the generator emits;
+      // rewriting it only makes the next `shadcn add` diverge.
+      "includes": ["src/components/ui/**"],
+      "linter": { "rules": { "style": { "useImportType": "off" } } }
+    }
+  ]
+}

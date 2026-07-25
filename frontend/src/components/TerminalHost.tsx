@@ -26,9 +26,7 @@ export function TerminalHost() {
   const match = useMatch("/projects/:projectId")
   const activeProjectId = match?.params.projectId ?? null
 
-  const visibleSessionId = activeProjectId
-    ? activeSessionId(sessions, activeProjectId)
-    : ""
+  const visibleSessionId = activeProjectId ? activeSessionId(sessions, activeProjectId) : ""
 
   // Session ids that have been viewed at least once. A viewed session stays in
   // the set (ids are unique uuids, so closed sessions leave only harmless dead
@@ -49,18 +47,10 @@ export function TerminalHost() {
   spawnedRef.current = spawned
 
   useEffect(() => {
-    if (
-      !activeProjectId ||
-      !visibleSessionId ||
-      spawnedRef.current.has(visibleSessionId)
-    ) {
+    if (!activeProjectId || !visibleSessionId || spawnedRef.current.has(visibleSessionId)) {
       return
     }
-    const resumable = resumableSession(
-      sessionsRef.current,
-      activeProjectId,
-      visibleSessionId,
-    )
+    const resumable = resumableSession(sessionsRef.current, activeProjectId, visibleSessionId)
     if (resumable) {
       setAsking(resumable)
       return
@@ -86,8 +76,7 @@ export function TerminalHost() {
           if (!spawned.has(session.id)) {
             return null
           }
-          const visible =
-            project.id === activeProjectId && session.id === projectActiveId
+          const visible = project.id === activeProjectId && session.id === projectActiveId
           return (
             <div
               key={session.id}
@@ -110,9 +99,7 @@ export function TerminalHost() {
       <ResumeSessionDialog
         session={asking}
         onStartNew={() => asking && answerResume(asking, "")}
-        onResume={() =>
-          asking && answerResume(asking, asking.providerSessionId ?? "")
-        }
+        onResume={() => asking && answerResume(asking, asking.providerSessionId ?? "")}
       />
     </>
   )

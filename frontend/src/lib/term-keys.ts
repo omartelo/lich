@@ -47,7 +47,13 @@ export function chordSequence(event: TermKeyState, isWindows = false): string | 
   if (ctrlOnly && (event.code === "KeyV" || event.key.toLowerCase() === "v")) {
     return isWindows ? "\x1bv" : "\x16"
   }
-  if (event.key === "Enter" && event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+  if (
+    event.key === "Enter" &&
+    event.shiftKey &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey
+  ) {
     return "\x1b\r"
   }
   return null

@@ -31,7 +31,7 @@ export function buildTree(paths: string[]): TreeNode[] {
       const type: TreeNodeType = i === parts.length - 1 ? "file" : "dir"
       let node = level.find((n) => n.name === name && n.type === type)
       if (!node) {
-        node = {name, path: prefix, type, children: []}
+        node = { name, path: prefix, type, children: [] }
         level.push(node)
       }
       level = node.children
@@ -47,7 +47,7 @@ function sortTree(nodes: TreeNode[]): void {
       ? a.type === "dir"
         ? -1
         : 1
-      : a.name.localeCompare(b.name, undefined, {sensitivity: "base"}),
+      : a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
   )
   for (const node of nodes) {
     sortTree(node.children)

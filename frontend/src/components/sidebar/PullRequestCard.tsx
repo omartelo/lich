@@ -1,7 +1,7 @@
-import {GitPullRequestArrow, X} from "lucide-react"
-import {cn} from "@/lib/utils"
-import {useGitStatus} from "@/lib/useGitStatus"
-import {usePullRequest} from "@/lib/usePullRequest"
+import { GitPullRequestArrow, X } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { useGitStatus } from "@/lib/useGitStatus"
+import { usePullRequest } from "@/lib/usePullRequest"
 
 interface PullRequestCardProps {
   // The worktree checkout whose branch PR this entry opens.
@@ -16,7 +16,7 @@ interface PullRequestCardProps {
 // the X removes it. It opens the full-screen Pulls view for the worktree's
 // branch, showing the open PR's number when there is one (and otherwise reading
 // as the door to open one, whose create flow lives on the screen's empty state).
-export function PullRequestCard({path, active, onSelect, onClose}: PullRequestCardProps) {
+export function PullRequestCard({ path, active, onSelect, onClose }: PullRequestCardProps) {
   const git = useGitStatus(path)
   const pr = usePullRequest(path, git?.branch ?? "", git?.head ?? "")
   return (
@@ -28,7 +28,7 @@ export function PullRequestCard({path, active, onSelect, onClose}: PullRequestCa
         active && "bg-accent text-accent-foreground",
       )}
     >
-      <GitPullRequestArrow className="size-4 shrink-0 text-muted-foreground"/>
+      <GitPullRequestArrow className="size-4 shrink-0 text-muted-foreground" />
       <span>Pull request</span>
       {pr && (
         <span className="flex items-center gap-1.5 text-xs">
@@ -45,7 +45,7 @@ export function PullRequestCard({path, active, onSelect, onClose}: PullRequestCa
         }}
         className="absolute right-2 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center rounded opacity-0 transition-opacity hover:bg-foreground/15 group-hover:opacity-100"
       >
-        <X className="size-3"/>
+        <X className="size-3" />
       </span>
     </button>
   )
