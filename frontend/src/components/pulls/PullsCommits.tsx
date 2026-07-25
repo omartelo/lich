@@ -34,7 +34,7 @@ function CommitRow({ commit }: { commit: PullRequestCommit }) {
         onClick={() => setOpen(!open)}
         disabled={body === ""}
         aria-expanded={body === "" ? undefined : open}
-        className="flex w-full items-center gap-2 px-6 py-2 text-left transition-colors hover:bg-accent/50 disabled:cursor-default disabled:hover:bg-transparent"
+        className="flex w-full cursor-default items-center gap-2 px-6 py-2 text-left transition-colors hover:bg-accent/50 disabled:hover:bg-transparent"
       >
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium" title={commit.headline}>
