@@ -14,14 +14,16 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react"
-import { ProjectService, Store, System, Terminal as TerminalService } from "@/lib/rpc"
+import { ProjectService, Store, System } from "@/lib/rpc"
 import type { ChecksRollup, MergeMethod, PullRequestDetail } from "@/lib/api-types"
 import { useProjects } from "@/lib/projects"
 import { baseName } from "@/lib/paths"
+import { Notice } from "@/components/common/Notice"
 import { closePulls } from "@/lib/pulls-card-store"
 import { activeTarget, sessionsOf } from "@/lib/sessions"
 import { useGitStatus } from "@/lib/useGitStatus"
 import { usePullRequestDetail } from "@/lib/usePullRequestDetail"
+import { useInject } from "@/lib/use-inject"
 import { cn, errorText } from "@/lib/utils"
 import { Markdown } from "@/components/Markdown"
 import { Button } from "@/components/ui/button"
@@ -60,12 +62,7 @@ export function Pulls() {
   const branch = status?.branch ?? ""
   const head = status?.head ?? ""
   const { detail, loading, error, refresh } = usePullRequestDetail(path, branch, head)
-
-  const inject = (text: string) => {
-    if (sessionId) {
-      void TerminalService.Write(sessionId, text)
-    }
-  }
+  const inject = useInject(sessionId)
 
   // A merged branch leaves its checkout behind — the one cleanup the user would
   // otherwise walk back to the sidebar for. Refuse a dirty worktree: whatever
@@ -112,9 +109,9 @@ export function Pulls() {
 
   let body: ReactNode
   if (!path) {
-    body = <Notice>No repository</Notice>
+    body = <CentredNotice>No repository</CentredNotice>
   } else if (error) {
-    body = <Notice>Couldn’t load the pull request: {error}</Notice>
+    body = <CentredNotice>Couldn’t load the pull request: {error}</CentredNotice>
   } else if (detail) {
     body = (
       <PullRequestView
@@ -127,7 +124,7 @@ export function Pulls() {
       />
     )
   } else if (loading) {
-    body = <Notice>Loading…</Notice>
+    body = <CentredNotice>Loading…</CentredNotice>
   } else {
     body = <EmptyState path={path} branch={branch} onOpened={refresh} />
   }
@@ -538,10 +535,12 @@ function EmptyState({ path, branch, onOpened }: EmptyStateProps) {
   )
 }
 
-function Notice({ children }: { children: ReactNode }) {
+// The screen-sized variant: the same muted line, centred in the whole area
+// rather than sitting at the top of a panel.
+function CentredNotice({ children }: { children: ReactNode }) {
   return (
     <div className="flex flex-1 items-center justify-center p-8">
-      <p className="text-sm text-muted-foreground">{children}</p>
+      <Notice className="p-0 text-sm">{children}</Notice>
     </div>
   )
 }

@@ -13,6 +13,10 @@ export const UPDATE_DISMISSED_KEY = "lich.pluginUpdateDismissed"
 // good, unlike the update one which stores the version it was dismissed for.
 export const DISMISSED_FLAG = "1"
 
+// Plugin hooks are read when a Claude session starts, so nothing an install or
+// an update changes reaches a session already running.
+export const RESTART_HINT = "restart your Claude sessions to apply."
+
 // PluginAction is what the gate should do: install prompt, update prompt (with
 // the target version), or nothing.
 export type PluginAction =

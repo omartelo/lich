@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react"
 import type { KeyboardEvent } from "react"
-import { Search } from "lucide-react"
 import { ProjectService } from "@/lib/rpc"
 import type { Branches, Worktree } from "@/lib/api-types"
+import { SearchInput } from "@/components/common/SearchInput"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -260,19 +260,16 @@ export function WorktreeDialog({
               <span className="text-xs text-muted-foreground">Loading branches…</span>
             )}
           </div>
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={filter}
-              onChange={(e) => onFilter(e.target.value)}
-              onKeyDown={onSearchKeyDown}
-              placeholder="Search branches…"
-              aria-label="Search base branches"
-              autoComplete="off"
-              spellCheck={false}
-              className="pl-8 font-mono"
-            />
-          </div>
+          <SearchInput
+            value={filter}
+            onChange={(e) => onFilter(e.target.value)}
+            onKeyDown={onSearchKeyDown}
+            placeholder="Search branches…"
+            aria-label="Search base branches"
+            autoComplete="off"
+            spellCheck={false}
+            className="font-mono"
+          />
           <div
             ref={listRef}
             role="listbox"

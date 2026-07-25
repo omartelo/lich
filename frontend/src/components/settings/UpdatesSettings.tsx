@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { SettingBlock } from "./SettingBlock"
 import { PatchNotesDialog } from "@/components/PatchNotesDialog"
 import { ClaudePlugin, PatchNotes } from "@/lib/rpc"
+import { RESTART_HINT } from "@/lib/plugin-gate"
 import { runUpdateCheck } from "@/lib/update-check"
 import { runWithToast } from "@/lib/toast-async"
 import type { PatchNotes as PatchNotesData, PluginStatus } from "@/lib/api-types"
@@ -75,7 +76,6 @@ export function UpdatesSettings() {
   }
 
   const spinner = <LoaderCircle className="size-4 animate-spin" />
-  const restartHint = "restart your Claude sessions to apply."
 
   return (
     <>
@@ -132,7 +132,7 @@ export function UpdatesSettings() {
                 void runPlugin(
                   ClaudePlugin.Install,
                   "Installing lich plugin…",
-                  `Plugin installed — ${restartHint}`,
+                  `Plugin installed — ${RESTART_HINT}`,
                   "Install failed",
                 )
               }
@@ -149,7 +149,7 @@ export function UpdatesSettings() {
                 void runPlugin(
                   ClaudePlugin.Update,
                   "Updating lich plugin…",
-                  `Plugin updated — ${restartHint}`,
+                  `Plugin updated — ${RESTART_HINT}`,
                   "Update failed",
                 )
               }

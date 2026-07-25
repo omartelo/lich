@@ -1,7 +1,8 @@
 import { NavLink } from "react-router-dom"
-import { Bell, Check, LoaderCircle, X } from "lucide-react"
+import { Bell, Check, LoaderCircle } from "lucide-react"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
+import { CloseButton } from "@/components/common/CloseButton"
 import { cn } from "@/lib/utils"
 import { useProjectStatus } from "@/lib/useSessionStatus"
 import type { Project } from "@/lib/api-types"
@@ -48,17 +49,15 @@ export function ProjectTab({ project, sessionIds, onClose }: ProjectTabProps) {
               {badge === "done" && <Check className="size-3 shrink-0 text-emerald-500" />}
               {badge === "waiting" && <Bell className="size-3 shrink-0 text-amber-500" />}
               <span className="truncate">{project.name}</span>
-              <span
-                role="button"
-                aria-label={`Close ${project.name}`}
+              {/* preventDefault, not stopPropagation: the parent is a NavLink,
+                  and the click must not navigate to the tab being closed. */}
+              <CloseButton
+                label={`Close ${project.name}`}
                 onClick={(event) => {
                   event.preventDefault()
                   onClose()
                 }}
-                className="flex size-4 shrink-0 items-center justify-center rounded opacity-0 transition-opacity hover:bg-foreground/15 group-hover:opacity-100"
-              >
-                <X className="size-3" />
-              </span>
+              />
             </>
           )
         }}

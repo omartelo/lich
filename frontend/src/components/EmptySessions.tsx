@@ -1,5 +1,6 @@
 import { Plus, SquareTerminal } from "lucide-react"
 import { useParams } from "react-router-dom"
+import { EmptyScreen } from "@/components/common/EmptyScreen"
 import { Button } from "@/components/ui/button"
 import { useProjects } from "@/lib/projects"
 import { sessionsOf } from "@/lib/sessions"
@@ -17,18 +18,15 @@ export function EmptySessions() {
   }
 
   return (
-    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-background">
-      <SquareTerminal className="size-12 text-muted-foreground" />
-      <div className="text-center">
-        <h1 className="text-lg font-semibold text-foreground">No session open</h1>
-        <p className="text-sm text-muted-foreground">
-          Open a session to start working in this project.
-        </p>
-      </div>
+    <EmptyScreen
+      icon={SquareTerminal}
+      title="No session open"
+      description="Open a session to start working in this project."
+    >
       <Button onClick={() => newSession(projectId)}>
         <Plus data-icon="inline-start" />
         New session
       </Button>
-    </div>
+    </EmptyScreen>
   )
 }

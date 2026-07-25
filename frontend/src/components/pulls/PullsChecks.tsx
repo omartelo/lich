@@ -1,4 +1,5 @@
 import { Check, Clock, ExternalLink, X } from "lucide-react"
+import { Notice } from "@/components/common/Notice"
 import type { CheckItem } from "@/lib/api-types"
 import { checkDuration } from "@/lib/check-duration"
 import { System } from "@/lib/rpc"
@@ -16,7 +17,7 @@ const stateIcon = {
 // GitHub's job, finding out which log to read is this tab's.
 export function PullsChecks({ checks }: { checks: CheckItem[] | null }) {
   if (!checks || checks.length === 0) {
-    return <p className="px-6 py-5 text-sm text-muted-foreground">No checks reported.</p>
+    return <Notice className="px-6 py-5 text-sm">No checks reported.</Notice>
   }
   return (
     <div className="flex flex-col py-1">

@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
-import { ProjectService, Terminal as TerminalService } from "@/lib/rpc"
-import { useActiveSession } from "@/lib/useActiveSession"
+import { Notice } from "@/components/common/Notice"
 import { discardTargets, parseDiff, type DiffFile } from "@/lib/diff"
+import { ProjectService } from "@/lib/rpc"
+import { useActiveSession } from "@/lib/useActiveSession"
 import { useGitStatus } from "@/lib/useGitStatus"
+import { useInject } from "@/lib/use-inject"
 import { errorText } from "@/lib/utils"
+import type { DiffBulk } from "./diff-bulk"
 import { DiscardDialog } from "./DiscardDialog"
-import { FileDiff, type DiffBulk } from "./FileDiff"
+import { FileDiff } from "./FileDiff"
 
 // ReviewPanel is the Review tab's body: the active session's uncommitted diff,
 // one collapsible file at a time. Context-menu actions write file/line
@@ -16,6 +19,7 @@ import { FileDiff, type DiffBulk } from "./FileDiff"
 // full screen, the tab bar and the close button.
 export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
   const { sessionId, path } = useActiveSession()
+  const inject = useInject(sessionId)
   const status = useGitStatus(path)
   const [files, setFiles] = useState<DiffFile[] | null>(null)
   const [failed, setFailed] = useState(false)
@@ -41,12 +45,6 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
   useEffect(() => {
     void refresh()
   }, [refresh, status?.files, status?.added, status?.deleted])
-
-  const inject = (text: string) => {
-    if (sessionId) {
-      void TerminalService.Write(sessionId, text)
-    }
-  }
 
   // Reverting a rename touches both paths (new removed, old restored); the
   // panel refreshes immediately instead of waiting for the next poll tick.
@@ -94,13 +92,13 @@ interface PanelBodyProps {
 
 function PanelBody({ files, failed, onInject, onDiscard, bulk }: PanelBodyProps) {
   if (failed) {
-    return <PanelNotice>Not a git repository</PanelNotice>
+    return <Notice>Not a git repository</Notice>
   }
   if (files === null) {
-    return <PanelNotice>Loading…</PanelNotice>
+    return <Notice>Loading…</Notice>
   }
   if (files.length === 0) {
-    return <PanelNotice>No uncommitted changes</PanelNotice>
+    return <Notice>No uncommitted changes</Notice>
   }
   return (
     <div className="flex flex-col p-2 [&>section:not(:first-child)]:mt-2.5 [&>section:not(:first-child)]:border-t [&>section:not(:first-child)]:border-border [&>section:not(:first-child)]:pt-2.5">
@@ -115,8 +113,4 @@ function PanelBody({ files, failed, onInject, onDiscard, bulk }: PanelBodyProps)
       ))}
     </div>
   )
-}
-
-function PanelNotice({ children }: { children: string }) {
-  return <p className="px-3 py-4 text-xs text-muted-foreground">{children}</p>
 }

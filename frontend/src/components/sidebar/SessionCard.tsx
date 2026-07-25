@@ -11,6 +11,7 @@ import { useSessionCwd } from "@/lib/useSessionCwd"
 import { useSessionAgent } from "@/lib/useSessionAgent"
 import { useGitStatus } from "@/lib/useGitStatus"
 import { usePullRequest } from "@/lib/usePullRequest"
+import { CloseButton } from "@/components/common/CloseButton"
 import { DiffStat } from "@/components/DiffStat"
 import { SessionStatusIcon } from "./SessionStatusIcon"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -193,17 +194,14 @@ export function SessionCard({
                 </span>
               )}
             </div>
-            <span
-              role="button"
-              aria-label={`Close ${session.label}`}
+            <CloseButton
+              label={`Close ${session.label}`}
               onClick={(event) => {
                 event.stopPropagation()
                 onClose()
               }}
-              className="absolute right-2 top-2 flex size-4 items-center justify-center rounded opacity-0 transition-opacity hover:bg-foreground/15 group-hover:opacity-100"
-            >
-              <X className="size-3" />
-            </span>
+              className="absolute right-2 top-2"
+            />
           </ContextMenuTrigger>
           <TooltipContent
             side="right"

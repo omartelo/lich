@@ -4,7 +4,6 @@ import {
   Monitor,
   Moon,
   Plus,
-  RotateCcw,
   SquareTerminal,
   Sun,
   ZoomIn,
@@ -22,7 +21,7 @@ import {
   useSettings,
 } from "@/lib/settings"
 import type { TerminalTheme, Theme } from "@/lib/settings"
-import { Button } from "@/components/ui/button"
+import { Stepper } from "@/components/common/Stepper"
 import { SegmentedControl } from "./SegmentedControl"
 import { SettingBlock, SettingGroup } from "./SettingBlock"
 import { FontSetting } from "./FontSetting"
@@ -76,37 +75,19 @@ export function AppearanceSettings() {
           title="Zoom"
           description="Scales the interface."
         >
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="Zoom out"
-              disabled={zoom <= ZOOM_MIN}
-              onClick={() => setZoom(zoom - ZOOM_STEP)}
-            >
-              <ZoomOut />
-            </Button>
-            <div className="flex h-9 min-w-16 items-center justify-center rounded-lg border border-border px-3 text-sm tabular-nums text-foreground">
-              {Math.round(zoom * 100)}%
-            </div>
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="Zoom in"
-              disabled={zoom >= ZOOM_MAX}
-              onClick={() => setZoom(zoom + ZOOM_STEP)}
-            >
-              <ZoomIn />
-            </Button>
-            <Button
-              variant="ghost"
-              disabled={zoom === DEFAULT_ZOOM}
-              onClick={() => setZoom(DEFAULT_ZOOM)}
-            >
-              <RotateCcw />
-              Reset
-            </Button>
-          </div>
+          <Stepper
+            value={zoom}
+            display={`${Math.round(zoom * 100)}%`}
+            min={ZOOM_MIN}
+            max={ZOOM_MAX}
+            step={ZOOM_STEP}
+            fallback={DEFAULT_ZOOM}
+            onChange={setZoom}
+            decrementIcon={<ZoomOut />}
+            incrementIcon={<ZoomIn />}
+            decrementLabel="Zoom out"
+            incrementLabel="Zoom in"
+          />
         </SettingBlock>
       </SettingGroup>
 
@@ -129,37 +110,19 @@ export function AppearanceSettings() {
           title="Text size"
           description="Scales the terminal."
         >
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="Smaller terminal text"
-              disabled={terminalFontSize <= TERMINAL_FONT_SIZE_MIN}
-              onClick={() => setTerminalFontSize(terminalFontSize - TERMINAL_FONT_SIZE_STEP)}
-            >
-              <Minus />
-            </Button>
-            <div className="flex h-9 min-w-16 items-center justify-center rounded-lg border border-border px-3 text-sm tabular-nums text-foreground">
-              {terminalFontSize}px
-            </div>
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="Larger terminal text"
-              disabled={terminalFontSize >= TERMINAL_FONT_SIZE_MAX}
-              onClick={() => setTerminalFontSize(terminalFontSize + TERMINAL_FONT_SIZE_STEP)}
-            >
-              <Plus />
-            </Button>
-            <Button
-              variant="ghost"
-              disabled={terminalFontSize === DEFAULT_TERMINAL_FONT_SIZE}
-              onClick={() => setTerminalFontSize(DEFAULT_TERMINAL_FONT_SIZE)}
-            >
-              <RotateCcw />
-              Reset
-            </Button>
-          </div>
+          <Stepper
+            value={terminalFontSize}
+            display={`${terminalFontSize}px`}
+            min={TERMINAL_FONT_SIZE_MIN}
+            max={TERMINAL_FONT_SIZE_MAX}
+            step={TERMINAL_FONT_SIZE_STEP}
+            fallback={DEFAULT_TERMINAL_FONT_SIZE}
+            onChange={setTerminalFontSize}
+            decrementIcon={<Minus />}
+            incrementIcon={<Plus />}
+            decrementLabel="Smaller terminal text"
+            incrementLabel="Larger terminal text"
+          />
         </SettingBlock>
 
         <FontSetting />

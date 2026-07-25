@@ -1,4 +1,5 @@
 import { FolderOpen } from "lucide-react"
+import { EmptyScreen } from "@/components/common/EmptyScreen"
 import { Button } from "@/components/ui/button"
 import { useProjects } from "@/lib/projects"
 
@@ -8,16 +9,15 @@ export function Home() {
   const { openProject } = useProjects()
 
   return (
-    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-background">
-      <FolderOpen className="size-12 text-muted-foreground" />
-      <div className="text-center">
-        <h1 className="text-lg font-semibold text-foreground">No project open</h1>
-        <p className="text-sm text-muted-foreground">Open a folder to start a terminal session.</p>
-      </div>
+    <EmptyScreen
+      icon={FolderOpen}
+      title="No project open"
+      description="Open a folder to start a terminal session."
+    >
       <Button onClick={() => void openProject()}>
         <FolderOpen data-icon="inline-start" />
         Open project
       </Button>
-    </div>
+    </EmptyScreen>
   )
 }

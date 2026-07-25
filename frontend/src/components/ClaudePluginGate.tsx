@@ -14,13 +14,12 @@ import {
   DISMISSED_FLAG,
   INSTALL_DISMISSED_KEY,
   type PluginAction,
+  RESTART_HINT,
   UPDATE_DISMISSED_KEY,
 } from "@/lib/plugin-gate"
 import { ClaudePlugin } from "@/lib/rpc"
 import { errorText } from "@/lib/utils"
 import { runWithToast } from "@/lib/toast-async"
-
-const RESTART_HINT = "restart your Claude sessions to apply."
 
 // ClaudePluginGate checks on startup whether the lich Claude Code plugin is
 // installed and current. Missing → a one-click install modal; a newer release →

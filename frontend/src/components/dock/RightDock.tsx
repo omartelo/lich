@@ -1,24 +1,22 @@
+import { Code, FileDiff, Maximize2, Minimize2, X } from "lucide-react"
 import { useState } from "react"
-import {
-  ChevronsDownUp,
-  ChevronsUpDown,
-  Code,
-  FileDiff,
-  Maximize2,
-  Minimize2,
-  X,
-} from "lucide-react"
+import { IconAction } from "@/components/common/IconAction"
+import { ResizeHandle } from "@/components/common/ResizeHandle"
+import { CollapseAllAction, useDiffBulk } from "@/components/diff/diff-bulk"
+import { ReviewPanel } from "@/components/diff/ReviewPanel"
+import { DiffStat } from "@/components/DiffStat"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { DiffStat } from "@/components/DiffStat"
-import { HeaderAction } from "@/components/diff/FileDiff"
-import { ReviewPanel } from "@/components/diff/ReviewPanel"
+import { usePanelWidth } from "@/lib/use-panel-width"
 import { useActiveSession } from "@/lib/useActiveSession"
 import { useGitStatus } from "@/lib/useGitStatus"
-import { usePanelWidth } from "@/lib/use-panel-width"
 import { FilesPanel } from "./FilesPanel"
 
 export type DockTab = "files" | "review"
+
+// Ghost tabs, sized down to the dock's 40px header — not the stock filled pill.
+const TAB_CLASS =
+  "gap-1 rounded-md px-2 py-0.5 text-xs hover:bg-accent/50 data-active:bg-accent data-active:text-accent-foreground dark:data-active:border-transparent dark:data-active:bg-accent dark:data-active:text-accent-foreground"
 
 interface RightDockProps {
   tab: DockTab
@@ -35,10 +33,7 @@ export function RightDock({ tab, onTab, onClose }: RightDockProps) {
   const { path } = useActiveSession()
   const status = useGitStatus(path)
   const [fullscreen, setFullscreen] = useState(false)
-  // One collapse/expand-all directive for the review panel; the nonce re-fires
-  // the sync even when every file already holds the target state.
-  const [bulk, setBulk] = useState({ open: true, nonce: 0 })
-  const toggleAll = () => setBulk((b) => ({ open: !b.open, nonce: b.nonce + 1 }))
+  const [bulk, toggleAll] = useDiffBulk()
   const { width, handleProps } = usePanelWidth({
     storageKey: "lich.dock.width",
     minRem: 20,
@@ -60,17 +55,11 @@ export function RightDock({ tab, onTab, onClose }: RightDockProps) {
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-2">
         <Tabs value={tab} onValueChange={(value) => onTab(value as DockTab)} className={"h-8"}>
           <TabsList className="h-auto p-0.5 bg-transparent gap-1">
-            <TabsTrigger
-              value="files"
-              className="gap-1 rounded-md px-2 py-0.5 text-xs hover:bg-accent/50 data-active:bg-accent data-active:text-accent-foreground dark:data-active:border-transparent dark:data-active:bg-accent dark:data-active:text-accent-foreground"
-            >
+            <TabsTrigger value="files" className={TAB_CLASS}>
               <Code className="size-3.5" />
               Code
             </TabsTrigger>
-            <TabsTrigger
-              value="review"
-              className="gap-1 rounded-md px-2 py-0.5 text-xs hover:bg-accent/50 data-active:bg-accent data-active:text-accent-foreground dark:data-active:border-transparent dark:data-active:bg-accent dark:data-active:text-accent-foreground"
-            >
+            <TabsTrigger value="review" className={TAB_CLASS}>
               <FileDiff className="size-3.5" />
               Review
               {status && status.files > 0 && (
@@ -81,23 +70,14 @@ export function RightDock({ tab, onTab, onClose }: RightDockProps) {
         </Tabs>
         <span className="ml-auto flex items-center gap-1">
           {tab === "review" && status && status.files > 0 && (
-            <HeaderAction
-              label={bulk.open ? "Collapse all files" : "Expand all files"}
-              onClick={toggleAll}
-            >
-              {bulk.open ? (
-                <ChevronsDownUp className="size-3.5" />
-              ) : (
-                <ChevronsUpDown className="size-3.5" />
-              )}
-            </HeaderAction>
+            <CollapseAllAction open={bulk.open} onToggle={toggleAll} />
           )}
-          <HeaderAction
+          <IconAction
             label={fullscreen ? "Exit full screen" : "Full screen"}
             onClick={() => setFullscreen((v) => !v)}
           >
             {fullscreen ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
-          </HeaderAction>
+          </IconAction>
           <Button
             variant="ghost"
             size="icon-xs"
@@ -112,15 +92,7 @@ export function RightDock({ tab, onTab, onClose }: RightDockProps) {
       <div className="flex flex-1 flex-col overflow-hidden">
         {tab === "files" ? <FilesPanel /> : <ReviewPanel bulk={bulk} />}
       </div>
-      {!fullscreen && (
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize panel"
-          {...handleProps}
-          className="absolute left-0 top-0 h-full w-1.5 cursor-col-resize touch-none transition-colors hover:bg-accent"
-        />
-      )}
+      {!fullscreen && <ResizeHandle edge="left" label="Resize panel" handleProps={handleProps} />}
     </aside>
   )
 }

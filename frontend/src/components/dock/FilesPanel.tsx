@@ -1,21 +1,17 @@
-import { useCallback, useEffect, useState } from "react"
 import { ChevronLeft } from "lucide-react"
-import { ProjectService, System, Terminal as TerminalService } from "@/lib/rpc"
-import { useActiveSession } from "@/lib/useActiveSession"
-import { useProjects } from "@/lib/projects"
-import { queuePaste } from "@/lib/paste-queue"
-import { useGitStatus } from "@/lib/useGitStatus"
-import { buildTree, type TreeNode } from "@/lib/file-tree"
+import { useCallback, useEffect, useState } from "react"
+import { Notice } from "@/components/common/Notice"
+import { InjectMenu } from "@/components/diff/InjectMenu"
 import { FileTree } from "@/components/FileTree"
 import { formatLineRef, parseDiff, type DiffFile } from "@/lib/diff"
+import { buildTree, type TreeNode } from "@/lib/file-tree"
+import { queuePaste } from "@/lib/paste-queue"
+import { useProjects } from "@/lib/projects"
+import { ProjectService, System } from "@/lib/rpc"
+import { useActiveSession } from "@/lib/useActiveSession"
+import { useGitStatus } from "@/lib/useGitStatus"
+import { useInject } from "@/lib/use-inject"
 import { errorText } from "@/lib/utils"
-import type { DocLineSelection } from "@/lib/codemirror"
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu"
 import { useFileEditor } from "./useFileEditor"
 
 // FilesPanel is the Files tab of the right dock: a read-only tree of the active
@@ -27,6 +23,7 @@ import { useFileEditor } from "./useFileEditor"
 export function FilesPanel() {
   const { projectId, sessionId, path } = useActiveSession()
   const { newSession, activateSession } = useProjects()
+  const inject = useInject(sessionId)
   const status = useGitStatus(path)
   const [tree, setTree] = useState<TreeNode[] | null>(null)
   const [stats, setStats] = useState<Map<string, DiffFile>>(new Map())
@@ -67,12 +64,6 @@ export function FilesPanel() {
 
   if (!projectId) {
     return null
-  }
-
-  const inject = (text: string) => {
-    if (sessionId) {
-      void TerminalService.Write(sessionId, text)
-    }
   }
 
   // Right-click → Open in editor. The backend either launched a GUI editor
@@ -219,32 +210,22 @@ interface PreviewBodyProps {
 // straight through (doc line === file line), so the range needs no remap.
 function PreviewBody({ text, rel, onInject }: PreviewBodyProps) {
   const { containerRef, getSelectedLines } = useFileEditor(text, rel)
-  const [range, setRange] = useState<DocLineSelection | null>(null)
+  const [lineRef, setLineRef] = useState<string | null>(null)
 
-  // Resolve the selection when the menu opens, not on every selection change.
-  const onOpenChange = (menuOpen: boolean) => {
-    if (menuOpen) {
-      setRange(getSelectedLines())
-    }
-  }
-
-  const lineRef = range && formatLineRef({ start: range.from, end: range.to })
   return (
-    <ContextMenu onOpenChange={onOpenChange}>
-      <ContextMenuTrigger render={<div className="isolate py-1" ref={containerRef} />} />
-      <ContextMenuContent>
-        <ContextMenuItem onClick={() => onInject(`@${rel} `)}>Inject file</ContextMenuItem>
-        <ContextMenuItem
-          disabled={lineRef === null}
-          onClick={() => lineRef && onInject(`${rel}:${lineRef} `)}
-        >
-          {lineRef === null ? "Inject lines" : `Inject lines ${lineRef}`}
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
+    <InjectMenu
+      path={rel}
+      containerRef={containerRef}
+      lineRef={lineRef}
+      // Resolve the selection when the menu opens, not on every change.
+      onOpenChange={(open) => {
+        if (!open) {
+          return
+        }
+        const range = getSelectedLines()
+        setLineRef(range && formatLineRef({ start: range.from, end: range.to }))
+      }}
+      onInject={onInject}
+    />
   )
-}
-
-function Notice({ children }: { children: string }) {
-  return <p className="px-3 py-4 text-xs text-muted-foreground">{children}</p>
 }

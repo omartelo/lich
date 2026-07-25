@@ -1,15 +1,14 @@
 import { useState } from "react"
 import type { ReactNode } from "react"
 import { useParams } from "react-router-dom"
-import { Search } from "lucide-react"
 import { AppearanceSettings } from "./AppearanceSettings"
 import { HotkeysSettings } from "./HotkeysSettings"
 import { ProvidersSettings } from "./ProvidersSettings"
 import { ProviderBinSettings } from "./ProviderBinSettings"
 import { WorktreeSetupSettings } from "./WorktreeSetupSettings"
 import { UpdatesSettings } from "./UpdatesSettings"
+import { SearchInput } from "@/components/common/SearchInput"
 import { enabledProviders, useProviders } from "@/lib/providers-store"
-import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 
 // A settings category: a nav entry plus the pane it renders. "app" sections are
@@ -82,16 +81,12 @@ export function Settings() {
     <div className="absolute inset-0 z-10 flex bg-background">
       <aside className="flex w-64 shrink-0 flex-col border-r border-border bg-sidebar">
         <div className="p-3">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search"
-              aria-label="Search settings"
-              className="pl-8"
-            />
-          </div>
+          <SearchInput
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search"
+            aria-label="Search settings"
+          />
         </div>
         <nav className="flex flex-col gap-0.5 px-2 pb-3">
           {appSections.map(navButton)}

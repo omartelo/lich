@@ -7,6 +7,7 @@ import { closeSettings, isSettingsOpen, subscribeSettingsCard } from "@/lib/sett
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
 import { enabledProviders, useProviders } from "@/lib/providers-store"
 import { ProviderIcon } from "@/lib/provider-icons"
+import { ResizeHandle } from "@/components/common/ResizeHandle"
 import { SettingsCard } from "./SettingsCard"
 import { Button } from "@/components/ui/button"
 import {
@@ -290,13 +291,7 @@ export function SessionSidebar() {
         onForceRemove={forceRemoveAndClose}
       />
 
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize sidebar"
-        {...handleProps}
-        className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize touch-none transition-colors hover:bg-accent"
-      />
+      <ResizeHandle edge="right" label="Resize sidebar" handleProps={handleProps} />
     </aside>
   )
 }

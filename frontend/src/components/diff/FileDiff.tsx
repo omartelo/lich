@@ -1,38 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from "react"
-import type { ReactNode } from "react"
 import { ChevronDown, ChevronRight, Paperclip, Undo2 } from "lucide-react"
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { IconAction } from "@/components/common/IconAction"
+import { DiffStat } from "@/components/DiffStat"
 import { Checkbox } from "@/components/ui/checkbox"
-import {
-  buildFileDoc,
-  formatLineRef,
-  newLineRange,
-  type DiffFile,
-  type FileDoc,
-  type NewLineRange,
-} from "@/lib/diff"
+import { buildFileDoc, formatLineRef, newLineRange, type DiffFile, type FileDoc } from "@/lib/diff"
 import { languageAbbr, splitPath } from "@/lib/lang-badge"
 import { cn } from "@/lib/utils"
-import { DiffStat } from "@/components/DiffStat"
+import type { DiffBulk } from "./diff-bulk"
+import { InjectMenu } from "./InjectMenu"
 import { useDiffEditor } from "./useDiffEditor"
 
 // Files whose rendered diff exceeds this many lines start collapsed, so one
 // giant lockfile doesn't swamp the panel (expanding is one click away).
 const LARGE_FILE_LINES = 500
-
-// A collapse/expand-all directive shared by every file in the panel. The nonce
-// is bumped on each bulk action so files re-sync even to a target they already
-// hold.
-export interface DiffBulk {
-  open: boolean
-  nonce: number
-}
 
 interface FileDiffProps {
   file: DiffFile
@@ -97,13 +77,13 @@ export function FileDiff({ file, onInject, onDiscard, bulk, viewed, onViewed }: 
         <span className="flex shrink-0 items-center gap-1.5">
           <DiffStat added={file.added} deleted={file.deleted} />
         </span>
-        <HeaderAction label="Add file as context" onClick={() => onInject(`@${file.newPath} `)}>
+        <IconAction label="Add file as context" onClick={() => onInject(`@${file.newPath} `)}>
           <Paperclip className="size-3.5" />
-        </HeaderAction>
+        </IconAction>
         {onDiscard && (
-          <HeaderAction label="Discard Changes" onClick={onDiscard}>
+          <IconAction label="Discard Changes" onClick={onDiscard}>
             <Undo2 className="size-3.5" />
-          </HeaderAction>
+          </IconAction>
         )}
         {onViewed && (
           <label
@@ -134,32 +114,6 @@ export function FileDiff({ file, onInject, onDiscard, bulk, viewed, onViewed }: 
   )
 }
 
-interface HeaderActionProps {
-  label: string
-  onClick: () => void
-  children: ReactNode
-}
-
-export function HeaderAction({ label, onClick, children }: HeaderActionProps) {
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <button
-            type="button"
-            onClick={onClick}
-            aria-label={label}
-            className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-          />
-        }
-      >
-        {children}
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
-  )
-}
-
 interface DiffBodyProps {
   doc: FileDoc
   path: string
@@ -167,34 +121,29 @@ interface DiffBodyProps {
 }
 
 // DiffBody exists as its own component so collapsing the file unmounts it,
-// destroying the CodeMirror view instead of keeping it alive off-screen. The
-// isolate wrapper keeps CodeMirror's high-z-index gutter from painting over
-// the sticky card header.
+// destroying the CodeMirror view instead of keeping it alive off-screen.
+//
+// A diff's document is not the file: the selection lands on doc lines, which
+// newLineRange maps back to the line numbers the agent needs to be told.
 function DiffBody({ doc, path, onInject }: DiffBodyProps) {
   const { containerRef, getSelectedDocLines } = useDiffEditor(doc, path)
-  const [range, setRange] = useState<NewLineRange | null>(null)
-
-  // Resolve the selection when the menu opens, not on every selection change.
-  const onOpenChange = (open: boolean) => {
-    if (!open) {
-      return
-    }
-    const selected = getSelectedDocLines()
-    setRange(selected ? newLineRange(doc.lineMeta, selected.from, selected.to) : null)
-  }
+  const [lineRef, setLineRef] = useState<string | null>(null)
 
   return (
-    <ContextMenu onOpenChange={onOpenChange}>
-      <ContextMenuTrigger render={<div className="isolate py-1" ref={containerRef} />} />
-      <ContextMenuContent>
-        <ContextMenuItem onClick={() => onInject(`@${path} `)}>Inject file</ContextMenuItem>
-        <ContextMenuItem
-          disabled={range === null}
-          onClick={() => range && onInject(`${path}:${formatLineRef(range)} `)}
-        >
-          {range === null ? "Inject lines" : `Inject lines ${formatLineRef(range)}`}
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
+    <InjectMenu
+      path={path}
+      containerRef={containerRef}
+      lineRef={lineRef}
+      // Resolve the selection when the menu opens, not on every change.
+      onOpenChange={(open) => {
+        if (!open) {
+          return
+        }
+        const selected = getSelectedDocLines()
+        const range = selected ? newLineRange(doc.lineMeta, selected.from, selected.to) : null
+        setLineRef(range && formatLineRef(range))
+      }}
+      onInject={onInject}
+    />
   )
 }
