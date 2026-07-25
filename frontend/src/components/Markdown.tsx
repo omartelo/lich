@@ -45,6 +45,9 @@ const components: Components = {
             void System.OpenExternal(href)
           }
         }}
+        // Middle-click never reaches onClick, and its default is a new Chromium
+        // window. Kill it — the plain click already opens the link.
+        onAuxClick={(e) => e.preventDefault()}
       >
         {children}
       </a>

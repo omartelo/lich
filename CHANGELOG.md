@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The shell no longer behaves like a browser.** The window is one only by
+  construction, and its reflexes leaked through everywhere except a focused
+  terminal, which already swallows them: a locale that did not match the UI
+  raised the translate bubble on startup; Ctrl+W closed the window, which quits
+  lich; Ctrl+T and Ctrl+N opened tabs and windows; Ctrl+P, Ctrl+S and Ctrl+O
+  opened dialogs with nowhere to land; Ctrl+Shift+Delete would have wiped lich's
+  own saved settings along with the browsing data; right-clicking the UI offered
+  Back, Reload and Save as; dropping a file on the window replaced the app with
+  that file, with no address bar to come back from; and middle-clicking a link
+  spawned a browser window. All of it is now refused. Reload, the devtools chords
+  and the terminal's own right-click menu are deliberately kept, and every chord
+  still reaches a terminal as its PTY sequence — Ctrl+W stays delete-word,
+  Ctrl+U kill-line, Ctrl+D end-of-file.
 - **A new directory of files now counts as the files it holds, not as one.** The
   changed-file count came from `git status --porcelain`, which reports an
   untracked directory as a single `?? pkg/` entry — so an agent writing 25 files

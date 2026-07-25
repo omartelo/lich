@@ -122,6 +122,7 @@ func TestArgs(t *testing.T) {
 		"--app=http://127.0.0.1:47821/?token=x",
 		"--user-data-dir=/home/u/.config/lich/chromium-profile",
 		"--class=lichdev",
+		"--disable-features=Translate",
 		"--ozone-platform=wayland",
 	} {
 		if !slices.Contains(args, want) {

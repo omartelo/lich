@@ -89,6 +89,10 @@ func Args(url, dataDir, class string, extra []string) []string {
 		"--class=" + class,
 		"--no-first-run",
 		"--no-default-browser-check",
+		// The translate bubble compares the page's language against the browser
+		// locale and offers to translate lich's own UI — a browser prompt in a
+		// window that is not a browser.
+		"--disable-features=Translate",
 	}
 	return append(args, extra...)
 }
