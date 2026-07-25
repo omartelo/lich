@@ -20,6 +20,15 @@ import { useDiffEditor } from "./useDiffEditor"
 // giant lockfile doesn't swamp the panel (expanding is one click away).
 const LARGE_FILE_LINES = 500
 
+// Height of one editor line, the knob sizing a file's placeholder before its
+// editor exists. Measured against the diff theme's 12px font; a wrapped long
+// line makes any single number a lower bound, so this only has to be close.
+const LINE_HEIGHT_PX = 17
+
+// How far outside the viewport a file's editor is built, so scrolling meets a
+// rendered diff rather than a gap.
+const MOUNT_MARGIN = "600px 0px"
+
 interface FileDiffProps {
   file: DiffFile
   onInject: (text: string) => void
@@ -114,7 +123,7 @@ export function FileDiff({ file, onInject, onDiscard, bulk, viewed, onViewed }: 
         (file.binary ? (
           <p className="px-9 py-2 text-xs text-muted-foreground">Binary file</p>
         ) : (
-          <DiffBody doc={doc} path={file.newPath} onInject={onInject} />
+          <LazyDiffBody doc={doc} path={file.newPath} onInject={onInject} />
         ))}
     </section>
   )
@@ -124,6 +133,37 @@ interface DiffBodyProps {
   doc: FileDoc
   path: string
   onInject: (text: string) => void
+}
+
+// A panel holds one CodeMirror view per expanded file, and a wide diff (a PR
+// touching 191 files) built them all in a single commit — enough to lock the
+// page. LazyDiffBody defers each one until its card comes near the viewport;
+// once built, the editor stays, so scrolling back keeps its selection and
+// highlighting. Collapsing the file still destroys it.
+function LazyDiffBody({ doc, path, onInject }: DiffBodyProps) {
+  const placeholder = useRef<HTMLDivElement>(null)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    const target = placeholder.current
+    if (!target) {
+      return
+    }
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setMounted(true)
+      }
+    }, { rootMargin: MOUNT_MARGIN })
+    observer.observe(target)
+    return () => observer.disconnect()
+  }, [])
+
+  if (mounted) {
+    return <DiffBody doc={doc} path={path} onInject={onInject} />
+  }
+  // The placeholder has to stand in for the file's height: zero-height cards
+  // would all sit in the viewport at once and nothing would be deferred.
+  return <div ref={placeholder} style={{ height: doc.lineMeta.length * LINE_HEIGHT_PX }} />
 }
 
 // DiffBody exists as its own component so collapsing the file unmounts it,

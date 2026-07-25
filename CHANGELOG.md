@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A pull request with hundreds of changed files no longer locks the app.**
+  Every file in a diff panel starts expanded, and an expanded file builds its own
+  CodeMirror view — so a 191-file pull request built 191 editors in one go, each
+  followed by a language chunk re-configuring its document. Chromium offered to
+  kill the page, and the screen stayed unusable well after it recovered. A file's
+  editor is now built only once its card comes near the viewport; until then the
+  card holds a placeholder of the file's height, so the scrollbar still measures
+  the whole diff. An editor that has been built stays built, keeping its
+  selection and highlighting when you scroll back. That 191-file diff now settles
+  in 465 ms with 8 editors, against 13.7 s with 191. The dock's Review tab shares
+  the same cards and the same fix. Files changed also stopped refetching the diff
+  every time the window regained focus — a new commit still refreshes it.
+
 ## [0.18.0] - 2026-07-25
 
 ### Added
