@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A new directory of files now counts as the files it holds, not as one.** The
+  changed-file count came from `git status --porcelain`, which reports an
+  untracked directory as a single `?? pkg/` entry — so an agent writing 25 files
+  into fresh packages showed 4 changed files in the footer and on the session
+  card, while the Review tab listed all of them. The count now asks git for
+  every untracked file; the line totals were already right.
 - **Merging a pull request now clears its badge everywhere, at once.** The
   footer, the session cards and the sidebar's "Pull request" entry only looked
   the pull request up again when the checkout's HEAD moved, or when the window

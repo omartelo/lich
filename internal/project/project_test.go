@@ -170,6 +170,21 @@ func TestDiff(t *testing.T) {
 		t.Errorf("Diff(untracked binary).Added = %d, want 5", got.Added)
 	}
 
+	// Untracked files inside a new directory count one by one: git's default
+	// porcelain collapses them into a single "?? pkg/" entry, which would report
+	// a whole new package as one changed file.
+	if err := os.MkdirAll(filepath.Join(repo, "pkg", "deep"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"one.txt", "two.txt"} {
+		if err := os.WriteFile(filepath.Join(repo, "pkg", "deep", name), []byte("l\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := svc.Diff(repo); got.Files != 5 || got.Added != 7 {
+		t.Errorf("Diff(new directory) = %+v, want {Files:5 Added:7 Deleted:1}", got)
+	}
+
 	if got := svc.Diff(t.TempDir()); got != (DiffStats{}) {
 		t.Errorf("Diff(non-repo) = %+v, want zero", got)
 	}
