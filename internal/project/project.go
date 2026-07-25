@@ -169,7 +169,10 @@ type DiffStats struct {
 // yields the zero value, matching Branch's contract.
 func (s *Service) Diff(path string) DiffStats {
 	var stats DiffStats
-	if out, err := command("git", "-C", path, "status", "--porcelain").Output(); err == nil {
+	// --untracked-files=all, because the default collapses a new directory into
+	// one "?? dir/" line: an agent writing 25 files into fresh packages would
+	// count as one changed file.
+	if out, err := command("git", "-C", path, "status", "--porcelain", "--untracked-files=all").Output(); err == nil {
 		stats.Files = countLines(out)
 	}
 	// A repository without commits has no HEAD; diff against git's empty tree,
