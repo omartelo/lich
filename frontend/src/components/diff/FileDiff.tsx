@@ -149,11 +149,14 @@ function LazyDiffBody({ doc, path, onInject }: DiffBodyProps) {
     if (!target) {
       return
     }
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) {
-        setMounted(true)
-      }
-    }, { rootMargin: MOUNT_MARGIN })
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setMounted(true)
+        }
+      },
+      { rootMargin: MOUNT_MARGIN },
+    )
     observer.observe(target)
     return () => observer.disconnect()
   }, [])
