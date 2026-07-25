@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom"
 import { EmptyScreen } from "@/components/common/EmptyScreen"
 import { Button } from "@/components/ui/button"
 import { useProjects } from "@/providers/projects"
-import { sessionsOf } from "@/lib/sessions"
+import { sessionsOf } from "@/lib/session/sessions"
 
 // A sessionless project is a legal state: the user is asked for a session rather
 // than having a replacement PTY spawned behind their back. The route matches for

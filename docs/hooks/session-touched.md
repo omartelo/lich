@@ -41,7 +41,7 @@ the hook's stdin payload if a single script filters instead of per-tool matchers
   `session-touched` (`{id}`).
 - **Refresh** — `frontend/src/providers/projects.tsx`: resolves the session id to the
   path its card watches (its worktree, else the project path) and calls
-  `refreshGitStatus(path)` (`frontend/src/lib/useGitStatus.ts`), which fetches
+  `refreshGitStatus(path)` (`frontend/src/lib/git/use-git-status.ts`), which fetches
   that path now, ahead of the poll tick. A no-op when no card watches the path
   (the session lives in a background project), so it costs no git call.
 

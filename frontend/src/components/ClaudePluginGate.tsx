@@ -16,7 +16,7 @@ import {
   type PluginAction,
   RESTART_HINT,
   UPDATE_DISMISSED_KEY,
-} from "@/lib/plugin-gate"
+} from "@/lib/update/plugin-gate"
 import { ClaudePlugin } from "@/lib/rpc"
 import { errorText } from "@/lib/utils"
 import { runWithToast } from "@/lib/toast-async"

@@ -1,4 +1,4 @@
-import { createKeyedStore, type ReadableKeyedStore } from "./keyed-store"
+import { createKeyedStore, type ReadableKeyedStore } from "@/lib/keyed-store"
 import { isUsageEvent, type SessionUsage } from "./session-events"
 
 // A subscription to the global usage event, injected so the store is testable

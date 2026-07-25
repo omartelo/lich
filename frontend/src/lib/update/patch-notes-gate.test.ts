@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { decidePatchNotes } from "./patch-notes-gate"
-import type { PatchNotes } from "./api-types"
+import type { PatchNotes } from "@/lib/api-types"
 
 const notes: PatchNotes = {
   version: "0.11.0",

@@ -3,8 +3,8 @@ import { useMatch } from "react-router-dom"
 import { TerminalView } from "./TerminalView"
 import { ResumeSessionDialog } from "./ResumeSessionDialog"
 import { useProjects } from "@/providers/projects"
-import { activeSessionId, resumableSession, sessionsOf } from "@/lib/sessions"
-import type { Session } from "@/lib/sessions"
+import { activeSessionId, resumableSession, sessionsOf } from "@/lib/session/sessions"
+import type { Session } from "@/lib/session/sessions"
 
 // TerminalHost keeps one persistent terminal per session, across every open
 // project, stacked in the same area. The router picks the active project and the

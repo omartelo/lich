@@ -1,6 +1,6 @@
 import { ProviderIcon } from "./ProviderIcon"
 import { formatModel } from "@/lib/model-name"
-import { useSessionUsage } from "@/lib/useSessionUsage"
+import { useSessionUsage } from "@/lib/session/use-session-usage"
 
 interface SessionModelProps {
   sessionId: string

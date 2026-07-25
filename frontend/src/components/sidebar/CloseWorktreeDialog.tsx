@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
-import type { Session } from "@/lib/sessions"
+import type { Session } from "@/lib/session/sessions"
 
 interface CloseWorktreeDialogProps {
   /** The worktree session being closed, or null when the dialog is hidden. */

@@ -2,7 +2,7 @@
 // flat, filterable list the palette lists and routes to. Kept pure (no React,
 // no stores) so the flatten and filter are testable without a render.
 
-import type { Project } from "./api-types"
+import type { Project } from "@/lib/api-types"
 import type { SessionKind, SessionState } from "./sessions"
 
 // PaletteSession is one session flattened with the project it belongs to — what

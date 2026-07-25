@@ -4,7 +4,7 @@ import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { CloseButton } from "@/components/common/CloseButton"
 import { cn } from "@/lib/utils"
-import { useProjectStatus } from "@/lib/useSessionStatus"
+import { useProjectStatus } from "@/lib/session/use-session-status"
 import type { Project } from "@/lib/api-types"
 
 interface ProjectTabProps {

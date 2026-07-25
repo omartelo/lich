@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils"
 import { ProviderIcon } from "@/components/ProviderIcon"
-import type { SessionKind } from "@/lib/sessions"
-import type { SessionStatus } from "@/lib/session-events"
+import type { SessionKind } from "@/lib/session/sessions"
+import type { SessionStatus } from "@/lib/session/session-events"
 
 // Ring drawn around the provider icon per processing state: a spinning ring
 // while Claude produces output, solid emerald once its turn ends, amber when

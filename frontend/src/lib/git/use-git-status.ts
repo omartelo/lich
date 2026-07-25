@@ -1,6 +1,6 @@
 import { createGitStatusStore, type GitStatus, type PollCadence } from "./git-status-store"
-import { ProjectService } from "./rpc"
-import { useKeyedStore } from "./use-keyed-store"
+import { ProjectService } from "@/lib/rpc"
+import { useKeyedStore } from "@/lib/use-keyed-store"
 
 export type { GitStatus }
 

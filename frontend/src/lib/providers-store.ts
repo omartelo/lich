@@ -9,7 +9,7 @@
 import { useEffect, useSyncExternalStore } from "react"
 import type { DetectedProvider } from "./api-types"
 import { Providers, Store } from "./rpc"
-import { PROVIDER_KINDS, type ProviderKind } from "./sessions"
+import { PROVIDER_KINDS, type ProviderKind } from "@/lib/session/sessions"
 
 const GLOBAL_SCOPE = ""
 

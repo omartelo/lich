@@ -54,7 +54,7 @@ what re-arms the spinner after them. Every tool re-reports `busy` (idempotent);
 - **UI push** — `internal/terminal/terminal.go`: emits the global app event
   `session-status` (`{id, state}`). Global rather than per-session because its
   consumers outlive any one card.
-- **Store** — `frontend/src/lib/session-status-store.ts`: one subscription taken
+- **Store** — `frontend/src/lib/session/session-status-store.ts`: one subscription taken
   at page load keeps the last state of every session, keyed by id. The card
   cannot hold it: the sidebar only renders cards for the active project, so
   switching projects unmounts them, and a status reported meanwhile would be lost.

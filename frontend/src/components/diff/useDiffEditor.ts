@@ -10,7 +10,7 @@ import {
   selectedDocLines,
   type DocLineSelection,
 } from "@/lib/codemirror"
-import type { FileDoc } from "@/lib/diff"
+import type { FileDoc } from "@/lib/git/diff"
 
 export interface DiffEditor {
   containerRef: RefObject<HTMLDivElement>

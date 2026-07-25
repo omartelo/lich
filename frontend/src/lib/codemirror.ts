@@ -13,7 +13,7 @@ import {
   gutterLineClass,
   lineNumbers,
 } from "@codemirror/view"
-import { gutterNumber, type DiffLine } from "./diff"
+import { gutterNumber, type DiffLine } from "@/lib/git/diff"
 
 // diffTheme styles the editor with the app's CSS variables, so the `.dark`
 // class on <html> restyles every view without any JS synchronization.

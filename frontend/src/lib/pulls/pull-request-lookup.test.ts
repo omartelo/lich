@@ -5,7 +5,7 @@ import { lookupPullRequest } from "./pull-request-lookup"
 // the lookup actually makes. Each test uses its own checkout path, so the
 // module-level share map never carries state across tests.
 const pullRequest = vi.fn()
-vi.mock("./rpc", () => ({
+vi.mock("@/lib/rpc", () => ({
   ProjectService: {
     PullRequest: (path: string) => pullRequest(path),
   },

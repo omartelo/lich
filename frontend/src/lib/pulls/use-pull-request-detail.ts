@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { ProjectService } from "./rpc"
-import type { PullRequestDetail } from "./api-types"
-import { errorText } from "./utils"
+import { ProjectService } from "@/lib/rpc"
+import type { PullRequestDetail } from "@/lib/api-types"
+import { errorText } from "@/lib/utils"
 
 export type { PullRequestDetail }
 

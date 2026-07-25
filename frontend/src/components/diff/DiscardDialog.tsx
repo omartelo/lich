@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
-import type { DiffFile } from "@/lib/diff"
+import type { DiffFile } from "@/lib/git/diff"
 
 interface DiscardDialogProps {
   /** The file whose changes are about to be reverted, or null when hidden. */

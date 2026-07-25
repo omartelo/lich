@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { decideUpdateAction } from "./app-update-gate"
-import type { AppUpdateStatus } from "./api-types"
+import type { AppUpdateStatus } from "@/lib/api-types"
 
 const status = (over: Partial<AppUpdateStatus>): AppUpdateStatus => ({
   currentVersion: "0.7.0",

@@ -1,8 +1,8 @@
-import { onAppEvent } from "./app-events"
+import { onAppEvent } from "@/lib/app-events"
 import { AGENT_EVENT, STATUS_EVENT } from "./session-events"
 import { createSessionAgentStore } from "./session-agent-store"
 import type { SessionKind } from "./sessions"
-import { useKeyedStore } from "./use-keyed-store"
+import { useKeyedStore } from "@/lib/use-keyed-store"
 
 // Subscribed at import rather than on first use: that opens the /events socket
 // at page load, so an agent reported before any card mounts still lands.

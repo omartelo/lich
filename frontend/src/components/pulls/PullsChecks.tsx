@@ -1,7 +1,7 @@
 import { Check, Clock, ExternalLink, X } from "lucide-react"
 import { Notice } from "@/components/common/Notice"
 import type { CheckItem } from "@/lib/api-types"
-import { checkDuration } from "@/lib/check-duration"
+import { checkDuration } from "@/lib/pulls/check-duration"
 import { System } from "@/lib/rpc"
 import { cn } from "@/lib/utils"
 

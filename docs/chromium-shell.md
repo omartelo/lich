@@ -45,7 +45,7 @@ its CDP surface):
 Why lich is ~80% there already:
 
 - Terminal I/O already rides a loopback WebSocket with token auth
-  (`internal/terminal/transport.go` ↔ `frontend/src/lib/term-transport.ts`) —
+  (`internal/terminal/transport.go` ↔ `frontend/src/lib/terminal/term-transport.ts`) —
   Chromium connects to it unchanged.
 - The frontend is already embedded and static; serving it over HTTP replaces
   handing it to the webview.

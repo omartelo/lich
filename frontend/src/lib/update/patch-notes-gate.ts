@@ -3,7 +3,7 @@
 // storage) so it is trivially testable; the component wires it to Current(),
 // localStorage and the dialog. Mirrors app-update-gate.ts.
 
-import type { PatchNotes } from "./api-types"
+import type { PatchNotes } from "@/lib/api-types"
 
 // Stores the version whose notes were last shown (or silently recorded on first
 // run), so a given release's popup fires exactly once.

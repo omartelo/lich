@@ -1,6 +1,6 @@
 import type { ComponentType } from "react"
 import { Sparkles, Terminal } from "lucide-react"
-import type { SessionKind } from "@/lib/sessions"
+import type { SessionKind } from "@/lib/session/sessions"
 
 // Brand marks for the AI providers. The Claude/Codex/opencode SVG paths are
 // vendored from @lobehub/icons (MIT — github.com/lobehub/lobe-icons), inlined so

@@ -13,6 +13,29 @@ React 18 + TypeScript + Vite, built to a static bundle that the Go binary embeds
 - **Terminal** is xterm.js 6 + WebGL. **Code / diff** is CodeMirror 6. **Icons** are lucide; file-type logos
   are `devicons-react`. **Toasts** are sonner. **DnD** is dnd-kit.
 
+## Layout
+
+```
+src/
+├── providers/     context Providers — the app's state layer (projects, settings)
+├── components/    one file per component, named after what it exports
+│   ├── common/    shared across features (Notice, EmptyScreen, CloseButton, …)
+│   ├── ui/        shadcn primitives — CLI output, see below
+│   └── <feature>/ diff · dock · pulls · settings · sidebar · tabs
+└── lib/           no React elements; a `.tsx` in here is misfiled
+    ├── session/   sessions, their events, the four per-session stores + hooks
+    ├── terminal/  xterm/PTY plumbing: term-*, replay, paste and setup queues
+    ├── git/       status poller, diff parsing, file tree, branch names
+    ├── pulls/     pull-request lookup, detail, diff, viewed ticks
+    ├── update/    the app, plugin and patch-notes gates
+    └── *.ts       cross-cutting: rpc, api-types, app-events, utils, keyed-store,
+                   the card stores, hotkeys, paths, panel width, dnd
+```
+
+A store and the hook that reads it are a pair and live together (`git/git-status-store.ts` beside
+`git/use-git-status.ts`) — the folders group by domain, never by kind. Files are kebab-case except
+components, which are PascalCase after their export. Tests sit next to what they test.
+
 ## Stack specifics
 
 - **Tailwind v4, CSS-first.** No `tailwind.config.*` — tokens and `@theme` live in `src/index.css`, wired via
@@ -50,7 +73,7 @@ run the binaries directly: `./node_modules/.bin/vitest run` or `pnpm exec vitest
 ## State — no state library
 
 zustand and tanstack-query were both rejected (PR #13). The pattern is a **module-level store +
-`useSyncExternalStore`**; see any `src/lib/*-store.ts`. Backend→frontend events are **global** payloads
+`useSyncExternalStore`**; see any `*-store.ts`. Backend→frontend events are **global** payloads
 `{ id, ... }` on the events channel, never per-session sockets — subscribe once, filter by id. Do not add a
 state dep; extend the store pattern.
 

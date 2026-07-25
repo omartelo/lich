@@ -1,7 +1,7 @@
 import { GitPullRequestArrow } from "lucide-react"
 import { SidebarCard } from "@/components/common/SidebarCard"
-import { useGitStatus } from "@/lib/useGitStatus"
-import { usePullRequest } from "@/lib/usePullRequest"
+import { useGitStatus } from "@/lib/git/use-git-status"
+import { usePullRequest } from "@/lib/pulls/use-pull-request"
 
 interface PullRequestCardProps {
   // The worktree checkout whose branch PR this entry opens.

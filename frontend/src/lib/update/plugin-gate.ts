@@ -3,7 +3,7 @@
 // is trivially testable; the component wires it to Status(), the dialog, and the
 // toast.
 
-import type { PluginStatus as Status } from "./api-types"
+import type { PluginStatus as Status } from "@/lib/api-types"
 export type { Status }
 
 export const INSTALL_DISMISSED_KEY = "lich.pluginInstallDismissed"

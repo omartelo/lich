@@ -1,7 +1,7 @@
-import { onAppEvent } from "./app-events"
+import { onAppEvent } from "@/lib/app-events"
 import { USAGE_EVENT, type SessionUsage } from "./session-events"
 import { createSessionUsageStore } from "./session-usage-store"
-import { useKeyedStore } from "./use-keyed-store"
+import { useKeyedStore } from "@/lib/use-keyed-store"
 
 // Subscribed at import rather than on first use: that opens the /events socket
 // at page load, so a usage report before any card mounts still lands.

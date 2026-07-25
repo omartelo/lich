@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { registerUpdateChecker, runUpdateCheck } from "./update-check"
-import type { AppUpdateStatus } from "./api-types"
+import type { AppUpdateStatus } from "@/lib/api-types"
 
 const status: AppUpdateStatus = {
   currentVersion: "0.14.0",

@@ -6,7 +6,7 @@ import {
   subscribeViewed,
   viewedFiles,
 } from "./pull-request-viewed"
-import { parseDiff, type DiffFile } from "./diff"
+import { parseDiff, type DiffFile } from "@/lib/git/diff"
 
 // The store is module-level, so every test uses its own pull request URL.
 const pr = (name: string) => `https://github.com/o/l/pull/${name}`

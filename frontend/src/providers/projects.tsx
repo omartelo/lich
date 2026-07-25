@@ -22,7 +22,7 @@ import {
   type Session,
   type SessionKind,
   type SessionState,
-} from "@/lib/sessions"
+} from "@/lib/session/sessions"
 import { applyOrder, pinFirst } from "@/lib/reorder"
 import { defaultProviderKind } from "@/lib/providers-store"
 import {
@@ -34,9 +34,9 @@ import {
   TITLE_EVENT,
   toSessionStatus,
   TOUCHED_EVENT,
-} from "@/lib/session-events"
-import { refreshGitStatus } from "@/lib/useGitStatus"
-import { markSessionSeen } from "@/lib/useSessionStatus"
+} from "@/lib/session/session-events"
+import { refreshGitStatus } from "@/lib/git/use-git-status"
+import { markSessionSeen } from "@/lib/session/use-session-status"
 import { isRecordingTarget, matchesCombo } from "@/lib/hotkeys"
 import { useSettings } from "./settings"
 

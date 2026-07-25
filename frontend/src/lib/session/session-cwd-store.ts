@@ -1,4 +1,4 @@
-import { createKeyedStore, type ReadableKeyedStore } from "./keyed-store"
+import { createKeyedStore, type ReadableKeyedStore } from "@/lib/keyed-store"
 import { isCwdEvent } from "./session-events"
 
 // A subscription to the global cwd event, injected so the store is testable

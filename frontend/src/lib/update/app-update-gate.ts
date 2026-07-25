@@ -2,7 +2,7 @@
 // silent. Kept pure (no bindings, no storage) so it is trivially testable; the
 // component wires it to Status() and the toast. Mirrors plugin-gate.ts.
 
-import type { AppUpdateStatus } from "./api-types"
+import type { AppUpdateStatus } from "@/lib/api-types"
 
 // Stores the version the update prompt was dismissed for, so a newer release
 // re-prompts (unlike a permanent dismissal).

@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { isValidBranchName } from "@/lib/branch-name"
+import { isValidBranchName } from "@/lib/git/branch-name"
 import { cn, errorText } from "@/lib/utils"
 
 interface WorktreeDialogProps {

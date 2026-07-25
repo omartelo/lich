@@ -4,7 +4,7 @@
 // falls back to the RPC and output to the /events channel, which the backend
 // keeps serving.
 
-import { endpoint } from "./rpc"
+import { endpoint } from "@/lib/rpc"
 import { decodeFrame, encodeFrame } from "./term-frame"
 
 const RECONNECT_MS = 1_000

@@ -19,19 +19,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useProjects } from "@/providers/projects"
-import { queueSetup } from "@/lib/setup-queue"
+import { queueSetup } from "@/lib/terminal/setup-queue"
 import {
   activeSessionId,
   groupByWorktree,
   isLastWorktreeSession,
   sessionsOf,
   type Session,
-} from "@/lib/sessions"
+} from "@/lib/session/sessions"
 import { baseName } from "@/lib/paths"
 import { CloseWorktreeDialog, ForceRemoveWorktreeDialog } from "./CloseWorktreeDialog"
 import { SessionGroup } from "./SessionGroup"
 import { WorktreeDialog } from "./WorktreeDialog"
-import { useGitStatus } from "@/lib/useGitStatus"
+import { useGitStatus } from "@/lib/git/use-git-status"
 import { usePanelWidth } from "@/lib/use-panel-width"
 import { errorText } from "@/lib/utils"
 

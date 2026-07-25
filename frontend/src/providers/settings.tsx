@@ -9,7 +9,7 @@ import {
   type HotkeyId,
   type Hotkeys,
 } from "@/lib/hotkeys"
-import { zoomIntent } from "@/lib/zoom-keys"
+import { zoomIntent } from "@/lib/terminal/zoom-keys"
 
 const FONT_STORAGE_KEY = "lich.terminal.font"
 const TERMINAL_FONT_SIZE_STORAGE_KEY = "lich.terminal.fontSize"

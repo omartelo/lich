@@ -1,8 +1,8 @@
 import { useCallback, useSyncExternalStore } from "react"
-import { onAppEvent } from "./app-events"
+import { onAppEvent } from "@/lib/app-events"
 import { STATUS_EVENT, type SessionStatus } from "./session-events"
 import { createSessionStatusStore, type PendingStatus } from "./session-status-store"
-import { useKeyedStore } from "./use-keyed-store"
+import { useKeyedStore } from "@/lib/use-keyed-store"
 
 // Subscribed at import rather than on first use: that opens the /events socket
 // at page load, so a status reported before any card mounts still lands.

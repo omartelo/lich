@@ -6,7 +6,7 @@
 // Every function here is pure — it returns a new state and never mutates the
 // input — which keeps the reducer logic testable without React or a PTY.
 
-import { applyOrder } from "./reorder"
+import { applyOrder } from "@/lib/reorder"
 
 // Provider ids that can back a session, mirrored from internal/providers.Registry
 // (Go) — keep in sync. A session's kind is one of these or the plain shell.

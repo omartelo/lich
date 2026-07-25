@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { lookupPullRequest } from "./pull-request-lookup"
-import type { PullRequest } from "./api-types"
+import type { PullRequest } from "@/lib/api-types"
 
 export type { PullRequest }
 

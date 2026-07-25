@@ -2,11 +2,15 @@ import { useEffect, useRef } from "react"
 import { toast } from "sonner"
 import { useMatch, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
-import { decideUpdateAction, UPDATE_DISMISSED_KEY, type UpdateAction } from "@/lib/app-update-gate"
+import {
+  decideUpdateAction,
+  UPDATE_DISMISSED_KEY,
+  type UpdateAction,
+} from "@/lib/update/app-update-gate"
 import { AppUpdate, System } from "@/lib/rpc"
 import { useProjects } from "@/providers/projects"
-import { queuePaste } from "@/lib/paste-queue"
-import { registerUpdateChecker } from "@/lib/update-check"
+import { queuePaste } from "@/lib/terminal/paste-queue"
+import { registerUpdateChecker } from "@/lib/update/update-check"
 import { errorText } from "@/lib/utils"
 
 // How often to re-check for a release after startup, so a long-running session

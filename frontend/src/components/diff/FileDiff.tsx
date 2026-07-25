@@ -3,8 +3,14 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { IconAction } from "@/components/common/IconAction"
 import { DiffStat } from "@/components/DiffStat"
 import { Checkbox } from "@/components/ui/checkbox"
-import { buildFileDoc, formatLineRef, newLineRange, type DiffFile, type FileDoc } from "@/lib/diff"
-import { languageAbbr, splitPath } from "@/lib/lang-badge"
+import {
+  buildFileDoc,
+  formatLineRef,
+  newLineRange,
+  type DiffFile,
+  type FileDoc,
+} from "@/lib/git/diff"
+import { languageAbbr, splitPath } from "@/lib/git/lang-badge"
 import { cn } from "@/lib/utils"
 import type { DiffBulk } from "./diff-bulk"
 import { InjectMenu } from "./InjectMenu"

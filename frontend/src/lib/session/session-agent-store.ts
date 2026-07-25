@@ -1,4 +1,4 @@
-import { createKeyedStore, type ReadableKeyedStore } from "./keyed-store"
+import { createKeyedStore, type ReadableKeyedStore } from "@/lib/keyed-store"
 import { isAgentEvent, isStatusEvent } from "./session-events"
 import { isSessionKind, type SessionKind } from "./sessions"
 

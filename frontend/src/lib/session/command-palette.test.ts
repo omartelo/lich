@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { filterPalette, matchesQuery, paletteSessions } from "./command-palette"
-import type { Project } from "./api-types"
+import type { Project } from "@/lib/api-types"
 import type { SessionState } from "./sessions"
 
 const projects: Project[] = [

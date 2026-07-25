@@ -53,13 +53,13 @@ holds the id of the Claude session currently in the card.
   `New`) emits the global app event `session-agent` (`{id, agent: "claude"}`):
   a report is proof Claude runs in this PTY, so a shell card wears Claude's
   icon while it does. The mark lives in
-  `frontend/src/lib/session-agent-store.ts`, never the store: it clears on the
+  `frontend/src/lib/session/session-agent-store.ts`, never the store: it clears on the
   session-state contract's `idle` (SessionEnd — Claude left) and on every PTY
   spawn (the backend emits an empty agent), so it dies with the process that
   earned it. The card's persisted kind — what a respawn runs, what the resume
   prompt keys on — never changes.
 - **Consumer** — the resume prompt. `LoadState` hydrates the id onto the
-  frontend session (`resumableSession` in `frontend/src/lib/sessions.ts`), and
+  frontend session (`resumableSession` in `frontend/src/lib/session/sessions.ts`), and
   the first time a restored card is opened `TerminalHost` asks before spawning:
   accepting passes the id to `terminal.Start`, which spawns `claude --resume
   <id>`.
@@ -80,7 +80,7 @@ holds the id of the Claude session currently in the card.
 - **Only Claude Code resumes.** The field and the column are provider-agnostic,
   but `--resume` is a Claude Code flag: `resumeArgs` in
   `internal/terminal/terminal.go` and `resumableSession` in
-  `frontend/src/lib/sessions.ts` both gate on the claude kind. Another provider
+  `frontend/src/lib/session/sessions.ts` both gate on the claude kind. Another provider
   reporting an id would have it stored and ignored until its own resume flag is
   wired.
 - **The deprecated `claude_session_id` alias stays until the install gate can

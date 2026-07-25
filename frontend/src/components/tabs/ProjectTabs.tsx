@@ -5,7 +5,7 @@ import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortabl
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { useProjects } from "@/providers/projects"
-import { sessionsOf } from "@/lib/sessions"
+import { sessionsOf } from "@/lib/session/sessions"
 import { openSettings } from "@/lib/settings-card-store"
 import { NotificationsButton } from "./NotificationsButton"
 import { horizontalAxis, useSortableList } from "@/lib/use-sortable-list"

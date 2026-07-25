@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { ProjectService } from "./rpc"
-import { parseDiff, type DiffFile } from "./diff"
-import { errorText } from "./utils"
+import { ProjectService } from "@/lib/rpc"
+import { parseDiff, type DiffFile } from "@/lib/git/diff"
+import { errorText } from "@/lib/utils"
 
 export interface PullRequestDiffState {
   files: DiffFile[] | null

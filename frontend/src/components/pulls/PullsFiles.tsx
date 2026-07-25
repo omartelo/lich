@@ -6,15 +6,15 @@ import { CollapseAllAction, useDiffBulk } from "@/components/diff/diff-bulk"
 import { FileDiff } from "@/components/diff/FileDiff"
 import { DiffStat } from "@/components/DiffStat"
 import { FileTree } from "@/components/FileTree"
-import { buildTree } from "@/lib/file-tree"
+import { buildTree } from "@/lib/git/file-tree"
 import {
   fileFingerprint,
   isViewed,
   setViewed,
   subscribeViewed,
   viewedFiles,
-} from "@/lib/pull-request-viewed"
-import { usePullRequestDiff } from "@/lib/usePullRequestDiff"
+} from "@/lib/pulls/pull-request-viewed"
+import { usePullRequestDiff } from "@/lib/pulls/use-pull-request-diff"
 
 // The file tree is a navigator, not the review itself: hiding it hands the
 // whole width to the diff. Remembered in localStorage like every other UI pref,

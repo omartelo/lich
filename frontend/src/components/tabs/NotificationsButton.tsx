@@ -9,10 +9,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { notificationsFrom } from "@/lib/notifications"
+import { notificationsFrom } from "@/lib/session/notifications"
 import { useProjects } from "@/providers/projects"
-import type { SessionStatus } from "@/lib/session-events"
-import { usePendingStatuses } from "@/lib/useSessionStatus"
+import type { SessionStatus } from "@/lib/session/session-events"
+import { usePendingStatuses } from "@/lib/session/use-session-status"
 
 function StatusIcon({ status }: { status: SessionStatus }) {
   if (status === "waiting") {
