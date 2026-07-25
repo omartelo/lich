@@ -6,6 +6,7 @@ import { CollapseAllAction, useDiffBulk } from "@/components/diff/diff-bulk"
 import { FileDiff } from "@/components/diff/FileDiff"
 import { DiffStat } from "@/components/DiffStat"
 import { FileTree } from "@/components/FileTree"
+import { Skeleton } from "@/components/ui/skeleton"
 import { buildTree } from "@/lib/git/file-tree"
 import {
   fileFingerprint,
@@ -20,6 +21,52 @@ import { usePullRequestDiff } from "@/lib/pulls/use-pull-request-diff"
 // whole width to the diff. Remembered in localStorage like every other UI pref,
 // so the choice survives leaving the screen.
 const TREE_HIDDEN_KEY = "lich.pulls.tree.hidden"
+
+// Ragged widths, so the placeholders read as file names and code rather than a
+// stack of identical bars.
+const TREE_ROWS = ["w-28", "w-40", "w-24", "w-36", "w-32", "w-44", "w-24", "w-36"]
+const CODE_ROWS = ["w-3/5", "w-4/5", "w-2/5", "w-11/12", "w-1/2", "w-3/4", "w-1/3", "w-2/3"]
+
+// The diff is a gh round-trip, so this tab is empty for about a second. A bare
+// "Loading…" line reads as a broken tab on a screen that wide; the skeleton
+// stands in for the shape that arrives — tree, toolbar, then file cards.
+function FilesSkeleton({ tree }: { tree: boolean }) {
+  return (
+    <div className="flex h-full" aria-busy>
+      {tree && (
+        <div className="flex w-60 shrink-0 flex-col gap-3 border-r border-border p-3">
+          {TREE_ROWS.map((width) => (
+            <Skeleton key={width} className={`h-3 ${width}`} />
+          ))}
+        </div>
+      )}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex flex-none items-center gap-2 border-b border-border px-3 py-2">
+          <Skeleton className="size-3.5" />
+          <Skeleton className="ml-auto h-3 w-20" />
+        </div>
+        <div className="flex flex-col gap-7 p-3">
+          {[0, 1, 2].map((card) => (
+            <div key={card} className="flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <Skeleton className="size-3.5" />
+                <Skeleton className="size-5" />
+                <Skeleton className="h-3 w-40" />
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="ml-auto h-3 w-14" />
+              </div>
+              <div className="flex max-w-3xl flex-col gap-2 pl-9">
+                {CODE_ROWS.map((width) => (
+                  <Skeleton key={width} className={`h-2.5 ${width}`} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 interface PullsFilesProps {
   path: string
@@ -59,7 +106,7 @@ export function PullsFiles({ path, head, pullRequest, onInject }: PullsFilesProp
     return <Notice className="px-4 py-6 text-sm">Couldn’t load the diff: {error}</Notice>
   }
   if (files === null) {
-    return <Notice className="px-4 py-6 text-sm">Loading…</Notice>
+    return <FilesSkeleton tree={treeOpen} />
   }
   if (files.length === 0) {
     return <Notice className="px-4 py-6 text-sm">No file changes</Notice>

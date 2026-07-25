@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in 465 ms with 8 editors, against 13.7 s with 191. The dock's Review tab shares
   the same cards and the same fix. Files changed also stopped refetching the diff
   every time the window regained focus — a new commit still refreshes it.
+- **The pull request screen no longer waits behind a bare "Loading…".** Both the
+  lookup and the diff are `gh` round-trips of about a second, and on a screen
+  that size a single muted line read as a failure. Each now holds the shape of
+  what is coming — title, actions, status line and tabs for the pull request;
+  file tree, toolbar and file cards for Files changed.
 
 ## [0.18.0] - 2026-07-25
 
