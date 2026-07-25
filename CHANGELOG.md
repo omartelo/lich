@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The work-tree path guard now rejects a rooted path on Windows too.** The
+  guard behind "open in editor", the file preview and discard leaned on
+  `filepath.IsAbs`, which on Windows demands a volume name — so `/etc/passwd`
+  read as a relative path and walked straight through. Nothing escaped the work
+  tree (the join pinned it back inside), but the rule the guard promises now
+  holds on every OS: a path starting at a root is refused, volume name or not.
+  This is what turned the v0.18.0 release build red on the Windows job.
+
+- **A red backend suite now says which test failed in the CI log.** The test
+  summary script sends `go test -json` to a file and its table to the job
+  summary, so a failing job showed an exit code and not one line of the failure.
+  The failing packages' output is replayed into the log before the summary is
+  written; the job still fails on a red test, exactly as before.
+
 ## [0.18.0] - 2026-07-25
 
 ### Added

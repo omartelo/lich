@@ -6,6 +6,7 @@ package system
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -118,15 +119,23 @@ func (s *Service) getenv(key string) string {
 	return ""
 }
 
-// validateRel rejects absolute paths and parent-directory escapes, so a joined
+// validateRel rejects rooted paths and parent-directory escapes, so a joined
 // path can never leave the work-tree root. Mirrors project.validateRelPath.
 func validateRel(rel string) error {
 	clean := filepath.Clean(rel)
-	if filepath.IsAbs(clean) || clean == ".." ||
+	if isRooted(clean) || clean == ".." ||
 		strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("invalid repository path %q", rel)
 	}
 	return nil
+}
+
+// isRooted reports whether a cleaned path starts at a root. IsAbs alone is not
+// enough on Windows, where it demands a volume name and so reads "/etc/passwd"
+// as relative; a work-tree path is always relative, so a leading separator is
+// refused too (os.IsPathSeparator counts "\" only where it is one).
+func isRooted(clean string) bool {
+	return filepath.IsAbs(clean) || os.IsPathSeparator(clean[0])
 }
 
 // ValidateExternalURL accepts absolute http/https URLs only.

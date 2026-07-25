@@ -1,6 +1,7 @@
 package system
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -135,6 +136,27 @@ func TestOpenInEditorFallsBackToDefault(t *testing.T) {
 	}
 	if want := filepath.Join("/repo", "a.txt"); len(args) == 0 || args[len(args)-1] != want {
 		t.Errorf("args = %v, want file %s as last arg", args, want)
+	}
+}
+
+// TestValidateRelRejectsRootedPaths pins the guard itself: a path that starts
+// at a root is never a work-tree path. "/etc/passwd" is the case Windows used to
+// wave through — filepath.IsAbs wants a volume name there, so a leading
+// separator alone read as relative.
+func TestValidateRelRejectsRootedPaths(t *testing.T) {
+	rooted := []string{"/etc/passwd", "/"}
+	if os.IsPathSeparator('\\') {
+		rooted = append(rooted, `\Windows\System32\config`, `C:\Windows`)
+	}
+	for _, rel := range rooted {
+		if err := validateRel(rel); err == nil {
+			t.Errorf("validateRel(%q): want error, got nil", rel)
+		}
+	}
+	for _, rel := range []string{"a.txt", "src/main.go", "a/b/../c.txt"} {
+		if err := validateRel(rel); err != nil {
+			t.Errorf("validateRel(%q): want nil, got %v", rel, err)
+		}
 	}
 }
 

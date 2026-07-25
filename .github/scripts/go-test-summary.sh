@@ -19,6 +19,23 @@ read -r pass fail skip < <(jq -rs '
       (map(select(.Action == "skip")) | length) ] | @tsv
 ' "$json")
 
+# -json sends every line of test output to the file, not the log, so a red run
+# would otherwise leave the job with an exit code and nothing to read — the
+# summary lands in the job summary, which the log does not carry. Replay the
+# failing tests' own output (plus their package's, where a build failure lands)
+# to the log before writing the summary.
+if [ "$code" != "0" ]; then
+  echo "::group::Failed test output"
+  # -j: the captured Output lines already carry their newline.
+  jq -js '
+    [ .[] | select(.Action == "fail") | .Package ] as $failed
+    | .[]
+    | select(.Action == "output" and (.Package | IN($failed[])))
+    | .Output
+  ' "$json"
+  echo "::endgroup::"
+fi
+
 total="$(go tool cover -func="$cover" | awk '/^total:/ {print $3}')"
 
 summary="${GITHUB_STEP_SUMMARY:-/dev/stdout}"
