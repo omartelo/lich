@@ -47,6 +47,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PullsChecks } from "./PullsChecks"
+import { PullsCommits } from "./PullsCommits"
 import { PullsFiles } from "./PullsFiles"
 
 // Ragged widths, so the body placeholder reads as prose instead of a block.
@@ -213,7 +214,8 @@ function PullRequestView({
 }: PullRequestViewProps) {
   const [merging, setMerging] = useState(false)
   const [edit, setEdit] = useState<EditState | null>(null)
-  const [tab, setTab] = useState<"overview" | "files" | "checks">("overview")
+  const [tab, setTab] = useState<"overview" | "commits" | "files" | "checks">("overview")
+  const commitCount = detail.commits?.length ?? 0
   const blocked = detail.isDraft
     ? "Pull request is a draft"
     : detail.mergeable === "CONFLICTING"
@@ -338,6 +340,12 @@ function PullRequestView({
           <TabButton active={tab === "overview"} onClick={() => setTab("overview")}>
             Overview
           </TabButton>
+          <TabButton active={tab === "commits"} onClick={() => setTab("commits")}>
+            Commits
+            {commitCount > 0 && (
+              <span className="tabular-nums text-muted-foreground">{commitCount}</span>
+            )}
+          </TabButton>
           <TabButton active={tab === "files"} onClick={() => setTab("files")}>
             Files changed
             {detail.changedFiles > 0 && (
@@ -358,9 +366,9 @@ function PullRequestView({
           <PullsFiles path={path} head={head} pullRequest={detail.url} onInject={onInject} />
         ) : (
           <div className="h-full overflow-y-auto">
-            {tab === "checks" ? (
-              <PullsChecks checks={detail.checkRuns} />
-            ) : (
+            {tab === "checks" && <PullsChecks checks={detail.checkRuns} />}
+            {tab === "commits" && <PullsCommits commits={detail.commits} />}
+            {tab === "overview" && (
               <div className="max-w-3xl px-6 py-5">
                 {detail.body.trim() !== "" ? (
                   <Markdown>{detail.body}</Markdown>

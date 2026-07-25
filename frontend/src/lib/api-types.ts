@@ -49,6 +49,19 @@ export interface CheckItem {
   completedAt: string
 }
 
+/** internal/project.PRCommit — one commit of the PR, for the Commits tab. */
+export interface PullRequestCommit {
+  oid: string
+  /** The message's subject line. */
+  headline: string
+  /** The rest of the message; "" for a one-line commit. */
+  body: string
+  /** The first author's login, or their name; "" when gh reports none. */
+  author: string
+  /** gh's ISO committedDate. */
+  date: string
+}
+
 /** internal/project.PRDetail — the branch's open PR in full, for the Pulls panel. */
 export interface PullRequestDetail {
   number: number
@@ -64,6 +77,8 @@ export interface PullRequestDetail {
   checks: ChecksRollup
   /** The rollup itself, worst state first; null when the PR reports no checks. */
   checkRuns: CheckItem[] | null
+  /** Every commit the PR would land, oldest first; null when gh reports none. */
+  commits: PullRequestCommit[] | null
 }
 
 /** internal/project.Worktree — a git worktree checkout: branch and path. */

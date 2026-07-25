@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The Pulls screen now lists the commits a pull request would land.** A new
+  "Commits" tab, counted next to its name, shows every commit oldest first with
+  the subject, the author and the date, and the message body under it the way
+  git prints one — the branch's story, which the diff and the file list never
+  tell. The commits ride along with the lookup the screen already makes, so it
+  costs no extra round-trip.
+
 ### Fixed
 
 - **A new directory of files now counts as the files it holds, not as one.** The

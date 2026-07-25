@@ -24,6 +24,9 @@ func TestParsePRDetail(t *testing.T) {
 			"statusCheckRollup": [
 				{"status": "COMPLETED", "conclusion": "SUCCESS"},
 				{"state": "SUCCESS"}
+			],
+			"commits": [
+				{"oid": "a4dbc1f", "messageHeadline": "feat: the panel", "messageBody": "why"}
 			]
 		}`)
 		pr, err := parsePRDetail(out)
@@ -44,6 +47,9 @@ func TestParsePRDetail(t *testing.T) {
 		}
 		if pr.ChangedFiles != 6 {
 			t.Errorf("wrong changed files: %d", pr.ChangedFiles)
+		}
+		if len(pr.Commits) != 1 || pr.Commits[0].Headline != "feat: the panel" {
+			t.Errorf("wrong commits: %+v", pr.Commits)
 		}
 	})
 
@@ -217,6 +223,55 @@ func TestToCheckItems(t *testing.T) {
 		}
 		if passed != rollup.Passed || failed != rollup.Failed || pending != rollup.Pending {
 			t.Errorf("list %d/%d/%d disagrees with rollup %+v", passed, failed, pending, rollup)
+		}
+	})
+}
+
+func TestToCommits(t *testing.T) {
+	t.Run("no commits yields no list", func(t *testing.T) {
+		if got := toCommits(nil); got != nil {
+			t.Errorf("toCommits(nil) = %+v, want nil", got)
+		}
+	})
+
+	t.Run("subject, body and author survive in gh's order", func(t *testing.T) {
+		got := toCommits([]ghCommit{
+			{
+				OID:             "a4dbc1f",
+				MessageHeadline: "fix: retire the badge",
+				MessageBody:     "The footer badge only looked up again on HEAD moves.",
+				CommittedDate:   "2026-07-25T22:32:47Z",
+				Authors:         []ghCommitAuthor{{Login: "omartelo", Name: "omartelo"}},
+			},
+			{OID: "f55ebe9", MessageHeadline: "docs: changelog"},
+		})
+		if len(got) != 2 {
+			t.Fatalf("want 2 commits, got %+v", got)
+		}
+		first := got[0]
+		if first.OID != "a4dbc1f" || first.Headline != "fix: retire the badge" {
+			t.Errorf("wrong header: %+v", first)
+		}
+		if !strings.Contains(first.Body, "HEAD moves") || first.Author != "omartelo" {
+			t.Errorf("lost body or author: %+v", first)
+		}
+		if first.Date != "2026-07-25T22:32:47Z" {
+			t.Errorf("wrong date: %q", first.Date)
+		}
+		// A one-line commit has no body and a web-flow merge commit no author;
+		// both are rows, not errors.
+		if got[1].Body != "" || got[1].Author != "" {
+			t.Errorf("second commit should be bare: %+v", got[1])
+		}
+	})
+
+	t.Run("a nameless login falls back to the name", func(t *testing.T) {
+		got := toCommits([]ghCommit{{
+			OID:     "c0ffee0",
+			Authors: []ghCommitAuthor{{Name: "Ada Lovelace"}},
+		}})
+		if len(got) != 1 || got[0].Author != "Ada Lovelace" {
+			t.Errorf("author fallback failed: %+v", got)
 		}
 	})
 }

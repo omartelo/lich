@@ -55,7 +55,7 @@ func runGH(timeout time.Duration, dir string, args ...string) ([]byte, error) {
 }
 
 // prViewFields is the gh `pr view --json` selection backing the Pulls panel.
-const prViewFields = "number,url,state,title,body,isDraft,mergeable,baseRefName,headRefName,statusCheckRollup,changedFiles"
+const prViewFields = "number,url,state,title,body,isDraft,mergeable,baseRefName,headRefName,statusCheckRollup,changedFiles,commits"
 
 // PRDetail is the full view of a branch's open pull request — richer than the
 // footer badge's PullRequest — driving the dock's Pulls panel: the title, body,
@@ -73,6 +73,17 @@ type PRDetail struct {
 	ChangedFiles int          `json:"changedFiles"`
 	Checks       ChecksRollup `json:"checks"`
 	CheckRuns    []CheckItem  `json:"checkRuns"`
+	Commits      []PRCommit   `json:"commits"`
+}
+
+// PRCommit is one commit the pull request would land, split the way git itself
+// splits a message: the subject line, then the body (empty for a one-liner).
+type PRCommit struct {
+	OID      string `json:"oid"`
+	Headline string `json:"headline"`
+	Body     string `json:"body"`
+	Author   string `json:"author"`
+	Date     string `json:"date"` // gh's ISO committedDate
 }
 
 // ChecksRollup collapses gh's statusCheckRollup array into the counts the panel
@@ -111,6 +122,22 @@ type ghPRView struct {
 	HeadRefName       string      `json:"headRefName"`
 	ChangedFiles      int         `json:"changedFiles"`
 	StatusCheckRollup []checkItem `json:"statusCheckRollup"`
+	Commits           []ghCommit  `json:"commits"`
+}
+
+// ghCommit is one entry of gh's commits array. Authors is a list because of
+// co-authored commits; the first one is the one the list names.
+type ghCommit struct {
+	OID             string           `json:"oid"`
+	MessageHeadline string           `json:"messageHeadline"`
+	MessageBody     string           `json:"messageBody"`
+	CommittedDate   string           `json:"committedDate"`
+	Authors         []ghCommitAuthor `json:"authors"`
+}
+
+type ghCommitAuthor struct {
+	Login string `json:"login"`
+	Name  string `json:"name"`
 }
 
 // checkItem is one statusCheckRollup entry. gh emits two shapes: a CheckRun
@@ -171,7 +198,32 @@ func parsePRDetail(out []byte) (*PRDetail, error) {
 		ChangedFiles: v.ChangedFiles,
 		Checks:       reduceChecks(v.StatusCheckRollup),
 		CheckRuns:    toCheckItems(v.StatusCheckRollup),
+		Commits:      toCommits(v.Commits),
 	}, nil
+}
+
+// toCommits flattens gh's commits into the list the Commits tab renders, in
+// gh's own order — oldest first, the order the branch built them. Returns nil
+// when gh reports none, so the tab can tell "no commits" from a list.
+func toCommits(commits []ghCommit) []PRCommit {
+	if len(commits) == 0 {
+		return nil
+	}
+	out := make([]PRCommit, 0, len(commits))
+	for _, c := range commits {
+		author := ""
+		if len(c.Authors) > 0 {
+			author = firstNonEmpty(c.Authors[0].Login, c.Authors[0].Name)
+		}
+		out = append(out, PRCommit{
+			OID:      c.OID,
+			Headline: c.MessageHeadline,
+			Body:     c.MessageBody,
+			Author:   author,
+			Date:     c.CommittedDate,
+		})
+	}
+	return out
 }
 
 // The verdict of one check, shared by the rollup counts and the Checks tab.
