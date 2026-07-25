@@ -54,6 +54,13 @@ zustand and tanstack-query were both rejected (PR #13). The pattern is a **modul
 `{ id, ... }` on the events channel, never per-session sockets — subscribe once, filter by id. Do not add a
 state dep; extend the store pattern.
 
+A per-session (or per-path) readout is `createKeyedStore` + `useKeyedStore`: one value per key, subscribers
+scoped to that key, entries outliving their listeners because a card unmounts with its project while its
+session keeps running. A new one is the event wiring and nothing else — cwd, agent and usage are three or
+four lines each. Reach for it before hand-rolling a `Map` of listener sets. `git-status-store` and
+`session-status-store` keep their own maps: one owns a poll cadence, the other a seen flag and a
+cross-project queue, and neither fits without widening the primitive for a single caller.
+
 ## Testing
 
 - vitest runs in the **node environment — there is no jsdom**. The gate covers pure logic (stores, parsers,

@@ -1,8 +1,8 @@
-import { useCallback, useSyncExternalStore } from "react"
 import { onAppEvent } from "./app-events"
 import { AGENT_EVENT, STATUS_EVENT } from "./session-events"
 import { createSessionAgentStore } from "./session-agent-store"
 import type { SessionKind } from "./sessions"
+import { useKeyedStore } from "./use-keyed-store"
 
 // Subscribed at import rather than on first use: that opens the /events socket
 // at page load, so an agent reported before any card mounts still lands.
@@ -16,9 +16,5 @@ const store = createSessionAgentStore(
 // card's unmount. Returns null while nothing runs there — the card then shows
 // its own kind.
 export function useSessionAgent(sessionId: string): SessionKind | null {
-  const subscribe = useCallback(
-    (onChange: () => void) => store.subscribe(sessionId, onChange),
-    [sessionId],
-  )
-  return useSyncExternalStore(subscribe, () => store.get(sessionId))
+  return useKeyedStore(store, sessionId)
 }

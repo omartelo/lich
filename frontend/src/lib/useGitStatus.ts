@@ -1,6 +1,6 @@
-import { useCallback, useSyncExternalStore } from "react"
-import { ProjectService } from "./rpc"
 import { createGitStatusStore, type GitStatus, type PollCadence } from "./git-status-store"
+import { ProjectService } from "./rpc"
+import { useKeyedStore } from "./use-keyed-store"
 
 export type { GitStatus }
 
@@ -35,11 +35,8 @@ export function refreshGitStatus(path: string): void {
 // all components watching the same directory share one fetch cycle, and an
 // unchanged status never re-renders them. Returns null until the first
 // successful fetch (or after a failed one), so callers can hide the segments
-// instead of rendering misleading zeros.
+// instead of rendering misleading zeros. An empty path subscribes to nothing —
+// useKeyedStore's guard is what keeps a poll off "".
 export function useGitStatus(path: string): GitStatus | null {
-  const subscribe = useCallback(
-    (onChange: () => void) => (path ? store.subscribe(path, onChange) : () => {}),
-    [path],
-  )
-  return useSyncExternalStore(subscribe, () => (path ? store.get(path) : null))
+  return useKeyedStore(store, path)
 }

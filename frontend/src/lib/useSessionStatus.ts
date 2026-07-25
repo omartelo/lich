@@ -2,6 +2,7 @@ import { useCallback, useSyncExternalStore } from "react"
 import { onAppEvent } from "./app-events"
 import { STATUS_EVENT, type SessionStatus } from "./session-events"
 import { createSessionStatusStore, type PendingStatus } from "./session-status-store"
+import { useKeyedStore } from "./use-keyed-store"
 
 // Subscribed at import rather than on first use: that opens the /events socket
 // at page load, so a status reported before any card mounts still lands.
@@ -12,11 +13,7 @@ const store = createSessionStatusStore((handler) => onAppEvent(STATUS_EVENT, han
 // card's unmount. Returns null when nothing has been reported for the session,
 // and whenever the report maps to no indicator (see toSessionStatus).
 export function useSessionStatus(sessionId: string): SessionStatus | null {
-  const subscribe = useCallback(
-    (onChange: () => void) => store.subscribe(sessionId, onChange),
-    [sessionId],
-  )
-  return useSyncExternalStore(subscribe, () => store.get(sessionId))
+  return useKeyedStore(store, sessionId)
 }
 
 // markSessionSeen records that a session's status has been on screen, so a
