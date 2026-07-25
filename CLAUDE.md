@@ -97,17 +97,6 @@ Deliberate limits and shortcuts — one line of *what and where*; the mechanism 
   failed read degrades to the session's start directory. Tracks the direct child only, not nested shells.
 - **git status is polled** — one shared poller per repository path (`frontend/src/lib/git/git-status-store.ts`); the
   lich plugin's `session-touched` hook nudges an immediate refresh. An fs watcher is the upgrade path.
-- **Context-window usage is read off the transcript** (`internal/terminal/usage_claude.go`): on a turn-boundary
-  status hook, the tail of `~/.claude/projects/<slug>/<id>.jsonl` is parsed for the last main-thread assistant
-  `usage` (sidechain sub-agent lines skipped), shown in the footer for the active session. The JSONL layout is
-  Claude-internal and unstable across releases — the read fails soft (the readout keeps its last number). The
-  percent is taken against the model's native window from a small `model → window` table (`modelWindows`: current
-  Opus/Sonnet/Fable are 1M, Haiku and pre-4.6 are 200k) — the transcript records the model but not the window; an
-  unlisted model falls back to inferring the window from the token count. Two deliberate ceilings: the table goes
-  stale as models ship (Models API `max_input_tokens` is the upgrade path), and it assumes the model's *native*
-  window — a session that runs a 1M-capable model at 200k reads double its true percent, because the exact window
-  lives only in the statusLine JSON (`context_window.context_window_size`), never in the transcript. The reader is
-  Claude-only (the sole provider reporting a session id today), isolated for a per-provider selection later.
 - **Persistence is hybrid**: UI prefs in the page's localStorage (`lich.*` keys — the reason the listener port is
   pinned at 47821; `LICH_LISTEN_PORT` overrides it, `LICH_PORT` is the distinct per-session hook variable), the
   workspace in SQLite (`<config-dir>/lich/lich.db`, `internal/store`). Closing a session deletes its row; keeping a

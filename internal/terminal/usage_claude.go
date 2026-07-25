@@ -9,55 +9,22 @@ import (
 	"strings"
 )
 
-// modelWindows maps a Claude model to its native context window — the transcript
-// records the model but not the window, so this is what the percent is taken
-// against. Current Opus/Sonnet/Fable are natively 1M (no beta); Haiku and pre-4.6
-// models are 200k. Matched by substring so a dated id ("…-4-5-20251001") still
-// hits. ponytail: this table goes stale as models ship — the Models API's
-// `max_input_tokens` is the authoritative upgrade path; an unlisted model falls
-// back to inferring the window from the token count (contextWindowFor).
-var modelWindows = []struct {
-	match  string
-	tokens int
-}{
-	{"opus-4-6", 1_000_000},
-	{"opus-4-7", 1_000_000},
-	{"opus-4-8", 1_000_000},
-	{"sonnet-4-6", 1_000_000},
-	{"sonnet-5", 1_000_000},
-	{"fable-5", 1_000_000},
-	{"mythos-5", 1_000_000},
-	{"haiku-4-5", 200_000},
-	// Older models (opus-4-5, sonnet-4-5, haiku-3-5, …) are unlisted and take
-	// the 200k fallback below — their native window.
-}
+const (
+	smallWindow   = 200_000
+	defaultWindow = 1_000_000
+)
 
-// contextWindows are the standard sizes the fallback picks between when a model
-// is unlisted, smallest first.
-var contextWindows = []int{200_000, 1_000_000}
-
-// contextWindowFor returns the window for a token count when the model is
-// unknown: the smallest standard window it still fits inside, the largest once
-// it exceeds them all — exact the moment a session passes 200k (a 200k window
-// cannot hold more than that).
-func contextWindowFor(tokens int) int {
-	for _, w := range contextWindows {
-		if tokens <= w {
-			return w
-		}
-	}
-	return contextWindows[len(contextWindows)-1]
-}
-
-// windowForModel returns a model's native context window from modelWindows, or
-// falls back to inferring it from the token count for an unlisted model.
+// windowForModel resolves the context window the percent is taken against. The
+// transcript records the model but not its window, so it is named: Haiku is the
+// only Claude model still on 200k, everything else is 1M — naming the exception
+// rather than the rule is what lets a model released after this build read right.
+// A count past 200k disproves the guess (a window cannot hold more than its size),
+// so it widens. Matched by substring: a dated id ("…-4-5-20251001") still hits.
 func windowForModel(model string, tokens int) int {
-	for _, w := range modelWindows {
-		if strings.Contains(model, w.match) {
-			return w.tokens
-		}
+	if strings.Contains(model, "haiku") && tokens <= smallWindow {
+		return smallWindow
 	}
-	return contextWindowFor(tokens)
+	return defaultWindow
 }
 
 // usageTailBytes bounds how much of a transcript's end is scanned for the last

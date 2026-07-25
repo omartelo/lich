@@ -54,18 +54,21 @@ func TestParseContextUsage(t *testing.T) {
 			wantPercent: 20,
 		},
 		{
-			name:        "an unlisted model past 200k infers a 1M window",
-			tail:        assistantLine(modelNew, 0, 300000, 0) + "\n",
-			wantOK:      true,
-			wantTokens:  300000,
-			wantPercent: 30, // 300000 * 100 / 1_000_000
-		},
-		{
-			name:        "an unlisted model under 200k infers a 200k window",
+			// Contract change: an unlisted model takes the 1M window at any
+			// token count. It used to infer the smallest window that fit, which
+			// read a new 1M model as five times fuller than it was.
+			name:        "an unlisted model defaults to the 1M window",
 			tail:        assistantLine(modelNew, 2, 40000, 0) + "\n",
 			wantOK:      true,
 			wantTokens:  40002,
-			wantPercent: 20,
+			wantPercent: 4, // 40002 * 100 / 1_000_000
+		},
+		{
+			name:        "a small-window model past 200k widens to fit",
+			tail:        assistantLine(modelHaiku, 0, 300000, 0) + "\n",
+			wantOK:      true,
+			wantTokens:  300000,
+			wantPercent: 30, // 300000 * 100 / 1_000_000
 		},
 		{
 			name:        "caps percent at 100 past a full window",
@@ -148,11 +151,14 @@ func TestWindowForModel(t *testing.T) {
 		want   int
 	}{
 		{modelOpus, 50_000, 1_000_000},
-		{modelHaiku, 50_000, 200_000},
-		{"claude-sonnet-5", 50_000, 1_000_000},
-		{"claude-fable-5", 50_000, 1_000_000},
-		{modelNew, 50_000, 200_000},    // unlisted, fits 200k
-		{modelNew, 500_000, 1_000_000}, // unlisted, exceeds 200k
+		{"claude-opus-5", 50_000, 1_000_000},
+		{modelHaiku, 50_000, 200_000}, // dated id, matched by substring
+		// Contract change: a model this build has never heard of now takes the
+		// 1M window instead of the smallest one that fits, so a model released
+		// later reads right without a new release.
+		{modelNew, 50_000, 1_000_000},
+		// A count past 200k disproves the Haiku guess — it widens.
+		{modelHaiku, 500_000, 1_000_000},
 	}
 	for _, tt := range tests {
 		if got := windowForModel(tt.model, tt.tokens); got != tt.want {

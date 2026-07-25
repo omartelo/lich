@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A model newer than your lich no longer reads its context window as 200k.**
+  Opus 5 sessions showed five times their real usage in the footer, because the
+  window came from a table of the 1M models and anything missing from it fell
+  back to the smallest window that fit — so every model launch needed a release
+  here. The rule is now the other way round: Haiku is the 200k exception and
+  everything else is 1M, which is what a model released after your build reads
+  without a new version.
 - **A pull request with hundreds of changed files no longer locks the app.**
   Every file in a diff panel starts expanded, and an expanded file builds its own
   CodeMirror view — so a 191-file pull request built 191 editors in one go, each
