@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   holds on every OS: a path starting at a root is refused, volume name or not.
   This is what turned the v0.18.0 release build red on the Windows job.
 
+- **The backend suite now runs on Windows and macOS before a tag, not after
+  one.** Per-PR CI only ever ran Linux, so an OS-specific regression stayed
+  invisible until the release build — which happens once the tag is already
+  pushed. A new `os-tests` job runs the suite on both OSes on every push to
+  `main`, and on a pull request labelled `ci:os`, so a PR touching an OS seam can
+  ask for the real runners before it merges.
+
 - **A red backend suite now says which test failed in the CI log.** The test
   summary script sends `go test -json` to a file and its table to the job
   summary, so a failing job showed an exit code and not one line of the failure.

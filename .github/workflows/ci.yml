@@ -1,10 +1,13 @@
 name: ci
 
 # Fast per-PR gate: format/vet + both suites, with pass/fail counts and
-# coverage rendered into the job summary. Windows backend is validated at
-# release time (release.yml); a PR runs the linux path only for quick feedback.
+# coverage rendered into the job summary. A PR runs the linux path only, for
+# quick feedback; the windows and macOS suites ride the os-tests job below.
 on:
   pull_request:
+    # labeled: adding `ci:os` to an open PR is what arms the os-tests job, so the
+    # label has to be an event, not just a state read on the next push.
+    types: [opened, synchronize, reopened, labeled]
   push:
     branches: [main]
 
@@ -72,3 +75,57 @@ jobs:
 
       - name: Backend tests
         run: bash .github/scripts/go-test-summary.sh linux
+
+  # The backend suite on the OSes the linux job cannot speak for. The
+  # cross-compile step above proves every target still builds; only a real runner
+  # proves it still passes — v0.18.0 shipped a path guard that read a rooted path
+  # as relative on Windows, and the tag's release build was the first thing to
+  # say so.
+  #
+  # Always after a merge to main, so a regression is caught before a tag is ever
+  # pushed; on a PR only when it carries the `ci:os` label, so touching an OS seam
+  # can be checked before the merge without slowing every other PR down.
+  os-tests:
+    if: >-
+      github.event_name == 'push' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:os')
+    strategy:
+      # One red OS still reports the other, rather than cancelling it.
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        # git-bash on Windows keeps these steps byte-identical to the linux job's.
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          package_json_file: frontend/package.json
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      # dist must exist before the Go suite (go:embed), same as the linux job.
+      # The frontend suite is OS-independent and already ran there.
+      - name: Frontend install + build
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Backend tests
+        run: bash .github/scripts/go-test-summary.sh ${{ matrix.os }}

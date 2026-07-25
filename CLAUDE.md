@@ -45,9 +45,13 @@ Frontend in isolation: `cd frontend && pnpm run build` (runs `tsc` + `vite build
 - `cd frontend && pnpm build` succeeds (tsc typecheck + vite).
 - Touched an OS seam or a `_test.go` build tag? Run the same cross-compile loop CI runs:
   `for os in linux darwin windows; do GOOS=$os go build ./... && GOOS=$os go vet ./...; done`
+  Cross-compiling only proves it builds — label the PR `ci:os` to run the backend suite on real Windows and macOS
+  runners before the merge.
 
 CI (`.github/workflows/ci.yml`) runs this gate on every PR and push to `main` and renders pass/fail counts plus
-coverage into the job summary. The summary is transparency, never the gate — a red test fails the job.
+coverage into the job summary. The summary is transparency, never the gate — a red test fails the job. The
+`os-tests` job runs the backend suite on Windows and macOS: always on a push to `main` (so a regression is caught
+before a tag), on a PR only when it carries the `ci:os` label.
 
 ## Hard Invariants
 
