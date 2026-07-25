@@ -17,9 +17,13 @@ feature history lives in `CHANGELOG.md` — don't duplicate it here.
   runtime checks — the PTY is the model (`internal/terminal`: creack/pty on Unix, ConPTY on Windows).
 - **Shell**: system Chromium-family browser launched in `--app` mode (`internal/chromium`), persistent profile under
   the user config dir (`os.UserConfigDir` + `lich/chromium-profile`). Window closed = app exit.
-- **Frontend**: React 18 + TypeScript + Vite. Terminal: xterm.js 6 + WebGL addon. Code/Review dock: CodeMirror.
-  Sessions spawn any registered provider (`internal/providers`: Claude Code, Codex, OpenCode, Crush). Service shapes
-  are hand-owned in `frontend/src/lib/api-types.ts` (mirrors of the Go structs' JSON tags — keep in sync).
+- **Frontend**: React 18 + TypeScript + Vite; the UI rules and the visual system are `frontend/CLAUDE.md` and
+  `frontend/DESIGN.md`. Sessions spawn any registered provider (`internal/providers`: Claude Code, Codex, OpenCode,
+  Crush). Service shapes are hand-owned in `frontend/src/lib/api-types.ts` — touch a Go struct's JSON tags and that
+  mirror moves in the same change; there is no codegen.
+- **Session hooks**: `docs/hooks/` is the canonical, contract-first spec. lich owns the server side; the scripts
+  live in the companion repo `omartelo/lich-plugin`, so an endpoint or payload change breaks a repo this one cannot
+  see — move the contract first, then both sides.
 - **Build/tasks**: [Task](https://taskfile.dev) — see Commands.
 
 ## Commands
@@ -36,14 +40,14 @@ task package          # .deb, .rpm, .pkg.tar.zst into bin/ (needs nfpm)
 task package:windows  # bin/lich-setup.exe installer (needs Inno Setup 6 — CI/Windows)
 ```
 
-Frontend in isolation: `cd frontend && pnpm run build` (runs `tsc` + `vite build`).
-
 ## Local Gate (before every commit / PR)
 
 - `gofmt -l .` clean (fix with `gofmt -w .`) and `go vet ./...` clean.
 - `cd frontend && pnpm check` clean — biome is the frontend's gofmt + vet (fix with `pnpm format`).
 - `go test ./...` (backend) and `cd frontend && pnpm test` (frontend) green — or `task test` for both.
 - `cd frontend && pnpm build` succeeds (tsc typecheck + vite).
+- Shipped anything a user can see? Its `CHANGELOG.md` `[Unreleased]` entry lands in the same PR — the release notes
+  are read from there, so an entry written later is an entry that missed its release.
 - Touched an OS seam or a `_test.go` build tag? Run the same cross-compile loop CI runs:
   `for os in linux darwin windows; do GOOS=$os go build ./... && GOOS=$os go vet ./...; done`
   Cross-compiling only proves it builds — label the PR `ci:os` to run the backend suite on real Windows and macOS
@@ -75,12 +79,11 @@ Non-negotiable rules. A violation means the work is not done.
 
 ## Releases
 
-Push a `vX.Y.Z` tag. `.github/workflows/release.yml` fans out into three parallel build jobs — `linux` (packages),
-`windows` (exe + Inno Setup installer), `mac` (both-arch raw binaries), each running the backend suite on its own
-OS — then `release` fans in (one `checksums.txt`, notes from the matching `CHANGELOG.md` section) and `aur`
-publishes `lich-bin`. A `workflow_dispatch` run from any branch exercises the whole pipeline without publishing.
-The version comes from the git tag (`git describe` in the Taskfile, env `VERSION` overrides) and is injected into
-`build/linux/nfpm/nfpm.yaml`.
+Push a `vX.Y.Z` tag — `.github/workflows/release.yml` builds every OS, runs the backend suite on each, publishes the
+artifacts and the AUR `lich-bin`, and takes the release notes from the matching `CHANGELOG.md` section. A
+`workflow_dispatch` run from any branch exercises the whole pipeline without publishing. The version comes from the
+git tag (`git describe` in the Taskfile, env `VERSION` overrides) and is injected into `build/linux/nfpm/nfpm.yaml`
+— never hand-edit it there.
 
 Before tagging:
 
@@ -90,7 +93,8 @@ Before tagging:
 
 ## Known Ceilings
 
-Deliberate limits and shortcuts — one line of *what and where*; the mechanism and its history live in the code and
+Deliberate limits and shortcuts. A bullet earns its place by naming a trap — something that breaks work when
+nobody knows it and that the call site never shows. The mechanism and the history stay in the code and
 `CHANGELOG.md`.
 
 - **Session cwd is polled** from the PTY child (`internal/terminal/cwd.go`, per-OS readers behind build tags); a
@@ -104,19 +108,13 @@ Deliberate limits and shortcuts — one line of *what and where*; the mechanism 
 - **Hidden sessions are serialized and destroyed**: 2MB replay rings on both sides (`frontend/src/lib/terminal/replay-buffer.ts`
   page-side, `internal/terminal/replay.go` backend-side — the latter survives a full page reload). waveterm's disk
   filestore is the upgrade path if size ever matters.
-- **Terminal I/O rides the loopback WebSocket**; when the socket is down, output falls back to `/events` and input
-  to the RPC — slower, never broken.
+- **Terminal I/O degrades, never breaks**: with the WebSocket down, output falls back to `/events` and input to the
+  RPC — slower, still working.
 - **Single instance via the pinned port**: the bind is the lock (`internal/singleton`); a duplicate launch focuses
   the running window (best-effort, untested against a real window) and exits 0.
-- **Self-update** (`internal/appupdate`): checks at startup, then hourly. Self-apply is Windows/macOS only; Linux
-  pastes a distro-specific command (AUR `lich-bin` on Arch, `install.sh` elsewhere) and relaunches through
-  `/restart` (`internal/restart`).
 - **Reordering rides dnd-kit's pointer sensors** (`frontend/src/lib/use-sortable-list.ts`); the activation distance
   is load-bearing — without it plain clicks stop selecting a session.
-- **No AppImage** — deliberate (`docs/chromium-shell.md`; CEF is the bundling path if it ever matters). Ships
-  `.deb`/`.rpm`/`.pkg.tar.zst`, `install.sh`, and AUR `lich-bin`.
-- **Windows is experimental**: cmd.exe shell, GUI subsystem build — no console, diagnostics in
-  `%AppData%\lich\lich.log`. Missing: code signing, winget manifest, Windows PTY tests.
-- **macOS is experimental**: unsigned raw binaries only (Gatekeeper quarantines; no `.dmg`/Homebrew yet); the window
-  path has not been smoke-tested on real hardware. Only darwin-specific code: the browser candidates
-  (`internal/chromium`).
+- **Windows is experimental**: cmd.exe is the shell, and the GUI subsystem build has no console — diagnostics only
+  reach `%AppData%\lich\lich.log`. The PTY has no Windows tests.
+- **macOS is experimental**: the window path has never run on real hardware, and the binaries are unsigned, so
+  Gatekeeper quarantines them. Only darwin-specific code: the browser candidates (`internal/chromium`).
