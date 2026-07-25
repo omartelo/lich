@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { Fonts as FontService } from "@/lib/rpc"
-import { DEFAULT_FONT, useSettings } from "@/lib/settings"
+import { DEFAULT_FONT, useSettings } from "@/providers/settings"
 import {
   Select,
   SelectContent,

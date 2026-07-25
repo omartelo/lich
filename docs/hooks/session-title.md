@@ -52,7 +52,7 @@ while the label is still automatic (see below), so a stable title is idempotent.
   Returns whether the label actually changed.
 - **Live update** — `internal/terminal/terminal.go`: when the label changed,
   emits the global app event `session-title` (`{id, label}`);
-  `frontend/src/lib/projects.tsx` mirrors it into session state so the card
+  `frontend/src/providers/projects.tsx` mirrors it into session state so the card
   updates without a reload.
 
 ## Known ceilings

@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
-import { useSettings } from "@/lib/settings"
+import { useSettings } from "@/providers/settings"
 
 /**
  * App toast host. Wraps sonner's Toaster, driving its theme from lich's

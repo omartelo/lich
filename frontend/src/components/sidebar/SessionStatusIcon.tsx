@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils"
-import { ProviderIcon } from "@/lib/provider-icons"
+import { ProviderIcon } from "@/components/ProviderIcon"
 import type { SessionKind } from "@/lib/sessions"
 import type { SessionStatus } from "@/lib/session-events"
 

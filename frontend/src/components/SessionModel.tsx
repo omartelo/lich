@@ -1,4 +1,4 @@
-import { ProviderIcon } from "@/lib/provider-icons"
+import { ProviderIcon } from "./ProviderIcon"
 import { formatModel } from "@/lib/model-name"
 import { useSessionUsage } from "@/lib/useSessionUsage"
 

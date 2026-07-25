@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react"
 import { useMatch } from "react-router-dom"
-import { TerminalView } from "@/components/TerminalView"
-import { ResumeSessionDialog } from "@/components/ResumeSessionDialog"
-import { useProjects } from "@/lib/projects"
+import { TerminalView } from "./TerminalView"
+import { ResumeSessionDialog } from "./ResumeSessionDialog"
+import { useProjects } from "@/providers/projects"
 import { activeSessionId, resumableSession, sessionsOf } from "@/lib/sessions"
 import type { Session } from "@/lib/sessions"
 

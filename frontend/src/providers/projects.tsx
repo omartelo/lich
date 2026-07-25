@@ -3,10 +3,10 @@ import type { ReactNode } from "react"
 import { toast } from "sonner"
 import { Bell, Folder } from "lucide-react"
 import { useMatch, useNavigate } from "react-router-dom"
-import type { Project } from "./api-types"
-import type { StoredProject as StoreProject } from "./api-types"
-import { ProjectService, Store } from "./rpc"
-import { onAppEvent } from "./app-events"
+import type { Project } from "@/lib/api-types"
+import type { StoredProject as StoreProject } from "@/lib/api-types"
+import { ProjectService, Store } from "@/lib/rpc"
+import { onAppEvent } from "@/lib/app-events"
 import {
   activeSessionId,
   addSession,
@@ -22,9 +22,9 @@ import {
   type Session,
   type SessionKind,
   type SessionState,
-} from "./sessions"
-import { applyOrder, pinFirst } from "./reorder"
-import { defaultProviderKind } from "./providers-store"
+} from "@/lib/sessions"
+import { applyOrder, pinFirst } from "@/lib/reorder"
+import { defaultProviderKind } from "@/lib/providers-store"
 import {
   isIdEvent,
   isStatusEvent,
@@ -34,10 +34,10 @@ import {
   TITLE_EVENT,
   toSessionStatus,
   TOUCHED_EVENT,
-} from "./session-events"
-import { refreshGitStatus } from "./useGitStatus"
-import { markSessionSeen } from "./useSessionStatus"
-import { isRecordingTarget, matchesCombo } from "./hotkeys"
+} from "@/lib/session-events"
+import { refreshGitStatus } from "@/lib/useGitStatus"
+import { markSessionSeen } from "@/lib/useSessionStatus"
+import { isRecordingTarget, matchesCombo } from "@/lib/hotkeys"
 import { useSettings } from "./settings"
 
 interface ProjectsValue {

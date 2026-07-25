@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { PatchNotesDialog } from "@/components/PatchNotesDialog"
+import { PatchNotesDialog } from "./PatchNotesDialog"
 import { decidePatchNotes, PATCH_NOTES_SEEN_KEY } from "@/lib/patch-notes-gate"
 import { PatchNotes } from "@/lib/rpc"
 import type { PatchNotes as PatchNotesData } from "@/lib/api-types"

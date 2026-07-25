@@ -2,8 +2,8 @@ import { useState } from "react"
 import { ChevronDown, ChevronRight, Folder, FolderOpen } from "lucide-react"
 import type { TreeNode } from "@/lib/file-tree"
 import type { DiffFile } from "@/lib/diff"
-import { FileIcon } from "@/lib/file-icon"
-import { DiffStat } from "@/components/DiffStat"
+import { FileIcon } from "./FileIcon"
+import { DiffStat } from "./DiffStat"
 import { cn } from "@/lib/utils"
 import {
   ContextMenu,

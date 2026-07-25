@@ -16,7 +16,7 @@ import {
 } from "lucide-react"
 import { ProjectService, Store, System } from "@/lib/rpc"
 import type { ChecksRollup, MergeMethod, PullRequestDetail } from "@/lib/api-types"
-import { useProjects } from "@/lib/projects"
+import { useProjects } from "@/providers/projects"
 import { baseName } from "@/lib/paths"
 import { Notice } from "@/components/common/Notice"
 import { closePulls } from "@/lib/pulls-card-store"

@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react"
 import type { ReactNode } from "react"
-import { CloseButton } from "@/components/common/CloseButton"
+import { CloseButton } from "./CloseButton"
 import { cn } from "@/lib/utils"
 
 interface SidebarCardProps {

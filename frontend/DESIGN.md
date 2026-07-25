@@ -79,7 +79,7 @@ inactive project tab (`ProjectTab`).
   everywhere. Small controls (list rows, menu items, ghost buttons) sit around `rounded-md`.
 - Density is high but breathing: list rows `~9px` vertical padding, `gap-1`–`gap-1.5` between them.
 - Icons are **lucide** at `size-3.5`/`size-4`; `size-3` inside dense meta. Provider marks come from
-  `provider-icons.tsx`, file-type logos from `devicons-react` (`file-icon.tsx`).
+  `ProviderIcon.tsx`, file-type logos from `devicons-react` (`FileIcon.tsx`).
 
 ## Interaction states
 

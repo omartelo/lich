@@ -6,7 +6,7 @@ import { ProjectService, Store } from "@/lib/rpc"
 import { closeSettings, isSettingsOpen, subscribeSettingsCard } from "@/lib/settings-card-store"
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
 import { enabledProviders, useProviders } from "@/lib/providers-store"
-import { ProviderIcon } from "@/lib/provider-icons"
+import { ProviderIcon } from "@/components/ProviderIcon"
 import { ResizeHandle } from "@/components/common/ResizeHandle"
 import { SettingsCard } from "./SettingsCard"
 import { Button } from "@/components/ui/button"
@@ -18,7 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useProjects } from "@/lib/projects"
+import { useProjects } from "@/providers/projects"
 import { queueSetup } from "@/lib/setup-queue"
 import {
   activeSessionId,

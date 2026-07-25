@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button"
-import { ConfirmDialog } from "@/components/ConfirmDialog"
+import { ConfirmDialog } from "./ConfirmDialog"
 import type { Session } from "@/lib/sessions"
 
 interface ResumeSessionDialogProps {

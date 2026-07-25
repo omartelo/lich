@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Store } from "@/lib/rpc"
-import { useProjects } from "@/lib/projects"
+import { useProjects } from "@/providers/projects"
 import { Input } from "@/components/ui/input"
 import { SettingBlock } from "./SettingBlock"
 

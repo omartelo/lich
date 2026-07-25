@@ -1,5 +1,5 @@
 import { useMatch } from "react-router-dom"
-import { useProjects } from "./projects"
+import { useProjects } from "@/providers/projects"
 import { activeTarget } from "./sessions"
 
 // useActiveSession resolves what is currently in focus: the routed project, its

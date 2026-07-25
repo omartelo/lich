@@ -19,8 +19,8 @@ import {
   ZOOM_MIN,
   ZOOM_STEP,
   useSettings,
-} from "@/lib/settings"
-import type { TerminalTheme, Theme } from "@/lib/settings"
+} from "@/providers/settings"
+import type { TerminalTheme, Theme } from "@/providers/settings"
 import { Stepper } from "@/components/common/Stepper"
 import { SegmentedControl } from "./SegmentedControl"
 import { SettingBlock, SettingGroup } from "./SettingBlock"

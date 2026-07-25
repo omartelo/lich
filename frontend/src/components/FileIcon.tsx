@@ -17,7 +17,7 @@ import RustOriginal from "devicons-react/icons/RustOriginal"
 import TypescriptOriginal from "devicons-react/icons/TypescriptOriginal"
 import XmlOriginal from "devicons-react/icons/XmlOriginal"
 import YamlOriginal from "devicons-react/icons/YamlOriginal"
-import { extname } from "./lang-badge"
+import { extname } from "@/lib/lang-badge"
 
 // devicons-react components spread extra props onto their <svg> and take a
 // `size` that sets both dimensions. Only the props this module passes are

@@ -2,7 +2,7 @@ import { Plus, SquareTerminal } from "lucide-react"
 import { useParams } from "react-router-dom"
 import { EmptyScreen } from "@/components/common/EmptyScreen"
 import { Button } from "@/components/ui/button"
-import { useProjects } from "@/lib/projects"
+import { useProjects } from "@/providers/projects"
 import { sessionsOf } from "@/lib/sessions"
 
 // A sessionless project is a legal state: the user is asked for a session rather

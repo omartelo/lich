@@ -39,7 +39,7 @@ the hook's stdin payload if a single script filters instead of per-tool matchers
   session id.
 - **UI push** — `internal/terminal/terminal.go`: emits the global app event
   `session-touched` (`{id}`).
-- **Refresh** — `frontend/src/lib/projects.tsx`: resolves the session id to the
+- **Refresh** — `frontend/src/providers/projects.tsx`: resolves the session id to the
   path its card watches (its worktree, else the project path) and calls
   `refreshGitStatus(path)` (`frontend/src/lib/useGitStatus.ts`), which fetches
   that path now, ahead of the poll tick. A no-op when no card watches the path

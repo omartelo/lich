@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { notificationsFrom } from "@/lib/notifications"
-import { useProjects } from "@/lib/projects"
+import { useProjects } from "@/providers/projects"
 import type { SessionStatus } from "@/lib/session-events"
 import { usePendingStatuses } from "@/lib/useSessionStatus"
 

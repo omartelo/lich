@@ -5,7 +5,7 @@ import {
   useDefaultProvider,
   useProviders,
 } from "@/lib/providers-store"
-import { ProviderIcon } from "@/lib/provider-icons"
+import { ProviderIcon } from "@/components/ProviderIcon"
 import type { ProviderKind } from "@/lib/sessions"
 import {
   Select,
