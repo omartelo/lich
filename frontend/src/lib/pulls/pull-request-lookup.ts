@@ -16,6 +16,34 @@ interface Shared {
 
 const shared = new Map<string, Shared>()
 
+const listeners = new Set<() => void>()
+
+// onPullRequestInvalidated registers a badge's re-read, returning its
+// unsubscribe. Every badge of every checkout is called, not just the one that
+// changed: a merge is a rare, deliberate action, and the callers of one
+// checkout still collapse into a single gh call. Key the listeners by path if
+// that ever stops being cheap enough.
+export function onPullRequestInvalidated(reload: () => void): () => void {
+  listeners.add(reload)
+  return () => {
+    listeners.delete(reload)
+  }
+}
+
+// invalidatePullRequests drops every shared answer and asks the badges to look
+// up again — for a change only lich itself can announce. Merging does not move
+// the checkout's HEAD (the commit lands on the base branch, on the remote), so
+// without this the footer, the session cards and the sidebar's pull request
+// entry keep reading "Open" until the window loses focus and gets it back.
+// Clearing the map matters as much as the notify: a re-read inside the share
+// window would otherwise replay the pre-merge answer.
+export function invalidatePullRequests(): void {
+  shared.clear()
+  for (const reload of listeners) {
+    reload()
+  }
+}
+
 // lookupPullRequest resolves a checkout's open PR, sharing one gh call across
 // every caller asking about the same checkout+branch+commit at the same time.
 // It never rejects: a failed lookup (no gh, not a GitHub repo) reads as "no

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Merging a pull request now clears its badge everywhere, at once.** The
+  footer, the session cards and the sidebar's "Pull request" entry only looked
+  the pull request up again when the checkout's HEAD moved, or when the window
+  lost focus and got it back — and a merge does neither, since the commit lands
+  on the base branch, on the remote. Merging from the Pulls screen emptied that
+  screen while every badge around it went on reading `#N Open` until you clicked
+  away to another window and back. Merging, opening a pull request and the
+  header's reload button now retire the shared answer and re-read it.
 - **A model newer than your lich no longer reads its context window as 200k.**
   Opus 5 sessions showed five times their real usage in the footer, because the
   window came from a table of the 1M models and anything missing from it fell

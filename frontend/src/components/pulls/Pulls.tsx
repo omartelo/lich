@@ -22,6 +22,7 @@ import { Notice } from "@/components/common/Notice"
 import { closePulls } from "@/lib/pulls-card-store"
 import { activeTarget, sessionsOf } from "@/lib/session/sessions"
 import { useGitStatus } from "@/lib/git/use-git-status"
+import { invalidatePullRequests } from "@/lib/pulls/pull-request-lookup"
 import { usePullRequestDetail } from "@/lib/pulls/use-pull-request-detail"
 import { useInject } from "@/lib/use-inject"
 import { cn, errorText } from "@/lib/utils"
@@ -68,6 +69,15 @@ export function Pulls() {
   const { detail, loading, error, refresh } = usePullRequestDetail(path, branch, head)
   const inject = useInject(sessionId)
 
+  // This screen and the badges around it read the same pull request through two
+  // separate lookups, so a change with HEAD standing still — a merge, a PR
+  // opened, whatever the reload button was pressed for — has to retire both.
+  // The check poll and the focus re-read stay this screen's own.
+  const reload = () => {
+    invalidatePullRequests()
+    refresh()
+  }
+
   // A merged branch leaves its checkout behind — the one cleanup the user would
   // otherwise walk back to the sidebar for. Refuse a dirty worktree: whatever
   // was never committed lives only there, and the sidebar's flow is the one that
@@ -97,7 +107,7 @@ export function Pulls() {
   }
 
   const onMerged = () => {
-    refresh()
+    reload()
     const merged = `Merged #${detail?.number} into ${detail?.baseRefName}`
     // Only a worktree checkout has something to clean up; the project's own
     // directory stays where it is.
@@ -122,7 +132,7 @@ export function Pulls() {
         path={path}
         head={head}
         detail={detail}
-        onRefresh={refresh}
+        onRefresh={reload}
         onMerged={onMerged}
         onInject={inject}
       />
@@ -130,7 +140,7 @@ export function Pulls() {
   } else if (loading) {
     body = <PullSkeleton />
   } else {
-    body = <EmptyState path={path} branch={branch} onOpened={refresh} />
+    body = <EmptyState path={path} branch={branch} onOpened={reload} />
   }
 
   return <div className="absolute inset-0 z-10 flex flex-col bg-background">{body}</div>

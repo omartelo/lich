@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { lookupPullRequest } from "./pull-request-lookup"
+import { lookupPullRequest, onPullRequestInvalidated } from "./pull-request-lookup"
 import type { PullRequest } from "@/lib/api-types"
 
 export type { PullRequest }
@@ -9,10 +9,11 @@ export type { PullRequest }
 // round-trip — but it refetches whenever the checkout's HEAD moves, so a PR the
 // session just opened (or a merge that closed one) reaches the badge without
 // waiting for a window focus. It also refetches on focus, for a PR opened or
-// merged in the browser. Callers asking about the same checkout share one gh
-// call (pull-request-lookup). Returns null while loading, on any error, or when
-// the branch has no open PR (a merged or closed one is filtered server-side),
-// so the caller hides the badge.
+// merged in the browser, and on invalidatePullRequests, for a merge landed from
+// the Pulls screen — which moves no HEAD at all. Callers asking about the same
+// checkout share one gh call (pull-request-lookup). Returns null while loading,
+// on any error, or when the branch has no open PR (a merged or closed one is
+// filtered server-side), so the caller hides the badge.
 export function usePullRequest(path: string, branch: string, head: string): PullRequest | null {
   const [pr, setPr] = useState<PullRequest | null>(null)
 
@@ -35,9 +36,11 @@ export function usePullRequest(path: string, branch: string, head: string): Pull
     }
     load()
     window.addEventListener("focus", load)
+    const unsubscribe = onPullRequestInvalidated(load)
     return () => {
       alive = false
       window.removeEventListener("focus", load)
+      unsubscribe()
     }
   }, [path, branch, head])
 

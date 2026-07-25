@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { lookupPullRequest } from "./pull-request-lookup"
+import {
+  invalidatePullRequests,
+  lookupPullRequest,
+  onPullRequestInvalidated,
+} from "./pull-request-lookup"
 
 // The RPC is the boundary here; stub it so the test asserts how many gh calls
 // the lookup actually makes. Each test uses its own checkout path, so the
@@ -68,6 +72,24 @@ describe("pull-request-lookup", () => {
     await lookupPullRequest("/f", "main", "sha1")
     await lookupPullRequest("/f", "main", "sha2")
     expect(pullRequest).toHaveBeenCalledTimes(2)
+  })
+
+  // Merging moves no HEAD and changes no branch, so an invalidation is the only
+  // thing that can retire the answer the badge is still showing.
+  it("asks gh again after an invalidation, inside the share window", async () => {
+    await lookupPullRequest("/g", "main", "sha1")
+    invalidatePullRequests()
+    await lookupPullRequest("/g", "main", "sha1")
+    expect(pullRequest).toHaveBeenCalledTimes(2)
+  })
+
+  it("notifies subscribers until they unsubscribe", () => {
+    const reload = vi.fn()
+    const unsubscribe = onPullRequestInvalidated(reload)
+    invalidatePullRequests()
+    unsubscribe()
+    invalidatePullRequests()
+    expect(reload).toHaveBeenCalledTimes(1)
   })
 
   it("resolves a failed lookup to no pull request", async () => {
