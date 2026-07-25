@@ -16,6 +16,10 @@ permissions:
 
 jobs:
   test:
+    # A `labeled` event exists only to arm os-tests below — any label, on any PR,
+    # fires one. This suite already ran on the push that brought the SHA in, and
+    # its check stays attached to it, so re-running it here buys nothing.
+    if: github.event.action != 'labeled'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
