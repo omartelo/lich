@@ -20,7 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `is:closed` and `is:all` reach past the open ones, and `is:draft`, `is:fork`
   and `review:approved` / `review:changes-requested` / `review:required` narrow
   what came back. Selecting a pull request shows it in full, whatever branch the
-  checkout is on. The column
+  checkout is on and whether or not it is still open — its status line now reads
+  Open, Draft, Merged or Closed, and says where the review stands beside the
+  checks and the conflicts. The column
   collapses to a rail when the pull request wants the width, and stays collapsed
   until it is asked back. A
   worktree's own pull request card is untouched: it still opens that one pull

@@ -87,9 +87,15 @@ export interface PullRequestDetail {
   url: string
   title: string
   body: string
+  /** gh: OPEN | CLOSED | MERGED. Only a number-addressed lookup returns a
+   * non-OPEN one; the branch lookup still hides them. */
+  state: string
   isDraft: boolean
   /** gh: MERGEABLE | CONFLICTING | UNKNOWN */
   mergeable: string
+  /** gh's aggregate verdict: APPROVED | CHANGES_REQUESTED | REVIEW_REQUIRED;
+   * "" where the repository requires no review. */
+  reviewDecision: string
   baseRefName: string
   headRefName: string
   changedFiles: number

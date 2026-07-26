@@ -29,7 +29,7 @@ func TestParsePRDetail(t *testing.T) {
 				{"oid": "a4dbc1f", "messageHeadline": "feat: the panel", "messageBody": "why"}
 			]
 		}`)
-		pr, err := parsePRDetail(out)
+		pr, err := parsePRDetail(out, true)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -54,7 +54,7 @@ func TestParsePRDetail(t *testing.T) {
 	})
 
 	t.Run("draft flag survives", func(t *testing.T) {
-		pr, err := parsePRDetail([]byte(`{"number":9,"state":"OPEN","isDraft":true}`))
+		pr, err := parsePRDetail([]byte(`{"number":9,"state":"OPEN","isDraft":true}`), true)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -64,7 +64,7 @@ func TestParsePRDetail(t *testing.T) {
 	})
 
 	t.Run("non-open PR is hidden", func(t *testing.T) {
-		pr, err := parsePRDetail([]byte(`{"number":88,"state":"MERGED","url":"x"}`))
+		pr, err := parsePRDetail([]byte(`{"number":88,"state":"MERGED","url":"x"}`), true)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -74,7 +74,7 @@ func TestParsePRDetail(t *testing.T) {
 	})
 
 	t.Run("no PR object is hidden", func(t *testing.T) {
-		pr, err := parsePRDetail([]byte(`{}`))
+		pr, err := parsePRDetail([]byte(`{}`), true)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -84,7 +84,7 @@ func TestParsePRDetail(t *testing.T) {
 	})
 
 	t.Run("malformed JSON errors", func(t *testing.T) {
-		if _, err := parsePRDetail([]byte(`{not json`)); err == nil {
+		if _, err := parsePRDetail([]byte(`{not json`), true); err == nil {
 			t.Error("expected a decode error")
 		}
 	})
@@ -694,4 +694,59 @@ func TestListPullRequestsFlow(t *testing.T) {
 			t.Errorf("gh was called %d times, want 0", gh.calls)
 		}
 	})
+}
+
+// TestParsePRDetailReview proves the aggregate review verdict survives the
+// decode — the field the Pulls header reads to say a PR is approved.
+func TestParsePRDetailReview(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{"approved", `{"number":1,"state":"OPEN","reviewDecision":"APPROVED"}`, "APPROVED"},
+		{
+			"changes requested",
+			`{"number":1,"state":"OPEN","reviewDecision":"CHANGES_REQUESTED"}`,
+			"CHANGES_REQUESTED",
+		},
+		// A repository that requires no review reports nothing, which the
+		// header treats as "no review to speak of" rather than as pending.
+		{"none required", `{"number":1,"state":"OPEN"}`, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pr, err := parsePRDetail([]byte(tt.raw), true)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if pr == nil || pr.ReviewDecision != tt.want {
+				t.Errorf("ReviewDecision = %+v, want %q", pr, tt.want)
+			}
+		})
+	}
+}
+
+// TestPullRequestDetailByNumberIgnoresState proves a number-addressed lookup
+// returns a merged pull request. The branch lookup still gates them out — a
+// merged PR must not keep showing on the badge — but a row the list offers has
+// to open, and the list can be asked for merged and closed ones.
+func TestPullRequestDetailByNumberIgnoresState(t *testing.T) {
+	merged := []byte(`{"number":13960,"state":"MERGED","title":"Add macos keyring security doc"}`)
+
+	pr, err := withGH(&fakeGH{out: merged}).PullRequestDetail("/repo", 13960)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pr == nil || pr.State != "MERGED" {
+		t.Fatalf("a numbered merged pull request should open: %+v", pr)
+	}
+
+	branch, err := withGH(&fakeGH{out: merged}).PullRequestDetail("/repo", 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if branch != nil {
+		t.Errorf("the branch lookup must still hide a merged PR, got %+v", branch)
+	}
 }

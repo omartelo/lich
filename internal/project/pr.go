@@ -59,7 +59,7 @@ func runGH(timeout time.Duration, dir string, args ...string) ([]byte, error) {
 }
 
 // prViewFields is the gh `pr view --json` selection backing the Pulls panel.
-const prViewFields = "number,url,state,title,body,isDraft,mergeable,baseRefName,headRefName,isCrossRepository,statusCheckRollup,changedFiles,commits"
+const prViewFields = "number,url,state,title,body,isDraft,mergeable,reviewDecision,baseRefName,headRefName,isCrossRepository,statusCheckRollup,changedFiles,commits"
 
 // prSelector renders the pull request argument gh's subcommands take ahead of
 // their flags. Zero means "the branch checked out at path" — gh's own default,
@@ -86,18 +86,25 @@ func prArgs(verb string, number int, rest ...string) []string {
 // CI rollup and mergeability gate the merge affordance. gh's state does not
 // travel with it: a detail exists only when the PR is open (parsePRDetail).
 type PRDetail struct {
-	Number       int          `json:"number"`
-	URL          string       `json:"url"`
-	Title        string       `json:"title"`
-	Body         string       `json:"body"`
-	IsDraft      bool         `json:"isDraft"`
-	Mergeable    string       `json:"mergeable"` // gh: MERGEABLE | CONFLICTING | UNKNOWN
-	BaseRefName  string       `json:"baseRefName"`
-	HeadRefName  string       `json:"headRefName"`
-	ChangedFiles int          `json:"changedFiles"`
-	Checks       ChecksRollup `json:"checks"`
-	CheckRuns    []CheckItem  `json:"checkRuns"`
-	Commits      []PRCommit   `json:"commits"`
+	Number int    `json:"number"`
+	URL    string `json:"url"`
+	Title  string `json:"title"`
+	Body   string `json:"body"`
+	// State is gh's OPEN | CLOSED | MERGED. Only a number-addressed lookup can
+	// return a non-OPEN one; the branch lookup still gates them out.
+	State     string `json:"state"`
+	IsDraft   bool   `json:"isDraft"`
+	Mergeable string `json:"mergeable"` // gh: MERGEABLE | CONFLICTING | UNKNOWN
+	// ReviewDecision is gh's aggregate verdict — APPROVED | CHANGES_REQUESTED |
+	// REVIEW_REQUIRED — and "" where the repository requires no review. Who
+	// reviewed is a different field (latestReviews) this does not carry.
+	ReviewDecision string       `json:"reviewDecision"`
+	BaseRefName    string       `json:"baseRefName"`
+	HeadRefName    string       `json:"headRefName"`
+	ChangedFiles   int          `json:"changedFiles"`
+	Checks         ChecksRollup `json:"checks"`
+	CheckRuns      []CheckItem  `json:"checkRuns"`
+	Commits        []PRCommit   `json:"commits"`
 	// IsCrossRepository marks a head branch that lives on a fork — the one PR
 	// a session cannot be opened on (CreateWorktreeFromPR), so the screen can
 	// say so instead of letting the button fail.
@@ -146,6 +153,7 @@ type ghPRView struct {
 	Body              string      `json:"body"`
 	IsDraft           bool        `json:"isDraft"`
 	Mergeable         string      `json:"mergeable"`
+	ReviewDecision    string      `json:"reviewDecision"`
 	BaseRefName       string      `json:"baseRefName"`
 	HeadRefName       string      `json:"headRefName"`
 	ChangedFiles      int         `json:"changedFiles"`
@@ -202,18 +210,22 @@ func (s *Service) PullRequestDetail(path string, number int) (*PRDetail, error) 
 	if err != nil {
 		return nil, fmt.Errorf("gh pr view: %w", err)
 	}
-	return parsePRDetail(out)
+	// The OPEN-only gate belongs to the branch lookup alone. Naming a number is
+	// asking for that pull request, whatever became of it — the list can show
+	// merged and closed ones, and a row that cannot be opened is not a row.
+	return parsePRDetail(out, number == 0)
 }
 
-// parsePRDetail decodes gh's JSON and reduces the check rollup. It returns nil
-// for a non-OPEN PR — gh still reports a merged/closed branch PR, but the panel
-// wants only an actionable one — matching parsePullRequest's contract.
-func parsePRDetail(out []byte) (*PRDetail, error) {
+// parsePRDetail decodes gh's JSON and reduces the check rollup. With openOnly it
+// returns nil for a non-OPEN PR — gh still reports a merged/closed branch PR,
+// but the badge wants only an actionable one — matching parsePullRequest's
+// contract.
+func parsePRDetail(out []byte, openOnly bool) (*PRDetail, error) {
 	var v ghPRView
 	if err := json.Unmarshal(out, &v); err != nil {
 		return nil, fmt.Errorf("decode gh pr view: %w", err)
 	}
-	if v.Number == 0 || v.State != "OPEN" {
+	if v.Number == 0 || (openOnly && v.State != "OPEN") {
 		return nil, nil
 	}
 	return &PRDetail{
@@ -221,8 +233,10 @@ func parsePRDetail(out []byte) (*PRDetail, error) {
 		URL:               v.URL,
 		Title:             v.Title,
 		Body:              v.Body,
+		State:             v.State,
 		IsDraft:           v.IsDraft,
 		Mergeable:         v.Mergeable,
+		ReviewDecision:    v.ReviewDecision,
 		BaseRefName:       v.BaseRefName,
 		HeadRefName:       v.HeadRefName,
 		ChangedFiles:      v.ChangedFiles,

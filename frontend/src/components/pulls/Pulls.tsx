@@ -350,11 +350,16 @@ function PullRequestView({
   const [edit, setEdit] = useState<EditState | null>(null)
   const [tab, setTab] = useState<"overview" | "commits" | "files" | "checks">("overview")
   const commitCount = detail.commits?.length ?? 0
-  const blocked = detail.isDraft
-    ? "Pull request is a draft"
-    : detail.mergeable === "CONFLICTING"
-      ? `Conflicts with ${detail.baseRefName}`
-      : null
+  // A pull request the list reached by number may be over already, in which
+  // case there is nothing to merge and gh would refuse anyway.
+  const blocked =
+    detail.state !== "OPEN"
+      ? `Pull request is ${detail.state.toLowerCase()}`
+      : detail.isDraft
+        ? "Pull request is a draft"
+        : detail.mergeable === "CONFLICTING"
+          ? `Conflicts with ${detail.baseRefName}`
+          : null
 
   const merge = async (method: MergeMethod, subject = "", body = "") => {
     setMerging(true)
@@ -455,15 +460,7 @@ function PullRequestView({
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
-          <span
-            className={cn(
-              "flex items-center gap-1.5 font-medium",
-              detail.isDraft ? "text-amber-500" : "text-emerald-500",
-            )}
-          >
-            <GitPullRequestArrow className="size-3.5" />
-            {detail.isDraft ? "Draft" : "Open"}
-          </span>
+          <StateStat state={detail.state} isDraft={detail.isDraft} />
           <span className="flex items-center gap-1.5 font-mono text-muted-foreground">
             <GitBranch className="size-3.5" />
             {detail.headRefName} → {detail.baseRefName}
@@ -481,7 +478,12 @@ function PullRequestView({
           ) : (
             <ChecksStat checks={detail.checks} />
           )}
-          <MergeableStat mergeable={detail.mergeable} base={detail.baseRefName} />
+          <MergeableStat
+            mergeable={detail.mergeable}
+            base={detail.baseRefName}
+            state={detail.state}
+          />
+          <ReviewStat decision={detail.reviewDecision} />
         </div>
 
         <div role="tablist" className="mt-4 flex gap-1">
@@ -685,7 +687,66 @@ function ChecksStat({ checks }: { checks: ChecksRollup }) {
   )
 }
 
-function MergeableStat({ mergeable, base }: { mergeable: string; base: string }) {
+// Merged and closed reach this screen only through the list, which can be asked
+// for them by number; the branch lookup still yields open pull requests alone.
+// They read as muted rather than as another colour — there is nothing left to
+// act on, so nothing for the eye to catch.
+function StateStat({ state, isDraft }: { state: string; isDraft: boolean }) {
+  if (state === "MERGED") {
+    return (
+      <Stat icon={GitMerge} tone="muted">
+        Merged
+      </Stat>
+    )
+  }
+  if (state === "CLOSED") {
+    return (
+      <Stat icon={X} tone="muted">
+        Closed
+      </Stat>
+    )
+  }
+  return (
+    <Stat icon={GitPullRequestArrow} tone={isDraft ? "pending" : "pass"}>
+      {isDraft ? "Draft" : "Open"}
+    </Stat>
+  )
+}
+
+// gh's aggregate verdict, in the header's words. A repository that requires no
+// review reports "" and gets no entry: there is no review to be waiting on.
+const REVIEW_STAT: Record<string, { icon: LucideIcon; tone: Tone; label: string }> = {
+  APPROVED: { icon: Check, tone: "pass", label: "Approved" },
+  CHANGES_REQUESTED: { icon: X, tone: "fail", label: "Changes requested" },
+  REVIEW_REQUIRED: { icon: CircleDashed, tone: "muted", label: "Review required" },
+}
+
+function ReviewStat({ decision }: { decision: string }) {
+  const stat = REVIEW_STAT[decision]
+  if (!stat) {
+    return null
+  }
+  return (
+    <Stat icon={stat.icon} tone={stat.tone}>
+      {stat.label}
+    </Stat>
+  )
+}
+
+function MergeableStat({
+  mergeable,
+  base,
+  state,
+}: {
+  mergeable: string
+  base: string
+  state: string
+}) {
+  // gh reports UNKNOWN for a pull request that is over, and "Checking
+  // mergeability…" against something already merged reads as a stuck screen.
+  if (state !== "OPEN") {
+    return null
+  }
   if (mergeable === "CONFLICTING") {
     return (
       <Stat icon={X} tone="fail">
