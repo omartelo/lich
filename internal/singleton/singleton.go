@@ -31,8 +31,19 @@ type Info struct {
 // so a slow one means the recorded instance is gone and the file is stale.
 const pingTimeout = time.Second
 
+// path resolves runtime.json. LICH_DEV (set by `task dev`) selects a separate
+// file, mirroring the store's database split: the dev shell records itself on
+// its own port, and must not overwrite — or, on exit, delete — the daily
+// driver's runtime file.
 func path(configDir string) string {
-	return filepath.Join(configDir, "lich", "runtime.json")
+	return filepath.Join(configDir, "lich", fileName(os.Getenv("LICH_DEV") != ""))
+}
+
+func fileName(dev bool) string {
+	if dev {
+		return "runtime-dev.json"
+	}
+	return "runtime.json"
 }
 
 // Write records this process as the running instance. Mode 0600: the token is a

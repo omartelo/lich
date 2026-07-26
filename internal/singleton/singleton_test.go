@@ -108,6 +108,48 @@ func TestDetect(t *testing.T) {
 	})
 }
 
+// TestDevSplit proves a `task dev` shell records itself in its own file: it
+// neither overwrites the daily driver's runtime.json nor, when main.go removes
+// the path it was handed on exit, takes that file down with it.
+func TestDevSplit(t *testing.T) {
+	if got := fileName(false); got != "runtime.json" {
+		t.Errorf("fileName(false) = %q, want runtime.json", got)
+	}
+	if got := fileName(true); got != "runtime-dev.json" {
+		t.Errorf("fileName(true) = %q, want runtime-dev.json", got)
+	}
+
+	configDir := writeConfig(t)
+	t.Setenv("LICH_DEV", "")
+	if _, err := Write(configDir, 47821, "daily"); err != nil {
+		t.Fatalf("Write daily: %v", err)
+	}
+
+	t.Setenv("LICH_DEV", "1")
+	devPath, err := Write(configDir, 47822, "dev")
+	if err != nil {
+		t.Fatalf("Write dev: %v", err)
+	}
+	if filepath.Base(devPath) != "runtime-dev.json" {
+		t.Errorf("dev path = %q, want .../runtime-dev.json", devPath)
+	}
+	if got, err := Read(configDir); err != nil || got == nil || got.Token != "dev" {
+		t.Fatalf("dev Read = %+v (err %v), want the dev record", got, err)
+	}
+	if err := os.Remove(devPath); err != nil {
+		t.Fatalf("remove dev path: %v", err)
+	}
+
+	t.Setenv("LICH_DEV", "")
+	got, err := Read(configDir)
+	if err != nil {
+		t.Fatalf("Read daily: %v", err)
+	}
+	if got == nil || got.Port != 47821 || got.Token != "daily" {
+		t.Fatalf("daily record = %+v, want port=47821 tok=daily", got)
+	}
+}
+
 // TestPing exercises the production probe against a listener that mimics the
 // transport's token-gated /ping: 204 with the token, 401 without.
 func TestPing(t *testing.T) {
