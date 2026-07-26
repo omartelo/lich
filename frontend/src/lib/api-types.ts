@@ -68,7 +68,11 @@ export interface PullRequestSummary {
   title: string
   /** Login, or the display name when gh reports no login. */
   author: string
+  /** gh: OPEN | CLOSED | MERGED */
+  state: string
   isDraft: boolean
+  /** gh: APPROVED | CHANGES_REQUESTED | REVIEW_REQUIRED; "" when none is required. */
+  reviewDecision: string
   headRefName: string
   /** The head branch lives on a fork: it can be read, but not pushed back to. */
   isCrossRepository: boolean

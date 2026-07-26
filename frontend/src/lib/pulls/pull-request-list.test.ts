@@ -4,6 +4,7 @@ import {
   checkVerdict,
   filterCounts,
   filterPullRequests,
+  parsePullsQuery,
   parsePullsSort,
   sortPullRequests,
   updatedAgo,
@@ -14,7 +15,9 @@ function pr(over: Partial<PullRequestSummary> = {}): PullRequestSummary {
     number: 1,
     title: "feat: a thing",
     author: "omartelo",
+    state: "OPEN",
     isDraft: false,
+    reviewDecision: "",
     headRefName: "feat/thing",
     isCrossRepository: false,
     updatedAt: "2026-07-26T10:00:00Z",
@@ -22,6 +25,9 @@ function pr(over: Partial<PullRequestSummary> = {}): PullRequestSummary {
     ...over,
   }
 }
+
+/** The filter box's own parse, for the tests that only care about the text. */
+const q = (raw = "") => parsePullsQuery(raw)
 
 describe("checkVerdict", () => {
   it("reports no checks apart from a pass", () => {
@@ -55,37 +61,37 @@ describe("filterPullRequests", () => {
   ]
 
   it("keeps everything by default", () => {
-    expect(filterPullRequests(list, "all", "")).toHaveLength(3)
+    expect(filterPullRequests(list, "all", q())).toHaveLength(3)
   })
 
   it("splits drafts from ready", () => {
-    expect(filterPullRequests(list, "drafts", "").map((p) => p.number)).toEqual([98])
-    expect(filterPullRequests(list, "ready", "").map((p) => p.number)).toEqual([107, 105])
+    expect(filterPullRequests(list, "drafts", q()).map((p) => p.number)).toEqual([98])
+    expect(filterPullRequests(list, "ready", q()).map((p) => p.number)).toEqual([107, 105])
   })
 
   it("keeps only a red rollup under failing", () => {
-    expect(filterPullRequests(list, "failing", "").map((p) => p.number)).toEqual([105])
+    expect(filterPullRequests(list, "failing", q()).map((p) => p.number)).toEqual([105])
   })
 
   it("searches the number with or without its hash", () => {
-    expect(filterPullRequests(list, "all", "#105").map((p) => p.number)).toEqual([105])
-    expect(filterPullRequests(list, "all", "105").map((p) => p.number)).toEqual([105])
+    expect(filterPullRequests(list, "all", q("#105")).map((p) => p.number)).toEqual([105])
+    expect(filterPullRequests(list, "all", q("105")).map((p) => p.number)).toEqual([105])
   })
 
   it("searches title, author and branch, case-insensitively", () => {
-    expect(filterPullRequests(list, "all", "POLLER").map((p) => p.number)).toEqual([105])
-    expect(filterPullRequests(list, "all", "someone").map((p) => p.number)).toEqual([98])
-    expect(filterPullRequests(list, "all", "feat/pulls").map((p) => p.number)).toEqual([107])
+    expect(filterPullRequests(list, "all", q("POLLER")).map((p) => p.number)).toEqual([105])
+    expect(filterPullRequests(list, "all", q("someone")).map((p) => p.number)).toEqual([98])
+    expect(filterPullRequests(list, "all", q("feat/pulls")).map((p) => p.number)).toEqual([107])
   })
 
   it("combines the quick filter with the search", () => {
-    expect(filterPullRequests(list, "drafts", "spike").map((p) => p.number)).toEqual([98])
-    expect(filterPullRequests(list, "ready", "spike")).toEqual([])
+    expect(filterPullRequests(list, "drafts", q("spike")).map((p) => p.number)).toEqual([98])
+    expect(filterPullRequests(list, "ready", q("spike"))).toEqual([])
   })
 
   it("ignores surrounding whitespace in the query", () => {
-    expect(filterPullRequests(list, "all", "   ").map((p) => p.number)).toEqual([107, 105, 98])
-    expect(filterPullRequests(list, "all", "  poller ").map((p) => p.number)).toEqual([105])
+    expect(filterPullRequests(list, "all", q("   ")).map((p) => p.number)).toEqual([107, 105, 98])
+    expect(filterPullRequests(list, "all", q("  poller ")).map((p) => p.number)).toEqual([105])
   })
 })
 
@@ -169,5 +175,103 @@ describe("parsePullsSort", () => {
 
   it.each([null, "", "by-vibes"])("falls back to recently updated for %j", (raw) => {
     expect(parsePullsSort(raw)).toBe("updated")
+  })
+})
+
+describe("parsePullsQuery", () => {
+  it("defaults to the open pull requests and no other constraint", () => {
+    expect(parsePullsQuery("")).toEqual({
+      state: "open",
+      review: null,
+      draft: null,
+      fork: null,
+      text: "",
+    })
+  })
+
+  it.each(["open", "closed", "merged", "all"])("reads is:%s as the state", (state) => {
+    expect(parsePullsQuery(`is:${state}`).state).toBe(state)
+  })
+
+  it("reads is:draft and is:ready as the two sides of one flag", () => {
+    expect(parsePullsQuery("is:draft").draft).toBe(true)
+    expect(parsePullsQuery("is:ready").draft).toBe(false)
+  })
+
+  it("reads is:fork", () => {
+    expect(parsePullsQuery("is:fork").fork).toBe(true)
+  })
+
+  it.each([
+    ["review:required", "required"],
+    ["review:approved", "approved"],
+    ["review:changes-requested", "changes-requested"],
+    ["review:changes_requested", "changes-requested"],
+  ])("reads %s", (raw, want) => {
+    expect(parsePullsQuery(raw).review).toBe(want)
+  })
+
+  it("is case-insensitive on the qualifier and its value", () => {
+    expect(parsePullsQuery("IS:Merged").state).toBe("merged")
+  })
+
+  it("combines qualifiers and keeps the rest as text", () => {
+    expect(parsePullsQuery("is:merged review:approved poller fix")).toEqual({
+      state: "merged",
+      review: "approved",
+      draft: null,
+      fork: null,
+      text: "poller fix",
+    })
+  })
+
+  // A qualifier this build does not know stays text: dropping it would widen
+  // the list silently, which reads as a filter that does not work.
+  it("keeps an unknown qualifier as text", () => {
+    const query = parsePullsQuery("is:spicy label:bug")
+    expect(query.state).toBe("open")
+    expect(query.text).toBe("is:spicy label:bug")
+  })
+
+  it("the last state wins", () => {
+    expect(parsePullsQuery("is:open is:merged").state).toBe("merged")
+  })
+})
+
+describe("filtering by qualifier", () => {
+  const list = [
+    pr({ number: 1, reviewDecision: "APPROVED" }),
+    pr({ number: 2, reviewDecision: "CHANGES_REQUESTED" }),
+    pr({ number: 3, reviewDecision: "REVIEW_REQUIRED", isDraft: true }),
+    pr({ number: 4, reviewDecision: "", isCrossRepository: true }),
+  ]
+
+  it("keeps only the asked-for review state", () => {
+    expect(filterPullRequests(list, "all", q("review:approved")).map((p) => p.number)).toEqual([1])
+    expect(
+      filterPullRequests(list, "all", q("review:changes-requested")).map((p) => p.number),
+    ).toEqual([2])
+    expect(filterPullRequests(list, "all", q("review:required")).map((p) => p.number)).toEqual([3])
+  })
+
+  // A repository that requires no review reports "", which is not a review
+  // state — asking for one must not match it.
+  it("never matches a pull request with no review decision", () => {
+    for (const review of ["required", "approved", "changes-requested"]) {
+      expect(
+        filterPullRequests(list, "all", q(`review:${review}`)).map((p) => p.number),
+      ).not.toContain(4)
+    }
+  })
+
+  it("filters drafts and forks", () => {
+    expect(filterPullRequests(list, "all", q("is:draft")).map((p) => p.number)).toEqual([3])
+    expect(filterPullRequests(list, "all", q("is:ready")).map((p) => p.number)).toEqual([1, 2, 4])
+    expect(filterPullRequests(list, "all", q("is:fork")).map((p) => p.number)).toEqual([4])
+  })
+
+  it("ands the qualifiers with the quick filter and the text", () => {
+    expect(filterPullRequests(list, "drafts", q("is:ready"))).toEqual([])
+    expect(filterPullRequests(list, "all", q("review:approved #2"))).toEqual([])
   })
 })

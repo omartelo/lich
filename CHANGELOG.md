@@ -14,9 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   requests" card at the top of the sidebar and opens the list — the one way in
   that does not already require a pull request, since every other entry appears
   only once a checkout has one. A column holds every open PR — number, title,
-  author, how long ago it moved, and a dot for its checks — with a search box,
-  quick filters (all, ready, drafts, failing) and a sort that remembers itself;
-  selecting one shows it in full, whatever branch the checkout is on. The column
+  author, how long ago it moved, and a dot for its checks — with quick filters
+  (all, ready, drafts, failing) and a sort that remembers itself. The filter box
+  takes GitHub's own qualifiers beside the words it matches: `is:merged`,
+  `is:closed` and `is:all` reach past the open ones, and `is:draft`, `is:fork`
+  and `review:approved` / `review:changes-requested` / `review:required` narrow
+  what came back. Selecting a pull request shows it in full, whatever branch the
+  checkout is on. The column
   collapses to a rail when the pull request wants the width, and stays collapsed
   until it is asked back. A
   worktree's own pull request card is untouched: it still opens that one pull

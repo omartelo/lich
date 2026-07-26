@@ -1,11 +1,14 @@
 import { useMemo, useState } from "react"
 import {
   ChevronDown,
+  GitMerge,
   GitPullRequestArrow,
+  GitPullRequestClosed,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
   Terminal,
+  type LucideIcon,
 } from "lucide-react"
 import { IconAction } from "@/components/common/IconAction"
 import type { PullRequestSummary } from "@/lib/api-types"
@@ -20,6 +23,7 @@ import {
   writePullsSort,
   type CheckVerdict,
   type PullsFilter,
+  type PullsQuery,
   type PullsSort,
 } from "@/lib/pulls/pull-request-list"
 import { Input } from "@/components/ui/input"
@@ -47,6 +51,16 @@ const VERDICT_DOT: Record<CheckVerdict, string> = {
 // every other UI pref, so the choice survives leaving the screen.
 const LIST_HIDDEN_KEY = "lich.pulls.list.hidden"
 
+// The box takes GitHub's own qualifiers, so the syntax is already known to
+// anyone who has searched pull requests there. The tooltip is the only place
+// that says so — a column this narrow has no room for a legend.
+const QUALIFIER_HELP = [
+  "Words match the number, title, author and branch.",
+  "is:open · is:closed · is:merged · is:all",
+  "is:draft · is:ready · is:fork",
+  "review:required · review:approved · review:changes-requested",
+].join("\n")
+
 const FILTER_LABELS: ReadonlyArray<[PullsFilter, string]> = [
   ["all", "All"],
   ["ready", "Ready"],
@@ -63,6 +77,11 @@ interface PullsListProps {
   onSelect: (number: number) => void
   sort: PullsSort
   onSortChange: (sort: PullsSort) => void
+  /** The raw filter box, owned by the screen: its `is:` state decides which
+   * pull requests gh is asked for, which is a fetch, not a filter. */
+  query: string
+  onQueryChange: (query: string) => void
+  parsed: PullsQuery
   /** Head branches already checked out somewhere — git refuses a second one. */
   checkedOutBranches: ReadonlySet<string>
 }
@@ -77,15 +96,17 @@ export function PullsList({
   onSelect,
   sort,
   onSortChange,
+  query,
+  onQueryChange,
+  parsed,
   checkedOutBranches,
 }: PullsListProps) {
   const [open, setOpen] = useState(() => localStorage.getItem(LIST_HIDDEN_KEY) !== "1")
   const [filter, setFilter] = useState<PullsFilter>("all")
-  const [query, setQuery] = useState("")
   const counts = useMemo(() => filterCounts(list), [list])
   const rows = useMemo(
-    () => sortPullRequests(filterPullRequests(list, filter, query), sort),
-    [list, filter, query, sort],
+    () => sortPullRequests(filterPullRequests(list, filter, parsed), sort),
+    [list, filter, parsed, sort],
   )
 
   const chooseSort = (next: PullsSort) => {
@@ -120,9 +141,10 @@ export function PullsList({
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Filter pull requests"
+              onChange={(event) => onQueryChange(event.target.value)}
+              placeholder="Filter — try is:merged"
               aria-label="Filter pull requests"
+              title={QUALIFIER_HELP}
               spellCheck={false}
               className="h-8 pl-8 text-sm"
             />
@@ -165,7 +187,7 @@ export function PullsList({
       </div>
 
       <div className="flex items-center justify-between px-3 py-2 text-xs text-muted-foreground">
-        <span className="uppercase tracking-wide">Open</span>
+        <span className="uppercase tracking-wide">{parsed.state}</span>
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -195,7 +217,9 @@ export function PullsList({
           <p className="px-2 py-3 text-xs text-muted-foreground">{error}</p>
         ) : rows.length === 0 ? (
           <p className="px-2 py-3 text-xs text-muted-foreground">
-            {list.length === 0 ? "No open pull requests." : "Nothing matches that filter."}
+            {list.length === 0
+              ? `No ${parsed.state === "all" ? "" : `${parsed.state} `}pull requests.`
+              : "Nothing matches that filter."}
           </p>
         ) : (
           rows.map((pr) => (
@@ -220,8 +244,25 @@ interface PullRowProps {
   onSelect: () => void
 }
 
+// State is carried by the glyph's shape, not by a hue: merged and closed rows
+// only appear when they were asked for, and DESIGN.md keeps colour for meaning
+// the eye has to catch (a failing check, a draft).
+const STATE_GLYPH: Record<string, LucideIcon> = {
+  MERGED: GitMerge,
+  CLOSED: GitPullRequestClosed,
+}
+
+// Only a decision worth acting on shows: REVIEW_REQUIRED is the resting state
+// of most rows, and labelling every one of them says nothing.
+const REVIEW_LABEL: Record<string, { text: string; className: string }> = {
+  APPROVED: { text: "approved", className: "text-emerald-500" },
+  CHANGES_REQUESTED: { text: "changes requested", className: "text-destructive" },
+}
+
 function PullRow({ pr, active, isCheckedOut, onSelect }: PullRowProps) {
   const verdict = checkVerdict(pr)
+  const StateGlyph = STATE_GLYPH[pr.state] ?? GitPullRequestArrow
+  const review = REVIEW_LABEL[pr.reviewDecision]
   return (
     <button
       type="button"
@@ -232,7 +273,7 @@ function PullRow({ pr, active, isCheckedOut, onSelect }: PullRowProps) {
         active && "bg-accent",
       )}
     >
-      <GitPullRequestArrow
+      <StateGlyph
         className={cn(
           "mt-0.5 size-3.5 shrink-0",
           pr.isDraft ? "text-amber-500" : "text-muted-foreground",
@@ -250,6 +291,7 @@ function PullRow({ pr, active, isCheckedOut, onSelect }: PullRowProps) {
             <span className={cn("size-1.5 shrink-0 rounded-full", VERDICT_DOT[verdict])} />
           )}
           {pr.isDraft && <span className="text-amber-500">Draft</span>}
+          {review && <span className={review.className}>{review.text}</span>}
           {pr.isCrossRepository && <span>fork</span>}
           {isCheckedOut && (
             <span className="flex items-center gap-1">

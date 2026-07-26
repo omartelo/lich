@@ -34,6 +34,97 @@ export function checkVerdict(pr: PullRequestSummary): CheckVerdict {
   return pr.checks.pending > 0 ? "pending" : "passed"
 }
 
+/** Which pull requests gh is asked for; anything else is filtered in the page. */
+export const PULLS_STATES = ["open", "closed", "merged", "all"] as const
+export type PullsState = (typeof PULLS_STATES)[number]
+
+const REVIEWS = ["required", "approved", "changes-requested"] as const
+type ReviewFilter = (typeof REVIEWS)[number]
+
+// gh's reviewDecision, in the words the query uses. "" — a repository that
+// requires no review — matches nothing, since asking for a review state means
+// asking for one that exists.
+const REVIEW_OF: Record<string, ReviewFilter> = {
+  REVIEW_REQUIRED: "required",
+  APPROVED: "approved",
+  CHANGES_REQUESTED: "changes-requested",
+}
+
+export interface PullsQuery {
+  state: PullsState
+  review: ReviewFilter | null
+  /** true for `is:draft`, false for `is:ready`, null when the query is silent. */
+  draft: boolean | null
+  fork: boolean | null
+  /** Everything that was not a qualifier, matched against the row's text. */
+  text: string
+}
+
+// parsePullsQuery reads GitHub's own qualifier syntax out of the filter box —
+// `is:merged`, `review:approved`, `is:draft` — and leaves the rest as the text
+// to match. A qualifier this build does not know stays text on purpose: a typo
+// then narrows the list to nothing visible rather than being silently dropped,
+// which reads as a filter that does not work.
+export function parsePullsQuery(raw: string): PullsQuery {
+  const query: PullsQuery = { state: "open", review: null, draft: null, fork: null, text: "" }
+  const words: string[] = []
+  for (const word of raw.split(/\s+/)) {
+    const value = word.slice(word.indexOf(":") + 1).toLowerCase()
+    const known = word.toLowerCase().startsWith("is:")
+      ? applyIs(query, value)
+      : word.toLowerCase().startsWith("review:")
+        ? applyReview(query, value)
+        : false
+    if (!known && word !== "") {
+      words.push(word)
+    }
+  }
+  query.text = words.join(" ")
+  return query
+}
+
+function applyIs(query: PullsQuery, value: string): boolean {
+  if ((PULLS_STATES as readonly string[]).includes(value)) {
+    query.state = value as PullsState
+    return true
+  }
+  switch (value) {
+    case "draft":
+      query.draft = true
+      return true
+    case "ready":
+      query.draft = false
+      return true
+    case "fork":
+      query.fork = true
+      return true
+    default:
+      return false
+  }
+}
+
+function applyReview(query: PullsQuery, value: string): boolean {
+  const review = REVIEWS.find((r) => r === value || r.replace("-", "_") === value)
+  if (!review) {
+    return false
+  }
+  query.review = review
+  return true
+}
+
+function matchesQualifiers(pr: PullRequestSummary, query: PullsQuery): boolean {
+  if (query.draft !== null && pr.isDraft !== query.draft) {
+    return false
+  }
+  if (query.fork !== null && pr.isCrossRepository !== query.fork) {
+    return false
+  }
+  if (query.review !== null && REVIEW_OF[pr.reviewDecision] !== query.review) {
+    return false
+  }
+  return true
+}
+
 function matchesFilter(pr: PullRequestSummary, filter: PullsFilter): boolean {
   switch (filter) {
     case "ready":
@@ -49,8 +140,8 @@ function matchesFilter(pr: PullRequestSummary, filter: PullsFilter): boolean {
 
 // The number matches with or without its "#", because that is how a PR is
 // named out loud and pasted from anywhere else.
-function matchesQuery(pr: PullRequestSummary, query: string): boolean {
-  const needle = query.trim().toLowerCase()
+function matchesText(pr: PullRequestSummary, text: string): boolean {
+  const needle = text.trim().toLowerCase()
   if (needle === "") {
     return true
   }
@@ -61,9 +152,12 @@ function matchesQuery(pr: PullRequestSummary, query: string): boolean {
 export function filterPullRequests(
   list: PullRequestSummary[],
   filter: PullsFilter,
-  query: string,
+  query: PullsQuery,
 ): PullRequestSummary[] {
-  return list.filter((pr) => matchesFilter(pr, filter) && matchesQuery(pr, query))
+  return list.filter(
+    (pr) =>
+      matchesFilter(pr, filter) && matchesQualifiers(pr, query) && matchesText(pr, query.text),
+  )
 }
 
 /** How many rows each quick filter would leave, for the counts on the buttons. */

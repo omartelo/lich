@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react"
+import { useMemo, useState, type ReactNode } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
 import {
@@ -26,7 +26,7 @@ import { queueSetup } from "@/lib/terminal/setup-queue"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { useCheckouts } from "@/lib/git/use-checkouts"
 import { invalidatePullRequests } from "@/lib/pulls/pull-request-lookup"
-import { readPullsSort, type PullsSort } from "@/lib/pulls/pull-request-list"
+import { parsePullsQuery, readPullsSort, type PullsSort } from "@/lib/pulls/pull-request-list"
 import { usePullRequestDetail } from "@/lib/pulls/use-pull-request-detail"
 import { usePullRequests } from "@/lib/pulls/use-pull-requests"
 import { useInject } from "@/lib/use-inject"
@@ -95,9 +95,13 @@ export function Pulls({ list = false }: PullsProps) {
   // addresses one directly, which only the list can produce.
   const selected = Number(number) || 0
   const { detail, loading, error, refresh } = usePullRequestDetail(path, branch, head, selected)
+  // The filter box lives here, not in the column: its `is:` state decides which
+  // pull requests gh is asked for, and that is a fetch rather than a filter.
+  const [query, setQuery] = useState("")
+  const parsedQuery = useMemo(() => parsePullsQuery(query), [query])
   // An empty path is the hook's own "nothing to look up", so the single pull
   // request screen never spends a gh call on a list it does not show.
-  const pulls = usePullRequests(list ? projectPath || path : "")
+  const pulls = usePullRequests(list ? projectPath || path : "", parsedQuery.state)
   const { checkouts, refresh: refreshCheckouts } = useCheckouts(projectPath)
   const inject = useInject(sessionId)
   const [sort, setSort] = useState<PullsSort>(readPullsSort)
@@ -253,6 +257,9 @@ export function Pulls({ list = false }: PullsProps) {
           onSelect={(picked) => navigate(`/projects/${projectId}/pulls/all/${picked}`)}
           sort={sort}
           onSortChange={setSort}
+          query={query}
+          onQueryChange={setQuery}
+          parsed={parsedQuery}
           checkedOutBranches={new Set(checkouts.map((c) => c.name))}
         />
       )}

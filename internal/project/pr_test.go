@@ -646,7 +646,7 @@ func TestParsePRList(t *testing.T) {
 func TestListPullRequestsFlow(t *testing.T) {
 	t.Run("the call is scoped and bounded", func(t *testing.T) {
 		gh := &fakeGH{out: []byte(`[{"number":1,"title":"t"}]`)}
-		list, err := withGH(gh).ListPullRequests("/repo")
+		list, err := withGH(gh).ListPullRequests("/repo", "")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -664,12 +664,34 @@ func TestListPullRequestsFlow(t *testing.T) {
 
 	t.Run("a real gh failure surfaces its cause", func(t *testing.T) {
 		gh := &fakeGH{err: errors.New("gh auth login required")}
-		_, err := withGH(gh).ListPullRequests("/repo")
+		_, err := withGH(gh).ListPullRequests("/repo", "")
 		if err == nil {
 			t.Fatal("expected an error")
 		}
 		if !strings.Contains(err.Error(), "gh pr list") || !strings.Contains(err.Error(), "auth login") {
 			t.Errorf("error should name the command and the cause, got %q", err)
+		}
+	})
+
+	t.Run("a known state reaches gh", func(t *testing.T) {
+		gh := &fakeGH{out: []byte(`[]`)}
+		if _, err := withGH(gh).ListPullRequests("/repo", "merged"); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !slices.Contains(gh.args, "merged") {
+			t.Errorf("args = %v, want the state among them", gh.args)
+		}
+	})
+
+	// The state comes from a query typed in the page, so anything outside the
+	// allow-list has to stop here rather than reach gh's flags.
+	t.Run("an unknown state never reaches gh", func(t *testing.T) {
+		gh := &fakeGH{}
+		if _, err := withGH(gh).ListPullRequests("/repo", "--limit=99999"); err == nil {
+			t.Error("expected an error for an unknown state")
+		}
+		if gh.calls != 0 {
+			t.Errorf("gh was called %d times, want 0", gh.calls)
 		}
 	})
 }

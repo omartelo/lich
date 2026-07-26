@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { ProjectService } from "@/lib/rpc"
 import type { PullRequestSummary } from "@/lib/api-types"
 import { onPullRequestInvalidated } from "@/lib/pulls/pull-request-lookup"
+import type { PullsState } from "@/lib/pulls/pull-request-list"
 import { errorText } from "@/lib/utils"
 
 export interface PullRequestListState {
@@ -16,13 +17,14 @@ export interface PullRequestListState {
 // polled: it re-reads on window focus, and whenever something lich itself did
 // retires the badges (a merge, a PR opened from the terminal). An empty list
 // with no error is a repository whose pull requests are all closed.
-export function usePullRequests(path: string): PullRequestListState {
+export function usePullRequests(path: string, state: PullsState): PullRequestListState {
   const [list, setList] = useState<PullRequestSummary[]>([])
   // Starts true so the first paint reads as loading rather than as "no pull
   // requests", the same contract as the detail hook.
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const seq = useRef(0)
+  const loaded = useRef(state)
 
   const refresh = useCallback(() => {
     if (!path) {
@@ -33,7 +35,14 @@ export function usePullRequests(path: string): PullRequestListState {
     }
     const mine = ++seq.current
     setLoading(true)
-    ProjectService.ListPullRequests(path)
+    // Rows of the state being left have to go before the new ones arrive: the
+    // column labels itself from the query, so keeping them would caption open
+    // pull requests as merged for as long as gh takes to answer.
+    if (loaded.current !== state) {
+      loaded.current = state
+      setList([])
+    }
+    ProjectService.ListPullRequests(path, state)
       .then((result) => {
         if (mine !== seq.current) return
         setList(result ?? [])
@@ -47,7 +56,7 @@ export function usePullRequests(path: string): PullRequestListState {
       .finally(() => {
         if (mine === seq.current) setLoading(false)
       })
-  }, [path])
+  }, [path, state])
 
   useEffect(() => {
     refresh()

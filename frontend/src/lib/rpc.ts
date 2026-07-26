@@ -125,9 +125,10 @@ export const ProjectService = {
    * which ListBranches omits, since it cannot be resumed as a worktree. */
   ListCheckouts: (path: string) => call<Worktree[] | null>("project.ListCheckouts", [path]),
   PullRequest: (path: string) => call<PullRequest | null>("project.PullRequest", [path]),
-  /** The repository's open PRs for the Pulls list column; null when it has none. */
-  ListPullRequests: (path: string) =>
-    call<PullRequestSummary[] | null>("project.ListPullRequests", [path]),
+  /** The repository's PRs in one state (open|closed|merged|all) for the Pulls
+   * list column; null when it has none. The backend allow-lists the state. */
+  ListPullRequests: (path: string, state: string) =>
+    call<PullRequestSummary[] | null>("project.ListPullRequests", [path, state]),
   /** One open PR in full (title, body, checks): the given number, or 0 for the checkout's own branch. */
   PullRequestDetail: (path: string, number: number) =>
     call<PullRequestDetail | null>("project.PullRequestDetail", [path, number]),

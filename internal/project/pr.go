@@ -427,19 +427,27 @@ func (s *Service) PullRequestDiff(path string, number int) (string, error) {
 // the ceiling is here so the list stays one bounded call — a repository with
 // more open pull requests than this shows the newest and says so.
 const (
-	prListFields = "number,title,author,isDraft,headRefName,isCrossRepository,updatedAt,statusCheckRollup"
+	prListFields = "number,title,author,state,isDraft,reviewDecision,headRefName,isCrossRepository,updatedAt,statusCheckRollup"
 	prListLimit  = 50
 )
+
+// prListStates allow-lists the values gh's --state takes, so a query built in
+// the page can never widen into an arbitrary flag.
+var prListStates = map[string]bool{"open": true, "closed": true, "merged": true, "all": true}
 
 // PRSummary is one row of the repository's open pull requests — what the list
 // column needs to render and rank a PR before anything is selected. The full
 // view behind a row is PRDetail, fetched per PR.
 type PRSummary struct {
-	Number      int    `json:"number"`
-	Title       string `json:"title"`
-	Author      string `json:"author"` // login, or the display name when gh reports no login
-	IsDraft     bool   `json:"isDraft"`
-	HeadRefName string `json:"headRefName"`
+	Number  int    `json:"number"`
+	Title   string `json:"title"`
+	Author  string `json:"author"` // login, or the display name when gh reports no login
+	State   string `json:"state"`  // gh: OPEN | CLOSED | MERGED
+	IsDraft bool   `json:"isDraft"`
+	// ReviewDecision is gh's APPROVED | CHANGES_REQUESTED | REVIEW_REQUIRED,
+	// and "" for a repository that requires no review.
+	ReviewDecision string `json:"reviewDecision"`
+	HeadRefName    string `json:"headRefName"`
 	// IsCrossRepository marks a PR whose head branch lives on a fork. lich can
 	// check such a branch out, but the commits would have nowhere to push, so
 	// the session flow refuses it (CreateWorktreeFromPR) and the button reads
@@ -455,7 +463,9 @@ type ghPRListItem struct {
 	Number            int         `json:"number"`
 	Title             string      `json:"title"`
 	Author            ghPRAuthor  `json:"author"`
+	State             string      `json:"state"`
 	IsDraft           bool        `json:"isDraft"`
+	ReviewDecision    string      `json:"reviewDecision"`
 	HeadRefName       string      `json:"headRefName"`
 	IsCrossRepository bool        `json:"isCrossRepository"`
 	UpdatedAt         string      `json:"updatedAt"`
@@ -467,13 +477,20 @@ type ghPRAuthor struct {
 	Name  string `json:"name"`
 }
 
-// ListPullRequests returns the repository's open pull requests, newest update
-// first — gh's own order, which the frontend re-sorts. It returns nil for a
-// repository with no open PR; a real failure (gh missing, unauthenticated, not
-// a GitHub repo) yields an error so the column can say why it is empty.
-func (s *Service) ListPullRequests(path string) ([]PRSummary, error) {
+// ListPullRequests returns the repository's pull requests in the given state
+// (open|closed|merged|all, defaulting to open), newest update first — gh's own
+// order, which the frontend re-sorts. It returns nil for a repository with none;
+// a real failure (gh missing, unauthenticated, not a GitHub repo) yields an
+// error so the column can say why it is empty.
+func (s *Service) ListPullRequests(path, state string) ([]PRSummary, error) {
+	if state == "" {
+		state = "open"
+	}
+	if !prListStates[state] {
+		return nil, fmt.Errorf("unknown pull request state %q", state)
+	}
 	out, err := s.gh(prReadTimeout, path,
-		"pr", "list", "--state", "open", "--limit", strconv.Itoa(prListLimit), "--json", prListFields)
+		"pr", "list", "--state", state, "--limit", strconv.Itoa(prListLimit), "--json", prListFields)
 	if errors.Is(err, errNoPullRequest) {
 		return nil, nil
 	}
@@ -498,7 +515,9 @@ func parsePRList(out []byte) ([]PRSummary, error) {
 			Number:            it.Number,
 			Title:             it.Title,
 			Author:            firstNonEmpty(it.Author.Login, it.Author.Name),
+			State:             it.State,
 			IsDraft:           it.IsDraft,
+			ReviewDecision:    it.ReviewDecision,
 			HeadRefName:       it.HeadRefName,
 			IsCrossRepository: it.IsCrossRepository,
 			UpdatedAt:         it.UpdatedAt,
