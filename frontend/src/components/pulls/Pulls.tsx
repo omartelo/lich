@@ -59,14 +59,21 @@ import { PullsList } from "./PullsList"
 // Ragged widths, so the body placeholder reads as prose instead of a block.
 const BODY_ROWS = ["w-full", "w-11/12", "w-4/5", "w-2/3", "w-5/6", "w-1/2"]
 
+interface PullsProps {
+  /** Show the repository's pull requests in a column beside the one in view.
+   * Off, the screen is one pull request and nothing else — the shape a
+   * worktree's own card opens, where a list of the repository's others is not
+   * what was asked for. */
+  list?: boolean
+}
+
 // Pulls is the per-project pull-request screen: it fills the main area on top of
-// the persistent terminals (like Settings). The list column holds the
-// repository's open pull requests; the pane beside it holds one in full —
+// the persistent terminals (like Settings), holding one pull request in full —
 // status, body and the full diff — with merge, create, open, and a session on
 // the PR's own branch. It resolves its path from the route's project id plus the
 // active session (the exact-match useActiveSession returns empty on this
 // subroute).
-export function Pulls() {
+export function Pulls({ list = false }: PullsProps) {
   const { projectId, number } = useParams()
   const navigate = useNavigate()
   const {
@@ -82,11 +89,14 @@ export function Pulls() {
   const status = useGitStatus(path)
   const branch = status?.branch ?? ""
   const head = status?.head ?? ""
-  // No number in the route keeps the original screen: the PR of whatever branch
-  // this checkout is on. A number addresses one directly, from the list.
+  // No number in the route means the PR of whatever branch this checkout is on
+  // — the whole screen without the list, and the default row with it. A number
+  // addresses one directly, which only the list can produce.
   const selected = Number(number) || 0
   const { detail, loading, error, refresh } = usePullRequestDetail(path, branch, head, selected)
-  const pulls = usePullRequests(projectPath || path)
+  // An empty path is the hook's own "nothing to look up", so the single pull
+  // request screen never spends a gh call on a list it does not show.
+  const pulls = usePullRequests(list ? projectPath || path : "")
   const { worktrees, refresh: refreshWorktrees } = useWorktrees(projectPath)
   const inject = useInject(sessionId)
   const [sort, setSort] = useState<PullsSort>(readPullsSort)
@@ -227,16 +237,18 @@ export function Pulls() {
 
   return (
     <div className="absolute inset-0 z-10 flex bg-background">
-      <PullsList
-        list={pulls.list}
-        loading={pulls.loading}
-        error={pulls.error}
-        selected={selected || (detail?.number ?? 0)}
-        onSelect={(picked) => navigate(`/projects/${projectId}/pulls/${picked}`)}
-        sort={sort}
-        onSortChange={setSort}
-        checkedOutBranches={new Set(worktrees.map((wt) => wt.name))}
-      />
+      {list && (
+        <PullsList
+          list={pulls.list}
+          loading={pulls.loading}
+          error={pulls.error}
+          selected={selected || (detail?.number ?? 0)}
+          onSelect={(picked) => navigate(`/projects/${projectId}/pulls/all/${picked}`)}
+          sort={sort}
+          onSortChange={setSort}
+          checkedOutBranches={new Set(worktrees.map((wt) => wt.name))}
+        />
+      )}
       <div className="flex min-w-0 flex-1 flex-col">{body}</div>
     </div>
   )

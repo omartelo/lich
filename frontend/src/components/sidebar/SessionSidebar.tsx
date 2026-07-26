@@ -1,14 +1,20 @@
 import { useState, useSyncExternalStore } from "react"
 import { useMatch, useNavigate } from "react-router-dom"
-import { GitBranch, Plus, Terminal } from "lucide-react"
+import { GitBranch, GitPullRequestArrow, Plus, Terminal } from "lucide-react"
 import { toast } from "sonner"
 import { ProjectService, Store } from "@/lib/rpc"
 import { closeSettings, isSettingsOpen, subscribeSettingsCard } from "@/lib/settings-card-store"
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
+import {
+  closePullsList,
+  isPullsListOpen,
+  subscribePullsListCard,
+} from "@/lib/pulls-list-card-store"
 import { enabledProviders, useProviders } from "@/lib/providers-store"
 import { ProviderIcon } from "@/components/ProviderIcon"
 import { ResizeHandle } from "@/components/common/ResizeHandle"
 import { SettingsCard } from "./SettingsCard"
+import { SidebarCard } from "@/components/common/SidebarCard"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -60,12 +66,16 @@ export function SessionSidebar() {
   const match = useMatch("/projects/:projectId/*")
   const projectId = match?.params.projectId
   const onSettings = !!useMatch("/projects/:projectId/settings")
-  // The splat covers both the bare screen and a pull request addressed by
-  // number, so the parked card keeps reading as active while the list is used.
-  const onPullsRoute = !!useMatch("/projects/:projectId/pulls/*")
+  // Two screens, two cards: a worktree's own pull request (exact route) and the
+  // repository's list (the "all" subtree, whose selection moves the URL).
+  const onPullsRoute = !!useMatch("/projects/:projectId/pulls")
+  const onPullsListRoute = !!useMatch("/projects/:projectId/pulls/all/*")
   const navigate = useNavigate()
   const settingsOpen = useSyncExternalStore(subscribeSettingsCard, () =>
     isSettingsOpen(projectId ?? ""),
+  )
+  const pullsListOpen = useSyncExternalStore(subscribePullsListCard, () =>
+    isPullsListOpen(projectId ?? ""),
   )
   const enabled = enabledProviders(useProviders())
   const path = projects.find((p) => p.id === projectId)?.path ?? ""
@@ -217,6 +227,24 @@ export function SessionSidebar() {
         </DropdownMenuContent>
       </DropdownMenu>
       <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto overflow-x-hidden">
+        {/* Pinned above the session groups beside Settings, not inside a
+            worktree's group: this card belongs to the project, and the screen it
+            opens is the repository's, not one checkout's. */}
+        {pullsListOpen && (
+          <SidebarCard
+            icon={GitPullRequestArrow}
+            label="Pull requests"
+            active={onPullsListRoute}
+            onSelect={() => navigate(`/projects/${projectId}/pulls/all`)}
+            onClose={() => {
+              closePullsList(projectId)
+              if (onPullsListRoute) {
+                navigate(`/projects/${projectId}`)
+              }
+            }}
+            closeLabel="Close pull requests"
+          />
+        )}
         {settingsOpen && (
           <SettingsCard
             active={onSettings}

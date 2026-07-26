@@ -5,9 +5,9 @@ import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortabl
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { useProjects } from "@/providers/projects"
-import { activeTarget, sessionsOf } from "@/lib/session/sessions"
+import { sessionsOf } from "@/lib/session/sessions"
 import { openSettings } from "@/lib/settings-card-store"
-import { openPulls } from "@/lib/pulls-card-store"
+import { openPullsList } from "@/lib/pulls-list-card-store"
 import { NotificationsButton } from "./NotificationsButton"
 import { horizontalAxis, useSortableList } from "@/lib/use-sortable-list"
 import { ProjectTab } from "./ProjectTab"
@@ -20,7 +20,7 @@ export function ProjectTabs() {
   // back to Home when the app is on the bare landing screen.
   const activeProjectId = useMatch("/projects/:projectId/*")?.params.projectId ?? homeId
   const onSettings = !!useMatch("/projects/:projectId/settings")
-  const onPulls = !!useMatch("/projects/:projectId/pulls/*")
+  const onPulls = !!useMatch("/projects/:projectId/pulls/all/*")
 
   const openProjectSettings = () => {
     if (!activeProjectId) {
@@ -30,19 +30,17 @@ export function ProjectTabs() {
     navigate(`/projects/${activeProjectId}/settings`)
   }
 
-  // The only way into the pull-request screen that does not already require a
-  // pull request: every other entry — the session card's badge, the footer's,
-  // the parked card — appears once the checkout has one, which is exactly when
-  // the repository-wide list is not what is missing.
+  // The repository's pull requests, and the only way in that does not already
+  // require one: every other entry — the session card's badge, the footer's,
+  // the worktree's parked card — appears once that checkout has a pull request,
+  // which is exactly when a list of the others is not what is missing. Those
+  // stay what they were, a single pull request on its own; this one is the list.
   const openProjectPulls = () => {
     if (!activeProjectId) {
       return
     }
-    const projectPath = projects.find((p) => p.id === activeProjectId)?.path ?? ""
-    // Park the card against the checkout the screen will resolve for itself, so
-    // it lands in that worktree's group rather than a group of its own.
-    openPulls(activeTarget(sessions, activeProjectId, projectPath).path)
-    navigate(`/projects/${activeProjectId}/pulls`)
+    openPullsList(activeProjectId)
+    navigate(`/projects/${activeProjectId}/pulls/all`)
   }
   // Home is pinned first and stays out of the drag list so it never reorders.
   const rest = projects.filter((project) => project.id !== homeId)

@@ -60,10 +60,14 @@ function App() {
                   area with the session sidebar kept beside it. */}
               <Route path="/projects/:projectId/settings" element={<Settings />} />
               {/* The pull-request screen: like Settings, a per-project full-screen
-                  route over the terminals. Bare, it shows the active session's
-                  branch PR; with a number, the one the list column selected. */}
+                  route over the terminals. Two shapes of it, and the route is
+                  the difference — bare is one checkout's own pull request and
+                  nothing else (the worktree's card, the footer badge); "all"
+                  adds the repository's list beside it (the tab bar's button),
+                  with the number naming the row it selected. */}
               <Route path="/projects/:projectId/pulls" element={<Pulls />} />
-              <Route path="/projects/:projectId/pulls/:number" element={<Pulls />} />
+              <Route path="/projects/:projectId/pulls/all" element={<Pulls list />} />
+              <Route path="/projects/:projectId/pulls/all/:number" element={<Pulls list />} />
             </Route>
           </Routes>
           {/* Inside ProjectsProvider + the router: the update flow opens a shell

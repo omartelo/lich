@@ -9,16 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **The Pulls screen now lists the repository's open pull requests, and can open
-  a session on one.** It has a door of its own: a pull-request button in the tab
-  bar, beside Settings — until now the screen could only be reached from a
-  checkout that already had a pull request, which is exactly when a list of the
-  others is not what is missing. A column beside the pull request holds every open PR —
-  number, title, author, how long ago it moved, and a dot for its checks — with
-  a search box, quick filters (all, ready, drafts, failing) and a sort that
-  remembers itself. Selecting one shows it in full, whatever branch the checkout
-  is on; a screen reached with no pull request selected still shows the
-  checkout's own, as before. **Open in Session**, beside Merge, checks the PR's
+- **lich now lists a repository's open pull requests, and can open a session on
+  one.** A pull-request button in the tab bar, beside Settings, parks a "Pull
+  requests" card at the top of the sidebar and opens the list — the one way in
+  that does not already require a pull request, since every other entry appears
+  only once a checkout has one. A column holds every open PR — number, title,
+  author, how long ago it moved, and a dot for its checks — with a search box,
+  quick filters (all, ready, drafts, failing) and a sort that remembers itself;
+  selecting one shows it in full, whatever branch the checkout is on. A
+  worktree's own pull request card is untouched: it still opens that one pull
+  request alone, without the list. **Open in Session**, beside Merge, checks the PR's
   head branch out into its own worktree and starts a session in it, with the
   pull request card already parked so the session carries its PR. A branch
   already checked out is reused rather than checked out twice — the button reads
