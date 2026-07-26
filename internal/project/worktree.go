@@ -97,12 +97,11 @@ func parseWorktrees(out string) []Worktree {
 	worktrees := []Worktree{}
 	first := true
 	for block := range strings.SplitSeq(strings.TrimSpace(out), "\n\n") {
-		wt, ok := parseWorktreeBlock(block)
 		if first {
 			first = false
 			continue
 		}
-		if ok {
+		if wt, ok := parseWorktreeBlock(block); ok {
 			worktrees = append(worktrees, wt)
 		}
 	}
@@ -158,6 +157,36 @@ func parseWorktreeBlock(block string) (Worktree, bool) {
 	return wt, wt.Path != "" && wt.Name != ""
 }
 
+// reserveWorktreePath resolves where the worktree holding branch name will live
+// and leaves that path free and its parent created, so the caller has nothing
+// left to do but hand it to git. Both creation flows share it.
+//
+// check-ref-format is git's own authority on a valid branch name, and it
+// rejects "..", which is what keeps the Join below free of path traversal.
+// Pruning first drops registrations whose directories are gone (a crash, a
+// manual rm) so they cannot block re-creating a worktree under the same name,
+// and an occupied path is refused here rather than by a half-finished git call.
+func reserveWorktreePath(projectPath, projectID, name string) (string, error) {
+	if _, err := runGit(projectPath, "check-ref-format", "--branch", name); err != nil {
+		return "", err
+	}
+	root, err := worktreesRoot()
+	if err != nil {
+		return "", err
+	}
+	wtPath := filepath.Join(root, projectID, name)
+	if _, err := runGit(projectPath, "worktree", "prune"); err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(wtPath); err == nil {
+		return "", fmt.Errorf("worktree path already exists: %s", wtPath)
+	}
+	if err := os.MkdirAll(filepath.Dir(wtPath), 0o755); err != nil {
+		return "", fmt.Errorf("create worktrees dir: %w", err)
+	}
+	return wtPath, nil
+}
+
 // CreateWorktree creates a git worktree named name (random when empty) under
 // the app data dir, branching off base. A remote base is fetched first and the
 // new branch tracks it. The worktree is verified usable before returning, so a
@@ -166,28 +195,9 @@ func (s *Service) CreateWorktree(projectPath, projectID, name, base string, base
 	if name == "" {
 		name = randomWorktreeName(func(n string) bool { return branchExists(projectPath, n) })
 	}
-	// check-ref-format is the authority on valid names; it also rejects "..",
-	// which keeps the Join below free of path traversal.
-	if _, err := runGit(projectPath, "check-ref-format", "--branch", name); err != nil {
-		return nil, err
-	}
-
-	root, err := worktreesRoot()
+	wtPath, err := reserveWorktreePath(projectPath, projectID, name)
 	if err != nil {
 		return nil, err
-	}
-	wtPath := filepath.Join(root, projectID, name)
-
-	// Drop registrations whose directories are gone (a crash or manual rm), so
-	// they don't block re-creating a worktree with the same name.
-	if _, err := runGit(projectPath, "worktree", "prune"); err != nil {
-		return nil, err
-	}
-	if _, err := os.Stat(wtPath); err == nil {
-		return nil, fmt.Errorf("worktree path already exists: %s", wtPath)
-	}
-	if err := os.MkdirAll(filepath.Dir(wtPath), 0o755); err != nil {
-		return nil, fmt.Errorf("create worktrees dir: %w", err)
 	}
 
 	args := []string{"worktree", "add"}
@@ -260,28 +270,9 @@ func (s *Service) CreateWorktreeFromPR(projectPath, projectID string, number int
 	if head.CrossRepo {
 		return nil, fmt.Errorf("pull request #%d comes from a fork: its branch cannot be pushed back", number)
 	}
-	// check-ref-format is the authority on valid names; it also rejects "..",
-	// which keeps the Join below free of path traversal.
-	if _, err := runGit(projectPath, "check-ref-format", "--branch", head.RefName); err != nil {
-		return nil, err
-	}
-
-	root, err := worktreesRoot()
+	wtPath, err := reserveWorktreePath(projectPath, projectID, head.RefName)
 	if err != nil {
 		return nil, err
-	}
-	wtPath := filepath.Join(root, projectID, head.RefName)
-
-	// Drop registrations whose directories are gone (a crash or manual rm), so
-	// they don't block re-creating a worktree with the same name.
-	if _, err := runGit(projectPath, "worktree", "prune"); err != nil {
-		return nil, err
-	}
-	if _, err := os.Stat(wtPath); err == nil {
-		return nil, fmt.Errorf("worktree path already exists: %s", wtPath)
-	}
-	if err := os.MkdirAll(filepath.Dir(wtPath), 0o755); err != nil {
-		return nil, fmt.Errorf("create worktrees dir: %w", err)
 	}
 	if _, err := runGit(projectPath, "worktree", "add", "--detach", wtPath); err != nil {
 		return nil, err

@@ -328,6 +328,9 @@ func TestWorktreeDirty(t *testing.T) {
 type scriptedGH struct {
 	headJSON    string
 	checkoutErr error
+	// lockOnFail locks the worktree before failing. git refuses to remove a
+	// locked worktree, which is how the cleanup itself is made to fail.
+	lockOnFail  bool
 	viewDir     string
 	checkoutDir string
 	calls       []string
@@ -338,6 +341,11 @@ func (g *scriptedGH) run(_ time.Duration, dir string, args ...string) ([]byte, e
 	if len(args) > 1 && args[1] == "checkout" {
 		g.checkoutDir = dir
 		if g.checkoutErr != nil {
+			if g.lockOnFail {
+				if out, err := exec.Command("git", "-C", dir, "worktree", "lock", dir).CombinedOutput(); err != nil {
+					return nil, fmt.Errorf("fake lock: %v (%s)", err, out)
+				}
+			}
 			return nil, g.checkoutErr
 		}
 		var head prHead
@@ -423,6 +431,29 @@ func TestCreateWorktreeFromPR(t *testing.T) {
 		}
 	})
 
+	// The cleanup is best-effort; what it must never do is bury the reason the
+	// checkout failed under the reason the cleanup failed.
+	t.Run("a cleanup that fails too still names gh's own refusal", func(t *testing.T) {
+		t.Setenv("XDG_DATA_HOME", t.TempDir())
+		repo, _ := initRepo(t)
+		gh := &scriptedGH{
+			headJSON:    `{"headRefName":"fix/poll","isCrossRepository":false}`,
+			checkoutErr: errors.New("fatal: could not fetch the head ref"),
+			lockOnFail:  true,
+		}
+
+		_, err := (&Service{gh: gh.run}).CreateWorktreeFromPR(repo, "proj", 105)
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		if !strings.Contains(err.Error(), "could not fetch the head ref") {
+			t.Errorf("gh's own cause was lost: %q", err)
+		}
+		if !strings.Contains(err.Error(), "could not be removed") {
+			t.Errorf("the failed cleanup went unreported: %q", err)
+		}
+	})
+
 	t.Run("a number that cannot name a pull request never reaches gh", func(t *testing.T) {
 		gh := &scriptedGH{}
 		if _, err := (&Service{gh: gh.run}).CreateWorktreeFromPR(t.TempDir(), "proj", 0); err == nil {
@@ -448,6 +479,47 @@ func TestCreateWorktreeFromPR(t *testing.T) {
 			t.Fatalf("want an already-exists refusal, got %v", err)
 		}
 	})
+}
+
+// TestPullRequestHead covers what gh can answer with that is not a head branch:
+// the flow has to stop at the lookup rather than build a worktree named "".
+func TestPullRequestHead(t *testing.T) {
+	tests := []struct {
+		name string
+		gh   *scriptedGH
+		want string
+	}{
+		{"payload gh could not have meant", &scriptedGH{headJSON: `{not json`}, "decode"},
+		{"a pull request with no head branch", &scriptedGH{headJSON: `{}`}, "no head branch"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := (&Service{gh: tt.gh.run}).pullRequestHead("/repo", 7)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("want an error naming %q, got %v", tt.want, err)
+			}
+		})
+	}
+}
+
+// TestCreateWorktreeFromPRRejectsRefName proves the branch name reaches git's
+// own check-ref-format before it is joined into a path: gh names the branch, so
+// nothing else stands between a hostile head ref and the worktrees directory.
+func TestCreateWorktreeFromPRRejectsRefName(t *testing.T) {
+	data := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", data)
+	repo, _ := initRepo(t)
+	gh := &scriptedGH{headJSON: `{"headRefName":"../../escaped","isCrossRepository":false}`}
+
+	if _, err := (&Service{gh: gh.run}).CreateWorktreeFromPR(repo, "proj", 105); err == nil {
+		t.Fatal("expected check-ref-format to refuse the head branch")
+	}
+	if gh.checkoutDir != "" {
+		t.Error("gh pr checkout ran for a name git had already refused")
+	}
+	if _, err := os.Stat(filepath.Join(data, "lich", "worktrees")); err == nil {
+		t.Error("a refused name still created the worktrees directory")
+	}
 }
 
 // TestListCheckouts proves the main checkout is included — the omission that

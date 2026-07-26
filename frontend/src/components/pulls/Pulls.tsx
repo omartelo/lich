@@ -2,21 +2,16 @@ import { useMemo, useState, type ReactNode } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
 import {
-  Check,
   ChevronDown,
-  CircleDashed,
-  Clock,
   ExternalLink,
   GitBranch,
   GitMerge,
   GitPullRequestArrow,
   RefreshCw,
   SquareTerminal,
-  X,
-  type LucideIcon,
 } from "lucide-react"
 import { ProjectService, Store, System } from "@/lib/rpc"
-import type { ChecksRollup, MergeMethod, PullRequestDetail } from "@/lib/api-types"
+import type { MergeMethod, PullRequestDetail } from "@/lib/api-types"
 import { useProjects } from "@/providers/projects"
 import { baseName } from "@/lib/paths"
 import { Notice } from "@/components/common/Notice"
@@ -55,9 +50,15 @@ import { PullsChecks } from "./PullsChecks"
 import { PullsCommits } from "./PullsCommits"
 import { PullsFiles } from "./PullsFiles"
 import { PullsList } from "./PullsList"
+import { ChecksStat, MergeableStat, ReviewStat, StateStat } from "./PullsStats"
 
 // Ragged widths, so the body placeholder reads as prose instead of a block.
 const BODY_ROWS = ["w-full", "w-11/12", "w-4/5", "w-2/3", "w-5/6", "w-1/2"]
+
+// The merge toast carries the only offer to remove the branch's worktree, so it
+// outstays the default: long enough to be read and acted on after the eye goes
+// back to the diff, short enough not to sit over the screen.
+const CLEANUP_TOAST_MS = 10_000
 
 interface PullsProps {
   /** Show the repository's pull requests in a column beside the one in view.
@@ -103,6 +104,12 @@ export function Pulls({ list = false }: PullsProps) {
   // request screen never spends a gh call on a list it does not show.
   const pulls = usePullRequests(list ? projectPath || path : "", parsedQuery.state)
   const { checkouts, refresh: refreshCheckouts } = useCheckouts(projectPath)
+  // Where the pull request's own branch already lives, if anywhere. Every
+  // "work on this PR" decision hangs off it: whether to create a checkout,
+  // whether the button says go rather than open, whether a merge leaves a
+  // worktree behind. The project's own directory counts — git refuses a second
+  // checkout of a branch just as hard when the project itself holds it.
+  const checkedOut = checkouts.find((c) => c.name === detail?.headRefName)
   const inject = useInject(sessionId)
   const [sort, setSort] = useState<PullsSort>(readPullsSort)
   const [opening, setOpening] = useState(false)
@@ -156,13 +163,13 @@ export function Pulls({ list = false }: PullsProps) {
     // pull request belonging to a worktree next door, or to none at all. The
     // project's own directory is never offered: it is not a worktree, and git
     // would refuse to remove it.
-    const wt = checkouts.find((c) => c.name === detail?.headRefName && c.path !== projectPath)
+    const wt = checkedOut?.path !== projectPath ? checkedOut : undefined
     if (!wt) {
       toast.success(merged)
       return
     }
     toast.success(merged, {
-      duration: 10_000,
+      duration: CLEANUP_TOAST_MS,
       action: { label: "Remove worktree", onClick: () => void removeWorktree(wt.path) },
     })
   }
@@ -175,7 +182,7 @@ export function Pulls({ list = false }: PullsProps) {
     if (!projectId || !detail) {
       return
     }
-    const existing = checkouts.find((checkout) => checkout.name === detail.headRefName)
+    const existing = checkedOut
     if (existing) {
       const live = sessionsOf(sessions, projectId).find((s) => s.path === existing.path)
       if (live) {
@@ -210,7 +217,6 @@ export function Pulls({ list = false }: PullsProps) {
     }
   }
 
-  const checkedOut = checkouts.find((c) => c.name === detail?.headRefName)
   const session: SessionAction = {
     label:
       checkedOut && sessionsOf(sessions, projectId ?? "").some((s) => s.path === checkedOut.path)
@@ -632,139 +638,6 @@ function MergeMessageDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
-}
-
-type Tone = "pass" | "fail" | "pending" | "muted"
-
-const toneClass: Record<Tone, string> = {
-  pass: "text-emerald-500",
-  fail: "text-destructive",
-  pending: "text-amber-500",
-  muted: "text-muted-foreground",
-}
-
-function Stat({
-  icon: Icon,
-  tone,
-  children,
-}: {
-  icon: LucideIcon
-  tone: Tone
-  children: ReactNode
-}) {
-  return (
-    <span className={cn("flex items-center gap-1.5 font-medium", toneClass[tone])}>
-      <Icon className="size-3.5" />
-      {children}
-    </span>
-  )
-}
-
-function ChecksStat({ checks }: { checks: ChecksRollup }) {
-  const { passed, failed, pending, total } = checks
-  if (total === 0) {
-    return null
-  }
-  if (failed > 0) {
-    return (
-      <Stat icon={X} tone="fail">
-        {failed} of {total} checks failing
-      </Stat>
-    )
-  }
-  if (pending > 0) {
-    return (
-      <Stat icon={Clock} tone="pending">
-        {pending} of {total} checks running
-      </Stat>
-    )
-  }
-  return (
-    <Stat icon={Check} tone="pass">
-      {passed === 1 ? "1 check passed" : `${passed} checks passed`}
-    </Stat>
-  )
-}
-
-// Merged and closed reach this screen only through the list, which can be asked
-// for them by number; the branch lookup still yields open pull requests alone.
-// They read as muted rather than as another colour — there is nothing left to
-// act on, so nothing for the eye to catch.
-function StateStat({ state, isDraft }: { state: string; isDraft: boolean }) {
-  if (state === "MERGED") {
-    return (
-      <Stat icon={GitMerge} tone="muted">
-        Merged
-      </Stat>
-    )
-  }
-  if (state === "CLOSED") {
-    return (
-      <Stat icon={X} tone="muted">
-        Closed
-      </Stat>
-    )
-  }
-  return (
-    <Stat icon={GitPullRequestArrow} tone={isDraft ? "pending" : "pass"}>
-      {isDraft ? "Draft" : "Open"}
-    </Stat>
-  )
-}
-
-// gh's aggregate verdict, in the header's words. A repository that requires no
-// review reports "" and gets no entry: there is no review to be waiting on.
-const REVIEW_STAT: Record<string, { icon: LucideIcon; tone: Tone; label: string }> = {
-  APPROVED: { icon: Check, tone: "pass", label: "Approved" },
-  CHANGES_REQUESTED: { icon: X, tone: "fail", label: "Changes requested" },
-  REVIEW_REQUIRED: { icon: CircleDashed, tone: "muted", label: "Review required" },
-}
-
-function ReviewStat({ decision }: { decision: string }) {
-  const stat = REVIEW_STAT[decision]
-  if (!stat) {
-    return null
-  }
-  return (
-    <Stat icon={stat.icon} tone={stat.tone}>
-      {stat.label}
-    </Stat>
-  )
-}
-
-function MergeableStat({
-  mergeable,
-  base,
-  state,
-}: {
-  mergeable: string
-  base: string
-  state: string
-}) {
-  // gh reports UNKNOWN for a pull request that is over, and "Checking
-  // mergeability…" against something already merged reads as a stuck screen.
-  if (state !== "OPEN") {
-    return null
-  }
-  if (mergeable === "CONFLICTING") {
-    return (
-      <Stat icon={X} tone="fail">
-        Conflicts with {base}
-      </Stat>
-    )
-  }
-  if (mergeable === "MERGEABLE") {
-    return (
-      <Stat icon={GitMerge} tone="pass">
-        Mergeable
-      </Stat>
-    )
-  }
-  return (
-    <Stat icon={CircleDashed} tone="muted">
-      Checking mergeability…
-    </Stat>
   )
 }
 

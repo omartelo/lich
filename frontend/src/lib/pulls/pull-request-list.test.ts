@@ -96,17 +96,31 @@ describe("filterPullRequests", () => {
 })
 
 describe("filterCounts", () => {
-  it("counts each filter over the whole list, not the filtered one", () => {
-    const counts = filterCounts([
-      pr({ number: 1 }),
-      pr({ number: 2, isDraft: true }),
-      pr({ number: 3, checks: { passed: 0, failed: 2, pending: 0, total: 2 } }),
-    ])
-    expect(counts).toEqual({ all: 3, ready: 2, drafts: 1, failing: 1 })
+  const list = [
+    pr({ number: 1 }),
+    pr({ number: 2, isDraft: true }),
+    pr({ number: 3, checks: { passed: 0, failed: 2, pending: 0, total: 2 } }),
+  ]
+
+  it("counts each filter over the whole list, not the selected one", () => {
+    expect(filterCounts(list, q())).toEqual({ all: 3, ready: 2, drafts: 1, failing: 1 })
+  })
+
+  // The buttons sit right under the filter box: a count that ignored the query
+  // would contradict the rows below it.
+  it("counts only what the query left standing", () => {
+    expect(filterCounts(list, q("is:draft"))).toEqual({ all: 1, ready: 0, drafts: 1, failing: 0 })
+    expect(filterCounts(list, q("#3"))).toEqual({ all: 1, ready: 1, drafts: 0, failing: 1 })
+  })
+
+  it("agrees with the rows the same query leaves", () => {
+    for (const raw of ["", "is:ready", "#2", "review:approved"]) {
+      expect(filterCounts(list, q(raw)).all).toBe(filterPullRequests(list, "all", q(raw)).length)
+    }
   })
 
   it("is all zeroes for an empty list", () => {
-    expect(filterCounts([])).toEqual({ all: 0, ready: 0, drafts: 0, failing: 0 })
+    expect(filterCounts([], q())).toEqual({ all: 0, ready: 0, drafts: 0, failing: 0 })
   })
 })
 
@@ -140,6 +154,19 @@ describe("sortPullRequests", () => {
 
   it("lifts a red rollup above a newer green one, then falls back to recency", () => {
     expect(sortPullRequests(list, "failing").map((p) => p.number)).toEqual([100, 107, 90])
+  })
+
+  // The order rides on a lexicographic compare of gh's ISO strings rather than
+  // on Date.parse, so a timestamp nobody can read sinks instead of poisoning
+  // the comparator with NaN.
+  it("sinks a timestamp it cannot read instead of scrambling the order", () => {
+    const broken = pr({ number: 1, updatedAt: "" })
+    expect(sortPullRequests([broken, ...list], "updated").map((p) => p.number)).toEqual([
+      107, 100, 90, 1,
+    ])
+    expect(sortPullRequests([broken, ...list], "oldest").map((p) => p.number)).toEqual([
+      1, 90, 100, 107,
+    ])
   })
 
   it("ranks a running check above one that reported nothing", () => {
@@ -231,6 +258,14 @@ describe("parsePullsQuery", () => {
     const query = parsePullsQuery("is:spicy label:bug")
     expect(query.state).toBe("open")
     expect(query.text).toBe("is:spicy label:bug")
+  })
+
+  // Same contract on the qualifier this build does know by name but not by
+  // value: a mistyped review state must not quietly become "no review filter".
+  it("keeps an unknown review value as text", () => {
+    const query = parsePullsQuery("review:aproved")
+    expect(query.review).toBeNull()
+    expect(query.text).toBe("review:aproved")
   })
 
   it("the last state wins", () => {

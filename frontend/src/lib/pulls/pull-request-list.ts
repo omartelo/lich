@@ -9,6 +9,13 @@ import type { PullRequestSummary } from "@/lib/api-types"
 export const PULLS_FILTERS = ["all", "ready", "drafts", "failing"] as const
 export type PullsFilter = (typeof PULLS_FILTERS)[number]
 
+export const FILTER_LABELS: Record<PullsFilter, string> = {
+  all: "All",
+  ready: "Ready",
+  drafts: "Drafts",
+  failing: "Failing",
+}
+
 export const PULLS_SORTS = ["updated", "oldest", "failing", "number"] as const
 export type PullsSort = (typeof PULLS_SORTS)[number]
 
@@ -18,6 +25,12 @@ export const SORT_LABELS: Record<PullsSort, string> = {
   failing: "Failing first",
   number: "Highest number",
 }
+
+// How many pull requests one gh call brings back — mirrors prListLimit in
+// internal/project/pr.go, and is only ever compared against, never sent. A full
+// page means the answer was cut: the column says so, because a query typed over
+// a truncated list otherwise reads as the repository's whole answer.
+export const PULLS_PAGE_LIMIT = 50
 
 /** What a row's check dot says. "none" is a PR that reports no checks at all. */
 export type CheckVerdict = "failed" | "pending" | "passed" | "none"
@@ -35,7 +48,7 @@ export function checkVerdict(pr: PullRequestSummary): CheckVerdict {
 }
 
 /** Which pull requests gh is asked for; anything else is filtered in the page. */
-export const PULLS_STATES = ["open", "closed", "merged", "all"] as const
+const PULLS_STATES = ["open", "closed", "merged", "all"] as const
 export type PullsState = (typeof PULLS_STATES)[number]
 
 const REVIEWS = ["required", "approved", "changes-requested"] as const
@@ -160,10 +173,19 @@ export function filterPullRequests(
   )
 }
 
-/** How many rows each quick filter would leave, for the counts on the buttons. */
-export function filterCounts(list: PullRequestSummary[]): Record<PullsFilter, number> {
+// How many rows each quick filter would leave, for the counts on the buttons.
+// Counted over what the query already left standing, not over the whole list:
+// the buttons sit under the filter box, so a count that ignored it would
+// contradict the rows right below them.
+export function filterCounts(
+  list: PullRequestSummary[],
+  query: PullsQuery,
+): Record<PullsFilter, number> {
   const counts = { all: 0, ready: 0, drafts: 0, failing: 0 }
   for (const pr of list) {
+    if (!matchesQualifiers(pr, query) || !matchesText(pr, query.text)) {
+      continue
+    }
     for (const filter of PULLS_FILTERS) {
       if (matchesFilter(pr, filter)) {
         counts[filter]++

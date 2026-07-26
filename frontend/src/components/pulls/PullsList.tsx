@@ -13,6 +13,9 @@ import {
 import { IconAction } from "@/components/common/IconAction"
 import type { PullRequestSummary } from "@/lib/api-types"
 import {
+  FILTER_LABELS,
+  PULLS_FILTERS,
+  PULLS_PAGE_LIMIT,
   PULLS_SORTS,
   SORT_LABELS,
   checkVerdict,
@@ -61,13 +64,6 @@ const QUALIFIER_HELP = [
   "review:required · review:approved · review:changes-requested",
 ].join("\n")
 
-const FILTER_LABELS: ReadonlyArray<[PullsFilter, string]> = [
-  ["all", "All"],
-  ["ready", "Ready"],
-  ["drafts", "Drafts"],
-  ["failing", "Failing"],
-]
-
 interface PullsListProps {
   list: PullRequestSummary[]
   loading: boolean
@@ -103,7 +99,7 @@ export function PullsList({
 }: PullsListProps) {
   const [open, setOpen] = useState(() => localStorage.getItem(LIST_HIDDEN_KEY) !== "1")
   const [filter, setFilter] = useState<PullsFilter>("all")
-  const counts = useMemo(() => filterCounts(list), [list])
+  const counts = useMemo(() => filterCounts(list, parsed), [list, parsed])
   const rows = useMemo(
     () => sortPullRequests(filterPullRequests(list, filter, parsed), sort),
     [list, filter, parsed, sort],
@@ -162,7 +158,7 @@ export function PullsList({
           aria-label="Pull request filter"
           className="flex gap-0.5 rounded-md border border-border bg-muted/40 p-0.5"
         >
-          {FILTER_LABELS.map(([value, label]) => {
+          {PULLS_FILTERS.map((value) => {
             const active = value === filter
             return (
               <button
@@ -178,7 +174,7 @@ export function PullsList({
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                {label}
+                {FILTER_LABELS[value]}
                 <span className="tabular-nums opacity-60">{counts[value]}</span>
               </button>
             )
@@ -187,7 +183,17 @@ export function PullsList({
       </div>
 
       <div className="flex items-center justify-between px-3 py-2 text-xs text-muted-foreground">
-        <span className="uppercase tracking-wide">{parsed.state}</span>
+        <span className="uppercase tracking-wide">
+          {parsed.state}
+          {list.length >= PULLS_PAGE_LIMIT && (
+            <span
+              className="ml-1.5 normal-case"
+              title={`Only the ${PULLS_PAGE_LIMIT} most recently updated are loaded — filtering searches those.`}
+            >
+              first {PULLS_PAGE_LIMIT}
+            </span>
+          )}
+        </span>
         <DropdownMenu>
           <DropdownMenuTrigger
             render={

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { closePulls, isPullsOpen, openPulls, subscribePullsCard } from "./pulls-card-store"
+import { closePullsList, isPullsListOpen, openPullsList } from "./pulls-list-card-store"
 import { isSettingsOpen } from "./settings-card-store"
 
 // The store is module-level (shared across tests): every test closes what it
@@ -7,6 +8,7 @@ import { isSettingsOpen } from "./settings-card-store"
 afterEach(() => {
   closePulls("/repo")
   closePulls("/repo/.worktrees/feature")
+  closePullsList("/repo")
 })
 
 describe("pulls-card-store", () => {
@@ -45,5 +47,17 @@ describe("pulls-card-store", () => {
   it("is independent of the settings card store", () => {
     openPulls("/repo")
     expect(isSettingsOpen("/repo")).toBe(false)
+  })
+
+  // These two are the pair most easily confused: one card is a checkout's own
+  // pull request (keyed by path), the other the repository's list (keyed by
+  // project id), and the same string can name either. Parking one must never
+  // park the other.
+  it("is independent of the pull request list card store", () => {
+    openPulls("/repo")
+    expect(isPullsListOpen("/repo")).toBe(false)
+    openPullsList("/repo")
+    closePulls("/repo")
+    expect(isPullsListOpen("/repo")).toBe(true)
   })
 })

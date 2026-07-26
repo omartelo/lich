@@ -438,8 +438,10 @@ func (s *Service) PullRequestDiff(path string, number int) (string, error) {
 
 // prListFields is the gh `pr list --json` selection backing the Pulls list
 // column, and prListLimit caps how many it asks for. gh's own default is 30;
-// the ceiling is here so the list stays one bounded call — a repository with
-// more open pull requests than this shows the newest and says so.
+// the ceiling is here so the list stays one bounded call. gh answers with the
+// most recently updated, and the column marks a full page so the cap is never
+// silent — a filter typed over a truncated list would otherwise read as the
+// repository's whole answer.
 const (
 	prListFields = "number,title,author,state,isDraft,reviewDecision,headRefName,isCrossRepository,updatedAt,statusCheckRollup"
 	prListLimit  = 50
@@ -503,11 +505,11 @@ func (s *Service) ListPullRequests(path, state string) ([]PRSummary, error) {
 	if !prListStates[state] {
 		return nil, fmt.Errorf("unknown pull request state %q", state)
 	}
+	// No errNoPullRequest branch here: asked for --json, gh answers a repository
+	// with no matching pull request as an empty array and exits 0. Its "no pull
+	// requests found" message belongs to view and diff, which address one.
 	out, err := s.gh(prReadTimeout, path,
 		"pr", "list", "--state", state, "--limit", strconv.Itoa(prListLimit), "--json", prListFields)
-	if errors.Is(err, errNoPullRequest) {
-		return nil, nil
-	}
 	if err != nil {
 		return nil, fmt.Errorf("gh pr list: %w", err)
 	}
