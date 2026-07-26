@@ -10,7 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **The Pulls screen now lists the repository's open pull requests, and can open
-  a session on one.** A column beside the pull request holds every open PR —
+  a session on one.** It has a door of its own: a pull-request button in the tab
+  bar, beside Settings — until now the screen could only be reached from a
+  checkout that already had a pull request, which is exactly when a list of the
+  others is not what is missing. A column beside the pull request holds every open PR —
   number, title, author, how long ago it moved, and a dot for its checks — with
   a search box, quick filters (all, ready, drafts, failing) and a sort that
   remembers itself. Selecting one shows it in full, whatever branch the checkout
