@@ -16,7 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   only once a checkout has one. A column holds every open PR — number, title,
   author, how long ago it moved, and a dot for its checks — with a search box,
   quick filters (all, ready, drafts, failing) and a sort that remembers itself;
-  selecting one shows it in full, whatever branch the checkout is on. A
+  selecting one shows it in full, whatever branch the checkout is on. The column
+  collapses to a rail when the pull request wants the width, and stays collapsed
+  until it is asked back. A
   worktree's own pull request card is untouched: it still opens that one pull
   request alone, without the list. **Open in Session**, beside Merge, checks the PR's
   head branch out into its own worktree and starts a session in it, with the

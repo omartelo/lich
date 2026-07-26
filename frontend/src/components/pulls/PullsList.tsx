@@ -1,5 +1,13 @@
 import { useMemo, useState } from "react"
-import { ChevronDown, GitPullRequestArrow, Search, Terminal } from "lucide-react"
+import {
+  ChevronDown,
+  GitPullRequestArrow,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Search,
+  Terminal,
+} from "lucide-react"
+import { IconAction } from "@/components/common/IconAction"
 import type { PullRequestSummary } from "@/lib/api-types"
 import {
   PULLS_SORTS,
@@ -34,6 +42,11 @@ const VERDICT_DOT: Record<CheckVerdict, string> = {
   none: "",
 }
 
+// The column is a navigator, not the review: collapsing it hands the width to
+// the pull request. Remembered in localStorage like the Files tab's tree and
+// every other UI pref, so the choice survives leaving the screen.
+const LIST_HIDDEN_KEY = "lich.pulls.list.hidden"
+
 const FILTER_LABELS: ReadonlyArray<[PullsFilter, string]> = [
   ["all", "All"],
   ["ready", "Ready"],
@@ -66,6 +79,7 @@ export function PullsList({
   onSortChange,
   checkedOutBranches,
 }: PullsListProps) {
+  const [open, setOpen] = useState(() => localStorage.getItem(LIST_HIDDEN_KEY) !== "1")
   const [filter, setFilter] = useState<PullsFilter>("all")
   const [query, setQuery] = useState("")
   const counts = useMemo(() => filterCounts(list), [list])
@@ -79,19 +93,43 @@ export function PullsList({
     onSortChange(next)
   }
 
+  const toggle = () => {
+    setOpen((wasOpen) => {
+      localStorage.setItem(LIST_HIDDEN_KEY, wasOpen ? "1" : "0")
+      return !wasOpen
+    })
+  }
+
+  // Collapsed, the column keeps a rail: the toggle has to survive its own
+  // click, and the seam keeps the pull request from running to the window edge.
+  if (!open) {
+    return (
+      <div className="flex flex-none flex-col items-center border-r border-border px-1.5 pt-3">
+        <IconAction label="Show the pull request list" onClick={toggle}>
+          <PanelLeftOpen className="size-3.5" />
+        </IconAction>
+      </div>
+    )
+  }
+
   return (
     <div className="flex w-80 flex-none flex-col border-r border-border">
       <div className="flex flex-col gap-2 px-3 pt-3">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Filter pull requests"
-            aria-label="Filter pull requests"
-            spellCheck={false}
-            className="h-8 pl-8 text-sm"
-          />
+        <div className="flex items-center gap-1.5">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Filter pull requests"
+              aria-label="Filter pull requests"
+              spellCheck={false}
+              className="h-8 pl-8 text-sm"
+            />
+          </div>
+          <IconAction label="Hide the pull request list" onClick={toggle}>
+            <PanelLeftClose className="size-3.5" />
+          </IconAction>
         </div>
         {/* The settings screen's SegmentedControl is built for a full-width
             pane; four options with counts wrap in a column this narrow, so this
