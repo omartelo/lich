@@ -2,9 +2,11 @@ package project
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -185,6 +187,86 @@ func (s *Service) CreateWorktree(projectPath, projectID, name, base string, base
 	}
 	seedWorktree(projectPath, wtPath)
 	return &Worktree{Name: name, Path: wtPath}, nil
+}
+
+// prHead is the little of a pull request CreateWorktreeFromPR needs: which
+// branch to check out, and whether that branch lives on a fork.
+type prHead struct {
+	RefName   string `json:"headRefName"`
+	CrossRepo bool   `json:"isCrossRepository"`
+}
+
+// pullRequestHead resolves a pull request's head branch through gh.
+func (s *Service) pullRequestHead(path string, number int) (prHead, error) {
+	out, err := s.gh(prReadTimeout, path, prArgs("view", number, "--json", "headRefName,isCrossRepository")...)
+	if err != nil {
+		return prHead{}, fmt.Errorf("gh pr view: %w", err)
+	}
+	var head prHead
+	if err := json.Unmarshal(out, &head); err != nil {
+		return prHead{}, fmt.Errorf("decode gh pr view: %w", err)
+	}
+	if head.RefName == "" {
+		return prHead{}, fmt.Errorf("pull request #%d has no head branch", number)
+	}
+	return head, nil
+}
+
+// CreateWorktreeFromPR checks a pull request out into its own worktree under the
+// app data dir, so a session can be opened on the PR's own branch. The checkout
+// is created detached and handed to `gh pr checkout`, which owns resolving the
+// head ref and its tracking — the part raw git cannot do for a pull request.
+//
+// It refuses a PR from a fork: the branch would check out, but the commits an
+// agent makes there have nowhere to push, so the failure belongs before the
+// worktree exists rather than at the first push. A failed checkout takes the
+// worktree with it — a detached husk would sit in the picker offering a resume
+// of nothing, and would hold the path against a second attempt.
+func (s *Service) CreateWorktreeFromPR(projectPath, projectID string, number int) (*Worktree, error) {
+	if number <= 0 {
+		return nil, fmt.Errorf("invalid pull request number %d", number)
+	}
+	head, err := s.pullRequestHead(projectPath, number)
+	if err != nil {
+		return nil, err
+	}
+	if head.CrossRepo {
+		return nil, fmt.Errorf("pull request #%d comes from a fork: its branch cannot be pushed back", number)
+	}
+	// check-ref-format is the authority on valid names; it also rejects "..",
+	// which keeps the Join below free of path traversal.
+	if _, err := runGit(projectPath, "check-ref-format", "--branch", head.RefName); err != nil {
+		return nil, err
+	}
+
+	root, err := worktreesRoot()
+	if err != nil {
+		return nil, err
+	}
+	wtPath := filepath.Join(root, projectID, head.RefName)
+
+	// Drop registrations whose directories are gone (a crash or manual rm), so
+	// they don't block re-creating a worktree with the same name.
+	if _, err := runGit(projectPath, "worktree", "prune"); err != nil {
+		return nil, err
+	}
+	if _, err := os.Stat(wtPath); err == nil {
+		return nil, fmt.Errorf("worktree path already exists: %s", wtPath)
+	}
+	if err := os.MkdirAll(filepath.Dir(wtPath), 0o755); err != nil {
+		return nil, fmt.Errorf("create worktrees dir: %w", err)
+	}
+	if _, err := runGit(projectPath, "worktree", "add", "--detach", wtPath); err != nil {
+		return nil, err
+	}
+	if _, err := s.gh(prCheckoutTimeout, wtPath, "pr", "checkout", strconv.Itoa(number)); err != nil {
+		if _, rmErr := runGit(projectPath, "worktree", "remove", "--force", wtPath); rmErr != nil {
+			return nil, fmt.Errorf("gh pr checkout: %w (and the worktree could not be removed: %v)", err, rmErr)
+		}
+		return nil, fmt.Errorf("gh pr checkout: %w", err)
+	}
+	seedWorktree(projectPath, wtPath)
+	return &Worktree{Name: head.RefName, Path: wtPath}, nil
 }
 
 // RemoveWorktree removes a worktree checkout. Without force git refuses to

@@ -17,6 +17,7 @@ import type {
   Project,
   PullRequest,
   PullRequestDetail,
+  PullRequestSummary,
   StoredProject,
   StoredSession,
   Worktree,
@@ -121,16 +122,25 @@ export const ProjectService = {
   DiscardFile: (path: string, rel: string) => call<null>("project.DiscardFile", [path, rel]),
   ListBranches: (path: string) => call<Branches>("project.ListBranches", [path]),
   PullRequest: (path: string) => call<PullRequest | null>("project.PullRequest", [path]),
-  /** The active branch's open PR in full (title, body, checks) for the Pulls dock tab. */
-  PullRequestDetail: (path: string) =>
-    call<PullRequestDetail | null>("project.PullRequestDetail", [path]),
-  /** Merge the branch's PR on GitHub. The backend allow-lists the method. */
-  MergePullRequest: (path: string, method: MergeMethod, subject: string, body: string) =>
-    call<null>("project.MergePullRequest", [path, method, subject, body]),
+  /** The repository's open PRs for the Pulls list column; null when it has none. */
+  ListPullRequests: (path: string) =>
+    call<PullRequestSummary[] | null>("project.ListPullRequests", [path]),
+  /** One open PR in full (title, body, checks): the given number, or 0 for the checkout's own branch. */
+  PullRequestDetail: (path: string, number: number) =>
+    call<PullRequestDetail | null>("project.PullRequestDetail", [path, number]),
+  /** Merge a PR on GitHub (0 = the checkout's branch). The backend allow-lists the method. */
+  MergePullRequest: (
+    path: string,
+    number: number,
+    method: MergeMethod,
+    subject: string,
+    body: string,
+  ) => call<null>("project.MergePullRequest", [path, number, method, subject, body]),
   /** Open GitHub's "new pull request" page in the browser (gh pr create --web). */
   CreatePullRequest: (path: string) => call<null>("project.CreatePullRequest", [path]),
-  /** The PR's unified diff (gh pr diff) for the Pulls screen's Files changed tab. */
-  PullRequestDiff: (path: string) => call<string>("project.PullRequestDiff", [path]),
+  /** A PR's unified diff (gh pr diff) for the Files changed tab; 0 = the checkout's branch. */
+  PullRequestDiff: (path: string, number: number) =>
+    call<string>("project.PullRequestDiff", [path, number]),
   CreateWorktree: (
     projectPath: string,
     projectID: string,
@@ -145,6 +155,9 @@ export const ProjectService = {
       base,
       baseIsRemote,
     ]),
+  /** Check a pull request's head branch out into its own worktree; rejects a fork PR. */
+  CreateWorktreeFromPR: (projectPath: string, projectID: string, number: number) =>
+    call<Worktree | null>("project.CreateWorktreeFromPR", [projectPath, projectID, number]),
   RemoveWorktree: (projectPath: string, wtPath: string, force: boolean) =>
     call<null>("project.RemoveWorktree", [projectPath, wtPath, force]),
   WorktreeDirty: (wtPath: string) => call<boolean>("project.WorktreeDirty", [wtPath]),

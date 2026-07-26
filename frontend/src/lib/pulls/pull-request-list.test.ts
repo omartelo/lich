@@ -1,0 +1,173 @@
+import { describe, expect, it } from "vitest"
+import type { PullRequestSummary } from "@/lib/api-types"
+import {
+  checkVerdict,
+  filterCounts,
+  filterPullRequests,
+  parsePullsSort,
+  sortPullRequests,
+  updatedAgo,
+} from "./pull-request-list"
+
+function pr(over: Partial<PullRequestSummary> = {}): PullRequestSummary {
+  return {
+    number: 1,
+    title: "feat: a thing",
+    author: "omartelo",
+    isDraft: false,
+    headRefName: "feat/thing",
+    isCrossRepository: false,
+    updatedAt: "2026-07-26T10:00:00Z",
+    checks: { passed: 0, failed: 0, pending: 0, total: 0 },
+    ...over,
+  }
+}
+
+describe("checkVerdict", () => {
+  it("reports no checks apart from a pass", () => {
+    expect(checkVerdict(pr())).toBe("none")
+    expect(checkVerdict(pr({ checks: { passed: 2, failed: 0, pending: 0, total: 2 } }))).toBe(
+      "passed",
+    )
+  })
+
+  it("lets one failure outrank anything still running", () => {
+    const checks = { passed: 3, failed: 1, pending: 2, total: 6 }
+    expect(checkVerdict(pr({ checks }))).toBe("failed")
+  })
+
+  it("is pending while a check is in flight", () => {
+    expect(checkVerdict(pr({ checks: { passed: 1, failed: 0, pending: 1, total: 2 } }))).toBe(
+      "pending",
+    )
+  })
+})
+
+describe("filterPullRequests", () => {
+  const list = [
+    pr({ number: 107, title: "feat: list pull requests", headRefName: "feat/pulls-list" }),
+    pr({
+      number: 105,
+      title: "fix: the poller",
+      checks: { passed: 2, failed: 1, pending: 0, total: 3 },
+    }),
+    pr({ number: 98, title: "spike: notifications", isDraft: true, author: "someone" }),
+  ]
+
+  it("keeps everything by default", () => {
+    expect(filterPullRequests(list, "all", "")).toHaveLength(3)
+  })
+
+  it("splits drafts from ready", () => {
+    expect(filterPullRequests(list, "drafts", "").map((p) => p.number)).toEqual([98])
+    expect(filterPullRequests(list, "ready", "").map((p) => p.number)).toEqual([107, 105])
+  })
+
+  it("keeps only a red rollup under failing", () => {
+    expect(filterPullRequests(list, "failing", "").map((p) => p.number)).toEqual([105])
+  })
+
+  it("searches the number with or without its hash", () => {
+    expect(filterPullRequests(list, "all", "#105").map((p) => p.number)).toEqual([105])
+    expect(filterPullRequests(list, "all", "105").map((p) => p.number)).toEqual([105])
+  })
+
+  it("searches title, author and branch, case-insensitively", () => {
+    expect(filterPullRequests(list, "all", "POLLER").map((p) => p.number)).toEqual([105])
+    expect(filterPullRequests(list, "all", "someone").map((p) => p.number)).toEqual([98])
+    expect(filterPullRequests(list, "all", "feat/pulls").map((p) => p.number)).toEqual([107])
+  })
+
+  it("combines the quick filter with the search", () => {
+    expect(filterPullRequests(list, "drafts", "spike").map((p) => p.number)).toEqual([98])
+    expect(filterPullRequests(list, "ready", "spike")).toEqual([])
+  })
+
+  it("ignores surrounding whitespace in the query", () => {
+    expect(filterPullRequests(list, "all", "   ").map((p) => p.number)).toEqual([107, 105, 98])
+    expect(filterPullRequests(list, "all", "  poller ").map((p) => p.number)).toEqual([105])
+  })
+})
+
+describe("filterCounts", () => {
+  it("counts each filter over the whole list, not the filtered one", () => {
+    const counts = filterCounts([
+      pr({ number: 1 }),
+      pr({ number: 2, isDraft: true }),
+      pr({ number: 3, checks: { passed: 0, failed: 2, pending: 0, total: 2 } }),
+    ])
+    expect(counts).toEqual({ all: 3, ready: 2, drafts: 1, failing: 1 })
+  })
+
+  it("is all zeroes for an empty list", () => {
+    expect(filterCounts([])).toEqual({ all: 0, ready: 0, drafts: 0, failing: 0 })
+  })
+})
+
+describe("sortPullRequests", () => {
+  const older = pr({ number: 90, updatedAt: "2026-07-20T10:00:00Z" })
+  const newest = pr({ number: 107, updatedAt: "2026-07-26T18:00:00Z" })
+  const failing = pr({
+    number: 100,
+    updatedAt: "2026-07-22T10:00:00Z",
+    checks: { passed: 1, failed: 1, pending: 0, total: 2 },
+  })
+  const list = [older, newest, failing]
+
+  it("does not touch the caller's array", () => {
+    const input = [...list]
+    sortPullRequests(input, "number")
+    expect(input).toEqual(list)
+  })
+
+  it("puts the most recent update first by default", () => {
+    expect(sortPullRequests(list, "updated").map((p) => p.number)).toEqual([107, 100, 90])
+  })
+
+  it("reverses that for oldest", () => {
+    expect(sortPullRequests(list, "oldest").map((p) => p.number)).toEqual([90, 100, 107])
+  })
+
+  it("ranks by number", () => {
+    expect(sortPullRequests(list, "number").map((p) => p.number)).toEqual([107, 100, 90])
+  })
+
+  it("lifts a red rollup above a newer green one, then falls back to recency", () => {
+    expect(sortPullRequests(list, "failing").map((p) => p.number)).toEqual([100, 107, 90])
+  })
+
+  it("ranks a running check above one that reported nothing", () => {
+    const pending = pr({ number: 5, checks: { passed: 0, failed: 0, pending: 1, total: 1 } })
+    const quiet = pr({ number: 6 })
+    expect(sortPullRequests([quiet, pending], "failing").map((p) => p.number)).toEqual([5, 6])
+  })
+})
+
+describe("updatedAgo", () => {
+  const now = Date.parse("2026-07-26T12:00:00Z")
+
+  it.each([
+    ["2026-07-26T11:59:30Z", "now"],
+    ["2026-07-26T11:48:00Z", "12m"],
+    ["2026-07-26T09:00:00Z", "3h"],
+    ["2026-07-24T12:00:00Z", "2d"],
+    ["2026-07-05T12:00:00Z", "3w"],
+  ])("renders %s as %s", (at, want) => {
+    expect(updatedAgo(at, now)).toBe(want)
+  })
+
+  it("says nothing for a timestamp it cannot read", () => {
+    expect(updatedAgo("", now)).toBe("")
+    expect(updatedAgo("yesterday", now)).toBe("")
+  })
+})
+
+describe("parsePullsSort", () => {
+  it("keeps a stored sort this build knows", () => {
+    expect(parsePullsSort("failing")).toBe("failing")
+  })
+
+  it.each([null, "", "by-vibes"])("falls back to recently updated for %j", (raw) => {
+    expect(parsePullsSort(raw)).toBe("updated")
+  })
+})

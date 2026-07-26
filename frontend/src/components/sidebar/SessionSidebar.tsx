@@ -60,7 +60,9 @@ export function SessionSidebar() {
   const match = useMatch("/projects/:projectId/*")
   const projectId = match?.params.projectId
   const onSettings = !!useMatch("/projects/:projectId/settings")
-  const onPullsRoute = !!useMatch("/projects/:projectId/pulls")
+  // The splat covers both the bare screen and a pull request addressed by
+  // number, so the parked card keeps reading as active while the list is used.
+  const onPullsRoute = !!useMatch("/projects/:projectId/pulls/*")
   const navigate = useNavigate()
   const settingsOpen = useSyncExternalStore(subscribeSettingsCard, () =>
     isSettingsOpen(projectId ?? ""),

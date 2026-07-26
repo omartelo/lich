@@ -1,0 +1,154 @@
+import type { PullRequestSummary } from "@/lib/api-types"
+
+// The list column's own logic: which rows a quick filter and the search box
+// leave standing, and in what order. Kept out of the component because this is
+// the part with edge cases (a PR with no checks is not "failing"), and the
+// frontend gate cannot render.
+
+/** The quick filters above the list, in the order they are shown. */
+export const PULLS_FILTERS = ["all", "ready", "drafts", "failing"] as const
+export type PullsFilter = (typeof PULLS_FILTERS)[number]
+
+export const PULLS_SORTS = ["updated", "oldest", "failing", "number"] as const
+export type PullsSort = (typeof PULLS_SORTS)[number]
+
+export const SORT_LABELS: Record<PullsSort, string> = {
+  updated: "Recently updated",
+  oldest: "Least recently updated",
+  failing: "Failing first",
+  number: "Highest number",
+}
+
+/** What a row's check dot says. "none" is a PR that reports no checks at all. */
+export type CheckVerdict = "failed" | "pending" | "passed" | "none"
+
+// A single failure outranks anything still running: red is what the eye should
+// find. Nothing reported is its own verdict — silence is not a pass.
+export function checkVerdict(pr: PullRequestSummary): CheckVerdict {
+  if (pr.checks.total === 0) {
+    return "none"
+  }
+  if (pr.checks.failed > 0) {
+    return "failed"
+  }
+  return pr.checks.pending > 0 ? "pending" : "passed"
+}
+
+function matchesFilter(pr: PullRequestSummary, filter: PullsFilter): boolean {
+  switch (filter) {
+    case "ready":
+      return !pr.isDraft
+    case "drafts":
+      return pr.isDraft
+    case "failing":
+      return checkVerdict(pr) === "failed"
+    default:
+      return true
+  }
+}
+
+// The number matches with or without its "#", because that is how a PR is
+// named out loud and pasted from anywhere else.
+function matchesQuery(pr: PullRequestSummary, query: string): boolean {
+  const needle = query.trim().toLowerCase()
+  if (needle === "") {
+    return true
+  }
+  const haystack = [`#${pr.number}`, String(pr.number), pr.title, pr.author, pr.headRefName]
+  return haystack.some((field) => field.toLowerCase().includes(needle))
+}
+
+export function filterPullRequests(
+  list: PullRequestSummary[],
+  filter: PullsFilter,
+  query: string,
+): PullRequestSummary[] {
+  return list.filter((pr) => matchesFilter(pr, filter) && matchesQuery(pr, query))
+}
+
+/** How many rows each quick filter would leave, for the counts on the buttons. */
+export function filterCounts(list: PullRequestSummary[]): Record<PullsFilter, number> {
+  const counts = { all: 0, ready: 0, drafts: 0, failing: 0 }
+  for (const pr of list) {
+    for (const filter of PULLS_FILTERS) {
+      if (matchesFilter(pr, filter)) {
+        counts[filter]++
+      }
+    }
+  }
+  return counts
+}
+
+// Worst first, so "Failing first" reads top-down as what needs attention.
+const VERDICT_RANK: Record<CheckVerdict, number> = {
+  failed: 0,
+  pending: 1,
+  none: 2,
+  passed: 3,
+}
+
+// gh's timestamps are ISO-8601 in UTC, so they sort lexicographically — no Date
+// parsing, and a malformed one sinks to the end instead of becoming NaN.
+function byUpdatedDesc(a: PullRequestSummary, b: PullRequestSummary): number {
+  return b.updatedAt.localeCompare(a.updatedAt)
+}
+
+export function sortPullRequests(
+  list: PullRequestSummary[],
+  sort: PullsSort,
+): PullRequestSummary[] {
+  const sorted = [...list]
+  switch (sort) {
+    case "oldest":
+      return sorted.sort((a, b) => a.updatedAt.localeCompare(b.updatedAt))
+    case "number":
+      return sorted.sort((a, b) => b.number - a.number)
+    case "failing":
+      return sorted.sort(
+        (a, b) =>
+          VERDICT_RANK[checkVerdict(a)] - VERDICT_RANK[checkVerdict(b)] || byUpdatedDesc(a, b),
+      )
+    default:
+      return sorted.sort(byUpdatedDesc)
+  }
+}
+
+// updatedAgo renders how long ago a pull request last moved, at the coarsest
+// unit that still says something — a row has space for "3h", not for a date and
+// a time. now is injectable so a test does not depend on the clock.
+export function updatedAgo(updatedAt: string, now: number = Date.now()): string {
+  const at = Date.parse(updatedAt)
+  if (Number.isNaN(at)) {
+    return ""
+  }
+  const minutes = Math.floor((now - at) / 60_000)
+  if (minutes < 1) {
+    return "now"
+  }
+  if (minutes < 60) {
+    return `${minutes}m`
+  }
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) {
+    return `${hours}h`
+  }
+  const days = Math.floor(hours / 24)
+  return days < 7 ? `${days}d` : `${Math.floor(days / 7)}w`
+}
+
+// Which order the column is in is a UI preference, so it lives in the page's
+// localStorage beside the panel widths — not in the workspace database.
+const SORT_KEY = "lich.pulls.sort"
+
+/** Reads a stored sort, falling back for anything this build does not know. */
+export function parsePullsSort(raw: string | null): PullsSort {
+  return PULLS_SORTS.find((sort) => sort === raw) ?? "updated"
+}
+
+export function readPullsSort(): PullsSort {
+  return parsePullsSort(localStorage.getItem(SORT_KEY))
+}
+
+export function writePullsSort(sort: PullsSort): void {
+  localStorage.setItem(SORT_KEY, sort)
+}

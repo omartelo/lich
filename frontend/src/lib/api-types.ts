@@ -62,6 +62,21 @@ export interface PullRequestCommit {
   date: string
 }
 
+/** internal/project.PRSummary — one row of the repository's open pull requests. */
+export interface PullRequestSummary {
+  number: number
+  title: string
+  /** Login, or the display name when gh reports no login. */
+  author: string
+  isDraft: boolean
+  headRefName: string
+  /** The head branch lives on a fork: it can be read, but not pushed back to. */
+  isCrossRepository: boolean
+  /** gh's ISO timestamp. */
+  updatedAt: string
+  checks: ChecksRollup
+}
+
 /** internal/project.PRDetail — the branch's open PR in full, for the Pulls panel. */
 export interface PullRequestDetail {
   number: number
@@ -74,6 +89,8 @@ export interface PullRequestDetail {
   baseRefName: string
   headRefName: string
   changedFiles: number
+  /** The head branch lives on a fork: no session can be opened on it. */
+  isCrossRepository: boolean
   checks: ChecksRollup
   /** The rollup itself, worst state first; null when the PR reports no checks. */
   checkRuns: CheckItem[] | null

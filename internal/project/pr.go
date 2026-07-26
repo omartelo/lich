@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os/exec"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,6 +22,9 @@ const (
 	prReadTimeout   = 8 * time.Second
 	prMergeTimeout  = 30 * time.Second
 	prCreateTimeout = 20 * time.Second
+	// A checkout fetches the head ref, so it is bounded by the size of the
+	// branch rather than by a round-trip.
+	prCheckoutTimeout = 90 * time.Second
 )
 
 // ghRunner runs one gh subcommand inside dir and returns its stdout. It is a
@@ -55,7 +59,27 @@ func runGH(timeout time.Duration, dir string, args ...string) ([]byte, error) {
 }
 
 // prViewFields is the gh `pr view --json` selection backing the Pulls panel.
-const prViewFields = "number,url,state,title,body,isDraft,mergeable,baseRefName,headRefName,statusCheckRollup,changedFiles,commits"
+const prViewFields = "number,url,state,title,body,isDraft,mergeable,baseRefName,headRefName,isCrossRepository,statusCheckRollup,changedFiles,commits"
+
+// prSelector renders the pull request argument gh's subcommands take ahead of
+// their flags. Zero means "the branch checked out at path" — gh's own default,
+// and the only mode there was before the repository-wide list. The selector is
+// an int rather than a string on purpose: a number can never reach gh's
+// selector slot as a "-"-prefixed value that would parse as a flag, nor as a
+// branch name the caller never meant to address.
+func prSelector(number int) []string {
+	if number <= 0 {
+		return nil
+	}
+	return []string{strconv.Itoa(number)}
+}
+
+// prArgs builds "pr <verb> [<number>] <rest...>" — the shape every gh pull
+// request subcommand takes, with the selector always ahead of the flags.
+func prArgs(verb string, number int, rest ...string) []string {
+	args := append([]string{"pr", verb}, prSelector(number)...)
+	return append(args, rest...)
+}
 
 // PRDetail is the full view of a branch's open pull request — richer than the
 // footer badge's PullRequest — driving the dock's Pulls panel: the title, body,
@@ -74,6 +98,10 @@ type PRDetail struct {
 	Checks       ChecksRollup `json:"checks"`
 	CheckRuns    []CheckItem  `json:"checkRuns"`
 	Commits      []PRCommit   `json:"commits"`
+	// IsCrossRepository marks a head branch that lives on a fork — the one PR
+	// a session cannot be opened on (CreateWorktreeFromPR), so the screen can
+	// say so instead of letting the button fail.
+	IsCrossRepository bool `json:"isCrossRepository"`
 }
 
 // PRCommit is one commit the pull request would land, split the way git itself
@@ -121,6 +149,7 @@ type ghPRView struct {
 	BaseRefName       string      `json:"baseRefName"`
 	HeadRefName       string      `json:"headRefName"`
 	ChangedFiles      int         `json:"changedFiles"`
+	IsCrossRepository bool        `json:"isCrossRepository"`
 	StatusCheckRollup []checkItem `json:"statusCheckRollup"`
 	Commits           []ghCommit  `json:"commits"`
 }
@@ -159,13 +188,14 @@ type checkItem struct {
 	CompletedAt  string `json:"completedAt"`
 }
 
-// PullRequestDetail returns the open pull request for the path's current branch
-// in full, or nil when the branch has no open PR — gh reports none, or the PR is
-// merged/closed, which the OPEN-only gate treats the same as the badge does. A
-// real failure (gh missing, not a GitHub repo) yields an error so the panel can
-// tell "no PR" apart from "could not look up".
-func (s *Service) PullRequestDetail(path string) (*PRDetail, error) {
-	out, err := s.gh(prReadTimeout, path, "pr", "view", "--json", prViewFields)
+// PullRequestDetail returns one open pull request in full: the given number, or
+// the PR of the branch checked out at path when number is zero. It yields nil
+// when there is no open PR — gh reports none, or the PR is merged/closed, which
+// the OPEN-only gate treats the same as the badge does. A real failure (gh
+// missing, not a GitHub repo) yields an error so the panel can tell "no PR"
+// apart from "could not look up".
+func (s *Service) PullRequestDetail(path string, number int) (*PRDetail, error) {
+	out, err := s.gh(prReadTimeout, path, prArgs("view", number, "--json", prViewFields)...)
 	if errors.Is(err, errNoPullRequest) {
 		return nil, nil
 	}
@@ -187,18 +217,19 @@ func parsePRDetail(out []byte) (*PRDetail, error) {
 		return nil, nil
 	}
 	return &PRDetail{
-		Number:       v.Number,
-		URL:          v.URL,
-		Title:        v.Title,
-		Body:         v.Body,
-		IsDraft:      v.IsDraft,
-		Mergeable:    v.Mergeable,
-		BaseRefName:  v.BaseRefName,
-		HeadRefName:  v.HeadRefName,
-		ChangedFiles: v.ChangedFiles,
-		Checks:       reduceChecks(v.StatusCheckRollup),
-		CheckRuns:    toCheckItems(v.StatusCheckRollup),
-		Commits:      toCommits(v.Commits),
+		Number:            v.Number,
+		URL:               v.URL,
+		Title:             v.Title,
+		Body:              v.Body,
+		IsDraft:           v.IsDraft,
+		Mergeable:         v.Mergeable,
+		BaseRefName:       v.BaseRefName,
+		HeadRefName:       v.HeadRefName,
+		ChangedFiles:      v.ChangedFiles,
+		IsCrossRepository: v.IsCrossRepository,
+		Checks:            reduceChecks(v.StatusCheckRollup),
+		CheckRuns:         toCheckItems(v.StatusCheckRollup),
+		Commits:           toCommits(v.Commits),
 	}, nil
 }
 
@@ -324,14 +355,15 @@ var mergeMethods = map[string]string{
 	"rebase": "--rebase",
 }
 
-// MergePullRequest merges the path's branch PR on GitHub with the given method
-// (squash|merge|rebase). A non-empty subject overrides the commit message (the
-// dock's "edit message" flow); an empty subject leaves gh's default, the quick
-// merge. It does not pass --delete-branch: lich's worktree removal owns that
-// cleanup, and deleting a checked-out worktree's branch is trouble. gh's stderr
-// is surfaced on failure (not mergeable, branch protection, gh missing).
-func (s *Service) MergePullRequest(path, method, subject, body string) error {
-	args, err := mergeArgs(method, subject, body)
+// MergePullRequest merges a pull request on GitHub with the given method
+// (squash|merge|rebase) — the given number, or the PR of the branch checked out
+// at path when number is zero. A non-empty subject overrides the commit message
+// (the dock's "edit message" flow); an empty subject leaves gh's default, the
+// quick merge. It does not pass --delete-branch: lich's worktree removal owns
+// that cleanup, and deleting a checked-out worktree's branch is trouble. gh's
+// stderr is surfaced on failure (not mergeable, branch protection, gh missing).
+func (s *Service) MergePullRequest(path string, number int, method, subject, body string) error {
+	args, err := mergeArgs(number, method, subject, body)
 	if err != nil {
 		return err
 	}
@@ -346,12 +378,12 @@ func (s *Service) MergePullRequest(path, method, subject, body string) error {
 // commits — rebase replays the branch's own commits, so gh rejects a message
 // there — and an empty subject means gh's default message. body rides along with
 // a subject and may itself be empty.
-func mergeArgs(method, subject, body string) ([]string, error) {
+func mergeArgs(number int, method, subject, body string) ([]string, error) {
 	flag, ok := mergeMethods[method]
 	if !ok {
 		return nil, fmt.Errorf("unknown merge method %q", method)
 	}
-	args := []string{"pr", "merge", flag}
+	args := prArgs("merge", number, flag)
 	if subject != "" && method != "rebase" {
 		args = append(args, "--subject", subject, "--body", body)
 	}
@@ -379,8 +411,8 @@ func (s *Service) CreatePullRequest(path string) error {
 // monster PR costs its own size in memory on both sides. Reviewing a diff that
 // large in a panel is not the workflow; stream it (or cap and mark it
 // truncated) if that ever stops being true.
-func (s *Service) PullRequestDiff(path string) (string, error) {
-	out, err := s.gh(prReadTimeout, path, "pr", "diff", "--color", "never")
+func (s *Service) PullRequestDiff(path string, number int) (string, error) {
+	out, err := s.gh(prReadTimeout, path, prArgs("diff", number, "--color", "never")...)
 	if errors.Is(err, errNoPullRequest) {
 		return "", nil
 	}
@@ -388,6 +420,92 @@ func (s *Service) PullRequestDiff(path string) (string, error) {
 		return "", fmt.Errorf("gh pr diff: %w", err)
 	}
 	return string(out), nil
+}
+
+// prListFields is the gh `pr list --json` selection backing the Pulls list
+// column, and prListLimit caps how many it asks for. gh's own default is 30;
+// the ceiling is here so the list stays one bounded call — a repository with
+// more open pull requests than this shows the newest and says so.
+const (
+	prListFields = "number,title,author,isDraft,headRefName,isCrossRepository,updatedAt,statusCheckRollup"
+	prListLimit  = 50
+)
+
+// PRSummary is one row of the repository's open pull requests — what the list
+// column needs to render and rank a PR before anything is selected. The full
+// view behind a row is PRDetail, fetched per PR.
+type PRSummary struct {
+	Number      int    `json:"number"`
+	Title       string `json:"title"`
+	Author      string `json:"author"` // login, or the display name when gh reports no login
+	IsDraft     bool   `json:"isDraft"`
+	HeadRefName string `json:"headRefName"`
+	// IsCrossRepository marks a PR whose head branch lives on a fork. lich can
+	// check such a branch out, but the commits would have nowhere to push, so
+	// the session flow refuses it (CreateWorktreeFromPR) and the button reads
+	// as blocked rather than failing on click.
+	IsCrossRepository bool         `json:"isCrossRepository"`
+	UpdatedAt         string       `json:"updatedAt"` // gh's ISO timestamp
+	Checks            ChecksRollup `json:"checks"`
+}
+
+// ghPRListItem mirrors one gh `pr list --json` entry; the rollup is reduced to
+// ChecksRollup and the author object flattened before either leaves this package.
+type ghPRListItem struct {
+	Number            int         `json:"number"`
+	Title             string      `json:"title"`
+	Author            ghPRAuthor  `json:"author"`
+	IsDraft           bool        `json:"isDraft"`
+	HeadRefName       string      `json:"headRefName"`
+	IsCrossRepository bool        `json:"isCrossRepository"`
+	UpdatedAt         string      `json:"updatedAt"`
+	StatusCheckRollup []checkItem `json:"statusCheckRollup"`
+}
+
+type ghPRAuthor struct {
+	Login string `json:"login"`
+	Name  string `json:"name"`
+}
+
+// ListPullRequests returns the repository's open pull requests, newest update
+// first — gh's own order, which the frontend re-sorts. It returns nil for a
+// repository with no open PR; a real failure (gh missing, unauthenticated, not
+// a GitHub repo) yields an error so the column can say why it is empty.
+func (s *Service) ListPullRequests(path string) ([]PRSummary, error) {
+	out, err := s.gh(prReadTimeout, path,
+		"pr", "list", "--state", "open", "--limit", strconv.Itoa(prListLimit), "--json", prListFields)
+	if errors.Is(err, errNoPullRequest) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("gh pr list: %w", err)
+	}
+	return parsePRList(out)
+}
+
+// parsePRList decodes gh's list payload into the column's rows.
+func parsePRList(out []byte) ([]PRSummary, error) {
+	var items []ghPRListItem
+	if err := json.Unmarshal(out, &items); err != nil {
+		return nil, fmt.Errorf("decode gh pr list: %w", err)
+	}
+	if len(items) == 0 {
+		return nil, nil
+	}
+	list := make([]PRSummary, 0, len(items))
+	for _, it := range items {
+		list = append(list, PRSummary{
+			Number:            it.Number,
+			Title:             it.Title,
+			Author:            firstNonEmpty(it.Author.Login, it.Author.Name),
+			IsDraft:           it.IsDraft,
+			HeadRefName:       it.HeadRefName,
+			IsCrossRepository: it.IsCrossRepository,
+			UpdatedAt:         it.UpdatedAt,
+			Checks:            reduceChecks(it.StatusCheckRollup),
+		})
+	}
+	return list, nil
 }
 
 // isNoPullRequest recognises gh's "no PR for this branch" message — the one

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The Pulls screen now lists the repository's open pull requests, and can open
+  a session on one.** A column beside the pull request holds every open PR —
+  number, title, author, how long ago it moved, and a dot for its checks — with
+  a search box, quick filters (all, ready, drafts, failing) and a sort that
+  remembers itself. Selecting one shows it in full, whatever branch the checkout
+  is on; a screen reached with no pull request selected still shows the
+  checkout's own, as before. **Open in Session**, beside Merge, checks the PR's
+  head branch out into its own worktree and starts a session in it, with the
+  pull request card already parked so the session carries its PR. A branch
+  already checked out is reused rather than checked out twice — the button reads
+  "Go to session" once one is live — and a pull request from a fork is refused
+  up front, since its commits could never be pushed back.
+
 ## [0.19.0] - 2026-07-25
 
 ### Added

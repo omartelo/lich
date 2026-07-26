@@ -14,7 +14,11 @@ export interface PullRequestDiffState {
 // next door it does not refresh on window focus: re-rendering a wide diff is far
 // too expensive to spend on every alt-tab back into the app. files is null while
 // loading or on error; an empty array is a PR with no file changes.
-export function usePullRequestDiff(path: string, head: string): PullRequestDiffState {
+export function usePullRequestDiff(
+  path: string,
+  head: string,
+  number: number,
+): PullRequestDiffState {
   const [files, setFiles] = useState<DiffFile[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const seq = useRef(0)
@@ -26,7 +30,7 @@ export function usePullRequestDiff(path: string, head: string): PullRequestDiffS
       return
     }
     const mine = ++seq.current
-    ProjectService.PullRequestDiff(path)
+    ProjectService.PullRequestDiff(path, number)
       .then((text) => {
         if (mine !== seq.current) return
         setFiles(parseDiff(text))
@@ -37,7 +41,7 @@ export function usePullRequestDiff(path: string, head: string): PullRequestDiffS
         setFiles(null)
         setError(errorText(err))
       })
-  }, [path])
+  }, [path, number])
 
   useEffect(() => {
     refresh()

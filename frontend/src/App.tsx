@@ -60,8 +60,10 @@ function App() {
                   area with the session sidebar kept beside it. */}
               <Route path="/projects/:projectId/settings" element={<Settings />} />
               {/* The pull-request screen: like Settings, a per-project full-screen
-                  route over the terminals, showing the active session's branch PR. */}
+                  route over the terminals. Bare, it shows the active session's
+                  branch PR; with a number, the one the list column selected. */}
               <Route path="/projects/:projectId/pulls" element={<Pulls />} />
+              <Route path="/projects/:projectId/pulls/:number" element={<Pulls />} />
             </Route>
           </Routes>
           {/* Inside ProjectsProvider + the router: the update flow opens a shell

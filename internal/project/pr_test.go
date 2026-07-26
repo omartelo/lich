@@ -278,39 +278,52 @@ func TestToCommits(t *testing.T) {
 
 func TestMergeArgs(t *testing.T) {
 	// An unrecognised method must be refused before any gh shell-out.
-	if _, err := mergeArgs("force", "", ""); err == nil {
+	if _, err := mergeArgs(0, "force", "", ""); err == nil {
 		t.Error("expected an error for an unknown merge method")
 	}
 
 	tests := []struct {
 		name    string
+		number  int
 		method  string
 		subject string
 		body    string
 		want    []string
 	}{
-		{"quick squash", "squash", "", "", []string{"pr", "merge", "--squash"}},
-		{"quick merge", "merge", "", "", []string{"pr", "merge", "--merge"}},
-		{"quick rebase", "rebase", "", "", []string{"pr", "merge", "--rebase"}},
+		{"quick squash", 0, "squash", "", "", []string{"pr", "merge", "--squash"}},
+		{"quick merge", 0, "merge", "", "", []string{"pr", "merge", "--merge"}},
+		{"quick rebase", 0, "rebase", "", "", []string{"pr", "merge", "--rebase"}},
 		{
 			"squash with edited message",
-			"squash", "title (#1)", "details",
+			0, "squash", "title (#1)", "details",
 			[]string{"pr", "merge", "--squash", "--subject", "title (#1)", "--body", "details"},
 		},
 		{
 			"empty body still passes both flags",
-			"merge", "subject only", "",
+			0, "merge", "subject only", "",
 			[]string{"pr", "merge", "--merge", "--subject", "subject only", "--body", ""},
 		},
 		{
 			"rebase ignores an edited message",
-			"rebase", "unused", "unused",
+			0, "rebase", "unused", "unused",
 			[]string{"pr", "merge", "--rebase"},
+		},
+		// The selector sits ahead of the flags — gh reads a trailing number as
+		// an argument to whichever flag precedes it.
+		{
+			"a numbered pull request is selected before the flags",
+			42, "squash", "", "",
+			[]string{"pr", "merge", "42", "--squash"},
+		},
+		{
+			"the selector survives an edited message",
+			42, "squash", "title (#42)", "",
+			[]string{"pr", "merge", "42", "--squash", "--subject", "title (#42)", "--body", ""},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := mergeArgs(tt.method, tt.subject, tt.body)
+			got, err := mergeArgs(tt.number, tt.method, tt.subject, tt.body)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -379,7 +392,7 @@ func withGH(f *fakeGH) *Service { return &Service{gh: f.run} }
 func TestPullRequestDetailFlow(t *testing.T) {
 	t.Run("open PR decodes, scoped to the path", func(t *testing.T) {
 		gh := &fakeGH{out: []byte(`{"number":7,"state":"OPEN","title":"t"}`)}
-		pr, err := withGH(gh).PullRequestDetail("/repo")
+		pr, err := withGH(gh).PullRequestDetail("/repo", 0)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -398,7 +411,7 @@ func TestPullRequestDetailFlow(t *testing.T) {
 	})
 
 	t.Run("no pull request is an empty panel, not an error", func(t *testing.T) {
-		pr, err := withGH(&fakeGH{err: errNoPullRequest}).PullRequestDetail("/repo")
+		pr, err := withGH(&fakeGH{err: errNoPullRequest}).PullRequestDetail("/repo", 0)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -409,7 +422,7 @@ func TestPullRequestDetailFlow(t *testing.T) {
 
 	t.Run("a real gh failure surfaces its cause", func(t *testing.T) {
 		gh := &fakeGH{err: errors.New("gh auth login required")}
-		_, err := withGH(gh).PullRequestDetail("/repo")
+		_, err := withGH(gh).PullRequestDetail("/repo", 0)
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -419,7 +432,7 @@ func TestPullRequestDetailFlow(t *testing.T) {
 	})
 
 	t.Run("malformed gh output errors", func(t *testing.T) {
-		if _, err := withGH(&fakeGH{out: []byte(`{not json`)}).PullRequestDetail("/repo"); err == nil {
+		if _, err := withGH(&fakeGH{out: []byte(`{not json`)}).PullRequestDetail("/repo", 0); err == nil {
 			t.Error("expected a decode error")
 		}
 	})
@@ -428,7 +441,7 @@ func TestPullRequestDetailFlow(t *testing.T) {
 func TestMergePullRequestFlow(t *testing.T) {
 	t.Run("the built args reach gh", func(t *testing.T) {
 		gh := &fakeGH{}
-		if err := withGH(gh).MergePullRequest("/repo", "squash", "", ""); err != nil {
+		if err := withGH(gh).MergePullRequest("/repo", 0, "squash", "", ""); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if want := []string{"pr", "merge", "--squash"}; !slices.Equal(gh.args, want) {
@@ -441,7 +454,7 @@ func TestMergePullRequestFlow(t *testing.T) {
 
 	t.Run("an unknown method never reaches gh", func(t *testing.T) {
 		gh := &fakeGH{}
-		if err := withGH(gh).MergePullRequest("/repo", "force", "", ""); err == nil {
+		if err := withGH(gh).MergePullRequest("/repo", 0, "force", "", ""); err == nil {
 			t.Error("expected an error for an unknown merge method")
 		}
 		if gh.calls != 0 {
@@ -451,7 +464,7 @@ func TestMergePullRequestFlow(t *testing.T) {
 
 	t.Run("gh's refusal surfaces", func(t *testing.T) {
 		gh := &fakeGH{err: errors.New("Pull request is not mergeable")}
-		err := withGH(gh).MergePullRequest("/repo", "merge", "", "")
+		err := withGH(gh).MergePullRequest("/repo", 0, "merge", "", "")
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -490,7 +503,7 @@ func TestCreatePullRequestFlow(t *testing.T) {
 func TestPullRequestDiffFlow(t *testing.T) {
 	t.Run("plain diff text is returned verbatim", func(t *testing.T) {
 		gh := &fakeGH{out: []byte("diff --git a/a.txt b/a.txt\n")}
-		text, err := withGH(gh).PullRequestDiff("/repo")
+		text, err := withGH(gh).PullRequestDiff("/repo", 0)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -506,7 +519,7 @@ func TestPullRequestDiffFlow(t *testing.T) {
 	})
 
 	t.Run("no pull request yields an empty diff, not an error", func(t *testing.T) {
-		text, err := withGH(&fakeGH{err: errNoPullRequest}).PullRequestDiff("/repo")
+		text, err := withGH(&fakeGH{err: errNoPullRequest}).PullRequestDiff("/repo", 0)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -517,10 +530,146 @@ func TestPullRequestDiffFlow(t *testing.T) {
 
 	t.Run("a real gh failure surfaces", func(t *testing.T) {
 		gh := &fakeGH{err: errors.New("could not resolve to a Repository")}
-		if _, err := withGH(gh).PullRequestDiff("/repo"); err == nil {
+		if _, err := withGH(gh).PullRequestDiff("/repo", 0); err == nil {
 			t.Fatal("expected an error")
 		} else if !strings.Contains(err.Error(), "gh pr diff") {
 			t.Errorf("error should name the command, got %q", err)
+		}
+	})
+}
+
+func TestPRArgs(t *testing.T) {
+	tests := []struct {
+		name   string
+		number int
+		want   []string
+	}{
+		// Zero is the branch's own PR: gh's default, and what every call site
+		// did before a pull request could be addressed by number.
+		{"no selector for the current branch", 0, []string{"pr", "view", "--json", "x"}},
+		{"a negative number is no selector either", -1, []string{"pr", "view", "--json", "x"}},
+		{"the number leads the flags", 9, []string{"pr", "view", "9", "--json", "x"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := prArgs("view", tt.number, "--json", "x"); !slices.Equal(got, tt.want) {
+				t.Errorf("prArgs() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPullRequestDetailByNumber(t *testing.T) {
+	gh := &fakeGH{out: []byte(`{"number":42,"state":"OPEN","title":"t"}`)}
+	pr, err := withGH(gh).PullRequestDetail("/repo", 42)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pr == nil || pr.Number != 42 {
+		t.Fatalf("wrong detail: %+v", pr)
+	}
+	if want := []string{"pr", "view", "42", "--json", prViewFields}; !slices.Equal(gh.args, want) {
+		t.Errorf("args = %v, want %v", gh.args, want)
+	}
+}
+
+func TestParsePRList(t *testing.T) {
+	t.Run("rows carry the author, the fork flag and the rollup", func(t *testing.T) {
+		out := []byte(`[
+			{
+				"number": 107,
+				"title": "feat: list a project's open pull requests",
+				"author": {"login": "omartelo"},
+				"isDraft": false,
+				"headRefName": "feat/pulls-list",
+				"isCrossRepository": false,
+				"updatedAt": "2026-07-26T12:00:00Z",
+				"statusCheckRollup": [
+					{"status": "COMPLETED", "conclusion": "SUCCESS"},
+					{"status": "COMPLETED", "conclusion": "FAILURE"},
+					{"status": "IN_PROGRESS"}
+				]
+			},
+			{
+				"number": 103,
+				"title": "docs: fix the port number",
+				"author": {"name": "Ada Lovelace"},
+				"isDraft": true,
+				"headRefName": "patch-1",
+				"isCrossRepository": true,
+				"updatedAt": "2026-07-24T09:30:00Z",
+				"statusCheckRollup": []
+			}
+		]`)
+		list, err := parsePRList(out)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(list) != 2 {
+			t.Fatalf("want 2 rows, got %d", len(list))
+		}
+		first := list[0]
+		if first.Number != 107 || first.Author != "omartelo" || first.HeadRefName != "feat/pulls-list" {
+			t.Errorf("wrong first row: %+v", first)
+		}
+		want := ChecksRollup{Passed: 1, Failed: 1, Pending: 1, Total: 3}
+		if first.Checks != want {
+			t.Errorf("checks = %+v, want %+v", first.Checks, want)
+		}
+		// A fork PR still lists — only the session flow refuses it.
+		if !list[1].IsCrossRepository || !list[1].IsDraft {
+			t.Errorf("second row lost its flags: %+v", list[1])
+		}
+		// gh reports no login for some authors; the display name is the fallback.
+		if list[1].Author != "Ada Lovelace" {
+			t.Errorf("author fallback failed: %q", list[1].Author)
+		}
+	})
+
+	t.Run("no open pull request is an empty column, not an error", func(t *testing.T) {
+		list, err := parsePRList([]byte(`[]`))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if list != nil {
+			t.Errorf("want nil, got %+v", list)
+		}
+	})
+
+	t.Run("malformed output errors", func(t *testing.T) {
+		if _, err := parsePRList([]byte(`{not json`)); err == nil {
+			t.Error("expected a decode error")
+		}
+	})
+}
+
+func TestListPullRequestsFlow(t *testing.T) {
+	t.Run("the call is scoped and bounded", func(t *testing.T) {
+		gh := &fakeGH{out: []byte(`[{"number":1,"title":"t"}]`)}
+		list, err := withGH(gh).ListPullRequests("/repo")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(list) != 1 {
+			t.Fatalf("want 1 row, got %d", len(list))
+		}
+		want := []string{"pr", "list", "--state", "open", "--limit", "50", "--json", prListFields}
+		if !slices.Equal(gh.args, want) {
+			t.Errorf("args = %v, want %v", gh.args, want)
+		}
+		if gh.dir != "/repo" || gh.timeout != prReadTimeout {
+			t.Errorf("wrong scope: dir %q timeout %v", gh.dir, gh.timeout)
+		}
+	})
+
+	t.Run("a real gh failure surfaces its cause", func(t *testing.T) {
+		gh := &fakeGH{err: errors.New("gh auth login required")}
+		_, err := withGH(gh).ListPullRequests("/repo")
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		if !strings.Contains(err.Error(), "gh pr list") || !strings.Contains(err.Error(), "auth login") {
+			t.Errorf("error should name the command and the cause, got %q", err)
 		}
 	})
 }

@@ -17,14 +17,20 @@ export interface PullRequestState {
   refresh: () => void
 }
 
-// usePullRequestDetail resolves the active branch's open PR in full for the
-// Pulls screen. Like the footer badge it is not polled — each lookup is a gh
-// network round-trip — but it refetches whenever the checkout's HEAD moves (a
-// commit from the session next door lands in the checks and the diff), on
-// window focus, and through refresh() so an in-app merge or a manual reload
-// updates the screen at once. detail is null with no error when the branch
-// simply has no open PR: the screen's empty state.
-export function usePullRequestDetail(path: string, branch: string, head: string): PullRequestState {
+// usePullRequestDetail resolves one open PR in full for the Pulls screen:
+// number when the list has selected one, the checkout's own branch when it is
+// zero. Like the footer badge it is not polled — each lookup is a gh network
+// round-trip — but it refetches whenever the selection or the checkout's HEAD
+// moves (a commit from the session next door lands in the checks and the diff),
+// on window focus, and through refresh() so an in-app merge or a manual reload
+// updates the screen at once. detail is null with no error when there is no
+// open PR: the screen's empty state.
+export function usePullRequestDetail(
+  path: string,
+  branch: string,
+  head: string,
+  number = 0,
+): PullRequestState {
   const [detail, setDetail] = useState<PullRequestDetail | null>(null)
   // Starts true so the first paint — before the mount effect fires the lookup —
   // reads as loading, not as "this branch has no pull request".
@@ -41,7 +47,7 @@ export function usePullRequestDetail(path: string, branch: string, head: string)
     }
     const mine = ++seq.current
     setLoading(true)
-    ProjectService.PullRequestDetail(path)
+    ProjectService.PullRequestDetail(path, number)
       .then((result) => {
         if (mine !== seq.current) return
         setDetail(result)
@@ -55,7 +61,7 @@ export function usePullRequestDetail(path: string, branch: string, head: string)
       .finally(() => {
         if (mine === seq.current) setLoading(false)
       })
-  }, [path])
+  }, [path, number])
 
   useEffect(() => {
     refresh()
