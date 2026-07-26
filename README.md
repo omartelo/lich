@@ -14,6 +14,7 @@
     <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-333" />
     <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-blue" /></a>
   </p>
+  <img src="docs/media/session.png" alt="A Claude Code session running in a lich worktree, with the session card showing its branch and diff badge" width="900" />
 </div>
 
 ## About
@@ -58,12 +59,23 @@ sessions default to:
   they belong to, and a kept worktree's session is ready to resume later.
 - **Review without leaving.** A CodeMirror diff dock shows the working changes;
   collapse or expand every file at once, and attach files to a session.
+- **Pull requests in the window.** A branch with an open pull request carries its
+  number on the session card. The pull request screen reads its status, checks,
+  commits and full diff, and merges it — squash, merge commit or rebase — without
+  reaching for a browser.
 - **Live git at a glance.** Session cards carry the working directory, current
   branch, a diff badge and an untracked-line count; a Warp-style footer follows
   `cd` and surfaces git status.
 - **Command palette.** `Ctrl`/`Cmd`+`K` to jump between sessions and projects.
 - **Notifications.** A session waiting on your input raises a toast and a dot on
   the bell, collected in a titled dropdown.
+
+<div align="center">
+  <img src="docs/media/pull-request.png" alt="The pull request screen: state, checks, mergeability and the pull request body" width="900" />
+  <p><em>The branch's pull request, read and merged in place.</em></p>
+  <img src="docs/media/pull-request-files.png" alt="The pull request's changed files, rendered as a CodeMirror diff with a file tree" width="900" />
+  <p><em>Its diff, file by file.</em></p>
+</div>
 
 ## Install
 
