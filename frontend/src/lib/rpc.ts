@@ -121,6 +121,9 @@ export const ProjectService = {
   ReadFile: (path: string, rel: string) => call<string>("project.ReadFile", [path, rel]),
   DiscardFile: (path: string, rel: string) => call<null>("project.DiscardFile", [path, rel]),
   ListBranches: (path: string) => call<Branches>("project.ListBranches", [path]),
+  /** Every checkout holding a branch, the project's own directory included —
+   * which ListBranches omits, since it cannot be resumed as a worktree. */
+  ListCheckouts: (path: string) => call<Worktree[] | null>("project.ListCheckouts", [path]),
   PullRequest: (path: string) => call<PullRequest | null>("project.PullRequest", [path]),
   /** The repository's open PRs for the Pulls list column; null when it has none. */
   ListPullRequests: (path: string) =>

@@ -24,7 +24,7 @@ import { closePulls, openPulls } from "@/lib/pulls-card-store"
 import { activeTarget, sessionsOf } from "@/lib/session/sessions"
 import { queueSetup } from "@/lib/terminal/setup-queue"
 import { useGitStatus } from "@/lib/git/use-git-status"
-import { useWorktrees } from "@/lib/git/use-worktrees"
+import { useCheckouts } from "@/lib/git/use-checkouts"
 import { invalidatePullRequests } from "@/lib/pulls/pull-request-lookup"
 import { readPullsSort, type PullsSort } from "@/lib/pulls/pull-request-list"
 import { usePullRequestDetail } from "@/lib/pulls/use-pull-request-detail"
@@ -80,6 +80,7 @@ export function Pulls({ list = false }: PullsProps) {
     projects,
     sessions,
     closeSession,
+    newSession,
     newWorktreeSession,
     reopenWorktreeSession,
     activateSession,
@@ -97,7 +98,7 @@ export function Pulls({ list = false }: PullsProps) {
   // An empty path is the hook's own "nothing to look up", so the single pull
   // request screen never spends a gh call on a list it does not show.
   const pulls = usePullRequests(list ? projectPath || path : "")
-  const { worktrees, refresh: refreshWorktrees } = useWorktrees(projectPath)
+  const { checkouts, refresh: refreshCheckouts } = useCheckouts(projectPath)
   const inject = useInject(sessionId)
   const [sort, setSort] = useState<PullsSort>(readPullsSort)
   const [opening, setOpening] = useState(false)
@@ -140,7 +141,7 @@ export function Pulls({ list = false }: PullsProps) {
     } catch (err: unknown) {
       toast.error(`Failed to remove worktree: ${errorText(err)}`)
     }
-    refreshWorktrees()
+    refreshCheckouts()
   }
 
   const onMerged = () => {
@@ -148,8 +149,10 @@ export function Pulls({ list = false }: PullsProps) {
     const merged = `Merged #${detail?.number} into ${detail?.baseRefName}`
     // The offer is about the merged branch's own checkout, which is not
     // necessarily the one this screen is standing in — the list can merge a
-    // pull request belonging to a worktree next door, or to none at all.
-    const wt = worktrees.find((w) => w.name === detail?.headRefName)
+    // pull request belonging to a worktree next door, or to none at all. The
+    // project's own directory is never offered: it is not a worktree, and git
+    // would refuse to remove it.
+    const wt = checkouts.find((c) => c.name === detail?.headRefName && c.path !== projectPath)
     if (!wt) {
       toast.success(merged)
       return
@@ -160,19 +163,23 @@ export function Pulls({ list = false }: PullsProps) {
     })
   }
 
-  // Opening a session on a pull request means working on its own head branch:
-  // a worktree holding that branch, with a session in it. git refuses to check
-  // one branch out twice, so an existing worktree is reused rather than
-  // recreated — resumed when it is parked, activated when it is already live.
+  // Opening a session on a pull request means working on its own head branch.
+  // git refuses to check one branch out twice, so a checkout that already holds
+  // it is reused rather than recreated — and that includes the project's own
+  // directory, which is where a branch usually is.
   const openInSession = async () => {
     if (!projectId || !detail) {
       return
     }
-    const existing = worktrees.find((wt) => wt.name === detail.headRefName)
+    const existing = checkouts.find((checkout) => checkout.name === detail.headRefName)
     if (existing) {
       const live = sessionsOf(sessions, projectId).find((s) => s.path === existing.path)
       if (live) {
         activateSession(projectId, live.id)
+      } else if (existing.path === projectPath) {
+        // The project's own checkout is not a worktree: it has no parked
+        // session to resume and must never be handed to the worktree flows.
+        newSession(projectId)
       } else {
         await reopenWorktreeSession(projectId, existing)
       }
@@ -190,7 +197,7 @@ export function Pulls({ list = false }: PullsProps) {
       // the pull request card rides along so the session carries its PR.
       queueSetup(newWorktreeSession(projectId, wt))
       openPulls(wt.path)
-      refreshWorktrees()
+      refreshCheckouts()
       navigate(`/projects/${projectId}`)
     } catch (err: unknown) {
       toast.error(`Couldn’t open a session: ${errorText(err)}`)
@@ -199,7 +206,7 @@ export function Pulls({ list = false }: PullsProps) {
     }
   }
 
-  const checkedOut = worktrees.find((wt) => wt.name === detail?.headRefName)
+  const checkedOut = checkouts.find((c) => c.name === detail?.headRefName)
   const session: SessionAction = {
     label:
       checkedOut && sessionsOf(sessions, projectId ?? "").some((s) => s.path === checkedOut.path)
@@ -246,7 +253,7 @@ export function Pulls({ list = false }: PullsProps) {
           onSelect={(picked) => navigate(`/projects/${projectId}/pulls/all/${picked}`)}
           sort={sort}
           onSortChange={setSort}
-          checkedOutBranches={new Set(worktrees.map((wt) => wt.name))}
+          checkedOutBranches={new Set(checkouts.map((c) => c.name))}
         />
       )}
       <div className="flex min-w-0 flex-1 flex-col">{body}</div>

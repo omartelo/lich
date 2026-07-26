@@ -50,7 +50,7 @@ interface PullsListProps {
   onSelect: (number: number) => void
   sort: PullsSort
   onSortChange: (sort: PullsSort) => void
-  /** Head branches already checked out in a worktree — git refuses a second one. */
+  /** Head branches already checked out somewhere — git refuses a second one. */
   checkedOutBranches: ReadonlySet<string>
 }
 
@@ -165,7 +165,7 @@ export function PullsList({
               key={pr.number}
               pr={pr}
               active={pr.number === selected}
-              hasWorktree={checkedOutBranches.has(pr.headRefName)}
+              isCheckedOut={checkedOutBranches.has(pr.headRefName)}
               onSelect={() => onSelect(pr.number)}
             />
           ))
@@ -178,11 +178,11 @@ export function PullsList({
 interface PullRowProps {
   pr: PullRequestSummary
   active: boolean
-  hasWorktree: boolean
+  isCheckedOut: boolean
   onSelect: () => void
 }
 
-function PullRow({ pr, active, hasWorktree, onSelect }: PullRowProps) {
+function PullRow({ pr, active, isCheckedOut, onSelect }: PullRowProps) {
   const verdict = checkVerdict(pr)
   return (
     <button
@@ -213,10 +213,10 @@ function PullRow({ pr, active, hasWorktree, onSelect }: PullRowProps) {
           )}
           {pr.isDraft && <span className="text-amber-500">Draft</span>}
           {pr.isCrossRepository && <span>fork</span>}
-          {hasWorktree && (
+          {isCheckedOut && (
             <span className="flex items-center gap-1">
               <Terminal className="size-3" />
-              worktree
+              checked out
             </span>
           )}
         </span>

@@ -109,6 +109,33 @@ func parseWorktrees(out string) []Worktree {
 	return worktrees
 }
 
+// ListCheckouts returns every checkout of the repository holding a branch —
+// the project's own directory included, which ListBranches deliberately leaves
+// out because a main checkout is not something the worktree picker can resume.
+// It answers a different question: which branches are spoken for. git refuses to
+// check one branch out twice, so a caller about to check a branch out has to
+// know about the main checkout as much as about the linked ones.
+func (s *Service) ListCheckouts(path string) ([]Worktree, error) {
+	out, err := runGit(path, "worktree", "list", "--porcelain")
+	if err != nil {
+		return nil, err
+	}
+	return parseCheckouts(out), nil
+}
+
+// parseCheckouts reads every block of `git worktree list --porcelain`, main
+// worktree included. Bare and detached entries still drop out: they hold no
+// branch, so they can never be the reason a checkout is refused.
+func parseCheckouts(out string) []Worktree {
+	checkouts := []Worktree{}
+	for block := range strings.SplitSeq(strings.TrimSpace(out), "\n\n") {
+		if wt, ok := parseWorktreeBlock(block); ok {
+			checkouts = append(checkouts, wt)
+		}
+	}
+	return checkouts
+}
+
 // parseWorktreeBlock extracts one worktree entry; ok is false for bare or
 // detached entries and malformed blocks.
 func parseWorktreeBlock(block string) (Worktree, bool) {

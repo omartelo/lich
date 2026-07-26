@@ -449,3 +449,64 @@ func TestCreateWorktreeFromPR(t *testing.T) {
 		}
 	})
 }
+
+// TestListCheckouts proves the main checkout is included — the omission that
+// let "Open in Session" try to check out a branch the project itself held.
+func TestListCheckouts(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	repo, git := initRepo(t)
+	svc := &Service{}
+
+	t.Run("the project's own checkout counts", func(t *testing.T) {
+		checkouts, err := svc.ListCheckouts(repo)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(checkouts) != 1 || checkouts[0].Name != "main" {
+			t.Fatalf("want the main checkout on main, got %+v", checkouts)
+		}
+		// ListBranches drops it on purpose; the two must not be confused again.
+		branches, err := svc.ListBranches(repo)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(branches.Worktrees) != 0 {
+			t.Errorf("ListBranches should still omit the main checkout, got %+v", branches.Worktrees)
+		}
+	})
+
+	t.Run("linked worktrees come along", func(t *testing.T) {
+		wt, err := svc.CreateWorktree(repo, "proj", "feature", "main", false)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		checkouts, err := svc.ListCheckouts(repo)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		var names []string
+		for _, c := range checkouts {
+			names = append(names, c.Name)
+		}
+		slices.Sort(names)
+		if !slices.Equal(names, []string{"feature", "main"}) {
+			t.Errorf("checkouts = %v, want [feature main]", names)
+		}
+		if !slices.ContainsFunc(checkouts, func(c Worktree) bool { return c.Path == wt.Path }) {
+			t.Errorf("the linked worktree's path is missing from %+v", checkouts)
+		}
+	})
+
+	t.Run("a detached checkout holds no branch", func(t *testing.T) {
+		git("worktree", "add", "--detach", filepath.Join(t.TempDir(), "loose"))
+		checkouts, err := svc.ListCheckouts(repo)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		for _, c := range checkouts {
+			if c.Name == "" || strings.HasSuffix(c.Path, "loose") {
+				t.Errorf("a detached entry leaked in: %+v", c)
+			}
+		}
+	})
+}
