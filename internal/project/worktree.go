@@ -119,7 +119,19 @@ func (s *Service) ListCheckouts(path string) ([]Worktree, error) {
 	if err != nil {
 		return nil, err
 	}
-	return parseCheckouts(out), nil
+	checkouts := parseCheckouts(out)
+	// The caller's own directory is handed back spelled the way the caller
+	// named it. A project's path is its identity in the workspace — it is what
+	// projectID hashes and what every stored session carries — so a checkout
+	// the caller cannot recognise as "the project itself" sends it down the
+	// worktree flows, which is precisely what this call exists to prevent.
+	own := canonicalPath(path)
+	for i, c := range checkouts {
+		if c.Path == own {
+			checkouts[i].Path = filepath.Clean(path)
+		}
+	}
+	return checkouts, nil
 }
 
 // parseCheckouts reads every block of `git worktree list --porcelain`, main
@@ -135,6 +147,22 @@ func parseCheckouts(out string) []Worktree {
 	return checkouts
 }
 
+// canonicalPath renders a checkout path the one way lich compares them. git
+// reports a worktree by its fully resolved path, while lich builds one by
+// joining names onto the data dir — the same directory under two spellings the
+// moment a symlink is in the way (macOS puts every temp and /var path behind
+// one) or the platform has more than one form for a name (Windows 8.3). Every
+// path that will be compared goes through here, on both sides.
+//
+// A path that no longer exists (a stale registration) cannot be resolved; Clean
+// is the best available answer and keeps the entry readable.
+func canonicalPath(p string) string {
+	if resolved, err := filepath.EvalSymlinks(p); err == nil {
+		return resolved
+	}
+	return filepath.Clean(p)
+}
+
 // parseWorktreeBlock extracts one worktree entry; ok is false for bare or
 // detached entries and malformed blocks.
 func parseWorktreeBlock(block string) (Worktree, bool) {
@@ -142,11 +170,8 @@ func parseWorktreeBlock(block string) (Worktree, bool) {
 	for line := range strings.SplitSeq(block, "\n") {
 		switch {
 		case strings.HasPrefix(line, "worktree "):
-			// git prints forward slashes even on Windows; Clean folds the
-			// path into the platform's native form so it compares equal to
-			// the paths CreateWorktree builds with filepath.Join.
 			if p := strings.TrimPrefix(line, "worktree "); p != "" {
-				wt.Path = filepath.Clean(p)
+				wt.Path = canonicalPath(p)
 			}
 		case strings.HasPrefix(line, "branch refs/heads/"):
 			wt.Name = strings.TrimPrefix(line, "branch refs/heads/")
@@ -223,7 +248,7 @@ func (s *Service) CreateWorktree(projectPath, projectID, name, base string, base
 		return nil, fmt.Errorf("worktree created but unusable: %w", err)
 	}
 	seedWorktree(projectPath, wtPath)
-	return &Worktree{Name: name, Path: wtPath}, nil
+	return &Worktree{Name: name, Path: canonicalPath(wtPath)}, nil
 }
 
 // prHead is the little of a pull request CreateWorktreeFromPR needs: which
@@ -284,7 +309,7 @@ func (s *Service) CreateWorktreeFromPR(projectPath, projectID string, number int
 		return nil, fmt.Errorf("gh pr checkout: %w", err)
 	}
 	seedWorktree(projectPath, wtPath)
-	return &Worktree{Name: head.RefName, Path: wtPath}, nil
+	return &Worktree{Name: head.RefName, Path: canonicalPath(wtPath)}, nil
 }
 
 // RemoveWorktree removes a worktree checkout. Without force git refuses to

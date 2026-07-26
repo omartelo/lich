@@ -93,7 +93,7 @@ func TestListBranches(t *testing.T) {
 		t.Fatalf("Worktrees = %v, want one entry", got.Worktrees)
 	}
 	if got.Worktrees[0].Name != "resume-me" ||
-		canonPath(t, got.Worktrees[0].Path) != canonPath(t, wt.Path) {
+		got.Worktrees[0].Path != wt.Path {
 		t.Errorf("Worktrees = %v, want [{resume-me %s}]", got.Worktrees, wt.Path)
 	}
 	// resume-me is now checked out in a worktree, so it belongs only to the
@@ -106,18 +106,6 @@ func TestListBranches(t *testing.T) {
 	if _, err := svc.ListBranches(t.TempDir()); err == nil {
 		t.Error("ListBranches(non-repo) = nil error, want error")
 	}
-}
-
-// canonPath resolves platform aliasing — Windows 8.3 short names (the CI
-// runner's TEMP), symlinked temp dirs — so a path reported by git and one
-// built by Go compare equal when they name the same directory.
-func canonPath(t *testing.T, p string) string {
-	t.Helper()
-	resolved, err := filepath.EvalSymlinks(p)
-	if err != nil {
-		return filepath.Clean(p)
-	}
-	return resolved
 }
 
 // TestParseWorktrees proves the porcelain parser skips the main worktree and
@@ -166,7 +154,7 @@ func TestCreateWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateWorktree: %v", err)
 	}
-	if want := filepath.Join(data, "lich", "worktrees", "pid", "feat/x"); wt.Path != want {
+	if want := canonicalPath(filepath.Join(data, "lich", "worktrees", "pid", "feat/x")); wt.Path != want {
 		t.Errorf("Path = %q, want %q", wt.Path, want)
 	}
 	if got := svc.Branch(wt.Path); got != "feat/x" {
@@ -373,13 +361,13 @@ func TestCreateWorktreeFromPR(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		want := filepath.Join(data, "lich", "worktrees", "proj", "fix/poll")
+		want := canonicalPath(filepath.Join(data, "lich", "worktrees", "proj", "fix/poll"))
 		if wt.Path != want || wt.Name != "fix/poll" {
 			t.Errorf("worktree = %+v, want name fix/poll at %s", wt, want)
 		}
 		// The checkout has to run inside the new worktree: run in the project it
 		// would move the project's own HEAD instead.
-		if gh.checkoutDir != wt.Path {
+		if canonicalPath(gh.checkoutDir) != wt.Path {
 			t.Errorf("gh pr checkout ran in %q, want %q", gh.checkoutDir, wt.Path)
 		}
 		if gh.viewDir != repo {
@@ -389,7 +377,14 @@ func TestCreateWorktreeFromPR(t *testing.T) {
 		if err != nil || strings.TrimSpace(string(out)) != "fix/poll" {
 			t.Errorf("worktree is not on the head branch: %q (%v)", out, err)
 		}
-		if !strings.Contains(git("worktree", "list"), wt.Path) {
+		// Compared through the same canonical form the product uses: git lists
+		// a worktree by its resolved path and with forward slashes on Windows,
+		// which is never the literal string filepath.Join built.
+		registered := false
+		for _, listed := range parseCheckouts(git("worktree", "list", "--porcelain")) {
+			registered = registered || listed.Path == wt.Path
+		}
+		if !registered {
 			t.Errorf("the worktree is not registered with git: %s", git("worktree", "list"))
 		}
 	})
@@ -522,6 +517,34 @@ func TestCreateWorktreeFromPRRejectsRefName(t *testing.T) {
 	}
 }
 
+// TestCheckoutPathsSurviveASymlink reproduces on any platform what macOS does
+// to every path under /var and Windows to a short name: git reports a checkout
+// by its resolved path while lich builds one by joining names, and the two
+// spellings have to still name one worktree. Without it the session opened on a
+// worktree is never recognised as living in that worktree.
+func TestCheckoutPathsSurviveASymlink(t *testing.T) {
+	target := t.TempDir()
+	link := filepath.Join(t.TempDir(), "data-link")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	t.Setenv("XDG_DATA_HOME", link)
+	repo, _ := initRepo(t)
+	svc := &Service{}
+
+	wt, err := svc.CreateWorktree(repo, "proj", "feature", "main", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	checkouts, err := svc.ListCheckouts(repo)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !slices.ContainsFunc(checkouts, func(c Worktree) bool { return c.Path == wt.Path }) {
+		t.Errorf("CreateWorktree returned %q, which is in none of %+v", wt.Path, checkouts)
+	}
+}
+
 // TestListCheckouts proves the main checkout is included — the omission that
 // let "Open in Session" try to check out a branch the project itself held.
 func TestListCheckouts(t *testing.T) {
@@ -566,6 +589,20 @@ func TestListCheckouts(t *testing.T) {
 		}
 		if !slices.ContainsFunc(checkouts, func(c Worktree) bool { return c.Path == wt.Path }) {
 			t.Errorf("the linked worktree's path is missing from %+v", checkouts)
+		}
+	})
+
+	// The caller's own directory comes back spelled the way it was passed in.
+	// git answers with the resolved path, which on macOS and Windows is a
+	// different string for the same directory — and the caller compares what it
+	// gets against the project path it already holds.
+	t.Run("the caller's own path is handed back unchanged", func(t *testing.T) {
+		checkouts, err := svc.ListCheckouts(repo)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !slices.ContainsFunc(checkouts, func(c Worktree) bool { return c.Path == repo }) {
+			t.Errorf("the project's own path is missing from %+v (asked as %q)", checkouts, repo)
 		}
 	})
 

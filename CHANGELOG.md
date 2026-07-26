@@ -35,6 +35,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "Go to session" once one is live — and a pull request from a fork is refused
   up front, since its commits could never be pushed back.
 
+### Fixed
+
+- **A worktree behind a symlinked path is recognised as the checkout it is.**
+  git reports a checkout by its fully resolved path while lich built one by
+  joining names onto the data dir, so the same directory travelled under two
+  spellings wherever a symlink sat in the way — every path on macOS, and a short
+  name on Windows. The session living in a worktree was then not seen to live
+  there: resuming a kept worktree opened a second one beside it, and **Open in
+  Session** offered to create what was already checked out. Both sides of the
+  comparison now resolve the same way.
+
 ## [0.19.0] - 2026-07-25
 
 ### Added
