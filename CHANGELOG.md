@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-07-26
+
 ### Added
 
 - **lich now lists a repository's open pull requests, and can open a session on
@@ -987,7 +989,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/omartelo/lich/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/omartelo/lich/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/omartelo/lich/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/omartelo/lich/compare/v0.16.0...v0.17.0
