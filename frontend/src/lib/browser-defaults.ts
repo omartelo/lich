@@ -11,11 +11,14 @@
 // The subset of KeyboardEvent the matcher needs — lets tests pass plain objects.
 type ChordState = Pick<KeyboardEvent, "ctrlKey" | "metaKey" | "shiftKey" | "altKey" | "key">
 
-// Tab and window commands (new/close/restore), the file and page commands whose
-// dialogs or navigation have nowhere to land, and the browsing-data wipe, which
-// would take lich's own localStorage settings with it.
+// Tab and window commands (new/close/restore/quit), the file and page commands
+// whose dialogs or navigation have nowhere to land, and the browsing-data wipe,
+// which would take lich's own localStorage settings with it. Shift does not make
+// a chord harmless: it only changes which surface opens — Ctrl+Shift+P prints
+// through the system dialog, Ctrl+Shift+O opens the bookmark manager, and
+// Ctrl+Shift+Q exits Chromium, which quits lich exactly as Ctrl+W does.
 const MOD_KEYS = new Set(["t", "w", "n", "p", "s", "o", "u", "d", "h", "j"])
-const MOD_SHIFT_KEYS = new Set(["t", "w", "n", "m", "delete"])
+const MOD_SHIFT_KEYS = new Set(["t", "w", "n", "m", "p", "o", "q", "delete"])
 
 // Deliberately still live: Ctrl+R and F5 (a reload recovers a wedged UI and
 // costs nothing — the session lives in the backend), the devtools chords

@@ -20,7 +20,7 @@ describe("isBrowserChord", () => {
   })
 
   it("swallows the shifted commands, including the browsing-data wipe", () => {
-    for (const key of ["T", "W", "N", "M", "Delete"]) {
+    for (const key of ["T", "W", "N", "M", "P", "O", "Q", "Delete"]) {
       expect(isBrowserChord(chord({ ctrlKey: true, shiftKey: true, key }))).toBe(true)
     }
   })

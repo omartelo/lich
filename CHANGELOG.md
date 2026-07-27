@@ -48,6 +48,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   picker, a signed-out `gh` names `gh auth login`, a rate limit says to wait, a
   refused merge says why. Anything unrecognised says so plainly; `gh`'s own text
   goes to lich's log, where it was always the more useful place for it.
+- **Three more browser reflexes stop firing.** Holding Shift used to let a chord
+  through: Ctrl+Shift+P still raised the system print dialog, Ctrl+Shift+O the
+  bookmark manager, and Ctrl+Shift+Q quit Chromium, which quits lich — the same
+  fatal move Ctrl+W was already stopped from making. They fired everywhere,
+  terminals included, since a terminal encodes neither of them. The devtools
+  chords, reload and F11 stay where they are.
 - **The pull request badge follows the project's GitHub account too.** It looked
   the branch's PR up on its own path, so it kept answering as `gh`'s active
   account while the screen beside it used the project's — a badge that vanished
