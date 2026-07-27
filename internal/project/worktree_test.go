@@ -320,16 +320,24 @@ type scriptedGH struct {
 	checkoutErr error
 	// lockOnFail locks the worktree before failing. git refuses to remove a
 	// locked worktree, which is how the cleanup itself is made to fail.
-	lockOnFail  bool
-	viewDir     string
-	checkoutDir string
-	calls       []string
+	lockOnFail bool
+	// token is what `gh auth token` answers with, so a test can follow which
+	// account each call in the flow ran as.
+	token         string
+	viewDir       string
+	viewToken     string
+	checkoutDir   string
+	checkoutToken string
+	calls         []string
 }
 
-func (g *scriptedGH) run(_ time.Duration, dir, _ string, args ...string) ([]byte, error) {
+func (g *scriptedGH) run(_ time.Duration, dir, token string, args ...string) ([]byte, error) {
 	g.calls = append(g.calls, strings.Join(args, " "))
+	if len(args) > 1 && args[0] == "auth" && args[1] == "token" {
+		return []byte(g.token + "\n"), nil
+	}
 	if len(args) > 1 && args[1] == "checkout" {
-		g.checkoutDir = dir
+		g.checkoutDir, g.checkoutToken = dir, token
 		if g.checkoutErr != nil {
 			if g.lockOnFail {
 				if out, err := exec.Command("git", "-C", dir, "worktree", "lock", dir).CombinedOutput(); err != nil {
@@ -347,7 +355,7 @@ func (g *scriptedGH) run(_ time.Duration, dir, _ string, args ...string) ([]byte
 		}
 		return nil, nil
 	}
-	g.viewDir = dir
+	g.viewDir, g.viewToken = dir, token
 	return []byte(g.headJSON), nil
 }
 
@@ -388,6 +396,37 @@ func TestCreateWorktreeFromPR(t *testing.T) {
 		}
 		if !registered {
 			t.Errorf("the worktree is not registered with git: %s", git("worktree", "list"))
+		}
+	})
+
+	// The checkout runs inside a worktree the store has never seen — it has no
+	// session row until the frontend opens one — so resolving the account from
+	// the directory gh runs in would answer "none" and fall back to gh's active
+	// account, failing on exactly the repositories the picker exists for.
+	t.Run("the checkout runs as the project's account", func(t *testing.T) {
+		t.Setenv("XDG_DATA_HOME", t.TempDir())
+		repo, _ := initRepo(t)
+		gh := &scriptedGH{
+			headJSON: `{"headRefName":"fix/account","isCrossRepository":false}`,
+			token:    "gho_project",
+		}
+		svc := &Service{runner: gh.run}
+		// Only the project directory names an account, as the store would.
+		svc.SetAccounts(func(dir string) string {
+			if dir == repo {
+				return "marcelo-filho_snk"
+			}
+			return ""
+		})
+
+		if _, err := svc.CreateWorktreeFromPR(repo, "proj", 105); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if gh.checkoutToken != "gho_project" {
+			t.Errorf("gh pr checkout ran with token %q, want the project's", gh.checkoutToken)
+		}
+		if gh.viewToken != "gho_project" {
+			t.Errorf("gh pr view ran with token %q, want the project's", gh.viewToken)
 		}
 	})
 

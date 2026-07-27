@@ -28,7 +28,16 @@ func (s *Service) SetAccounts(lookup accountLookup) {
 // gh runs one gh subcommand for the checkout at dir, as the account that
 // checkout's project selected.
 func (s *Service) gh(timeout time.Duration, dir string, args ...string) ([]byte, error) {
-	return s.runner(timeout, dir, s.tokenFor(dir), args...)
+	return s.ghFor(dir, timeout, dir, args...)
+}
+
+// ghFor runs a gh subcommand inside dir as the account resolved for accountDir.
+// The two differ whenever gh has to run inside a checkout the store has never
+// seen — a worktree created moments ago has no session row yet, so asking it
+// which account to use would answer "none" and silently fall back to gh's
+// active one, which is the whole failure this feature exists to prevent.
+func (s *Service) ghFor(accountDir string, timeout time.Duration, dir string, args ...string) ([]byte, error) {
+	return s.runner(timeout, dir, s.tokenFor(accountDir), args...)
 }
 
 // tokenFor resolves the token of the account the checkout's project selected.

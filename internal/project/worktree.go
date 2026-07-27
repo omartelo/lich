@@ -304,7 +304,10 @@ func (s *Service) CreateWorktreeFromPR(projectPath, projectID string, number int
 	if _, err := runGit(projectPath, "worktree", "add", "--detach", wtPath); err != nil {
 		return nil, err
 	}
-	if _, err := s.gh(prCheckoutTimeout, wtPath, "pr", "checkout", strconv.Itoa(number)); err != nil {
+	// The checkout runs inside the new worktree but answers to the project's
+	// account: the worktree has no session row yet, so it can name no account
+	// of its own.
+	if _, err := s.ghFor(projectPath, prCheckoutTimeout, wtPath, "pr", "checkout", strconv.Itoa(number)); err != nil {
 		if _, rmErr := runGit(projectPath, "worktree", "remove", "--force", wtPath); rmErr != nil {
 			slog.Warn("worktree left behind by a failed PR checkout", "path", wtPath, "err", rmErr)
 			return nil, fmt.Errorf("%w Its half-made worktree could not be removed either.", err)
