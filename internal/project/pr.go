@@ -23,6 +23,7 @@ const (
 	prReadTimeout   = 8 * time.Second
 	prMergeTimeout  = 30 * time.Second
 	prCreateTimeout = 20 * time.Second
+	prReviewTimeout = 20 * time.Second
 	// A checkout fetches the head ref, so it is bounded by the size of the
 	// branch rather than by a round-trip.
 	prCheckoutTimeout = 90 * time.Second
@@ -408,6 +409,21 @@ func mergeArgs(number int, method, subject, body string) ([]string, error) {
 		args = append(args, "--subject", subject, "--body", body)
 	}
 	return args, nil
+}
+
+// ApprovePullRequest submits an approving review on GitHub — the given number,
+// or the PR of the branch checked out at path when number is zero. The review is
+// filed by whichever account the project talks to (ghaccount.go), which is also
+// why GitHub can refuse it: nobody may approve their own pull request.
+//
+// Deliberately no review body: a comment belongs to the line it is about, and
+// the screen has no diff-commenting surface to attach one to. Approve is the
+// verdict, nothing more.
+func (s *Service) ApprovePullRequest(path string, number int) error {
+	if _, err := s.gh(prReviewTimeout, path, prArgs("review", number, "--approve")...); err != nil {
+		return err
+	}
+	return nil
 }
 
 // CreatePullRequest opens GitHub's "new pull request" page in the browser for

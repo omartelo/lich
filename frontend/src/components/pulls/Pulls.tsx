@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
 import {
+  Check,
   ChevronDown,
   ExternalLink,
   GitBranch,
@@ -353,6 +354,7 @@ function PullRequestView({
   onInject,
 }: PullRequestViewProps) {
   const [merging, setMerging] = useState(false)
+  const [approving, setApproving] = useState(false)
   const [edit, setEdit] = useState<EditState | null>(null)
   const [tab, setTab] = useState<"overview" | "commits" | "files" | "checks">("overview")
   const commitCount = detail.commits?.length ?? 0
@@ -377,6 +379,24 @@ function PullRequestView({
       toast.error(`Merge failed: ${errorText(err)}`)
     } finally {
       setMerging(false)
+    }
+  }
+
+  // A draft or a conflicting pull request can still be reviewed — only one that
+  // is already over cannot, which is why this does not reuse the merge gate.
+  const reviewBlocked =
+    detail.state !== "OPEN" ? `Pull request is ${detail.state.toLowerCase()}` : null
+
+  const approve = async () => {
+    setApproving(true)
+    try {
+      await ProjectService.ApprovePullRequest(path, detail.number)
+      toast.success(`Approved #${detail.number}`)
+      onRefresh()
+    } catch (err: unknown) {
+      toast.error(`Approve failed: ${errorText(err)}`)
+    } finally {
+      setApproving(false)
     }
   }
 
@@ -418,6 +438,26 @@ function PullRequestView({
               >
                 <SquareTerminal />
                 {session.busy ? "Opening…" : session.label}
+              </Button>
+            </span>
+            {/* Approving twice is something GitHub allows and nobody means to
+                do, so an approved pull request says so instead of offering it
+                again — the verdict is in ReviewStat below either way. */}
+            <span title={reviewBlocked ?? undefined}>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={
+                  approving || reviewBlocked !== null || detail.reviewDecision === "APPROVED"
+                }
+                onClick={() => void approve()}
+              >
+                <Check />
+                {approving
+                  ? "Approving…"
+                  : detail.reviewDecision === "APPROVED"
+                    ? "Approved"
+                    : "Approve"}
               </Button>
             </span>
             {/* The reason rides on a wrapper: a disabled button takes no pointer

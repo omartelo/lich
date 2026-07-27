@@ -33,6 +33,13 @@ func TestGHMessage(t *testing.T) {
 			"GitHub has no pull request with that number.",
 		},
 		{
+			"approving your own pull request",
+			"failed to create review: GraphQL: Review Can not approve your own pull request (addPullRequestReview)",
+			errTest, nil,
+			"GitHub does not let an account approve its own pull request — this one was opened by the " +
+				"account lich is using here.",
+		},
+		{
 			"logged out",
 			"To get started with GitHub CLI, please run: gh auth login",
 			errTest, nil,

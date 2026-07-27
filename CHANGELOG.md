@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Approving a pull request no longer means leaving lich.** An Approve button
+  sits beside Merge on the pull request screen and files the approving review
+  through the project's GitHub account. Once the review lands, the button reads
+  Approved and stops offering itself — GitHub would happily take a second one,
+  but nobody means to send it. A pull request that is already merged or closed
+  cannot be reviewed and says so; a draft or a conflicting one still can. GitHub
+  refuses an account approving its own pull request, and that refusal now reads
+  as the sentence it is. Reviews with a body, and requesting changes, are not
+  here: a review comment belongs to the line it is about, and lich has nowhere to
+  attach one yet.
+
 - **A project can pick which GitHub account it talks to.** `gh` keeps one active
   account per host, so a repository only a second account can see answered every
   pull request lookup with "Could not resolve to a Repository" — the same message

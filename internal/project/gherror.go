@@ -33,6 +33,11 @@ var ghFailures = []toolFailure{
 			"Choose the account that can see it in Settings → Version Control.",
 	},
 	{"could not resolve to a pullrequest", "GitHub has no pull request with that number."},
+	{
+		"can not approve your own pull request",
+		"GitHub does not let an account approve its own pull request — this one was opened by the " +
+			"account lich is using here.",
+	},
 	{"gh auth login", "gh is not signed in to GitHub. Run `gh auth login` in a terminal."},
 	{"not logged into", "gh is not signed in to GitHub. Run `gh auth login` in a terminal."},
 	{"api rate limit exceeded", "GitHub is rate-limiting this account. Try again in a few minutes."},

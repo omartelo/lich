@@ -143,6 +143,10 @@ export const ProjectService = {
     subject: string,
     body: string,
   ) => call<null>("project.MergePullRequest", [path, number, method, subject, body]),
+  /** Submit an approving review (0 = the checkout's branch). GitHub refuses a
+   * PR opened by the same account. */
+  ApprovePullRequest: (path: string, number: number) =>
+    call<null>("project.ApprovePullRequest", [path, number]),
   /** Open GitHub's "new pull request" page in the browser (gh pr create --web). */
   CreatePullRequest: (path: string) => call<null>("project.CreatePullRequest", [path]),
   /** A PR's unified diff (gh pr diff) for the Files changed tab; 0 = the checkout's branch. */
