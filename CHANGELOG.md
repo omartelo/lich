@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **One session loading no longer freezes every other terminal.** A resumed
+  Claude session with a large transcript floods its terminal, and while the
+  window was busy swallowing it the socket that carries terminal output stopped
+  being read. That backpressure used to land on the loop reading the PTYs: the
+  read stalled, the PTY buffers filled, and every shell in every session — not
+  just the one that was loading — stopped dead until the socket recovered.
+  Output now leaves each session through a queue of its own, so a window that
+  falls behind slows down the session producing the flood and nothing else.
+
 ## [0.21.0] - 2026-07-27
 
 ### Added
