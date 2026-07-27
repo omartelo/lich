@@ -27,7 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   section in Settings names the account for the project at hand, chosen from the
   ones `gh auth status` lists, and every GitHub call lich makes for that project
   — the badge, the pull request list, checks, diffs, merges and PR checkouts —
-  runs as it. Left at "gh's active account", nothing changes. The account governs
+  runs as it. Left at "gh's active account", nothing changes. An account is named
+  by its host as well as its login, so one that lives on a GitHub Enterprise
+  instance is offered — and found — like any other, and the same login on two
+  hosts stays two accounts; the host is spelled out in the picker only when there
+  is more than one in play. The account governs
   what lich reads from GitHub, not what git does: a push still rides the remote's
   ssh key and signs with the global `user.email`.
 

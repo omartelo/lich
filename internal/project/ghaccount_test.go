@@ -21,13 +21,15 @@ func TestParseGHAccounts(t *testing.T) {
 				"  - Token scopes: 'gist', 'read:org', 'repo'\n\n" +
 				"  ✓ Logged in to github.com account marcelo-filho_snk (keyring)\n" +
 				"  - Active account: false\n",
-			[]string{"omartelo", "marcelo-filho_snk"},
+			[]string{"github.com/omartelo", "github.com/marcelo-filho_snk"},
 		},
 		{
+			// The same login can exist on both hosts, so the host travels with
+			// it — and gh needs it back to find the token.
 			"a second host contributes its own accounts",
 			"github.com\n  ✓ Logged in to github.com account omartelo (keyring)\n" +
-				"ghe.example.com\n  ✓ Logged in to ghe.example.com account work-login (keyring)\n",
-			[]string{"omartelo", "work-login"},
+				"ghe.example.com\n  ✓ Logged in to ghe.example.com account omartelo (keyring)\n",
+			[]string{"github.com/omartelo", "ghe.example.com/omartelo"},
 		},
 		{"not logged in", "You are not logged into any GitHub hosts.\n", nil},
 		{"empty", "", nil},
@@ -47,8 +49,8 @@ func TestGitHubAccounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !slices.Equal(got, []string{"omartelo"}) {
-		t.Errorf("GitHubAccounts() = %v, want [omartelo]", got)
+	if !slices.Equal(got, []string{"github.com/omartelo"}) {
+		t.Errorf("GitHubAccounts() = %v, want [github.com/omartelo]", got)
 	}
 	if want := "auth status"; strings.Join(gh.args, " ") != want {
 		t.Errorf("ran %q, want %q", strings.Join(gh.args, " "), want)
@@ -66,7 +68,7 @@ func TestAccountTokenReachesGH(t *testing.T) {
 	var seen []string
 	gh := &accountGH{token: "gho_secret", pr: `{"number":7,"state":"OPEN"}`, calls: &seen}
 	svc := &Service{runner: gh.run}
-	svc.SetAccounts(func(string) string { return "marcelo-filho_snk" })
+	svc.SetAccounts(func(string) string { return "github.com/marcelo-filho_snk" })
 
 	pr, err := svc.PullRequestDetail("/repo", 0)
 	if err != nil || pr == nil {
@@ -75,7 +77,7 @@ func TestAccountTokenReachesGH(t *testing.T) {
 	if gh.viewToken != "gho_secret" {
 		t.Errorf("pr view ran with token %q, want the configured account's", gh.viewToken)
 	}
-	if want := "auth token --user marcelo-filho_snk"; !slices.Contains(seen, want) {
+	if want := "auth token --hostname github.com --user marcelo-filho_snk"; !slices.Contains(seen, want) {
 		t.Errorf("calls = %v, want one resolving the account (%q)", seen, want)
 	}
 }
@@ -114,7 +116,7 @@ func TestNoAccountRunsAsActive(t *testing.T) {
 func TestAccountTokenFailureFallsBack(t *testing.T) {
 	gh := &accountGH{tokenErr: errTest, pr: `{"number":7,"state":"OPEN"}`}
 	svc := &Service{runner: gh.run}
-	svc.SetAccounts(func(string) string { return "gone" })
+	svc.SetAccounts(func(string) string { return "github.com/gone" })
 
 	pr, err := svc.PullRequestDetail("/repo", 0)
 	if err != nil || pr == nil {
@@ -144,4 +146,41 @@ func (g *accountGH) run(_ time.Duration, _, token string, args ...string) ([]byt
 	}
 	g.viewToken = token
 	return []byte(g.pr), nil
+}
+
+// TestTokenArgs pins how an account is turned back into a gh call. Naming the
+// host is what makes an enterprise account resolvable at all: without it gh
+// looks the login up on its default host, answers "no oauth token found", and
+// tokenFor falls back to the active account without a word.
+func TestTokenArgs(t *testing.T) {
+	tests := []struct {
+		name    string
+		account string
+		want    []string
+	}{
+		{
+			"an account names its host",
+			"github.com/omartelo",
+			[]string{"auth", "token", "--hostname", "github.com", "--user", "omartelo"},
+		},
+		{
+			"an enterprise account is looked up on its own host",
+			"ghe.example.com/work-login",
+			[]string{"auth", "token", "--hostname", "ghe.example.com", "--user", "work-login"},
+		},
+		{
+			// Written before accounts carried a host: gh's default host is
+			// where it was found, so that is where it still resolves.
+			"a host-less account still resolves",
+			"omartelo",
+			[]string{"auth", "token", "--user", "omartelo"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tokenArgs(tt.account); !slices.Equal(got, tt.want) {
+				t.Errorf("tokenArgs(%q) = %v, want %v", tt.account, got, tt.want)
+			}
+		})
+	}
 }
