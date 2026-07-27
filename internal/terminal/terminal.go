@@ -82,12 +82,14 @@ type agentEvent struct {
 // session is a single running PTY-backed shell. done closes when the session
 // is reaped (by stream or Close — whichever removes it from the map), stopping
 // its cwd watcher. replay holds a capped tail of the PTY's output so a
-// reconnecting frontend can reseed its scrollback after a page reload.
+// reconnecting frontend can reseed its scrollback after a page reload. outbox
+// carries the coalesced output to the frontend off the PTY read path.
 type session struct {
 	pty    ptyHandle
 	out    *coalescer
 	done   chan struct{}
 	replay *replayBuffer
+	outbox *outbox
 }
 
 // Store is the persistence the terminal service depends on: the binary to spawn
@@ -421,30 +423,39 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume string, setup bo
 		return nil, "", fmt.Errorf("failed to start pty for %q: %w", id, err)
 	}
 
-	out := newCoalescer(func(data []byte) {
+	box := newOutbox(func(data []byte) {
 		if s.ws != nil && s.ws.send(id, data) {
 			return
 		}
 		encoded := base64.StdEncoding.EncodeToString(data)
 		s.hub.Emit(dataEventPrefix+id, encoded)
-	}, visibleFlushInterval, hiddenFlushInterval)
-	sess := &session{pty: p, out: out, done: make(chan struct{}), replay: newReplayBuffer(replayCapBytes)}
+	}, outboxDepth)
+	out := newCoalescer(box.push, visibleFlushInterval, hiddenFlushInterval)
+	sess := &session{
+		pty:    p,
+		out:    out,
+		done:   make(chan struct{}),
+		replay: newReplayBuffer(replayCapBytes),
+		outbox: box,
+	}
 	s.sessions[id] = sess
-	go s.stream(id, p, out, sess.replay)
+	go s.stream(id, sess)
 	return sess, cwd, nil
 }
 
 // stream copies PTY output to the frontend until the PTY is closed, then reaps
 // the process, drops the session and emits its exit event. Output goes through
 // the session's coalescer, which batches it on a short cadence while the
-// terminal is visible and a long one while it is hidden.
-func (s *Service) stream(id string, p ptyHandle, out *coalescer, replay *replayBuffer) {
+// terminal is visible and a long one while it is hidden, and then through its
+// outbox, which delivers it off this goroutine.
+func (s *Service) stream(id string, sess *session) {
+	p := sess.pty
 	buf := make([]byte, readBufSize)
 	for {
 		n, err := p.Read(buf)
 		if n > 0 {
-			replay.append(buf[:n])
-			out.Write(buf[:n])
+			sess.replay.append(buf[:n])
+			sess.out.Write(buf[:n])
 		}
 		if err != nil {
 			break
@@ -455,9 +466,11 @@ func (s *Service) stream(id string, p ptyHandle, out *coalescer, replay *replayB
 	// (Close only reaps sessions still in the map), and the user-driven Close
 	// path tolerates this as a no-op double close.
 	_ = p.Close()
-	// Flush any batched output before the exit event so the frontend always
-	// sees the final bytes ahead of the exit banner.
-	out.Close()
+	// Flush any batched output and wait for it to be delivered before the exit
+	// event, so the frontend always sees the final bytes ahead of the exit
+	// banner.
+	sess.out.Close()
+	sess.outbox.close()
 
 	s.mu.Lock()
 	if current, ok := s.sessions[id]; ok && current.pty == p {
