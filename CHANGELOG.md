@@ -7,18 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+## [0.21.0] - 2026-07-27
 
-- **Approving a pull request no longer means leaving lich.** An Approve button
-  sits beside Merge on the pull request screen and files the approving review
-  through the project's GitHub account. Once the review lands, the button reads
-  Approved and stops offering itself — GitHub would happily take a second one,
-  but nobody means to send it. A pull request that is already merged or closed
-  cannot be reviewed and says so; a draft or a conflicting one still can. GitHub
-  refuses an account approving its own pull request, and that refusal now reads
-  as the sentence it is. Reviews with a body, and requesting changes, are not
-  here: a review comment belongs to the line it is about, and lich has nowhere to
-  attach one yet.
+### Added
 
 - **A project can pick which GitHub account it talks to.** `gh` keeps one active
   account per host, so a repository only a second account can see answered every
@@ -31,19 +22,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   by its host as well as its login, so one that lives on a GitHub Enterprise
   instance is offered — and found — like any other, and the same login on two
   hosts stays two accounts; the host is spelled out in the picker only when there
-  is more than one in play. The account governs
-  what lich reads from GitHub, not what git does: a push still rides the remote's
-  ssh key and signs with the global `user.email`.
+  is more than one in play. The account governs what lich reads from GitHub, not
+  what git does: a push still rides the remote's ssh key and signs with the
+  global `user.email`.
+- **Approving a pull request no longer means leaving lich.** An Approve button
+  sits beside Merge on the pull request screen and files the approving review
+  through the project's GitHub account. Once the review lands, the button reads
+  Approved and stops offering itself — GitHub would happily take a second one,
+  but nobody means to send it. A pull request that is already merged or closed
+  cannot be reviewed and says so; a draft or a conflicting one still can. GitHub
+  refuses an account approving its own pull request, and that refusal now reads
+  as the sentence it is. Reviews with a body, and requesting changes, are not
+  here: a review comment belongs to the line it is about, and lich has nowhere to
+  attach one yet.
 
 ### Fixed
 
-- **git failures read as sentences too.** The worktree dialog, the discard flow
-  and the sidebar used to show git's own stderr, prefixed by the subcommand lich
-  had run — `git worktree: fatal: '…' contains modified or untracked files, use
-  --force to delete it`, or, when git refuses by exit status alone, the words
-  `exit status 1`. A rejected branch name now names the branch, a taken name says
-  it is taken, a folder that is not a repository says so, and a dirty worktree
-  says where to remove it. git's own text goes to lich's log.
 - **GitHub failures now read as sentences instead of `gh` output.** The pull
   request screens used to paste whatever `gh` printed — `GraphQL: Could not
   resolve to a Repository with the name 'acme/private'. (repository)`, prefixed
@@ -52,16 +46,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   picker, a signed-out `gh` names `gh auth login`, a rate limit says to wait, a
   refused merge says why. Anything unrecognised says so plainly; `gh`'s own text
   goes to lich's log, where it was always the more useful place for it.
+- **git failures read as sentences too.** The worktree dialog, the discard flow
+  and the sidebar used to show git's own stderr, prefixed by the subcommand lich
+  had run — `git worktree: fatal: '…' contains modified or untracked files, use
+  --force to delete it`, or, when git refuses by exit status alone, the words
+  `exit status 1`. A rejected branch name now names the branch, a taken name says
+  it is taken, a folder that is not a repository says so, and a dirty worktree
+  says where to remove it. git's own text goes to lich's log.
+- **The pull request badge follows the project's GitHub account too.** It looked
+  the branch's PR up on its own path, so it kept answering as `gh`'s active
+  account while the screen beside it used the project's — a badge that vanished
+  on the repositories the account picker exists for.
 - **Three more browser reflexes stop firing.** Holding Shift used to let a chord
   through: Ctrl+Shift+P still raised the system print dialog, Ctrl+Shift+O the
   bookmark manager, and Ctrl+Shift+Q quit Chromium, which quits lich — the same
   fatal move Ctrl+W was already stopped from making. They fired everywhere,
   terminals included, since a terminal encodes neither of them. The devtools
   chords, reload and F11 stay where they are.
-- **The pull request badge follows the project's GitHub account too.** It looked
-  the branch's PR up on its own path, so it kept answering as `gh`'s active
-  account while the screen beside it used the project's — a badge that vanished
-  on the repositories the account picker exists for.
 
 ## [0.20.0] - 2026-07-26
 
@@ -1056,7 +1057,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/omartelo/lich/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/omartelo/lich/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/omartelo/lich/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/omartelo/lich/compare/v0.17.0...v0.18.0
