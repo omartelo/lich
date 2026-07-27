@@ -6,7 +6,6 @@ package project
 
 import (
 	"bytes"
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -48,14 +47,19 @@ type Picker interface {
 // Service opens project directories via the native file picker.
 type Service struct {
 	picker Picker
-	// gh runs the GitHub CLI for the pull request flows (pr.go); a seam so they
-	// are testable without a GitHub remote.
-	gh ghRunner
+	// runner runs the GitHub CLI for the pull request flows (pr.go); a seam so
+	// they are testable without a GitHub remote. Call it through s.gh, which
+	// resolves the account the checkout runs as.
+	runner ghRunner
+	// accounts resolves the gh account a checkout's calls run as; nil (the
+	// default, and every test that does not wire it) means gh's own active
+	// account. Wired to the store in main (ghaccount.go).
+	accounts accountLookup
 }
 
 // New returns a project service using the given picker.
 func New(picker Picker) *Service {
-	return &Service{picker: picker, gh: runGH}
+	return &Service{picker: picker, runner: runGH}
 }
 
 // Open shows the native directory picker and returns the chosen project, or nil
@@ -117,12 +121,7 @@ const prLookupTimeout = 5 * time.Second
 // repo. It shells out to `gh pr view`, which resolves the PR from the checked-out
 // branch. Any failure yields nil, matching Branch's "hide the segment" contract.
 func (s *Service) PullRequest(path string) *PullRequest {
-	ctx, cancel := context.WithTimeout(context.Background(), prLookupTimeout)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "gh", "pr", "view", "--json", "number,url,state")
-	cmd.Dir = path
-	winexec.Hide(cmd)
-	out, err := cmd.Output()
+	out, err := s.gh(prLookupTimeout, path, "pr", "view", "--json", "number,url,state")
 	if err != nil {
 		return nil
 	}

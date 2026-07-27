@@ -87,6 +87,8 @@ func main() {
 	hub := events.New()
 	term := terminal.New(db, env, hub)
 	proj := project.New(project.ZenityPicker{})
+	// gh has one active account per host; a project can name a different one.
+	proj.SetAccounts(db.GHAccountForPath)
 
 	// Every service the frontend uses goes through the loopback RPC
 	// (internal/rpc). store.Close manages the DB lifecycle and stays Go-only.

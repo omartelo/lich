@@ -81,6 +81,49 @@ func (s *Service) ClaudeBin(projectID string) string {
 	return s.ProviderBin(providers.Claude, projectID)
 }
 
+// ghAccountKey is the settings key holding the gh account a project's GitHub
+// calls run as. Project-scoped only, no global fallback: gh already has a
+// global answer (its active account), and this exists precisely to override it
+// for one repository.
+const ghAccountKey = "vcs.account"
+
+// GHAccountForPath returns the gh account login configured for the project the
+// checkout at path belongs to, or "" for none. The path is a project directory
+// or one of its worktrees — the project services address a checkout by path,
+// never by project id, so the mapping is resolved here.
+func (s *Service) GHAccountForPath(path string) string {
+	projectID := s.projectIDForPath(path)
+	if projectID == "" {
+		return ""
+	}
+	login, err := s.GetSetting(ghAccountKey, projectID)
+	if err != nil {
+		return ""
+	}
+	return login
+}
+
+// projectIDForPath resolves which project a checkout belongs to: its own
+// directory, or a session's (a worktree lives outside the project directory, so
+// only its session row ties it back). Returns "" when neither matches.
+func (s *Service) projectIDForPath(path string) string {
+	if path == "" {
+		return ""
+	}
+	var id string
+	err := s.db.QueryRow(
+		`SELECT id FROM projects WHERE path = ?
+		 UNION ALL
+		 SELECT project_id FROM sessions WHERE path = ?
+		 LIMIT 1`,
+		path, path,
+	).Scan(&id)
+	if err != nil {
+		return ""
+	}
+	return id
+}
+
 // worktreeSetupKey is the settings key holding a project's worktree setup
 // script. Project-scoped only, no global fallback: a setup command is
 // repo-specific, so a global value would be wrong more often than useful.

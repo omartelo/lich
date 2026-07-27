@@ -6,6 +6,7 @@ import { HotkeysSettings } from "./HotkeysSettings"
 import { ProvidersSettings } from "./ProvidersSettings"
 import { ProviderBinSettings } from "./ProviderBinSettings"
 import { WorktreeSetupSettings } from "./WorktreeSetupSettings"
+import { VersionControlSettings } from "./VersionControlSettings"
 import { UpdatesSettings } from "./UpdatesSettings"
 import { SearchInput } from "@/components/common/SearchInput"
 import { enabledProviders, useProviders } from "@/lib/providers-store"
@@ -32,6 +33,12 @@ const BASE_SECTIONS: Section[] = [
     label: "Worktree",
     group: "app",
     render: (id) => <WorktreeSetupSettings projectId={id} />,
+  },
+  {
+    id: "version-control",
+    label: "Version Control",
+    group: "app",
+    render: (id) => <VersionControlSettings projectId={id} />,
   },
   { id: "updates", label: "Updates", group: "app", render: () => <UpdatesSettings /> },
 ]

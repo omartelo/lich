@@ -3,7 +3,9 @@ package project
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -26,19 +28,16 @@ type Branches struct {
 }
 
 // runGit runs git -C dir args... and returns stdout. Unlike Branch/Diff, which
-// deliberately swallow errors for polling, failures here carry git's stderr in
-// the message so the frontend can show it verbatim.
+// deliberately swallow errors for polling, a failure here is shown to someone —
+// so it comes back as the screen's message and git's stderr reaches the log
+// (giterror.go).
 func runGit(dir string, args ...string) (string, error) {
 	cmd := command("git", append([]string{"-C", dir}, args...)...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
-		msg := strings.TrimSpace(stderr.String())
-		if msg == "" {
-			msg = err.Error()
-		}
-		return "", fmt.Errorf("git %s: %s", args[0], msg)
+		return "", gitFailure(args, stderr.String(), err)
 	}
 	return string(out), nil
 }
@@ -192,8 +191,10 @@ func parseWorktreeBlock(block string) (Worktree, bool) {
 // manual rm) so they cannot block re-creating a worktree under the same name,
 // and an occupied path is refused here rather than by a half-finished git call.
 func reserveWorktreePath(projectPath, projectID, name string) (string, error) {
+	// check-ref-format says no by exit status alone, with nothing on stderr, so
+	// the name it rejected has to come from here.
 	if _, err := runGit(projectPath, "check-ref-format", "--branch", name); err != nil {
-		return "", err
+		return "", fmt.Errorf("%q is not a name git accepts for a branch.", name)
 	}
 	root, err := worktreesRoot()
 	if err != nil {
@@ -204,10 +205,11 @@ func reserveWorktreePath(projectPath, projectID, name string) (string, error) {
 		return "", err
 	}
 	if _, err := os.Stat(wtPath); err == nil {
-		return "", fmt.Errorf("worktree path already exists: %s", wtPath)
+		return "", fmt.Errorf("A worktree named %q already exists.", name)
 	}
 	if err := os.MkdirAll(filepath.Dir(wtPath), 0o755); err != nil {
-		return "", fmt.Errorf("create worktrees dir: %w", err)
+		slog.Warn("create worktrees dir", "path", filepath.Dir(wtPath), "err", err)
+		return "", errors.New("The worktree directory could not be created.")
 	}
 	return wtPath, nil
 }
@@ -229,7 +231,7 @@ func (s *Service) CreateWorktree(projectPath, projectID, name, base string, base
 	if baseIsRemote {
 		remote, branch, ok := strings.Cut(base, "/")
 		if !ok {
-			return nil, fmt.Errorf("remote branch %q has no remote prefix", base)
+			return nil, fmt.Errorf("%q is not a remote branch lich can track.", base)
 		}
 		if _, err := runGit(projectPath, "fetch", "--", remote, branch); err != nil {
 			return nil, err
@@ -245,7 +247,7 @@ func (s *Service) CreateWorktree(projectPath, projectID, name, base string, base
 	// The session spawns claude at wtPath immediately after; make sure the
 	// checkout actually works before handing it over.
 	if _, err := runGit(wtPath, "rev-parse", "--is-inside-work-tree"); err != nil {
-		return nil, fmt.Errorf("worktree created but unusable: %w", err)
+		return nil, errors.New("The worktree was created but git does not read it as a checkout.")
 	}
 	seedWorktree(projectPath, wtPath)
 	return &Worktree{Name: name, Path: canonicalPath(wtPath)}, nil
@@ -262,14 +264,14 @@ type prHead struct {
 func (s *Service) pullRequestHead(path string, number int) (prHead, error) {
 	out, err := s.gh(prReadTimeout, path, prArgs("view", number, "--json", "headRefName,isCrossRepository")...)
 	if err != nil {
-		return prHead{}, fmt.Errorf("gh pr view: %w", err)
+		return prHead{}, err
 	}
 	var head prHead
 	if err := json.Unmarshal(out, &head); err != nil {
-		return prHead{}, fmt.Errorf("decode gh pr view: %w", err)
+		return prHead{}, errUnreadableAnswer(err)
 	}
 	if head.RefName == "" {
-		return prHead{}, fmt.Errorf("pull request #%d has no head branch", number)
+		return prHead{}, fmt.Errorf("GitHub reports no head branch for pull request #%d.", number)
 	}
 	return head, nil
 }
@@ -286,14 +288,14 @@ func (s *Service) pullRequestHead(path string, number int) (prHead, error) {
 // of nothing, and would hold the path against a second attempt.
 func (s *Service) CreateWorktreeFromPR(projectPath, projectID string, number int) (*Worktree, error) {
 	if number <= 0 {
-		return nil, fmt.Errorf("invalid pull request number %d", number)
+		return nil, fmt.Errorf("%d is not a pull request number.", number)
 	}
 	head, err := s.pullRequestHead(projectPath, number)
 	if err != nil {
 		return nil, err
 	}
 	if head.CrossRepo {
-		return nil, fmt.Errorf("pull request #%d comes from a fork: its branch cannot be pushed back", number)
+		return nil, fmt.Errorf("Pull request #%d comes from a fork: its branch could not be pushed back.", number)
 	}
 	wtPath, err := reserveWorktreePath(projectPath, projectID, head.RefName)
 	if err != nil {
@@ -304,9 +306,10 @@ func (s *Service) CreateWorktreeFromPR(projectPath, projectID string, number int
 	}
 	if _, err := s.gh(prCheckoutTimeout, wtPath, "pr", "checkout", strconv.Itoa(number)); err != nil {
 		if _, rmErr := runGit(projectPath, "worktree", "remove", "--force", wtPath); rmErr != nil {
-			return nil, fmt.Errorf("gh pr checkout: %w (and the worktree could not be removed: %v)", err, rmErr)
+			slog.Warn("worktree left behind by a failed PR checkout", "path", wtPath, "err", rmErr)
+			return nil, fmt.Errorf("%w Its half-made worktree could not be removed either.", err)
 		}
-		return nil, fmt.Errorf("gh pr checkout: %w", err)
+		return nil, err
 	}
 	seedWorktree(projectPath, wtPath)
 	return &Worktree{Name: head.RefName, Path: canonicalPath(wtPath)}, nil

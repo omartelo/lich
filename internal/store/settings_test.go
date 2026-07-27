@@ -57,6 +57,48 @@ func TestClaudeBinResolution(t *testing.T) {
 	}
 }
 
+func TestGHAccountForPath(t *testing.T) {
+	svc := newTestStore(t)
+	if err := svc.AddProject("p1", "lich", "/repo/lich"); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	// A worktree lives outside the project directory; only its session row ties
+	// the path back to the project.
+	if err := svc.AddSession("p1", "s1", "fix", "claude", "/data/worktrees/p1/fix", 2); err != nil {
+		t.Fatalf("AddSession: %v", err)
+	}
+	if err := svc.SetSetting(ghAccountKey, "p1", "octocat"); err != nil {
+		t.Fatalf("SetSetting: %v", err)
+	}
+
+	tests := []struct {
+		name string
+		path string
+		want string
+	}{
+		{"project directory", "/repo/lich", "octocat"},
+		{"worktree of the project", "/data/worktrees/p1/fix", "octocat"},
+		{"unknown path", "/elsewhere", ""},
+		{"empty path", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := svc.GHAccountForPath(tt.path); got != tt.want {
+				t.Errorf("GHAccountForPath(%q) = %q, want %q", tt.path, got, tt.want)
+			}
+		})
+	}
+
+	// A project with no account configured resolves to "", which runs gh as its
+	// own active account.
+	if err := svc.AddProject("p2", "other", "/repo/other"); err != nil {
+		t.Fatalf("AddProject p2: %v", err)
+	}
+	if got := svc.GHAccountForPath("/repo/other"); got != "" {
+		t.Errorf("unconfigured project = %q, want \"\"", got)
+	}
+}
+
 func TestProviderBinResolution(t *testing.T) {
 	svc := newTestStore(t)
 

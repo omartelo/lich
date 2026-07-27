@@ -99,6 +99,10 @@ nobody knows it and that the call site never shows. The mechanism and the histor
 
 - **Session cwd is polled** from the PTY child (`internal/terminal/cwd.go`, per-OS readers behind build tags); a
   failed read degrades to the session's start directory. Tracks the direct child only, not nested shells.
+- **A project's gh account governs gh, not git**: `vcs.account` (`internal/project/ghaccount.go`) puts one
+  account's token in `GH_TOKEN` for every gh call lich makes for that project. A push still rides the remote's
+  ssh key and signs with the global `user.email`, so a PR can be *read* by one account and its commits *land*
+  under another, with no error anywhere. Per-worktree `core.sshCommand` + `user.email` is the upgrade path.
 - **git status is polled** — one shared poller per repository path (`frontend/src/lib/git/git-status-store.ts`); the
   lich plugin's `session-touched` hook nudges an immediate refresh. An fs watcher is the upgrade path.
 - **Persistence is hybrid**: UI prefs in the page's localStorage (`lich.*` keys — the reason the listener port is

@@ -352,14 +352,8 @@ func TestIsNoPullRequest(t *testing.T) {
 	}
 }
 
-func TestGhError(t *testing.T) {
-	if got := ghError("  boom  ", errTest); got != "boom" {
-		t.Errorf("stderr should win and be trimmed, got %q", got)
-	}
-	if got := ghError("   ", errTest); got != "sentinel" {
-		t.Errorf("empty stderr should fall back to the error, got %q", got)
-	}
-}
+// ghError's contract moved to gherror.go: gh's stderr no longer reaches the
+// caller at all. TestGHMessage covers what replaced it.
 
 // errTest is a fixed error for ghError's fallback branch.
 var errTest = testError("sentinel")
@@ -377,17 +371,18 @@ type fakeGH struct {
 	calls   int
 	timeout time.Duration
 	dir     string
+	token   string
 	args    []string
 }
 
-func (f *fakeGH) run(timeout time.Duration, dir string, args ...string) ([]byte, error) {
+func (f *fakeGH) run(timeout time.Duration, dir, token string, args ...string) ([]byte, error) {
 	f.calls++
-	f.timeout, f.dir, f.args = timeout, dir, args
+	f.timeout, f.dir, f.token, f.args = timeout, dir, token, args
 	return f.out, f.err
 }
 
 // withGH builds a Service whose gh calls land on the fake instead of the CLI.
-func withGH(f *fakeGH) *Service { return &Service{gh: f.run} }
+func withGH(f *fakeGH) *Service { return &Service{runner: f.run} }
 
 func TestPullRequestDetailFlow(t *testing.T) {
 	t.Run("open PR decodes, scoped to the path", func(t *testing.T) {
@@ -420,14 +415,17 @@ func TestPullRequestDetailFlow(t *testing.T) {
 		}
 	})
 
-	t.Run("a real gh failure surfaces its cause", func(t *testing.T) {
-		gh := &fakeGH{err: errors.New("gh auth login required")}
+	t.Run("a real gh failure reaches the caller as written", func(t *testing.T) {
+		// The runner already turned gh's stderr into the screen's message
+		// (gherror.go); the flow must pass it through rather than prefix it
+		// with the command it ran.
+		gh := &fakeGH{err: errors.New("gh is not signed in to GitHub.")}
 		_, err := withGH(gh).PullRequestDetail("/repo", 0)
 		if err == nil {
 			t.Fatal("expected an error")
 		}
-		if !strings.Contains(err.Error(), "gh pr view") || !strings.Contains(err.Error(), "auth login") {
-			t.Errorf("error should name the command and the cause, got %q", err)
+		if err.Error() != "gh is not signed in to GitHub." {
+			t.Errorf("error = %q, want the runner's message unchanged", err)
 		}
 	})
 
@@ -436,6 +434,39 @@ func TestPullRequestDetailFlow(t *testing.T) {
 			t.Error("expected a decode error")
 		}
 	})
+}
+
+// TestPullRequestBadgeRunsThroughTheRunner pins the badge to the same runner as
+// the rest: it used to shell out to gh on its own, which left it running as
+// whatever account gh had active while the screen beside it used the project's.
+func TestPullRequestBadgeRunsThroughTheRunner(t *testing.T) {
+	gh := &fakeGH{out: []byte(`{"number":7,"url":"https://github.com/o/r/pull/7","state":"OPEN"}`)}
+	pr := withGH(gh).PullRequest("/repo")
+	if pr == nil || pr.Number != 7 {
+		t.Fatalf("PullRequest() = %+v, want the open PR", pr)
+	}
+	if want := []string{"pr", "view", "--json", "number,url,state"}; !slices.Equal(gh.args, want) {
+		t.Errorf("args = %v, want %v", gh.args, want)
+	}
+	if gh.dir != "/repo" || gh.timeout != prLookupTimeout {
+		t.Errorf("wrong scope: dir %q timeout %v", gh.dir, gh.timeout)
+	}
+
+	// A failure still hides the badge rather than surfacing anything.
+	if pr := withGH(&fakeGH{err: errTest}).PullRequest("/repo"); pr != nil {
+		t.Errorf("failed lookup = %+v, want nil", pr)
+	}
+
+	// And it runs as the project's account, like every other GitHub call.
+	account := &accountGH{token: "gho_secret", pr: `{"number":7,"url":"u","state":"OPEN"}`}
+	svc := &Service{runner: account.run}
+	svc.SetAccounts(func(string) string { return "octocat" })
+	if pr := svc.PullRequest("/repo"); pr == nil {
+		t.Fatal("PullRequest() = nil, want the open PR")
+	}
+	if account.viewToken != "gho_secret" {
+		t.Errorf("badge ran with token %q, want the configured account's", account.viewToken)
+	}
 }
 
 func TestMergePullRequestFlow(t *testing.T) {
@@ -468,8 +499,8 @@ func TestMergePullRequestFlow(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected an error")
 		}
-		if !strings.Contains(err.Error(), "gh pr merge") || !strings.Contains(err.Error(), "not mergeable") {
-			t.Errorf("error should name the command and the cause, got %q", err)
+		if err.Error() != "Pull request is not mergeable" {
+			t.Errorf("error = %q, want the runner's message unchanged", err)
 		}
 	})
 }
@@ -494,8 +525,8 @@ func TestCreatePullRequestFlow(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected an error")
 		}
-		if !strings.Contains(err.Error(), "gh pr create") || !strings.Contains(err.Error(), "no git remote") {
-			t.Errorf("error should name the command and the cause, got %q", err)
+		if err.Error() != "no git remote found" {
+			t.Errorf("error = %q, want the runner's message unchanged", err)
 		}
 	})
 }
@@ -532,8 +563,8 @@ func TestPullRequestDiffFlow(t *testing.T) {
 		gh := &fakeGH{err: errors.New("could not resolve to a Repository")}
 		if _, err := withGH(gh).PullRequestDiff("/repo", 0); err == nil {
 			t.Fatal("expected an error")
-		} else if !strings.Contains(err.Error(), "gh pr diff") {
-			t.Errorf("error should name the command, got %q", err)
+		} else if err.Error() != "could not resolve to a Repository" {
+			t.Errorf("error = %q, want the runner's message unchanged", err)
 		}
 	})
 }
@@ -668,8 +699,8 @@ func TestListPullRequestsFlow(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected an error")
 		}
-		if !strings.Contains(err.Error(), "gh pr list") || !strings.Contains(err.Error(), "auth login") {
-			t.Errorf("error should name the command and the cause, got %q", err)
+		if err.Error() != "gh auth login required" {
+			t.Errorf("error = %q, want the runner's message unchanged", err)
 		}
 	})
 
