@@ -332,7 +332,18 @@ export function TerminalView({
         resizeInput.dispose()
         selection.dispose()
         searchResults.dispose()
+        // Disposing the WebGL addon only detaches its canvas — the GL context
+        // lives on until the canvas is collected, and Chromium force-loses the
+        // oldest of them once 16 are alive. Since every hide destroys a
+        // terminal and every show builds a new one, a dozen tab switches are
+        // enough to start killing live renderers (a frozen terminal for the 3s
+        // xterm waits for a restore, then a permanent fall back to the slower
+        // DOM renderer). Hand the context back here instead.
+        const canvases = [...container.querySelectorAll("canvas")]
         term.dispose()
+        for (const canvas of canvases) {
+          canvas.getContext("webgl2")?.getExtension("WEBGL_lose_context")?.loseContext()
+        }
       },
     }
   }
