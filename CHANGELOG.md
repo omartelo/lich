@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A session no longer offers to resume a conversation that is gone.** Reopening
+  a session lich had run Claude Code in asked whether to continue that
+  conversation — and answering yes could drop you into a terminal showing
+  Claude's "no conversation found" error instead of a session. lich stored the
+  conversation's id for good, but Claude Code prunes its own transcripts, so an
+  old enough session was offering something that could no longer happen. The
+  question is now only asked while the conversation is still there; when it is
+  not, the session starts fresh and says so.
+
 ## [0.22.0] - 2026-07-28
 
 ### Added

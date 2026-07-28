@@ -236,8 +236,11 @@ const readBufSize = 32 * 1024
 //
 // A non-empty resume is a Claude session id to reopen (`--resume`), which the
 // frontend passes after the user accepted the prompt to continue the session
-// this card ran before the last restart. An id Claude no longer knows fails in
-// the PTY like any other bad invocation — the user sees Claude's own error.
+// this card ran before the last restart. The prompt is only raised for a
+// conversation ResumeAvailable still finds, so an id Claude no longer knows
+// normally never reaches here; one that slips through (pruned between the check
+// and the spawn) fails in the PTY like any other bad invocation — the user sees
+// Claude's own error.
 //
 // setup is passed once, by the flow that just created this session's worktree:
 // it runs the project's worktree setup script (Settings › Project) in the PTY

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react"
 import { useMatch } from "react-router-dom"
+import { toast } from "sonner"
 import { TerminalView } from "./TerminalView"
 import { ResumeSessionDialog } from "./ResumeSessionDialog"
+import { Terminal as TerminalService } from "@/lib/rpc"
 import { useProjects } from "@/providers/projects"
 import { activeSessionId, resumableSession, sessionsOf } from "@/lib/session/sessions"
 import type { Session } from "@/lib/session/sessions"
@@ -20,7 +22,8 @@ import type { Session } from "@/lib/session/sessions"
 //
 // A restored session that ran Claude Code before the last restart carries that
 // Claude session's id, so its spawn waits on the resume prompt: the terminal is
-// mounted only once the user has said whether to continue that conversation.
+// mounted only once the user has said whether to continue that conversation —
+// and only when there is still a conversation to continue (ResumeAvailable).
 export function TerminalHost() {
   const { projects, sessions } = useProjects()
   const match = useMatch("/projects/:projectId")
@@ -50,12 +53,38 @@ export function TerminalHost() {
     if (!activeProjectId || !visibleSessionId || spawnedRef.current.has(visibleSessionId)) {
       return
     }
+    const spawn = (id: string) => setSpawned((prev) => new Set(prev).add(id))
     const resumable = resumableSession(sessionsRef.current, activeProjectId, visibleSessionId)
-    if (resumable) {
-      setAsking(resumable)
+    if (!resumable) {
+      spawn(visibleSessionId)
       return
     }
-    setSpawned((prev) => new Set(prev).add(visibleSessionId))
+    // The row carries its provider session id for good, but the conversation it
+    // names does not: Claude Code prunes its transcripts, and a resume offered
+    // past that point is what put the provider's error in the PTY instead of a
+    // session. A failed check still asks — losing a live conversation to an
+    // answer nobody gave costs more than the error this removes.
+    let live = true
+    void TerminalService.ResumeAvailable(resumable.kind, resumable.providerSessionId ?? "")
+      .then((available) => {
+        if (!live) {
+          return
+        }
+        if (available) {
+          setAsking(resumable)
+          return
+        }
+        toast("The previous conversation is no longer available — starting a new session.")
+        spawn(resumable.id)
+      })
+      .catch(() => {
+        if (live) {
+          setAsking(resumable)
+        }
+      })
+    return () => {
+      live = false
+    }
   }, [activeProjectId, visibleSessionId])
 
   // Answer the prompt and release the spawn: resume is the Claude session id to
