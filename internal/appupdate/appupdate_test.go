@@ -66,11 +66,50 @@ func TestCanSelfApply(t *testing.T) {
 		{"linux never", "linux", exe, false},
 		{"no exe path", "darwin", "", false},
 		{"unwritable dir", "darwin", filepath.Join("/nonexistent-abc123", "lich"), false},
+		{"homebrew cellar is brew's", "darwin", cellarExe(t), false},
 	}
 	for _, tc := range tests {
 		if got := canSelfApply(tc.goos, tc.exePath); got != tc.want {
 			t.Errorf("canSelfApply(%q,%q) = %v, want %v", tc.goos, tc.exePath, got, tc.want)
 		}
+	}
+}
+
+// cellarExe returns a writable path shaped like a Homebrew formula install
+// (<prefix>/Cellar/<formula>/<version>/bin/lich), so the Cellar segment is the
+// only reason canSelfApply can refuse it.
+func cellarExe(t *testing.T) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "Cellar", "lich", "0.21.1", "bin")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return filepath.Join(dir, "lich")
+}
+
+// The binary users actually launch is <prefix>/bin/lich, a symlink into the
+// Cellar — the check has to see through it.
+func TestBrewOwnedResolvesLinkedBinary(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation needs elevation on Windows")
+	}
+	cellar := cellarExe(t)
+	if err := os.WriteFile(cellar, []byte("lich"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	linkDir := filepath.Join(t.TempDir(), "bin")
+	if err := os.MkdirAll(linkDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(linkDir, "lich")
+	if err := os.Symlink(cellar, link); err != nil {
+		t.Fatal(err)
+	}
+	if !brewOwned(link) {
+		t.Errorf("brewOwned(%q) = false, want true through the symlink", link)
+	}
+	if canSelfApply("darwin", link) {
+		t.Error("canSelfApply = true for a brew-linked binary, want false")
 	}
 }
 
@@ -137,25 +176,28 @@ func TestStatus(t *testing.T) {
 
 func TestInstallCommand(t *testing.T) {
 	arch := "yay -S lich-bin" + restartChain
+	brew := "brew upgrade omartelo/tap/lich" + restartChain
 
 	tests := []struct {
 		name      string
 		goos      string
+		exePath   string
 		osRelease string // written to a temp file; "" leaves osReleasePath missing
 		want      string
 	}{
-		{"windows self-apply", "windows", "", ""},
-		{"darwin self-apply", "darwin", "", ""},
-		{"arch by ID", "linux", "ID=arch\n", arch},
-		{"arch quoted ID", "linux", "ID=\"arch\"\n", arch},
-		{"arch derivative via ID_LIKE", "linux", "ID=manjaro\nID_LIKE=arch\n", arch},
-		{"debian uses install.sh", "linux", "ID=debian\n", installScript},
-		{"fedora uses install.sh", "linux", "ID=fedora\nID_LIKE=\"rhel centos\"\n", installScript},
-		{"missing os-release uses install.sh", "linux", "", installScript},
+		{"windows self-apply", "windows", "", "", ""},
+		{"darwin self-apply", "darwin", "", "", ""},
+		{"homebrew install", "darwin", cellarExe(t), "", brew},
+		{"arch by ID", "linux", "", "ID=arch\n", arch},
+		{"arch quoted ID", "linux", "", "ID=\"arch\"\n", arch},
+		{"arch derivative via ID_LIKE", "linux", "", "ID=manjaro\nID_LIKE=arch\n", arch},
+		{"debian uses install.sh", "linux", "", "ID=debian\n", installScript},
+		{"fedora uses install.sh", "linux", "", "ID=fedora\nID_LIKE=\"rhel centos\"\n", installScript},
+		{"missing os-release uses install.sh", "linux", "", "", installScript},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			s := &Service{goos: tc.goos, osReleasePath: filepath.Join("/nonexistent-abc123", "os-release")}
+			s := &Service{goos: tc.goos, exePath: tc.exePath, osReleasePath: filepath.Join("/nonexistent-abc123", "os-release")}
 			if tc.osRelease != "" {
 				path := filepath.Join(t.TempDir(), "os-release")
 				if err := os.WriteFile(path, []byte(tc.osRelease), 0o600); err != nil {

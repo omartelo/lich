@@ -10,12 +10,15 @@ Pick your system:
 - [Fedora / RHEL](#fedora--rhel)
 - [Arch](#arch)
 - [Static binary (any distro)](#static-binary)
+- [macOS (experimental)](#macos-experimental)
 - [Windows (experimental)](#windows-experimental)
 - [Verifying checksums](#verifying-checksums)
 
 **Runtime dependencies** — lich opens its window in a Chromium-family browser;
 none is bundled. On Linux any of `chromium`, `google-chrome`, `helium-browser` or `brave`
-satisfies it, and `zenity` provides the folder picker. On Windows, Chrome,
+satisfies it, and `zenity` provides the folder picker. On macOS, Chrome,
+Chromium, Edge or Brave are looked up as `.app` bundles under `/Applications`
+(and `~/Applications`), and the folder picker is native. On Windows, Chrome,
 Edge or Brave are found via their conventional install paths (Edge ships with
 Windows) and the folder picker is native.
 
@@ -83,6 +86,29 @@ install -Dm755 lich-*-linux-amd64 ~/.local/bin/lich
 
 You still need the runtime dependencies — install `chromium` (or another
 Chromium-family browser) and `zenity` through your package manager.
+
+## macOS (experimental)
+
+From the [tap](https://github.com/omartelo/homebrew-tap) — Apple Silicon and
+Intel both:
+
+```bash
+brew install omartelo/tap/lich
+```
+
+The formula installs the release binary, so `brew upgrade` tracks new versions
+and lich's own update button steps aside on a Homebrew install.
+
+Without Homebrew, download `lich-*-darwin-arm64` (Apple Silicon) or
+`lich-*-darwin-amd64` (Intel) from the releases page and install it by hand.
+The binary is unsigned, so a browser or `curl` download carries a quarantine
+flag Gatekeeper refuses to run — clear it after verifying the checksum (see
+below):
+
+```bash
+install -m755 lich-*-darwin-arm64 ~/.local/bin/lich
+xattr -d com.apple.quarantine ~/.local/bin/lich
+```
 
 ## Windows (experimental)
 

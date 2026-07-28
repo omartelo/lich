@@ -1,8 +1,9 @@
 // Package appupdate checks GitHub for a newer lich release and, on the install
 // channels that own their binary (Windows and macOS), downloads and swaps it in
-// place. On Linux the binary belongs to the system package manager, so this
-// package only reports the update — the UI drives the install through the
-// package manager instead (see install.sh and the /restart endpoint).
+// place. On Linux — and wherever Homebrew owns the binary — it belongs to a
+// package manager, so this package only reports the update: the UI drives the
+// install through that manager instead (see install.sh and the /restart
+// endpoint).
 package appupdate
 
 import (
@@ -30,6 +31,9 @@ const (
 
 	// aurPackage is the AUR name Arch users update through their helper.
 	aurPackage = "lich-bin"
+	// brewFormula is the tap-qualified formula name Homebrew users update
+	// through; brew owns the Cellar copy, so lich never swaps it itself.
+	brewFormula = "omartelo/tap/lich"
 	// installScript is the deb/rpm/other-distro update path: install.sh detects
 	// the distro, installs the matching package, and POSTs /restart itself.
 	installScript = "curl -fsSL https://raw.githubusercontent.com/" + repo + "/main/install.sh | sh"
@@ -192,7 +196,8 @@ func assetName(goos, goarch, version string) string {
 
 // canSelfApply reports whether this build can replace its own binary: a
 // self-apply platform (Windows/macOS) with a known, writable executable
-// directory. Linux always returns false — its binary is package-manager owned.
+// directory that no package manager owns. Linux always returns false — its
+// binary is package-manager owned.
 func canSelfApply(goos, exePath string) bool {
 	if goos != "windows" && goos != "darwin" {
 		return false
@@ -200,15 +205,36 @@ func canSelfApply(goos, exePath string) bool {
 	if exePath == "" {
 		return false
 	}
+	if brewOwned(exePath) {
+		return false
+	}
 	return dirWritable(filepath.Dir(exePath))
+}
+
+// brewOwned reports whether exePath is a Homebrew formula install. The Cellar
+// is writable by its user, so the writability check alone would let lich swap a
+// binary brew tracks — leaving brew reporting the version it installed while a
+// different one runs. Every prefix (/opt/homebrew, /usr/local, a custom one)
+// keeps formulae under a Cellar segment, and <prefix>/bin/lich is a symlink
+// into it, so the path is resolved first.
+func brewOwned(exePath string) bool {
+	resolved, err := filepath.EvalSymlinks(exePath)
+	if err != nil {
+		resolved = exePath
+	}
+	return slices.Contains(strings.Split(resolved, string(filepath.Separator)), "Cellar")
 }
 
 // installCommand is the shell command the UI pastes to update this install, or
 // "" on the self-apply platforms (they swap the binary through the button).
 // Arch goes through its AUR helper plus an explicit restart — yay knows nothing
 // about lich's /restart — while every other distro uses install.sh, which
-// restarts itself.
+// restarts itself. A Homebrew install is package-manager owned like Arch's, on
+// whichever platform it runs.
 func (s *Service) installCommand() string {
+	if brewOwned(s.exePath) {
+		return "brew upgrade " + brewFormula + restartChain
+	}
 	if s.goos != "linux" {
 		return ""
 	}

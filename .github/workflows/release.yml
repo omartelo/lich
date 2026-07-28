@@ -279,3 +279,56 @@ jobs:
           commit_email: meopedevts@proton.me
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           commit_message: "Update to ${{ github.ref_name }}"
+
+  # The formula pins the macOS assets by checksum, so it can only be rendered
+  # once `release` has published them and their checksums.txt. HOMEBREW_TAP_TOKEN
+  # is a PAT with contents:write on omartelo/homebrew-tap — GITHUB_TOKEN is
+  # scoped to this repository and cannot push to another one.
+  homebrew:
+    needs: [release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Render formula
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          gh release download "$GITHUB_REF_NAME" --pattern checksums.txt
+          sum() {
+            awk -v file="$1" '$2 == file { print $1 }' checksums.txt
+          }
+          arm64="$(sum "lich-v${version}-darwin-arm64")"
+          amd64="$(sum "lich-v${version}-darwin-amd64")"
+          # An empty checksum would publish a formula that fails every install.
+          if [ -z "$arm64" ] || [ -z "$amd64" ]; then
+            echo "missing darwin checksums in checksums.txt" >&2
+            cat checksums.txt >&2
+            exit 1
+          fi
+          sed -e "s/@VERSION@/${version}/g" \
+              -e "s/@SHA_ARM64@/${arm64}/" \
+              -e "s/@SHA_AMD64@/${amd64}/" \
+              build/darwin/homebrew/lich.rb.tpl > lich.rb
+          cat lich.rb
+
+      - name: Publish lich to the tap
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          git clone --depth 1 \
+            "https://x-access-token:${GH_TOKEN}@github.com/omartelo/homebrew-tap.git" tap
+          mkdir -p tap/Formula
+          cp lich.rb tap/Formula/lich.rb
+          cd tap
+          git config user.name omartelo
+          git config user.email meopedevts@proton.me
+          git add Formula/lich.rb
+          # A re-run of the same tag renders an identical formula; nothing to push.
+          if git diff --cached --quiet; then
+            echo "formula already up to date"
+            exit 0
+          fi
+          git commit -m "lich: update to ${GITHUB_REF_NAME}"
+          git push

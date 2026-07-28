@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **macOS installs through Homebrew.** `brew install omartelo/tap/lich` puts the
+  release binary on your PATH on Apple Silicon and Intel alike, and `brew
+  upgrade` carries it forward from there. It also settles the Gatekeeper prompt
+  that a hand-downloaded binary raises: the binaries are still unsigned, but
+  Homebrew does not mark what it installs as quarantined, so there is nothing
+  left to clear by hand. Every release publishes the formula automatically.
+
+### Changed
+
+- **A Homebrew install updates through Homebrew.** lich updates itself in place
+  on macOS, which would have meant overwriting a file Homebrew owns and tracks —
+  leaving `brew` naming a version that is no longer the one running. Homebrew
+  installs now offer the `brew upgrade` command the way Linux installs offer
+  their package manager's, instead of the self-update button.
+
 ### Fixed
 
 - **The mouse works again after coming back to a session.** Leaving a session
