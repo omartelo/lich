@@ -33,12 +33,12 @@ func New(env []string) *Service {
 
 // OpenExternal opens an http(s) URL in the default browser. Scheme-gated so a
 // crafted terminal escape can never turn a click into a file:// or custom
-// scheme launch.
+// scheme launch. The launcher itself is per-OS (see the open_* files).
 func (s *Service) OpenExternal(rawURL string) error {
 	if err := ValidateExternalURL(rawURL); err != nil {
 		return err
 	}
-	return s.run("xdg-open", rawURL)
+	return s.openURL(rawURL)
 }
 
 // OpenInEditor decides how to open a work-tree file. rel is validated against

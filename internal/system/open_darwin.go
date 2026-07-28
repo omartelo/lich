@@ -6,3 +6,9 @@ package system
 func (s *Service) openDefault(full string) error {
 	return s.run("open", "-t", full)
 }
+
+// openURL hands an external URL to the default browser. No -t here: that flag
+// forces the text editor, which is right for a source file and wrong for a link.
+func (s *Service) openURL(rawURL string) error {
+	return s.run("open", rawURL)
+}

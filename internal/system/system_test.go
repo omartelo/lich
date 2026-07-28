@@ -27,11 +27,15 @@ func TestValidateExternalURL(t *testing.T) {
 	}
 }
 
+// TestOpenExternalGatesBeforeLaunching proves the scheme gate runs before
+// anything is launched, and that an accepted URL reaches the launcher. The
+// opener command is per-OS, so only the URL (always the last argument) is
+// portable to assert.
 func TestOpenExternalGatesBeforeLaunching(t *testing.T) {
 	launched := ""
 	s := &Service{run: func(_ string, args ...string) error {
 		if len(args) > 0 {
-			launched = args[0]
+			launched = args[len(args)-1]
 		}
 		return nil
 	}}
@@ -40,6 +44,27 @@ func TestOpenExternalGatesBeforeLaunching(t *testing.T) {
 	}
 	if err := s.OpenExternal("https://example.com"); err != nil || launched != "https://example.com" {
 		t.Fatalf("valid url not launched: %q (%v)", launched, err)
+	}
+}
+
+// TestOpenExternalPassesURLAsOneArgument proves the URL is handed to the
+// launcher whole, as a single argument. On Windows that is what keeps a `&` in
+// a query string out of a shell's hands — the opener there must not route
+// through cmd, whose parser would end the command at the ampersand.
+func TestOpenExternalPassesURLAsOneArgument(t *testing.T) {
+	const raw = "https://example.com/x?a=1&b=2"
+	var name string
+	var args []string
+	s := &Service{run: captureRun(&name, &args)}
+
+	if err := s.OpenExternal(raw); err != nil {
+		t.Fatalf("OpenExternal: %v", err)
+	}
+	if name == "cmd" {
+		t.Errorf("launcher is %q: a URL must not go through the shell", name)
+	}
+	if len(args) == 0 || args[len(args)-1] != raw {
+		t.Errorf("args = %v, want the whole url %q as the last argument", args, raw)
 	}
 }
 

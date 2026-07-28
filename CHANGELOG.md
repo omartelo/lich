@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Settings › Font lists your installed fonts on Windows.** The picker read the
+  font list from fontconfig, which Windows does not have, so it offered nothing
+  beyond the bundled default and whatever was already selected. It now reads the
+  fonts Windows itself records, folding every weight of a family onto one entry.
+- **Links open in your browser on Windows.** Clicking an external link — a pull
+  request, a release page — called the Linux opener and did nothing at all, with
+  only a line in `lich.log` to show for it. Each platform now uses its own
+  opener.
 - **lich no longer vanishes mid-session on Windows.** Tracking a session's
   working directory reads it out of the child process's own memory, and a length
   that memory reported odd — which a 32-bit child, or one exiting mid-read, does
