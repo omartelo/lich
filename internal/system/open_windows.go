@@ -1,11 +1,18 @@
 package system
 
-// openDefault hands the file to the shell's file association when no
-// $VISUAL/$EDITOR is set. `start` is a cmd builtin, hence `cmd /c`; the empty
-// first argument is start's title slot, which a quoted path would otherwise
-// consume.
+// openDefault hands the file to its shell association when no $VISUAL/$EDITOR
+// is set. explorer takes the path as a plain argument, which is the point: the
+// `cmd /c start` this replaced handed it to a shell that reads & | < > as
+// command separators, and Go quotes an argument only when it holds a space — so
+// a file named "a&calc.txt", which a checked-out branch is free to carry, ran
+// calc. explorer exits 1 even when it worked; nothing waits on it.
 func (s *Service) openDefault(full string) error {
-	return s.run("cmd", "/c", "start", "", full)
+	return s.run("explorer", full)
+}
+
+// quoteForShell quotes a path for cmd.exe, the shell a Windows session runs.
+func (s *Service) quoteForShell(full string) (string, bool) {
+	return quoteCmdPath(full)
 }
 
 // openURL hands an external URL to the default browser. Deliberately not the
