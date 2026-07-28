@@ -31,6 +31,11 @@ environment of **every PTY it spawns**, inherited by `claude` and its hooks:
 Outside lich these are absent, so every hook must no-op and exit 0 — the plugin
 stays safe to install globally.
 
+These three are the hook contract, not the whole session environment: lich also
+exports `LICH_WORKTREE_PORT`, a dev-server port belonging to the session's
+checkout. It addresses nothing in lich and no hook reads it — it exists for the
+project's own setup script and commands (`PORT=$LICH_WORKTREE_PORT pnpm dev`).
+
 ## Client rules (all hooks)
 
 - Missing env vars → no-op, exit 0.

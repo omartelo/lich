@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -450,16 +451,18 @@ func TestPTYEcho(t *testing.T) {
 }
 
 // TestSessionEnvInjectsCoordinates proves a spawned PTY gets the loopback
-// coordinates a Claude Code hook needs, without aliasing the shared base env.
+// coordinates a Claude Code hook needs plus its checkout's dev-server port,
+// without aliasing the shared base env.
 func TestSessionEnvInjectsCoordinates(t *testing.T) {
 	s := &Service{env: []string{"A=1"}, ws: &transport{port: 4321, token: "tok"}}
-	env := s.sessionEnv("sess")
+	env := s.sessionEnv("sess", "/src/repo")
 
 	want := map[string]bool{
 		"A=1":                  true,
 		"LICH_PORT=4321":       true,
 		"LICH_TOKEN=tok":       true,
 		"LICH_SESSION_ID=sess": true,
+		"LICH_WORKTREE_PORT=" + strconv.Itoa(worktreePort("/src/repo")): true,
 	}
 	for _, e := range env {
 		delete(want, e)
@@ -473,10 +476,28 @@ func TestSessionEnvInjectsCoordinates(t *testing.T) {
 }
 
 // TestSessionEnvNoTransport proves that without a transport there is nothing to
-// report to, so the base env is returned unchanged (the hook will no-op).
+// report to, so the hook coordinates are left out (the hook will no-op) — but
+// the checkout's dev-server port, which owes the transport nothing, still lands.
 func TestSessionEnvNoTransport(t *testing.T) {
 	s := &Service{env: []string{"A=1"}}
-	env := s.sessionEnv("sess")
+	env := s.sessionEnv("sess", "/src/repo")
+
+	want := []string{"A=1", "LICH_WORKTREE_PORT=" + strconv.Itoa(worktreePort("/src/repo"))}
+	if !slices.Equal(env, want) {
+		t.Fatalf("env = %v, want %v", env, want)
+	}
+	for _, e := range env {
+		if strings.HasPrefix(e, "LICH_PORT=") || strings.HasPrefix(e, "LICH_TOKEN=") {
+			t.Fatalf("transport coordinates leaked without a transport: %v", env)
+		}
+	}
+}
+
+// TestSessionEnvWithoutCwd proves a session with no start directory names no
+// checkout, so no port is invented for it.
+func TestSessionEnvWithoutCwd(t *testing.T) {
+	s := &Service{env: []string{"A=1"}}
+	env := s.sessionEnv("sess", "")
 	if len(env) != 1 || env[0] != "A=1" {
 		t.Fatalf("expected base env unchanged, got %v", env)
 	}

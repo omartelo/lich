@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Every worktree gets a dev-server port of its own.** Two worktrees of one
+  project both ran `pnpm dev` and both wanted the same port, so the second one
+  lost — and the setup script that had just installed the dependencies had no
+  way to know it should have picked another number. Every session now starts
+  with `LICH_WORKTREE_PORT` set to a port derived from its checkout's path:
+  `PORT=$LICH_WORKTREE_PORT pnpm dev` in the setup script (Settings › Project),
+  or in the terminal, and both worktrees come up. The number is the same every
+  time for a given checkout, so a bookmark to it keeps working across restarts.
+
 ### Fixed
 
 - **Settings › Font lists your installed fonts on Windows.** The picker read the

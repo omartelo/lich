@@ -103,6 +103,11 @@ nobody knows it and that the call site never shows. The mechanism and the histor
   account's token in `GH_TOKEN` for every gh call lich makes for that project. A push still rides the remote's
   ssh key and signs with the global `user.email`, so a PR can be *read* by one account and its commits *land*
   under another, with no error anywhere. Per-worktree `core.sshCommand` + `user.email` is the upgrade path.
+- **`LICH_WORKTREE_PORT` is a hash, not a reservation** (`internal/terminal/worktreeport.go`): the session's
+  start directory folded into a fixed 1000-port window. Nothing probes and nothing binds, so two checkouts can
+  land on the same number and only the dev server started second finds out. Stability is the trade — a probe
+  would move the port every time the previous server still held it. The main checkout is assigned one like any
+  worktree; the range is fixed, not per-project.
 - **git status is polled** — one shared poller per repository path (`frontend/src/lib/git/git-status-store.ts`); the
   lich plugin's `session-touched` hook nudges an immediate refresh. An fs watcher is the upgrade path.
 - **Persistence is hybrid**: UI prefs in the page's localStorage (`lich.*` keys — the reason the listener port is
