@@ -43,11 +43,6 @@ export function AppUpdateGate() {
     return () => clearInterval(id)
   }, [])
 
-  useEffect(() => {
-    registerUpdateChecker(checkNow)
-    return () => registerUpdateChecker(null)
-  })
-
   const prompt = (action: UpdateAction & { kind: "update" }) => {
     promptedVersion.current = action.version
     if (action.canSelfApply) {
@@ -79,6 +74,18 @@ export function AppUpdateGate() {
     }
     return status
   }
+
+  // The manual check closes over this render's state, so it rides a ref and the
+  // registration runs once. Declared here rather than beside the poll above:
+  // it reads checkNow, and an effect with no dependency array — what this was —
+  // re-registered on every render to the same effect.
+  const checkNowRef = useRef(checkNow)
+  checkNowRef.current = checkNow
+
+  useEffect(() => {
+    registerUpdateChecker(() => checkNowRef.current())
+    return () => registerUpdateChecker(null)
+  }, [])
 
   const dismiss = (version: string) => writePref(UPDATE_DISMISSED_KEY, version)
 

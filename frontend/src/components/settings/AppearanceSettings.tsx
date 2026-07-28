@@ -17,6 +17,8 @@ import {
   TERMINAL_FONT_SIZE_STEP,
   ZOOM_MAX,
   ZOOM_MIN,
+  THEMES,
+  TERMINAL_THEMES,
   ZOOM_STEP,
   useSettings,
 } from "@/providers/settings"
@@ -26,21 +28,27 @@ import { SegmentedControl } from "./SegmentedControl"
 import { SettingBlock, SettingGroup } from "./SettingBlock"
 import { FontSetting } from "./FontSetting"
 
-const THEME_OPTIONS: ReadonlyArray<{ value: Theme; label: string; icon: JSX.Element }> = [
-  { value: "system", label: "System", icon: <Monitor /> },
-  { value: "light", label: "Light", icon: <Sun /> },
-  { value: "dark", label: "Dark", icon: <Moon /> },
-]
+// How each theme value presents itself. Built off THEMES/TERMINAL_THEMES so the
+// picker cannot drift from what the provider persists — adding a theme there
+// is what puts it on screen, and forgetting an entry here is a type error.
+const THEME_LABELS: Record<Theme, { label: string; icon: JSX.Element }> = {
+  system: { label: "System", icon: <Monitor /> },
+  light: { label: "Light", icon: <Sun /> },
+  dark: { label: "Dark", icon: <Moon /> },
+}
 
-const TERMINAL_THEME_OPTIONS: ReadonlyArray<{
-  value: TerminalTheme
-  label: string
-  icon: JSX.Element
-}> = [
-  { value: "match", label: "Match app", icon: <Monitor /> },
-  { value: "light", label: "Light", icon: <Sun /> },
-  { value: "dark", label: "Dark", icon: <Moon /> },
-]
+const TERMINAL_THEME_LABELS: Record<TerminalTheme, { label: string; icon: JSX.Element }> = {
+  match: { label: "Match app", icon: <Monitor /> },
+  light: { label: "Light", icon: <Sun /> },
+  dark: { label: "Dark", icon: <Moon /> },
+}
+
+const THEME_OPTIONS = THEMES.map((value) => ({ value, ...THEME_LABELS[value] }))
+
+const TERMINAL_THEME_OPTIONS = TERMINAL_THEMES.map((value) => ({
+  value,
+  ...TERMINAL_THEME_LABELS[value],
+}))
 
 // Appearance holds every look-and-feel control, split into an Interface group
 // (theme, zoom) and a Terminal group (background, text size, font) so the two
