@@ -10,6 +10,7 @@ import {
 import { AppUpdate, System } from "@/lib/rpc"
 import { useProjects } from "@/providers/projects"
 import { queuePaste } from "@/lib/terminal/paste-queue"
+import { readPref, writePref } from "@/lib/prefs"
 import { registerUpdateChecker } from "@/lib/update/update-check"
 import { errorText } from "@/lib/utils"
 
@@ -60,7 +61,7 @@ export function AppUpdateGate() {
     let action: UpdateAction
     try {
       const status = await AppUpdate.Status()
-      action = decideUpdateAction(status, localStorage.getItem(UPDATE_DISMISSED_KEY))
+      action = decideUpdateAction(status, readPref(UPDATE_DISMISSED_KEY))
     } catch {
       return
     }
@@ -79,7 +80,7 @@ export function AppUpdateGate() {
     return status
   }
 
-  const dismiss = (version: string) => localStorage.setItem(UPDATE_DISMISSED_KEY, version)
+  const dismiss = (version: string) => writePref(UPDATE_DISMISSED_KEY, version)
 
   // Windows/macOS: swap the binary in place, then offer a one-click restart.
   const promptSelfApply = (version: string) => {

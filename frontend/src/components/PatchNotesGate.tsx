@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { PatchNotesDialog } from "./PatchNotesDialog"
 import { decidePatchNotes, PATCH_NOTES_SEEN_KEY } from "@/lib/update/patch-notes-gate"
 import { PatchNotes } from "@/lib/rpc"
+import { readPref, writePref } from "@/lib/prefs"
 import type { PatchNotes as PatchNotesData } from "@/lib/api-types"
 
 // PatchNotesGate shows lich's "what's new" popup once per release, right after
@@ -16,9 +17,9 @@ export function PatchNotesGate() {
     void PatchNotes.Current()
       .then((current) => {
         if (!alive) return
-        const action = decidePatchNotes(current, localStorage.getItem(PATCH_NOTES_SEEN_KEY))
+        const action = decidePatchNotes(current, readPref(PATCH_NOTES_SEEN_KEY))
         if (action.kind === "record") {
-          localStorage.setItem(PATCH_NOTES_SEEN_KEY, action.version)
+          writePref(PATCH_NOTES_SEEN_KEY, action.version)
         } else if (action.kind === "show") {
           setNotes(action.notes)
         }
@@ -32,7 +33,7 @@ export function PatchNotesGate() {
   if (!notes) return null
 
   const close = () => {
-    localStorage.setItem(PATCH_NOTES_SEEN_KEY, notes.version)
+    writePref(PATCH_NOTES_SEEN_KEY, notes.version)
     setNotes(null)
   }
 

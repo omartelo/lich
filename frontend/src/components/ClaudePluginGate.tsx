@@ -19,6 +19,7 @@ import {
 } from "@/lib/update/plugin-gate"
 import { ClaudePlugin } from "@/lib/rpc"
 import { errorText } from "@/lib/utils"
+import { readPref, writePref } from "@/lib/prefs"
 import { runWithToast } from "@/lib/toast-async"
 
 // ClaudePluginGate checks on startup whether the lich Claude Code plugin is
@@ -44,8 +45,8 @@ export function ClaudePluginGate() {
       const status = await ClaudePlugin.Status()
       action = decidePluginAction(
         status,
-        localStorage.getItem(INSTALL_DISMISSED_KEY) === DISMISSED_FLAG,
-        localStorage.getItem(UPDATE_DISMISSED_KEY),
+        readPref(INSTALL_DISMISSED_KEY) === DISMISSED_FLAG,
+        readPref(UPDATE_DISMISSED_KEY),
       )
     } catch {
       return
@@ -63,7 +64,7 @@ export function ClaudePluginGate() {
       action: { label: "Update", onClick: () => void runUpdate() },
       cancel: {
         label: "Later",
-        onClick: () => localStorage.setItem(UPDATE_DISMISSED_KEY, version),
+        onClick: () => writePref(UPDATE_DISMISSED_KEY, version),
       },
     })
   }
@@ -90,7 +91,7 @@ export function ClaudePluginGate() {
   }
 
   const dismissForever = () => {
-    localStorage.setItem(INSTALL_DISMISSED_KEY, DISMISSED_FLAG)
+    writePref(INSTALL_DISMISSED_KEY, DISMISSED_FLAG)
     setInstallOpen(false)
   }
 

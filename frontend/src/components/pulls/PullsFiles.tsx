@@ -16,6 +16,7 @@ import {
   viewedFiles,
 } from "@/lib/pulls/pull-request-viewed"
 import { usePullRequestDiff } from "@/lib/pulls/use-pull-request-diff"
+import { usePanelVisible } from "@/lib/use-panel-visible"
 
 // The file tree is a navigator, not the review itself: hiding it hands the
 // whole width to the diff. Remembered in localStorage like every other UI pref,
@@ -92,7 +93,7 @@ export function PullsFiles({ path, number, head, pullRequest, onInject }: PullsF
   // Every file mounts its own CodeMirror, so a wide PR earns a way to fold them
   // all at once — same directive the Review dock hands its panel.
   const [bulk, toggleAll] = useDiffBulk()
-  const [treeOpen, setTreeOpen] = useState(() => localStorage.getItem(TREE_HIDDEN_KEY) !== "1")
+  const [treeOpen, toggleTree] = usePanelVisible(TREE_HIDDEN_KEY)
   const viewed = useSyncExternalStore(subscribeViewed, () => viewedFiles(pullRequest))
   // A tick is against the file's content, so a new commit unticks exactly the
   // files it rewrote. Recomputed only when the diff itself changes.
@@ -123,12 +124,6 @@ export function PullsFiles({ path, number, head, pullRequest, onInject }: PullsF
   const jumpTo = (target: string) => {
     setActive(target)
     rows.current.get(target)?.scrollIntoView({ block: "start", behavior: "smooth" })
-  }
-
-  const toggleTree = () => {
-    const next = !treeOpen
-    setTreeOpen(next)
-    localStorage.setItem(TREE_HIDDEN_KEY, next ? "0" : "1")
   }
 
   return (

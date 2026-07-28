@@ -10,6 +10,7 @@ import {
   type Hotkeys,
 } from "@/lib/hotkeys"
 import { zoomIntent } from "@/lib/terminal/zoom-keys"
+import { parseBoolPref, parseEnumPref, parseNumberPref, readPref, writePref } from "@/lib/prefs"
 
 const FONT_STORAGE_KEY = "lich.terminal.font"
 const TERMINAL_FONT_SIZE_STORAGE_KEY = "lich.terminal.fontSize"
@@ -62,34 +63,24 @@ export function clampTerminalFontSize(value: number): number {
   return Math.round(bounded)
 }
 
-function readTerminalFontSize(): number {
-  const stored = Number(localStorage.getItem(TERMINAL_FONT_SIZE_STORAGE_KEY))
-  return Number.isFinite(stored) && stored > 0
-    ? clampTerminalFontSize(stored)
-    : DEFAULT_TERMINAL_FONT_SIZE
-}
+const readFont = (): string => readPref(FONT_STORAGE_KEY) ?? DEFAULT_FONT
 
-function readTheme(): Theme {
-  const stored = localStorage.getItem(THEME_STORAGE_KEY)
-  return THEMES.includes(stored as Theme) ? (stored as Theme) : DEFAULT_THEME
-}
+const readTerminalFontSize = (): number =>
+  parseNumberPref(
+    readPref(TERMINAL_FONT_SIZE_STORAGE_KEY),
+    DEFAULT_TERMINAL_FONT_SIZE,
+    clampTerminalFontSize,
+  )
 
-function readTerminalTheme(): TerminalTheme {
-  const stored = localStorage.getItem(TERMINAL_THEME_STORAGE_KEY)
-  return TERMINAL_THEMES.includes(stored as TerminalTheme)
-    ? (stored as TerminalTheme)
-    : DEFAULT_TERMINAL_THEME
-}
+const readTheme = (): Theme => parseEnumPref(readPref(THEME_STORAGE_KEY), THEMES, DEFAULT_THEME)
 
-function readZoom(): number {
-  const stored = Number(localStorage.getItem(ZOOM_STORAGE_KEY))
-  return Number.isFinite(stored) && stored > 0 ? clampZoom(stored) : DEFAULT_ZOOM
-}
+const readTerminalTheme = (): TerminalTheme =>
+  parseEnumPref(readPref(TERMINAL_THEME_STORAGE_KEY), TERMINAL_THEMES, DEFAULT_TERMINAL_THEME)
+
+const readZoom = (): number => parseNumberPref(readPref(ZOOM_STORAGE_KEY), DEFAULT_ZOOM, clampZoom)
 
 // Default on: the footer context readout shows unless the user turned it off.
-function readContextUsage(): boolean {
-  return localStorage.getItem(CONTEXT_USAGE_STORAGE_KEY) !== "false"
-}
+const readContextUsage = (): boolean => parseBoolPref(readPref(CONTEXT_USAGE_STORAGE_KEY), true)
 
 interface SettingsValue {
   /** Terminal font family, applied globally across all project terminals. */
@@ -123,9 +114,7 @@ interface SettingsValue {
 const SettingsContext = createContext<SettingsValue | null>(null)
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [font, setFontState] = useState<string>(
-    () => localStorage.getItem(FONT_STORAGE_KEY) ?? DEFAULT_FONT,
-  )
+  const [font, setFontState] = useState<string>(readFont)
   const [terminalFontSize, setTerminalFontSizeState] = useState<number>(readTerminalFontSize)
   const [theme, setThemeState] = useState<Theme>(readTheme)
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>("light")
@@ -136,24 +125,24 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const setFont = useCallback((next: string) => {
     setFontState(next)
-    localStorage.setItem(FONT_STORAGE_KEY, next)
+    writePref(FONT_STORAGE_KEY, next)
   }, [])
 
   const setTerminalFontSize = useCallback((next: number) => {
     const clamped = clampTerminalFontSize(next)
     setTerminalFontSizeState(clamped)
-    localStorage.setItem(TERMINAL_FONT_SIZE_STORAGE_KEY, String(clamped))
+    writePref(TERMINAL_FONT_SIZE_STORAGE_KEY, clamped)
   }, [])
 
   const setTheme = useCallback((next: Theme) => {
     setThemeState(next)
-    localStorage.setItem(THEME_STORAGE_KEY, next)
+    writePref(THEME_STORAGE_KEY, next)
   }, [])
 
   const setZoom = useCallback((next: number) => {
     const clamped = clampZoom(next)
     setZoomState(clamped)
-    localStorage.setItem(ZOOM_STORAGE_KEY, String(clamped))
+    writePref(ZOOM_STORAGE_KEY, clamped)
   }, [])
 
   // zoomBy applies a relative step off the latest value so rapid wheel ticks
@@ -161,14 +150,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const zoomBy = useCallback((delta: number) => {
     setZoomState((prev) => {
       const clamped = clampZoom(prev + delta)
-      localStorage.setItem(ZOOM_STORAGE_KEY, String(clamped))
+      writePref(ZOOM_STORAGE_KEY, clamped)
       return clamped
     })
   }, [])
 
   const setTerminalTheme = useCallback((next: TerminalTheme) => {
     setTerminalThemeState(next)
-    localStorage.setItem(TERMINAL_THEME_STORAGE_KEY, next)
+    writePref(TERMINAL_THEME_STORAGE_KEY, next)
   }, [])
 
   const setHotkey = useCallback((id: HotkeyId, combo: Combo) => {
@@ -189,7 +178,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const setShowContextUsage = useCallback((next: boolean) => {
     setShowContextUsageState(next)
-    localStorage.setItem(CONTEXT_USAGE_STORAGE_KEY, String(next))
+    writePref(CONTEXT_USAGE_STORAGE_KEY, next)
   }, [])
 
   // Toggle the `.dark` class on <html> and track the resolved scheme. For

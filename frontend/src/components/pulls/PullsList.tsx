@@ -37,6 +37,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { usePanelVisible } from "@/lib/use-panel-visible"
 import { cn } from "@/lib/utils"
 
 // The dot's colour is the only chroma in a row, so it has to mean something: a
@@ -97,7 +98,7 @@ export function PullsList({
   parsed,
   checkedOutBranches,
 }: PullsListProps) {
-  const [open, setOpen] = useState(() => localStorage.getItem(LIST_HIDDEN_KEY) !== "1")
+  const [open, toggle] = usePanelVisible(LIST_HIDDEN_KEY)
   const [filter, setFilter] = useState<PullsFilter>("all")
   const counts = useMemo(() => filterCounts(list, parsed), [list, parsed])
   const rows = useMemo(
@@ -108,13 +109,6 @@ export function PullsList({
   const chooseSort = (next: PullsSort) => {
     writePullsSort(next)
     onSortChange(next)
-  }
-
-  const toggle = () => {
-    setOpen((wasOpen) => {
-      localStorage.setItem(LIST_HIDDEN_KEY, wasOpen ? "1" : "0")
-      return !wasOpen
-    })
   }
 
   // Collapsed, the column keeps a rail: the toggle has to survive its own

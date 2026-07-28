@@ -1,3 +1,5 @@
+import { readPref, writePref } from "@/lib/prefs"
+
 // Global keyboard shortcuts. Combos are user-configurable and persisted to
 // localStorage, matching every other setting (see settings.tsx). `mod` is the
 // platform primary modifier — Ctrl on Windows/Linux, Cmd on macOS — so a single
@@ -141,7 +143,7 @@ export function mergeHotkeys(overrides: unknown): Hotkeys {
 
 export function loadHotkeys(): Hotkeys {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = readPref(STORAGE_KEY)
     return raw ? mergeHotkeys(JSON.parse(raw)) : DEFAULT_HOTKEYS
   } catch {
     return DEFAULT_HOTKEYS
@@ -149,5 +151,5 @@ export function loadHotkeys(): Hotkeys {
 }
 
 export function saveHotkeys(hotkeys: Hotkeys): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(hotkeys))
+  writePref(STORAGE_KEY, JSON.stringify(hotkeys))
 }
