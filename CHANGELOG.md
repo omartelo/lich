@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The mouse works again after coming back to a session.** Leaving a session
+  and returning to it left clicking, scrolling and dragging dead inside the
+  running program — Claude Code, or any terminal app that reads the mouse — while
+  the keyboard kept working, until a keystroke happened to bring it back. Hiding
+  a session destroys its terminal and showing it rebuilds it from a snapshot, and
+  that snapshot restored the app's request to receive mouse events but not the
+  format it asked to receive them in. The rebuilt terminal fell back to a format
+  from 1980 that lich does not transmit, so the app was sent nothing at all. The
+  format is now restored with the rest of the terminal's state.
+
 ## [0.21.1] - 2026-07-27
 
 ### Fixed

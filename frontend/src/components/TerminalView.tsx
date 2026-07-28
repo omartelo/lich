@@ -18,6 +18,7 @@ import { takeSetup } from "@/lib/terminal/setup-queue"
 import { recordChunk } from "@/lib/terminal/term-perf"
 import { copyToastMessage, COPY_TOAST_DURATION_MS } from "@/lib/terminal/copy-toast"
 import { computeGrid } from "@/lib/terminal/term-fit"
+import { mouseEncodingSequence } from "@/lib/terminal/term-modes"
 import { useSettings } from "@/providers/settings"
 import type { ResolvedTheme } from "@/providers/settings"
 import type { SessionKind } from "@/lib/session/sessions"
@@ -78,6 +79,15 @@ function cellDimensions(term: Terminal): { width: number; height: number } | nul
     return null
   }
   return cell
+}
+
+// mouseEncoding reads which encoding the app selected for mouse reports —
+// another private the public API does not expose (term.modes carries the
+// protocol only). Undefined if xterm ever moves it, which costs the restore in
+// term-modes.ts and nothing else.
+function mouseEncoding(term: Terminal): string | undefined {
+  return (term as unknown as { _core?: { coreMouseService?: { activeEncoding?: string } } })._core
+    ?.coreMouseService?.activeEncoding
 }
 
 // fitTerminal resizes the grid to fill the container edge to edge (replacing
@@ -176,6 +186,10 @@ export function TerminalView({
   const startedRef = useRef(false)
   // Snapshot + queued output of a hidden (destroyed) terminal.
   const serializedRef = useRef<string | null>(null)
+  // The mouse encoding the snapshot cannot carry (term-modes.ts). Kept apart
+  // from it because it survives the overflow path, where the snapshot is
+  // dropped: it describes the app, not the buffer.
+  const mouseEncodingRef = useRef("")
   const replayRef = useRef(makeReplayBuffer())
   const visibleRef = useRef(visible)
   const fontRef = useRef(font)
@@ -356,6 +370,7 @@ export function TerminalView({
       return
     }
     serializedRef.current = live.serialize.serialize()
+    mouseEncodingRef.current = mouseEncodingSequence(mouseEncoding(live.term))
     live.dispose()
     liveRef.current = null
   }
@@ -377,10 +392,16 @@ export function TerminalView({
     if (serializedRef.current) {
       live.term.write(serializedRef.current)
     }
+    // Between the snapshot and the queued tail: the tail is newer output, so
+    // anything the app changed there still wins.
+    if (mouseEncodingRef.current) {
+      live.term.write(mouseEncodingRef.current)
+    }
     for (const chunk of replayRef.current.drain()) {
       live.term.write(chunk)
     }
     serializedRef.current = null
+    mouseEncodingRef.current = ""
     liveRef.current = live
   }
 
