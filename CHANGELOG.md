@@ -17,6 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   old enough session was offering something that could no longer happen. The
   question is now only asked while the conversation is still there; when it is
   not, the session starts fresh and says so.
+- **A session whose worktree was deleted outside lich no longer opens an empty
+  terminal.** Removing a checkout by hand left its session behind, pointing at a
+  directory that is not there: opening it mounted a terminal that stayed blank,
+  with nothing on screen to say why. lich now recognises the missing checkout,
+  says so, and closes the session — closes, not deletes, so re-creating the
+  worktree brings the session and its conversation back.
+- **A session that fails to start now says why.** Every other reason a terminal
+  could fail to open — a provider binary that is not installed, or a wrong path
+  in Settings › Providers — failed in silence behind a blank terminal. The
+  failure is now reported, and the session stays, ready to retry once the cause
+  is fixed.
 
 ## [0.22.0] - 2026-07-28
 

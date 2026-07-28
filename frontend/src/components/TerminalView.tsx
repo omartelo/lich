@@ -9,6 +9,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { System, Terminal as Service } from "@/lib/rpc"
+import { errorText } from "@/lib/utils"
 import { onAppEvent } from "@/lib/app-events"
 import { ensureTransport, onSessionData, sendInput } from "@/lib/terminal/term-transport"
 import { chordSequence, isSearchOpenChord } from "@/lib/terminal/term-keys"
@@ -505,16 +506,26 @@ export function TerminalView({
         resizeObserver.disconnect()
       })
 
-      await Service.Start(
-        sessionId,
-        projectId,
-        cwd,
-        kind,
-        resume,
-        takeSetup(sessionId),
-        live.term.cols,
-        live.term.rows,
-      )
+      try {
+        await Service.Start(
+          sessionId,
+          projectId,
+          cwd,
+          kind,
+          resume,
+          takeSetup(sessionId),
+          live.term.cols,
+          live.term.rows,
+        )
+      } catch (error) {
+        // Every spawn failure arrives here as one opaque string — a binary that
+        // is not on $PATH, an exhausted fd table. The card stays, because all of
+        // them are worth another try once the cause is fixed; the one that is
+        // not (a checkout that is gone) never reaches the spawn, having been
+        // settled by the gate in TerminalHost.
+        toast.error(`Session failed to start: ${errorText(error)}`)
+        return
+      }
       if (disposed) {
         // Unmounted during the Start round-trip: the cleanup's Close raced
         // ahead of the spawn, so close again now that the PTY exists. The

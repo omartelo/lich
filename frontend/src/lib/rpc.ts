@@ -85,6 +85,10 @@ async function post(path: string): Promise<void> {
 }
 
 export const Terminal = {
+  /** Whether a session cannot start in cwd because the directory is gone — a
+   * worktree removed outside lich. False for every uncertainty, so only a
+   * provable absence closes a session. */
+  WorkdirMissing: (cwd: string) => call<boolean>("terminal.WorkdirMissing", [cwd]),
   /** Whether the conversation providerSessionID names can still be reopened —
    * false once the provider has pruned its transcript, which is the resume the
    * prompt must not offer. */
