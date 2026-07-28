@@ -1,8 +1,7 @@
 import { useState, useSyncExternalStore } from "react"
 import { useMatch, useNavigate } from "react-router-dom"
 import { GitBranch, GitPullRequestArrow, Plus, Terminal } from "lucide-react"
-import { toast } from "sonner"
-import { ProjectService, Store } from "@/lib/rpc"
+import { ProjectService } from "@/lib/rpc"
 import { closeSettings, isSettingsOpen, subscribeSettingsCard } from "@/lib/settings-card-store"
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
 import {
@@ -26,20 +25,13 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useProjects } from "@/providers/projects"
 import { queueSetup } from "@/lib/terminal/setup-queue"
-import {
-  activeSessionId,
-  groupByWorktree,
-  isLastWorktreeSession,
-  sessionsOf,
-  type Session,
-} from "@/lib/session/sessions"
-import { baseName } from "@/lib/paths"
+import { activeSessionId, groupByWorktree, sessionsOf } from "@/lib/session/sessions"
 import { CloseWorktreeDialog, ForceRemoveWorktreeDialog } from "./CloseWorktreeDialog"
 import { SessionGroup } from "./SessionGroup"
 import { WorktreeDialog } from "./WorktreeDialog"
+import { useWorktreeClose } from "./useWorktreeClose"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { usePanelWidth } from "@/lib/use-panel-width"
-import { errorText } from "@/lib/utils"
 
 // SessionSidebar lists the active project's sessions and can be drag-resized
 // within a fixed pixel range. Width persists across restarts. It renders nothing
@@ -55,10 +47,7 @@ export function SessionSidebar() {
     newSession,
     newWorktreeSession,
     reopenWorktreeSession,
-    closeSession,
-    keepSession,
     activateSession,
-    renameSession,
     reorderSessions,
   } = useProjects()
   // Match the project subtree ("/*") so the sidebar stays mounted — and keeps
@@ -88,10 +77,9 @@ export function SessionSidebar() {
     edge: "right",
   })
   const [worktreeOpen, setWorktreeOpen] = useState(false)
-  const [pendingClose, setPendingClose] = useState<Session | null>(null)
-  const [pendingForce, setPendingForce] = useState<Session | null>(null)
   // Resolved ahead of the no-project bail below: hooks cannot sit behind it.
   const list = sessionsOf(sessions, projectId ?? "")
+  const worktreeClose = useWorktreeClose(projectId ?? "", path, list)
 
   if (!projectId) {
     return null
@@ -102,7 +90,6 @@ export function SessionSidebar() {
   // the view; its own sidebar entry reads as active instead.
   const activeId = onSettings || onPullsRoute ? "" : realActiveId
   const groups = groupByWorktree(list)
-  const projectName = baseName(path)
 
   // A drag reorders one group only; splice its new order back into the flat list
   // in group order and persist the whole thing. reorderSessions bails on any
@@ -127,59 +114,6 @@ export function SessionSidebar() {
   const resumeWorktree = (wt: { name: string; path: string }) => {
     void reopenWorktreeSession(projectId, wt)
     setWorktreeOpen(false)
-  }
-
-  const requestClose = (session: Session) => {
-    if (isLastWorktreeSession(list, session)) {
-      setPendingClose(session)
-      return
-    }
-    closeSession(projectId, session.id)
-  }
-
-  const keepAndClose = () => {
-    if (pendingClose) {
-      keepSession(projectId, pendingClose.id)
-    }
-    setPendingClose(null)
-  }
-
-  // Close first so the PTY running inside the worktree dies before git tries
-  // to remove it. A refused removal surfaces as a toast; the checkout stays on
-  // disk and reappears in the new-worktree picker.
-  const closeAndRemove = (session: Session, force: boolean) => {
-    closeSession(projectId, session.id)
-    // The checkout is going away, so no parked row for it may linger — one would
-    // otherwise resurface a resume against a worktree that no longer exists.
-    void Store.PurgeWorktreeSessions(projectId, session.path ?? "")
-    ProjectService.RemoveWorktree(path, session.path ?? "", force).catch((err: unknown) => {
-      toast.error(`Failed to remove worktree: ${errorText(err)}`)
-    })
-  }
-
-  const removeAndClose = async () => {
-    const session = pendingClose
-    setPendingClose(null)
-    if (!session?.path) {
-      return
-    }
-    // A dirty worktree needs a second confirmation before --force discards its
-    // changes. A failed check falls through to the plain remove, whose own
-    // refusal surfaces as a toast.
-    const dirty = await ProjectService.WorktreeDirty(session.path).catch(() => false)
-    if (dirty) {
-      setPendingForce(session)
-      return
-    }
-    closeAndRemove(session, false)
-  }
-
-  const forceRemoveAndClose = () => {
-    const session = pendingForce
-    setPendingForce(null)
-    if (session?.path) {
-      closeAndRemove(session, true)
-    }
   }
 
   return (
@@ -263,24 +197,16 @@ export function SessionSidebar() {
           return (
             <SessionGroup
               key={group.path || "__root__"}
+              projectId={projectId}
               path={group.path}
               sessions={group.sessions}
               projectPath={path}
-              projectName={projectName}
               activeId={activeId}
               // The divider only earns its place once a worktree splits the list;
               // a lone group keeps the old flat, header-less look.
               showHeader={groups.length > 1}
               onReorder={(ids) => commitGroupOrder(group.path, ids)}
-              onSelect={(id) => {
-                activateSession(projectId, id)
-                // From the settings screen this returns to the terminal; on the
-                // project route it is a no-op.
-                navigate(`/projects/${projectId}`)
-              }}
-              onClose={(session) => requestClose(session)}
-              onRename={(id, label) => renameSession(projectId, id, label)}
-              onOpenTerminal={(cwd) => newSession(projectId, "shell", cwd)}
+              onClose={worktreeClose.requestClose}
               pullsActive={onPullsRoute && groupActive}
               onPulls={() => {
                 openPulls(group.path || path)
@@ -310,15 +236,15 @@ export function SessionSidebar() {
         onResume={resumeWorktree}
       />
       <CloseWorktreeDialog
-        session={pendingClose}
-        onCancel={() => setPendingClose(null)}
-        onKeep={keepAndClose}
-        onRemove={removeAndClose}
+        session={worktreeClose.pendingClose}
+        onCancel={worktreeClose.cancel}
+        onKeep={worktreeClose.keep}
+        onRemove={worktreeClose.remove}
       />
       <ForceRemoveWorktreeDialog
-        session={pendingForce}
-        onCancel={() => setPendingForce(null)}
-        onForceRemove={forceRemoveAndClose}
+        session={worktreeClose.pendingForce}
+        onCancel={worktreeClose.cancel}
+        onForceRemove={worktreeClose.forceRemove}
       />
 
       <ResizeHandle edge="right" label="Resize sidebar" handleProps={handleProps} />

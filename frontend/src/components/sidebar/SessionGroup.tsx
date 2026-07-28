@@ -1,30 +1,32 @@
 import { useSyncExternalStore } from "react"
+import { useNavigate } from "react-router-dom"
 import { DndContext, closestCenter } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { useSortableList, verticalAxis } from "@/lib/use-sortable-list"
 import { baseName } from "@/lib/paths"
 import type { Session } from "@/lib/session/sessions"
+import { useProjects } from "@/providers/projects"
 import { SessionCard } from "./SessionCard"
 import { PullRequestCard } from "./PullRequestCard"
 import { isPullsOpen, subscribePullsCard } from "@/lib/pulls-card-store"
 
 interface SessionGroupProps {
+  projectId: string
   // "" for the project's own root, else the worktree checkout path.
   path: string
   sessions: Session[]
   projectPath: string
-  projectName: string
   activeId: string
   // A divider label is drawn only when the sidebar holds more than one group; a
   // lone project with no worktrees keeps its old flat, header-less list.
   showHeader: boolean
   // Commits a new order for this group's sessions; a drag can only ever produce
-  // one, since each group owns an isolated DndContext.
+  // one, since each group owns an isolated DndContext. Not derivable here: the
+  // sidebar splices it back into the flat list its siblings share.
   onReorder: (ids: string[]) => void
-  onSelect: (id: string) => void
+  // Closing stays the sidebar's: the last session of a worktree raises the
+  // keep-or-remove dialog it owns (useWorktreeClose).
   onClose: (session: Session) => void
-  onRename: (id: string, label: string) => void
-  onOpenTerminal: (cwd: string) => void
   // The worktree's pull-request entry: opens the Pulls screen for this branch.
   // pullsActive marks it when that screen is showing this group's PR. Rendered
   // only for worktree groups (a truthy path).
@@ -38,30 +40,40 @@ interface SessionGroupProps {
 // the group's own checkout path, never a session's live cwd, so a `cd` deeper
 // into the tree never re-buckets the group. The isolated DndContext is what
 // confines a drag to reordering within the group.
+//
+// The card actions needing nothing but a session id — select, rename, open a
+// terminal beside it — are wired here rather than threaded down from the
+// sidebar, which keeps only the ones carrying its own state.
 export function SessionGroup({
+  projectId,
   path,
   sessions,
   projectPath,
-  projectName,
   activeId,
   showHeader,
   onReorder,
-  onSelect,
   onClose,
-  onRename,
-  onOpenTerminal,
   pullsActive,
   onPulls,
   onClosePulls,
 }: SessionGroupProps) {
+  const { activateSession, renameSession, newSession } = useProjects()
+  const navigate = useNavigate()
   const ids = sessions.map((session) => session.id)
   const { sensors, onDragEnd } = useSortableList(ids, onReorder)
-  const name = path ? baseName(path) : projectName
+  const name = baseName(path || projectPath)
   // The PR card keys off the group's real checkout — the project root for the
   // root group (empty path), else the worktree — so a root project on a feature
   // branch parks its card too, not only worktrees.
   const checkout = path || projectPath
   const pullsOpen = useSyncExternalStore(subscribePullsCard, () => isPullsOpen(checkout))
+
+  const select = (id: string) => {
+    activateSession(projectId, id)
+    // From the settings screen this returns to the terminal; on the project
+    // route it is a no-op.
+    navigate(`/projects/${projectId}`)
+  }
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -87,10 +99,10 @@ export function SessionGroup({
                 session={session}
                 path={projectPath}
                 active={session.id === activeId}
-                onSelect={() => onSelect(session.id)}
+                onSelect={() => select(session.id)}
                 onClose={() => onClose(session)}
-                onRename={(label) => onRename(session.id, label)}
-                onOpenTerminal={onOpenTerminal}
+                onRename={(label) => renameSession(projectId, session.id, label)}
+                onOpenTerminal={(cwd) => newSession(projectId, "shell", cwd)}
                 onPulls={onPulls}
               />
             ))}
