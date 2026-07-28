@@ -44,7 +44,10 @@ export function NotificationsButton() {
     <DropdownMenu>
       <DropdownMenuTrigger
         title="Notifications"
-        aria-label="Notifications"
+        // The count belongs in the trigger's own name: it rode an aria-label on
+        // the dot below, which is a plain span with no role, so nothing
+        // announced it.
+        aria-label={items.length > 0 ? `Notifications, ${items.length} pending` : "Notifications"}
         render={
           <Button
             variant="ghost"
@@ -56,7 +59,7 @@ export function NotificationsButton() {
         <Bell className="size-4" />
         {items.length > 0 && (
           <span
-            aria-label={`${items.length} pending`}
+            aria-hidden
             className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-red-500 ring-2 ring-sidebar"
           />
         )}

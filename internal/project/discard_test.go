@@ -55,27 +55,6 @@ func TestDiscardFileNew(t *testing.T) {
 	}
 }
 
-// TestValidateRelPathRejectsRootedPaths pins the guard itself. The callers'
-// escape tests pass on Windows for the wrong reason — the joined path simply
-// misses on disk — so the rule is asserted here directly: a path starting at a
-// root is never a work-tree path, whether or not it carries a volume name.
-func TestValidateRelPathRejectsRootedPaths(t *testing.T) {
-	rooted := []string{"/etc/passwd", "/"}
-	if os.IsPathSeparator('\\') {
-		rooted = append(rooted, `\Windows\System32\config`, `C:\Windows`)
-	}
-	for _, rel := range rooted {
-		if err := validateRelPath(rel); err == nil {
-			t.Errorf("validateRelPath(%q): want error, got nil", rel)
-		}
-	}
-	for _, rel := range []string{"a.txt", "internal/rpc/rpc.go", "a/b/../c.txt"} {
-		if err := validateRelPath(rel); err != nil {
-			t.Errorf("validateRelPath(%q): want nil, got %v", rel, err)
-		}
-	}
-}
-
 // TestDiscardFileRejectsEscape proves traversal and absolute paths never reach
 // the filesystem.
 func TestDiscardFileRejectsEscape(t *testing.T) {

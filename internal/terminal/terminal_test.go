@@ -16,17 +16,25 @@ import (
 	"time"
 
 	"github.com/omartelo/lich/internal/events"
+	"github.com/omartelo/lich/internal/shquote"
 )
 
 // stubBins is a Store returning a fixed binary path and worktree setup script,
-// for tests that never spawn. Its persistence methods are no-ops — none of
-// these tests exercise the SessionStart or ai-title paths.
-type stubBins struct{ bin, setup string }
+// for tests that never spawn. Its write methods are no-ops — none of these tests
+// exercise the SessionStart or ai-title paths — while providerSession and its
+// error drive the context-usage read (usage_test.go).
+type stubBins struct {
+	bin, setup      string
+	providerSession string
+	providerErr     error
+}
 
-func (s stubBins) ProviderBin(_, _ string) string            { return s.bin }
-func (s stubBins) WorktreeSetup(_ string) string             { return s.setup }
-func (s stubBins) SetProviderSession(_, _ string) error      { return nil }
-func (s stubBins) ProviderSession(_ string) (string, error)  { return "", nil }
+func (s stubBins) ProviderBin(_, _ string) string       { return s.bin }
+func (s stubBins) WorktreeSetup(_ string) string        { return s.setup }
+func (s stubBins) SetProviderSession(_, _ string) error { return nil }
+func (s stubBins) ProviderSession(_ string) (string, error) {
+	return s.providerSession, s.providerErr
+}
 func (s stubBins) SetSessionTitle(_, _ string) (bool, error) { return false, nil }
 
 // TestChildEnvStripsAppImageVars proves the AppImage runtime variables that break
@@ -318,7 +326,7 @@ func TestStartWithSetupWrapsTheSpawn(t *testing.T) {
 	if len(got) != 3 || got[0] != "sh" || got[1] != "-c" {
 		t.Fatalf("spawned argv = %v, want sh -c <cmd>", got)
 	}
-	for _, want := range []string{"echo setup-ran", "exec " + shQuote(bin)} {
+	for _, want := range []string{"echo setup-ran", "exec " + shquote.Quote(bin)} {
 		if !strings.Contains(got[2], want) {
 			t.Errorf("spawned command missing %q:\n%s", want, got[2])
 		}

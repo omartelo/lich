@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react"
 import { Store } from "@/lib/rpc"
+import { WORKTREE_SETUP_KEY } from "@/lib/project-settings"
 import { useProjects } from "@/providers/projects"
 import { Input } from "@/components/ui/input"
 import { SettingBlock } from "./SettingBlock"
-
-// Same key the Go store resolves (internal/store worktreeSetupKey).
-export const WORKTREE_SETUP_KEY = "worktree.setup"
 
 // WorktreeSetupSettings edits the project's worktree setup script: a shell
 // command run in a new worktree session's terminal ahead of the provider,

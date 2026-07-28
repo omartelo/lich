@@ -1,8 +1,11 @@
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { lookupPullRequest, onPullRequestInvalidated } from "./pull-request-lookup"
 import type { PullRequest } from "@/lib/api-types"
+import { useRemoteResource } from "@/lib/use-remote-resource"
 
 export type { PullRequest }
+
+const NO_PULL_REQUEST: PullRequest | null = null
 
 // usePullRequest resolves the open GitHub PR for a path's current branch via the
 // gh CLI. Unlike git status it is not polled — each lookup is a network
@@ -15,34 +18,20 @@ export type { PullRequest }
 // on any error, or when the branch has no open PR (a merged or closed one is
 // filtered server-side), so the caller hides the badge.
 export function usePullRequest(path: string, branch: string, head: string): PullRequest | null {
-  const [pr, setPr] = useState<PullRequest | null>(null)
+  const { data, refresh } = useRemoteResource(
+    path && `${path} ${branch} ${head}`,
+    () => lookupPullRequest(path, branch, head),
+    {
+      empty: NO_PULL_REQUEST,
+      refetchOnFocus: true,
+      // A different checkout is a different PR: drop the old badge at once
+      // rather than showing it against the new branch. A new commit on the same
+      // branch keeps it, so the badge does not blink on every commit.
+      resetOn: `${path} ${branch}`,
+    },
+  )
 
-  // A different checkout is a different PR: drop the old badge at once rather
-  // than showing it against the new branch. A new commit on the same branch
-  // keeps it, so the badge does not blink on every commit.
-  useEffect(() => {
-    setPr(null)
-  }, [path, branch])
+  useEffect(() => onPullRequestInvalidated(refresh), [refresh])
 
-  useEffect(() => {
-    if (!path) {
-      return
-    }
-    let alive = true
-    const load = () => {
-      void lookupPullRequest(path, branch, head).then((result) => {
-        if (alive) setPr(result)
-      })
-    }
-    load()
-    window.addEventListener("focus", load)
-    const unsubscribe = onPullRequestInvalidated(load)
-    return () => {
-      alive = false
-      window.removeEventListener("focus", load)
-      unsubscribe()
-    }
-  }, [path, branch, head])
-
-  return pr
+  return data
 }

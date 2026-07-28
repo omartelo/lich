@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react"
 import { ProjectService, Store } from "@/lib/rpc"
 import { accountLabel, upgradeAccount } from "@/lib/gh-account"
+import { GH_ACCOUNT_KEY } from "@/lib/project-settings"
+import { errorText } from "@/lib/utils"
 import { invalidatePullRequests } from "@/lib/pulls/pull-request-lookup"
 import { useProjects } from "@/providers/projects"
 import {
@@ -12,9 +14,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { SettingBlock } from "./SettingBlock"
-
-// Same key the Go store resolves (internal/store ghAccountKey).
-export const GH_ACCOUNT_KEY = "vcs.account"
 
 // The stored value for "no override" is "", which a Select item cannot carry —
 // this stands in for it in the picker only.
@@ -38,7 +37,7 @@ export function VersionControlSettings({ projectId }: { projectId?: string }) {
         setAccounts(list ?? [])
         setError("")
       })
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
+      .catch((err: unknown) => setError(errorText(err)))
   }, [])
 
   useEffect(() => {

@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { System } from "@/lib/rpc"
 import type { PatchNotes } from "@/lib/api-types"
+import { cn } from "@/lib/utils"
 
 const RELEASE_TAG_BASE = "https://github.com/omartelo/lich/releases/tag/v"
 
@@ -85,7 +86,7 @@ export function PatchNotesDialog({ notes, onClose }: PatchNotesDialogProps) {
           {groups.map((group) => (
             <div key={group.label} className="border-t py-3.5 first:border-t-0 first:pt-1">
               <div className="mb-2.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <span className={`size-2 rounded-full ${dotColor(group.label)}`} />
+                <span className={cn("size-2 rounded-full", dotColor(group.label))} />
                 {group.label}
               </div>
               <ul className="flex flex-col gap-2.5">

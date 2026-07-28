@@ -33,24 +33,33 @@ type usageEvent struct {
 // one selects its own reader here by the session's kind — not an interface until
 // there are two to hide behind it.
 func (s *Service) emitUsage(id string) {
+	if event, ok := s.sessionUsage(id); ok {
+		s.hub.Emit(usageEventName, event)
+	}
+}
+
+// sessionUsage resolves the event emitUsage would push for session id, or
+// ok=false for every miss the doc above lists. Split from the emit so the
+// resolution is testable without a connected window — pollCwd's pattern.
+func (s *Service) sessionUsage(id string) (usageEvent, bool) {
 	providerSessionID, err := s.store.ProviderSession(id)
 	if err != nil {
 		slog.Warn("terminal: read provider session", "session", id, "err", err)
-		return
+		return usageEvent{}, false
 	}
 	if providerSessionID == "" {
-		return
+		return usageEvent{}, false
 	}
 	u, ok := claudeContextUsage(providerSessionID)
 	if !ok {
-		return
+		return usageEvent{}, false
 	}
-	s.hub.Emit(usageEventName, usageEvent{
+	return usageEvent{
 		ID:      id,
 		Percent: u.percent,
 		Tokens:  u.tokens,
 		Window:  u.window,
 		Model:   u.model,
 		Effort:  u.effort,
-	})
+	}, true
 }

@@ -1,15 +1,7 @@
-import { useEffect, useRef } from "react"
+import { useMemo } from "react"
 import type { RefObject } from "react"
-import { EditorState } from "@codemirror/state"
-import { EditorView } from "@codemirror/view"
-import {
-  buildLineDecorations,
-  diffGutter,
-  loadLanguage,
-  readOnlyCodeExtensions,
-  selectedDocLines,
-  type DocLineSelection,
-} from "@/lib/codemirror"
+import { buildLineDecorations, diffGutter, type DocLineSelection } from "@/lib/codemirror"
+import { useCodeMirrorView } from "@/lib/use-codemirror-view"
 import type { FileDoc } from "@/lib/git/diff"
 
 export interface DiffEditor {
@@ -18,38 +10,19 @@ export interface DiffEditor {
   getSelectedDocLines: () => DocLineSelection | null
 }
 
-// useDiffEditor owns one read-only CodeMirror view: created when the container
-// mounts, destroyed on unmount or when the doc is replaced by a refresh.
+// useDiffEditor is the diff card's read-only CodeMirror view: the shared editor
+// plus the two extensions that make it a diff — the +/- gutter and the per-line
+// background. Its selection lands on *doc* lines, which are the diff's own
+// interleaving of added and deleted, not the file's numbering; mapping them
+// back is newLineRange's job at the call site.
 export function useDiffEditor(doc: FileDoc, filename: string): DiffEditor {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const viewRef = useRef<EditorView | null>(null)
-
-  useEffect(() => {
-    const parent = containerRef.current
-    if (!parent) {
-      return
-    }
-    const view = new EditorView({
-      state: EditorState.create({
-        doc: doc.text,
-        extensions: [
-          ...readOnlyCodeExtensions(),
-          diffGutter(doc.lineMeta),
-          buildLineDecorations(doc.lineMeta),
-        ],
-      }),
-      parent,
-    })
-    viewRef.current = view
-    loadLanguage(view, filename, () => viewRef.current === view)
-    return () => {
-      viewRef.current = null
-      view.destroy()
-    }
-  }, [doc, filename])
-
-  const getSelectedDocLines = (): DocLineSelection | null =>
-    viewRef.current ? selectedDocLines(viewRef.current) : null
-
-  return { containerRef, getSelectedDocLines }
+  const source = useMemo(
+    () => ({
+      text: doc.text,
+      extensions: [diffGutter(doc.lineMeta), buildLineDecorations(doc.lineMeta)],
+    }),
+    [doc],
+  )
+  const { containerRef, getSelectedLines } = useCodeMirrorView(source, filename)
+  return { containerRef, getSelectedDocLines: getSelectedLines }
 }

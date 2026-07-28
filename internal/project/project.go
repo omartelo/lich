@@ -11,24 +11,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/omartelo/lich/internal/winexec"
 )
-
-// command builds an exec.Cmd for a child console tool (git, gh) with its
-// console window suppressed on Windows — lich's GUI-subsystem binary would
-// otherwise pop one per spawn (winexec.Hide). Used across this package instead
-// of exec.Command so no polling call site can forget it.
-func command(name string, args ...string) *exec.Cmd {
-	cmd := exec.Command(name, args...)
-	winexec.Hide(cmd)
-	return cmd
-}
 
 // Project identifies an opened project directory.
 type Project struct {
@@ -96,11 +83,8 @@ func newProject(path string) *Project {
 // the current state on call, so a checkout made after opening is not reflected
 // until the branch is resolved again.
 func (s *Service) Branch(path string) string {
-	out, err := command("git", "-C", path, "symbolic-ref", "--short", "HEAD").Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
+	out, _ := gitQuiet(path, "symbolic-ref", "--short", "HEAD")
+	return strings.TrimSpace(out)
 }
 
 // PullRequest identifies the open GitHub pull request for a work tree's current
@@ -171,40 +155,48 @@ func (s *Service) Diff(path string) DiffStats {
 	// --untracked-files=all, because the default collapses a new directory into
 	// one "?? dir/" line: an agent writing 25 files into fresh packages would
 	// count as one changed file.
-	if out, err := command("git", "-C", path, "status", "--porcelain", "--untracked-files=all").Output(); err == nil {
+	if out, ok := gitQuiet(path, "status", "--porcelain", "--untracked-files=all"); ok {
 		stats.Files = countLines(out)
 	}
-	// A repository without commits has no HEAD; diff against git's empty tree,
-	// same as DiffText. Errors here must not skip the untracked block below.
-	base := "HEAD"
-	if out, err := runGit(path, "rev-parse", "--verify", "HEAD"); err == nil {
-		stats.Head = strings.TrimSpace(out)
-	} else {
-		base = emptyTreeHash
-	}
-	if out, err := command("git", "-C", path, "diff", "--numstat", base).Output(); err == nil {
-		for line := range strings.Lines(string(out)) {
-			cols := strings.Fields(line)
-			if len(cols) < 3 {
-				continue
-			}
-			// Binary files report "-" for both counts; Atoi fails and adds zero.
-			added, _ := strconv.Atoi(cols[0])
-			deleted, _ := strconv.Atoi(cols[1])
-			stats.Added += added
-			stats.Deleted += deleted
-		}
+	head, base := diffBase(path)
+	stats.Head = head
+	if out, ok := gitQuiet(path, "diff", "--numstat", base); ok {
+		stats.Added, stats.Deleted = numstatTotals(out)
 	}
 	// Untracked files are invisible to `git diff`; count their lines as
 	// additions, the way Warp and forge diff views present a fresh file.
-	if out, err := command("git", "-C", path, "ls-files", "--others", "--exclude-standard", "-z").Output(); err == nil {
-		for _, rel := range strings.Split(string(out), "\x00") {
-			if rel != "" {
-				stats.Added += countFileLines(filepath.Join(path, rel))
-			}
-		}
+	for _, rel := range untrackedFiles(path) {
+		stats.Added += countFileLines(filepath.Join(path, rel))
 	}
 	return stats
+}
+
+// diffBase resolves what uncommitted changes are diffed against: HEAD and its
+// commit, or git's empty tree with no commit at all when the repository has no
+// HEAD yet. A repository without commits is an ordinary state here, not a
+// failure — hence the quiet probe.
+func diffBase(path string) (head, base string) {
+	out, ok := gitQuiet(path, "rev-parse", "--verify", "HEAD")
+	if !ok {
+		return "", emptyTreeHash
+	}
+	return strings.TrimSpace(out), "HEAD"
+}
+
+// numstatTotals sums the added and deleted line counts of `git diff --numstat`.
+func numstatTotals(out string) (added, deleted int) {
+	for line := range strings.Lines(out) {
+		cols := strings.Fields(line)
+		if len(cols) < 3 {
+			continue
+		}
+		// Binary files report "-" for both counts; Atoi fails and adds zero.
+		a, _ := strconv.Atoi(cols[0])
+		d, _ := strconv.Atoi(cols[1])
+		added += a
+		deleted += d
+	}
+	return added, deleted
 }
 
 // countFileLines returns the line count of a text file, or 0 for binaries
@@ -230,9 +222,9 @@ func countFileLines(name string) int {
 	return n
 }
 
-func countLines(out []byte) int {
+func countLines(out string) int {
 	n := 0
-	for line := range strings.Lines(string(out)) {
+	for line := range strings.Lines(out) {
 		if strings.TrimSpace(line) != "" {
 			n++
 		}

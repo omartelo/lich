@@ -21,10 +21,7 @@ const maxUntrackedDiffSize = 10 << 20
 // against git's empty tree. Untracked files are rendered as new-file hunks so
 // the review panel shows them alongside tracked changes.
 func (s *Service) DiffText(path string) (string, error) {
-	base := "HEAD"
-	if _, err := runGit(path, "rev-parse", "--verify", "HEAD"); err != nil {
-		base = emptyTreeHash
-	}
+	_, base := diffBase(path)
 	tracked, err := runGit(path, "diff", base)
 	if err != nil {
 		return "", err
@@ -39,19 +36,11 @@ func (s *Service) DiffText(path string) (string, error) {
 }
 
 // untrackedFiles lists paths unknown to git, relative to the work tree root.
-// Errors yield an empty list — the tracked diff is still worth returning.
+// A failure yields an empty list — both callers (the polled Diff counts and the
+// review panel's full text) are worth returning without it.
 func untrackedFiles(path string) []string {
-	out, err := command("git", "-C", path, "ls-files", "--others", "--exclude-standard", "-z").Output()
-	if err != nil {
-		return nil
-	}
-	var files []string
-	for rel := range strings.SplitSeq(string(out), "\x00") {
-		if rel != "" {
-			files = append(files, rel)
-		}
-	}
-	return files
+	out, _ := gitQuiet(path, "ls-files", "--others", "--exclude-standard", "-z")
+	return splitNUL(out)
 }
 
 // untrackedDiff renders an untracked file as a new-file unified diff via

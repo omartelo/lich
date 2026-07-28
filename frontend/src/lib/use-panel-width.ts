@@ -1,5 +1,6 @@
 import { useRef, useState } from "react"
 import type { PointerEvent as ReactPointerEvent } from "react"
+import { readPref, writePref } from "@/lib/prefs"
 import { dragWidth, parseStoredWidth, type PanelEdge, type WidthBounds } from "./panel-width"
 
 export interface PanelWidthOptions extends WidthBounds {
@@ -26,7 +27,7 @@ export interface PanelWidth {
 export function usePanelWidth(options: PanelWidthOptions): PanelWidth {
   const { storageKey, defaultRem, edge } = options
   const [width, setWidth] = useState(() =>
-    parseStoredWidth(localStorage.getItem(storageKey), options, defaultRem),
+    parseStoredWidth(readPref(storageKey), options, defaultRem),
   )
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
 
@@ -53,7 +54,7 @@ export function usePanelWidth(options: PanelWidthOptions): PanelWidth {
     dragRef.current = null
     event.currentTarget.releasePointerCapture(event.pointerId)
     setWidth(finalWidth)
-    localStorage.setItem(storageKey, String(finalWidth))
+    writePref(storageKey, finalWidth)
   }
 
   return { width, handleProps: { onPointerDown, onPointerMove, onPointerUp } }

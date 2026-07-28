@@ -1,4 +1,5 @@
 import type { PullRequestSummary } from "@/lib/api-types"
+import { parseEnumPref, readPref, writePref } from "@/lib/prefs"
 
 // The list column's own logic: which rows a quick filter and the search box
 // leave standing, and in what order. Kept out of the component because this is
@@ -258,13 +259,13 @@ const SORT_KEY = "lich.pulls.sort"
 
 /** Reads a stored sort, falling back for anything this build does not know. */
 export function parsePullsSort(raw: string | null): PullsSort {
-  return PULLS_SORTS.find((sort) => sort === raw) ?? "updated"
+  return parseEnumPref(raw, PULLS_SORTS, "updated")
 }
 
 export function readPullsSort(): PullsSort {
-  return parsePullsSort(localStorage.getItem(SORT_KEY))
+  return parsePullsSort(readPref(SORT_KEY))
 }
 
 export function writePullsSort(sort: PullsSort): void {
-  localStorage.setItem(SORT_KEY, sort)
+  writePref(SORT_KEY, sort)
 }

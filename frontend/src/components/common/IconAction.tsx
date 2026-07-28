@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
-interface IconAction {
+interface IconActionProps {
   /** Both the tooltip and the accessible name — one string, one meaning. */
   label: string
   onClick: () => void
@@ -11,7 +11,7 @@ interface IconAction {
 // A bare icon button for a panel's header strip: no border, no fill at rest,
 // its meaning carried by a tooltip. Attach as context, discard changes, collapse
 // all, full screen, hide the tree.
-export function IconAction({ label, onClick, children }: IconAction) {
+export function IconAction({ label, onClick, children }: IconActionProps) {
   return (
     <Tooltip>
       <TooltipTrigger

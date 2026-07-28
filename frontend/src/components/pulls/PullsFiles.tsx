@@ -6,6 +6,7 @@ import { CollapseAllAction, useDiffBulk } from "@/components/diff/diff-bulk"
 import { FileDiff } from "@/components/diff/FileDiff"
 import { DiffStat } from "@/components/DiffStat"
 import { FileTree } from "@/components/FileTree"
+import { SkeletonLines } from "@/components/common/SkeletonLines"
 import { Skeleton } from "@/components/ui/skeleton"
 import { buildTree } from "@/lib/git/file-tree"
 import {
@@ -16,6 +17,7 @@ import {
   viewedFiles,
 } from "@/lib/pulls/pull-request-viewed"
 import { usePullRequestDiff } from "@/lib/pulls/use-pull-request-diff"
+import { usePanelVisible } from "@/lib/use-panel-visible"
 
 // The file tree is a navigator, not the review itself: hiding it hands the
 // whole width to the diff. Remembered in localStorage like every other UI pref,
@@ -35,9 +37,7 @@ function FilesSkeleton({ tree }: { tree: boolean }) {
     <div className="flex h-full" aria-busy>
       {tree && (
         <div className="flex w-60 shrink-0 flex-col gap-3 border-r border-border p-3">
-          {TREE_ROWS.map((width) => (
-            <Skeleton key={width} className={`h-3 ${width}`} />
-          ))}
+          <SkeletonLines widths={TREE_ROWS} />
         </div>
       )}
       <div className="flex flex-1 flex-col overflow-hidden">
@@ -56,9 +56,7 @@ function FilesSkeleton({ tree }: { tree: boolean }) {
                 <Skeleton className="ml-auto h-3 w-14" />
               </div>
               <div className="flex max-w-3xl flex-col gap-2 pl-9">
-                {CODE_ROWS.map((width) => (
-                  <Skeleton key={width} className={`h-2.5 ${width}`} />
-                ))}
+                <SkeletonLines widths={CODE_ROWS} height="h-2.5" />
               </div>
             </div>
           ))}
@@ -92,7 +90,7 @@ export function PullsFiles({ path, number, head, pullRequest, onInject }: PullsF
   // Every file mounts its own CodeMirror, so a wide PR earns a way to fold them
   // all at once — same directive the Review dock hands its panel.
   const [bulk, toggleAll] = useDiffBulk()
-  const [treeOpen, setTreeOpen] = useState(() => localStorage.getItem(TREE_HIDDEN_KEY) !== "1")
+  const [treeOpen, toggleTree] = usePanelVisible(TREE_HIDDEN_KEY)
   const viewed = useSyncExternalStore(subscribeViewed, () => viewedFiles(pullRequest))
   // A tick is against the file's content, so a new commit unticks exactly the
   // files it rewrote. Recomputed only when the diff itself changes.
@@ -123,12 +121,6 @@ export function PullsFiles({ path, number, head, pullRequest, onInject }: PullsF
   const jumpTo = (target: string) => {
     setActive(target)
     rows.current.get(target)?.scrollIntoView({ block: "start", behavior: "smooth" })
-  }
-
-  const toggleTree = () => {
-    const next = !treeOpen
-    setTreeOpen(next)
-    localStorage.setItem(TREE_HIDDEN_KEY, next ? "0" : "1")
   }
 
   return (
