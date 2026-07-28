@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react"
 import { ProjectService } from "@/lib/rpc"
 import type { Worktree } from "@/lib/api-types"
+import { useRemoteResource } from "@/lib/use-remote-resource"
+
+const NO_CHECKOUTS: Worktree[] = []
 
 // useCheckouts lists every checkout of the project that holds a branch — its
 // own directory as much as its linked worktrees. It answers the question the
@@ -13,37 +15,15 @@ import type { Worktree } from "@/lib/api-types"
 // — a worktree can be created or a branch switched from a terminal — and
 // through refresh() right after this screen creates one itself. An error yields
 // an empty list: the worst it costs is a checkout attempt that gh refuses with
-// its own message.
+// its own message, which is why the error itself is dropped here.
 export function useCheckouts(projectPath: string): {
   checkouts: Worktree[]
   refresh: () => void
 } {
-  const [checkouts, setCheckouts] = useState<Worktree[]>([])
-  const seq = useRef(0)
-
-  const refresh = useCallback(() => {
-    if (!projectPath) {
-      setCheckouts([])
-      return
-    }
-    const mine = ++seq.current
-    ProjectService.ListCheckouts(projectPath)
-      .then((list) => {
-        if (mine === seq.current) setCheckouts(list ?? [])
-      })
-      .catch(() => {
-        if (mine === seq.current) setCheckouts([])
-      })
-  }, [projectPath])
-
-  useEffect(() => {
-    refresh()
-    window.addEventListener("focus", refresh)
-    return () => {
-      seq.current++
-      window.removeEventListener("focus", refresh)
-    }
-  }, [refresh])
-
-  return { checkouts, refresh }
+  const { data, refresh } = useRemoteResource(
+    projectPath,
+    () => ProjectService.ListCheckouts(projectPath).then((list) => list ?? NO_CHECKOUTS),
+    { empty: NO_CHECKOUTS, refetchOnFocus: true },
+  )
+  return { checkouts: data, refresh }
 }

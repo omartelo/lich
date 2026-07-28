@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react"
 import { ProjectService } from "@/lib/rpc"
 import { parseDiff, type DiffFile } from "@/lib/git/diff"
-import { errorText } from "@/lib/utils"
+import { useRemoteResource } from "@/lib/use-remote-resource"
+
+const NO_FILES: DiffFile[] | null = null
 
 export interface PullRequestDiffState {
   files: DiffFile[] | null
@@ -19,36 +20,10 @@ export function usePullRequestDiff(
   head: string,
   number: number,
 ): PullRequestDiffState {
-  const [files, setFiles] = useState<DiffFile[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const seq = useRef(0)
-
-  const refresh = useCallback(() => {
-    if (!path) {
-      setFiles(null)
-      setError(null)
-      return
-    }
-    const mine = ++seq.current
-    ProjectService.PullRequestDiff(path, number)
-      .then((text) => {
-        if (mine !== seq.current) return
-        setFiles(parseDiff(text))
-        setError(null)
-      })
-      .catch((err: unknown) => {
-        if (mine !== seq.current) return
-        setFiles(null)
-        setError(errorText(err))
-      })
-  }, [path, number])
-
-  useEffect(() => {
-    refresh()
-    return () => {
-      seq.current++
-    }
-  }, [refresh, head])
-
-  return { files, error }
+  const { data, error } = useRemoteResource(
+    path && `${path} ${number} ${head}`,
+    () => ProjectService.PullRequestDiff(path, number).then(parseDiff),
+    { empty: NO_FILES },
+  )
+  return { files: data, error }
 }
