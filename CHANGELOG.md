@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **lich no longer vanishes mid-session on Windows.** Tracking a session's
+  working directory reads it out of the child process's own memory, and a length
+  that memory reported odd — which a 32-bit child, or one exiting mid-read, does
+  — crashed the whole app. The window stayed on screen still showing its
+  terminal, so the only sign was that nothing ever updated again and reloading
+  found nothing listening. The read now refuses a length it cannot use. A crash
+  that does happen is also written to `lich.log` now: it used to go to a console
+  the Windows build does not have, leaving the log to simply stop with no trace
+  of why.
 - **A session no longer offers to resume a conversation that is gone.** Reopening
   a session lich had run Claude Code in asked whether to continue that
   conversation — and answering yes could drop you into a terminal showing

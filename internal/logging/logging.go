@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 )
 
@@ -22,10 +23,11 @@ const maxLogSize = 5 << 20
 
 // Init points slog's default logger at stderr plus <dir>/lich.log
 // (lich-dev.log under LICH_DEV, mirroring the store's database split), with
-// the level taken from LICH_LOG_LEVEL (debug|warn|error; default info). The
-// returned closer owns the file. When the file cannot be opened, logging
-// still works on stderr alone: the closer is nil and the error says why the
-// persistent half is missing — the caller reports it and carries on.
+// the level taken from LICH_LOG_LEVEL (debug|warn|error; default info), and
+// routes the runtime's crash output to the same file. The returned closer owns
+// the file. When the file cannot be opened, logging still works on stderr
+// alone: the closer is nil and the error says why the persistent half is
+// missing — the caller reports it and carries on.
 func Init(dir string) (io.Closer, error) {
 	file, err := openLogFile(dir)
 	out := io.Writer(os.Stderr)
@@ -42,6 +44,14 @@ func Init(dir string) (io.Closer, error) {
 		AddSource: true,
 		Level:     parseLevel(os.Getenv("LICH_LOG_LEVEL")),
 	})))
+	if file != nil {
+		// A panic bypasses slog entirely: the runtime prints it to stderr, which
+		// the windowsgui build does not have. Without this the log simply stops
+		// mid-session and the crash leaves no trace anywhere.
+		if err := debug.SetCrashOutput(file, debug.CrashOptions{}); err != nil {
+			slog.Warn("crash output unavailable — a panic will not reach the log", "err", err)
+		}
+	}
 	return closer, err
 }
 

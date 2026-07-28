@@ -3,6 +3,7 @@ package logging
 import (
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -145,4 +146,38 @@ func TestInitSurvivesUnwritableDir(t *testing.T) {
 		t.Fatal("closer should be nil when the file half failed")
 	}
 	slog.Info("must not panic")
+}
+
+// crashProbeEnv hands the child half of TestInitRoutesPanicToLogFile the
+// directory to log into; empty means this process is the parent.
+const crashProbeEnv = "LICH_TEST_CRASH_DIR"
+
+// TestInitRoutesPanicToLogFile proves an unhandled panic reaches the log file
+// rather than only the stderr a windowsgui process does not have. Runs the
+// crash in a subprocess, because a panic ends the process it happens in.
+func TestInitRoutesPanicToLogFile(t *testing.T) {
+	if dir := os.Getenv(crashProbeEnv); dir != "" {
+		if _, err := Init(dir); err != nil {
+			t.Fatalf("Init: %v", err)
+		}
+		panic("crash probe")
+	}
+
+	dir := t.TempDir()
+	cmd := exec.Command(os.Args[0], "-test.run=^TestInitRoutesPanicToLogFile$")
+	cmd.Env = append(os.Environ(), crashProbeEnv+"="+dir, "LICH_DEV=")
+	if err := cmd.Run(); err == nil {
+		t.Fatal("child exited cleanly, want the panic to kill it")
+	}
+
+	content, err := os.ReadFile(filepath.Join(dir, "lich.log"))
+	if err != nil {
+		t.Fatalf("read log: %v", err)
+	}
+	// The message and a stack: a trace without the panic value names no cause.
+	for _, want := range []string{"crash probe", "goroutine "} {
+		if !strings.Contains(string(content), want) {
+			t.Errorf("panic did not reach the log file, missing %q:\n%s", want, content)
+		}
+	}
 }

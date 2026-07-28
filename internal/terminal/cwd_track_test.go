@@ -38,6 +38,30 @@ func waitEmit(t *testing.T, emits <-chan string) string {
 	}
 }
 
+// TestDosPathRunesRejectsUnusableLengths proves a DosPath byte length that no
+// UTF-16 buffer can have is refused outright rather than sized down to an
+// empty buffer — the Windows walk reads into &buf[0], so a zero-length buffer
+// there panics and, on its bare goroutine, takes the whole app with it.
+func TestDosPathRunesRejectsUnusableLengths(t *testing.T) {
+	cases := []struct {
+		name string
+		in   uint16
+		want int
+	}{
+		{"empty", 0, 0},
+		{"odd", 1, 0},
+		{"odd garbage", 4097, 0},
+		{"one code unit", 2, 1},
+		{"C:\\", 6, 3},
+		{"max even", 65534, 32767},
+	}
+	for _, tc := range cases {
+		if got := dosPathRunes(tc.in); got != tc.want {
+			t.Errorf("%s: dosPathRunes(%d) = %d, want %d", tc.name, tc.in, got, tc.want)
+		}
+	}
+}
+
 // TestProcessCwdReadsSelf proves the platform read resolves a live process's
 // working directory — exercised against the test process itself.
 func TestProcessCwdReadsSelf(t *testing.T) {

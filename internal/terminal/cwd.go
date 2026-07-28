@@ -24,6 +24,20 @@ type cwdEvent struct {
 // only on change, so a static directory costs nothing to re-render.
 const cwdPollInterval = 300 * time.Millisecond
 
+// dosPathRunes is how many UTF-16 code units a DosPath of n bytes holds, and 0
+// when n is not a length a UTF-16 buffer can have. n comes out of the child's
+// own memory (the Windows processCwd walks its PEB), where x/sys documents it
+// as "should always be even" — a 32-bit child, or one exiting mid-walk, hands
+// back whatever happens to sit there. An odd n would size the buffer to zero
+// and take the read path straight into a panic, on a bare goroutine that ends
+// the process. Kept out of the build-tagged file so the guard tests on any OS.
+func dosPathRunes(n uint16) int {
+	if n == 0 || n%2 != 0 {
+		return 0
+	}
+	return int(n / 2)
+}
+
 // watchCwd reports the session child's working directory to the frontend
 // whenever it changes, until done closes. Each platform brings its own read
 // (see the cwd_* files); on one without any, and when the PTY reports no

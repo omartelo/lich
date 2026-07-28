@@ -52,10 +52,11 @@ func processCwd(pid int) string {
 	}
 
 	dos := params.CurrentDirectory.DosPath
-	if dos.Length == 0 || dos.Buffer == nil {
+	runes := dosPathRunes(dos.Length)
+	if runes == 0 || dos.Buffer == nil {
 		return ""
 	}
-	buf := make([]uint16, dos.Length/2)
+	buf := make([]uint16, runes)
 	if err := readMemory(h, uintptr(unsafe.Pointer(dos.Buffer)),
 		unsafe.Pointer(&buf[0]), uintptr(dos.Length)); err != nil {
 		return ""
