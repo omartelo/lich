@@ -23,10 +23,34 @@ import (
 // for tests that never spawn. Its write methods are no-ops — none of these tests
 // exercise the SessionStart or ai-title paths — while providerSession and its
 // error drive the context-usage read (usage_test.go).
+//
+// The cost side is a real (if tiny) implementation rather than a no-op: the
+// ledger is what makes a second read resume instead of recount, so a stub that
+// forgot it would let that contract pass untested. ledgers is a map so the
+// value receivers can still write to it; a test that exercises cost builds one
+// with newCostStore.
 type stubBins struct {
 	bin, setup      string
 	providerSession string
 	providerErr     error
+	costOn          bool
+	ledgers         map[string]stubLedger
+}
+
+// stubLedger mirrors one session_costs row.
+type stubLedger struct {
+	offset      int64
+	lastMessage string
+	cost        float64
+}
+
+// newCostStore is a stubBins with the cost readout on and an empty ledger.
+func newCostStore(providerSession string) stubBins {
+	return stubBins{
+		providerSession: providerSession,
+		costOn:          true,
+		ledgers:         make(map[string]stubLedger),
+	}
 }
 
 func (s stubBins) ProviderBin(_, _ string) string       { return s.bin }
@@ -36,6 +60,30 @@ func (s stubBins) ProviderSession(_ string) (string, error) {
 	return s.providerSession, s.providerErr
 }
 func (s stubBins) SetSessionTitle(_, _ string) (bool, error) { return false, nil }
+
+func (s stubBins) CostReadout() bool { return s.costOn }
+
+func (s stubBins) CostLedger(sessionID, transcriptID string) (int64, string, float64, error) {
+	ledger := s.ledgers[sessionID+"\x00"+transcriptID]
+	return ledger.offset, ledger.lastMessage, ledger.cost, nil
+}
+
+func (s stubBins) SaveCostLedger(
+	sessionID, transcriptID string, offset int64, lastMessage string, cost float64,
+) error {
+	s.ledgers[sessionID+"\x00"+transcriptID] = stubLedger{offset, lastMessage, cost}
+	return nil
+}
+
+func (s stubBins) SessionCost(sessionID string) (float64, error) {
+	total := 0.0
+	for key, ledger := range s.ledgers {
+		if strings.HasPrefix(key, sessionID+"\x00") {
+			total += ledger.cost
+		}
+	}
+	return total, nil
+}
 
 // TestChildEnvStripsAppImageVars proves the AppImage runtime variables that break
 // mise/asdf shims are dropped while the real user environment is passed through.

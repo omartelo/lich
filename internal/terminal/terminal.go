@@ -16,6 +16,7 @@ import (
 	"sync"
 
 	"github.com/omartelo/lich/internal/events"
+	"github.com/omartelo/lich/internal/pricing"
 	"github.com/omartelo/lich/internal/providers"
 )
 
@@ -92,15 +93,21 @@ type session struct {
 }
 
 // Store is the persistence the terminal service depends on: the binary to spawn
-// for a provider in a project (empty return spawns the provider's default), and
-// where to record the provider session id a PTY reports through its session-start
-// hook. The store implements both.
+// for a provider in a project (empty return spawns the provider's default),
+// where to record the provider session id a PTY reports through its
+// session-start hook, and the running cost accounting behind the footer readout
+// (CostReadout gates it — off, none of the rest is called). The store
+// implements them all.
 type Store interface {
 	ProviderBin(providerID, projectID string) string
 	WorktreeSetup(projectID string) string
 	SetProviderSession(sessionID, providerSessionID string) error
 	ProviderSession(sessionID string) (string, error)
 	SetSessionTitle(sessionID, title string) (bool, error)
+	CostReadout() bool
+	CostLedger(sessionID, transcriptID string) (int64, string, float64, error)
+	SaveCostLedger(sessionID, transcriptID string, offset int64, lastMessage string, cost float64) error
+	SessionCost(sessionID string) (float64, error)
 }
 
 // Service manages PTY-backed shell sessions keyed by session ID.
@@ -116,6 +123,9 @@ type Service struct {
 	// ws is the local WebSocket transport for terminal I/O (see transport.go);
 	// nil when it failed to start, leaving /events and the RPC as the path.
 	ws *transport
+	// prices resolves what a session's tokens cost. Nil disables the cost
+	// readout outright — the state a test that builds a bare Service is in.
+	prices rateSource
 }
 
 // New returns a ready-to-use terminal service that resolves the binary to spawn
@@ -129,6 +139,7 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 		store:    store,
 		hub:      hub,
 		env:      append(childEnv(env), "TERM=xterm-256color"),
+		prices:   pricing.New(),
 	}
 	ws, err := newTransport(
 		func(id string, data []byte) {

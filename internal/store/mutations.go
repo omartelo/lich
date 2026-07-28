@@ -138,6 +138,13 @@ func (s *Service) ReopenWorktreeSession(projectID, path, newSessionID string) (*
 			}
 			return fmt.Errorf("find parked session for %q: %w", path, err)
 		}
+		// The cost ledgers are read out before the row goes, because deleting it
+		// cascades them away — and a resumed session that forgot what it spent
+		// would restate its total from zero over the same conversation.
+		ledgers, err := costLedgers(tx, old.ID)
+		if err != nil {
+			return err
+		}
 		if _, err := tx.Exec(`DELETE FROM sessions WHERE id = ?`, old.ID); err != nil {
 			return fmt.Errorf("drop parked session %q: %w", old.ID, err)
 		}
@@ -147,6 +154,9 @@ func (s *Service) ReopenWorktreeSession(projectID, path, newSessionID string) (*
 			newSessionID, projectID, old.Label, old.Kind, path, old.ProviderSessionID, labelAuto, projectID,
 		); err != nil {
 			return fmt.Errorf("reinsert session %q: %w", newSessionID, err)
+		}
+		if err := restoreCostLedgers(tx, newSessionID, ledgers); err != nil {
+			return err
 		}
 		if err := setActiveSession(tx, projectID, newSessionID); err != nil {
 			return err

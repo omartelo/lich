@@ -3,6 +3,8 @@ import { Store } from "@/lib/rpc"
 import { useProjects } from "@/providers/projects"
 import { binKey } from "@/lib/providers-store"
 import { useSettings } from "@/providers/settings"
+import { setCostReadout } from "@/lib/cost-readout-store"
+import { useCostReadout } from "@/lib/use-cost-readout"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { SettingBlock } from "./SettingBlock"
@@ -22,6 +24,7 @@ export function ProviderBinSettings({
 }) {
   const { projects } = useProjects()
   const { showContextUsage, setShowContextUsage } = useSettings()
+  const showCost = useCostReadout()
   const project = projects.find((p) => p.id === projectId)
   const key = binKey(providerId)
   const [globalBin, setGlobalBin] = useState("")
@@ -84,18 +87,31 @@ export function ProviderBinSettings({
       )}
 
       {/* Only Claude Code reports context-window usage (via the lich plugin), so
-          the footer readout toggle lives in its section, not the generic hub. */}
+          the footer readout toggles live in its section, not the generic hub. */}
       {providerId === "claude" && (
-        <SettingBlock
-          title="Model & context in the footer"
-          description="Show this session's model and context-window usage in the footer — the model name plus a ring with the percent, read from the transcript."
-        >
-          <Switch
-            checked={showContextUsage}
-            onCheckedChange={setShowContextUsage}
-            aria-label="Show model and context usage in the footer"
-          />
-        </SettingBlock>
+        <>
+          <SettingBlock
+            title="Model & context in the footer"
+            description="Show this session's model and context-window usage in the footer — the model name plus a ring with the percent, read from the transcript."
+          >
+            <Switch
+              checked={showContextUsage}
+              onCheckedChange={setShowContextUsage}
+              aria-label="Show model and context usage in the footer"
+            />
+          </SettingBlock>
+
+          <SettingBlock
+            title="Session cost in the footer"
+            description="Show what each session has cost at API prices, summed from its transcript. Leave this off on a subscription plan — the figure only means something when you are billed per token."
+          >
+            <Switch
+              checked={showCost}
+              onCheckedChange={setCostReadout}
+              aria-label="Show session cost in the footer"
+            />
+          </SettingBlock>
+        </>
       )}
     </>
   )

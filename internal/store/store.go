@@ -51,6 +51,15 @@ CREATE TABLE IF NOT EXISTS settings (
     value      TEXT NOT NULL,
     PRIMARY KEY (key, project_id)
 );
+
+CREATE TABLE IF NOT EXISTS session_costs (
+    session_id      TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    transcript_id   TEXT NOT NULL,
+    byte_offset     INTEGER NOT NULL DEFAULT 0,
+    last_message_id TEXT NOT NULL DEFAULT '',
+    cost_usd        REAL NOT NULL DEFAULT 0,
+    PRIMARY KEY (session_id, transcript_id)
+);
 `
 
 // busyTimeoutMS is how long a write waits on SQLite's lock before failing.

@@ -36,16 +36,22 @@ export const AGENT_EVENT = "session-agent"
 // context-window usage (see terminal.usageEventName). Payload: { id, percent,
 // tokens, window, model, effort } — percent is 0–100 of the window, tokens the
 // raw input-side count, window the model's context size, model its id, effort
-// the reasoning level ("" when the turn records none).
+// the reasoning level ("" when the turn records none) — plus an optional
+// costUsd, which is present only when the cost readout is on and every model in
+// the session has a known price. Its absence is the answer, not a zero.
 export const USAGE_EVENT = "session-usage"
 
-// A session's context-window occupancy as the footer shows it.
+// A session's context-window occupancy as the footer shows it, and what the
+// session has cost so far. costUsd is null whenever the backend sent no number:
+// the setting is off (the case on a subscription, where the figure is noise) or
+// a model has no price yet. Nothing is rendered for it then.
 export interface SessionUsage {
   percent: number
   tokens: number
   window: number
   model: string
   effort: string
+  costUsd: number | null
 }
 
 // The states a card renders an indicator for. The contract also defines "idle"
@@ -95,6 +101,7 @@ export function isUsageEvent(data: unknown): data is {
   window: number
   model: string
   effort: string
+  costUsd?: number
 } {
   return (
     isIdEvent(data) &&
@@ -104,6 +111,14 @@ export function isUsageEvent(data: unknown): data is {
     typeof (data as { model?: unknown }).model === "string" &&
     typeof (data as { effort?: unknown }).effort === "string"
   )
+}
+
+// usageCost reads the optional cost off a usage payload. Absent is the common
+// case (the readout is off for everyone who is not billed per token), and
+// anything that is not a finite number is treated as absent rather than shown:
+// a total is either trustworthy or not rendered.
+export function usageCost(data: { costUsd?: unknown }): number | null {
+  return typeof data.costUsd === "number" && Number.isFinite(data.costUsd) ? data.costUsd : null
 }
 
 // shouldToastAttention decides whether a session needing the user deserves the

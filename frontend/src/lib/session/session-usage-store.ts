@@ -1,5 +1,5 @@
 import { createKeyedStore, type ReadableKeyedStore } from "@/lib/keyed-store"
-import { isUsageEvent, type SessionUsage } from "./session-events"
+import { isUsageEvent, usageCost, type SessionUsage } from "./session-events"
 
 // A subscription to the global usage event, injected so the store is testable
 // without standing up the /events socket. Returns its unsubscribe.
@@ -16,7 +16,8 @@ const sameUsage = (a: SessionUsage | null, b: SessionUsage | null): boolean =>
     a.tokens === b.tokens &&
     a.window === b.window &&
     a.model === b.model &&
-    a.effort === b.effort)
+    a.effort === b.effort &&
+    a.costUsd === b.costUsd)
 
 // createSessionUsageStore keeps the last reported context-window usage of every
 // session, keyed by session id, fed by one subscription taken at creation —
@@ -36,6 +37,7 @@ export function createSessionUsageStore(
       window: data.window,
       model: data.model,
       effort: data.effort,
+      costUsd: usageCost(data),
     })
   })
   return store

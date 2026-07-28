@@ -103,6 +103,13 @@ nobody knows it and that the call site never shows. The mechanism and the histor
   account's token in `GH_TOKEN` for every gh call lich makes for that project. A push still rides the remote's
   ssh key and signs with the global `user.email`, so a PR can be *read* by one account and its commits *land*
   under another, with no error anywhere. Per-worktree `core.sshCommand` + `user.email` is the upgrade path.
+- **The cost readout is priced from a table, not from the provider**: no provider publishes an API for what a
+  turn cost, so `internal/pricing` bills the transcript's token counts against a baked table that refreshes
+  itself from LiteLLM's published one when it meets an unknown model. Two consequences: a model nobody has
+  priced yet makes the readout go *absent* (the scan stops at that line — a total missing a turn is worse than
+  no total), and the accounting is per `(session, transcript)` in `session_costs`, so a conversation forked
+  inside the PTY — which copies its history into a new transcript — bills that history twice. lich's own
+  resume continues the same transcript and is unaffected.
 - **git status is polled** — one shared poller per repository path (`frontend/src/lib/git/git-status-store.ts`); the
   lich plugin's `session-touched` hook nudges an immediate refresh. An fs watcher is the upgrade path.
 - **Persistence is hybrid**: UI prefs in the page's localStorage (`lich.*` keys — the reason the listener port is

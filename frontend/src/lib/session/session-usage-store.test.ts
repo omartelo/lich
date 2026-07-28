@@ -30,6 +30,7 @@ describe("createSessionUsageStore", () => {
       window: 200000,
       model: opus,
       effort: eff,
+      costUsd: null,
     })
     expect(store.get("s2")).toEqual({
       percent: 5,
@@ -37,6 +38,7 @@ describe("createSessionUsageStore", () => {
       window: 1000000,
       model: opus,
       effort: eff,
+      costUsd: null,
     })
   })
 
@@ -75,6 +77,7 @@ describe("createSessionUsageStore", () => {
       window: 200000,
       model: opus,
       effort: "xhigh",
+      costUsd: null,
     })
   })
 
@@ -89,7 +92,49 @@ describe("createSessionUsageStore", () => {
       window: 200000,
       model: opus,
       effort: eff,
+      costUsd: null,
     })
+  })
+
+  it("carries the session cost when the backend sent one", () => {
+    const { store, emit } = harness()
+    emit({
+      id: "s1",
+      percent: 10,
+      tokens: 20000,
+      window: 200000,
+      model: opus,
+      effort: eff,
+      costUsd: 1.25,
+    })
+    expect(store.get("s1")?.costUsd).toBe(1.25)
+  })
+
+  // The backend omits the field entirely rather than sending 0 — on a
+  // subscription, or for a model nothing can price. Reading it as null is what
+  // keeps the footer from claiming a session was free.
+  it("reads an absent or unusable cost as null", () => {
+    const { store, emit } = harness()
+    const base = { id: "s1", percent: 10, tokens: 20000, window: 200000, model: opus, effort: eff }
+
+    emit(base)
+    expect(store.get("s1")?.costUsd).toBeNull()
+
+    emit({ ...base, percent: 11, costUsd: "1.25" })
+    expect(store.get("s1")?.costUsd).toBeNull()
+
+    emit({ ...base, percent: 12, costUsd: Number.NaN })
+    expect(store.get("s1")?.costUsd).toBeNull()
+  })
+
+  it("re-renders when only the cost moved", () => {
+    const { store, emit } = harness()
+    let calls = 0
+    store.subscribe("s1", () => calls++)
+    const base = { id: "s1", percent: 10, tokens: 20000, window: 200000, model: opus, effort: eff }
+    emit({ ...base, costUsd: 0.1 })
+    emit({ ...base, costUsd: 0.2 })
+    expect(calls).toBe(2)
   })
 
   it("ignores malformed payloads", () => {

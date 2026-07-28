@@ -8,6 +8,8 @@ import type { DockTab } from "@/components/dock/RightDock"
 import { useActiveSession } from "@/lib/session/use-active-session"
 import { useSessionCwd } from "@/lib/session/use-session-cwd"
 import { useSessionUsage } from "@/lib/session/use-session-usage"
+import { useCostReadout } from "@/lib/use-cost-readout"
+import { formatCost } from "@/lib/session/session-cost"
 import { displayPath } from "@/lib/paths"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { usePullRequest } from "@/lib/pulls/use-pull-request"
@@ -92,8 +94,10 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
   // Context-window occupancy of the active session, read off its transcript at
   // each turn's end (null until the first turn of a Claude session lands).
   const usage = useSessionUsage(sessionId)
-  // The footer context readout is opt-out (Settings › Providers).
+  // The footer context readout is opt-out (Settings › Providers); the cost
+  // beside it is opt-in, and off for everyone not billed per token.
   const { showContextUsage } = useSettings()
+  const showCost = useCostReadout()
   const status = useGitStatus(path)
   const pr = usePullRequest(path, status?.branch ?? "", status?.head ?? "")
   const now = useNow()
@@ -108,6 +112,27 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
       toast.error("Could not open the file picker")
     }
   }
+
+  // What the session has cost, beside the ring. Rendered only when the backend
+  // sent a number: on a subscription — and for a model no price table knows —
+  // there is nothing here at all, which is the point of the setting.
+  const costReadout =
+    usage && showCost && usage.costUsd !== null ? (
+      <Tooltip>
+        <TooltipTrigger render={<span className="tabular-nums" />}>
+          {formatCost(usage.costUsd)}
+        </TooltipTrigger>
+        <TooltipContent side="top" className="border border-border bg-card text-foreground">
+          <div className="flex flex-col gap-1">
+            <span className="font-medium">Session cost</span>
+            <span className="text-xs text-muted-foreground">
+              API pricing for every turn this session has run, this conversation and the ones it
+              cleared.
+            </span>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    ) : null
 
   // The context-window readout — the ring plus percent, with a detailed
   // tooltip. Null when the user turned it off (Settings › Providers).
@@ -195,8 +220,9 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
 
       <span className="ml-auto flex items-center gap-4">
         {showContextUsage && <SessionModel sessionId={sessionId} />}
+        {costReadout}
         {contextReadout}
-        {contextReadout && (status?.branch || path) && (
+        {(contextReadout || costReadout) && (status?.branch || path) && (
           <Separator orientation="vertical" className="h-4" />
         )}
         {status?.branch && (

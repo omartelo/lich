@@ -12,13 +12,19 @@ const usageEventName = "session-usage"
 // context window the turn left occupied (0–100); Tokens is the raw input-side
 // count behind it, Window the model's context window, Model the model id, and
 // Effort the reasoning effort level ("" when the line records none).
+//
+// CostUSD is what the session has cost so far, and is omitted — not zeroed —
+// whenever there is no number worth showing: the setting is off, or a model in
+// the transcript has no known price. The readout is for API billing, so on a
+// subscription the field never appears at all and the footer shows nothing.
 type usageEvent struct {
-	ID      string `json:"id"`
-	Percent int    `json:"percent"`
-	Tokens  int    `json:"tokens"`
-	Window  int    `json:"window"`
-	Model   string `json:"model"`
-	Effort  string `json:"effort"`
+	ID      string   `json:"id"`
+	Percent int      `json:"percent"`
+	Tokens  int      `json:"tokens"`
+	Window  int      `json:"window"`
+	Model   string   `json:"model"`
+	Effort  string   `json:"effort"`
+	CostUSD *float64 `json:"costUsd,omitempty"`
 }
 
 // emitUsage reads the context-window usage of the provider conversation running
@@ -54,12 +60,62 @@ func (s *Service) sessionUsage(id string) (usageEvent, bool) {
 	if !ok {
 		return usageEvent{}, false
 	}
-	return usageEvent{
+	event := usageEvent{
 		ID:      id,
 		Percent: u.percent,
 		Tokens:  u.tokens,
 		Window:  u.window,
 		Model:   u.model,
 		Effort:  u.effort,
-	}, true
+	}
+	if cost, ok := s.sessionCost(id, providerSessionID); ok {
+		event.CostUSD = &cost
+	}
+	return event, true
+}
+
+// sessionCost is what session id has cost across every conversation it has run,
+// or ok=false for "no number to show". That covers the flag being off (nothing
+// is even read then), a transcript that cannot be reached, and a model no price
+// table knows — see scanTranscriptCost for why an unpriced line stops the count
+// instead of being skipped.
+//
+// The accounting is persisted per transcript, so it survives both a `/clear`
+// (a new conversation under the same session, counted into its own row) and a
+// restart of lich itself.
+func (s *Service) sessionCost(id, providerSessionID string) (float64, bool) {
+	if s.prices == nil || !s.store.CostReadout() {
+		return 0, false
+	}
+	path, ok := claudeTranscriptPath(providerSessionID)
+	if !ok {
+		return 0, false
+	}
+	offset, lastMessage, cost, err := s.store.CostLedger(id, providerSessionID)
+	if err != nil {
+		slog.Warn("terminal: read cost ledger", "session", id, "err", err)
+		return 0, false
+	}
+	from := costLedger{offset: offset, lastMessage: lastMessage, cost: cost}
+	ledger, complete, ok := scanTranscriptCost(path, from, s.prices)
+	if !ok {
+		return 0, false
+	}
+	if ledger != from {
+		if err := s.store.SaveCostLedger(
+			id, providerSessionID, ledger.offset, ledger.lastMessage, ledger.cost,
+		); err != nil {
+			slog.Warn("terminal: save cost ledger", "session", id, "err", err)
+			return 0, false
+		}
+	}
+	if !complete {
+		return 0, false
+	}
+	total, err := s.store.SessionCost(id)
+	if err != nil {
+		slog.Warn("terminal: read session cost", "session", id, "err", err)
+		return 0, false
+	}
+	return total, true
 }

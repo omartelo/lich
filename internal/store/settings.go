@@ -124,6 +124,23 @@ func (s *Service) projectIDForPath(path string) string {
 	return id
 }
 
+// costReadoutKey is the settings key that turns the per-session cost readout
+// on. Global only, and off unless it holds "true": the number means nothing on
+// a subscription, so it is absent until someone billed per token asks for it.
+// A backend setting rather than a UI preference because the flag also gates the
+// work — off, no transcript is summed and no price is ever fetched.
+const costReadoutKey = "usage.cost"
+
+// CostReadout reports whether the session cost readout is on. Any read failure
+// answers off, which is the safe default for a number most users must not see.
+func (s *Service) CostReadout() bool {
+	value, err := s.GetSetting(costReadoutKey, globalScope)
+	if err != nil {
+		return false
+	}
+	return value == "true"
+}
+
 // worktreeSetupKey is the settings key holding a project's worktree setup
 // script. Project-scoped only, no global fallback: a setup command is
 // repo-specific, so a global value would be wrong more often than useful.

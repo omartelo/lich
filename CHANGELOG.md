@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Settings › Providers › Claude can show what a session has cost.** Off by
+  default, and deliberately so: on a subscription plan the number is noise, so
+  with the setting off the footer shows nothing at all — no zero, no greyed-out
+  figure — and lich never even reads the transcript for it. Turned on, the
+  footer carries the session's spend at API prices beside the context ring,
+  summed across every turn it has run, including the conversations it cleared
+  and the sub-agents it spawned. The total survives a restart, and a session
+  parked with its worktree keeps it when you reopen it. Prices ship with the
+  binary and refresh themselves from the published price table the first time a
+  session runs a model that binary never heard of; while a model has no known
+  price, the readout stays absent rather than quoting a total that is missing a
+  turn.
+
 ### Fixed
 
 - **Settings › Font lists your installed fonts on Windows.** The picker read the
