@@ -44,19 +44,3 @@ func TestWrapSetup(t *testing.T) {
 		t.Errorf("wrap changed dir/size: %+v", got)
 	}
 }
-
-// TestShQuote proves quoting survives the shell round trip's edge cases.
-func TestShQuote(t *testing.T) {
-	tests := []struct{ in, want string }{
-		{"plain", "'plain'"},
-		{"with space", "'with space'"},
-		{"it's", `'it'\''s'`},
-		{"", "''"},
-		{"$HOME `id` ;rm", "'$HOME `id` ;rm'"},
-	}
-	for _, tt := range tests {
-		if got := shQuote(tt.in); got != tt.want {
-			t.Errorf("shQuote(%q) = %s, want %s", tt.in, got, tt.want)
-		}
-	}
-}

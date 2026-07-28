@@ -1,11 +1,14 @@
 package claudeplugin
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -211,5 +214,143 @@ func TestStatusNotInstalled(t *testing.T) {
 	}
 	if got.LatestVersion != "0.2.0" {
 		t.Fatalf("LatestVersion = %q, want %q", got.LatestVersion, "0.2.0")
+	}
+}
+
+// The `claude plugin` calls are the supported interface for every mutation this
+// package makes, so nothing below can be asserted without spawning something.
+// The test binary doubles as that something: TestMain hands control to a fake
+// CLI when the guard variable is set, which is how the child tells its two roles
+// apart. Portable by construction — no shell script, no per-OS fixture.
+const (
+	fakeClaudeGuard = "LICH_TEST_FAKE_CLAUDE"
+	fakeClaudeLog   = "LICH_TEST_FAKE_CLAUDE_LOG"
+	fakeClaudeFail  = "LICH_TEST_FAKE_CLAUDE_FAIL"
+)
+
+func TestMain(m *testing.M) {
+	if os.Getenv(fakeClaudeGuard) == "" {
+		os.Exit(m.Run())
+	}
+	// Recording before the exit code: a call that fails still has to show which
+	// call it was.
+	if log := os.Getenv(fakeClaudeLog); log != "" {
+		line := strings.Join(os.Args[1:], " ") + "\n"
+		f, err := os.OpenFile(log, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+		if err != nil {
+			os.Exit(2)
+		}
+		_, _ = f.WriteString(line)
+		_ = f.Close()
+	}
+	if failOn := os.Getenv(fakeClaudeFail); failOn != "" && strings.Contains(strings.Join(os.Args[1:], " "), failOn) {
+		fmt.Fprintln(os.Stderr, "fake claude: refusing "+failOn)
+		os.Exit(1)
+	}
+	os.Exit(0)
+}
+
+// stubBin is a BinResolver naming a fixed binary, standing in for the store.
+type stubBin string
+
+func (b stubBin) ClaudeBin(string) string { return string(b) }
+
+// fakeClaude points a Service's shell-out at the test binary's fake CLI and
+// returns a reader of the calls it received. failOn, when non-empty, makes the
+// fake fail any call whose arguments contain it.
+func fakeClaude(t *testing.T, failOn string) (*Service, func() []string) {
+	t.Helper()
+	log := filepath.Join(t.TempDir(), "calls.log")
+	t.Setenv(fakeClaudeGuard, "1")
+	t.Setenv(fakeClaudeLog, log)
+	t.Setenv(fakeClaudeFail, failOn)
+
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test binary: %v", err)
+	}
+	calls := func() []string {
+		data, err := os.ReadFile(log)
+		if err != nil {
+			return nil
+		}
+		return strings.Split(strings.TrimSpace(string(data)), "\n")
+	}
+	return &Service{bins: stubBin(self)}, calls
+}
+
+// TestInstallAddsMarketplaceThenPlugin pins the order and the exact targets: the
+// marketplace has to be added before the plugin can resolve, and both name the
+// keys Claude Code stores the plugin under.
+func TestInstallAddsMarketplaceThenPlugin(t *testing.T) {
+	s, calls := fakeClaude(t, "")
+
+	if err := s.Install(); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	want := []string{
+		"plugin marketplace add " + marketplaceRepo,
+		"plugin install " + pluginKey,
+	}
+	if got := calls(); !slices.Equal(got, want) {
+		t.Errorf("calls = %v, want %v", got, want)
+	}
+}
+
+// TestInstallSurvivesARepeatMarketplaceAdd proves the documented tolerance: a
+// marketplace already present makes `marketplace add` fail, and that failure
+// must not cost the install that follows it.
+func TestInstallSurvivesARepeatMarketplaceAdd(t *testing.T) {
+	s, calls := fakeClaude(t, "marketplace add")
+
+	if err := s.Install(); err != nil {
+		t.Fatalf("Install after a repeat marketplace add: %v", err)
+	}
+	if got := calls(); len(got) != 2 || got[1] != "plugin install "+pluginKey {
+		t.Errorf("calls = %v, want the install to have run anyway", got)
+	}
+}
+
+// TestInstallReportsTheInstallFailure proves the other half: when the install
+// itself fails, the error carries both the call and what the CLI said, which is
+// all the settings screen has to show.
+func TestInstallReportsTheInstallFailure(t *testing.T) {
+	s, _ := fakeClaude(t, "plugin install")
+
+	err := s.Install()
+	if err == nil {
+		t.Fatal("Install: want an error, got nil")
+	}
+	for _, want := range []string{"plugin install " + pluginKey, "refusing"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q missing %q", err, want)
+		}
+	}
+}
+
+// TestUpdateTargetsThePluginKey proves Update names the same key Status reads
+// the installed version under — a mismatch would silently update nothing.
+func TestUpdateTargetsThePluginKey(t *testing.T) {
+	s, calls := fakeClaude(t, "")
+
+	if err := s.Update(); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if got := calls(); !slices.Equal(got, []string{"plugin update " + pluginKey}) {
+		t.Errorf("calls = %v, want a single plugin update", got)
+	}
+}
+
+// TestRunClaudeFallsBackToPath proves an unset binary override spawns plain
+// "claude" rather than an empty command — the store answers "" for every
+// project that configured no path.
+func TestRunClaudeFallsBackToPath(t *testing.T) {
+	s := &Service{bins: stubBin("")}
+	err := s.runClaude("plugin", "update", pluginKey)
+	if err == nil {
+		return // a machine with Claude Code installed: the call really ran
+	}
+	if !strings.Contains(err.Error(), "claude plugin update") {
+		t.Errorf("error %q does not name the claude call", err)
 	}
 }

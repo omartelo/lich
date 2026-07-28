@@ -6,7 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
+
+	"github.com/omartelo/lich/internal/relpath"
 )
 
 // maxReadFileSize caps a previewed file. CodeMirror is a source viewer, not a
@@ -52,22 +53,16 @@ func lsFiles(path string, args ...string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	var files []string
-	for rel := range strings.SplitSeq(out, "\x00") {
-		if rel != "" {
-			files = append(files, rel)
-		}
-	}
-	return files, nil
+	return splitNUL(out), nil
 }
 
 // ReadFile returns the text content of one repo-relative file for the read-only
-// preview. rel is validated against traversal (validateRelPath, shared with
-// DiscardFile) before it is joined onto the work-tree root. Binaries, irregular
-// files, and files above maxReadFileSize are refused — the preview is for
-// source, not blobs.
+// preview. rel is validated against traversal (internal/relpath, shared with
+// DiscardFile and the editor launch) before it is joined onto the work-tree
+// root. Binaries, irregular files, and files above maxReadFileSize are refused —
+// the preview is for source, not blobs.
 func (s *Service) ReadFile(path, rel string) (string, error) {
-	if err := validateRelPath(rel); err != nil {
+	if err := relpath.Validate(rel); err != nil {
 		return "", err
 	}
 	full := filepath.Join(path, rel)

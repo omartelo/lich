@@ -8,6 +8,26 @@ import (
 	"github.com/omartelo/lich/internal/providers"
 )
 
+// nextSessionPosition is the position a newly inserted session takes: after the
+// project's last one, so a new card appends to the list even once the user has
+// dragged the others around. A subquery rather than a read-then-write, so the
+// order can never be decided against a stale count.
+const nextSessionPosition = `(SELECT COALESCE(MAX(position), -1) + 1 FROM sessions WHERE project_id = ?)`
+
+// setActiveSession points a project at the session that should hold focus. Every
+// mutation that adds, parks or removes a session ends by calling it inside the
+// same transaction: the active id and the session set have to move together, or
+// a reload restores a project focused on a session that is no longer there.
+func setActiveSession(tx *sql.Tx, projectID, sessionID string) error {
+	if _, err := tx.Exec(
+		`UPDATE projects SET active_session_id = ? WHERE id = ?`,
+		sessionID, projectID,
+	); err != nil {
+		return fmt.Errorf("set active session of %q: %w", projectID, err)
+	}
+	return nil
+}
+
 // AddProject persists a newly opened project and marks it open. Reopening a
 // previously closed project keeps its stored sessions, name, path and tab
 // position intact — only is_open flips back to 1. A brand-new project takes the
@@ -48,12 +68,13 @@ func (s *Service) AddSession(projectID, sessionID, label, kind, path string, nex
 	return s.tx(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(
 			`INSERT INTO sessions (id, project_id, label, kind, path, position)
-			 VALUES (?, ?, ?, ?, ?,
-			         (SELECT COALESCE(MAX(position), -1) + 1 FROM sessions WHERE project_id = ?))`,
+			 VALUES (?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
 			sessionID, projectID, label, kind, path, projectID,
 		); err != nil {
 			return fmt.Errorf("insert session %q: %w", sessionID, err)
 		}
+		// Not setActiveSession: the label counter moves with the insert too, and
+		// one statement is what keeps the pair atomic.
 		if _, err := tx.Exec(
 			`UPDATE projects SET active_session_id = ?, next_seq = ? WHERE id = ?`,
 			sessionID, nextSeq, projectID,
@@ -71,13 +92,7 @@ func (s *Service) DeleteSession(projectID, sessionID, activeID string) error {
 		if _, err := tx.Exec(`DELETE FROM sessions WHERE id = ?`, sessionID); err != nil {
 			return fmt.Errorf("delete session %q: %w", sessionID, err)
 		}
-		if _, err := tx.Exec(
-			`UPDATE projects SET active_session_id = ? WHERE id = ?`,
-			activeID, projectID,
-		); err != nil {
-			return fmt.Errorf("update active session of %q: %w", projectID, err)
-		}
-		return nil
+		return setActiveSession(tx, projectID, activeID)
 	})
 }
 
@@ -91,13 +106,7 @@ func (s *Service) CloseSession(projectID, sessionID, activeID string) error {
 		if _, err := tx.Exec(`UPDATE sessions SET is_open = 0 WHERE id = ?`, sessionID); err != nil {
 			return fmt.Errorf("close session %q: %w", sessionID, err)
 		}
-		if _, err := tx.Exec(
-			`UPDATE projects SET active_session_id = ? WHERE id = ?`,
-			activeID, projectID,
-		); err != nil {
-			return fmt.Errorf("update active session of %q: %w", projectID, err)
-		}
-		return nil
+		return setActiveSession(tx, projectID, activeID)
 	})
 }
 
@@ -134,17 +143,13 @@ func (s *Service) ReopenWorktreeSession(projectID, path, newSessionID string) (*
 		}
 		if _, err := tx.Exec(
 			`INSERT INTO sessions (id, project_id, label, kind, path, provider_session_id, label_auto, position)
-			 VALUES (?, ?, ?, ?, ?, ?, ?,
-			         (SELECT COALESCE(MAX(position), -1) + 1 FROM sessions WHERE project_id = ?))`,
+			 VALUES (?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
 			newSessionID, projectID, old.Label, old.Kind, path, old.ProviderSessionID, labelAuto, projectID,
 		); err != nil {
 			return fmt.Errorf("reinsert session %q: %w", newSessionID, err)
 		}
-		if _, err := tx.Exec(
-			`UPDATE projects SET active_session_id = ? WHERE id = ?`,
-			newSessionID, projectID,
-		); err != nil {
-			return fmt.Errorf("activate reopened session on %q: %w", projectID, err)
+		if err := setActiveSession(tx, projectID, newSessionID); err != nil {
+			return err
 		}
 		restored = &Session{ID: newSessionID, Label: old.Label, Kind: old.Kind, Path: path, ProviderSessionID: old.ProviderSessionID}
 		return nil

@@ -135,6 +135,35 @@ func TestSetProviderSessionUnknownSessionNoop(t *testing.T) {
 	}
 }
 
+// TestProviderSessionReadsBackWhatWasReported pins the read half of the pair the
+// context-usage readout depends on: the terminal service resolves a transcript
+// by this id after every non-idle hook, so it has to answer the newest reported
+// id and it has to answer "" — never an error — for the three shapes of "not
+// yet": no row, no report, and a session that never had one.
+func TestProviderSessionReadsBackWhatWasReported(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2)
+	_ = svc.AddSession("p1", "shell", "Shell", "shell", "", 3)
+
+	_ = svc.SetProviderSession("s1", "uuid-abc")
+	_ = svc.SetProviderSession("s1", "uuid-def")
+	got, err := svc.ProviderSession("s1")
+	if err != nil || got != "uuid-def" {
+		t.Errorf("ProviderSession(s1) = (%q, %v), want (uuid-def, nil)", got, err)
+	}
+
+	// A shell session never reports one, and a session that does not exist at
+	// all is the hook racing persistence — both are "keep the last value", not
+	// a failure the caller has to handle.
+	for _, id := range []string{"shell", "ghost"} {
+		got, err := svc.ProviderSession(id)
+		if err != nil || got != "" {
+			t.Errorf("ProviderSession(%s) = (%q, %v), want (\"\", nil)", id, got, err)
+		}
+	}
+}
+
 // mustLoadSessions loads the single test project's sessions or fails.
 func mustLoadSessions(t *testing.T, svc *Service) []Session {
 	t.Helper()

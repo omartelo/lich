@@ -1,7 +1,6 @@
 package project
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,21 +24,6 @@ type Branches struct {
 	Local     []string   `json:"local"`
 	Remote    []string   `json:"remote"` // "origin/main" form
 	Worktrees []Worktree `json:"worktrees"`
-}
-
-// runGit runs git -C dir args... and returns stdout. Unlike Branch/Diff, which
-// deliberately swallow errors for polling, a failure here is shown to someone —
-// so it comes back as the screen's message and git's stderr reaches the log
-// (giterror.go).
-func runGit(dir string, args ...string) (string, error) {
-	cmd := command("git", append([]string{"-C", dir}, args...)...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	out, err := cmd.Output()
-	if err != nil {
-		return "", gitFailure(args, stderr.String(), err)
-	}
-	return string(out), nil
 }
 
 // ListBranches returns the repository's local and remote branches and its
@@ -342,10 +326,12 @@ func (s *Service) WorktreeDirty(wtPath string) (bool, error) {
 	return strings.TrimSpace(out) != "", nil
 }
 
-// branchExists reports whether refs/heads/<name> exists in the repository.
+// branchExists reports whether refs/heads/<name> exists in the repository. A
+// name that does not exist is the answer the caller is looking for, not a
+// failure, so the probe stays off runGit's reporting path.
 func branchExists(projectPath, name string) bool {
-	err := command("git", "-C", projectPath, "show-ref", "--verify", "--quiet", "refs/heads/"+name).Run()
-	return err == nil
+	_, ok := gitQuiet(projectPath, "show-ref", "--verify", "--quiet", "refs/heads/"+name)
+	return ok
 }
 
 // worktreesRoot resolves <XDG_DATA_HOME|~/.local/share>/lich/worktrees, the
@@ -360,15 +346,4 @@ func worktreesRoot() (string, error) {
 		dir = filepath.Join(home, ".local", "share")
 	}
 	return filepath.Join(dir, "lich", "worktrees"), nil
-}
-
-// splitLines splits command output into its non-empty lines.
-func splitLines(out string) []string {
-	lines := []string{}
-	for line := range strings.Lines(out) {
-		if trimmed := strings.TrimSpace(line); trimmed != "" {
-			lines = append(lines, trimmed)
-		}
-	}
-	return lines
 }

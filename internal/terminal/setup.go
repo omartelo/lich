@@ -1,6 +1,10 @@
 package terminal
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/omartelo/lich/internal/shquote"
+)
 
 // wrapSetup rewrites a session's spawn so the project's worktree setup script
 // runs first, in the same PTY — its output lands in the terminal the user is
@@ -17,7 +21,7 @@ func wrapSetup(spec ptySpec, script, goos string) ptySpec {
 	}
 	argv := make([]string, 0, len(spec.args)+1)
 	for _, arg := range append([]string{spec.bin}, spec.args...) {
-		argv = append(argv, shQuote(arg))
+		argv = append(argv, shquote.Quote(arg))
 	}
 	spec.bin = "sh"
 	spec.args = []string{
@@ -25,9 +29,4 @@ func wrapSetup(spec ptySpec, script, goos string) ptySpec {
 		"(\n" + script + "\n) || echo \"[lich] worktree setup failed (exit $?)\"; exec " + strings.Join(argv, " "),
 	}
 	return spec
-}
-
-// shQuote returns s single-quoted for POSIX sh, safe against embedded quotes.
-func shQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

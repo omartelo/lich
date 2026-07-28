@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The log file stops burying real failures under routine git output.** The
+  footer polls every open checkout several times a second, and two of the git
+  calls behind it answer "no" as a matter of course: a repository with no
+  commits has no `HEAD` to resolve, and a path that is not a repository has no
+  branch to name. Both ran through the path that treats any failure as one worth
+  reporting, so each poll filed a warning — thousands a day into a log that
+  rotates at 5MB, pushing out the failures a bug report is actually about.
+  Discarding a newly created file did the same, once per discard, for the check
+  that asks whether the file exists in `HEAD`. Those calls now ask quietly;
+  everything a person is waiting on still reports as before.
+
 ## [0.21.1] - 2026-07-27
 
 ### Fixed
