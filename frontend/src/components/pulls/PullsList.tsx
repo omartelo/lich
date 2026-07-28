@@ -313,7 +313,7 @@ function ListSkeleton() {
     <div aria-busy className="flex flex-col gap-3 px-2 py-2">
       {SKELETON_ROWS.map((width) => (
         <div key={width} className="flex flex-col gap-1.5">
-          <Skeleton className={`h-3 ${width}`} />
+          <Skeleton className={cn("h-3", width)} />
           <Skeleton className="h-2.5 w-1/3" />
         </div>
       ))}

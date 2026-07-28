@@ -65,9 +65,10 @@ export function FileDiff({ file, onInject, onDiscard, bulk, viewed, onViewed }: 
   return (
     <section>
       <div
-        className={`sticky top-0 z-10 flex w-full items-center gap-2 bg-sidebar px-2 py-1 text-xs ${
-          expanded ? "border-b border-border/60" : ""
-        }`}
+        className={cn(
+          "sticky top-0 z-10 flex w-full items-center gap-2 bg-sidebar px-2 py-1 text-xs",
+          expanded && "border-b border-border/60",
+        )}
       >
         <button
           type="button"
@@ -80,7 +81,10 @@ export function FileDiff({ file, onInject, onDiscard, bulk, viewed, onViewed }: 
         >
           <Chevron className="size-3.5 shrink-0 text-muted-foreground" />
           <span
-            className={`flex size-5 shrink-0 items-center justify-center rounded text-[0.5625rem] font-bold ${badge.className}`}
+            className={cn(
+              "flex size-5 shrink-0 items-center justify-center rounded text-[0.5625rem] font-bold",
+              badge.className,
+            )}
           >
             {badge.abbr}
           </span>

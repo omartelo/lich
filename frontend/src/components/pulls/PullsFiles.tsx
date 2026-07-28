@@ -6,6 +6,7 @@ import { CollapseAllAction, useDiffBulk } from "@/components/diff/diff-bulk"
 import { FileDiff } from "@/components/diff/FileDiff"
 import { DiffStat } from "@/components/DiffStat"
 import { FileTree } from "@/components/FileTree"
+import { SkeletonLines } from "@/components/common/SkeletonLines"
 import { Skeleton } from "@/components/ui/skeleton"
 import { buildTree } from "@/lib/git/file-tree"
 import {
@@ -36,9 +37,7 @@ function FilesSkeleton({ tree }: { tree: boolean }) {
     <div className="flex h-full" aria-busy>
       {tree && (
         <div className="flex w-60 shrink-0 flex-col gap-3 border-r border-border p-3">
-          {TREE_ROWS.map((width) => (
-            <Skeleton key={width} className={`h-3 ${width}`} />
-          ))}
+          <SkeletonLines widths={TREE_ROWS} />
         </div>
       )}
       <div className="flex flex-1 flex-col overflow-hidden">
@@ -57,9 +56,7 @@ function FilesSkeleton({ tree }: { tree: boolean }) {
                 <Skeleton className="ml-auto h-3 w-14" />
               </div>
               <div className="flex max-w-3xl flex-col gap-2 pl-9">
-                {CODE_ROWS.map((width) => (
-                  <Skeleton key={width} className={`h-2.5 ${width}`} />
-                ))}
+                <SkeletonLines widths={CODE_ROWS} height="h-2.5" />
               </div>
             </div>
           ))}

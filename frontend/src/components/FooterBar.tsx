@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { useNavigate } from "react-router-dom"
 import { openPulls } from "@/lib/pulls-card-store"
 import { toast } from "sonner"
@@ -31,6 +31,48 @@ function useNow(): Date {
 }
 
 const two = (n: number): string => String(n).padStart(2, "0")
+
+interface FooterButtonProps {
+  /** Both the tooltip and the accessible name — one string, one meaning. */
+  label: string
+  onClick: () => void
+  /** Set for a button that toggles a dock panel: it reads as pressed while
+   * that panel is open. Left off for a plain action. */
+  pressed?: boolean
+  disabled?: boolean
+  /** Roomier padding for a button carrying text beside its glyph. */
+  wide?: boolean
+  children: ReactNode
+}
+
+// One segment of the status strip: a glyph (sometimes with a readout beside
+// it), its meaning in a tooltip, and the accent fill that marks the dock panel
+// it opens as the one on screen.
+function FooterButton({ label, onClick, pressed, disabled, wide, children }: FooterButtonProps) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            onClick={onClick}
+            disabled={disabled}
+            aria-pressed={pressed}
+            aria-label={label}
+            className={cn(
+              "flex items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40",
+              wide ? "gap-1.5 px-1.5 py-1" : "justify-center p-1",
+              pressed && "bg-accent text-accent-foreground",
+            )}
+          />
+        }
+      >
+        {children}
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  )
+}
 
 interface FooterBarProps {
   dock: DockTab | null
@@ -104,91 +146,51 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
 
   return (
     <footer className="flex h-9 shrink-0 items-center gap-2 border-t border-border bg-sidebar px-3 text-xs text-muted-foreground">
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <button
-              type="button"
-              onClick={() => void attachFile()}
-              disabled={!sessionId}
-              aria-label="Attach file"
-              className="flex items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
-            />
-          }
-        >
-          <Plus className="size-4" />
-        </TooltipTrigger>
-        <TooltipContent>Attach file</TooltipContent>
-      </Tooltip>
+      <FooterButton label="Attach file" onClick={() => void attachFile()} disabled={!sessionId}>
+        <Plus className="size-4" />
+      </FooterButton>
       {path && (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <button
-                type="button"
-                onClick={() => onDock("files")}
-                aria-pressed={dock === "files"}
-                aria-label="Browse code"
-                className={`flex items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground ${
-                  dock === "files" ? "bg-accent text-accent-foreground" : ""
-                }`}
-              />
-            }
-          >
-            <Code className="size-4" />
-          </TooltipTrigger>
-          <TooltipContent>Browse code</TooltipContent>
-        </Tooltip>
+        <FooterButton
+          label="Browse code"
+          onClick={() => onDock("files")}
+          pressed={dock === "files"}
+        >
+          <Code className="size-4" />
+        </FooterButton>
       )}
       {status && (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <button
-                type="button"
-                onClick={() => onDock("review")}
-                aria-pressed={dock === "review"}
-                className={`flex items-center gap-1.5 rounded-md px-1.5 py-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground ${
-                  dock === "review" ? "bg-accent text-accent-foreground" : ""
-                }`}
-              />
-            }
-          >
-            {status.files === 0 ? (
-              <>
-                <Diff className="size-3.5" /> 0
-              </>
-            ) : (
-              <>
-                <FileText className="size-3.5" />
-                {status.files}
-                <span className="opacity-50">·</span>
-                <DiffStat added={status.added} deleted={status.deleted} />
-              </>
-            )}
-          </TooltipTrigger>
-          <TooltipContent>Review changes</TooltipContent>
-        </Tooltip>
+        <FooterButton
+          label="Review changes"
+          onClick={() => onDock("review")}
+          pressed={dock === "review"}
+          wide
+        >
+          {status.files === 0 ? (
+            <>
+              <Diff className="size-3.5" /> 0
+            </>
+          ) : (
+            <>
+              <FileText className="size-3.5" />
+              {status.files}
+              <span className="opacity-50">·</span>
+              <DiffStat added={status.added} deleted={status.deleted} />
+            </>
+          )}
+        </FooterButton>
       )}
 
       {pr && projectId && (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <button
-                type="button"
-                onClick={() => {
-                  openPulls(basePath)
-                  navigate(`/projects/${projectId}/pulls`)
-                }}
-                className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-              />
-            }
-          >
-            <GitPullRequestArrow className="size-3.5" /> PR #{pr.number}
-          </TooltipTrigger>
-          <TooltipContent>View pull request</TooltipContent>
-        </Tooltip>
+        <FooterButton
+          label="View pull request"
+          onClick={() => {
+            openPulls(basePath)
+            navigate(`/projects/${projectId}/pulls`)
+          }}
+          wide
+        >
+          <GitPullRequestArrow className="size-3.5" /> PR #{pr.number}
+        </FooterButton>
       )}
 
       <span className="ml-auto flex items-center gap-4">

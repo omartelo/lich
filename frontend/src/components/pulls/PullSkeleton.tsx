@@ -1,3 +1,4 @@
+import { SkeletonLines } from "@/components/common/SkeletonLines"
 import { Skeleton } from "@/components/ui/skeleton"
 
 // Ragged widths, so the body placeholder reads as prose instead of a block.
@@ -31,9 +32,7 @@ export function PullSkeleton() {
         </div>
       </div>
       <div className="flex max-w-3xl flex-col gap-3 px-6 py-6">
-        {BODY_ROWS.map((width) => (
-          <Skeleton key={width} className={`h-3 ${width}`} />
-        ))}
+        <SkeletonLines widths={BODY_ROWS} />
       </div>
     </div>
   )
