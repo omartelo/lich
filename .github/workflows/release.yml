@@ -281,9 +281,11 @@ jobs:
           commit_message: "Update to ${{ github.ref_name }}"
 
   # The formula pins the macOS assets by checksum, so it can only be rendered
-  # once `release` has published them and their checksums.txt. HOMEBREW_TAP_TOKEN
-  # is a PAT with contents:write on omartelo/homebrew-tap — GITHUB_TOKEN is
-  # scoped to this repository and cannot push to another one.
+  # once `release` has published them and their checksums.txt.
+  # HOMEBREW_TAP_SSH_KEY is a deploy key with write access on
+  # omartelo/homebrew-tap — GITHUB_TOKEN is scoped to this repository and cannot
+  # push to another one. A deploy key, unlike a PAT, reaches exactly that one
+  # repository and never expires, so a release years from now still publishes.
   homebrew:
     needs: [release]
     runs-on: ubuntu-latest
@@ -315,10 +317,17 @@ jobs:
 
       - name: Publish lich to the tap
         env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          SSH_KEY: ${{ secrets.HOMEBREW_TAP_SSH_KEY }}
         run: |
-          git clone --depth 1 \
-            "https://x-access-token:${GH_TOKEN}@github.com/omartelo/homebrew-tap.git" tap
+          key="$(mktemp)"
+          printf '%s\n' "$SSH_KEY" > "$key"
+          chmod 600 "$key"
+          known="$(mktemp)"
+          ssh-keyscan -t ed25519 github.com > "$known" 2>/dev/null
+          # IdentitiesOnly keeps ssh from offering the runner's other keys first
+          # and getting rejected before this one is tried.
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o UserKnownHostsFile=$known"
+          git clone --depth 1 git@github.com:omartelo/homebrew-tap.git tap
           mkdir -p tap/Formula
           cp lich.rb tap/Formula/lich.rb
           cd tap
