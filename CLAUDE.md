@@ -103,6 +103,11 @@ nobody knows it and that the call site never shows. The mechanism and the histor
   account's token in `GH_TOKEN` for every gh call lich makes for that project. A push still rides the remote's
   ssh key and signs with the global `user.email`, so a PR can be *read* by one account and its commits *land*
   under another, with no error anywhere. Per-worktree `core.sshCommand` + `user.email` is the upgrade path.
+- **`LICH_WORKTREE_PORT` is a hash, not a reservation** (`internal/terminal/worktreeport.go`): the session's
+  start directory folded into a fixed 1000-port window. Nothing probes and nothing binds, so two checkouts can
+  land on the same number and only the dev server started second finds out. Stability is the trade — a probe
+  would move the port every time the previous server still held it. The main checkout is assigned one like any
+  worktree; the range is fixed, not per-project.
 - **The cost readout is priced from a table, not from the provider**: no provider publishes an API for what a
   turn cost, so `internal/pricing` bills the transcript's token counts against a baked table that refreshes
   itself from LiteLLM's published one when it meets an unknown model. Two consequences: a model nobody has

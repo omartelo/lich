@@ -216,18 +216,25 @@ func (s *Service) SetRestart(fn func() error) {
 	s.ws.setRestart(fn)
 }
 
-// sessionEnv is the environment for one PTY: the shared base plus the loopback
-// coordinates a Claude Code hook needs to report this session's status back to
-// lich. LICH_SESSION_ID is per-session, so this returns a fresh slice rather
-// than aliasing (and appending to) the shared s.env. When the transport failed
-// to start there is nowhere to report, so the base env is used unchanged — a
-// hook spawned in this PTY sees no LICH_PORT and no-ops.
-func (s *Service) sessionEnv(id string) []string {
-	if s.ws == nil {
-		return s.env
-	}
-	env := make([]string, len(s.env), len(s.env)+3)
+// sessionEnv is the environment for one PTY: the shared base, the dev-server
+// port this session's checkout owns, and the loopback coordinates a Claude Code
+// hook needs to report this session's status back to lich. All of it is
+// per-session, so this returns a fresh slice rather than aliasing (and
+// appending to) the shared s.env.
+//
+// LICH_WORKTREE_PORT is derived from cwd alone — it belongs to the checkout,
+// not to the transport, so it is exported even when the transport failed to
+// start. The loopback coordinates are: with no transport there is nowhere to
+// report, so a hook spawned in this PTY sees no LICH_PORT and no-ops.
+func (s *Service) sessionEnv(id, cwd string) []string {
+	env := make([]string, len(s.env), len(s.env)+4)
 	copy(env, s.env)
+	if port := worktreePort(cwd); port > 0 {
+		env = append(env, "LICH_WORKTREE_PORT="+strconv.Itoa(port))
+	}
+	if s.ws == nil {
+		return env
+	}
 	return append(env,
 		"LICH_PORT="+strconv.Itoa(s.ws.port),
 		"LICH_TOKEN="+s.ws.token,
@@ -256,7 +263,8 @@ const readBufSize = 32 * 1024
 // setup is passed once, by the flow that just created this session's worktree:
 // it runs the project's worktree setup script (Settings › Project) in the PTY
 // before the provider, so a fresh checkout installs its dependencies in view.
-// A respawn or resume never sets it.
+// A respawn or resume never sets it. The script runs in the session's own
+// environment, so it reads the same LICH_WORKTREE_PORT the provider will.
 func (s *Service) Start(id, projectID, cwd, kind, resume string, setup bool, cols, rows int) error {
 	sess, cwd, err := s.spawnSession(id, projectID, cwd, kind, resume, setup, cols, rows)
 	if err != nil || sess == nil {
@@ -295,7 +303,7 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume string, setup bo
 		bin:  resolveCommand(kind, s.store.ProviderBin(kind, projectID), userShell()),
 		args: resumeArgs(kind, resume),
 		dir:  cwd,
-		env:  s.sessionEnv(id),
+		env:  s.sessionEnv(id, cwd),
 		cols: cols,
 		rows: rows,
 	}

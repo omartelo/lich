@@ -43,7 +43,9 @@ export function WorktreeSetupSettings({ projectId }: { projectId?: string }) {
       description={
         "Runs in every new worktree's terminal before the agent starts — chain steps with &&. " +
         "The session opens even if it fails. Gitignored .env* files are copied into the new " +
-        "worktree automatically; a .worktreeinclude file at the repo root overrides the patterns."
+        "worktree automatically; a .worktreeinclude file at the repo root overrides the patterns. " +
+        "$LICH_WORKTREE_PORT holds a port of this worktree's own, so two of them can run a dev " +
+        "server at once: PORT=$LICH_WORKTREE_PORT pnpm dev."
       }
     >
       <p className="mb-2 text-xs text-muted-foreground">{project.path}</p>
