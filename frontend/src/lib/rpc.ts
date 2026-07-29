@@ -20,6 +20,7 @@ import type {
   PullRequestSummary,
   StoredProject,
   StoredSession,
+  ThemeDefinition,
   Worktree,
 } from "./api-types"
 
@@ -255,4 +256,13 @@ export const System = {
 export const Providers = {
   /** Every known provider with its install state (binary found on PATH). */
   Detect: () => call<DetectedProvider[]>("providers.Detect", []),
+}
+
+export const Themes = {
+  /** Bundled themes plus user-imported themes from the config dir. */
+  List: () => call<ThemeDefinition[] | null>("themes.List", []),
+  /** Import a raw theme JSON document into the config dir. */
+  Import: (raw: string) => call<ThemeDefinition>("themes.Import", [raw]),
+  /** Remove a user-imported theme. Bundled themes are rejected by the backend. */
+  Remove: (id: string) => call<null>("themes.Remove", [id]),
 }

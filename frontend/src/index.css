@@ -59,13 +59,9 @@
     --color-background: var(--background);
 }
 
-/* Light is a light-gray canvas with near-white raised chrome (the mirror of
-   dark, where the ground is darkest and chrome lifts lighter). Pure white
-   everywhere glared, so the ground/terminal sit at ~0.94 and card/sidebar/
-   popover at ~0.98 — raised surfaces read without a border and nothing is
-   blinding white. Accent drops to ~0.9 so the hover/selection fill is visible
-   on the chrome. Keep TERMINAL_COLORS.light in TerminalView.tsx aligned with
-   --background. */
+/* Boot defaults. React applies the selected theme's variables from bundled or
+   imported JSON after SettingsProvider starts; these values keep first paint
+   legible before that state is available. */
 :root {
     --background: oklch(0.94 0.003 286.32);
     --foreground: oklch(0.21 0.006 285.885);
@@ -248,4 +244,3 @@ html,
 body {
   overflow: hidden;
 }
-

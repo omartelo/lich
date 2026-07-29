@@ -25,6 +25,7 @@ import (
 	"github.com/omartelo/lich/internal/store"
 	"github.com/omartelo/lich/internal/system"
 	"github.com/omartelo/lich/internal/terminal"
+	"github.com/omartelo/lich/internal/themes"
 )
 
 // The frontend is embedded into the binary and served over the loopback
@@ -102,6 +103,7 @@ func main() {
 	dispatcher.Register("store", db)
 	dispatcher.Register("system", system.New(env))
 	dispatcher.Register("providers", providers.New())
+	dispatcher.Register("themes", themes.New())
 	dispatcher.Deny("store.Close")
 	term.Mount("/rpc/", dispatcher)
 	term.Mount("/events", hub)

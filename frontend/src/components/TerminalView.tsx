@@ -21,7 +21,6 @@ import { copyToastMessage, COPY_TOAST_DURATION_MS } from "@/lib/terminal/copy-to
 import { computeGrid } from "@/lib/terminal/term-fit"
 import { mouseEncodingSequence } from "@/lib/terminal/term-modes"
 import { useSettings } from "@/providers/settings"
-import type { ResolvedTheme } from "@/providers/settings"
 import type { SessionKind } from "@/lib/session/sessions"
 import "@xterm/xterm/css/xterm.css"
 
@@ -106,13 +105,6 @@ function fitTerminal(term: Terminal, container: HTMLElement): void {
   }
 }
 
-// Light matches the app's light-gray canvas (--background) rather than pure
-// white, which glared; the dark foreground keeps CLI output high-contrast.
-const TERMINAL_COLORS: Record<ResolvedTheme, { background: string; foreground: string }> = {
-  dark: { background: "#06070f", foreground: "#e5e7eb" },
-  light: { background: "#e8e8ea", foreground: "#1f2328" },
-}
-
 // ensureFontLoaded blocks until a font is available. The renderer measures
 // cell metrics at open, so bundled fonts (@font-face) must be loaded first;
 // system fonts resolve as no-ops and failures fall back to monospace.
@@ -176,6 +168,7 @@ export function TerminalView({
   visible,
 }: TerminalViewProps) {
   const { font, terminalFontSize, resolvedTerminalTheme } = useSettings()
+  const terminalColors = resolvedTerminalTheme.terminal
   const containerRef = useRef<HTMLDivElement | null>(null)
   const liveRef = useRef<LiveTerminal | null>(null)
   // False until the mount effect's async setup builds the first terminal.
@@ -195,11 +188,11 @@ export function TerminalView({
   const visibleRef = useRef(visible)
   const fontRef = useRef(font)
   const fontSizeRef = useRef(terminalFontSize)
-  const themeRef = useRef(resolvedTerminalTheme)
+  const themeRef = useRef(terminalColors)
   visibleRef.current = visible
   fontRef.current = font
   fontSizeRef.current = terminalFontSize
-  themeRef.current = resolvedTerminalTheme
+  themeRef.current = terminalColors
 
   // In-terminal search (Ctrl+F). The open flag mirrors into a ref so the
   // terminal's key handler — wired once at creation — reads the live value.
@@ -247,7 +240,7 @@ export function TerminalView({
       cursorBlink: true,
       scrollback: SCROLLBACK_LINES,
       allowProposedApi: true,
-      theme: TERMINAL_COLORS[themeRef.current],
+      theme: themeRef.current,
     })
     const serialize = new SerializeAddon()
     term.loadAddon(serialize)
@@ -600,7 +593,7 @@ export function TerminalView({
   useEffect(() => {
     const live = liveRef.current
     if (live) {
-      live.term.options.theme = TERMINAL_COLORS[resolvedTerminalTheme]
+      live.term.options.theme = resolvedTerminalTheme.terminal
     }
   }, [resolvedTerminalTheme])
 
@@ -612,7 +605,7 @@ export function TerminalView({
       <div
         ref={containerRef}
         className="h-full w-full"
-        style={{ backgroundColor: TERMINAL_COLORS[resolvedTerminalTheme].background }}
+        style={{ backgroundColor: terminalColors.background }}
       />
       {searchOpen && (
         <div className="absolute right-3 top-3 z-20 flex items-center gap-1 rounded-md border bg-popover p-1 text-popover-foreground shadow-lg">

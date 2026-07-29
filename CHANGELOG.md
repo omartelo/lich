@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Appearance can import custom color themes.** lich still ships the bundled
+  Light and Dark themes, but Settings › Appearance now accepts theme JSON files
+  saved under the app config directory. Imported themes can recolor both the
+  interface tokens and the terminal palette, can be selected independently for
+  the app and terminal, and can be removed without touching the bundled themes.
 - **Every worktree gets a dev-server port of its own.** Two worktrees of one
   project both ran `pnpm dev` and both wanted the same port, so the second one
   lost — and the setup script that had just installed the dependencies had no

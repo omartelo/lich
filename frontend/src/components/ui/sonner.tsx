@@ -11,7 +11,7 @@ export function Toaster(props: ToasterProps) {
   const { resolvedTheme } = useSettings()
   return (
     <Sonner
-      theme={resolvedTheme}
+      theme={resolvedTheme.scheme}
       position="top-right"
       // Drop the stack below the top bar (h-10 = 2.5rem) so a toast never
       // lands on the notification and settings buttons in the corner.

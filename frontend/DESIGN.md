@@ -27,9 +27,9 @@ state first.
 
 ### Color
 
-Zinc, achromatic, by decision — there is **no brand accent hue**. The palette is defined once in
-`src/index.css` (`@theme` + `:root`/`.dark`, oklch). Never hardcode a hex or oklch value in a component; always
-go through a token.
+The bundled light/dark themes are zinc and achromatic — there is **no brand accent hue** by default. Palettes are
+theme JSON data applied to the tokens mapped in `src/index.css` (`@theme` + CSS variables). Never hardcode a hex or
+oklch value in a component; always go through a token.
 
 Surface roles (dark values shown; light is the mirror):
 
@@ -120,7 +120,8 @@ Short specs; the code is the detail. All follow the idiom above.
 
 ## Fixed by decision — do not "fix" these
 
-- **Zinc, no accent hue.** Adding a brand color is a design change, not a tweak.
+- **Bundled themes stay zinc, no accent hue.** A chromatic palette belongs in a custom theme JSON, not in component
+  classes.
 - **The layout.** Top tabs · left session sidebar · terminal · right dock · footer. The reskin is skin, not
   structure.
 - **Semantic color** and the **diff language badges** — they carry meaning.
