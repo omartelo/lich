@@ -2,18 +2,21 @@ import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Notice } from "@/components/common/Notice"
 import { discardTargets, parseDiff, type DiffFile } from "@/lib/git/diff"
+import { addReviewComment } from "@/lib/review-comments"
 import { ProjectService } from "@/lib/rpc"
 import { useActiveSession } from "@/lib/session/use-active-session"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { useInject } from "@/lib/use-inject"
 import { errorText } from "@/lib/utils"
+import { CommentBatch } from "./CommentBatch"
 import type { DiffBulk } from "./diff-bulk"
 import { DiscardDialog } from "./DiscardDialog"
 import { FileDiff } from "./FileDiff"
 
 // ReviewPanel is the Review tab's body: the active session's uncommitted diff,
 // one collapsible file at a time. Context-menu actions write file/line
-// references into the session's PTY, mirroring the footer's attach-file button.
+// references into the session's PTY, mirroring the footer's attach-file button,
+// or hold a comment on the selection for the batch at the panel's foot.
 // It follows the active session — a worktree session reviews its checkout, not
 // the project root. The dock (RightDock) owns the surrounding chrome: width,
 // full screen, the tab bar and the close button.
@@ -65,14 +68,18 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
   }
 
   return (
-    <div className="h-full overflow-y-auto">
-      <PanelBody
-        files={files}
-        failed={failed}
-        onInject={inject}
-        onDiscard={setPendingDiscard}
-        bulk={bulk}
-      />
+    <div className="flex h-full flex-col">
+      <div className="flex-1 overflow-y-auto">
+        <PanelBody
+          files={files}
+          failed={failed}
+          onInject={inject}
+          onSessionComment={(file, lines, text) => addReviewComment(path, file, lines, text)}
+          onDiscard={setPendingDiscard}
+          bulk={bulk}
+        />
+      </div>
+      <CommentBatch target={path} onInject={inject} />
       <DiscardDialog
         file={pendingDiscard}
         onCancel={() => setPendingDiscard(null)}
@@ -86,11 +93,12 @@ interface PanelBodyProps {
   files: DiffFile[] | null
   failed: boolean
   onInject: (text: string) => void
+  onSessionComment: (path: string, lines: string, text: string) => void
   onDiscard: (file: DiffFile) => void
   bulk: DiffBulk
 }
 
-function PanelBody({ files, failed, onInject, onDiscard, bulk }: PanelBodyProps) {
+function PanelBody({ files, failed, onInject, onSessionComment, onDiscard, bulk }: PanelBodyProps) {
   if (failed) {
     return <Notice>Not a git repository</Notice>
   }
@@ -107,6 +115,7 @@ function PanelBody({ files, failed, onInject, onDiscard, bulk }: PanelBodyProps)
           key={file.newPath}
           file={file}
           onInject={onInject}
+          onSessionComment={onSessionComment}
           onDiscard={() => onDiscard(file)}
           bulk={bulk}
         />

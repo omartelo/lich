@@ -11,12 +11,16 @@ import { docLineAt, type DiffLine, type DiffSide } from "@/lib/git/diff"
 //
 //   t:<node id>            a thread GitHub already has
 //   d:<side>:<start>-<end> the comments written here and not yet sent
-//   c                      the box a new comment is being typed in
+//   c                      the box a comment is being typed in
 //
 // Threads and drafts on the same line get their own gaps; two drafts on the same
 // line share one, which is why the draft key is the line rather than an index
 // into the review (an index moves when an earlier comment is discarded, and a
 // key that moves takes the widget's DOM — and the text inside it — with it).
+//
+// The composer is not resolved here: it hangs off the *document* line the
+// selection ended on, which is what the caller has, and a selection ending on a
+// deleted line has no new-file line to resolve at all.
 export const COMPOSER_KEY = "c"
 
 const side = (value: string): DiffSide => (value === "LEFT" ? "LEFT" : "RIGHT")
@@ -38,8 +42,6 @@ export interface ReviewSlotInput {
   threads: ReviewThread[]
   /** Draft comments in this file. */
   drafts: DraftReviewComment[]
-  /** The last line of the selection a new comment is being written on, or 0. */
-  composerLine: number
 }
 
 // reviewSlots resolves every gap this file's diff should open, in document
@@ -47,12 +49,7 @@ export interface ReviewSlotInput {
 // outdated thread has a line number that addresses code this diff no longer
 // shows, and a thread on an unchanged line has no line here at all. Both are
 // rendered in the Conversation tab, where nothing pretends to point at code.
-export function reviewSlots({
-  lineMeta,
-  threads,
-  drafts,
-  composerLine,
-}: ReviewSlotInput): ThreadSlot[] {
+export function reviewSlots({ lineMeta, threads, drafts }: ReviewSlotInput): ThreadSlot[] {
   const slots: ThreadSlot[] = []
   const seen = new Set<string>()
   const add = (key: string, line: number, at: DiffSide): void => {
@@ -73,9 +70,6 @@ export function reviewSlots({
   }
   for (const comment of drafts) {
     add(draftSlotKey(comment), comment.line, side(comment.side))
-  }
-  if (composerLine > 0) {
-    add(COMPOSER_KEY, composerLine, "RIGHT")
   }
   return slots
 }

@@ -1,4 +1,5 @@
 import type { DraftReviewComment, ReviewThread as Thread } from "@/lib/api-types"
+import type { NewLineRange } from "@/lib/git/diff"
 import { COMPOSER_KEY, draftSlotKey, threadSlotKey } from "@/lib/pulls/review-slots"
 import { CommentBox } from "@/components/pulls/CommentBox"
 import { PendingComments, ReviewThread, type ThreadActions } from "@/components/pulls/ReviewThread"
@@ -18,18 +19,29 @@ export interface DiffReview {
   onRemove: (index: number) => void
 }
 
-/** The comment being written: the lines it covers and the text so far. Held by
- * the diff body rather than by the box, so a refetch that rebuilds the editor
- * moves the box without emptying it. */
-export interface Composer {
-  start: number
-  end: number
+/** A resolved selection: what to call the lines, which new-file lines they are
+ * (null when the selection holds only deletions), and the document line a
+ * composer opened on it hangs under. */
+export interface DiffSelection {
+  lines: string
+  range: NewLineRange | null
+  docLine: number
+}
+
+/** The comment being written, and where it goes when it is filed. Held by the
+ * diff body rather than by the box, so a refetch that rebuilds the editor moves
+ * the box without emptying it. */
+export interface Composer extends DiffSelection {
+  /** "session" is held for the next prompt; "review" waits for GitHub. */
+  kind: "session" | "review"
   body: string
 }
 
 interface ReviewSlotProps {
   slotKey: string
-  review: DiffReview
+  /** Absent on the dock's working diff, which has threads of no kind — only a
+   * composer aimed at the session. */
+  review?: DiffReview
   composer: Composer | null
   onComposerChange: (body: string) => void
   onComposerSubmit: () => void
@@ -52,24 +64,35 @@ export function ReviewSlot({
     if (!composer) {
       return null
     }
+    // The label says where the note is going, because the two destinations look
+    // identical once the box is open and only one of them reaches GitHub.
+    const session = composer.kind === "session"
     return (
       <div className="my-1.5 flex flex-col gap-1.5 rounded-md bg-sidebar px-3 py-2.5">
-        <span className="text-xs text-muted-foreground">
-          {composer.start === composer.end
-            ? `Comment on line ${composer.end}`
-            : `Comment on lines ${composer.start}–${composer.end}`}
+        <span className="font-mono text-xs text-muted-foreground">
+          {session ? "for the session" : "on the pull request"} · {composer.lines}
         </span>
         <CommentBox
           value={composer.body}
           onChange={onComposerChange}
           onSubmit={onComposerSubmit}
           onCancel={onComposerCancel}
-          submitLabel="Add to review"
-          placeholder="Leave a comment. It is sent when you submit the review."
+          submitLabel={session ? "Add to batch" : "Add to review"}
+          placeholder={
+            session
+              ? "What should change here? It goes to the session with the rest."
+              : "Leave a comment. It is sent when you submit the review."
+          }
           autoFocus
+          submitOnEnter={session}
+          rows={session ? 2 : 3}
         />
       </div>
     )
+  }
+
+  if (!review) {
+    return null
   }
 
   if (slotKey.startsWith("t:")) {

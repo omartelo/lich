@@ -20,10 +20,11 @@ export interface DiffEditor {
 // interleaving of added and deleted, not the file's numbering; mapping them
 // back is newLineRange's job at the call site.
 //
-// `extra` is laid on top for a caller that needs more of the editor — the pull
-// request's review threads open their gaps through it. It has to be a stable
-// reference: it rides the view's identity, so a new one on every render would
-// rebuild the editor on every render.
+// `extra` is laid on top for a caller that needs more of the editor — every gap
+// opened between two lines, whether it holds a review thread, a comment waiting
+// for GitHub or one waiting for the session, comes through it. It has to be a
+// stable reference: it rides the view's identity, so a new one on every render
+// would rebuild the editor on every render.
 export function useDiffEditor(doc: FileDoc, filename: string, extra?: Extension): DiffEditor {
   const source = useMemo(
     () => ({

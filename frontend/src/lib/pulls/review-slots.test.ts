@@ -43,7 +43,7 @@ const draft = (line: number, over: Partial<DraftReviewComment> = {}): DraftRevie
 })
 
 const slots = (over: Partial<Parameters<typeof reviewSlots>[0]> = {}) =>
-  reviewSlots({ lineMeta, threads: [], drafts: [], composerLine: 0, ...over })
+  reviewSlots({ lineMeta, threads: [], drafts: [], ...over })
 
 describe("reviewSlots", () => {
   it("anchors a thread on the document line rendering its file line", () => {
@@ -86,10 +86,11 @@ describe("reviewSlots", () => {
     expect(built.every((slot) => slot.docLine === 4)).toBe(true)
   })
 
-  it("opens the composer on the last line of the selection", () => {
-    expect(slots({ composerLine: 2 })).toEqual([{ key: COMPOSER_KEY, docLine: 3 }])
-    // A composer on a line this diff does not show has nowhere to open.
-    expect(slots({ composerLine: 900 })).toEqual([])
+  it("leaves the composer to the caller", () => {
+    // It hangs off the document line the selection ended on — which the caller
+    // has and this does not, and which exists even for a selection that ends on
+    // a deleted line and so has no new-file line at all.
+    expect(slots().some((slot) => slot.key === COMPOSER_KEY)).toBe(false)
   })
 
   it("never emits the same key twice", () => {

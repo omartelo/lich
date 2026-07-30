@@ -14,6 +14,11 @@ interface CommentBoxProps {
   autoFocus?: boolean
   rows?: number
   className?: string
+  /** Send on a bare ⏎, with ⇧⏎ for a new line. For a one-line note taken while
+   * reading — a comment for the session — where reaching for a modifier is the
+   * slower half of writing it. Off elsewhere: a review comment is prose, and a
+   * stray ⏎ would file half of it. */
+  submitOnEnter?: boolean
 }
 
 // The one place review text is typed: a line comment, a reply, the summary above
@@ -34,6 +39,7 @@ export function CommentBox({
   autoFocus = false,
   rows = 3,
   className,
+  submitOnEnter = false,
 }: CommentBoxProps) {
   const empty = value.trim() === ""
   return (
@@ -42,7 +48,11 @@ export function CommentBox({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !empty) {
+          // The box lives inside a CodeMirror widget on a diff: every key has to
+          // stop here, or the editor around it reads what is being typed.
+          e.stopPropagation()
+          const send = submitOnEnter ? !e.shiftKey : e.metaKey || e.ctrlKey
+          if (e.key === "Enter" && send && !empty) {
             e.preventDefault()
             onSubmit()
           }

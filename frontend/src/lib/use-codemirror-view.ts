@@ -21,7 +21,7 @@ export interface CodeMirrorView {
   /** 1-based doc line span of the current selection, or null when empty. */
   getSelectedLines: () => DocLineSelection | null
   /** The live view, or null before it is built. State rather than a ref: a
-   * caller that dispatches into the view (the diff's thread slots) has to be
+   * caller that dispatches into the view (the diff's review slots) has to be
    * told when there is one to dispatch to. */
   view: EditorView | null
 }

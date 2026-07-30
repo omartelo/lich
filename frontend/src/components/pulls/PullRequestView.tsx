@@ -66,7 +66,8 @@ interface PullRequestViewProps {
   onRefresh: () => void
   /** The merge landed; the screen decides what follows (a toast, the worktree). */
   onMerged: () => void
-  onInject: (text: string) => void
+  /** Write into the session's terminal; false when no session took it. */
+  onInject: (text: string) => boolean
   /** What has been said about this pull request, and how to re-read it after a
    * reply, a resolve or a submitted review. */
   conversation: PullRequestConversation | null

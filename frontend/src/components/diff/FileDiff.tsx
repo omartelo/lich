@@ -11,15 +11,14 @@ import {
   newLineRange,
   type DiffFile,
   type FileDoc,
-  type NewLineRange,
 } from "@/lib/git/diff"
 import { languageAbbr, splitPath } from "@/lib/git/lang-badge"
-import { reviewSlots } from "@/lib/pulls/review-slots"
+import { COMPOSER_KEY, reviewSlots } from "@/lib/pulls/review-slots"
 import { cn } from "@/lib/utils"
 import type { DiffBulk } from "./diff-bulk"
 import { InjectMenu } from "./InjectMenu"
 import { useDiffEditor } from "./useDiffEditor"
-import { type Composer, type DiffReview, ReviewSlot } from "./ReviewSlots"
+import { type Composer, type DiffReview, type DiffSelection, ReviewSlot } from "./ReviewSlots"
 
 // Files whose rendered diff exceeds this many lines start collapsed, so one
 // giant lockfile doesn't swamp the panel (expanding is one click away).
@@ -37,6 +36,10 @@ const MOUNT_MARGIN = "600px 0px"
 interface FileDiffProps {
   file: DiffFile
   onInject: (text: string) => void
+  /** Hold a comment on these lines for the panel's batch, which the session's
+   * next prompt carries. Absent = no session comment, the shape every surface
+   * had before review comments existed. */
+  onSessionComment?: (path: string, lines: string, text: string) => void
   /** Ask the panel to confirm and revert this file's changes. Omitted for a
    * read-only diff (a PR's changes), where discarding makes no sense. */
   onDiscard?: () => void
@@ -58,6 +61,7 @@ interface FileDiffProps {
 export function FileDiff({
   file,
   onInject,
+  onSessionComment,
   onDiscard,
   bulk,
   viewed,
@@ -156,7 +160,13 @@ export function FileDiff({
         (file.binary ? (
           <p className="px-9 py-2 text-xs text-muted-foreground">Binary file</p>
         ) : (
-          <LazyDiffBody doc={doc} path={file.newPath} onInject={onInject} review={review} />
+          <LazyDiffBody
+            doc={doc}
+            path={file.newPath}
+            onInject={onInject}
+            onSessionComment={onSessionComment}
+            review={review}
+          />
         ))}
     </section>
   )
@@ -166,6 +176,7 @@ interface DiffBodyProps {
   doc: FileDoc
   path: string
   onInject: (text: string) => void
+  onSessionComment?: (path: string, lines: string, text: string) => void
   review?: DiffReview
 }
 
@@ -174,7 +185,7 @@ interface DiffBodyProps {
 // page. LazyDiffBody defers each one until its card comes near the viewport;
 // once built, the editor stays, so scrolling back keeps its selection and
 // highlighting. Collapsing the file still destroys it.
-function LazyDiffBody({ doc, path, onInject, review }: DiffBodyProps) {
+function LazyDiffBody({ doc, path, onInject, onSessionComment, review }: DiffBodyProps) {
   const placeholder = useRef<HTMLDivElement>(null)
   const [mounted, setMounted] = useState(false)
 
@@ -196,7 +207,15 @@ function LazyDiffBody({ doc, path, onInject, review }: DiffBodyProps) {
   }, [])
 
   if (mounted) {
-    return <DiffBody doc={doc} path={path} onInject={onInject} review={review} />
+    return (
+      <DiffBody
+        doc={doc}
+        path={path}
+        onInject={onInject}
+        onSessionComment={onSessionComment}
+        review={review}
+      />
+    )
   }
   // The placeholder has to stand in for the file's height: zero-height cards
   // would all sit in the viewport at once and nothing would be deferred.
@@ -209,55 +228,75 @@ const NO_SLOTS: SlotElements = new Map()
 // destroying the CodeMirror view instead of keeping it alive off-screen.
 //
 // A diff's document is not the file: the selection lands on doc lines, which
-// newLineRange maps back to the line numbers the agent needs to be told — and,
-// under a pull request, the line numbers GitHub files a comment against.
-function DiffBody({ doc, path, onInject, review }: DiffBodyProps) {
+// newLineRange maps back to the line numbers an inject writes, a session comment
+// anchors to, and GitHub files a review comment against.
+function DiffBody({ doc, path, onInject, onSessionComment, review }: DiffBodyProps) {
   // One slot extension per view. It is memoised because it *is* part of the
   // view's identity: a new one would rebuild the editor on every render.
   const [elements, setElements] = useState<SlotElements>(NO_SLOTS)
   const slots = useMemo(() => threadSlots(setElements), [])
+  // The gaps exist wherever a comment can be written, which on the dock's
+  // working diff is the session's alone.
+  const gapped = Boolean(review || onSessionComment)
   const { containerRef, getSelectedDocLines, view } = useDiffEditor(
     doc,
     path,
-    review ? slots.extension : undefined,
+    gapped ? slots.extension : undefined,
   )
-  const [range, setRange] = useState<NewLineRange | null>(null)
+  // Both halves of the resolved selection: the file lines a comment is filed
+  // against, and the doc line a composer hangs under. They differ — a selection
+  // ending on a deleted line has a doc line but no new-file one.
+  const [selection, setSelection] = useState<DiffSelection | null>(null)
   const [composer, setComposer] = useState<Composer | null>(null)
 
   // Where the gaps go, never what is in them: keyed off the composer's line
   // rather than the composer, so typing into it does not re-dispatch the whole
   // slot set on every keystroke.
-  const composerLine = composer?.end ?? 0
-  const wanted = useMemo(
-    (): ThreadSlot[] =>
-      review
-        ? reviewSlots({
-            lineMeta: doc.lineMeta,
-            threads: review.threads,
-            drafts: review.drafts.map(({ comment }) => comment),
-            composerLine,
-          })
-        : [],
-    [review, doc.lineMeta, composerLine],
-  )
+  const composerLine = composer?.docLine ?? 0
+  const wanted = useMemo((): ThreadSlot[] => {
+    const built = review
+      ? reviewSlots({
+          lineMeta: doc.lineMeta,
+          threads: review.threads,
+          drafts: review.drafts.map(({ comment }) => comment),
+        })
+      : []
+    // The composer is placed by doc line, not by file line: it belongs under
+    // the last line the selection covered, whichever side that line came from.
+    return composerLine > 0 ? [...built, { key: COMPOSER_KEY, docLine: composerLine }] : built
+  }, [review, doc.lineMeta, composerLine])
 
   useEffect(() => {
-    if (view && review) {
+    if (view && gapped) {
       slots.update(view, wanted)
     }
-  }, [view, review, slots, wanted])
+  }, [view, gapped, slots, wanted])
 
-  const addComment = (): void => {
-    if (!review || !composer || composer.body.trim() === "") {
+  const openComposer = (kind: Composer["kind"]) => (): void => {
+    if (selection) {
+      setComposer({ ...selection, kind, body: "" })
+    }
+  }
+
+  // Where a written comment goes, which is the whole difference between the two
+  // menu items: the batch the session's next prompt carries, or the review
+  // GitHub is waiting for.
+  const fileComment = (): void => {
+    const body = composer?.body.trim() ?? ""
+    if (!composer || body === "") {
       return
     }
-    review.onAdd({
-      path,
-      line: composer.end,
-      startLine: composer.start === composer.end ? 0 : composer.start,
-      side: "RIGHT",
-      body: composer.body.trim(),
-    })
+    if (composer.kind === "session") {
+      onSessionComment?.(path, composer.lines, body)
+    } else if (composer.range) {
+      review?.onAdd({
+        path,
+        line: composer.range.end,
+        startLine: composer.range.start === composer.range.end ? 0 : composer.range.start,
+        side: "RIGHT",
+        body,
+      })
+    }
     setComposer(null)
   }
 
@@ -266,31 +305,30 @@ function DiffBody({ doc, path, onInject, review }: DiffBodyProps) {
       <InjectMenu
         path={path}
         containerRef={containerRef}
-        lineRef={range && formatLineRef(range)}
+        lineRef={selection?.lines ?? null}
         // Resolve the selection when the menu opens, not on every change.
         onOpenChange={(open) => {
           if (!open) {
             return
           }
           const selected = getSelectedDocLines()
-          setRange(selected ? newLineRange(doc.lineMeta, selected.from, selected.to) : null)
+          const range = selected ? newLineRange(doc.lineMeta, selected.from, selected.to) : null
+          setSelection(
+            selected && range ? { lines: formatLineRef(range), range, docLine: selected.to } : null,
+          )
         }}
         onInject={onInject}
-        // Commenting only exists under a pull request — but the item is offered
-        // whenever there is one, not only once a range is resolved: the
-        // selection is read as the menu opens, so gating the item on it would
-        // hide it on the very open that produced it. With nothing selected the
-        // menu disables it, like Inject lines beside it.
+        // Both items are offered whenever their destination exists, not only
+        // once a range is resolved: the selection is read as the menu opens, so
+        // gating them on it would hide them on the very open that produced it.
+        // With nothing selected the menu disables them, like Inject lines.
         //
         // Deliberately new-file lines only: a comment on a deleted line is a
         // thread GitHub anchors on the other side, and that needs its own gesture.
-        onComment={
-          review
-            ? () => range && setComposer({ start: range.start, end: range.end, body: "" })
-            : undefined
-        }
+        onSessionComment={onSessionComment && openComposer("session")}
+        onReviewComment={review && openComposer("review")}
       />
-      {review &&
+      {gapped &&
         [...elements].map(([key, element]) =>
           createPortal(
             <ReviewSlot
@@ -298,7 +336,7 @@ function DiffBody({ doc, path, onInject, review }: DiffBodyProps) {
               review={review}
               composer={composer}
               onComposerChange={(body) => setComposer((held) => held && { ...held, body })}
-              onComposerSubmit={addComment}
+              onComposerSubmit={fileComment}
               onComposerCancel={() => setComposer(null)}
             />,
             element,
