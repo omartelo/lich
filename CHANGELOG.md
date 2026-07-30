@@ -86,6 +86,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reason — the call is yours. It just used to offer it in silence, with the red
   a line away in the status row. The Merge button now carries the number of
   failing checks, and hovering it says GitHub will merge anyway.
+- **Dropdown menus are as wide as what they say.** Every menu was pinned to the
+  width of the button that opened it, so the ones hanging off a small control —
+  New Session, the pull request filter, Merge — wrapped their items over two and
+  three lines. They size to their own text now, on one line each, with a little
+  more room around it. A select still matches its field, which is the one place
+  the old behaviour was right.
 - **Settings › Font lists your installed fonts on Windows.** The picker read the
   font list from fontconfig, which Windows does not have, so it offered nothing
   beyond the bundled default and whatever was already selected. It now reads the
