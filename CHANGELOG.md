@@ -13,9 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the session a *reference* — a file, a line range — but never an instruction,
   so anything you actually wanted changed had to be typed out by hand while
   looking straight at it. Right-clicking a selection, in the Review dock or in a
-  pull request's Files changed, now also offers *Comment on lines*: the note is
-  held against those lines instead of being written out. Comments collect at the
-  foot of the panel in the order you read the diff, each removable on its own,
+  pull request's Files changed, now also offers *Comment on lines*: a box opens
+  between the lines themselves, and the note is held against them instead of
+  being written out. Comments collect at the foot of the panel in the order you
+  read the diff, each removable on its own,
   and one *Send* hands the whole batch over as a single prompt — pasted into the
   session unsent, so the last word before the agent starts is still yours. They
   outlive leaving the tab but not a restart: a line number written before an

@@ -12,7 +12,6 @@ import {
 } from "@/lib/git/diff"
 import { languageAbbr, splitPath } from "@/lib/git/lang-badge"
 import { cn } from "@/lib/utils"
-import { CommentDialog, type CommentAnchor } from "./CommentDialog"
 import type { DiffBulk } from "./diff-bulk"
 import { InjectMenu } from "./InjectMenu"
 import { useDiffEditor } from "./useDiffEditor"
@@ -192,40 +191,36 @@ function LazyDiffBody({ doc, path, onInject, onComment }: DiffBodyProps) {
 // A diff's document is not the file: the selection lands on doc lines, which
 // newLineRange maps back to the line numbers the agent needs to be told.
 function DiffBody({ doc, path, onInject, onComment }: DiffBodyProps) {
-  const { containerRef, getSelectedDocLines } = useDiffEditor(doc, path)
-  const [lineRef, setLineRef] = useState<string | null>(null)
-  const [anchor, setAnchor] = useState<CommentAnchor | null>(null)
+  const { containerRef, getSelectedDocLines, openComment } = useDiffEditor(
+    doc,
+    path,
+    onComment && ((lines, text) => onComment(path, lines, text)),
+  )
+  // Both halves of the resolved selection: the file lines an inject or a
+  // comment is filed against, and the doc line the composer hangs under.
+  const [selection, setSelection] = useState<{ lines: string; docLine: number } | null>(null)
 
   return (
-    <>
-      <InjectMenu
-        path={path}
-        containerRef={containerRef}
-        lineRef={lineRef}
-        // Resolve the selection when the menu opens, not on every change.
-        onOpenChange={(open) => {
-          if (!open) {
-            return
-          }
-          const selected = getSelectedDocLines()
-          const range = selected ? newLineRange(doc.lineMeta, selected.from, selected.to) : null
-          setLineRef(range && formatLineRef(range))
-        }}
-        onInject={onInject}
-        onComment={onComment && ((lines) => setAnchor({ path, lines }))}
-      />
-      {onComment && (
-        <CommentDialog
-          anchor={anchor}
-          onCancel={() => setAnchor(null)}
-          onAdd={(text) => {
-            if (anchor) {
-              onComment(anchor.path, anchor.lines, text)
-            }
-            setAnchor(null)
-          }}
-        />
-      )}
-    </>
+    <InjectMenu
+      path={path}
+      containerRef={containerRef}
+      lineRef={selection?.lines ?? null}
+      // Resolve the selection when the menu opens, not on every change.
+      onOpenChange={(open) => {
+        if (!open) {
+          return
+        }
+        const selected = getSelectedDocLines()
+        const range = selected ? newLineRange(doc.lineMeta, selected.from, selected.to) : null
+        setSelection(
+          range && selected ? { lines: formatLineRef(range), docLine: selected.to } : null,
+        )
+      }}
+      onInject={onInject}
+      onComment={
+        onComment &&
+        (() => selection && openComment({ line: selection.docLine, lines: selection.lines }))
+      }
+    />
   )
 }
