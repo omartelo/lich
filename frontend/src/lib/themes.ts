@@ -12,6 +12,7 @@ export const DARK_THEME_ID = "dark"
 export type Theme = typeof SYSTEM_THEME | string
 export type TerminalTheme = typeof MATCH_TERMINAL_THEME | string
 export type ResolvedTheme = ThemeDefinition
+type ThemeImportTemplate = Omit<ThemeDefinition, "origin">
 
 const BUNDLED = [lightTheme, darkTheme].map((theme) =>
   normalizeTheme(theme as unknown as ThemeDefinition, "bundled"),
@@ -20,6 +21,7 @@ const BUNDLED_ORDER = new Map(BUNDLED.map((theme, index) => [theme.id, index]))
 
 export const APP_COLOR_TOKENS = Object.keys(BUNDLED[0].app)
 export const BUNDLED_THEMES = mergeThemes(BUNDLED)
+export const THEME_TEMPLATE_FILENAME = "lich-theme-template.json"
 
 export function mergeThemes(
   themes: readonly ThemeDefinition[] | null | undefined,
@@ -73,6 +75,18 @@ export function applyAppTheme(theme: ThemeDefinition, root: HTMLElement): void {
 
 export function customThemes(themes: readonly ThemeDefinition[]): ThemeDefinition[] {
   return themes.filter((theme) => theme.origin === "custom")
+}
+
+export function themeTemplateJSON(): string {
+  const base = BUNDLED[0]
+  const template = {
+    id: "my-theme",
+    name: "My Theme",
+    scheme: base.scheme,
+    app: { ...base.app },
+    terminal: { ...base.terminal },
+  } satisfies ThemeImportTemplate
+  return `${JSON.stringify(template, null, 2)}\n`
 }
 
 export function sanitizeThemePreference(raw: string | null): Theme {

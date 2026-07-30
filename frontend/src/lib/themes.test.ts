@@ -10,6 +10,8 @@ import {
   resolveTheme,
   sanitizeTerminalThemePreference,
   sanitizeThemePreference,
+  THEME_TEMPLATE_FILENAME,
+  themeTemplateJSON,
 } from "./themes"
 
 function customTheme(id: string): ThemeDefinition {
@@ -75,5 +77,18 @@ describe("themes", () => {
     for (const theme of BUNDLED_THEMES) {
       expect(Object.keys(theme.app).sort()).toEqual(tokens)
     }
+  })
+
+  it("builds a valid import template", () => {
+    const template = JSON.parse(themeTemplateJSON()) as Partial<ThemeDefinition>
+
+    expect(THEME_TEMPLATE_FILENAME).toBe("lich-theme-template.json")
+    expect(template.id).toBe("my-theme")
+    expect(template.name).toBe("My Theme")
+    expect(template.scheme).toBe("light")
+    expect(template.origin).toBeUndefined()
+    expect(Object.keys(template.app ?? {}).sort()).toEqual([...APP_COLOR_TOKENS].sort())
+    expect(template.terminal?.background).toBeTruthy()
+    expect(template.terminal?.foreground).toBeTruthy()
   })
 })

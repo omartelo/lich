@@ -1,6 +1,7 @@
 # Theme JSON
 
 lich ships bundled `light` and `dark` themes and accepts user-imported JSON themes.
+The Appearance settings can download a valid starter template.
 Imported themes are stored under the user config directory:
 
 - Production: `<config-dir>/lich/themes/<id>.json`
@@ -76,4 +77,3 @@ before saving.
 - Unknown app or terminal tokens are rejected.
 - Color values are CSS color strings, cannot be blank, cannot exceed 128
   characters, and cannot contain `;`, `{`, or `}`.
-

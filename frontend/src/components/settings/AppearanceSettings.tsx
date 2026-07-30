@@ -1,6 +1,7 @@
 import {
   CaseSensitive,
   ChevronDown,
+  Download,
   Minus,
   Plus,
   SquareTerminal,
@@ -39,7 +40,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { customThemes } from "@/lib/themes"
+import { customThemes, THEME_TEMPLATE_FILENAME, themeTemplateJSON } from "@/lib/themes"
 import { errorText } from "@/lib/utils"
 
 // Appearance holds every look-and-feel control, split into an Interface group
@@ -95,6 +96,17 @@ export function AppearanceSettings() {
     }
   }
 
+  const onDownloadThemeTemplate = () => {
+    const url = URL.createObjectURL(new Blob([themeTemplateJSON()], { type: "application/json" }))
+    const link = document.createElement("a")
+    link.href = url
+    link.download = THEME_TEMPLATE_FILENAME
+    document.body.append(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <>
       <SettingGroup label="Interface">
@@ -143,8 +155,24 @@ export function AppearanceSettings() {
             />
             <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>
               <Upload />
-              Import JSON
+              Import
             </Button>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Download Theme Template"
+                    onClick={onDownloadThemeTemplate}
+                  />
+                }
+              >
+                <Download />
+              </TooltipTrigger>
+              <TooltipContent>Download Theme Template</TooltipContent>
+            </Tooltip>
           </div>
           {hasCustomThemes && (
             <div className="mt-3 w-full max-w-md">
