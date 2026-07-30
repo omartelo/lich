@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest"
 import type { DraftReviewComment, ReviewThread } from "@/lib/api-types"
 import { buildFileDoc, parseDiff } from "@/lib/git/diff"
-import { COMPOSER_KEY, draftSlotKey, isAnchored, reviewSlots, threadSlotKey } from "./review-slots"
+import {
+  COMPOSER_KEY,
+  draftSlotKey,
+  isAnchored,
+  isThreadSlot,
+  reviewSlots,
+  threadSlotKey,
+} from "./review-slots"
 
 // doc: 1 context(1/1) · 2 del(old 2) · 3 add(new 2) · 4 add(new 3) · 5 context(3/4)
 //      6 separator · 7 del(old 10) · 8 add(new 11) · 9 context(11/12)
@@ -102,6 +109,12 @@ describe("reviewSlots", () => {
 describe("threadSlotKey", () => {
   it("keys a thread by its node id, which outlives its line moving", () => {
     expect(threadSlotKey(thread("PRRT_kw1", 3))).toBe("t:PRRT_kw1")
+  })
+
+  it("is what tells a thread's gap from a draft's or the composer's", () => {
+    expect(isThreadSlot(threadSlotKey(thread("PRRT_kw1", 3)))).toBe(true)
+    expect(isThreadSlot(draftSlotKey(draft(3)))).toBe(false)
+    expect(isThreadSlot(COMPOSER_KEY)).toBe(false)
   })
 })
 

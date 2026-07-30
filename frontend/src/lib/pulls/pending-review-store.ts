@@ -98,14 +98,19 @@ export function clearPendingReview(pullRequest: string): void {
 }
 
 /** The draft comments on one file and side, with the index each one holds in
- * the review — the widget needs the index to edit or drop its own comment. */
+ * the review — the widget needs the index to edit or drop its own comment.
+ *
+ * Takes the comments rather than the review because the diff is rebuilt from
+ * what this answers: the summary body changing must not look like the line
+ * comments changing, or every open editor redraws its gaps on every keystroke
+ * in the submit dialog. */
 export function draftsOnFile(
-  review: PendingReview,
+  comments: readonly DraftReviewComment[],
   path: string,
   side: string,
 ): { comment: DraftReviewComment; index: number }[] {
   const out: { comment: DraftReviewComment; index: number }[] = []
-  review.comments.forEach((comment, index) => {
+  comments.forEach((comment, index) => {
     if (comment.path === path && (comment.side || "RIGHT") === (side || "RIGHT")) {
       out.push({ comment, index })
     }

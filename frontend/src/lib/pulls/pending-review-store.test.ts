@@ -86,6 +86,16 @@ describe("a review being written", () => {
     addDraftComment(PR, comment("a.go", 12, "here"))
     expect(pendingReview(PR).body).toBe("two things before this lands")
   })
+
+  it("leaves the comments alone when only the summary is written", () => {
+    // The diff rebuilds its inline gaps from this array's identity, so typing a
+    // summary must not read as the line comments having moved.
+    addDraftComment(PR, comment("a.go", 12, "here"))
+    const before = pendingReview(PR).comments
+    setReviewBody(PR, "typing")
+    setReviewBody(PR, "typing a")
+    expect(pendingReview(PR).comments).toBe(before)
+  })
 })
 
 describe("what a lost render must not destroy", () => {
@@ -107,6 +117,16 @@ describe("what a lost render must not destroy", () => {
     clearPendingReview(PR)
     resetPendingReviews()
     expect(pendingReview(PR).comments).toHaveLength(0)
+  })
+
+  it("clearing a pull request nobody wrote on tells nobody", () => {
+    let calls = 0
+    const stop = subscribePendingReview(() => {
+      calls++
+    })
+    clearPendingReview(PR)
+    stop()
+    expect(calls).toBe(0)
   })
 })
 
@@ -134,17 +154,17 @@ describe("draftsOnFile", () => {
     addDraftComment(PR, { ...comment("a.go", 20, "deleted line"), side: "LEFT" })
     addDraftComment(PR, comment("a.go", 30, "second"))
 
-    const right = draftsOnFile(pendingReview(PR), "a.go", "RIGHT")
+    const right = draftsOnFile(pendingReview(PR).comments, "a.go", "RIGHT")
     expect(right.map((held) => held.index)).toEqual([0, 3])
     expect(right.map((held) => held.comment.body)).toEqual(["first", "second"])
 
-    const left = draftsOnFile(pendingReview(PR), "a.go", "LEFT")
+    const left = draftsOnFile(pendingReview(PR).comments, "a.go", "LEFT")
     expect(left.map((held) => held.index)).toEqual([2])
   })
 
   it("treats an unset side as the new file", () => {
     addDraftComment(PR, { ...comment("a.go", 12, "first"), side: "" })
-    expect(draftsOnFile(pendingReview(PR), "a.go", "RIGHT")).toHaveLength(1)
+    expect(draftsOnFile(pendingReview(PR).comments, "a.go", "RIGHT")).toHaveLength(1)
   })
 })
 
@@ -176,6 +196,9 @@ describe("a stored draft from somewhere else", () => {
         { path: "", line: 3, body: "no file" },
         { path: "a.go", line: 0, body: "line zero" },
         { path: "a.go", line: 3, body: "" },
+        // Not a comment at all — what a truncated or hand-edited store holds.
+        "a string",
+        null,
       ],
     })
     expect(parsed).toEqual({ body: "keep me", comments: [] })

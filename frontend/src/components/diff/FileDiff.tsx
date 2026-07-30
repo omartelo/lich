@@ -13,7 +13,7 @@ import {
   type FileDoc,
 } from "@/lib/git/diff"
 import { languageAbbr, splitPath } from "@/lib/git/lang-badge"
-import { COMPOSER_KEY, reviewSlots } from "@/lib/pulls/review-slots"
+import { COMPOSER_KEY, isAnchored, reviewSlots } from "@/lib/pulls/review-slots"
 import { cn } from "@/lib/utils"
 import type { DiffBulk } from "./diff-bulk"
 import { InjectMenu } from "./InjectMenu"
@@ -82,8 +82,11 @@ export function FileDiff({
   const Chevron = expanded ? ChevronDown : ChevronRight
   const badge = languageAbbr(file.newPath)
   const { dir, base } = splitPath(file.newPath)
+  // Only what opening the file would actually reveal: a settled thread is not
+  // outstanding, and one the diff cannot anchor lives in the Conversation tab.
   const talking = review
-    ? review.threads.filter((thread) => !thread.isResolved).length + review.drafts.length
+    ? review.threads.filter((thread) => !thread.isResolved && isAnchored(thread, doc.lineMeta))
+        .length + review.drafts.length
     : 0
 
   return (
@@ -288,7 +291,7 @@ function DiffBody({ doc, path, onInject, onSessionComment, review }: DiffBodyPro
     }
     if (composer.kind === "session") {
       onSessionComment?.(path, composer.lines, body)
-    } else if (composer.range) {
+    } else {
       review?.onAdd({
         path,
         line: composer.range.end,

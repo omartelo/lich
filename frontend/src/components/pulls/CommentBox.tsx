@@ -1,6 +1,13 @@
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
+/** The field every piece of review prose is typed into. Exported because the
+ * submit dialog writes the review's summary into a bare textarea — it carries
+ * the dialog's own footer instead of this box's buttons — and the two fields
+ * drifting apart would read as two different controls for the same thing. */
+export const commentFieldClass =
+  "w-full resize-y rounded-md border border-input bg-transparent px-2.5 py-1.5 font-sans text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+
 interface CommentBoxProps {
   value: string
   onChange: (value: string) => void
@@ -65,7 +72,7 @@ export function CommentBox({
         placeholder={placeholder}
         // biome-ignore lint/a11y/noAutofocus: the box only exists because the reviewer just asked for it — typing is the next thing they do.
         autoFocus={autoFocus}
-        className="w-full resize-y rounded-md border border-input bg-transparent px-2.5 py-1.5 font-sans text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+        className={commentFieldClass}
       />
       <div className="flex items-center gap-2">
         <Button size="sm" onClick={onSubmit} disabled={busy || empty}>

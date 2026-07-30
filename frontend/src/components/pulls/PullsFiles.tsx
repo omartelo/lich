@@ -10,7 +10,7 @@ import { FileTree } from "@/components/FileTree"
 import { SkeletonLines } from "@/components/common/SkeletonLines"
 import { Skeleton } from "@/components/ui/skeleton"
 import { buildTree } from "@/lib/git/file-tree"
-import type { DraftReviewComment, ReviewThread as Thread } from "@/lib/api-types"
+import type { ReviewThread as Thread } from "@/lib/api-types"
 import type { DiffReview } from "@/components/diff/ReviewSlots"
 import type { ThreadActions } from "./ReviewThread"
 import {
@@ -128,6 +128,34 @@ export function PullsFiles({
   // Structure only; the per-file +/- lives on each diff's header, the way
   // GitHub shows it.
   const tree = useMemo(() => buildTree((files ?? []).map((file) => file.newPath)), [files])
+  // What one file's diff gets laid over it: its own threads, its own drafts, and
+  // the three writes that change them. The draft store is keyed by pull request,
+  // so the file only has to say which comments are its.
+  //
+  // Memoised because each of these rides the identity of its file's CodeMirror
+  // decorations: a fresh object per render would re-dispatch every mounted
+  // editor's gaps on every render of this screen, and this screen re-renders
+  // for things the diff does not care about — a tick, a tree click, a keystroke
+  // in the review summary. Hence the drafts and not the whole review: only the
+  // line comments are laid over the diff.
+  const drafts = review.comments
+  const reviews = useMemo(() => {
+    const byPath = new Map<string, DiffReview>()
+    for (const file of files ?? []) {
+      byPath.set(file.newPath, {
+        threads: (threads ?? []).filter((thread) => thread.path === file.newPath),
+        drafts: [
+          ...draftsOnFile(drafts, file.newPath, "RIGHT"),
+          ...draftsOnFile(drafts, file.newPath, "LEFT"),
+        ],
+        actions,
+        onAdd: (comment) => addDraftComment(pullRequest, comment),
+        onEdit: (index, body) => editDraftComment(pullRequest, index, body),
+        onRemove: (index) => removeDraftComment(pullRequest, index),
+      })
+    }
+    return byPath
+  }, [files, threads, drafts, actions, pullRequest])
 
   if (error) {
     return <Notice className="px-4 py-6 text-sm">Couldn’t load the diff: {error}</Notice>
@@ -149,18 +177,6 @@ export function PullsFiles({
     setActive(target)
     rows.current.get(target)?.scrollIntoView({ block: "start", behavior: "smooth" })
   }
-
-  // What one file's diff gets laid over it: its own threads, its own drafts, and
-  // the three writes that change them. The draft store is keyed by pull request,
-  // so the file only has to say which comments are its.
-  const reviewFor = (filePath: string): DiffReview => ({
-    threads: (threads ?? []).filter((thread) => thread.path === filePath),
-    drafts: [...draftsOnFile(review, filePath, "RIGHT"), ...draftsOnFile(review, filePath, "LEFT")],
-    actions,
-    onAdd: (comment: DraftReviewComment) => addDraftComment(pullRequest, comment),
-    onEdit: (index: number, body: string) => editDraftComment(pullRequest, index, body),
-    onRemove: (index: number) => removeDraftComment(pullRequest, index),
-  })
 
   return (
     <div className="flex h-full">
@@ -219,7 +235,7 @@ export function PullsFiles({
                   onViewed={(next) =>
                     setViewed(pullRequest, file.newPath, fingerprints.get(file.newPath) ?? "", next)
                   }
-                  review={reviewFor(file.newPath)}
+                  review={reviews.get(file.newPath)}
                 />
               </div>
             ))}

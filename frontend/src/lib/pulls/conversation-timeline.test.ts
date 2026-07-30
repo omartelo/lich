@@ -62,6 +62,18 @@ describe("conversationTimeline", () => {
     ).toEqual({ items: [], resolved: [] })
   })
 
+  it("places a thread with no comments left in it rather than dropping it", () => {
+    // GitHub keeps the thread when its last comment is deleted; it has no date
+    // of its own, so it sorts to the front instead of vanishing from the tab.
+    const timeline = conversationTimeline({
+      headRefOid: "abc",
+      reviews: null,
+      comments: [{ author: "someone", body: "later", date: "2026-07-30T12:00:00Z" }],
+      threads: [{ ...thread("t-empty", "2026-07-30T08:00:00Z"), comments: null }],
+    })
+    expect(timeline.items.map((item) => item.kind)).toEqual(["thread", "comment"])
+  })
+
   it("keeps something said with an unreadable timestamp", () => {
     const timeline = conversationTimeline({
       headRefOid: "abc",

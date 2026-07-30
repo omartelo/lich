@@ -1,7 +1,9 @@
 import { Check, MessageSquare, X } from "lucide-react"
 import type { ReviewEvent } from "@/lib/api-types"
 import type { PendingReview } from "@/lib/pulls/pending-review-store"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { commentFieldClass } from "./CommentBox"
 import {
   Dialog,
   DialogContent,
@@ -70,7 +72,7 @@ export function SubmitReviewDialog({
             rows={6}
             placeholder="Summary — optional"
             autoFocus
-            className="min-h-24 w-full resize-y rounded-md border border-input bg-transparent px-2.5 py-1.5 text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+            className={cn(commentFieldClass, "min-h-24")}
           />
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <MessageSquare className="size-3.5" />

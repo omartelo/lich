@@ -1,6 +1,6 @@
 import type { DraftReviewComment, ReviewThread as Thread } from "@/lib/api-types"
 import type { NewLineRange } from "@/lib/git/diff"
-import { COMPOSER_KEY, draftSlotKey, threadSlotKey } from "@/lib/pulls/review-slots"
+import { COMPOSER_KEY, draftSlotKey, isThreadSlot, threadSlotKey } from "@/lib/pulls/review-slots"
 import { CommentBox } from "@/components/pulls/CommentBox"
 import { PendingComments, ReviewThread, type ThreadActions } from "@/components/pulls/ReviewThread"
 
@@ -19,12 +19,13 @@ export interface DiffReview {
   onRemove: (index: number) => void
 }
 
-/** A resolved selection: what to call the lines, which new-file lines they are
- * (null when the selection holds only deletions), and the document line a
- * composer opened on it hangs under. */
+/** A resolved selection: what to call the lines, which new-file lines they are,
+ * and the document line a composer opened on it hangs under. A selection that
+ * covers only deleted lines has no new-file range and so never becomes one of
+ * these — commenting on the other side needs its own gesture. */
 export interface DiffSelection {
   lines: string
-  range: NewLineRange | null
+  range: NewLineRange
   docLine: number
 }
 
@@ -100,7 +101,7 @@ export function ReviewSlot({
     return null
   }
 
-  if (slotKey.startsWith("t:")) {
+  if (isThreadSlot(slotKey)) {
     const thread = review.threads.find((held) => threadSlotKey(held) === slotKey)
     return thread ? <ReviewThread thread={thread} actions={review.actions} /> : null
   }

@@ -38,7 +38,7 @@ type Register = (key: string, element: HTMLElement | null) => void
 // portal, and with the portal whatever was half-typed inside.
 class SlotWidget extends WidgetType {
   constructor(
-    private readonly key: string,
+    readonly key: string,
     private readonly register: Register,
   ) {
     super()
@@ -127,7 +127,10 @@ export function threadSlots(onChange: (elements: SlotElements) => void): ThreadS
 // RangeSet has to be built in document order, and a slot past the end of the
 // document (a thread on a line this diff no longer renders) is dropped rather
 // than clamped onto an unrelated line.
-function buildSlots(doc: Text, slots: ThreadSlot[], register: Register): DecorationSet {
+//
+// Exported for the suite: the sort and the bounds are what stand between a
+// caller's unordered list and a RangeSetBuilder that throws on the diff.
+export function buildSlots(doc: Text, slots: ThreadSlot[], register: Register): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>()
   const ordered = [...slots]
     .filter((slot) => slot.docLine >= 1 && slot.docLine <= doc.lines)

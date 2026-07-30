@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore, type ReactNode } from "react"
+import { useMemo, useState, useSyncExternalStore, type ReactNode } from "react"
 import { toast } from "sonner"
 import {
   Check,
@@ -124,16 +124,22 @@ export function PullRequestView({
   // Every write to a thread re-reads the conversation rather than patching what
   // is on screen: GitHub decides what a reply and a resolve actually did, and a
   // hand-rolled optimistic copy is a second source of truth for no gain.
-  const actions: ThreadActions = {
-    reply: async (commentID, body) => {
-      await ProjectService.ReplyToReviewThread(path, detail.number, commentID, body)
-      onConversationRefresh()
-    },
-    resolve: async (threadID, resolved) => {
-      await ProjectService.ResolveReviewThread(path, threadID, resolved)
-      onConversationRefresh()
-    },
-  }
+  //
+  // Memoised because the Files tab hangs its per-file review objects off this
+  // one, and those ride the identity of each diff's CodeMirror decorations.
+  const actions: ThreadActions = useMemo(
+    () => ({
+      reply: async (commentID, body) => {
+        await ProjectService.ReplyToReviewThread(path, detail.number, commentID, body)
+        onConversationRefresh()
+      },
+      resolve: async (threadID, resolved) => {
+        await ProjectService.ResolveReviewThread(path, threadID, resolved)
+        onConversationRefresh()
+      },
+    }),
+    [path, detail.number, onConversationRefresh],
+  )
 
   const comment = async (body: string) => {
     await ProjectService.CommentOnPullRequest(path, detail.number, body)

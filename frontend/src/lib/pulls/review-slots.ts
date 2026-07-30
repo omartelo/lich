@@ -23,17 +23,26 @@ import { docLineAt, type DiffLine, type DiffSide } from "@/lib/git/diff"
 // deleted line has no new-file line to resolve at all.
 export const COMPOSER_KEY = "c"
 
+const THREAD_PREFIX = "t:"
+const DRAFT_PREFIX = "d:"
+
 const side = (value: string): DiffSide => (value === "LEFT" ? "LEFT" : "RIGHT")
 
 /** The gap the comments on one line share. */
 export function draftSlotKey(comment: DraftReviewComment): string {
   const start = comment.startLine > 0 ? comment.startLine : comment.line
-  return `d:${side(comment.side)}:${start}-${comment.line}`
+  return `${DRAFT_PREFIX}${side(comment.side)}:${start}-${comment.line}`
 }
 
 /** The gap a thread hangs in. */
 export function threadSlotKey(thread: ReviewThread): string {
-  return `t:${thread.id}`
+  return THREAD_PREFIX + thread.id
+}
+
+/** Whether a gap holds a thread GitHub already has. Asked by the renderer,
+ * which is handed a key and nothing else. */
+export function isThreadSlot(key: string): boolean {
+  return key.startsWith(THREAD_PREFIX)
 }
 
 export interface ReviewSlotInput {
@@ -74,8 +83,9 @@ export function reviewSlots({ lineMeta, threads, drafts }: ReviewSlotInput): Thr
   return slots
 }
 
-/** Whether a thread can be rendered against this file's diff at all — the
- * question the Conversation tab asks in reverse, so nothing is shown twice. */
+/** Whether a thread can be rendered against this file's diff at all. The file's
+ * header counts what is under it, and a count that includes what expanding the
+ * file will not show is a count that sends the reader looking for nothing. */
 export function isAnchored(thread: ReviewThread, lineMeta: DiffLine[]): boolean {
   return !thread.isOutdated && docLineAt(lineMeta, side(thread.side), thread.line) !== null
 }

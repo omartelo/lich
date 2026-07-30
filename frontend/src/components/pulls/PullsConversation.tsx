@@ -5,8 +5,8 @@ import { Markdown } from "@/components/Markdown"
 import { Notice } from "@/components/common/Notice"
 import type { PullRequestConversation, PullRequestReview } from "@/lib/api-types"
 import { conversationTimeline } from "@/lib/pulls/conversation-timeline"
-import { updatedAgo } from "@/lib/pulls/pull-request-list"
 import { errorText } from "@/lib/utils"
+import { Byline } from "./Byline"
 import { CommentBox } from "./CommentBox"
 import { ReviewThread, type ThreadActions } from "./ReviewThread"
 
@@ -121,15 +121,6 @@ export function PullsConversation({
   )
 }
 
-function Byline({ author, date }: { author: string; date: string }) {
-  return (
-    <div className="flex items-baseline gap-2 text-xs text-muted-foreground">
-      <span className="font-semibold text-foreground">{author || "someone"}</span>
-      <span>{updatedAgo(date)}</span>
-    </div>
-  )
-}
-
 // A verdict is the one thing in the timeline with a colour: it is the answer to
 // "can this land", which is what the eye comes here for.
 function ReviewVerdict({ review }: { review: PullRequestReview }) {
@@ -155,11 +146,9 @@ function ReviewVerdict({ review }: { review: PullRequestReview }) {
 
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-baseline gap-2 text-xs text-muted-foreground">
-        <span className="font-semibold text-foreground">{review.author || "someone"}</span>
+      <Byline author={review.author} date={review.date}>
         {verdict}
-        <span>{updatedAgo(review.date)}</span>
-      </div>
+      </Byline>
       {review.body.trim() !== "" && <Markdown>{review.body}</Markdown>}
     </div>
   )

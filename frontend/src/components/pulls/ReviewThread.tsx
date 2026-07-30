@@ -13,8 +13,8 @@ import { Markdown } from "@/components/Markdown"
 import { Button } from "@/components/ui/button"
 import { IconAction } from "@/components/common/IconAction"
 import type { DraftReviewComment, ReviewThread as Thread } from "@/lib/api-types"
-import { updatedAgo } from "@/lib/pulls/pull-request-list"
 import { cn, errorText } from "@/lib/utils"
+import { Byline } from "./Byline"
 import { CommentBox } from "./CommentBox"
 
 // What a thread card can do to the thread it renders. Both actions are the
@@ -152,10 +152,7 @@ export function ReviewThread({
         <div className="flex flex-col gap-2.5">
           {comments.map((comment) => (
             <div key={comment.id} className="flex flex-col gap-0.5">
-              <div className="flex items-baseline gap-2 text-xs text-muted-foreground">
-                <span className="font-semibold text-foreground">{comment.author || "someone"}</span>
-                <span>{updatedAgo(comment.date)}</span>
-              </div>
+              <Byline author={comment.author} date={comment.date} />
               <Markdown>{comment.body}</Markdown>
             </div>
           ))}
@@ -203,13 +200,18 @@ interface PendingCommentsProps {
 // of remarks. They are marked as pending on purpose — a comment nobody can see
 // yet must not look like one that has been posted.
 export function PendingComments({ drafts, onEdit, onRemove }: PendingCommentsProps) {
-  const [editing, setEditing] = useState<number | null>(null)
+  // Which comment is open, by its own identity rather than by its index: an
+  // index moves the moment another comment is discarded, and an open box that
+  // followed the index would save its text over a comment nobody was editing.
+  // The store replaces comments rather than mutating them, so the reference is
+  // stable for exactly as long as the comment is unchanged.
+  const [editing, setEditing] = useState<DraftReviewComment | null>(null)
   const [draft, setDraft] = useState("")
 
   return (
     <div className="flex flex-col gap-2 rounded-md bg-sidebar px-3 py-2.5 text-sm">
       {drafts.map(({ comment, index }) =>
-        editing === index ? (
+        editing === comment ? (
           <CommentBox
             key={index}
             value={draft}
@@ -232,7 +234,7 @@ export function PendingComments({ drafts, onEdit, onRemove }: PendingCommentsPro
                   label="Edit this comment"
                   onClick={() => {
                     setDraft(comment.body)
-                    setEditing(index)
+                    setEditing(comment)
                   }}
                 >
                   <Pencil className="size-3.5" />

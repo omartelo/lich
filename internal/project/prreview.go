@@ -193,8 +193,6 @@ func (s *Service) CommentOnPullRequest(path string, number int, body string) err
 	if body == "" {
 		return fmt.Errorf("a comment needs something written in it")
 	}
-	if _, err := s.gh(prReviewTimeout, path, prArgs("comment", number, "--body", body)...); err != nil {
-		return err
-	}
-	return nil
+	_, err := s.gh(prReviewTimeout, path, prArgs("comment", number, "--body", body)...)
+	return err
 }
