@@ -74,7 +74,7 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
           files={files}
           failed={failed}
           onInject={inject}
-          onComment={(file, lines, text) => addReviewComment(path, file, lines, text)}
+          onSessionComment={(file, lines, text) => addReviewComment(path, file, lines, text)}
           onDiscard={setPendingDiscard}
           bulk={bulk}
         />
@@ -93,12 +93,12 @@ interface PanelBodyProps {
   files: DiffFile[] | null
   failed: boolean
   onInject: (text: string) => void
-  onComment: (path: string, lines: string, text: string) => void
+  onSessionComment: (path: string, lines: string, text: string) => void
   onDiscard: (file: DiffFile) => void
   bulk: DiffBulk
 }
 
-function PanelBody({ files, failed, onInject, onComment, onDiscard, bulk }: PanelBodyProps) {
+function PanelBody({ files, failed, onInject, onSessionComment, onDiscard, bulk }: PanelBodyProps) {
   if (failed) {
     return <Notice>Not a git repository</Notice>
   }
@@ -115,7 +115,7 @@ function PanelBody({ files, failed, onInject, onComment, onDiscard, bulk }: Pane
           key={file.newPath}
           file={file}
           onInject={onInject}
-          onComment={onComment}
+          onSessionComment={onSessionComment}
           onDiscard={() => onDiscard(file)}
           bulk={bulk}
         />

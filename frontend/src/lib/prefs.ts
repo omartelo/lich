@@ -16,6 +16,10 @@ export function writePref(key: string, value: string | number | boolean): void {
   localStorage.setItem(key, String(value))
 }
 
+export function removePref(key: string): void {
+  localStorage.removeItem(key)
+}
+
 /** One of a known set — a theme, a sort. Anything else is a value from another
  * build (or a hand-edited store) and reads as the fallback. */
 export function parseEnumPref<T extends string>(

@@ -509,44 +509,6 @@ func TestMergePullRequestFlow(t *testing.T) {
 	})
 }
 
-func TestApprovePullRequestFlow(t *testing.T) {
-	t.Run("the branch's own pull request needs no selector", func(t *testing.T) {
-		gh := &fakeGH{}
-		if err := withGH(gh).ApprovePullRequest("/repo", 0); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if want := []string{"pr", "review", "--approve"}; !slices.Equal(gh.args, want) {
-			t.Errorf("args = %v, want %v", gh.args, want)
-		}
-		if gh.dir != "/repo" || gh.timeout != prReviewTimeout {
-			t.Errorf("wrong scope: dir %q timeout %v", gh.dir, gh.timeout)
-		}
-	})
-
-	t.Run("a numbered pull request is addressed by number", func(t *testing.T) {
-		gh := &fakeGH{}
-		if err := withGH(gh).ApprovePullRequest("/repo", 42); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if want := []string{"pr", "review", "42", "--approve"}; !slices.Equal(gh.args, want) {
-			t.Errorf("args = %v, want %v", gh.args, want)
-		}
-	})
-
-	t.Run("gh's refusal reaches the caller as written", func(t *testing.T) {
-		// The one refusal this flow meets in practice: GitHub lets nobody
-		// approve their own pull request.
-		gh := &fakeGH{err: errors.New("GitHub does not let an account approve its own pull request")}
-		err := withGH(gh).ApprovePullRequest("/repo", 7)
-		if err == nil {
-			t.Fatal("expected an error")
-		}
-		if err.Error() != "GitHub does not let an account approve its own pull request" {
-			t.Errorf("error = %q, want the runner's message unchanged", err)
-		}
-	})
-}
-
 func TestCreatePullRequestFlow(t *testing.T) {
 	t.Run("opens the web flow in the path", func(t *testing.T) {
 		gh := &fakeGH{}

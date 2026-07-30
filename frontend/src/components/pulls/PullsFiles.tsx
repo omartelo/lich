@@ -10,6 +10,17 @@ import { FileTree } from "@/components/FileTree"
 import { SkeletonLines } from "@/components/common/SkeletonLines"
 import { Skeleton } from "@/components/ui/skeleton"
 import { buildTree } from "@/lib/git/file-tree"
+import type { ReviewThread as Thread } from "@/lib/api-types"
+import type { DiffReview } from "@/components/diff/ReviewSlots"
+import type { ThreadActions } from "./ReviewThread"
+import {
+  addDraftComment,
+  draftsOnFile,
+  editDraftComment,
+  pendingReview,
+  removeDraftComment,
+  subscribePendingReview,
+} from "@/lib/pulls/pending-review-store"
 import {
   fileFingerprint,
   isViewed,
@@ -75,10 +86,13 @@ interface PullsFilesProps {
   /** The checkout's HEAD; a new commit refetches the diff. */
   head: string
   /** Identity of the pull request being reviewed (its URL) — what the Viewed
-   * ticks are keyed by, so two PRs never share them. */
+   * ticks and the draft review are keyed by, so two PRs never share them. */
   pullRequest: string
   /** Write into the session's terminal; false when no session took it. */
   onInject: (text: string) => boolean
+  /** Every thread of the pull request; each file takes the ones anchored in it. */
+  threads: Thread[] | null
+  actions: ThreadActions
 }
 
 // PullsFiles is the "Files changed" tab of the Pulls screen: a changed-files
@@ -87,10 +101,19 @@ interface PullsFilesProps {
 // so a PR file can be referenced into the session's terminal, and a comment on
 // the selection joins the batch this tab sends as one prompt. Each file can be
 // ticked off as viewed, which folds it away and counts toward the header total.
-export function PullsFiles({ path, number, head, pullRequest, onInject }: PullsFilesProps) {
+export function PullsFiles({
+  path,
+  number,
+  head,
+  pullRequest,
+  onInject,
+  threads,
+  actions,
+}: PullsFilesProps) {
   const { files, error } = usePullRequestDiff(path, head, number)
   const rows = useRef<Map<string, HTMLElement>>(new Map())
   const [active, setActive] = useState<string | null>(null)
+  const review = useSyncExternalStore(subscribePendingReview, () => pendingReview(pullRequest))
   // Every file mounts its own CodeMirror, so a wide PR earns a way to fold them
   // all at once — same directive the Review dock hands its panel.
   const [bulk, toggleAll] = useDiffBulk()
@@ -105,6 +128,34 @@ export function PullsFiles({ path, number, head, pullRequest, onInject }: PullsF
   // Structure only; the per-file +/- lives on each diff's header, the way
   // GitHub shows it.
   const tree = useMemo(() => buildTree((files ?? []).map((file) => file.newPath)), [files])
+  // What one file's diff gets laid over it: its own threads, its own drafts, and
+  // the three writes that change them. The draft store is keyed by pull request,
+  // so the file only has to say which comments are its.
+  //
+  // Memoised because each of these rides the identity of its file's CodeMirror
+  // decorations: a fresh object per render would re-dispatch every mounted
+  // editor's gaps on every render of this screen, and this screen re-renders
+  // for things the diff does not care about — a tick, a tree click, a keystroke
+  // in the review summary. Hence the drafts and not the whole review: only the
+  // line comments are laid over the diff.
+  const drafts = review.comments
+  const reviews = useMemo(() => {
+    const byPath = new Map<string, DiffReview>()
+    for (const file of files ?? []) {
+      byPath.set(file.newPath, {
+        threads: (threads ?? []).filter((thread) => thread.path === file.newPath),
+        drafts: [
+          ...draftsOnFile(drafts, file.newPath, "RIGHT"),
+          ...draftsOnFile(drafts, file.newPath, "LEFT"),
+        ],
+        actions,
+        onAdd: (comment) => addDraftComment(pullRequest, comment),
+        onEdit: (index, body) => editDraftComment(pullRequest, index, body),
+        onRemove: (index) => removeDraftComment(pullRequest, index),
+      })
+    }
+    return byPath
+  }, [files, threads, drafts, actions, pullRequest])
 
   if (error) {
     return <Notice className="px-4 py-6 text-sm">Couldn’t load the diff: {error}</Notice>
@@ -176,7 +227,7 @@ export function PullsFiles({ path, number, head, pullRequest, onInject }: PullsF
                 <FileDiff
                   file={file}
                   onInject={onInject}
-                  onComment={(path, lines, text) =>
+                  onSessionComment={(path, lines, text) =>
                     addReviewComment(pullRequest, path, lines, text)
                   }
                   bulk={bulk}
@@ -184,6 +235,7 @@ export function PullsFiles({ path, number, head, pullRequest, onInject }: PullsF
                   onViewed={(next) =>
                     setViewed(pullRequest, file.newPath, fingerprints.get(file.newPath) ?? "", next)
                   }
+                  review={reviews.get(file.newPath)}
                 />
               </div>
             ))}

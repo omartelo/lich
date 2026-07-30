@@ -1,3 +1,4 @@
+import * as React from "react"
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip"
 
 import { cn } from "@/lib/utils"
@@ -10,9 +11,15 @@ function Tooltip({ ...props }: TooltipPrimitive.Root.Props) {
   return <TooltipPrimitive.Root data-slot="tooltip" {...props} />
 }
 
-function TooltipTrigger({ ...props }: TooltipPrimitive.Trigger.Props) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
-}
+// forwardRef is load-bearing under React 18, for the same reason ui/button.tsx
+// forwards: a trigger handed to another base-ui part through `render` is given
+// a ref to reach the DOM node, and a plain function component drops it —
+// silently, since the only sign is a console warning. The session card nests
+// this inside a ContextMenuTrigger, which is exactly that composition.
+const TooltipTrigger = React.forwardRef<HTMLButtonElement, TooltipPrimitive.Trigger.Props>(
+  (props, ref) => <TooltipPrimitive.Trigger data-slot="tooltip-trigger" ref={ref} {...props} />,
+)
+TooltipTrigger.displayName = "TooltipTrigger"
 
 function TooltipContent({
   className,

@@ -82,6 +82,11 @@ type Table struct {
 	// refreshing is held for the duration of a refresh so concurrent misses share
 	// the one in-flight request.
 	refreshing bool
+	// inFlight counts the refresh Rate spawned but nobody waits for. The app
+	// never does — the answer the caller needed was already given, and the
+	// refresh only teaches the next turn. A test does, because the goroutine
+	// outliving it writes the cache into a directory the test is removing.
+	inFlight sync.WaitGroup
 
 	http      *http.Client
 	url       string
@@ -121,8 +126,17 @@ func (t *Table) Rate(model string) (Rate, bool) {
 	if rate, ok := t.lookup(model); ok {
 		return rate, true
 	}
-	go t.refreshFor(model)
+	t.inFlight.Go(func() { t.refreshFor(model) })
 	return Rate{}, false
+}
+
+// awaitRefresh blocks until every refresh Rate started has finished. For the
+// suite: the refresh writes the cache, so a test that ends while one is running
+// has a goroutine writing into the temp directory being torn down around it —
+// which fails the test as a RemoveAll error, in whichever test happens to lose
+// the race. Nothing in the app calls this.
+func (t *Table) awaitRefresh() {
+	t.inFlight.Wait()
 }
 
 // lookup resolves a model id against the table: the id as reported, then with a

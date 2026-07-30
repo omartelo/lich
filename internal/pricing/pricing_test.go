@@ -83,12 +83,38 @@ func TestDatedModelIdResolvesToItsFamily(t *testing.T) {
 func TestUnknownModelIsUnpricedNotFree(t *testing.T) {
 	srv, _ := serveRemote(t, remoteBody)
 	table := newTable(srv.URL, filepath.Join(t.TempDir(), "prices.json"), srv.Client())
+	// A miss is exactly what starts a refresh, and this test is made of misses.
+	// Left running, it writes the cache into the temp directory while the
+	// cleanup removes it.
+	t.Cleanup(table.awaitRefresh)
 
 	if rate, ok := table.Rate("some-private-deployment"); ok {
 		t.Errorf("Rate = %+v, ok=true; want an unpriced miss", rate)
 	}
 	if rate, ok := table.Rate(""); ok {
 		t.Errorf("Rate(\"\") = %+v, ok=true; want an unpriced miss", rate)
+	}
+}
+
+// TestARefreshDoesNotOutliveItsTest locks a flake that only ever appeared on
+// CI. Rate's miss spawns the refresh, the refresh writes the cache, and a test
+// that ended first had that write land inside its own temp directory's removal
+// — failing as "TempDir RemoveAll cleanup: directory not empty", in whichever
+// test lost the race rather than in the one that leaked the goroutine.
+func TestARefreshDoesNotOutliveItsTest(t *testing.T) {
+	srv, _ := serveRemote(t, remoteBody)
+	cache := filepath.Join(t.TempDir(), "prices.json")
+	table := newTable(srv.URL, cache, srv.Client())
+
+	if _, ok := table.Rate("claude-opus-9"); ok {
+		t.Fatal("Rate: the baked table cannot know a model published after it")
+	}
+	table.awaitRefresh()
+
+	// The temp directory is removed the moment this returns, so the refresh's
+	// write has to have landed already.
+	if _, err := os.Stat(cache); err != nil {
+		t.Errorf("cache after awaitRefresh: %v; want the write already landed", err)
 	}
 }
 

@@ -17,8 +17,12 @@ interface SkeletonLinesProps {
 export function SkeletonLines({ widths, height = "h-3", className }: SkeletonLinesProps) {
   return (
     <>
-      {widths.map((width) => (
-        <Skeleton key={width} className={cn(height, width, className)} />
+      {/* Keyed by position, not by width: a ragged stack repeats widths by
+          design, and two bars keyed the same are two bars React folds into one.
+          The list is static, so the index is the identity. */}
+      {widths.map((width, line) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: a fixed stack of bars, never reordered.
+        <Skeleton key={line} className={cn(height, width, className)} />
       ))}
     </>
   )

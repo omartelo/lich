@@ -16,16 +16,24 @@ interface InjectMenuProps {
   /** Resolve the selection; fired as the menu opens, not on every change. */
   onOpenChange: (open: boolean) => void
   onInject: (text: string) => void
-  /** Start a comment on the selected lines. Absent on a surface that is not a
-   * review — the dock's file preview — which offers the references only. */
-  onComment?: (lines: string) => void
+  /** Start a comment held for the session's next prompt. Absent on a surface
+   * that is not a review — the dock's file preview. */
+  onSessionComment?: () => void
+  /** Start a comment on the pull request itself. Absent wherever there is no
+   * pull request behind the diff — the dock's working diff. */
+  onReviewComment?: () => void
 }
 
 // The right-click menu over a code view — a file's diff, or the read-only
 // preview in the dock — that writes a reference into the session's terminal.
-// The whole file, or just the lines under the selection. On a review surface it
-// also opens a comment on those lines, which is held for the batch rather than
-// written out on its own.
+// The whole file, or just the lines under the selection.
+//
+// One selection, and up to three things to do with it: inject it as a
+// reference, comment on it for the session's next prompt, or comment on it for
+// the pull request. That fork is the reason the two comment items are named for
+// where they go rather than both reading "comment": on a pull request's diff
+// both are offered, and picking the wrong one is a note that lands where nobody
+// looks for it.
 //
 // The isolate wrapper keeps CodeMirror's high-z-index gutter from painting over
 // the sticky header of the card above it.
@@ -35,7 +43,8 @@ export function InjectMenu({
   lineRef,
   onOpenChange,
   onInject,
-  onComment,
+  onSessionComment,
+  onReviewComment,
 }: InjectMenuProps) {
   return (
     <ContextMenu onOpenChange={onOpenChange}>
@@ -48,12 +57,16 @@ export function InjectMenu({
         >
           {lineRef === null ? "Inject lines" : `Inject lines ${lineRef}`}
         </ContextMenuItem>
-        {onComment && (
-          <ContextMenuItem
-            disabled={lineRef === null}
-            onClick={() => lineRef && onComment(lineRef)}
-          >
-            {lineRef === null ? "Comment on lines…" : `Comment on lines ${lineRef}…`}
+        {onSessionComment && (
+          <ContextMenuItem disabled={lineRef === null} onClick={onSessionComment}>
+            {lineRef === null ? "Comment for the session…" : `Comment for the session ${lineRef}…`}
+          </ContextMenuItem>
+        )}
+        {onReviewComment && (
+          <ContextMenuItem disabled={lineRef === null} onClick={onReviewComment}>
+            {lineRef === null
+              ? "Comment on the pull request…"
+              : `Comment on the pull request ${lineRef}…`}
           </ContextMenuItem>
         )}
       </ContextMenuContent>

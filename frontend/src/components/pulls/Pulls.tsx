@@ -12,6 +12,7 @@ import { useGitStatus } from "@/lib/git/use-git-status"
 import { useCheckouts } from "@/lib/git/use-checkouts"
 import { invalidatePullRequests } from "@/lib/pulls/pull-request-lookup"
 import { parsePullsQuery, readPullsSort, type PullsSort } from "@/lib/pulls/pull-request-list"
+import { usePullRequestConversation } from "@/lib/pulls/use-pull-request-conversation"
 import { usePullRequestDetail } from "@/lib/pulls/use-pull-request-detail"
 import { usePullRequests } from "@/lib/pulls/use-pull-requests"
 import { useInject } from "@/lib/use-inject"
@@ -66,6 +67,10 @@ export function Pulls({ list = false }: PullsProps) {
   // addresses one directly, which only the list can produce.
   const selected = Number(number) || 0
   const { detail, loading, error, refresh } = usePullRequestDetail(path, branch, head, selected)
+  // The conversation hangs off the pull request the detail resolved, not off the
+  // route: the screen reaches one by number or by branch, and only the answer
+  // says which pull request that was.
+  const conversation = usePullRequestConversation(path, detail?.number ?? 0, head)
   // The filter box lives here, not in the column: its `is:` state decides which
   // pull requests gh is asked for, and that is a fetch rather than a filter.
   const [query, setQuery] = useState("")
@@ -91,6 +96,7 @@ export function Pulls({ list = false }: PullsProps) {
   const reload = () => {
     invalidatePullRequests()
     refresh()
+    conversation.refresh()
   }
 
   // A merged branch leaves its checkout behind — the one cleanup the user would
@@ -214,6 +220,9 @@ export function Pulls({ list = false }: PullsProps) {
         onRefresh={reload}
         onMerged={onMerged}
         onInject={inject}
+        conversation={conversation.conversation}
+        conversationLoading={conversation.loading}
+        onConversationRefresh={conversation.refresh}
       />
     )
   } else if (loading) {

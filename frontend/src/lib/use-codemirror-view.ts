@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import type { RefObject } from "react"
-import type { Extension, StateEffect } from "@codemirror/state"
+import type { Extension } from "@codemirror/state"
 import { EditorState } from "@codemirror/state"
 import { EditorView } from "@codemirror/view"
 import { loadLanguage, readOnlyCodeExtensions, selectedDocLines } from "@/lib/codemirror"
@@ -20,9 +20,10 @@ export interface CodeMirrorView {
   containerRef: RefObject<HTMLDivElement>
   /** 1-based doc line span of the current selection, or null when empty. */
   getSelectedLines: () => DocLineSelection | null
-  /** Drive an extension from outside the editor — the seam the inline comment
-   * composer opens through. A no-op once the view is gone. */
-  dispatchEffects: (effects: StateEffect<unknown>[]) => void
+  /** The live view, or null before it is built. State rather than a ref: a
+   * caller that dispatches into the view (the diff's review slots) has to be
+   * told when there is one to dispatch to. */
+  view: EditorView | null
 }
 
 // useCodeMirrorView owns one read-only CodeMirror view for its container:
@@ -34,6 +35,7 @@ export interface CodeMirrorView {
 export function useCodeMirrorView(source: CodeMirrorSource, filename: string): CodeMirrorView {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
+  const [view, setView] = useState<EditorView | null>(null)
 
   useEffect(() => {
     const parent = containerRef.current
@@ -48,11 +50,13 @@ export function useCodeMirrorView(source: CodeMirrorSource, filename: string): C
       parent,
     })
     viewRef.current = view
+    setView(view)
     // Async: the language may still be loading when the view is replaced, so
     // the callback checks it is still the live one before touching it.
     loadLanguage(view, filename, () => viewRef.current === view)
     return () => {
       viewRef.current = null
+      setView(null)
       view.destroy()
     }
   }, [source, filename])
@@ -60,9 +64,5 @@ export function useCodeMirrorView(source: CodeMirrorSource, filename: string): C
   const getSelectedLines = (): DocLineSelection | null =>
     viewRef.current ? selectedDocLines(viewRef.current) : null
 
-  const dispatchEffects = (effects: StateEffect<unknown>[]): void => {
-    viewRef.current?.dispatch({ effects })
-  }
-
-  return { containerRef, getSelectedLines, dispatchEffects }
+  return { containerRef, getSelectedLines, view }
 }

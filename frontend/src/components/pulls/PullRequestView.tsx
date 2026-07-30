@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react"
+import { useMemo, useState, useSyncExternalStore, type ReactNode } from "react"
 import { toast } from "sonner"
 import {
   Check,
@@ -6,12 +6,27 @@ import {
   ExternalLink,
   GitBranch,
   GitMerge,
+  MessageSquare,
   RefreshCw,
   SquareTerminal,
+  X,
 } from "lucide-react"
 import { ProjectService, System } from "@/lib/rpc"
-import type { MergeMethod, PullRequestDetail } from "@/lib/api-types"
-import { mergeBlockedReason } from "@/lib/pulls/merge-gate"
+import type {
+  MergeMethod,
+  PullRequestConversation,
+  PullRequestDetail,
+  ReviewEvent,
+} from "@/lib/api-types"
+import {
+  clearPendingReview,
+  pendingReview,
+  setReviewBody,
+  subscribePendingReview,
+} from "@/lib/pulls/pending-review-store"
+import { conversationCount, conversationTimeline } from "@/lib/pulls/conversation-timeline"
+import { allowedMergeMethods, mergeBlockedReason } from "@/lib/pulls/merge-gate"
+import { useBranchRules } from "@/lib/pulls/use-branch-rules"
 import { cn, errorText } from "@/lib/utils"
 import { Markdown } from "@/components/Markdown"
 import { Button } from "@/components/ui/button"
@@ -25,8 +40,11 @@ import {
 import { MergeMessageDialog, mergeEditFor, type MergeEdit } from "./MergeMessageDialog"
 import { PullsChecks } from "./PullsChecks"
 import { PullsCommits } from "./PullsCommits"
+import { PullsConversation } from "./PullsConversation"
 import { PullsFiles } from "./PullsFiles"
 import { ChecksStat, MergeableStat, ReviewStat, StateStat } from "./PullsStats"
+import type { ThreadActions } from "./ReviewThread"
+import { SubmitReviewDialog } from "./SubmitReviewDialog"
 
 // SessionAction is the header's "work on this pull request" button, resolved by
 // the screen: what it should say, whether it can run at all, and what it does.
@@ -39,7 +57,25 @@ export interface SessionAction {
   run: () => void
 }
 
-type Tab = "overview" | "commits" | "files" | "checks"
+type Tab = "overview" | "commits" | "files" | "conversation" | "checks"
+
+const MERGE_LABELS: Record<MergeMethod, string> = {
+  squash: "Squash and merge",
+  merge: "Create a merge commit",
+  rebase: "Rebase and merge",
+}
+
+// What the hover says when nothing blocks the merge but CI is red. GitHub only
+// reports a failing check as blocking where a rule requires it; everywhere else
+// the merge is offered and the call is the reader's, which is the whole reason
+// this has to be said out loud.
+function failingChecks(failed: number): string | undefined {
+  if (failed === 0) {
+    return undefined
+  }
+  const checks = failed === 1 ? "check is" : "checks are"
+  return `${failed} ${checks} failing — GitHub will still merge this`
+}
 
 interface PullRequestViewProps {
   path: string
@@ -53,6 +89,11 @@ interface PullRequestViewProps {
   onMerged: () => void
   /** Write into the session's terminal; false when no session took it. */
   onInject: (text: string) => boolean
+  /** What has been said about this pull request, and how to re-read it after a
+   * reply, a resolve or a submitted review. */
+  conversation: PullRequestConversation | null
+  conversationLoading: boolean
+  onConversationRefresh: () => void
 }
 
 // PullRequestView is one pull request in full: the header (title, the actions
@@ -67,13 +108,26 @@ export function PullRequestView({
   onRefresh,
   onMerged,
   onInject,
+  conversation,
+  conversationLoading,
+  onConversationRefresh,
 }: PullRequestViewProps) {
   const [merging, setMerging] = useState(false)
-  const [approving, setApproving] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [verdict, setVerdict] = useState<ReviewEvent | null>(null)
   const [edit, setEdit] = useState<MergeEdit | null>(null)
   const [tab, setTab] = useState<Tab>("overview")
+  // Read here rather than threaded down from the screen: it is keyed by the
+  // base branch, which only exists once the detail has resolved — and this is
+  // the one place that is guaranteed.
+  const rules = useBranchRules(path, detail.baseRefName)
   const commitCount = detail.commits?.length ?? 0
+  const review = useSyncExternalStore(subscribePendingReview, () => pendingReview(detail.url))
+  const pending = review.comments.length
+  const talk = conversationCount(conversationTimeline(conversation))
   const blocked = mergeBlockedReason(detail)
+  const methods = allowedMergeMethods(rules)
+  const editableMethods = methods.filter((method) => method !== "rebase")
 
   const merge = async (method: MergeMethod, subject = "", body = "") => {
     setMerging(true)
@@ -93,16 +147,57 @@ export function PullRequestView({
   const reviewBlocked =
     detail.state !== "OPEN" ? `Pull request is ${detail.state.toLowerCase()}` : null
 
-  const approve = async () => {
-    setApproving(true)
+  // Every write to a thread re-reads the conversation rather than patching what
+  // is on screen: GitHub decides what a reply and a resolve actually did, and a
+  // hand-rolled optimistic copy is a second source of truth for no gain.
+  //
+  // Memoised because the Files tab hangs its per-file review objects off this
+  // one, and those ride the identity of each diff's CodeMirror decorations.
+  const actions: ThreadActions = useMemo(
+    () => ({
+      reply: async (commentID, body) => {
+        await ProjectService.ReplyToReviewThread(path, detail.number, commentID, body)
+        onConversationRefresh()
+      },
+      resolve: async (threadID, resolved) => {
+        await ProjectService.ResolveReviewThread(path, threadID, resolved)
+        onConversationRefresh()
+      },
+    }),
+    [path, detail.number, onConversationRefresh],
+  )
+
+  const comment = async (body: string) => {
+    await ProjectService.CommentOnPullRequest(path, detail.number, body)
+    onConversationRefresh()
+  }
+
+  // The whole review in one call: the verdict, the summary, and every comment
+  // held back since the first one was written.
+  const submitReview = async (event: ReviewEvent) => {
+    setSubmitting(true)
     try {
-      await ProjectService.ApprovePullRequest(path, detail.number)
-      toast.success(`Approved #${detail.number}`)
+      await ProjectService.SubmitReview(
+        path,
+        detail.number,
+        event,
+        review.body,
+        conversation?.headRefOid ?? "",
+        review.comments,
+      )
+      clearPendingReview(detail.url)
+      setVerdict(null)
+      toast.success(
+        event === "approve"
+          ? `Approved #${detail.number}`
+          : `Review sent on #${detail.number}${pending > 0 ? ` — ${pending} comments` : ""}`,
+      )
       onRefresh()
+      onConversationRefresh()
     } catch (err: unknown) {
-      toast.error(`Approve failed: ${errorText(err)}`)
+      toast.error(`Review failed: ${errorText(err)}`)
     } finally {
-      setApproving(false)
+      setSubmitting(false)
     }
   }
 
@@ -128,56 +223,101 @@ export function PullRequestView({
                 {session.busy ? "Opening…" : session.label}
               </Button>
             </span>
-            {/* Approving twice is something GitHub allows and nobody means to
-                do, so an approved pull request says so instead of offering it
-                again — the verdict is in ReviewStat below either way. */}
+            {/* With nothing written, reviewing is the one-click approval it has
+                always been. The moment a comment is waiting, the same control
+                becomes the way to send the review it belongs to — and says how
+                many are riding on it. Approving twice is something GitHub allows
+                and nobody means to do, so an approved pull request says so
+                instead of offering it again. */}
             <span title={reviewBlocked ?? undefined}>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={
-                  approving || reviewBlocked !== null || detail.reviewDecision === "APPROVED"
-                }
-                onClick={() => void approve()}
-              >
-                <Check />
-                {approving
-                  ? "Approving…"
-                  : detail.reviewDecision === "APPROVED"
-                    ? "Approved"
-                    : "Approve"}
-              </Button>
+              {pending === 0 ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={
+                    submitting || reviewBlocked !== null || detail.reviewDecision === "APPROVED"
+                  }
+                  onClick={() => void submitReview("approve")}
+                >
+                  <Check />
+                  {submitting
+                    ? "Approving…"
+                    : detail.reviewDecision === "APPROVED"
+                      ? "Approved"
+                      : "Approve"}
+                </Button>
+              ) : (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button size="sm" variant="ghost" disabled={reviewBlocked !== null}>
+                        <MessageSquare />
+                        Submit review
+                        <span className="tabular-nums text-muted-foreground">{pending}</span>
+                        <ChevronDown />
+                      </Button>
+                    }
+                  />
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setVerdict("comment")}>
+                      Comment
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setVerdict("approve")}>
+                      Approve
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setVerdict("request_changes")}>
+                      Request changes
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => clearPendingReview(detail.url)}>
+                      Discard {pending} pending {pending === 1 ? "comment" : "comments"}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </span>
             {/* The reason rides on a wrapper: a disabled button takes no pointer
-                events, so its own title would never surface. */}
-            <span title={blocked ?? undefined}>
+                events, so its own title would never surface. With nothing
+                blocking, the same spot carries what would make you think twice
+                — red CI that no rule requires, which GitHub merges over
+                without a word. */}
+            <span title={blocked ?? failingChecks(detail.checks.failed)}>
               <DropdownMenu>
                 <DropdownMenuTrigger
                   render={
                     <Button size="sm" disabled={merging || blocked !== null}>
                       <GitMerge />
                       {merging ? "Merging…" : "Merge"}
+                      {/* The checks readout says this too, a line above — but
+                          the decision is taken here, and a count beside the
+                          button is the only place it cannot be missed. */}
+                      {detail.checks.failed > 0 && (
+                        <span className="flex items-center gap-0.5">
+                          <X className="size-3.5" />
+                          <span className="tabular-nums">{detail.checks.failed}</span>
+                        </span>
+                      )}
                       <ChevronDown />
                     </Button>
                   }
                 />
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => void merge("squash")}>
-                    Squash and merge
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => void merge("merge")}>
-                    Create a merge commit
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => void merge("rebase")}>
-                    Rebase and merge
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setEdit(mergeEditFor("squash", detail))}>
-                    Squash and merge, edit message…
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setEdit(mergeEditFor("merge", detail))}>
-                    Create a merge commit, edit message…
-                  </DropdownMenuItem>
+                  {methods.map((method) => (
+                    <DropdownMenuItem key={method} onClick={() => void merge(method)}>
+                      {MERGE_LABELS[method]}
+                    </DropdownMenuItem>
+                  ))}
+                  {/* Rebase replays the branch's own commits, so gh takes no
+                      message for it and it has no "edit message" twin. */}
+                  {editableMethods.length > 0 && <DropdownMenuSeparator />}
+                  {editableMethods.map((method) => (
+                    <DropdownMenuItem
+                      key={`${method}-edit`}
+                      onClick={() => setEdit(mergeEditFor(method, detail))}
+                    >
+                      {MERGE_LABELS[method]}, edit message…
+                    </DropdownMenuItem>
+                  ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             </span>
@@ -236,6 +376,10 @@ export function PullRequestView({
               <span className="tabular-nums text-muted-foreground">{detail.changedFiles}</span>
             )}
           </TabButton>
+          <TabButton active={tab === "conversation"} onClick={() => setTab("conversation")}>
+            Conversation
+            {talk > 0 && <span className="tabular-nums text-muted-foreground">{talk}</span>}
+          </TabButton>
           {detail.checks.total > 0 && (
             <TabButton active={tab === "checks"} onClick={() => setTab("checks")}>
               Checks
@@ -253,11 +397,21 @@ export function PullRequestView({
             head={head}
             pullRequest={detail.url}
             onInject={onInject}
+            threads={conversation?.threads ?? null}
+            actions={actions}
           />
         ) : (
           <div className="h-full overflow-y-auto">
             {tab === "checks" && <PullsChecks checks={detail.checkRuns} />}
             {tab === "commits" && <PullsCommits commits={detail.commits} />}
+            {tab === "conversation" && (
+              <PullsConversation
+                conversation={conversation}
+                loading={conversationLoading}
+                actions={actions}
+                onComment={comment}
+              />
+            )}
             {tab === "overview" && (
               <div className="max-w-3xl px-6 py-5">
                 {detail.body.trim() !== "" ? (
@@ -270,6 +424,17 @@ export function PullRequestView({
           </div>
         )}
       </div>
+
+      {verdict && (
+        <SubmitReviewDialog
+          event={verdict}
+          review={review}
+          submitting={submitting}
+          onBodyChange={(body) => setReviewBody(detail.url, body)}
+          onCancel={() => setVerdict(null)}
+          onSubmit={() => void submitReview(verdict)}
+        />
+      )}
 
       {edit && (
         <MergeMessageDialog

@@ -252,3 +252,23 @@ export function newLineRange(
 export function formatLineRef(r: NewLineRange): string {
   return r.start === r.end ? `${r.start}` : `${r.start}-${r.end}`
 }
+
+/** Which file a review thread hangs off: GitHub's RIGHT is the new file, LEFT a
+ * line the branch deleted. */
+export type DiffSide = "RIGHT" | "LEFT"
+
+// docLineAt maps a file line back to the document line rendering it — the
+// inverse of the gutter, and what anchors a review thread to the diff it is
+// about. A line the diff does not show has no anchor here: GitHub numbers
+// against the whole file, while the document holds only the hunks, so a thread
+// on untouched code (or one the branch has since rewritten) yields null and is
+// rendered away from the file instead of on the wrong line.
+export function docLineAt(lineMeta: DiffLine[], side: DiffSide, line: number): number | null {
+  if (line <= 0) {
+    return null
+  }
+  const index = lineMeta.findIndex((meta) =>
+    side === "LEFT" ? meta.oldLine === line : meta.newLine === line,
+  )
+  return index === -1 ? null : index + 1
+}

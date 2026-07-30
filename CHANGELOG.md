@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Review a pull request without leaving lich.** Pulls only ever showed the
+  parts that travel one way — the checks, the commits, the diff — so a review
+  that asked for a change was invisible here and reading it meant the browser.
+  The diff now carries the conversation: a thread opens inline under the line it
+  is about, with its replies, and can be answered and resolved where it sits.
+  Right-click a selection and *Comment on the pull request* starts one of your
+  own; each comment waits with the others until **Submit review** sends them
+  together as a single review — approving, commenting, or requesting changes,
+  with a summary of your own above them. Comments waiting to be sent are marked
+  as pending and survive a refresh, a collapsed file and a restart, so a review
+  written over an afternoon is still there. A new **Conversation** tab holds the
+  whole exchange in the order it happened — verdicts, comments on the pull
+  request itself, and the threads whose lines the branch has since rewritten,
+  which no diff can show. Settled threads fold themselves away behind a count.
 - **Appearance can import custom color themes.** lich still ships the bundled
   Light and Dark themes, but Settings › Appearance now accepts theme JSON files
   saved under the app config directory. Imported themes can recolor both the
@@ -18,14 +32,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the session a *reference* — a file, a line range — but never an instruction,
   so anything you actually wanted changed had to be typed out by hand while
   looking straight at it. Right-clicking a selection, in the Review dock or in a
-  pull request's Files changed, now also offers *Comment on lines*: a box opens
-  between the lines themselves, and the note is held against them instead of
-  being written out. Comments collect at the foot of the panel in the order you
+  pull request's Files changed, now also offers *Comment for the session*: a box
+  opens between the lines themselves, and the note is held against them instead
+  of being written out. Comments collect at the foot of the panel in the order you
   read the diff, each removable on its own,
   and one *Send* hands the whole batch over as a single prompt — pasted into the
   session unsent, so the last word before the agent starts is still yours. They
   outlive leaving the tab but not a restart: a line number written before an
-  edit points somewhere else after it.
+  edit points somewhere else after it. On a pull request's diff both destinations
+  are offered side by side, named for where the note goes.
 - **Every worktree gets a dev-server port of its own.** Two worktrees of one
   project both ran `pnpm dev` and both wanted the same port, so the second one
   lost — and the setup script that had just installed the dependencies had no
@@ -57,13 +72,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **The Merge button says no before the click, not after.** Merging a pull
-  request GitHub would not take — a required review missing, a required check
-  still running, the base branch moved on, or GitHub simply still working out
-  whether the branch merges — offered the button anyway and answered with a
-  toast that named none of those reasons. The button is now disabled whenever
-  GitHub reports it cannot merge, and hovering it says which of them it is. A
-  failing check that no rule requires still merges: the checks readout shows it
-  red, and the call stays yours.
+  request GitHub would not take — a review missing, a reviewer asking for
+  changes, a conflict, the base branch moved on — offered the button anyway and
+  answered with a toast that named none of those reasons. The button is now
+  disabled for each of them, and hovering it says which. Everything else it
+  still offers: a failing check no rule requires merges fine, a base branch
+  governed by a ruleset merges fine, and GitHub still deciding is not a no. The
+  call stays yours, and where GitHub does refuse, it refuses out loud.
+- **The Merge menu offers what your repository actually accepts.** A repository
+  can pin a branch to one merge method — squash only is the common one — and
+  nothing in a pull request says so, so the menu offered all three and GitHub
+  refused two of them after the click. lich now reads the base branch's rules
+  and offers only the methods that branch takes. A branch nothing governs, or
+  an answer lich cannot read, still offers all three: the menu never comes back
+  narrower than the truth.
+- **Merging over red CI says so first.** A failing check that no rule requires
+  does not block a merge on GitHub, and lich offers the merge for the same
+  reason — the call is yours. It just used to offer it in silence, with the red
+  a line away in the status row. The Merge button now carries the number of
+  failing checks, and hovering it says GitHub will merge anyway.
+- **Dropdown menus are as wide as what they say.** Every menu was pinned to the
+  width of the button that opened it, so the ones hanging off a small control —
+  New Session, the pull request filter, Merge — wrapped their items over two and
+  three lines. They size to their own text now, on one line each, with a little
+  more room around it. A select still matches its field, which is the one place
+  the old behaviour was right.
 - **Settings › Font lists your installed fonts on Windows.** The picker read the
   font list from fontconfig, which Windows does not have, so it offered nothing
   beyond the bundled default and whatever was already selected. It now reads the
