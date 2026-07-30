@@ -11,6 +11,7 @@ import {
   EditorView,
   GutterMarker,
   gutterLineClass,
+  lineNumberWidgetMarker,
   lineNumbers,
 } from "@codemirror/view"
 import { gutterNumber, type DiffLine } from "@/lib/git/diff"
@@ -43,13 +44,18 @@ const diffTheme = EditorView.theme({
   // here is undoing the editor: the content inside is prose in a React tree, not
   // code, so it takes the app's font and wraps like text rather than inheriting
   // the monospace pre-wrap of the lines around it.
+  //
+  // The breathing room is padding here and never a margin inside: CodeMirror
+  // sizes a block widget from the element's own box, which a child's margin
+  // sits outside of. Every pixel of margin in there is a pixel the gutter does
+  // not know about, and it drifts the line numbers below by that much.
   ".cm-thread-slot": {
     fontFamily: "var(--font-sans)",
     fontSize: "0.8125rem",
     lineHeight: "1.5",
     whiteSpace: "normal",
     tabSize: "unset",
-    padding: "0 0.5rem",
+    padding: "0.375rem 0.5rem",
     cursor: "auto",
     userSelect: "text",
   },
@@ -151,16 +157,34 @@ export function buildLineDecorations(lineMeta: DiffLine[]): Extension {
   return [EditorView.decorations.of(lines.finish()), gutterLineClass.of(gutters.finish())]
 }
 
+// A block widget — the gap a review thread or a comment box opens between two
+// lines — is a block in the content but not a line, and the gutter draws
+// nothing for a widget unless it is given a marker for it. Nothing at all is
+// the bug: the gutter ends up one cell short of the content's blocks, so every
+// number below the widget sits beside the line above its own. An empty marker
+// buys the widget a cell of its own height and nothing else, which is what
+// keeps the numbers level with their code.
+class BlockSpacer extends GutterMarker {
+  toDOM(): Node {
+    return document.createTextNode("")
+  }
+}
+
+const blockSpacer = new BlockSpacer()
+
 // diffGutter is the single-column line gutter: numbers come from lineMeta
 // (old-file for deletions, new-file otherwise), not from doc line numbers.
 // lineNumbers' internal spacer probes formatNumber with out-of-range numbers
 // to size the gutter; those get the widest real number so it never collapses.
 export function diffGutter(lineMeta: DiffLine[]): Extension {
   const widest = String(Math.max(1, ...lineMeta.map((meta) => meta.newLine ?? meta.oldLine ?? 0)))
-  return lineNumbers({
-    formatNumber: (lineNo) => {
-      const meta = lineMeta[lineNo - 1]
-      return meta ? gutterNumber(meta) : widest
-    },
-  })
+  return [
+    lineNumbers({
+      formatNumber: (lineNo) => {
+        const meta = lineMeta[lineNo - 1]
+        return meta ? gutterNumber(meta) : widest
+      },
+    }),
+    lineNumberWidgetMarker.of(() => blockSpacer),
+  ]
 }

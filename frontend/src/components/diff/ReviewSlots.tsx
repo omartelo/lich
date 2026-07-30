@@ -52,6 +52,11 @@ interface ReviewSlotProps {
 // nothing behind it renders nothing: the slots and the data behind them are
 // updated in separate passes, and a thread resolved in between must not throw
 // on the way out.
+//
+// Nothing in here may carry a vertical margin. CodeMirror measures a block
+// widget by its element's own box, so a margin inside is height the gutter
+// never hears about, and the line numbers below drift by exactly that much.
+// The spacing is the slot's padding (`.cm-thread-slot` in codemirror.ts).
 export function ReviewSlot({
   slotKey,
   review,
@@ -68,7 +73,7 @@ export function ReviewSlot({
     // identical once the box is open and only one of them reaches GitHub.
     const session = composer.kind === "session"
     return (
-      <div className="my-1.5 flex flex-col gap-1.5 rounded-md bg-sidebar px-3 py-2.5">
+      <div className="flex flex-col gap-1.5 rounded-md bg-sidebar px-3 py-2.5">
         <span className="font-mono text-xs text-muted-foreground">
           {session ? "for the session" : "on the pull request"} · {composer.lines}
         </span>
@@ -97,14 +102,12 @@ export function ReviewSlot({
 
   if (slotKey.startsWith("t:")) {
     const thread = review.threads.find((held) => threadSlotKey(held) === slotKey)
-    return thread ? (
-      <ReviewThread thread={thread} actions={review.actions} className="my-1.5" />
-    ) : null
+    return thread ? <ReviewThread thread={thread} actions={review.actions} /> : null
   }
 
   const drafts = review.drafts.filter(({ comment }) => draftSlotKey(comment) === slotKey)
   return drafts.length > 0 ? (
-    <div className="my-1.5">
+    <div>
       <PendingComments drafts={drafts} onEdit={review.onEdit} onRemove={review.onRemove} />
     </div>
   ) : null
