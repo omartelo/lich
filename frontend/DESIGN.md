@@ -30,6 +30,7 @@ state first.
 The bundled light/dark themes are zinc and achromatic — there is **no brand accent hue** by default. Palettes are
 theme JSON data applied to the tokens mapped in `src/index.css` (`@theme` + CSS variables). Never hardcode a hex or
 oklch value in a component; always go through a token.
+The importable theme JSON contract lives in `docs/themes.md`.
 
 Surface roles (dark values shown; light is the mirror):
 

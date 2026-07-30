@@ -1,5 +1,6 @@
 import {
   CaseSensitive,
+  ChevronDown,
   Minus,
   Plus,
   SquareTerminal,
@@ -8,7 +9,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react"
-import { useRef } from "react"
+import { useRef, useState } from "react"
 import { toast } from "sonner"
 import {
   DEFAULT_TERMINAL_FONT_SIZE,
@@ -22,6 +23,8 @@ import {
   useSettings,
 } from "@/providers/settings"
 import type { TerminalTheme, Theme } from "@/providers/settings"
+import type { ThemeDefinition } from "@/lib/api-types"
+import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { Stepper } from "@/components/common/Stepper"
 import { SettingBlock, SettingGroup } from "./SettingBlock"
 import { FontSetting } from "./FontSetting"
@@ -35,7 +38,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { customTheme } from "@/lib/themes"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { customThemes } from "@/lib/themes"
 import { errorText } from "@/lib/utils"
 
 // Appearance holds every look-and-feel control, split into an Interface group
@@ -44,6 +48,8 @@ import { errorText } from "@/lib/utils"
 // context, so the block titles drop their "Interface"/"Terminal" prefix.
 export function AppearanceSettings() {
   const fileRef = useRef<HTMLInputElement | null>(null)
+  const [themePendingRemoval, setThemePendingRemoval] = useState<ThemeDefinition | null>(null)
+  const [importedThemesOpen, setImportedThemesOpen] = useState(false)
   const {
     themes,
     theme,
@@ -57,7 +63,8 @@ export function AppearanceSettings() {
     terminalTheme,
     setTerminalTheme,
   } = useSettings()
-  const removableTheme = customTheme(themes, theme)
+  const importedThemes = customThemes(themes)
+  const hasCustomThemes = importedThemes.length > 0
 
   const onImportTheme = async (file: File | undefined) => {
     if (!file) {
@@ -76,12 +83,13 @@ export function AppearanceSettings() {
   }
 
   const onRemoveTheme = async () => {
-    if (!removableTheme) {
+    if (!themePendingRemoval) {
       return
     }
     try {
-      await removeTheme(removableTheme.id)
-      toast.success(`Removed theme: ${removableTheme.name}`)
+      await removeTheme(themePendingRemoval.id)
+      toast.success(`Removed theme: ${themePendingRemoval.name}`)
+      setThemePendingRemoval(null)
     } catch (error) {
       toast.error(`Theme removal failed: ${errorText(error)}`)
     }
@@ -114,16 +122,14 @@ export function AppearanceSettings() {
                       </SelectItem>
                     ))}
                 </SelectGroup>
-                {themes.some((item) => item.origin === "custom") && (
+                {hasCustomThemes && (
                   <SelectGroup>
                     <SelectLabel>Custom</SelectLabel>
-                    {themes
-                      .filter((item) => item.origin === "custom")
-                      .map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {item.name}
-                        </SelectItem>
-                      ))}
+                    {importedThemes.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.name}
+                      </SelectItem>
+                    ))}
                   </SelectGroup>
                 )}
               </SelectContent>
@@ -139,16 +145,78 @@ export function AppearanceSettings() {
               <Upload />
               Import JSON
             </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={!removableTheme}
-              onClick={() => void onRemoveTheme()}
-            >
-              <Trash2 />
-              Remove
-            </Button>
           </div>
+          {hasCustomThemes && (
+            <div className="mt-3 w-full max-w-md">
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-8 w-full justify-start px-1.5 text-muted-foreground"
+                aria-expanded={importedThemesOpen}
+                onClick={() => setImportedThemesOpen((open) => !open)}
+              >
+                <ChevronDown
+                  className={
+                    importedThemesOpen ? "transition-transform" : "-rotate-90 transition-transform"
+                  }
+                />
+                Imported themes ({importedThemes.length})
+              </Button>
+              {importedThemesOpen && (
+                <div className="mt-1 space-y-0.5">
+                  {importedThemes.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex min-h-10 items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent/50"
+                    >
+                      <span
+                        aria-hidden
+                        className="size-4 shrink-0 rounded-sm border border-border"
+                        style={{ backgroundColor: item.app.background }}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm">{item.name}</span>
+                        <span className="block truncate font-mono text-xs text-muted-foreground">
+                          {item.id}
+                        </span>
+                      </span>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label={`Remove ${item.name}`}
+                              onClick={() => setThemePendingRemoval(item)}
+                            />
+                          }
+                        >
+                          <Trash2 />
+                        </TooltipTrigger>
+                        <TooltipContent>{`Remove ${item.name}`}</TooltipContent>
+                      </Tooltip>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          <ConfirmDialog
+            open={themePendingRemoval !== null}
+            onCancel={() => setThemePendingRemoval(null)}
+            title="Remove imported theme?"
+            description={
+              <>
+                Delete <span className="font-medium">{themePendingRemoval?.name}</span>? This
+                removes the imported theme file from lich.
+              </>
+            }
+          >
+            <Button variant="destructive" onClick={() => void onRemoveTheme()}>
+              Remove theme
+            </Button>
+          </ConfirmDialog>
         </SettingBlock>
 
         <SettingBlock
@@ -200,16 +268,14 @@ export function AppearanceSettings() {
                     </SelectItem>
                   ))}
               </SelectGroup>
-              {themes.some((item) => item.origin === "custom") && (
+              {hasCustomThemes && (
                 <SelectGroup>
                   <SelectLabel>Custom</SelectLabel>
-                  {themes
-                    .filter((item) => item.origin === "custom")
-                    .map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.name}
-                      </SelectItem>
-                    ))}
+                  {importedThemes.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.name}
+                    </SelectItem>
+                  ))}
                 </SelectGroup>
               )}
             </SelectContent>

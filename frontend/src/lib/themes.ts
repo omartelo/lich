@@ -13,45 +13,12 @@ export type Theme = typeof SYSTEM_THEME | string
 export type TerminalTheme = typeof MATCH_TERMINAL_THEME | string
 export type ResolvedTheme = ThemeDefinition
 
-export const APP_COLOR_TOKENS = [
-  "background",
-  "foreground",
-  "card",
-  "card-foreground",
-  "popover",
-  "popover-foreground",
-  "primary",
-  "primary-foreground",
-  "secondary",
-  "secondary-foreground",
-  "muted",
-  "muted-foreground",
-  "accent",
-  "accent-foreground",
-  "destructive",
-  "border",
-  "input",
-  "ring",
-  "chart-1",
-  "chart-2",
-  "chart-3",
-  "chart-4",
-  "chart-5",
-  "sidebar",
-  "sidebar-foreground",
-  "sidebar-primary",
-  "sidebar-primary-foreground",
-  "sidebar-accent",
-  "sidebar-accent-foreground",
-  "sidebar-border",
-  "sidebar-ring",
-] as const
-
 const BUNDLED = [lightTheme, darkTheme].map((theme) =>
   normalizeTheme(theme as unknown as ThemeDefinition, "bundled"),
 )
 const BUNDLED_ORDER = new Map(BUNDLED.map((theme, index) => [theme.id, index]))
 
+export const APP_COLOR_TOKENS = Object.keys(BUNDLED[0].app)
 export const BUNDLED_THEMES = mergeThemes(BUNDLED)
 
 export function mergeThemes(
@@ -104,16 +71,8 @@ export function applyAppTheme(theme: ThemeDefinition, root: HTMLElement): void {
   }
 }
 
-export function themeExists(themes: readonly ThemeDefinition[], id: string): boolean {
-  return themes.some((theme) => theme.id === id)
-}
-
-export function customTheme(
-  themes: readonly ThemeDefinition[],
-  id: string,
-): ThemeDefinition | null {
-  const theme = themes.find((item) => item.id === id)
-  return theme?.origin === "custom" ? theme : null
+export function customThemes(themes: readonly ThemeDefinition[]): ThemeDefinition[] {
+  return themes.filter((theme) => theme.origin === "custom")
 }
 
 export function sanitizeThemePreference(raw: string | null): Theme {
