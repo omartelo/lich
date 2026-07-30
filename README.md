@@ -1,5 +1,8 @@
 <div align="center">
-  <img src="frontend/public/appicon.png" alt="lich" width="88" height="88" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="frontend/public/appicon.png" />
+    <img src="frontend/public/appicon-light.png" alt="lich" width="88" height="88" />
+  </picture>
   <h1>lich</h1>
   <p><strong>A terminal-first harness for coding with AI agents.</strong></p>
   <p>

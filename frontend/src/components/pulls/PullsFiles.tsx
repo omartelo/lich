@@ -2,6 +2,7 @@ import { PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import { useMemo, useRef, useState, useSyncExternalStore } from "react"
 import { IconAction } from "@/components/common/IconAction"
 import { Notice } from "@/components/common/Notice"
+import { CommentBatch } from "@/components/diff/CommentBatch"
 import { CollapseAllAction, useDiffBulk } from "@/components/diff/diff-bulk"
 import { FileDiff } from "@/components/diff/FileDiff"
 import { DiffStat } from "@/components/DiffStat"
@@ -17,6 +18,7 @@ import {
   viewedFiles,
 } from "@/lib/pulls/pull-request-viewed"
 import { usePullRequestDiff } from "@/lib/pulls/use-pull-request-diff"
+import { addReviewComment } from "@/lib/review-comments"
 import { usePanelVisible } from "@/lib/use-panel-visible"
 
 // The file tree is a navigator, not the review itself: hiding it hands the
@@ -75,13 +77,15 @@ interface PullsFilesProps {
   /** Identity of the pull request being reviewed (its URL) — what the Viewed
    * ticks are keyed by, so two PRs never share them. */
   pullRequest: string
-  onInject: (text: string) => void
+  /** Write into the session's terminal; false when no session took it. */
+  onInject: (text: string) => boolean
 }
 
 // PullsFiles is the "Files changed" tab of the Pulls screen: a changed-files
 // tree on the left (click to jump) beside the PR's diff, rendered with the same
 // FileDiff cards as the Review dock — read-only, no discard. Inject still works,
-// so a PR file can be referenced into the session's terminal. Each file can be
+// so a PR file can be referenced into the session's terminal, and a comment on
+// the selection joins the batch this tab sends as one prompt. Each file can be
 // ticked off as viewed, which folds it away and counts toward the header total.
 export function PullsFiles({ path, number, head, pullRequest, onInject }: PullsFilesProps) {
   const { files, error } = usePullRequestDiff(path, head, number)
@@ -172,6 +176,9 @@ export function PullsFiles({ path, number, head, pullRequest, onInject }: PullsF
                 <FileDiff
                   file={file}
                   onInject={onInject}
+                  onComment={(path, lines, text) =>
+                    addReviewComment(pullRequest, path, lines, text)
+                  }
                   bulk={bulk}
                   viewed={isViewed(viewed, file.newPath, fingerprints.get(file.newPath) ?? "")}
                   onViewed={(next) =>
@@ -182,6 +189,7 @@ export function PullsFiles({ path, number, head, pullRequest, onInject }: PullsF
             ))}
           </div>
         </div>
+        <CommentBatch target={pullRequest} onInject={onInject} />
       </div>
     </div>
   )

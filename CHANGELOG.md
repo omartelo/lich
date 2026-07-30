@@ -14,6 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   saved under the app config directory. Imported themes can recolor both the
   interface tokens and the terminal palette, can be selected independently for
   the app and terminal, and can be removed without touching the bundled themes.
+- **Review comments, handed to the session as one prompt.** A diff could give
+  the session a *reference* — a file, a line range — but never an instruction,
+  so anything you actually wanted changed had to be typed out by hand while
+  looking straight at it. Right-clicking a selection, in the Review dock or in a
+  pull request's Files changed, now also offers *Comment on lines*: a box opens
+  between the lines themselves, and the note is held against them instead of
+  being written out. Comments collect at the foot of the panel in the order you
+  read the diff, each removable on its own,
+  and one *Send* hands the whole batch over as a single prompt — pasted into the
+  session unsent, so the last word before the agent starts is still yours. They
+  outlive leaving the tab but not a restart: a line number written before an
+  edit points somewhere else after it.
 - **Every worktree gets a dev-server port of its own.** Two worktrees of one
   project both ran `pnpm dev` and both wanted the same port, so the second one
   lost — and the setup script that had just installed the dependencies had no
@@ -34,6 +46,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   session runs a model that binary never heard of; while a model has no known
   price, the readout stays absent rather than quoting a total that is missing a
   turn.
+
+### Changed
+
+- **New app icon.** The purple flame is now a monochrome one that inverts with
+  the colour scheme: white on dark, black on light. The window and tab icon
+  follows the scheme live; the launcher, dock and taskbar icon is a single
+  image the desktop cannot re-theme, so it ships white.
 
 ### Fixed
 

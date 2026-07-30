@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react"
 import type { RefObject } from "react"
-import type { Extension } from "@codemirror/state"
+import type { Extension, StateEffect } from "@codemirror/state"
 import { EditorState } from "@codemirror/state"
 import { EditorView } from "@codemirror/view"
 import { loadLanguage, readOnlyCodeExtensions, selectedDocLines } from "@/lib/codemirror"
@@ -20,6 +20,9 @@ export interface CodeMirrorView {
   containerRef: RefObject<HTMLDivElement>
   /** 1-based doc line span of the current selection, or null when empty. */
   getSelectedLines: () => DocLineSelection | null
+  /** Drive an extension from outside the editor — the seam the inline comment
+   * composer opens through. A no-op once the view is gone. */
+  dispatchEffects: (effects: StateEffect<unknown>[]) => void
 }
 
 // useCodeMirrorView owns one read-only CodeMirror view for its container:
@@ -57,5 +60,9 @@ export function useCodeMirrorView(source: CodeMirrorSource, filename: string): C
   const getSelectedLines = (): DocLineSelection | null =>
     viewRef.current ? selectedDocLines(viewRef.current) : null
 
-  return { containerRef, getSelectedLines }
+  const dispatchEffects = (effects: StateEffect<unknown>[]): void => {
+    viewRef.current?.dispatch({ effects })
+  }
+
+  return { containerRef, getSelectedLines, dispatchEffects }
 }
