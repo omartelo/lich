@@ -18,6 +18,7 @@ func TestParsePRDetail(t *testing.T) {
 			"body": "makes the badge actionable",
 			"isDraft": false,
 			"mergeable": "MERGEABLE",
+			"mergeStateStatus": "UNSTABLE",
 			"baseRefName": "main",
 			"headRefName": "quiet-willow",
 			"changedFiles": 6,
@@ -41,6 +42,9 @@ func TestParsePRDetail(t *testing.T) {
 		}
 		if pr.Mergeable != "MERGEABLE" || pr.BaseRefName != "main" || pr.HeadRefName != "quiet-willow" {
 			t.Errorf("wrong refs/mergeable: %+v", pr)
+		}
+		if pr.MergeStateStatus != "UNSTABLE" {
+			t.Errorf("wrong merge state status: %q", pr.MergeStateStatus)
 		}
 		if pr.Checks.Passed != 2 || pr.Checks.Total != 2 || pr.Checks.Failed != 0 {
 			t.Errorf("wrong checks: %+v", pr.Checks)

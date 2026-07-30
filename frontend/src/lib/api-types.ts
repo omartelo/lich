@@ -93,6 +93,9 @@ export interface PullRequestDetail {
   isDraft: boolean
   /** gh: MERGEABLE | CONFLICTING | UNKNOWN */
   mergeable: string
+  /** GitHub's own "can this merge right now": CLEAN | UNSTABLE | BLOCKED |
+   * BEHIND | DIRTY | DRAFT | HAS_HOOKS | UNKNOWN. See mergeBlockedReason. */
+  mergeStateStatus: string
   /** gh's aggregate verdict: APPROVED | CHANGES_REQUESTED | REVIEW_REQUIRED;
    * "" where the repository requires no review. */
   reviewDecision: string
