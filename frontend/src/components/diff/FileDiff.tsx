@@ -1,20 +1,25 @@
-import { ChevronDown, ChevronRight, Paperclip, Undo2 } from "lucide-react"
+import { ChevronDown, ChevronRight, MessageSquare, Paperclip, Undo2 } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { IconAction } from "@/components/common/IconAction"
 import { DiffStat } from "@/components/DiffStat"
 import { Checkbox } from "@/components/ui/checkbox"
+import { threadSlots, type SlotElements, type ThreadSlot } from "@/lib/codemirror-threads"
 import {
   buildFileDoc,
   formatLineRef,
   newLineRange,
   type DiffFile,
   type FileDoc,
+  type NewLineRange,
 } from "@/lib/git/diff"
 import { languageAbbr, splitPath } from "@/lib/git/lang-badge"
+import { reviewSlots } from "@/lib/pulls/review-slots"
 import { cn } from "@/lib/utils"
 import type { DiffBulk } from "./diff-bulk"
 import { InjectMenu } from "./InjectMenu"
 import { useDiffEditor } from "./useDiffEditor"
+import { type Composer, type DiffReview, ReviewSlot } from "./ReviewSlots"
 
 // Files whose rendered diff exceeds this many lines start collapsed, so one
 // giant lockfile doesn't swamp the panel (expanding is one click away).
@@ -42,11 +47,23 @@ interface FileDiffProps {
   /** Handle the tick. Absent = no Viewed control (the dock's working diff,
    * where every file is the current one). */
   onViewed?: (next: boolean) => void
+  /** The pull request review over this file: threads to render inline, drafts
+   * waiting to be sent, and what a new comment does. Absent for the working
+   * diff, which has no pull request behind it. */
+  review?: DiffReview
 }
 
 // The card must not clip overflow — a clipping ancestor would break the
 // sticky header.
-export function FileDiff({ file, onInject, onDiscard, bulk, viewed, onViewed }: FileDiffProps) {
+export function FileDiff({
+  file,
+  onInject,
+  onDiscard,
+  bulk,
+  viewed,
+  onViewed,
+  review,
+}: FileDiffProps) {
   const doc = useMemo(() => buildFileDoc(file), [file])
   const [expanded, setExpanded] = useState(!file.binary && doc.lineMeta.length <= LARGE_FILE_LINES)
   // The nonce guard skips the initial mount so each file keeps its own
@@ -61,6 +78,9 @@ export function FileDiff({ file, onInject, onDiscard, bulk, viewed, onViewed }: 
   const Chevron = expanded ? ChevronDown : ChevronRight
   const badge = languageAbbr(file.newPath)
   const { dir, base } = splitPath(file.newPath)
+  const talking = review
+    ? review.threads.filter((thread) => !thread.isResolved).length + review.drafts.length
+    : 0
 
   return (
     <section>
@@ -93,6 +113,15 @@ export function FileDiff({ file, onInject, onDiscard, bulk, viewed, onViewed }: 
           </span>
           {dir && <span className="truncate text-muted-foreground">{dir}</span>}
         </button>
+        {/* A collapsed file must still say it is being talked about — the
+            threads inside it are invisible until it is opened. Settled threads
+            are left out of the count: they are not what is outstanding. */}
+        {talking > 0 && (
+          <span className="flex shrink-0 items-center gap-1 text-muted-foreground">
+            <MessageSquare className="size-3.5" />
+            <span className="tabular-nums">{talking}</span>
+          </span>
+        )}
         <span className="flex shrink-0 items-center gap-1.5">
           <DiffStat added={file.added} deleted={file.deleted} />
         </span>
@@ -127,7 +156,7 @@ export function FileDiff({ file, onInject, onDiscard, bulk, viewed, onViewed }: 
         (file.binary ? (
           <p className="px-9 py-2 text-xs text-muted-foreground">Binary file</p>
         ) : (
-          <LazyDiffBody doc={doc} path={file.newPath} onInject={onInject} />
+          <LazyDiffBody doc={doc} path={file.newPath} onInject={onInject} review={review} />
         ))}
     </section>
   )
@@ -137,6 +166,7 @@ interface DiffBodyProps {
   doc: FileDoc
   path: string
   onInject: (text: string) => void
+  review?: DiffReview
 }
 
 // A panel holds one CodeMirror view per expanded file, and a wide diff (a PR
@@ -144,7 +174,7 @@ interface DiffBodyProps {
 // page. LazyDiffBody defers each one until its card comes near the viewport;
 // once built, the editor stays, so scrolling back keeps its selection and
 // highlighting. Collapsing the file still destroys it.
-function LazyDiffBody({ doc, path, onInject }: DiffBodyProps) {
+function LazyDiffBody({ doc, path, onInject, review }: DiffBodyProps) {
   const placeholder = useRef<HTMLDivElement>(null)
   const [mounted, setMounted] = useState(false)
 
@@ -166,37 +196,115 @@ function LazyDiffBody({ doc, path, onInject }: DiffBodyProps) {
   }, [])
 
   if (mounted) {
-    return <DiffBody doc={doc} path={path} onInject={onInject} />
+    return <DiffBody doc={doc} path={path} onInject={onInject} review={review} />
   }
   // The placeholder has to stand in for the file's height: zero-height cards
   // would all sit in the viewport at once and nothing would be deferred.
   return <div ref={placeholder} style={{ height: doc.lineMeta.length * LINE_HEIGHT_PX }} />
 }
 
+const NO_SLOTS: SlotElements = new Map()
+
 // DiffBody exists as its own component so collapsing the file unmounts it,
 // destroying the CodeMirror view instead of keeping it alive off-screen.
 //
 // A diff's document is not the file: the selection lands on doc lines, which
-// newLineRange maps back to the line numbers the agent needs to be told.
-function DiffBody({ doc, path, onInject }: DiffBodyProps) {
-  const { containerRef, getSelectedDocLines } = useDiffEditor(doc, path)
-  const [lineRef, setLineRef] = useState<string | null>(null)
+// newLineRange maps back to the line numbers the agent needs to be told — and,
+// under a pull request, the line numbers GitHub files a comment against.
+function DiffBody({ doc, path, onInject, review }: DiffBodyProps) {
+  // One slot extension per view. It is memoised because it *is* part of the
+  // view's identity: a new one would rebuild the editor on every render.
+  const [elements, setElements] = useState<SlotElements>(NO_SLOTS)
+  const slots = useMemo(() => threadSlots(setElements), [])
+  const { containerRef, getSelectedDocLines, view } = useDiffEditor(
+    doc,
+    path,
+    review ? slots.extension : undefined,
+  )
+  const [range, setRange] = useState<NewLineRange | null>(null)
+  const [composer, setComposer] = useState<Composer | null>(null)
+
+  // Where the gaps go, never what is in them: keyed off the composer's line
+  // rather than the composer, so typing into it does not re-dispatch the whole
+  // slot set on every keystroke.
+  const composerLine = composer?.end ?? 0
+  const wanted = useMemo(
+    (): ThreadSlot[] =>
+      review
+        ? reviewSlots({
+            lineMeta: doc.lineMeta,
+            threads: review.threads,
+            drafts: review.drafts.map(({ comment }) => comment),
+            composerLine,
+          })
+        : [],
+    [review, doc.lineMeta, composerLine],
+  )
+
+  useEffect(() => {
+    if (view && review) {
+      slots.update(view, wanted)
+    }
+  }, [view, review, slots, wanted])
+
+  const addComment = (): void => {
+    if (!review || !composer || composer.body.trim() === "") {
+      return
+    }
+    review.onAdd({
+      path,
+      line: composer.end,
+      startLine: composer.start === composer.end ? 0 : composer.start,
+      side: "RIGHT",
+      body: composer.body.trim(),
+    })
+    setComposer(null)
+  }
 
   return (
-    <InjectMenu
-      path={path}
-      containerRef={containerRef}
-      lineRef={lineRef}
-      // Resolve the selection when the menu opens, not on every change.
-      onOpenChange={(open) => {
-        if (!open) {
-          return
+    <>
+      <InjectMenu
+        path={path}
+        containerRef={containerRef}
+        lineRef={range && formatLineRef(range)}
+        // Resolve the selection when the menu opens, not on every change.
+        onOpenChange={(open) => {
+          if (!open) {
+            return
+          }
+          const selected = getSelectedDocLines()
+          setRange(selected ? newLineRange(doc.lineMeta, selected.from, selected.to) : null)
+        }}
+        onInject={onInject}
+        // Commenting only exists under a pull request — but the item is offered
+        // whenever there is one, not only once a range is resolved: the
+        // selection is read as the menu opens, so gating the item on it would
+        // hide it on the very open that produced it. With nothing selected the
+        // menu disables it, like Inject lines beside it.
+        //
+        // Deliberately new-file lines only: a comment on a deleted line is a
+        // thread GitHub anchors on the other side, and that needs its own gesture.
+        onComment={
+          review
+            ? () => range && setComposer({ start: range.start, end: range.end, body: "" })
+            : undefined
         }
-        const selected = getSelectedDocLines()
-        const range = selected ? newLineRange(doc.lineMeta, selected.from, selected.to) : null
-        setLineRef(range && formatLineRef(range))
-      }}
-      onInject={onInject}
-    />
+      />
+      {review &&
+        [...elements].map(([key, element]) =>
+          createPortal(
+            <ReviewSlot
+              slotKey={key}
+              review={review}
+              composer={composer}
+              onComposerChange={(body) => setComposer((held) => held && { ...held, body })}
+              onComposerSubmit={addComment}
+              onComposerCancel={() => setComposer(null)}
+            />,
+            element,
+            key,
+          ),
+        )}
+    </>
   )
 }

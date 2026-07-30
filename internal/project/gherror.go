@@ -38,6 +38,20 @@ var ghFailures = []toolFailure{
 		"GitHub does not let an account approve its own pull request — this one was opened by the " +
 			"account lich is using here.",
 	},
+	{
+		"must be part of the diff",
+		"GitHub only takes a comment on a line this pull request actually changed. " +
+			"Pick a line inside the diff.",
+	},
+	{
+		"one pending review per pull request",
+		"GitHub still holds an unsubmitted review from this account on this pull request. " +
+			"Finish or discard it on github.com, then submit again.",
+	},
+	{
+		"pull request review thread",
+		"GitHub would not take that reply — the thread it answers is gone or already locked.",
+	},
 	{"gh auth login", "gh is not signed in to GitHub. Run `gh auth login` in a terminal."},
 	{"not logged into", "gh is not signed in to GitHub. Run `gh auth login` in a terminal."},
 	{"api rate limit exceeded", "GitHub is rate-limiting this account. Try again in a few minutes."},

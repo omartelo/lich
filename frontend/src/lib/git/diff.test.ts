@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   buildFileDoc,
   discardTargets,
+  docLineAt,
   formatLineRef,
   gutterNumber,
   newLineRange,
@@ -225,5 +226,34 @@ describe("gutterNumber", () => {
     expect(gutterNumber(meta[1])).toBe("2") // del → old line
     expect(gutterNumber(meta[2])).toBe("2") // add → new line
     expect(gutterNumber(meta[5])).toBe("") // separator
+  })
+})
+
+describe("docLineAt", () => {
+  const meta = buildFileDoc(parseDiff(modifiedTwoHunks)[0]).lineMeta
+
+  it("finds the document line rendering a new-file line", () => {
+    // doc: 1 context(1/1) · 2 del(old 2) · 3 add(new 2) · 4 add(new 3) · 5 context(4)
+    expect(docLineAt(meta, "RIGHT", 1)).toBe(1)
+    expect(docLineAt(meta, "RIGHT", 2)).toBe(3)
+    expect(docLineAt(meta, "RIGHT", 3)).toBe(4)
+  })
+
+  it("finds a deleted line on the other side", () => {
+    expect(docLineAt(meta, "LEFT", 2)).toBe(2)
+  })
+
+  it("crosses the hunk separator to the second hunk", () => {
+    // doc 6 is the separator, so the second hunk starts at 7: del(old 10),
+    // add(new 11), context(old 11 / new 12).
+    expect(docLineAt(meta, "LEFT", 10)).toBe(7)
+    expect(docLineAt(meta, "RIGHT", 11)).toBe(8)
+  })
+
+  it("has no anchor for a line this diff does not show", () => {
+    expect(docLineAt(meta, "RIGHT", 500)).toBeNull()
+    expect(docLineAt(meta, "LEFT", 500)).toBeNull()
+    // A thread GitHub could not re-anchor arrives with line 0.
+    expect(docLineAt(meta, "RIGHT", 0)).toBeNull()
   })
 })

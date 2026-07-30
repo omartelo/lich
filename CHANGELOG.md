@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Review a pull request without leaving lich.** Pulls only ever showed the
+  parts that travel one way — the checks, the commits, the diff — so a review
+  that asked for a change was invisible here and reading it meant the browser.
+  The diff now carries the conversation: a thread opens inline under the line it
+  is about, with its replies, and can be answered and resolved where it sits.
+  Right-click a selection in the diff and *Comment on lines* starts one of your
+  own; each comment waits with the others until **Submit review** sends them
+  together as a single review — approving, commenting, or requesting changes,
+  with a summary of your own above them. Comments waiting to be sent are marked
+  as pending and survive a refresh, a collapsed file and a restart, so a review
+  written over an afternoon is still there. A new **Conversation** tab holds the
+  whole exchange in the order it happened — verdicts, comments on the pull
+  request itself, and the threads whose lines the branch has since rewritten,
+  which no diff can show. Settled threads fold themselves away behind a count.
 - **Every worktree gets a dev-server port of its own.** Two worktrees of one
   project both ran `pnpm dev` and both wanted the same port, so the second one
   lost — and the setup script that had just installed the dependencies had no

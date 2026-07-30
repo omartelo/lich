@@ -39,6 +39,20 @@ const diffTheme = EditorView.theme({
     padding: "0 0.75rem 0 0.5rem",
     minWidth: "2.25rem",
   },
+  // The gap a review thread renders into (codemirror-threads.ts). Everything
+  // here is undoing the editor: the content inside is prose in a React tree, not
+  // code, so it takes the app's font and wraps like text rather than inheriting
+  // the monospace pre-wrap of the lines around it.
+  ".cm-thread-slot": {
+    fontFamily: "var(--font-sans)",
+    fontSize: "0.8125rem",
+    lineHeight: "1.5",
+    whiteSpace: "normal",
+    tabSize: "unset",
+    padding: "0 0.5rem",
+    cursor: "auto",
+    userSelect: "text",
+  },
 })
 
 // readOnlyCodeExtensions is the base set for any read-only code viewer — the

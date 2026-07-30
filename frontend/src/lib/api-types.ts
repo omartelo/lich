@@ -108,6 +108,75 @@ export interface PullRequestDetail {
   commits: PullRequestCommit[] | null
 }
 
+/** internal/project.PRReview — one submitted review and its verdict. */
+export interface PullRequestReview {
+  author: string
+  /** gh: APPROVED | CHANGES_REQUESTED | COMMENTED | DISMISSED */
+  state: string
+  body: string
+  date: string
+}
+
+/** internal/project.PRComment — a comment on the pull request itself. */
+export interface PullRequestComment {
+  author: string
+  body: string
+  date: string
+}
+
+/** internal/project.PRThreadComment — one message inside a review thread. */
+export interface ReviewThreadComment {
+  /** REST database id — the address a reply is posted to. */
+  id: number
+  author: string
+  body: string
+  date: string
+  /** GitHub's own snippet of the lines the thread is about; what an outdated
+   * thread has left once the diff no longer holds them. */
+  diffHunk: string
+}
+
+/** internal/project.PRReviewThread — one conversation anchored to a diff line. */
+export interface ReviewThread {
+  /** GraphQL node id — what resolving takes, never what a reply takes. */
+  id: string
+  path: string
+  /** Anchor line in the file `side` names; a thread that lost its anchor keeps
+   * the original line and is marked outdated. */
+  line: number
+  /** First line of a multi-line thread; 0 when it covers one line. */
+  startLine: number
+  /** RIGHT (the new file) | LEFT (a deleted line). */
+  side: string
+  isResolved: boolean
+  isOutdated: boolean
+  comments: ReviewThreadComment[] | null
+}
+
+/** internal/project.PRConversation — everything said about a pull request. */
+export interface PullRequestConversation {
+  /** The commit new review comments are filed against. */
+  headRefOid: string
+  reviews: PullRequestReview[] | null
+  comments: PullRequestComment[] | null
+  threads: ReviewThread[] | null
+}
+
+/** internal/project.ReviewComment — one line comment of a review being sent. */
+export interface DraftReviewComment {
+  path: string
+  /** Last line the comment covers. */
+  line: number
+  /** First line of a range; 0 for a single line. */
+  startLine: number
+  /** RIGHT | LEFT; "" is RIGHT. */
+  side: string
+  body: string
+}
+
+/** The verdict a submitted review carries. */
+export type ReviewEvent = "approve" | "comment" | "request_changes"
+
 /** internal/project.Worktree — a git worktree checkout: branch and path. */
 export interface Worktree {
   name: string

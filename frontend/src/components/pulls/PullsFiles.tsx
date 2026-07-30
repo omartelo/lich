@@ -9,6 +9,17 @@ import { FileTree } from "@/components/FileTree"
 import { SkeletonLines } from "@/components/common/SkeletonLines"
 import { Skeleton } from "@/components/ui/skeleton"
 import { buildTree } from "@/lib/git/file-tree"
+import type { DraftReviewComment, ReviewThread as Thread } from "@/lib/api-types"
+import type { DiffReview } from "@/components/diff/ReviewSlots"
+import type { ThreadActions } from "./ReviewThread"
+import {
+  addDraftComment,
+  draftsOnFile,
+  editDraftComment,
+  pendingReview,
+  removeDraftComment,
+  subscribePendingReview,
+} from "@/lib/pulls/pending-review-store"
 import {
   fileFingerprint,
   isViewed,
@@ -73,9 +84,12 @@ interface PullsFilesProps {
   /** The checkout's HEAD; a new commit refetches the diff. */
   head: string
   /** Identity of the pull request being reviewed (its URL) — what the Viewed
-   * ticks are keyed by, so two PRs never share them. */
+   * ticks and the draft review are keyed by, so two PRs never share them. */
   pullRequest: string
   onInject: (text: string) => void
+  /** Every thread of the pull request; each file takes the ones anchored in it. */
+  threads: Thread[] | null
+  actions: ThreadActions
 }
 
 // PullsFiles is the "Files changed" tab of the Pulls screen: a changed-files
@@ -83,10 +97,19 @@ interface PullsFilesProps {
 // FileDiff cards as the Review dock — read-only, no discard. Inject still works,
 // so a PR file can be referenced into the session's terminal. Each file can be
 // ticked off as viewed, which folds it away and counts toward the header total.
-export function PullsFiles({ path, number, head, pullRequest, onInject }: PullsFilesProps) {
+export function PullsFiles({
+  path,
+  number,
+  head,
+  pullRequest,
+  onInject,
+  threads,
+  actions,
+}: PullsFilesProps) {
   const { files, error } = usePullRequestDiff(path, head, number)
   const rows = useRef<Map<string, HTMLElement>>(new Map())
   const [active, setActive] = useState<string | null>(null)
+  const review = useSyncExternalStore(subscribePendingReview, () => pendingReview(pullRequest))
   // Every file mounts its own CodeMirror, so a wide PR earns a way to fold them
   // all at once — same directive the Review dock hands its panel.
   const [bulk, toggleAll] = useDiffBulk()
@@ -122,6 +145,18 @@ export function PullsFiles({ path, number, head, pullRequest, onInject }: PullsF
     setActive(target)
     rows.current.get(target)?.scrollIntoView({ block: "start", behavior: "smooth" })
   }
+
+  // What one file's diff gets laid over it: its own threads, its own drafts, and
+  // the three writes that change them. The draft store is keyed by pull request,
+  // so the file only has to say which comments are its.
+  const reviewFor = (filePath: string): DiffReview => ({
+    threads: (threads ?? []).filter((thread) => thread.path === filePath),
+    drafts: [...draftsOnFile(review, filePath, "RIGHT"), ...draftsOnFile(review, filePath, "LEFT")],
+    actions,
+    onAdd: (comment: DraftReviewComment) => addDraftComment(pullRequest, comment),
+    onEdit: (index: number, body: string) => editDraftComment(pullRequest, index, body),
+    onRemove: (index: number) => removeDraftComment(pullRequest, index),
+  })
 
   return (
     <div className="flex h-full">
@@ -177,6 +212,7 @@ export function PullsFiles({ path, number, head, pullRequest, onInject }: PullsF
                   onViewed={(next) =>
                     setViewed(pullRequest, file.newPath, fingerprints.get(file.newPath) ?? "", next)
                   }
+                  review={reviewFor(file.newPath)}
                 />
               </div>
             ))}

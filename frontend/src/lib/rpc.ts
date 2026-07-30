@@ -11,13 +11,16 @@ import type {
   Branches,
   DetectedProvider,
   DiffStats,
+  DraftReviewComment,
   MergeMethod,
   PatchNotes as PatchNotesData,
   PluginStatus,
   Project,
   PullRequest,
+  PullRequestConversation,
   PullRequestDetail,
   PullRequestSummary,
+  ReviewEvent,
   StoredProject,
   StoredSession,
   Worktree,
@@ -152,10 +155,32 @@ export const ProjectService = {
     subject: string,
     body: string,
   ) => call<null>("project.MergePullRequest", [path, number, method, subject, body]),
-  /** Submit an approving review (0 = the checkout's branch). GitHub refuses a
-   * PR opened by the same account. */
-  ApprovePullRequest: (path: string, number: number) =>
-    call<null>("project.ApprovePullRequest", [path, number]),
+  /** A PR's reviews, its own comments and its review threads, in one call. The
+   * number is required — the query addresses a PR, never "the branch's". */
+  PullRequestConversation: (path: string, number: number) =>
+    call<PullRequestConversation | null>("project.PullRequestConversation", [path, number]),
+  /** File one review: the verdict, the summary body, and every line comment the
+   * screen has been holding. `head` is the commit they were written against.
+   * Approve is this with no body and no comments; GitHub refuses a PR opened by
+   * the same account. */
+  SubmitReview: (
+    path: string,
+    number: number,
+    event: ReviewEvent,
+    body: string,
+    head: string,
+    comments: DraftReviewComment[],
+  ) => call<null>("project.SubmitReview", [path, number, event, body, head, comments]),
+  /** Answer an existing thread; commentID is the database id of a comment in
+   * it. Posts immediately — a reply is never part of the pending review. */
+  ReplyToReviewThread: (path: string, number: number, commentID: number, body: string) =>
+    call<null>("project.ReplyToReviewThread", [path, number, commentID, body]),
+  /** Resolve a thread, or reopen it. threadID is the GraphQL node id. */
+  ResolveReviewThread: (path: string, threadID: string, resolved: boolean) =>
+    call<null>("project.ResolveReviewThread", [path, threadID, resolved]),
+  /** Comment on the pull request itself — no file, no line. */
+  CommentOnPullRequest: (path: string, number: number, body: string) =>
+    call<null>("project.CommentOnPullRequest", [path, number, body]),
   /** Open GitHub's "new pull request" page in the browser (gh pr create --web). */
   CreatePullRequest: (path: string) => call<null>("project.CreatePullRequest", [path]),
   /** A PR's unified diff (gh pr diff) for the Files changed tab; 0 = the checkout's branch. */

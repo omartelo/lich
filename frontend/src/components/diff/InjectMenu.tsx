@@ -16,6 +16,10 @@ interface InjectMenuProps {
   /** Resolve the selection; fired as the menu opens, not on every change. */
   onOpenChange: (open: boolean) => void
   onInject: (text: string) => void
+  /** Start a review comment on the selected lines. Absent where there is no
+   * pull request to comment on — the dock's working diff — and while nothing is
+   * selected. */
+  onComment?: () => void
 }
 
 // The right-click menu over a code view — a file's diff, or the read-only
@@ -30,6 +34,7 @@ export function InjectMenu({
   lineRef,
   onOpenChange,
   onInject,
+  onComment,
 }: InjectMenuProps) {
   return (
     <ContextMenu onOpenChange={onOpenChange}>
@@ -42,6 +47,13 @@ export function InjectMenu({
         >
           {lineRef === null ? "Inject lines" : `Inject lines ${lineRef}`}
         </ContextMenuItem>
+        {/* The same selection, the other destination: the session next door, or
+            the pull request on GitHub. */}
+        {onComment && (
+          <ContextMenuItem disabled={lineRef === null} onClick={onComment}>
+            {lineRef === null ? "Comment on lines" : `Comment on lines ${lineRef}`}
+          </ContextMenuItem>
+        )}
       </ContextMenuContent>
     </ContextMenu>
   )
