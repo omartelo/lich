@@ -1,7 +1,8 @@
 # Theme JSON
 
 lich ships bundled `light` and `dark` themes and accepts user-imported JSON themes.
-The Appearance settings can download a valid starter template.
+The Appearance settings can download a valid dark starter template that uses
+only hex colors.
 Imported themes are stored under the user config directory:
 
 - Production: `<config-dir>/lich/themes/<id>.json`

@@ -105,6 +105,7 @@ export function AppearanceSettings() {
     link.click()
     link.remove()
     URL.revokeObjectURL(url)
+    toast.success("Template download started!")
   }
 
   return (

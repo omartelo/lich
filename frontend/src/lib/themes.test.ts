@@ -83,12 +83,17 @@ describe("themes", () => {
     const template = JSON.parse(themeTemplateJSON()) as Partial<ThemeDefinition>
 
     expect(THEME_TEMPLATE_FILENAME).toBe("lich-theme-template.json")
-    expect(template.id).toBe("my-theme")
-    expect(template.name).toBe("My Theme")
-    expect(template.scheme).toBe("light")
+    expect(template.id).toBe("purple-night")
+    expect(template.name).toBe("Purple Night")
+    expect(template.scheme).toBe("dark")
     expect(template.origin).toBeUndefined()
     expect(Object.keys(template.app ?? {}).sort()).toEqual([...APP_COLOR_TOKENS].sort())
     expect(template.terminal?.background).toBeTruthy()
     expect(template.terminal?.foreground).toBeTruthy()
+    expect(Object.values({ ...template.app, ...template.terminal }).every(isHexColor)).toBe(true)
   })
 })
+
+function isHexColor(value: unknown): boolean {
+  return typeof value === "string" && /^#[0-9a-fA-F]{3,8}$/.test(value)
+}
