@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { ProjectService, System } from "@/lib/rpc"
 import type { MergeMethod, PullRequestDetail } from "@/lib/api-types"
+import { mergeBlockedReason } from "@/lib/pulls/merge-gate"
 import { cn, errorText } from "@/lib/utils"
 import { Markdown } from "@/components/Markdown"
 import { Button } from "@/components/ui/button"
@@ -71,16 +72,7 @@ export function PullRequestView({
   const [edit, setEdit] = useState<MergeEdit | null>(null)
   const [tab, setTab] = useState<Tab>("overview")
   const commitCount = detail.commits?.length ?? 0
-  // A pull request the list reached by number may be over already, in which
-  // case there is nothing to merge and gh would refuse anyway.
-  const blocked =
-    detail.state !== "OPEN"
-      ? `Pull request is ${detail.state.toLowerCase()}`
-      : detail.isDraft
-        ? "Pull request is a draft"
-        : detail.mergeable === "CONFLICTING"
-          ? `Conflicts with ${detail.baseRefName}`
-          : null
+  const blocked = mergeBlockedReason(detail)
 
   const merge = async (method: MergeMethod, subject = "", body = "") => {
     setMerging(true)

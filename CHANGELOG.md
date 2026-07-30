@@ -39,6 +39,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The Merge button says no before the click, not after.** Merging a pull
+  request GitHub would not take — a required review missing, a required check
+  still running, the base branch moved on, or GitHub simply still working out
+  whether the branch merges — offered the button anyway and answered with a
+  toast that named none of those reasons. The button is now disabled whenever
+  GitHub reports it cannot merge, and hovering it says which of them it is. A
+  failing check that no rule requires still merges: the checks readout shows it
+  red, and the call stays yours.
 - **Settings › Font lists your installed fonts on Windows.** The picker read the
   font list from fontconfig, which Windows does not have, so it offered nothing
   beyond the bundled default and whatever was already selected. It now reads the
