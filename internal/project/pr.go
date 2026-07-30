@@ -65,7 +65,7 @@ func runGH(timeout time.Duration, dir, token string, args ...string) ([]byte, er
 }
 
 // prViewFields is the gh `pr view --json` selection backing the Pulls panel.
-const prViewFields = "number,url,state,title,body,isDraft,mergeable,reviewDecision,baseRefName,headRefName,isCrossRepository,statusCheckRollup,changedFiles,commits"
+const prViewFields = "number,url,state,title,body,isDraft,mergeable,mergeStateStatus,reviewDecision,baseRefName,headRefName,isCrossRepository,statusCheckRollup,changedFiles,commits"
 
 // prSelector renders the pull request argument gh's subcommands take ahead of
 // their flags. Zero means "the branch checked out at path" — gh's own default,
@@ -101,6 +101,12 @@ type PRDetail struct {
 	State     string `json:"state"`
 	IsDraft   bool   `json:"isDraft"`
 	Mergeable string `json:"mergeable"` // gh: MERGEABLE | CONFLICTING | UNKNOWN
+	// MergeStateStatus is GitHub's own answer to "can this merge right now" —
+	// CLEAN | UNSTABLE | BLOCKED | BEHIND | DIRTY | DRAFT | HAS_HOOKS | UNKNOWN.
+	// Mergeable alone cannot gate the button: it says nothing about a required
+	// review or a required check, and it reads UNKNOWN while GitHub recomputes
+	// after a push.
+	MergeStateStatus string `json:"mergeStateStatus"`
 	// ReviewDecision is gh's aggregate verdict — APPROVED | CHANGES_REQUESTED |
 	// REVIEW_REQUIRED — and "" where the repository requires no review. Who
 	// reviewed is a different field (latestReviews) this does not carry.
@@ -137,6 +143,7 @@ type ghPRView struct {
 	Body              string      `json:"body"`
 	IsDraft           bool        `json:"isDraft"`
 	Mergeable         string      `json:"mergeable"`
+	MergeStateStatus  string      `json:"mergeStateStatus"`
 	ReviewDecision    string      `json:"reviewDecision"`
 	BaseRefName       string      `json:"baseRefName"`
 	HeadRefName       string      `json:"headRefName"`
@@ -201,6 +208,7 @@ func parsePRDetail(out []byte, openOnly bool) (*PRDetail, error) {
 		State:             v.State,
 		IsDraft:           v.IsDraft,
 		Mergeable:         v.Mergeable,
+		MergeStateStatus:  v.MergeStateStatus,
 		ReviewDecision:    v.ReviewDecision,
 		BaseRefName:       v.BaseRefName,
 		HeadRefName:       v.HeadRefName,
