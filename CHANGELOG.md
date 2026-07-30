@@ -30,6 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   price, the readout stays absent rather than quoting a total that is missing a
   turn.
 
+### Changed
+
+- **New app icon.** The purple flame is now a monochrome one that inverts with
+  the colour scheme: white on dark, black on light. The window and tab icon
+  follows the scheme live; the launcher, dock and taskbar icon is a single
+  image the desktop cannot re-theme, so it ships white.
+
 ### Fixed
 
 - **Settings › Font lists your installed fonts on Windows.** The picker read the
