@@ -36,6 +36,15 @@ export interface ChecksRollup {
 /** How a pull request is merged — the gh flag the backend allow-lists. */
 export type MergeMethod = "squash" | "merge" | "rebase"
 
+/** internal/project.BranchRules — what a repository's rulesets say about
+ * merging into one branch. */
+export interface BranchRules {
+  /** The methods the branch accepts, in GitHub's spelling. Empty is "no rule
+   * about it", which is also what an unreadable answer reports — so an empty
+   * list must always widen the menu, never empty it. */
+  allowedMergeMethods: string[] | null
+}
+
 /** internal/project.CheckItem — one check of the PR's rollup, for the Checks tab. */
 export interface CheckItem {
   name: string

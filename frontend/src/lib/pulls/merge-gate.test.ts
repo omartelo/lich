@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { mergeBlockedReason } from "./merge-gate"
+import { allowedMergeMethods, mergeBlockedReason } from "./merge-gate"
 import type { PullRequestDetail } from "@/lib/api-types"
 
 const detail = (over: Partial<PullRequestDetail> = {}): PullRequestDetail => ({
@@ -111,5 +111,32 @@ describe("mergeBlockedReason", () => {
     expect(mergeBlockedReason(detail({ mergeStateStatus: "", mergeable: "CONFLICTING" }))).toBe(
       "Conflicts with main",
     )
+  })
+})
+
+describe("allowedMergeMethods", () => {
+  it("narrows the menu to what the base branch's ruleset accepts", () => {
+    expect(allowedMergeMethods({ allowedMergeMethods: ["squash"] })).toEqual(["squash"])
+  })
+
+  it("keeps the menu's own order, not the ruleset's", () => {
+    expect(allowedMergeMethods({ allowedMergeMethods: ["rebase", "squash"] })).toEqual([
+      "squash",
+      "rebase",
+    ])
+  })
+
+  // Every unknown widens. A menu that lost an option lich could have offered
+  // says nothing about why; one that offers an option GitHub turns down at
+  // least answers with gh's own refusal.
+  it("offers everything where nothing is known", () => {
+    const all = ["squash", "merge", "rebase"]
+    // The call failed, or has not answered yet.
+    expect(allowedMergeMethods(null)).toEqual(all)
+    // The branch has no ruleset, or one that says nothing about merging.
+    expect(allowedMergeMethods({ allowedMergeMethods: [] })).toEqual(all)
+    expect(allowedMergeMethods({ allowedMergeMethods: null })).toEqual(all)
+    // A ruleset naming only methods this build cannot ask gh for.
+    expect(allowedMergeMethods({ allowedMergeMethods: ["fast_forward"] })).toEqual(all)
   })
 })

@@ -74,6 +74,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still offers: a failing check no rule requires merges fine, a base branch
   governed by a ruleset merges fine, and GitHub still deciding is not a no. The
   call stays yours, and where GitHub does refuse, it refuses out loud.
+- **The Merge menu offers what your repository actually accepts.** A repository
+  can pin a branch to one merge method — squash only is the common one — and
+  nothing in a pull request says so, so the menu offered all three and GitHub
+  refused two of them after the click. lich now reads the base branch's rules
+  and offers only the methods that branch takes. A branch nothing governs, or
+  an answer lich cannot read, still offers all three: the menu never comes back
+  narrower than the truth.
+- **Merging over red CI says so first.** A failing check that no rule requires
+  does not block a merge on GitHub, and lich offers the merge for the same
+  reason — the call is yours. It just used to offer it in silence, with the red
+  a line away in the status row. The Merge button now carries the number of
+  failing checks, and hovering it says GitHub will merge anyway.
 - **Settings › Font lists your installed fonts on Windows.** The picker read the
   font list from fontconfig, which Windows does not have, so it offered nothing
   beyond the bundled default and whatever was already selected. It now reads the

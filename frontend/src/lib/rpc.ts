@@ -8,6 +8,7 @@
 
 import type {
   AppUpdateStatus,
+  BranchRules,
   Branches,
   DetectedProvider,
   DiffStats,
@@ -181,6 +182,10 @@ export const ProjectService = {
   /** Comment on the pull request itself — no file, no line. */
   CommentOnPullRequest: (path: string, number: number, body: string) =>
     call<null>("project.CommentOnPullRequest", [path, number, body]),
+  /** What a repository's rulesets say about merging into one branch. Answers
+   * per branch, not per pull request — every PR onto the same base shares it. */
+  BranchRules: (path: string, branch: string) =>
+    call<BranchRules | null>("project.BranchRules", [path, branch]),
   /** Open GitHub's "new pull request" page in the browser (gh pr create --web). */
   CreatePullRequest: (path: string) => call<null>("project.CreatePullRequest", [path]),
   /** A PR's unified diff (gh pr diff) for the Files changed tab; 0 = the checkout's branch. */

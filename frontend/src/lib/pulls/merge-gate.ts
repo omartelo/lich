@@ -1,4 +1,23 @@
-import type { PullRequestDetail } from "@/lib/api-types"
+import type { BranchRules, MergeMethod, PullRequestDetail } from "@/lib/api-types"
+
+// Every method lich knows how to ask gh for, in the order the menu offers them.
+const EVERY_METHOD: MergeMethod[] = ["squash", "merge", "rebase"]
+
+// allowedMergeMethods narrows the Merge menu to what the base branch accepts. A
+// ruleset can pin a repository to squash alone, and nothing in a pull request's
+// own fields says so — the menu offered all three and gh refused after the
+// click, with a sentence that named no method.
+//
+// Everything unknown widens rather than narrows: no rules, an unreadable
+// answer, a call that failed, or a ruleset naming only methods this build does
+// not have. A menu that lost an option lich could have offered is a worse
+// failure than one that offers an option GitHub turns down, because only the
+// second one tells you what happened.
+export function allowedMergeMethods(rules: BranchRules | null): MergeMethod[] {
+  const named = rules?.allowedMergeMethods ?? []
+  const allowed = EVERY_METHOD.filter((method) => named.includes(method))
+  return allowed.length > 0 ? allowed : EVERY_METHOD
+}
 
 // The review verdicts that keep a BLOCKED pull request blocked. An approval —
 // or a repository that asks for none — leaves BLOCKED meaning only that a rule

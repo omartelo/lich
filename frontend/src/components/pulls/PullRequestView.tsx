@@ -9,6 +9,7 @@ import {
   MessageSquare,
   RefreshCw,
   SquareTerminal,
+  X,
 } from "lucide-react"
 import { ProjectService, System } from "@/lib/rpc"
 import type {
@@ -24,7 +25,8 @@ import {
   subscribePendingReview,
 } from "@/lib/pulls/pending-review-store"
 import { conversationCount, conversationTimeline } from "@/lib/pulls/conversation-timeline"
-import { mergeBlockedReason } from "@/lib/pulls/merge-gate"
+import { allowedMergeMethods, mergeBlockedReason } from "@/lib/pulls/merge-gate"
+import { useBranchRules } from "@/lib/pulls/use-branch-rules"
 import { cn, errorText } from "@/lib/utils"
 import { Markdown } from "@/components/Markdown"
 import { Button } from "@/components/ui/button"
@@ -56,6 +58,24 @@ export interface SessionAction {
 }
 
 type Tab = "overview" | "commits" | "files" | "conversation" | "checks"
+
+const MERGE_LABELS: Record<MergeMethod, string> = {
+  squash: "Squash and merge",
+  merge: "Create a merge commit",
+  rebase: "Rebase and merge",
+}
+
+// What the hover says when nothing blocks the merge but CI is red. GitHub only
+// reports a failing check as blocking where a rule requires it; everywhere else
+// the merge is offered and the call is the reader's, which is the whole reason
+// this has to be said out loud.
+function failingChecks(failed: number): string | undefined {
+  if (failed === 0) {
+    return undefined
+  }
+  const checks = failed === 1 ? "check is" : "checks are"
+  return `${failed} ${checks} failing — GitHub will still merge this`
+}
 
 interface PullRequestViewProps {
   path: string
@@ -97,11 +117,17 @@ export function PullRequestView({
   const [verdict, setVerdict] = useState<ReviewEvent | null>(null)
   const [edit, setEdit] = useState<MergeEdit | null>(null)
   const [tab, setTab] = useState<Tab>("overview")
+  // Read here rather than threaded down from the screen: it is keyed by the
+  // base branch, which only exists once the detail has resolved — and this is
+  // the one place that is guaranteed.
+  const rules = useBranchRules(path, detail.baseRefName)
   const commitCount = detail.commits?.length ?? 0
   const review = useSyncExternalStore(subscribePendingReview, () => pendingReview(detail.url))
   const pending = review.comments.length
   const talk = conversationCount(conversationTimeline(conversation))
   const blocked = mergeBlockedReason(detail)
+  const methods = allowedMergeMethods(rules)
+  const editableMethods = methods.filter((method) => method !== "rebase")
 
   const merge = async (method: MergeMethod, subject = "", body = "") => {
     setMerging(true)
@@ -251,35 +277,47 @@ export function PullRequestView({
               )}
             </span>
             {/* The reason rides on a wrapper: a disabled button takes no pointer
-                events, so its own title would never surface. */}
-            <span title={blocked ?? undefined}>
+                events, so its own title would never surface. With nothing
+                blocking, the same spot carries what would make you think twice
+                — red CI that no rule requires, which GitHub merges over
+                without a word. */}
+            <span title={blocked ?? failingChecks(detail.checks.failed)}>
               <DropdownMenu>
                 <DropdownMenuTrigger
                   render={
                     <Button size="sm" disabled={merging || blocked !== null}>
                       <GitMerge />
                       {merging ? "Merging…" : "Merge"}
+                      {/* The checks readout says this too, a line above — but
+                          the decision is taken here, and a count beside the
+                          button is the only place it cannot be missed. */}
+                      {detail.checks.failed > 0 && (
+                        <span className="flex items-center gap-0.5">
+                          <X className="size-3.5" />
+                          <span className="tabular-nums">{detail.checks.failed}</span>
+                        </span>
+                      )}
                       <ChevronDown />
                     </Button>
                   }
                 />
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => void merge("squash")}>
-                    Squash and merge
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => void merge("merge")}>
-                    Create a merge commit
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => void merge("rebase")}>
-                    Rebase and merge
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setEdit(mergeEditFor("squash", detail))}>
-                    Squash and merge, edit message…
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setEdit(mergeEditFor("merge", detail))}>
-                    Create a merge commit, edit message…
-                  </DropdownMenuItem>
+                  {methods.map((method) => (
+                    <DropdownMenuItem key={method} onClick={() => void merge(method)}>
+                      {MERGE_LABELS[method]}
+                    </DropdownMenuItem>
+                  ))}
+                  {/* Rebase replays the branch's own commits, so gh takes no
+                      message for it and it has no "edit message" twin. */}
+                  {editableMethods.length > 0 && <DropdownMenuSeparator />}
+                  {editableMethods.map((method) => (
+                    <DropdownMenuItem
+                      key={`${method}-edit`}
+                      onClick={() => setEdit(mergeEditFor(method, detail))}
+                    >
+                      {MERGE_LABELS[method]}, edit message…
+                    </DropdownMenuItem>
+                  ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             </span>
