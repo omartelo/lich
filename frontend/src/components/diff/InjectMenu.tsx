@@ -16,11 +16,16 @@ interface InjectMenuProps {
   /** Resolve the selection; fired as the menu opens, not on every change. */
   onOpenChange: (open: boolean) => void
   onInject: (text: string) => void
+  /** Start a comment on the selected lines. Absent on a surface that is not a
+   * review — the dock's file preview — which offers the references only. */
+  onComment?: (lines: string) => void
 }
 
 // The right-click menu over a code view — a file's diff, or the read-only
 // preview in the dock — that writes a reference into the session's terminal.
-// The whole file, or just the lines under the selection.
+// The whole file, or just the lines under the selection. On a review surface it
+// also opens a comment on those lines, which is held for the batch rather than
+// written out on its own.
 //
 // The isolate wrapper keeps CodeMirror's high-z-index gutter from painting over
 // the sticky header of the card above it.
@@ -30,6 +35,7 @@ export function InjectMenu({
   lineRef,
   onOpenChange,
   onInject,
+  onComment,
 }: InjectMenuProps) {
   return (
     <ContextMenu onOpenChange={onOpenChange}>
@@ -42,6 +48,14 @@ export function InjectMenu({
         >
           {lineRef === null ? "Inject lines" : `Inject lines ${lineRef}`}
         </ContextMenuItem>
+        {onComment && (
+          <ContextMenuItem
+            disabled={lineRef === null}
+            onClick={() => lineRef && onComment(lineRef)}
+          >
+            {lineRef === null ? "Comment on lines…" : `Comment on lines ${lineRef}…`}
+          </ContextMenuItem>
+        )}
       </ContextMenuContent>
     </ContextMenu>
   )

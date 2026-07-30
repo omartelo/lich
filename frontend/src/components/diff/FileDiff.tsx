@@ -12,6 +12,7 @@ import {
 } from "@/lib/git/diff"
 import { languageAbbr, splitPath } from "@/lib/git/lang-badge"
 import { cn } from "@/lib/utils"
+import { CommentDialog, type CommentAnchor } from "./CommentDialog"
 import type { DiffBulk } from "./diff-bulk"
 import { InjectMenu } from "./InjectMenu"
 import { useDiffEditor } from "./useDiffEditor"
@@ -32,6 +33,9 @@ const MOUNT_MARGIN = "600px 0px"
 interface FileDiffProps {
   file: DiffFile
   onInject: (text: string) => void
+  /** Hold a comment on these lines for the panel's batch. Absent = no comment
+   * action, the shape every surface had before review comments existed. */
+  onComment?: (path: string, lines: string, text: string) => void
   /** Ask the panel to confirm and revert this file's changes. Omitted for a
    * read-only diff (a PR's changes), where discarding makes no sense. */
   onDiscard?: () => void
@@ -46,7 +50,15 @@ interface FileDiffProps {
 
 // The card must not clip overflow — a clipping ancestor would break the
 // sticky header.
-export function FileDiff({ file, onInject, onDiscard, bulk, viewed, onViewed }: FileDiffProps) {
+export function FileDiff({
+  file,
+  onInject,
+  onComment,
+  onDiscard,
+  bulk,
+  viewed,
+  onViewed,
+}: FileDiffProps) {
   const doc = useMemo(() => buildFileDoc(file), [file])
   const [expanded, setExpanded] = useState(!file.binary && doc.lineMeta.length <= LARGE_FILE_LINES)
   // The nonce guard skips the initial mount so each file keeps its own
@@ -127,7 +139,7 @@ export function FileDiff({ file, onInject, onDiscard, bulk, viewed, onViewed }: 
         (file.binary ? (
           <p className="px-9 py-2 text-xs text-muted-foreground">Binary file</p>
         ) : (
-          <LazyDiffBody doc={doc} path={file.newPath} onInject={onInject} />
+          <LazyDiffBody doc={doc} path={file.newPath} onInject={onInject} onComment={onComment} />
         ))}
     </section>
   )
@@ -137,6 +149,7 @@ interface DiffBodyProps {
   doc: FileDoc
   path: string
   onInject: (text: string) => void
+  onComment?: (path: string, lines: string, text: string) => void
 }
 
 // A panel holds one CodeMirror view per expanded file, and a wide diff (a PR
@@ -144,7 +157,7 @@ interface DiffBodyProps {
 // page. LazyDiffBody defers each one until its card comes near the viewport;
 // once built, the editor stays, so scrolling back keeps its selection and
 // highlighting. Collapsing the file still destroys it.
-function LazyDiffBody({ doc, path, onInject }: DiffBodyProps) {
+function LazyDiffBody({ doc, path, onInject, onComment }: DiffBodyProps) {
   const placeholder = useRef<HTMLDivElement>(null)
   const [mounted, setMounted] = useState(false)
 
@@ -166,7 +179,7 @@ function LazyDiffBody({ doc, path, onInject }: DiffBodyProps) {
   }, [])
 
   if (mounted) {
-    return <DiffBody doc={doc} path={path} onInject={onInject} />
+    return <DiffBody doc={doc} path={path} onInject={onInject} onComment={onComment} />
   }
   // The placeholder has to stand in for the file's height: zero-height cards
   // would all sit in the viewport at once and nothing would be deferred.
@@ -178,25 +191,41 @@ function LazyDiffBody({ doc, path, onInject }: DiffBodyProps) {
 //
 // A diff's document is not the file: the selection lands on doc lines, which
 // newLineRange maps back to the line numbers the agent needs to be told.
-function DiffBody({ doc, path, onInject }: DiffBodyProps) {
+function DiffBody({ doc, path, onInject, onComment }: DiffBodyProps) {
   const { containerRef, getSelectedDocLines } = useDiffEditor(doc, path)
   const [lineRef, setLineRef] = useState<string | null>(null)
+  const [anchor, setAnchor] = useState<CommentAnchor | null>(null)
 
   return (
-    <InjectMenu
-      path={path}
-      containerRef={containerRef}
-      lineRef={lineRef}
-      // Resolve the selection when the menu opens, not on every change.
-      onOpenChange={(open) => {
-        if (!open) {
-          return
-        }
-        const selected = getSelectedDocLines()
-        const range = selected ? newLineRange(doc.lineMeta, selected.from, selected.to) : null
-        setLineRef(range && formatLineRef(range))
-      }}
-      onInject={onInject}
-    />
+    <>
+      <InjectMenu
+        path={path}
+        containerRef={containerRef}
+        lineRef={lineRef}
+        // Resolve the selection when the menu opens, not on every change.
+        onOpenChange={(open) => {
+          if (!open) {
+            return
+          }
+          const selected = getSelectedDocLines()
+          const range = selected ? newLineRange(doc.lineMeta, selected.from, selected.to) : null
+          setLineRef(range && formatLineRef(range))
+        }}
+        onInject={onInject}
+        onComment={onComment && ((lines) => setAnchor({ path, lines }))}
+      />
+      {onComment && (
+        <CommentDialog
+          anchor={anchor}
+          onCancel={() => setAnchor(null)}
+          onAdd={(text) => {
+            if (anchor) {
+              onComment(anchor.path, anchor.lines, text)
+            }
+            setAnchor(null)
+          }}
+        />
+      )}
+    </>
   )
 }

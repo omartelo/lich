@@ -50,7 +50,8 @@ interface PullRequestViewProps {
   onRefresh: () => void
   /** The merge landed; the screen decides what follows (a toast, the worktree). */
   onMerged: () => void
-  onInject: (text: string) => void
+  /** Write into the session's terminal; false when no session took it. */
+  onInject: (text: string) => boolean
 }
 
 // PullRequestView is one pull request in full: the header (title, the actions

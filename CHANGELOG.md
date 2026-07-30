@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Review comments, handed to the session as one prompt.** A diff could give
+  the session a *reference* — a file, a line range — but never an instruction,
+  so anything you actually wanted changed had to be typed out by hand while
+  looking straight at it. Right-clicking a selection, in the Review dock or in a
+  pull request's Files changed, now also offers *Comment on lines*: the note is
+  held against those lines instead of being written out. Comments collect at the
+  foot of the panel in the order you read the diff, each removable on its own,
+  and one *Send* hands the whole batch over as a single prompt — pasted into the
+  session unsent, so the last word before the agent starts is still yours. They
+  outlive leaving the tab but not a restart: a line number written before an
+  edit points somewhere else after it.
 - **Every worktree gets a dev-server port of its own.** Two worktrees of one
   project both ran `pnpm dev` and both wanted the same port, so the second one
   lost — and the setup script that had just installed the dependencies had no
