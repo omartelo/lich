@@ -55,7 +55,9 @@ describe("mergeBlockedReason", () => {
 
   it("names the missing review behind a blocked pull request", () => {
     expect(
-      mergeBlockedReason(detail({ mergeStateStatus: "BLOCKED", reviewDecision: "REVIEW_REQUIRED" })),
+      mergeBlockedReason(
+        detail({ mergeStateStatus: "BLOCKED", reviewDecision: "REVIEW_REQUIRED" }),
+      ),
     ).toBe("GitHub requires a review that has not been left")
     expect(
       mergeBlockedReason(
