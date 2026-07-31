@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Merge past a rule that is holding a pull request back.** Once GitHub answers
+  that a rule on the base branch stands in the way, gh refuses the merge without
+  ever calling GitHub — so there was nothing lich could do with that pull request
+  but leave for the browser. The Merge menu now offers the same merge as a
+  bypass, GitHub's own administrator override, and says so in every label it
+  offers. It appears only where an override can actually help — a rule holding
+  the merge, or a base branch that has moved — never over a conflict or a draft,
+  which no override resolves, and never for an account that does not administer
+  the repository, so a bypass on offer is one that will go through.
+
+### Changed
+
+- **A refused merge says which kind of refusal it was.** gh writes one sentence
+  for two very different failures and puts the difference in its tail; lich read
+  only the opening and claimed conflicts either way, sending you to look for
+  conflicts a pull request did not have. A conflict now says so, and a rule on
+  the base branch says that instead.
+- **A merge blocked by a commit rule names the rule.** An approved pull request
+  with green checks and no conflicts could still be refused, with nothing on
+  screen accounting for it: the cause was a ruleset testing the *commit message*
+  the merge would write, which no field of a pull request mentions. Where the
+  base branch carries one, the Merge button and the failure now name what it
+  requires — the message, author or committer email patterns, and what each one
+  expects.
+
 ## [0.23.0] - 2026-07-30
 
 ### Added

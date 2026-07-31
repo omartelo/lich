@@ -1,4 +1,4 @@
-import type { BranchRules, MergeMethod, PullRequestDetail } from "@/lib/api-types"
+import type { BranchRules, CommitPattern, MergeMethod, PullRequestDetail } from "@/lib/api-types"
 
 // Every method lich knows how to ask gh for, in the order the menu offers them.
 const EVERY_METHOD: MergeMethod[] = ["squash", "merge", "rebase"]
@@ -64,4 +64,66 @@ export function mergeBlockedReason(detail: PullRequestDetail): string | null {
     return REVIEW_PENDING[detail.reviewDecision] ?? null
   }
   return null
+}
+
+// The merge states an administrator override gets past, which is gh's own
+// allowsAdminOverride — pass --admin on anything else and gh refuses from the
+// client anyway. A conflict is absent on purpose: the override skips a rule, it
+// does not compute a merge that has no answer.
+const OVERRIDABLE = ["BLOCKED", "BEHIND"]
+
+// canAdminOverride reports whether the Merge menu should offer to bypass the
+// rules on the base branch: something has to be in the way that an override
+// actually clears, and the account has to hold the privilege.
+//
+// This is the one place the menu does *not* widen on an unknown. Everything
+// else here would rather offer an option GitHub turns down than drop one it
+// would have taken, because a refusal at least says what happened — but a
+// bypass is read as a permission you have, so offering one that is not there
+// makes GitHub's refusal look like a broken button. Absent is the honest shape
+// of "not yours"; the backend answers the same way (branchrules.go).
+export function canAdminOverride(detail: PullRequestDetail, rules: BranchRules | null): boolean {
+  if (!rules?.viewerCanBypass) {
+    return false
+  }
+  if (detail.state !== "OPEN" || detail.isDraft) {
+    return false
+  }
+  return OVERRIDABLE.includes(detail.mergeStateStatus)
+}
+
+// GitHub's pattern operators in the words a sentence needs. An operator this
+// build has never seen falls back to "match": the pattern beside it still says
+// more than no note at all.
+const PATTERN_VERBS: Record<string, string> = {
+  regex: "match",
+  starts_with: "start with",
+  ends_with: "end with",
+  contains: "contain",
+}
+
+function describePattern(rule: CommitPattern): string {
+  const verb = PATTERN_VERBS[rule.operator] ?? "match"
+  return `${rule.target} must ${rule.negate ? "not " : ""}${verb} ${rule.pattern}`
+}
+
+// mergeRuleNote names what governs the base branch when GitHub answers BLOCKED
+// and nothing on the pull request accounts for it — the approved, green,
+// conflict-free case, where the cause is a rule read against the commit the
+// merge would write and no field on screen mentions it.
+//
+// It is a note, never a verdict: it names the rules that exist, not the one
+// that fired. GitHub publishes no "why is this BLOCKED", so the honest answer
+// is where to look — and re-running the pattern here would be a guess dressed
+// as an answer, in a regex dialect that is not the one GitHub evaluates.
+export function mergeRuleNote(detail: PullRequestDetail, rules: BranchRules | null): string | null {
+  if (detail.mergeStateStatus !== "BLOCKED") {
+    return null
+  }
+  const patterns = rules?.commitPatterns ?? []
+  if (patterns.length === 0) {
+    return null
+  }
+  const clauses = patterns.map(describePattern).join("; ")
+  return `A ruleset governs ${detail.baseRefName}: every commit ${clauses}.`
 }

@@ -43,6 +43,26 @@ export interface BranchRules {
    * about it", which is also what an unreadable answer reports — so an empty
    * list must always widen the menu, never empty it. */
   allowedMergeMethods: string[] | null
+  /** The rules that read a commit's own text. Empty means "no rule of this
+   * kind" — never "nothing blocks this merge". */
+  commitPatterns: CommitPattern[] | null
+  /** This account administers the repository, and so may merge past the rules
+   * above. The one field here that fails closed: anything short of a clear yes
+   * is false, so the bypass is hidden rather than offered and refused. */
+  viewerCanBypass: boolean
+}
+
+/** internal/project.CommitPattern — one ruleset rule testing the text of a
+ * commit rather than the state of a pull request. The one class of rule
+ * nothing on a pull request hints at, and so the one worth naming on screen. */
+export interface CommitPattern {
+  /** What the rule reads: "message" | "author email" | "committer email". */
+  target: string
+  /** GitHub's spelling: regex | starts_with | ends_with | contains. */
+  operator: string
+  pattern: string
+  /** The pattern is what the text must *not* be. */
+  negate: boolean
 }
 
 /** internal/project.CheckItem — one check of the PR's rollup, for the Checks tab. */

@@ -282,7 +282,7 @@ func TestToCommits(t *testing.T) {
 
 func TestMergeArgs(t *testing.T) {
 	// An unrecognised method must be refused before any gh shell-out.
-	if _, err := mergeArgs(0, "force", "", ""); err == nil {
+	if _, err := mergeArgs(0, "force", "", "", false); err == nil {
 		t.Error("expected an error for an unknown merge method")
 	}
 
@@ -292,42 +292,57 @@ func TestMergeArgs(t *testing.T) {
 		method  string
 		subject string
 		body    string
+		admin   bool
 		want    []string
 	}{
-		{"quick squash", 0, "squash", "", "", []string{"pr", "merge", "--squash"}},
-		{"quick merge", 0, "merge", "", "", []string{"pr", "merge", "--merge"}},
-		{"quick rebase", 0, "rebase", "", "", []string{"pr", "merge", "--rebase"}},
+		{"quick squash", 0, "squash", "", "", false, []string{"pr", "merge", "--squash"}},
+		{"quick merge", 0, "merge", "", "", false, []string{"pr", "merge", "--merge"}},
+		{"quick rebase", 0, "rebase", "", "", false, []string{"pr", "merge", "--rebase"}},
 		{
 			"squash with edited message",
-			0, "squash", "title (#1)", "details",
+			0, "squash", "title (#1)", "details", false,
 			[]string{"pr", "merge", "--squash", "--subject", "title (#1)", "--body", "details"},
 		},
 		{
 			"empty body still passes both flags",
-			0, "merge", "subject only", "",
+			0, "merge", "subject only", "", false,
 			[]string{"pr", "merge", "--merge", "--subject", "subject only", "--body", ""},
 		},
 		{
 			"rebase ignores an edited message",
-			0, "rebase", "unused", "unused",
+			0, "rebase", "unused", "unused", false,
 			[]string{"pr", "merge", "--rebase"},
 		},
 		// The selector sits ahead of the flags — gh reads a trailing number as
 		// an argument to whichever flag precedes it.
 		{
 			"a numbered pull request is selected before the flags",
-			42, "squash", "", "",
+			42, "squash", "", "", false,
 			[]string{"pr", "merge", "42", "--squash"},
 		},
 		{
 			"the selector survives an edited message",
 			42, "squash", "title (#42)", "",
+			false,
 			[]string{"pr", "merge", "42", "--squash", "--subject", "title (#42)", "--body", ""},
+		},
+		{
+			"a bypass merge carries --admin",
+			42, "squash", "", "", true,
+			[]string{"pr", "merge", "42", "--squash", "--admin"},
+		},
+		{
+			"a bypass merge keeps an edited message",
+			0, "squash", "refactor(dashboard): fix", "", true,
+			[]string{
+				"pr", "merge", "--squash",
+				"--subject", "refactor(dashboard): fix", "--body", "", "--admin",
+			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := mergeArgs(tt.number, tt.method, tt.subject, tt.body)
+			got, err := mergeArgs(tt.number, tt.method, tt.subject, tt.body, tt.admin)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -368,21 +383,37 @@ func (e testError) Error() string { return string(e) }
 
 // fakeGH stands in for the gh CLI: it records the invocation and replays a
 // canned result, so the pull request flows run without a GitHub remote.
+//
+// out and err answer every call. A flow that makes more than one gh call — and
+// needs a different answer from each — sets outs/errs instead, one entry per
+// call in order; a call past the end of either falls back to out/err. history
+// keeps every invocation, while args stays the last one.
 type fakeGH struct {
-	out []byte
-	err error
+	out  []byte
+	outs [][]byte
+	err  error
+	errs []error
 
 	calls   int
 	timeout time.Duration
 	dir     string
 	token   string
 	args    []string
+	history [][]string
 }
 
 func (f *fakeGH) run(timeout time.Duration, dir, token string, args ...string) ([]byte, error) {
+	out, err := f.out, f.err
+	if f.calls < len(f.outs) {
+		out = f.outs[f.calls]
+	}
+	if f.calls < len(f.errs) {
+		err = f.errs[f.calls]
+	}
 	f.calls++
 	f.timeout, f.dir, f.token, f.args = timeout, dir, token, args
-	return f.out, f.err
+	f.history = append(f.history, args)
+	return out, err
 }
 
 // withGH builds a Service whose gh calls land on the fake instead of the CLI.
@@ -476,7 +507,7 @@ func TestPullRequestBadgeRunsThroughTheRunner(t *testing.T) {
 func TestMergePullRequestFlow(t *testing.T) {
 	t.Run("the built args reach gh", func(t *testing.T) {
 		gh := &fakeGH{}
-		if err := withGH(gh).MergePullRequest("/repo", 0, "squash", "", ""); err != nil {
+		if err := withGH(gh).MergePullRequest("/repo", 0, "squash", "", "", false); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if want := []string{"pr", "merge", "--squash"}; !slices.Equal(gh.args, want) {
@@ -489,7 +520,7 @@ func TestMergePullRequestFlow(t *testing.T) {
 
 	t.Run("an unknown method never reaches gh", func(t *testing.T) {
 		gh := &fakeGH{}
-		if err := withGH(gh).MergePullRequest("/repo", 0, "force", "", ""); err == nil {
+		if err := withGH(gh).MergePullRequest("/repo", 0, "force", "", "", false); err == nil {
 			t.Error("expected an error for an unknown merge method")
 		}
 		if gh.calls != 0 {
@@ -499,7 +530,7 @@ func TestMergePullRequestFlow(t *testing.T) {
 
 	t.Run("gh's refusal surfaces", func(t *testing.T) {
 		gh := &fakeGH{err: errors.New("Pull request is not mergeable")}
-		err := withGH(gh).MergePullRequest("/repo", 0, "merge", "", "")
+		err := withGH(gh).MergePullRequest("/repo", 0, "merge", "", "", false)
 		if err == nil {
 			t.Fatal("expected an error")
 		}

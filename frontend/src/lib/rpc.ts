@@ -148,14 +148,18 @@ export const ProjectService = {
   /** One open PR in full (title, body, checks): the given number, or 0 for the checkout's own branch. */
   PullRequestDetail: (path: string, number: number) =>
     call<PullRequestDetail | null>("project.PullRequestDetail", [path, number]),
-  /** Merge a PR on GitHub (0 = the checkout's branch). The backend allow-lists the method. */
+  /** Merge a PR on GitHub (0 = the checkout's branch). The backend allow-lists
+   * the method. `admin` merges with administrator privileges — GitHub's own
+   * bypass of the rules on the base branch, and the only way gh calls GitHub at
+   * all once a rule holds the merge back. */
   MergePullRequest: (
     path: string,
     number: number,
     method: MergeMethod,
     subject: string,
     body: string,
-  ) => call<null>("project.MergePullRequest", [path, number, method, subject, body]),
+    admin: boolean,
+  ) => call<null>("project.MergePullRequest", [path, number, method, subject, body, admin]),
   /** A PR's reviews, its own comments and its review threads, in one call. The
    * number is required — the query addresses a PR, never "the branch's". */
   PullRequestConversation: (path: string, number: number) =>

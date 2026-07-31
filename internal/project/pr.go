@@ -265,11 +265,13 @@ var mergeMethods = map[string]string{
 // (squash|merge|rebase) — the given number, or the PR of the branch checked out
 // at path when number is zero. A non-empty subject overrides the commit message
 // (the dock's "edit message" flow); an empty subject leaves gh's default, the
-// quick merge. It does not pass --delete-branch: lich's worktree removal owns
-// that cleanup, and deleting a checked-out worktree's branch is trouble. gh's
-// stderr is surfaced on failure (not mergeable, branch protection, gh missing).
-func (s *Service) MergePullRequest(path string, number int, method, subject, body string) error {
-	args, err := mergeArgs(number, method, subject, body)
+// quick merge. admin merges with administrator privileges, GitHub's own bypass
+// of the rules on the base branch. It does not pass --delete-branch: lich's
+// worktree removal owns that cleanup, and deleting a checked-out worktree's
+// branch is trouble. gh's stderr is surfaced on failure (not mergeable, branch
+// protection, gh missing).
+func (s *Service) MergePullRequest(path string, number int, method, subject, body string, admin bool) error {
+	args, err := mergeArgs(number, method, subject, body, admin)
 	if err != nil {
 		return err
 	}
@@ -284,7 +286,12 @@ func (s *Service) MergePullRequest(path string, number int, method, subject, bod
 // commits — rebase replays the branch's own commits, so gh rejects a message
 // there — and an empty subject means gh's default message. body rides along with
 // a subject and may itself be empty.
-func mergeArgs(number int, method, subject, body string) ([]string, error) {
+//
+// --admin is what makes gh call GitHub at all on a governed branch: without it
+// gh refuses from the client the moment mergeStateStatus is BLOCKED or BEHIND,
+// so no rule violation ever reaches the screen. Whether this account may
+// actually bypass is GitHub's answer to give, not this one's to guess.
+func mergeArgs(number int, method, subject, body string, admin bool) ([]string, error) {
 	flag, ok := mergeMethods[method]
 	if !ok {
 		return nil, fmt.Errorf("unknown merge method %q", method)
@@ -292,6 +299,9 @@ func mergeArgs(number int, method, subject, body string) ([]string, error) {
 	args := prArgs("merge", number, flag)
 	if subject != "" && method != "rebase" {
 		args = append(args, "--subject", subject, "--body", body)
+	}
+	if admin {
+		args = append(args, "--admin")
 	}
 	return args, nil
 }
