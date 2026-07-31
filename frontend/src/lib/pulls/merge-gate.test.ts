@@ -183,6 +183,11 @@ describe("canAdminOverride", () => {
     expect(
       canAdminOverride(detail({ mergeStateStatus: "DIRTY", mergeable: "CONFLICTING" }), admin()),
     ).toBe(false)
+    // The conflict a stale merge state hides — BLOCKED is on the override list,
+    // and only the second field says there is nothing to override.
+    expect(
+      canAdminOverride(detail({ mergeStateStatus: "BLOCKED", mergeable: "CONFLICTING" }), admin()),
+    ).toBe(false)
     expect(canAdminOverride(detail({ isDraft: true, mergeStateStatus: "BLOCKED" }), admin())).toBe(
       false,
     )

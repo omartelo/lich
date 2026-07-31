@@ -89,6 +89,12 @@ export function canAdminOverride(detail: PullRequestDetail, rules: BranchRules |
   if (detail.state !== "OPEN" || detail.isDraft) {
     return false
   }
+  // Both fields again, for the reason mergeBlockedReason reads both: GitHub
+  // answers BLOCKED over a conflict while its merge state is still stale, and a
+  // bypass offered there is the dead click this whole gate exists to remove.
+  if (detail.mergeable === "CONFLICTING") {
+    return false
+  }
   return OVERRIDABLE.includes(detail.mergeStateStatus)
 }
 

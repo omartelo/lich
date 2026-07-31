@@ -318,7 +318,13 @@ export function PullRequestView({
                     dead and keeping them would put the click that cannot work
                     beside the one that can. Without the privilege the dead
                     click stays, on purpose: it is what carries gh's refusal and
-                    the rule note back (merge-gate.ts). */}
+                    the rule note back (merge-gate.ts).
+
+                    The consequence to know: BLOCKED is what GitHub answers for
+                    any governed base branch, rules met or not, so an
+                    administrator's ordinary approved merge goes out with
+                    --admin here and GitHub records it as an override. gh leaves
+                    no other way through. */}
                 <DropdownMenuContent align="end">
                   {methods.map((method) => (
                     <DropdownMenuItem
