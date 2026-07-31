@@ -57,11 +57,26 @@ func TestGHMessage(t *testing.T) {
 			errTest, nil,
 			"This checkout's git remotes do not point at GitHub.",
 		},
+		// gh writes one sentence for both refusals and puts the reason in its
+		// tail, so these two must not collapse into each other: only one of them
+		// is a conflict, and the other is fixed somewhere else entirely.
 		{
-			"an unmergeable pull request",
+			"a conflicting pull request",
 			"Pull request is not mergeable: the merge commit cannot be cleanly created.",
 			errTest, nil,
-			"GitHub will not merge this pull request yet — it has conflicts or an unmet requirement.",
+			"This pull request conflicts with its base branch — merge the base in and resolve them first.",
+		},
+		{
+			"a pull request a rule holds back",
+			"Pull request is not mergeable: the base branch policy prohibits the merge.",
+			errTest, nil,
+			"A rule on the base branch blocks this merge. Its ruleset on GitHub says which one.",
+		},
+		{
+			"GitHub's own answer when a bypass merge is refused",
+			"Rule violations found: - Commit message must match the required pattern",
+			errTest, nil,
+			"A ruleset on the base branch refused this merge — GitHub named the rules it broke; lich's log has them.",
 		},
 		{
 			"gh missing, reported by exec",

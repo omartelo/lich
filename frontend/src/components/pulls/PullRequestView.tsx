@@ -25,7 +25,12 @@ import {
   subscribePendingReview,
 } from "@/lib/pulls/pending-review-store"
 import { conversationCount, conversationTimeline } from "@/lib/pulls/conversation-timeline"
-import { allowedMergeMethods, mergeBlockedReason } from "@/lib/pulls/merge-gate"
+import {
+  allowedMergeMethods,
+  canAdminOverride,
+  mergeBlockedReason,
+  mergeRuleNote,
+} from "@/lib/pulls/merge-gate"
 import { useBranchRules } from "@/lib/pulls/use-branch-rules"
 import { cn, errorText } from "@/lib/utils"
 import { Markdown } from "@/components/Markdown"
@@ -128,15 +133,20 @@ export function PullRequestView({
   const blocked = mergeBlockedReason(detail)
   const methods = allowedMergeMethods(rules)
   const editableMethods = methods.filter((method) => method !== "rebase")
+  const ruleNote = mergeRuleNote(detail, rules)
+  const bypass = canAdminOverride(detail, rules)
 
-  const merge = async (method: MergeMethod, subject = "", body = "") => {
+  const merge = async (method: MergeMethod, subject = "", body = "", admin = false) => {
     setMerging(true)
     try {
-      await ProjectService.MergePullRequest(path, detail.number, method, subject, body)
+      await ProjectService.MergePullRequest(path, detail.number, method, subject, body, admin)
       setEdit(null)
       onMerged()
     } catch (err: unknown) {
-      toast.error(`Merge failed: ${errorText(err)}`)
+      // gh's refusal names a kind of cause, never the rule behind it; the note
+      // is the only thing on screen that can, so it rides along when there is
+      // one to say.
+      toast.error([`Merge failed: ${errorText(err)}`, ruleNote].filter(Boolean).join(" "))
     } finally {
       setMerging(false)
     }
@@ -281,11 +291,11 @@ export function PullRequestView({
                 blocking, the same spot carries what would make you think twice
                 — red CI that no rule requires, which GitHub merges over
                 without a word. */}
-            <span title={blocked ?? failingChecks(detail.checks.failed)}>
+            <span title={blocked ?? ruleNote ?? failingChecks(detail.checks.failed)}>
               <DropdownMenu>
                 <DropdownMenuTrigger
                   render={
-                    <Button size="sm" disabled={merging || blocked !== null}>
+                    <Button size="sm" disabled={merging || (blocked !== null && !bypass)}>
                       <GitMerge />
                       {merging ? "Merging…" : "Merge"}
                       {/* The checks readout says this too, a line above — but
@@ -301,10 +311,28 @@ export function PullRequestView({
                     </Button>
                   }
                 />
+                {/* Every item bypasses, or none does — never a menu offering
+                    both. Once GitHub answers BLOCKED or BEHIND gh refuses a
+                    plain merge from the client without ever calling GitHub, so
+                    where the bypass is available the ordinary items are already
+                    dead and keeping them would put the click that cannot work
+                    beside the one that can. Without the privilege the dead
+                    click stays, on purpose: it is what carries gh's refusal and
+                    the rule note back (merge-gate.ts).
+
+                    The consequence to know: BLOCKED is what GitHub answers for
+                    any governed base branch, rules met or not, so an
+                    administrator's ordinary approved merge goes out with
+                    --admin here and GitHub records it as an override. gh leaves
+                    no other way through. */}
                 <DropdownMenuContent align="end">
                   {methods.map((method) => (
-                    <DropdownMenuItem key={method} onClick={() => void merge(method)}>
+                    <DropdownMenuItem
+                      key={method}
+                      onClick={() => void merge(method, "", "", bypass)}
+                    >
                       {MERGE_LABELS[method]}
+                      {bypass && ", bypass rules"}
                     </DropdownMenuItem>
                   ))}
                   {/* Rebase replays the branch's own commits, so gh takes no
@@ -316,6 +344,7 @@ export function PullRequestView({
                       onClick={() => setEdit(mergeEditFor(method, detail))}
                     >
                       {MERGE_LABELS[method]}, edit message…
+                      {bypass && " (bypasses rules)"}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
@@ -442,7 +471,7 @@ export function PullRequestView({
           merging={merging}
           onChange={setEdit}
           onCancel={() => setEdit(null)}
-          onConfirm={() => void merge(edit.method, edit.subject, edit.body)}
+          onConfirm={() => void merge(edit.method, edit.subject, edit.body, bypass)}
         />
       )}
     </>

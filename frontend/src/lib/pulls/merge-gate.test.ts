@@ -1,6 +1,20 @@
 import { describe, expect, it } from "vitest"
-import { allowedMergeMethods, mergeBlockedReason } from "./merge-gate"
-import type { PullRequestDetail } from "@/lib/api-types"
+import {
+  allowedMergeMethods,
+  canAdminOverride,
+  mergeBlockedReason,
+  mergeRuleNote,
+} from "./merge-gate"
+import type { BranchRules, PullRequestDetail } from "@/lib/api-types"
+
+const rules = (over: Partial<BranchRules> = {}): BranchRules => ({
+  allowedMergeMethods: null,
+  commitPatterns: null,
+  viewerCanBypass: false,
+  ...over,
+})
+
+const admin = (over: Partial<BranchRules> = {}) => rules({ viewerCanBypass: true, ...over })
 
 const detail = (over: Partial<PullRequestDetail> = {}): PullRequestDetail => ({
   number: 130,
@@ -116,11 +130,11 @@ describe("mergeBlockedReason", () => {
 
 describe("allowedMergeMethods", () => {
   it("narrows the menu to what the base branch's ruleset accepts", () => {
-    expect(allowedMergeMethods({ allowedMergeMethods: ["squash"] })).toEqual(["squash"])
+    expect(allowedMergeMethods(rules({ allowedMergeMethods: ["squash"] }))).toEqual(["squash"])
   })
 
   it("keeps the menu's own order, not the ruleset's", () => {
-    expect(allowedMergeMethods({ allowedMergeMethods: ["rebase", "squash"] })).toEqual([
+    expect(allowedMergeMethods(rules({ allowedMergeMethods: ["rebase", "squash"] }))).toEqual([
       "squash",
       "rebase",
     ])
@@ -134,9 +148,120 @@ describe("allowedMergeMethods", () => {
     // The call failed, or has not answered yet.
     expect(allowedMergeMethods(null)).toEqual(all)
     // The branch has no ruleset, or one that says nothing about merging.
-    expect(allowedMergeMethods({ allowedMergeMethods: [] })).toEqual(all)
-    expect(allowedMergeMethods({ allowedMergeMethods: null })).toEqual(all)
+    expect(allowedMergeMethods(rules({ allowedMergeMethods: [] }))).toEqual(all)
+    expect(allowedMergeMethods(rules({ allowedMergeMethods: null }))).toEqual(all)
     // A ruleset naming only methods this build cannot ask gh for.
-    expect(allowedMergeMethods({ allowedMergeMethods: ["fast_forward"] })).toEqual(all)
+    expect(allowedMergeMethods(rules({ allowedMergeMethods: ["fast_forward"] }))).toEqual(all)
+  })
+})
+
+describe("canAdminOverride", () => {
+  // The two gh itself allows --admin on; anything else and gh refuses the flag
+  // as well, so offering it would trade one dead click for another.
+  it("offers the bypass on the states GitHub lets an administrator past", () => {
+    expect(canAdminOverride(detail({ mergeStateStatus: "BLOCKED" }), admin())).toBe(true)
+    expect(canAdminOverride(detail({ mergeStateStatus: "BEHIND" }), admin())).toBe(true)
+  })
+
+  // The rest of this module widens on an unknown; this one hides. A bypass
+  // reads as a privilege you hold, so offering one that is not there turns
+  // GitHub's refusal into what looks like a broken button.
+  it("hides the bypass from an account that does not administer the repository", () => {
+    const blocked = detail({ mergeStateStatus: "BLOCKED" })
+    expect(canAdminOverride(blocked, rules())).toBe(false)
+    // The rules have not answered yet, or the read failed.
+    expect(canAdminOverride(blocked, null)).toBe(false)
+  })
+
+  it("does not offer it where nothing is in the way", () => {
+    expect(canAdminOverride(detail(), admin())).toBe(false)
+    expect(canAdminOverride(detail({ mergeStateStatus: "UNSTABLE" }), admin())).toBe(false)
+  })
+
+  // An override skips a rule; it does not resolve a conflict or finish a draft.
+  it("does not offer it for what an override cannot fix", () => {
+    expect(
+      canAdminOverride(detail({ mergeStateStatus: "DIRTY", mergeable: "CONFLICTING" }), admin()),
+    ).toBe(false)
+    // The conflict a stale merge state hides — BLOCKED is on the override list,
+    // and only the second field says there is nothing to override.
+    expect(
+      canAdminOverride(detail({ mergeStateStatus: "BLOCKED", mergeable: "CONFLICTING" }), admin()),
+    ).toBe(false)
+    expect(canAdminOverride(detail({ isDraft: true, mergeStateStatus: "BLOCKED" }), admin())).toBe(
+      false,
+    )
+    expect(
+      canAdminOverride(detail({ state: "MERGED", mergeStateStatus: "BLOCKED" }), admin()),
+    ).toBe(false)
+  })
+})
+
+describe("mergeRuleNote", () => {
+  const pattern = {
+    target: "message",
+    operator: "regex",
+    pattern: "^(feat|fix): .+",
+    negate: false,
+  }
+
+  // The case the note exists for: approved, green, no conflict, still BLOCKED.
+  it("names the commit rule governing the base branch", () => {
+    expect(
+      mergeRuleNote(
+        detail({ mergeStateStatus: "BLOCKED", reviewDecision: "APPROVED", baseRefName: "develop" }),
+        rules({ commitPatterns: [pattern] }),
+      ),
+    ).toBe("A ruleset governs develop: every commit message must match ^(feat|fix): .+.")
+  })
+
+  it("reads a negated rule as the prohibition it is", () => {
+    expect(
+      mergeRuleNote(
+        detail({ mergeStateStatus: "BLOCKED" }),
+        rules({
+          commitPatterns: [
+            { target: "author email", operator: "ends_with", pattern: "@ex.com", negate: true },
+          ],
+        }),
+      ),
+    ).toBe("A ruleset governs main: every commit author email must not end with @ex.com.")
+  })
+
+  it("names every rule when the branch carries more than one", () => {
+    const note = mergeRuleNote(
+      detail({ mergeStateStatus: "BLOCKED" }),
+      rules({
+        commitPatterns: [
+          pattern,
+          { target: "committer email", operator: "contains", pattern: "@", negate: false },
+        ],
+      }),
+    )
+    expect(note).toContain("message must match ^(feat|fix): .+")
+    expect(note).toContain("committer email must contain @")
+  })
+
+  // An operator GitHub adds after this build shipped still gets its pattern on
+  // screen — a slightly wrong verb beats no note at all.
+  it("falls back to a verb for an operator it has never seen", () => {
+    expect(
+      mergeRuleNote(
+        detail({ mergeStateStatus: "BLOCKED" }),
+        rules({ commitPatterns: [{ ...pattern, operator: "SOMETHING_NEW" }] }),
+      ),
+    ).toContain("message must match ^(feat|fix): .+")
+  })
+
+  it("says nothing when GitHub is not holding the merge back", () => {
+    expect(mergeRuleNote(detail(), rules({ commitPatterns: [pattern] }))).toBeNull()
+  })
+
+  // A rule note is not a verdict: no rule of this kind never means "unblocked".
+  it("says nothing when no rule of this kind is known", () => {
+    const blocked = detail({ mergeStateStatus: "BLOCKED" })
+    expect(mergeRuleNote(blocked, null)).toBeNull()
+    expect(mergeRuleNote(blocked, rules())).toBeNull()
+    expect(mergeRuleNote(blocked, rules({ commitPatterns: [] }))).toBeNull()
   })
 })

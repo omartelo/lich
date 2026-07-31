@@ -58,6 +58,22 @@ var ghFailures = []toolFailure{
 	{"none of the git remotes", "This checkout's git remotes do not point at GitHub."},
 	{"no git remotes found", "This checkout has no git remote to look up on GitHub."},
 	{"not a git repository", "This folder is not a git repository."},
+	// gh refuses a merge before it calls GitHub, and its one sentence carries
+	// the reason in the tail: these two match that tail, because "not mergeable"
+	// alone cannot tell a conflict from a rule and named the wrong one half the
+	// time. The bare match stays last for a wording neither one catches.
+	{
+		"merge commit cannot be cleanly created",
+		"This pull request conflicts with its base branch — merge the base in and resolve them first.",
+	},
+	{
+		"base branch policy prohibits the merge",
+		"A rule on the base branch blocks this merge. Its ruleset on GitHub says which one.",
+	},
+	{
+		"rule violations found",
+		"A ruleset on the base branch refused this merge — GitHub named the rules it broke; lich's log has them.",
+	},
 	{"not mergeable", "GitHub will not merge this pull request yet — it has conflicts or an unmet requirement."},
 	{"protected branch", "A branch protection rule on GitHub blocks this merge."},
 	{"required status check", "GitHub requires a status check that has not passed yet."},
