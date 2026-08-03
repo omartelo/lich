@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A thread in Conversation shows the lines it is about, not the file.** GitHub
+  sends a review comment with the whole hunk it sits in, which on a file the
+  branch adds is the entire file — so a remark about ten lines arrived under a
+  hundred and twenty, and finding the ones it meant was a scroll. The snippet is
+  now cut to the commented span (with a little context above a single-line one),
+  its lines carry the diff viewer's own green and red, and the file reference in
+  the header reads the whole range: `utils.java:65-74`.
 - **A refused merge says which kind of refusal it was.** gh writes one sentence
   for two very different failures and puts the difference in its tail; lich read
   only the opening and claimed conflicts either way, sending you to look for

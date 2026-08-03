@@ -28,6 +28,11 @@ const conversationPayload = `{"data":{"repository":{"pullRequest":{
      "line":null,"originalLine":18,"startLine":null,"diffSide":"RIGHT",
      "comments":{"nodes":[
        {"databaseId":900003,"author":null,"body":"gone account","createdAt":"2026-07-30T08:00:00Z","diffHunk":"@@ -16,3 +16,5 @@"}
+     ]}},
+    {"id":"PRRT_kw3","isResolved":false,"isOutdated":true,"path":"internal/store/store.go",
+     "line":null,"originalLine":74,"startLine":null,"originalStartLine":65,"diffSide":"RIGHT",
+     "comments":{"nodes":[
+       {"databaseId":900004,"author":{"login":"reviewer"},"body":"this range","createdAt":"2026-07-30T09:30:00Z","diffHunk":"@@ -60,0 +60,15 @@"}
      ]}}
   ]}
 }}}}`
@@ -65,8 +70,8 @@ func TestParseConversation(t *testing.T) {
 	})
 
 	t.Run("an anchored thread keeps its line span and both ids", func(t *testing.T) {
-		if len(convo.Threads) != 2 {
-			t.Fatalf("threads = %d, want 2", len(convo.Threads))
+		if len(convo.Threads) != 3 {
+			t.Fatalf("threads = %d, want 3", len(convo.Threads))
 		}
 		anchored := convo.Threads[0]
 		if anchored.ID != "PRRT_kw1" || anchored.Line != 61 || anchored.StartLine != 59 {
@@ -97,6 +102,15 @@ func TestParseConversation(t *testing.T) {
 		}
 		if outdated.StartLine != 0 {
 			t.Errorf("startLine = %d, want 0 for a single-line thread", outdated.StartLine)
+		}
+	})
+
+	t.Run("an outdated range keeps its original first line", func(t *testing.T) {
+		// Without it the span collapses to one line, and the snippet the
+		// Conversation tab cuts from the hunk loses the lines it was filed on.
+		ranged := convo.Threads[2]
+		if ranged.StartLine != 65 || ranged.Line != 74 {
+			t.Errorf("span = %d–%d, want the original 65–74", ranged.StartLine, ranged.Line)
 		}
 	})
 
@@ -137,7 +151,7 @@ func TestPullRequestConversationFlow(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if convo == nil || len(convo.Threads) != 2 {
+		if convo == nil || len(convo.Threads) != 3 {
 			t.Fatalf("wrong conversation: %+v", convo)
 		}
 		want := []string{
