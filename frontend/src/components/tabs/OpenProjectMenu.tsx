@@ -78,11 +78,7 @@ export function OpenProjectMenu() {
         </div>
         <DropdownMenuSeparator />
         {recents.map((recent) => (
-          <DropdownMenuItem
-            key={recent.id}
-            className="gap-2"
-            onClick={() => void pick(recent)}
-          >
+          <DropdownMenuItem key={recent.id} className="gap-2" onClick={() => void pick(recent)}>
             <Folder className="size-4 shrink-0 text-muted-foreground" />
             <span className="flex min-w-0 flex-col">
               <span className="truncate">{recent.name}</span>
