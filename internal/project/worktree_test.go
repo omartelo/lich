@@ -430,10 +430,10 @@ func TestCreateWorktreeFromPR(t *testing.T) {
 		}
 	})
 
-	t.Run("a fork pull request is refused before anything is created", func(t *testing.T) {
+	t.Run("a fork pull request with no maintainer edits is refused before anything is created", func(t *testing.T) {
 		t.Setenv("XDG_DATA_HOME", t.TempDir())
 		repo, _ := initRepo(t)
-		gh := &scriptedGH{headJSON: `{"headRefName":"patch-1","isCrossRepository":true}`}
+		gh := &scriptedGH{headJSON: `{"headRefName":"patch-1","isCrossRepository":true,"maintainerCanModify":false}`}
 
 		_, err := (&Service{runner: gh.run}).CreateWorktreeFromPR(repo, "proj", 103)
 		if err == nil || !strings.Contains(err.Error(), "fork") {
@@ -441,6 +441,23 @@ func TestCreateWorktreeFromPR(t *testing.T) {
 		}
 		if gh.checkoutDir != "" {
 			t.Error("gh pr checkout ran for a fork pull request")
+		}
+	})
+
+	// The permission is the whole gate: with it on, the fork's branch takes a
+	// push back and the pull request is workable like any other.
+	t.Run("a fork pull request that allows maintainer edits is checked out", func(t *testing.T) {
+		data := t.TempDir()
+		t.Setenv("XDG_DATA_HOME", data)
+		repo, _ := initRepo(t)
+		gh := &scriptedGH{headJSON: `{"headRefName":"patch-1","isCrossRepository":true,"maintainerCanModify":true}`}
+
+		wt, err := (&Service{runner: gh.run}).CreateWorktreeFromPR(repo, "proj", 103)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if canonicalPath(gh.checkoutDir) != wt.Path {
+			t.Errorf("gh pr checkout ran in %q, want %q", gh.checkoutDir, wt.Path)
 		}
 	})
 

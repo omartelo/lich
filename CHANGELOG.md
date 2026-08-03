@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Open a session on a fork's pull request when its author allows it.** Every
+  pull request from a fork was refused a session, on the grounds that an agent's
+  commits would have nowhere to push — but GitHub asks the author that very
+  question when the pull request is opened, and "allow edits by maintainers" is
+  on by default. lich now reads the answer: with the permission on, the fork's
+  branch checks out and opens like any other, and only a fork that withholds it
+  still greys the button out, saying which of the two it is.
 - **A thread in Conversation shows the lines it is about, not the file.** GitHub
   sends a review comment with the whole hunk it sits in, which on a file the
   branch adds is the entire file — so a remark about ten lines arrived under a

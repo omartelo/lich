@@ -67,6 +67,19 @@ func TestParsePRDetail(t *testing.T) {
 		}
 	})
 
+	// The pair the session button reads: a fork alone says nothing, the maintainer
+	// permission is what decides whether it can be worked on.
+	t.Run("a fork PR carries its maintainer-edit permission", func(t *testing.T) {
+		raw := `{"number":131,"state":"OPEN","isCrossRepository":true,"maintainerCanModify":true}`
+		pr, err := parsePRDetail([]byte(raw), true)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if pr == nil || !pr.IsCrossRepository || !pr.MaintainerCanModify {
+			t.Errorf("expected an editable fork detail, got %+v", pr)
+		}
+	})
+
 	t.Run("non-open PR is hidden", func(t *testing.T) {
 		pr, err := parsePRDetail([]byte(`{"number":88,"state":"MERGED","url":"x"}`), true)
 		if err != nil {

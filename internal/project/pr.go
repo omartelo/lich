@@ -65,7 +65,7 @@ func runGH(timeout time.Duration, dir, token string, args ...string) ([]byte, er
 }
 
 // prViewFields is the gh `pr view --json` selection backing the Pulls panel.
-const prViewFields = "number,url,state,title,body,isDraft,mergeable,mergeStateStatus,reviewDecision,baseRefName,headRefName,isCrossRepository,statusCheckRollup,changedFiles,commits"
+const prViewFields = "number,url,state,title,body,isDraft,mergeable,mergeStateStatus,reviewDecision,baseRefName,headRefName,isCrossRepository,maintainerCanModify,statusCheckRollup,changedFiles,commits"
 
 // prSelector renders the pull request argument gh's subcommands take ahead of
 // their flags. Zero means "the branch checked out at path" — gh's own default,
@@ -117,10 +117,14 @@ type PRDetail struct {
 	Checks         ChecksRollup `json:"checks"`
 	CheckRuns      []CheckItem  `json:"checkRuns"`
 	Commits        []PRCommit   `json:"commits"`
-	// IsCrossRepository marks a head branch that lives on a fork — the one PR
-	// a session cannot be opened on (CreateWorktreeFromPR), so the screen can
-	// say so instead of letting the button fail.
+	// IsCrossRepository marks a head branch that lives on a fork.
 	IsCrossRepository bool `json:"isCrossRepository"`
+	// MaintainerCanModify is GitHub's "allow edits by maintainers" on a fork PR,
+	// and the whole of what decides whether a session can be opened on one: with
+	// it a push back to the fork's branch is authorised, without it there is
+	// nowhere for an agent's commits to go (CreateWorktreeFromPR). It is false on
+	// a same-repository PR, where nothing needs the permission.
+	MaintainerCanModify bool `json:"maintainerCanModify"`
 }
 
 // PRCommit is one commit the pull request would land, split the way git itself
@@ -136,21 +140,22 @@ type PRCommit struct {
 // ghPRView mirrors the requested gh payload; statusCheckRollup is reduced to
 // ChecksRollup inside parsePRDetail and never leaves this package raw.
 type ghPRView struct {
-	Number            int         `json:"number"`
-	URL               string      `json:"url"`
-	State             string      `json:"state"`
-	Title             string      `json:"title"`
-	Body              string      `json:"body"`
-	IsDraft           bool        `json:"isDraft"`
-	Mergeable         string      `json:"mergeable"`
-	MergeStateStatus  string      `json:"mergeStateStatus"`
-	ReviewDecision    string      `json:"reviewDecision"`
-	BaseRefName       string      `json:"baseRefName"`
-	HeadRefName       string      `json:"headRefName"`
-	ChangedFiles      int         `json:"changedFiles"`
-	IsCrossRepository bool        `json:"isCrossRepository"`
-	StatusCheckRollup []checkItem `json:"statusCheckRollup"`
-	Commits           []ghCommit  `json:"commits"`
+	Number              int         `json:"number"`
+	URL                 string      `json:"url"`
+	State               string      `json:"state"`
+	Title               string      `json:"title"`
+	Body                string      `json:"body"`
+	IsDraft             bool        `json:"isDraft"`
+	Mergeable           string      `json:"mergeable"`
+	MergeStateStatus    string      `json:"mergeStateStatus"`
+	ReviewDecision      string      `json:"reviewDecision"`
+	BaseRefName         string      `json:"baseRefName"`
+	HeadRefName         string      `json:"headRefName"`
+	ChangedFiles        int         `json:"changedFiles"`
+	IsCrossRepository   bool        `json:"isCrossRepository"`
+	MaintainerCanModify bool        `json:"maintainerCanModify"`
+	StatusCheckRollup   []checkItem `json:"statusCheckRollup"`
+	Commits             []ghCommit  `json:"commits"`
 }
 
 // ghCommit is one entry of gh's commits array. Authors is a list because of
@@ -201,22 +206,23 @@ func parsePRDetail(out []byte, openOnly bool) (*PRDetail, error) {
 		return nil, nil
 	}
 	return &PRDetail{
-		Number:            v.Number,
-		URL:               v.URL,
-		Title:             v.Title,
-		Body:              v.Body,
-		State:             v.State,
-		IsDraft:           v.IsDraft,
-		Mergeable:         v.Mergeable,
-		MergeStateStatus:  v.MergeStateStatus,
-		ReviewDecision:    v.ReviewDecision,
-		BaseRefName:       v.BaseRefName,
-		HeadRefName:       v.HeadRefName,
-		ChangedFiles:      v.ChangedFiles,
-		IsCrossRepository: v.IsCrossRepository,
-		Checks:            reduceChecks(v.StatusCheckRollup),
-		CheckRuns:         toCheckItems(v.StatusCheckRollup),
-		Commits:           toCommits(v.Commits),
+		Number:              v.Number,
+		URL:                 v.URL,
+		Title:               v.Title,
+		Body:                v.Body,
+		State:               v.State,
+		IsDraft:             v.IsDraft,
+		Mergeable:           v.Mergeable,
+		MergeStateStatus:    v.MergeStateStatus,
+		ReviewDecision:      v.ReviewDecision,
+		BaseRefName:         v.BaseRefName,
+		HeadRefName:         v.HeadRefName,
+		ChangedFiles:        v.ChangedFiles,
+		IsCrossRepository:   v.IsCrossRepository,
+		MaintainerCanModify: v.MaintainerCanModify,
+		Checks:              reduceChecks(v.StatusCheckRollup),
+		CheckRuns:           toCheckItems(v.StatusCheckRollup),
+		Commits:             toCommits(v.Commits),
 	}, nil
 }
 

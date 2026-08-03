@@ -131,8 +131,12 @@ export interface PullRequestDetail {
   baseRefName: string
   headRefName: string
   changedFiles: number
-  /** The head branch lives on a fork: no session can be opened on it. */
+  /** The head branch lives on a fork. */
   isCrossRepository: boolean
+  /** GitHub's "allow edits by maintainers" on a fork PR: what decides whether a
+   * session can be opened on it. False on a same-repository PR, which needs no
+   * such permission. */
+  maintainerCanModify: boolean
   checks: ChecksRollup
   /** The rollup itself, worst state first; null when the PR reports no checks. */
   checkRuns: CheckItem[] | null

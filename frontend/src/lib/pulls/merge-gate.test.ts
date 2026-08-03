@@ -30,6 +30,7 @@ const detail = (over: Partial<PullRequestDetail> = {}): PullRequestDetail => ({
   headRefName: "quiet-willow",
   changedFiles: 1,
   isCrossRepository: false,
+  maintainerCanModify: false,
   checks: { total: 0, passed: 0, failed: 0, pending: 0 },
   checkRuns: null,
   commits: null,
