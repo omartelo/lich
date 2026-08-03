@@ -146,28 +146,29 @@
     }
 }
 
-/* Diff viewer (CodeMirror line + gutter decorations). Classic emerald/red for
+/* Diff colours, worn by the CodeMirror viewer's line and gutter decorations and
+   by the review-thread snippets that render outside it. Classic emerald/red for
    add/del — the footer's counters keep the app's sky/pink identity. The 3px
    strip lives on the gutter cell (leftmost edge) as an inset box-shadow, which
    doesn't shift content the way border-left would. */
-.cm-diff-add {
+.diff-add {
   background-color: color-mix(in oklab, var(--color-emerald-500) 12%, transparent);
 }
-.cm-diff-del {
+.diff-del {
   background-color: color-mix(in oklab, var(--color-red-500) 10%, transparent);
 }
-.dark .cm-diff-add {
+.dark .diff-add {
   background-color: color-mix(in oklab, var(--color-emerald-400) 14%, transparent);
 }
-.dark .cm-diff-del {
+.dark .diff-del {
   background-color: color-mix(in oklab, var(--color-red-400) 12%, transparent);
 }
 
-.cm-diff-gutter-add {
+.diff-gutter-add {
   background-color: color-mix(in oklab, var(--color-emerald-500) 18%, transparent);
   box-shadow: inset 3px 0 0 0 var(--color-emerald-500);
 }
-.cm-diff-gutter-del {
+.diff-gutter-del {
   background-color: color-mix(in oklab, var(--color-red-500) 15%, transparent);
   box-shadow: inset 3px 0 0 0 var(--color-red-500);
 }

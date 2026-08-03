@@ -20,7 +20,7 @@ const prConversationQuery = `query($owner:String!,$repo:String!,$number:Int!){
       reviews(last:50){nodes{author{login} state body submittedAt}}
       comments(last:50){nodes{author{login} body createdAt}}
       reviewThreads(last:100){nodes{
-        id isResolved isOutdated path line originalLine startLine diffSide
+        id isResolved isOutdated path line originalLine startLine originalStartLine diffSide
         comments(first:50){nodes{databaseId author{login} body createdAt diffHunk}}
       }}
     }
@@ -135,15 +135,16 @@ type ghIssueComment struct {
 }
 
 type ghReviewThread struct {
-	ID           string `json:"id"`
-	IsResolved   bool   `json:"isResolved"`
-	IsOutdated   bool   `json:"isOutdated"`
-	Path         string `json:"path"`
-	Line         *int   `json:"line"`
-	OriginalLine *int   `json:"originalLine"`
-	StartLine    *int   `json:"startLine"`
-	DiffSide     string `json:"diffSide"`
-	Comments     struct {
+	ID                string `json:"id"`
+	IsResolved        bool   `json:"isResolved"`
+	IsOutdated        bool   `json:"isOutdated"`
+	Path              string `json:"path"`
+	Line              *int   `json:"line"`
+	OriginalLine      *int   `json:"originalLine"`
+	StartLine         *int   `json:"startLine"`
+	OriginalStartLine *int   `json:"originalStartLine"`
+	DiffSide          string `json:"diffSide"`
+	Comments          struct {
 		Nodes []ghThreadComment `json:"nodes"`
 	} `json:"comments"`
 }
@@ -234,7 +235,7 @@ func toThreads(nodes []ghReviewThread) []PRReviewThread {
 			ID:         t.ID,
 			Path:       t.Path,
 			Line:       threadLine(t),
-			StartLine:  deref(t.StartLine),
+			StartLine:  threadStartLine(t),
 			Side:       t.DiffSide,
 			IsResolved: t.IsResolved,
 			IsOutdated: t.IsOutdated,
@@ -253,6 +254,15 @@ func threadLine(t ghReviewThread) int {
 		return *t.Line
 	}
 	return deref(t.OriginalLine)
+}
+
+// threadStartLine is the same fallback for the range's first line: an outdated
+// thread keeps the original, which is the number its diff hunk is written in.
+func threadStartLine(t ghReviewThread) int {
+	if t.StartLine != nil {
+		return *t.StartLine
+	}
+	return deref(t.OriginalStartLine)
 }
 
 func deref(v *int) int {

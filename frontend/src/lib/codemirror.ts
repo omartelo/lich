@@ -117,8 +117,8 @@ export function loadLanguage(view: EditorView, filename: string, isAlive: () => 
 }
 
 const lineClasses: Partial<Record<DiffLine["kind"], Decoration>> = {
-  add: Decoration.line({ class: "cm-diff-add" }),
-  del: Decoration.line({ class: "cm-diff-del" }),
+  add: Decoration.line({ class: "diff-add" }),
+  del: Decoration.line({ class: "diff-del" }),
   meta: Decoration.line({ class: "cm-diff-sep" }),
 }
 
@@ -131,8 +131,8 @@ class LineClassMarker extends GutterMarker {
 }
 
 const gutterMarkers: Partial<Record<DiffLine["kind"], LineClassMarker>> = {
-  add: new LineClassMarker("cm-diff-gutter-add"),
-  del: new LineClassMarker("cm-diff-gutter-del"),
+  add: new LineClassMarker("diff-gutter-add"),
+  del: new LineClassMarker("diff-gutter-del"),
 }
 
 // buildLineDecorations colors added/deleted lines and hunk separators, in the

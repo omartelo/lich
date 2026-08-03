@@ -13,9 +13,11 @@ import { Markdown } from "@/components/Markdown"
 import { Button } from "@/components/ui/button"
 import { IconAction } from "@/components/common/IconAction"
 import type { DraftReviewComment, ReviewThread as Thread } from "@/lib/api-types"
+import { formatLineRef } from "@/lib/git/diff"
 import { cn, errorText } from "@/lib/utils"
 import { Byline } from "./Byline"
 import { CommentBox } from "./CommentBox"
+import { ThreadHunk } from "./ThreadHunk"
 
 // What a thread card can do to the thread it renders. Both actions are the
 // screen's, not this component's: it knows how to ask, never which pull request
@@ -35,6 +37,14 @@ interface ReviewThreadProps {
    * resolved ones by name. */
   defaultOpen?: boolean
   className?: string
+}
+
+/** The lines a thread covers, as a file reference reads them: "74" or "65-74". */
+function lineRef(thread: Thread): string {
+  return formatLineRef({
+    start: thread.startLine > 0 ? thread.startLine : thread.line,
+    end: thread.line,
+  })
 }
 
 // One review thread: what was said, in order, with a way to answer it and a way
@@ -118,7 +128,7 @@ export function ReviewThread({
           {standalone ? (
             <span className="truncate font-mono" title={thread.path}>
               {thread.path}
-              {thread.line > 0 && `:${thread.line}`}
+              {thread.line > 0 && `:${lineRef(thread)}`}
             </span>
           ) : (
             <span className="shrink-0">Line {thread.line}</span>
@@ -142,10 +152,10 @@ export function ReviewThread({
         </Button>
       </div>
 
-      {open && standalone && last?.diffHunk && (
-        <pre className="overflow-x-auto rounded-md bg-background px-3 py-2 font-mono text-xs leading-relaxed text-muted-foreground">
-          {last.diffHunk}
-        </pre>
+      {/* The hunk of the comment the thread was filed on: a reply carries one
+          too, but the thread's line numbers are written against the first. */}
+      {open && standalone && comments[0]?.diffHunk && (
+        <ThreadHunk diffHunk={comments[0].diffHunk} thread={thread} />
       )}
 
       {open && (
