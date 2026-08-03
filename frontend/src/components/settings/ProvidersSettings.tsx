@@ -43,6 +43,7 @@ export function ProvidersSettings() {
         >
           <Select
             value={defaultProvider}
+            items={Object.fromEntries(enabled.map((provider) => [provider.id, provider.name]))}
             onValueChange={(value) => value && setProviderDefault(value as ProviderKind)}
           >
             <SelectTrigger className="w-64">

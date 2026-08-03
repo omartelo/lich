@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { ProjectService, Store } from "@/lib/rpc"
-import { accountLabel, upgradeAccount } from "@/lib/gh-account"
+import { accountLabel, accountSelectItems, upgradeAccount } from "@/lib/gh-account"
 import { GH_ACCOUNT_KEY } from "@/lib/project-settings"
 import { errorText } from "@/lib/utils"
 import { invalidatePullRequests } from "@/lib/pulls/pull-request-lookup"
@@ -18,6 +18,7 @@ import { SettingBlock } from "./SettingBlock"
 // The stored value for "no override" is "", which a Select item cannot carry —
 // this stands in for it in the picker only.
 const ACTIVE_ACCOUNT = "__active__"
+const ACTIVE_ACCOUNT_LABEL = "gh's active account"
 
 // VersionControlSettings picks which authenticated GitHub account lich's gh
 // calls run as for this project. gh keeps one active account per host, so a
@@ -92,13 +93,17 @@ export function VersionControlSettings({ projectId }: { projectId?: string }) {
       }
     >
       <p className="mb-2 text-xs text-muted-foreground">{project.path}</p>
-      <Select value={account || ACTIVE_ACCOUNT} onValueChange={(value) => value && persist(value)}>
+      <Select
+        value={account || ACTIVE_ACCOUNT}
+        items={accountSelectItems(ACTIVE_ACCOUNT, ACTIVE_ACCOUNT_LABEL, options)}
+        onValueChange={(value) => value && persist(value)}
+      >
         <SelectTrigger className="w-72">
           <SelectValue placeholder="Select an account" />
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>
-            <SelectItem value={ACTIVE_ACCOUNT}>gh's active account</SelectItem>
+            <SelectItem value={ACTIVE_ACCOUNT}>{ACTIVE_ACCOUNT_LABEL}</SelectItem>
             {options.map((option) => (
               <SelectItem key={option} value={option}>
                 {accountLabel(option, options)}
