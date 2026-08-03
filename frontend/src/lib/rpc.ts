@@ -131,6 +131,9 @@ export const ProjectService = {
   /** Whether a stored project's directory is still there, before reopening it. */
   Exists: (path: string) => call<boolean>("project.Exists", [path]),
   PickFile: (title: string) => call<string>("project.PickFile", [title]),
+  /** Native save dialog seeded with defaultName. "" when the user cancels. */
+  PickSaveFile: (title: string, defaultName: string) =>
+    call<string>("project.PickSaveFile", [title, defaultName]),
   Branch: (path: string) => call<string>("project.Branch", [path]),
   Diff: (path: string) => call<DiffStats>("project.Diff", [path]),
   DiffText: (path: string) => call<string>("project.DiffText", [path]),
@@ -308,4 +311,6 @@ export const Themes = {
     call<ThemeImportResult>("themes.Import", [path, overwrite]),
   /** Remove a user-imported theme. Bundled themes are rejected by the backend. */
   Remove: (id: string) => call<null>("themes.Remove", [id]),
+  /** Write the bundled starter theme to a destination the user picked. */
+  SaveTemplate: (path: string) => call<null>("themes.SaveTemplate", [path]),
 }

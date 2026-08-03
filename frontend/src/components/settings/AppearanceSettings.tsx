@@ -25,7 +25,7 @@ import {
 } from "@/providers/settings"
 import type { TerminalTheme, Theme } from "@/providers/settings"
 import type { ThemeDefinition } from "@/lib/api-types"
-import { ProjectService } from "@/lib/rpc"
+import { ProjectService, Themes } from "@/lib/rpc"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { Stepper } from "@/components/common/Stepper"
 import { SettingBlock, SettingGroup } from "./SettingBlock"
@@ -47,7 +47,7 @@ import {
   MATCH_TERMINAL_THEME,
   SYSTEM_THEME,
   THEME_TEMPLATE_FILENAME,
-  themeTemplateJSON,
+  themeSelectItems,
 } from "@/lib/themes"
 import { errorText } from "@/lib/utils"
 
@@ -117,16 +117,15 @@ export function AppearanceSettings() {
     }
   }
 
-  const onDownloadThemeTemplate = () => {
-    const url = URL.createObjectURL(new Blob([themeTemplateJSON()], { type: "application/json" }))
-    const link = document.createElement("a")
-    link.href = url
-    link.download = THEME_TEMPLATE_FILENAME
-    document.body.append(link)
-    link.click()
-    link.remove()
-    URL.revokeObjectURL(url)
-    toast.success("Template download started!")
+  const onDownloadThemeTemplate = async () => {
+    try {
+      const path = await ProjectService.PickSaveFile("Save Theme Template", THEME_TEMPLATE_FILENAME)
+      if (!path) return
+      await Themes.SaveTemplate(path)
+      toast.success(`Saved theme template to ${path}`)
+    } catch (error) {
+      toast.error(`Theme template failed: ${errorText(error)}`)
+    }
   }
 
   return (
@@ -137,7 +136,11 @@ export function AppearanceSettings() {
           description="Controls the app color tokens. System follows your OS and uses the bundled light or dark theme."
         >
           <div className="flex flex-wrap items-center gap-2">
-            <Select value={theme} onValueChange={(value) => value && setTheme(value as Theme)}>
+            <Select
+              value={theme}
+              items={themeSelectItems(themes, SYSTEM_THEME, "System")}
+              onValueChange={(value) => value && setTheme(value as Theme)}
+            >
               <SelectTrigger className="w-64">
                 <SelectValue />
               </SelectTrigger>
@@ -161,7 +164,7 @@ export function AppearanceSettings() {
                     variant="ghost"
                     size="icon"
                     aria-label="Download Theme Template"
-                    onClick={onDownloadThemeTemplate}
+                    onClick={() => void onDownloadThemeTemplate()}
                   />
                 }
               >
@@ -288,6 +291,7 @@ export function AppearanceSettings() {
         >
           <Select
             value={terminalTheme}
+            items={themeSelectItems(themes, MATCH_TERMINAL_THEME, "Match app")}
             onValueChange={(value) => value && setTerminalTheme(value as TerminalTheme)}
           >
             <SelectTrigger className="w-64">

@@ -13,13 +13,10 @@ import {
   reconcileThemeSelections,
   resolveTerminalTheme,
   resolveTheme,
-  sanitizeTerminalThemePreference,
-  sanitizeThemePreference,
   selectionsAfterThemeRemoval,
   SYSTEM_THEME,
-  THEME_ID_MAX_LENGTH,
   THEME_TEMPLATE_FILENAME,
-  themeTemplateJSON,
+  themeSelectItems,
 } from "./themes"
 
 function customTheme(id: string): ThemeDefinition {
@@ -99,17 +96,6 @@ describe("themes", () => {
     ).toEqual({ theme: "custom", terminalTheme: "dark" })
   })
 
-  it("sanitizes stored theme preferences", () => {
-    expect(sanitizeThemePreference("custom-theme")).toBe("custom-theme")
-    expect(sanitizeThemePreference("System")).toBe("system")
-    expect(sanitizeTerminalThemePreference("match")).toBe("match")
-    expect(sanitizeTerminalThemePreference("bad value")).toBe("match")
-    expect(sanitizeThemePreference("a".repeat(THEME_ID_MAX_LENGTH))).toHaveLength(
-      THEME_ID_MAX_LENGTH,
-    )
-    expect(sanitizeThemePreference("a".repeat(THEME_ID_MAX_LENGTH + 1))).toBe(DEFAULT_THEME)
-  })
-
   it("applies every app token as a CSS variable", () => {
     const values = new Map<string, string>()
     const root = {
@@ -130,21 +116,20 @@ describe("themes", () => {
     }
   })
 
-  it("builds a valid import template", () => {
-    const template = JSON.parse(themeTemplateJSON()) as Partial<ThemeDefinition>
+  it("maps every selectable value to the label the trigger shows", () => {
+    const themes = mergeThemes([customTheme("purple-night")])
+    const items = themeSelectItems(themes, SYSTEM_THEME, "System")
 
+    expect(items[SYSTEM_THEME]).toBe("System")
+    expect(items.light).toBe("Light")
+    expect(items["purple-night"]).toBe("Custom")
+    expect(Object.keys(items)).toHaveLength(themes.length + 1)
+  })
+
+  // The template itself is a Go asset now — internal/themes proves it parses,
+  // carries every token and survives the real validator. All that is left here
+  // is the name the save dialog is seeded with.
+  it("names the template file the save dialog offers", () => {
     expect(THEME_TEMPLATE_FILENAME).toBe("lich-theme-template.json")
-    expect(template.id).toBe("purple-night")
-    expect(template.name).toBe("Purple Night")
-    expect(template.scheme).toBe("dark")
-    expect(template.origin).toBeUndefined()
-    expect(Object.keys(template.app ?? {}).sort()).toEqual([...APP_COLOR_TOKENS].sort())
-    expect(template.terminal?.background).toBeTruthy()
-    expect(template.terminal?.foreground).toBeTruthy()
-    expect(Object.values({ ...template.app, ...template.terminal }).every(isHexColor)).toBe(true)
   })
 })
-
-function isHexColor(value: unknown): boolean {
-  return typeof value === "string" && /^#[0-9a-fA-F]{3,8}$/.test(value)
-}

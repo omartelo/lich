@@ -16,13 +16,13 @@ import {
   applyAppTheme,
   BUNDLED_THEMES,
   DARK_THEME_SCHEME,
+  DEFAULT_TERMINAL_THEME,
+  DEFAULT_THEME,
   mergeImportedTheme,
   mergeThemes,
   reconcileThemeSelections,
   resolveTerminalTheme,
   resolveTheme,
-  sanitizeTerminalThemePreference,
-  sanitizeThemePreference,
   selectionsAfterThemeRemoval,
   SYSTEM_THEME,
 } from "@/lib/themes"
@@ -78,10 +78,13 @@ const readTerminalFontSize = (): number =>
     clampTerminalFontSize,
   )
 
-const readTheme = (): Theme => sanitizeThemePreference(readPref(THEME_STORAGE_KEY))
+// Both preferences are read raw: the stored id is an open value, and the only
+// check worth making is membership, which reconcileThemeSelections applies once
+// the theme list lands. Until then an unknown id resolves to the system theme.
+const readTheme = (): Theme => readPref(THEME_STORAGE_KEY) ?? DEFAULT_THEME
 
 const readTerminalTheme = (): TerminalTheme =>
-  sanitizeTerminalThemePreference(readPref(TERMINAL_THEME_STORAGE_KEY))
+  readPref(TERMINAL_THEME_STORAGE_KEY) ?? DEFAULT_TERMINAL_THEME
 
 const readZoom = (): number => parseNumberPref(readPref(ZOOM_STORAGE_KEY), DEFAULT_ZOOM, clampZoom)
 

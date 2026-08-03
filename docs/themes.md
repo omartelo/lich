@@ -1,8 +1,9 @@
 # Theme JSON
 
 lich ships bundled `light` and `dark` themes and accepts user-imported JSON themes.
-The Appearance settings can download a valid dark starter template that uses
-only hex colors.
+The Appearance settings can save a valid dark starter template that uses only hex
+colors; it is `themes/template.json`, embedded in the binary, and it names every
+supported color.
 Imported themes are stored under the user config directory:
 
 - Production: `<config-dir>/lich/themes/<id>.json`
@@ -66,7 +67,9 @@ before saving.
 ## Validation Rules
 
 - `id` is required, must match `^[a-z0-9][a-z0-9._-]{0,63}$`, and cannot be
-  `light`, `dark`, `system`, or `match`.
+  `light`, `dark`, `system`, or `match`. Windows device names (`con`, `prn`,
+  `aux`, `nul`, `com1`-`com9`, `lpt1`-`lpt9`) are rejected too: a theme id names
+  a file, and those still address a device even with an extension.
 - `name` is required, cannot be blank, and cannot exceed 128 characters.
 - `scheme` must be `light` or `dark`.
 - `app` is required and must include every token shown in the example.
@@ -76,9 +79,22 @@ before saving.
   `cyan`, `white`, `brightBlack`, `brightRed`, `brightGreen`, `brightYellow`,
   `brightBlue`, `brightMagenta`, `brightCyan`, `brightWhite`.
 - Unknown app or terminal tokens are rejected.
-- Color values are CSS color strings, cannot be blank, cannot exceed 128
-  characters, and cannot contain `;`, `{`, or `}`.
+- No color value can be blank or exceed 128 characters.
+
+Each color block takes what its consumer actually parses:
+
+- **`app`** values become CSS custom properties, so they accept hex
+  (`#rgb` through `#rrggbbaa`), a CSS color name, or a color function —
+  `rgb()`, `rgba()`, `hsl()`, `hsla()`, `oklch()`, `oklab()`, `lab()`, `lch()`,
+  `color()`. Anything that could name a resource or defer a value — `url()`,
+  `image-set()`, `var()`, `attr()`, `color-mix()` — is rejected.
+- **`terminal`** values must be hex. xterm parses hex directly; every other form
+  goes through a round-trip that fails on translucency and is swallowed into a
+  silent fallback, which would apply a theme only halfway with no error shown.
 
 Import uses lich's native file picker. Re-importing a theme whose `id` already
 exists asks for confirmation before replacing the stored file; cancelling the
 confirmation leaves the existing theme unchanged.
+
+The template download uses the native save dialog, so the file lands where you
+choose it; the dialog confirms replacing an existing file.

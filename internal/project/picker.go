@@ -18,6 +18,16 @@ func (ZenityPicker) PickFile(title string) (string, error) {
 	return mapZenity(zenity.SelectFile(zenity.Title(title)))
 }
 
+// ConfirmOverwrite is the dialog's own guard: the caller writes whatever path
+// comes back, so replacing an existing file is agreed to here or nowhere.
+func (ZenityPicker) PickSaveFile(title, defaultName string) (string, error) {
+	return mapZenity(zenity.SelectFileSave(
+		zenity.Title(title),
+		zenity.Filename(defaultName),
+		zenity.ConfirmOverwrite(),
+	))
+}
+
 func mapZenity(path string, err error) (string, error) {
 	if errors.Is(err, zenity.ErrCanceled) {
 		return "", nil

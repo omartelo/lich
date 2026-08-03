@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"unicode/utf8"
+
+	themeassets "github.com/omartelo/lich/themes"
 )
 
 const (
@@ -23,16 +25,34 @@ const (
 	colorValueMaxLength = 128
 	maxThemeFileSize    = 1 << 20
 	themeIDPattern      = `^[a-z0-9][a-z0-9._-]{0,63}$`
+	// App colors are set as CSS custom properties, so the allowlist is what
+	// both a CSS color context and xterm's parser accept — anything able to
+	// name a resource (url(), image-set()) or defer a value (var(), attr())
+	// is out by construction, not by blocklist.
+	appColorPattern = `^(#[0-9a-fA-F]{3,8}|[a-zA-Z]{3,20}|(rgb|rgba|hsl|hsla|oklch|oklab|lab|lch|color)\([0-9a-zA-Z.,%/ +-]*\))$`
+	// Terminal colors are stricter: xterm parses hex directly, and everything
+	// else goes through a canvas round-trip that throws on alpha and is caught
+	// into a silent fallback — a theme that half-applies with no error.
+	terminalColorPattern = `^#[0-9a-fA-F]{3,8}$`
 )
 
 var (
-	idPattern = regexp.MustCompile(themeIDPattern)
-	reserved  = map[string]struct{}{
+	idPattern          = regexp.MustCompile(themeIDPattern)
+	appColorValue      = regexp.MustCompile(appColorPattern)
+	terminalColorValue = regexp.MustCompile(terminalColorPattern)
+	reserved           = map[string]struct{}{
 		"light":  {},
 		"dark":   {},
 		"system": {},
 		"match":  {},
 	}
+	// A theme id names a file, and on Windows these still address a device
+	// even with an extension — con.json opens the console, not a file.
+	windowsDeviceNames = set(
+		"con", "prn", "aux", "nul",
+		"com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9",
+		"lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
+	)
 )
 
 // Theme describes every color value the frontend needs to paint the app and
@@ -144,6 +164,18 @@ func (s *Service) Import(path string, overwrite bool) (ImportResult, error) {
 		return ImportResult{}, fmt.Errorf("install theme: %w", err)
 	}
 	return ImportResult{Theme: theme}, nil
+}
+
+// SaveTemplate writes the bundled starter theme to a destination the user
+// picked. The save dialog already confirmed replacing an existing file.
+func (s *Service) SaveTemplate(path string) error {
+	if strings.TrimSpace(path) == "" {
+		return fmt.Errorf("no destination was chosen")
+	}
+	if err := os.WriteFile(path, themeassets.Template, 0o600); err != nil {
+		return fmt.Errorf("write theme template: %w", err)
+	}
+	return nil
 }
 
 func readThemeFile(path string) ([]byte, error) {
@@ -270,10 +302,10 @@ func validateTheme(theme Theme) error {
 	if theme.Scheme != SchemeLight && theme.Scheme != SchemeDark {
 		return fmt.Errorf("theme scheme must be %q or %q", SchemeLight, SchemeDark)
 	}
-	if err := validateColors("app", theme.App, appTokens, true); err != nil {
+	if err := validateColors("app", theme.App, appTokens, appColorValue, true); err != nil {
 		return err
 	}
-	if err := validateColors("terminal", theme.Terminal, terminalTokens, false); err != nil {
+	if err := validateColors("terminal", theme.Terminal, terminalTokens, terminalColorValue, false); err != nil {
 		return err
 	}
 	for _, key := range []string{"background", "foreground"} {
@@ -288,18 +320,27 @@ func validateID(id string) error {
 	if len(id) > themeIDMaxLength || !idPattern.MatchString(id) {
 		return fmt.Errorf("theme id %q must be lowercase letters, digits, dots, underscores or dashes", id)
 	}
+	if _, ok := windowsDeviceNames[id]; ok {
+		return fmt.Errorf("theme id %q is a reserved Windows device name", id)
+	}
 	return nil
 }
 
-func validateColors(group string, colors map[string]string, allowed map[string]struct{}, requireAll bool) error {
+func validateColors(
+	group string,
+	colors map[string]string,
+	allowed map[string]struct{},
+	value *regexp.Regexp,
+	requireAll bool,
+) error {
 	if colors == nil {
 		return fmt.Errorf("%s colors are required", group)
 	}
-	for key, value := range colors {
+	for key, color := range colors {
 		if _, ok := allowed[key]; !ok {
 			return fmt.Errorf("unknown %s color %q", group, key)
 		}
-		if err := validateColorValue(group, key, value); err != nil {
+		if err := validateColorValue(group, key, color, value); err != nil {
 			return err
 		}
 	}
@@ -313,13 +354,13 @@ func validateColors(group string, colors map[string]string, allowed map[string]s
 	return nil
 }
 
-func validateColorValue(group, key, value string) error {
+func validateColorValue(group, key, value string, pattern *regexp.Regexp) error {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
 		return fmt.Errorf("%s.%s cannot be empty", group, key)
 	}
-	if len(trimmed) > colorValueMaxLength || strings.ContainsAny(trimmed, ";{}") {
-		return fmt.Errorf("%s.%s is not a safe CSS color value", group, key)
+	if len(trimmed) > colorValueMaxLength || !pattern.MatchString(trimmed) {
+		return fmt.Errorf("%s.%s is not an accepted color value: %q", group, key, value)
 	}
 	return nil
 }

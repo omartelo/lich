@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	themeassets "github.com/omartelo/lich/themes"
 )
 
 func customTheme(id string) Theme {
@@ -182,6 +184,24 @@ func TestImportRejectsInvalidColorValues(t *testing.T) {
 			name: "unsafe app color",
 			mutate: func(theme *Theme) {
 				theme.App["foreground"] = "red; color: blue"
+			},
+		},
+		{
+			name: "app color naming a resource",
+			mutate: func(theme *Theme) {
+				theme.App["foreground"] = "url(http://example.test/pixel.png)"
+			},
+		},
+		{
+			name: "app color deferring a value",
+			mutate: func(theme *Theme) {
+				theme.App["foreground"] = "var(--leaked)"
+			},
+		},
+		{
+			name: "non-hex terminal color",
+			mutate: func(theme *Theme) {
+				theme.Terminal["cursor"] = "oklch(0.7 0.1 280)"
 			},
 		},
 		{
@@ -486,4 +506,97 @@ func cssVariables(t *testing.T, css, selector string) map[string]string {
 		variables[property[1]] = strings.TrimSpace(property[2])
 	}
 	return variables
+}
+
+func TestBundledThemesPassValidation(t *testing.T) {
+	for _, theme := range bundledThemes {
+		t.Run(theme.ID, func(t *testing.T) {
+			if err := validateTheme(theme); err != nil {
+				t.Fatalf("bundled theme %q is invalid: %v", theme.ID, err)
+			}
+		})
+	}
+}
+
+// The template ships as the answer to "what shape does a theme have", so it has
+// to survive the same validator an imported file meets — not just parse.
+func TestBundledTemplateIsImportable(t *testing.T) {
+	var template Theme
+	if err := json.Unmarshal(themeassets.Template, &template); err != nil {
+		t.Fatalf("parse template: %v", err)
+	}
+	if template.Origin != "" {
+		t.Fatalf("template ships an origin: %q", template.Origin)
+	}
+	template.Origin = OriginCustom
+	if err := validateCustom(template); err != nil {
+		t.Fatalf("template is not importable: %v", err)
+	}
+	if !reflect.DeepEqual(keySet(template.App), appTokens) {
+		t.Fatalf("template app tokens = %#v, want %#v", keySet(template.App), appTokens)
+	}
+	if !reflect.DeepEqual(keySet(template.Terminal), terminalTokens) {
+		t.Fatalf("template terminal tokens = %#v, want every supported one", keySet(template.Terminal))
+	}
+}
+
+func TestSaveTemplateWritesEveryColor(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "template.json")
+	if err := NewInDir(t.TempDir()).SaveTemplate(path); err != nil {
+		t.Fatalf("SaveTemplate: %v", err)
+	}
+	written, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read saved template: %v", err)
+	}
+	if !reflect.DeepEqual(written, themeassets.Template) {
+		t.Fatal("saved template differs from the bundled asset")
+	}
+}
+
+func TestSaveTemplateRejectsEmptyDestination(t *testing.T) {
+	if err := NewInDir(t.TempDir()).SaveTemplate("  "); err == nil {
+		t.Fatal("SaveTemplate with no destination succeeded")
+	}
+}
+
+func TestSaveTemplateReportsWriteFailure(t *testing.T) {
+	dir := t.TempDir()
+	if err := NewInDir(dir).SaveTemplate(filepath.Join(dir, "missing", "template.json")); err == nil {
+		t.Fatal("SaveTemplate into a missing directory succeeded")
+	}
+}
+
+func TestImportRejectsWindowsDeviceNames(t *testing.T) {
+	for _, id := range []string{"con", "nul", "aux", "com1", "lpt9"} {
+		t.Run(id, func(t *testing.T) {
+			if _, err := importTheme(t, NewInDir(t.TempDir()), customTheme(id)); err == nil {
+				t.Fatalf("Import of Windows device name %q succeeded", id)
+			}
+		})
+	}
+}
+
+// The documented example is the shape users copy from, so it answers to the
+// validator like any other imported theme.
+func TestDocumentedExampleIsImportable(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "docs", "themes.md"))
+	if err != nil {
+		t.Fatalf("read docs/themes.md: %v", err)
+	}
+	block := regexp.MustCompile("(?s)```json\n(.*?)```").FindSubmatch(data)
+	if block == nil {
+		t.Fatal("docs/themes.md has no JSON example")
+	}
+	var example Theme
+	if err := json.Unmarshal(block[1], &example); err != nil {
+		t.Fatalf("parse documented example: %v", err)
+	}
+	example.Origin = OriginCustom
+	if err := validateCustom(example); err != nil {
+		t.Fatalf("documented example is not importable: %v", err)
+	}
+	if !reflect.DeepEqual(keySet(example.App), appTokens) {
+		t.Fatalf("documented app tokens = %#v, want %#v", keySet(example.App), appTokens)
+	}
 }
