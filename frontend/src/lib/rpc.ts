@@ -26,6 +26,7 @@ import type {
   StoredProject,
   StoredSession,
   ThemeDefinition,
+  ThemeImportResult,
   Worktree,
 } from "./api-types"
 
@@ -129,7 +130,7 @@ export const ProjectService = {
   Home: () => call<Project>("project.Home", []),
   /** Whether a stored project's directory is still there, before reopening it. */
   Exists: (path: string) => call<boolean>("project.Exists", [path]),
-  PickFile: () => call<string>("project.PickFile", []),
+  PickFile: (title: string) => call<string>("project.PickFile", [title]),
   Branch: (path: string) => call<string>("project.Branch", [path]),
   Diff: (path: string) => call<DiffStats>("project.Diff", [path]),
   DiffText: (path: string) => call<string>("project.DiffText", [path]),
@@ -302,8 +303,9 @@ export const Providers = {
 export const Themes = {
   /** Bundled themes plus user-imported themes from the config dir. */
   List: () => call<ThemeDefinition[] | null>("themes.List", []),
-  /** Import a raw theme JSON document into the config dir. */
-  Import: (raw: string) => call<ThemeDefinition>("themes.Import", [raw]),
+  /** Import a picked theme file, reporting an existing id before replacement. */
+  Import: (path: string, overwrite: boolean) =>
+    call<ThemeImportResult>("themes.Import", [path, overwrite]),
   /** Remove a user-imported theme. Bundled themes are rejected by the backend. */
   Remove: (id: string) => call<null>("themes.Remove", [id]),
 }

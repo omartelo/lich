@@ -67,7 +67,7 @@ before saving.
 
 - `id` is required, must match `^[a-z0-9][a-z0-9._-]{0,63}$`, and cannot be
   `light`, `dark`, `system`, or `match`.
-- `name` is required and cannot be blank.
+- `name` is required, cannot be blank, and cannot exceed 128 characters.
 - `scheme` must be `light` or `dark`.
 - `app` is required and must include every token shown in the example.
 - `terminal.background` and `terminal.foreground` are required.
@@ -78,3 +78,7 @@ before saving.
 - Unknown app or terminal tokens are rejected.
 - Color values are CSS color strings, cannot be blank, cannot exceed 128
   characters, and cannot contain `;`, `{`, or `}`.
+
+Import uses lich's native file picker. Re-importing a theme whose `id` already
+exists asks for confirmation before replacing the stored file; cancelling the
+confirmation leaves the existing theme unchanged.

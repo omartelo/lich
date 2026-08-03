@@ -10,17 +10,23 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 const (
-	OriginBundled = "bundled"
-	OriginCustom  = "custom"
-	SchemeLight   = "light"
-	SchemeDark    = "dark"
+	OriginBundled       = "bundled"
+	OriginCustom        = "custom"
+	SchemeLight         = "light"
+	SchemeDark          = "dark"
+	themeIDMaxLength    = 64
+	themeNameMaxLength  = 128
+	colorValueMaxLength = 128
+	maxThemeFileSize    = 1 << 20
+	themeIDPattern      = `^[a-z0-9][a-z0-9._-]{0,63}$`
 )
 
 var (
-	idPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
+	idPattern = regexp.MustCompile(themeIDPattern)
 	reserved  = map[string]struct{}{
 		"light":  {},
 		"dark":   {},
@@ -38,6 +44,13 @@ type Theme struct {
 	Origin   string            `json:"origin"`
 	App      map[string]string `json:"app"`
 	Terminal map[string]string `json:"terminal"`
+}
+
+// ImportResult either reports the installed theme or asks the UI to confirm
+// replacing the existing custom theme with the same id.
+type ImportResult struct {
+	Theme          Theme `json:"theme"`
+	NeedsOverwrite bool  `json:"needsOverwrite"`
 }
 
 // Service reads bundled themes plus user-imported themes.
@@ -86,37 +99,94 @@ func (s *Service) List() ([]Theme, error) {
 	return out, nil
 }
 
-// Import validates raw JSON and persists it as a custom theme.
-func (s *Service) Import(raw string) (Theme, error) {
+// Import reads a picked JSON file and installs it as a custom theme. An
+// existing id is reported without changing it unless overwrite is true.
+func (s *Service) Import(path string, overwrite bool) (ImportResult, error) {
 	if s.initErr != nil {
-		return Theme{}, s.initErr
+		return ImportResult{}, s.initErr
+	}
+	raw, err := readThemeFile(path)
+	if err != nil {
+		return ImportResult{}, err
 	}
 	var theme Theme
-	if err := json.Unmarshal([]byte(raw), &theme); err != nil {
-		return Theme{}, fmt.Errorf("parse theme JSON: %w", err)
+	if err := json.Unmarshal(raw, &theme); err != nil {
+		return ImportResult{}, fmt.Errorf("parse theme JSON: %w", err)
 	}
 	theme.Origin = OriginCustom
 	if err := validateCustom(theme); err != nil {
-		return Theme{}, err
+		return ImportResult{}, err
 	}
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
-		return Theme{}, fmt.Errorf("create themes dir: %w", err)
+		return ImportResult{}, fmt.Errorf("create themes dir: %w", err)
 	}
+	data, err := encodeTheme(theme)
+	if err != nil {
+		return ImportResult{}, err
+	}
+	destination := s.path(theme.ID)
+	if !overwrite {
+		created, err := writeNewTheme(destination, data)
+		if err != nil {
+			return ImportResult{}, err
+		}
+		if !created {
+			return ImportResult{Theme: theme, NeedsOverwrite: true}, nil
+		}
+		return ImportResult{Theme: theme}, nil
+	}
+	tmp := destination + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return ImportResult{}, fmt.Errorf("write theme: %w", err)
+	}
+	if err := os.Rename(tmp, destination); err != nil {
+		_ = os.Remove(tmp)
+		return ImportResult{}, fmt.Errorf("install theme: %w", err)
+	}
+	return ImportResult{Theme: theme}, nil
+}
+
+func readThemeFile(path string) ([]byte, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("read theme file: %w", err)
+	}
+	if !info.Mode().IsRegular() || info.Size() > maxThemeFileSize {
+		return nil, fmt.Errorf("theme file must be a regular file no larger than %d bytes", maxThemeFileSize)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read theme file: %w", err)
+	}
+	return data, nil
+}
+
+func encodeTheme(theme Theme) ([]byte, error) {
 	data, err := json.MarshalIndent(theme, "", "  ")
 	if err != nil {
-		return Theme{}, fmt.Errorf("encode theme: %w", err)
+		return nil, fmt.Errorf("encode theme: %w", err)
 	}
-	data = append(data, '\n')
-	path := s.path(theme.ID)
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return Theme{}, fmt.Errorf("write theme: %w", err)
+	return append(data, '\n'), nil
+}
+
+func writeNewTheme(path string, data []byte) (bool, error) {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if os.IsExist(err) {
+		return false, nil
 	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
-		return Theme{}, fmt.Errorf("install theme: %w", err)
+	if err != nil {
+		return false, fmt.Errorf("create theme: %w", err)
 	}
-	return theme, nil
+	if _, err := file.Write(data); err != nil {
+		_ = file.Close()
+		_ = os.Remove(path)
+		return false, fmt.Errorf("write theme: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		_ = os.Remove(path)
+		return false, fmt.Errorf("close theme: %w", err)
+	}
+	return true, nil
 }
 
 // Remove deletes a custom theme. Bundled and reserved ids cannot be removed.
@@ -194,6 +264,9 @@ func validateTheme(theme Theme) error {
 	if strings.TrimSpace(theme.Name) == "" {
 		return fmt.Errorf("theme name is required")
 	}
+	if utf8.RuneCountInString(theme.Name) > themeNameMaxLength {
+		return fmt.Errorf("theme name cannot exceed %d characters", themeNameMaxLength)
+	}
 	if theme.Scheme != SchemeLight && theme.Scheme != SchemeDark {
 		return fmt.Errorf("theme scheme must be %q or %q", SchemeLight, SchemeDark)
 	}
@@ -212,7 +285,7 @@ func validateTheme(theme Theme) error {
 }
 
 func validateID(id string) error {
-	if !idPattern.MatchString(id) {
+	if len(id) > themeIDMaxLength || !idPattern.MatchString(id) {
 		return fmt.Errorf("theme id %q must be lowercase letters, digits, dots, underscores or dashes", id)
 	}
 	return nil
@@ -245,7 +318,7 @@ func validateColorValue(group, key, value string) error {
 	if trimmed == "" {
 		return fmt.Errorf("%s.%s cannot be empty", group, key)
 	}
-	if len(trimmed) > 128 || strings.ContainsAny(trimmed, ";{}") {
+	if len(trimmed) > colorValueMaxLength || strings.ContainsAny(trimmed, ";{}") {
 		return fmt.Errorf("%s.%s is not a safe CSS color value", group, key)
 	}
 	return nil

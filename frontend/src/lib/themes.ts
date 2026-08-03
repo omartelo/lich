@@ -1,6 +1,6 @@
 import type { ThemeDefinition } from "@/lib/api-types"
-import darkTheme from "@/themes/dark.json"
-import lightTheme from "@/themes/light.json"
+import darkTheme from "../../../themes/dark.json"
+import lightTheme from "../../../themes/light.json"
 
 export const SYSTEM_THEME = "system"
 export const MATCH_TERMINAL_THEME = "match"
@@ -8,6 +8,11 @@ export const DEFAULT_THEME = SYSTEM_THEME
 export const DEFAULT_TERMINAL_THEME = MATCH_TERMINAL_THEME
 export const LIGHT_THEME_ID = "light"
 export const DARK_THEME_ID = "dark"
+export const BUNDLED_THEME_ORIGIN = "bundled"
+export const CUSTOM_THEME_ORIGIN = "custom"
+export const DARK_THEME_SCHEME = "dark"
+export const THEME_ID_MAX_LENGTH = 64
+export const THEME_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/
 
 export type Theme = typeof SYSTEM_THEME | string
 export type TerminalTheme = typeof MATCH_TERMINAL_THEME | string
@@ -15,7 +20,7 @@ export type ResolvedTheme = ThemeDefinition
 type ThemeImportTemplate = Omit<ThemeDefinition, "origin">
 
 const BUNDLED = [lightTheme, darkTheme].map((theme) =>
-  normalizeTheme(theme as unknown as ThemeDefinition, "bundled"),
+  normalizeTheme(theme as unknown as ThemeDefinition, BUNDLED_THEME_ORIGIN),
 )
 const BUNDLED_ORDER = new Map(BUNDLED.map((theme, index) => [theme.id, index]))
 
@@ -28,7 +33,7 @@ export function mergeThemes(
 ): ThemeDefinition[] {
   const byId = new Map<string, ThemeDefinition>()
   for (const theme of BUNDLED) {
-    byId.set(theme.id, normalizeTheme(theme, "bundled"))
+    byId.set(theme.id, normalizeTheme(theme, BUNDLED_THEME_ORIGIN))
   }
   for (const theme of themes ?? []) {
     const normalized = normalizeTheme(theme)
@@ -36,9 +41,9 @@ export function mergeThemes(
   }
   return [...byId.values()].sort((a, b) => {
     if (a.origin !== b.origin) {
-      return a.origin === "bundled" ? -1 : 1
+      return a.origin === BUNDLED_THEME_ORIGIN ? -1 : 1
     }
-    if (a.origin === "bundled") {
+    if (a.origin === BUNDLED_THEME_ORIGIN) {
       return (BUNDLED_ORDER.get(a.id) ?? 0) - (BUNDLED_ORDER.get(b.id) ?? 0)
     }
     return a.name.localeCompare(b.name)
@@ -50,10 +55,11 @@ export function resolveTheme(
   themes: readonly ThemeDefinition[],
   systemDark: boolean,
 ): ThemeDefinition {
+  const systemTheme = findTheme(themes, systemDark ? DARK_THEME_ID : LIGHT_THEME_ID)
   if (selected === SYSTEM_THEME) {
-    return findTheme(themes, systemDark ? DARK_THEME_ID : LIGHT_THEME_ID)
+    return systemTheme
   }
-  return findTheme(themes, selected)
+  return themes.find((theme) => theme.id === selected) ?? systemTheme
 }
 
 export function resolveTerminalTheme(
@@ -64,7 +70,7 @@ export function resolveTerminalTheme(
   if (selected === MATCH_TERMINAL_THEME) {
     return appTheme
   }
-  return findTheme(themes, selected)
+  return themes.find((theme) => theme.id === selected) ?? appTheme
 }
 
 export function applyAppTheme(theme: ThemeDefinition, root: HTMLElement): void {
@@ -74,7 +80,51 @@ export function applyAppTheme(theme: ThemeDefinition, root: HTMLElement): void {
 }
 
 export function customThemes(themes: readonly ThemeDefinition[]): ThemeDefinition[] {
-  return themes.filter((theme) => theme.origin === "custom")
+  return themes.filter((theme) => theme.origin === CUSTOM_THEME_ORIGIN)
+}
+
+export function bundledThemes(themes: readonly ThemeDefinition[]): ThemeDefinition[] {
+  return themes.filter((theme) => theme.origin === BUNDLED_THEME_ORIGIN)
+}
+
+export function mergeImportedTheme(
+  themes: readonly ThemeDefinition[],
+  imported: ThemeDefinition,
+): ThemeDefinition[] {
+  return mergeThemes([...themes, imported])
+}
+
+export interface ThemeSelections {
+  theme: Theme
+  terminalTheme: TerminalTheme
+}
+
+export function reconcileThemeSelections(
+  selections: ThemeSelections,
+  themes: readonly ThemeDefinition[],
+): ThemeSelections {
+  const ids = new Set(themes.map((item) => item.id))
+  return {
+    theme:
+      selections.theme === SYSTEM_THEME || ids.has(selections.theme)
+        ? selections.theme
+        : DEFAULT_THEME,
+    terminalTheme:
+      selections.terminalTheme === MATCH_TERMINAL_THEME || ids.has(selections.terminalTheme)
+        ? selections.terminalTheme
+        : DEFAULT_TERMINAL_THEME,
+  }
+}
+
+export function selectionsAfterThemeRemoval(
+  removedID: string,
+  selections: ThemeSelections,
+): ThemeSelections {
+  return {
+    theme: selections.theme === removedID ? DEFAULT_THEME : selections.theme,
+    terminalTheme:
+      selections.terminalTheme === removedID ? DEFAULT_TERMINAL_THEME : selections.terminalTheme,
+  }
 }
 
 export function themeTemplateJSON(): string {
@@ -155,15 +205,15 @@ function findTheme(themes: readonly ThemeDefinition[], id: string): ThemeDefinit
   return (
     themes.find((theme) => theme.id === id) ??
     themes.find((theme) => theme.id === LIGHT_THEME_ID) ??
-    normalizeTheme(lightTheme as unknown as ThemeDefinition, "bundled")
+    normalizeTheme(lightTheme as unknown as ThemeDefinition, BUNDLED_THEME_ORIGIN)
   )
 }
 
 function safePreference(raw: string | null): string | null {
-  if (!raw || raw.length > 64) {
+  if (!raw || raw.length > THEME_ID_MAX_LENGTH) {
     return null
   }
-  return /^[a-z0-9][a-z0-9._-]{0,63}$/.test(raw) ? raw : null
+  return THEME_ID_PATTERN.test(raw) ? raw : null
 }
 
 function normalizeTheme(

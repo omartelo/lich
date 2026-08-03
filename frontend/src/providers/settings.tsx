@@ -15,16 +15,19 @@ import { Themes as ThemeRPC } from "@/lib/rpc"
 import {
   applyAppTheme,
   BUNDLED_THEMES,
-  DEFAULT_TERMINAL_THEME,
-  DEFAULT_THEME,
+  DARK_THEME_SCHEME,
+  mergeImportedTheme,
   mergeThemes,
+  reconcileThemeSelections,
   resolveTerminalTheme,
   resolveTheme,
   sanitizeTerminalThemePreference,
   sanitizeThemePreference,
+  selectionsAfterThemeRemoval,
+  SYSTEM_THEME,
 } from "@/lib/themes"
 import type { TerminalTheme, Theme, ResolvedTheme } from "@/lib/themes"
-import type { ThemeDefinition } from "@/lib/api-types"
+import type { ThemeDefinition, ThemeImportResult } from "@/lib/api-types"
 
 export type { TerminalTheme, Theme, ResolvedTheme } from "@/lib/themes"
 export { DEFAULT_TERMINAL_THEME, DEFAULT_THEME } from "@/lib/themes"
@@ -97,7 +100,7 @@ interface SettingsValue {
   setTheme: (theme: Theme) => void
   /** Bundled and imported themes available to the app. */
   themes: ThemeDefinition[]
-  importTheme: (raw: string) => Promise<ThemeDefinition>
+  importTheme: (path: string, overwrite: boolean) => Promise<ThemeImportResult>
   removeTheme: (id: string) => Promise<void>
   /** Theme resolved to concrete colors (system already mapped to the OS). */
   resolvedTheme: ResolvedTheme
@@ -124,6 +127,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [font, setFontState] = useState<string>(readFont)
   const [terminalFontSize, setTerminalFontSizeState] = useState<number>(readTerminalFontSize)
   const [themes, setThemes] = useState<ThemeDefinition[]>(BUNDLED_THEMES)
+  const [themesLoaded, setThemesLoaded] = useState(false)
   const [theme, setThemeState] = useState<Theme>(readTheme)
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(BUNDLED_THEMES[0])
   const [zoom, setZoomState] = useState<number>(readZoom)
@@ -137,6 +141,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       .then((loaded) => {
         if (!cancelled) {
           setThemes(mergeThemes(loaded))
+          setThemesLoaded(true)
         }
       })
       .catch((error) => {
@@ -146,6 +151,19 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (!themesLoaded) return
+    const reconciled = reconcileThemeSelections({ theme, terminalTheme }, themes)
+    if (reconciled.theme !== theme) {
+      setThemeState(reconciled.theme)
+      writePref(THEME_STORAGE_KEY, reconciled.theme)
+    }
+    if (reconciled.terminalTheme !== terminalTheme) {
+      setTerminalThemeState(reconciled.terminalTheme)
+      writePref(TERMINAL_THEME_STORAGE_KEY, reconciled.terminalTheme)
+    }
+  }, [theme, terminalTheme, themes, themesLoaded])
 
   const setFont = useCallback((next: string) => {
     setFontState(next)
@@ -185,33 +203,33 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const importTheme = useCallback(
-    async (raw: string) => {
-      const imported = await ThemeRPC.Import(raw)
-      setThemes((prev) => mergeThemes([...prev, imported]))
-      setTheme(imported.id)
-      return imported
+    async (path: string, overwrite: boolean) => {
+      const result = await ThemeRPC.Import(path, overwrite)
+      if (!result.needsOverwrite) {
+        setThemes((prev) => mergeImportedTheme(prev, result.theme))
+        setTheme(result.theme.id)
+      }
+      return result
     },
     [setTheme],
   )
 
-  const removeTheme = useCallback(async (id: string) => {
-    await ThemeRPC.Remove(id)
-    setThemes((prev) => mergeThemes(prev.filter((item) => item.id !== id)))
-    setThemeState((prev) => {
-      if (prev !== id) {
-        return prev
+  const removeTheme = useCallback(
+    async (id: string) => {
+      await ThemeRPC.Remove(id)
+      setThemes((prev) => mergeThemes(prev.filter((item) => item.id !== id)))
+      const next = selectionsAfterThemeRemoval(id, { theme, terminalTheme })
+      if (next.theme !== theme) {
+        setThemeState(next.theme)
+        writePref(THEME_STORAGE_KEY, next.theme)
       }
-      writePref(THEME_STORAGE_KEY, DEFAULT_THEME)
-      return DEFAULT_THEME
-    })
-    setTerminalThemeState((prev) => {
-      if (prev !== id) {
-        return prev
+      if (next.terminalTheme !== terminalTheme) {
+        setTerminalThemeState(next.terminalTheme)
+        writePref(TERMINAL_THEME_STORAGE_KEY, next.terminalTheme)
       }
-      writePref(TERMINAL_THEME_STORAGE_KEY, DEFAULT_TERMINAL_THEME)
-      return DEFAULT_TERMINAL_THEME
-    })
-  }, [])
+    },
+    [theme, terminalTheme],
+  )
 
   const setHotkey = useCallback((id: HotkeyId, combo: Combo) => {
     setHotkeys((prev) => {
@@ -242,11 +260,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const apply = () => {
       const resolved = resolveTheme(theme, themes, media.matches)
       applyAppTheme(resolved, document.documentElement)
-      document.documentElement.classList.toggle("dark", resolved.scheme === "dark")
+      document.documentElement.classList.toggle(
+        DARK_THEME_SCHEME,
+        resolved.scheme === DARK_THEME_SCHEME,
+      )
       setResolvedTheme(resolved)
     }
     apply()
-    if (theme !== "system") return
+    if (theme !== SYSTEM_THEME) return
     media.addEventListener("change", apply)
     return () => media.removeEventListener("change", apply)
   }, [theme, themes])

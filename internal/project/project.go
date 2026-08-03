@@ -137,8 +137,8 @@ func (s *Service) Exists(path string) bool {
 
 // PickFile shows the native file picker and returns the chosen file path, or ""
 // if the user cancels the dialog.
-func (s *Service) PickFile() (string, error) {
-	path, err := s.picker.PickFile("Attach File")
+func (s *Service) PickFile(title string) (string, error) {
+	path, err := s.picker.PickFile(title)
 	if err != nil {
 		return "", fmt.Errorf("open dialog failed: %w", err)
 	}

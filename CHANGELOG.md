@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A project whose directory has been moved or deleted says so and leaves the
   list for good. With nothing closed yet the button is the picker it always was.
 
+- **Download a ready-to-edit template for a custom theme.** Appearance now puts
+  a template download beside the theme importer, so making a theme can start
+  from a valid JSON file instead of the documentation alone. The example names
+  every supported app and terminal color, uses valid values throughout, and is
+  ready to rename, recolor and import back into lich.
 - **Merge past a rule that is holding a pull request back.** Once GitHub answers
   that a rule on the base branch stands in the way, gh refuses the merge without
   ever calling GitHub — so there was nothing lich could do with that pull request
@@ -79,6 +84,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   saved under the app config directory. Imported themes can recolor both the
   interface tokens and the terminal palette, can be selected independently for
   the app and terminal, and can be removed without touching the bundled themes.
+  Re-importing an existing id asks before replacing it, and a deleted selected
+  theme returns both pickers to their automatic system behavior.
 - **Review comments, handed to the session as one prompt.** A diff could give
   the session a *reference* — a file, a line range — but never an instruction,
   so anything you actually wanted changed had to be typed out by hand while

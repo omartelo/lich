@@ -143,10 +143,8 @@ export function PullsList({
             <PanelLeftClose className="size-3.5" />
           </IconAction>
         </div>
-        {/* The settings screen's SegmentedControl is built for a full-width
-            pane; four options with counts wrap in a column this narrow, so this
-            is the same idiom at list density — one bordered track, the chosen
-            option filled. */}
+        {/* Four counted filters need a dense local track so they stay on one
+            line in this narrow column. */}
         <div
           role="radiogroup"
           aria-label="Pull request filter"

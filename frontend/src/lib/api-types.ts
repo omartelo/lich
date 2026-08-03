@@ -280,6 +280,12 @@ export interface ThemeDefinition {
   terminal: Record<string, string>
 }
 
+/** internal/themes.ImportResult — import outcome before an optional overwrite. */
+export interface ThemeImportResult {
+  theme: ThemeDefinition
+  needsOverwrite: boolean
+}
+
 /** internal/patchnotes.Group — one "### Added/Changed/Fixed" block of a release. */
 export interface PatchNotesGroup {
   label: string

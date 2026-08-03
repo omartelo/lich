@@ -4,12 +4,20 @@ import {
   APP_COLOR_TOKENS,
   applyAppTheme,
   BUNDLED_THEMES,
+  bundledThemes,
   customThemes,
+  DEFAULT_TERMINAL_THEME,
+  DEFAULT_THEME,
+  mergeImportedTheme,
   mergeThemes,
+  reconcileThemeSelections,
   resolveTerminalTheme,
   resolveTheme,
   sanitizeTerminalThemePreference,
   sanitizeThemePreference,
+  selectionsAfterThemeRemoval,
+  SYSTEM_THEME,
+  THEME_ID_MAX_LENGTH,
   THEME_TEMPLATE_FILENAME,
   themeTemplateJSON,
 } from "./themes"
@@ -37,19 +45,58 @@ describe("themes", () => {
     expect(customThemes(themes).map((theme) => theme.id)).toEqual(["custom-a", "custom-b"])
   })
 
-  it("resolves system to the bundled light or dark theme", () => {
-    expect(resolveTheme("system", BUNDLED_THEMES, false).id).toBe("light")
-    expect(resolveTheme("system", BUNDLED_THEMES, true).id).toBe("dark")
+  it("returns only bundled themes", () => {
+    const themes = mergeThemes([customTheme("custom")])
+    expect(bundledThemes(themes).map((theme) => theme.id)).toEqual(["light", "dark"])
   })
 
-  it("falls back to light when a stored custom theme is missing", () => {
+  it("merges an imported theme by id", () => {
+    const original = customTheme("custom")
+    const replacement = { ...original, name: "Replacement" }
+    const themes = mergeImportedTheme(mergeThemes([original]), replacement)
+    expect(themes).toHaveLength(3)
+    expect(themes[2].name).toBe("Replacement")
+  })
+
+  it("resolves system to the bundled light or dark theme", () => {
+    expect(resolveTheme(SYSTEM_THEME, BUNDLED_THEMES, false).id).toBe("light")
+    expect(resolveTheme(SYSTEM_THEME, BUNDLED_THEMES, true).id).toBe("dark")
+  })
+
+  it("falls back to the system scheme when a stored custom theme is missing", () => {
     expect(resolveTheme("missing", BUNDLED_THEMES, false).id).toBe("light")
+    expect(resolveTheme("missing", BUNDLED_THEMES, true).id).toBe("dark")
   })
 
   it("resolves terminal match to the app theme", () => {
     const appTheme = customTheme("custom")
     expect(resolveTerminalTheme("match", appTheme, BUNDLED_THEMES)).toBe(appTheme)
     expect(resolveTerminalTheme("dark", appTheme, BUNDLED_THEMES).id).toBe("dark")
+    expect(resolveTerminalTheme("missing", appTheme, BUNDLED_THEMES)).toBe(appTheme)
+  })
+
+  it("reconciles missing stored selections after themes load", () => {
+    expect(
+      reconcileThemeSelections(
+        { theme: "missing-app", terminalTheme: "missing-terminal" },
+        BUNDLED_THEMES,
+      ),
+    ).toEqual({ theme: DEFAULT_THEME, terminalTheme: DEFAULT_TERMINAL_THEME })
+    expect(
+      reconcileThemeSelections({ theme: "dark", terminalTheme: "light" }, BUNDLED_THEMES),
+    ).toEqual({ theme: "dark", terminalTheme: "light" })
+  })
+
+  it("resets only selections that use a removed theme", () => {
+    expect(
+      selectionsAfterThemeRemoval("custom", {
+        theme: "custom",
+        terminalTheme: "custom",
+      }),
+    ).toEqual({ theme: DEFAULT_THEME, terminalTheme: DEFAULT_TERMINAL_THEME })
+    expect(
+      selectionsAfterThemeRemoval("other", { theme: "custom", terminalTheme: "dark" }),
+    ).toEqual({ theme: "custom", terminalTheme: "dark" })
   })
 
   it("sanitizes stored theme preferences", () => {
@@ -57,6 +104,10 @@ describe("themes", () => {
     expect(sanitizeThemePreference("System")).toBe("system")
     expect(sanitizeTerminalThemePreference("match")).toBe("match")
     expect(sanitizeTerminalThemePreference("bad value")).toBe("match")
+    expect(sanitizeThemePreference("a".repeat(THEME_ID_MAX_LENGTH))).toHaveLength(
+      THEME_ID_MAX_LENGTH,
+    )
+    expect(sanitizeThemePreference("a".repeat(THEME_ID_MAX_LENGTH + 1))).toBe(DEFAULT_THEME)
   })
 
   it("applies every app token as a CSS variable", () => {

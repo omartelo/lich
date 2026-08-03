@@ -10,7 +10,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react"
-import { useRef, useState } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
 import {
   DEFAULT_TERMINAL_FONT_SIZE,
@@ -25,6 +25,7 @@ import {
 } from "@/providers/settings"
 import type { TerminalTheme, Theme } from "@/providers/settings"
 import type { ThemeDefinition } from "@/lib/api-types"
+import { ProjectService } from "@/lib/rpc"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { Stepper } from "@/components/common/Stepper"
 import { SettingBlock, SettingGroup } from "./SettingBlock"
@@ -40,7 +41,14 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { customThemes, THEME_TEMPLATE_FILENAME, themeTemplateJSON } from "@/lib/themes"
+import {
+  bundledThemes,
+  customThemes,
+  MATCH_TERMINAL_THEME,
+  SYSTEM_THEME,
+  THEME_TEMPLATE_FILENAME,
+  themeTemplateJSON,
+} from "@/lib/themes"
 import { errorText } from "@/lib/utils"
 
 // Appearance holds every look-and-feel control, split into an Interface group
@@ -48,8 +56,11 @@ import { errorText } from "@/lib/utils"
 // concerns read apart instead of as one flat list. The group label supplies the
 // context, so the block titles drop their "Interface"/"Terminal" prefix.
 export function AppearanceSettings() {
-  const fileRef = useRef<HTMLInputElement | null>(null)
   const [themePendingRemoval, setThemePendingRemoval] = useState<ThemeDefinition | null>(null)
+  const [themePendingOverwrite, setThemePendingOverwrite] = useState<{
+    path: string
+    theme: ThemeDefinition
+  } | null>(null)
   const [importedThemesOpen, setImportedThemesOpen] = useState(false)
   const {
     themes,
@@ -67,19 +78,29 @@ export function AppearanceSettings() {
   const importedThemes = customThemes(themes)
   const hasCustomThemes = importedThemes.length > 0
 
-  const onImportTheme = async (file: File | undefined) => {
-    if (!file) {
-      return
-    }
+  const onImportTheme = async () => {
     try {
-      const imported = await importTheme(await file.text())
-      toast.success(`Imported theme: ${imported.name}`)
+      const path = await ProjectService.PickFile("Import Theme")
+      if (!path) return
+      const result = await importTheme(path, false)
+      if (result.needsOverwrite) {
+        setThemePendingOverwrite({ path, theme: result.theme })
+        return
+      }
+      toast.success(`Imported theme: ${result.theme.name}`)
     } catch (error) {
       toast.error(`Theme import failed: ${errorText(error)}`)
-    } finally {
-      if (fileRef.current) {
-        fileRef.current.value = ""
-      }
+    }
+  }
+
+  const onOverwriteTheme = async () => {
+    if (!themePendingOverwrite) return
+    try {
+      const result = await importTheme(themePendingOverwrite.path, true)
+      toast.success(`Imported theme: ${result.theme.name}`)
+      setThemePendingOverwrite(null)
+    } catch (error) {
+      toast.error(`Theme import failed: ${errorText(error)}`)
     }
   }
 
@@ -123,38 +144,12 @@ export function AppearanceSettings() {
               <SelectContent>
                 <SelectGroup>
                   <SelectLabel>Automatic</SelectLabel>
-                  <SelectItem value="system">System</SelectItem>
+                  <SelectItem value={SYSTEM_THEME}>System</SelectItem>
                 </SelectGroup>
-                <SelectGroup>
-                  <SelectLabel>Bundled</SelectLabel>
-                  {themes
-                    .filter((item) => item.origin === "bundled")
-                    .map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.name}
-                      </SelectItem>
-                    ))}
-                </SelectGroup>
-                {hasCustomThemes && (
-                  <SelectGroup>
-                    <SelectLabel>Custom</SelectLabel>
-                    {importedThemes.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.name}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                )}
+                <ThemeOptions themes={themes} />
               </SelectContent>
             </Select>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="application/json,.json"
-              className="hidden"
-              onChange={(event) => void onImportTheme(event.currentTarget.files?.[0])}
-            />
-            <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>
+            <Button type="button" variant="outline" onClick={() => void onImportTheme()}>
               <Upload />
               Import
             </Button>
@@ -246,6 +241,22 @@ export function AppearanceSettings() {
               Remove theme
             </Button>
           </ConfirmDialog>
+          <ConfirmDialog
+            open={themePendingOverwrite !== null}
+            onCancel={() => setThemePendingOverwrite(null)}
+            title="Replace imported theme?"
+            description={
+              <>
+                A theme with the id{" "}
+                <span className="font-medium">{themePendingOverwrite?.theme.id}</span> already
+                exists. Import anyway? This permanently deletes the previous theme.
+              </>
+            }
+          >
+            <Button variant="destructive" onClick={() => void onOverwriteTheme()}>
+              Replace theme
+            </Button>
+          </ConfirmDialog>
         </SettingBlock>
 
         <SettingBlock
@@ -285,28 +296,9 @@ export function AppearanceSettings() {
             <SelectContent>
               <SelectGroup>
                 <SelectLabel>Automatic</SelectLabel>
-                <SelectItem value="match">Match app</SelectItem>
+                <SelectItem value={MATCH_TERMINAL_THEME}>Match app</SelectItem>
               </SelectGroup>
-              <SelectGroup>
-                <SelectLabel>Bundled</SelectLabel>
-                {themes
-                  .filter((item) => item.origin === "bundled")
-                  .map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.name}
-                    </SelectItem>
-                  ))}
-              </SelectGroup>
-              {hasCustomThemes && (
-                <SelectGroup>
-                  <SelectLabel>Custom</SelectLabel>
-                  {importedThemes.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.name}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              )}
+              <ThemeOptions themes={themes} />
             </SelectContent>
           </Select>
         </SettingBlock>
@@ -333,6 +325,37 @@ export function AppearanceSettings() {
 
         <FontSetting />
       </SettingGroup>
+    </>
+  )
+}
+
+interface ThemeOptionsProps {
+  themes: readonly ThemeDefinition[]
+}
+
+function ThemeOptions({ themes }: ThemeOptionsProps) {
+  const bundled = bundledThemes(themes)
+  const custom = customThemes(themes)
+  return (
+    <>
+      <SelectGroup>
+        <SelectLabel>Bundled</SelectLabel>
+        {bundled.map((item) => (
+          <SelectItem key={item.id} value={item.id}>
+            {item.name}
+          </SelectItem>
+        ))}
+      </SelectGroup>
+      {custom.length > 0 && (
+        <SelectGroup>
+          <SelectLabel>Custom</SelectLabel>
+          {custom.map((item) => (
+            <SelectItem key={item.id} value={item.id}>
+              {item.name}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      )}
     </>
   )
 }

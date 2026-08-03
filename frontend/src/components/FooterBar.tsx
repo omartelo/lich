@@ -104,7 +104,7 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
 
   const attachFile = async () => {
     try {
-      const file = await ProjectService.PickFile()
+      const file = await ProjectService.PickFile("Attach File")
       if (file && sessionId) {
         void TerminalService.Write(sessionId, `${file} `)
       }
