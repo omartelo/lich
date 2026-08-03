@@ -238,15 +238,17 @@ func (s *Service) CreateWorktree(projectPath, projectID, name, base string, base
 }
 
 // prHead is the little of a pull request CreateWorktreeFromPR needs: which
-// branch to check out, and whether that branch lives on a fork.
+// branch to check out, whether that branch lives on a fork, and whether the fork
+// takes pushes from a maintainer.
 type prHead struct {
 	RefName   string `json:"headRefName"`
 	CrossRepo bool   `json:"isCrossRepository"`
+	CanModify bool   `json:"maintainerCanModify"`
 }
 
 // pullRequestHead resolves a pull request's head branch through gh.
 func (s *Service) pullRequestHead(path string, number int) (prHead, error) {
-	out, err := s.gh(prReadTimeout, path, prArgs("view", number, "--json", "headRefName,isCrossRepository")...)
+	out, err := s.gh(prReadTimeout, path, prArgs("view", number, "--json", "headRefName,isCrossRepository,maintainerCanModify")...)
 	if err != nil {
 		return prHead{}, err
 	}
@@ -265,11 +267,13 @@ func (s *Service) pullRequestHead(path string, number int) (prHead, error) {
 // is created detached and handed to `gh pr checkout`, which owns resolving the
 // head ref and its tracking — the part raw git cannot do for a pull request.
 //
-// It refuses a PR from a fork: the branch would check out, but the commits an
-// agent makes there have nowhere to push, so the failure belongs before the
-// worktree exists rather than at the first push. A failed checkout takes the
-// worktree with it — a detached husk would sit in the picker offering a resume
-// of nothing, and would hold the path against a second attempt.
+// It refuses a PR from a fork that has "allow edits by maintainers" off: the
+// branch would check out, but the commits an agent makes there have nowhere to
+// push, so the failure belongs before the worktree exists rather than at the
+// first push. With the permission on, the fork's branch takes a push like any
+// other and the pull request opens. A failed checkout takes the worktree with it
+// — a detached husk would sit in the picker offering a resume of nothing, and
+// would hold the path against a second attempt.
 func (s *Service) CreateWorktreeFromPR(projectPath, projectID string, number int) (*Worktree, error) {
 	if number <= 0 {
 		return nil, fmt.Errorf("%d is not a pull request number.", number)
@@ -278,8 +282,8 @@ func (s *Service) CreateWorktreeFromPR(projectPath, projectID string, number int
 	if err != nil {
 		return nil, err
 	}
-	if head.CrossRepo {
-		return nil, fmt.Errorf("Pull request #%d comes from a fork: its branch could not be pushed back.", number)
+	if head.CrossRepo && !head.CanModify {
+		return nil, fmt.Errorf("Pull request #%d comes from a fork that does not allow edits by maintainers: its branch could not be pushed back.", number)
 	}
 	wtPath, err := reserveWorktreePath(projectPath, projectID, head.RefName)
 	if err != nil {

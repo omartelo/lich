@@ -198,9 +198,10 @@ export function Pulls({ list = false }: PullsProps) {
       checkedOut && sessionsOf(sessions, projectId ?? "").some((s) => s.path === checkedOut.path)
         ? "Go to session"
         : "Open in Session",
-    blocked: detail?.isCrossRepository
-      ? "The head branch lives on a fork — its commits could not be pushed back"
-      : null,
+    blocked:
+      detail?.isCrossRepository && !detail.maintainerCanModify
+        ? "The head branch lives on a fork that does not allow edits by maintainers — its commits could not be pushed back"
+        : null,
     busy: opening,
     run: () => void openInSession(),
   }
