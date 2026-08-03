@@ -7,8 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-08-03
+
 ### Added
 
+- **Appearance can import custom color themes.** lich still ships the bundled
+  Light and Dark themes, but Settings › Appearance now accepts theme JSON files
+  saved under the app config directory. Imported themes can recolor both the
+  interface tokens and the terminal palette, can be selected independently for
+  the app and terminal, and can be removed without touching the bundled themes.
+  Re-importing an existing id asks before replacing it, and a deleted selected
+  theme returns both pickers to their automatic system behavior. A theme does
+  not have to start from the documentation either: **Save template** writes a
+  valid example naming every supported app and terminal color, ready to rename,
+  recolor and import back. Both directions go through the same native dialogs as
+  the rest of lich, so the template lands where you choose it instead of
+  somewhere you have to go find afterwards.
 - **Report a bug without being told where the log file is.** Reporting anything
   meant being walked to a directory you had no reason to know, to a file whose
   name nobody had said out loud. Settings now ends in **Help**: one button opens
@@ -23,7 +37,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the settings nav next to **Updates**, the two of them apart from the sections
   that configure a project: neither is something you set, and neither is
   something you open twice in a session.
-
 - **Reopen a recent project without the file picker.** A closed project keeps
   everything it was closed with — its sessions, its name, its tab position —
   but finding it again meant walking the directory picker back to it. The "+"
@@ -31,14 +44,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   where you left it, with the picker one entry below for every other folder.
   A project whose directory has been moved or deleted says so and leaves the
   list for good. With nothing closed yet the button is the picker it always was.
-
-- **Save a ready-to-edit template for a custom theme.** Appearance now puts a
-  template beside the theme importer, so making a theme can start from a valid
-  JSON file instead of the documentation alone. The example names every
-  supported app and terminal color, uses valid values throughout, and is ready
-  to rename, recolor and import back into lich. Both sides go through the same
-  native dialogs the rest of lich uses, so the template lands where you choose
-  it instead of somewhere you have to go find afterwards.
 - **Merge past a rule that is holding a pull request back.** Once GitHub answers
   that a rule on the base branch stands in the way, gh refuses the merge without
   ever calling GitHub — so there was nothing lich could do with that pull request
@@ -96,13 +101,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   whole exchange in the order it happened — verdicts, comments on the pull
   request itself, and the threads whose lines the branch has since rewritten,
   which no diff can show. Settled threads fold themselves away behind a count.
-- **Appearance can import custom color themes.** lich still ships the bundled
-  Light and Dark themes, but Settings › Appearance now accepts theme JSON files
-  saved under the app config directory. Imported themes can recolor both the
-  interface tokens and the terminal palette, can be selected independently for
-  the app and terminal, and can be removed without touching the bundled themes.
-  Re-importing an existing id asks before replacing it, and a deleted selected
-  theme returns both pickers to their automatic system behavior.
 - **Review comments, handed to the session as one prompt.** A diff could give
   the session a *reference* — a file, a line range — but never an instruction,
   so anything you actually wanted changed had to be typed out by hand while
@@ -1333,7 +1331,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/omartelo/lich/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/omartelo/lich/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/omartelo/lich/compare/v0.21.1...v0.22.0
 [0.21.1]: https://github.com/omartelo/lich/compare/v0.21.0...v0.21.1
