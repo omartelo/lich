@@ -54,6 +54,16 @@ func (s *Service) CloseProject(id string) error {
 	return nil
 }
 
+// DeleteProject removes a project and, through ON DELETE CASCADE, its sessions.
+// Closing keeps a project for a later reopen; this is for the row that outlived
+// the directory it points at, which nothing can reopen anymore.
+func (s *Service) DeleteProject(id string) error {
+	if _, err := s.db.Exec(`DELETE FROM projects WHERE id = ?`, id); err != nil {
+		return fmt.Errorf("delete project %q: %w", id, err)
+	}
+	return nil
+}
+
 // AddSession inserts a session, makes it the project's active one and records the
 // project's next label counter — all atomically, mirroring the frontend reducer.
 // Kind selects what the session's PTY runs (a provider id or "shell"); empty

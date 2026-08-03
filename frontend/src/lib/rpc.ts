@@ -21,6 +21,7 @@ import type {
   PullRequestConversation,
   PullRequestDetail,
   PullRequestSummary,
+  RecentProject,
   ReviewEvent,
   StoredProject,
   StoredSession,
@@ -125,6 +126,8 @@ export const ProjectService = {
   /** A project rooted at the user's home dir, no picker (the update flow's
    * install terminal when no project is in view). */
   Home: () => call<Project>("project.Home", []),
+  /** Whether a stored project's directory is still there, before reopening it. */
+  Exists: (path: string) => call<boolean>("project.Exists", [path]),
   PickFile: () => call<string>("project.PickFile", []),
   Branch: (path: string) => call<string>("project.Branch", [path]),
   Diff: (path: string) => call<DiffStats>("project.Diff", [path]),
@@ -222,6 +225,10 @@ export const Store = {
   AddProject: (id: string, name: string, path: string) =>
     call<null>("store.AddProject", [id, name, path]),
   CloseProject: (id: string) => call<null>("store.CloseProject", [id]),
+  /** The closed projects offered for reopening, newest first (capped backend-side). */
+  RecentProjects: () => call<RecentProject[] | null>("store.RecentProjects", []),
+  /** Drop a project and its sessions for good — the row whose directory is gone. */
+  DeleteProject: (id: string) => call<null>("store.DeleteProject", [id]),
   AddSession: (
     projectID: string,
     sessionID: string,

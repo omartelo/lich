@@ -3,7 +3,7 @@ import type { ReactNode } from "react"
 import { toast } from "sonner"
 import { Bell, Folder } from "lucide-react"
 import { useMatch, useNavigate } from "react-router-dom"
-import type { Project } from "@/lib/api-types"
+import type { Project, RecentProject } from "@/lib/api-types"
 import type { StoredProject as StoreProject } from "@/lib/api-types"
 import { ProjectService, Store } from "@/lib/rpc"
 import { onAppEvent } from "@/lib/app-events"
@@ -24,6 +24,7 @@ import {
   type SessionState,
 } from "@/lib/session/sessions"
 import { applyOrder, pinFirst } from "@/lib/reorder"
+import { displayPath } from "@/lib/paths"
 import { defaultProviderKind } from "@/lib/providers-store"
 import {
   isIdEvent,
@@ -48,6 +49,9 @@ interface ProjectsValue {
   homeId: string | null
   /** Show the OS directory picker, add the chosen project and navigate to it. */
   openProject: () => Promise<void>
+  /** Reopen a closed project without the picker. A project whose directory is
+   * gone is dropped from the store instead, with a toast saying so. */
+  openRecent: (recent: RecentProject) => Promise<void>
   /** Ensure a project rooted at $HOME exists (no picker) and return its id — the
    * update flow's install terminal when no project is in view. */
   ensureHomeProject: () => Promise<string>
@@ -190,18 +194,39 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     return () => off()
   }, [])
 
+  // A reopened project keeps the sessions it was closed with, hence the reload.
+  // Nothing is seeded: a brand-new project lands on the empty screen.
+  const adopt = useCallback(
+    async (project: Project) => {
+      await Store.AddProject(project.id, project.name, project.path)
+      applyLoaded((await Store.LoadState()) ?? [])
+      navigate(`/projects/${project.id}`)
+    },
+    [applyLoaded, navigate],
+  )
+
   const openProject = useCallback(async () => {
     const picked = await ProjectService.Open()
     if (!picked) {
       return
     }
-    await Store.AddProject(picked.id, picked.name, picked.path)
+    await adopt(picked)
+  }, [adopt])
 
-    // A reopened project keeps the sessions it was closed with, hence the reload.
-    // Nothing is seeded: a brand-new project lands on the empty screen.
-    applyLoaded((await Store.LoadState()) ?? [])
-    navigate(`/projects/${picked.id}`)
-  }, [applyLoaded, navigate])
+  // Reopening skips the picker, so nothing guarantees the directory is still
+  // there — a project whose folder was moved or deleted can never be opened
+  // again, so its row goes with it rather than sitting in the list forever.
+  const openRecent = useCallback(
+    async (recent: RecentProject) => {
+      if (await ProjectService.Exists(recent.path)) {
+        await adopt(recent)
+        return
+      }
+      await Store.DeleteProject(recent.id)
+      toast.error(`Project not found: ${displayPath(recent.path)}`)
+    },
+    [adopt],
+  )
 
   // Add a $HOME-rooted project without the picker, idempotent by its stable id
   // (the same directory always maps to the same project), and return its id. The
@@ -480,6 +505,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       sessions,
       homeId,
       openProject,
+      openRecent,
       ensureHomeProject,
       closeProject,
       newSession,
@@ -497,6 +523,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       sessions,
       homeId,
       openProject,
+      openRecent,
       ensureHomeProject,
       closeProject,
       newSession,

@@ -1,5 +1,5 @@
 import { useMatch, useNavigate } from "react-router-dom"
-import { GitPullRequestArrow, Plus, Settings } from "lucide-react"
+import { GitPullRequestArrow, Settings } from "lucide-react"
 import { DndContext, closestCenter } from "@dnd-kit/core"
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable"
 import { cn } from "@/lib/utils"
@@ -12,9 +12,10 @@ import { NotificationsButton } from "./NotificationsButton"
 import { horizontalAxis, useSortableList } from "@/lib/use-sortable-list"
 import { ProjectTab } from "./ProjectTab"
 import { HomeTab } from "./HomeTab"
+import { OpenProjectMenu } from "./OpenProjectMenu"
 
 export function ProjectTabs() {
-  const { projects, sessions, homeId, openProject, closeProject, reorderProjects } = useProjects()
+  const { projects, sessions, homeId, closeProject, reorderProjects } = useProjects()
   const navigate = useNavigate()
   // The project the settings gear targets: whichever one is in view, falling
   // back to Home when the app is on the bare landing screen.
@@ -69,16 +70,7 @@ export function ProjectTabs() {
             ))}
           </SortableContext>
         </DndContext>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => void openProject()}
-          title="Open project"
-          aria-label="Open project"
-          className="text-muted-foreground"
-        >
-          <Plus className="size-4" />
-        </Button>
+        <OpenProjectMenu />
       </div>
       <div aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border" />
       <NotificationsButton />
