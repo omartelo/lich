@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Reopen a recent project without the file picker.** A closed project keeps
+  everything it was closed with — its sessions, its name, its tab position —
+  but finding it again meant walking the directory picker back to it. The "+"
+  in the tab strip now lists the last five projects you closed, each reopening
+  where you left it, with the picker one entry below for every other folder.
+  A project whose directory has been moved or deleted says so and leaves the
+  list for good. With nothing closed yet the button is the picker it always was.
+
 - **Merge past a rule that is holding a pull request back.** Once GitHub answers
   that a rule on the base branch stands in the way, gh refuses the merge without
   ever calling GitHub — so there was nothing lich could do with that pull request

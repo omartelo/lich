@@ -9,6 +9,10 @@ export interface Project {
   path: string
 }
 
+/** internal/store.Recent — a closed project offered for reopening. Identity
+ * only, hence the same shape as an opened one. */
+export type RecentProject = Project
+
 /** internal/project.DiffStats — uncommitted-changes summary of a work tree. */
 export interface DiffStats {
   files: number

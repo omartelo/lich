@@ -831,3 +831,97 @@ func TestPurgeWorktreeSessions(t *testing.T) {
 		t.Errorf("pathless rows after empty-path purge = %d, want 1 (guard held)", n)
 	}
 }
+
+// TestRecentProjectsListsClosedOnesNewestFirst covers the whole contract of the
+// reopen menu's list: open projects stay out of it, closed ones come back
+// newest first, and the list is capped.
+func TestRecentProjectsListsClosedOnesNewestFirst(t *testing.T) {
+	svc := newTestStore(t)
+	for _, id := range []string{"p1", "p2", "p3", "p4", "p5", "p6", "p7"} {
+		if err := svc.AddProject(id, id, "/tmp/"+id); err != nil {
+			t.Fatalf("AddProject(%s): %v", id, err)
+		}
+	}
+	for _, id := range []string{"p1", "p2", "p3", "p4", "p5", "p6"} {
+		if err := svc.CloseProject(id); err != nil {
+			t.Fatalf("CloseProject(%s): %v", id, err)
+		}
+	}
+
+	recents, err := svc.RecentProjects()
+	if err != nil {
+		t.Fatalf("RecentProjects: %v", err)
+	}
+	got := make([]string, len(recents))
+	for i, r := range recents {
+		got[i] = r.ID
+	}
+	want := []string{"p6", "p5", "p4", "p3", "p2"} // p7 is open, p1 falls off the limit
+	if len(got) != len(want) {
+		t.Fatalf("recent ids = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("recent ids = %v, want %v", got, want)
+		}
+	}
+	if recents[0].Name != "p6" || recents[0].Path != "/tmp/p6" {
+		t.Errorf("recent metadata = %+v", recents[0])
+	}
+}
+
+// TestReopeningARecentProjectRestoresItsSessions proves the menu's entry is the
+// same reopen path a tab close/reopen takes: the row is kept, so are its
+// sessions, and the project leaves the recent list once it is open again.
+func TestReopeningARecentProjectRestoresItsSessions(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2)
+	_ = svc.CloseProject("p1")
+
+	if err := svc.AddProject("p1", "alpha", "/tmp/alpha"); err != nil {
+		t.Fatalf("AddProject (reopen): %v", err)
+	}
+	recents, err := svc.RecentProjects()
+	if err != nil {
+		t.Fatalf("RecentProjects: %v", err)
+	}
+	if len(recents) != 0 {
+		t.Errorf("recents after reopen = %+v, want none", recents)
+	}
+	projects, err := svc.LoadState()
+	if err != nil {
+		t.Fatalf("LoadState: %v", err)
+	}
+	if len(projects) != 1 || len(projects[0].Sessions) != 1 {
+		t.Fatalf("reopened state = %+v, want one project with one session", projects)
+	}
+}
+
+// TestDeleteProjectRemovesItsSessions covers the missing-directory path: the
+// row is dropped for good, and the cascade takes its sessions with it.
+func TestDeleteProjectRemovesItsSessions(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2)
+	_ = svc.CloseProject("p1")
+
+	if err := svc.DeleteProject("p1"); err != nil {
+		t.Fatalf("DeleteProject: %v", err)
+	}
+	recents, err := svc.RecentProjects()
+	if err != nil {
+		t.Fatalf("RecentProjects: %v", err)
+	}
+	if len(recents) != 0 {
+		t.Errorf("recents after delete = %+v, want none", recents)
+	}
+	var sessions int
+	if err := svc.db.QueryRow(`SELECT COUNT(*) FROM sessions WHERE project_id = ?`, "p1").
+		Scan(&sessions); err != nil {
+		t.Fatalf("count sessions: %v", err)
+	}
+	if sessions != 0 {
+		t.Errorf("sessions after delete = %d, want 0 (cascade)", sessions)
+	}
+}

@@ -212,3 +212,24 @@ func TestDiffNoCommits(t *testing.T) {
 		t.Errorf("Diff(no-commit repo).Head = %q, want empty", got.Head)
 	}
 }
+
+// TestExistsAcceptsOnlyDirectories: a project path that now names a file is as
+// unopenable as one that names nothing, so both have to read as gone.
+func TestExistsAcceptsOnlyDirectories(t *testing.T) {
+	svc := New(nil)
+	dir := t.TempDir()
+	file := filepath.Join(dir, "file.txt")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	if !svc.Exists(dir) {
+		t.Errorf("Exists(%q) = false, want true", dir)
+	}
+	if svc.Exists(file) {
+		t.Errorf("Exists(file) = true, want false")
+	}
+	if svc.Exists(filepath.Join(dir, "gone")) {
+		t.Errorf("Exists(missing) = true, want false")
+	}
+}

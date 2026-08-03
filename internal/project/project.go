@@ -127,6 +127,14 @@ func parsePullRequest(out []byte) *PullRequest {
 	return &pr
 }
 
+// Exists reports whether path is still a directory on disk. A stored project
+// outlives the folder it points at — the picker guarantees the directory exists
+// when a project is first opened, nothing does when one is reopened from a row.
+func (s *Service) Exists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
 // PickFile shows the native file picker and returns the chosen file path, or ""
 // if the user cancels the dialog.
 func (s *Service) PickFile() (string, error) {

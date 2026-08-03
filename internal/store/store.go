@@ -221,6 +221,48 @@ func (s *Service) LoadState() ([]Project, error) {
 	return projects, nil
 }
 
+// Recent is a closed project offered for reopening — identity only, since the
+// menu that lists them shows a name and a path and nothing else.
+type Recent struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
+// recentLimit caps the reopen list. Five is what fits above the picker entry
+// without turning the menu into a second project list.
+const recentLimit = 5
+
+// RecentProjects returns the closed projects (is_open = 0) offered for
+// reopening, newest first.
+//
+// rowid DESC orders by when a project was first added, not when it was last
+// open — reopening keeps the row, so a project that has been through the list
+// does not move back to the top. A last_opened_at column is the upgrade path.
+func (s *Service) RecentProjects() ([]Recent, error) {
+	rows, err := s.db.Query(
+		`SELECT id, name, path FROM projects WHERE is_open = 0 ORDER BY rowid DESC LIMIT ?`,
+		recentLimit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query recent projects: %w", err)
+	}
+	defer rows.Close()
+
+	recents := []Recent{}
+	for rows.Next() {
+		var r Recent
+		if err := rows.Scan(&r.ID, &r.Name, &r.Path); err != nil {
+			return nil, fmt.Errorf("scan recent project: %w", err)
+		}
+		recents = append(recents, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate recent projects: %w", err)
+	}
+	return recents, nil
+}
+
 // sessionsOf returns a project's sessions in the order the user dragged them
 // into, falling back to insertion order for rows never reordered.
 func (s *Service) sessionsOf(projectID string) ([]Session, error) {
