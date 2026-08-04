@@ -518,6 +518,25 @@ func TestBundledThemesPassValidation(t *testing.T) {
 	}
 }
 
+// The bundled assets carry an "origin" for the frontend, which imports the same
+// JSON. Go must not read it back: a typo there would ship a theme the UI sorts
+// and filters as neither bundled nor custom.
+func TestBundledThemeOriginIgnoresAsset(t *testing.T) {
+	for name, field := range map[string]string{
+		"typo":    `"origin": "bundlde",`,
+		"custom":  `"origin": "custom",`,
+		"missing": "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			raw := `{"id": "light", "name": "Light", "scheme": "light", ` + field +
+				`"app": {}, "terminal": {}}`
+			if got := mustBundledTheme([]byte(raw)).Origin; got != OriginBundled {
+				t.Fatalf("origin = %q, want %q", got, OriginBundled)
+			}
+		})
+	}
+}
+
 // The template ships as the answer to "what shape does a theme have", so it has
 // to survive the same validator an imported file meets — not just parse.
 func TestBundledTemplateIsImportable(t *testing.T) {
