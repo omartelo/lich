@@ -8,9 +8,10 @@ import {
   customThemes,
   DEFAULT_TERMINAL_THEME,
   DEFAULT_THEME,
-  mergeImportedTheme,
+  mergeImportedThemes,
   mergeThemes,
   reconcileThemeSelections,
+  repoLabel,
   resolveTerminalTheme,
   resolveTheme,
   selectionsAfterThemeRemoval,
@@ -50,9 +51,36 @@ describe("themes", () => {
   it("merges an imported theme by id", () => {
     const original = customTheme("custom")
     const replacement = { ...original, name: "Replacement" }
-    const themes = mergeImportedTheme(mergeThemes([original]), replacement)
+    const themes = mergeImportedThemes(mergeThemes([original]), [replacement])
     expect(themes).toHaveLength(3)
     expect(themes[2].name).toBe("Replacement")
+  })
+
+  it("merges a whole installed pack at once", () => {
+    const themes = mergeImportedThemes(BUNDLED_THEMES, [
+      customTheme("pack-a"),
+      customTheme("pack-b"),
+    ])
+    expect(themes.map((theme) => theme.id)).toEqual(["light", "dark", "pack-a", "pack-b"])
+  })
+
+  it("keeps the repository source of an installed theme", () => {
+    const installed = {
+      ...customTheme("installed"),
+      source: { url: "https://github.com/you/lich-themes.git", version: "1.2.0" },
+    }
+    const merged = mergeThemes([installed])
+    expect(merged[2].source).toEqual(installed.source)
+    // The merge must copy the source, not alias the caller's object.
+    expect(merged[2].source).not.toBe(installed.source)
+    expect(mergeThemes([customTheme("plain")])[2].source).toBeUndefined()
+  })
+
+  it("shortens a clone URL to owner/repo", () => {
+    expect(repoLabel("https://github.com/you/lich-themes.git")).toBe("you/lich-themes")
+    expect(repoLabel("git@github.com:you/lich-themes.git")).toBe("you/lich-themes")
+    expect(repoLabel("https://gitlab.com/team/group/themes/")).toBe("group/themes")
+    expect(repoLabel("/home/you/themes")).toBe("you/themes")
   })
 
   it("resolves system to the bundled light or dark theme", () => {

@@ -102,11 +102,22 @@ export function themeSelectItems(
   return items
 }
 
-export function mergeImportedTheme(
+export function mergeImportedThemes(
   themes: readonly ThemeDefinition[],
-  imported: ThemeDefinition,
+  imported: readonly ThemeDefinition[],
 ): ThemeDefinition[] {
-  return mergeThemes([...themes, imported])
+  return mergeThemes([...themes, ...imported])
+}
+
+// repoLabel shortens a clone URL to the "owner/repo" a user recognizes; the
+// full URL is kept for the tooltip, since only the tail fits a theme row.
+export function repoLabel(url: string): string {
+  const trimmed = url
+    .trim()
+    .replace(/\.git$/, "")
+    .replace(/[/\\]+$/, "")
+  const segments = trimmed.split(/[/\\:]+/).filter(Boolean)
+  return segments.slice(-2).join("/") || trimmed
 }
 
 export interface ThemeSelections {
@@ -148,6 +159,7 @@ function normalizeTheme(theme: ThemeDefinition): ThemeDefinition {
     name: theme.name,
     scheme: theme.scheme,
     origin: theme.origin,
+    ...(theme.source ? { source: { ...theme.source } } : {}),
     app: { ...theme.app },
     terminal: { ...theme.terminal },
   }

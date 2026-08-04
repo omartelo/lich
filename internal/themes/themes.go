@@ -62,8 +62,18 @@ type Theme struct {
 	Name     string            `json:"name"`
 	Scheme   string            `json:"scheme"`
 	Origin   string            `json:"origin"`
+	Source   *Source           `json:"source,omitempty"`
 	App      map[string]string `json:"app"`
 	Terminal map[string]string `json:"terminal"`
+}
+
+// Source records the repository a theme was installed from and the manifest
+// version it came in at, so lich can clone it again to look for a newer one. It
+// is written by lich, never by a picked file: a standalone import has no
+// source and stays unversioned.
+type Source struct {
+	URL     string `json:"url"`
+	Version string `json:"version"`
 }
 
 // ImportResult either reports the installed theme or asks the UI to confirm
@@ -134,36 +144,66 @@ func (s *Service) Import(path string, overwrite bool) (ImportResult, error) {
 		return ImportResult{}, fmt.Errorf("parse theme JSON: %w", err)
 	}
 	theme.Origin = OriginCustom
+	// A picked file names no repository: whatever it claims as its source would
+	// point a later update check at a URL lich never cloned.
+	theme.Source = nil
 	if err := validateCustom(theme); err != nil {
 		return ImportResult{}, err
 	}
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
 		return ImportResult{}, fmt.Errorf("create themes dir: %w", err)
 	}
-	data, err := encodeTheme(theme)
+	installed, err := s.install(theme, overwrite)
 	if err != nil {
 		return ImportResult{}, err
 	}
+	if !installed {
+		return ImportResult{Theme: theme, NeedsOverwrite: true}, nil
+	}
+	return ImportResult{Theme: theme}, nil
+}
+
+// install writes theme to its file. Without overwrite an existing file is left
+// untouched and install reports false, which the callers turn into a question
+// for the user.
+func (s *Service) install(theme Theme, overwrite bool) (bool, error) {
+	data, err := encodeTheme(theme)
+	if err != nil {
+		return false, err
+	}
 	destination := s.path(theme.ID)
 	if !overwrite {
-		created, err := writeNewTheme(destination, data)
-		if err != nil {
-			return ImportResult{}, err
-		}
-		if !created {
-			return ImportResult{Theme: theme, NeedsOverwrite: true}, nil
-		}
-		return ImportResult{Theme: theme}, nil
+		return writeNewTheme(destination, data)
 	}
 	tmp := destination + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return ImportResult{}, fmt.Errorf("write theme: %w", err)
+		return false, fmt.Errorf("write theme: %w", err)
 	}
 	if err := os.Rename(tmp, destination); err != nil {
 		_ = os.Remove(tmp)
-		return ImportResult{}, fmt.Errorf("install theme: %w", err)
+		return false, fmt.Errorf("install theme: %w", err)
 	}
-	return ImportResult{Theme: theme}, nil
+	return true, nil
+}
+
+// read loads one installed theme by id.
+func (s *Service) read(id string) (Theme, error) {
+	if err := validateID(id); err != nil {
+		return Theme{}, err
+	}
+	data, err := os.ReadFile(s.path(id))
+	if err != nil {
+		return Theme{}, fmt.Errorf("read theme %q: %w", id, err)
+	}
+	var theme Theme
+	if err := json.Unmarshal(data, &theme); err != nil {
+		return Theme{}, fmt.Errorf("parse theme %q: %w", id, err)
+	}
+	theme.Origin = OriginCustom
+	if err := validateCustom(theme); err != nil {
+		return Theme{}, err
+	}
+	return theme, nil
 }
 
 // SaveTemplate writes the bundled starter theme to a destination the user
@@ -313,6 +353,9 @@ func validateTheme(theme Theme) error {
 	if theme.Scheme != SchemeLight && theme.Scheme != SchemeDark {
 		return fmt.Errorf("theme scheme must be %q or %q", SchemeLight, SchemeDark)
 	}
+	if err := validateSource(theme.Source); err != nil {
+		return err
+	}
 	if err := validateColors("app", theme.App, appTokens, appColorValue, true); err != nil {
 		return err
 	}
@@ -377,7 +420,7 @@ func validateColorValue(group, key, value string, pattern *regexp.Regexp) error 
 }
 
 func cloneTheme(theme Theme) Theme {
-	return Theme{
+	out := Theme{
 		ID:       theme.ID,
 		Name:     theme.Name,
 		Scheme:   theme.Scheme,
@@ -385,6 +428,11 @@ func cloneTheme(theme Theme) Theme {
 		App:      cloneMap(theme.App),
 		Terminal: cloneMap(theme.Terminal),
 	}
+	if theme.Source != nil {
+		source := *theme.Source
+		out.Source = &source
+	}
+	return out
 }
 
 func cloneMap(in map[string]string) map[string]string {

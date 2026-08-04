@@ -18,7 +18,7 @@ import {
   DARK_THEME_SCHEME,
   DEFAULT_TERMINAL_THEME,
   DEFAULT_THEME,
-  mergeImportedTheme,
+  mergeImportedThemes,
   mergeThemes,
   reconcileThemeSelections,
   resolveTerminalTheme,
@@ -27,7 +27,7 @@ import {
   SYSTEM_THEME,
 } from "@/lib/themes"
 import type { TerminalTheme, Theme, ResolvedTheme } from "@/lib/themes"
-import type { ThemeDefinition, ThemeImportResult } from "@/lib/api-types"
+import type { ThemeDefinition, ThemeGitInstallResult, ThemeImportResult } from "@/lib/api-types"
 
 export type { TerminalTheme, Theme, ResolvedTheme } from "@/lib/themes"
 export { DEFAULT_TERMINAL_THEME, DEFAULT_THEME } from "@/lib/themes"
@@ -104,6 +104,10 @@ interface SettingsValue {
   /** Bundled and imported themes available to the app. */
   themes: ThemeDefinition[]
   importTheme: (path: string, overwrite: boolean) => Promise<ThemeImportResult>
+  /** Install every theme of a repository, versioned by its manifest. */
+  installThemesFromGit: (url: string, overwrite: boolean) => Promise<ThemeGitInstallResult>
+  /** Re-clone the repository a theme came from and install a newer manifest. */
+  updateThemeFromGit: (id: string) => Promise<ThemeGitInstallResult>
   removeTheme: (id: string) => Promise<void>
   /** Theme resolved to concrete colors (system already mapped to the OS). */
   resolvedTheme: ResolvedTheme
@@ -209,12 +213,45 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     async (path: string, overwrite: boolean) => {
       const result = await ThemeRPC.Import(path, overwrite)
       if (!result.needsOverwrite) {
-        setThemes((prev) => mergeImportedTheme(prev, result.theme))
+        setThemes((prev) => mergeImportedThemes(prev, [result.theme]))
         setTheme(result.theme.id)
       }
       return result
     },
     [setTheme],
+  )
+
+  // A pack installs as a whole, so its first theme is what gets selected —
+  // selecting nothing would leave the user with no sign the install landed.
+  const adoptInstalledThemes = useCallback(
+    (installed: readonly ThemeDefinition[], select: boolean) => {
+      if (installed.length === 0) return
+      setThemes((prev) => mergeImportedThemes(prev, installed))
+      if (select) {
+        setTheme(installed[0].id)
+      }
+    },
+    [setTheme],
+  )
+
+  const installThemesFromGit = useCallback(
+    async (url: string, overwrite: boolean) => {
+      const result = await ThemeRPC.InstallFromGit(url, overwrite)
+      adoptInstalledThemes(result.themes ?? [], true)
+      return result
+    },
+    [adoptInstalledThemes],
+  )
+
+  const updateThemeFromGit = useCallback(
+    async (id: string) => {
+      const result = await ThemeRPC.UpdateFromGit(id)
+      // An update repaints themes the user may already be looking at, but it
+      // must not move the selection off the one they picked.
+      adoptInstalledThemes(result.themes ?? [], false)
+      return result
+    },
+    [adoptInstalledThemes],
   )
 
   const removeTheme = useCallback(
@@ -343,6 +380,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         theme,
         setTheme,
         importTheme,
+        installThemesFromGit,
+        updateThemeFromGit,
         removeTheme,
         resolvedTheme,
         zoom,

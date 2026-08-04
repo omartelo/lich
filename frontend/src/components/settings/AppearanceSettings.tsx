@@ -2,8 +2,10 @@ import {
   CaseSensitive,
   ChevronDown,
   Download,
+  GitBranch,
   Minus,
   Plus,
+  RefreshCw,
   SquareTerminal,
   Trash2,
   Upload,
@@ -30,6 +32,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { Stepper } from "@/components/common/Stepper"
 import { SettingBlock, SettingGroup } from "./SettingBlock"
 import { FontSetting } from "./FontSetting"
+import { ImportThemeDialog } from "./ImportThemeDialog"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -45,6 +48,7 @@ import {
   bundledThemes,
   customThemes,
   MATCH_TERMINAL_THEME,
+  repoLabel,
   SYSTEM_THEME,
   THEME_TEMPLATE_FILENAME,
   themeSelectItems,
@@ -61,12 +65,21 @@ export function AppearanceSettings() {
     path: string
     theme: ThemeDefinition
   } | null>(null)
+  const [packPendingOverwrite, setPackPendingOverwrite] = useState<{
+    url: string
+    conflicts: string[]
+  } | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [updatingID, setUpdatingID] = useState<string | null>(null)
   const [importedThemesOpen, setImportedThemesOpen] = useState(false)
   const {
     themes,
     theme,
     setTheme,
     importTheme,
+    installThemesFromGit,
+    updateThemeFromGit,
     removeTheme,
     zoom,
     setZoom,
@@ -78,11 +91,13 @@ export function AppearanceSettings() {
   const importedThemes = customThemes(themes)
   const hasCustomThemes = importedThemes.length > 0
 
-  const onImportTheme = async () => {
+  const onChooseThemeFile = async () => {
+    setImporting(true)
     try {
       const path = await ProjectService.PickFile("Import Theme")
       if (!path) return
       const result = await importTheme(path, false)
+      setImportOpen(false)
       if (result.needsOverwrite) {
         setThemePendingOverwrite({ path, theme: result.theme })
         return
@@ -90,6 +105,45 @@ export function AppearanceSettings() {
       toast.success(`Imported theme: ${result.theme.name}`)
     } catch (error) {
       toast.error(`Theme import failed: ${errorText(error)}`)
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  const installRepository = async (url: string, overwrite: boolean) => {
+    setImporting(true)
+    try {
+      const result = await installThemesFromGit(url, overwrite)
+      setImportOpen(false)
+      const conflicts = result.conflicts ?? []
+      if (conflicts.length > 0) {
+        setPackPendingOverwrite({ url, conflicts })
+        return
+      }
+      setPackPendingOverwrite(null)
+      toast.success(
+        `Installed ${themeCount(result.themes?.length ?? 0)} from ${result.pack} v${result.version}`,
+      )
+    } catch (error) {
+      toast.error(`Theme install failed: ${errorText(error)}`)
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  const onUpdateTheme = async (item: ThemeDefinition) => {
+    setUpdatingID(item.id)
+    try {
+      const result = await updateThemeFromGit(item.id)
+      toast.success(
+        result.upToDate
+          ? `${result.pack} is already at v${result.version}`
+          : `Updated ${result.pack} to v${result.version}`,
+      )
+    } catch (error) {
+      toast.error(`Theme update failed: ${errorText(error)}`)
+    } finally {
+      setUpdatingID(null)
     }
   }
 
@@ -152,7 +206,7 @@ export function AppearanceSettings() {
                 <ThemeOptions themes={themes} />
               </SelectContent>
             </Select>
-            <Button type="button" variant="outline" onClick={() => void onImportTheme()}>
+            <Button type="button" variant="outline" onClick={() => setImportOpen(true)}>
               <Upload />
               Import
             </Button>
@@ -203,10 +257,41 @@ export function AppearanceSettings() {
                       />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm">{item.name}</span>
-                        <span className="block truncate font-mono text-xs text-muted-foreground">
-                          {item.id}
-                        </span>
+                        {/* The row is narrow: the repository replaces the id
+                            rather than sharing the line, or both truncate away. */}
+                        {item.source ? (
+                          <span className="flex min-w-0 items-center gap-1.5 font-mono text-xs text-muted-foreground">
+                            <GitBranch className="size-3 shrink-0" />
+                            <span className="truncate" title={item.source.url}>
+                              {repoLabel(item.source.url)}
+                            </span>
+                            <span className="shrink-0 tabular-nums">v{item.source.version}</span>
+                          </span>
+                        ) : (
+                          <span className="block truncate font-mono text-xs text-muted-foreground">
+                            {item.id}
+                          </span>
+                        )}
                       </span>
+                      {item.source && (
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label={`Update ${item.name}`}
+                                disabled={updatingID !== null}
+                                onClick={() => void onUpdateTheme(item)}
+                              />
+                            }
+                          >
+                            <RefreshCw className={updatingID === item.id ? "animate-spin" : ""} />
+                          </TooltipTrigger>
+                          <TooltipContent>Check the repository for a newer version</TooltipContent>
+                        </Tooltip>
+                      )}
                       <Tooltip>
                         <TooltipTrigger
                           render={
@@ -229,6 +314,35 @@ export function AppearanceSettings() {
               )}
             </div>
           )}
+          <ImportThemeDialog
+            open={importOpen}
+            onOpenChange={setImportOpen}
+            onInstallRepository={(url) => installRepository(url, false)}
+            onChooseFile={onChooseThemeFile}
+            busy={importing}
+          />
+          <ConfirmDialog
+            open={packPendingOverwrite !== null}
+            onCancel={() => setPackPendingOverwrite(null)}
+            title="Replace imported themes?"
+            description={
+              <>
+                The repository carries themes that are already installed:{" "}
+                <span className="font-medium">{packPendingOverwrite?.conflicts.join(", ")}</span>.
+                Install anyway? This permanently deletes the previous versions.
+              </>
+            }
+          >
+            <Button
+              variant="destructive"
+              disabled={importing}
+              onClick={() => {
+                if (packPendingOverwrite) void installRepository(packPendingOverwrite.url, true)
+              }}
+            >
+              Replace themes
+            </Button>
+          </ConfirmDialog>
           <ConfirmDialog
             open={themePendingRemoval !== null}
             onCancel={() => setThemePendingRemoval(null)}
@@ -331,6 +445,10 @@ export function AppearanceSettings() {
       </SettingGroup>
     </>
   )
+}
+
+function themeCount(count: number): string {
+  return count === 1 ? "1 theme" : `${count} themes`
 }
 
 interface ThemeOptionsProps {
