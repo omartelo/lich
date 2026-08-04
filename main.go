@@ -190,23 +190,23 @@ func runChromium(term *terminal.Service, configDir string, coord *restart.Coordi
 }
 
 // handleBindFailure runs when the pinned listener would not bind, and never
-// returns. A fresh launch whose port is held by another live lich is a duplicate
-// launch: focus that window and exit 0 — the user re-launching an app they
-// already have open should get the window, not an error. Anything else (a
-// restart successor that never got the port back, or a non-lich process sitting
-// on the port) is a real failure: log it and exit 1.
+// returns. It gathers the two inputs the decision needs, asks
+// singleton.BindFailureVerdict what they mean, and performs the effects.
 func handleBindFailure(configDir string) {
 	port := os.Getenv("LICH_LISTEN_PORT")
-	// A restart successor legitimately expects the port to be busy for a moment
-	// (it retries the bind); a failure there is real, not a duplicate launch.
-	if os.Getenv(restart.WaitEnv) == "" {
+	restartWait := os.Getenv(restart.WaitEnv)
+	// A restart successor never probes: the verdict is already decided, and the
+	// probe would only cost it a timeout on a port it is racing for.
+	var running *singleton.Info
+	if restartWait == "" {
 		want, _ := strconv.Atoi(port)
-		if running, _ := singleton.Detect(configDir, want, singleton.Ping); running != nil {
-			slog.Info("lich already running, focusing existing window",
-				"pid", running.PID, "port", running.Port)
-			focusRunning(configDir, running)
-			os.Exit(0)
-		}
+		running, _ = singleton.Detect(configDir, want, singleton.Ping)
+	}
+	if singleton.BindFailureVerdict(restartWait, running) == singleton.BindFailureIsDuplicate {
+		slog.Info("lich already running, focusing existing window",
+			"pid", running.PID, "port", running.Port)
+		focusRunning(configDir, running)
+		os.Exit(0)
 	}
 	slog.Error("loopback listener failed to start — is the port free?", "port", port)
 	os.Exit(1)
