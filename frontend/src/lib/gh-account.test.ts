@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { accountLabel, splitAccount, upgradeAccount } from "./gh-account"
+import { accountLabel, accountSelectItems, splitAccount, upgradeAccount } from "./gh-account"
 
 describe("upgradeAccount", () => {
   const accounts = ["github.com/omartelo", "ghe.example.com/work-login"]
@@ -61,5 +61,23 @@ describe("accountLabel", () => {
 
   it("shows a host-less account as its bare login", () => {
     expect(accountLabel("omartelo", ["omartelo"])).toBe("omartelo")
+  })
+})
+
+describe("accountSelectItems", () => {
+  it("labels the no-override row and every account the picker offers", () => {
+    const accounts = ["github.com/omartelo", "ghe.example.com/omartelo"]
+    const items = accountSelectItems("__active__", "gh's active account", accounts)
+
+    expect(items.__active__).toBe("gh's active account")
+    expect(items["github.com/omartelo"]).toBe("omartelo — github.com")
+    expect(items["ghe.example.com/omartelo"]).toBe("omartelo — ghe.example.com")
+    expect(Object.keys(items)).toHaveLength(accounts.length + 1)
+  })
+
+  it("offers the no-override row on its own when gh lists nothing", () => {
+    expect(accountSelectItems("__active__", "gh's active account", [])).toEqual({
+      __active__: "gh's active account",
+    })
   })
 })

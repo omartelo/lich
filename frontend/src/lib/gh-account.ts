@@ -33,3 +33,19 @@ export function accountLabel(account: string, accounts: readonly string[]): stri
   const hosts = new Set(accounts.map((a) => splitAccount(a)[0]))
   return hosts.size > 1 || host !== "github.com" ? `${login} — ${host}` : login
 }
+
+/** Every row the account picker offers, as the value→label map a Select needs
+ * to label its own trigger. Without it the closed trigger stringifies the
+ * value, showing the stand-in for "no override" and the host-qualified form
+ * of an account rather than the words the rows read. */
+export function accountSelectItems(
+  activeValue: string,
+  activeLabel: string,
+  accounts: readonly string[],
+): Record<string, string> {
+  const items: Record<string, string> = { [activeValue]: activeLabel }
+  for (const account of accounts) {
+    items[account] = accountLabel(account, accounts)
+  }
+  return items
+}

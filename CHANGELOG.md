@@ -83,6 +83,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   requires — the message, author or committer email patterns, and what each one
   expects.
 
+### Fixed
+
+- **Settings dropdowns read back what you picked.** A closed dropdown showed the
+  stored value instead of the row you had chosen, so the default provider read
+  `claude` rather than "Claude Code", and the GitHub account read `__active__`
+  — an internal placeholder that means "no override" — or the host-qualified
+  `github.com/you` where the row itself had said `you`. Picking again was the
+  only way to be sure what was set, and the account one could easily read as
+  something having gone wrong. Every dropdown now shows the same words when
+  closed that it shows when open.
+
 ## [0.23.0] - 2026-07-30
 
 ### Added
