@@ -134,6 +134,47 @@ func TestCreateWorktreeSeedsIgnored(t *testing.T) {
 	}
 }
 
+// TestCreateWorktreeSkipsACollapsedIgnoredTreeSilently pins the trailing-slash
+// guard, which only shows itself in the log. `git ls-files --directory`
+// collapses a wholly ignored tree into a single entry ("secrets/"), and a
+// slashless include pattern matches that entry by basename — so the seed does
+// reach a directory here. Whether it is skipped by the guard or refused by
+// copyFile, nothing lands in the worktree and nothing joins the copied slice;
+// the difference is that copyFile refuses it as an error and the loop files a
+// warning for a tree the seed was never going to copy. The absence of that
+// warning is the contract.
+func TestCreateWorktreeSkipsACollapsedIgnoredTreeSilently(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	repo, git := initRepo(t)
+	for rel, content := range map[string]string{
+		".gitignore":        "secrets/\n",
+		".worktreeinclude":  "secrets*\n",
+		"secrets/token.txt": "s3cret\n",
+	} {
+		p := filepath.Join(repo, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	git("add", ".gitignore", ".worktreeinclude")
+	git("commit", "-m", "ignore secrets")
+
+	logged := captureLog(t)
+	wt, err := New(nil).CreateWorktree(repo, "pid", "collapsed", "main", false)
+	if err != nil {
+		t.Fatalf("CreateWorktree: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(wt.Path, "secrets")); !os.IsNotExist(err) {
+		t.Errorf("ignored tree seeded, want absent (err=%v)", err)
+	}
+	if out := logged(); out != "" {
+		t.Errorf("seeding a collapsed ignored tree logged:\n%s", out)
+	}
+}
+
 // TestCreateWorktreeSeedsFromIncludeFile proves .worktreeinclude replaces the
 // default patterns instead of extending them.
 func TestCreateWorktreeSeedsFromIncludeFile(t *testing.T) {
