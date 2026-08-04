@@ -144,6 +144,37 @@ func TestInitRotatesOversizedLog(t *testing.T) {
 	}
 }
 
+// TestInitKeepsUndersizedLog proves a log below the threshold is appended to
+// rather than rotated. Rotating on every boot would overwrite .old with the
+// session that just started — destroying the generation a bug report is told
+// to attach, and the one RevealLog puts in view.
+func TestInitKeepsUndersizedLog(t *testing.T) {
+	restoreDefault(t)
+	t.Setenv("LICH_DEV", "")
+	dir := logDir(t)
+	path := filepath.Join(dir, "lich.log")
+	if err := os.WriteFile(path, []byte("previous generation\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	closer, err := Init(dir)
+	if err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	defer closer.Close()
+
+	if _, err := os.Stat(path + ".old"); !os.IsNotExist(err) {
+		t.Errorf("undersized log was rotated: stat(.old) = %v", err)
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read log: %v", err)
+	}
+	if !strings.HasPrefix(string(content), "previous generation") {
+		t.Errorf("existing log not appended to:\n%s", content)
+	}
+}
+
 // failingWriter always errors, standing in for the dead stderr of a
 // windowsgui process.
 type failingWriter struct{}

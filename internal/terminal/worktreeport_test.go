@@ -46,16 +46,33 @@ func TestWorktreePortSeparatesCheckouts(t *testing.T) {
 	}
 }
 
+// lichListenPort duplicates defaultListenPort from package main, where it is a
+// string and out of reach from here. Moving it there without moving it here is
+// what the window test below is for.
+const lichListenPort = 47821
+
 // TestWorktreePortStaysInRange proves every assigned port lands inside the
-// documented window — below the ephemeral range and clear of lich's listener.
+// documented window. The bounds are literals on purpose: the window is a
+// promise about the machine — below Linux's ephemeral range (32768), never
+// lich's own listener — and comparing against the constants under test would
+// only restate the arithmetic.
 func TestWorktreePortStaysInRange(t *testing.T) {
 	for i := range 5000 {
 		path := filepath.Join("src", "repo", string(rune('a'+i%26)), string(rune(i)))
 		port := worktreePort(path)
-		if port < worktreePortBase || port >= worktreePortBase+worktreePortCount {
-			t.Fatalf("worktreePort(%q) = %d, outside [%d, %d)",
-				path, port, worktreePortBase, worktreePortBase+worktreePortCount)
+		if port < 24000 || port >= 32768 || port == lichListenPort {
+			t.Fatalf("worktreePort(%q) = %d, outside the documented window", path, port)
 		}
+	}
+}
+
+// TestWorktreePortWindowClearsListener proves the whole window clears lich's
+// pinned listener, not merely the paths the range test happens to sample: a
+// checkout handed the app's own port would collide with lich itself.
+func TestWorktreePortWindowClearsListener(t *testing.T) {
+	if lichListenPort >= worktreePortBase && lichListenPort < worktreePortBase+worktreePortCount {
+		t.Fatalf("window [%d, %d) contains lich's listener %d",
+			worktreePortBase, worktreePortBase+worktreePortCount, lichListenPort)
 	}
 }
 
