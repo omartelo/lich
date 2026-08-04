@@ -13,7 +13,7 @@ See [README.md](README.md) for the shared transport (`LICH_PORT` / `LICH_TOKEN`
 POST http://127.0.0.1:${LICH_PORT}/hook?token=${LICH_TOKEN}
 Content-Type: application/json
 
-{"session_id": "<LICH_SESSION_ID>", "state": "<busy|done>"}
+{"session_id": "<LICH_SESSION_ID>", "state": "<busy|done|waiting|idle>"}
 ```
 
 States: `busy`, `done`, `waiting`, `idle`. lich rejects anything else.

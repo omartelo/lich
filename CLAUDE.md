@@ -120,7 +120,8 @@ nobody knows it and that the call site never shows. The mechanism and the histor
 - **Persistence is hybrid**: UI prefs in the page's localStorage (`lich.*` keys — the reason the listener port is
   pinned at 47821; `LICH_LISTEN_PORT` overrides it, `LICH_PORT` is the distinct per-session hook variable), the
   workspace in SQLite (`<config-dir>/lich/lich.db`, `internal/store`). Closing a session deletes its row; keeping a
-  worktree parks its session for a later resume; a closed project is hidden, never deleted.
+  worktree parks its session for a later resume; closing a project hides it, but reopening one whose directory is
+  gone silently deletes it and its sessions.
 - **Hidden sessions are serialized and destroyed**: 2MB replay rings on both sides (`frontend/src/lib/terminal/replay-buffer.ts`
   page-side, `internal/terminal/replay.go` backend-side — the latter survives a full page reload). waveterm's disk
   filestore is the upgrade path if size ever matters.
@@ -132,5 +133,6 @@ nobody knows it and that the call site never shows. The mechanism and the histor
   is load-bearing — without it plain clicks stop selecting a session.
 - **Windows is experimental**: cmd.exe is the shell, and the GUI subsystem build has no console — diagnostics only
   reach `%AppData%\lich\lich.log`. The PTY has no Windows tests.
-- **macOS is experimental**: the window path has never run on real hardware, and the binaries are unsigned, so
-  Gatekeeper quarantines them. Only darwin-specific code: the browser candidates (`internal/chromium`).
+- **macOS is experimental**: unsigned (Gatekeeper quarantines them) and never run on real hardware. Three darwin
+  seams: `internal/chromium`, `internal/system`, and `internal/terminal`'s cwd reader, which hardcodes libSystem
+  struct offsets.

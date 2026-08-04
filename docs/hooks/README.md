@@ -62,7 +62,7 @@ project's own setup script and commands (`PORT=$LICH_WORKTREE_PORT pnpm dev`).
 ## Contracts
 
 - [session-state.md](session-state.md) — a session's processing state
-  (`busy`/`done`) shown on its card.
+  (`busy`/`done`/`waiting`/`idle`) shown on its card.
 - [session-start.md](session-start.md) — the Claude session id, persisted
   against the lich session for later features.
 - [session-title.md](session-title.md) — Claude's auto-generated `ai-title`,
