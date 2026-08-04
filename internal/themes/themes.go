@@ -239,10 +239,21 @@ func (s *Service) Remove(id string) error {
 }
 
 func (s *Service) customThemes() ([]Theme, error) {
-	entries, err := os.ReadDir(s.dir)
+	// Stat before reading: a file sitting where the themes directory belongs
+	// makes ReadDir report not-exist on Windows, which the "nothing imported
+	// yet" branch below would swallow into an empty list on that OS and an
+	// error everywhere else.
+	info, err := os.Stat(s.dir)
 	if os.IsNotExist(err) {
 		return nil, nil
 	}
+	if err != nil {
+		return nil, fmt.Errorf("read themes dir: %w", err)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("themes path is not a directory: %s", s.dir)
+	}
+	entries, err := os.ReadDir(s.dir)
 	if err != nil {
 		return nil, fmt.Errorf("read themes dir: %w", err)
 	}

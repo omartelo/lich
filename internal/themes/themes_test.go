@@ -577,6 +577,28 @@ func TestImportRejectsWindowsDeviceNames(t *testing.T) {
 	}
 }
 
+// \r? because the repo pins no .gitattributes, so a Windows checkout hands this
+// test CRLF and a bare \n matches nothing there.
+var docJSONBlock = regexp.MustCompile("(?s)```json\r?\n(.*?)```")
+
+func TestDocJSONBlockReadsBothLineEndings(t *testing.T) {
+	for _, tt := range []struct{ name, newline string }{
+		{name: "lf", newline: "\n"},
+		{name: "crlf", newline: "\r\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			doc := "text" + tt.newline + "```json" + tt.newline + "{}" + tt.newline + "```"
+			block := docJSONBlock.FindStringSubmatch(doc)
+			if block == nil {
+				t.Fatalf("no JSON block found in a %s document", tt.name)
+			}
+			if strings.TrimSpace(block[1]) != "{}" {
+				t.Fatalf("block = %q, want the JSON body", block[1])
+			}
+		})
+	}
+}
+
 // The documented example is the shape users copy from, so it answers to the
 // validator like any other imported theme.
 func TestDocumentedExampleIsImportable(t *testing.T) {
@@ -584,7 +606,7 @@ func TestDocumentedExampleIsImportable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read docs/themes.md: %v", err)
 	}
-	block := regexp.MustCompile("(?s)```json\n(.*?)```").FindSubmatch(data)
+	block := docJSONBlock.FindSubmatch(data)
 	if block == nil {
 		t.Fatal("docs/themes.md has no JSON example")
 	}
