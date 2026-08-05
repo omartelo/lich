@@ -335,11 +335,11 @@ func agedCopy(t *testing.T, service *Service, name string, age time.Duration) st
 // TestPruneDeletesOnlyExpiredCopies pins both sides of the deadline. The ages
 // are literal days, not keepDropped ± something: a test that derives them from
 // the constant moves with it, and would stay green for a window widened to a
-// month.
+// week or a month.
 func TestPruneDeletesOnlyExpiredCopies(t *testing.T) {
 	service := New(t.TempDir())
-	expired := agedCopy(t, service, "old.png", 8*24*time.Hour)
-	kept := agedCopy(t, service, "recent.png", 6*24*time.Hour)
+	expired := agedCopy(t, service, "old.png", 4*24*time.Hour)
+	kept := agedCopy(t, service, "recent.png", 2*24*time.Hour)
 
 	service.Prune()
 
@@ -356,7 +356,7 @@ func TestPruneDeletesOnlyExpiredCopies(t *testing.T) {
 // clear the ones before it.
 func TestSavePrunes(t *testing.T) {
 	service := New(t.TempDir())
-	expired := agedCopy(t, service, "old.png", 8*24*time.Hour)
+	expired := agedCopy(t, service, "old.png", 4*24*time.Hour)
 
 	fresh, err := service.Save("new.png", strings.NewReader("bytes"))
 	if err != nil {

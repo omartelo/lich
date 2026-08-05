@@ -122,7 +122,7 @@ nobody knows it and that the call site never shows. The mechanism and the histor
   down from the search root. Three consequences: twins at the same depth are ambiguous and resolve to nothing,
   anything neither tree holds is *copied* to `<config-dir>/lich/dropped/` — so an agent told to edit it edits the
   copy — and a directory, which has no copy to fall back on, simply fails when the budget or the skip list hides
-  it. A copy is deleted 7 days after it is written (on the next drop, or at startup), so a path pasted into a
+  it. A copy is deleted 3 days after it is written (on the next drop, or at startup), so a path pasted into a
   prompt older than that no longer resolves.
 - **git status is polled** — one shared poller per repository path (`frontend/src/lib/git/git-status-store.ts`); the
   lich plugin's `session-touched` hook nudges an immediate refresh. An fs watcher is the upgrade path.

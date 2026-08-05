@@ -50,10 +50,10 @@ var homeDir = os.UserHomeDir
 const mtimeSlackMs = 2_000
 
 // keepDropped is how long a copy outlives its drop. Long enough that a path
-// pasted into a prompt still resolves days later — a session can sit unsent
-// over a weekend — and short enough that the directory cannot grow without
-// bound, which is the only reason it is deleted at all.
-const keepDropped = 7 * 24 * time.Hour
+// pasted into a prompt still resolves after a weekend of it sitting unsent,
+// and short enough that the directory cannot grow without bound, which is the
+// only reason it is deleted at all.
+const keepDropped = 3 * 24 * time.Hour
 
 // skipDirs are trees a dropped file is never meaningfully found in, and the
 // ones that make the search expensive.

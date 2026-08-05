@@ -19,8 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Files and folders found under the session's own directory — or under your
   home — paste their real path, so an edit lands on your file; a screenshot or
   a log from anywhere else is copied into `<config-dir>/lich/dropped/` and
-  pastes the copy's path — a copy that is deleted a week later, so the folder
-  cannot grow for as long as you use lich. A folder that neither search finds
+  pastes the copy's path — a copy that is deleted three days later, so the
+  folder cannot grow for as long as you use lich. A folder that neither search finds
   has no copy to fall back on, and says so rather than pretending.
 
 ### Fixed
