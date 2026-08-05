@@ -85,11 +85,11 @@ func TestReplacedClientDoesNotSilenceHub(t *testing.T) {
 	server := httptest.NewServer(hub)
 	defer server.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	swapped, cancelSwap := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelSwap()
 	url := "ws" + strings.TrimPrefix(server.URL, "http")
 
-	first, _, err := websocket.Dial(ctx, url, nil)
+	first, _, err := websocket.Dial(swapped, url, nil)
 	if err != nil {
 		t.Fatalf("dial first: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestReplacedClientDoesNotSilenceHub(t *testing.T) {
 	replaced := hub.conn
 	hub.mu.Unlock()
 
-	second, _, err := websocket.Dial(ctx, url, nil)
+	second, _, err := websocket.Dial(swapped, url, nil)
 	if err != nil {
 		t.Fatalf("dial second: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestReplacedClientDoesNotSilenceHub(t *testing.T) {
 	// hub's client. Polling hub.conn would be the worse signal: without the
 	// identity guard the read loop nils it out, and the wait would fail on its
 	// own before the assertion below ever ran.
-	if _, _, err := first.Read(ctx); err == nil {
+	if _, _, err := first.Read(swapped); err == nil {
 		t.Fatal("the hub never closed the replaced client")
 	}
 
@@ -121,7 +121,12 @@ func TestReplacedClientDoesNotSilenceHub(t *testing.T) {
 	hub.drop(replaced)
 
 	hub.Emit("session-title", map[string]string{"id": "s1", "label": "x"})
-	_, payload, err := second.Read(ctx)
+
+	// Its own deadline: sharing the one above would let a slow swap eat this
+	// wait's budget and report a silent hub that is merely late.
+	delivered, cancelDelivery := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelDelivery()
+	_, payload, err := second.Read(delivered)
 	if err != nil {
 		t.Fatalf("live client received nothing after the replaced one was dropped: %v", err)
 	}

@@ -33,8 +33,8 @@ func TestReplacedClientDoesNotSilenceTransport(t *testing.T) {
 	}
 	defer func() { _ = second.CloseNow() }()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	swapped, cancelSwap := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelSwap()
 
 	// handle swaps the transport's connection before it closes the one it
 	// replaced, so the first client's read failing proves the second one is
@@ -42,7 +42,7 @@ func TestReplacedClientDoesNotSilenceTransport(t *testing.T) {
 	// without the identity guard the read loop nils it out, and the wait would
 	// fail on its own before the assertion below ever ran. This read is also
 	// what answers the close handshake — handle's close waits for the reply.
-	if _, _, err := first.Read(ctx); err == nil {
+	if _, _, err := first.Read(swapped); err == nil {
 		t.Fatal("the transport never closed the replaced client")
 	}
 
@@ -55,7 +55,11 @@ func TestReplacedClientDoesNotSilenceTransport(t *testing.T) {
 	if !tr.send("sess", []byte("output")) {
 		t.Fatal("send reported no client after the replaced one was dropped")
 	}
-	kind, data, err := second.Read(ctx)
+	// Its own deadline: sharing the one above would let a slow swap eat this
+	// wait's budget and report a silent transport that is merely late.
+	delivered, cancelDelivery := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelDelivery()
+	kind, data, err := second.Read(delivered)
 	if err != nil {
 		t.Fatalf("live client received nothing after the replaced one was dropped: %v", err)
 	}
