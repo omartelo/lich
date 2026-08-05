@@ -115,6 +115,14 @@ nobody knows it and that the call site never shows. The mechanism and the histor
   no total), and the accounting is per `(session, transcript)` in `session_costs`, so a conversation forked
   inside the PTY — which copies its history into a new transcript — bills that history twice. lich's own
   resume continues the same transcript and is unaffected.
+- **A dropped file has no path, so lich guesses it**: Chromium hands the page a drop's bytes and metadata but never
+  its path (no `text/uri-list`, no `File.path`), so `internal/drop` searches for it by name + size + mtime — the
+  session's directory first, then home. The search is breadth-first under a 50k-entry budget per tree, and skips
+  home's dot directories: depth-first spent the whole budget inside `~/.cache` and missed a directory one level
+  down from the search root. Three consequences: twins at the same depth are ambiguous and resolve to nothing,
+  anything neither tree holds is *copied* to `<config-dir>/lich/dropped/` — so an agent told to edit it edits the
+  copy — and a directory, which has no copy to fall back on, simply fails when the budget or the skip list hides
+  it. The copies are never pruned.
 - **git status is polled** — one shared poller per repository path (`frontend/src/lib/git/git-status-store.ts`); the
   lich plugin's `session-touched` hook nudges an immediate refresh. An fs watcher is the upgrade path.
 - **Persistence is hybrid**: UI prefs in the page's localStorage (`lich.*` keys — the reason the listener port is

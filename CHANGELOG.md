@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Drag files onto a terminal to put their paths at the prompt — any kind of
+  file, a whole folder, or several at once.** Claude Code suggests dropping
+  images into your terminal; in lich the terminal is a browser window, so a
+  drop did nothing useful (and a drop that missed one navigated the window away
+  from the app). Now anything dropped on a session lands at its prompt as a
+  path, quoted where it needs to be and left unsent, exactly as a paste would —
+  the agent then treats an image path as an image and any other path as a path.
+  Files and folders found under the session's own directory — or under your
+  home — paste their real path, so an edit lands on your file; a screenshot or
+  a log from anywhere else is copied into `<config-dir>/lich/dropped/` and
+  pastes the copy's path. A folder that neither search finds has no copy to
+  fall back on, and says so rather than pretending.
+
 ### Fixed
 
 - **A plugin install or update that cannot see the newest release now says so,

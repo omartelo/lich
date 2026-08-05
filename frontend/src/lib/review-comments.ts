@@ -16,6 +16,8 @@
 // replaced, never mutated, so subscribers keep a stable reference until
 // something actually changes.
 
+import { bracketedPaste } from "./terminal/bracketed-paste"
+
 export interface ReviewComment {
   /** Identity for the list and for removal; carries no meaning of its own. */
   id: string
@@ -78,21 +80,16 @@ export function subscribeReviewComments(listener: () => void): () => void {
   }
 }
 
-// Bracketed paste. The block is multi-line, and a newline written straight into
-// a TUI's prompt is a send — one per line, so the agent would answer the first
-// comment while the rest were still being typed. Wrapping the batch the way
-// xterm wraps text pasted by hand lands it in the prompt as a single paste, and
-// unsent: the user presses Enter, exactly as they do after an inject.
-const PASTE_START = "\x1b[200~"
-const PASTE_END = "\x1b[201~"
-
 /**
  * The batch as one terminal write: the comments as a markdown list, each
- * anchored the way an inject writes a line reference, wrapped as a paste.
+ * anchored the way an inject writes a line reference, wrapped as a paste. The
+ * block is multi-line, and a newline written straight into a TUI's prompt is a
+ * send — one per line, so the agent would answer the first comment while the
+ * rest were still being typed.
  */
 export function composeReviewComments(list: readonly ReviewComment[]): string {
   const items = list.map((c) => `- ${c.path}:${c.lines} — ${continuation(c.text)}`)
-  return `${PASTE_START}Review comments:\n\n${items.join("\n")}${PASTE_END}`
+  return bracketedPaste(`Review comments:\n\n${items.join("\n")}`)
 }
 
 // A comment written across several lines stays one list item: its own newlines
