@@ -54,9 +54,9 @@ release.
   the number of the branch's pull request.
 - **Git worktrees, built in.** Spin one up from any base branch — search it,
   local or remote, even across dozens of branches — and lich seeds the new
-  checkout with your gitignored `.env*` files, hands it a dev-server port of its
-  own (`LICH_WORKTREE_PORT`) and runs a per-project setup script before the agent
-  starts. The sidebar groups sessions by the worktree they belong to, and a kept
+  checkout with your gitignored `.env*` files, hands it a stable dev-server port
+  derived from its path (`LICH_WORKTREE_PORT`) and runs a per-project setup
+  script before the agent starts. The sidebar groups sessions by the worktree they belong to, and a kept
   worktree's session resumes its conversation later.
 - **Review, and hand the review back.** A CodeMirror diff dock shows the working
   changes beside a live file tree — collapse or expand every file at once, open
@@ -94,8 +94,8 @@ release.
   <p><em>The repository's pull requests, filtered by GitHub's own qualifiers.</em></p>
   <img src="docs/media/pull-request.png" alt="The pull request screen: state, checks, mergeability and the pull request body, with Approve and Merge in the header" width="900" />
   <p><em>Read, approved and merged in place.</em></p>
-  <img src="docs/media/pull-request-review.png" alt="A review thread open inline under the lines it comments on, inside the pull request's changed files" width="900" />
-  <p><em>Its diff, with the review threads on the lines they belong to.</em></p>
+  <img src="docs/media/pull-request-review.png" alt="A comment written on the pull request's diff, sitting inline under the lines it is about and marked as pending until the review is submitted" width="900" />
+  <p><em>A review written on the diff itself — each comment pending until you submit them together.</em></p>
   <img src="docs/media/themes.png" alt="Settings, Appearance: the bundled themes beside an imported pack showing the repository it came from and its version" width="900" />
   <p><em>A theme pack installed from a git repository, updated in place.</em></p>
 </div>
