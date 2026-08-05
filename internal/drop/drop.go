@@ -237,7 +237,10 @@ func (s *Service) Save(name string, body io.Reader) (string, error) {
 	if _, err := io.Copy(file, body); err != nil {
 		// A body that stops mid-write — an aborted request, a full disk —
 		// otherwise leaves a truncated copy nobody asked for and nobody pasted,
-		// under a name the next drop of the same file will then avoid.
+		// under a name the next drop of the same file will then avoid. Windows
+		// refuses to remove a file that still has an open handle, so the close
+		// happens here rather than in the deferred one below it.
+		file.Close()
 		if err := os.Remove(path); err != nil {
 			slog.Warn("drop: could not remove a half-written copy", "path", path, "err", err)
 		}
