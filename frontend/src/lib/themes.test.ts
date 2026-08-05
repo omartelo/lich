@@ -20,12 +20,15 @@ import {
   themeSelectItems,
 } from "./themes"
 
-function customTheme(id: string): ThemeDefinition {
+// The name is a parameter because mergeThemes orders custom themes by it: a
+// fixture that gave every theme the same name made that comparator a no-op and
+// left the picker's order unasserted.
+function customTheme(id: string, name = "Custom"): ThemeDefinition {
   const base = BUNDLED_THEMES[0]
   return {
     ...base,
     id,
-    name: "Custom",
+    name,
     origin: "custom",
     app: { ...base.app, background: "#101010" },
     terminal: { ...base.terminal, background: "#111111" },
@@ -41,6 +44,13 @@ describe("themes", () => {
   it("returns only imported custom themes", () => {
     const themes = mergeThemes([customTheme("custom-a"), customTheme("custom-b")])
     expect(customThemes(themes).map((theme) => theme.id)).toEqual(["custom-a", "custom-b"])
+  })
+
+  // Ids deliberately in the opposite order to the names: only an order taken
+  // from the name can produce this one, which is what the picker shows.
+  it("orders custom themes by name, after the bundled pair", () => {
+    const themes = mergeThemes([customTheme("aaa", "Zinc Night"), customTheme("zzz", "Amber Dusk")])
+    expect(themes.map((theme) => theme.id)).toEqual(["light", "dark", "zzz", "aaa"])
   })
 
   it("returns only bundled themes", () => {

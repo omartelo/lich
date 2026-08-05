@@ -42,12 +42,26 @@ describe("conversationTimeline", () => {
     ])
   })
 
-  it("files resolved threads separately, newest first", () => {
+  it("keeps a settled thread out of the timeline", () => {
     const timeline = conversationTimeline(conversation)
     expect(timeline.resolved.map((held) => held.id)).toEqual(["t-done"])
     expect(
       timeline.items.some((item) => item.kind === "thread" && item.thread.id === "t-done"),
     ).toBe(false)
+  })
+
+  // Two of them, deliberately: with one settled thread the assertion passes
+  // whichever way the comparator runs, so the order it promises goes unchecked.
+  it("files settled threads newest first", () => {
+    const timeline = conversationTimeline({
+      ...conversation,
+      threads: [
+        thread("t-open", "2026-07-30T08:00:00Z"),
+        thread("t-settled-early", "2026-07-30T07:00:00Z", true),
+        thread("t-settled-late", "2026-07-30T11:00:00Z", true),
+      ],
+    })
+    expect(timeline.resolved.map((held) => held.id)).toEqual(["t-settled-late", "t-settled-early"])
   })
 
   it("counts everything the tab shows, settled threads included", () => {
