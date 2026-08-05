@@ -371,6 +371,37 @@ func TestSavePrunes(t *testing.T) {
 	}
 }
 
+// failingReader gives some bytes and then stops, like a request the page
+// aborts halfway through.
+type failingReader struct{ read bool }
+
+func (r *failingReader) Read(p []byte) (int, error) {
+	if r.read {
+		return 0, errors.New("connection went away")
+	}
+	r.read = true
+	return copy(p, "half"), nil
+}
+
+// TestSaveLeavesNothingBehindOnFailure: the caller is told the copy failed, so
+// no path was ever pasted — a truncated file under that name would be waste
+// the next drop of the same file has to route around.
+func TestSaveLeavesNothingBehindOnFailure(t *testing.T) {
+	service := New(t.TempDir())
+
+	if _, err := service.Save("shot.png", &failingReader{}); err == nil {
+		t.Fatal("Save reported success on a body that failed")
+	}
+
+	entries, err := os.ReadDir(service.dir)
+	if err != nil {
+		t.Fatalf("read copies dir: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("copies dir holds %d entries, want none", len(entries))
+	}
+}
+
 // TestPruneWithoutCopiesDir covers the first launch: nothing has been dropped,
 // so the directory does not exist, and that is not a fault.
 func TestPruneWithoutCopiesDir(t *testing.T) {
