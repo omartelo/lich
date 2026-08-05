@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from "react"
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
 import type { ReactNode } from "react"
 import {
   DEFAULT_HOTKEYS,
@@ -188,20 +188,17 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     writePref(THEME_STORAGE_KEY, next)
   }, [])
 
+  // Neither of these persists: the zoom is mirrored to localStorage by the
+  // effect that applies it, so the one updater that has to be functional (see
+  // zoomBy) stays free of the side effect React calls twice under StrictMode.
   const setZoom = useCallback((next: number) => {
-    const clamped = clampZoom(next)
-    setZoomState(clamped)
-    writePref(ZOOM_STORAGE_KEY, clamped)
+    setZoomState(clampZoom(next))
   }, [])
 
   // zoomBy applies a relative step off the latest value so rapid wheel ticks
   // accumulate instead of collapsing to a single step between renders.
   const zoomBy = useCallback((delta: number) => {
-    setZoomState((prev) => {
-      const clamped = clampZoom(prev + delta)
-      writePref(ZOOM_STORAGE_KEY, clamped)
-      return clamped
-    })
+    setZoomState((prev) => clampZoom(prev + delta))
   }, [])
 
   const setTerminalTheme = useCallback((next: TerminalTheme) => {
@@ -328,8 +325,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   // every zoom step, wrapping whatever TUI was running. The terminal sizes its
   // text in absolute px (TerminalView's fontSize), so rem scaling leaves it
   // untouched by construction; its size is its own setting.
+  //
+  // Also where the value is persisted, so both setters can stay pure.
   useEffect(() => {
     document.documentElement.style.fontSize = `${zoom * 100}%`
+    writePref(ZOOM_STORAGE_KEY, zoom)
   }, [zoom])
 
   // Zoom via keyboard chords or Ctrl/Cmd + mouse wheel. Both listen on the
@@ -369,36 +369,63 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const resolvedTerminalTheme = resolveTerminalTheme(terminalTheme, resolvedTheme, themes)
 
-  return (
-    <SettingsContext.Provider
-      value={{
-        font,
-        setFont,
-        terminalFontSize,
-        setTerminalFontSize,
-        themes,
-        theme,
-        setTheme,
-        importTheme,
-        installThemesFromGit,
-        updateThemeFromGit,
-        removeTheme,
-        resolvedTheme,
-        zoom,
-        setZoom,
-        terminalTheme,
-        setTerminalTheme,
-        resolvedTerminalTheme,
-        hotkeys,
-        setHotkey,
-        resetHotkey,
-        showContextUsage,
-        setShowContextUsage,
-      }}
-    >
-      {children}
-    </SettingsContext.Provider>
+  // Memoised for the same reason ProjectsProvider is: a literal here hands every
+  // consumer a new object on every render of this provider, and one of those
+  // consumers is TerminalView — one per spawned session. A Ctrl+wheel zoom is a
+  // burst of state changes, so the un-memoised value re-rendered every open
+  // terminal on every wheel tick.
+  const value = useMemo(
+    () => ({
+      font,
+      setFont,
+      terminalFontSize,
+      setTerminalFontSize,
+      themes,
+      theme,
+      setTheme,
+      importTheme,
+      installThemesFromGit,
+      updateThemeFromGit,
+      removeTheme,
+      resolvedTheme,
+      zoom,
+      setZoom,
+      terminalTheme,
+      setTerminalTheme,
+      resolvedTerminalTheme,
+      hotkeys,
+      setHotkey,
+      resetHotkey,
+      showContextUsage,
+      setShowContextUsage,
+    }),
+    [
+      font,
+      setFont,
+      terminalFontSize,
+      setTerminalFontSize,
+      themes,
+      theme,
+      setTheme,
+      importTheme,
+      installThemesFromGit,
+      updateThemeFromGit,
+      removeTheme,
+      resolvedTheme,
+      zoom,
+      setZoom,
+      terminalTheme,
+      setTerminalTheme,
+      resolvedTerminalTheme,
+      hotkeys,
+      setHotkey,
+      resetHotkey,
+      showContextUsage,
+      setShowContextUsage,
+    ],
   )
+
+  return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>
 }
 
 export function useSettings(): SettingsValue {
