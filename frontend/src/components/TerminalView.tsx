@@ -20,6 +20,11 @@ import { recordChunk } from "@/lib/terminal/term-perf"
 import { copyToastMessage, COPY_TOAST_DURATION_MS } from "@/lib/terminal/copy-toast"
 import { computeGrid } from "@/lib/terminal/term-fit"
 import { linkClickIsOurs, mouseEncodingSequence } from "@/lib/terminal/term-modes"
+import {
+  composeDroppedPaths,
+  readDroppedFiles,
+  resolveDroppedFiles,
+} from "@/lib/terminal/drop-files"
 import { useSettings } from "@/providers/settings"
 import type { SessionKind } from "@/lib/session/sessions"
 import "@xterm/xterm/css/xterm.css"
@@ -119,6 +124,12 @@ async function ensureFontLoaded(font: string): Promise<void> {
   }
 }
 
+// carriesFiles tells a file drag from text dragged out of the app's own UI —
+// a selection, a link — which the terminal leaves alone.
+function carriesFiles(transfer: DataTransfer): boolean {
+  return [...transfer.types].includes("Files")
+}
+
 // decodeBase64 turns the base64 PTY payload back into bytes. The backend
 // encodes output so multi-byte UTF-8 sequences survive the JSON envelope.
 function decodeBase64(data: string): Uint8Array {
@@ -196,6 +207,10 @@ export function TerminalView({
 
   // In-terminal search (Ctrl+F). The open flag mirrors into a ref so the
   // terminal's key handler — wired once at creation — reads the live value.
+  // A file drag is over the terminal; see onDragEnter for the depth counter.
+  const [dropping, setDropping] = useState(false)
+  const dragDepth = useRef(0)
+
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<SearchResults | null>(null)
@@ -228,6 +243,14 @@ export function TerminalView({
       live.search.clearDecorations()
       live.term.clearSelection()
       live.term.focus()
+    }
+  }
+
+  // writeInput sends to the PTY over the WebSocket, falling back to the RPC
+  // while it is down (term-transport.ts).
+  const writeInput = (data: string) => {
+    if (!sendInput(sessionId, data)) {
+      void Service.Write(sessionId, data)
     }
   }
 
@@ -267,12 +290,6 @@ export function TerminalView({
     })
     term.loadAddon(webgl)
     fitTerminal(term, container)
-
-    const writeInput = (data: string) => {
-      if (!sendInput(sessionId, data)) {
-        void Service.Write(sessionId, data)
-      }
-    }
 
     // Chords xterm encodes differently from what our TUIs expect go straight
     // to the PTY (see term-keys.ts). Returning false makes xterm skip the
@@ -397,6 +414,56 @@ export function TerminalView({
     serializedRef.current = null
     mouseEncodingRef.current = ""
     liveRef.current = live
+  }
+
+  // Files dropped on the terminal land at the prompt as paths, the way a
+  // native emulator pastes a drop (lib/terminal/drop-files.ts). dragDepth
+  // counts enter/leave: they also fire crossing xterm's own child elements, so
+  // the hint would flicker off mid-drag on the plain boolean.
+  const onDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    dragDepth.current = 0
+    setDropping(false)
+    const dropped = readDroppedFiles(event.dataTransfer)
+    if (dropped.length === 0) {
+      return
+    }
+    void (async () => {
+      const { paths, skipped } = await resolveDroppedFiles(cwd, dropped)
+      const paste = composeDroppedPaths(paths, IS_WINDOWS)
+      if (paste !== "") {
+        writeInput(paste)
+        liveRef.current?.term.focus()
+      }
+      if (skipped.length > 0) {
+        toast.error(`Not attached: ${skipped.join(", ")}`)
+      }
+    })()
+  }
+
+  const onDragEnter = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!carriesFiles(event.dataTransfer)) {
+      return
+    }
+    dragDepth.current += 1
+    setDropping(true)
+  }
+
+  const onDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!carriesFiles(event.dataTransfer)) {
+      return
+    }
+    // Without this the drop event never fires — and App's window handler
+    // swallows what lands outside a terminal.
+    event.preventDefault()
+    event.dataTransfer.dropEffect = "copy"
+  }
+
+  const onDragLeave = () => {
+    dragDepth.current = Math.max(0, dragDepth.current - 1)
+    if (dragDepth.current === 0) {
+      setDropping(false)
+    }
   }
 
   // Create the terminal and its PTY session once per session id. The session
@@ -601,12 +668,28 @@ export function TerminalView({
   // remainder of the grid fit and the ruler gutter then blend into the
   // terminal instead of showing the app background as a right-edge stripe.
   return (
-    <div className="relative h-full w-full">
+    // A drop target has no keyboard equivalent to offer, and a role here would
+    // speak over xterm's own accessibility tree inside it.
+    // biome-ignore lint/a11y/noStaticElementInteractions: drop target, see above
+    <div
+      className="relative h-full w-full"
+      onDrop={onDrop}
+      onDragEnter={onDragEnter}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+    >
       <div
         ref={containerRef}
         className="h-full w-full"
         style={{ backgroundColor: terminalColors.background }}
       />
+      {dropping && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-end justify-center bg-accent/10 pb-6 ring-2 ring-inset ring-ring">
+          <span className="rounded-md bg-popover px-2 py-1 text-xs text-muted-foreground shadow-lg">
+            Drop to paste at the prompt
+          </span>
+        </div>
+      )}
       {searchOpen && (
         <div className="absolute right-3 top-3 z-20 flex items-center gap-1 rounded-md border bg-popover p-1 text-popover-foreground shadow-lg">
           <Input

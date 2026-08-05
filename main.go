@@ -13,6 +13,7 @@ import (
 	"github.com/omartelo/lich/internal/appupdate"
 	"github.com/omartelo/lich/internal/chromium"
 	"github.com/omartelo/lich/internal/claudeplugin"
+	"github.com/omartelo/lich/internal/drop"
 	"github.com/omartelo/lich/internal/events"
 	"github.com/omartelo/lich/internal/fonts"
 	"github.com/omartelo/lich/internal/logging"
@@ -99,7 +100,12 @@ func main() {
 	// Every service the frontend uses goes through the loopback RPC
 	// (internal/rpc). store.Close manages the DB lifecycle and stays Go-only.
 	dispatcher := rpc.New()
+	drops := drop.New(configDir)
+	// The other prune runs after each new copy; this one is what clears the
+	// last of them for a lich that is never dropped on again.
+	drops.Prune()
 	dispatcher.Register("terminal", term)
+	dispatcher.Register("drop", drops)
 	dispatcher.Register("fonts", fonts.New())
 	dispatcher.Register("project", proj)
 	dispatcher.Register("claudeplugin", claudeplugin.New(db))
@@ -110,7 +116,12 @@ func main() {
 	dispatcher.Register("providers", providers.New())
 	dispatcher.Register("themes", themes.New())
 	dispatcher.Deny("store.Close")
+	// The dropped file's bytes are the request body, so the upload is its own
+	// endpoint: the RPC envelope is a JSON argument array with a 1MB bound.
+	dispatcher.Deny("drop.Upload")
+	dispatcher.Deny("drop.Save")
 	term.Mount("/rpc/", dispatcher)
+	term.Mount("/drop", http.HandlerFunc(drops.Upload))
 	term.Mount("/events", hub)
 
 	// In-place restart: the update flow (install.sh) POSTs /restart after

@@ -14,6 +14,7 @@ import type {
   Diagnostics as DiagnosticsData,
   DiffStats,
   DraftReviewComment,
+  DropItem,
   MergeMethod,
   PatchNotes as PatchNotesData,
   PluginStatus,
@@ -123,6 +124,14 @@ export const Terminal = {
   // Base64 tail of a session's output, to reseed scrollback after a reload.
   Replay: (id: string) => call<string>("terminal.Replay", [id]),
   Close: (id: string) => call<null>("terminal.Close", [id]),
+}
+
+export const DropService = {
+  /** Absolute paths for the dropped items found under root, in order; "" where
+   * the tree holds no single match and the caller must upload a copy instead.
+   * The upload is not here — its body is the file, so it has its own endpoint
+   * (see lib/terminal/drop-files.ts). */
+  Resolve: (root: string, items: DropItem[]) => call<string[]>("drop.Resolve", [root, items]),
 }
 
 export const ProjectService = {

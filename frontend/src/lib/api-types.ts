@@ -270,6 +270,19 @@ export interface AppUpdateStatus {
   installCommand: string
 }
 
+/**
+ * internal/drop.Item — one entry of a terminal file drop, described by the
+ * only thing Chromium tells the page about a local file. mtime is
+ * File.lastModified (milliseconds); size is 0 for a directory, whose reported
+ * one is a placeholder.
+ */
+export interface DropItem {
+  name: string
+  size: number
+  mtime: number
+  dir: boolean
+}
+
 /** internal/themes.Theme — a color theme for the UI tokens and xterm. */
 export interface ThemeDefinition {
   id: string
