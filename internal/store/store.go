@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS projects (
     is_open           INTEGER NOT NULL DEFAULT 1,
     next_seq          INTEGER NOT NULL DEFAULT 1,
     active_session_id TEXT    NOT NULL DEFAULT '',
-    position          INTEGER NOT NULL DEFAULT 0
+    position          INTEGER NOT NULL DEFAULT 0,
+    closed_seq        INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -145,6 +146,7 @@ func open(path string) (*Service, error) {
 		`ALTER TABLE sessions ADD COLUMN is_open INTEGER NOT NULL DEFAULT 1`,
 		`ALTER TABLE sessions ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE projects ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE projects ADD COLUMN closed_seq INTEGER NOT NULL DEFAULT 0`,
 	}
 	for _, stmt := range migrations {
 		if _, err := db.Exec(stmt); err != nil && !migrationApplied(err) {
@@ -234,14 +236,16 @@ type Recent struct {
 const recentLimit = 5
 
 // RecentProjects returns the closed projects (is_open = 0) offered for
-// reopening, newest first.
+// reopening, the last one closed first.
 //
-// rowid DESC orders by when a project was first added, not when it was last
-// open — reopening keeps the row, so a project that has been through the list
-// does not move back to the top. A last_opened_at column is the upgrade path.
+// rowid is the tiebreaker, not the order: it dates a project's first open, so
+// on its own it hid a long-standing project behind five newer ones the moment
+// it was closed. Rows closed before closed_seq existed carry 0 and keep falling
+// back to it.
 func (s *Service) RecentProjects() ([]Recent, error) {
 	rows, err := s.db.Query(
-		`SELECT id, name, path FROM projects WHERE is_open = 0 ORDER BY rowid DESC LIMIT ?`,
+		`SELECT id, name, path FROM projects WHERE is_open = 0
+		  ORDER BY closed_seq DESC, rowid DESC LIMIT ?`,
 		recentLimit,
 	)
 	if err != nil {

@@ -46,9 +46,18 @@ func (s *Service) AddProject(id, name, path string) error {
 }
 
 // CloseProject marks a project closed without deleting it or its sessions, so it
-// can be reopened later with its session state restored.
+// can be reopened later with its session state restored. closed_seq is what
+// orders the reopen menu; a counter rather than a timestamp, so two closes in
+// the same second still order.
 func (s *Service) CloseProject(id string) error {
-	if _, err := s.db.Exec(`UPDATE projects SET is_open = 0 WHERE id = ?`, id); err != nil {
+	_, err := s.db.Exec(
+		`UPDATE projects
+		    SET is_open = 0,
+		        closed_seq = (SELECT COALESCE(MAX(closed_seq), 0) + 1 FROM projects)
+		  WHERE id = ?`,
+		id,
+	)
+	if err != nil {
 		return fmt.Errorf("close project %q: %w", id, err)
 	}
 	return nil

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The project you just closed is the first one the "+" offers back.** The
+  recent list was ordered by when a project was *first* opened, so closing a
+  long-standing one put it behind five newer projects — the list you reach for
+  right after closing something was the one place that thing could not be. It is
+  now ordered by the close itself, and reopening a project and closing it again
+  returns it to the top. Projects already closed keep the order they had.
+
 ## [0.26.0] - 2026-08-05
 
 ### Added

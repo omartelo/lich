@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -867,6 +868,99 @@ func TestRecentProjectsListsClosedOnesNewestFirst(t *testing.T) {
 	}
 	if recents[0].Name != "p6" || recents[0].Path != "/tmp/p6" {
 		t.Errorf("recent metadata = %+v", recents[0])
+	}
+}
+
+// recentIDs is the reopen menu's list reduced to what its order is asserted on.
+func recentIDs(t *testing.T, svc *Service) []string {
+	t.Helper()
+	recents, err := svc.RecentProjects()
+	if err != nil {
+		t.Fatalf("RecentProjects: %v", err)
+	}
+	ids := make([]string, len(recents))
+	for i, r := range recents {
+		ids[i] = r.ID
+	}
+	return ids
+}
+
+// TestRecentProjectsOrderByWhenTheyWereClosed pins the list to the last close
+// rather than to the first open: the oldest project, closed last, leads it, and
+// reopening one and closing it again puts it back on top.
+func TestRecentProjectsOrderByWhenTheyWereClosed(t *testing.T) {
+	svc := newTestStore(t)
+	for _, id := range []string{"p1", "p2", "p3"} {
+		if err := svc.AddProject(id, id, "/tmp/"+id); err != nil {
+			t.Fatalf("AddProject(%s): %v", id, err)
+		}
+	}
+	for _, id := range []string{"p3", "p2", "p1"} {
+		if err := svc.CloseProject(id); err != nil {
+			t.Fatalf("CloseProject(%s): %v", id, err)
+		}
+	}
+	if got := recentIDs(t, svc); !slices.Equal(got, []string{"p1", "p2", "p3"}) {
+		t.Fatalf("recent ids = %v, want [p1 p2 p3]", got)
+	}
+
+	if err := svc.AddProject("p3", "p3", "/tmp/p3"); err != nil {
+		t.Fatalf("AddProject (reopen): %v", err)
+	}
+	if err := svc.CloseProject("p3"); err != nil {
+		t.Fatalf("CloseProject (reclose): %v", err)
+	}
+	if got := recentIDs(t, svc); !slices.Equal(got, []string{"p3", "p1", "p2"}) {
+		t.Fatalf("recent ids after reopen and close = %v, want [p3 p1 p2]", got)
+	}
+}
+
+// TestRecentProjectsFallBackToRowidForRowsClosedBeforeTheColumn covers the
+// upgrade: projects already closed when closed_seq arrived carry 0, so they hold
+// the order they had, and the first project closed afterwards outranks all of
+// them.
+func TestRecentProjectsFallBackToRowidForRowsClosedBeforeTheColumn(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "pre-closed-seq.db")
+
+	// The projects table as it stood before closed_seq, with two rows already
+	// closed and one still open.
+	const oldSchema = `
+CREATE TABLE projects (
+    id                TEXT    PRIMARY KEY,
+    name              TEXT    NOT NULL,
+    path              TEXT    NOT NULL,
+    is_open           INTEGER NOT NULL DEFAULT 1,
+    next_seq          INTEGER NOT NULL DEFAULT 1,
+    active_session_id TEXT    NOT NULL DEFAULT '',
+    position          INTEGER NOT NULL DEFAULT 0
+);
+INSERT INTO projects (id, name, path, is_open) VALUES ('old', 'old', '/tmp/old', 0);
+INSERT INTO projects (id, name, path, is_open) VALUES ('newer', 'newer', '/tmp/newer', 0);
+INSERT INTO projects (id, name, path, is_open) VALUES ('open', 'open', '/tmp/open', 1);`
+
+	seed, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open seed db: %v", err)
+	}
+	if _, err := seed.Exec(oldSchema); err != nil {
+		t.Fatalf("seed pre-closed_seq schema: %v", err)
+	}
+	_ = seed.Close()
+
+	svc, err := open(path)
+	if err != nil {
+		t.Fatalf("open pre-closed_seq db: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.Close() })
+
+	if got := recentIDs(t, svc); !slices.Equal(got, []string{"newer", "old"}) {
+		t.Fatalf("migrated recent ids = %v, want [newer old]", got)
+	}
+	if err := svc.CloseProject("open"); err != nil {
+		t.Fatalf("CloseProject: %v", err)
+	}
+	if got := recentIDs(t, svc); !slices.Equal(got, []string{"open", "newer", "old"}) {
+		t.Fatalf("recent ids after first close = %v, want [open newer old]", got)
 	}
 }
 
