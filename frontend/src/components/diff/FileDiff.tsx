@@ -69,7 +69,24 @@ export function FileDiff({
   review,
 }: FileDiffProps) {
   const doc = useMemo(() => buildFileDoc(file), [file])
-  const [expanded, setExpanded] = useState(!file.binary && doc.lineMeta.length <= LARGE_FILE_LINES)
+  const openByDefault = !file.binary && doc.lineMeta.length <= LARGE_FILE_LINES
+  const [expanded, setExpanded] = useState(openByDefault)
+  // The card outlives its content: the panel keys files by path, so a refetch
+  // that rewrites this file reuses this component. Without the re-sync, a file
+  // folded away by its Viewed tick stayed folded after a commit unticked it —
+  // an unread file, closed, with nothing on screen saying why — and one that
+  // grew past the large-file bar stayed open.
+  //
+  // Keyed on the text and not on the doc object: every refetch builds a fresh
+  // one, so a reference check would reopen every hand-folded file on each
+  // window focus. Only the content actually changing counts as a new file.
+  const lastText = useRef(doc.text)
+  useEffect(() => {
+    if (lastText.current !== doc.text) {
+      lastText.current = doc.text
+      setExpanded(openByDefault)
+    }
+  }, [doc.text, openByDefault])
   // The nonce guard skips the initial mount so each file keeps its own
   // large-file default until the user actually triggers a bulk action.
   const lastNonce = useRef(bulk?.nonce)
@@ -200,6 +217,10 @@ function LazyDiffBody({ doc, path, onInject, onSessionComment, review }: DiffBod
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
+          // Its work is done, and the placeholder it watches is about to leave
+          // the DOM — an observer holds its target, so without this the removed
+          // node stays alive for as long as the panel does.
+          observer.disconnect()
           setMounted(true)
         }
       },

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { Notice } from "@/components/common/Notice"
 import { discardTargets, parseDiff, type DiffFile } from "@/lib/git/diff"
@@ -12,6 +12,14 @@ import { CommentBatch } from "./CommentBatch"
 import type { DiffBulk } from "./diff-bulk"
 import { DiscardDialog } from "./DiscardDialog"
 import { FileDiff } from "./FileDiff"
+
+// How often the diff *text* is re-read while the panel is open. The status
+// counts invalidate it the moment they move, but they cannot see an edit that
+// leaves them alone: replacing text on a line that was already modified keeps
+// files/added/deleted exactly where they were, and HEAD does not move either.
+// With no read of its own the panel held that stale diff for as long as the
+// counts stood still — not one tick, but indefinitely.
+const DIFF_POLL_MS = 2_000
 
 // ReviewPanel is the Review tab's body: the active session's uncommitted diff,
 // one collapsible file at a time. Context-menu actions write file/line
@@ -28,25 +36,48 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
   const [failed, setFailed] = useState(false)
   const [pendingDiscard, setPendingDiscard] = useState<DiffFile | null>(null)
 
+  // The text behind what is on screen, and the id of the newest read — a reply
+  // carrying an older one is dropped, so switching checkouts mid-flight cannot
+  // land the previous one's diff.
+  const lastText = useRef<string | null>(null)
+  const seq = useRef(0)
+
+  // Publishing only on a changed text is what lets this be polled at all: an
+  // identical read leaves `files` — and with it every mounted CodeMirror view,
+  // its selection and its scroll position — untouched.
   const refresh = useCallback(async () => {
     if (!path) {
       return
     }
+    const mine = ++seq.current
     try {
       const text = await ProjectService.DiffText(path)
-      setFiles(parseDiff(text))
+      if (mine !== seq.current) {
+        return
+      }
       setFailed(false)
+      if (text === lastText.current) {
+        return
+      }
+      lastText.current = text
+      setFiles(parseDiff(text))
     } catch {
+      if (mine !== seq.current) {
+        return
+      }
+      lastText.current = null
       setFiles([])
       setFailed(true)
     }
   }, [path])
 
-  // The 3s git-status poll doubles as the invalidation signal: the diff text is
-  // only re-fetched when the stats actually move, so selections and scroll
-  // survive idle ticks.
+  // Two signals feeding one read: the status counts move the instant a file is
+  // touched, so they invalidate immediately, and the interval covers the edits
+  // they are blind to (see DIFF_POLL_MS).
   useEffect(() => {
     void refresh()
+    const timer = setInterval(() => void refresh(), DIFF_POLL_MS)
+    return () => clearInterval(timer)
   }, [refresh, status?.files, status?.added, status?.deleted])
 
   // Reverting a rename touches both paths (new removed, old restored); the
