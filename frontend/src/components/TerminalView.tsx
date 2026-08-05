@@ -19,7 +19,7 @@ import { takeSetup } from "@/lib/terminal/setup-queue"
 import { recordChunk } from "@/lib/terminal/term-perf"
 import { copyToastMessage, COPY_TOAST_DURATION_MS } from "@/lib/terminal/copy-toast"
 import { computeGrid } from "@/lib/terminal/term-fit"
-import { mouseEncodingSequence } from "@/lib/terminal/term-modes"
+import { linkClickIsOurs, mouseEncodingSequence } from "@/lib/terminal/term-modes"
 import { useSettings } from "@/providers/settings"
 import type { SessionKind } from "@/lib/session/sessions"
 import "@xterm/xterm/css/xterm.css"
@@ -246,7 +246,7 @@ export function TerminalView({
     term.loadAddon(serialize)
     term.loadAddon(
       new WebLinksAddon((event, uri) => {
-        if (event.ctrlKey || event.metaKey) {
+        if (linkClickIsOurs(event, term.modes.mouseTrackingMode)) {
           void System.OpenExternal(uri)
         }
       }),
