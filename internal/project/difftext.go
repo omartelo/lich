@@ -12,10 +12,6 @@ import (
 // repository whose HEAD does not exist yet (no commits).
 const emptyTreeHash = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
-// maxUntrackedDiffSize caps how large an untracked file may be before it is
-// skipped in the textual diff, matching countFileLines' ceiling.
-const maxUntrackedDiffSize = 10 << 20
-
 // DiffText returns the full unified diff of uncommitted changes (staged +
 // unstaged + untracked) against HEAD. A repository without commits diffs
 // against git's empty tree. Untracked files are rendered as new-file hunks so
@@ -47,7 +43,7 @@ func untrackedFiles(path string) []string {
 // git diff --no-index, which exits 1 when the files differ — success here.
 // Any other failure (file vanished between ls-files and now) yields "".
 func untrackedDiff(dir, rel string) string {
-	if info, err := os.Stat(filepath.Join(dir, rel)); err != nil || !info.Mode().IsRegular() || info.Size() > maxUntrackedDiffSize {
+	if info, err := os.Stat(filepath.Join(dir, rel)); err != nil || !info.Mode().IsRegular() || info.Size() > maxTextFileBytes {
 		return ""
 	}
 	cmd := command("git", "-C", dir, "diff", "--no-index", "--", os.DevNull, rel)

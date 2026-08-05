@@ -218,20 +218,17 @@ func numstatTotals(out string) (added, deleted int) {
 	return added, deleted
 }
 
-// countFileLines returns the line count of a text file, or 0 for binaries
-// (NUL byte in the first 8000 bytes, git's own heuristic) and unreadable files.
-// It reads the whole file with a 10MB cap — untracked source files are small;
-// stream in chunks if that assumption ever breaks.
+// countFileLines returns the line count of a text file, or 0 for binaries and
+// unreadable files.
 func countFileLines(name string) int {
-	const maxSize = 10 << 20
-	if info, err := os.Stat(name); err != nil || !info.Mode().IsRegular() || info.Size() > maxSize {
+	if info, err := os.Stat(name); err != nil || !info.Mode().IsRegular() || info.Size() > maxTextFileBytes {
 		return 0
 	}
 	data, err := os.ReadFile(name)
 	if err != nil || len(data) == 0 {
 		return 0
 	}
-	if bytes.IndexByte(data[:min(len(data), 8000)], 0) >= 0 {
+	if isBinary(data) {
 		return 0
 	}
 	n := bytes.Count(data, []byte{'\n'})

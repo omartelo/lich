@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Install a theme from a git repository, and update it later.** A theme file
+  you pick has no version and no way back to whoever wrote it: a fix means being
+  sent another file and importing it again. Settings › Appearance › **Import**
+  now opens a dialog that takes a repository URL as well — a repository with a
+  `lich-theme.json` manifest and its themes beside it. lich clones it, checks
+  the manifest and every theme, and installs the pack only if all of it is
+  valid; ids you already have are named and confirmed before anything is
+  replaced. Each installed theme then shows where it came from and at which
+  version, with an action that re-clones the repository and takes the newer
+  release when there is one. Picking a single file still works exactly as it
+  did, and is still the right way to try a theme you are writing — it simply
+  reads as unversioned, because it is.
+
 ### Fixed
 
 - **Ctrl+Click on a link inside a session opens one tab, not two.** Claude Code

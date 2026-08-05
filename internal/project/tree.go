@@ -12,8 +12,24 @@ import (
 
 // maxReadFileSize caps a previewed file. CodeMirror is a source viewer, not a
 // blob viewer, and the RPC body limit rejects a response this large anyway
-// (internal/rpc.bodyLimit). Kept in step with the diff viewer's own ceilings.
+// (internal/rpc.bodyLimit). Deliberately tighter than maxTextFileBytes: this one
+// crosses the wire, the others only ever reach a line count or a diff.
 const maxReadFileSize = 1 << 20
+
+// maxTextFileBytes caps the files lich will read whole: the untracked-file line
+// count and the untracked new-file diff. Untracked source files are small;
+// stream in chunks if that assumption ever breaks.
+const maxTextFileBytes = 10 << 20
+
+// binarySniffBytes is how far into a file git looks for a NUL before calling it
+// binary. Matching git means a file lich refuses to preview is the same file git
+// refuses to diff — the two answers have to agree or the review panel
+// contradicts the diff beside it.
+const binarySniffBytes = 8000
+
+func isBinary(data []byte) bool {
+	return bytes.IndexByte(data[:min(len(data), binarySniffBytes)], 0) >= 0
+}
 
 // Tree lists the work tree's files as repo-relative, slash-separated paths,
 // sorted. It merges tracked files with untracked-but-not-ignored ones
@@ -80,8 +96,7 @@ func (s *Service) ReadFile(path, rel string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("read %s: %w", rel, err)
 	}
-	// git's own binary heuristic: a NUL byte in the first 8000 bytes.
-	if bytes.IndexByte(data[:min(len(data), 8000)], 0) >= 0 {
+	if isBinary(data) {
 		return "", fmt.Errorf("%s is a binary file", rel)
 	}
 	return string(data), nil

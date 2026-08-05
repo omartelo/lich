@@ -276,14 +276,34 @@ export interface ThemeDefinition {
   name: string
   scheme: "light" | "dark"
   origin: "bundled" | "custom"
+  /** Set only for a theme installed from a repository; a picked file has none. */
+  source?: ThemeSource
   app: Record<string, string>
   terminal: Record<string, string>
+}
+
+/** internal/themes.Source — the repository a theme was installed from. */
+export interface ThemeSource {
+  url: string
+  version: string
 }
 
 /** internal/themes.ImportResult — import outcome before an optional overwrite. */
 export interface ThemeImportResult {
   theme: ThemeDefinition
   needsOverwrite: boolean
+}
+
+/**
+ * internal/themes.GitInstallResult — a repository install. A non-empty
+ * conflicts means nothing was written and those ids need confirmation.
+ */
+export interface ThemeGitInstallResult {
+  pack: string
+  version: string
+  themes: ThemeDefinition[] | null
+  conflicts: string[] | null
+  upToDate: boolean
 }
 
 /** internal/patchnotes.Group — one "### Added/Changed/Fixed" block of a release. */

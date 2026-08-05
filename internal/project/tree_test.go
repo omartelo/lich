@@ -1,6 +1,7 @@
 package project
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"slices"
@@ -99,6 +100,37 @@ func TestReadFileRejectsLarge(t *testing.T) {
 	write(t, repo, "big", strings.Repeat("x", maxReadFileSize+1))
 	if _, err := New(nil).ReadFile(repo, "big"); err == nil {
 		t.Error("ReadFile(oversize): want error, got nil")
+	}
+}
+
+// TestIsBinaryWindow pins the edge of git's sniff window, the one thing the
+// callers' own tests cannot see: they only ever feed a NUL near byte 0, so a
+// wider or narrower window still passes them. The offsets are git's literal
+// 8000 on purpose — deriving them from binarySniffBytes would make the test
+// follow the constant instead of pinning it.
+func TestIsBinaryWindow(t *testing.T) {
+	nulAt := func(offset int) []byte {
+		data := bytes.Repeat([]byte("x"), offset+1)
+		data[offset] = 0
+		return data
+	}
+	tests := []struct {
+		name string
+		data []byte
+		want bool
+	}{
+		{"empty", nil, false},
+		{"short text", []byte("package main\n"), false},
+		{"short with NUL", []byte("ab\x00c"), true},
+		{"last byte in window", nulAt(7999), true},
+		{"first byte past window", nulAt(8000), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isBinary(tt.data); got != tt.want {
+				t.Errorf("isBinary(%s) = %v, want %v", tt.name, got, tt.want)
+			}
+		})
 	}
 }
 

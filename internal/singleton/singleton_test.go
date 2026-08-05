@@ -176,6 +176,31 @@ func TestPing(t *testing.T) {
 	}
 }
 
+func TestBindFailureVerdict(t *testing.T) {
+	live := &Info{PID: 1, Port: 47821, Token: "t"}
+	tests := []struct {
+		name        string
+		restartWait string
+		running     *Info
+		want        BindVerdict
+	}{
+		{"restart successor, nothing detected", "1", nil, BindFailureIsReal},
+		// A successor races for a busy port on purpose; whatever still holds it
+		// is not a window to hand over to.
+		{"restart successor, lich still holding the port", "1", live, BindFailureIsReal},
+		{"fresh launch, port held by something else", "", nil, BindFailureIsReal},
+		{"fresh launch, another live lich", "", live, BindFailureIsDuplicate},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := BindFailureVerdict(tt.restartWait, tt.running); got != tt.want {
+				t.Errorf("BindFailureVerdict(%q, %+v) = %d, want %d",
+					tt.restartWait, tt.running, got, tt.want)
+			}
+		})
+	}
+}
+
 func serverPort(t *testing.T, srv *httptest.Server) int {
 	t.Helper()
 	_, portStr, ok := strings.Cut(strings.TrimPrefix(srv.URL, "http://"), ":")

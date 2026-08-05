@@ -96,6 +96,34 @@ func Detect(configDir string, wantPort int, ping func(port int, token string) bo
 	return info, nil
 }
 
+// BindVerdict is what a failed bind of the pinned listener port means.
+type BindVerdict int
+
+const (
+	// BindFailureIsReal: log and exit 1 — the port is held by something that is
+	// not a lich we can hand over to, or this process is a restart successor,
+	// which legitimately expects a busy port and retries the bind itself (so a
+	// failure here is genuine).
+	BindFailureIsReal BindVerdict = iota
+	// BindFailureIsDuplicate: another live lich holds the port — focus its
+	// window and exit 0. Re-launching an app you already have open should give
+	// you the window, not an error.
+	BindFailureIsDuplicate
+)
+
+// BindFailureVerdict decides what a failed bind means. restartWait is the
+// restart.WaitEnv value; running is what Detect found, which the caller probes
+// for only when restartWait is empty (a successor never pays for the probe).
+func BindFailureVerdict(restartWait string, running *Info) BindVerdict {
+	if restartWait != "" {
+		return BindFailureIsReal
+	}
+	if running == nil {
+		return BindFailureIsReal
+	}
+	return BindFailureIsDuplicate
+}
+
 // Ping reports whether a token-gated lich listener answers on port. It is the
 // production probe passed to Detect: only lich serves /ping behind the token, so
 // a 204 proves the recorded instance is alive and is lich.

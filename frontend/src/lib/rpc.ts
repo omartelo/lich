@@ -27,6 +27,7 @@ import type {
   StoredProject,
   StoredSession,
   ThemeDefinition,
+  ThemeGitInstallResult,
   ThemeImportResult,
   Worktree,
 } from "./api-types"
@@ -314,6 +315,11 @@ export const Themes = {
   /** Import a picked theme file, reporting an existing id before replacement. */
   Import: (path: string, overwrite: boolean) =>
     call<ThemeImportResult>("themes.Import", [path, overwrite]),
+  /** Clone a theme repository and install every theme its manifest versions. */
+  InstallFromGit: (url: string, overwrite: boolean) =>
+    call<ThemeGitInstallResult>("themes.InstallFromGit", [url, overwrite]),
+  /** Re-clone the repository a theme came from, installing a newer manifest. */
+  UpdateFromGit: (id: string) => call<ThemeGitInstallResult>("themes.UpdateFromGit", [id]),
   /** Remove a user-imported theme. Bundled themes are rejected by the backend. */
   Remove: (id: string) => call<null>("themes.Remove", [id]),
   /** Write the bundled starter theme to a destination the user picked. */

@@ -365,13 +365,23 @@ func (s *Service) stream(id string, sess *session) {
 	sess.outbox.close()
 
 	s.mu.Lock()
+	reaped := false
 	if current, ok := s.sessions[id]; ok && current.pty == p {
 		delete(s.sessions, id)
 		close(current.done)
+		reaped = true
 	}
 	s.mu.Unlock()
 
-	s.hub.Emit(exitEventPrefix+id, nil)
+	// Only the goroutine that actually evicted its own PTY owes an exit event:
+	// a reap that lost the race to a respawn under the same id would otherwise
+	// tell a live session it exited, and the frontend writes "[process exited]"
+	// into that terminal. Emitted outside s.mu for the reason Start gives —
+	// Emit blocks on a stalled /events client, and holding s.mu across it would
+	// freeze every session's I/O.
+	if reaped {
+		s.hub.Emit(exitEventPrefix+id, nil)
+	}
 }
 
 // Write forwards keyboard input from the frontend to a session's PTY.

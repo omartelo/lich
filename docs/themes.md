@@ -62,7 +62,81 @@ does not match `<id>.json` is ignored.
 ```
 
 `origin` is optional in imported JSON. The backend overwrites it with `custom`
-before saving.
+before saving. `source` is written by lich for a theme installed from a
+repository (below) and stripped from a picked file — a standalone theme carries
+no version and is never updated in place.
+
+## Theme Repositories
+
+A repository is the versioned way in. It is a plain git repository with a
+manifest at its root and one or more theme files beside it:
+
+```
+lich-theme.json      { "name": "Sample pack", "version": "1.2.0" }
+tokyo-night.json
+gruvbox.json
+```
+
+- `name` is required and cannot exceed 128 characters.
+- `version` must be `MAJOR.MINOR.PATCH` (a leading `v` is accepted and dropped).
+  A pre-release is rejected: the update check orders no two of them.
+- The manifest deliberately does not list the themes. Every other root-level
+  `*.json` is read as one, up to 32; anything else in the repository — `README`,
+  subdirectories — is ignored.
+- Version is per repository, not per theme. Installing takes the whole pack, and
+  so does updating it.
+
+Install clones the repository shallowly into a temporary directory, validates
+the manifest and every theme, and only then writes. One invalid file fails the
+whole install — a half-installed pack is worse than a rejected one. Theme ids
+already present are reported back for confirmation before anything is replaced.
+The clone is discarded: an update is another clone.
+
+The stored theme records where it came from:
+
+```json
+"source": { "url": "https://github.com/you/lich-themes.git", "version": "1.2.0" }
+```
+
+Updating re-clones that URL and installs the pack again when the manifest
+carries a newer version; an equal or older one is reported as up to date.
+
+Accepted remotes are `https://`, `ssh://`, `file://`, an absolute path, and
+git's `user@host:path` shorthand. Everything else is rejected before git runs:
+`ext::` resolves through a remote helper that executes a shell command, and an
+argument starting with `-` would be read as a flag. Credential prompts are
+disabled, so a private repository fails instead of hanging — authentication
+rides the ssh key or credential helper git already has.
+
+### Start a repository
+
+```bash
+mkdir my-lich-themes && cd my-lich-themes
+git init
+cat > lich-theme.json <<'EOF'
+{
+  "name": "My themes",
+  "version": "1.0.0"
+}
+EOF
+```
+
+Put a theme beside it. Settings › Appearance › **Save template** writes a valid
+starter naming every supported color — save it into the repository, then set its
+`id`, `name` and `scheme`. File names inside the repository are yours; lich
+stores each theme as `<id>.json` under its own directory on install.
+
+```bash
+git add . && git commit -m "themes"
+```
+
+An absolute path is an accepted remote, so the repository installs before it is
+pushed anywhere: **Import**, paste the directory, **Install**. Once it is on a
+host, the clone URL is what other people paste.
+
+Shipping a change: edit the themes, bump `version` in the manifest, commit and
+push. An install still on the old version takes it with **Update**; forget the
+bump and lich reports the pack as already up to date.
 
 ## Validation Rules
 
@@ -92,9 +166,10 @@ Each color block takes what its consumer actually parses:
   goes through a round-trip that fails on translucency and is swallowed into a
   silent fallback, which would apply a theme only halfway with no error shown.
 
-Import uses lich's native file picker. Re-importing a theme whose `id` already
-exists asks for confirmation before replacing the stored file; cancelling the
-confirmation leaves the existing theme unchanged.
+Import opens a dialog holding both ways in: a repository URL, or the native file
+picker for a single theme. Re-importing a theme whose `id` already exists asks
+for confirmation before replacing the stored file; cancelling the confirmation
+leaves the existing theme unchanged.
 
 The template download uses the native save dialog, so the file lands where you
 choose it; the dialog confirms replacing an existing file.
