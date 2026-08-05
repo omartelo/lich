@@ -40,8 +40,7 @@ func TestReplacedClientDoesNotSilenceTransport(t *testing.T) {
 	// replaced, so the first client's read failing proves the second one is
 	// already the transport's client. Polling t.conn would be the worse signal:
 	// without the identity guard the read loop nils it out, and the wait would
-	// fail on its own before the assertion below ever ran. This read is also
-	// what answers the close handshake — handle's close waits for the reply.
+	// fail on its own before the assertion below ever ran.
 	if _, _, err := first.Read(swapped); err == nil {
 		t.Fatal("the transport never closed the replaced client")
 	}
@@ -72,6 +71,56 @@ func TestReplacedClientDoesNotSilenceTransport(t *testing.T) {
 	}
 	if id != "sess" || string(payload) != "output" {
 		t.Fatalf("got id=%q payload=%q", id, payload)
+	}
+}
+
+// stallCeiling bounds how long input from a freshly connected client may take
+// to reach the service. The work in between is an accept and a loopback write,
+// so the real number is microseconds; the ceiling only has to sit far below the
+// close handshake's own timeout, which is what a graceful close of the replaced
+// client would spend here.
+const stallCeiling = 2 * time.Second
+
+// TestReplacingAClientDoesNotStallTheNewOne pins that handle starts reading
+// from the new client without waiting on the one it replaced. A graceful close
+// waits for the peer's close reply, and it runs on the handler goroutine before
+// the read loop starts — so a replaced client that is alive but not reading
+// would hold the new client's input hostage for the length of that handshake.
+func TestReplacingAClientDoesNotStallTheNewOne(t *testing.T) {
+	arrived := make(chan struct{}, 1)
+	tr, err := newTransport(func(string, []byte) { arrived <- struct{}{} }, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("newTransport: %v", err)
+	}
+
+	// Never read from: a client that reads would answer the close handshake and
+	// hide the stall.
+	first, err := dial(t, tr, tr.token)
+	if err != nil {
+		t.Fatalf("dial first: %v", err)
+	}
+	defer func() { _ = first.CloseNow() }()
+	waitForClient(t, tr)
+
+	second, err := dial(t, tr, tr.token)
+	if err != nil {
+		t.Fatalf("dial second: %v", err)
+	}
+	defer func() { _ = second.CloseNow() }()
+
+	frame, err := encodeFrame("sess", []byte("x"))
+	if err != nil {
+		t.Fatalf("encodeFrame: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := second.Write(ctx, websocket.MessageBinary, frame); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	select {
+	case <-arrived:
+	case <-time.After(stallCeiling):
+		t.Fatalf("the new client's input did not reach the service within %v: handle is waiting on the client it replaced", stallCeiling)
 	}
 }
 

@@ -481,7 +481,10 @@ func (t *transport) handle(w http.ResponseWriter, r *http.Request) {
 	t.conn = conn
 	t.mu.Unlock()
 	if previous != nil {
-		_ = previous.Close(websocket.StatusPolicyViolation, "replaced by new client")
+		// Not a graceful close: that waits for the replaced client's close
+		// reply, on this goroutine, before the new client's read loop starts.
+		// Nothing reads the status anyway — the page reconnects on any close.
+		_ = previous.CloseNow()
 	}
 	go t.readLoop(conn)
 }
