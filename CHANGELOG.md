@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-08-05
+
 ### Added
 
 - **Install a theme from a git repository, and update it later.** A theme file
@@ -1385,7 +1387,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.24.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/omartelo/lich/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/omartelo/lich/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/omartelo/lich/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/omartelo/lich/compare/v0.21.1...v0.22.0
