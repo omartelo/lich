@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-08-05
+
 ### Added
 
 - **Comment on a file you opened whole.** The dock's **Code** tab reads a file
@@ -1441,7 +1443,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.25.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.26.0...HEAD
+[0.26.0]: https://github.com/omartelo/lich/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/omartelo/lich/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/omartelo/lich/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/omartelo/lich/compare/v0.22.0...v0.23.0
