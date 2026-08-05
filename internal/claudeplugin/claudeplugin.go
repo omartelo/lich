@@ -92,10 +92,8 @@ func computeStatus(installed bool, installedVer, latestVer string) Status {
 
 // Install adds the marketplace and installs the plugin at user scope.
 func (s *Service) Install() error {
-	// A repeat marketplace add errors ("already exists"); that is harmless —
-	// the install below is what matters, so only its error is surfaced.
-	if err := s.runClaude("plugin", "marketplace", "add", marketplaceRepo); err != nil {
-		slog.Debug("claudeplugin: marketplace add", "err", err)
+	if err := s.syncMarketplace(); err != nil {
+		return err
 	}
 	return s.runClaude("plugin", "install", pluginKey)
 }
@@ -103,7 +101,29 @@ func (s *Service) Install() error {
 // Update pulls the latest released version. Claude Code applies it on the next
 // session (a restart is required, which the UI signals).
 func (s *Service) Update() error {
+	if err := s.syncMarketplace(); err != nil {
+		return err
+	}
 	return s.runClaude("plugin", "update", pluginKey)
+}
+
+// syncMarketplace brings the local marketplace clone level with the remote: an
+// add for the first install, an update for one already there.
+//
+// Both `plugin install` and `plugin update` refresh the marketplace themselves,
+// but a failed refresh only downgrades them to a warning — they read the stale
+// clone, report "already at the latest version" and exit 0. That is a success
+// lich has no way to tell from a real one, so the refresh runs here first, where
+// its failure is an error the user sees.
+func (s *Service) syncMarketplace() error {
+	// A repeat add errors ("already exists"), which is how an existing clone
+	// announces itself; the update is the branch that then matters.
+	err := s.runClaude("plugin", "marketplace", "add", marketplaceRepo)
+	if err == nil {
+		return nil
+	}
+	slog.Debug("claudeplugin: marketplace add", "err", err)
+	return s.runClaude("plugin", "marketplace", "update", marketplaceName)
 }
 
 func (s *Service) runClaude(args ...string) error {

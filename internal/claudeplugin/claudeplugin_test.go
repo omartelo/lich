@@ -299,15 +299,21 @@ func TestInstallAddsMarketplaceThenPlugin(t *testing.T) {
 
 // TestInstallSurvivesARepeatMarketplaceAdd proves the documented tolerance: a
 // marketplace already present makes `marketplace add` fail, and that failure
-// must not cost the install that follows it.
+// must not cost the install that follows it — it only redirects the refresh to
+// the existing clone.
 func TestInstallSurvivesARepeatMarketplaceAdd(t *testing.T) {
 	s, calls := fakeClaude(t, "marketplace add")
 
 	if err := s.Install(); err != nil {
 		t.Fatalf("Install after a repeat marketplace add: %v", err)
 	}
-	if got := calls(); len(got) != 2 || got[1] != "plugin install "+pluginKey {
-		t.Errorf("calls = %v, want the install to have run anyway", got)
+	want := []string{
+		"plugin marketplace add " + marketplaceRepo,
+		"plugin marketplace update " + marketplaceName,
+		"plugin install " + pluginKey,
+	}
+	if got := calls(); !slices.Equal(got, want) {
+		t.Errorf("calls = %v, want %v", got, want)
 	}
 }
 
@@ -336,8 +342,61 @@ func TestUpdateTargetsThePluginKey(t *testing.T) {
 	if err := s.Update(); err != nil {
 		t.Fatalf("Update: %v", err)
 	}
-	if got := calls(); !slices.Equal(got, []string{"plugin update " + pluginKey}) {
-		t.Errorf("calls = %v, want a single plugin update", got)
+	if got := calls(); got[len(got)-1] != "plugin update "+pluginKey {
+		t.Errorf("calls = %v, want the last one to be the plugin update", got)
+	}
+}
+
+// TestUpdateRefreshesTheMarketplaceFirst pins the order on the real-world path,
+// where the marketplace is already present: the clone is refreshed before the
+// plugin update reads a version off it. Reversed, the update reads the stale
+// clone and reports the version it already has as the newest one.
+func TestUpdateRefreshesTheMarketplaceFirst(t *testing.T) {
+	s, calls := fakeClaude(t, "marketplace add")
+
+	if err := s.Update(); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	want := []string{
+		"plugin marketplace add " + marketplaceRepo,
+		"plugin marketplace update " + marketplaceName,
+		"plugin update " + pluginKey,
+	}
+	if got := calls(); !slices.Equal(got, want) {
+		t.Errorf("calls = %v, want %v", got, want)
+	}
+}
+
+// TestMarketplaceRefreshFailureStopsTheRun is the regression this package exists
+// to prevent: an unrefreshable marketplace must surface as an error, never as a
+// plugin call that exits 0 on the stale clone and reads as a successful update.
+func TestMarketplaceRefreshFailureStopsTheRun(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		run  func(*Service) error
+	}{
+		{"install", (*Service).Install},
+		{"update", (*Service).Update},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// "marketplace" fails both the add and the update, leaving the clone
+			// as it was; "plugin install"/"plugin update" still match nothing.
+			s, calls := fakeClaude(t, "marketplace")
+
+			err := tc.run(s)
+			if err == nil {
+				t.Fatal("want an error when the marketplace cannot be refreshed, got nil")
+			}
+			if !strings.Contains(err.Error(), "plugin marketplace update "+marketplaceName) {
+				t.Errorf("error %q does not name the refresh that failed", err)
+			}
+			for _, call := range calls() {
+				if strings.HasPrefix(call, "plugin install") || strings.HasPrefix(call, "plugin update") {
+					t.Errorf("calls = %v, want no plugin call after a failed refresh", calls())
+					break
+				}
+			}
+		})
 	}
 }
 

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A plugin install or update that cannot see the newest release now says so,
+  instead of reporting success and leaving the old one in place.** Claude Code
+  keeps a local clone of the plugin's marketplace, and both the install and the
+  update refresh it themselves — but when that refresh fails, they only warn:
+  they read the clone as it stands, decide the version already installed is the
+  newest one, and exit reporting success. lich had no way to tell that apart
+  from a real update, so it announced one, and the next session started on the
+  same old plugin. The refresh is now lich's own first step, where it either
+  succeeds or fails loudly with what Claude Code said about it.
+
 ## [0.25.0] - 2026-08-05
 
 ### Added
