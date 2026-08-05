@@ -2,7 +2,9 @@ package drop
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -310,6 +312,69 @@ func TestUploadRejectsBadName(t *testing.T) {
 			}
 		})
 	}
+}
+
+// agedCopy puts a file in the copies directory with a chosen age, standing in
+// for a copy an earlier drop left behind.
+func agedCopy(t *testing.T, service *Service, name string, age time.Duration) string {
+	t.Helper()
+	if err := os.MkdirAll(service.dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	path := filepath.Join(service.dir, name)
+	if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+	stamp := time.Now().Add(-age)
+	if err := os.Chtimes(path, stamp, stamp); err != nil {
+		t.Fatalf("chtimes %s: %v", path, err)
+	}
+	return path
+}
+
+// TestPruneDeletesOnlyExpiredCopies pins both sides of the deadline. The ages
+// are literal days, not keepDropped ± something: a test that derives them from
+// the constant moves with it, and would stay green for a window widened to a
+// month.
+func TestPruneDeletesOnlyExpiredCopies(t *testing.T) {
+	service := New(t.TempDir())
+	expired := agedCopy(t, service, "old.png", 8*24*time.Hour)
+	kept := agedCopy(t, service, "recent.png", 6*24*time.Hour)
+
+	service.Prune()
+
+	if _, err := os.Stat(expired); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("expired copy still there (%v)", err)
+	}
+	if _, err := os.Stat(kept); err != nil {
+		t.Fatalf("copy inside the window was deleted: %v", err)
+	}
+}
+
+// TestSavePrunes is the trigger that matters most: a lich left running for
+// weeks never restarts, so the copy that grows the directory is what has to
+// clear the ones before it.
+func TestSavePrunes(t *testing.T) {
+	service := New(t.TempDir())
+	expired := agedCopy(t, service, "old.png", 8*24*time.Hour)
+
+	fresh, err := service.Save("new.png", strings.NewReader("bytes"))
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	if _, err := os.Stat(expired); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("Save left the expired copy behind (%v)", err)
+	}
+	if _, err := os.Stat(fresh); err != nil {
+		t.Fatalf("Save pruned the copy it had just written: %v", err)
+	}
+}
+
+// TestPruneWithoutCopiesDir covers the first launch: nothing has been dropped,
+// so the directory does not exist, and that is not a fault.
+func TestPruneWithoutCopiesDir(t *testing.T) {
+	New(t.TempDir()).Prune()
 }
 
 // TestSaveKeepsEarlierDrops pins the no-overwrite rule: the first copy's path

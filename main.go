@@ -101,6 +101,9 @@ func main() {
 	// (internal/rpc). store.Close manages the DB lifecycle and stays Go-only.
 	dispatcher := rpc.New()
 	drops := drop.New(configDir)
+	// The other prune runs after each new copy; this one is what clears the
+	// last of them for a lich that is never dropped on again.
+	drops.Prune()
 	dispatcher.Register("terminal", term)
 	dispatcher.Register("drop", drops)
 	dispatcher.Register("fonts", fonts.New())

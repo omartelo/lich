@@ -12,7 +12,7 @@
 //     on the user's file.
 //   - Upload: for anything neither tree holds, keep a copy under the config dir
 //     and paste the copy's path. Reading it works; editing it edits the copy —
-//     which is why Resolve is tried first.
+//     which is why Resolve is tried first. The copies expire (see Prune).
 //
 // A dropped directory only ever takes the first path: the page can walk one,
 // but copying a tree to paste a path to the copy is not what the drop meant.
@@ -29,6 +29,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // maxUpload bounds one dropped file. Screenshots and logs are the payload; a
@@ -47,6 +48,12 @@ var homeDir = os.UserHomeDir
 // mtimeSlackMs absorbs the rounding between the browser's millisecond
 // File.lastModified and the filesystem's timestamp.
 const mtimeSlackMs = 2_000
+
+// keepDropped is how long a copy outlives its drop. Long enough that a path
+// pasted into a prompt still resolves days later — a session can sit unsent
+// over a weekend — and short enough that the directory cannot grow without
+// bound, which is the only reason it is deleted at all.
+const keepDropped = 7 * 24 * time.Hour
 
 // skipDirs are trees a dropped file is never meaningfully found in, and the
 // ones that make the search expensive.
@@ -230,7 +237,41 @@ func (s *Service) Save(name string, body io.Reader) (string, error) {
 	if _, err := io.Copy(file, body); err != nil {
 		return "", fmt.Errorf("write %s: %w", path, err)
 	}
+	s.Prune()
 	return path, nil
+}
+
+// Prune deletes copies older than keepDropped. Called after each new copy —
+// which is the only thing that grows the directory — and once at startup, so
+// the last of them is cleared even by a lich that is never dropped on again.
+//
+// Age is the rule because a copy's whole purpose is the prompt it was pasted
+// into: once that conversation is days behind, the path in it is scrollback.
+// A failure here is never the caller's problem — the copy it just wrote is
+// good, and the stale ones get another chance on the next drop.
+func (s *Service) Prune() {
+	entries, err := os.ReadDir(s.dir)
+	if err != nil {
+		// Nothing dropped yet is the common case, not a fault.
+		if !errors.Is(err, fs.ErrNotExist) {
+			slog.Warn("drop: prune could not read the copies dir", "dir", s.dir, "err", err)
+		}
+		return
+	}
+	deadline := time.Now().Add(-keepDropped)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil || info.ModTime().After(deadline) {
+			continue
+		}
+		path := filepath.Join(s.dir, entry.Name())
+		if err := os.Remove(path); err != nil {
+			slog.Warn("drop: prune failed", "path", path, "err", err)
+		}
+	}
 }
 
 // uniquePath is name, or name-2, name-3… up to a bound past which a caller is
