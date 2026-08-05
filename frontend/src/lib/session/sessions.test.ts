@@ -4,7 +4,6 @@ import {
   activeTarget,
   addSession,
   closeSession,
-  createProjectSessions,
   groupByWorktree,
   isLastWorktreeSession,
   isSessionKind,
@@ -25,7 +24,7 @@ const P = "project-1"
 // buildState creates a project with `n` sessions (ids "s1".."sn"), the last one
 // active.
 function buildState(n: number): SessionState {
-  let state: SessionState = { [P]: createProjectSessions("s1") }
+  let state: SessionState = addSession({}, P, "s1")
   for (let i = 2; i <= n; i++) {
     state = addSession(state, P, `s${i}`)
   }
@@ -65,20 +64,29 @@ function withClaudeSession(
   }
 }
 
-describe("createProjectSessions", () => {
-  it("seeds one active claude session labeled Session 1", () => {
-    const project = createProjectSessions("s1")
-    expect(project.sessions).toEqual([{ id: "s1", label: "Session 1", kind: "claude" }])
-    expect(project.activeId).toBe("s1")
-    expect(project.nextSeq).toBe(2)
-  })
-})
-
 describe("addSession", () => {
-  it("creates the project entry when absent", () => {
+  it("creates the project entry when absent, as one active Session 1", () => {
     const state = addSession({}, P, "s1")
-    expect(sessionsOf(state, P)).toHaveLength(1)
+    expect(sessionsOf(state, P)).toEqual([{ id: "s1", label: "Session 1", kind: "claude" }])
     expect(activeSessionId(state, P)).toBe("s1")
+    expect(state[P].nextSeq).toBe(2)
+  })
+
+  // The first session of a project used to take a different code path from
+  // every later one, and that path ignored both arguments: a worktree opened
+  // as a project's first session lost its checkout and its name, spawning in
+  // the project root while the store recorded the worktree.
+  it("keeps the worktree path and label when it creates the project entry", () => {
+    const created = sessionsOf(
+      addSession({}, P, "s1", "claude", "/wt/lucky-otter", "lucky-otter"),
+      P,
+    )[0]
+    expect(created).toEqual({
+      id: "s1",
+      label: "lucky-otter",
+      kind: "claude",
+      path: "/wt/lucky-otter",
+    })
   })
 
   it("appends, focuses the new session and advances the label sequence", () => {

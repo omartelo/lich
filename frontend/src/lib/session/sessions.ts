@@ -48,16 +48,13 @@ export interface ProjectSessions {
 
 export type SessionState = Record<string, ProjectSessions>
 
-export function createProjectSessions(
-  firstSessionId: string,
-  kind: SessionKind = "claude",
-): ProjectSessions {
-  return {
-    sessions: [{ id: firstSessionId, label: "Session 1", kind }],
-    activeId: firstSessionId,
-    nextSeq: 2,
-  }
-}
+// What a project with no entry yet counts as. Seeding the missing entry rather
+// than branching on it is what keeps the first session of a project from being
+// built by a second, poorer code path: the one that used to run here dropped
+// the worktree path and the label it was handed, so a worktree session opened
+// as a project's first landed in the project root while the store recorded the
+// checkout.
+const NO_SESSIONS: ProjectSessions = { sessions: [], activeId: "", nextSeq: 1 }
 
 // addSession appends a session to a project and makes it active. If the project
 // has no entry yet, it is created with this session as the first. A worktree
@@ -71,10 +68,7 @@ export function addSession(
   path = "",
   label?: string,
 ): SessionState {
-  const current = state[projectId]
-  if (!current) {
-    return { ...state, [projectId]: createProjectSessions(sessionId, kind) }
-  }
+  const current = state[projectId] ?? NO_SESSIONS
   const session: Session = {
     id: sessionId,
     label: label || `Session ${current.nextSeq}`,

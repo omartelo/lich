@@ -9,7 +9,7 @@ import {
   shouldToastAttention,
   toSessionStatus,
 } from "./session-events"
-import { addSession, createProjectSessions, setActiveSession, type SessionState } from "./sessions"
+import { addSession, setActiveSession, type SessionState } from "./sessions"
 
 const ACTIVE = "project-active"
 const BACKGROUND = "project-background"
@@ -17,10 +17,8 @@ const BACKGROUND = "project-background"
 // Two projects of two sessions each; "s2"/"b2" are the active session of their
 // project, mirroring the shape the provider reads on an attention event.
 function buildState(): SessionState {
-  let state: SessionState = {
-    [ACTIVE]: createProjectSessions("s1"),
-    [BACKGROUND]: createProjectSessions("b1"),
-  }
+  let state: SessionState = addSession({}, ACTIVE, "s1")
+  state = addSession(state, BACKGROUND, "b1")
   state = addSession(state, ACTIVE, "s2")
   state = addSession(state, BACKGROUND, "b2")
   return state
