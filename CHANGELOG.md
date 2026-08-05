@@ -22,6 +22,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   did, and is still the right way to try a theme you are writing — it simply
   reads as unversioned, because it is.
 
+### Fixed
+
+- **The Review panel no longer shows a diff that has stopped being true.** It
+  decided when to re-read the diff from the changed-file counts alone, and an
+  edit that replaces text on a line already marked as changed leaves every one
+  of those counts exactly where it was — same files, same `+`, same `-`, and no
+  new commit. The panel held that stale diff not for a tick but indefinitely,
+  which is the worst thing a review surface can do: it was most likely to happen
+  while an agent was iterating on the same lines, which is precisely when you
+  are watching it. The panel now reads the diff itself while it is open and
+  publishes only when the text actually changed, so an idle repository still
+  costs nothing and your selection and scroll position still survive a tick.
+- **A file unticked by a new commit opens again instead of staying folded.**
+  Ticking a file off as viewed folds it away, and a commit that rewrites that
+  file correctly unticks it — but the fold was decided once and never revisited,
+  so the file came back unread *and* closed, with nothing on screen to say why.
+  A file whose content changes now returns to the state it would have had if it
+  had just arrived, which for anything but a very large file is open.
+- **The command palette tells a screen reader which row is selected.** The rows
+  carried `aria-selected` on a plain button, where it means nothing, so arrowing
+  through the list moved a highlight that was only ever visual. The list is now
+  a proper listbox of options and announces the row under the cursor.
+
 ## [0.24.0] - 2026-08-04
 
 ### Added
