@@ -80,13 +80,17 @@ function FilesSkeleton({ tree }: { tree: boolean }) {
 }
 
 interface PullsFilesProps {
+  /** The checkout the review runs from: where the diff is fetched, and what the
+   * session comments are held under — the dock browsing the same checkout adds
+   * to that batch too. */
   path: string
   /** Which pull request's diff to fetch. */
   number: number
   /** The checkout's HEAD; a new commit refetches the diff. */
   head: string
   /** Identity of the pull request being reviewed (its URL) — what the Viewed
-   * ticks and the draft review are keyed by, so two PRs never share them. */
+   * ticks and the draft review are keyed by, so two PRs never share them. The
+   * session comments are not among them: they are keyed by the checkout. */
   pullRequest: string
   /** Write into the session's terminal; false when no session took it. */
   onInject: (text: string) => boolean
@@ -227,8 +231,8 @@ export function PullsFiles({
                 <FileDiff
                   file={file}
                   onInject={onInject}
-                  onSessionComment={(path, lines, text) =>
-                    addReviewComment(pullRequest, path, lines, text)
+                  onSessionComment={(file, lines, text) =>
+                    addReviewComment(path, file, lines, text)
                   }
                   bulk={bulk}
                   viewed={isViewed(viewed, file.newPath, fingerprints.get(file.newPath) ?? "")}
@@ -241,7 +245,10 @@ export function PullsFiles({
             ))}
           </div>
         </div>
-        <CommentBatch target={pullRequest} onInject={onInject} />
+        {/* Keyed by the checkout, not by the pull request: these notes are
+            going to that checkout's session, and the dock's own comments are
+            waiting in the same batch. */}
+        <CommentBatch target={path} onInject={onInject} />
       </div>
     </div>
   )

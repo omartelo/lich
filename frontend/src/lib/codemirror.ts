@@ -172,6 +172,12 @@ class BlockSpacer extends GutterMarker {
 
 const blockSpacer = new BlockSpacer()
 
+/** The gutter's half of a block widget, for any view that opens gaps — the
+ * diff's threads and comment boxes, and the file preview's composer. */
+export function blockWidgetGutter(): Extension {
+  return lineNumberWidgetMarker.of(() => blockSpacer)
+}
+
 // diffGutter is the single-column line gutter: numbers come from lineMeta
 // (old-file for deletions, new-file otherwise), not from doc line numbers.
 // lineNumbers' internal spacer probes formatNumber with out-of-range numbers
@@ -185,6 +191,6 @@ export function diffGutter(lineMeta: DiffLine[]): Extension {
         return meta ? gutterNumber(meta) : widest
       },
     }),
-    lineNumberWidgetMarker.of(() => blockSpacer),
+    blockWidgetGutter(),
   ]
 }

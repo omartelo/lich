@@ -13,7 +13,8 @@ import {
 } from "@/lib/review-comments"
 
 interface CommentBatchProps {
-  /** What is under review: the checkout's path, or the pull request's URL. */
+  /** Where the batch is going: the checkout's path, shared by every surface
+   * reviewing it. */
   target: string
   /** Write into the session's terminal; false when no session took it. */
   onInject: (text: string) => boolean

@@ -6,7 +6,8 @@ import { useProjects } from "@/providers/projects"
 import { baseName } from "@/lib/paths"
 import { Notice } from "@/components/common/Notice"
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
-import { activeTarget, sessionsOf } from "@/lib/session/sessions"
+import { sessionsOf } from "@/lib/session/sessions"
+import { useActiveSession } from "@/lib/session/use-active-session"
 import { queueSetup } from "@/lib/terminal/setup-queue"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { useCheckouts } from "@/lib/git/use-checkouts"
@@ -38,9 +39,8 @@ interface PullsProps {
 // Pulls is the per-project pull-request screen: it fills the main area on top of
 // the persistent terminals (like Settings), holding one pull request in full —
 // status, body and the full diff — with merge, create, open, and a session on
-// the PR's own branch. It resolves its path from the route's project id plus the
-// active session (the exact-match useActiveSession returns empty on this
-// subroute).
+// the PR's own branch. It reviews from the active session's checkout, the same
+// one the dock beside it browses.
 //
 // The pull request itself is PullRequestView's; what this owns is everything
 // around it — which one is in view, and what an action there means for the
@@ -58,7 +58,7 @@ export function Pulls({ list = false }: PullsProps) {
     activateSession,
   } = useProjects()
   const projectPath = projects.find((p) => p.id === projectId)?.path ?? ""
-  const { sessionId, path } = activeTarget(sessions, projectId ?? null, projectPath)
+  const { sessionId, path } = useActiveSession()
   const status = useGitStatus(path)
   const branch = status?.branch ?? ""
   const head = status?.head ?? ""

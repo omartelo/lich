@@ -230,9 +230,9 @@ export function sessionsOf(state: SessionState, projectId: string): Session[] {
 
 // activeTarget resolves what a project screen acts on: the active session's id
 // and the path it lives in — a worktree session resolves to its checkout,
-// everything else to the project root. Pure so both useActiveSession (the
-// project route) and the pull request screen (a subroute, where the exact-match
-// useMatch yields no project) read the same triple.
+// everything else to the project root. Pure, and the whole of useActiveSession's
+// answer: every screen inside a project — the terminal, its settings, its pull
+// requests — reads this same triple, and so does the chrome beside them.
 export function activeTarget(
   state: SessionState,
   projectId: string | null,

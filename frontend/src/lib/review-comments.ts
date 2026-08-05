@@ -2,9 +2,12 @@
 // session as one prompt. A comment is a place plus what should change there:
 // the file, the lines the selection covered, and the note.
 //
-// Keyed by what is under review — the checkout's path for the working diff, the
-// pull request's URL for a PR — so the dock and the Pulls screen never mix their
-// notes, and leaving a tab does not drop them.
+// Keyed by where the notes are going and not by what they were written on: the
+// checkout's path, which is the session that will be handed the batch. One
+// review crosses surfaces — a pull request's diff, the file it changed opened
+// whole in the dock, the checkout's own uncommitted changes — and a note taken
+// on any of them belongs in the same prompt. Two checkouts still keep their
+// batches apart, and leaving a tab does not drop them.
 //
 // In memory only, like the Viewed ticks next door: a comment anchors to line
 // numbers of the diff as it was rendered, and nothing tracks the file moving

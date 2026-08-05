@@ -7,7 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Comment on a file you opened whole.** The dock's **Code** tab reads a file
+  the way the review reads a diff, and the reason to open it mid-review is a
+  change too small to judge on its own — but there was nothing to do with what
+  you found there except type it out again in the terminal. Selecting lines and
+  right-clicking now offers **Comment for the session**, the same box the diff
+  opens, and the batch strip sits at the foot of the tab.
+
+### Changed
+
+- **One batch of session comments per checkout, not one per screen.** The
+  comments held for the session's next prompt were keyed by whatever produced
+  them — the pull request for its diff, the checkout for the dock — so a review
+  that crossed the two ended up with two batches, sent as two prompts, neither
+  of them the review. They are now keyed by the checkout they are going to: a
+  note taken on a pull request's diff, on a file opened whole beside it, or on
+  the checkout's own uncommitted changes joins one list, visible from all three.
+
 ### Fixed
+
+- **The dock no longer empties itself the moment you open a pull request.** The
+  file tree and the review both follow the active session, and the session they
+  resolved was the one the *terminal* route named: on a pull request or the
+  settings screen there was no such route, so the dock kept its width and its
+  tabs while its contents went blank — and the footer lost the buttons that open
+  it. The session now resolves anywhere inside the project, which is where the
+  dock earns its keep: a pull request's diff shows a change in a dozen lines,
+  and the file it came from is one tab away.
 
 - **A plugin install or update that cannot see the newest release now says so,
   instead of reporting success and leaving the old one in place.** Claude Code
