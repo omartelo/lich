@@ -16,11 +16,12 @@ const SHOWN = "0"
 // never hidden the panel.
 export function usePanelVisible(storageKey: string): [boolean, () => void] {
   const [visible, setVisible] = useState(() => readPref(storageKey) !== HIDDEN)
+  // The write sits outside the updater: React treats one as pure and calls it
+  // twice under StrictMode.
   const toggle = () => {
-    setVisible((wasVisible) => {
-      writePref(storageKey, wasVisible ? HIDDEN : SHOWN)
-      return !wasVisible
-    })
+    const next = !visible
+    writePref(storageKey, next ? SHOWN : HIDDEN)
+    setVisible(next)
   }
   return [visible, toggle]
 }

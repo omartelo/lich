@@ -21,13 +21,22 @@ import { SessionModel } from "./SessionModel"
 import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
-const CLOCK_TICK_MS = 10_000
+const MINUTE_MS = 60_000
 
+// The readout is HH:MM, so it is scheduled on the minute rather than on a fixed
+// interval: a 10s tick spent five of every six renders redrawing the same
+// string, and still showed a minute that could be ten seconds stale.
 function useNow(): Date {
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), CLOCK_TICK_MS)
-    return () => clearInterval(timer)
+    let timer = 0
+    const tick = () => {
+      const at = new Date()
+      setNow(at)
+      timer = window.setTimeout(tick, MINUTE_MS - (at.getTime() % MINUTE_MS))
+    }
+    timer = window.setTimeout(tick, MINUTE_MS - (Date.now() % MINUTE_MS))
+    return () => window.clearTimeout(timer)
   }, [])
   return now
 }

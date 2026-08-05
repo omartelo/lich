@@ -33,6 +33,14 @@ import { useWorktreeClose } from "./useWorktreeClose"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { usePanelWidth } from "@/lib/use-panel-width"
 
+// Named here like every other `lich.*` pref rather than spelled at the call
+// site. The bounds go with it: wide enough for a session label and its branch,
+// capped short of crowding the terminal.
+const WIDTH_KEY = "lich.sidebar.width"
+const MIN_REM = 12
+const MAX_REM = 30
+const DEFAULT_REM = 15
+
 // SessionSidebar lists the active project's sessions and can be drag-resized
 // within a fixed pixel range. Width persists across restarts. It renders nothing
 // when no project is active (Home, Settings), so it never competes with those
@@ -70,10 +78,10 @@ export function SessionSidebar() {
   const path = projects.find((p) => p.id === projectId)?.path ?? ""
   const git = useGitStatus(path)
   const { width, handleProps } = usePanelWidth({
-    storageKey: "lich.sidebar.width",
-    minRem: 12,
-    maxRem: 30,
-    defaultRem: 15,
+    storageKey: WIDTH_KEY,
+    minRem: MIN_REM,
+    maxRem: MAX_REM,
+    defaultRem: DEFAULT_REM,
     edge: "right",
   })
   const [worktreeOpen, setWorktreeOpen] = useState(false)

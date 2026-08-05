@@ -116,37 +116,53 @@ export function CommandPalette() {
             />
           </div>
 
-          <div className="flex-1 overflow-y-auto p-1.5">
+          {/* listbox/option, not bare buttons: `aria-selected` is meaningless
+              on a button's implicit role, so the row the arrow keys are on was
+              painted for the eye and announced to nobody. */}
+          <div role="listbox" aria-label="Results" className="flex-1 overflow-y-auto p-1.5">
             {total === 0 ? (
               <div className="px-3 py-8 text-center text-sm text-muted-foreground">
                 No matches for <span className="font-mono text-foreground/80">{query.trim()}</span>
               </div>
             ) : (
               <>
-                {results.sessions.length > 0 && <GroupLabel>Sessions</GroupLabel>}
-                {results.sessions.map((session, i) => (
-                  <SessionRow
-                    key={session.sessionId}
-                    session={session}
-                    selected={i === active}
-                    onSelect={() => setSelected(i)}
-                    onRun={() => runIndex(i)}
-                  />
-                ))}
-                {results.projects.length > 0 && <GroupLabel>Projects</GroupLabel>}
-                {results.projects.map((project, j) => {
-                  const index = results.sessions.length + j
-                  return (
-                    <ProjectRow
-                      key={project.id}
-                      project={project}
-                      sessionCount={sessions[project.id]?.sessions.length ?? 0}
-                      selected={index === active}
-                      onSelect={() => setSelected(index)}
-                      onRun={() => runIndex(index)}
-                    />
-                  )
-                })}
+                {/* A listbox takes only options and groups as children, so the
+                    section heading rides inside a group rather than sitting
+                    loose between the rows. */}
+                {results.sessions.length > 0 && (
+                  // biome-ignore lint/a11y/useSemanticElements: the rule offers <fieldset>, which groups form controls and is not a valid child of a listbox.
+                  <div role="group" aria-label="Sessions">
+                    <GroupLabel>Sessions</GroupLabel>
+                    {results.sessions.map((session, i) => (
+                      <SessionRow
+                        key={session.sessionId}
+                        session={session}
+                        selected={i === active}
+                        onSelect={() => setSelected(i)}
+                        onRun={() => runIndex(i)}
+                      />
+                    ))}
+                  </div>
+                )}
+                {results.projects.length > 0 && (
+                  // biome-ignore lint/a11y/useSemanticElements: same as above — a listbox takes group, not fieldset.
+                  <div role="group" aria-label="Projects">
+                    <GroupLabel>Projects</GroupLabel>
+                    {results.projects.map((project, j) => {
+                      const index = results.sessions.length + j
+                      return (
+                        <ProjectRow
+                          key={project.id}
+                          project={project}
+                          sessionCount={sessions[project.id]?.sessions.length ?? 0}
+                          selected={index === active}
+                          onSelect={() => setSelected(index)}
+                          onRun={() => runIndex(index)}
+                        />
+                      )
+                    })}
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -188,6 +204,7 @@ function Row({ selected, onSelect, onRun, children }: RowProps) {
     <button
       ref={ref}
       type="button"
+      role="option"
       aria-selected={selected}
       onMouseMove={onSelect}
       onClick={onRun}

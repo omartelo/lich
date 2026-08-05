@@ -14,6 +14,16 @@ import { FilesPanel } from "./FilesPanel"
 
 export type DockTab = "files" | "review"
 
+// One dock width serves both tabs, so there is one key for it. Named here like
+// every other `lich.*` pref rather than spelled at the call site.
+const WIDTH_KEY = "lich.dock.width"
+
+// Wide enough for a diff line at the 12px review font, capped short of eating
+// the terminal whole.
+const MIN_REM = 20
+const MAX_REM = 60
+const DEFAULT_REM = 28
+
 // Ghost tabs, sized down to the dock's 40px header — not the stock filled pill.
 const TAB_CLASS =
   "gap-1 rounded-md px-2 py-0.5 text-xs hover:bg-accent/50 data-active:bg-accent data-active:text-accent-foreground dark:data-active:border-transparent dark:data-active:bg-accent dark:data-active:text-accent-foreground"
@@ -35,10 +45,10 @@ export function RightDock({ tab, onTab, onClose }: RightDockProps) {
   const [fullscreen, setFullscreen] = useState(false)
   const [bulk, toggleAll] = useDiffBulk()
   const { width, handleProps } = usePanelWidth({
-    storageKey: "lich.dock.width",
-    minRem: 20,
-    maxRem: 60,
-    defaultRem: 28,
+    storageKey: WIDTH_KEY,
+    minRem: MIN_REM,
+    maxRem: MAX_REM,
+    defaultRem: DEFAULT_REM,
     edge: "left",
   })
 
