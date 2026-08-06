@@ -6,7 +6,6 @@ import { Code, FileText, GitBranch, Folder, Plus, Diff, GitPullRequestArrow } fr
 import { ProjectService, Terminal as TerminalService } from "@/lib/rpc"
 import type { DockTab } from "@/components/dock/RightDock"
 import { useActiveSession } from "@/lib/session/use-active-session"
-import { useSessionCwd } from "@/lib/session/use-session-cwd"
 import { useSessionUsage } from "@/lib/session/use-session-usage"
 import { useCostReadout } from "@/lib/use-cost-readout"
 import { formatCost } from "@/lib/session/session-cost"
@@ -95,11 +94,7 @@ interface FooterBarProps {
 // shows its checkout's path, branch and diff.
 export function FooterBar({ dock, onDock }: FooterBarProps) {
   const navigate = useNavigate()
-  const { projectId, sessionId, path: basePath } = useActiveSession()
-  // Overlay the backend's live cwd so a `cd` in the terminal moves the footer
-  // with it — same source the session card follows. Falls back to the session's
-  // static start path until the watcher reports.
-  const path = useSessionCwd(sessionId) || basePath
+  const { projectId, sessionId, path, checkout } = useActiveSession()
   // Context-window occupancy of the active session, read off its transcript at
   // each turn's end (null until the first turn of a Claude session lands).
   const usage = useSessionUsage(sessionId)
@@ -218,7 +213,7 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
         <FooterButton
           label="View pull request"
           onClick={() => {
-            openPulls(basePath)
+            openPulls(checkout)
             navigate(`/projects/${projectId}/pulls`)
           }}
           wide

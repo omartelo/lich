@@ -58,7 +58,7 @@ export function Pulls({ list = false }: PullsProps) {
     activateSession,
   } = useProjects()
   const projectPath = projects.find((p) => p.id === projectId)?.path ?? ""
-  const { sessionId, path } = useActiveSession()
+  const { sessionId, path, checkout } = useActiveSession()
   const status = useGitStatus(path)
   const branch = status?.branch ?? ""
   const head = status?.head ?? ""
@@ -119,7 +119,7 @@ export function Pulls({ list = false }: PullsProps) {
     void Store.PurgeWorktreeSessions(projectId, wtPath)
     closePulls(wtPath)
     // Only leave the screen when the checkout under it is the one going away.
-    if (wtPath === path) {
+    if (wtPath === checkout) {
       navigate(`/projects/${projectId}`)
     }
     try {

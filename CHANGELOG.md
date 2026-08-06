@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The dock now reviews the directory the session is actually working in.** A
+  session that moved — spawned in one checkout and `cd`-ed into another
+  repository — moved its card and the footer with it: both read the live working
+  directory, showing that repository's branch and its uncommitted counts. The
+  dock did not. It stayed on the directory the session started in, so **Review**
+  answered "No uncommitted changes" and the **Code** tree listed the wrong
+  checkout while the footer, one row below, counted 35 changed files. The dock's
+  three tabs and the pull-request screen now follow the same directory the card
+  and footer show.
+
 ## [0.26.1] - 2026-08-05
 
 ### Fixed
