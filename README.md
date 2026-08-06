@@ -4,6 +4,7 @@
     <img src="frontend/public/appicon-light.png" alt="lich" width="88" height="88" />
   </picture>
   <h1>lich</h1>
+  <p><strong>English</strong> · <a href="README.zh-CN.md">简体中文</a></p>
   <p><strong>A terminal-first harness for coding with AI agents.</strong></p>
   <p>
     Open your projects, run agents like Claude Code, Codex and Opencode in real
