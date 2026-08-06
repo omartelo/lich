@@ -18,18 +18,18 @@ vars:
 
 tasks:
   build:frontend:
-    summary: Installs frontend deps and builds frontend/dist (embedded by Go)
+    desc: Build frontend/dist (embedded by the Go binary)
     cmds:
       - cmd: cd frontend && pnpm install --frozen-lockfile && pnpm run build
 
   build:
-    summary: Builds the static lich binary
+    desc: Build the static binary into bin/
     deps: [build:frontend]
     cmds:
       - cmd: CGO_ENABLED=0 go build {{.GO_BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}} .
 
   build:windows:
-    summary: Cross-compiles the Windows binary (experimental)
+    desc: Cross-compile the Windows binary (experimental)
     deps: [build:frontend]
     cmds:
       # GUI subsystem: no console window rides along. stdout/stderr go
@@ -37,23 +37,23 @@ tasks:
       - cmd: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "{{.LDFLAGS}} -H=windowsgui" -o {{.BIN_DIR}}/{{.APP_NAME}}.exe .
 
   build:mac:
-    summary: Cross-compiles the macOS binaries — arm64 + amd64 (experimental)
+    desc: Cross-compile the macOS binaries (experimental)
     deps: [build:frontend]
     cmds:
       # Both arches: Apple Silicon (arm64) and Intel (amd64). Pure Go, so both
       # cross-compile from any host. Unsigned — Gatekeeper quarantines until
-      # notarization ships (see CLAUDE.md Known Ceilings).
+      # notarization ships (INSTALL.md says what a user has to do about it).
       - cmd: CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build {{.GO_BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}-darwin-arm64 .
       - cmd: CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build {{.GO_BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}-darwin-amd64 .
 
   run:
-    summary: Builds and runs the application
+    desc: Build and run
     deps: [build]
     cmds:
       - cmd: ./{{.BIN_DIR}}/{{.APP_NAME}}
 
   dev:
-    summary: Development mode — Vite HMR + backend, window pointed at the dev server
+    desc: Dev mode — Vite HMR, isolated DB, port and Chromium profile
     cmds:
       # frontend/dist must exist for go:embed to compile, even though the
       # window loads the Vite server; build it once, then serve with HMR.
@@ -72,13 +72,13 @@ tasks:
           LICH_DEV=1 LICH_DEV_URL="http://127.0.0.1:{{.VITE_PORT}}" LICH_LISTEN_PORT=47822 go run .
 
   test:
-    summary: Backend and frontend suites
+    desc: Run the backend and frontend suites
     cmds:
       - cmd: go test ./...
       - cmd: cd frontend && pnpm test
 
   mutation:
-    summary: 'Mutation tests via gremlins (config: .gremlins.yaml). Scope with -- ./pkg/'
+    desc: Mutation tests via gremlins — .gremlins.yaml, scope with -- ./internal/pkg/
     preconditions:
       - sh: command -v gremlins
         msg: "gremlins is required: go install github.com/go-gremlins/gremlins/cmd/gremlins@latest"
@@ -88,7 +88,7 @@ tasks:
       - cmd: gremlins unleash {{.CLI_ARGS}}
 
   package:
-    summary: Builds the Linux packages (deb, rpm, archlinux) into bin/
+    desc: Build the Linux packages (deb, rpm, archlinux)
     deps: [build]
     cmds:
       - task: package:nfpm
@@ -99,7 +99,7 @@ tasks:
         vars: { FORMAT: archlinux, TARGET: '{{.APP_NAME}}.pkg.tar.zst' }
 
   package:windows:
-    summary: Builds the Windows installer (lich-setup.exe) — needs Inno Setup 6
+    desc: Build bin/lich-setup.exe (needs Inno Setup 6)
     deps: [build:windows]
     preconditions:
       - sh: command -v iscc

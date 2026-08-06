@@ -5,7 +5,8 @@
 `lich` is a **harness for AI coding agents** — a desktop app whose Go backend serves an embedded React frontend to
 a system Chromium window in `--app` mode (no Electron, no webview toolkit; decision record:
 `docs/chromium-shell.md`). It is built for other developers to use, not only its author: docs, errors and defaults
-answer to a stranger. Linux first; Windows and macOS builds are experimental (see Known Ceilings).
+answer to a stranger. Linux first; Windows and macOS are experimental and there is no hardware here for either —
+a cross-compile proves the code builds, never that the platform works.
 
 This file records only what the code cannot say: invariants, deliberate ceilings, and the workflow. User-facing
 feature history lives in `CHANGELOG.md` — don't duplicate it here.
@@ -25,21 +26,9 @@ feature history lives in `CHANGELOG.md` — don't duplicate it here.
 - **Session hooks**: `docs/hooks/` is the canonical, contract-first spec. lich owns the server side; the scripts
   live in the companion repo `omartelo/lich-plugin`, so an endpoint or payload change breaks a repo this one cannot
   see — move the contract first, then both sides.
-- **Build/tasks**: [Task](https://taskfile.dev) — see Commands.
-
-## Commands
-
-```bash
-task dev              # dev mode: Vite HMR + backend; separate DB, port and Chromium profile
-task build            # frontend build + static Go binary → bin/lich
-task build:windows    # cross-compiles bin/lich.exe (experimental)
-task build:mac        # cross-compiles bin/lich-darwin-{arm64,amd64} (experimental)
-task run              # build + run
-task test             # go test ./... + frontend vitest
-task mutation         # mutation testing via gremlins (scope: task mutation -- ./internal/store/)
-task package          # .deb, .rpm, .pkg.tar.zst into bin/ (needs nfpm)
-task package:windows  # bin/lich-setup.exe installer (needs Inno Setup 6 — CI/Windows)
-```
+- **Build/tasks**: [Task](https://taskfile.dev) — `task --list` describes every one of them, so they are not
+  copied here. `task dev` gets its own DB, port and Chromium profile: it never touches an installed lich's
+  workspace.
 
 ## Local Gate (before every commit / PR)
 
@@ -53,11 +42,6 @@ task package:windows  # bin/lich-setup.exe installer (needs Inno Setup 6 — CI/
   `for os in linux darwin windows; do GOOS=$os go build ./... && GOOS=$os go vet ./...; done`
   Cross-compiling only proves it builds — label the PR `ci:os` to run the backend suite on real Windows and macOS
   runners before the merge.
-
-CI (`.github/workflows/ci.yml`) runs this gate on every PR and push to `main` and renders pass/fail counts plus
-coverage into the job summary. The summary is transparency, never the gate — a red test fails the job. The
-`os-tests` job runs the backend suite on Windows and macOS: always on a push to `main` (so a regression is caught
-before a tag), on a PR only when it carries the `ci:os` label.
 
 ## Hard Invariants
 
@@ -103,46 +87,27 @@ nobody knows it and that the call site never shows. The mechanism and the histor
 - **A project's gh account governs gh, not git**: `vcs.account` (`internal/project/ghaccount.go`) puts one
   account's token in `GH_TOKEN` for every gh call lich makes for that project. A push still rides the remote's
   ssh key and signs with the global `user.email`, so a PR can be *read* by one account and its commits *land*
-  under another, with no error anywhere. Per-worktree `core.sshCommand` + `user.email` is the upgrade path.
-- **`LICH_WORKTREE_PORT` is a hash, not a reservation** (`internal/terminal/worktreeport.go`): the session's
-  start directory folded into a fixed 1000-port window. Nothing probes and nothing binds, so two checkouts can
-  land on the same number and only the dev server started second finds out. Stability is the trade — a probe
-  would move the port every time the previous server still held it. The main checkout is assigned one like any
-  worktree; the range is fixed, not per-project.
-- **The cost readout is priced from a table, not from the provider**: no provider publishes an API for what a
-  turn cost, so `internal/pricing` bills the transcript's token counts against a baked table that refreshes
-  itself from LiteLLM's published one when it meets an unknown model. Two consequences: a model nobody has
-  priced yet makes the readout go *absent* (the scan stops at that line — a total missing a turn is worse than
-  no total), and the accounting is per `(session, transcript)` in `session_costs`, so a conversation forked
-  inside the PTY — which copies its history into a new transcript — bills that history twice. lich's own
-  resume continues the same transcript and is unaffected.
-- **A dropped file has no path, so lich guesses it**: Chromium hands the page a drop's bytes and metadata but never
-  its path (no `text/uri-list`, no `File.path`), so `internal/drop` searches for it by name + size + mtime — the
-  session's directory first, then home. The search is breadth-first under a 50k-entry budget per tree, and skips
-  home's dot directories: depth-first spent the whole budget inside `~/.cache` and missed a directory one level
-  down from the search root. Three consequences: twins at the same depth are ambiguous and resolve to nothing,
-  anything neither tree holds is *copied* to `<config-dir>/lich/dropped/` — so an agent told to edit it edits the
-  copy — and a directory, which has no copy to fall back on, simply fails when the budget or the skip list hides
-  it. A copy is deleted 3 days after it is written (on the next drop, or at startup), so a path pasted into a
-  prompt older than that no longer resolves.
+  under another, with no error anywhere.
+- **`LICH_WORKTREE_PORT` is a hash, not a reservation** (`internal/terminal/worktreeport.go`): nothing probes and
+  nothing binds, so two checkouts can land on the same number and only the dev server started second finds out.
+- **The cost readout is priced from a table, not from the provider** (`internal/pricing`): an unpriced model makes
+  the readout go *absent* rather than wrong, and billing is per `(session, transcript)` — a conversation forked
+  inside the PTY bills its copied history twice. lich's own resume continues the same transcript and is unaffected.
+- **A dropped file has no path, so lich guesses it** (`internal/drop`): Chromium never hands the page a path, so a
+  drop is matched by name + size + mtime under the session directory, then home. Twins resolve to nothing; a file
+  in neither tree is *copied*, so an agent told to edit it edits the copy — and that copy is deleted 3 days on,
+  so a path pasted into a prompt eventually stops resolving.
 - **git status is polled** — one shared poller per repository path (`frontend/src/lib/git/git-status-store.ts`); the
-  lich plugin's `session-touched` hook nudges an immediate refresh. An fs watcher is the upgrade path.
+  lich plugin's `session-touched` hook nudges an immediate refresh.
 - **Persistence is hybrid**: UI prefs in the page's localStorage (`lich.*` keys — the reason the listener port is
   pinned at 47821; `LICH_LISTEN_PORT` overrides it, `LICH_PORT` is the distinct per-session hook variable), the
   workspace in SQLite (`<config-dir>/lich/lich.db`, `internal/store`). Closing a session deletes its row; keeping a
   worktree parks its session for a later resume; closing a project hides it, but reopening one whose directory is
   gone silently deletes it and its sessions.
-- **Hidden sessions are serialized and destroyed**: 2MB replay rings on both sides (`frontend/src/lib/terminal/replay-buffer.ts`
-  page-side, `internal/terminal/replay.go` backend-side — the latter survives a full page reload). waveterm's disk
-  filestore is the upgrade path if size ever matters.
-- **Terminal I/O degrades, never breaks**: with the WebSocket down, output falls back to `/events` and input to the
-  RPC — slower, still working.
+- **Hidden sessions are serialized and destroyed**: 2MB replay rings on both sides
+  (`frontend/src/lib/terminal/replay-buffer.ts` page-side, `internal/terminal/replay.go` backend-side — the latter
+  survives a full page reload). Scrollback past the ring is gone, not paged.
 - **Single instance via the pinned port**: the bind is the lock (`internal/singleton`); a duplicate launch focuses
   the running window (best-effort, untested against a real window) and exits 0.
 - **Reordering rides dnd-kit's pointer sensors** (`frontend/src/lib/use-sortable-list.ts`); the activation distance
   is load-bearing — without it plain clicks stop selecting a session.
-- **Windows is experimental**: cmd.exe is the shell, and the GUI subsystem build has no console — diagnostics only
-  reach `%AppData%\lich\lich.log`. The PTY has no Windows tests.
-- **macOS is experimental**: unsigned (Gatekeeper quarantines them) and never run on real hardware. Three darwin
-  seams: `internal/chromium`, `internal/system`, and `internal/terminal`'s cwd reader, which hardcodes libSystem
-  struct offsets.
