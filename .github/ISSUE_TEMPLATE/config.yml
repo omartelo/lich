@@ -1,0 +1,7 @@
+# Blank issues stay on: the two forms cover the common cases, and the rest of
+# what people report does not fit a form.
+blank_issues_enabled: true
+contact_links:
+  - name: lich plugin (session titles, git refresh, resume)
+    url: https://github.com/omartelo/lich-plugin/issues
+    about: The Claude Code hooks ship from their own repository — report those there.

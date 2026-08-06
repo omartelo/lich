@@ -1,0 +1,32 @@
+name: Feature request
+description: Something lich should do, or should do differently
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Broken behaviour belongs in the bug form instead — this one is for what
+        lich does not do yet.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you are trying to do
+      description: |
+        The work you are doing when lich gets in the way, and what it makes you
+        do instead — leave the app, keep a second terminal open, do it by hand
+        every time. The problem is the half that decides whether this gets
+        built, so it is the only required field.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you have in mind
+      description: |
+        Optional. If you already know the shape you want, describe it. If not,
+        skip it — a well-described problem often has a better answer than the
+        one either of us reaches for first.
+    validations:
+      required: false
