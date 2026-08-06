@@ -4,12 +4,14 @@
     <img src="frontend/public/appicon-light.png" alt="lich" width="88" height="88" />
   </picture>
   <h1>lich</h1>
+  <p><strong>English</strong> · <a href="README.zh-CN.md">简体中文</a></p>
   <p><strong>A terminal-first harness for coding with AI agents.</strong></p>
   <p>
     Open your projects, run agents like Claude Code, Codex and Opencode in real
     terminals, and keep git — worktrees, diffs and pull requests — in view
     without leaving the window.
   </p>
+  <p><a href="https://omartelo.github.io/lich/"><strong>omartelo.github.io/lich</strong></a></p>
   <p>
     <a href="https://github.com/omartelo/lich/releases"><img alt="Release" src="https://img.shields.io/github/v/release/omartelo/lich?color=4285F4&label=release" /></a>
     <img alt="Go" src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white" />
