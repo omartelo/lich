@@ -28,6 +28,16 @@ tasks:
     cmds:
       - cmd: CGO_ENABLED=0 go build {{.GO_BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}} .
 
+  icons:windows:
+    desc: Regenerate rsrc_windows_amd64.syso from build/windows/lich.ico
+    cmds:
+      # The .syso is the resource the Windows executable links, and it is the
+      # only source of the exe's icon: the Start Menu shortcut and the native
+      # file picker (an in-process COM dialog) both draw it. Nothing rebuilds
+      # it automatically, so a new lich.ico that skips this task ships an
+      # executable still wearing the previous mark.
+      - cmd: go run github.com/akavel/rsrc@v0.10.2 -ico build/windows/lich.ico -arch amd64 -o rsrc_windows_amd64.syso
+
   build:windows:
     desc: Cross-compile the Windows binary (experimental)
     deps: [build:frontend]

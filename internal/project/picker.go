@@ -6,8 +6,10 @@ import (
 	"github.com/ncruces/zenity"
 )
 
-// ZenityPicker shells out to zenity/qarma (github.com/ncruces/zenity) — the
-// Chromium shell has no native dialog of its own. Cancel maps to ("", nil).
+// ZenityPicker opens the OS file chooser through github.com/ncruces/zenity —
+// the Chromium shell has no native dialog of its own. Only Linux shells out to
+// zenity/qarma; Windows and macOS run the dialog in-process, so there it is a
+// window of lich's own and wears the executable's icon. Cancel maps to ("", nil).
 type ZenityPicker struct{}
 
 func (ZenityPicker) PickDirectory(title string) (string, error) {

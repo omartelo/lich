@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Windows: the app list and the file picker wear the current icon.** The icon
+  linked into the executable was still the purple meteor retired two releases
+  ago, and it is the one Windows draws in two places the window itself never
+  covers: the Start Menu's app list, and the taskbar button of the native file
+  picker — the dialog that opens a project. So the window and its taskbar entry
+  showed the current mark while the app list, one keypress away, showed the old
+  one. Both now match.
+
 - **The dock now reviews the directory the session is actually working in.** A
   session that moved — spawned in one checkout and `cd`-ed into another
   repository — moved its card and the footer with it: both read the live working
