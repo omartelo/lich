@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lich — 面向 AI 编码智能体的终端优先工作台</title>
+<meta name="description" content="打开你的项目，在真实终端里运行 Claude Code、Codex、opencode 这样的智能体，并把 git —— worktree、diff 和 Pull Request —— 一并留在视野里，无需离开窗口。" />
+<link rel="icon" href="media/appicon.svg" />
+<meta property="og:title" content="lich" />
+<meta property="og:description" content="面向 AI 编码智能体的终端优先工作台。" />
+<meta property="og:image" content="https://omartelo.github.io/lich/media/session.png" />
+<meta property="og:url" content="https://omartelo.github.io/lich/index.zh-CN.html" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="alternate" hreflang="en" href="https://omartelo.github.io/lich/" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <img src="media/appicon.svg" alt="" />
+    <span class="name">lich</span>
+    <nav>
+      <a href="#features">特性</a>
+      <a href="#install">安装</a>
+      <a href="./" class="lang">English</a>
+      <a href="https://github.com/omartelo/lich" class="gh">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="hero">
+    <img class="mark" src="media/appicon.svg" alt="lich" />
+    <h1>面向 AI 编码智能体的终端优先工作台</h1>
+    <p class="lede">
+      打开你的项目，在真实终端里运行 Claude Code、Codex、opencode 这样的智能体，
+      并把 git —— worktree、diff 和 Pull Request —— 一并留在视野里，无需离开窗口。
+    </p>
+
+    <div class="cta">
+      <a class="btn" href="#install">安装</a>
+      <a class="btn ghost" href="https://github.com/omartelo/lich">在 GitHub 上查看源码</a>
+    </div>
+
+    <div class="install">
+      <span id="cmd">curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh</span>
+      <button type="button" id="copy">复制</button>
+    </div>
+    <p class="note">Linux 一行命令 —— 识别发行版、校验校验和，并安装原生软件包。</p>
+  </div>
+
+  <figure class="shot-hero">
+    <img src="media/session.png" alt="标签栏上的四个项目，侧栏里的五个会话 —— 各自带着 worktree、分支和 diff 徽标 —— 与此同时一个 Claude Code 会话正在终端里工作" width="1800" />
+  </figure>
+
+  <section id="features">
+    <h2>它能做什么</h2>
+    <p class="section-lede">
+      单个静态 Go 二进制文件，界面在你系统自带的 Chromium 系浏览器中以 <code>--app</code> 模式打开。
+      没有 Electron，也不捆绑 webview。
+    </p>
+
+    <div class="features">
+      <div class="feature">
+        <h3>自带智能体</h3>
+        <p>Claude Code、Codex、opencode 等都是一等公民 —— 在设置里把 lich 指向各自的
+        二进制文件，选一个默认的，或者逐个会话单独指定。</p>
+      </div>
+      <div class="feature">
+        <h3>终端优先的会话</h3>
+        <p>真正由 PTY 支撑的 shell，在 GPU 上渲染。滚动缓冲区能挺过整页刷新；底栏跟随
+        <code>cd</code>、标明模型，并用一个圆环显示已占用的上下文窗口。</p>
+      </div>
+      <div class="feature">
+        <h3>内建 git worktree</h3>
+        <p>从任意基础分支开一个，自动播种被 gitignore 掉的 <code>.env*</code> 文件，并分配
+        一个稳定的开发服务器端口。被保留的 worktree，其会话之后可以接着原来的对话恢复。</p>
+      </div>
+      <div class="feature">
+        <h3>项目与会话</h3>
+        <p>项目在顶部标签栏，会话在侧栏里按 worktree 分组 —— 每张卡片都带着自己的工作目录、
+        分支、diff 徽标和 Pull Request 编号。</p>
+      </div>
+      <div class="feature">
+        <h3>审查，并把审查交回去</h3>
+        <p>diff 面板紧挨着实时文件树。右键选中的几行就能针对它们写评论；整批评论作为一条
+        prompt 落进会话，但不自动发送。</p>
+      </div>
+      <div class="feature">
+        <h3>Pull Request，端到端</h3>
+        <p>用 GitHub 自己的限定符筛选列表，把某个 PR 检出到它自己的 worktree，内联审查、
+        批准并合并 —— 全程不用打开浏览器标签页。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>四处看看</h2>
+
+    <div class="gallery">
+      <figure>
+        <img loading="lazy" src="media/review-comments.png" alt="审查面板里针对 diff 若干行写下的两条评论" width="1800" />
+        <figcaption>写在 diff 上的评论，作为一条 prompt 交给会话。</figcaption>
+      </figure>
+      <figure>
+        <img loading="lazy" src="media/pulls-list.png" alt="Pull Request 列表，含作者、时长和检查状态，由筛选框收窄" width="1800" />
+        <figcaption>仓库的 Pull Request，用 GitHub 自己的限定符筛选。</figcaption>
+      </figure>
+      <figure>
+        <img loading="lazy" src="media/pull-request-review.png" alt="一条处于 pending 的审查评论，内联在它所针对的那几行下面" width="1800" />
+        <figcaption>写在 diff 本身上的审查 —— 每条评论都处于 pending，直到你把它们一起提交。</figcaption>
+      </figure>
+      <figure>
+        <img loading="lazy" src="media/themes.png" alt="设置，外观：内置主题旁边是一套导入的主题包，显示它来自哪个仓库以及版本号" width="1800" />
+        <figcaption>从 git 仓库安装的主题包，就地更新。</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="install">
+    <h2>安装</h2>
+    <p class="section-lede">
+      手动的分发版软件包和静态二进制文件见
+      <a class="link" href="https://github.com/omartelo/lich/blob/main/INSTALL.md">INSTALL.md</a>。
+    </p>
+
+    <table>
+      <thead>
+        <tr><th>平台</th><th>安装方式</th><th>运行时依赖</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Linux</td>
+          <td>上面的一行命令，或 AUR 的 <a class="link" href="https://aur.archlinux.org/packages/lich-bin"><code>lich-bin</code></a></td>
+          <td><code>PATH</code> 上有 chromium / google-chrome / brave，外加 <code>zenity</code></td>
+        </tr>
+        <tr>
+          <td>macOS <span class="exp">实验性</span></td>
+          <td><code>brew install omartelo/tap/lich</code></td>
+          <td><code>/Applications</code> 里有 Chrome / Chromium / Edge / Brave</td>
+        </tr>
+        <tr>
+          <td>Windows <span class="exp">实验性</span></td>
+          <td>从 <a class="link" href="https://github.com/omartelo/lich/releases">Releases</a> 下载安装程序</td>
+          <td>Chrome / Edge / Brave</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>一切都跑在你自己的机器上</h2>
+    <p class="section-lede">
+      没有账号，不用登录，没有遥测。后端是一个带 token 鉴权的本地回环监听器，除了更新检查
+      —— 向 GitHub Releases 发一次版本查询 —— 之外，没有任何东西离开 <code>localhost</code>。
+      你的工作区存在配置目录下的 SQLite 里。
+    </p>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>AGPL-3.0-only © 2026 omartelo —— 自由软件，在开放中构建。</p>
+    <nav>
+      <a href="./">English</a>
+      <a href="https://github.com/omartelo/lich">GitHub</a>
+      <a href="https://github.com/omartelo/lich/blob/main/CHANGELOG.md">更新日志</a>
+      <a href="https://github.com/omartelo/lich/blob/main/docs/themes.md">主题</a>
+      <a href="https://github.com/omartelo/lich-plugin">插件</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+document.getElementById("copy").addEventListener("click", async (e) => {
+  await navigator.clipboard.writeText(document.getElementById("cmd").textContent);
+  e.target.textContent = "已复制";
+  setTimeout(() => { e.target.textContent = "复制"; }, 1600);
+});
+</script>
+
+</body>
+</html>

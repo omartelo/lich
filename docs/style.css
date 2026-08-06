@@ -1,0 +1,151 @@
+:root {
+  color-scheme: light dark;
+  --background: oklch(0.94 0.003 286.32);
+  --foreground: oklch(0.21 0.006 285.885);
+  --card: oklch(0.98 0.002 286.32);
+  --muted-foreground: oklch(0.505 0.016 285.938);
+  --accent: oklch(0.9 0.004 286.32);
+  --border: oklch(0.888 0.004 286.32);
+  --primary: oklch(0.21 0.006 285.885);
+  --primary-foreground: oklch(0.985 0 0);
+  --radius: 0.45rem;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, "Fira Code", "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.141 0.005 285.823);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.21 0.006 285.885);
+    --muted-foreground: oklch(0.705 0.015 286.067);
+    --accent: oklch(0.274 0.006 286.033);
+    --border: oklch(1 0 0 / 10%);
+    --primary: oklch(0.92 0.004 286.32);
+    --primary-foreground: oklch(0.21 0.006 285.885);
+  }
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; }
+img { max-width: 100%; display: block; }
+code, kbd { font-family: var(--mono); }
+
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 24px; }
+
+/* ---- top bar: a hairline seam, nothing enclosed ---- */
+header {
+  position: sticky; top: 0; z-index: 10;
+  background: color-mix(in oklab, var(--background) 88%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+header .wrap { display: flex; align-items: center; gap: 10px; height: 52px; }
+header img { width: 20px; height: 20px; }
+header .name { font-weight: 600; letter-spacing: -0.01em; }
+header nav { margin-left: auto; display: flex; gap: 2px; }
+header nav a {
+  color: var(--muted-foreground); text-decoration: none;
+  font-size: 13.5px; padding: 5px 10px; border-radius: var(--radius);
+}
+header nav a:hover { background: color-mix(in oklab, var(--accent) 55%, transparent); color: var(--foreground); }
+
+/* ---- hero ---- */
+.hero { padding: 76px 0 44px; text-align: center; }
+.hero img.mark { width: 72px; height: 72px; margin: 0 auto 22px; }
+.hero h1 {
+  font-size: clamp(30px, 5vw, 42px); line-height: 1.2;
+  letter-spacing: -0.03em; font-weight: 600; max-width: 26ch; margin: 0 auto;
+}
+/* CJK has no spaces, so a 26ch measure breaks the title mid-word. Every glyph
+   is one em wide, which makes an em measure exact here. */
+html[lang="zh-CN"] .hero h1 { max-width: 21em; }
+.hero p.lede {
+  margin: 18px auto 0; max-width: 60ch;
+  color: var(--muted-foreground); font-size: 16px;
+}
+.cta { margin-top: 30px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 9px 16px; border-radius: var(--radius);
+  font-size: 14px; font-weight: 500; text-decoration: none;
+  background: var(--primary); color: var(--primary-foreground);
+}
+.btn.ghost { background: transparent; color: var(--muted-foreground); }
+.btn.ghost:hover { background: color-mix(in oklab, var(--accent) 55%, transparent); color: var(--foreground); }
+
+.install {
+  margin: 26px auto 0; max-width: 720px;
+  display: flex; align-items: flex-start; gap: 10px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 11px 12px 11px 14px; background: var(--card);
+  font-family: var(--mono); font-size: 13px; text-align: left;
+}
+.install span { flex: 1; overflow-wrap: anywhere; }
+.install span::before { content: "$ "; color: var(--muted-foreground); }
+.install button {
+  flex: none; font: inherit; font-size: 12px; cursor: pointer;
+  border: 0; border-radius: 6px; padding: 4px 9px;
+  background: transparent; color: var(--muted-foreground);
+}
+.install button:hover { background: var(--accent); color: var(--foreground); }
+.hero .note { margin-top: 12px; font-size: 12.5px; color: var(--muted-foreground); }
+
+/* ---- shots ---- */
+figure { margin: 0; }
+figure img { border: 1px solid var(--border); border-radius: var(--radius); }
+figure figcaption {
+  margin-top: 10px; font-size: 12.5px; color: var(--muted-foreground); text-align: center;
+}
+.shot-hero { margin: 40px 0 0; }
+
+/* ---- sections ---- */
+section { padding: 68px 0; border-top: 1px solid var(--border); }
+section.flush { border-top: 0; padding-top: 0; }
+h2 {
+  font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 8px;
+}
+.section-lede { color: var(--muted-foreground); max-width: 62ch; }
+
+.features { display: grid; gap: 34px; grid-template-columns: repeat(2, 1fr); margin-top: 34px; }
+.feature h3 { font-size: 15px; font-weight: 600; margin-bottom: 5px; }
+.feature p { color: var(--muted-foreground); font-size: 14px; }
+.feature code { font-size: 12.5px; color: var(--foreground); }
+
+.gallery { display: grid; gap: 40px; margin-top: 36px; }
+
+/* ---- table ---- */
+table { width: 100%; border-collapse: collapse; margin-top: 26px; font-size: 14px; }
+th, td { text-align: left; padding: 11px 12px 11px 0; vertical-align: top; }
+th {
+  font-size: 11.5px; font-weight: 500; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--muted-foreground);
+}
+tbody tr { border-top: 1px solid var(--border); }
+td:first-child { white-space: nowrap; font-weight: 500; }
+td .exp { font-weight: 400; color: var(--muted-foreground); font-style: italic; }
+td:last-child { color: var(--muted-foreground); }
+a.link { color: inherit; text-decoration-color: var(--border); text-underline-offset: 3px; }
+a.link:hover { text-decoration-color: currentColor; }
+
+/* ---- footer ---- */
+footer { border-top: 1px solid var(--border); padding: 30px 0 60px; }
+footer .wrap { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+footer p { font-size: 13px; color: var(--muted-foreground); }
+footer nav { margin-left: auto; display: flex; gap: 16px; font-size: 13px; }
+footer nav a { color: var(--muted-foreground); text-decoration: none; }
+footer nav a:hover { color: var(--foreground); }
+
+@media (max-width: 720px) {
+  .features { grid-template-columns: 1fr; }
+  .hero { padding-top: 52px; }
+  header nav a:not(.gh):not(.lang) { display: none; }
+}

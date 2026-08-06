@@ -5,6 +5,7 @@
   </picture>
   <h1>lich</h1>
   <p><a href="README.md">English</a> · <strong>简体中文</strong></p>
+  <p><a href="https://omartelo.github.io/lich/index.zh-CN.html"><strong>omartelo.github.io/lich</strong></a></p>
   <p><strong>为 AI 编码智能体打造的终端优先工作台。</strong></p>
   <p>
     打开你的项目，在真实终端里运行 Claude Code、Codex、Opencode 这样的智能体，
