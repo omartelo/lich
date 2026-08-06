@@ -2,9 +2,10 @@
 
 ## What it is
 
-`lich` is a **personal harness** — a desktop app whose Go backend serves an embedded React frontend to a system
-Chromium window in `--app` mode (no Electron, no webview toolkit; decision record: `docs/chromium-shell.md`). It is
-a bespoke tool, not a generic product. Linux first; Windows and macOS builds are experimental (see Known Ceilings).
+`lich` is a **harness for AI coding agents** — a desktop app whose Go backend serves an embedded React frontend to
+a system Chromium window in `--app` mode (no Electron, no webview toolkit; decision record:
+`docs/chromium-shell.md`). It is built for other developers to use, not only its author: docs, errors and defaults
+answer to a stranger. Linux first; Windows and macOS builds are experimental (see Known Ceilings).
 
 This file records only what the code cannot say: invariants, deliberate ceilings, and the workflow. User-facing
 feature history lives in `CHANGELOG.md` — don't duplicate it here.

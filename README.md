@@ -22,18 +22,19 @@
 
 ## About
 
-`lich` is a **personal harness** — a desktop app that wraps a terminal-first
-workspace around AI coding agents. Open several projects, run a session (or
+`lich` is a **harness for AI coding agents** — a desktop app that wraps a
+terminal-first workspace around them. Open several projects, run a session (or
 many) per project, drive an agent in each, and watch git state — branches,
 diffs, worktrees, pull requests — without ever leaving the window. It ships as a
 single static Go binary that opens its UI in your system's Chromium-family
 browser in `--app` mode — no Electron, no bundled webview (decision record:
 [`docs/chromium-shell.md`](docs/chromium-shell.md)).
 
-It is deliberately bespoke: shaped by the author's taste for other harnesses
-(Warp and friends), built for one workflow rather than as a generic product.
-It's public because there's no reason to hide it, not because it's a supported
-release.
+It is built to get out of the way of the work — the terminal stays a real
+terminal, and git stays where you can see it. Development is active: bugs and
+feature requests belong in
+[Issues](https://github.com/omartelo/lich/issues), and what changed in each
+version is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Features
 
