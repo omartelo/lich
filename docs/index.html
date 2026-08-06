@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lich — a terminal-first harness for coding with AI agents</title>
+<meta name="description" content="Open your projects, run agents like Claude Code, Codex and opencode in real terminals, and keep git — worktrees, diffs and pull requests — in view without leaving the window." />
+<link rel="icon" href="media/appicon.svg" />
+<meta property="og:title" content="lich" />
+<meta property="og:description" content="A terminal-first harness for coding with AI agents." />
+<meta property="og:image" content="https://omartelo.github.io/lich/media/session.png" />
+<meta property="og:url" content="https://omartelo.github.io/lich/" />
+<meta name="twitter:card" content="summary_large_image" />
+<style>
+:root {
+  color-scheme: light dark;
+  --background: oklch(0.94 0.003 286.32);
+  --foreground: oklch(0.21 0.006 285.885);
+  --card: oklch(0.98 0.002 286.32);
+  --muted-foreground: oklch(0.505 0.016 285.938);
+  --accent: oklch(0.9 0.004 286.32);
+  --border: oklch(0.888 0.004 286.32);
+  --primary: oklch(0.21 0.006 285.885);
+  --primary-foreground: oklch(0.985 0 0);
+  --radius: 0.45rem;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, "Fira Code", "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.141 0.005 285.823);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.21 0.006 285.885);
+    --muted-foreground: oklch(0.705 0.015 286.067);
+    --accent: oklch(0.274 0.006 286.033);
+    --border: oklch(1 0 0 / 10%);
+    --primary: oklch(0.92 0.004 286.32);
+    --primary-foreground: oklch(0.21 0.006 285.885);
+  }
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; }
+img { max-width: 100%; display: block; }
+code, kbd { font-family: var(--mono); }
+
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 24px; }
+
+/* ---- top bar: a hairline seam, nothing enclosed ---- */
+header {
+  position: sticky; top: 0; z-index: 10;
+  background: color-mix(in oklab, var(--background) 88%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+header .wrap { display: flex; align-items: center; gap: 10px; height: 52px; }
+header img { width: 20px; height: 20px; }
+header .name { font-weight: 600; letter-spacing: -0.01em; }
+header nav { margin-left: auto; display: flex; gap: 2px; }
+header nav a {
+  color: var(--muted-foreground); text-decoration: none;
+  font-size: 13.5px; padding: 5px 10px; border-radius: var(--radius);
+}
+header nav a:hover { background: color-mix(in oklab, var(--accent) 55%, transparent); color: var(--foreground); }
+
+/* ---- hero ---- */
+.hero { padding: 76px 0 44px; text-align: center; }
+.hero img.mark { width: 72px; height: 72px; margin: 0 auto 22px; }
+.hero h1 {
+  font-size: clamp(30px, 5vw, 42px); line-height: 1.2;
+  letter-spacing: -0.03em; font-weight: 600; max-width: 26ch; margin: 0 auto;
+}
+.hero p.lede {
+  margin: 18px auto 0; max-width: 60ch;
+  color: var(--muted-foreground); font-size: 16px;
+}
+.cta { margin-top: 30px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 9px 16px; border-radius: var(--radius);
+  font-size: 14px; font-weight: 500; text-decoration: none;
+  background: var(--primary); color: var(--primary-foreground);
+}
+.btn.ghost { background: transparent; color: var(--muted-foreground); }
+.btn.ghost:hover { background: color-mix(in oklab, var(--accent) 55%, transparent); color: var(--foreground); }
+
+.install {
+  margin: 26px auto 0; max-width: 720px;
+  display: flex; align-items: flex-start; gap: 10px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 11px 12px 11px 14px; background: var(--card);
+  font-family: var(--mono); font-size: 13px; text-align: left;
+}
+.install span { flex: 1; overflow-wrap: anywhere; }
+.install span::before { content: "$ "; color: var(--muted-foreground); }
+.install button {
+  flex: none; font: inherit; font-size: 12px; cursor: pointer;
+  border: 0; border-radius: 6px; padding: 4px 9px;
+  background: transparent; color: var(--muted-foreground);
+}
+.install button:hover { background: var(--accent); color: var(--foreground); }
+.hero .note { margin-top: 12px; font-size: 12.5px; color: var(--muted-foreground); }
+
+/* ---- shots ---- */
+figure { margin: 0; }
+figure img { border: 1px solid var(--border); border-radius: var(--radius); }
+figure figcaption {
+  margin-top: 10px; font-size: 12.5px; color: var(--muted-foreground); text-align: center;
+}
+.shot-hero { margin: 40px 0 0; }
+
+/* ---- sections ---- */
+section { padding: 68px 0; border-top: 1px solid var(--border); }
+section.flush { border-top: 0; padding-top: 0; }
+h2 {
+  font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 8px;
+}
+.section-lede { color: var(--muted-foreground); max-width: 62ch; }
+
+.features { display: grid; gap: 34px; grid-template-columns: repeat(2, 1fr); margin-top: 34px; }
+.feature h3 { font-size: 15px; font-weight: 600; margin-bottom: 5px; }
+.feature p { color: var(--muted-foreground); font-size: 14px; }
+.feature code { font-size: 12.5px; color: var(--foreground); }
+
+.gallery { display: grid; gap: 40px; margin-top: 36px; }
+
+/* ---- table ---- */
+table { width: 100%; border-collapse: collapse; margin-top: 26px; font-size: 14px; }
+th, td { text-align: left; padding: 11px 12px 11px 0; vertical-align: top; }
+th {
+  font-size: 11.5px; font-weight: 500; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--muted-foreground);
+}
+tbody tr { border-top: 1px solid var(--border); }
+td:first-child { white-space: nowrap; font-weight: 500; }
+td .exp { font-weight: 400; color: var(--muted-foreground); font-style: italic; }
+td:last-child { color: var(--muted-foreground); }
+a.link { color: inherit; text-decoration-color: var(--border); text-underline-offset: 3px; }
+a.link:hover { text-decoration-color: currentColor; }
+
+/* ---- footer ---- */
+footer { border-top: 1px solid var(--border); padding: 30px 0 60px; }
+footer .wrap { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+footer p { font-size: 13px; color: var(--muted-foreground); }
+footer nav { margin-left: auto; display: flex; gap: 16px; font-size: 13px; }
+footer nav a { color: var(--muted-foreground); text-decoration: none; }
+footer nav a:hover { color: var(--foreground); }
+
+@media (max-width: 720px) {
+  .features { grid-template-columns: 1fr; }
+  .hero { padding-top: 52px; }
+  header nav a:not(.gh) { display: none; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <img src="media/appicon.svg" alt="" />
+    <span class="name">lich</span>
+    <nav>
+      <a href="#features">Features</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/omartelo/lich" class="gh">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="hero">
+    <img class="mark" src="media/appicon.svg" alt="lich" />
+    <h1>A terminal-first harness for coding with AI agents</h1>
+    <p class="lede">
+      Open your projects, run agents like Claude Code, Codex and opencode in real
+      terminals, and keep git — worktrees, diffs and pull requests — in view without
+      leaving the window.
+    </p>
+
+    <div class="cta">
+      <a class="btn" href="#install">Install</a>
+      <a class="btn ghost" href="https://github.com/omartelo/lich">Source on GitHub</a>
+    </div>
+
+    <div class="install">
+      <span id="cmd">curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh</span>
+      <button type="button" id="copy">Copy</button>
+    </div>
+    <p class="note">Linux one-liner — detects your distro, verifies the checksum, installs the native package.</p>
+  </div>
+
+  <figure class="shot-hero">
+    <img src="media/session.png" alt="Four projects on the tab bar and five sessions in the sidebar — each with its worktree, branch and diff badge — while a Claude Code session works in the terminal" width="1800" />
+  </figure>
+
+  <section id="features">
+    <h2>What it does</h2>
+    <p class="section-lede">
+      A single static Go binary that opens its UI in your system's Chromium-family browser
+      in <code>--app</code> mode. No Electron, no bundled webview.
+    </p>
+
+    <div class="features">
+      <div class="feature">
+        <h3>Bring your own agent</h3>
+        <p>Claude Code, Codex, opencode and more are first-class — point lich at each
+        binary, pick the default, or choose per session.</p>
+      </div>
+      <div class="feature">
+        <h3>Terminal-first sessions</h3>
+        <p>Real PTY-backed shells rendered on the GPU. The scrollback survives a page
+        reload; the footer follows <code>cd</code>, names the model and fills a ring with
+        the context window in use.</p>
+      </div>
+      <div class="feature">
+        <h3>Git worktrees, built in</h3>
+        <p>Branch one off any base, seeded with your gitignored <code>.env*</code> files and
+        a stable dev-server port. A kept worktree's session resumes its conversation later.</p>
+      </div>
+      <div class="feature">
+        <h3>Projects and sessions</h3>
+        <p>Projects on a tab bar, sessions in the sidebar grouped by worktree — each card
+        carrying its directory, branch, diff badge and pull request number.</p>
+      </div>
+      <div class="feature">
+        <h3>Review, and hand it back</h3>
+        <p>A diff dock beside a live file tree. Right-click a selection to comment against
+        those lines; the batch lands in the session as one prompt, unsent.</p>
+      </div>
+      <div class="feature">
+        <h3>Pull requests, end to end</h3>
+        <p>List them with GitHub's own qualifiers, check one out into its own worktree,
+        review it inline, approve it and merge it — without a browser tab.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>A look around</h2>
+
+    <div class="gallery">
+      <figure>
+        <img loading="lazy" src="media/review-comments.png" alt="The review dock with two comments written against lines of the diff" width="1800" />
+        <figcaption>Comments written on the diff, handed to the session as one prompt.</figcaption>
+      </figure>
+      <figure>
+        <img loading="lazy" src="media/pulls-list.png" alt="The pull request list with author, age and check status, narrowed by a filter box" width="1800" />
+        <figcaption>The repository's pull requests, filtered by GitHub's own qualifiers.</figcaption>
+      </figure>
+      <figure>
+        <img loading="lazy" src="media/pull-request-review.png" alt="A pending review comment sitting inline under the lines it is about" width="1800" />
+        <figcaption>A review written on the diff itself — each comment pending until you submit them together.</figcaption>
+      </figure>
+      <figure>
+        <img loading="lazy" src="media/themes.png" alt="Settings, Appearance: bundled themes beside an imported pack showing its repository and version" width="1800" />
+        <figcaption>A theme pack installed from a git repository, updated in place.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="install">
+    <h2>Install</h2>
+    <p class="section-lede">
+      Manual per-distro packages and the static binary live in
+      <a class="link" href="https://github.com/omartelo/lich/blob/main/INSTALL.md">INSTALL.md</a>.
+    </p>
+
+    <table>
+      <thead>
+        <tr><th>Platform</th><th>Get it</th><th>Needs at runtime</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Linux</td>
+          <td>The one-liner above, or AUR <a class="link" href="https://aur.archlinux.org/packages/lich-bin"><code>lich-bin</code></a></td>
+          <td>chromium / google-chrome / brave on <code>PATH</code>, plus <code>zenity</code></td>
+        </tr>
+        <tr>
+          <td>macOS <span class="exp">experimental</span></td>
+          <td><code>brew install omartelo/tap/lich</code></td>
+          <td>Chrome / Chromium / Edge / Brave in <code>/Applications</code></td>
+        </tr>
+        <tr>
+          <td>Windows <span class="exp">experimental</span></td>
+          <td>Installer from <a class="link" href="https://github.com/omartelo/lich/releases">Releases</a></td>
+          <td>Chrome / Edge / Brave</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Everything runs on your machine</h2>
+    <p class="section-lede">
+      No account, no sign-in, no telemetry. The backend is a token-authenticated loopback
+      listener, and nothing leaves <code>localhost</code> except the update check — a version
+      ping to GitHub Releases. Your workspace lives in SQLite under your config directory.
+    </p>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>AGPL-3.0-only © 2026 omartelo — a personal harness, public because there's no reason to hide it.</p>
+    <nav>
+      <a href="https://github.com/omartelo/lich">GitHub</a>
+      <a href="https://github.com/omartelo/lich/blob/main/CHANGELOG.md">Changelog</a>
+      <a href="https://github.com/omartelo/lich/blob/main/docs/themes.md">Themes</a>
+      <a href="https://github.com/omartelo/lich-plugin">Plugin</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+document.getElementById("copy").addEventListener("click", async (e) => {
+  await navigator.clipboard.writeText(document.getElementById("cmd").textContent);
+  e.target.textContent = "Copied";
+  setTimeout(() => { e.target.textContent = "Copy"; }, 1600);
+});
+</script>
+
+</body>
+</html>
