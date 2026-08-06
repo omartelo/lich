@@ -24,16 +24,16 @@
 
 ## 关于
 
-`lich` 是一个**个人工作台**（personal harness）—— 一个把终端优先的工作区包裹在 AI
-编码智能体外面的桌面应用。同时打开多个项目，每个项目跑一个（或多个）会话，在每个会话里
-驱动一个智能体，并且始终看得见 git 的状态：分支、diff、worktree、Pull Request ——
-全程不必离开窗口。它以单个静态 Go 二进制文件的形式发布，界面在你系统自带的 Chromium
-系浏览器中以 `--app` 模式打开 —— 没有 Electron，也不捆绑 webview（决策记录：
+`lich` 是一个**面向 AI 编码智能体的工作台**（harness）—— 一个把终端优先的工作区包裹在
+它们外面的桌面应用。同时打开多个项目，每个项目跑一个（或多个）会话，在每个会话里驱动一个
+智能体，并且始终看得见 git 的状态：分支、diff、worktree、Pull Request —— 全程不必离开
+窗口。它以单个静态 Go 二进制文件的形式发布，界面在你系统自带的 Chromium 系浏览器中以
+`--app` 模式打开 —— 没有 Electron，也不捆绑 webview（决策记录：
 [`docs/chromium-shell.md`](docs/chromium-shell.md)）。
 
-它刻意是量身定制的：形状来自作者对其他工作台（Warp 之类）的口味，为一种工作流而造，
-而不是作为通用产品。它之所以公开，是因为没有理由藏起来，而不是因为它是一个提供支持的
-正式发行版。
+它的目标是不挡路 —— 终端始终是真正的终端，git 始终留在你看得见的地方。项目处于活跃开发
+中：bug 和功能需求请提到 [Issues](https://github.com/omartelo/lich/issues)，每个版本改了
+什么见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 特性
 
