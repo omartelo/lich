@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-08-07
+
 ### Added
 
 - **Pin a session.** The session you keep coming back to no longer drifts down
@@ -51,7 +53,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hold it — browser sign-in and translate, both off — into its own Chromium
   profile before the window opens. The preferences are re-applied on every
   launch, so installs that already met the prompts are quiet from the next start
-  onwards, and nothing else in the profile is touched. The icon
+  onwards, and nothing else in the profile is touched.
+
+- **Windows: the app list and the file picker wear the current icon.** The icon
   linked into the executable was still the purple meteor retired two releases
   ago, and it is the one Windows draws in two places the window itself never
   covers: the Start Menu's app list, and the taskbar button of the native file
@@ -1516,7 +1520,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.26.1...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/omartelo/lich/compare/v0.26.1...v0.27.0
 [0.26.1]: https://github.com/omartelo/lich/compare/v0.26.0...v0.26.1
 [0.26.0]: https://github.com/omartelo/lich/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/omartelo/lich/compare/v0.24.0...v0.25.0
