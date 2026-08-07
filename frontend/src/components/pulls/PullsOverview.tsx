@@ -98,11 +98,15 @@ export function PullsOverview({ path, detail, onRefresh }: PullsOverviewProps) {
                   setDraft(null)
                 }
               }}
-              rows={16}
               placeholder="Describe the pull request"
               // biome-ignore lint/a11y/noAutofocus: the box only exists because Edit was just clicked — typing is the next thing that happens.
               autoFocus
-              className={cn(commentFieldClass, "min-h-64")}
+              // The box is sized by the description rather than by a row count:
+              // a pull request body runs from one line to a page, and a fixed
+              // height either wastes the screen or hides most of the text. The
+              // bounds are the viewport's, so it grows with the window and
+              // still leaves Save on screen.
+              className={cn(commentFieldClass, "field-sizing-content min-h-[40vh] max-h-[70vh]")}
             />
             <div className="flex items-center gap-2">
               <Button size="sm" onClick={() => void save()} disabled={saving}>
