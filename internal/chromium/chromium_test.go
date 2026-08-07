@@ -121,6 +121,9 @@ func TestArgs(t *testing.T) {
 	for _, want := range []string{
 		"--app=http://127.0.0.1:47821/?token=x",
 		"--user-data-dir=/home/u/.config/lich/chromium-profile",
+		// Naming the profile is what keeps Chromium's profile picker — the
+		// Google account chooser — off a launch.
+		"--profile-directory=Default",
 		"--class=lichdev",
 		"--disable-features=Translate",
 		"--ozone-platform=wayland",

@@ -9,7 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Windows: the app list and the file picker wear the current icon.** The icon
+- **The app window no longer opens on a Google account chooser.** On Windows,
+  the first thing a new install showed was not lich: a Chrome that knows more
+  than one Google account greeted the launch with a profile picker asking which
+  account to use, and once past it a second bar offered to translate lich's own
+  interface. Two browser prompts in a window that is not a browser, both in the
+  first ten seconds of the first run. lich now names its profile on the command
+  line, which is what keeps the picker shut, and writes the two preferences that
+  hold it — browser sign-in and translate, both off — into its own Chromium
+  profile before the window opens. The preferences are re-applied on every
+  launch, so installs that already met the prompts are quiet from the next start
+  onwards, and nothing else in the profile is touched. The icon
   linked into the executable was still the purple meteor retired two releases
   ago, and it is the one Windows draws in two places the window itself never
   covers: the Start Menu's app list, and the taskbar button of the native file
