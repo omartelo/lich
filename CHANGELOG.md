@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The pull request's description is editable in the app, and its reviewers are
+  picked there too.** The Overview tab was a read-only rendering of the body: a
+  description an agent wrote and you wanted to trim, and choosing who reviews,
+  were the last two things about a pull request that sent you to github.com in
+  the middle of the work. Overview now says who opened it, lists the review
+  roster — who was asked, who approved, who requested changes — with **Request
+  review** beside it, ticking anyone the repository allows on a review, and
+  carries an **Edit** for the description that saves straight to GitHub. A
+  reviewer who already answered comes back unticked: ticking them again is the
+  re-request. Merged and closed pull requests keep the roster and lose the
+  picker, which GitHub would refuse anyway.
+
 ### Fixed
 
 - **Windows: the app list and the file picker wear the current icon.** The icon

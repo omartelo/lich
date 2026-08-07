@@ -33,7 +33,6 @@ import {
 } from "@/lib/pulls/merge-gate"
 import { useBranchRules } from "@/lib/pulls/use-branch-rules"
 import { cn, errorText } from "@/lib/utils"
-import { Markdown } from "@/components/Markdown"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -47,6 +46,7 @@ import { PullsChecks } from "./PullsChecks"
 import { PullsCommits } from "./PullsCommits"
 import { PullsConversation } from "./PullsConversation"
 import { PullsFiles } from "./PullsFiles"
+import { PullsOverview } from "./PullsOverview"
 import { ChecksStat, MergeableStat, ReviewStat, StateStat } from "./PullsStats"
 import type { ThreadActions } from "./ReviewThread"
 import { SubmitReviewDialog } from "./SubmitReviewDialog"
@@ -442,13 +442,7 @@ export function PullRequestView({
               />
             )}
             {tab === "overview" && (
-              <div className="max-w-3xl px-6 py-5">
-                {detail.body.trim() !== "" ? (
-                  <Markdown>{detail.body}</Markdown>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No description.</p>
-                )}
-              </div>
+              <PullsOverview path={path} detail={detail} onRefresh={onRefresh} />
             )}
           </div>
         )}
