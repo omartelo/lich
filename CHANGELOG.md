@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **A review comment's box grows with the comment.** Every field review prose is
+  typed into — the line comment, the batch note for the session, the reply, the
+  summary above a review — was a fixed three lines tall, so anything longer than a
+  sentence had to be dragged open before the first line was finished. The box now
+  grows as it is filled, up to a much taller ceiling, then scrolls; the drag
+  handle still overrides it in either direction.
+
 ### Fixed
 
 - **Windows: the app list and the file picker wear the current icon.** The icon
