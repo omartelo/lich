@@ -5,8 +5,12 @@ import { cn } from "@/lib/utils"
  * submit dialog writes the review's summary into a bare textarea — it carries
  * the dialog's own footer instead of this box's buttons — and the two fields
  * drifting apart would read as two different controls for the same thing. */
+// The box grows with what is typed instead of holding one fixed height: a review
+// comment is prose of unknown length, and a field that needs dragging open on the
+// first line taxes every comment. `field-sizing: content` makes `rows` inert, so
+// the floor and the ceiling are the min/max height — past the ceiling it scrolls.
 export const commentFieldClass =
-  "w-full resize-y rounded-md border border-input bg-transparent px-2.5 py-1.5 font-sans text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+  "max-h-64 min-h-16 w-full resize-y rounded-md border border-input bg-transparent px-2.5 py-1.5 font-sans text-sm shadow-xs outline-none transition-[color,box-shadow] field-sizing-content placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
 
 interface CommentBoxProps {
   value: string
@@ -19,7 +23,6 @@ interface CommentBoxProps {
   busy?: boolean
   placeholder?: string
   autoFocus?: boolean
-  rows?: number
   className?: string
   /** Send on a bare ⏎, with ⇧⏎ for a new line. For a one-line note taken while
    * reading — a comment for the session — where reaching for a modifier is the
@@ -44,7 +47,6 @@ export function CommentBox({
   busy = false,
   placeholder,
   autoFocus = false,
-  rows = 3,
   className,
   submitOnEnter = false,
 }: CommentBoxProps) {
@@ -68,7 +70,6 @@ export function CommentBox({
             onCancel()
           }
         }}
-        rows={rows}
         placeholder={placeholder}
         // biome-ignore lint/a11y/noAutofocus: the box only exists because the reviewer just asked for it — typing is the next thing they do.
         autoFocus={autoFocus}

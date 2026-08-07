@@ -69,7 +69,6 @@ export function SubmitReviewDialog({
           <textarea
             value={review.body}
             onChange={(e) => onBodyChange(e.target.value)}
-            rows={6}
             placeholder="Summary — optional"
             autoFocus
             className={cn(commentFieldClass, "min-h-24")}
