@@ -24,6 +24,7 @@ import type {
   PullRequestDetail,
   PullRequestSummary,
   RecentProject,
+  ReviewCandidate,
   ReviewEvent,
   StoredProject,
   StoredSession,
@@ -205,6 +206,16 @@ export const ProjectService = {
   /** Comment on the pull request itself — no file, no line. */
   CommentOnPullRequest: (path: string, number: number, body: string) =>
     call<null>("project.CommentOnPullRequest", [path, number, body]),
+  /** Replace the PR's description. An empty body clears it. */
+  EditPullRequestBody: (path: string, number: number, body: string) =>
+    call<null>("project.EditPullRequestBody", [path, number, body]),
+  /** Ask a login for a review, or withdraw the request. GitHub refuses one
+   * addressed to the PR's own author. */
+  RequestReview: (path: string, number: number, login: string, requested: boolean) =>
+    call<null>("project.RequestReview", [path, number, login, requested]),
+  /** Who this repository allows on a review — the picker's list; capped at 100. */
+  AssignableReviewers: (path: string) =>
+    call<ReviewCandidate[] | null>("project.AssignableReviewers", [path]),
   /** What a repository's rulesets say about merging into one branch. Answers
    * per branch, not per pull request — every PR onto the same base shares it. */
   BranchRules: (path: string, branch: string) =>

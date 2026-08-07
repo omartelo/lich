@@ -18,9 +18,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a stray click. Unpin it and everything comes back, including the slot in the
   list it had before.
 
+- **The pull request's description is editable in the app, and its reviewers are
+  picked there too.** The Overview tab was a read-only rendering of the body: a
+  description an agent wrote and you wanted to trim, and choosing who reviews,
+  were the last two things about a pull request that sent you to github.com in
+  the middle of the work. Overview now says who opened it, lists the review
+  roster — who was asked, who approved, who requested changes — with **Request
+  review** beside it, ticking anyone the repository allows on a review, and
+  carries an **Edit** for the description that saves straight to GitHub. A
+  reviewer who already answered comes back unticked: ticking them again is the
+  re-request. Merged and closed pull requests keep the roster and lose the
+  picker, which GitHub would refuse anyway.
+
+### Changed
+
+- **A review comment's box grows with the comment.** Every field review prose is
+  typed into — the line comment, the batch note for the session, the reply, the
+  summary above a review — was a fixed three lines tall, so anything longer than a
+  sentence had to be dragged open before the first line was finished. The box now
+  grows as it is filled, up to a much taller ceiling, then scrolls; the drag
+  handle still overrides it in either direction.
+
 ### Fixed
 
-- **Windows: the app list and the file picker wear the current icon.** The icon
+- **The app window no longer opens on a Google account chooser.** On Windows,
+  the first thing a new install showed was not lich: a Chrome that knows more
+  than one Google account greeted the launch with a profile picker asking which
+  account to use, and once past it a second bar offered to translate lich's own
+  interface. Two browser prompts in a window that is not a browser, both in the
+  first ten seconds of the first run. lich now names its profile on the command
+  line, which is what keeps the picker shut, and writes the two preferences that
+  hold it — browser sign-in and translate, both off — into its own Chromium
+  profile before the window opens. The preferences are re-applied on every
+  launch, so installs that already met the prompts are quiet from the next start
+  onwards, and nothing else in the profile is touched. The icon
   linked into the executable was still the purple meteor retired two releases
   ago, and it is the one Windows draws in two places the window itself never
   covers: the Start Menu's app list, and the taskbar button of the native file

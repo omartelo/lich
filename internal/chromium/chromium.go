@@ -7,6 +7,7 @@ package chromium
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 )
@@ -86,12 +87,18 @@ func Args(url, dataDir, class string, extra []string) []string {
 	args := []string{
 		"--app=" + url,
 		"--user-data-dir=" + dataDir,
+		// Naming the profile is also what keeps the profile picker shut:
+		// Chromium documents the picker as suppressed whenever the command line
+		// names a profile directory. Without it, a Chrome that knows several
+		// Google accounts can open the app on an account chooser.
+		"--profile-directory=" + profileName,
 		"--class=" + class,
 		"--no-first-run",
 		"--no-default-browser-check",
 		// The translate bubble compares the page's language against the browser
 		// locale and offers to translate lich's own UI — a browser prompt in a
-		// window that is not a browser.
+		// window that is not a browser. The profile pref of the same name
+		// (profile.go) is what actually holds it down; this only asks.
 		"--disable-features=Translate",
 	}
 	return append(args, extra...)
@@ -107,8 +114,16 @@ func Run(url, dataDir, class string, extra []string, onStart func(*os.Process)) 
 	if err != nil {
 		return err
 	}
+	// The data dir is required to launch at all; the prefs inside it only
+	// decide how quiet the window is.
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		return fmt.Errorf("chromium profile dir: %w", err)
+	}
+	if err := writePrefs(dataDir); err != nil {
+		// A profile lich could not pre-configure is a browser that may ask
+		// about translation or Google accounts. Annoying; not a reason to
+		// refuse to open the window.
+		slog.Warn("chromium profile prefs", "err", err)
 	}
 	cmd := exec.Command(browser, Args(url, dataDir, class, extra)...)
 	cmd.Stdout = os.Stdout

@@ -23,6 +23,9 @@ const (
 	prMergeTimeout  = 30 * time.Second
 	prCreateTimeout = 20 * time.Second
 	prReviewTimeout = 20 * time.Second
+	// An edit (the description, a reviewer) is one mutating round-trip, the same
+	// budget a review write gets.
+	prEditTimeout = 20 * time.Second
 	// A checkout fetches the head ref, so it is bounded by the size of the
 	// branch rather than by a round-trip.
 	prCheckoutTimeout = 90 * time.Second
@@ -65,7 +68,7 @@ func runGH(timeout time.Duration, dir, token string, args ...string) ([]byte, er
 }
 
 // prViewFields is the gh `pr view --json` selection backing the Pulls panel.
-const prViewFields = "number,url,state,title,body,isDraft,mergeable,mergeStateStatus,reviewDecision,baseRefName,headRefName,isCrossRepository,maintainerCanModify,statusCheckRollup,changedFiles,commits"
+const prViewFields = "number,url,state,title,body,author,isDraft,mergeable,mergeStateStatus,reviewDecision,reviewRequests,latestReviews,baseRefName,headRefName,isCrossRepository,maintainerCanModify,statusCheckRollup,changedFiles,commits"
 
 // prSelector renders the pull request argument gh's subcommands take ahead of
 // their flags. Zero means "the branch checked out at path" — gh's own default,
@@ -96,6 +99,10 @@ type PRDetail struct {
 	URL    string `json:"url"`
 	Title  string `json:"title"`
 	Body   string `json:"body"`
+	// Author is the login of whoever opened it, or their display name when gh
+	// reports no login. GitHub refuses a review request addressed to them, which
+	// is what keeps them out of the picker.
+	Author string `json:"author"`
 	// State is gh's OPEN | CLOSED | MERGED. Only a number-addressed lookup can
 	// return a non-OPEN one; the branch lookup still gates them out.
 	State     string `json:"state"`
@@ -110,13 +117,15 @@ type PRDetail struct {
 	// ReviewDecision is gh's aggregate verdict — APPROVED | CHANGES_REQUESTED |
 	// REVIEW_REQUIRED — and "" where the repository requires no review. Who
 	// reviewed is a different field (latestReviews) this does not carry.
-	ReviewDecision string       `json:"reviewDecision"`
-	BaseRefName    string       `json:"baseRefName"`
-	HeadRefName    string       `json:"headRefName"`
-	ChangedFiles   int          `json:"changedFiles"`
-	Checks         ChecksRollup `json:"checks"`
-	CheckRuns      []CheckItem  `json:"checkRuns"`
-	Commits        []PRCommit   `json:"commits"`
+	ReviewDecision string `json:"reviewDecision"`
+	// Reviewers is who was asked and who answered, in one list (prreviewers.go).
+	Reviewers    []PRReviewer `json:"reviewers"`
+	BaseRefName  string       `json:"baseRefName"`
+	HeadRefName  string       `json:"headRefName"`
+	ChangedFiles int          `json:"changedFiles"`
+	Checks       ChecksRollup `json:"checks"`
+	CheckRuns    []CheckItem  `json:"checkRuns"`
+	Commits      []PRCommit   `json:"commits"`
 	// IsCrossRepository marks a head branch that lives on a fork.
 	IsCrossRepository bool `json:"isCrossRepository"`
 	// MaintainerCanModify is GitHub's "allow edits by maintainers" on a fork PR,
@@ -140,22 +149,25 @@ type PRCommit struct {
 // ghPRView mirrors the requested gh payload; statusCheckRollup is reduced to
 // ChecksRollup inside parsePRDetail and never leaves this package raw.
 type ghPRView struct {
-	Number              int         `json:"number"`
-	URL                 string      `json:"url"`
-	State               string      `json:"state"`
-	Title               string      `json:"title"`
-	Body                string      `json:"body"`
-	IsDraft             bool        `json:"isDraft"`
-	Mergeable           string      `json:"mergeable"`
-	MergeStateStatus    string      `json:"mergeStateStatus"`
-	ReviewDecision      string      `json:"reviewDecision"`
-	BaseRefName         string      `json:"baseRefName"`
-	HeadRefName         string      `json:"headRefName"`
-	ChangedFiles        int         `json:"changedFiles"`
-	IsCrossRepository   bool        `json:"isCrossRepository"`
-	MaintainerCanModify bool        `json:"maintainerCanModify"`
-	StatusCheckRollup   []checkItem `json:"statusCheckRollup"`
-	Commits             []ghCommit  `json:"commits"`
+	Number              int               `json:"number"`
+	URL                 string            `json:"url"`
+	State               string            `json:"state"`
+	Title               string            `json:"title"`
+	Body                string            `json:"body"`
+	Author              ghPRAuthor        `json:"author"`
+	IsDraft             bool              `json:"isDraft"`
+	Mergeable           string            `json:"mergeable"`
+	MergeStateStatus    string            `json:"mergeStateStatus"`
+	ReviewDecision      string            `json:"reviewDecision"`
+	ReviewRequests      []ghReviewRequest `json:"reviewRequests"`
+	LatestReviews       []ghLatestReview  `json:"latestReviews"`
+	BaseRefName         string            `json:"baseRefName"`
+	HeadRefName         string            `json:"headRefName"`
+	ChangedFiles        int               `json:"changedFiles"`
+	IsCrossRepository   bool              `json:"isCrossRepository"`
+	MaintainerCanModify bool              `json:"maintainerCanModify"`
+	StatusCheckRollup   []checkItem       `json:"statusCheckRollup"`
+	Commits             []ghCommit        `json:"commits"`
 }
 
 // ghCommit is one entry of gh's commits array. Authors is a list because of
@@ -210,11 +222,13 @@ func parsePRDetail(out []byte, openOnly bool) (*PRDetail, error) {
 		URL:                 v.URL,
 		Title:               v.Title,
 		Body:                v.Body,
+		Author:              firstNonEmpty(v.Author.Login, v.Author.Name),
 		State:               v.State,
 		IsDraft:             v.IsDraft,
 		Mergeable:           v.Mergeable,
 		MergeStateStatus:    v.MergeStateStatus,
 		ReviewDecision:      v.ReviewDecision,
+		Reviewers:           toReviewers(v.LatestReviews, v.ReviewRequests),
 		BaseRefName:         v.BaseRefName,
 		HeadRefName:         v.HeadRefName,
 		ChangedFiles:        v.ChangedFiles,
@@ -321,6 +335,15 @@ func (s *Service) CreatePullRequest(path string) error {
 		return err
 	}
 	return nil
+}
+
+// EditPullRequestBody replaces the pull request's description — the one thing
+// about a pull request that could only be changed on github.com, and the one an
+// agent's first draft usually needs. An empty body is a real edit (it clears the
+// description), so nothing is rejected here.
+func (s *Service) EditPullRequestBody(path string, number int, body string) error {
+	_, err := s.gh(prEditTimeout, path, prArgs("edit", number, "--body", body)...)
+	return err
 }
 
 // PullRequestDiff returns the unified diff of the path's branch pull request —

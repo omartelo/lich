@@ -91,7 +91,6 @@ export function ReviewSlot({
           }
           autoFocus
           submitOnEnter={session}
-          rows={session ? 2 : 3}
         />
       </div>
     )

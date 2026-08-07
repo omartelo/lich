@@ -120,6 +120,8 @@ export interface PullRequestDetail {
   url: string
   title: string
   body: string
+  /** Who opened it: a login, or a display name when gh reports no login. */
+  author: string
   /** gh: OPEN | CLOSED | MERGED. Only a number-addressed lookup returns a
    * non-OPEN one; the branch lookup still hides them. */
   state: string
@@ -132,6 +134,9 @@ export interface PullRequestDetail {
   /** gh's aggregate verdict: APPROVED | CHANGES_REQUESTED | REVIEW_REQUIRED;
    * "" where the repository requires no review. */
   reviewDecision: string
+  /** Who was asked for a review and who answered, in one list; null when
+   * nobody is on it. */
+  reviewers: PullRequestReviewer[] | null
   baseRefName: string
   headRefName: string
   changedFiles: number
@@ -146,6 +151,25 @@ export interface PullRequestDetail {
   checkRuns: CheckItem[] | null
   /** Every commit the PR would land, oldest first; null when gh reports none. */
   commits: PullRequestCommit[] | null
+}
+
+/** internal/project.PRReviewer — one entry of the review roster: somebody asked
+ * and still owing a review, or somebody who has answered. */
+export interface PullRequestReviewer {
+  /** A login, or a team's slug. */
+  login: string
+  /** A team, which gh addresses as org/slug — so it is shown, never edited. */
+  isTeam: boolean
+  /** "" while the review is still owed, else gh's APPROVED | CHANGES_REQUESTED
+   * | COMMENTED | DISMISSED. */
+  state: string
+}
+
+/** internal/project.PRCandidate — one account the reviewer picker may offer. */
+export interface ReviewCandidate {
+  login: string
+  /** The display name; "" when the account has none. */
+  name: string
 }
 
 /** internal/project.PRReview — one submitted review and its verdict. */
