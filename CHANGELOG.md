@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Pin a session.** The session you keep coming back to no longer drifts down
+  the sidebar as new ones open above it: pin it from the card's right-click menu
+  or from the pin that appears beside the × on hover, and it sorts to the top of
+  the list and stays there across restarts. A pinned card also drops its close
+  affordances — no ×, no **Close session** in the menu, and the worktree it lives
+  in refuses to be removed — so the session you meant to keep cannot be closed by
+  a stray click. Unpin it and everything comes back, including the slot in the
+  list it had before.
+
 ### Fixed
 
 - **Windows: the app list and the file picker wear the current icon.** The icon

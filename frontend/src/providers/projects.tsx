@@ -19,6 +19,7 @@ import {
   restoreSession,
   sessionsOf,
   setActiveSession,
+  setSessionPinned,
   type Session,
   type SessionKind,
   type SessionState,
@@ -74,6 +75,9 @@ interface ProjectsValue {
   activateSession: (projectId: string, sessionId: string) => void
   /** Rename a session's display label. */
   renameSession: (projectId: string, sessionId: string, label: string) => void
+  /** Pin a session to the head of its project's list, or unpin it. A pinned
+   * session refuses to close until it is unpinned. */
+  pinSession: (projectId: string, sessionId: string, pinned: boolean) => void
   /** Rearrange the project tabs to the given id order (drag-and-drop). */
   reorderProjects: (ids: string[]) => void
   /** Rearrange a project's session cards to the given id order (drag-and-drop). */
@@ -108,6 +112,7 @@ function buildSessionState(loaded: StoreProject[]): SessionState {
       kind: isSessionKind(s.kind) ? s.kind : "claude",
       ...(s.path ? { path: s.path } : {}),
       ...(s.providerSessionId ? { providerSessionId: s.providerSessionId } : {}),
+      ...(s.pinned ? { pinned: true } : {}),
     }))
     state[p.id] = {
       sessions,
@@ -499,6 +504,15 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     void Store.RenameSession(sessionId, label)
   }, [])
 
+  const pinSession = useCallback((projectId: string, sessionId: string, pinned: boolean) => {
+    const next = setSessionPinned(sessionsRef.current, projectId, sessionId, pinned)
+    if (next === sessionsRef.current) {
+      return
+    }
+    setSessions(next)
+    void Store.SetSessionPinned(sessionId, pinned)
+  }, [])
+
   const value = useMemo(
     () => ({
       projects,
@@ -515,6 +529,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       keepSession,
       activateSession,
       renameSession,
+      pinSession,
       reorderProjects,
       reorderSessions,
     }),
@@ -533,6 +548,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       keepSession,
       activateSession,
       renameSession,
+      pinSession,
       reorderProjects,
       reorderSessions,
     ],

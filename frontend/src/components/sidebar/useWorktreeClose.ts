@@ -58,6 +58,12 @@ export function useWorktreeClose(
     pendingForce,
 
     requestClose(session) {
+      // The card hides both close affordances while pinned; this is the contract
+      // behind them, so a keep-or-remove dialog can never open on a pinned
+      // session either.
+      if (session.pinned) {
+        return
+      }
       if (isLastWorktreeSession(sessions, session)) {
         setPendingClose(session)
         return

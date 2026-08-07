@@ -15,6 +15,8 @@ import {
   resumableSession,
   sessionsOf,
   setActiveSession,
+  setSessionPinned,
+  sortPinned,
   type Session,
   type SessionState,
 } from "./sessions"
@@ -254,6 +256,61 @@ describe("reorderSessions", () => {
     const state = buildState(3)
     reorderSessions(state, P, ["s3", "s2", "s1"])
     expect(sessionsOf(state, P).map((s) => s.id)).toEqual(["s1", "s2", "s3"])
+  })
+})
+
+describe("sortPinned", () => {
+  it("hoists the pinned sessions, keeping both blocks in order", () => {
+    let state = setSessionPinned(buildState(4), P, "s3", true)
+    state = setSessionPinned(state, P, "s1", true)
+    expect(sortPinned(sessionsOf(state, P)).map((s) => s.id)).toEqual(["s1", "s3", "s2", "s4"])
+  })
+
+  it("returns the list untouched when nothing is pinned", () => {
+    const list = sessionsOf(buildState(3), P)
+    expect(sortPinned(list)).toBe(list)
+  })
+
+  // The hoist is display-only, so unpinning drops a session back among the
+  // neighbours it was lifted over instead of stranding it on top.
+  it("puts an unpinned session back where the stored order has it", () => {
+    let state = setSessionPinned(buildState(3), P, "s3", true)
+    expect(sortPinned(sessionsOf(state, P)).map((s) => s.id)).toEqual(["s3", "s1", "s2"])
+    state = setSessionPinned(state, P, "s3", false)
+    expect(sortPinned(sessionsOf(state, P)).map((s) => s.id)).toEqual(["s1", "s2", "s3"])
+  })
+})
+
+describe("setSessionPinned", () => {
+  it("marks the session pinned without moving it", () => {
+    const next = setSessionPinned(buildState(3), P, "s3", true)
+    expect(sessionsOf(next, P).map((s) => s.id)).toEqual(["s1", "s2", "s3"])
+    expect(sessionsOf(next, P)[2].pinned).toBe(true)
+  })
+
+  it("unpins a pinned session", () => {
+    let state = setSessionPinned(buildState(3), P, "s3", true)
+    state = setSessionPinned(state, P, "s3", false)
+    expect(sessionsOf(state, P)[2].pinned).toBe(false)
+  })
+
+  it("leaves the active session and the label counter alone", () => {
+    const state = buildState(3)
+    const next = setSessionPinned(state, P, "s1", true)
+    expect(activeSessionId(next, P)).toBe(activeSessionId(state, P))
+    expect(next[P].nextSeq).toBe(state[P].nextSeq)
+  })
+
+  it("ignores unknown project and session ids", () => {
+    const state = buildState(2)
+    expect(setSessionPinned(state, "nope", "s1", true)).toBe(state)
+    expect(setSessionPinned(state, P, "ghost", true)).toBe(state)
+  })
+
+  it("does not mutate the input state", () => {
+    const state = buildState(3)
+    setSessionPinned(state, P, "s3", true)
+    expect(sessionsOf(state, P)[2].pinned).toBeUndefined()
   })
 })
 

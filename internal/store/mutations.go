@@ -220,6 +220,19 @@ func (s *Service) RenameSession(sessionID, label string) error {
 	return nil
 }
 
+// SetSessionPinned pins or unpins a session — the flag the sidebar reads to
+// hoist a card to the head of the list, and to withhold its close affordances.
+// It leaves position untouched, so an unpinned session falls back to the slot
+// the last drag gave it rather than landing wherever the pinned block ended.
+func (s *Service) SetSessionPinned(sessionID string, pinned bool) error {
+	if _, err := s.db.Exec(
+		`UPDATE sessions SET pinned = ? WHERE id = ?`, pinned, sessionID,
+	); err != nil {
+		return fmt.Errorf("set session %q pinned: %w", sessionID, err)
+	}
+	return nil
+}
+
 // SetSessionTitle sets a session's label from the provider's ai-title reported
 // by the Stop hook, but only while the label is still automatic: a prior
 // RenameSession clears label_auto and makes this a no-op, so a user's own name

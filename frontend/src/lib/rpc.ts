@@ -266,6 +266,10 @@ export const Store = {
     call<null>("store.PurgeWorktreeSessions", [projectID, path]),
   RenameSession: (sessionID: string, label: string) =>
     call<null>("store.RenameSession", [sessionID, label]),
+  /** Pin (or unpin) a session: it sorts to the head of its project's list and
+   * refuses to close until unpinned. */
+  SetSessionPinned: (sessionID: string, pinned: boolean) =>
+    call<null>("store.SetSessionPinned", [sessionID, pinned]),
   SetActiveSession: (projectID: string, sessionID: string) =>
     call<null>("store.SetActiveSession", [projectID, sessionID]),
   ReorderProjects: (ids: string[]) => call<null>("store.ReorderProjects", [ids]),

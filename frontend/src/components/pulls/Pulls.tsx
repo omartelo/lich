@@ -107,13 +107,20 @@ export function Pulls({ list = false }: PullsProps) {
     if (!projectId) {
       return
     }
+    const occupants = sessionsOf(sessions, projectId).filter((s) => s.path === wtPath)
+    // Removing the checkout would take its pinned sessions with it, which is
+    // exactly what the pin refuses.
+    if (occupants.some((s) => s.pinned)) {
+      toast.error("Worktree has a pinned session — unpin it first.")
+      return
+    }
     if (await ProjectService.WorktreeDirty(wtPath).catch(() => false)) {
       toast.error("Worktree has uncommitted changes — remove it from the sidebar.")
       return
     }
     // The PTYs living in the checkout must die before git pulls the directory
     // out from under them, and no parked row may survive to offer a resume.
-    for (const session of sessionsOf(sessions, projectId).filter((s) => s.path === wtPath)) {
+    for (const session of occupants) {
       closeSession(projectId, session.id)
     }
     void Store.PurgeWorktreeSessions(projectId, wtPath)

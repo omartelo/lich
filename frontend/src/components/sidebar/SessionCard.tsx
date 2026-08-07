@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import type { KeyboardEvent } from "react"
-import { GitBranch, GitPullRequestArrow, Pencil, Terminal, X } from "lucide-react"
+import { GitBranch, GitPullRequestArrow, Pencil, Pin, PinOff, Terminal, X } from "lucide-react"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { cn } from "@/lib/utils"
@@ -30,6 +30,9 @@ interface SessionCardProps {
   onSelect: () => void
   onClose: () => void
   onRename: (label: string) => void
+  // Pin the card to the head of the list, or unpin it. A pinned card offers no
+  // close affordance at all — unpinning is the way back to closing it.
+  onPin: (pinned: boolean) => void
   // Open a shell session rooted at this card's shown directory. Wired only for
   // agent sessions, so the user can drop into a terminal in the worktree the
   // agent is working in without cd-ing there by hand.
@@ -46,9 +49,11 @@ export function SessionCard({
   onSelect,
   onClose,
   onRename,
+  onPin,
   onOpenTerminal,
   onPulls,
 }: SessionCardProps) {
+  const pinned = !!session.pinned
   const pathRef = useRef<HTMLSpanElement>(null)
   const [pathOverflow, setPathOverflow] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -145,10 +150,18 @@ export function SessionCard({
                   onClick={(event) => event.stopPropagation()}
                   onKeyDown={onEditKeyDown}
                   onBlur={(event) => commit(event.currentTarget.value)}
-                  className="w-full rounded-sm bg-transparent pr-5 text-sm font-medium text-foreground outline-none ring-1 ring-accent-foreground/30"
+                  className={cn(
+                    "w-full rounded-sm bg-transparent text-sm font-medium text-foreground outline-none ring-1 ring-accent-foreground/30",
+                    pinned ? "pr-6" : "pr-11",
+                  )}
                 />
               ) : (
-                <span className="flex w-full min-w-0 items-center gap-1.5 pr-5">
+                <span
+                  className={cn(
+                    "flex w-full min-w-0 items-center gap-1.5",
+                    pinned ? "pr-6" : "pr-11",
+                  )}
+                >
                   <SessionStatusIcon kind={agent ?? session.kind} status={status} />
                   <span className="truncate text-sm font-medium text-foreground">
                     {session.label}
@@ -194,14 +207,34 @@ export function SessionCard({
                 </span>
               )}
             </div>
-            <CloseButton
-              label={`Close ${session.label}`}
-              onClick={(event) => {
-                event.stopPropagation()
-                onClose()
-              }}
-              className="absolute right-2 top-2"
-            />
+            {/* A pinned card keeps its pin on screen — it is both the state's
+                only mark and the way to undo it — and shows no × at all: closing
+                is what the pin withholds. */}
+            <span className="absolute right-2 top-2 flex items-center gap-1">
+              <span
+                role="button"
+                aria-label={pinned ? `Unpin ${session.label}` : `Pin ${session.label}`}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onPin(!pinned)
+                }}
+                className={cn(
+                  "flex size-4 shrink-0 items-center justify-center rounded transition-opacity hover:bg-foreground/15",
+                  pinned ? "text-foreground" : "opacity-0 group-hover:opacity-100",
+                )}
+              >
+                <Pin className={cn("size-3", pinned && "fill-current")} />
+              </span>
+              {!pinned && (
+                <CloseButton
+                  label={`Close ${session.label}`}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onClose()
+                  }}
+                />
+              )}
+            </span>
           </ContextMenuTrigger>
           <TooltipContent
             side="right"
@@ -236,6 +269,10 @@ export function SessionCard({
             <Pencil />
             Rename
           </ContextMenuItem>
+          <ContextMenuItem onClick={() => onPin(!pinned)}>
+            {pinned ? <PinOff /> : <Pin />}
+            {pinned ? "Unpin" : "Pin"}
+          </ContextMenuItem>
           {session.kind !== "shell" && (
             <ContextMenuItem onClick={() => onOpenTerminal(shownPath)}>
               <Terminal />
@@ -246,11 +283,15 @@ export function SessionCard({
             <GitPullRequestArrow />
             Pull request
           </ContextMenuItem>
-          <ContextMenuSeparator />
-          <ContextMenuItem variant="destructive" onClick={onClose}>
-            <X />
-            Close session
-          </ContextMenuItem>
+          {!pinned && (
+            <>
+              <ContextMenuSeparator />
+              <ContextMenuItem variant="destructive" onClick={onClose}>
+                <X />
+                Close session
+              </ContextMenuItem>
+            </>
+          )}
         </ContextMenuContent>
       </ContextMenu>
     </div>

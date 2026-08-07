@@ -57,7 +57,7 @@ export function SessionGroup({
   onPulls,
   onClosePulls,
 }: SessionGroupProps) {
-  const { activateSession, renameSession, newSession } = useProjects()
+  const { activateSession, renameSession, pinSession, newSession } = useProjects()
   const navigate = useNavigate()
   const ids = sessions.map((session) => session.id)
   const { sensors, onDragEnd } = useSortableList(ids, onReorder)
@@ -102,6 +102,7 @@ export function SessionGroup({
                 onSelect={() => select(session.id)}
                 onClose={() => onClose(session)}
                 onRename={(label) => renameSession(projectId, session.id, label)}
+                onPin={(pinned) => pinSession(projectId, session.id, pinned)}
                 onOpenTerminal={(cwd) => newSession(projectId, "shell", cwd)}
                 onPulls={onPulls}
               />

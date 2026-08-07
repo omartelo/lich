@@ -508,6 +508,47 @@ func TestReorderSessionsIgnoresForeignSession(t *testing.T) {
 	}
 }
 
+// The pin is a flag on the row and nothing more: LoadState keeps handing back
+// the drag order, which is the order an unpinned card falls back into. Hoisting
+// here as well would erase that slot on every reload.
+func TestSetSessionPinnedPersistsWithoutMovingTheRow(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2)
+	_ = svc.AddSession("p1", "s2", "Session 2", "", "", 3)
+	_ = svc.AddSession("p1", "s3", "Session 3", "", "", 4)
+	_ = svc.ReorderSessions("p1", []string{"s2", "s3", "s1"})
+
+	if err := svc.SetSessionPinned("s1", true); err != nil {
+		t.Fatalf("SetSessionPinned: %v", err)
+	}
+	if got := sessionIDs(t, svc, "p1"); !equalIDs(got, []string{"s2", "s3", "s1"}) {
+		t.Errorf("order after pin = %v, want [s2 s3 s1]", got)
+	}
+	projects, err := svc.LoadState()
+	if err != nil {
+		t.Fatalf("LoadState: %v", err)
+	}
+	for _, s := range projects[0].Sessions {
+		if want := s.ID == "s1"; s.Pinned != want {
+			t.Errorf("session %q pinned = %v, want %v", s.ID, s.Pinned, want)
+		}
+	}
+
+	if err := svc.SetSessionPinned("s1", false); err != nil {
+		t.Fatalf("unpin: %v", err)
+	}
+	projects, err = svc.LoadState()
+	if err != nil {
+		t.Fatalf("LoadState: %v", err)
+	}
+	for _, s := range projects[0].Sessions {
+		if s.Pinned {
+			t.Errorf("session %q still pinned", s.ID)
+		}
+	}
+}
+
 func TestReorderProjectsPersistsOrder(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")

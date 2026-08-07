@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useProjects } from "@/providers/projects"
 import { queueSetup } from "@/lib/terminal/setup-queue"
-import { activeSessionId, groupByWorktree, sessionsOf } from "@/lib/session/sessions"
+import { activeSessionId, groupByWorktree, sessionsOf, sortPinned } from "@/lib/session/sessions"
 import { CloseWorktreeDialog, ForceRemoveWorktreeDialog } from "./CloseWorktreeDialog"
 import { SessionGroup } from "./SessionGroup"
 import { WorktreeDialog } from "./WorktreeDialog"
@@ -86,7 +86,9 @@ export function SessionSidebar() {
   })
   const [worktreeOpen, setWorktreeOpen] = useState(false)
   // Resolved ahead of the no-project bail below: hooks cannot sit behind it.
-  const list = sessionsOf(sessions, projectId ?? "")
+  // Pinned first, which also carries their worktree group to the top of the
+  // sidebar — groupByWorktree buckets by first appearance.
+  const list = sortPinned(sessionsOf(sessions, projectId ?? ""))
   const worktreeClose = useWorktreeClose(projectId ?? "", path, list)
 
   if (!projectId) {

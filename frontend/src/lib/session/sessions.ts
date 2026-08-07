@@ -36,6 +36,8 @@ export interface Session {
   // set by the store: a session created in this run has none, and the hook's
   // later report is not mirrored here — a running session has nothing to resume.
   providerSessionId?: string
+  // Kept at the head of the project's list and refused a close until unpinned.
+  pinned?: boolean
 }
 
 export interface ProjectSessions {
@@ -173,6 +175,40 @@ export function renameSession(
     [projectId]: {
       ...current,
       sessions: current.sessions.map((s) => (s.id === sessionId ? { ...s, label } : s)),
+    },
+  }
+}
+
+// sortPinned hoists the pinned sessions to the head of the list. The partition
+// is stable, so both blocks keep the order the drags gave them.
+//
+// It sorts for display and never writes the result back into the state: the
+// stored list stays in drag order, which is what lets an unpinned session drop
+// back among its old neighbours instead of being stranded on top. The store
+// hands back that same drag order, so a reload draws what the pin did live.
+export function sortPinned(sessions: Session[]): Session[] {
+  const pinned = sessions.filter((s) => s.pinned)
+  return pinned.length === 0 ? sessions : [...pinned, ...sessions.filter((s) => !s.pinned)]
+}
+
+// setSessionPinned pins or unpins a session, leaving the list order alone —
+// sortPinned is what hoists it, at render time. Unknown project or session ids
+// are ignored, returning the input state unchanged.
+export function setSessionPinned(
+  state: SessionState,
+  projectId: string,
+  sessionId: string,
+  pinned: boolean,
+): SessionState {
+  const current = state[projectId]
+  if (!current || !current.sessions.some((s) => s.id === sessionId)) {
+    return state
+  }
+  return {
+    ...state,
+    [projectId]: {
+      ...current,
+      sessions: current.sessions.map((s) => (s.id === sessionId ? { ...s, pinned } : s)),
     },
   }
 }

@@ -238,6 +238,7 @@ export interface StoredSession {
   kind: string
   path: string
   providerSessionId: string
+  pinned: boolean
 }
 
 /** internal/store.Project — a persisted project with its session state. */

@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     provider_session_id TEXT NOT NULL DEFAULT '',
     label_auto          INTEGER NOT NULL DEFAULT 1,
     is_open             INTEGER NOT NULL DEFAULT 1,
-    position            INTEGER NOT NULL DEFAULT 0
+    position            INTEGER NOT NULL DEFAULT 0,
+    pinned              INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
 
@@ -78,13 +79,16 @@ type Service struct {
 // provider CLI assigns the conversation running in the PTY, reported by that
 // provider's session-start hook; empty until a hook fires (or for shell
 // sessions), it is the key for features that need to reach a session's
-// transcript or resume it. Only Claude Code reports one today.
+// transcript or resume it. Only Claude Code reports one today. Pinned keeps a
+// session at the head of its project's list and withholds its close affordances
+// until it is unpinned.
 type Session struct {
 	ID                string `json:"id"`
 	Label             string `json:"label"`
 	Kind              string `json:"kind"`
 	Path              string `json:"path"`
 	ProviderSessionID string `json:"providerSessionId"`
+	Pinned            bool   `json:"pinned"`
 }
 
 // Project is a persisted project together with its restorable session state.
@@ -145,6 +149,7 @@ func open(path string) (*Service, error) {
 		`ALTER TABLE sessions ADD COLUMN label_auto INTEGER NOT NULL DEFAULT 1`,
 		`ALTER TABLE sessions ADD COLUMN is_open INTEGER NOT NULL DEFAULT 1`,
 		`ALTER TABLE sessions ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE sessions ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE projects ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE projects ADD COLUMN closed_seq INTEGER NOT NULL DEFAULT 0`,
 	}
@@ -269,9 +274,14 @@ func (s *Service) RecentProjects() ([]Recent, error) {
 
 // sessionsOf returns a project's sessions in the order the user dragged them
 // into, falling back to insertion order for rows never reordered.
+//
+// Pinned rows are not hoisted here, and pinning never rewrites position: this is
+// the drag order, and the sidebar lifts the pinned cards over it when it draws.
+// Hoisting in both places would cost a session its slot on every reload, since
+// the frontend would have no order left to put an unpinned card back into.
 func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	rows, err := s.db.Query(
-		`SELECT id, label, kind, path, provider_session_id
+		`SELECT id, label, kind, path, provider_session_id, pinned
 		   FROM sessions WHERE project_id = ? AND is_open = 1 ORDER BY position, rowid`,
 		projectID,
 	)
@@ -283,7 +293,9 @@ func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	sessions := []Session{}
 	for rows.Next() {
 		var sess Session
-		if err := rows.Scan(&sess.ID, &sess.Label, &sess.Kind, &sess.Path, &sess.ProviderSessionID); err != nil {
+		if err := rows.Scan(
+			&sess.ID, &sess.Label, &sess.Kind, &sess.Path, &sess.ProviderSessionID, &sess.Pinned,
+		); err != nil {
 			return nil, fmt.Errorf("scan session: %w", err)
 		}
 		sessions = append(sessions, sess)
