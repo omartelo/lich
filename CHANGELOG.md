@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A worktree's setup script can now find the project it came from.** Sessions get
+  `$LICH_PROJECT_DIR`, the project's own checkout — which, for a session running in a
+  worktree, is somewhere else entirely and previously had no name the script could
+  reach. The point is the expensive half of a new worktree: dependencies. Instead of
+  `pnpm install` downloading gigabytes each time, a setup script can reuse what the
+  project already has —
+  `cp --reflink=auto -r "$LICH_PROJECT_DIR/node_modules" .` on a filesystem with
+  copy-on-write (btrfs, XFS, APFS) makes a full, independent copy that costs no disk
+  until something writes to it, and `ln -s` works where reflinks do not.
+
 ### Changed
 
 - **A worktree's dev-server port is now reserved, not guessed.** `LICH_WORKTREE_PORT`

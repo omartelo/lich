@@ -31,6 +31,7 @@ import (
 // with newCostStore.
 type stubBins struct {
 	bin, setup      string
+	projectPath     string
 	providerSession string
 	providerErr     error
 	costOn          bool
@@ -55,6 +56,7 @@ func newCostStore(providerSession string) stubBins {
 }
 
 func (s stubBins) ProviderBin(_, _ string) string       { return s.bin }
+func (s stubBins) ProjectPath(_ string) string          { return s.projectPath }
 func (s stubBins) WorktreeSetup(_ string) string        { return s.setup }
 func (s stubBins) SetProviderSession(_, _ string) error { return nil }
 
@@ -558,20 +560,22 @@ func TestReserveWorktreePortSeparatesCollidingCheckouts(t *testing.T) {
 }
 
 // TestSessionEnvInjectsCoordinates proves a spawned PTY gets the loopback
-// coordinates a Claude Code hook needs plus its checkout's dev-server port,
-// without aliasing the shared base env. The port is the one the checkout holds
-// in the reservation table, not a number recomputed here.
+// coordinates a Claude Code hook needs, its project's directory and its
+// checkout's dev-server port, without aliasing the shared base env. The port is
+// the one the checkout holds in the reservation table, not a number recomputed
+// here.
 func TestSessionEnvInjectsCoordinates(t *testing.T) {
-	store := stubBins{ports: map[string]int{"/src/repo": 24007}}
+	store := stubBins{projectPath: "/src/repo", ports: map[string]int{"/src/repo/wt": 24007}}
 	s := &Service{env: []string{"A=1"}, store: store, ws: &transport{port: 4321, token: "tok"}}
-	env := s.sessionEnv("sess", "/src/repo")
+	env := s.sessionEnv("sess", "p1", "/src/repo/wt")
 
 	want := map[string]bool{
-		"A=1":                      true,
-		"LICH_PORT=4321":           true,
-		"LICH_TOKEN=tok":           true,
-		"LICH_SESSION_ID=sess":     true,
-		"LICH_WORKTREE_PORT=24007": true,
+		"A=1":                        true,
+		"LICH_PORT=4321":             true,
+		"LICH_TOKEN=tok":             true,
+		"LICH_SESSION_ID=sess":       true,
+		"LICH_PROJECT_DIR=/src/repo": true,
+		"LICH_WORKTREE_PORT=24007":   true,
 	}
 	for _, e := range env {
 		delete(want, e)
@@ -586,13 +590,14 @@ func TestSessionEnvInjectsCoordinates(t *testing.T) {
 
 // TestSessionEnvNoTransport proves that without a transport there is nothing to
 // report to, so the hook coordinates are left out (the hook will no-op) — but
-// the checkout's dev-server port, which owes the transport nothing, still lands.
+// the project directory and the checkout's dev-server port, which owe the
+// transport nothing, still land.
 func TestSessionEnvNoTransport(t *testing.T) {
-	store := stubBins{ports: map[string]int{"/src/repo": 24007}}
+	store := stubBins{projectPath: "/src/repo", ports: map[string]int{"/src/repo/wt": 24007}}
 	s := &Service{env: []string{"A=1"}, store: store}
-	env := s.sessionEnv("sess", "/src/repo")
+	env := s.sessionEnv("sess", "p1", "/src/repo/wt")
 
-	want := []string{"A=1", "LICH_WORKTREE_PORT=24007"}
+	want := []string{"A=1", "LICH_PROJECT_DIR=/src/repo", "LICH_WORKTREE_PORT=24007"}
 	if !slices.Equal(env, want) {
 		t.Fatalf("env = %v, want %v", env, want)
 	}
@@ -607,8 +612,20 @@ func TestSessionEnvNoTransport(t *testing.T) {
 // checkout, so no port is invented for it.
 func TestSessionEnvWithoutCwd(t *testing.T) {
 	s := &Service{env: []string{"A=1"}, store: stubBins{}}
-	env := s.sessionEnv("sess", "")
+	env := s.sessionEnv("sess", "p1", "")
 	if len(env) != 1 || env[0] != "A=1" {
 		t.Fatalf("expected base env unchanged, got %v", env)
+	}
+}
+
+// TestSessionEnvWithoutProject proves a session whose project the store cannot
+// resolve is left without LICH_PROJECT_DIR rather than handed an empty one: a
+// setup script reading it would `cd` to the filesystem root.
+func TestSessionEnvWithoutProject(t *testing.T) {
+	s := &Service{env: []string{"A=1"}, store: stubBins{}}
+	for _, e := range s.sessionEnv("sess", "gone", "") {
+		if strings.HasPrefix(e, "LICH_PROJECT_DIR=") {
+			t.Fatalf("exported %q for a project that does not resolve", e)
+		}
 	}
 }

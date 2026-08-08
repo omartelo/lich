@@ -277,6 +277,18 @@ func (s *Service) RecentProjects() ([]Recent, error) {
 	return recents, nil
 }
 
+// ProjectPath returns the directory of the project with this id, or "" when
+// there is no such project. It is the main checkout — a session running in a
+// worktree has its own directory and still belongs to this one, which is what
+// makes the answer worth asking for.
+func (s *Service) ProjectPath(projectID string) string {
+	var path string
+	if err := s.db.QueryRow(`SELECT path FROM projects WHERE id = ?`, projectID).Scan(&path); err != nil {
+		return ""
+	}
+	return path
+}
+
 // sessionsOf returns a project's sessions in the order the user dragged them
 // into, falling back to insertion order for rows never reordered.
 //
