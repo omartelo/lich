@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Worktree groups can be dragged into the order you want.** Reordering
+  sessions stopped halfway once a worktree split the sidebar into groups: a card
+  could move inside its own group, but the groups themselves sat in the order
+  they happened to open, so a checkout you were done with kept its place at the
+  top. Drag a group by its header — the divider with the worktree's name — and
+  the whole block moves with it, cards and pull request card included. A sidebar
+  with a single group has no header and is unchanged. A pinned session still
+  carries its group to the top, which is the one order a drag cannot beat.
+
 ## [0.27.0] - 2026-08-07
 
 ### Added
