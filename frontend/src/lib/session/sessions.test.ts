@@ -37,7 +37,7 @@ function buildState(n: number): SessionState {
 
 describe("isSessionKind", () => {
   it("accepts every provider kind and the shell", () => {
-    for (const kind of ["claude", "codex", "opencode", "crush", "shell"]) {
+    for (const kind of ["claude", "codex", "opencode", "omp", "crush", "shell"]) {
       expect(isSessionKind(kind)).toBe(true)
     }
   })
