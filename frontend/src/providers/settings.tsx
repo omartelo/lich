@@ -38,6 +38,7 @@ const THEME_STORAGE_KEY = "lich.appearance.theme"
 const ZOOM_STORAGE_KEY = "lich.appearance.zoom"
 const TERMINAL_THEME_STORAGE_KEY = "lich.appearance.terminalTheme"
 const CONTEXT_USAGE_STORAGE_KEY = "lich.footer.contextUsage"
+const COST_BUDGET_STORAGE_KEY = "lich.footer.costBudget"
 
 // DEFAULT_FONT is the bundled FiraCode Nerd Font Mono. It is not installed via
 // fontconfig, so it must be offered explicitly alongside the system fonts.
@@ -91,6 +92,23 @@ const readZoom = (): number => parseNumberPref(readPref(ZOOM_STORAGE_KEY), DEFAU
 // Default on: the footer context readout shows unless the user turned it off.
 const readContextUsage = (): boolean => parseBoolPref(readPref(CONTEXT_USAGE_STORAGE_KEY), true)
 
+// clampCostBudget bounds a spend ceiling to something a cost readout can be
+// compared against: never negative, and no finer than the cent the readout
+// prints. Anything that is not a number at all is no ceiling, which is what an
+// emptied input has to mean — the alternative is a NaN budget that colours the
+// readout forever.
+export function clampCostBudget(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0
+  }
+  return Math.round(Math.max(0, value) * 100) / 100
+}
+
+// The spend ceiling is off by default and reads as 0 for a stored 0 — the value
+// is a magnitude, so parseNumberPref already answers the fallback for it.
+const readCostBudget = (): number =>
+  parseNumberPref(readPref(COST_BUDGET_STORAGE_KEY), 0, clampCostBudget)
+
 interface SettingsValue {
   /** Terminal font family, applied globally across all project terminals. */
   font: string
@@ -126,6 +144,9 @@ interface SettingsValue {
   /** Whether the footer shows the active session's context-window usage. */
   showContextUsage: boolean
   setShowContextUsage: (show: boolean) => void
+  /** Spend ceiling in USD the footer cost readout colours against; 0 is none. */
+  costBudget: number
+  setCostBudget: (usd: number) => void
 }
 
 const SettingsContext = createContext<SettingsValue | null>(null)
@@ -141,6 +162,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [terminalTheme, setTerminalThemeState] = useState<TerminalTheme>(readTerminalTheme)
   const [hotkeys, setHotkeys] = useState<Hotkeys>(loadHotkeys)
   const [showContextUsage, setShowContextUsageState] = useState<boolean>(readContextUsage)
+  const [costBudget, setCostBudgetState] = useState<number>(readCostBudget)
 
   useEffect(() => {
     let cancelled = false
@@ -289,6 +311,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     writePref(CONTEXT_USAGE_STORAGE_KEY, next)
   }, [])
 
+  const setCostBudget = useCallback((next: number) => {
+    const clamped = clampCostBudget(next)
+    setCostBudgetState(clamped)
+    writePref(COST_BUDGET_STORAGE_KEY, clamped)
+  }, [])
+
   // Apply the resolved theme's CSS variables and toggle `.dark` for existing
   // dark variants. For "system", follow the OS scheme and keep following it
   // live.
@@ -398,6 +426,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       resetHotkey,
       showContextUsage,
       setShowContextUsage,
+      costBudget,
+      setCostBudget,
     }),
     [
       font,
@@ -422,6 +452,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       resetHotkey,
       showContextUsage,
       setShowContextUsage,
+      costBudget,
+      setCostBudget,
     ],
   )
 
