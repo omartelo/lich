@@ -48,5 +48,6 @@ telemetry, so the interesting boundaries are local ones:
 - **A dropped file resolving to a copy.** When a drop matches nothing in the
   searched trees, lich copies it to a temporary directory and hands over that
   path. Documented, deliberate.
-- **Two checkouts sharing a `LICH_WORKTREE_PORT`.** It is a hash of the path,
-  not a reservation, and nothing binds it.
+- **Two checkouts sharing a `LICH_WORKTREE_PORT`.** lich reserves the number and
+  proves it free at the time it is handed out, but nothing holds it until your
+  dev server binds it.

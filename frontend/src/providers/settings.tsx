@@ -10,7 +10,13 @@ import {
   type Hotkeys,
 } from "@/lib/hotkeys"
 import { zoomIntent } from "@/lib/terminal/zoom-keys"
-import { parseBoolPref, parseNumberPref, readPref, writePref } from "@/lib/prefs"
+import {
+  parseBoolPref,
+  parseNumberPref,
+  parseOptionalBoolPref,
+  readPref,
+  writePref,
+} from "@/lib/prefs"
 import { Themes as ThemeRPC } from "@/lib/rpc"
 import {
   applyAppTheme,
@@ -39,6 +45,7 @@ const ZOOM_STORAGE_KEY = "lich.appearance.zoom"
 const TERMINAL_THEME_STORAGE_KEY = "lich.appearance.terminalTheme"
 const CONTEXT_USAGE_STORAGE_KEY = "lich.footer.contextUsage"
 const COST_BUDGET_STORAGE_KEY = "lich.footer.costBudget"
+const DESKTOP_NOTIFICATIONS_STORAGE_KEY = "lich.notifications.desktop"
 
 // DEFAULT_FONT is the bundled FiraCode Nerd Font Mono. It is not installed via
 // fontconfig, so it must be offered explicitly alongside the system fonts.
@@ -109,6 +116,12 @@ export function clampCostBudget(value: number): number {
 const readCostBudget = (): number =>
   parseNumberPref(readPref(COST_BUDGET_STORAGE_KEY), 0, clampCostBudget)
 
+// No default: a desktop notification interrupts the user outside the app, so it
+// is the one preference lich asks about instead of assuming. null means the
+// question has not been put yet — see the opt-in dialog.
+const readDesktopNotifications = (): boolean | null =>
+  parseOptionalBoolPref(readPref(DESKTOP_NOTIFICATIONS_STORAGE_KEY))
+
 interface SettingsValue {
   /** Terminal font family, applied globally across all project terminals. */
   font: string
@@ -147,6 +160,10 @@ interface SettingsValue {
   /** Spend ceiling in USD the footer cost readout colours against; 0 is none. */
   costBudget: number
   setCostBudget: (usd: number) => void
+  /** Whether a session needing input notifies the desktop while the lich window
+   * is unfocused. null until the user has answered the opt-in dialog. */
+  desktopNotifications: boolean | null
+  setDesktopNotifications: (enabled: boolean) => void
 }
 
 const SettingsContext = createContext<SettingsValue | null>(null)
@@ -163,6 +180,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [hotkeys, setHotkeys] = useState<Hotkeys>(loadHotkeys)
   const [showContextUsage, setShowContextUsageState] = useState<boolean>(readContextUsage)
   const [costBudget, setCostBudgetState] = useState<number>(readCostBudget)
+  const [desktopNotifications, setDesktopNotificationsState] = useState<boolean | null>(
+    readDesktopNotifications,
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -317,6 +337,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     writePref(COST_BUDGET_STORAGE_KEY, clamped)
   }, [])
 
+  // Writing either answer settles the question for good: a refusal is stored,
+  // not left absent, so the dialog is put once and the toggle owns it after.
+  const setDesktopNotifications = useCallback((next: boolean) => {
+    setDesktopNotificationsState(next)
+    writePref(DESKTOP_NOTIFICATIONS_STORAGE_KEY, next)
+  }, [])
+
   // Apply the resolved theme's CSS variables and toggle `.dark` for existing
   // dark variants. For "system", follow the OS scheme and keep following it
   // live.
@@ -428,6 +455,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setShowContextUsage,
       costBudget,
       setCostBudget,
+      desktopNotifications,
+      setDesktopNotifications,
     }),
     [
       font,
@@ -454,6 +483,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setShowContextUsage,
       costBudget,
       setCostBudget,
+      desktopNotifications,
+      setDesktopNotifications,
     ],
   )
 
