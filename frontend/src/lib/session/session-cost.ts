@@ -18,3 +18,19 @@ export function formatCost(usd: number): string {
   }
   return usd >= 1 ? `$${usd.toFixed(2)}` : `$${usd.toFixed(3)}`
 }
+
+// budgetShare is how much of a session's spend ceiling is gone, on the 0–100
+// scale usageColor paints. It answers 0 — the scale's muted end — whenever
+// there is no ceiling to be near, so a user who set none sees the readout
+// exactly as it was before budgets existed.
+//
+// The share is capped at 100: past the ceiling there is no louder colour than
+// red, and an uncapped number would only be read by a caller that does not
+// exist. The figure it is taken against is API pricing from a table, so treat
+// it as a nudge, not an invoice.
+export function budgetShare(usd: number, budget: number): number {
+  if (!Number.isFinite(usd) || !Number.isFinite(budget) || usd <= 0 || budget <= 0) {
+    return 0
+  }
+  return Math.min((usd / budget) * 100, 100)
+}

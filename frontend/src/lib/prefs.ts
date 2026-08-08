@@ -43,6 +43,21 @@ export function parseNumberPref(
   return raw !== null && Number.isFinite(value) && value > 0 ? clamp(value) : fallback
 }
 
+/** A flag with a third answer: never decided. For a setting the user is asked
+ * about once, where "off" and "not asked yet" have to stay apart — the same
+ * stored value cannot mean both a refusal and a pending question. Anything
+ * other than what writePref emits reads as undecided, so a foreign value asks
+ * rather than silently answering for the user. */
+export function parseOptionalBoolPref(raw: string | null): boolean | null {
+  if (raw === "true") {
+    return true
+  }
+  if (raw === "false") {
+    return false
+  }
+  return null
+}
+
 /** A flag. Only what writePref emits for a boolean counts; anything else is
  * the fallback, so a half-written or foreign value cannot pin a toggle. */
 export function parseBoolPref(raw: string | null, fallback: boolean): boolean {

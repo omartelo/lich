@@ -88,8 +88,10 @@ nobody knows it and that the call site never shows. The mechanism and the histor
   account's token in `GH_TOKEN` for every gh call lich makes for that project. A push still rides the remote's
   ssh key and signs with the global `user.email`, so a PR can be *read* by one account and its commits *land*
   under another, with no error anywhere.
-- **`LICH_WORKTREE_PORT` is a hash, not a reservation** (`internal/terminal/worktreeport.go`): nothing probes and
-  nothing binds, so two checkouts can land on the same number and only the dev server started second finds out.
+- **`LICH_WORKTREE_PORT` is reserved, never held** (`internal/terminal/worktreeport.go`, table `worktree_ports`):
+  the number is checked against the other checkouts and bound once to prove it is free, then released — the dev
+  server starts minutes later, after the setup script, and anything on the machine can take the port in between.
+  A reservation is released only when its directory stops existing, which is read at allocation time.
 - **The cost readout is priced from a table, not from the provider** (`internal/pricing`): an unpriced model makes
   the readout go *absent* rather than wrong, and billing is per `(session, transcript)` — a conversation forked
   inside the PTY bills its copied history twice. lich's own resume continues the same transcript and is unaffected.
@@ -99,6 +101,10 @@ nobody knows it and that the call site never shows. The mechanism and the histor
   so a path pasted into a prompt eventually stops resolving.
 - **git status is polled** — one shared poller per repository path (`frontend/src/lib/git/git-status-store.ts`); the
   lich plugin's `session-touched` hook nudges an immediate refresh.
+- **lich fetches on its own** — the base-branch readout (`internal/project/basestatus.go`) runs
+  `git fetch --no-tags origin` in the background, at most once every 2 minutes per repository, for as long as a
+  card is on screen. It is the only git write lich makes outside the worktree flows, nothing in the UI announces
+  it, and it moves remote refs in the user's own repository.
 - **Persistence is hybrid**: UI prefs in the page's localStorage (`lich.*` keys — the reason the listener port is
   pinned at 47821; `LICH_LISTEN_PORT` overrides it, `LICH_PORT` is the distinct per-session hook variable), the
   workspace in SQLite (`<config-dir>/lich/lich.db`, `internal/store`). Closing a session deletes its row; keeping a

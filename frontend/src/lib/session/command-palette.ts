@@ -2,7 +2,7 @@
 // flat, filterable list the palette lists and routes to. Kept pure (no React,
 // no stores) so the flatten and filter are testable without a render.
 
-import type { Project } from "@/lib/api-types"
+import type { Project, TranscriptMatch } from "@/lib/api-types"
 import type { SessionKind, SessionState } from "./sessions"
 
 // PaletteSession is one session flattened with the project it belongs to — what
@@ -72,4 +72,36 @@ export function filterPalette(
     ),
     projects: projects.filter((p) => matchesQuery(`${p.name} ${p.path}`, query)),
   }
+}
+
+// MESSAGE_MIN_QUERY mirrors the backend's minSearchQuery: under three
+// characters the search is refused there, so the palette does not ask for it.
+export const MESSAGE_MIN_QUERY = 3
+
+// PaletteMessage is a session the query was talked about in — the same row a
+// "jump to session" is, carrying the sentence that made it a hit.
+export interface PaletteMessage extends PaletteSession {
+  snippet: string
+  count: number
+}
+
+// paletteMessages joins transcript matches back onto the sessions they were
+// searched for, keeping the order the search returned. A match whose session
+// has closed since the query went out is dropped: the row would have nowhere to
+// jump to. Null (a search that found nothing, or never ran) is no rows.
+export function paletteMessages(
+  matches: readonly TranscriptMatch[] | null,
+  sessions: readonly PaletteSession[],
+): PaletteMessage[] {
+  if (!matches) {
+    return []
+  }
+  const rows: PaletteMessage[] = []
+  for (const match of matches) {
+    const session = sessions.find((s) => s.sessionId === match.id)
+    if (session) {
+      rows.push({ ...session, snippet: match.snippet, count: match.count })
+    }
+  }
+  return rows
 }

@@ -8,12 +8,13 @@ const SLOW_MS = 10_000
 const IDLE_TICKS = 3
 const CADENCE = { fastMs: FAST_MS, slowMs: SLOW_MS, idleTicks: IDLE_TICKS }
 
-const status = (files: number, head = "abc123"): GitStatus => ({
+const status = (files: number, head = "abc123", base: GitStatus["base"] = null): GitStatus => ({
   branch: "main",
   files,
   added: files,
   deleted: 0,
   head,
+  base,
 })
 
 beforeEach(() => {
@@ -88,6 +89,40 @@ describe("createGitStatusStore", () => {
     await vi.advanceTimersByTimeAsync(FAST_MS)
     expect(listener).toHaveBeenCalledTimes(2)
     expect(store.get("/repo")?.head).toBe("bbb")
+  })
+
+  // A base branch moves under a checkout that changed in no other way — the
+  // whole scenario the readout exists for. Nothing else on the status differs,
+  // so only the base comparison can notice it.
+  it("notifies when only the base standing moves", async () => {
+    let base: GitStatus["base"] = { base: "origin/main", behind: 0, conflicts: null }
+    const fetch = vi.fn(async () => status(0, "abc123", base))
+    const store = createGitStatusStore(fetch, CADENCE)
+    const listener = vi.fn()
+    store.subscribe("/repo", listener)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(listener).toHaveBeenCalledTimes(1)
+    base = { base: "origin/main", behind: 2, conflicts: null }
+    await vi.advanceTimersByTimeAsync(FAST_MS)
+    expect(listener).toHaveBeenCalledTimes(2)
+    expect(store.get("/repo")?.base?.behind).toBe(2)
+  })
+
+  // Same count, different files: a comparison by length alone would keep the
+  // old paths on screen and name files the checkout no longer fights over.
+  it("notifies when the conflicting files change but their count does not", async () => {
+    let conflicts = ["a.go"]
+    const fetch = vi.fn(async () =>
+      status(0, "abc123", { base: "origin/main", behind: 1, conflicts }),
+    )
+    const store = createGitStatusStore(fetch, CADENCE)
+    const listener = vi.fn()
+    store.subscribe("/repo", listener)
+    await vi.advanceTimersByTimeAsync(0)
+    conflicts = ["b.go"]
+    await vi.advanceTimersByTimeAsync(FAST_MS)
+    expect(listener).toHaveBeenCalledTimes(2)
+    expect(store.get("/repo")?.base?.conflicts).toEqual(["b.go"])
   })
 
   // The whole point of the fast interval is that it does not last: a checkout

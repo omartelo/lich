@@ -1,10 +1,12 @@
 import { useSyncExternalStore } from "react"
 import { useNavigate } from "react-router-dom"
 import { DndContext, closestCenter } from "@dnd-kit/core"
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 import { useSortableList, verticalAxis } from "@/lib/use-sortable-list"
+import { cn } from "@/lib/utils"
 import { baseName } from "@/lib/paths"
-import type { Session } from "@/lib/session/sessions"
+import { groupKey, type Session } from "@/lib/session/sessions"
 import { useProjects } from "@/providers/projects"
 import { SessionCard } from "./SessionCard"
 import { PullRequestCard } from "./PullRequestCard"
@@ -18,7 +20,9 @@ interface SessionGroupProps {
   projectPath: string
   activeId: string
   // A divider label is drawn only when the sidebar holds more than one group; a
-  // lone project with no worktrees keeps its old flat, header-less list.
+  // lone project with no worktrees keeps its old flat, header-less list. The
+  // header doubles as the group's drag handle, so a lone group is also the case
+  // where reordering groups has nothing to reorder.
   showHeader: boolean
   // Commits a new order for this group's sessions; a drag can only ever produce
   // one, since each group owns an isolated DndContext. Not derivable here: the
@@ -39,7 +43,9 @@ interface SessionGroupProps {
 // with the worktree folder name; the branch stays on each card. The title reads
 // the group's own checkout path, never a session's live cwd, so a `cd` deeper
 // into the tree never re-buckets the group. The isolated DndContext is what
-// confines a drag to reordering within the group.
+// confines a card drag to reordering within the group; the group itself is a
+// sortable of the sidebar's outer context, dragged by its header alone so the
+// two never contend for the same pointer.
 //
 // The card actions needing nothing but a session id — select, rename, open a
 // terminal beside it — are wired here rather than threaded down from the
@@ -62,6 +68,7 @@ export function SessionGroup({
   const ids = sessions.map((session) => session.id)
   const { sensors, onDragEnd } = useSortableList(ids, onReorder)
   const name = baseName(path || projectPath)
+  const group = useSortable({ id: groupKey(path), disabled: !showHeader })
   // The PR card keys off the group's real checkout — the project root for the
   // root group (empty path), else the worktree — so a root project on a feature
   // branch parks its card too, not only worktrees.
@@ -76,9 +83,20 @@ export function SessionGroup({
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div
+      ref={group.setNodeRef}
+      style={{ transform: CSS.Transform.toString(group.transform), transition: group.transition }}
+      className={cn(
+        "flex flex-col gap-1.5",
+        group.isDragging && "pointer-events-none relative z-10 rounded-lg bg-sidebar shadow-md",
+      )}
+    >
       {showHeader && (
-        <div className="flex items-center gap-2 px-1 pb-0.5 pt-1.5">
+        <div
+          className="flex cursor-grab items-center gap-2 px-1 pb-0.5 pt-1.5"
+          {...group.attributes}
+          {...group.listeners}
+        >
           <span className="min-w-0 truncate text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground/70">
             {name}
           </span>

@@ -45,7 +45,9 @@ export function WorktreeSetupSettings({ projectId }: { projectId?: string }) {
         "The session opens even if it fails. Gitignored .env* files are copied into the new " +
         "worktree automatically; a .worktreeinclude file at the repo root overrides the patterns. " +
         "$LICH_WORKTREE_PORT holds a port of this worktree's own, so two of them can run a dev " +
-        "server at once: PORT=$LICH_WORKTREE_PORT pnpm dev."
+        "server at once: PORT=$LICH_WORKTREE_PORT pnpm dev. $LICH_PROJECT_DIR points at the project " +
+        "itself, so the script can reuse what is already installed there instead of downloading it " +
+        'again: cp --reflink=auto -r "$LICH_PROJECT_DIR/node_modules" .'
       }
     >
       <p className="mb-2 text-xs text-muted-foreground">{project.path}</p>

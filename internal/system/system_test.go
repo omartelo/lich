@@ -3,6 +3,7 @@ package system
 import (
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -288,5 +289,81 @@ func TestOpenInEditorFallsBackToDefault(t *testing.T) {
 	}
 	if want := filepath.Join("/repo", "a.txt"); len(args) == 0 || args[len(args)-1] != want {
 		t.Errorf("args = %v, want file %s as last arg", args, want)
+	}
+}
+
+// captureNotify records the one notification a test raises.
+func captureNotify(text, title *string) func(string, string) error {
+	return func(gotText, gotTitle string) error {
+		*text, *title = gotText, gotTitle
+		return nil
+	}
+}
+
+// TestNotifyBuildsTwoLineText proves the detail becomes the text's second line
+// rather than a separate field: Linux takes the first line as the summary, so
+// the split has to live in the text itself.
+func TestNotifyBuildsTwoLineText(t *testing.T) {
+	var text, title string
+	s := &Service{notify: captureNotify(&text, &title)}
+
+	if err := s.Notify("api needs your input", "lich"); err != nil {
+		t.Fatalf("Notify: %v", err)
+	}
+	if want := "api needs your input\nlich"; text != want {
+		t.Errorf("text = %q, want %q", text, want)
+	}
+	if title != "lich" {
+		t.Errorf("title = %q, want lich", title)
+	}
+
+	if err := s.Notify("api needs your input", ""); err != nil {
+		t.Fatalf("Notify without detail: %v", err)
+	}
+	if strings.Contains(text, "\n") {
+		t.Errorf("text = %q, want no second line when detail is empty", text)
+	}
+}
+
+// TestNotifyTruncatesEachLine pins the 120-rune cap on both lines, counted in
+// runes: a byte cap would split a multi-byte character and hand the notifier
+// invalid UTF-8.
+func TestNotifyTruncatesEachLine(t *testing.T) {
+	var text, title string
+	s := &Service{notify: captureNotify(&text, &title)}
+
+	exact := strings.Repeat("é", 120)
+	if err := s.Notify(exact, exact); err != nil {
+		t.Fatalf("Notify: %v", err)
+	}
+	if text != exact+"\n"+exact {
+		t.Errorf("120 runes were altered: %q", text)
+	}
+
+	over := strings.Repeat("é", 121)
+	if err := s.Notify(over, over); err != nil {
+		t.Fatalf("Notify: %v", err)
+	}
+	want := exact + "…\n" + exact + "…"
+	if text != want {
+		t.Errorf("text = %q, want each line cut to 120 runes plus an ellipsis", text)
+	}
+}
+
+// TestNotifyRejectsEmpty proves a blank notification never reaches the desktop:
+// a card with no label must not raise an empty popup.
+func TestNotifyRejectsEmpty(t *testing.T) {
+	raised := false
+	s := &Service{notify: func(string, string) error {
+		raised = true
+		return nil
+	}}
+	for _, summary := range []string{"", "   ", "\n"} {
+		if err := s.Notify(summary, ""); err == nil {
+			t.Errorf("summary %q: want error", summary)
+		}
+	}
+	if raised {
+		t.Error("an empty notification reached the desktop")
 	}
 }
