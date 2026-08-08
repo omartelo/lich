@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **lich asks which agents you use, instead of assuming Claude Code.** The first
+  launch opened on a Claude session because Claude was the only harness lich's
+  author ran: a machine with Codex and nothing else met a first session that died
+  on `claude: command not found`, and the three other harnesses lich supports were
+  off in a Settings screen nobody had been told about. lich now scans for agents
+  before showing anything and opens on the providers it found — a list of what is
+  actually installed, a switch each, and the pick of which one new sessions spawn.
+  The first one found is on already, so the common case is one click, and the
+  panel is the Settings › Providers screen verbatim, so the place to change it
+  later is a screen already met. Nothing installed is its own answer: lich names
+  what it looks for rather than failing inside a terminal. Existing installs that
+  never chose a default see it once.
+
+- **oh-my-pi joins the harnesses lich can run.** A Pi fork with an IDE wired in,
+  spawned like the rest from its `omp` binary and off until turned on.
+
 ## [0.27.0] - 2026-08-07
 
 ### Added
