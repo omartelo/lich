@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  decideDesktopNotice,
   isAgentEvent,
   isCwdEvent,
   isIdEvent,
@@ -177,5 +178,25 @@ describe("shouldToastAttention", () => {
 
   it("stays silent for an empty state", () => {
     expect(shouldToastAttention({}, "s1", ACTIVE)).toBe(false)
+  })
+})
+
+describe("decideDesktopNotice", () => {
+  it("stays out of the way while the user is at the window", () => {
+    expect(decideDesktopNotice(true, true)).toBe("none")
+    expect(decideDesktopNotice(true, null)).toBe("none")
+    expect(decideDesktopNotice(true, false)).toBe("none")
+  })
+
+  it("notifies once the user has opted in and left the window", () => {
+    expect(decideDesktopNotice(false, true)).toBe("notify")
+  })
+
+  it("puts the question on the first report that would have notified", () => {
+    expect(decideDesktopNotice(false, null)).toBe("ask")
+  })
+
+  it("keeps quiet for a refusal instead of asking again", () => {
+    expect(decideDesktopNotice(false, false)).toBe("none")
   })
 })

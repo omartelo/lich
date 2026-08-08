@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A session waiting on you now reaches the desktop.** The bell on the card and
+  the toast beside it only ever worked while you were looking at lich — walk away
+  to a browser or another workspace and a session blocked on a permission prompt
+  sat there until you happened to come back. When a session needs your input and
+  the lich window is not the one you are in, lich now raises a desktop
+  notification through the system's own notifier, naming the session and its
+  project so you know where to go. Nothing changes while the window has focus:
+  the in-app toast is still the one that fires, and it still routes to the card.
+  lich asks before it starts — the first time a session would have notified you,
+  a dialog puts the question, and either answer settles it. **Settings ›
+  Notifications** holds the switch afterwards, whichever way you answered.
+
 - **A worktree's setup script can now find the project it came from.** Sessions get
   `$LICH_PROJECT_DIR`, the project's own checkout — which, for a session running in a
   worktree, is somewhere else entirely and previously had no name the script could
