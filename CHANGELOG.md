@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **A worktree's dev-server port is now reserved, not guessed.** `LICH_WORKTREE_PORT`
+  was a hash of the checkout's path: stable, but blind. Two worktrees of one project
+  could hash onto the same number, and neither knew about the dev server, database or
+  container already sitting on that port — the collision showed up as the second
+  `pnpm dev` refusing to start, with nothing pointing at why. lich now keeps a
+  reservation per checkout: a worktree is offered its hashed number, and takes it only
+  if no other checkout holds it and nothing on the machine is listening on it,
+  otherwise the next free port in the same range. A checkout keeps its number for good
+  — across restarts of lich, of the session, and of your dev server — and gives it back
+  when its directory is gone, so removing a worktree returns the port to the pool.
+
 ## [0.27.0] - 2026-08-07
 
 ### Added

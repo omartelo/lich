@@ -57,9 +57,10 @@ version is in [CHANGELOG.md](CHANGELOG.md).
   the number of the branch's pull request.
 - **Git worktrees, built in.** Spin one up from any base branch — search it,
   local or remote, even across dozens of branches — and lich seeds the new
-  checkout with your gitignored `.env*` files, hands it a stable dev-server port
-  derived from its path (`LICH_WORKTREE_PORT`) and runs a per-project setup
-  script before the agent starts. The sidebar groups sessions by the worktree they belong to, and a kept
+  checkout with your gitignored `.env*` files, hands it a dev-server port of its
+  own that no other checkout and no process on the machine is already using
+  (`LICH_WORKTREE_PORT`) and runs a per-project setup script before the agent
+  starts. The sidebar groups sessions by the worktree they belong to, and a kept
   worktree's session resumes its conversation later.
 - **Review, and hand the review back.** A CodeMirror diff dock shows the working
   changes beside a live file tree — collapse or expand every file at once, open

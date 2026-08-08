@@ -5,6 +5,11 @@ import (
 	"testing"
 )
 
+// alwaysFree and neverFree stand in for the loopback probe, so the allocation
+// tests below decide what the machine looks like instead of asking it.
+func alwaysFree(int) bool { return true }
+func neverFree(int) bool  { return false }
+
 // TestWorktreePortIsStable pins the property the whole feature rests on: the
 // port is a function of the path and nothing else, so a worktree keeps its
 // number across restarts of the session and of lich.
@@ -82,5 +87,77 @@ func TestWorktreePortWindowClearsListener(t *testing.T) {
 func TestWorktreePortWithoutPath(t *testing.T) {
 	if got := worktreePort(""); got != 0 {
 		t.Fatalf("worktreePort(\"\") = %d, want 0", got)
+	}
+}
+
+// TestPickWorktreePortPrefersHash proves an uncontested checkout still gets its
+// hashed number, which is what keeps a worktree's port stable for free.
+func TestPickWorktreePortPrefersHash(t *testing.T) {
+	path := filepath.Join("src", "repo", "feature-a")
+	if got := pickWorktreePort(path, map[int]bool{}, alwaysFree); got != worktreePort(path) {
+		t.Fatalf("pickWorktreePort(%q) = %d, want the hashed %d", path, got, worktreePort(path))
+	}
+}
+
+// TestPickWorktreePortWalksPastReserved proves the collision this whole
+// allocation exists for: a checkout whose hashed port another checkout already
+// holds is moved off it rather than handed a number two dev servers would fight
+// over.
+func TestPickWorktreePortWalksPastReserved(t *testing.T) {
+	path := filepath.Join("src", "repo", "feature-a")
+	hashed := worktreePort(path)
+	got := pickWorktreePort(path, map[int]bool{hashed: true}, alwaysFree)
+	if got == hashed {
+		t.Fatalf("pickWorktreePort(%q) = %d, the port already reserved", path, got)
+	}
+	if got < worktreePortBase || got >= worktreePortBase+worktreePortCount {
+		t.Fatalf("pickWorktreePort(%q) = %d, outside the window", path, got)
+	}
+}
+
+// TestPickWorktreePortWalksPastBoundPort proves the half the reservation table
+// cannot see: a port some unrelated process on this machine is already
+// listening on is skipped too.
+func TestPickWorktreePortWalksPastBoundPort(t *testing.T) {
+	path := filepath.Join("src", "repo", "feature-a")
+	hashed := worktreePort(path)
+	free := func(port int) bool { return port != hashed }
+	if got := pickWorktreePort(path, map[int]bool{}, free); got == hashed {
+		t.Fatalf("pickWorktreePort(%q) = %d, a port that failed to bind", path, got)
+	}
+}
+
+// TestPickWorktreePortWrapsAtWindowEnd proves the walk is circular: with every
+// port from the hashed one to the end of the window taken, the checkout is
+// served from the start of the window rather than out of it.
+func TestPickWorktreePortWrapsAtWindowEnd(t *testing.T) {
+	path := filepath.Join("src", "repo", "feature-a")
+	hashed := worktreePort(path)
+	inUse := map[int]bool{}
+	for port := hashed; port < worktreePortBase+worktreePortCount; port++ {
+		inUse[port] = true
+	}
+	got := pickWorktreePort(path, inUse, alwaysFree)
+	if got != worktreePortBase {
+		t.Fatalf("pickWorktreePort(%q) = %d, want the first port of the window %d",
+			path, got, worktreePortBase)
+	}
+}
+
+// TestPickWorktreePortExhaustedFallsBackToHash proves a full window costs the
+// session nothing it did not already have: it gets its hashed number back,
+// which is the collision the caller lived with before any of this.
+func TestPickWorktreePortExhaustedFallsBackToHash(t *testing.T) {
+	path := filepath.Join("src", "repo", "feature-a")
+	if got := pickWorktreePort(path, map[int]bool{}, neverFree); got != worktreePort(path) {
+		t.Fatalf("pickWorktreePort(%q) = %d, want the hashed %d", path, got, worktreePort(path))
+	}
+}
+
+// TestPickWorktreePortWithoutPath proves a pathless session is not walked into
+// a port: it has no checkout to own one.
+func TestPickWorktreePortWithoutPath(t *testing.T) {
+	if got := pickWorktreePort("", map[int]bool{}, alwaysFree); got != 0 {
+		t.Fatalf("pickWorktreePort(\"\") = %d, want 0", got)
 	}
 }

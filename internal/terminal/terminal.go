@@ -94,13 +94,15 @@ type session struct {
 
 // Store is the persistence the terminal service depends on: the binary to spawn
 // for a provider in a project (empty return spawns the provider's default),
-// where to record the provider session id a PTY reports through its
-// session-start hook, and the running cost accounting behind the footer readout
-// (CostReadout gates it — off, none of the rest is called). The store
-// implements them all.
+// the dev-server port reserved for each checkout, where to record the provider
+// session id a PTY reports through its session-start hook, and the running cost
+// accounting behind the footer readout (CostReadout gates it — off, none of the
+// rest is called). The store implements them all.
 type Store interface {
 	ProviderBin(providerID, projectID string) string
 	WorktreeSetup(projectID string) string
+	WorktreePorts() map[string]int
+	SetWorktreePort(path string, port int) error
 	SetProviderSession(sessionID, providerSessionID string) error
 	ProviderSession(sessionID string) (string, error)
 	SetSessionTitle(sessionID, title string) (bool, error)
@@ -222,14 +224,14 @@ func (s *Service) SetRestart(fn func() error) {
 // per-session, so this returns a fresh slice rather than aliasing (and
 // appending to) the shared s.env.
 //
-// LICH_WORKTREE_PORT is derived from cwd alone — it belongs to the checkout,
+// LICH_WORKTREE_PORT is resolved from cwd alone — it belongs to the checkout,
 // not to the transport, so it is exported even when the transport failed to
 // start. The loopback coordinates are: with no transport there is nowhere to
 // report, so a hook spawned in this PTY sees no LICH_PORT and no-ops.
 func (s *Service) sessionEnv(id, cwd string) []string {
 	env := make([]string, len(s.env), len(s.env)+4)
 	copy(env, s.env)
-	if port := worktreePort(cwd); port > 0 {
+	if port := s.reserveWorktreePort(cwd); port > 0 {
 		env = append(env, "LICH_WORKTREE_PORT="+strconv.Itoa(port))
 	}
 	if s.ws == nil {
