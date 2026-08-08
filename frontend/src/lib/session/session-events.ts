@@ -139,3 +139,27 @@ export function shouldToastAttention(
   const focused = projectId === activeProjectId && project.activeId === sessionId
   return !focused
 }
+
+/** What the desktop channel does with a session that needs the user. */
+export type DesktopNotice = "none" | "ask" | "notify"
+
+// decideDesktopNotice is the desktop half of the same report shouldToastAttention
+// answers, and it asks a different question: not which session the user is on,
+// but whether they are at the window at all. With lich in front there is nothing
+// to do — the card's bell and the toast are already in view. With the window
+// behind something else every waiting session is unseen, the active one
+// included, and the notification is the only channel left. Until the opt-in has
+// been answered (null) the first such report puts the question instead of the
+// notification.
+export function decideDesktopNotice(
+  windowFocused: boolean,
+  enabled: boolean | null,
+): DesktopNotice {
+  if (windowFocused) {
+    return "none"
+  }
+  if (enabled === null) {
+    return "ask"
+  }
+  return enabled ? "notify" : "none"
+}
