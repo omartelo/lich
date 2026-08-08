@@ -95,8 +95,8 @@ type session struct {
 // Store is the persistence the terminal service depends on: the binary to spawn
 // for a provider in a project (empty return spawns the provider's default),
 // that project's own directory, the dev-server port reserved for each checkout,
-// where to record the provider
-// session id a PTY reports through its session-start hook, and the running cost
+// where to record the provider session id a PTY reports through its
+// session-start hook, and the running cost
 // accounting behind the footer readout (CostReadout gates it — off, none of the
 // rest is called). The store implements them all.
 type Store interface {
