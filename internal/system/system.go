@@ -1,10 +1,12 @@
 // Package system holds the few OS integrations the frontend needs that are
 // not tied to any domain service — opening a URL in the user's default browser,
-// opening a work-tree file in their editor, and the handful of facts a bug
-// report needs (version, platform, where the log lives).
+// opening a work-tree file in their editor, raising a desktop notification, and
+// the handful of facts a bug report needs (version, platform, where the log
+// lives).
 package system
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"os/exec"
@@ -12,6 +14,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/ncruces/zenity"
 	"github.com/omartelo/lich/internal/relpath"
 )
 
@@ -26,6 +29,9 @@ type Service struct {
 	version string
 	// run launches a detached process; injected in tests, exec in production.
 	run func(name string, args ...string) error
+	// notify posts one desktop notification; injected in tests, zenity in
+	// production (see Notify).
+	notify func(text, title string) error
 }
 
 func New(env []string, logPath, version string) *Service {
@@ -35,6 +41,9 @@ func New(env []string, logPath, version string) *Service {
 		version: version,
 		run: func(name string, args ...string) error {
 			return exec.Command(name, args...).Start()
+		},
+		notify: func(text, title string) error {
+			return zenity.Notify(text, zenity.Title(title))
 		},
 	}
 }
@@ -64,6 +73,46 @@ func (s *Service) RevealLog() error {
 		return fmt.Errorf("no log file: lich is logging to stderr only")
 	}
 	return s.openDefault(filepath.Dir(s.logPath))
+}
+
+// notifyTitle is the app name carried by every notification lich raises. macOS
+// shows it as the notification's title and Windows as the toast's source; Linux
+// ignores it, taking the text's first line as the summary — which is why the
+// text, not the title, has to carry what happened.
+const notifyTitle = "lich"
+
+// notifyLimit bounds each line of a notification, in runes. Both lines are
+// labels a user or an agent wrote (a session's name, a project's), and a
+// desktop notification is not the place to render an essay.
+const notifyLimit = 120
+
+// Notify raises a desktop notification through the OS's own notification
+// service — the one channel that still reaches the user after they leave the
+// lich window. summary is the headline, detail the second line (empty omits
+// it).
+//
+// Delivery only: the page decides when a notification is warranted, because it
+// is the side that knows whether the window has focus and which session the
+// user is looking at.
+func (s *Service) Notify(summary, detail string) error {
+	text := truncate(summary, notifyLimit)
+	if detail != "" {
+		text += "\n" + truncate(detail, notifyLimit)
+	}
+	if strings.TrimSpace(text) == "" {
+		return errors.New("refusing to raise an empty notification")
+	}
+	return s.notify(text, notifyTitle)
+}
+
+// truncate caps s at limit runes — never bytes, which would cut a multi-byte
+// character in half and hand the notifier invalid UTF-8.
+func truncate(s string, limit int) string {
+	runes := []rune(s)
+	if len(runes) <= limit {
+		return s
+	}
+	return string(runes[:limit]) + "…"
 }
 
 // OpenExternal opens an http(s) URL in the default browser. Scheme-gated so a

@@ -326,6 +326,9 @@ export const System = {
   Diagnostics: () => call<DiagnosticsData>("system.Diagnostics", []),
   /** Open the log's folder in the platform's file manager, for attaching it. */
   RevealLog: () => call<null>("system.RevealLog", []),
+  /** Raise a desktop notification: a headline and an optional second line.
+   * The caller decides it is warranted — the backend only delivers. */
+  Notify: (summary: string, detail: string) => call<null>("system.Notify", [summary, detail]),
 }
 
 export const Providers = {
