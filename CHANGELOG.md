@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A session waiting on you now reaches the desktop.** The bell on the card and
+  the toast beside it only ever worked while you were looking at lich — walk away
+  to a browser or another workspace and a session blocked on a permission prompt
+  sat there until you happened to come back. When a session needs your input and
+  the lich window is not the one you are in, lich now raises a desktop
+  notification through the system's own notifier, naming the session and its
+  project so you know where to go. Nothing changes while the window has focus:
+  the in-app toast is still the one that fires, and it still routes to the card.
+  lich asks before it starts — the first time a session would have notified you,
+  a dialog puts the question, and either answer settles it. **Settings ›
+  Notifications** holds the switch afterwards, whichever way you answered.
+
 - **A session card says when its base branch moved, and whether a merge would
   collide.** Running several worktrees at once, the first one to land leaves the
   others stale without a word — and you found out at the Merge button, one branch
@@ -24,6 +36,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   committed, and the base is always the repository's default branch — a branch
   stacked on another feature branch is measured against the wrong one. The
   readout is absent entirely on a repository with no `origin`.
+
+### Changed
+
+- **A worktree's dev-server port is now reserved, not guessed.** `LICH_WORKTREE_PORT`
+  was a hash of the checkout's path: stable, but blind. Two worktrees of one project
+  could hash onto the same number, and neither knew about the dev server, database or
+  container already sitting on that port — the collision showed up as the second
+  `pnpm dev` refusing to start, with nothing pointing at why. lich now keeps a
+  reservation per checkout: a worktree is offered its hashed number, and takes it only
+  if no other checkout holds it and nothing on the machine is listening on it,
+  otherwise the next free port in the same range. A checkout keeps its number for good
+  — across restarts of lich, of the session, and of your dev server — and gives it back
+  when its directory is gone, so removing a worktree returns the port to the pool.
 
 ## [0.27.0] - 2026-08-07
 

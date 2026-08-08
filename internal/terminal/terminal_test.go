@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -36,6 +35,7 @@ type stubBins struct {
 	providerErr     error
 	costOn          bool
 	ledgers         map[string]stubLedger
+	ports           map[string]int
 }
 
 // stubLedger mirrors one session_costs row.
@@ -57,6 +57,21 @@ func newCostStore(providerSession string) stubBins {
 func (s stubBins) ProviderBin(_, _ string) string       { return s.bin }
 func (s stubBins) WorktreeSetup(_ string) string        { return s.setup }
 func (s stubBins) SetProviderSession(_, _ string) error { return nil }
+
+func (s stubBins) WorktreePorts() map[string]int {
+	if s.ports == nil {
+		return map[string]int{}
+	}
+	return s.ports
+}
+
+func (s stubBins) SetWorktreePort(path string, port int) error {
+	if s.ports != nil {
+		s.ports[path] = port
+	}
+	return nil
+}
+
 func (s stubBins) ProviderSession(_ string) (string, error) {
 	return s.providerSession, s.providerErr
 }
@@ -498,19 +513,65 @@ func TestPTYEcho(t *testing.T) {
 	}
 }
 
+// TestReserveWorktreePortKeepsReservation proves a checkout that already holds
+// a port keeps it untouched — probing would read its own running dev server as
+// "taken" and move the checkout off the port it is serving on.
+func TestReserveWorktreePortKeepsReservation(t *testing.T) {
+	store := stubBins{ports: map[string]int{"/src/repo": 24007}}
+	s := &Service{store: store}
+	if got := s.reserveWorktreePort("/src/repo/"); got != 24007 {
+		t.Fatalf("reserveWorktreePort = %d, want the reserved 24007", got)
+	}
+	if store.ports["/src/repo"] != 24007 {
+		t.Fatalf("reservation was rewritten to %d", store.ports["/src/repo"])
+	}
+}
+
+// TestReserveWorktreePortRecordsAllocation proves a first-time checkout is
+// written into the table under its cleaned path — without that write the next
+// checkout to collide with it would never learn the port is spoken for.
+func TestReserveWorktreePortRecordsAllocation(t *testing.T) {
+	store := stubBins{ports: map[string]int{}}
+	s := &Service{store: store}
+	got := s.reserveWorktreePort("/src/repo/")
+	if got < worktreePortBase || got >= worktreePortBase+worktreePortCount {
+		t.Fatalf("reserveWorktreePort = %d, outside the window", got)
+	}
+	if store.ports["/src/repo"] != got {
+		t.Fatalf("reserved %d but the table holds %v", got, store.ports)
+	}
+}
+
+// TestReserveWorktreePortSeparatesCollidingCheckouts proves the end-to-end
+// point of the reservation: two checkouts that hash to one port do not both
+// leave with it.
+func TestReserveWorktreePortSeparatesCollidingCheckouts(t *testing.T) {
+	first := "/src/repo/feature-a"
+	// A path is not free to choose — it has to hash onto first's port — so the
+	// collision is manufactured by seeding the table with first's number under
+	// a path that is not the one being allocated.
+	store := stubBins{ports: map[string]int{"/src/other": worktreePort(first)}}
+	s := &Service{store: store}
+	if got := s.reserveWorktreePort(first); got == worktreePort(first) {
+		t.Fatalf("reserveWorktreePort(%q) = %d, the port /src/other holds", first, got)
+	}
+}
+
 // TestSessionEnvInjectsCoordinates proves a spawned PTY gets the loopback
 // coordinates a Claude Code hook needs plus its checkout's dev-server port,
-// without aliasing the shared base env.
+// without aliasing the shared base env. The port is the one the checkout holds
+// in the reservation table, not a number recomputed here.
 func TestSessionEnvInjectsCoordinates(t *testing.T) {
-	s := &Service{env: []string{"A=1"}, ws: &transport{port: 4321, token: "tok"}}
+	store := stubBins{ports: map[string]int{"/src/repo": 24007}}
+	s := &Service{env: []string{"A=1"}, store: store, ws: &transport{port: 4321, token: "tok"}}
 	env := s.sessionEnv("sess", "/src/repo")
 
 	want := map[string]bool{
-		"A=1":                  true,
-		"LICH_PORT=4321":       true,
-		"LICH_TOKEN=tok":       true,
-		"LICH_SESSION_ID=sess": true,
-		"LICH_WORKTREE_PORT=" + strconv.Itoa(worktreePort("/src/repo")): true,
+		"A=1":                      true,
+		"LICH_PORT=4321":           true,
+		"LICH_TOKEN=tok":           true,
+		"LICH_SESSION_ID=sess":     true,
+		"LICH_WORKTREE_PORT=24007": true,
 	}
 	for _, e := range env {
 		delete(want, e)
@@ -527,10 +588,11 @@ func TestSessionEnvInjectsCoordinates(t *testing.T) {
 // report to, so the hook coordinates are left out (the hook will no-op) — but
 // the checkout's dev-server port, which owes the transport nothing, still lands.
 func TestSessionEnvNoTransport(t *testing.T) {
-	s := &Service{env: []string{"A=1"}}
+	store := stubBins{ports: map[string]int{"/src/repo": 24007}}
+	s := &Service{env: []string{"A=1"}, store: store}
 	env := s.sessionEnv("sess", "/src/repo")
 
-	want := []string{"A=1", "LICH_WORKTREE_PORT=" + strconv.Itoa(worktreePort("/src/repo"))}
+	want := []string{"A=1", "LICH_WORKTREE_PORT=24007"}
 	if !slices.Equal(env, want) {
 		t.Fatalf("env = %v, want %v", env, want)
 	}
@@ -544,7 +606,7 @@ func TestSessionEnvNoTransport(t *testing.T) {
 // TestSessionEnvWithoutCwd proves a session with no start directory names no
 // checkout, so no port is invented for it.
 func TestSessionEnvWithoutCwd(t *testing.T) {
-	s := &Service{env: []string{"A=1"}}
+	s := &Service{env: []string{"A=1"}, store: stubBins{}}
 	env := s.sessionEnv("sess", "")
 	if len(env) != 1 || env[0] != "A=1" {
 		t.Fatalf("expected base env unchanged, got %v", env)

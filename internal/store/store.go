@@ -54,6 +54,11 @@ CREATE TABLE IF NOT EXISTS settings (
     PRIMARY KEY (key, project_id)
 );
 
+CREATE TABLE IF NOT EXISTS worktree_ports (
+    path TEXT    NOT NULL PRIMARY KEY,
+    port INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS session_costs (
     session_id      TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     transcript_id   TEXT NOT NULL,
