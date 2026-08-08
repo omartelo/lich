@@ -5,7 +5,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-
 import { CSS } from "@dnd-kit/utilities"
 import { useSortableList, verticalAxis } from "@/lib/use-sortable-list"
 import { cn } from "@/lib/utils"
-import { baseName } from "@/lib/paths"
+import { checkoutLabel } from "@/lib/git/checkout-label"
 import { groupKey, type Session } from "@/lib/session/sessions"
 import { useProjects } from "@/providers/projects"
 import { SessionCard } from "./SessionCard"
@@ -40,12 +40,12 @@ interface SessionGroupProps {
 }
 
 // SessionGroup renders one worktree's sessions under a static divider titled
-// with the worktree folder name; the branch stays on each card. The title reads
-// the group's own checkout path, never a session's live cwd, so a `cd` deeper
-// into the tree never re-buckets the group. The isolated DndContext is what
-// confines a card drag to reordering within the group; the group itself is a
-// sortable of the sidebar's outer context, dragged by its header alone so the
-// two never contend for the same pointer.
+// with the worktree's name; the branch stays on each card. Both the title and
+// the bucketing read the group's own checkout path, never a session's live cwd,
+// so a `cd` deeper into the tree never re-buckets the group or renames it. The
+// isolated DndContext is what confines a card drag to reordering within the
+// group; the group itself is a sortable of the sidebar's outer context, dragged
+// by its header alone so the two never contend for the same pointer.
 //
 // The card actions needing nothing but a session id — select, rename, open a
 // terminal beside it — are wired here rather than threaded down from the
@@ -67,7 +67,7 @@ export function SessionGroup({
   const navigate = useNavigate()
   const ids = sessions.map((session) => session.id)
   const { sensors, onDragEnd } = useSortableList(ids, onReorder)
-  const name = baseName(path || projectPath)
+  const name = checkoutLabel(path, projectPath, projectId)
   const group = useSortable({ id: groupKey(path), disabled: !showHeader })
   // The PR card keys off the group's real checkout — the project root for the
   // root group (empty path), else the worktree — so a root project on a feature

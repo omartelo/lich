@@ -93,6 +93,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with a single group has no header and is unchanged. A pinned session still
   carries its group to the top, which is the one order a drag cannot beat.
 
+- **A worktree group's header spells the whole worktree name.** Worktrees named
+  the way most repositories name branches — `feat/x`, `fix/x` — came out of the
+  divider as `x`, because the header showed only the last folder of the
+  checkout's path. Two worktrees off the same ticket therefore drew the identical
+  header, and the divider stopped telling you which sessions were whose. The
+  header now reads the name the worktree was created with, slashes and all. A
+  worktree without a slash in it looks exactly as it did.
+
 - **lich asks which agents you use, instead of assuming Claude Code.** The first
   launch opened on a Claude session because Claude was the only harness lich's
   author ran: a machine with Codex and nothing else met a first session that died
