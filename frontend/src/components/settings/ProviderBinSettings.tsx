@@ -23,12 +23,15 @@ export function ProviderBinSettings({
   projectId?: string
 }) {
   const { projects } = useProjects()
-  const { showContextUsage, setShowContextUsage } = useSettings()
+  const { showContextUsage, setShowContextUsage, costBudget, setCostBudget } = useSettings()
   const showCost = useCostReadout()
   const project = projects.find((p) => p.id === projectId)
   const key = binKey(providerId)
   const [globalBin, setGlobalBin] = useState("")
   const [projectBin, setProjectBin] = useState("")
+  // The field keeps the raw string so a half-typed "1." survives the keystroke;
+  // the stored budget is the parsed value, and an emptied field is no budget.
+  const [budget, setBudget] = useState(() => (costBudget > 0 ? String(costBudget) : ""))
 
   useEffect(() => {
     void Store.GetSetting(key, GLOBAL_SCOPE).then(setGlobalBin)
@@ -44,6 +47,11 @@ export function ProviderBinSettings({
   const persistGlobal = (value: string) => {
     setGlobalBin(value)
     void Store.SetSetting(key, GLOBAL_SCOPE, value.trim())
+  }
+
+  const persistBudget = (value: string) => {
+    setBudget(value)
+    setCostBudget(Number(value))
   }
 
   const persistProject = (value: string) => {
@@ -111,6 +119,26 @@ export function ProviderBinSettings({
               aria-label="Show session cost in the footer"
             />
           </SettingBlock>
+
+          {/* A ceiling is only ever seen through the readout, so it is offered
+              beside it and hidden with it. */}
+          {showCost && (
+            <SettingBlock
+              title="Spend ceiling"
+              description="Colour the cost in the footer as a session approaches this many dollars — amber at 80%, red at 95%. It is a warning, not a limit: nothing is stopped, and the figure it watches is API pricing from a table. Leave empty for none."
+            >
+              <Input
+                type="number"
+                min={0}
+                step={1}
+                value={budget}
+                onChange={(event) => persistBudget(event.target.value)}
+                placeholder="No ceiling"
+                aria-label="Session spend ceiling in dollars"
+                className="w-40 font-mono"
+              />
+            </SettingBlock>
+          )}
         </>
       )}
     </>

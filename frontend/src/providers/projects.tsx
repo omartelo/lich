@@ -5,7 +5,7 @@ import { Bell, Folder } from "lucide-react"
 import { useMatch, useNavigate } from "react-router-dom"
 import type { Project, RecentProject } from "@/lib/api-types"
 import type { StoredProject as StoreProject } from "@/lib/api-types"
-import { ProjectService, Store } from "@/lib/rpc"
+import { ProjectService, Store, System } from "@/lib/rpc"
 import { onAppEvent } from "@/lib/app-events"
 import {
   activeSessionId,
@@ -28,6 +28,7 @@ import { applyOrder, pinFirst } from "@/lib/reorder"
 import { displayPath } from "@/lib/paths"
 import { defaultProviderKind } from "@/lib/providers-store"
 import {
+  decideDesktopNotice,
   isIdEvent,
   isStatusEvent,
   isTitleEvent,
@@ -37,6 +38,7 @@ import {
   toSessionStatus,
   TOUCHED_EVENT,
 } from "@/lib/session/session-events"
+import { NotificationsOptIn } from "@/components/NotificationsOptIn"
 import { refreshGitStatus } from "@/lib/git/use-git-status"
 import { markSessionSeen } from "@/lib/session/use-session-status"
 import { isRecordingTarget, matchesCombo } from "@/lib/hotkeys"
@@ -148,7 +150,16 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   // event subscription without re-subscribing on every navigation.
   const activeProjectIdRef = useRef(activeProjectId)
   activeProjectIdRef.current = activeProjectId
-  const { hotkeys } = useSettings()
+  const { hotkeys, desktopNotifications, setDesktopNotifications } = useSettings()
+  // Read inside the same once-only subscription, for the same reason as the
+  // active project: a preference change must not tear down the status listener.
+  const desktopNotificationsRef = useRef(desktopNotifications)
+  desktopNotificationsRef.current = desktopNotifications
+  // Whether the opt-in dialog is up. Raised by the first report that would have
+  // notified, never at launch — the question lands with the event that motivates
+  // it. Dismissing without an answer leaves the preference unset, so the next
+  // one asks again.
+  const [askNotifications, setAskNotifications] = useState(false)
 
   const applyLoaded = useCallback((loaded: StoreProject[]) => {
     setProjects(loaded.map(toProject))
@@ -395,14 +406,28 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         return
       }
       const { id } = data
+      const projectId = projectOfSession(sessionsRef.current, id)
+      const project = sessionsRef.current[projectId]
+      if (!project) {
+        return
+      }
+      const label = project.sessions.find((s) => s.id === id)?.label ?? UNLABELED_SESSION
+      const projectName = projectsRef.current.find((p) => p.id === projectId)?.name
+
+      // The desktop channel answers to window focus, decided by
+      // decideDesktopNotice; the toast below keeps its own, unchanged rule. The
+      // two are independent: a report can raise both, either, or neither.
+      const notice = decideDesktopNotice(document.hasFocus(), desktopNotificationsRef.current)
+      if (notice === "ask") {
+        setAskNotifications(true)
+      } else if (notice === "notify") {
+        // A failure is the backend's to log; the page has nothing to do with it.
+        System.Notify(`${label} needs your input`, projectName ?? "").catch(() => {})
+      }
+
       if (!shouldToastAttention(sessionsRef.current, id, activeProjectIdRef.current)) {
         return
       }
-      const projectId = projectOfSession(sessionsRef.current, id)
-      const label =
-        sessionsRef.current[projectId]?.sessions.find((s) => s.id === id)?.label ??
-        UNLABELED_SESSION
-      const projectName = projectsRef.current.find((p) => p.id === projectId)?.name
       toast(
         <div className="flex min-w-0 flex-col">
           <span>{label} needs your input</span>
@@ -554,7 +579,19 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     ],
   )
 
-  return <ProjectsContext.Provider value={value}>{children}</ProjectsContext.Provider>
+  return (
+    <ProjectsContext.Provider value={value}>
+      {children}
+      <NotificationsOptIn
+        open={askNotifications}
+        onDismiss={() => setAskNotifications(false)}
+        onDecide={(enabled) => {
+          setDesktopNotifications(enabled)
+          setAskNotifications(false)
+        }}
+      />
+    </ProjectsContext.Provider>
+  )
 }
 
 export function useProjects(): ProjectsValue {

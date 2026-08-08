@@ -8,14 +8,14 @@ import type { DockTab } from "@/components/dock/RightDock"
 import { useActiveSession } from "@/lib/session/use-active-session"
 import { useSessionUsage } from "@/lib/session/use-session-usage"
 import { useCostReadout } from "@/lib/use-cost-readout"
-import { formatCost } from "@/lib/session/session-cost"
+import { budgetShare, formatCost } from "@/lib/session/session-cost"
 import { displayPath } from "@/lib/paths"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { usePullRequest } from "@/lib/pulls/use-pull-request"
 import { useSettings } from "@/providers/settings"
 import { cn } from "@/lib/utils"
 import { DiffStat } from "./DiffStat"
-import { ContextRing, contextColor } from "./ContextRing"
+import { ContextRing, usageColor } from "./ContextRing"
 import { SessionModel } from "./SessionModel"
 import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -100,7 +100,7 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
   const usage = useSessionUsage(sessionId)
   // The footer context readout is opt-out (Settings › Providers); the cost
   // beside it is opt-in, and off for everyone not billed per token.
-  const { showContextUsage } = useSettings()
+  const { showContextUsage, costBudget } = useSettings()
   const showCost = useCostReadout()
   const status = useGitStatus(path)
   const pr = usePullRequest(path, status?.branch ?? "", status?.head ?? "")
@@ -119,16 +119,30 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
 
   // What the session has cost, beside the ring. Rendered only when the backend
   // sent a number: on a subscription — and for a model no price table knows —
-  // there is nothing here at all, which is the point of the setting.
+  // there is nothing here at all, which is the point of the setting. With a
+  // spend ceiling set it takes the same colour ramp as the context ring, so a
+  // session running long shows it in the corner of the eye rather than only to
+  // whoever reads the figure.
   const costReadout =
     usage && showCost && usage.costUsd !== null ? (
       <Tooltip>
-        <TooltipTrigger render={<span className="tabular-nums" />}>
+        <TooltipTrigger
+          render={
+            <span
+              className={cn("tabular-nums", usageColor(budgetShare(usage.costUsd, costBudget)))}
+            />
+          }
+        >
           {formatCost(usage.costUsd)}
         </TooltipTrigger>
         <TooltipContent side="top" className="border border-border bg-card text-foreground">
           <div className="flex flex-col gap-1">
             <span className="font-medium">Session cost</span>
+            {costBudget > 0 && (
+              <span className="font-mono text-xs text-muted-foreground">
+                {formatCost(usage.costUsd)} of {formatCost(costBudget)} budget
+              </span>
+            )}
             <span className="text-xs text-muted-foreground">
               API pricing for every turn this session has run, this conversation and the ones it
               cleared.
@@ -146,7 +160,7 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
         <TooltipTrigger
           render={
             <span
-              className={cn("flex items-center gap-1.5 tabular-nums", contextColor(usage.percent))}
+              className={cn("flex items-center gap-1.5 tabular-nums", usageColor(usage.percent))}
             />
           }
         >
@@ -156,7 +170,7 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
         <TooltipContent side="top" className="border border-border bg-card text-foreground">
           <div className="flex flex-col gap-1.5">
             <span className="font-medium">Context window</span>
-            <div className={cn("flex items-center gap-2", contextColor(usage.percent))}>
+            <div className={cn("flex items-center gap-2", usageColor(usage.percent))}>
               <span className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
                 <span
                   className="block h-full rounded-full bg-current"

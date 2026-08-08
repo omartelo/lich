@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { filterPalette, matchesQuery, paletteSessions } from "./command-palette"
+import { filterPalette, matchesQuery, paletteMessages, paletteSessions } from "./command-palette"
 import type { Project } from "@/lib/api-types"
 import type { SessionState } from "./sessions"
 
@@ -85,5 +85,54 @@ describe("filterPalette", () => {
     const r = filterPalette("", all, projects)
     expect(r.sessions).toHaveLength(3)
     expect(r.projects).toHaveLength(2)
+  })
+})
+
+describe("paletteMessages", () => {
+  const all = paletteSessions(projects, sessions)
+
+  it("carries the session a match belongs to, so the row can open it", () => {
+    const rows = paletteMessages([{ id: "s3", snippet: "wire the auth middleware", count: 2 }], all)
+    expect(rows).toEqual([
+      {
+        sessionId: "s3",
+        projectId: "p2",
+        projectName: "revu",
+        label: "Wire revu auth middleware",
+        kind: "claude",
+        path: "/home/u/try/revu",
+        snippet: "wire the auth middleware",
+        count: 2,
+      },
+    ])
+  })
+
+  it("keeps the order the search returned", () => {
+    const rows = paletteMessages(
+      [
+        { id: "s3", snippet: "third", count: 1 },
+        { id: "s1", snippet: "first", count: 1 },
+      ],
+      all,
+    )
+    expect(rows.map((r) => r.sessionId)).toEqual(["s3", "s1"])
+  })
+
+  // The search is debounced, so its reply can name a session closed while it
+  // was in flight. That row would have nowhere to jump to.
+  it("drops a match whose session is gone", () => {
+    const rows = paletteMessages(
+      [
+        { id: "s9", snippet: "orphan", count: 1 },
+        { id: "s1", snippet: "still here", count: 1 },
+      ],
+      all,
+    )
+    expect(rows.map((r) => r.sessionId)).toEqual(["s1"])
+  })
+
+  it("is empty when the search found nothing or never ran", () => {
+    expect(paletteMessages([], all)).toEqual([])
+    expect(paletteMessages(null, all)).toEqual([])
   })
 })
