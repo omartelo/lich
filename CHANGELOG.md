@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A session card says when its base branch moved, and whether a merge would
+  collide.** Running several worktrees at once, the first one to land leaves the
+  others stale without a word — and you found out at the Merge button, one branch
+  at a time. The card's branch row now carries the answer: a plain count of the
+  commits `origin/main` has picked up since, or an amber alert naming how many
+  files a merge would conflict on. Hovering the card spells it out — the base
+  branch by name, the commit count, and up to three of the conflicting paths.
+  Nothing has to be checked out, merged or fetched by hand to see it, and knowing
+  which branches will fight is what lets you pick the order to land them in: one
+  conflict to resolve instead of one per worktree.
+
+  It reads committed work only, so an agent mid-edit shows what it last
+  committed, and the base is always the repository's default branch — a branch
+  stacked on another feature branch is measured against the wrong one. The
+  readout is absent entirely on a repository with no `origin`.
+
 ## [0.27.0] - 2026-08-07
 
 ### Added

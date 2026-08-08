@@ -12,11 +12,12 @@ const GIT_POLL: PollCadence = { fastMs: 1_000, slowMs: 3_000, idleTicks: 5 }
 
 async function fetchGitStatus(path: string): Promise<GitStatus | null> {
   try {
-    const [branch, diff] = await Promise.all([
+    const [branch, diff, base] = await Promise.all([
       ProjectService.Branch(path),
       ProjectService.Diff(path),
+      ProjectService.BaseStatus(path),
     ])
-    return { branch, ...diff }
+    return { branch, ...diff, base }
   } catch {
     return null
   }

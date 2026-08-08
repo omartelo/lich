@@ -8,6 +8,7 @@
 
 import type {
   AppUpdateStatus,
+  BaseStatus,
   BranchRules,
   Branches,
   DetectedProvider,
@@ -148,6 +149,9 @@ export const ProjectService = {
     call<string>("project.PickSaveFile", [title, defaultName]),
   Branch: (path: string) => call<string>("project.Branch", [path]),
   Diff: (path: string) => call<DiffStats>("project.Diff", [path]),
+  /** How far the checkout's base branch has moved and what a merge would
+   * collide on. null when the repository has no origin to measure against. */
+  BaseStatus: (path: string) => call<BaseStatus | null>("project.BaseStatus", [path]),
   DiffText: (path: string) => call<string>("project.DiffText", [path]),
   /** Tracked files, repo-relative and slash-separated, sorted (git ls-files). */
   Tree: (path: string) => call<string[] | null>("project.Tree", [path]),
