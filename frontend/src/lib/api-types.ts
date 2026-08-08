@@ -265,6 +265,14 @@ export interface StoredSession {
   pinned: boolean
 }
 
+/** internal/terminal.TranscriptMatch — a session whose conversation mentions a
+ * search query, with its newest matching message. */
+export interface TranscriptMatch {
+  id: string
+  snippet: string
+  count: number
+}
+
 /** internal/store.Project — a persisted project with its session state. */
 export interface StoredProject {
   id: string

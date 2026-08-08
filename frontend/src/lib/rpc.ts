@@ -31,6 +31,7 @@ import type {
   ThemeDefinition,
   ThemeGitInstallResult,
   ThemeImportResult,
+  TranscriptMatch,
   Worktree,
 } from "./api-types"
 
@@ -124,6 +125,11 @@ export const Terminal = {
   SetVisible: (id: string, visible: boolean) => call<null>("terminal.SetVisible", [id, visible]),
   // Base64 tail of a session's output, to reseed scrollback after a reload.
   Replay: (id: string) => call<string>("terminal.Replay", [id]),
+  /** Which of these sessions have talked about the query, and what they said.
+   * Empty for a query under three characters, and for a session whose current
+   * conversation the backend cannot read. */
+  SearchTranscripts: (ids: string[], query: string) =>
+    call<TranscriptMatch[] | null>("terminal.SearchTranscripts", [ids, query]),
   Close: (id: string) => call<null>("terminal.Close", [id]),
 }
 

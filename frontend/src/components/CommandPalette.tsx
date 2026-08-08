@@ -1,13 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import { useNavigate } from "react-router-dom"
-import { CornerDownLeft, Folder, Search } from "lucide-react"
+import { CornerDownLeft, Folder, MessageSquareText, Search } from "lucide-react"
 import { useProjects } from "@/providers/projects"
 import { useSettings } from "@/providers/settings"
 import { isRecordingTarget, matchesCombo } from "@/lib/hotkeys"
 import { useSessionStatus } from "@/lib/session/use-session-status"
 import { SessionStatusIcon } from "@/components/sidebar/SessionStatusIcon"
-import { filterPalette, paletteSessions, type PaletteSession } from "@/lib/session/command-palette"
+import {
+  filterPalette,
+  paletteSessions,
+  type PaletteMessage,
+  type PaletteSession,
+} from "@/lib/session/command-palette"
+import { useTranscriptSearch } from "@/lib/session/use-transcript-search"
 import type { Project } from "@/lib/api-types"
 import { cn } from "@/lib/utils"
 
@@ -47,7 +53,12 @@ export function CommandPalette() {
 
   const all = useMemo(() => paletteSessions(projects, sessions), [projects, sessions])
   const results = useMemo(() => filterPalette(query, all, projects), [query, all, projects])
-  const total = results.sessions.length + results.projects.length
+  // What was said inside the sessions, not just their names. It arrives after
+  // the two name-matched groups (it is a disk read behind a debounce), so it is
+  // listed last and never moves a row the user is already aiming at.
+  const messages = useTranscriptSearch(query, all, open)
+  const messageOffset = results.sessions.length + results.projects.length
+  const total = messageOffset + messages.length
 
   useEffect(() => setSelected(0), [query])
   const active = Math.min(selected, Math.max(0, total - 1))
@@ -65,6 +76,13 @@ export function CommandPalette() {
       const s = results.sessions[index]
       if (s) {
         openProject(s.projectId, s.sessionId)
+      }
+      return
+    }
+    if (index >= messageOffset) {
+      const m = messages[index - messageOffset]
+      if (m) {
+        openProject(m.projectId, m.sessionId)
       }
       return
     }
@@ -163,6 +181,24 @@ export function CommandPalette() {
                     })}
                   </div>
                 )}
+                {messages.length > 0 && (
+                  // biome-ignore lint/a11y/useSemanticElements: same as above — a listbox takes group, not fieldset.
+                  <div role="group" aria-label="Messages">
+                    <GroupLabel>Messages</GroupLabel>
+                    {messages.map((message, k) => {
+                      const index = messageOffset + k
+                      return (
+                        <MessageRow
+                          key={message.sessionId}
+                          message={message}
+                          selected={index === active}
+                          onSelect={() => setSelected(index)}
+                          onRun={() => runIndex(index)}
+                        />
+                      )
+                    })}
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -245,6 +281,37 @@ function SessionRow({
           <span className="text-foreground/70">{session.projectName}</span> · {session.path}
         </span>
       </span>
+    </Row>
+  )
+}
+
+// A message hit leads with what was said and names the session under it: the
+// snippet is why the row is here, but the session is what the row opens.
+function MessageRow({
+  message,
+  selected,
+  onSelect,
+  onRun,
+}: {
+  message: PaletteMessage
+  selected: boolean
+  onSelect: () => void
+  onRun: () => void
+}) {
+  return (
+    <Row selected={selected} onSelect={onSelect} onRun={onRun}>
+      <MessageSquareText className="size-4 shrink-0 text-muted-foreground" />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-sm">{message.snippet}</span>
+        <span className="truncate font-mono text-xs text-muted-foreground">
+          <span className="text-foreground/70">{message.label}</span> · {message.projectName}
+        </span>
+      </span>
+      {message.count > 1 && (
+        <span className="shrink-0 font-mono text-[0.625rem] text-muted-foreground">
+          {message.count} matches
+        </span>
+      )}
     </Row>
   )
 }
