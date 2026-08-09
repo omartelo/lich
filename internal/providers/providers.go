@@ -13,6 +13,7 @@ const (
 	Claude   = "claude"
 	Codex    = "codex"
 	OpenCode = "opencode"
+	OMP      = "omp"
 	Crush    = "crush"
 )
 
@@ -26,12 +27,13 @@ type Provider struct {
 
 // Registry is every provider lich knows about, in display order. Claude Code is
 // first: it is the default, and the plugin's home. It and Codex are the two
-// wired for resume and for the plugin's reports — opencode and Crush just spawn
-// their TUI in a PTY.
+// wired for resume and for the plugin's reports — the rest just spawn their TUI
+// in a PTY.
 var Registry = []Provider{
 	{ID: Claude, Name: "Claude Code", Binaries: []string{"claude"}},
 	{ID: Codex, Name: "Codex", Binaries: []string{"codex"}},
 	{ID: OpenCode, Name: "opencode", Binaries: []string{"opencode"}},
+	{ID: OMP, Name: "oh-my-pi", Binaries: []string{"omp"}},
 	{ID: Crush, Name: "Crush", Binaries: []string{"crush"}},
 }
 

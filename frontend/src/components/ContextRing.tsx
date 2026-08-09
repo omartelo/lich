@@ -1,9 +1,12 @@
 import { cn } from "@/lib/utils"
 
-// contextColor is the semantic text colour for a context-window fill, shared by
-// the ring, the footer percent, and the tooltip bar so they always agree: muted
-// at rest, amber as the window fills, red near the limit.
-export function contextColor(percent: number): string {
+// usageColor is the semantic text colour for a share of something bounded, on
+// one 0–100 scale: muted at rest, amber as it fills, red near the limit. The
+// context ring, the footer percent and the tooltip bar read against it, and so
+// does the cost readout against its spend ceiling — a budget half spent and a
+// context window half full mean the same thing to the eye, so they must not be
+// two palettes.
+export function usageColor(percent: number): string {
   if (percent >= 95) {
     return "text-red-500"
   }
@@ -23,7 +26,7 @@ interface ContextRingProps {
 // label (the number lives beside it, at footer size where it is legible). The
 // radius 15.9155 makes the circumference exactly 100, so the arc's dash length
 // is the percent directly. Strokes use currentColor, so the caller sets the
-// colour (see contextColor) once for the ring and its adjacent text.
+// colour (see usageColor) once for the ring and its adjacent text.
 export function ContextRing({ percent, className }: ContextRingProps) {
   return (
     <svg

@@ -74,6 +74,15 @@ what re-arms the spinner after them. Every tool re-reports `busy` (idempotent);
   the session already focused. It reads the raw event rather than the store: the
   store collapses a repeat state into no notification, which would swallow a
   toast.
+- **Desktop notification** — same handler, `system.Notify`
+  (`internal/system/system.go`, zenity's per-OS notifier). It answers to
+  `document.hasFocus()`, not to the toast's rule: with the window unfocused every
+  `waiting` session is unseen, the focused one included, so that exclusion does
+  not apply here. The page decides, the backend only delivers — focus is a fact
+  only the page holds. Gated on an opt-in (`lich.notifications.desktop`, tri-state
+  so "refused" and "not asked" stay apart): the first report that would have
+  notified puts the dialog instead (`NotificationsOptIn`), and **Settings ›
+  Notifications** owns the switch from then on.
 
 ## Known ceilings
 
@@ -100,5 +109,12 @@ what re-arms the spinner after them. Every tool re-reports `busy` (idempotent);
   next PTY spawn, so what lingers is a check on a card whose provider has left.
   The plugin registers a `SessionEnd` hook anyway: an unknown event name is
   ignored rather than rejected, so it starts working the day Codex adds one.
+- The desktop notification is not clickable: clicking it focuses nothing and
+  routes nowhere, which is why its text names the session and the project — the
+  user navigates by hand. Making it actionable is per-OS and none of it is
+  cheap: Linux needs `notify-send --wait --action`, holding a process per
+  notification; macOS needs lich shipped as a signed `.app` bundle with
+  `UNUserNotificationCenter`; Windows needs a registered AppUserModelID with a
+  COM activation handler.
 - Adding another state beyond `busy`/`done`/`waiting`/`idle` is a contract
   change — see the versioning note in the README.

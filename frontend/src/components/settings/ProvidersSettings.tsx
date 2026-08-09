@@ -24,7 +24,11 @@ import { Switch } from "@/components/ui/switch"
 // it in New Session. A provider that is not installed cannot be turned on — but
 // one already enabled (Claude, on by default) stays togglable so it is never
 // trapped off-screen.
-export function ProvidersSettings() {
+//
+// installedOnly narrows the list to what is on PATH, for the first-run dialog:
+// there the question is which of your agents to use, so "Not found on PATH" rows
+// are noise. In Settings they are the useful state and the full roster shows.
+export function ProvidersSettings({ installedOnly = false }: { installedOnly?: boolean }) {
   const providers = useProviders()
   const defaultProvider = useDefaultProvider()
 
@@ -32,7 +36,8 @@ export function ProvidersSettings() {
     return <p className="py-5 text-sm text-muted-foreground">Detecting providers…</p>
   }
 
-  const enabled = enabledProviders(providers)
+  const listed = installedOnly ? providers.filter((provider) => provider.installed) : providers
+  const enabled = enabledProviders(listed)
 
   return (
     <div className="flex flex-col">
@@ -65,7 +70,7 @@ export function ProvidersSettings() {
         </SettingBlock>
       )}
       <div className="flex flex-col divide-y divide-border">
-        {providers.map((provider) => (
+        {listed.map((provider) => (
           <div key={provider.id} className="flex items-center justify-between gap-4 py-4">
             <div className="flex min-w-0 items-center gap-3">
               <ProviderIcon kind={provider.id} />

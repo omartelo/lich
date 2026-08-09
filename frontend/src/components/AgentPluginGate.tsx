@@ -22,34 +22,44 @@ import {
   UPDATE_DISMISSED_KEY,
 } from "@/lib/update/plugin-gate"
 import { AgentPlugin } from "@/lib/rpc"
+import { enabledProviders, useProviders, useStoredDefaultProvider } from "@/lib/providers-store"
 import { errorText } from "@/lib/utils"
 import { readPref, writePref } from "@/lib/prefs"
 import { runWithToast } from "@/lib/toast-async"
 
 // AgentPluginGate checks on startup whether the lich plugin is installed and
-// current in every provider CLI that can run it. Missing → an install modal
+// current in the provider CLIs the user turned on. Missing → an install modal
 // listing those CLIs, ticked by default; a newer release → a non-blocking,
 // actionable update toast. Plugin hooks only load in new sessions, so both
 // actions remind the user to restart. Any failure is silent — it must never
 // block or break startup.
+//
+// It waits for a stored default provider, which is what ProviderSetupGate writes
+// on a first launch: asking to install a plugin before the user has said which
+// harnesses they use would stack two modals and offer one they are about to turn
+// off.
 export function AgentPluginGate() {
   const [offer, setOffer] = useState<Status[]>([])
   const [picked, setPicked] = useState<string[]>([])
   const [installing, setInstalling] = useState(false)
-  // Guard React strict-mode's double effect: the check runs once per start.
+  const providers = useProviders()
+  const storedDefault = useStoredDefaultProvider()
+  // Guard React strict-mode's double effect, and the re-renders the provider
+  // store emits: the check runs once per start.
   const checked = useRef(false)
 
   useEffect(() => {
-    if (checked.current) return
+    if (checked.current || storedDefault === "") return
     checked.current = true
-    void check()
-  }, [])
+    void check(enabledProviders(providers).map((p) => p.id))
+  }, [providers, storedDefault])
 
-  const check = async () => {
+  const check = async (enabled: string[]) => {
     let action: PluginAction
     try {
+      const statuses = await AgentPlugin.Status()
       action = decidePluginAction(
-        await AgentPlugin.Status(),
+        statuses.filter((s) => enabled.includes(s.provider)),
         readPref(INSTALL_DISMISSED_KEY) === DISMISSED_FLAG,
         readPref(UPDATE_DISMISSED_KEY),
       )

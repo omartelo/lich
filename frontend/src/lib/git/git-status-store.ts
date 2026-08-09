@@ -1,3 +1,5 @@
+import type { BaseStatus } from "@/lib/api-types"
+
 export interface GitStatus {
   branch: string
   files: number
@@ -5,6 +7,9 @@ export interface GitStatus {
   deleted: number
   /** The HEAD commit — how a subscriber notices a commit, not just an edit. */
   head: string
+  /** How the checkout stands against the branch it merges into; null when the
+   * repository has no origin to measure against. */
+  base: BaseStatus | null
 }
 
 export type GitStatusFetcher = (path: string) => Promise<GitStatus | null>
@@ -33,6 +38,17 @@ interface Entry {
   quiet: number
 }
 
+// The conflict list is compared by content, not by length: two merges can
+// collide on the same number of files and not the same files, and a badge that
+// kept the old paths would name files the checkout no longer fights over.
+const sameBase = (a: BaseStatus | null, b: BaseStatus | null): boolean =>
+  a === b ||
+  (a != null &&
+    b != null &&
+    a.base === b.base &&
+    a.behind === b.behind &&
+    (a.conflicts ?? []).join("\n") === (b.conflicts ?? []).join("\n"))
+
 const unchanged = (a: GitStatus | null, b: GitStatus | null): boolean =>
   a === b ||
   (a !== null &&
@@ -41,7 +57,8 @@ const unchanged = (a: GitStatus | null, b: GitStatus | null): boolean =>
     a.files === b.files &&
     a.added === b.added &&
     a.deleted === b.deleted &&
-    a.head === b.head)
+    a.head === b.head &&
+    sameBase(a.base, b.base))
 
 // createGitStatusStore shares one poll loop per path across every subscriber.
 // Before this, each session card ran its own interval: 20 cards on the same

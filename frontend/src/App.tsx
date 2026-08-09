@@ -15,6 +15,7 @@ import { Toaster } from "@/components/ui/sonner"
 import { AgentPluginGate } from "@/components/AgentPluginGate"
 import { AppUpdateGate } from "@/components/AppUpdateGate"
 import { PatchNotesGate } from "@/components/PatchNotesGate"
+import { ProviderSetupGate } from "@/components/ProviderSetupGate"
 import { CommandPalette } from "@/components/CommandPalette"
 
 // Layout is persistent across navigation: the project tabs, session sidebar and
@@ -92,8 +93,14 @@ function App() {
           <CommandPalette />
         </ProjectsProvider>
       </HashRouter>
+      {/* Holds its prompt until a provider has been chosen, so a first launch
+          asks which harnesses you use before offering to install into them. */}
       <AgentPluginGate />
       <PatchNotesGate />
+      {/* Last, so that on the one launch where it can coincide with another gate
+          it is the dialog on top: choosing a provider comes before reading about
+          a release. */}
+      <ProviderSetupGate />
       <Toaster />
     </SettingsProvider>
   )

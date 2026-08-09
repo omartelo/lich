@@ -21,6 +21,11 @@ function samePending(a: readonly PendingStatus[], b: readonly PendingStatus[]): 
 
 interface Entry {
   status: SessionStatus | null
+  // When the current status started, as wall-clock ms — what the card's elapsed
+  // readout counts from. Stamped on the transition alone: the hook reports the
+  // same state repeatedly while a turn runs, and a session has been waiting
+  // since it started waiting, not since the last report said so again.
+  since: number
   // Whether the user has had a chance to see the current status, which only
   // "done" cares about: it is the one state that persists with nothing running,
   // so a finished turn would badge its project tab forever. "busy" and
@@ -52,7 +57,7 @@ export function createSessionStatusStore(source: StatusEventSource) {
   const entryOf = (id: string): Entry => {
     let entry = entries.get(id)
     if (!entry) {
-      entry = { status: null, seen: false, listeners: new Set() }
+      entry = { status: null, since: 0, seen: false, listeners: new Set() }
       entries.set(id, entry)
     }
     return entry
@@ -109,6 +114,7 @@ export function createSessionStatusStore(source: StatusEventSource) {
       return
     }
     entry.status = next
+    entry.since = Date.now()
     // A fresh report is by definition unseen, whether or not the last one was.
     entry.seen = false
     notify(entry)
@@ -157,6 +163,14 @@ export function createSessionStatusStore(source: StatusEventSource) {
 
   const get = (id: string): SessionStatus | null => entries.get(id)?.status ?? null
 
+  // since answers when the current status started, or null when there is no
+  // status to time — including for an entry a subscriber opened before the
+  // first report landed.
+  const since = (id: string): number | null => {
+    const entry = entries.get(id)
+    return entry && entry.status !== null ? entry.since : null
+  }
+
   // subscribeAll fires whenever the notification queue changes (see pendingAll),
   // as opposed to subscribe, which is scoped to one session.
   const subscribeAll = (listener: () => void): (() => void) => {
@@ -170,5 +184,5 @@ export function createSessionStatusStore(source: StatusEventSource) {
   // changes, so it is safe to hand straight to useSyncExternalStore.
   const pendingAll = (): PendingStatus[] => pending
 
-  return { subscribe, get, markSeen, pendingOf, subscribeAll, pendingAll }
+  return { subscribe, get, since, markSeen, pendingOf, subscribeAll, pendingAll }
 }

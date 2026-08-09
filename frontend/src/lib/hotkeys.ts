@@ -8,7 +8,7 @@ import { readPref, writePref } from "@/lib/prefs"
 // Zoom is deliberately absent: those chords shadow Chromium's own accelerators,
 // which are bound to physical keys, so they are matched on event.code in
 // zoom-keys.ts instead of being character combos a user can rebind.
-export type HotkeyId = "commandPalette" | "newSession"
+export type HotkeyId = "commandPalette" | "newSession" | "nextSession" | "prevSession"
 
 export interface Combo {
   mod: boolean
@@ -34,6 +34,21 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
     id: "newSession",
     label: "New session",
     combo: { mod: true, shift: true, alt: false, key: "t" },
+  },
+  // Down/up because the sidebar list is vertical. Two modifiers plus an arrow is
+  // the one shape nothing downstream wants: any Ctrl+letter is a control code a
+  // shell or Claude Code already binds, Chromium's own switching accelerators are
+  // Ctrl+Tab and Ctrl+PageUp/Down, and Ctrl+Alt+arrow is the desktop's
+  // workspace switch on Linux — it would never reach the page.
+  {
+    id: "nextSession",
+    label: "Next session",
+    combo: { mod: true, shift: true, alt: false, key: "ArrowDown" },
+  },
+  {
+    id: "prevSession",
+    label: "Previous session",
+    combo: { mod: true, shift: true, alt: false, key: "ArrowUp" },
   },
 ]
 
@@ -104,6 +119,7 @@ export function sameCombo(a: Combo, b: Combo): boolean {
 
 function formatKey(key: string): string {
   if (key === " ") return "Space"
+  if (key.startsWith("Arrow")) return key.slice("Arrow".length)
   return key.length === 1 ? key.toUpperCase() : key
 }
 

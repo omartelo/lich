@@ -7,7 +7,10 @@ import {
   groupByWorktree,
   isLastWorktreeSession,
   isSessionKind,
+  neighborSessionId,
+  orderGroups,
   projectOfSession,
+  ROOT_GROUP_KEY,
   removeProject,
   renameSession,
   reorderSessions,
@@ -36,7 +39,7 @@ function buildState(n: number): SessionState {
 
 describe("isSessionKind", () => {
   it("accepts every provider kind and the shell", () => {
-    for (const kind of ["claude", "codex", "opencode", "crush", "shell"]) {
+    for (const kind of ["claude", "codex", "opencode", "omp", "crush", "shell"]) {
       expect(isSessionKind(kind)).toBe(true)
     }
   })
@@ -282,6 +285,58 @@ describe("sortPinned", () => {
   })
 })
 
+describe("neighborSessionId", () => {
+  it("steps forward and backward through the list", () => {
+    const state = buildState(3)
+    expect(neighborSessionId(state, P, "s1", 1)).toBe("s2")
+    expect(neighborSessionId(state, P, "s2", -1)).toBe("s1")
+  })
+
+  it("wraps at both ends", () => {
+    const state = buildState(3)
+    expect(neighborSessionId(state, P, "s3", 1)).toBe("s1")
+    expect(neighborSessionId(state, P, "s1", -1)).toBe("s3")
+  })
+
+  // The sidebar draws sortPinned's order, so the walk has to follow it — a
+  // pinned session sits at the top of the list, not where it was created.
+  it("walks the pinned order the sidebar shows", () => {
+    const state = setSessionPinned(buildState(3), P, "s3", true) // s3, s1, s2
+    expect(neighborSessionId(state, P, "s3", 1)).toBe("s1")
+    expect(neighborSessionId(state, P, "s3", -1)).toBe("s2")
+    expect(neighborSessionId(state, P, "s2", 1)).toBe("s3")
+  })
+
+  // A root session opened after a worktree one lands last in the stored list but
+  // draws under its own group, so the walk follows the groups the sidebar shows.
+  it("walks the worktree groups as they are drawn", () => {
+    let state = addSession({}, P, "s1")
+    state = addSession(state, P, "wt1", "claude", "/wt")
+    state = addSession(state, P, "s2")
+    expect(neighborSessionId(state, P, "s1", 1)).toBe("s2")
+    expect(neighborSessionId(state, P, "s2", 1)).toBe("wt1")
+    expect(neighborSessionId(state, P, "wt1", 1)).toBe("s1")
+  })
+
+  it("has nowhere to go with zero or one session", () => {
+    expect(neighborSessionId({}, P, "", 1)).toBe("")
+    expect(neighborSessionId(buildState(1), P, "s1", 1)).toBe("")
+    expect(neighborSessionId(buildState(1), P, "s1", -1)).toBe("")
+  })
+
+  it("ignores an unknown project", () => {
+    expect(neighborSessionId(buildState(3), "nope", "s1", 1)).toBe("")
+  })
+
+  // The active session can be gone (closed under a stale render), so the press
+  // still lands on the end it steps in from instead of doing nothing.
+  it("falls back to an end of the list for an unknown session", () => {
+    const state = buildState(3)
+    expect(neighborSessionId(state, P, "gone", 1)).toBe("s1")
+    expect(neighborSessionId(state, P, "gone", -1)).toBe("s3")
+  })
+})
+
 describe("setSessionPinned", () => {
   it("marks the session pinned without moving it", () => {
     const next = setSessionPinned(buildState(3), P, "s3", true)
@@ -395,6 +450,30 @@ describe("restoreSession", () => {
   })
 })
 
+// The undo behind the close toast: the same session comes back where it was,
+// still carrying the conversation it ran, without minting a new numbered card.
+describe("closeSession then restoreSession (undo)", () => {
+  const closedAt = 1
+
+  it("returns an equivalent session to its slot, conversation intact", () => {
+    const before = withClaudeSession(buildState(3), "s2", "claude-abc")
+    const closed = closeSession(before, P, "s2")
+    const undone = restoreSession(closed, P, before[P].sessions[closedAt], closedAt)
+
+    expect(sessionsOf(undone, P).map((s) => s.id)).toEqual(["s1", "s2", "s3"])
+    expect(sessionsOf(undone, P)[closedAt]).toEqual(before[P].sessions[closedAt])
+    expect(resumableSession(undone, P, "s2")?.providerSessionId).toBe("claude-abc")
+    expect(activeSessionId(undone, P)).toBe("s2")
+    expect(undone[P].nextSeq).toBe(before[P].nextSeq)
+  })
+
+  it("does nothing when the project was closed in between", () => {
+    const before = buildState(3)
+    const closed = removeProject(closeSession(before, P, "s2"), P)
+    expect(restoreSession(closed, P, before[P].sessions[closedAt], closedAt)).toBe(closed)
+  })
+})
+
 describe("activeTarget", () => {
   const root = "/repo"
 
@@ -477,5 +556,37 @@ describe("groupByWorktree", () => {
     expect(groups.map((g) => g.path)).toEqual(["/wt/a", "/wt/b"])
     expect(groups[0].sessions.map((x) => x.id)).toEqual(["a1", "a2"])
     expect(groups[1].sessions.map((x) => x.id)).toEqual(["b1"])
+  })
+})
+
+describe("orderGroups", () => {
+  const s = (id: string, path?: string): Session => ({
+    id,
+    label: id,
+    kind: "shell",
+    ...(path ? { path } : {}),
+  })
+  const groups = groupByWorktree([
+    s("r1"),
+    s("r2"),
+    s("a1", "/wt/a"),
+    s("b1", "/wt/b"),
+    s("b2", "/wt/b"),
+  ])
+
+  it("moves a group's whole block, keeping its internal order", () => {
+    const ids = orderGroups(groups, ["/wt/b", ROOT_GROUP_KEY, "/wt/a"])
+    expect(ids).toEqual(["b1", "b2", "r1", "r2", "a1"])
+  })
+
+  it("keys the pathless root group by ROOT_GROUP_KEY, not by ''", () => {
+    expect(orderGroups(groups, [ROOT_GROUP_KEY])).toEqual(["r1", "r2"])
+    expect(orderGroups(groups, [""])).toEqual([])
+  })
+
+  // A short list is what reorderSessions rejects, so a group closed mid-drag
+  // drops the whole stale order instead of taking its sessions with it.
+  it("contributes nothing for a key naming no group", () => {
+    expect(orderGroups(groups, ["/wt/gone"])).toEqual([])
   })
 })

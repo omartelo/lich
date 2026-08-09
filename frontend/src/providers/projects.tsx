@@ -5,13 +5,14 @@ import { Bell, Folder } from "lucide-react"
 import { useMatch, useNavigate } from "react-router-dom"
 import type { Project, RecentProject } from "@/lib/api-types"
 import type { StoredProject as StoreProject } from "@/lib/api-types"
-import { ProjectService, Store } from "@/lib/rpc"
+import { ProjectService, Store, System } from "@/lib/rpc"
 import { onAppEvent } from "@/lib/app-events"
 import {
   activeSessionId,
   addSession,
   closeSession as removeSession,
   isSessionKind,
+  neighborSessionId,
   projectOfSession,
   removeProject,
   renameSession as relabelSession,
@@ -28,6 +29,7 @@ import { applyOrder, pinFirst } from "@/lib/reorder"
 import { displayPath } from "@/lib/paths"
 import { defaultProviderKind } from "@/lib/providers-store"
 import {
+  decideStatusNotice,
   isIdEvent,
   isStatusEvent,
   isTitleEvent,
@@ -36,7 +38,9 @@ import {
   TITLE_EVENT,
   toSessionStatus,
   TOUCHED_EVENT,
+  type SessionStatus,
 } from "@/lib/session/session-events"
+import { NotificationsOptIn } from "@/components/NotificationsOptIn"
 import { refreshGitStatus } from "@/lib/git/use-git-status"
 import { markSessionSeen } from "@/lib/session/use-session-status"
 import { isRecordingTarget, matchesCombo } from "@/lib/hotkeys"
@@ -67,8 +71,12 @@ interface ProjectsValue {
   /** Resume a worktree: reopen its parked session (continuing its Claude
    * conversation) when one exists, else open a fresh session on it. */
   reopenWorktreeSession: (projectId: string, wt: { name: string; path: string }) => Promise<void>
-  /** Permanently delete a session; deleting the last one leaves the project with none. */
+  /** Permanently delete a session, offering an Undo toast for the stray click;
+   * deleting the last one leaves the project with none. */
   closeSession: (projectId: string, sessionId: string) => void
+  /** Delete a session with no undo offered — the worktree flows, where the
+   * checkout the session lives in is going away with it. */
+  discardSession: (projectId: string, sessionId: string) => void
   /** Close a worktree session but park its row so it can be resumed later. */
   keepSession: (projectId: string, sessionId: string) => void
   /** Focus an existing session within a project. */
@@ -100,6 +108,11 @@ const toProject = (p: StoreProject): Project => ({
 })
 
 const ATTENTION_TOAST_MS = 10_000
+
+// How long the undo stays on offer after a close. Long enough to notice the card
+// is gone and reach the button, short enough that it is not still there when the
+// next one is closed on purpose.
+const UNDO_TOAST_MS = 10_000
 
 const UNLABELED_SESSION = "A session"
 
@@ -148,7 +161,23 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   // event subscription without re-subscribing on every navigation.
   const activeProjectIdRef = useRef(activeProjectId)
   activeProjectIdRef.current = activeProjectId
-  const { hotkeys } = useSettings()
+  const { hotkeys, desktopNotifications, setDesktopNotifications, finishedTurnNotifications } =
+    useSettings()
+  // Read inside the same once-only subscription, for the same reason as the
+  // active project: a preference change must not tear down the status listener.
+  const desktopNotificationsRef = useRef(desktopNotifications)
+  desktopNotificationsRef.current = desktopNotifications
+  const finishedTurnNotificationsRef = useRef(finishedTurnNotifications)
+  finishedTurnNotificationsRef.current = finishedTurnNotifications
+  // The status each session last reported, which decideStatusNotice reads to
+  // drop a finished turn repeated with nothing run in between. A closed session
+  // leaves its entry behind; one string per session id is not worth a sweep.
+  const lastStatusRef = useRef(new Map<string, SessionStatus | null>())
+  // Whether the opt-in dialog is up. Raised by the first report that would have
+  // notified, never at launch — the question lands with the event that motivates
+  // it. Dismissing without an answer leaves the preference unset, so the next
+  // one asks again.
+  const [askNotifications, setAskNotifications] = useState(false)
 
   const applyLoaded = useCallback((loaded: StoreProject[]) => {
     setProjects(loaded.map(toProject))
@@ -319,56 +348,111 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     [newWorktreeSession],
   )
 
-  // The new-session shortcut opens a session in the active project (mirrors the
-  // "+" button). It fires even with terminal focus, so it stays reachable while
-  // working in a terminal — the capture-phase listener sees the chord before
-  // the terminal does and stops propagation so the PTY never receives it.
-  // Bails while a hotkey is being recorded so rebinding does not trigger it.
-  useEffect(() => {
-    if (!activeProjectId) {
-      return
-    }
-    const onKey = (event: KeyboardEvent) => {
-      if (isRecordingTarget(event)) return
-      if (matchesCombo(event, hotkeys.newSession)) {
-        event.preventDefault()
-        event.stopPropagation()
-        newSession(activeProjectId)
-      }
-    }
-    window.addEventListener("keydown", onKey, true)
-    return () => window.removeEventListener("keydown", onKey, true)
-  }, [activeProjectId, newSession, hotkeys])
-
   // dropSession removes a session's card and persists that removal via `persist`
-  // — DeleteSession (gone for good) or CloseSession (parked for a later resume).
-  // Closing the last one leaves the project sessionless: the EmptySessions screen
-  // then offers a new one, rather than a replacement PTY spawning unasked.
+  // — DeleteSession (gone for good) or CloseSession (parked for a later resume)
+  // — returning that write so a caller can chain on it. Closing the last one
+  // leaves the project sessionless: the EmptySessions screen then offers a new
+  // one, rather than a replacement PTY spawning unasked.
   const dropSession = useCallback(
-    (projectId: string, sessionId: string, persist: (activeID: string) => Promise<unknown>) => {
+    (
+      projectId: string,
+      sessionId: string,
+      persist: (activeID: string) => Promise<unknown>,
+    ): Promise<unknown> => {
       const removed = removeSession(sessionsRef.current, projectId, sessionId)
       if (removed === sessionsRef.current) {
-        return
+        return Promise.resolve()
       }
       setSessions(removed)
-      void persist(activeSessionId(removed, projectId))
+      return persist(activeSessionId(removed, projectId))
+    },
+    [],
+  )
+
+  // Undo re-creates the row a close deleted, from what the page still holds,
+  // rather than parking it for the toast's lifetime: parking would need a
+  // reopen-by-id the store has no other reason to grow, and every app exit
+  // inside the toast window would strand a hidden parked row that a later
+  // worktree resume could resurrect. Re-creating owns no window — the close is
+  // final the moment it is made, and the undo is a plain new write. What the
+  // row does not carry back: label_auto (a restored card is auto-titleable
+  // again, even if its name was hand-picked) and the cost ledgers of any
+  // transcript it will not run through again.
+  //
+  // The PTY is not held open for the window either — a closed session's terminal
+  // is gone. The restored card comes back unspawned, so the resume prompt is
+  // what brings the conversation with it, exactly as for a parked worktree.
+  const restoreClosedSession = useCallback(
+    (projectId: string, session: Session, index: number, nextSeq: number) => {
+      const next = restoreSession(sessionsRef.current, projectId, session, index)
+      if (next === sessionsRef.current) {
+        return // the project was closed while the toast was up
+      }
+      setSessions(next)
+      const order = sessionsOf(next, projectId).map((s) => s.id)
+      const { id, label, kind, path = "", providerSessionId } = session
+      void Store.AddSession(projectId, id, label, kind, path, nextSeq)
+        .then(() => providerSessionId && Store.SetProviderSession(id, providerSessionId))
+        // AddSession appends: the slot the card went back to is a reorder.
+        .then(() => Store.ReorderSessions(projectId, order))
     },
     [],
   )
 
   const closeSession = useCallback(
-    (projectId: string, sessionId: string) =>
-      dropSession(projectId, sessionId, (activeID) =>
+    (projectId: string, sessionId: string) => {
+      const project = sessionsRef.current[projectId]
+      const index = project?.sessions.findIndex((s) => s.id === sessionId) ?? -1
+      if (!project || index === -1) {
+        return
+      }
+      const session = project.sessions[index]
+      const { nextSeq } = project
+      // The conversation id lives on the row, not on the card — a session started
+      // in this run never mirrors it into the page — so it is read back before
+      // the delete takes it with it: an undo without it restores an empty card.
+      const conversation = session.providerSessionId
+        ? Promise.resolve(session.providerSessionId)
+        : Store.ProviderSession(sessionId).catch(() => "")
+      const deleted = dropSession(projectId, sessionId, (activeID) =>
+        conversation.then(() => Store.DeleteSession(projectId, sessionId, activeID)),
+      )
+      toast(`Closed ${session.label}`, {
+        duration: UNDO_TOAST_MS,
+        action: {
+          label: "Undo",
+          // Waits on the delete: the store can sit on a lock for seconds, and an
+          // insert that overtook it would be deleted right back out.
+          onClick: () =>
+            void Promise.all([conversation, deleted]).then(([providerSessionId]) =>
+              restoreClosedSession(
+                projectId,
+                { ...session, ...(providerSessionId ? { providerSessionId } : {}) },
+                index,
+                nextSeq,
+              ),
+            ),
+        },
+      })
+    },
+    [dropSession, restoreClosedSession],
+  )
+
+  const discardSession = useCallback(
+    (projectId: string, sessionId: string) => {
+      void dropSession(projectId, sessionId, (activeID) =>
         Store.DeleteSession(projectId, sessionId, activeID),
-      ),
+      )
+    },
     [dropSession],
   )
 
   const keepSession = useCallback(
-    (projectId: string, sessionId: string) =>
-      dropSession(projectId, sessionId, (activeID) =>
+    (projectId: string, sessionId: string) => {
+      void dropSession(projectId, sessionId, (activeID) =>
         Store.CloseSession(projectId, sessionId, activeID),
-      ),
+      )
+    },
     [dropSession],
   )
 
@@ -381,6 +465,51 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     void Store.SetActiveSession(projectId, sessionId)
   }, [])
 
+  // The session shortcuts act on the active project: one opens a session
+  // (mirroring the "+" button), the other two walk its sidebar list. They fire
+  // even with terminal focus, so they stay reachable while working in a terminal
+  // — the capture-phase listener sees the chord before the terminal does and
+  // stops propagation so the PTY never receives it. Bails while a hotkey is
+  // being recorded so rebinding does not trigger it.
+  useEffect(() => {
+    if (!activeProjectId) {
+      return
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (isRecordingTarget(event)) return
+      if (matchesCombo(event, hotkeys.newSession)) {
+        event.preventDefault()
+        event.stopPropagation()
+        newSession(activeProjectId)
+        return
+      }
+      const step = matchesCombo(event, hotkeys.nextSession)
+        ? 1
+        : matchesCombo(event, hotkeys.prevSession)
+          ? -1
+          : 0
+      if (step === 0) {
+        return
+      }
+      // Swallowed even with nowhere to go: the chord belongs to lich, so a
+      // project with a single session must not leak it into that session's PTY.
+      event.preventDefault()
+      event.stopPropagation()
+      const current = sessionsRef.current
+      const target = neighborSessionId(
+        current,
+        activeProjectId,
+        activeSessionId(current, activeProjectId),
+        step,
+      )
+      if (target) {
+        activateSession(activeProjectId, target)
+      }
+    }
+    window.addEventListener("keydown", onKey, true)
+    return () => window.removeEventListener("keydown", onKey, true)
+  }, [activeProjectId, newSession, activateSession, hotkeys])
+
   // A session that needs the user (permission prompt or idle input) raises a
   // global toast that routes to its card — reachable even when the session lives
   // in a background project whose card is not mounted. Skipped for the session
@@ -391,18 +520,47 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   // for a second waiting report. One toast per report is the contract here.
   useEffect(() => {
     const off = onAppEvent(STATUS_EVENT, (data) => {
-      if (!isStatusEvent(data) || toSessionStatus(data.state) !== "waiting") {
+      if (!isStatusEvent(data)) {
         return
       }
       const { id } = data
-      if (!shouldToastAttention(sessionsRef.current, id, activeProjectIdRef.current)) {
+      const status = toSessionStatus(data.state)
+      const previous = lastStatusRef.current.get(id) ?? null
+      lastStatusRef.current.set(id, status)
+
+      const projectId = projectOfSession(sessionsRef.current, id)
+      const project = sessionsRef.current[projectId]
+      // A session whose project is closed — or whose own row is gone, which
+      // leaves projectOfSession with nothing to answer — has nowhere to route.
+      if (!project) {
         return
       }
-      const projectId = projectOfSession(sessionsRef.current, id)
-      const label =
-        sessionsRef.current[projectId]?.sessions.find((s) => s.id === id)?.label ??
-        UNLABELED_SESSION
+      const label = project.sessions.find((s) => s.id === id)?.label ?? UNLABELED_SESSION
       const projectName = projectsRef.current.find((p) => p.id === projectId)?.name
+
+      // The desktop channel answers to window focus and to its own per-status
+      // preference, both decided by decideStatusNotice; the toast below keeps
+      // its own, unchanged rule. The two are independent: a report can raise
+      // both, either, or neither.
+      const notice = decideStatusNotice(status, previous, document.hasFocus(), {
+        attention: desktopNotificationsRef.current,
+        finishedTurn: finishedTurnNotificationsRef.current,
+      })
+      if (notice === "ask") {
+        setAskNotifications(true)
+      } else if (notice === "notify") {
+        const summary =
+          status === "waiting" ? `${label} needs your input` : `${label} has finished working`
+        // A failure is the backend's to log; the page has nothing to do with it.
+        System.Notify(summary, projectName ?? "").catch(() => {})
+      }
+
+      if (
+        status !== "waiting" ||
+        !shouldToastAttention(sessionsRef.current, id, activeProjectIdRef.current)
+      ) {
+        return
+      }
       toast(
         <div className="flex min-w-0 flex-col">
           <span>{label} needs your input</span>
@@ -526,6 +684,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       newWorktreeSession,
       reopenWorktreeSession,
       closeSession,
+      discardSession,
       keepSession,
       activateSession,
       renameSession,
@@ -545,6 +704,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       newWorktreeSession,
       reopenWorktreeSession,
       closeSession,
+      discardSession,
       keepSession,
       activateSession,
       renameSession,
@@ -554,7 +714,19 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     ],
   )
 
-  return <ProjectsContext.Provider value={value}>{children}</ProjectsContext.Provider>
+  return (
+    <ProjectsContext.Provider value={value}>
+      {children}
+      <NotificationsOptIn
+        open={askNotifications}
+        onDismiss={() => setAskNotifications(false)}
+        onDecide={(enabled) => {
+          setDesktopNotifications(enabled)
+          setAskNotifications(false)
+        }}
+      />
+    </ProjectsContext.Provider>
+  )
 }
 
 export function useProjects(): ProjectsValue {

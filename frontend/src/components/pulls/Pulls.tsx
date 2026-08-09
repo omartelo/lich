@@ -51,7 +51,7 @@ export function Pulls({ list = false }: PullsProps) {
   const {
     projects,
     sessions,
-    closeSession,
+    discardSession,
     newSession,
     newWorktreeSession,
     reopenWorktreeSession,
@@ -120,8 +120,10 @@ export function Pulls({ list = false }: PullsProps) {
     }
     // The PTYs living in the checkout must die before git pulls the directory
     // out from under them, and no parked row may survive to offer a resume.
+    // Discarded, not closed: undoing one would restore a card rooted in the
+    // checkout this is removing.
     for (const session of occupants) {
-      closeSession(projectId, session.id)
+      discardSession(projectId, session.id)
     }
     void Store.PurgeWorktreeSessions(projectId, wtPath)
     closePulls(wtPath)

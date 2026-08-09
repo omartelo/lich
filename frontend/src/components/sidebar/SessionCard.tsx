@@ -1,15 +1,26 @@
 import { useEffect, useRef, useState } from "react"
 import type { KeyboardEvent } from "react"
-import { GitBranch, GitPullRequestArrow, Pencil, Pin, PinOff, Terminal, X } from "lucide-react"
+import {
+  ArrowDown,
+  GitBranch,
+  GitPullRequestArrow,
+  Pencil,
+  Pin,
+  PinOff,
+  Terminal,
+  TriangleAlert,
+  X,
+} from "lucide-react"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { cn } from "@/lib/utils"
 import { displayPath } from "@/lib/paths"
 import type { Session } from "@/lib/session/sessions"
-import { useSessionStatus } from "@/lib/session/use-session-status"
+import { useSessionStatus, useSessionStatusAge } from "@/lib/session/use-session-status"
 import { useSessionCwd } from "@/lib/session/use-session-cwd"
 import { useSessionAgent } from "@/lib/session/use-session-agent"
 import { useGitStatus } from "@/lib/git/use-git-status"
+import { baseReadout } from "@/lib/git/base-status"
 import { usePullRequest } from "@/lib/pulls/use-pull-request"
 import { CloseButton } from "@/components/common/CloseButton"
 import { DiffStat } from "@/components/DiffStat"
@@ -63,6 +74,10 @@ export function SessionCard({
   // null before the first report, and whenever the hook reports a state with
   // no indicator (see toSessionStatus) — then the icon shows ringless.
   const status = useSessionStatus(session.id)
+  // How long that state has lasted, beside the ring: with five agents running,
+  // the bells all look alike and the one blocked longest is the one to answer
+  // first. "" for the states that have no clock (see useSessionStatusAge).
+  const age = useSessionStatusAge(session.id)
   // The provider CLI live inside the PTY right now — a hand-run `claude` or
   // `codex` in a shell session puts that provider's mark on the card while it
   // runs; null falls back to the session's own kind.
@@ -76,6 +91,9 @@ export function SessionCard({
   const shownPath = liveCwd || session.path || path
   const git = useGitStatus(shownPath)
   const pr = usePullRequest(shownPath, git?.branch ?? "", git?.head ?? "")
+  // How the checkout stands against the branch it merges into: null — the case
+  // nearly all day — draws nothing at all.
+  const base = baseReadout(git?.base ?? null)
   // Renaming disables the drag: the sensor would otherwise claim the pointer
   // before the input could be clicked into or its text selected.
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -163,6 +181,11 @@ export function SessionCard({
                   )}
                 >
                   <SessionStatusIcon kind={agent ?? session.kind} status={status} />
+                  {age && (
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                      {age}
+                    </span>
+                  )}
                   <span className="truncate text-sm font-medium text-foreground">
                     {session.label}
                   </span>
@@ -189,6 +212,23 @@ export function SessionCard({
                     <span className="truncate">{git.branch}</span>
                   </span>
                   <span className="flex shrink-0 items-center gap-1.5">
+                    {/* Base standing first, then the PR, then the diff: the
+                        cluster reads outward from the branch it qualifies. */}
+                    {base && (
+                      <span
+                        className={cn(
+                          "flex items-center gap-0.5 tabular-nums",
+                          base.kind === "conflict" && "text-amber-500",
+                        )}
+                      >
+                        {base.kind === "conflict" ? (
+                          <TriangleAlert className="size-3 shrink-0" />
+                        ) : (
+                          <ArrowDown className="size-3 shrink-0" />
+                        )}
+                        {base.count}
+                      </span>
+                    )}
                     {pr && (
                       <span
                         role="button"
@@ -259,6 +299,26 @@ export function SessionCard({
                       <DiffStat added={git.added} deleted={git.deleted} />
                     </span>
                   )}
+                </span>
+              )}
+              {/* The base standing spelled out — the card itself has room for a
+                  glyph and a number, and this is the only place the branch it
+                  measures against is named. */}
+              {base?.behind && <span className="text-muted-foreground">{base.behind}</span>}
+              {base?.conflict && (
+                <span className="flex items-center gap-1 text-amber-500">
+                  <TriangleAlert className="size-3 shrink-0" />
+                  {base.conflict}
+                </span>
+              )}
+              {base && base.paths.length > 0 && (
+                <span className="flex flex-col gap-0.5 pl-4 text-muted-foreground">
+                  {base.paths.map((file) => (
+                    <span key={file} className="break-all font-mono">
+                      {file}
+                    </span>
+                  ))}
+                  {base.more > 0 && <span>+{base.more} more</span>}
                 </span>
               )}
             </div>

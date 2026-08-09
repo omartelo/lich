@@ -876,6 +876,29 @@ func TestPurgeWorktreeSessions(t *testing.T) {
 	}
 }
 
+// TestProjectPathAnswersWithTheMainCheckout proves the lookup the terminal
+// makes to tell a worktree session where its project lives.
+func TestProjectPathAnswersWithTheMainCheckout(t *testing.T) {
+	svc := newTestStore(t)
+	if err := svc.AddProject("p1", "alpha", "/tmp/alpha"); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+
+	if got := svc.ProjectPath("p1"); got != "/tmp/alpha" {
+		t.Errorf("ProjectPath(p1) = %q, want /tmp/alpha", got)
+	}
+}
+
+// TestProjectPathOfAnUnknownProjectIsEmpty proves an id nothing answers to
+// yields "" rather than an error the caller would have to invent a path for.
+func TestProjectPathOfAnUnknownProjectIsEmpty(t *testing.T) {
+	svc := newTestStore(t)
+
+	if got := svc.ProjectPath("gone"); got != "" {
+		t.Errorf("ProjectPath(gone) = %q, want an empty string", got)
+	}
+}
+
 // TestRecentProjectsListsClosedOnesNewestFirst covers the whole contract of the
 // reopen menu's list: open projects stay out of it, closed ones come back
 // newest first, and the list is capped.
