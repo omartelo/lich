@@ -70,3 +70,19 @@ func TestDetectAllMissing(t *testing.T) {
 		}
 	}
 }
+
+// TestKnown proves the guard the session-start hook payload passes through:
+// every registered id is accepted, and anything else — a provider lich has no
+// entry for, the shell kind, an empty string — is not.
+func TestKnown(t *testing.T) {
+	for _, p := range Registry {
+		if !Known(p.ID) {
+			t.Errorf("Known(%q) = false, want true for a registered provider", p.ID)
+		}
+	}
+	for _, id := range []string{"", "shell", "gemini", "Claude"} {
+		if Known(id) {
+			t.Errorf("Known(%q) = true, want false", id)
+		}
+	}
+}
