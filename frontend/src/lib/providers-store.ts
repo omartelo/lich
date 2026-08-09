@@ -182,6 +182,16 @@ export function useProviders(): ProviderState[] {
   return snapshot
 }
 
+// useStoredDefaultProvider returns the persisted default id unresolved — "" when
+// the user has never chosen one. Only the first-run gate wants that: every other
+// caller wants useDefaultProvider, which resolves the empty value away and so can
+// never report the absence.
+export function useStoredDefaultProvider(): string {
+  const defaultId = useSyncExternalStore(store.subscribe, store.getDefaultSnapshot)
+  useEffect(store.ensureLoaded, [])
+  return defaultId
+}
+
 // useDefaultProvider returns the resolved default provider kind, tracking both
 // the stored default and enable changes (a disabled default falls back live).
 export function useDefaultProvider(): ProviderKind {

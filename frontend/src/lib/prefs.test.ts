@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { parseBoolPref, parseEnumPref, parseNumberPref } from "./prefs"
+import { parseBoolPref, parseEnumPref, parseNumberPref, parseOptionalBoolPref } from "./prefs"
 
 const THEMES = ["system", "light", "dark"] as const
 
@@ -64,5 +64,22 @@ describe("parseBoolPref", () => {
     expect(parseBoolPref("1", true)).toBe(true)
     expect(parseBoolPref("1", false)).toBe(false)
     expect(parseBoolPref("yes", false)).toBe(false)
+  })
+})
+
+describe("parseOptionalBoolPref", () => {
+  it("reads what writePref emits", () => {
+    expect(parseOptionalBoolPref("true")).toBe(true)
+    expect(parseOptionalBoolPref("false")).toBe(false)
+  })
+
+  it("keeps an absent key apart from a refusal", () => {
+    expect(parseOptionalBoolPref(null)).toBeNull()
+  })
+
+  it("treats a value it did not write as undecided, not as off", () => {
+    expect(parseOptionalBoolPref("1")).toBeNull()
+    expect(parseOptionalBoolPref("no")).toBeNull()
+    expect(parseOptionalBoolPref("")).toBeNull()
   })
 })

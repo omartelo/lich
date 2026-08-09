@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
+  decideDesktopNotice,
+  decideStatusNotice,
   isAgentEvent,
   isCwdEvent,
   isIdEvent,
@@ -177,5 +179,82 @@ describe("shouldToastAttention", () => {
 
   it("stays silent for an empty state", () => {
     expect(shouldToastAttention({}, "s1", ACTIVE)).toBe(false)
+  })
+})
+
+describe("decideDesktopNotice", () => {
+  it("stays out of the way while the user is at the window", () => {
+    expect(decideDesktopNotice(true, true)).toBe("none")
+    expect(decideDesktopNotice(true, null)).toBe("none")
+    expect(decideDesktopNotice(true, false)).toBe("none")
+  })
+
+  it("notifies once the user has opted in and left the window", () => {
+    expect(decideDesktopNotice(false, true)).toBe("notify")
+  })
+
+  it("puts the question on the first report that would have notified", () => {
+    expect(decideDesktopNotice(false, null)).toBe("ask")
+  })
+
+  it("keeps quiet for a refusal instead of asking again", () => {
+    expect(decideDesktopNotice(false, false)).toBe("none")
+  })
+})
+
+describe("decideStatusNotice", () => {
+  const BOTH_ON = { attention: true, finishedTurn: true }
+  const BOTH_OFF = { attention: false, finishedTurn: false }
+  const FRESH = null // no previous status: nothing to collapse against
+
+  it("stays out of the way while the user is at the window", () => {
+    expect(decideStatusNotice("waiting", FRESH, true, BOTH_ON)).toBe("none")
+    expect(decideStatusNotice("done", FRESH, true, BOTH_ON)).toBe("none")
+  })
+
+  it("notifies for each channel the user turned on", () => {
+    expect(decideStatusNotice("waiting", FRESH, false, BOTH_ON)).toBe("notify")
+    expect(decideStatusNotice("done", "busy", false, BOTH_ON)).toBe("notify")
+  })
+
+  it("stays silent for each channel the user left off", () => {
+    expect(decideStatusNotice("waiting", FRESH, false, BOTH_OFF)).toBe("none")
+    expect(decideStatusNotice("done", "busy", false, BOTH_OFF)).toBe("none")
+  })
+
+  // The switches are independent: neither channel rides the other's answer.
+  it("keeps the two channels apart", () => {
+    const onlyAttention = { attention: true, finishedTurn: false }
+    expect(decideStatusNotice("waiting", FRESH, false, onlyAttention)).toBe("notify")
+    expect(decideStatusNotice("done", "busy", false, onlyAttention)).toBe("none")
+
+    const onlyFinished = { attention: false, finishedTurn: true }
+    expect(decideStatusNotice("waiting", FRESH, false, onlyFinished)).toBe("none")
+    expect(decideStatusNotice("done", "busy", false, onlyFinished)).toBe("notify")
+  })
+
+  it("says nothing about a session that is merely running", () => {
+    expect(decideStatusNotice("busy", "waiting", false, BOTH_ON)).toBe("none")
+    expect(decideStatusNotice(null, "busy", false, BOTH_ON)).toBe("none")
+  })
+
+  // The dialog belongs to the blocked-on-you channel alone: a finished turn with
+  // the opt-in unanswered must not put a question the user never asked for.
+  it("only ever puts the question for a blocked session", () => {
+    const unanswered = { attention: null, finishedTurn: true }
+    expect(decideStatusNotice("waiting", FRESH, false, unanswered)).toBe("ask")
+    expect(decideStatusNotice("done", "busy", false, unanswered)).toBe("notify")
+  })
+
+  it("does not notify twice for the same finished turn", () => {
+    expect(decideStatusNotice("done", "done", false, BOTH_ON)).toBe("none")
+    // A turn that ran again is a new one, so it announces itself again.
+    expect(decideStatusNotice("done", "busy", false, BOTH_ON)).toBe("notify")
+  })
+
+  // The toast's contract, which the desktop channel shares: a second prompt is
+  // a second thing to answer, so a repeat "waiting" is not collapsed.
+  it("notifies again for a repeated waiting report", () => {
+    expect(decideStatusNotice("waiting", "waiting", false, BOTH_ON)).toBe("notify")
   })
 })

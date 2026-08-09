@@ -2,6 +2,7 @@ import { useState } from "react"
 import type { ReactNode } from "react"
 import { useParams } from "react-router-dom"
 import { AppearanceSettings } from "./AppearanceSettings"
+import { NotificationsSettings } from "./NotificationsSettings"
 import { HotkeysSettings } from "./HotkeysSettings"
 import { ProvidersSettings } from "./ProvidersSettings"
 import { ProviderBinSettings } from "./ProviderBinSettings"
@@ -28,6 +29,12 @@ interface Section {
 // toggles; enabling a provider adds its own section below (see providerSections).
 const BASE_SECTIONS: Section[] = [
   { id: "appearance", label: "Appearance", group: "app", render: () => <AppearanceSettings /> },
+  {
+    id: "notifications",
+    label: "Notifications",
+    group: "app",
+    render: () => <NotificationsSettings />,
+  },
   { id: "hotkeys", label: "Hotkeys", group: "app", render: () => <HotkeysSettings /> },
   { id: "providers", label: "Providers", group: "app", render: () => <ProvidersSettings /> },
   {

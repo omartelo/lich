@@ -10,7 +10,13 @@ import {
   type Hotkeys,
 } from "@/lib/hotkeys"
 import { zoomIntent } from "@/lib/terminal/zoom-keys"
-import { parseBoolPref, parseNumberPref, readPref, writePref } from "@/lib/prefs"
+import {
+  parseBoolPref,
+  parseNumberPref,
+  parseOptionalBoolPref,
+  readPref,
+  writePref,
+} from "@/lib/prefs"
 import { Themes as ThemeRPC } from "@/lib/rpc"
 import {
   applyAppTheme,
@@ -38,6 +44,9 @@ const THEME_STORAGE_KEY = "lich.appearance.theme"
 const ZOOM_STORAGE_KEY = "lich.appearance.zoom"
 const TERMINAL_THEME_STORAGE_KEY = "lich.appearance.terminalTheme"
 const CONTEXT_USAGE_STORAGE_KEY = "lich.footer.contextUsage"
+const COST_BUDGET_STORAGE_KEY = "lich.footer.costBudget"
+const DESKTOP_NOTIFICATIONS_STORAGE_KEY = "lich.notifications.desktop"
+const FINISHED_TURN_NOTIFICATIONS_STORAGE_KEY = "lich.notifications.finishedTurn"
 
 // DEFAULT_FONT is the bundled FiraCode Nerd Font Mono. It is not installed via
 // fontconfig, so it must be offered explicitly alongside the system fonts.
@@ -91,6 +100,36 @@ const readZoom = (): number => parseNumberPref(readPref(ZOOM_STORAGE_KEY), DEFAU
 // Default on: the footer context readout shows unless the user turned it off.
 const readContextUsage = (): boolean => parseBoolPref(readPref(CONTEXT_USAGE_STORAGE_KEY), true)
 
+// clampCostBudget bounds a spend ceiling to something a cost readout can be
+// compared against: never negative, and no finer than the cent the readout
+// prints. Anything that is not a number at all is no ceiling, which is what an
+// emptied input has to mean — the alternative is a NaN budget that colours the
+// readout forever.
+export function clampCostBudget(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0
+  }
+  return Math.round(Math.max(0, value) * 100) / 100
+}
+
+// The spend ceiling is off by default and reads as 0 for a stored 0 — the value
+// is a magnitude, so parseNumberPref already answers the fallback for it.
+const readCostBudget = (): number =>
+  parseNumberPref(readPref(COST_BUDGET_STORAGE_KEY), 0, clampCostBudget)
+
+// No default: a desktop notification interrupts the user outside the app, so it
+// is the one preference lich asks about instead of assuming. null means the
+// question has not been put yet — see the opt-in dialog.
+const readDesktopNotifications = (): boolean | null =>
+  parseOptionalBoolPref(readPref(DESKTOP_NOTIFICATIONS_STORAGE_KEY))
+
+// Off, and its own key: a finished turn is a weaker reason to interrupt someone
+// than a session blocked on them, so an install that already answered the opt-in
+// above never inherits it. Turning this on is an explicit act, hence a plain
+// flag with no undecided state — the dialog is not put for this channel.
+const readFinishedTurnNotifications = (): boolean =>
+  parseBoolPref(readPref(FINISHED_TURN_NOTIFICATIONS_STORAGE_KEY), false)
+
 interface SettingsValue {
   /** Terminal font family, applied globally across all project terminals. */
   font: string
@@ -126,6 +165,18 @@ interface SettingsValue {
   /** Whether the footer shows the active session's context-window usage. */
   showContextUsage: boolean
   setShowContextUsage: (show: boolean) => void
+  /** Spend ceiling in USD the footer cost readout colours against; 0 is none. */
+  costBudget: number
+  setCostBudget: (usd: number) => void
+  /** Whether a session needing input notifies the desktop while the lich window
+   * is unfocused. null until the user has answered the opt-in dialog. */
+  desktopNotifications: boolean | null
+  setDesktopNotifications: (enabled: boolean) => void
+  /** Whether a session that finished its turn notifies the desktop while the
+   * lich window is unfocused. Independent of the opt-in above, and off until
+   * the user turns it on. */
+  finishedTurnNotifications: boolean
+  setFinishedTurnNotifications: (enabled: boolean) => void
 }
 
 const SettingsContext = createContext<SettingsValue | null>(null)
@@ -141,6 +192,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [terminalTheme, setTerminalThemeState] = useState<TerminalTheme>(readTerminalTheme)
   const [hotkeys, setHotkeys] = useState<Hotkeys>(loadHotkeys)
   const [showContextUsage, setShowContextUsageState] = useState<boolean>(readContextUsage)
+  const [costBudget, setCostBudgetState] = useState<number>(readCostBudget)
+  const [desktopNotifications, setDesktopNotificationsState] = useState<boolean | null>(
+    readDesktopNotifications,
+  )
+  const [finishedTurnNotifications, setFinishedTurnNotificationsState] = useState<boolean>(
+    readFinishedTurnNotifications,
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -289,6 +347,24 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     writePref(CONTEXT_USAGE_STORAGE_KEY, next)
   }, [])
 
+  const setCostBudget = useCallback((next: number) => {
+    const clamped = clampCostBudget(next)
+    setCostBudgetState(clamped)
+    writePref(COST_BUDGET_STORAGE_KEY, clamped)
+  }, [])
+
+  // Writing either answer settles the question for good: a refusal is stored,
+  // not left absent, so the dialog is put once and the toggle owns it after.
+  const setDesktopNotifications = useCallback((next: boolean) => {
+    setDesktopNotificationsState(next)
+    writePref(DESKTOP_NOTIFICATIONS_STORAGE_KEY, next)
+  }, [])
+
+  const setFinishedTurnNotifications = useCallback((next: boolean) => {
+    setFinishedTurnNotificationsState(next)
+    writePref(FINISHED_TURN_NOTIFICATIONS_STORAGE_KEY, next)
+  }, [])
+
   // Apply the resolved theme's CSS variables and toggle `.dark` for existing
   // dark variants. For "system", follow the OS scheme and keep following it
   // live.
@@ -398,6 +474,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       resetHotkey,
       showContextUsage,
       setShowContextUsage,
+      costBudget,
+      setCostBudget,
+      desktopNotifications,
+      setDesktopNotifications,
+      finishedTurnNotifications,
+      setFinishedTurnNotifications,
     }),
     [
       font,
@@ -422,6 +504,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       resetHotkey,
       showContextUsage,
       setShowContextUsage,
+      costBudget,
+      setCostBudget,
+      desktopNotifications,
+      setDesktopNotifications,
+      finishedTurnNotifications,
+      setFinishedTurnNotifications,
     ],
   )
 

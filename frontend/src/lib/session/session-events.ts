@@ -139,3 +139,63 @@ export function shouldToastAttention(
   const focused = projectId === activeProjectId && project.activeId === sessionId
   return !focused
 }
+
+/** What the desktop channel does with a session that needs the user. */
+export type DesktopNotice = "none" | "ask" | "notify"
+
+// decideDesktopNotice is the desktop half of the same report shouldToastAttention
+// answers, and it asks a different question: not which session the user is on,
+// but whether they are at the window at all. With lich in front there is nothing
+// to do — the card's bell and the toast are already in view. With the window
+// behind something else every waiting session is unseen, the active one
+// included, and the notification is the only channel left. Until the opt-in has
+// been answered (null) the first such report puts the question instead of the
+// notification.
+export function decideDesktopNotice(
+  windowFocused: boolean,
+  enabled: boolean | null,
+): DesktopNotice {
+  if (windowFocused) {
+    return "none"
+  }
+  if (enabled === null) {
+    return "ask"
+  }
+  return enabled ? "notify" : "none"
+}
+
+/** The two desktop channels' opt-ins, as decideStatusNotice reads them. */
+export interface DesktopNotifyPrefs {
+  /** A session blocked on the user — the channel the opt-in dialog asks about,
+   * hence null while it has not been answered. */
+  attention: boolean | null
+  /** A turn that finished. A plain switch in Settings, off until it is turned
+   * on: never inherited from the answer given to the dialog above. */
+  finishedTurn: boolean
+}
+
+// decideStatusNotice routes a status report to the desktop channel that owns it.
+// Each channel has its own opt-in and both answer to the same focus rule, so
+// both go through decideDesktopNotice. Only "waiting" can come back "ask": the
+// finished-turn preference is a boolean, so turning it on is itself the answer
+// and there is no second question to put.
+//
+// A "done" repeated with no run in between is dropped: it is the same finished
+// turn reported again, not a new one to announce. That collapse lives here, off
+// the caller's previous status, rather than in the status store the toast path
+// deliberately bypasses — "waiting" must keep notifying on every report, because
+// a second permission prompt is a second thing to answer.
+export function decideStatusNotice(
+  status: SessionStatus | null,
+  previous: SessionStatus | null,
+  windowFocused: boolean,
+  prefs: DesktopNotifyPrefs,
+): DesktopNotice {
+  if (status === "waiting") {
+    return decideDesktopNotice(windowFocused, prefs.attention)
+  }
+  if (status === "done" && previous !== "done") {
+    return decideDesktopNotice(windowFocused, prefs.finishedTurn)
+  }
+  return "none"
+}

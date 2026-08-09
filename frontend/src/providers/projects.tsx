@@ -5,7 +5,7 @@ import { Bell, Folder } from "lucide-react"
 import { useMatch, useNavigate } from "react-router-dom"
 import type { Project, RecentProject } from "@/lib/api-types"
 import type { StoredProject as StoreProject } from "@/lib/api-types"
-import { ProjectService, Store } from "@/lib/rpc"
+import { ProjectService, Store, System } from "@/lib/rpc"
 import { onAppEvent } from "@/lib/app-events"
 import {
   activeSessionId,
@@ -28,6 +28,7 @@ import { applyOrder, pinFirst } from "@/lib/reorder"
 import { displayPath } from "@/lib/paths"
 import { defaultProviderKind } from "@/lib/providers-store"
 import {
+  decideStatusNotice,
   isIdEvent,
   isStatusEvent,
   isTitleEvent,
@@ -36,7 +37,9 @@ import {
   TITLE_EVENT,
   toSessionStatus,
   TOUCHED_EVENT,
+  type SessionStatus,
 } from "@/lib/session/session-events"
+import { NotificationsOptIn } from "@/components/NotificationsOptIn"
 import { refreshGitStatus } from "@/lib/git/use-git-status"
 import { markSessionSeen } from "@/lib/session/use-session-status"
 import { isRecordingTarget, matchesCombo } from "@/lib/hotkeys"
@@ -157,7 +160,23 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   // event subscription without re-subscribing on every navigation.
   const activeProjectIdRef = useRef(activeProjectId)
   activeProjectIdRef.current = activeProjectId
-  const { hotkeys } = useSettings()
+  const { hotkeys, desktopNotifications, setDesktopNotifications, finishedTurnNotifications } =
+    useSettings()
+  // Read inside the same once-only subscription, for the same reason as the
+  // active project: a preference change must not tear down the status listener.
+  const desktopNotificationsRef = useRef(desktopNotifications)
+  desktopNotificationsRef.current = desktopNotifications
+  const finishedTurnNotificationsRef = useRef(finishedTurnNotifications)
+  finishedTurnNotificationsRef.current = finishedTurnNotifications
+  // The status each session last reported, which decideStatusNotice reads to
+  // drop a finished turn repeated with nothing run in between. A closed session
+  // leaves its entry behind; one string per session id is not worth a sweep.
+  const lastStatusRef = useRef(new Map<string, SessionStatus | null>())
+  // Whether the opt-in dialog is up. Raised by the first report that would have
+  // notified, never at launch — the question lands with the event that motivates
+  // it. Dismissing without an answer leaves the preference unset, so the next
+  // one asks again.
+  const [askNotifications, setAskNotifications] = useState(false)
 
   const applyLoaded = useCallback((loaded: StoreProject[]) => {
     setProjects(loaded.map(toProject))
@@ -476,18 +495,47 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   // for a second waiting report. One toast per report is the contract here.
   useEffect(() => {
     const off = onAppEvent(STATUS_EVENT, (data) => {
-      if (!isStatusEvent(data) || toSessionStatus(data.state) !== "waiting") {
+      if (!isStatusEvent(data)) {
         return
       }
       const { id } = data
-      if (!shouldToastAttention(sessionsRef.current, id, activeProjectIdRef.current)) {
+      const status = toSessionStatus(data.state)
+      const previous = lastStatusRef.current.get(id) ?? null
+      lastStatusRef.current.set(id, status)
+
+      const projectId = projectOfSession(sessionsRef.current, id)
+      const project = sessionsRef.current[projectId]
+      // A session whose project is closed — or whose own row is gone, which
+      // leaves projectOfSession with nothing to answer — has nowhere to route.
+      if (!project) {
         return
       }
-      const projectId = projectOfSession(sessionsRef.current, id)
-      const label =
-        sessionsRef.current[projectId]?.sessions.find((s) => s.id === id)?.label ??
-        UNLABELED_SESSION
+      const label = project.sessions.find((s) => s.id === id)?.label ?? UNLABELED_SESSION
       const projectName = projectsRef.current.find((p) => p.id === projectId)?.name
+
+      // The desktop channel answers to window focus and to its own per-status
+      // preference, both decided by decideStatusNotice; the toast below keeps
+      // its own, unchanged rule. The two are independent: a report can raise
+      // both, either, or neither.
+      const notice = decideStatusNotice(status, previous, document.hasFocus(), {
+        attention: desktopNotificationsRef.current,
+        finishedTurn: finishedTurnNotificationsRef.current,
+      })
+      if (notice === "ask") {
+        setAskNotifications(true)
+      } else if (notice === "notify") {
+        const summary =
+          status === "waiting" ? `${label} needs your input` : `${label} has finished working`
+        // A failure is the backend's to log; the page has nothing to do with it.
+        System.Notify(summary, projectName ?? "").catch(() => {})
+      }
+
+      if (
+        status !== "waiting" ||
+        !shouldToastAttention(sessionsRef.current, id, activeProjectIdRef.current)
+      ) {
+        return
+      }
       toast(
         <div className="flex min-w-0 flex-col">
           <span>{label} needs your input</span>
@@ -641,7 +689,19 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     ],
   )
 
-  return <ProjectsContext.Provider value={value}>{children}</ProjectsContext.Provider>
+  return (
+    <ProjectsContext.Provider value={value}>
+      {children}
+      <NotificationsOptIn
+        open={askNotifications}
+        onDismiss={() => setAskNotifications(false)}
+        onDecide={(enabled) => {
+          setDesktopNotifications(enabled)
+          setAskNotifications(false)
+        }}
+      />
+    </ProjectsContext.Provider>
+  )
 }
 
 export function useProjects(): ProjectsValue {
