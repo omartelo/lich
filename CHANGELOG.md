@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Closing a session can be undone.** The × was the one button in the app with
+  no way back: a stray click deleted the card and the agent's conversation went
+  with it, and pinning only ever protected the session you remembered to pin.
+  Closing one now raises a toast naming it with an **Undo** — the card comes
+  back in the slot it left, under the same name, and the conversation comes back
+  with it: the restored session asks whether to continue where it left off, the
+  same prompt a worktree session resumed from the sidebar gets. Closing a
+  worktree's last session is unchanged — that question is still keep or remove —
+  and a pinned session still offers no close at all.
+
 ## [0.27.0] - 2026-08-07
 
 ### Added

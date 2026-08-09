@@ -39,9 +39,9 @@ export function TerminalHost() {
 
   const visibleSessionId = activeProjectId ? activeSessionId(sessions, activeProjectId) : ""
 
-  // Session ids that have been viewed at least once. A viewed session stays in
-  // the set (ids are unique uuids, so closed sessions leave only harmless dead
-  // entries), which keeps its terminal mounted after the user navigates away.
+  // Session ids that have been viewed at least once, which keeps a terminal
+  // mounted after the user navigates away. A session that leaves the workspace
+  // is pruned from it (see below), not left behind as a dead entry.
   const [spawned, setSpawned] = useState<Set<string>>(() => new Set())
   // The session whose resume prompt is on screen, if any; its spawn waits here.
   const [asking, setAsking] = useState<Session | null>(null)
@@ -95,6 +95,23 @@ export function TerminalHost() {
       live = false
     }
   }, [activeProjectId, visibleSessionId, keepSession])
+
+  // A session that left the workspace leaves both maps with it. Its id can come
+  // back — an undone close restores the very same one — and its terminal did
+  // not: the unmount closed the PTY. A leftover "spawned" entry would mount the
+  // card straight into a fresh PTY, past the gate that asks about the
+  // conversation, and a leftover resume id would then be answered for the user.
+  useEffect(() => {
+    const live = new Set(Object.values(sessions).flatMap((p) => p.sessions.map((s) => s.id)))
+    setSpawned((prev) => {
+      const kept = [...prev].filter((id) => live.has(id))
+      return kept.length === prev.size ? prev : new Set(kept)
+    })
+    setResuming((prev) => {
+      const kept = Object.entries(prev).filter(([id]) => live.has(id))
+      return kept.length === Object.keys(prev).length ? prev : Object.fromEntries(kept)
+    })
+  }, [sessions])
 
   // Answer the prompt and release the spawn: resume is the Claude session id to
   // continue, or "" to start fresh.

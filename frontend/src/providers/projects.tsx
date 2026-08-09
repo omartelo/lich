@@ -67,8 +67,12 @@ interface ProjectsValue {
   /** Resume a worktree: reopen its parked session (continuing its Claude
    * conversation) when one exists, else open a fresh session on it. */
   reopenWorktreeSession: (projectId: string, wt: { name: string; path: string }) => Promise<void>
-  /** Permanently delete a session; deleting the last one leaves the project with none. */
+  /** Permanently delete a session, offering an Undo toast for the stray click;
+   * deleting the last one leaves the project with none. */
   closeSession: (projectId: string, sessionId: string) => void
+  /** Delete a session with no undo offered — the worktree flows, where the
+   * checkout the session lives in is going away with it. */
+  discardSession: (projectId: string, sessionId: string) => void
   /** Close a worktree session but park its row so it can be resumed later. */
   keepSession: (projectId: string, sessionId: string) => void
   /** Focus an existing session within a project. */
@@ -100,6 +104,11 @@ const toProject = (p: StoreProject): Project => ({
 })
 
 const ATTENTION_TOAST_MS = 10_000
+
+// How long the undo stays on offer after a close. Long enough to notice the card
+// is gone and reach the button, short enough that it is not still there when the
+// next one is closed on purpose.
+const UNDO_TOAST_MS = 10_000
 
 const UNLABELED_SESSION = "A session"
 
@@ -341,34 +350,110 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   }, [activeProjectId, newSession, hotkeys])
 
   // dropSession removes a session's card and persists that removal via `persist`
-  // — DeleteSession (gone for good) or CloseSession (parked for a later resume).
-  // Closing the last one leaves the project sessionless: the EmptySessions screen
-  // then offers a new one, rather than a replacement PTY spawning unasked.
+  // — DeleteSession (gone for good) or CloseSession (parked for a later resume)
+  // — returning that write so a caller can chain on it. Closing the last one
+  // leaves the project sessionless: the EmptySessions screen then offers a new
+  // one, rather than a replacement PTY spawning unasked.
   const dropSession = useCallback(
-    (projectId: string, sessionId: string, persist: (activeID: string) => Promise<unknown>) => {
+    (
+      projectId: string,
+      sessionId: string,
+      persist: (activeID: string) => Promise<unknown>,
+    ): Promise<unknown> => {
       const removed = removeSession(sessionsRef.current, projectId, sessionId)
       if (removed === sessionsRef.current) {
-        return
+        return Promise.resolve()
       }
       setSessions(removed)
-      void persist(activeSessionId(removed, projectId))
+      return persist(activeSessionId(removed, projectId))
+    },
+    [],
+  )
+
+  // Undo re-creates the row a close deleted, from what the page still holds,
+  // rather than parking it for the toast's lifetime: parking would need a
+  // reopen-by-id the store has no other reason to grow, and every app exit
+  // inside the toast window would strand a hidden parked row that a later
+  // worktree resume could resurrect. Re-creating owns no window — the close is
+  // final the moment it is made, and the undo is a plain new write. What the
+  // row does not carry back: label_auto (a restored card is auto-titleable
+  // again, even if its name was hand-picked) and the cost ledgers of any
+  // transcript it will not run through again.
+  //
+  // The PTY is not held open for the window either — a closed session's terminal
+  // is gone. The restored card comes back unspawned, so the resume prompt is
+  // what brings the conversation with it, exactly as for a parked worktree.
+  const restoreClosedSession = useCallback(
+    (projectId: string, session: Session, index: number, nextSeq: number) => {
+      const next = restoreSession(sessionsRef.current, projectId, session, index)
+      if (next === sessionsRef.current) {
+        return // the project was closed while the toast was up
+      }
+      setSessions(next)
+      const order = sessionsOf(next, projectId).map((s) => s.id)
+      const { id, label, kind, path = "", providerSessionId } = session
+      void Store.AddSession(projectId, id, label, kind, path, nextSeq)
+        .then(() => providerSessionId && Store.SetProviderSession(id, providerSessionId))
+        // AddSession appends: the slot the card went back to is a reorder.
+        .then(() => Store.ReorderSessions(projectId, order))
     },
     [],
   )
 
   const closeSession = useCallback(
-    (projectId: string, sessionId: string) =>
-      dropSession(projectId, sessionId, (activeID) =>
+    (projectId: string, sessionId: string) => {
+      const project = sessionsRef.current[projectId]
+      const index = project?.sessions.findIndex((s) => s.id === sessionId) ?? -1
+      if (!project || index === -1) {
+        return
+      }
+      const session = project.sessions[index]
+      const { nextSeq } = project
+      // The conversation id lives on the row, not on the card — a session started
+      // in this run never mirrors it into the page — so it is read back before
+      // the delete takes it with it: an undo without it restores an empty card.
+      const conversation = session.providerSessionId
+        ? Promise.resolve(session.providerSessionId)
+        : Store.ProviderSession(sessionId).catch(() => "")
+      const deleted = dropSession(projectId, sessionId, (activeID) =>
+        conversation.then(() => Store.DeleteSession(projectId, sessionId, activeID)),
+      )
+      toast(`Closed ${session.label}`, {
+        duration: UNDO_TOAST_MS,
+        action: {
+          label: "Undo",
+          // Waits on the delete: the store can sit on a lock for seconds, and an
+          // insert that overtook it would be deleted right back out.
+          onClick: () =>
+            void Promise.all([conversation, deleted]).then(([providerSessionId]) =>
+              restoreClosedSession(
+                projectId,
+                { ...session, ...(providerSessionId ? { providerSessionId } : {}) },
+                index,
+                nextSeq,
+              ),
+            ),
+        },
+      })
+    },
+    [dropSession, restoreClosedSession],
+  )
+
+  const discardSession = useCallback(
+    (projectId: string, sessionId: string) => {
+      void dropSession(projectId, sessionId, (activeID) =>
         Store.DeleteSession(projectId, sessionId, activeID),
-      ),
+      )
+    },
     [dropSession],
   )
 
   const keepSession = useCallback(
-    (projectId: string, sessionId: string) =>
-      dropSession(projectId, sessionId, (activeID) =>
+    (projectId: string, sessionId: string) => {
+      void dropSession(projectId, sessionId, (activeID) =>
         Store.CloseSession(projectId, sessionId, activeID),
-      ),
+      )
+    },
     [dropSession],
   )
 
@@ -526,6 +611,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       newWorktreeSession,
       reopenWorktreeSession,
       closeSession,
+      discardSession,
       keepSession,
       activateSession,
       renameSession,
@@ -545,6 +631,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       newWorktreeSession,
       reopenWorktreeSession,
       closeSession,
+      discardSession,
       keepSession,
       activateSession,
       renameSession,

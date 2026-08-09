@@ -36,15 +36,19 @@ export function useWorktreeClose(
   projectPath: string,
   sessions: Session[],
 ): WorktreeClose {
-  const { closeSession, keepSession } = useProjects()
+  const { closeSession, discardSession, keepSession } = useProjects()
   const [pendingClose, setPendingClose] = useState<Session | null>(null)
   const [pendingForce, setPendingForce] = useState<Session | null>(null)
 
   // Close first so the PTY running inside the worktree dies before git tries
   // to remove it. A refused removal surfaces as a toast; the checkout stays on
   // disk and reappears in the new-worktree picker.
+  //
+  // discardSession, not closeSession: the checkout is going away in the same
+  // breath, so an undo would restore a card rooted in a directory that no
+  // longer exists.
   const closeAndRemove = (session: Session, force: boolean) => {
-    closeSession(projectId, session.id)
+    discardSession(projectId, session.id)
     // The checkout is going away, so no parked row for it may linger — one would
     // otherwise resurface a resume against a worktree that no longer exists.
     void Store.PurgeWorktreeSessions(projectId, session.path ?? "")

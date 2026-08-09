@@ -379,6 +379,30 @@ describe("restoreSession", () => {
   })
 })
 
+// The undo behind the close toast: the same session comes back where it was,
+// still carrying the conversation it ran, without minting a new numbered card.
+describe("closeSession then restoreSession (undo)", () => {
+  const closedAt = 1
+
+  it("returns an equivalent session to its slot, conversation intact", () => {
+    const before = withClaudeSession(buildState(3), "s2", "claude-abc")
+    const closed = closeSession(before, P, "s2")
+    const undone = restoreSession(closed, P, before[P].sessions[closedAt], closedAt)
+
+    expect(sessionsOf(undone, P).map((s) => s.id)).toEqual(["s1", "s2", "s3"])
+    expect(sessionsOf(undone, P)[closedAt]).toEqual(before[P].sessions[closedAt])
+    expect(resumableSession(undone, P, "s2")?.providerSessionId).toBe("claude-abc")
+    expect(activeSessionId(undone, P)).toBe("s2")
+    expect(undone[P].nextSeq).toBe(before[P].nextSeq)
+  })
+
+  it("does nothing when the project was closed in between", () => {
+    const before = buildState(3)
+    const closed = removeProject(closeSession(before, P, "s2"), P)
+    expect(restoreSession(closed, P, before[P].sessions[closedAt], closedAt)).toBe(closed)
+  })
+})
+
 describe("activeTarget", () => {
   const root = "/repo"
 

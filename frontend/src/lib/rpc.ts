@@ -277,6 +277,11 @@ export const Store = {
     call<null>("store.PurgeWorktreeSessions", [projectID, path]),
   RenameSession: (sessionID: string, label: string) =>
     call<null>("store.RenameSession", [sessionID, label]),
+  /** The provider conversation id recorded for a session, "" when none. */
+  ProviderSession: (sessionID: string) => call<string>("store.ProviderSession", [sessionID]),
+  /** Re-attach a provider conversation id to a session row. */
+  SetProviderSession: (sessionID: string, providerSessionID: string) =>
+    call<null>("store.SetProviderSession", [sessionID, providerSessionID]),
   /** Pin (or unpin) a session: it sorts to the head of its project's list and
    * refuses to close until unpinned. */
   SetSessionPinned: (sessionID: string, pinned: boolean) =>
