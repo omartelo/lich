@@ -10,7 +10,7 @@ import { applyOrder } from "@/lib/reorder"
 
 // Provider ids that can back a session, mirrored from internal/providers.Registry
 // (Go) — keep in sync. A session's kind is one of these or the plain shell.
-export const PROVIDER_KINDS = ["claude", "codex", "opencode", "crush"] as const
+export const PROVIDER_KINDS = ["claude", "codex", "opencode", "omp", "crush"] as const
 export type ProviderKind = (typeof PROVIDER_KINDS)[number]
 
 // What a session's PTY runs: a provider's CLI or the user's shell. Values match
@@ -192,18 +192,24 @@ export function sortPinned(sessions: Session[]): Session[] {
 }
 
 // neighborSessionId returns the session one step from `sessionId` in the order
-// the sidebar draws (sortPinned over the project's list), wrapping at both ends.
-// "" means there is nowhere to go — unknown project, no sessions, or a single
-// one — and the caller leaves focus alone. A `sessionId` no longer in the list
-// (its session was closed) lands on the end the step comes from, so the press
-// still moves somewhere.
+// the sidebar draws, wrapping at both ends. "" means there is nowhere to go —
+// unknown project, no sessions, or a single one — and the caller leaves focus
+// alone. A `sessionId` no longer in the list (its session was closed) lands on
+// the end the step comes from, so the press still moves somewhere.
+//
+// The order is the grouped one, not the stored flat list: a session opened in
+// the project root after a worktree one sits between its own group's cards in
+// the state and under them on screen, so walking the flat list would jump a
+// divider and come back.
 export function neighborSessionId(
   state: SessionState,
   projectId: string,
   sessionId: string,
   step: 1 | -1,
 ): string {
-  const sessions = sortPinned(sessionsOf(state, projectId))
+  const sessions = groupByWorktree(sortPinned(sessionsOf(state, projectId))).flatMap(
+    (group) => group.sessions,
+  )
   if (sessions.length < 2) {
     return ""
   }
@@ -330,6 +336,25 @@ export function groupByWorktree(sessions: Session[]): SessionGroup[] {
     group.sessions.push(session)
   }
   return groups
+}
+
+// The project root group's stand-in id. Its path is the empty string, which a
+// dnd-kit sortable id cannot be.
+export const ROOT_GROUP_KEY = "__root__"
+
+export function groupKey(path: string): string {
+  return path || ROOT_GROUP_KEY
+}
+
+// orderGroups returns the flat session-id order that lays the groups out in the
+// given key order, each group keeping its own internal order. Group order is not
+// stored anywhere — groupByWorktree reads it off the flat list — so moving a
+// group means moving its whole block of ids. A key naming no group contributes
+// nothing, which makes the result fail reorderSessions' id-set check rather than
+// silently drop that group's sessions.
+export function orderGroups(groups: SessionGroup[], keys: string[]): string[] {
+  const byKey = new Map(groups.map((group) => [groupKey(group.path), group]))
+  return keys.flatMap((key) => byKey.get(key)?.sessions.map((session) => session.id) ?? [])
 }
 
 // True only for the last session in a worktree checkout. Removing a checkout a

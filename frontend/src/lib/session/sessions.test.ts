@@ -8,7 +8,9 @@ import {
   isLastWorktreeSession,
   isSessionKind,
   neighborSessionId,
+  orderGroups,
   projectOfSession,
+  ROOT_GROUP_KEY,
   removeProject,
   renameSession,
   reorderSessions,
@@ -36,7 +38,7 @@ function buildState(n: number): SessionState {
 
 describe("isSessionKind", () => {
   it("accepts every provider kind and the shell", () => {
-    for (const kind of ["claude", "codex", "opencode", "crush", "shell"]) {
+    for (const kind of ["claude", "codex", "opencode", "omp", "crush", "shell"]) {
       expect(isSessionKind(kind)).toBe(true)
     }
   })
@@ -304,6 +306,17 @@ describe("neighborSessionId", () => {
     expect(neighborSessionId(state, P, "s2", 1)).toBe("s3")
   })
 
+  // A root session opened after a worktree one lands last in the stored list but
+  // draws under its own group, so the walk follows the groups the sidebar shows.
+  it("walks the worktree groups as they are drawn", () => {
+    let state = addSession({}, P, "s1")
+    state = addSession(state, P, "wt1", "claude", "/wt")
+    state = addSession(state, P, "s2")
+    expect(neighborSessionId(state, P, "s1", 1)).toBe("s2")
+    expect(neighborSessionId(state, P, "s2", 1)).toBe("wt1")
+    expect(neighborSessionId(state, P, "wt1", 1)).toBe("s1")
+  })
+
   it("has nowhere to go with zero or one session", () => {
     expect(neighborSessionId({}, P, "", 1)).toBe("")
     expect(neighborSessionId(buildState(1), P, "s1", 1)).toBe("")
@@ -503,5 +516,37 @@ describe("groupByWorktree", () => {
     expect(groups.map((g) => g.path)).toEqual(["/wt/a", "/wt/b"])
     expect(groups[0].sessions.map((x) => x.id)).toEqual(["a1", "a2"])
     expect(groups[1].sessions.map((x) => x.id)).toEqual(["b1"])
+  })
+})
+
+describe("orderGroups", () => {
+  const s = (id: string, path?: string): Session => ({
+    id,
+    label: id,
+    kind: "shell",
+    ...(path ? { path } : {}),
+  })
+  const groups = groupByWorktree([
+    s("r1"),
+    s("r2"),
+    s("a1", "/wt/a"),
+    s("b1", "/wt/b"),
+    s("b2", "/wt/b"),
+  ])
+
+  it("moves a group's whole block, keeping its internal order", () => {
+    const ids = orderGroups(groups, ["/wt/b", ROOT_GROUP_KEY, "/wt/a"])
+    expect(ids).toEqual(["b1", "b2", "r1", "r2", "a1"])
+  })
+
+  it("keys the pathless root group by ROOT_GROUP_KEY, not by ''", () => {
+    expect(orderGroups(groups, [ROOT_GROUP_KEY])).toEqual(["r1", "r2"])
+    expect(orderGroups(groups, [""])).toEqual([])
+  })
+
+  // A short list is what reorderSessions rejects, so a group closed mid-drag
+  // drops the whole stale order instead of taking its sessions with it.
+  it("contributes nothing for a key naming no group", () => {
+    expect(orderGroups(groups, ["/wt/gone"])).toEqual([])
   })
 })

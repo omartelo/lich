@@ -22,19 +22,7 @@ func initRepo(t *testing.T) (string, func(args ...string) string) {
 	if out, err := exec.Command("git", "init", "-b", "main", repo).CombinedOutput(); err != nil {
 		t.Skipf("git init unavailable: %v (%s)", err, out)
 	}
-	git := func(args ...string) string {
-		t.Helper()
-		cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
-		cmd.Env = append(os.Environ(),
-			"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
-			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t",
-		)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("git %v: %v (%s)", args, err, out)
-		}
-		return strings.TrimSpace(string(out))
-	}
+	git := gitIn(t, repo)
 	// Byte-exact file content is part of the assertions (DiscardFile restores
 	// HEAD bytes); pin autocrlf so neither Git for Windows' default nor the
 	// machine's global config rewrites line endings on checkout.

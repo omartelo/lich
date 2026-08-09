@@ -2,6 +2,7 @@ package project
 
 import (
 	"bytes"
+	"context"
 	"os/exec"
 	"strings"
 
@@ -14,6 +15,14 @@ import (
 // of exec.Command so no call site can forget it.
 func command(name string, args ...string) *exec.Cmd {
 	cmd := exec.Command(name, args...)
+	winexec.Hide(cmd)
+	return cmd
+}
+
+// commandContext is command for a call that must be killed if it outlives ctx —
+// anything reaching the network, where "slow" has no upper bound.
+func commandContext(ctx context.Context, name string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, name, args...)
 	winexec.Hide(cmd)
 	return cmd
 }

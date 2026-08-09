@@ -1,5 +1,7 @@
 import { useState, useSyncExternalStore } from "react"
 import { useMatch, useNavigate } from "react-router-dom"
+import { DndContext, closestCenter } from "@dnd-kit/core"
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { GitBranch, GitPullRequestArrow, Plus, Terminal } from "lucide-react"
 import { ProjectService } from "@/lib/rpc"
 import { closeSettings, isSettingsOpen, subscribeSettingsCard } from "@/lib/settings-card-store"
@@ -25,7 +27,15 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useProjects } from "@/providers/projects"
 import { queueSetup } from "@/lib/terminal/setup-queue"
-import { activeSessionId, groupByWorktree, sessionsOf, sortPinned } from "@/lib/session/sessions"
+import {
+  activeSessionId,
+  groupByWorktree,
+  groupKey,
+  orderGroups,
+  sessionsOf,
+  sortPinned,
+} from "@/lib/session/sessions"
+import { useSortableList, verticalAxis } from "@/lib/use-sortable-list"
 import { CloseWorktreeDialog, ForceRemoveWorktreeDialog } from "./CloseWorktreeDialog"
 import { SessionGroup } from "./SessionGroup"
 import { WorktreeDialog } from "./WorktreeDialog"
@@ -90,6 +100,13 @@ export function SessionSidebar() {
   // sidebar — groupByWorktree buckets by first appearance.
   const list = sortPinned(sessionsOf(sessions, projectId ?? ""))
   const worktreeClose = useWorktreeClose(projectId ?? "", path, list)
+  const groups = groupByWorktree(list)
+  // Dragging a group moves its whole block of sessions inside the flat list the
+  // groups are read back from — there is no separate group order to store.
+  const { sensors, onDragEnd } = useSortableList(
+    groups.map((group) => groupKey(group.path)),
+    (keys) => reorderSessions(projectId ?? "", orderGroups(groups, keys)),
+  )
 
   if (!projectId) {
     return null
@@ -99,7 +116,6 @@ export function SessionSidebar() {
   // No session card highlights while a full-screen route (Settings, Pulls) owns
   // the view; its own sidebar entry reads as active instead.
   const activeId = onSettings || onPullsRoute ? "" : realActiveId
-  const groups = groupByWorktree(list)
 
   // A drag reorders one group only; splice its new order back into the flat list
   // in group order and persist the whole thing. reorderSessions bails on any
@@ -202,39 +218,51 @@ export function SessionSidebar() {
             }}
           />
         )}
-        {groups.map((group) => {
-          const groupActive = group.sessions.some((s) => s.id === realActiveId)
-          return (
-            <SessionGroup
-              key={group.path || "__root__"}
-              projectId={projectId}
-              path={group.path}
-              sessions={group.sessions}
-              projectPath={path}
-              activeId={activeId}
-              // The divider only earns its place once a worktree splits the list;
-              // a lone group keeps the old flat, header-less look.
-              showHeader={groups.length > 1}
-              onReorder={(ids) => commitGroupOrder(group.path, ids)}
-              onClose={worktreeClose.requestClose}
-              pullsActive={onPullsRoute && groupActive}
-              onPulls={() => {
-                openPulls(group.path || path)
-                const target = groupActive ? realActiveId : group.sessions[0]?.id
-                if (target) {
-                  activateSession(projectId, target)
-                }
-                navigate(`/projects/${projectId}/pulls`)
-              }}
-              onClosePulls={() => {
-                closePulls(group.path || path)
-                if (onPullsRoute && groupActive) {
-                  navigate(`/projects/${projectId}`)
-                }
-              }}
-            />
-          )
-        })}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          modifiers={[verticalAxis]}
+          onDragEnd={onDragEnd}
+        >
+          <SortableContext
+            items={groups.map((group) => groupKey(group.path))}
+            strategy={verticalListSortingStrategy}
+          >
+            {groups.map((group) => {
+              const groupActive = group.sessions.some((s) => s.id === realActiveId)
+              return (
+                <SessionGroup
+                  key={groupKey(group.path)}
+                  projectId={projectId}
+                  path={group.path}
+                  sessions={group.sessions}
+                  projectPath={path}
+                  activeId={activeId}
+                  // The divider only earns its place once a worktree splits the
+                  // list; a lone group keeps the old flat, header-less look.
+                  showHeader={groups.length > 1}
+                  onReorder={(ids) => commitGroupOrder(group.path, ids)}
+                  onClose={worktreeClose.requestClose}
+                  pullsActive={onPullsRoute && groupActive}
+                  onPulls={() => {
+                    openPulls(group.path || path)
+                    const target = groupActive ? realActiveId : group.sessions[0]?.id
+                    if (target) {
+                      activateSession(projectId, target)
+                    }
+                    navigate(`/projects/${projectId}/pulls`)
+                  }}
+                  onClosePulls={() => {
+                    closePulls(group.path || path)
+                    if (onPullsRoute && groupActive) {
+                      navigate(`/projects/${projectId}`)
+                    }
+                  }}
+                />
+              )
+            })}
+          </SortableContext>
+        </DndContext>
       </div>
 
       <WorktreeDialog

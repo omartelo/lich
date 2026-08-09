@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { formatCost } from "./session-cost"
+import { budgetShare, formatCost } from "./session-cost"
 
 describe("formatCost", () => {
   it("shows cents once there are dollars to anchor them", () => {
@@ -27,5 +27,35 @@ describe("formatCost", () => {
     expect(formatCost(-1)).toBe("")
     expect(formatCost(Number.NaN)).toBe("")
     expect(formatCost(Number.POSITIVE_INFINITY)).toBe("")
+  })
+})
+
+describe("budgetShare", () => {
+  it("is the share of the ceiling already spent", () => {
+    expect(budgetShare(5, 10)).toBe(50)
+    expect(budgetShare(0.25, 1)).toBe(25)
+  })
+
+  // The colour changes at 80 and 95 (see usageColor), so these are the two
+  // shares that actually decide what the footer looks like.
+  it("reaches the amber and red marks at the spends that earn them", () => {
+    expect(budgetShare(8, 10)).toBe(80)
+    expect(budgetShare(9.5, 10)).toBe(95)
+    expect(budgetShare(7.9, 10)).toBeCloseTo(79)
+  })
+
+  it("caps past the ceiling — there is no colour louder than red", () => {
+    expect(budgetShare(25, 10)).toBe(100)
+  })
+
+  it("is the muted end when no ceiling is set", () => {
+    expect(budgetShare(12, 0)).toBe(0)
+    expect(budgetShare(12, -5)).toBe(0)
+  })
+
+  it("is the muted end for a cost that cannot be one", () => {
+    expect(budgetShare(Number.NaN, 10)).toBe(0)
+    expect(budgetShare(-1, 10)).toBe(0)
+    expect(budgetShare(1, Number.POSITIVE_INFINITY)).toBe(0)
   })
 })

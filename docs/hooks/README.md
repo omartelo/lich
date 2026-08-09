@@ -33,8 +33,11 @@ stays safe to install globally.
 
 These three are the hook contract, not the whole session environment: lich also
 exports `LICH_WORKTREE_PORT`, a dev-server port belonging to the session's
-checkout. It addresses nothing in lich and no hook reads it — it exists for the
-project's own setup script and commands (`PORT=$LICH_WORKTREE_PORT pnpm dev`).
+checkout, and `LICH_PROJECT_DIR`, the project's own directory (the main
+checkout, which for a session running in a worktree is somewhere else entirely).
+Neither addresses anything in lich and no hook reads them — they exist for the
+project's own setup script and commands (`PORT=$LICH_WORKTREE_PORT pnpm dev`,
+`cp --reflink=auto -r "$LICH_PROJECT_DIR/node_modules" .`).
 
 ## Client rules (all hooks)
 

@@ -13,6 +13,7 @@ const (
 	Claude   = "claude"
 	Codex    = "codex"
 	OpenCode = "opencode"
+	OMP      = "omp"
 	Crush    = "crush"
 )
 
@@ -31,6 +32,7 @@ var Registry = []Provider{
 	{ID: Claude, Name: "Claude Code", Binaries: []string{"claude"}},
 	{ID: Codex, Name: "Codex", Binaries: []string{"codex"}},
 	{ID: OpenCode, Name: "opencode", Binaries: []string{"opencode"}},
+	{ID: OMP, Name: "oh-my-pi", Binaries: []string{"omp"}},
 	{ID: Crush, Name: "Crush", Binaries: []string{"crush"}},
 }
 
