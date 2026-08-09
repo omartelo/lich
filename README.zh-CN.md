@@ -40,9 +40,10 @@
 
 - **自带智能体。** [Claude Code](https://www.anthropic.com/claude-code)（Anthropic）、
   [Codex](https://github.com/openai/codex)（OpenAI）、
-  [opencode](https://github.com/sst/opencode)（SST）和
-  [Crush](https://github.com/charmbracelet/crush)（Charm）都是一等公民：在设置里把
-  lich 指向各自的二进制文件，选一个默认的，或者逐个会话单独指定。
+  [opencode](https://github.com/sst/opencode)（SST）、oh-my-pi 和
+  [Crush](https://github.com/charmbracelet/crush)（Charm）都是一等公民：首次启动会
+  问你装了其中哪几个，之后可以在设置里把 lich 指向各自的二进制文件，选一个默认的，
+  或者逐个会话单独指定。
 - **终端优先的会话。** 真正由 PTY 支撑的 shell，每个项目可以开好几个，由 xterm.js 在
   GPU 上（WebGL）渲染。可以搜索滚动缓冲区（`Ctrl+F`）；缓冲区能挺过整页刷新。Warp 风格
   的底栏跟随 `cd` 并显示 git 状态；对于 Claude 会话，它还会标明模型、用一个圆环填充已
@@ -75,11 +76,13 @@
   重新上色。从一个 git 仓库安装一套主题包，等它发布新版本时就地更新；**Save template**
   会写出一份列明所有受支持颜色的模板。格式与仓库布局见
   [`docs/themes.md`](docs/themes.md)。
-- **窗口里的其余部分。** `Ctrl`/`Cmd`+`K` 在会话与项目之间跳转。某个会话在等你输入时会
-  弹出一个 toast，并在铃铛上点亮一个小圆点，统一收进带标题的下拉列表；装上
-  [lich 插件](https://github.com/omartelo/lich-plugin)之后，Claude 会话还会给自己的卡片
-  起标题，并在它写入文件的那一刻刷新 git。设置 › 帮助可以打开日志文件夹和一份预填好的
-  bug 报告。
+- **窗口里的其余部分。** `Ctrl`/`Cmd`+`K` 在会话与项目之间跳转 —— 既可以按名字，也可以
+  按对话里说过的内容；`Ctrl+Shift+↓`/`↑` 则不经过命令面板直接切换。某个会话在等你输入时会
+  弹出一个 toast，并在铃铛上点亮一个小圆点，统一收进带标题的下拉列表；如果你允许，在 lich
+  窗口不是当前窗口时还会发一条桌面通知。装上
+  [lich 插件](https://github.com/omartelo/lich-plugin)之后（Claude Code、Codex 或两者都装），
+  会话还会给自己的卡片起标题，并在它写入文件的那一刻刷新 git。设置 › 帮助可以打开日志文件夹
+  和一份预填好的 bug 报告。
 
 <div align="center">
   <img src="docs/media/pulls-list.png" alt="Pull Request 列表：每个开启的 Pull Request 及其作者、时长和检查状态，由筛选框收窄" width="900" />
@@ -116,8 +119,8 @@ Homebrew 安装可以绕开 Gatekeeper 的提示；从 Releases 页面下载的�
 1. **安装**并启动 `lich`。
 2. **打开一个项目** —— 标签栏里的 `+` 会列出你最近关掉的项目，也能调起系统的文件夹
    选择器；指向一个 git 仓库即可。
-3. **把 lich 指向你的智能体** —— 在设置 › Providers 里，为 Claude Code、Codex、
-   opencode 或 Crush 设置二进制文件路径，并选一个默认的。
+3. **把 lich 指向你的智能体** —— 首次启动会列出在你机器上找到的智能体；之后可以在
+   设置 › Providers 里设置各自的二进制文件路径，并改掉新会话默认用哪一个。
 4. **开一个会话** —— *New Session* 会在项目里启动一个跑着你的智能体的终端。
 5. **分出一个 worktree**（可选）—— 从任意基础分支创建一个；lich 会为它播种文件，并把你
    带进一个新的会话。

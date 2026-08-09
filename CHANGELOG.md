@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-08-09
+
 ### Added
 
 - **A Codex session resumes, and wears its own icon.** The companion plugin now
@@ -115,6 +117,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stacked on another feature branch is measured against the wrong one. The
   readout is absent entirely on a repository with no `origin`.
 
+- **lich asks which agents you use, instead of assuming Claude Code.** The first
+  launch opened on a Claude session because Claude was the only harness lich's
+  author ran: a machine with Codex and nothing else met a first session that died
+  on `claude: command not found`, and the three other harnesses lich supports were
+  off in a Settings screen nobody had been told about. lich now scans for agents
+  before showing anything and opens on the providers it found — a list of what is
+  actually installed, a switch each, and the pick of which one new sessions spawn.
+  The first one found is on already, so the common case is one click, and the
+  panel is the Settings › Providers screen verbatim, so the place to change it
+  later is a screen already met. Nothing installed is its own answer: lich names
+  what it looks for rather than failing inside a terminal. Existing installs that
+  never chose a default see it once.
+
+- **oh-my-pi joins the harnesses lich can run.** A Pi fork with an IDE wired in,
+  spawned like the rest from its `omp` binary and off until turned on.
+
+- **Switch sessions from the keyboard.** Reaching another session without the
+  mouse meant opening the command palette and typing its name. **Ctrl+Shift+↓**
+  and **Ctrl+Shift+↑** now step to the next and previous session of the project
+  you are in, wrapping around at both ends and walking the sidebar exactly as it
+  is drawn — pinned cards first, worktree groups in the order the dividers show.
+  Both fire while you are typing in a terminal, and both are rebindable in
+  Settings › Hotkeys like the shortcuts already there.
+
 ### Changed
 
 - **A worktree's dev-server port is now reserved, not guessed.** `LICH_WORKTREE_PORT`
@@ -146,30 +172,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   header, and the divider stopped telling you which sessions were whose. The
   header now reads the name the worktree was created with, slashes and all. A
   worktree without a slash in it looks exactly as it did.
-
-- **lich asks which agents you use, instead of assuming Claude Code.** The first
-  launch opened on a Claude session because Claude was the only harness lich's
-  author ran: a machine with Codex and nothing else met a first session that died
-  on `claude: command not found`, and the three other harnesses lich supports were
-  off in a Settings screen nobody had been told about. lich now scans for agents
-  before showing anything and opens on the providers it found — a list of what is
-  actually installed, a switch each, and the pick of which one new sessions spawn.
-  The first one found is on already, so the common case is one click, and the
-  panel is the Settings › Providers screen verbatim, so the place to change it
-  later is a screen already met. Nothing installed is its own answer: lich names
-  what it looks for rather than failing inside a terminal. Existing installs that
-  never chose a default see it once.
-
-- **oh-my-pi joins the harnesses lich can run.** A Pi fork with an IDE wired in,
-  spawned like the rest from its `omp` binary and off until turned on.
-
-- **Switch sessions from the keyboard.** Reaching another session without the
-  mouse meant opening the command palette and typing its name. **Ctrl+Shift+↓**
-  and **Ctrl+Shift+↑** now step to the next and previous session of the project
-  you are in, wrapping around at both ends and walking the sidebar exactly as it
-  is drawn — pinned cards first, worktree groups in the order the dividers show.
-  Both fire while you are typing in a terminal, and both are rebindable in
-  Settings › Hotkeys like the shortcuts already there.
 
 ## [0.27.0] - 2026-08-07
 
@@ -1684,7 +1686,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.27.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.28.0...HEAD
+[0.28.0]: https://github.com/omartelo/lich/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/omartelo/lich/compare/v0.26.1...v0.27.0
 [0.26.1]: https://github.com/omartelo/lich/compare/v0.26.0...v0.26.1
 [0.26.0]: https://github.com/omartelo/lich/compare/v0.25.0...v0.26.0

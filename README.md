@@ -42,9 +42,10 @@ version is in [CHANGELOG.md](CHANGELOG.md).
 
 - **Bring your own agent.** [Claude Code](https://www.anthropic.com/claude-code)
   (Anthropic), [Codex](https://github.com/openai/codex) (OpenAI),
-  [opencode](https://github.com/sst/opencode) (SST) and
+  [opencode](https://github.com/sst/opencode) (SST), oh-my-pi and
   [Crush](https://github.com/charmbracelet/crush) (Charm) are all first-class:
-  point lich at each binary in Settings, pick the default, or choose per session.
+  the first launch asks which of them you have, then point lich at each binary in
+  Settings, pick the default, or choose per session.
 - **Terminal-first sessions.** Real PTY-backed shells, several per project,
   rendered by xterm.js on the GPU (WebGL). Search the scrollback (`Ctrl+F`); the
   buffer survives a full page reload. A Warp-style footer follows `cd` and
@@ -87,8 +88,11 @@ version is in [CHANGELOG.md](CHANGELOG.md).
   **Save template** writes a starter naming every supported color. Format and
   repository layout: [`docs/themes.md`](docs/themes.md).
 - **The rest of the window.** `Ctrl`/`Cmd`+`K` jumps between sessions and
-  projects. A session waiting on your input raises a toast and a dot on the bell,
-  collected in a titled dropdown; with the
+  projects — by name, or by what was said in the conversation; `Ctrl+Shift+↓`/`↑`
+  steps between them without the palette. A session waiting on your input raises
+  a toast and a dot on the bell, collected in a titled dropdown, and — if you let
+  it — a desktop notification when the lich window is not the one you are in;
+  with the
   [lich plugin](https://github.com/omartelo/lich-plugin) installed — in Claude
   Code, in Codex, or in both — a session also titles its own card and refreshes
   git the moment it writes a file.
@@ -131,8 +135,9 @@ hand.
 1. **Install** and launch `lich`.
 2. **Open a project** — the `+` in the tab strip lists what you closed recently
    and opens your OS folder picker; point it at a git repository.
-3. **Point lich at your agent** — in Settings › Providers, set the binary path
-   for Claude Code, Codex, opencode or Crush, and choose a default.
+3. **Point lich at your agent** — the first launch lists the agents it found on
+   your machine; in Settings › Providers you can set each binary path and change
+   which one new sessions default to.
 4. **Start a session** — *New Session* spawns a terminal running your agent in
    the project.
 5. **Branch off a worktree** *(optional)* — create one from any base branch;
