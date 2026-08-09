@@ -46,6 +46,7 @@ const TERMINAL_THEME_STORAGE_KEY = "lich.appearance.terminalTheme"
 const CONTEXT_USAGE_STORAGE_KEY = "lich.footer.contextUsage"
 const COST_BUDGET_STORAGE_KEY = "lich.footer.costBudget"
 const DESKTOP_NOTIFICATIONS_STORAGE_KEY = "lich.notifications.desktop"
+const FINISHED_TURN_NOTIFICATIONS_STORAGE_KEY = "lich.notifications.finishedTurn"
 
 // DEFAULT_FONT is the bundled FiraCode Nerd Font Mono. It is not installed via
 // fontconfig, so it must be offered explicitly alongside the system fonts.
@@ -122,6 +123,13 @@ const readCostBudget = (): number =>
 const readDesktopNotifications = (): boolean | null =>
   parseOptionalBoolPref(readPref(DESKTOP_NOTIFICATIONS_STORAGE_KEY))
 
+// Off, and its own key: a finished turn is a weaker reason to interrupt someone
+// than a session blocked on them, so an install that already answered the opt-in
+// above never inherits it. Turning this on is an explicit act, hence a plain
+// flag with no undecided state — the dialog is not put for this channel.
+const readFinishedTurnNotifications = (): boolean =>
+  parseBoolPref(readPref(FINISHED_TURN_NOTIFICATIONS_STORAGE_KEY), false)
+
 interface SettingsValue {
   /** Terminal font family, applied globally across all project terminals. */
   font: string
@@ -164,6 +172,11 @@ interface SettingsValue {
    * is unfocused. null until the user has answered the opt-in dialog. */
   desktopNotifications: boolean | null
   setDesktopNotifications: (enabled: boolean) => void
+  /** Whether a session that finished its turn notifies the desktop while the
+   * lich window is unfocused. Independent of the opt-in above, and off until
+   * the user turns it on. */
+  finishedTurnNotifications: boolean
+  setFinishedTurnNotifications: (enabled: boolean) => void
 }
 
 const SettingsContext = createContext<SettingsValue | null>(null)
@@ -182,6 +195,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [costBudget, setCostBudgetState] = useState<number>(readCostBudget)
   const [desktopNotifications, setDesktopNotificationsState] = useState<boolean | null>(
     readDesktopNotifications,
+  )
+  const [finishedTurnNotifications, setFinishedTurnNotificationsState] = useState<boolean>(
+    readFinishedTurnNotifications,
   )
 
   useEffect(() => {
@@ -344,6 +360,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     writePref(DESKTOP_NOTIFICATIONS_STORAGE_KEY, next)
   }, [])
 
+  const setFinishedTurnNotifications = useCallback((next: boolean) => {
+    setFinishedTurnNotificationsState(next)
+    writePref(FINISHED_TURN_NOTIFICATIONS_STORAGE_KEY, next)
+  }, [])
+
   // Apply the resolved theme's CSS variables and toggle `.dark` for existing
   // dark variants. For "system", follow the OS scheme and keep following it
   // live.
@@ -457,6 +478,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setCostBudget,
       desktopNotifications,
       setDesktopNotifications,
+      finishedTurnNotifications,
+      setFinishedTurnNotifications,
     }),
     [
       font,
@@ -485,6 +508,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setCostBudget,
       desktopNotifications,
       setDesktopNotifications,
+      finishedTurnNotifications,
+      setFinishedTurnNotifications,
     ],
   )
 

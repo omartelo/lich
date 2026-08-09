@@ -43,6 +43,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a dialog puts the question, and either answer settles it. **Settings ›
   Notifications** holds the switch afterwards, whichever way you answered.
 
+- **And so does a session that finished working.** The other half of walking
+  away: a run you left going ends, says nothing, and you find out whenever you
+  next look. A second switch under **Settings › Notifications** raises a desktop
+  notification when a session ends its turn with nothing left to ask you — same
+  rule as the one above, so it only fires while the lich window is not the one
+  you are in. It is off until you turn it on, including if you already said yes
+  to the question above: the two are separate, because a long run finishing and a
+  session blocked on you are not equally worth an interruption. Nothing changes
+  inside lich — no new toast; the card and its project tab still do the telling.
+
 - **A worktree's setup script can now find the project it came from.** Sessions get
   `$LICH_PROJECT_DIR`, the project's own checkout — which, for a session running in a
   worktree, is somewhere else entirely and previously had no name the script could
