@@ -22,6 +22,18 @@ export interface DiffStats {
   head: string
 }
 
+/** internal/project.BaseStatus — where a checkout stands against the branch it
+ * will merge into. null from the service when there is nothing to answer from:
+ * no origin, or no origin/HEAD to name a base with. */
+export interface BaseStatus {
+  /** The branch merged into, in "origin/main" form. */
+  base: string
+  /** Commits the base has that this checkout does not. */
+  behind: number
+  /** Repo-relative paths a merge would collide on; empty when it is clean. */
+  conflicts: string[] | null
+}
+
 /** internal/project.PullRequest — the branch's open GitHub PR (gh CLI). */
 export interface PullRequest {
   number: number
@@ -263,6 +275,14 @@ export interface StoredSession {
   path: string
   providerSessionId: string
   pinned: boolean
+}
+
+/** internal/terminal.TranscriptMatch — a session whose conversation mentions a
+ * search query, with its newest matching message. */
+export interface TranscriptMatch {
+  id: string
+  snippet: string
+  count: number
 }
 
 /** internal/store.Project — a persisted project with its session state. */

@@ -11,6 +11,7 @@ func TestDefaultBinary(t *testing.T) {
 		Claude:   "claude",
 		Codex:    "codex",
 		OpenCode: "opencode",
+		OMP:      "omp",
 		Crush:    "crush",
 		"nope":   "",
 		"":       "",
@@ -52,8 +53,8 @@ func TestDetect(t *testing.T) {
 	if got[1].ID != Codex || got[1].Installed {
 		t.Errorf("codex = %+v, want not installed", got[1])
 	}
-	if got[3].ID != Crush || !got[3].Installed || got[3].Path != "/opt/bin/crush" {
-		t.Errorf("crush = %+v, want installed at /opt/bin/crush", got[3])
+	if got[4].ID != Crush || !got[4].Installed || got[4].Path != "/opt/bin/crush" {
+		t.Errorf("crush = %+v, want installed at /opt/bin/crush", got[4])
 	}
 }
 

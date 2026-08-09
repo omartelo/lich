@@ -19,6 +19,114 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   survives switching projects, so a session that started waiting while you were
   looking elsewhere comes back with its real age, not a fresh clock.
 
+- **The command palette searches what was said, not just what things are
+  called.** Finding the session where you worked something out meant remembering
+  the name you gave it — and the name is usually the one thing you don't
+  remember. Type three characters or more and a **Messages** group appears under
+  the sessions and projects, listing the sessions whose conversation mentions
+  them, each with the sentence it matched and how many of its messages did;
+  Enter opens the session as any other palette row does. It reads your turns and
+  the agent's, not tool output, and it looks inside the conversation a session is
+  running now — what was said before a `/clear` is in a transcript lich can no
+  longer name. Claude Code sessions only, like the rest of the transcript
+  readouts.
+
+- **A spend ceiling for the footer cost readout.** The cost of a session was a
+  number you had to go and read; a session left running past what you meant to
+  spend on it looked exactly like a cheap one. Set a ceiling in dollars under
+  **Settings › Providers › Claude Code** and the figure takes the same colour ramp
+  the context ring already uses — amber from 80% of it, red from 95% — with the
+  tooltip naming the ceiling it is measured against. It is a warning and nothing
+  more: no turn is stopped, and the number it watches is API pricing from lich's
+  own table, so leave it empty on a subscription. The setting appears with the
+  cost readout and hides with it.
+
+- **A session waiting on you now reaches the desktop.** The bell on the card and
+  the toast beside it only ever worked while you were looking at lich — walk away
+  to a browser or another workspace and a session blocked on a permission prompt
+  sat there until you happened to come back. When a session needs your input and
+  the lich window is not the one you are in, lich now raises a desktop
+  notification through the system's own notifier, naming the session and its
+  project so you know where to go. Nothing changes while the window has focus:
+  the in-app toast is still the one that fires, and it still routes to the card.
+  lich asks before it starts — the first time a session would have notified you,
+  a dialog puts the question, and either answer settles it. **Settings ›
+  Notifications** holds the switch afterwards, whichever way you answered.
+
+- **A worktree's setup script can now find the project it came from.** Sessions get
+  `$LICH_PROJECT_DIR`, the project's own checkout — which, for a session running in a
+  worktree, is somewhere else entirely and previously had no name the script could
+  reach. The point is the expensive half of a new worktree: dependencies. Instead of
+  `pnpm install` downloading gigabytes each time, a setup script can reuse what the
+  project already has —
+  `cp --reflink=auto -r "$LICH_PROJECT_DIR/node_modules" .` on a filesystem with
+  copy-on-write (btrfs, XFS, APFS) makes a full, independent copy that costs no disk
+  until something writes to it, and `ln -s` works where reflinks do not.
+
+- **A session card says when its base branch moved, and whether a merge would
+  collide.** Running several worktrees at once, the first one to land leaves the
+  others stale without a word — and you found out at the Merge button, one branch
+  at a time. The card's branch row now carries the answer: a plain count of the
+  commits `origin/main` has picked up since, or an amber alert naming how many
+  files a merge would conflict on. Hovering the card spells it out — the base
+  branch by name, the commit count, and up to three of the conflicting paths.
+  Nothing has to be checked out, merged or fetched by hand to see it, and knowing
+  which branches will fight is what lets you pick the order to land them in: one
+  conflict to resolve instead of one per worktree.
+
+  It reads committed work only, so an agent mid-edit shows what it last
+  committed, and the base is always the repository's default branch — a branch
+  stacked on another feature branch is measured against the wrong one. The
+  readout is absent entirely on a repository with no `origin`.
+
+### Changed
+
+- **A worktree's dev-server port is now reserved, not guessed.** `LICH_WORKTREE_PORT`
+  was a hash of the checkout's path: stable, but blind. Two worktrees of one project
+  could hash onto the same number, and neither knew about the dev server, database or
+  container already sitting on that port — the collision showed up as the second
+  `pnpm dev` refusing to start, with nothing pointing at why. lich now keeps a
+  reservation per checkout: a worktree is offered its hashed number, and takes it only
+  if no other checkout holds it and nothing on the machine is listening on it,
+  otherwise the next free port in the same range. A checkout keeps its number for good
+  — across restarts of lich, of the session, and of your dev server — and gives it back
+  when its directory is gone, so removing a worktree returns the port to the pool.
+
+### Fixed
+
+- **Worktree groups can be dragged into the order you want.** Reordering
+  sessions stopped halfway once a worktree split the sidebar into groups: a card
+  could move inside its own group, but the groups themselves sat in the order
+  they happened to open, so a checkout you were done with kept its place at the
+  top. Drag a group by its header — the divider with the worktree's name — and
+  the whole block moves with it, cards and pull request card included. A sidebar
+  with a single group has no header and is unchanged. A pinned session still
+  carries its group to the top, which is the one order a drag cannot beat.
+
+- **A worktree group's header spells the whole worktree name.** Worktrees named
+  the way most repositories name branches — `feat/x`, `fix/x` — came out of the
+  divider as `x`, because the header showed only the last folder of the
+  checkout's path. Two worktrees off the same ticket therefore drew the identical
+  header, and the divider stopped telling you which sessions were whose. The
+  header now reads the name the worktree was created with, slashes and all. A
+  worktree without a slash in it looks exactly as it did.
+
+- **lich asks which agents you use, instead of assuming Claude Code.** The first
+  launch opened on a Claude session because Claude was the only harness lich's
+  author ran: a machine with Codex and nothing else met a first session that died
+  on `claude: command not found`, and the three other harnesses lich supports were
+  off in a Settings screen nobody had been told about. lich now scans for agents
+  before showing anything and opens on the providers it found — a list of what is
+  actually installed, a switch each, and the pick of which one new sessions spawn.
+  The first one found is on already, so the common case is one click, and the
+  panel is the Settings › Providers screen verbatim, so the place to change it
+  later is a screen already met. Nothing installed is its own answer: lich names
+  what it looks for rather than failing inside a terminal. Existing installs that
+  never chose a default see it once.
+
+- **oh-my-pi joins the harnesses lich can run.** A Pi fork with an IDE wired in,
+  spawned like the rest from its `omp` binary and off until turned on.
+
 ## [0.27.0] - 2026-08-07
 
 ### Added

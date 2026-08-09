@@ -43,6 +43,10 @@ type Service struct {
 	// default, and every test that does not wire it) means gh's own active
 	// account. Wired to the store in main (ghaccount.go).
 	accounts accountLookup
+	// bases memoises the base-branch readout and throttles the fetch behind it
+	// (basestatus.go). Zero value ready; it holds a mutex, so a Service is
+	// passed by pointer and never copied.
+	bases baseCache
 }
 
 // New returns a project service using the given picker.
