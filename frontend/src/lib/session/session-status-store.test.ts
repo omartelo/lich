@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { createSessionStatusStore } from "./session-status-store"
 
 // A stand-in for the /events subscription: hands back an emit so a test can
@@ -194,6 +194,78 @@ describe("pendingOf", () => {
     const { source } = fakeSource()
     const store = createSessionStatusStore(source)
     expect(() => store.markSeen("ghost")).not.toThrow()
+  })
+})
+
+describe("since", () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("stamps the moment the status changed", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", "waiting"))
+    expect(store.since("s1")).toBe(1_000)
+  })
+
+  // The whole point of the readout: the hook keeps reporting the same state
+  // while a turn runs, and the card must say how long the session has been
+  // waiting, not how long since the last report said so again.
+  it("does not restart on a repeat of the same state", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", "waiting"))
+    vi.setSystemTime(21_000)
+    emit(report("s1", "waiting"))
+    expect(store.since("s1")).toBe(1_000)
+  })
+
+  it("keeps the stamp of a status that has not changed since the app started", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", "busy"))
+    vi.setSystemTime(1_000 + 90 * 60_000)
+    expect(store.since("s1")).toBe(1_000)
+  })
+
+  it("restarts the clock on a real transition", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", "busy"))
+    vi.setSystemTime(5_000)
+    emit(report("s1", "waiting"))
+    expect(store.since("s1")).toBe(5_000)
+  })
+
+  // Entries outlive their listeners, so a status that arrived while the card
+  // was unmounted is timed from when it arrived, not from when the card came
+  // back and re-subscribed.
+  it("stamps a status that arrives while nothing is subscribed", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    const off = store.subscribe("s1", () => {})
+    off()
+    emit(report("s1", "waiting"))
+    vi.setSystemTime(9_000)
+    store.subscribe("s1", () => {})
+    expect(store.since("s1")).toBe(1_000)
+  })
+
+  it("has no clock for a session with no status", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    expect(store.since("ghost")).toBeNull()
+    store.subscribe("s1", () => {})
+    expect(store.since("s1")).toBeNull()
+    emit(report("s2", "busy"))
+    emit(report("s2", "idle"))
+    expect(store.since("s2")).toBeNull()
   })
 })
 

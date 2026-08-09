@@ -12,6 +12,7 @@ import {
   addSession,
   closeSession as removeSession,
   isSessionKind,
+  neighborSessionId,
   projectOfSession,
   removeProject,
   renameSession as relabelSession,
@@ -347,27 +348,6 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     [newWorktreeSession],
   )
 
-  // The new-session shortcut opens a session in the active project (mirrors the
-  // "+" button). It fires even with terminal focus, so it stays reachable while
-  // working in a terminal — the capture-phase listener sees the chord before
-  // the terminal does and stops propagation so the PTY never receives it.
-  // Bails while a hotkey is being recorded so rebinding does not trigger it.
-  useEffect(() => {
-    if (!activeProjectId) {
-      return
-    }
-    const onKey = (event: KeyboardEvent) => {
-      if (isRecordingTarget(event)) return
-      if (matchesCombo(event, hotkeys.newSession)) {
-        event.preventDefault()
-        event.stopPropagation()
-        newSession(activeProjectId)
-      }
-    }
-    window.addEventListener("keydown", onKey, true)
-    return () => window.removeEventListener("keydown", onKey, true)
-  }, [activeProjectId, newSession, hotkeys])
-
   // dropSession removes a session's card and persists that removal via `persist`
   // — DeleteSession (gone for good) or CloseSession (parked for a later resume)
   // — returning that write so a caller can chain on it. Closing the last one
@@ -484,6 +464,51 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     setSessions(next)
     void Store.SetActiveSession(projectId, sessionId)
   }, [])
+
+  // The session shortcuts act on the active project: one opens a session
+  // (mirroring the "+" button), the other two walk its sidebar list. They fire
+  // even with terminal focus, so they stay reachable while working in a terminal
+  // — the capture-phase listener sees the chord before the terminal does and
+  // stops propagation so the PTY never receives it. Bails while a hotkey is
+  // being recorded so rebinding does not trigger it.
+  useEffect(() => {
+    if (!activeProjectId) {
+      return
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (isRecordingTarget(event)) return
+      if (matchesCombo(event, hotkeys.newSession)) {
+        event.preventDefault()
+        event.stopPropagation()
+        newSession(activeProjectId)
+        return
+      }
+      const step = matchesCombo(event, hotkeys.nextSession)
+        ? 1
+        : matchesCombo(event, hotkeys.prevSession)
+          ? -1
+          : 0
+      if (step === 0) {
+        return
+      }
+      // Swallowed even with nowhere to go: the chord belongs to lich, so a
+      // project with a single session must not leak it into that session's PTY.
+      event.preventDefault()
+      event.stopPropagation()
+      const current = sessionsRef.current
+      const target = neighborSessionId(
+        current,
+        activeProjectId,
+        activeSessionId(current, activeProjectId),
+        step,
+      )
+      if (target) {
+        activateSession(activeProjectId, target)
+      }
+    }
+    window.addEventListener("keydown", onKey, true)
+    return () => window.removeEventListener("keydown", onKey, true)
+  }, [activeProjectId, newSession, activateSession, hotkeys])
 
   // A session that needs the user (permission prompt or idle input) raises a
   // global toast that routes to its card — reachable even when the session lives
