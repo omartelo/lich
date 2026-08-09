@@ -22,15 +22,16 @@ Responses: `204` ok · `401` invalid token · `400` invalid body.
 
 ## Event → action mapping
 
-| Claude Code hook                        | action                        |
-|-----------------------------------------|-------------------------------|
-| `PostToolUse` (file-mutating tools)     | refresh the session's git status |
+| Claude Code hook                        | Codex hook                          | action                           |
+|-----------------------------------------|-------------------------------------|----------------------------------|
+| `PostToolUse` (file-mutating tools)     | `PostToolUse` (file-mutating tools) | refresh the session's git status |
 
-Fire it from `PostToolUse` **only for tools that write to disk** — match
-`Edit`, `Write`, `NotebookEdit`, `Bash` (and any others that mutate files). Do
-**not** fire on read-only tools (`Read`, `Grep`, `Glob`): a git-status refresh
-per read would cost more than the poll it is meant to beat. The tool name is on
-the hook's stdin payload if a single script filters instead of per-tool matchers.
+Fire it from `PostToolUse` **only for tools that write to disk** — the names are
+the provider's, so match its own: `Edit`, `Write`, `NotebookEdit`, `Bash` on
+Claude Code, `apply_patch` (plus `Bash`) on Codex. Do **not** fire on read-only
+tools (`Read`, `Grep`, `Glob`): a git-status refresh per read would cost more
+than the poll it is meant to beat. The tool name is on the hook's stdin payload
+if a single script filters instead of per-tool matchers.
 
 ## lich server side
 

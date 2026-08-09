@@ -75,12 +75,6 @@ func (s *Service) ProviderBin(providerID, projectID string) string {
 	return bin
 }
 
-// ClaudeBin is ProviderBin for Claude Code, kept for the plugin service that
-// resolves the same binary outside the terminal's spawn path.
-func (s *Service) ClaudeBin(projectID string) string {
-	return s.ProviderBin(providers.Claude, projectID)
-}
-
 // ghAccountKey is the settings key holding the gh account a project's GitHub
 // calls run as. Project-scoped only, no global fallback: gh already has a
 // global answer (its active account), and this exists precisely to override it

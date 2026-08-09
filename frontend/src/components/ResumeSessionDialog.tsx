@@ -5,17 +5,17 @@ import type { Session } from "@/lib/session/sessions"
 interface ResumeSessionDialogProps {
   /** The restored session about to spawn, or null when the dialog is hidden. */
   session: Session | null
-  /** Spawn Claude Code fresh, leaving the previous conversation behind. */
+  /** Spawn the provider fresh, leaving the previous conversation behind. */
   onStartNew: () => void
-  /** Spawn Claude Code with --resume, continuing the previous conversation. */
+  /** Spawn the provider on its resume invocation, continuing the conversation. */
   onResume: () => void
 }
 
 // ResumeSessionDialog asks, the first time a restored card is opened, whether
-// its terminal should continue the Claude session it ran before the restart
-// (`--resume`) or start a new one. Dismissing is the same answer as "Start
-// new": the card has to end up with a terminal either way, and the spawn is
-// waiting on this.
+// its terminal should continue the provider conversation it ran before the
+// restart or start a new one. Dismissing is the same answer as "Start new": the
+// card has to end up with a terminal either way, and the spawn is waiting on
+// this.
 export function ResumeSessionDialog({ session, onStartNew, onResume }: ResumeSessionDialogProps) {
   return (
     <ConfirmDialog
@@ -25,7 +25,7 @@ export function ResumeSessionDialog({ session, onStartNew, onResume }: ResumeSes
       title="Resume previous session?"
       description={
         <>
-          <span className="font-medium">{session?.label}</span> left a Claude Code session behind (
+          <span className="font-medium">{session?.label}</span> left a conversation behind (
           <span className="break-all font-mono">{session?.providerSessionId}</span>
           ). Resume it to pick the conversation up where it stopped, or start new for an empty one.
         </>

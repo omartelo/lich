@@ -1,6 +1,6 @@
 // Package ghrelease reads the latest published release of a GitHub repository —
 // the one piece lich's two update checks (the app in internal/appupdate and the
-// Claude plugin in internal/claudeplugin) share. It reports the release tag as a
+// lich plugin in internal/agentplugin) share. It reports the release tag as a
 // bare version and never errors: a failed lookup yields "", which every caller
 // treats as "no release known" so a network blip never blocks or breaks startup.
 package ghrelease

@@ -14,8 +14,12 @@ const defaultBin = providers.Claude
 // KindShell marks a session that runs the user's shell instead of a provider.
 const KindShell = "shell"
 
-// resumeFlag is the Claude Code flag that reopens an existing session by id.
-const resumeFlag = "--resume"
+// How each provider reopens an existing conversation by id: Claude Code takes a
+// flag, Codex a subcommand.
+const (
+	claudeResumeFlag  = "--resume"
+	codexResumeSubcmd = "resume"
+)
 
 // resolveCommand picks the binary a session runs: the user's shell for "shell"
 // sessions, otherwise the provider binary for the session's kind.
@@ -41,14 +45,20 @@ func resolveBin(kind, bin string) string {
 	return defaultBin
 }
 
-// resumeArgs returns the arguments that reopen a Claude session, or nil when the
-// session must start fresh. Resume is Claude-specific: "--resume" is Claude
-// Code's flag, so a shell or any other provider never grows it (the frontend
-// only ever passes a resume id for a claude session, but a stray one must not
-// reach codex/opencode/crush either).
+// resumeArgs returns the arguments that reopen a provider conversation, or nil
+// when the session must start fresh. Each provider spells resume its own way,
+// and a provider with no spelling here never grows one — the frontend only
+// passes a resume id for a kind it knows resumes, but a stray one must not reach
+// a shell or opencode/crush either.
 func resumeArgs(kind, resume string) []string {
-	if kind != providers.Claude || resume == "" {
+	if resume == "" {
 		return nil
 	}
-	return []string{resumeFlag, resume}
+	switch kind {
+	case providers.Claude:
+		return []string{claudeResumeFlag, resume}
+	case providers.Codex:
+		return []string{codexResumeSubcmd, resume}
+	}
+	return nil
 }

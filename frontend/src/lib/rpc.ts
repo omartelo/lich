@@ -296,10 +296,11 @@ export const Fonts = {
   List: () => call<string[] | null>("fonts.List", []),
 }
 
-export const ClaudePlugin = {
-  Status: () => call<PluginStatus>("claudeplugin.Status", []),
-  Install: () => call<null>("claudeplugin.Install", []),
-  Update: () => call<null>("claudeplugin.Update", []),
+export const AgentPlugin = {
+  /** One entry per provider that can run the plugin, in display order. */
+  Status: () => call<PluginStatus[]>("agentplugin.Status", []),
+  Install: (provider: string) => call<null>("agentplugin.Install", [provider]),
+  Update: (provider: string) => call<null>("agentplugin.Update", [provider]),
 }
 
 export const AppUpdate = {

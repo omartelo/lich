@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+
+	"github.com/omartelo/lich/internal/providers"
 )
 
 // newTestStore opens a throwaway database under the test's temp directory.
@@ -392,8 +394,8 @@ func TestOperationsOnClosedStoreReturnErrors(t *testing.T) {
 	if _, err := svc.LoadState(); err == nil {
 		t.Error("LoadState on closed store = nil error, want error")
 	}
-	if got := svc.ClaudeBin("p1"); got != "" {
-		t.Errorf("ClaudeBin on closed store = %q, want empty", got)
+	if got := svc.ProviderBin(providers.Claude, "p1"); got != "" {
+		t.Errorf("ProviderBin on closed store = %q, want empty", got)
 	}
 }
 

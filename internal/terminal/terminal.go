@@ -17,7 +17,6 @@ import (
 
 	"github.com/omartelo/lich/internal/events"
 	"github.com/omartelo/lich/internal/pricing"
-	"github.com/omartelo/lich/internal/providers"
 )
 
 // Event names. A terminal I/O event carries the session ID as a suffix (e.g.
@@ -45,10 +44,10 @@ const (
 	// disk, nudging an immediate git-status refresh ahead of the steady poll.
 	touchedEventName = "session-touched"
 	// agentEventName carries which provider CLI is live inside a session's PTY
-	// ({id, agent}) — today only Claude reports it, through the session-start
-	// hook, so a shell card shows Claude's mark while Claude runs in it. An
-	// empty agent clears the mark; every PTY spawn emits that clear so a
-	// respawned session never wears a dead agent's icon.
+	// ({id, agent}) — reported through the session-start hook by whichever
+	// provider ships it, so a shell card shows that provider's mark while its
+	// CLI runs in it. An empty agent clears the mark; every PTY spawn emits that
+	// clear so a respawned session never wears a dead agent's icon.
 	agentEventName = "session-agent"
 )
 
@@ -158,13 +157,14 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 				go s.emitUsage(id)
 			}
 		},
-		func(sessionID, providerSessionID string) error {
+		func(sessionID, providerSessionID, provider string) error {
 			if err := store.SetProviderSession(sessionID, providerSessionID); err != nil {
 				return err
 			}
-			// A SessionStart report is proof Claude is running in this PTY —
-			// whatever the card's kind, its icon can wear Claude's mark now.
-			hub.Emit(agentEventName, agentEvent{ID: sessionID, Agent: providers.Claude})
+			// A SessionStart report is proof that provider's CLI is running in
+			// this PTY — whatever the card's kind, its icon can wear that
+			// provider's mark now.
+			hub.Emit(agentEventName, agentEvent{ID: sessionID, Agent: provider})
 			return nil
 		},
 		func(id, title string) error {
@@ -252,13 +252,13 @@ const readBufSize = 32 * 1024
 // streams its output to the frontend. An empty cwd defaults to the user's home directory. Starting a
 // session that is already running is a no-op.
 //
-// A non-empty resume is a Claude session id to reopen (`--resume`), which the
-// frontend passes after the user accepted the prompt to continue the session
-// this card ran before the last restart. The prompt is only raised for a
-// conversation ResumeAvailable still finds, so an id Claude no longer knows
-// normally never reaches here; one that slips through (pruned between the check
-// and the spawn) fails in the PTY like any other bad invocation — the user sees
-// Claude's own error.
+// A non-empty resume is a provider conversation id to reopen, spelled for the
+// session's kind by resumeArgs, which the frontend passes after the user
+// accepted the prompt to continue the session this card ran before the last
+// restart. The prompt is only raised for a conversation ResumeAvailable still
+// finds, so an id the provider no longer knows normally never reaches here; one
+// that slips through (pruned between the check and the spawn) fails in the PTY
+// like any other bad invocation — the user sees the provider's own error.
 //
 // setup is passed once, by the flow that just created this session's worktree:
 // it runs the project's worktree setup script (Settings › Project) in the PTY

@@ -330,7 +330,7 @@ func TestStartPassesResumeToTheProcess(t *testing.T) {
 	got := spawnedArgs(t, svc, "s1")
 	svc.mu.Unlock()
 
-	want := []string{bin, resumeFlag, "abc-123"}
+	want := []string{bin, "--resume", "abc-123"}
 	if !slices.Equal(got, want) {
 		t.Errorf("spawned argv = %v, want %v", got, want)
 	}
@@ -442,17 +442,19 @@ func TestResolveCommand(t *testing.T) {
 	}
 }
 
-// TestResumeArgs proves --resume is Claude-only: a claude session resumes when
-// an id is given, and neither a shell nor any other provider ever grows the flag
-// (it is Claude Code's, and a stray id must not reach codex/opencode/crush).
+// TestResumeArgs proves each provider resumes in its own spelling — a flag for
+// Claude Code, a subcommand for Codex — and that a provider with none wired
+// never grows one: a shell, opencode or Crush must not be handed a stray id.
 func TestResumeArgs(t *testing.T) {
 	cases := []struct {
 		name, kind, resume string
 		want               []string
 	}{
 		{"claude fresh", "claude", "", nil},
-		{"claude resume", "claude", "abc-123", []string{resumeFlag, "abc-123"}},
-		{"codex never resumes", "codex", "abc-123", nil},
+		{"claude resume", "claude", "abc-123", []string{"--resume", "abc-123"}},
+		{"codex fresh", "codex", "", nil},
+		{"codex resume", "codex", "abc-123", []string{"resume", "abc-123"}},
+		{"opencode never resumes", "opencode", "abc-123", nil},
 		{"shell never resumes", KindShell, "abc-123", nil},
 		{"shell fresh", KindShell, "", nil},
 	}

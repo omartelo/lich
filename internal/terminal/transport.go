@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/omartelo/lich/internal/providers"
 	"github.com/omartelo/lich/internal/restart"
 )
 
@@ -90,7 +91,7 @@ type transport struct {
 	mux         *http.ServeMux
 	input       func(id string, data []byte)
 	status      func(id, state string)
-	linkSession func(sessionID, providerSessionID string) error
+	linkSession func(sessionID, providerSessionID, provider string) error
 	setTitle    func(sessionID, title string) error
 	touched     func(sessionID string)
 	// restart, when set, relaunches lich and closes this window; POST /restart
@@ -110,7 +111,7 @@ type transport struct {
 func newTransport(
 	input func(id string, data []byte),
 	status func(id, state string),
-	linkSession func(sessionID, providerSessionID string) error,
+	linkSession func(sessionID, providerSessionID, provider string) error,
 	setTitle func(sessionID, title string) error,
 	touched func(sessionID string),
 ) (*transport, error) {
@@ -357,6 +358,7 @@ func parseHookRequest(body []byte) (hookRequest, error) {
 type startRequest struct {
 	SessionID             string `json:"session_id"`
 	ProviderSessionID     string `json:"provider_session_id"`
+	Provider              string `json:"provider"`
 	LegacyClaudeSessionID string `json:"claude_session_id"`
 }
 
@@ -368,7 +370,7 @@ func (t *transport) sessionStart(w http.ResponseWriter, r *http.Request) {
 		if t.linkSession == nil {
 			return nil
 		}
-		if err := t.linkSession(req.SessionID, req.ProviderSessionID); err != nil {
+		if err := t.linkSession(req.SessionID, req.ProviderSessionID, req.Provider); err != nil {
 			return fmt.Errorf("failed to record session: %w", err)
 		}
 		return nil
@@ -376,7 +378,10 @@ func (t *transport) sessionStart(w http.ResponseWriter, r *http.Request) {
 }
 
 // parseSessionStart validates a session-start POST body: the lich session id and
-// the non-empty provider session id it is reporting. Both must be present.
+// the non-empty provider session id it is reporting. Both must be present. The
+// provider that reported is optional and defaults to Claude Code — the only one
+// that reported before the field existed — and is rejected when it names a
+// provider lich has no registry entry for, like an unknown state on /hook.
 func parseSessionStart(body []byte) (startRequest, error) {
 	var req startRequest
 	if err := json.Unmarshal(body, &req); err != nil {
@@ -385,11 +390,17 @@ func parseSessionStart(body []byte) (startRequest, error) {
 	if req.ProviderSessionID == "" {
 		req.ProviderSessionID = req.LegacyClaudeSessionID
 	}
+	if req.Provider == "" {
+		req.Provider = providers.Claude
+	}
 	if req.SessionID == "" {
 		return startRequest{}, errors.New("session-start missing session_id")
 	}
 	if req.ProviderSessionID == "" {
 		return startRequest{}, errors.New("session-start missing provider_session_id")
+	}
+	if !providers.Known(req.Provider) {
+		return startRequest{}, fmt.Errorf("session-start has unknown provider %q", req.Provider)
 	}
 	return req, nil
 }

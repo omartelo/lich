@@ -7,14 +7,15 @@ import { isSessionKind, type SessionKind } from "./sessions"
 export type AgentEventSource = (handler: (data: unknown) => void) => () => void
 
 // createSessionAgentStore keeps the provider CLI currently live inside each
-// session's PTY, keyed by session id — the hand-run `claude` in a shell
-// session that its card should wear the mark of. Fed by two subscriptions
+// session's PTY, keyed by session id — the hand-run `claude` or `codex` in a
+// shell session that its card should wear the mark of. Fed by two subscriptions
 // taken at creation, before any card mounts:
 //
 // - the agent event sets the mark (an empty or unknown agent clears it — the
 //   backend emits "" on every PTY spawn so a respawn drops a stale mark);
-// - a status report of "idle" clears it: that is SessionEnd, Claude leaving
-//   the PTY, and the card falls back to its own kind.
+// - a status report of "idle" clears it: that is SessionEnd, the CLI leaving
+//   the PTY, and the card falls back to its own kind. A provider with no such
+//   event (Codex) keeps its mark until the next spawn.
 //
 // Never persisted: the mark is live PTY state, like the cwd.
 export function createSessionAgentStore(

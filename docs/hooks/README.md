@@ -1,9 +1,14 @@
 # Hook contracts
 
-lich observes and drives Claude Code sessions through **hooks**. Each hook is a
+lich observes and drives provider sessions through **hooks**. Each hook is a
 small script that runs inside a session (shipped by the companion plugin
-[`omartelo/lich-plugin`](https://github.com/omartelo/lich-plugin)) and talks to
-lich over a shared local transport.
+[`omartelo/lich-plugin`](https://github.com/omartelo/lich-plugin), which installs
+on Claude Code and Codex) and talks to lich over a shared local transport.
+
+The contracts are provider-agnostic: lich injects the same variables into every
+PTY it spawns, so what changes per provider is only which of its lifecycle
+events maps onto a report — each contract's mapping table has a column per
+harness.
 
 This directory is the **canonical, contract-first source** for those hooks:
 
@@ -20,7 +25,8 @@ Define the contract here first, then implement both sides against it.
 
 Every hook rides the same loopback channel lich already runs for terminal I/O
 (`internal/terminal/transport.go`). lich injects three variables into the
-environment of **every PTY it spawns**, inherited by `claude` and its hooks:
+environment of **every PTY it spawns**, inherited by the provider CLI and its
+hooks:
 
 | Var               | Purpose                     |
 |-------------------|-----------------------------|

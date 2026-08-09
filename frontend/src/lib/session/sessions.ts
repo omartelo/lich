@@ -242,19 +242,24 @@ export function removeProject(state: SessionState, projectId: string): SessionSt
   return next
 }
 
+// The provider kinds whose CLI can reopen a conversation by id, mirrored from
+// resumeArgs (Go) — keep in sync. opencode and Crush have no such invocation, so
+// an id reported for one is stored and never offered.
+const RESUMABLE_KINDS: readonly SessionKind[] = ["claude", "codex"]
+
 // resumableSession returns the session whose PTY should ask before it spawns,
 // because it carries the provider conversation it ran before the last restart.
 // Null for everything with nothing to resume: unknown ids, sessions created in
-// this run, providers with no resume flag wired (only Claude Code has one), and
-// shell sessions — whose shell cannot reopen a conversation even when a hand-run
-// provider CLI left an id on their row.
+// this run, providers with no resume wired, and shell sessions — whose shell
+// cannot reopen a conversation even when a hand-run provider CLI left an id on
+// their row.
 export function resumableSession(
   state: SessionState,
   projectId: string,
   sessionId: string,
 ): Session | null {
   const session = state[projectId]?.sessions.find((s) => s.id === sessionId)
-  if (!session || session.kind !== "claude" || !session.providerSessionId) {
+  if (!session || !RESUMABLE_KINDS.includes(session.kind) || !session.providerSessionId) {
     return null
   }
   return session

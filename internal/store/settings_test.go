@@ -1,6 +1,10 @@
 package store
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/omartelo/lich/internal/providers"
+)
 
 func TestSettingGlobalAndProjectScope(t *testing.T) {
 	svc := newTestStore(t)
@@ -33,26 +37,26 @@ func TestSettingGlobalAndProjectScope(t *testing.T) {
 	}
 }
 
-func TestClaudeBinResolution(t *testing.T) {
+func TestClaudeProviderBinResolution(t *testing.T) {
 	svc := newTestStore(t)
 
 	// Nothing configured: empty, so the terminal applies its own default.
-	if got := svc.ClaudeBin("p1"); got != "" {
+	if got := svc.ProviderBin(providers.Claude, "p1"); got != "" {
 		t.Errorf("unconfigured = %q, want \"\"", got)
 	}
 
 	// Global only: every project resolves to it.
 	_ = svc.SetSetting(claudeBinKey, globalScope, "global-claude")
-	if got := svc.ClaudeBin("p1"); got != "global-claude" {
+	if got := svc.ProviderBin(providers.Claude, "p1"); got != "global-claude" {
 		t.Errorf("global fallback = %q, want global-claude", got)
 	}
 
 	// Project override wins over global for that project only.
 	_ = svc.SetSetting(claudeBinKey, "p1", "p1-claude")
-	if got := svc.ClaudeBin("p1"); got != "p1-claude" {
+	if got := svc.ProviderBin(providers.Claude, "p1"); got != "p1-claude" {
 		t.Errorf("p1 override = %q, want p1-claude", got)
 	}
-	if got := svc.ClaudeBin("p2"); got != "global-claude" {
+	if got := svc.ProviderBin(providers.Claude, "p2"); got != "global-claude" {
 		t.Errorf("p2 = %q, want global-claude", got)
 	}
 }
@@ -116,7 +120,7 @@ func TestProviderBinResolution(t *testing.T) {
 		t.Errorf("p1 codex override = %q, want p1-codex", got)
 	}
 
-	// Claude routes through the legacy key, so ProviderBin and ClaudeBin agree.
+	// Claude routes through the legacy key, so both scopes read the same value.
 	_ = svc.SetSetting(claudeBinKey, globalScope, "global-claude")
 	if got := svc.ProviderBin("claude", "p2"); got != "global-claude" {
 		t.Errorf("ProviderBin claude = %q, want global-claude", got)

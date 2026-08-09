@@ -1,8 +1,8 @@
 # Contract: session title
 
-Reports Claude Code's auto-generated session title (the `ai-title`) so lich can
-name the session card after it — the same short summary shown in
-`claude --resume`, instead of `Session 3`.
+Reports the title a provider gives its own session so lich can name the session
+card after it, instead of `Session 3` — for Claude Code the auto-generated
+`ai-title`, the same short summary shown in `claude --resume`.
 
 See [README.md](README.md) for the shared transport (`LICH_PORT` / `LICH_TOKEN`
 / `LICH_SESSION_ID`) and the client rules every hook follows.
@@ -25,9 +25,9 @@ failed to persist.
 
 ## Event → action mapping
 
-| Claude Code hook | action                                              |
-|------------------|-----------------------------------------------------|
-| `Stop`           | set the session label to `title` (if still auto)    |
+| Claude Code hook | Codex hook | action                                        |
+|------------------|------------|-----------------------------------------------|
+| `Stop`           | `Stop`     | set the session label to `title` (if still auto) |
 
 The `ai-title` is an internal Haiku summary of the first prompt, written to the
 transcript **after** the first turn — so it does not exist at `SessionStart`.
@@ -37,6 +37,11 @@ Code passes on stdin and take the last `ai-title` line:
 ```sh
 title=$(tac "$transcript_path" | grep -m1 '"type":"ai-title"' | jq -r '.aiTitle')
 ```
+
+A provider that generates no title sends whatever it names its own thread after
+— Codex uses the first user message verbatim, which the plugin reads from the
+rollout and trims to a card-sized label. The contract only asks for a non-empty
+string; where it comes from is the client's business.
 
 Send it on `Stop`. Re-sending on every `Stop` is fine — lich only applies it
 while the label is still automatic (see below), so a stable title is idempotent.

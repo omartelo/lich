@@ -304,17 +304,24 @@ func TestParseSessionStart(t *testing.T) {
 		body           string
 		wantID         string
 		wantProviderID string
+		wantProvider   string
 		wantErr        bool
 	}{
-		{"ok", `{"session_id":"s1","provider_session_id":"uuid-1"}`, "s1", "uuid-1", false},
-		{"legacy claude field", `{"session_id":"s1","claude_session_id":"uuid-2"}`, "s1", "uuid-2", false},
+		{"ok", `{"session_id":"s1","provider_session_id":"uuid-1"}`, "s1", "uuid-1", "claude", false},
+		{"legacy claude field", `{"session_id":"s1","claude_session_id":"uuid-2"}`, "s1", "uuid-2", "claude", false},
 		{"new field wins over legacy",
 			`{"session_id":"s1","provider_session_id":"uuid-1","claude_session_id":"uuid-2"}`,
-			"s1", "uuid-1", false},
-		{"missing session id", `{"provider_session_id":"uuid-1"}`, "", "", true},
-		{"missing provider id", `{"session_id":"s1"}`, "", "", true},
-		{"empty provider id", `{"session_id":"s1","provider_session_id":""}`, "", "", true},
-		{"bad json", `{`, "", "", true},
+			"s1", "uuid-1", "claude", false},
+		{"reported provider",
+			`{"session_id":"s1","provider_session_id":"uuid-1","provider":"codex"}`,
+			"s1", "uuid-1", "codex", false},
+		{"missing session id", `{"provider_session_id":"uuid-1"}`, "", "", "", true},
+		{"missing provider id", `{"session_id":"s1"}`, "", "", "", true},
+		{"empty provider id", `{"session_id":"s1","provider_session_id":""}`, "", "", "", true},
+		{"unknown provider",
+			`{"session_id":"s1","provider_session_id":"uuid-1","provider":"gemini"}`,
+			"", "", "", true},
+		{"bad json", `{`, "", "", "", true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -328,9 +335,11 @@ func TestParseSessionStart(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if req.SessionID != tc.wantID || req.ProviderSessionID != tc.wantProviderID {
-				t.Fatalf("got (%q,%q), want (%q,%q)",
-					req.SessionID, req.ProviderSessionID, tc.wantID, tc.wantProviderID)
+			if req.SessionID != tc.wantID || req.ProviderSessionID != tc.wantProviderID ||
+				req.Provider != tc.wantProvider {
+				t.Fatalf("got (%q,%q,%q), want (%q,%q,%q)",
+					req.SessionID, req.ProviderSessionID, req.Provider,
+					tc.wantID, tc.wantProviderID, tc.wantProvider)
 			}
 		})
 	}
@@ -338,8 +347,8 @@ func TestParseSessionStart(t *testing.T) {
 
 func TestSessionStartLinksSession(t *testing.T) {
 	got := make(chan string, 1)
-	tr, err := newTransport(func(string, []byte) {}, nil, func(id, claudeID string) error {
-		got <- id + ":" + claudeID
+	tr, err := newTransport(func(string, []byte) {}, nil, func(id, providerID, provider string) error {
+		got <- id + ":" + providerID + ":" + provider
 		return nil
 	}, nil, nil)
 	if err != nil {
@@ -347,7 +356,7 @@ func TestSessionStartLinksSession(t *testing.T) {
 	}
 	url := fmt.Sprintf("http://127.0.0.1:%d/session-start?token=%s", tr.port, tr.token)
 	resp, err := http.Post(url, "application/json",
-		strings.NewReader(`{"session_id":"sess","provider_session_id":"uuid-9"}`))
+		strings.NewReader(`{"session_id":"sess","provider_session_id":"uuid-9","provider":"codex"}`))
 	if err != nil {
 		t.Fatalf("post: %v", err)
 	}
@@ -357,7 +366,7 @@ func TestSessionStartLinksSession(t *testing.T) {
 	}
 	select {
 	case v := <-got:
-		if v != "sess:uuid-9" {
+		if v != "sess:uuid-9:codex" {
 			t.Fatalf("got %q", v)
 		}
 	case <-time.After(5 * time.Second):
@@ -367,7 +376,7 @@ func TestSessionStartLinksSession(t *testing.T) {
 
 func TestSessionStartRejectsBadToken(t *testing.T) {
 	fired := make(chan struct{}, 1)
-	tr, err := newTransport(func(string, []byte) {}, nil, func(string, string) error {
+	tr, err := newTransport(func(string, []byte) {}, nil, func(string, string, string) error {
 		fired <- struct{}{}
 		return nil
 	}, nil, nil)
@@ -637,7 +646,7 @@ func TestStoreFailuresReport500(t *testing.T) {
 			body: `{"session_id":"s","provider_session_id":"u"}`,
 			tr: func() (*transport, error) {
 				return newTransport(func(string, []byte) {}, nil,
-					func(string, string) error { return boom }, nil, nil)
+					func(string, string, string) error { return boom }, nil, nil)
 			},
 		},
 		{

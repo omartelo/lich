@@ -2,6 +2,8 @@
 // Hand-owned, no codegen: field names mirror the Go structs' JSON tags — keep
 // them in sync when a service struct changes.
 
+import type { ProviderKind } from "@/lib/session/sessions"
+
 /** internal/project.Project — an opened project directory's identity. */
 export interface Project {
   id: string
@@ -275,8 +277,14 @@ export interface StoredProject {
   sessions: StoredSession[] | null
 }
 
-/** internal/claudeplugin.Status — the plugin's install/update state. */
+/** internal/agentplugin.Status — one provider's plugin install/update state. */
 export interface PluginStatus {
+  /** Provider id (mirrors internal/providers) whose CLI this is about. */
+  provider: ProviderKind
+  /** Display name, for the rows the user reads. */
+  name: string
+  /** Whether that CLI is on PATH at all — false means nothing to install into. */
+  available: boolean
   installed: boolean
   installedVersion: string
   latestVersion: string

@@ -12,7 +12,7 @@ import { EmptySessions } from "@/components/EmptySessions"
 import { Settings } from "@/components/settings/Settings"
 import { Pulls } from "@/components/pulls/Pulls"
 import { Toaster } from "@/components/ui/sonner"
-import { ClaudePluginGate } from "@/components/ClaudePluginGate"
+import { AgentPluginGate } from "@/components/AgentPluginGate"
 import { AppUpdateGate } from "@/components/AppUpdateGate"
 import { PatchNotesGate } from "@/components/PatchNotesGate"
 import { CommandPalette } from "@/components/CommandPalette"
@@ -92,7 +92,7 @@ function App() {
           <CommandPalette />
         </ProjectsProvider>
       </HashRouter>
-      <ClaudePluginGate />
+      <AgentPluginGate />
       <PatchNotesGate />
       <Toaster />
     </SettingsProvider>

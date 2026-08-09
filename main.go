@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/omartelo/lich/internal/agentplugin"
 	"github.com/omartelo/lich/internal/appupdate"
 	"github.com/omartelo/lich/internal/chromium"
-	"github.com/omartelo/lich/internal/claudeplugin"
 	"github.com/omartelo/lich/internal/drop"
 	"github.com/omartelo/lich/internal/events"
 	"github.com/omartelo/lich/internal/fonts"
@@ -108,7 +108,7 @@ func main() {
 	dispatcher.Register("drop", drops)
 	dispatcher.Register("fonts", fonts.New())
 	dispatcher.Register("project", proj)
-	dispatcher.Register("claudeplugin", claudeplugin.New(db))
+	dispatcher.Register("agentplugin", agentplugin.New(db))
 	dispatcher.Register("appupdate", appupdate.New(version))
 	dispatcher.Register("patchnotes", patchnotes.New(version, changelog))
 	dispatcher.Register("store", db)

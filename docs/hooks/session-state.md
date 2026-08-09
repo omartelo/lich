@@ -22,17 +22,20 @@ Responses: `204` ok · `401` invalid token · `400` invalid body.
 
 ## Event → state mapping
 
-| Claude Code hook   | state     |
-|--------------------|-----------|
-| `UserPromptSubmit` | `busy`    |
-| `PostToolUse`      | `busy`    |
-| `Notification`     | `waiting` |
-| `Stop`             | `done`    |
-| `SessionEnd`       | `idle`    |
+| Claude Code hook   | Codex hook          | state     |
+|--------------------|---------------------|-----------|
+| `UserPromptSubmit` | `UserPromptSubmit`  | `busy`    |
+| `PostToolUse`      | `PostToolUse`       | `busy`    |
+| `Notification`     | `PermissionRequest` | `waiting` |
+| `Stop`             | `Stop`              | `done`    |
+| `SessionEnd`       | —                   | `idle`    |
 
 `Notification` fires when Claude needs a permission decision or has been idle
 waiting for input — both mean "your turn"; lich shows a toast (see below) only
-for `waiting`.
+for `waiting`. Codex has no `Notification`: the same meaning arrives as
+`PermissionRequest`, where a hook exiting `2` would *deny* the request — which
+is why the contract's client rules (silent, always exit 0) are load-bearing
+there and not merely polite.
 
 `SessionEnd → idle` clears the card's indicator (no spinner/check/bell). It
 fires when the Claude session ends or is reset, so a stale state does not linger
@@ -90,5 +93,12 @@ what re-arms the spinner after them. Every tool re-reports `busy` (idempotent);
   a permission and let Claude end the turn without another tool and the card
   stays `waiting` until `Stop → done`. Rare, and it self-corrects on the next
   turn.
+- **Codex never reports `idle`.** It has no `SessionEnd` event (0.144.5 ships a
+  schema for every other event in the table and none for that one), so a Codex
+  card keeps its last indicator — and the `session-agent` mark from
+  [session-start](session-start.md) — after the CLI exits. Both clear on the
+  next PTY spawn, so what lingers is a check on a card whose provider has left.
+  The plugin registers a `SessionEnd` hook anyway: an unknown event name is
+  ignored rather than rejected, so it starts working the day Codex adds one.
 - Adding another state beyond `busy`/`done`/`waiting`/`idle` is a contract
   change — see the versioning note in the README.

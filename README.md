@@ -88,8 +88,9 @@ version is in [CHANGELOG.md](CHANGELOG.md).
 - **The rest of the window.** `Ctrl`/`Cmd`+`K` jumps between sessions and
   projects. A session waiting on your input raises a toast and a dot on the bell,
   collected in a titled dropdown; with the
-  [lich plugin](https://github.com/omartelo/lich-plugin) installed, a Claude
-  session also titles its own card and refreshes git the moment it writes a file.
+  [lich plugin](https://github.com/omartelo/lich-plugin) installed — in Claude
+  Code, in Codex, or in both — a session also titles its own card and refreshes
+  git the moment it writes a file.
   Settings › Help opens the log folder and a pre-filled bug report.
 
 <div align="center">

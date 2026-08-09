@@ -25,13 +25,25 @@ type Provider struct {
 }
 
 // Registry is every provider lich knows about, in display order. Claude Code is
-// first: it is the default and the only one wired for resume, the plugin and
-// ai-titles — the rest just spawn their TUI in a PTY.
+// first: it is the default, and the plugin's home. It and Codex are the two
+// wired for resume and for the plugin's reports — opencode and Crush just spawn
+// their TUI in a PTY.
 var Registry = []Provider{
 	{ID: Claude, Name: "Claude Code", Binaries: []string{"claude"}},
 	{ID: Codex, Name: "Codex", Binaries: []string{"codex"}},
 	{ID: OpenCode, Name: "opencode", Binaries: []string{"opencode"}},
 	{ID: Crush, Name: "Crush", Binaries: []string{"crush"}},
+}
+
+// Known reports whether id names a registered provider. It guards a provider id
+// that arrives from outside lich — a hook payload — before it is used as one.
+func Known(id string) bool {
+	for _, p := range Registry {
+		if p.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 // DefaultBinary returns a provider's preferred executable name, or "" for an

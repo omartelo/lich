@@ -18,6 +18,7 @@ import {
   setSessionPinned,
   sortPinned,
   type Session,
+  type SessionKind,
   type SessionState,
 } from "./sessions"
 
@@ -47,13 +48,13 @@ describe("isSessionKind", () => {
   })
 })
 
-// withClaudeSession stamps a restored session's Claude session id onto the
+// withClaudeSession stamps a restored session's provider session id onto the
 // state, the way hydration from the store does.
 function withClaudeSession(
   state: SessionState,
   sessionId: string,
   providerSessionId: string,
-  kind: "claude" | "shell" = "claude",
+  kind: SessionKind = "claude",
 ): SessionState {
   return {
     ...state,
@@ -333,6 +334,21 @@ describe("resumableSession", () => {
   // hook stamp an id on its row — the shell still cannot reopen it.
   it("returns null for a shell session even with a claude session id", () => {
     const state = withClaudeSession(buildState(2), "s1", "claude-abc", "shell")
+    expect(resumableSession(state, P, "s1")).toBeNull()
+  })
+
+  it("returns a codex session carrying a provider session id", () => {
+    const state = withClaudeSession(buildState(2), "s1", "019fe876-0fb5", "codex")
+    expect(resumableSession(state, P, "s1")).toMatchObject({
+      id: "s1",
+      providerSessionId: "019fe876-0fb5",
+    })
+  })
+
+  // opencode reports no id and has no resume invocation wired; one arriving
+  // anyway must not raise a prompt lich cannot honour.
+  it("returns null for a provider with no resume wired", () => {
+    const state = withClaudeSession(buildState(2), "s1", "some-id", "opencode")
     expect(resumableSession(state, P, "s1")).toBeNull()
   })
 
