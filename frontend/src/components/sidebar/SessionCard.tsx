@@ -6,7 +6,7 @@ import { CSS } from "@dnd-kit/utilities"
 import { cn } from "@/lib/utils"
 import { displayPath } from "@/lib/paths"
 import type { Session } from "@/lib/session/sessions"
-import { useSessionStatus } from "@/lib/session/use-session-status"
+import { useSessionStatus, useSessionStatusAge } from "@/lib/session/use-session-status"
 import { useSessionCwd } from "@/lib/session/use-session-cwd"
 import { useSessionAgent } from "@/lib/session/use-session-agent"
 import { useGitStatus } from "@/lib/git/use-git-status"
@@ -63,6 +63,10 @@ export function SessionCard({
   // null before the first report, and whenever the hook reports a state with
   // no indicator (see toSessionStatus) — then the icon shows ringless.
   const status = useSessionStatus(session.id)
+  // How long that state has lasted, beside the ring: with five agents running,
+  // the bells all look alike and the one blocked longest is the one to answer
+  // first. "" for the states that have no clock (see useSessionStatusAge).
+  const age = useSessionStatusAge(session.id)
   // The provider CLI live inside the PTY right now — a hand-run `claude` in a
   // shell session puts Claude's mark on the card while it runs; null falls
   // back to the session's own kind.
@@ -163,6 +167,11 @@ export function SessionCard({
                   )}
                 >
                   <SessionStatusIcon kind={agent ?? session.kind} status={status} />
+                  {age && (
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                      {age}
+                    </span>
+                  )}
                   <span className="truncate text-sm font-medium text-foreground">
                     {session.label}
                   </span>

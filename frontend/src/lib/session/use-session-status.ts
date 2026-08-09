@@ -1,7 +1,8 @@
-import { useCallback, useSyncExternalStore } from "react"
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react"
 import { onAppEvent } from "@/lib/app-events"
 import { STATUS_EVENT, type SessionStatus } from "./session-events"
 import { createSessionStatusStore, type PendingStatus } from "./session-status-store"
+import { formatAge, subscribeAge } from "./session-age"
 import { useKeyedStore } from "@/lib/use-keyed-store"
 
 // Subscribed at import rather than on first use: that opens the /events socket
@@ -14,6 +15,35 @@ const store = createSessionStatusStore((handler) => onAppEvent(STATUS_EVENT, han
 // and whenever the report maps to no indicator (see toSessionStatus).
 export function useSessionStatus(sessionId: string): SessionStatus | null {
   return useKeyedStore(store, sessionId)
+}
+
+// useSessionStatusAge returns how long the session has been in its current
+// status, short and relative ("40s", "12m", "3h"), or "" for a status with no
+// clock worth reading.
+//
+// "busy" and "waiting" have one: both are live, and with several agents running
+// how long each has been in that state is what picks the one to deal with
+// first. "done" does not — the turn is over, nothing is accruing, and its
+// number would climb for hours on a card that has nothing left to say, pulling
+// the eye away from the cards that do.
+export function useSessionStatusAge(sessionId: string): string {
+  const status = useSessionStatus(sessionId)
+  const subscribe = useCallback(
+    (onChange: () => void) => store.subscribe(sessionId, onChange),
+    [sessionId],
+  )
+  const since = useSyncExternalStore(subscribe, () => store.since(sessionId))
+  const started = status === "busy" || status === "waiting" ? since : null
+  const [now, setNow] = useState(() => Date.now())
+  // One timer for every card on screen (see subscribeAge); a card in any other
+  // state subscribes to nothing at all.
+  useEffect(() => {
+    if (started === null) {
+      return
+    }
+    return subscribeAge(started, setNow)
+  }, [started])
+  return started === null ? "" : formatAge(now - started)
 }
 
 // markSessionSeen records that a session's status has been on screen, so a
