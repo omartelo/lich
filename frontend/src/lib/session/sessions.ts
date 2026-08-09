@@ -191,6 +191,29 @@ export function sortPinned(sessions: Session[]): Session[] {
   return pinned.length === 0 ? sessions : [...pinned, ...sessions.filter((s) => !s.pinned)]
 }
 
+// neighborSessionId returns the session one step from `sessionId` in the order
+// the sidebar draws (sortPinned over the project's list), wrapping at both ends.
+// "" means there is nowhere to go — unknown project, no sessions, or a single
+// one — and the caller leaves focus alone. A `sessionId` no longer in the list
+// (its session was closed) lands on the end the step comes from, so the press
+// still moves somewhere.
+export function neighborSessionId(
+  state: SessionState,
+  projectId: string,
+  sessionId: string,
+  step: 1 | -1,
+): string {
+  const sessions = sortPinned(sessionsOf(state, projectId))
+  if (sessions.length < 2) {
+    return ""
+  }
+  const index = sessions.findIndex((s) => s.id === sessionId)
+  if (index === -1) {
+    return step === 1 ? sessions[0].id : sessions[sessions.length - 1].id
+  }
+  return sessions[(index + step + sessions.length) % sessions.length].id
+}
+
 // setSessionPinned pins or unpins a session, leaving the list order alone —
 // sortPinned is what hoists it, at render time. Unknown project or session ids
 // are ignored, returning the input state unchanged.

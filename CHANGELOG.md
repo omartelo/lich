@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Switch sessions from the keyboard.** Reaching another session without the
+  mouse meant opening the command palette and typing its name. **Ctrl+Shift+↓**
+  and **Ctrl+Shift+↑** now step to the next and previous session of the project
+  you are in, wrapping around at both ends and walking the sidebar exactly as it
+  is drawn — pinned cards first. Both fire while you are typing in a terminal,
+  and both are rebindable in Settings › Hotkeys like the shortcuts already there.
+
 ## [0.27.0] - 2026-08-07
 
 ### Added

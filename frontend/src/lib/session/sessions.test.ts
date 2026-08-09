@@ -7,6 +7,7 @@ import {
   groupByWorktree,
   isLastWorktreeSession,
   isSessionKind,
+  neighborSessionId,
   projectOfSession,
   removeProject,
   renameSession,
@@ -278,6 +279,47 @@ describe("sortPinned", () => {
     expect(sortPinned(sessionsOf(state, P)).map((s) => s.id)).toEqual(["s3", "s1", "s2"])
     state = setSessionPinned(state, P, "s3", false)
     expect(sortPinned(sessionsOf(state, P)).map((s) => s.id)).toEqual(["s1", "s2", "s3"])
+  })
+})
+
+describe("neighborSessionId", () => {
+  it("steps forward and backward through the list", () => {
+    const state = buildState(3)
+    expect(neighborSessionId(state, P, "s1", 1)).toBe("s2")
+    expect(neighborSessionId(state, P, "s2", -1)).toBe("s1")
+  })
+
+  it("wraps at both ends", () => {
+    const state = buildState(3)
+    expect(neighborSessionId(state, P, "s3", 1)).toBe("s1")
+    expect(neighborSessionId(state, P, "s1", -1)).toBe("s3")
+  })
+
+  // The sidebar draws sortPinned's order, so the walk has to follow it — a
+  // pinned session sits at the top of the list, not where it was created.
+  it("walks the pinned order the sidebar shows", () => {
+    const state = setSessionPinned(buildState(3), P, "s3", true) // s3, s1, s2
+    expect(neighborSessionId(state, P, "s3", 1)).toBe("s1")
+    expect(neighborSessionId(state, P, "s3", -1)).toBe("s2")
+    expect(neighborSessionId(state, P, "s2", 1)).toBe("s3")
+  })
+
+  it("has nowhere to go with zero or one session", () => {
+    expect(neighborSessionId({}, P, "", 1)).toBe("")
+    expect(neighborSessionId(buildState(1), P, "s1", 1)).toBe("")
+    expect(neighborSessionId(buildState(1), P, "s1", -1)).toBe("")
+  })
+
+  it("ignores an unknown project", () => {
+    expect(neighborSessionId(buildState(3), "nope", "s1", 1)).toBe("")
+  })
+
+  // The active session can be gone (closed under a stale render), so the press
+  // still lands on the end it steps in from instead of doing nothing.
+  it("falls back to an end of the list for an unknown session", () => {
+    const state = buildState(3)
+    expect(neighborSessionId(state, P, "gone", 1)).toBe("s1")
+    expect(neighborSessionId(state, P, "gone", -1)).toBe("s3")
   })
 })
 
