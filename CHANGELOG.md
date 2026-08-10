@@ -107,6 +107,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   neighbour's size, smearing its text until the drop. Cards, session groups and
   project tabs now only move while dragging, never resize.
 
+- **"What's new" stays dismissed.** The popup after an update remembered your
+  click in the window's own storage, so a browser profile that had stopped
+  accepting writes — and kept answering reads with what it last loaded — greeted
+  you with the same release notes on every launch, with no way to make it stop.
+  The dismissed release is now kept in the workspace database beside everything
+  else that has to survive a restart.
+
 ## [0.28.0] - 2026-08-09
 
 ### Added

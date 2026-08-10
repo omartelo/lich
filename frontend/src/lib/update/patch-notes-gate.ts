@@ -6,8 +6,18 @@
 import type { PatchNotes } from "@/lib/api-types"
 
 // Stores the version whose notes were last shown (or silently recorded on first
-// run), so a given release's popup fires exactly once.
-export const PATCH_NOTES_SEEN_KEY = "lich.patchNotesSeen"
+// run), so a given release's popup fires exactly once. It is a workspace
+// setting rather than a localStorage pref: a Chromium profile whose Local
+// Storage stops accepting writes keeps serving the value it loaded at startup,
+// which leaves the popup returning on every launch with no click able to stop
+// it (#199). The database is the same store the sessions themselves survive in.
+export const PATCH_NOTES_SEEN_KEY = "update.patchNotesSeen"
+
+// The localStorage key the same state used before it moved into the database.
+// Read once as a fallback so an install that already dismissed a release is not
+// treated as a first run — which would swallow the popup for the very release
+// that moves it. Never written; it ages out with the profile.
+export const LEGACY_PATCH_NOTES_SEEN_KEY = "lich.patchNotesSeen"
 
 // PatchNotesAction is what the gate should do:
 // - show: open the popup for this version's notes.
