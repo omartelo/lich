@@ -18,8 +18,10 @@
     <img alt="Shell" src="https://img.shields.io/badge/shell-Chromium%20--app-4285F4?logo=googlechrome&logoColor=white" />
     <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-333" />
     <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-blue" /></a>
+    <a href="https://github.com/sponsors/omartelo"><img alt="Sponsor" src="https://img.shields.io/github/sponsors/omartelo?color=ea4aaa&logo=githubsponsors&label=sponsors" /></a>
   </p>
   <img src="docs/media/session.png" alt="Four projects on the tab bar and five sessions in the sidebar — each with its worktree, branch and diff badge — while a Claude Code session works in the terminal and the footer shows the model and context ring" width="900" />
+  <!-- sponsor-logos: company logos go here, between the screenshot and About -->
 </div>
 
 ## About
@@ -196,6 +198,22 @@ Package a Linux release locally (needs
 ```bash
 task package   # .deb + .rpm + Arch .pkg.tar.zst in bin/
 ```
+
+## Sponsors
+
+lich is written and maintained by one person. Sponsoring pays for the time that
+goes into it and keeps the project independent: there is no paid tier of the app
+and there will not be one.
+
+[**Become a sponsor**](https://github.com/sponsors/omartelo)
+
+<!-- sponsor-names: monthly sponsors go here -->
+
+### Backers
+
+<!-- backers: one-time supporters go here -->
+
+Nobody yet.
 
 ## License
 
