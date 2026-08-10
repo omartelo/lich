@@ -61,6 +61,22 @@ func Write(configDir string, port int, token string) (string, error) {
 	return p, nil
 }
 
+// UncleanExit reports whether the run before this one ended without closing its
+// window. Write records the runtime file at startup and the clean window-close
+// exit removes it, so a file still on disk when a fresh launch is about to write
+// its own is the previous run's — it crashed, was killed, or the machine went
+// down under it. Call it before Write, which overwrites the evidence.
+//
+// restartWait is the restart.WaitEnv value: a successor is spawned while its
+// predecessor still holds the file, and that handover is not a crash.
+func UncleanExit(configDir, restartWait string) bool {
+	if restartWait != "" {
+		return false
+	}
+	_, err := os.Stat(path(configDir))
+	return err == nil
+}
+
 // Read loads runtime.json. A missing file returns (nil, nil): no instance
 // recorded, not an error.
 func Read(configDir string) (*Info, error) {

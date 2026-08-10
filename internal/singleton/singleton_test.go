@@ -55,6 +55,37 @@ func TestReadRejectsGarbage(t *testing.T) {
 	}
 }
 
+// TestUncleanExit pins the three cases the launch notice is decided from: the
+// file the clean exit removed, the file it never got to remove, and the file a
+// restart successor finds because its predecessor is still holding it.
+func TestUncleanExit(t *testing.T) {
+	t.Run("no runtime file is a clean exit", func(t *testing.T) {
+		if UncleanExit(writeConfig(t), "") {
+			t.Fatal("UncleanExit with no runtime file = true, want false")
+		}
+	})
+
+	t.Run("a leftover runtime file is an unclean exit", func(t *testing.T) {
+		configDir := writeConfig(t)
+		if _, err := Write(configDir, 47821, "tok"); err != nil {
+			t.Fatalf("Write: %v", err)
+		}
+		if !UncleanExit(configDir, "") {
+			t.Fatal("UncleanExit with a leftover runtime file = false, want true")
+		}
+	})
+
+	t.Run("a restart successor inherits the file, not a crash", func(t *testing.T) {
+		configDir := writeConfig(t)
+		if _, err := Write(configDir, 47821, "tok"); err != nil {
+			t.Fatalf("Write: %v", err)
+		}
+		if UncleanExit(configDir, "1") {
+			t.Fatal("UncleanExit for a restart successor = true, want false")
+		}
+	})
+}
+
 func TestDetect(t *testing.T) {
 	const want = 47821
 	seed := func(t *testing.T, port int, token string) string {

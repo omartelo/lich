@@ -345,6 +345,9 @@ export const System = {
   Diagnostics: () => call<DiagnosticsData>("system.Diagnostics", []),
   /** Open the log's folder in the platform's file manager, for attaching it. */
   RevealLog: () => call<null>("system.RevealLog", []),
+  /** Whether the run before this one ended without closing its window. Reading
+   * it clears it, so only the first caller of a launch is told. */
+  TakeUncleanExit: () => call<boolean>("system.TakeUncleanExit", []),
   /** Raise a desktop notification: a headline and an optional second line.
    * The caller decides it is warranted — the backend only delivers. */
   Notify: (summary: string, detail: string) => call<null>("system.Notify", [summary, detail]),

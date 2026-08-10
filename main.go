@@ -123,7 +123,11 @@ func main() {
 	dispatcher.Register("appupdate", appupdate.New(version))
 	dispatcher.Register("patchnotes", patchnotes.New(version, changelog))
 	dispatcher.Register("store", db)
-	dispatcher.Register("system", system.New(env, logPath, version))
+	// Read before runChromium writes this run's runtime file over the previous
+	// run's: a file still there is the only trace a bad exit leaves, and the
+	// restored workspace looks exactly like one closed on purpose.
+	uncleanExit := singleton.UncleanExit(configDir, os.Getenv(restart.WaitEnv))
+	dispatcher.Register("system", system.New(env, logPath, version, uncleanExit))
 	dispatcher.Register("providers", providers.New())
 	// The relay is the only service whose caller is not the window: the `lich`
 	// CLI running inside a session reaches it over the same listener. It watches
