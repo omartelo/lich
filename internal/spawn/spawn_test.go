@@ -161,8 +161,12 @@ func TestOpenLandsInTheCallersProject(t *testing.T) {
 	if spawn.setup {
 		t.Error("ran the worktree setup script for a session that opened no worktree")
 	}
-	if spawn.cols != startCols || spawn.rows != startRows {
-		t.Errorf("spawn sized %dx%d, want %dx%d", spawn.cols, spawn.rows, startCols, startRows)
+	// No size of its own — pinned as the literal zero rather than read off the
+	// constants, because the zero is the contract: it is what makes the terminal
+	// service start this session at the size the window is actually showing,
+	// instead of a shape chosen here that the first view would have to repaint.
+	if spawn.cols != 0 || spawn.rows != 0 {
+		t.Errorf("spawn sized %dx%d, want no size of its own", spawn.cols, spawn.rows)
 	}
 	if spawn.name != opened.Name {
 		t.Errorf("spawned as %q but reported %q — the roster name has to be one name", spawn.name, opened.Name)

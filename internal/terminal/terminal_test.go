@@ -873,3 +873,87 @@ func TestSessionStateWithoutAWatcherIsHarmless(t *testing.T) {
 		t.Fatalf("status = %d, want 204", resp.StatusCode)
 	}
 }
+
+// The size a session starts at is a contract with the window, not an
+// implementation detail: a session drawn into a grid the window does not have
+// is repainted on its first view, and whatever its provider had already written
+// is gone from the screen (see sizeFor).
+
+func TestSizeForKeepsAMeasuredSize(t *testing.T) {
+	svc := New(stubBins{}, nil, events.New())
+
+	svc.mu.Lock()
+	cols, rows := svc.sizeFor(174, 51)
+	svc.mu.Unlock()
+
+	if cols != 174 || rows != 51 {
+		t.Errorf("sizeFor(174, 51) = %dx%d, want the caller's own terminal", cols, rows)
+	}
+}
+
+func TestSizeForFallsBackWhenNothingHasBeenMeasured(t *testing.T) {
+	svc := New(stubBins{}, nil, events.New())
+
+	svc.mu.Lock()
+	cols, rows := svc.sizeFor(0, 0)
+	svc.mu.Unlock()
+
+	// Pinned, not read off the constants: a conventional terminal is the whole
+	// reason this number is safe to hand a TUI that nobody is watching yet.
+	if cols != 80 || rows != 24 {
+		t.Errorf("sizeFor(0, 0) with no window = %dx%d, want 80x24", cols, rows)
+	}
+}
+
+func TestSizeForCopiesTheWindowsLastSize(t *testing.T) {
+	svc := New(stubBins{}, nil, events.New())
+
+	svc.mu.Lock()
+	svc.sizeFor(174, 51)
+	cols, rows := svc.sizeFor(0, 0)
+	svc.mu.Unlock()
+
+	if cols != 174 || rows != 51 {
+		t.Errorf("sizeFor(0, 0) = %dx%d, want the window's own 174x51", cols, rows)
+	}
+}
+
+// A resize is the window measuring its terminal, which is the freshest size
+// lich has — including for the session an agent opens next, whose own PTY
+// nobody is looking at.
+func TestResizeRecordsTheWindowsSize(t *testing.T) {
+	svc := New(stubBins{}, nil, events.New())
+
+	if err := svc.Resize("ghost", 174, 51); err != nil {
+		t.Fatalf("Resize = %v, want nil", err)
+	}
+
+	svc.mu.Lock()
+	cols, rows := svc.sizeFor(0, 0)
+	svc.mu.Unlock()
+	if cols != 174 || rows != 51 {
+		t.Errorf("a session spawned after the resize starts at %dx%d, want 174x51", cols, rows)
+	}
+}
+
+// TestStartWithoutASizeCopiesTheWindow drives the whole path: a card the window
+// measured, then a session opened with no terminal of its own.
+func TestStartWithoutASizeCopiesTheWindow(t *testing.T) {
+	bin := stayAliveBin(t)
+	svc := New(stubBins{bin: bin}, nil, events.New())
+	t.Cleanup(func() { _ = svc.Close("s1"); _ = svc.Close("s2") })
+
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, 174, 51); err != nil {
+		t.Fatalf("Start = %v, want nil", err)
+	}
+	if err := svc.Start("s2", "p1", t.TempDir(), "claude", "", "", false, 0, 0); err != nil {
+		t.Fatalf("Start without a size = %v, want nil", err)
+	}
+
+	svc.mu.Lock()
+	cols, rows := svc.lastCols, svc.lastRows
+	svc.mu.Unlock()
+	if cols != 174 || rows != 51 {
+		t.Errorf("the agent's session moved the window's size to %dx%d", cols, rows)
+	}
+}

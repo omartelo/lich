@@ -37,12 +37,18 @@ import (
 // is the workspace state, which outlives any one card.
 const OpenedEventName = "session-opened"
 
-// The size a session's PTY starts at. Nothing is watching it yet — the window
-// resizes it to the real terminal the first time the card is viewed — so this
-// only has to be a shape a TUI can draw itself into meanwhile.
+// The size a session opened here starts at: none of its own, which the terminal
+// service reads as "whatever size the window last reported" (terminal.sizeFor).
+//
+// There is no terminal to measure at this end — that is what opening a session
+// for an agent means — and naming a shape here was wrong rather than arbitrary.
+// The provider drew its whole conversation into a grid the window did not have;
+// the first view of the card resized the PTY, the TUI repainted, and everything
+// it had written was gone from the screen. Copying the window's size costs
+// nothing and leaves the card readable.
 const (
-	startCols = 80
-	startRows = 24
+	startCols = 0
+	startRows = 0
 )
 
 // Sessions is the persistence this needs: the workspace to resolve a project in,

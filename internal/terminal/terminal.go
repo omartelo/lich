@@ -145,6 +145,43 @@ type Service struct {
 	// without answering (internal/relay). Guarded by mu: wired after the
 	// transport is already serving.
 	onState func(id, state string)
+	// lastCols/lastRows is the last terminal size the window reported, and the
+	// size a session spawned with none of its own is started at. See
+	// sizeFor. Guarded by mu.
+	lastCols, lastRows int
+}
+
+// The size a session is started at when nothing has ever measured a terminal —
+// no window has opened yet, so there is no real one to copy. A conventional
+// terminal, which every TUI draws itself into.
+const (
+	fallbackCols = 80
+	fallbackRows = 24
+)
+
+// sizeFor resolves the size to start a PTY at. A caller that measured a
+// terminal passes it and gets it back; one that has no terminal to measure
+// (internal/spawn, opening a session for an agent) passes zero and gets the
+// last size the window reported.
+//
+// Copying that size is what keeps such a session readable. Its provider draws
+// its whole conversation into whatever grid it is given, and the window replays
+// those exact bytes into the terminal it builds when somebody finally opens the
+// card. Started at a size the window does not have, the session is redrawn on
+// the first view — at which point the TUI repaints and what it had already
+// written is gone from the screen. The conversation survives in the provider,
+// not on the screen the user came to read.
+//
+// Called under s.mu.
+func (s *Service) sizeFor(cols, rows int) (int, int) {
+	if cols > 0 && rows > 0 {
+		s.lastCols, s.lastRows = cols, rows
+		return cols, rows
+	}
+	if s.lastCols > 0 && s.lastRows > 0 {
+		return s.lastCols, s.lastRows
+	}
+	return fallbackCols, fallbackRows
 }
 
 // New returns a ready-to-use terminal service that resolves the binary to spawn
@@ -361,6 +398,7 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, se
 	if _, running := s.sessions[id]; running {
 		return nil, "", nil
 	}
+	cols, rows = s.sizeFor(cols, rows)
 
 	if cwd == "" {
 		home, err := os.UserHomeDir()
@@ -512,6 +550,14 @@ func (s *Service) Replay(id string) (string, error) {
 // the visible terminal; a hidden terminal is resized on the next time it is
 // shown.
 func (s *Service) Resize(id string, cols, rows int) error {
+	// Recorded even when the session it names is gone: it is the window's own
+	// terminal being measured, and the next session spawned without one starts
+	// at that size (see sizeFor).
+	if cols > 0 && rows > 0 {
+		s.mu.Lock()
+		s.lastCols, s.lastRows = cols, rows
+		s.mu.Unlock()
+	}
 	p := s.ptyOf(id)
 	if p == nil {
 		return nil

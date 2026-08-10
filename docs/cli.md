@@ -491,11 +491,13 @@ whoever asked.
   window is written into a TUI that may not be reading yet, and lich cannot tell
   that apart from a delivered one (delivery is proven, receipt is not). Hence
   the line the command prints; opening and sending are two steps on purpose.
-- **`open` starts the PTY at 80×24.** Nothing is watching it, so there is no
-  terminal to measure. The window resizes it the first time the card is viewed,
-  and a TUI that drew itself into the smaller grid redraws — but output produced
-  before that view was wrapped for 80 columns, and the replayed scrollback keeps
-  those wraps.
+- **`open` starts the PTY at the size the window last reported**, because there
+  is no terminal at this end to measure (`terminal.sizeFor`); 80×24 only when no
+  window has ever measured one. It is a copy, not a subscription: a window
+  resized between the spawn and the first view of the card leaves that session
+  drawn for the old grid, and the first view resizes it — at which point the TUI
+  repaints and the conversation it had already written is gone from the screen,
+  though not from the provider. The same seam a hidden session's replay has.
 - **An opened session takes the project's active slot.** The row is written the
   way the window writes one, so the project's `active_session_id` moves to it —
   the card is not focused now, but a reload lands on it. Two of them and the

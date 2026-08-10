@@ -596,6 +596,13 @@ export function TerminalView({
         void Service.Close(sessionId)
         return
       }
+      // Start is a no-op for a session that was already running — one an agent
+      // opened through the CLI or its MCP tools, whose PTY the backend started
+      // without a terminal to measure — and a no-op ignores the size passed to
+      // it. Sending it separately is what stops such a session from drawing
+      // into a grid this terminal does not have. Same size: no SIGWINCH, no
+      // repaint, so the ordinary spawn pays nothing.
+      void Service.Resize(sessionId, live.term.cols, live.term.rows)
       // Deliver any one-shot input queued for this session (the update flow's
       // install command) now that the PTY exists. No trailing newline, so it
       // sits at the prompt for the user to run.
