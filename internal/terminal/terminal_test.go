@@ -7,6 +7,7 @@
 package terminal
 
 import (
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/omartelo/lich/internal/events"
+	"github.com/omartelo/lich/internal/providers"
 	"github.com/omartelo/lich/internal/shquote"
 )
 
@@ -300,7 +302,7 @@ func TestStartIsNoopWhenAlreadyRunning(t *testing.T) {
 	sess := spawnSession(t)
 	svc.sessions["s1"] = sess
 
-	if err := svc.Start("s1", "p1", "", "", "", false, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", "", "", "", "", false, 80, 24); err != nil {
 		t.Errorf("Start(running) = %v, want nil", err)
 	}
 	if svc.sessions["s1"] != sess {
@@ -315,6 +317,19 @@ func stayAliveBin(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "fake-claude")
 	if err := os.WriteFile(path, []byte("#!/bin/sh\nsleep 30\n"), 0o755); err != nil {
+		t.Fatalf("write stub bin: %v", err)
+	}
+	return path
+}
+
+// echoBin writes a script that echoes its input like cat and ignores whatever
+// arguments it is spawned with. A session spawn carries flags of lich's own now
+// (the MCP registration), and plain /bin/cat would read those as file names,
+// fail, and exit before the test could inspect the session.
+func echoBin(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "fake-claude")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nexec cat\n"), 0o755); err != nil {
 		t.Fatalf("write stub bin: %v", err)
 	}
 	return path
@@ -339,7 +354,7 @@ func TestStartPassesResumeToTheProcess(t *testing.T) {
 	svc := New(stubBins{bin: bin}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "abc-123", false, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "abc-123", "", false, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 
@@ -347,9 +362,12 @@ func TestStartPassesResumeToTheProcess(t *testing.T) {
 	got := spawnedArgs(t, svc, "s1")
 	svc.mu.Unlock()
 
-	want := []string{bin, "--resume", "abc-123"}
-	if !slices.Equal(got, want) {
-		t.Errorf("spawned argv = %v, want %v", got, want)
+	// A spawn also registers lich's MCP server, whose content
+	// TestProviderArgsRegistersTheMCPServer pins; this test owns the resume id
+	// reaching argv ahead of it.
+	want := []string{bin, "--resume", "abc-123", "--mcp-config"}
+	if len(got) != len(want)+1 || !slices.Equal(got[:len(want)], want) {
+		t.Errorf("spawned argv = %v, want %v followed by one config", got, want)
 	}
 }
 
@@ -360,7 +378,7 @@ func TestStartWithoutResumeSpawnsBare(t *testing.T) {
 	svc := New(stubBins{bin: bin}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", false, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 
@@ -368,8 +386,12 @@ func TestStartWithoutResumeSpawnsBare(t *testing.T) {
 	got := spawnedArgs(t, svc, "s1")
 	svc.mu.Unlock()
 
-	if !slices.Equal(got, []string{bin}) {
-		t.Errorf("spawned argv = %v, want %v", got, []string{bin})
+	// A claude spawn is never bare now: it carries lich's MCP registration,
+	// whose content TestProviderArgsRegistersTheMCPServer pins. What this test
+	// owns is that no resume flag was invented alongside it.
+	want := []string{bin, "--mcp-config"}
+	if len(got) != len(want)+1 || !slices.Equal(got[:len(want)], want) {
+		t.Errorf("spawned argv = %v, want %v followed by one config", got, want)
 	}
 }
 
@@ -381,7 +403,7 @@ func TestStartWithSetupWrapsTheSpawn(t *testing.T) {
 	svc := New(stubBins{bin: bin, setup: "echo setup-ran"}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", true, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", true, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 
@@ -406,7 +428,7 @@ func TestStartWithSetupButNoScriptSpawnsBare(t *testing.T) {
 	svc := New(stubBins{bin: bin}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", true, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", true, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 
@@ -414,8 +436,11 @@ func TestStartWithSetupButNoScriptSpawnsBare(t *testing.T) {
 	got := spawnedArgs(t, svc, "s1")
 	svc.mu.Unlock()
 
-	if !slices.Equal(got, []string{bin}) {
-		t.Errorf("spawned argv = %v, want %v", got, []string{bin})
+	// As above: the registration is expected, an sh indirection is not — argv
+	// still starts at the provider binary itself.
+	want := []string{bin, "--mcp-config"}
+	if len(got) != len(want)+1 || !slices.Equal(got[:len(want)], want) {
+		t.Errorf("spawned argv = %v, want %v followed by one config", got, want)
 	}
 }
 
@@ -481,6 +506,53 @@ func TestResumeArgs(t *testing.T) {
 			t.Errorf("%s: resumeArgs(%q, %q) = %v, want %v",
 				tc.name, tc.kind, tc.resume, got, tc.want)
 		}
+	}
+}
+
+// TestNameArgs proves only Claude Code is named — the one provider with a peer
+// roster — and that a name which would be parsed as a flag never reaches argv.
+func TestNameArgs(t *testing.T) {
+	cases := []struct {
+		name, kind, peer string
+		want             []string
+	}{
+		{"claude named", "claude", "lich-4f2a", []string{"--name", "lich-4f2a"}},
+		{"claude unnamed", "claude", "", nil},
+		{"claude blank name", "claude", "   ", nil},
+		{"claude name trimmed", "claude", " lich-4f2a ", []string{"--name", "lich-4f2a"}},
+		{"claude flag-like name", "claude", "--dangerously-skip-permissions", nil},
+		{"codex has no roster", "codex", "lich-4f2a", nil},
+		{"opencode has no roster", "opencode", "lich-4f2a", nil},
+		{"shell has no roster", KindShell, "lich-4f2a", nil},
+	}
+	for _, tc := range cases {
+		got := nameArgs(tc.kind, tc.peer)
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("%s: nameArgs(%q, %q) = %v, want %v",
+				tc.name, tc.kind, tc.peer, got, tc.want)
+		}
+	}
+}
+
+// TestStartPassesNameToTheProcess proves the peer name reaches the spawned
+// binary's argv beside the resume id, in the order claude parses.
+func TestStartPassesNameToTheProcess(t *testing.T) {
+	bin := stayAliveBin(t)
+	svc := New(stubBins{bin: bin}, nil, events.New())
+	t.Cleanup(func() { _ = svc.Close("s1") })
+
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "lich-4f2a", false, 80, 24); err != nil {
+		t.Fatalf("Start = %v, want nil", err)
+	}
+
+	svc.mu.Lock()
+	got := spawnedArgs(t, svc, "s1")
+	svc.mu.Unlock()
+
+	// As above: the registration follows, pinned by its own test.
+	want := []string{bin, "--name", "lich-4f2a", "--mcp-config"}
+	if len(got) != len(want)+1 || !slices.Equal(got[:len(want)], want) {
+		t.Errorf("spawned argv = %v, want %v followed by one config", got, want)
 	}
 }
 
@@ -587,6 +659,119 @@ func TestSessionEnvInjectsCoordinates(t *testing.T) {
 	}
 	if len(s.env) != 1 || s.env[0] != "A=1" {
 		t.Fatalf("shared base env was mutated: %v", s.env)
+	}
+}
+
+// TestProviderArgsRegistersTheMCPServer proves each provider that can be handed
+// an MCP server at spawn is handed lich's, spelled its own way.
+func TestProviderArgsRegistersTheMCPServer(t *testing.T) {
+	const bin = "/usr/bin/lich"
+
+	claude := providerArgs(providers.Claude, "", "", bin)
+	if len(claude) != 2 || claude[0] != "--mcp-config" {
+		t.Fatalf("claude args = %v", claude)
+	}
+	var config struct {
+		MCPServers map[string]struct {
+			Command string   `json:"command"`
+			Args    []string `json:"args"`
+		} `json:"mcpServers"`
+	}
+	if err := json.Unmarshal([]byte(claude[1]), &config); err != nil {
+		t.Fatalf("--mcp-config value is not JSON: %v (%q)", err, claude[1])
+	}
+	server, ok := config.MCPServers["lich"]
+	if !ok {
+		t.Fatalf("no lich server in %q", claude[1])
+	}
+	if server.Command != bin || !slices.Equal(server.Args, []string{"mcp"}) {
+		t.Errorf("server = %+v, want %q mcp", server, bin)
+	}
+	if strings.Contains(claude[1], "token") {
+		t.Errorf("a secret reached the argv, which /proc exposes: %q", claude[1])
+	}
+
+	codex := providerArgs(providers.Codex, "", "", bin)
+	want := []string{
+		"-c", `mcp_servers.lich.command="/usr/bin/lich"`,
+		"-c", `mcp_servers.lich.args=["mcp"]`,
+	}
+	if !slices.Equal(codex, want) {
+		t.Errorf("codex args = %v, want %v", codex, want)
+	}
+}
+
+// TestProviderArgsOrdersEachProvidersConstraint pins the two orderings that are
+// not interchangeable: Claude Code's --mcp-config is variadic and swallows what
+// follows it, and Codex reads resume as a subcommand that every global option
+// must precede.
+func TestProviderArgsOrdersEachProvidersConstraint(t *testing.T) {
+	claude := providerArgs(providers.Claude, "lich-4f2a", "conv-1", "/usr/bin/lich")
+	if claude[len(claude)-2] != "--mcp-config" {
+		t.Errorf("--mcp-config is not last, so it eats what follows: %v", claude)
+	}
+	for _, want := range []string{"--name", "--resume"} {
+		if !slices.Contains(claude, want) {
+			t.Errorf("claude args lost %q: %v", want, claude)
+		}
+	}
+
+	codex := providerArgs(providers.Codex, "", "conv-1", "/usr/bin/lich")
+	resume := slices.Index(codex, "resume")
+	if resume < 0 {
+		t.Fatalf("codex args lost the resume subcommand: %v", codex)
+	}
+	if last := slices.Index(codex, "-c"); last > resume {
+		t.Errorf("a global option follows the subcommand: %v", codex)
+	}
+	if codex[len(codex)-1] != "conv-1" {
+		t.Errorf("codex args = %v, want the conversation id last", codex)
+	}
+}
+
+// TestProviderArgsWithoutARegistration proves the providers with no way to be
+// told at spawn are spawned exactly as before, and that a lich which cannot
+// name its own binary registers nothing rather than something broken.
+func TestProviderArgsWithoutARegistration(t *testing.T) {
+	tests := []struct {
+		name string
+		kind string
+		bin  string
+	}{
+		{"opencode has no flag for it", providers.OpenCode, "/usr/bin/lich"},
+		{"crush has no flag for it", providers.Crush, "/usr/bin/lich"},
+		{"oh-my-pi has no flag for it", providers.OMP, "/usr/bin/lich"},
+		{"a shell session is not a provider", KindShell, "/usr/bin/lich"},
+		{"no binary to point at", providers.Claude, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if args := providerArgs(tt.kind, "", "", tt.bin); len(args) != 0 {
+				t.Errorf("args = %v, want none", args)
+			}
+		})
+	}
+}
+
+// TestSessionEnvExportsTheBinary proves a session is told where the lich it
+// belongs to lives. Its agent calls that path back to reach another session
+// (internal/cli), and on a machine running an installed lich beside a dev build
+// the bare name would resolve to the wrong one.
+func TestSessionEnvExportsTheBinary(t *testing.T) {
+	exe, err := os.Executable()
+	if err != nil {
+		t.Skipf("no executable path on this platform: %v", err)
+	}
+	s := &Service{env: []string{"A=1"}, store: stubBins{}, ws: &transport{port: 4321, token: "tok"}}
+
+	var got string
+	for _, e := range s.sessionEnv("sess", "p1", "") {
+		if path, ok := strings.CutPrefix(e, "LICH_BIN="); ok {
+			got = path
+		}
+	}
+	if got != exe {
+		t.Fatalf("LICH_BIN = %q, want the running binary %q", got, exe)
 	}
 }
 

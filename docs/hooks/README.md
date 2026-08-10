@@ -51,6 +51,10 @@ Neither addresses anything in lich and no hook reads them — they exist for the
 project's own setup script and commands (`PORT=$LICH_WORKTREE_PORT pnpm dev`,
 `cp --reflink=auto -r "$LICH_PROJECT_DIR/node_modules" .`).
 
+`LICH_BIN` is the fourth: the path of the lich this session belongs to, which
+the agent in the PTY calls to reach the sessions beside it. That surface has its
+own contract in [cli.md](../cli.md).
+
 ## Client rules (all hooks)
 
 - Missing env vars → no-op, exit 0.

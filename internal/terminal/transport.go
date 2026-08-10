@@ -90,7 +90,7 @@ type transport struct {
 	token       string
 	mux         *http.ServeMux
 	input       func(id string, data []byte)
-	status      func(id, state string)
+	status      func(req hookRequest)
 	linkSession func(sessionID, providerSessionID, provider string) error
 	setTitle    func(sessionID, title string) error
 	touched     func(sessionID string)
@@ -103,14 +103,14 @@ type transport struct {
 
 // newTransport starts the listener on a random loopback port. input receives
 // decoded input frames (keyboard data for a session's PTY); status receives a
-// session's processing state reported by the Claude Code hook (see /hook);
-// linkSession records the provider session id a PTY reports at start (see
-// /session-start); setTitle applies an auto-generated session label (see
-// /session-title); touched signals a session likely changed files on disk (see
-// /session-touched).
+// session's processing state, and the tool it is about to run, as reported by
+// the provider's hooks (see /hook); linkSession records the provider session id
+// a PTY reports at start (see /session-start); setTitle applies an
+// auto-generated session label (see /session-title); touched signals a session
+// likely changed files on disk (see /session-touched).
 func newTransport(
 	input func(id string, data []byte),
-	status func(id, state string),
+	status func(req hookRequest),
 	linkSession func(sessionID, providerSessionID, provider string) error,
 	setTitle func(sessionID, title string) error,
 	touched func(sessionID string),
@@ -316,26 +316,38 @@ func servePost[T any](
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// hookRequest is a status POST body.
+// hookRequest is a status POST body. Tool and Detail are the optional pair a
+// pre-tool report carries — the provider's own name for the tool it is about to
+// run, and its own words for what that tool acts on. Both are absent from every
+// other report.
 type hookRequest struct {
 	SessionID string `json:"session_id"`
 	State     string `json:"state"`
+	Tool      string `json:"tool"`
+	Detail    string `json:"detail"`
 }
 
-// hook receives a session status POST from the Claude Code hook running inside a
+// hookTextLimit bounds the tool name and detail a report may carry, in runes.
+// Over-long values are truncated rather than rejected: they are decoration on a
+// state that has to land either way, and losing the spinner because a command
+// line grew is the worse failure.
+const hookTextLimit = 120
+
+// hook receives a session status POST from a provider's hook running inside a
 // spawned PTY and forwards it to the frontend via the status callback.
 func (t *transport) hook(w http.ResponseWriter, r *http.Request) {
 	servePost(t, w, r, parseHookRequest, func(req hookRequest) error {
 		if t.status != nil {
-			t.status(req.SessionID, req.State)
+			t.status(req)
 		}
 		return nil
 	})
 }
 
-// parseHookRequest validates a status POST body: a session id and one of the
-// known states. It never trusts the payload — an unknown state is rejected so a
-// stray or hostile POST can't drive the UI into an undefined status.
+// parseHookRequest validates a status POST body: a session id, one of the known
+// states, and the optional tool pair. It never trusts the payload — an unknown
+// state is rejected so a stray or hostile POST can't drive the UI into an
+// undefined status, and the free text is trimmed and capped (see hookTextLimit).
 func parseHookRequest(body []byte) (hookRequest, error) {
 	var req hookRequest
 	if err := json.Unmarshal(body, &req); err != nil {
@@ -348,7 +360,24 @@ func parseHookRequest(body []byte) (hookRequest, error) {
 		req.State != statusWaiting && req.State != statusIdle {
 		return hookRequest{}, fmt.Errorf("hook has unknown state %q", req.State)
 	}
+	req.Tool = clampRunes(strings.TrimSpace(req.Tool), hookTextLimit)
+	req.Detail = clampRunes(strings.TrimSpace(req.Detail), hookTextLimit)
+	// A detail with no tool to qualify names nothing, so it is dropped rather
+	// than shown on its own.
+	if req.Tool == "" {
+		req.Detail = ""
+	}
 	return req, nil
+}
+
+// clampRunes truncates s to at most max runes, counting runes rather than bytes
+// so a cut never lands mid-character.
+func clampRunes(s string, max int) string {
+	runes := []rune(s)
+	if len(runes) <= max {
+		return s
+	}
+	return string(runes[:max])
 }
 
 // startRequest is a session-start POST body. LegacyClaudeSessionID accepts the

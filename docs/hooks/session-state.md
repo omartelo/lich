@@ -1,8 +1,10 @@
 # Contract: session state
 
-Reports a session's Claude Code processing state to lich so its card shows a
-spinner while Claude is working, a check when the turn ends, and a bell when
-Claude is blocked on the user — plus a toast that routes to the waiting card.
+Reports a session's processing state to lich so its card shows a spinner while
+the agent is working, a check when the turn ends, and a bell when it is blocked
+on the user — plus a toast that routes to the waiting card. A `busy` report may
+also name the tool the agent is about to run, which the card shows under the
+session's label.
 
 See [README.md](README.md) for the shared transport (`LICH_PORT` / `LICH_TOKEN`
 / `LICH_SESSION_ID`) and the client rules every hook follows.
@@ -13,10 +15,17 @@ See [README.md](README.md) for the shared transport (`LICH_PORT` / `LICH_TOKEN`
 POST http://127.0.0.1:${LICH_PORT}/hook?token=${LICH_TOKEN}
 Content-Type: application/json
 
-{"session_id": "<LICH_SESSION_ID>", "state": "<busy|done|waiting|idle>"}
+{"session_id": "<LICH_SESSION_ID>", "state": "<busy|done|waiting|idle>",
+ "tool": "<tool name>", "detail": "<what it acts on>"}
 ```
 
 States: `busy`, `done`, `waiting`, `idle`. lich rejects anything else.
+
+`tool` and `detail` are optional and belong to the pre-tool report alone (see
+below). Both are trimmed and capped at 120 characters — they decorate a state
+that has to land either way, so an over-long value is truncated, never a reason
+to reject the report. A `detail` with no `tool` to qualify names nothing and is
+dropped.
 
 Responses: `204` ok · `401` invalid token · `400` invalid body.
 
@@ -28,6 +37,7 @@ Both sides test against the payloads in
 | Claude Code hook   | Codex hook          | state     |
 |--------------------|---------------------|-----------|
 | `UserPromptSubmit` | `UserPromptSubmit`  | `busy`    |
+| `PreToolUse`       | `PreToolUse`        | `busy` + `tool` |
 | `PostToolUse`      | `PostToolUse`       | `busy`    |
 | `Notification`     | `PermissionRequest` | `waiting` |
 | `Stop`             | `Stop`              | `done`    |
@@ -50,23 +60,69 @@ question does not** — those resume by running a tool, so `PostToolUse → busy
 what re-arms the spinner after them. Every tool re-reports `busy` (idempotent);
 `Stop → done` ends the turn.
 
+## The tool a turn is running
+
+`PreToolUse` reports `busy` like every other event, and adds two fields: `tool`,
+the harness's own name for what is about to run, and `detail`, its own words for
+what that tool acts on. Both are passed through as sent — lich does not
+translate between vocabularies, because the word on the card should be the word
+in the terminal beside it.
+
+The two vocabularies overlap more than the harnesses' own tool sets do. Codex's
+hook payload reports a shell call as `Bash`, the same name and the same
+`tool_input.command` string Claude Code sends, and routes reading and searching
+through it; the one word of its own that reaches a card is `apply_patch`:
+
+| Action        | Claude Code                | Codex                    |
+|---------------|----------------------------|--------------------------|
+| run a command | `Bash`                     | `Bash`                   |
+| edit a file   | `Edit` / `Write`           | `apply_patch`            |
+| read a file   | `Read`                     | — (goes through `Bash`)  |
+| search        | `Grep` / `Glob`            | — (goes through `Bash`)  |
+| an MCP tool   | `mcp__srv__tool`           | `mcp__srv__tool`         |
+
+Each row was taken off a real run of both CLIs against a stub listener, not from
+their documentation. A harness is free to report a name outside this table; the
+card shows whatever arrives.
+
+`detail` is whatever identifies the call at a glance — the command line, the
+file path, the pattern. It is free text: a harness that offers nothing usable
+sends only `tool`, and the card shows only the name. The client is what makes
+it readable (both harnesses report absolute paths, which no 240px card can
+show); lich takes what it is given.
+
+**A report holds the tool until the state leaves `busy`.** `PostToolUse` fires
+between tools with no `tool` field, so treating "no tool" as "clear" would blink
+the line off and on at every step. lich therefore keeps the last name for as
+long as the session is `busy`, and drops it on `done`, `waiting` and `idle` —
+never on `idle` alone, which Codex has no event for.
+
+`PreToolUse` is the first contract event on the agent's critical path: in both
+harnesses a hook exiting `2` there **blocks the tool call**. Until now the worst
+a broken script could do was lose a status report.
+
 ## lich server side
 
 - **Env injection** — `internal/terminal/terminal.go`, `Service.sessionEnv`:
   adds the three `LICH_*` vars to each PTY's environment.
 - **Endpoint** — `internal/terminal/transport.go`, `transport.hook`: validates
   the token and body (`parseHookRequest`) on the same loopback listener as
-  terminal I/O, then forwards `(session_id, state)`.
+  terminal I/O, then forwards the whole report.
 - **UI push** — `internal/terminal/terminal.go`: emits the global app event
-  `session-status` (`{id, state}`). Global rather than per-session because its
-  consumers outlive any one card.
+  `session-status` (`{id, state, tool, detail}`). Global rather than per-session
+  because its consumers outlive any one card.
 - **Store** — `frontend/src/lib/session/session-status-store.ts`: one subscription taken
   at page load keeps the last state of every session, keyed by id. The card
   cannot hold it: the sidebar only renders cards for the active project, so
   switching projects unmounts them, and a status reported meanwhile would be lost.
-- **Render** — `frontend/src/components/sidebar/SessionCard.tsx`: reads the store
-  (`useSessionStatus`) and shows a spinner (`busy`), check (`done`) or bell
-  (`waiting`); any other value, including `idle`, clears the indicator.
+  `session-tool-store.ts` reads the same event for the tool pair, keeping its own
+  keyed entry so a repeat `busy` — which the status store collapses into no
+  change at all — still moves the tool line.
+- **Render** — `frontend/src/components/sidebar/SessionCard.tsx`: reads the stores
+  (`useSessionStatus`, `useSessionTool`) and shows a spinner (`busy`), check
+  (`done`) or bell (`waiting`); any other value, including `idle`, clears the
+  indicator. The tool line sits under the session's label and exists only while
+  one is reported, so a card outside a turn is exactly the card it was before.
 - **Tab badge** — `frontend/src/components/tabs/ProjectTab.tsx`: reduces a
   project's sessions to one indicator (`useProjectStatus`, ranking `waiting` over
   `busy` over `done`), shown only while the project is not the active one. A
@@ -119,5 +175,10 @@ what re-arms the spinner after them. Every tool re-reports `busy` (idempotent);
   notification; macOS needs lich shipped as a signed `.app` bundle with
   `UNUserNotificationCenter`; Windows needs a registered AppUserModelID with a
   COM activation handler.
+- **The tool line names the call, not its progress.** It appears when the tool
+  starts and holds that name for however long the tool runs — a 3-minute build
+  and a 30ms read look identical. Nothing reports a tool finishing on its own:
+  `PostToolUse` says `busy` with no tool, which by the rule above changes
+  nothing.
 - Adding another state beyond `busy`/`done`/`waiting`/`idle` is a contract
   change — see the versioning note in the README.

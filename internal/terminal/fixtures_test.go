@@ -220,7 +220,7 @@ func assertFixtureFields(t *testing.T, parsed any, want map[string]any) {
 func TestHookFixturesMatchEndpoints(t *testing.T) {
 	tr, err := newTransport(
 		func(string, []byte) {},
-		func(string, string) {},
+		func(hookRequest) {},
 		func(string, string, string) error { return nil },
 		func(string, string) error { return nil },
 		func(string) {},

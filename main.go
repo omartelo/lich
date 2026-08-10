@@ -13,6 +13,7 @@ import (
 	"github.com/omartelo/lich/internal/agentplugin"
 	"github.com/omartelo/lich/internal/appupdate"
 	"github.com/omartelo/lich/internal/chromium"
+	"github.com/omartelo/lich/internal/cli"
 	"github.com/omartelo/lich/internal/drop"
 	"github.com/omartelo/lich/internal/events"
 	"github.com/omartelo/lich/internal/fonts"
@@ -20,6 +21,7 @@ import (
 	"github.com/omartelo/lich/internal/patchnotes"
 	"github.com/omartelo/lich/internal/project"
 	"github.com/omartelo/lich/internal/providers"
+	"github.com/omartelo/lich/internal/relay"
 	"github.com/omartelo/lich/internal/restart"
 	"github.com/omartelo/lich/internal/rpc"
 	"github.com/omartelo/lich/internal/singleton"
@@ -52,6 +54,15 @@ const defaultListenPort = "47821"
 var version = "dev"
 
 func main() {
+	// `lich <subcommand>` is the CLI a session's agent calls to reach the
+	// sessions beside it (internal/cli). It answers before anything else here:
+	// it must not open the database, take the log file or race the singleton
+	// bind of the lich it is talking to. Anything that is not a subcommand —
+	// including `lich -- <chromium flags>` — falls through and opens the app.
+	if code := cli.Run(os.Args[1:], os.Getenv, os.Stdout, os.Stderr); code != cli.NotACommand {
+		os.Exit(code)
+	}
+
 	// Snapshot before any env tweaks: spawned terminal sessions must inherit
 	// what the user launched lich with (see terminal.childEnv). ResolveShellEnv
 	// recovers the rc-exported vars a GUI launch misses (see its doc).
@@ -114,6 +125,9 @@ func main() {
 	dispatcher.Register("store", db)
 	dispatcher.Register("system", system.New(env, logPath, version))
 	dispatcher.Register("providers", providers.New())
+	// The relay is the only service whose caller is not the window: the `lich`
+	// CLI running inside a session reaches it over the same listener.
+	dispatcher.Register("relay", relay.New(db, term))
 	dispatcher.Register("themes", themes.New())
 	dispatcher.Deny("store.Close")
 	// The dropped file's bytes are the request body, so the upload is its own

@@ -32,11 +32,12 @@ const (
 	dataEventPrefix = "terminal:data:"
 	// exitEventPrefix is emitted once when a session's shell process exits.
 	exitEventPrefix = "terminal:exit:"
-	// statusEventName carries a session's Claude Code processing state
-	// ({id, state} — "busy"/"done"/"waiting"/"idle"), reported by the lich hook
-	// running inside the PTY (see transport.hook and docs/hooks/session-state.md).
-	// The frontend keeps it in a store keyed by id (session-status-store.ts)
-	// rather than in the card, which is only mounted while its project is active.
+	// statusEventName carries a session's processing state ({id, state, tool,
+	// detail} — "busy"/"done"/"waiting"/"idle", plus the tool a pre-tool report
+	// names), reported by the lich hooks running inside the PTY (see
+	// transport.hook and docs/hooks/session-state.md). The frontend keeps it in
+	// stores keyed by id (session-status-store.ts, session-tool-store.ts) rather
+	// than in the card, which is only mounted while its project is active.
 	statusEventName = "session-status"
 	// titleEventName carries an auto-applied session label ({id, label}).
 	titleEventName = "session-title"
@@ -51,11 +52,15 @@ const (
 	agentEventName = "session-agent"
 )
 
-// statusEvent is the payload of statusEventName: the session whose Claude Code
-// processing state changed, and the new state.
+// statusEvent is the payload of statusEventName: the session whose processing
+// state changed, the new state, and — on a pre-tool report alone — the tool it
+// is about to run and what that tool acts on. Both are the provider's own
+// words, never translated here (docs/hooks/session-state.md tables them).
 type statusEvent struct {
-	ID    string `json:"id"`
-	State string `json:"state"`
+	ID     string `json:"id"`
+	State  string `json:"state"`
+	Tool   string `json:"tool,omitempty"`
+	Detail string `json:"detail,omitempty"`
 }
 
 // titleEvent is the payload of titleEventName: the session whose label changed
@@ -150,15 +155,20 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 				slog.Warn("terminal: input write failed", "session", id, "err", err)
 			}
 		},
-		func(id, state string) {
-			hub.Emit(statusEventName, statusEvent{ID: id, State: state})
+		func(req hookRequest) {
+			hub.Emit(statusEventName, statusEvent{
+				ID:     req.SessionID,
+				State:  req.State,
+				Tool:   req.Tool,
+				Detail: req.Detail,
+			})
 			// Every non-idle state is a point where a fresh assistant usage line
 			// may have landed — a tool call mid-turn (busy), a prompt (waiting),
 			// or the turn's end (done) — so refresh the context window then, and
 			// off-thread so a stalled emit never blocks the hook's response. Skip
 			// idle (SessionEnd): the session is ending, nothing new to read.
-			if state != "idle" {
-				go s.emitUsage(id)
+			if req.State != statusIdle {
+				go s.emitUsage(req.SessionID)
 			}
 		},
 		func(sessionID, providerSessionID, provider string) error {
@@ -228,10 +238,11 @@ func (s *Service) SetRestart(fn func() error) {
 //
 // LICH_PROJECT_DIR and LICH_WORKTREE_PORT belong to the checkout rather than to
 // the transport, so they are exported even when the transport failed to start.
-// The loopback coordinates are the transport's: with none there is nowhere to
-// report, so a hook spawned in this PTY sees no LICH_PORT and no-ops.
+// The rest are the transport's: with none there is nowhere to report, so a hook
+// spawned in this PTY sees no LICH_PORT and no-ops, and the `lich` CLI it would
+// have called has nothing to call.
 func (s *Service) sessionEnv(id, projectID, cwd string) []string {
-	env := make([]string, len(s.env), len(s.env)+5)
+	env := make([]string, len(s.env), len(s.env)+6)
 	copy(env, s.env)
 	if dir := s.store.ProjectPath(projectID); dir != "" {
 		env = append(env, "LICH_PROJECT_DIR="+dir)
@@ -242,12 +253,32 @@ func (s *Service) sessionEnv(id, projectID, cwd string) []string {
 	if s.ws == nil {
 		return env
 	}
-	return append(env,
+	env = append(env,
 		"LICH_PORT="+strconv.Itoa(s.ws.port),
 		"LICH_TOKEN="+s.ws.token,
 		"LICH_SESSION_ID="+id,
 	)
+	if bin := lichBin(); bin != "" {
+		env = append(env, "LICH_BIN="+bin)
+	}
+	return env
 }
+
+// lichBin is the path of the running lich binary, exported as LICH_BIN so a
+// session can call the `lich` CLI back (internal/cli) — which is how one
+// session reaches another. The path rather than the name: an installed lich is
+// on $PATH and a `task dev` build is not, and on a machine running both, the
+// name would resolve to whichever came first rather than to the lich this
+// session belongs to. Empty when the path cannot be resolved; nothing is
+// exported then and a caller falls back to $PATH.
+var lichBin = sync.OnceValue(func() string {
+	exe, err := os.Executable()
+	if err != nil {
+		slog.Warn("resolve executable — LICH_BIN unset in sessions", "err", err)
+		return ""
+	}
+	return exe
+})
 
 // readBufSize is the chunk size read from a session's PTY per iteration.
 const readBufSize = 32 * 1024
@@ -267,13 +298,17 @@ const readBufSize = 32 * 1024
 // that slips through (pruned between the check and the spawn) fails in the PTY
 // like any other bad invocation — the user sees the provider's own error.
 //
+// name is what the session answers to in its provider's peer roster (Claude
+// Code's `/list-agents`), passed by the frontend so the roster names the card
+// the user sees. Only Claude Code has a roster; every other kind ignores it.
+//
 // setup is passed once, by the flow that just created this session's worktree:
 // it runs the project's worktree setup script (Settings › Project) in the PTY
 // before the provider, so a fresh checkout installs its dependencies in view.
 // A respawn or resume never sets it. The script runs in the session's own
 // environment, so it reads the same LICH_WORKTREE_PORT the provider will.
-func (s *Service) Start(id, projectID, cwd, kind, resume string, setup bool, cols, rows int) error {
-	sess, cwd, err := s.spawnSession(id, projectID, cwd, kind, resume, setup, cols, rows)
+func (s *Service) Start(id, projectID, cwd, kind, resume, name string, setup bool, cols, rows int) error {
+	sess, cwd, err := s.spawnSession(id, projectID, cwd, kind, resume, name, setup, cols, rows)
 	if err != nil || sess == nil {
 		return err
 	}
@@ -290,7 +325,7 @@ func (s *Service) Start(id, projectID, cwd, kind, resume string, setup bool, col
 // registration. A nil session with a nil error means id was already running.
 // The returned cwd is the effective start directory (the input, or the
 // resolved home when it was empty).
-func (s *Service) spawnSession(id, projectID, cwd, kind, resume string, setup bool, cols, rows int) (*session, string, error) {
+func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, setup bool, cols, rows int) (*session, string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -306,9 +341,16 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume string, setup bo
 		cwd = home
 	}
 
+	// The MCP registration is withheld without a transport for the same reason
+	// the hook coordinates are: the server it points at would have nothing to
+	// talk to, so the session would carry tools that can only fail.
+	mcpBin := ""
+	if s.ws != nil {
+		mcpBin = lichBin()
+	}
 	spec := ptySpec{
 		bin:  resolveCommand(kind, s.store.ProviderBin(kind, projectID), userShell()),
-		args: resumeArgs(kind, resume),
+		args: providerArgs(kind, name, resume, mcpBin),
 		dir:  cwd,
 		env:  s.sessionEnv(id, projectID, cwd),
 		cols: cols,
@@ -462,6 +504,14 @@ func (s *Service) Close(id string) error {
 		return nil
 	}
 	return sess.pty.Close()
+}
+
+// Live reports whether a session has a process running right now. It is the
+// difference between a card and a PTY: a session the user has never opened in
+// this page has a row in the store and nothing behind it to type at, so it can
+// be listed but never addressed (internal/relay).
+func (s *Service) Live(id string) bool {
+	return s.ptyOf(id) != nil
 }
 
 // ptyOf returns the PTY for a session, or nil if it is not running.
