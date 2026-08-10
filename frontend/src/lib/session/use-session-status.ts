@@ -76,6 +76,15 @@ export function useProjectStatus(sessionIds: readonly string[]): SessionStatus |
   return useSyncExternalStore(subscribe, snapshot)
 }
 
+// runningSessions returns which of these sessions are mid-turn right now (see
+// session-status-store.runningOf). Read imperatively rather than subscribed to:
+// its caller is a click that has to decide about this instant, and a component
+// re-rendering on every status change to hold a number it only reads on close
+// would be the subscription doing nothing the rest of the time.
+export function runningSessions(sessionIds: readonly string[]): string[] {
+  return store.runningOf(sessionIds)
+}
+
 // usePendingStatuses returns every session needing attention across all
 // projects — the notification queue (see session-status-store.pendingAll).
 // subscribeAll and pendingAll are module-stable, so no memoization is needed.

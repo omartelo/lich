@@ -192,7 +192,10 @@ export function SessionSidebar() {
           </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
-      <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto overflow-x-hidden">
+      {/* The scrollbar takes width, so it rides the aside's own padding (-mr-2)
+          and the padding is re-applied inside — a gap between thumb and card
+          when it shows, no shift in card width when it doesn't. */}
+      <div className="-mr-2 flex flex-1 flex-col gap-1.5 overflow-y-auto overflow-x-hidden pr-2">
         {/* Pinned above the session groups beside Settings, not inside a
             worktree's group: this card belongs to the project, and the screen it
             opens is the repository's, not one checkout's. */}

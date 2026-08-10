@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Closing a project asks when an agent is still working.** The tab's × took a
+  project's terminals down with it, killing whatever was mid-turn — with a
+  spinner on that very tab as the only warning, and no undo. Closing a project
+  whose sessions are busy or waiting on you now names how many and asks first;
+  a project where nothing is running still closes on the click.
 - **The sidebar says which session is waiting on which.** One session handing
   work to another used to happen entirely off screen: the card that asked looked
   like any card running a tool, and the card doing the work spun with no hint of
@@ -26,13 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   open. So it no longer has to: when the answer comes back and nobody is waiting
   on it, lich types it at the prompt of the session that asked, exactly as it
   typed the request at the other one. Ask, carry on, and the answer turns up.
-
 - **A request stops waiting when the answer went elsewhere.** If the session you
   asked works through the request and then answers in its own window instead of
   back through lich, the wait ends right there saying so, and a notification
   opens that session so you can read what it wrote — instead of running out a
   five-minute clock on an answer that already exists.
-
 - **Delegate to session, from the card menu.** Right-click the session you are
   in and pick another to hand work to; lich writes the request at your own
   prompt and leaves the cursor there, so you read it before it is sent. What it
@@ -93,6 +96,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   other session.
 
 ### Fixed
+
+- **The session list's scrollbar no longer sits on the cards.** With enough
+  sessions to scroll, the scrollbar came down flush against the right edge of
+  every card, reading as part of them. It now keeps a gap, and the cards stay
+  the width they were when the list is short enough not to scroll.
 
 - **A dragged card keeps its own shape.** Dragging a session card past a taller
   neighbour — a worktree card with a long title, say — stretched it to that
