@@ -1,9 +1,13 @@
 package terminal
 
 import (
+	"encoding/json"
+	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/omartelo/lich/internal/providers"
+	"github.com/omartelo/lich/internal/relay"
 )
 
 // What a session's PTY runs: which binary, and with which arguments. Every
@@ -29,6 +33,14 @@ const (
 // roster — the list its cross-session messaging addresses, and what
 // `/list-agents` prints.
 const claudeNameFlag = "--name"
+
+// How each provider is handed an MCP server on its command line: Claude Code
+// takes a JSON string, Codex takes config overrides for its `mcp_servers`
+// table. Which providers accept one at all is providers.AcceptsMCPServer.
+const (
+	claudeMCPFlag   = "--mcp-config"
+	codexConfigFlag = "-c"
+)
 
 // resolveCommand picks the binary a session runs: the user's shell for "shell"
 // sessions, otherwise the provider binary for the session's kind.
@@ -69,6 +81,74 @@ func nameArgs(kind, name string) []string {
 		return nil
 	}
 	return []string{claudeNameFlag, name}
+}
+
+// providerArgs assembles the whole argument list for one spawn. Ordering is
+// decided here rather than by appending in call order, because the two
+// providers constrain it in opposite directions: Codex spells resume as a
+// subcommand, so its global options have to come first, while Claude Code's
+// --mcp-config is variadic and reads everything after it as another config
+// path, so it has to come last.
+func providerArgs(kind, name, resume, lichBin string) []string {
+	mcp := mcpArgs(kind, lichBin)
+	args := append([]string{}, nameArgs(kind, name)...)
+	args = append(args, resumeArgs(kind, resume)...)
+	if kind == providers.Codex {
+		return append(mcp, args...)
+	}
+	return append(args, mcp...)
+}
+
+// mcpArgs registers lich's own MCP server with the provider being spawned, so
+// the agent in that session finds tools for reaching the sessions beside it in
+// its own tool list — without the user having to know the feature exists, and
+// without lich editing any config the user owns.
+//
+// The registration is stdio and carries no secret: it names the lich binary and
+// its `mcp` subcommand, and the server inherits the loopback coordinates from
+// this PTY's environment. A URL registration would have put the token in argv,
+// which any user on the machine can read out of /proc/<pid>/cmdline.
+//
+// Empty when lich cannot name its own binary, or when the provider has no way
+// to be told at spawn — never --strict-mcp-config, which would drop the user's
+// own MCP servers for the sake of lich's.
+func mcpArgs(kind, lichBin string) []string {
+	if lichBin == "" || !providers.AcceptsMCPServer(kind) {
+		return nil
+	}
+	switch kind {
+	case providers.Claude:
+		config := claudeMCPConfig(lichBin)
+		if config == "" {
+			return nil
+		}
+		return []string{claudeMCPFlag, config}
+	case providers.Codex:
+		return []string{
+			codexConfigFlag, fmt.Sprintf("mcp_servers.%s.command=%q", relay.MCPServerName, lichBin),
+			codexConfigFlag, fmt.Sprintf("mcp_servers.%s.args=[%q]", relay.MCPServerName, relay.MCPSubcommand),
+		}
+	}
+	return nil
+}
+
+// claudeMCPConfig is the JSON string Claude Code's --mcp-config accepts in
+// place of a file, which is what keeps this registration off the disk entirely.
+func claudeMCPConfig(lichBin string) string {
+	config := map[string]any{
+		"mcpServers": map[string]any{
+			relay.MCPServerName: map[string]any{
+				"command": lichBin,
+				"args":    []string{relay.MCPSubcommand},
+			},
+		},
+	}
+	raw, err := json.Marshal(config)
+	if err != nil {
+		slog.Warn("mcp registration skipped", "err", err)
+		return ""
+	}
+	return string(raw)
 }
 
 // resumeArgs returns the arguments that reopen a provider conversation, or nil

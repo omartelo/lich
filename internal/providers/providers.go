@@ -48,6 +48,20 @@ func Known(id string) bool {
 	return false
 }
 
+// AcceptsMCPServer reports whether a provider can be handed an MCP server on
+// its own command line, so lich can register one for a session it spawns
+// without editing config that belongs to the user or to their repository.
+//
+// Claude Code takes `--mcp-config` with a JSON string; Codex takes `-c`
+// overrides for its `mcp_servers` table. opencode, oh-my-pi and Crush have no
+// such flag — Crush's whole flag list is cwd, data-dir, session and debug — so
+// registering for those means writing a config file lich does not own, and lich
+// does not. Their sessions reach the other sessions through the `lich` command
+// line instead (docs/cli.md).
+func AcceptsMCPServer(id string) bool {
+	return id == Claude || id == Codex
+}
+
 // DefaultBinary returns a provider's preferred executable name, or "" for an
 // unknown id.
 func DefaultBinary(id string) string {

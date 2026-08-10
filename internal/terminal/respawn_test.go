@@ -153,7 +153,7 @@ func respawn(t *testing.T, svc *Service, id string) *session {
 // shell.
 func TestRespawnedSessionIsNotToldItExited(t *testing.T) {
 	hub, rec := newProbeHub(t)
-	svc := New(stubBins{bin: "/bin/cat"}, nil, hub)
+	svc := New(stubBins{bin: echoBin(t)}, nil, hub)
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
 	respawn(t, svc, "s1")
@@ -171,7 +171,7 @@ func TestRespawnedSessionIsNotToldItExited(t *testing.T) {
 // evicts only its own PTY, so after Close+Start under one id that id still
 // resolves to the new PTY and input still reaches it.
 func TestRespawnedSessionKeepsItsPTY(t *testing.T) {
-	svc := New(stubBins{bin: "/bin/cat"}, nil, events.New())
+	svc := New(stubBins{bin: echoBin(t)}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
 	respawn(t, svc, "s1")

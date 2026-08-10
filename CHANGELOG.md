@@ -9,6 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **One session can hand work to another, whatever it is running.** Claude Code
+  sessions can already message each other; Codex, OpenCode and Crush cannot, and
+  nothing in lich reached across a card. Every session now carries a `lich`
+  command that does: `lich sessions` lists the live cards beside it,
+  `lich send "<card>" "<task>"` puts the task at that card's prompt and waits,
+  and the agent there answers with `lich reply`. The answer comes back as the
+  command's output, so the session that asked reads it without anyone carrying
+  text between two terminals. It works the same on all four providers precisely
+  because it never reads a terminal — the agent writes its own answer — and
+  cards are addressed by the label you see on them. The full surface is
+  `docs/cli.md`.
+
+- **Sessions find each other on their own.** A command only helps someone who
+  has been told it exists, and the person who would need telling is the one who
+  does not read release notes. So lich now registers itself as an MCP server
+  with each Claude Code and Codex session it opens: those agents see
+  `list_sessions`, `send_to_session`, `wait_for_answer` and `reply_to_session`
+  in their own tool list from the first turn, with nothing to install, type or
+  configure. Your own MCP servers are untouched, and the registration carries no
+  credential — it names lich and a subcommand, nothing else. opencode, oh-my-pi
+  and Crush offer no way to be told this at startup, so their sessions keep
+  using the `lich` command, which works everywhere.
+
+- **lich is scriptable from outside a session.** The same commands run from any
+  shell on the machine — a script, a scheduled job, your own terminal — finding
+  the running lich on their own instead of needing to be spawned by it. `--json`
+  gives `sessions`, `send` and `wait` a machine-readable line, so an automation
+  can hand a session a task and read its answer without a provider in the loop.
+  A message relayed that way says it came from the command line rather than
+  posing as another session.
+
 - **A card says which tool its agent is running.** A busy session showed a
   spinning ring and nothing else: whether it was three seconds into a file read
   or three minutes into a test run, the card looked the same. It now names the

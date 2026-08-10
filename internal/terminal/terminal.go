@@ -238,10 +238,11 @@ func (s *Service) SetRestart(fn func() error) {
 //
 // LICH_PROJECT_DIR and LICH_WORKTREE_PORT belong to the checkout rather than to
 // the transport, so they are exported even when the transport failed to start.
-// The loopback coordinates are the transport's: with none there is nowhere to
-// report, so a hook spawned in this PTY sees no LICH_PORT and no-ops.
+// The rest are the transport's: with none there is nowhere to report, so a hook
+// spawned in this PTY sees no LICH_PORT and no-ops, and the `lich` CLI it would
+// have called has nothing to call.
 func (s *Service) sessionEnv(id, projectID, cwd string) []string {
-	env := make([]string, len(s.env), len(s.env)+5)
+	env := make([]string, len(s.env), len(s.env)+6)
 	copy(env, s.env)
 	if dir := s.store.ProjectPath(projectID); dir != "" {
 		env = append(env, "LICH_PROJECT_DIR="+dir)
@@ -252,12 +253,32 @@ func (s *Service) sessionEnv(id, projectID, cwd string) []string {
 	if s.ws == nil {
 		return env
 	}
-	return append(env,
+	env = append(env,
 		"LICH_PORT="+strconv.Itoa(s.ws.port),
 		"LICH_TOKEN="+s.ws.token,
 		"LICH_SESSION_ID="+id,
 	)
+	if bin := lichBin(); bin != "" {
+		env = append(env, "LICH_BIN="+bin)
+	}
+	return env
 }
+
+// lichBin is the path of the running lich binary, exported as LICH_BIN so a
+// session can call the `lich` CLI back (internal/cli) — which is how one
+// session reaches another. The path rather than the name: an installed lich is
+// on $PATH and a `task dev` build is not, and on a machine running both, the
+// name would resolve to whichever came first rather than to the lich this
+// session belongs to. Empty when the path cannot be resolved; nothing is
+// exported then and a caller falls back to $PATH.
+var lichBin = sync.OnceValue(func() string {
+	exe, err := os.Executable()
+	if err != nil {
+		slog.Warn("resolve executable — LICH_BIN unset in sessions", "err", err)
+		return ""
+	}
+	return exe
+})
 
 // readBufSize is the chunk size read from a session's PTY per iteration.
 const readBufSize = 32 * 1024
@@ -320,9 +341,16 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, se
 		cwd = home
 	}
 
+	// The MCP registration is withheld without a transport for the same reason
+	// the hook coordinates are: the server it points at would have nothing to
+	// talk to, so the session would carry tools that can only fail.
+	mcpBin := ""
+	if s.ws != nil {
+		mcpBin = lichBin()
+	}
 	spec := ptySpec{
 		bin:  resolveCommand(kind, s.store.ProviderBin(kind, projectID), userShell()),
-		args: append(nameArgs(kind, name), resumeArgs(kind, resume)...),
+		args: providerArgs(kind, name, resume, mcpBin),
 		dir:  cwd,
 		env:  s.sessionEnv(id, projectID, cwd),
 		cols: cols,
@@ -476,6 +504,14 @@ func (s *Service) Close(id string) error {
 		return nil
 	}
 	return sess.pty.Close()
+}
+
+// Live reports whether a session has a process running right now. It is the
+// difference between a card and a PTY: a session the user has never opened in
+// this page has a row in the store and nothing behind it to type at, so it can
+// be listed but never addressed (internal/relay).
+func (s *Service) Live(id string) bool {
+	return s.ptyOf(id) != nil
 }
 
 // ptyOf returns the PTY for a session, or nil if it is not running.
