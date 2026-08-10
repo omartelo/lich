@@ -20,6 +20,9 @@ States: `busy`, `done`, `waiting`, `idle`. lich rejects anything else.
 
 Responses: `204` ok · `401` invalid token · `400` invalid body.
 
+Both sides test against the payloads in
+[`fixtures/session-state.jsonl`](fixtures/session-state.jsonl).
+
 ## Event → state mapping
 
 | Claude Code hook   | Codex hook          | state     |

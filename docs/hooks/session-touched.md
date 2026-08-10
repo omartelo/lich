@@ -20,6 +20,9 @@ Content-Type: application/json
 
 Responses: `204` ok · `401` invalid token · `400` invalid body.
 
+Both sides test against the payloads in
+[`fixtures/session-touched.jsonl`](fixtures/session-touched.jsonl).
+
 ## Event → action mapping
 
 | Claude Code hook                        | Codex hook                          | action                           |

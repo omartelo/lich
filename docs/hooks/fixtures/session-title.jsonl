@@ -1,0 +1,7 @@
+{"name":"ok","body":{"session_id":"s1","title":"Fix the replay ring overflow"},"accept":{"session_id":"s1","title":"Fix the replay ring overflow"}}
+{"name":"surrounding whitespace is trimmed","body":{"session_id":"s1","title":"  Fix the replay ring overflow\n"},"accept":{"session_id":"s1","title":"Fix the replay ring overflow"}}
+{"name":"missing session_id","body":{"title":"Fix the replay ring overflow"},"reject":"session_id is required"}
+{"name":"missing title","body":{"session_id":"s1"},"reject":"title is required and must not be blank"}
+{"name":"empty title","body":{"session_id":"s1","title":""},"reject":"title is required and must not be blank"}
+{"name":"blank title","body":{"session_id":"s1","title":"   \n"},"reject":"title is required and must not be blank"}
+{"name":"malformed json","raw":"{","reject":"body must be a JSON object"}

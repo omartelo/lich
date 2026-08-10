@@ -1,0 +1,10 @@
+{"name":"busy","body":{"session_id":"s1","state":"busy"},"accept":{"session_id":"s1","state":"busy"}}
+{"name":"done","body":{"session_id":"s1","state":"done"},"accept":{"session_id":"s1","state":"done"}}
+{"name":"waiting","body":{"session_id":"s1","state":"waiting"},"accept":{"session_id":"s1","state":"waiting"}}
+{"name":"idle","body":{"session_id":"s1","state":"idle"},"accept":{"session_id":"s1","state":"idle"}}
+{"name":"missing session_id","body":{"state":"busy"},"reject":"session_id is required"}
+{"name":"empty session_id","body":{"session_id":"","state":"busy"},"reject":"session_id is required"}
+{"name":"unknown state","body":{"session_id":"s1","state":"cooking"},"reject":"state must be one of busy, done, waiting, idle"}
+{"name":"missing state","body":{"session_id":"s1"},"reject":"state must be one of busy, done, waiting, idle"}
+{"name":"state is case sensitive","body":{"session_id":"s1","state":"Busy"},"reject":"state must be one of busy, done, waiting, idle"}
+{"name":"malformed json","raw":"{","reject":"body must be a JSON object"}

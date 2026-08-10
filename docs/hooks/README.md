@@ -21,6 +21,12 @@ This directory is the **canonical, contract-first source** for those hooks:
 
 Define the contract here first, then implement both sides against it.
 
+Prose alone could not hold that line across two repositories — a renamed field
+went red in neither. [`fixtures/`](fixtures/) is every contract as bytes, one
+case per line, and both sides assert against the same lines: lich in
+`internal/terminal/fixtures_test.go`, the plugin in its own suite. A payload
+that moves now fails on whichever side moved first.
+
 ## Shared transport
 
 Every hook rides the same loopback channel lich already runs for terminal I/O
@@ -57,15 +63,20 @@ project's own setup script and commands (`PORT=$LICH_WORKTREE_PORT pnpm dev`,
   release — no lich release needed.
 - A change **to** a contract (new endpoint, field, or accepted value) is a
   breaking change: ship the lich server side first, then the plugin. Keep the
-  two in lockstep.
+  two in lockstep. The order runs through the fixtures: the prose here moves,
+  then [`fixtures/`](fixtures/), then lich's endpoint, then the plugin.
 
 ## Adding a new hook
 
 1. Write its contract in this directory (transport is already shared; document
    the endpoint, payload, accepted values, and event→action mapping).
-2. Implement the lich server side (endpoint handler + however the data reaches
+2. Add its [`fixtures/`](fixtures/) file — the payloads it accepts and the ones
+   it refuses — and register it in `hookContracts`
+   (`internal/terminal/fixtures_test.go`). A contract with no fixture file fails
+   that test, so this step is not optional.
+3. Implement the lich server side (endpoint handler + however the data reaches
    the UI) with tests.
-3. In the plugin, add the hook script and point its doc at the contract here —
+4. In the plugin, add the hook script and point its doc at the contract here —
    the contract is the single source of truth.
 
 ## Contracts
@@ -78,3 +89,6 @@ project's own setup script and commands (`PORT=$LICH_WORKTREE_PORT pnpm dev`,
   applied as the session card's label.
 - [session-touched.md](session-touched.md) — a session changed files, so its
   git status refreshes immediately instead of on the next poll.
+
+Each has a fixture file of the same name in [`fixtures/`](fixtures/); the format
+is documented there.

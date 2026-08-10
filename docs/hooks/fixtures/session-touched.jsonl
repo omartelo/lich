@@ -1,0 +1,5 @@
+{"name":"ok","body":{"session_id":"s1"},"accept":{"session_id":"s1"}}
+{"name":"extra fields are ignored","body":{"session_id":"s1","tool":"Edit"},"accept":{"session_id":"s1"}}
+{"name":"missing session_id","body":{},"reject":"session_id is required"}
+{"name":"empty session_id","body":{"session_id":""},"reject":"session_id is required"}
+{"name":"malformed json","raw":"{","reject":"body must be a JSON object"}

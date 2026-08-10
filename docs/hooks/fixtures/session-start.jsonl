@@ -1,0 +1,9 @@
+{"name":"reported provider","body":{"session_id":"s1","provider_session_id":"018f9c5a-0000-7000-9a3b-1c2d3e4f5c01","provider":"codex"},"accept":{"session_id":"s1","provider_session_id":"018f9c5a-0000-7000-9a3b-1c2d3e4f5c01","provider":"codex"}}
+{"name":"absent provider defaults to claude","body":{"session_id":"s1","provider_session_id":"018f9c5a-0000-7000-9a3b-1c2d3e4f5c01"},"accept":{"session_id":"s1","provider_session_id":"018f9c5a-0000-7000-9a3b-1c2d3e4f5c01","provider":"claude"}}
+{"name":"legacy claude_session_id is folded","body":{"session_id":"s1","claude_session_id":"018f9c5a-0000-7000-9a3b-1c2d3e4f5c02"},"accept":{"session_id":"s1","provider_session_id":"018f9c5a-0000-7000-9a3b-1c2d3e4f5c02","provider":"claude"}}
+{"name":"provider_session_id wins over legacy","body":{"session_id":"s1","provider_session_id":"018f9c5a-0000-7000-9a3b-1c2d3e4f5c01","claude_session_id":"018f9c5a-0000-7000-9a3b-1c2d3e4f5c02"},"accept":{"session_id":"s1","provider_session_id":"018f9c5a-0000-7000-9a3b-1c2d3e4f5c01","provider":"claude"}}
+{"name":"missing session_id","body":{"provider_session_id":"018f9c5a-0000-7000-9a3b-1c2d3e4f5c01"},"reject":"session_id is required"}
+{"name":"missing provider_session_id","body":{"session_id":"s1"},"reject":"provider_session_id is required"}
+{"name":"empty provider_session_id","body":{"session_id":"s1","provider_session_id":""},"reject":"provider_session_id is required"}
+{"name":"unregistered provider","body":{"session_id":"s1","provider_session_id":"018f9c5a-0000-7000-9a3b-1c2d3e4f5c01","provider":"aider"},"reject":"provider must be a registered provider id"}
+{"name":"malformed json","raw":"{","reject":"body must be a JSON object"}

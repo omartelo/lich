@@ -36,6 +36,10 @@ Content-Type: application/json
 Responses: `204` ok · `401` invalid token · `400` invalid body · `500` lich
 failed to persist.
 
+Both sides test against the payloads in
+[`fixtures/session-start.jsonl`](fixtures/session-start.jsonl), including the
+deprecated alias and the defaulted `provider`.
+
 ## Event → action mapping
 
 | Claude Code hook | Codex hook     | action                                       |
