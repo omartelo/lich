@@ -17,8 +17,10 @@
     <img alt="Shell" src="https://img.shields.io/badge/shell-Chromium%20--app-4285F4?logo=googlechrome&logoColor=white" />
     <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-333" />
     <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-blue" /></a>
+    <a href="https://github.com/sponsors/omartelo"><img alt="Sponsor" src="https://img.shields.io/github/sponsors/omartelo?color=ea4aaa&logo=githubsponsors&label=sponsors" /></a>
   </p>
   <img src="docs/media/session.png" alt="标签栏上的四个项目，侧栏里的五个会话 —— 各自带着 worktree、分支和 diff 徽标 —— 与此同时一个 Claude Code 会话正在终端里工作，底栏显示着模型和上下文圆环" width="900" />
+  <!-- sponsor-logos: company logos go here, between the screenshot and About -->
 </div>
 
 > 本文档译自英文 [README.md](README.md)。英文版本是唯一的事实来源；若两者出现分歧，以英文为准。
@@ -168,6 +170,21 @@ task test     # Go 与前端测试套件
 ```bash
 task package   # bin/ 下生成 .deb + .rpm + Arch .pkg.tar.zst
 ```
+
+## 赞助
+
+lich 由一个人编写和维护。赞助为投入其中的时间买单，也让这个项目保持独立：这个应用没有
+付费版本，将来也不会有。
+
+[**成为赞助者**](https://github.com/sponsors/omartelo)
+
+<!-- sponsor-names: monthly sponsors go here -->
+
+### 支持者
+
+<!-- backers: one-time supporters go here -->
+
+暂时还没有。
 
 ## 许可
 
