@@ -19,6 +19,8 @@ import type { Session } from "@/lib/session/sessions"
 import { useSessionStatus, useSessionStatusAge } from "@/lib/session/use-session-status"
 import { useSessionCwd } from "@/lib/session/use-session-cwd"
 import { useSessionAgent } from "@/lib/session/use-session-agent"
+import { useSessionTool } from "@/lib/session/use-session-tool"
+import { toolGlyph } from "@/lib/session/tool-glyph"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { baseReadout } from "@/lib/git/base-status"
 import { usePullRequest } from "@/lib/pulls/use-pull-request"
@@ -82,6 +84,11 @@ export function SessionCard({
   // `codex` in a shell session puts that provider's mark on the card while it
   // runs; null falls back to the session's own kind.
   const agent = useSessionAgent(session.id)
+  // The tool the turn is running right now, reported by the provider's pre-tool
+  // hook: null outside a tool call, which is what keeps the card its usual size
+  // whenever nothing is happening in it.
+  const tool = useSessionTool(session.id)
+  const ToolGlyph = tool && toolGlyph(tool.name)
   // The live working directory the backend's cwd watcher reports ("" until it
   // does): a `cd` in the terminal moves the card with it. Falls back to the
   // session's static start path — a worktree session lives in its own checkout,
@@ -189,6 +196,21 @@ export function SessionCard({
                   <span className="truncate text-sm font-medium text-foreground">
                     {session.label}
                   </span>
+                </span>
+              )}
+              {/* Under the label, so the card reads name → what it is doing →
+                  where. It is the only row that comes and goes with the turn,
+                  which is the cost of putting it where the eye already is. */}
+              {tool && (
+                <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                  {ToolGlyph && <ToolGlyph className="size-3 shrink-0" />}
+                  <span className="shrink-0 font-medium text-foreground">{tool.name}</span>
+                  {tool.detail && (
+                    <>
+                      <span className="shrink-0 opacity-50">·</span>
+                      <span className="truncate font-mono">{tool.detail}</span>
+                    </>
+                  )}
                 </span>
               )}
               {/* rtl anchors the tail (project folder) to the right so overflow is

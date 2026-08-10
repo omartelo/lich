@@ -3,6 +3,7 @@ package terminal
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -219,6 +220,47 @@ func TestParseHookRequest(t *testing.T) {
 	}
 }
 
+// The cap is pinned as a literal rather than read off hookTextLimit: a test
+// that derives its input from the constant passes whatever the constant becomes,
+// which is exactly the mutation it exists to catch.
+func TestParseHookRequestCapsToolText(t *testing.T) {
+	tests := []struct {
+		name       string
+		tool       string
+		wantLength int
+	}{
+		{"at the cap", strings.Repeat("x", 120), 120},
+		{"one past the cap", strings.Repeat("x", 121), 120},
+		{"far past the cap", strings.Repeat("x", 5000), 120},
+		// Runes, not bytes: a cut between the two bytes of "é" would produce a
+		// name the page renders as a replacement character.
+		{"multi-byte runes", strings.Repeat("é", 200), 120},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			body, err := json.Marshal(hookRequest{
+				SessionID: "s1",
+				State:     "busy",
+				Tool:      tc.tool,
+				Detail:    tc.tool,
+			})
+			if err != nil {
+				t.Fatalf("marshal body: %v", err)
+			}
+			req, err := parseHookRequest(body)
+			if err != nil {
+				t.Fatalf("parseHookRequest: %v", err)
+			}
+			if got := len([]rune(req.Tool)); got != tc.wantLength {
+				t.Errorf("tool is %d runes, want %d", got, tc.wantLength)
+			}
+			if got := len([]rune(req.Detail)); got != tc.wantLength {
+				t.Errorf("detail is %d runes, want %d", got, tc.wantLength)
+			}
+		})
+	}
+}
+
 func TestPingAnswersWithToken(t *testing.T) {
 	tr, err := newTransport(func(string, []byte) {}, nil, nil, nil, nil)
 	if err != nil {
@@ -250,15 +292,16 @@ func TestPingRejectsBadToken(t *testing.T) {
 }
 
 func TestHookForwardsStatus(t *testing.T) {
-	got := make(chan string, 1)
-	tr, err := newTransport(func(string, []byte) {}, func(id, state string) {
-		got <- id + ":" + state
+	got := make(chan hookRequest, 1)
+	tr, err := newTransport(func(string, []byte) {}, func(req hookRequest) {
+		got <- req
 	}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("newTransport: %v", err)
 	}
 	url := fmt.Sprintf("http://127.0.0.1:%d/hook?token=%s", tr.port, tr.token)
-	resp, err := http.Post(url, "application/json", strings.NewReader(`{"session_id":"sess","state":"busy"}`))
+	body := `{"session_id":"sess","state":"busy","tool":"Bash","detail":"pnpm test"}`
+	resp, err := http.Post(url, "application/json", strings.NewReader(body))
 	if err != nil {
 		t.Fatalf("post: %v", err)
 	}
@@ -267,9 +310,10 @@ func TestHookForwardsStatus(t *testing.T) {
 		t.Fatalf("status = %d, want 204", resp.StatusCode)
 	}
 	select {
-	case v := <-got:
-		if v != "sess:busy" {
-			t.Fatalf("got %q", v)
+	case req := <-got:
+		want := hookRequest{SessionID: "sess", State: "busy", Tool: "Bash", Detail: "pnpm test"}
+		if req != want {
+			t.Fatalf("got %#v, want %#v", req, want)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("status never forwarded to the callback")
@@ -278,7 +322,7 @@ func TestHookForwardsStatus(t *testing.T) {
 
 func TestHookRejectsBadToken(t *testing.T) {
 	fired := make(chan struct{}, 1)
-	tr, err := newTransport(func(string, []byte) {}, func(string, string) { fired <- struct{}{} }, nil, nil, nil)
+	tr, err := newTransport(func(string, []byte) {}, func(hookRequest) { fired <- struct{}{} }, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("newTransport: %v", err)
 	}
@@ -683,7 +727,7 @@ func TestStoreFailuresReport500(t *testing.T) {
 // mid-document and the parse fails. Without the limit this would be a 204.
 func TestHookBodyLimit(t *testing.T) {
 	fired := make(chan struct{}, 1)
-	tr, err := newTransport(func(string, []byte) {}, func(string, string) { fired <- struct{}{} }, nil, nil, nil)
+	tr, err := newTransport(func(string, []byte) {}, func(hookRequest) { fired <- struct{}{} }, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("newTransport: %v", err)
 	}

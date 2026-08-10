@@ -32,11 +32,12 @@ const (
 	dataEventPrefix = "terminal:data:"
 	// exitEventPrefix is emitted once when a session's shell process exits.
 	exitEventPrefix = "terminal:exit:"
-	// statusEventName carries a session's Claude Code processing state
-	// ({id, state} — "busy"/"done"/"waiting"/"idle"), reported by the lich hook
-	// running inside the PTY (see transport.hook and docs/hooks/session-state.md).
-	// The frontend keeps it in a store keyed by id (session-status-store.ts)
-	// rather than in the card, which is only mounted while its project is active.
+	// statusEventName carries a session's processing state ({id, state, tool,
+	// detail} — "busy"/"done"/"waiting"/"idle", plus the tool a pre-tool report
+	// names), reported by the lich hooks running inside the PTY (see
+	// transport.hook and docs/hooks/session-state.md). The frontend keeps it in
+	// stores keyed by id (session-status-store.ts, session-tool-store.ts) rather
+	// than in the card, which is only mounted while its project is active.
 	statusEventName = "session-status"
 	// titleEventName carries an auto-applied session label ({id, label}).
 	titleEventName = "session-title"
@@ -51,11 +52,15 @@ const (
 	agentEventName = "session-agent"
 )
 
-// statusEvent is the payload of statusEventName: the session whose Claude Code
-// processing state changed, and the new state.
+// statusEvent is the payload of statusEventName: the session whose processing
+// state changed, the new state, and — on a pre-tool report alone — the tool it
+// is about to run and what that tool acts on. Both are the provider's own
+// words, never translated here (docs/hooks/session-state.md tables them).
 type statusEvent struct {
-	ID    string `json:"id"`
-	State string `json:"state"`
+	ID     string `json:"id"`
+	State  string `json:"state"`
+	Tool   string `json:"tool,omitempty"`
+	Detail string `json:"detail,omitempty"`
 }
 
 // titleEvent is the payload of titleEventName: the session whose label changed
@@ -150,15 +155,20 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 				slog.Warn("terminal: input write failed", "session", id, "err", err)
 			}
 		},
-		func(id, state string) {
-			hub.Emit(statusEventName, statusEvent{ID: id, State: state})
+		func(req hookRequest) {
+			hub.Emit(statusEventName, statusEvent{
+				ID:     req.SessionID,
+				State:  req.State,
+				Tool:   req.Tool,
+				Detail: req.Detail,
+			})
 			// Every non-idle state is a point where a fresh assistant usage line
 			// may have landed — a tool call mid-turn (busy), a prompt (waiting),
 			// or the turn's end (done) — so refresh the context window then, and
 			// off-thread so a stalled emit never blocks the hook's response. Skip
 			// idle (SessionEnd): the session is ending, nothing new to read.
-			if state != "idle" {
-				go s.emitUsage(id)
+			if req.State != statusIdle {
+				go s.emitUsage(req.SessionID)
 			}
 		},
 		func(sessionID, providerSessionID, provider string) error {

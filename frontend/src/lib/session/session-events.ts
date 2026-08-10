@@ -82,6 +82,27 @@ export function isStatusEvent(data: unknown): data is { id: string; state: strin
   return isIdEvent(data) && typeof (data as { state?: unknown }).state === "string"
 }
 
+// The tool a session's turn is running: the harness's own name for it, and its
+// own words for what it acts on ("" when it offered none). Never translated
+// between providers: the word on the card is the word in the terminal beside
+// it (the vocabularies are tabled in docs/hooks/session-state.md).
+export interface SessionTool {
+  name: string
+  detail: string
+}
+
+// statusTool reads the tool pair off a status payload, or null when the report
+// names no tool. Whether a report *clears* the line is the store's call, not
+// this one's: a "busy" naming nothing is the gap between two tools, not the end
+// of the turn (see session-tool-store).
+export function statusTool(data: unknown): SessionTool | null {
+  const { tool, detail } = (data ?? {}) as { tool?: unknown; detail?: unknown }
+  if (typeof tool !== "string" || tool === "") {
+    return null
+  }
+  return { name: tool, detail: typeof detail === "string" ? detail : "" }
+}
+
 export function isTitleEvent(data: unknown): data is { id: string; label: string } {
   return isIdEvent(data) && typeof (data as { label?: unknown }).label === "string"
 }
