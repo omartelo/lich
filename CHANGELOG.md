@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A card says which tool its agent is running.** A busy session showed a
+  spinning ring and nothing else: whether it was three seconds into a file read
+  or three minutes into a test run, the card looked the same. It now names the
+  tool under the session's label while the turn is inside one — `Bash · pnpm
+  test`, `apply_patch · usage.go` — and goes back to its usual shape the moment
+  the tool ends. Both providers report it, each in its own vocabulary — mostly
+  the same one, with a Codex edit arriving as `apply_patch`. Needs the companion
+  plugin updated (Settings › Updates); an older one leaves the card exactly as it
+  was.
+
 - **Point one Claude session at another.** Claude Code can message your other
   sessions, but only if it knows what they are called — and left to itself it
   names a session after its directory, so every session in one checkout looks
