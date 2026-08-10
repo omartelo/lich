@@ -12,8 +12,8 @@ import {
   X,
 } from "lucide-react"
 import { useSortable } from "@dnd-kit/sortable"
-import { CSS } from "@dnd-kit/utilities"
 import { cn } from "@/lib/utils"
+import { dragStyle } from "@/lib/use-sortable-list"
 import { displayPath } from "@/lib/paths"
 import type { Session } from "@/lib/session/sessions"
 import { useSessionStatus, useSessionStatusAge } from "@/lib/session/use-session-status"
@@ -135,7 +135,7 @@ export function SessionCard({
     // triggers that render it.
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      style={dragStyle(transform, transition)}
       className={cn("relative", isDragging && "pointer-events-none z-10 rounded-lg shadow-md")}
       {...attributes}
       {...listeners}

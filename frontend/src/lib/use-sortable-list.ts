@@ -7,6 +7,7 @@ import {
   type Modifier,
 } from "@dnd-kit/core"
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable"
+import { CSS, type Transform } from "@dnd-kit/utilities"
 
 // How far the pointer must travel before a press turns into a drag. Without it
 // the sensor claims the press outright and a plain click stops selecting the
@@ -15,6 +16,14 @@ const DRAG_THRESHOLD_PX = 5
 
 export const horizontalAxis: Modifier = ({ transform }) => ({ ...transform, y: 0 })
 export const verticalAxis: Modifier = ({ transform }) => ({ ...transform, x: 0 })
+
+// The style every sortable node wears while it moves. Translate, never
+// Transform: dnd-kit's transform also carries the scale needed to match the
+// item being displaced, so a card dragged past a taller neighbour would stretch
+// to that neighbour's size instead of keeping its own.
+export function dragStyle(transform: Transform | null, transition?: string) {
+  return { transform: CSS.Translate.toString(transform), transition }
+}
 
 // useSortableList wires the sensors and the drop handler shared by the two
 // reorderable surfaces (session cards, project tabs). It reports the new id

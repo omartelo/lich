@@ -2,8 +2,7 @@ import { useSyncExternalStore } from "react"
 import { useNavigate } from "react-router-dom"
 import { DndContext, closestCenter } from "@dnd-kit/core"
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
-import { CSS } from "@dnd-kit/utilities"
-import { useSortableList, verticalAxis } from "@/lib/use-sortable-list"
+import { dragStyle, useSortableList, verticalAxis } from "@/lib/use-sortable-list"
 import { cn } from "@/lib/utils"
 import { checkoutLabel } from "@/lib/git/checkout-label"
 import { groupKey, type Session } from "@/lib/session/sessions"
@@ -85,7 +84,7 @@ export function SessionGroup({
   return (
     <div
       ref={group.setNodeRef}
-      style={{ transform: CSS.Transform.toString(group.transform), transition: group.transition }}
+      style={dragStyle(group.transform, group.transition)}
       className={cn(
         "flex flex-col gap-1.5",
         group.isDragging && "pointer-events-none relative z-10 rounded-lg bg-sidebar shadow-md",

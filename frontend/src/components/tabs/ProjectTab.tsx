@@ -1,8 +1,8 @@
 import { NavLink } from "react-router-dom"
 import { Bell, Check, LoaderCircle } from "lucide-react"
 import { useSortable } from "@dnd-kit/sortable"
-import { CSS } from "@dnd-kit/utilities"
 import { CloseButton } from "@/components/common/CloseButton"
+import { dragStyle } from "@/lib/use-sortable-list"
 import { cn } from "@/lib/utils"
 import { useProjectStatus } from "@/lib/session/use-session-status"
 import type { Project } from "@/lib/api-types"
@@ -26,7 +26,7 @@ export function ProjectTab({ project, sessionIds, onClose }: ProjectTabProps) {
   return (
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      style={dragStyle(transform, transition)}
       className={cn("shrink-0", isDragging && "z-10 rounded-md bg-accent shadow-md")}
       {...attributes}
       {...listeners}

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A dragged card keeps its own shape.** Dragging a session card past a taller
+  neighbour — a worktree card with a long title, say — stretched it to that
+  neighbour's size, smearing its text until the drop. Cards, session groups and
+  project tabs now only move while dragging, never resize.
+
 ## [0.28.0] - 2026-08-09
 
 ### Added
