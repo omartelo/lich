@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Closing a project asks when an agent is still working.** The tab's × took a
+  project's terminals down with it, killing whatever was mid-turn — with a
+  spinner on that very tab as the only warning, and no undo. Closing a project
+  whose sessions are busy or waiting on you now names how many and asks first;
+  a project where nothing is running still closes on the click.
+
 ### Fixed
 
 - **A dragged card keeps its own shape.** Dragging a session card past a taller

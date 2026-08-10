@@ -197,6 +197,51 @@ describe("pendingOf", () => {
   })
 })
 
+describe("runningOf", () => {
+  it("returns nothing when no session of the project is mid-turn", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", "done"))
+    expect(store.runningOf([])).toEqual([])
+    expect(store.runningOf(["s1", "ghost"])).toEqual([])
+  })
+
+  it("counts both a working agent and one blocked on the user", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", "busy"))
+    emit(report("s2", "waiting"))
+    emit(report("s3", "done"))
+    expect(store.runningOf(["s1", "s2", "s3"])).toEqual(["s1", "s2"])
+  })
+
+  it("only counts the sessions of the project asked about", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("mine", "busy"))
+    emit(report("theirs", "busy"))
+    expect(store.runningOf(["mine"])).toEqual(["mine"])
+  })
+
+  // Unlike a tab badge, a running turn is not something the user can dismiss by
+  // looking at it: the guard must still fire for a session already seen.
+  it("keeps counting a running session that was marked seen", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", "busy"))
+    store.markSeen("s1")
+    expect(store.runningOf(["s1"])).toEqual(["s1"])
+  })
+
+  it("stops counting a session once its turn ends", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", "busy"))
+    emit(report("s1", "done"))
+    expect(store.runningOf(["s1"])).toEqual([])
+  })
+})
+
 describe("since", () => {
   beforeEach(() => {
     vi.useFakeTimers()

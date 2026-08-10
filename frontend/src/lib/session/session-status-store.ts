@@ -153,6 +153,17 @@ export function createSessionStatusStore(source: StatusEventSource) {
     return BADGE_PRIORITY.find((status) => live.has(status)) ?? null
   }
 
+  // runningOf returns the sessions of these ids that still hold a turn: an agent
+  // working, or one blocked on a prompt nobody has answered. Unlike pendingOf
+  // this ignores "seen" — a turn does not stop running because it was looked at
+  // — and it answers with the sessions themselves, since a caller asking this
+  // is about to say how many are at stake.
+  const runningOf = (ids: readonly string[]): string[] =>
+    ids.filter((id) => {
+      const status = entries.get(id)?.status
+      return status === "busy" || status === "waiting"
+    })
+
   const subscribe = (id: string, listener: () => void): (() => void) => {
     const entry = entryOf(id)
     entry.listeners.add(listener)
@@ -184,5 +195,5 @@ export function createSessionStatusStore(source: StatusEventSource) {
   // changes, so it is safe to hand straight to useSyncExternalStore.
   const pendingAll = (): PendingStatus[] => pending
 
-  return { subscribe, get, since, markSeen, pendingOf, subscribeAll, pendingAll }
+  return { subscribe, get, since, markSeen, pendingOf, runningOf, subscribeAll, pendingAll }
 }
