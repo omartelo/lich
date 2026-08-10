@@ -9,6 +9,10 @@ It is not only for agents. The same commands run from any shell on the machine �
 a script, a scheduled job, the user's own terminal — which is what makes lich
 automatable without a provider in the loop. `--json` is there for exactly that.
 
+One command is about lich itself rather than about the sessions: `lich rage`
+collects a bug report from the machine, and is the surface for the failure where
+there is no window to ask through.
+
 Agents mostly do not run it as a command. lich registers the same operations as
 **MCP tools** for the providers that can be told at spawn, so they are in the
 agent's own tool list without anybody being told anything — see
@@ -38,9 +42,10 @@ channel of their own: anything that can run a shell command can answer.
 
 ## Transport
 
-Every command reads the coordinates lich already injects into each PTY (see the
-hooks [README](hooks/README.md)) and posts to the same loopback listener the
-window uses:
+Every command that addresses a session reads the coordinates lich already
+injects into each PTY (see the hooks [README](hooks/README.md)) and posts to the
+same loopback listener the window uses. `lich rage` is the exception: it reads
+the file system and nothing else.
 
 | Var               | Purpose                                          |
 |-------------------|--------------------------------------------------|
@@ -169,6 +174,35 @@ at lich.
 
 A tool that fails answers with `isError` and the reason as text, not a JSON-RPC
 error: the agent should read what went wrong and act on it, not lose the turn.
+
+### `lich rage [--output <path>]`
+
+The one command here that talks to no session — and to no lich. It collects a
+bug report from this machine into `./lich-rage-<timestamp>.tar.gz` (or
+`--output`'s path) and prints where it went:
+
+```
+Wrote lich-rage-20260810-150405.tar.gz
+lich v0.25.0 on linux/amd64, running (pid 4242, port 47821).
+Read it before you attach it: it carries absolute paths, project and branch names.
+```
+
+It exists for the failure lich cannot report on itself: a window that never
+opened has no Settings › Help to ask through. So it needs no running instance —
+whether one is running, and whether it still answers, is one of the facts it
+reports.
+
+| Entry | What it holds |
+|-------|---------------|
+| `report.md` | Version and build, platform, instance state, browser, providers on PATH, plugin state per provider, and the config directory one level deep. |
+| `env.txt` | Every `LICH_*` variable plus a fixed allowlist (`SHELL`, `PATH`, `EDITOR`, the desktop ones). Anything named like a token, key, secret or password is `<SET>` / `<UNSET>`, never a value. |
+| `logs/` | `lich.log` and the rotated `lich.log.old`, each carrying at most its last 4 MiB. |
+
+Nothing is uploaded and no issue is filed: the archive sits on disk until the
+user attaches it to one they wrote. The loopback token is masked wherever it
+appeared — by value for the running instance, and by the `token=` query shape
+for every earlier one. The Chromium profile, the workspace database and its
+directories are named but never read.
 
 ## Registration
 
@@ -364,6 +398,10 @@ whoever asked.
 - **A busy target is written to anyway.** Every provider lich spawns queues text
   typed mid-turn and submits it when the turn ends, so the message waits its
   turn rather than interrupting one.
+- **A bug report knows nothing about the workspace.** `lich rage` never opens
+  the database — a second process migrating it is not a price a bug report may
+  charge — so no project, session or cost is in the bundle, only that the file
+  exists and how big it is. What a session was doing has to be asked for.
 - **The answer is the agent's summary, not the transcript.** Nothing reads the
   target's output, so what comes back is exactly what that agent chose to type
   into `lich reply` — and an agent that never runs it is indistinguishable from

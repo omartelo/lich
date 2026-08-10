@@ -6,13 +6,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/coder/websocket"
+
+	"github.com/omartelo/lich/internal/events"
 )
 
 // TestMain drops LICH_LISTEN_PORT so every transport in this package binds a
@@ -752,5 +756,27 @@ func TestTransportInfoZeroWithoutTransport(t *testing.T) {
 	s := &Service{}
 	if info := s.Transport(); info.Port != 0 || info.Token != "" {
 		t.Fatalf("expected zero TransportInfo, got %+v", info)
+	}
+}
+
+// A launch that cannot bind the pinned port has the OS error as its only
+// diagnosis, so New must keep it rather than only reporting the absent port.
+func TestTransportErrorKeepsBindFailure(t *testing.T) {
+	busy, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("occupy a port: %v", err)
+	}
+	defer busy.Close()
+	t.Setenv("LICH_LISTEN_PORT", strconv.Itoa(busy.Addr().(*net.TCPAddr).Port))
+
+	// A nil store, not the suite's stub: that one is Unix-only, and this test
+	// earns its keep on Windows. Nothing here spawns a session, so the store is
+	// never reached.
+	s := New(nil, nil, events.New())
+	if info := s.Transport(); info.Port != 0 {
+		t.Fatalf("transport bound %d, want the busy port to refuse it", info.Port)
+	}
+	if s.TransportError() == nil {
+		t.Fatal("TransportError is nil after a failed bind")
 	}
 }

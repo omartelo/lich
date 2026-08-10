@@ -16,6 +16,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now opens with a notice that the previous run ended unexpectedly, and a button
   onto the log folder where that run's log sits. Closing the window as usual
   says nothing, and neither does the relaunch an in-place update performs.
+- **`lich rage` packs a bug report you can actually attach.** Reporting a
+  problem meant being walked through it: find the log folder, notice that the
+  rotated generation beside it is usually the one holding the crash, say which
+  browser and which provider CLIs the machine has, remember the version. One
+  command now collects all of it — versions and build, platform, whether an
+  instance is running and answering, the browser it found, the providers on
+  PATH, the plugin's state in each of them, the config directory, the
+  environment lich was launched with and both log generations — into a single
+  `.tar.gz` beside you. Values named like a token, key, secret or password are
+  reported as present or absent rather than printed, and lich's own loopback
+  token is masked wherever it had been written. Nothing is uploaded and no issue
+  is filed: the archive stays on disk until you attach it to one you wrote. It
+  reads the file system only, so it still works when the window never opened —
+  the case where there was no Settings › Help to ask through.
 - **Closing a project asks when an agent is still working.** The tab's × took a
   project's terminals down with it, killing whatever was mid-turn — with a
   spinner on that very tab as the only warning, and no undo. Closing a project
@@ -113,6 +127,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   neighbour — a worktree card with a long title, say — stretched it to that
   neighbour's size, smearing its text until the drop. Cards, session groups and
   project tabs now only move while dragging, never resize.
+
+- **A restart on Windows no longer costs you the settings you just changed.**
+  Where Linux and macOS ask the window to close, Windows killed it outright —
+  and the window is where your interface settings are written, on their way to
+  disk a few seconds later. Anything changed just before an update or a restart
+  went with it: a theme, a panel width, a dialog you had dismissed. The window
+  is now asked to close on Windows too, and only killed if it cannot be.
+
+- **"What's new" stays dismissed.** The popup after an update remembered your
+  click in the window's own storage, so a browser profile that had stopped
+  accepting writes — and kept answering reads with what it last loaded — greeted
+  you with the same release notes on every launch, with no way to make it stop.
+  The dismissed release is now kept in the workspace database beside everything
+  else that has to survive a restart.
+
+- **A lich that will not open says why.** When the loopback listener could not
+  take its port, the log asked whether the port was free and dropped the system
+  error that knew the answer — leaving the one launch failure that shows no
+  window with nothing to go on. It now records the error itself, which is what
+  separates a port another program holds from a port the system refuses to hand
+  over with nothing listening on it (a Windows habit).
 
 ## [0.28.0] - 2026-08-09
 
