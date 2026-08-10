@@ -131,6 +131,12 @@ type Service struct {
 	// ws is the local WebSocket transport for terminal I/O (see transport.go);
 	// nil when it failed to start, leaving /events and the RPC as the path.
 	ws *transport
+	// wsErr is why ws is nil. Kept because a failed bind of the pinned port is
+	// how the app fails to launch at all, and the OS error is the only thing
+	// telling a port somebody else holds apart from a port the OS refuses to
+	// hand over — Windows answers WSAEACCES for a port inside an excluded
+	// range, with nothing listening on it.
+	wsErr error
 	// prices resolves what a session's tokens cost. Nil disables the cost
 	// readout outright — the state a test that builds a bare Service is in.
 	prices rateSource
@@ -203,9 +209,7 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 			hub.Emit(touchedEventName, touchedEvent{ID: id})
 		},
 	)
-	if err == nil {
-		s.ws = ws
-	}
+	s.ws, s.wsErr = ws, err
 	return s
 }
 

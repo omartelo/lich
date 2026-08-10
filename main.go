@@ -168,7 +168,7 @@ func main() {
 func runChromium(term *terminal.Service, configDir string, coord *restart.Coordinator) {
 	info := term.Transport()
 	if info.Port == 0 {
-		handleBindFailure(configDir) // never returns
+		handleBindFailure(configDir, term.TransportError()) // never returns
 	}
 
 	// The runtime file lets install.sh reach a running lich for /restart when it
@@ -220,8 +220,9 @@ func runChromium(term *terminal.Service, configDir string, coord *restart.Coordi
 
 // handleBindFailure runs when the pinned listener would not bind, and never
 // returns. It gathers the two inputs the decision needs, asks
-// singleton.BindFailureVerdict what they mean, and performs the effects.
-func handleBindFailure(configDir string) {
+// singleton.BindFailureVerdict what they mean, and performs the effects. cause
+// is the bind error, carried into the log for the launches that end here.
+func handleBindFailure(configDir string, cause error) {
 	port := os.Getenv("LICH_LISTEN_PORT")
 	restartWait := os.Getenv(restart.WaitEnv)
 	// A restart successor never probes: the verdict is already decided, and the
@@ -237,7 +238,9 @@ func handleBindFailure(configDir string) {
 		focusRunning(configDir, running)
 		os.Exit(0)
 	}
-	slog.Error("loopback listener failed to start — is the port free?", "port", port)
+	// No "is the port free?" here: on Windows the answer is regularly yes and
+	// the bind still fails, so the OS error is the message.
+	slog.Error("loopback listener failed to start", "port", port, "err", cause)
 	os.Exit(1)
 }
 

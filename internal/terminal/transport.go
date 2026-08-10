@@ -591,6 +591,13 @@ type TransportInfo struct {
 	Token string `json:"token"`
 }
 
+// TransportError reports why the transport is absent, nil when it started. It
+// stays out of TransportInfo on purpose: the page has no use for an OS error,
+// and the launch-failure log is the only caller.
+func (s *Service) TransportError() error {
+	return s.wsErr
+}
+
 // Transport returns the WebSocket endpoint for terminal I/O.
 func (s *Service) Transport() TransportInfo {
 	if s.ws == nil {

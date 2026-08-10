@@ -107,6 +107,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   neighbour's size, smearing its text until the drop. Cards, session groups and
   project tabs now only move while dragging, never resize.
 
+- **A lich that will not open says why.** When the loopback listener could not
+  take its port, the log asked whether the port was free and dropped the system
+  error that knew the answer — leaving the one launch failure that shows no
+  window with nothing to go on. It now records the error itself, which is what
+  separates a port another program holds from a port the system refuses to hand
+  over with nothing listening on it (a Windows habit).
+
 ## [0.28.0] - 2026-08-09
 
 ### Added
