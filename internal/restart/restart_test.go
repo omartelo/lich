@@ -36,6 +36,36 @@ func TestSuccessorEnvAppendsWaitMarker(t *testing.T) {
 	}
 }
 
+func TestCloseWindowCommand(t *testing.T) {
+	// /F is the whole point: with it taskkill ends the process, and Chromium
+	// never flushes the profile the close exists to save.
+	t.Run("asks rather than forces", func(t *testing.T) {
+		_, args := closeWindowCommand(func(string) string { return `C:\Windows` }, 4321)
+		if slices.Contains(args, "/F") {
+			t.Fatalf("args = %v, must not force the kill", args)
+		}
+		if !slices.Equal(args, []string{"/PID", "4321"}) {
+			t.Fatalf("args = %v, want [/PID 4321]", args)
+		}
+	})
+
+	t.Run("resolved under SystemRoot", func(t *testing.T) {
+		exe, _ := closeWindowCommand(func(string) string { return `C:\Windows` }, 1)
+		if exe != `C:\Windows\System32\taskkill.exe` {
+			t.Fatalf("exe = %q, want the SystemRoot path", exe)
+		}
+	})
+
+	// No SystemRoot is a broken environment, not a reason to skip the close:
+	// the bare name still resolves through PATH on every Windows.
+	t.Run("falls back to the bare name", func(t *testing.T) {
+		exe, _ := closeWindowCommand(func(string) string { return "" }, 1)
+		if exe != "taskkill.exe" {
+			t.Fatalf("exe = %q, want taskkill.exe", exe)
+		}
+	})
+}
+
 func TestDoSpawnsThenTerminates(t *testing.T) {
 	var (
 		spawnedEnv []string

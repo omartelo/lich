@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"sync"
 )
 
@@ -83,4 +84,18 @@ func (c *Coordinator) Do() error {
 // successorEnv is env plus the wait marker, on a fresh slice.
 func successorEnv(env []string) []string {
 	return append(append([]string(nil), env...), WaitEnv+"=1")
+}
+
+// closeWindowCommand is how Windows asks a GUI process to close: taskkill
+// without /F posts WM_CLOSE to the process's windows rather than ending it
+// where it stands. It is resolved under SystemRoot instead of through PATH —
+// what this command reaches decides whether somebody's window is closed or
+// killed, and PATH is the user's to rearrange. Kept out of the build-tagged
+// file so the pure logic tests on any OS, like chromium.windowsBrowserCandidates.
+func closeWindowCommand(getenv func(string) string, pid int) (string, []string) {
+	exe := "taskkill.exe"
+	if root := getenv("SystemRoot"); root != "" {
+		exe = root + `\System32\taskkill.exe`
+	}
+	return exe, []string{"/PID", strconv.Itoa(pid)}
 }

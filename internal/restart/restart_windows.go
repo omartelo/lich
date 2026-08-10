@@ -3,6 +3,7 @@
 package restart
 
 import (
+	"log/slog"
 	"os"
 	"os/exec"
 	"syscall"
@@ -22,8 +23,26 @@ func startDetached(exe string, env []string) error {
 	return cmd.Start()
 }
 
-// terminateProcess ends the window process. Windows has no graceful signal to a
-// GUI child here, so this is a hard kill.
+// terminateProcess asks the window to close, the way restart_unix.go's SIGTERM
+// does, so Chromium clears its profile lock and flushes it. That flush is the
+// point: the page's prefs live in the profile's localStorage, which Chromium
+// commits to disk lazily, so a window that is killed rather than closed loses
+// whatever was written in the seconds before the restart — a dismissed dialog
+// coming back on the next launch (#199) is what that looks like.
+//
+// Windows has no signal to send, so the close is posted as WM_CLOSE by taskkill
+// without /F. The hard kill stays as the fallback for when there is no window to
+// post to (a restart in the moment before it opens): the successor is already
+// waiting on the pinned port, and nothing may be left holding it.
 func terminateProcess(p *os.Process) error {
-	return p.Kill()
+	exe, args := closeWindowCommand(os.Getenv, p.Pid)
+	cmd := exec.Command(exe, args...)
+	// lich is built for the GUI subsystem (-H=windowsgui); without this the
+	// console helper flashes a window over the app on its way out.
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NO_WINDOW}
+	if err := cmd.Run(); err != nil {
+		slog.Warn("close window gracefully, killing instead", "err", err)
+		return p.Kill()
+	}
+	return nil
 }
