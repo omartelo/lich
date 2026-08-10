@@ -23,7 +23,7 @@ export function HelpSettings() {
       <SettingBlock
         icon={<Bug className="size-4" />}
         title="Report a bug"
-        description="Opens the bug form in your browser with the version and platform filled in. lich does not file the issue — you write it and attach the log yourself."
+        description="Opens the bug form in your browser with the version and platform filled in. lich does not file the issue — you write it yourself. Run `lich rage` in a terminal to pack the log, the versions and what lich found on this machine into one archive to attach."
       >
         <Button
           size="sm"

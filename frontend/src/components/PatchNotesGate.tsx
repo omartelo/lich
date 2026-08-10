@@ -1,9 +1,16 @@
 import { useEffect, useState } from "react"
 import { PatchNotesDialog } from "./PatchNotesDialog"
-import { decidePatchNotes, PATCH_NOTES_SEEN_KEY } from "@/lib/update/patch-notes-gate"
-import { PatchNotes } from "@/lib/rpc"
-import { readPref, writePref } from "@/lib/prefs"
+import {
+  decidePatchNotes,
+  LEGACY_PATCH_NOTES_SEEN_KEY,
+  PATCH_NOTES_SEEN_KEY,
+} from "@/lib/update/patch-notes-gate"
+import { PatchNotes, Store } from "@/lib/rpc"
+import { readPref } from "@/lib/prefs"
 import type { PatchNotes as PatchNotesData } from "@/lib/api-types"
+
+// The setting is the app's, not a project's — it answers for this install.
+const GLOBAL_SCOPE = ""
 
 // PatchNotesGate shows lich's "what's new" popup once per release, right after
 // an update. On startup it fetches this build's changelog section and decides:
@@ -14,12 +21,14 @@ export function PatchNotesGate() {
 
   useEffect(() => {
     let alive = true
-    void PatchNotes.Current()
-      .then((current) => {
+    void Promise.all([PatchNotes.Current(), Store.GetSetting(PATCH_NOTES_SEEN_KEY, GLOBAL_SCOPE)])
+      .then(([current, seen]) => {
         if (!alive) return
-        const action = decidePatchNotes(current, readPref(PATCH_NOTES_SEEN_KEY))
+        // A setting that was never written reads as "": the gate wants null for
+        // it, so a first run records rather than shows.
+        const action = decidePatchNotes(current, seen || readPref(LEGACY_PATCH_NOTES_SEEN_KEY))
         if (action.kind === "record") {
-          writePref(PATCH_NOTES_SEEN_KEY, action.version)
+          record(action.version)
         } else if (action.kind === "show") {
           setNotes(action.notes)
         }
@@ -33,9 +42,15 @@ export function PatchNotesGate() {
   if (!notes) return null
 
   const close = () => {
-    writePref(PATCH_NOTES_SEEN_KEY, notes.version)
+    record(notes.version)
     setNotes(null)
   }
 
   return <PatchNotesDialog notes={notes} onClose={close} />
+}
+
+// record remembers the version whose notes have been seen. A failed write only
+// costs the popup one extra appearance, so it stays silent like the read.
+function record(version: string): void {
+  void Store.SetSetting(PATCH_NOTES_SEEN_KEY, GLOBAL_SCOPE, version).catch(() => {})
 }

@@ -16,6 +16,7 @@ import { AgentPluginGate } from "@/components/AgentPluginGate"
 import { AppUpdateGate } from "@/components/AppUpdateGate"
 import { PatchNotesGate } from "@/components/PatchNotesGate"
 import { ProviderSetupGate } from "@/components/ProviderSetupGate"
+import { UncleanExitGate } from "@/components/UncleanExitGate"
 import { CommandPalette } from "@/components/CommandPalette"
 
 // Layout is persistent across navigation: the project tabs, session sidebar and
@@ -97,6 +98,9 @@ function App() {
           asks which harnesses you use before offering to install into them. */}
       <AgentPluginGate />
       <PatchNotesGate />
+      {/* A toast, so it shares no surface with the gates around it: the launch
+          after a crash can be the launch that also has a release to announce. */}
+      <UncleanExitGate />
       {/* Last, so that on the one launch where it can coincide with another gate
           it is the dialog on top: choosing a provider comes before reading about
           a release. */}

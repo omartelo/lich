@@ -115,13 +115,33 @@ func TestRevealLogWithoutAFileLaunchesNothing(t *testing.T) {
 }
 
 func TestDiagnosticsReportsTheRunningBuild(t *testing.T) {
-	s := New(nil, "/config/lich/lich.log", "0.23.0")
+	s := New(nil, "/config/lich/lich.log", "0.23.0", false)
 	got := s.Diagnostics()
 	if got.Version != "0.23.0" || got.LogPath != "/config/lich/lich.log" {
 		t.Errorf("Diagnostics() = %+v, want the version and log path it was built with", got)
 	}
 	if want := runtime.GOOS + "/" + runtime.GOARCH; got.Platform != want {
 		t.Errorf("Platform = %q, want %q", got.Platform, want)
+	}
+}
+
+// TestTakeUncleanExitIsConsumed pins the notice to one telling. A page reload
+// asks the same process again, and a second warning about a crash the user has
+// already been told about reads as a second crash.
+func TestTakeUncleanExitIsConsumed(t *testing.T) {
+	s := New(nil, "", "0.23.0", true)
+	if !s.TakeUncleanExit() {
+		t.Fatal("first TakeUncleanExit() = false, want true")
+	}
+	if s.TakeUncleanExit() {
+		t.Error("second TakeUncleanExit() = true, want false — the flag was not consumed")
+	}
+}
+
+func TestTakeUncleanExitAfterACleanExit(t *testing.T) {
+	s := New(nil, "", "0.23.0", false)
+	if s.TakeUncleanExit() {
+		t.Error("TakeUncleanExit() = true after a clean exit, want false")
 	}
 }
 

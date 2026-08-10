@@ -85,7 +85,7 @@ func TestSessionsOverTheRealDispatcher(t *testing.T) {
 	env, _ := wiredLich(t)
 
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"sessions"}, env, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"sessions"}, "test", env, &stdout, &stderr); code != 0 {
 		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
 	}
 	if !strings.Contains(stdout.String(), "docs\tlich\tcodex") {
@@ -102,7 +102,7 @@ func TestSendAndReplyOverTheRealDispatcher(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	done := make(chan int, 1)
 	go func() {
-		done <- Run([]string{"send", "--timeout", "20", "docs", "run the tests"}, env, &stdout, &stderr)
+		done <- Run([]string{"send", "--timeout", "20", "docs", "run the tests"}, "test", env, &stdout, &stderr)
 	}()
 
 	ticketID := ticketFrom(term)
@@ -111,7 +111,7 @@ func TestSendAndReplyOverTheRealDispatcher(t *testing.T) {
 	}
 
 	var replyOut, replyErr bytes.Buffer
-	if code := Run([]string{"reply", ticketID, "3 failures"}, env, &replyOut, &replyErr); code != 0 {
+	if code := Run([]string{"reply", ticketID, "3 failures"}, "test", env, &replyOut, &replyErr); code != 0 {
 		t.Fatalf("reply exit = %d, stderr = %q", code, replyErr.String())
 	}
 	if code := <-done; code != 0 {
@@ -205,7 +205,7 @@ func TestOpenOverTheRealDispatcher(t *testing.T) {
 	}
 
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"open", "--kind", "codex"}, env, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"open", "--kind", "codex"}, "test", env, &stdout, &stderr); code != 0 {
 		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
 	}
 	if !strings.Contains(stdout.String(), `"Session 4"`) {

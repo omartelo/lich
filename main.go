@@ -44,11 +44,6 @@ var assets embed.FS
 //go:embed CHANGELOG.md
 var changelog string
 
-// defaultListenPort pins the loopback listener so the page origin — and with
-// it the frontend's localStorage (lich.* settings) — survives restarts.
-// LICH_LISTEN_PORT overrides (not LICH_PORT, the per-session hook variable).
-const defaultListenPort = "47821"
-
 // version is the running build's version, injected at build time via
 // -ldflags "-X main.version=<git tag>" (see Taskfile.yml). Unset in dev builds
 // ("dev"), which the update check treats as "not a release".
@@ -60,7 +55,7 @@ func main() {
 	// it must not open the database, take the log file or race the singleton
 	// bind of the lich it is talking to. Anything that is not a subcommand —
 	// including `lich -- <chromium flags>` — falls through and opens the app.
-	if code := cli.Run(os.Args[1:], os.Getenv, os.Stdout, os.Stderr); code != cli.NotACommand {
+	if code := cli.Run(os.Args[1:], version, os.Getenv, os.Stdout, os.Stderr); code != cli.NotACommand {
 		os.Exit(code)
 	}
 
@@ -87,8 +82,11 @@ func main() {
 		defer closer.Close()
 	}
 
+	// Pinned in the environment, not just resolved: the restart successor and
+	// every spawned session inherit it, so they all agree on the origin the
+	// page's localStorage is keyed by (singleton.DefaultPort).
 	if os.Getenv("LICH_LISTEN_PORT") == "" {
-		if err := os.Setenv("LICH_LISTEN_PORT", defaultListenPort); err != nil {
+		if err := os.Setenv("LICH_LISTEN_PORT", strconv.Itoa(singleton.DefaultPort)); err != nil {
 			slog.Error("set LICH_LISTEN_PORT", "err", err)
 			os.Exit(1)
 		}
@@ -124,7 +122,11 @@ func main() {
 	dispatcher.Register("appupdate", appupdate.New(version))
 	dispatcher.Register("patchnotes", patchnotes.New(version, changelog))
 	dispatcher.Register("store", db)
-	dispatcher.Register("system", system.New(env, logPath, version))
+	// Read before runChromium writes this run's runtime file over the previous
+	// run's: a file still there is the only trace a bad exit leaves, and the
+	// restored workspace looks exactly like one closed on purpose.
+	uncleanExit := singleton.UncleanExit(configDir, os.Getenv(restart.WaitEnv))
+	dispatcher.Register("system", system.New(env, logPath, version, uncleanExit))
 	dispatcher.Register("providers", providers.New())
 	// The relay is the only service whose caller is not the window: the `lich`
 	// CLI running inside a session reaches it over the same listener. It watches
@@ -172,7 +174,7 @@ func main() {
 func runChromium(term *terminal.Service, configDir string, coord *restart.Coordinator) {
 	info := term.Transport()
 	if info.Port == 0 {
-		handleBindFailure(configDir) // never returns
+		handleBindFailure(configDir, term.TransportError()) // never returns
 	}
 
 	// The runtime file lets install.sh reach a running lich for /restart when it
@@ -224,8 +226,9 @@ func runChromium(term *terminal.Service, configDir string, coord *restart.Coordi
 
 // handleBindFailure runs when the pinned listener would not bind, and never
 // returns. It gathers the two inputs the decision needs, asks
-// singleton.BindFailureVerdict what they mean, and performs the effects.
-func handleBindFailure(configDir string) {
+// singleton.BindFailureVerdict what they mean, and performs the effects. cause
+// is the bind error, carried into the log for the launches that end here.
+func handleBindFailure(configDir string, cause error) {
 	port := os.Getenv("LICH_LISTEN_PORT")
 	restartWait := os.Getenv(restart.WaitEnv)
 	// A restart successor never probes: the verdict is already decided, and the
@@ -241,7 +244,9 @@ func handleBindFailure(configDir string) {
 		focusRunning(configDir, running)
 		os.Exit(0)
 	}
-	slog.Error("loopback listener failed to start — is the port free?", "port", port)
+	// No "is the port free?" here: on Windows the answer is regularly yes and
+	// the bind still fails, so the OS error is the message.
+	slog.Error("loopback listener failed to start", "port", port, "err", cause)
 	os.Exit(1)
 }
 

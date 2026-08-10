@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 
 	"github.com/ncruces/zenity"
 	"github.com/omartelo/lich/internal/relpath"
@@ -27,6 +28,10 @@ type Service struct {
 	logPath string
 	// version is the running build's version, "dev" outside a release.
 	version string
+	// uncleanExit records that the previous run never reached its clean exit
+	// (see singleton.UncleanExit). Consumed by the first reader, so it is
+	// atomic: a page reload calls in again on the same process.
+	uncleanExit atomic.Bool
 	// run launches a detached process; injected in tests, exec in production.
 	run func(name string, args ...string) error
 	// notify posts one desktop notification; injected in tests, zenity in
@@ -34,8 +39,8 @@ type Service struct {
 	notify func(text, title string) error
 }
 
-func New(env []string, logPath, version string) *Service {
-	return &Service{
+func New(env []string, logPath, version string, uncleanExit bool) *Service {
+	s := &Service{
 		env:     env,
 		logPath: logPath,
 		version: version,
@@ -46,6 +51,17 @@ func New(env []string, logPath, version string) *Service {
 			return zenity.Notify(text, zenity.Title(title))
 		},
 	}
+	s.uncleanExit.Store(uncleanExit)
+	return s
+}
+
+// TakeUncleanExit reports whether the run before this one ended without closing
+// its window, and clears the flag. It is consumed rather than read because the
+// notice belongs to the launch that followed the bad exit, not to every page
+// reload of it: the page mounts its gate again on each reload, the process does
+// not start again with it.
+func (s *Service) TakeUncleanExit() bool {
+	return s.uncleanExit.Swap(false)
 }
 
 // Diagnostics is what a bug report opens with: the three facts that decide

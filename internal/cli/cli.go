@@ -13,6 +13,11 @@
 // one install.sh uses to reach a running lich for /restart. Such a caller has
 // no session of its own, and the message it relays says so.
 //
+// One command is not about the other sessions at all: `lich rage` collects a
+// bug report from this machine, and answers to the failure where there is no
+// window to ask through (internal/rage). It is here because it is part of the
+// same command line, and because it must work when nothing else does.
+//
 // The contract is docs/cli.md; the lich-plugin slash commands are written
 // against it, so a flag or an output line that moves here breaks a repo this
 // one cannot see.
@@ -27,9 +32,13 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/omartelo/lich/internal/doctor"
+	"github.com/omartelo/lich/internal/rage"
 	"github.com/omartelo/lich/internal/relay"
 	"github.com/omartelo/lich/internal/singleton"
 	"github.com/omartelo/lich/internal/spawn"
@@ -83,16 +92,28 @@ const usage = `lich talks to the sessions open in the running lich window.
       itself for the providers that support it; you only run it by hand to
       point another MCP client at lich.
 
+  lich rage [--output <path>]
+      Collect a bug report — versions, browser, providers, plugin state and
+      the logs, with secrets masked — into one .tar.gz to attach to an issue.
+      Nothing is uploaded, and it works with no lich running.
+
+  lich doctor
+      Walk the boot lich walks — config dir, log, the pinned port, the
+      workspace database, the browser, the providers — and say whether it
+      would start here. Exits non-zero when something would stop it.
+
 Run inside a lich session these address the sessions beside it. Run anywhere
 else on the machine they find the running lich on their own, and what they
 relay is attributed to the command line rather than to a session.
 `
 
 // Run executes one subcommand and returns the process exit code, or
-// NotACommand when args name none. env reads the process environment.
-func Run(args []string, env func(string) string, stdout, stderr io.Writer) int {
+// NotACommand when args name none. env reads the process environment, and
+// version is the running build's, which only the bug report needs.
+func Run(args []string, version string, env func(string) string, stdout, stderr io.Writer) int {
 	return dispatch(args, &client{
-		env: env, stdin: os.Stdin, stdout: stdout, stderr: stderr, running: runningLich,
+		env: env, version: version, stdin: os.Stdin,
+		stdout: stdout, stderr: stderr, running: runningLich,
 	})
 }
 
@@ -116,6 +137,13 @@ func dispatch(args []string, c *client) int {
 		return c.run(c.open, args[1:])
 	case "mcp":
 		return c.run(c.serveMCP, args[1:])
+	case "rage":
+		return c.run(c.rage, args[1:])
+	case "doctor":
+		// Not through run: this command's failure is the report it just
+		// printed, and a second "lich: …" line on stderr would only say it
+		// again, worse.
+		return c.doctor(args[1:])
 	case "help", "--help", "-h":
 		fmt.Fprint(c.stdout, usage)
 		return 0
@@ -125,6 +153,9 @@ func dispatch(args []string, c *client) int {
 
 type client struct {
 	env func(string) string
+	// version is the running build's, reported by the bug report and by nothing
+	// else: every other command talks to a lich that knows its own.
+	version string
 	// stdin carries the MCP server's incoming messages; nil for every other
 	// command, none of which reads anything.
 	stdin  io.Reader
@@ -133,6 +164,14 @@ type client struct {
 	// running finds the lich instance to talk to when the environment carries
 	// no coordinates, i.e. when this is not running inside a lich PTY.
 	running func() (*singleton.Info, error)
+	// bundle writes the bug report archive; nil takes the real collector. A
+	// test overrides it because collecting scans PATH, runs the provider CLIs
+	// and asks GitHub for the plugin's latest release.
+	bundle func(w io.Writer, root string) (rage.Report, error)
+	// diagnose walks the boot; nil takes the real one. A test overrides it for
+	// the same reason bundle exists — the real walk binds the pinned port and
+	// opens the workspace database.
+	diagnose func() ([]doctor.Check, error)
 }
 
 // run reports a subcommand's failure the way a command line does — one line on
@@ -267,6 +306,104 @@ func openedText(opened spawn.Session) string {
 			"before you send it work.\n",
 		opened.Label, opened.Kind, where, opened.Label, opened.Name,
 	)
+}
+
+// rage writes the bug report bundle to a file and says what it wrote. It talks
+// to no lich: the report it collects is most needed exactly when there is none
+// running to ask.
+func (c *client) rage(args []string) error {
+	flags := newFlagSet("rage")
+	output := flags.String("output", "", "write the bundle here instead of ./lich-rage-<timestamp>.tar.gz")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 0 {
+		return fmt.Errorf("usage: lich rage [--output <path>]")
+	}
+
+	path := *output
+	if path == "" {
+		path = rage.DefaultBase(time.Now()) + ".tar.gz"
+	}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return fmt.Errorf("create the bundle: %w", err)
+	}
+
+	collect := c.bundle
+	if collect == nil {
+		collect = c.collectRage
+	}
+	report, err := collect(file, archiveRoot(path))
+	if closeErr := file.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		// A half-written archive is worse than none: it opens, it looks like a
+		// report, and it is missing the part that mattered.
+		_ = os.Remove(path)
+		return err
+	}
+
+	fmt.Fprintf(c.stdout, "Wrote %s\n", path)
+	fmt.Fprintf(c.stdout, "lich %s on %s, %s.\n", report.Version, report.Platform, report.Instance)
+	fmt.Fprintln(c.stdout, "Read it before you attach it: it carries absolute paths, project and branch names.")
+	return nil
+}
+
+// doctor prints the boot report and returns the process exit code directly: a
+// launch-stopping check is a non-zero exit, which is what a script reads.
+func (c *client) doctor(args []string) int {
+	flags := newFlagSet("doctor")
+	if err := flags.Parse(args); err != nil {
+		fmt.Fprintf(c.stderr, "lich: %v\n", err)
+		return 1
+	}
+	if flags.NArg() != 0 {
+		fmt.Fprintln(c.stderr, "lich: usage: lich doctor")
+		return 1
+	}
+
+	run := c.diagnose
+	if run == nil {
+		run = c.runDoctor
+	}
+	checks, err := run()
+	if err != nil {
+		fmt.Fprintf(c.stderr, "lich: %v\n", err)
+		return 1
+	}
+	doctor.Render(c.stdout, c.version, checks)
+	if doctor.Failed(checks) {
+		return 1
+	}
+	return 0
+}
+
+// runDoctor is the real boot walk, reached when no seam replaced it.
+func (c *client) runDoctor() ([]doctor.Check, error) {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return nil, fmt.Errorf("resolve config directory: %w", err)
+	}
+	return doctor.New(dir, c.env).Run(), nil
+}
+
+// collectRage is the real collector, reached when no seam replaced it.
+func (c *client) collectRage(w io.Writer, root string) (rage.Report, error) {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return rage.Report{}, fmt.Errorf("resolve config directory: %w", err)
+	}
+	return rage.New(dir, c.version, os.Environ()).Bundle(w, root)
+}
+
+// archiveRoot is the directory the bundle's entries sit under: the archive's
+// own name, so two extracted side by side stay apart.
+func archiveRoot(path string) string {
+	base := filepath.Base(path)
+	base = strings.TrimSuffix(base, ".gz")
+	return strings.TrimSuffix(base, ".tar")
 }
 
 // report prints a Send or Wait outcome. An answer goes to stdout on its own so

@@ -55,6 +55,68 @@ func TestReadRejectsGarbage(t *testing.T) {
 	}
 }
 
+// TestUncleanExit pins the three cases the launch notice is decided from: the
+// file the clean exit removed, the file it never got to remove, and the file a
+// restart successor finds because its predecessor is still holding it.
+func TestUncleanExit(t *testing.T) {
+	t.Run("no runtime file is a clean exit", func(t *testing.T) {
+		if UncleanExit(writeConfig(t), "") {
+			t.Fatal("UncleanExit with no runtime file = true, want false")
+		}
+	})
+
+	t.Run("a leftover runtime file is an unclean exit", func(t *testing.T) {
+		configDir := writeConfig(t)
+		if _, err := Write(configDir, 47821, "tok"); err != nil {
+			t.Fatalf("Write: %v", err)
+		}
+		if !UncleanExit(configDir, "") {
+			t.Fatal("UncleanExit with a leftover runtime file = false, want true")
+		}
+	})
+
+	t.Run("a restart successor inherits the file, not a crash", func(t *testing.T) {
+		configDir := writeConfig(t)
+		if _, err := Write(configDir, 47821, "tok"); err != nil {
+			t.Fatalf("Write: %v", err)
+		}
+		if UncleanExit(configDir, "1") {
+			t.Fatal("UncleanExit for a restart successor = true, want false")
+		}
+	})
+}
+
+// TestDefaultPortIsPinned spells the number out rather than reading the
+// constant: the page's localStorage (lich.* settings) is keyed by the origin
+// this port forms, so moving it wipes every user's preferences. A test that
+// followed the constant would let that move through green.
+func TestDefaultPortIsPinned(t *testing.T) {
+	if DefaultPort != 47821 {
+		t.Fatalf("DefaultPort = %d, want 47821 — moving it wipes the page's localStorage", DefaultPort)
+	}
+}
+
+func TestPortReadsTheOverride(t *testing.T) {
+	cases := map[string]int{
+		"":           DefaultPort,
+		"0":          DefaultPort,
+		"-1":         DefaultPort,
+		"not-a-port": DefaultPort,
+		"1234":       1234,
+	}
+	for value, want := range cases {
+		got := Port(func(key string) string {
+			if key != "LICH_LISTEN_PORT" {
+				t.Errorf("Port read %q, not the listener variable", key)
+			}
+			return value
+		})
+		if got != want {
+			t.Errorf("Port(LICH_LISTEN_PORT=%q) = %d, want %d", value, got, want)
+		}
+	}
+}
+
 func TestDetect(t *testing.T) {
 	const want = 47821
 	seed := func(t *testing.T, port int, token string) string {
