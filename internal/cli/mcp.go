@@ -39,6 +39,19 @@ const mcpProtocolVersion = "2025-06-18"
 // registers itself under at spawn.
 const mcpServerName = "lich"
 
+// mcpMaxWait caps how long any tool here blocks, whatever the caller asks for.
+//
+// Claude Code moves an MCP call that runs past 120 seconds into the background
+// and delivers its result later as a notification. A tool that waits longer
+// therefore does not wait at all — it detaches, and the agent reports that it is
+// "waiting in the background" while the answer lands somewhere it has stopped
+// looking. Seen on the first real run, at the caller's own request: it asked for
+// 120 seconds and then 180.
+//
+// The ticket is what makes the cap cheap. A wait that ends unanswered costs one
+// more tool call, inside the agent's own turn, instead of a detached task.
+const mcpMaxWait = 90
+
 // jsonRPC frames one message in either direction. ID is absent on a
 // notification, which is answered with nothing at all.
 type jsonRPC struct {
@@ -205,17 +218,21 @@ func (a mcpArgs) text(key string) string {
 	}
 }
 
+// seconds reads a wait from the arguments, clamped to what an MCP call may
+// block for (see mcpMaxWait). A caller asking for longer gets the cap, not the
+// detachment it was heading for.
 func (a mcpArgs) seconds(key string) int {
+	asked := 0
 	switch v := a[key].(type) {
 	case float64:
-		return int(v)
+		asked = int(v)
 	case string:
-		var n int
-		_, _ = fmt.Sscanf(v, "%d", &n)
-		return n
-	default:
-		return 0
+		_, _ = fmt.Sscanf(v, "%d", &asked)
 	}
+	if asked <= 0 || asked > mcpMaxWait {
+		return mcpMaxWait
+	}
+	return asked
 }
 
 // schema builds an inputSchema from named properties and the subset of them
@@ -261,15 +278,23 @@ var mcpTools = []mcpTool{
 	},
 	{
 		Name: "send_to_session",
-		Description: "Give another lich session a task and wait for its agent to answer. " +
-			"The task is put at that session's prompt as if typed there. Returns its answer, " +
-			"or a ticket to pick the answer up with wait_for_answer if it takes too long.",
+		Description: "Give another lich session a task. The task is put at that session's prompt " +
+			"as if typed there. Returns the answer when it comes back quickly; for anything " +
+			"slower the answer is delivered to your own prompt as soon as it exists, so you can " +
+			"carry on and do not need to poll. " +
+			"Sessions are addressed by the label on their lich card — call list_sessions for " +
+			"the labels. If you were given a name like `myrepo-a1b2`, that is a peer-roster " +
+			"name from your own cross-session messaging, not a lich label: reach it with your " +
+			"own messaging tool instead of this one.",
 		Schema: schema(map[string]any{
-			"session": property("string", "Label of the target session, as returned by list_sessions."),
+			"session": property("string",
+				"Label of the target session, exactly as list_sessions returns it. Not a peer-roster name."),
 			"prompt":  property("string", "What to ask that session's agent to do."),
 			"project": property("string", "Project name, needed only when two live sessions share a label."),
 			"timeout_seconds": property("number",
-				"How long to wait for an answer. Defaults to 100; the call returns a ticket rather than failing if it runs out."),
+				"Seconds to hold the line for a quick answer, at most 90 — longer is capped, "+
+					"because a call running past 120s is detached by the client and stops being a "+
+					"wait at all. Running out costs nothing: the answer arrives at your prompt."),
 		}, "session", "prompt"),
 		Run: func(c *client, args mcpArgs) (string, error) {
 			var result relay.Result
@@ -283,11 +308,13 @@ var mcpTools = []mcpTool{
 	},
 	{
 		Name: "wait_for_answer",
-		Description: "Wait again on a ticket that send_to_session handed back because its wait ran out. " +
-			"The task was already delivered; this only waits for the answer.",
+		Description: "Hold the line again on a ticket send_to_session handed back. Optional: the " +
+			"answer reaches your prompt on its own whether or not you call this. Use it only when " +
+			"you have nothing else to do and want the answer inside this turn.",
 		Schema: schema(map[string]any{
-			"ticket":          property("string", "The ticket send_to_session returned."),
-			"timeout_seconds": property("number", "How long to wait. Defaults to 100."),
+			"ticket": property("string", "The ticket send_to_session returned."),
+			"timeout_seconds": property("number",
+				"Seconds to wait, at most 90. Call this again with the same ticket for longer."),
 		}, "ticket"),
 		Run: func(c *client, args mcpArgs) (string, error) {
 			var result relay.Result
@@ -301,7 +328,9 @@ var mcpTools = []mcpTool{
 	{
 		Name: "reply_to_session",
 		Description: "Answer a task another session gave you. Call this when a message at your prompt " +
-			"came from lich and carried a ticket; whoever asked is blocked until you do.",
+			"came from lich and carried a ticket; whoever asked is blocked until you do. " +
+			"It is the only route back — a peer message does not reach them, because they are " +
+			"waiting on the ticket and reading nothing else.",
 		Schema: schema(map[string]any{
 			"ticket": property("string", "The ticket from the message you were given."),
 			"answer": property("string", "Your answer, in full — nothing else is sent back."),
@@ -319,11 +348,29 @@ var mcpTools = []mcpTool{
 // there is one, otherwise what to call next. A bare ticket would leave the
 // agent guessing what it is for.
 func mcpOutcome(result relay.Result) string {
-	if result.Status == relay.StatusAnswered {
+	switch result.Status {
+	case relay.StatusAnswered:
 		return result.Answer
+	case relay.StatusUnanswered:
+		return unansweredText(result.Target)
 	}
 	return fmt.Sprintf(
-		"%s has not answered yet. The task was delivered; call wait_for_answer with ticket %q.",
+		"%s is still working. The task was delivered and its answer will be put at your own "+
+			"prompt when it arrives, so carry on — there is nothing to poll. Ticket %q, if you "+
+			"want to hold the line for it with wait_for_answer instead.",
 		result.Target, result.Ticket,
+	)
+}
+
+// unansweredText is what both surfaces say when the target worked through the
+// request and ended its turn without replying here. It has to send the reader
+// to the other session: whatever the agent there produced is on its screen and
+// nowhere lich can reach, so an answer that reads as "nothing happened" would
+// be the one wrong thing to say.
+func unansweredText(target string) string {
+	return fmt.Sprintf(
+		"The %q session finished its turn without answering through lich. "+
+			"Whatever it produced is in that session — tell the user to open the %q card to read it.",
+		target, target,
 	)
 }

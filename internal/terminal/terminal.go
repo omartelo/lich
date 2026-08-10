@@ -134,6 +134,11 @@ type Service struct {
 	// prices resolves what a session's tokens cost. Nil disables the cost
 	// readout outright — the state a test that builds a bare Service is in.
 	prices rateSource
+	// onState, when set, receives every session-state report. The relay watches
+	// it to notice a target that worked through a request and ended its turn
+	// without answering (internal/relay). Guarded by mu: wired after the
+	// transport is already serving.
+	onState func(id, state string)
 }
 
 // New returns a ready-to-use terminal service that resolves the binary to spawn
@@ -162,6 +167,9 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 				Tool:   req.Tool,
 				Detail: req.Detail,
 			})
+			if watch := s.stateWatcher(); watch != nil {
+				watch(req.SessionID, req.State)
+			}
 			// Every non-idle state is a point where a fresh assistant usage line
 			// may have landed — a tool call mid-turn (busy), a prompt (waiting),
 			// or the turn's end (done) — so refresh the context window then, and
@@ -218,6 +226,23 @@ func (s *Service) MountPublic(pattern string, handler http.Handler) {
 		return
 	}
 	s.ws.mountPublic(pattern, handler)
+}
+
+// SetSessionState wires fn to every session-state report the hooks deliver.
+// Only one watcher: the relay is the only thing that needs the stream, and the
+// window gets the same reports over its own event channel.
+func (s *Service) SetSessionState(fn func(id, state string)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onState = fn
+}
+
+// stateWatcher reads the watcher under the lock, so a report arriving while it
+// is being wired sees one function or none, never a torn read.
+func (s *Service) stateWatcher() func(id, state string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.onState
 }
 
 // SetRestart wires the POST /restart endpoint to fn, the in-place relaunch the

@@ -57,7 +57,9 @@ func wiredLich(t *testing.T) (func(string) string, *wiredTerminal) {
 	t.Helper()
 	term := &wiredTerminal{}
 	dispatcher := rpc.New()
-	dispatcher.Register("relay", relay.New(wiredSessions{}, term))
+	// No events sink: these tests are about the wire between the CLI and the
+	// dispatcher, and the window is not on this side of it.
+	dispatcher.Register("relay", relay.New(wiredSessions{}, term, nil))
 
 	server := httptest.NewServer(dispatcher)
 	t.Cleanup(server.Close)

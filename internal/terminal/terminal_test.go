@@ -8,7 +8,9 @@ package terminal
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -814,5 +816,60 @@ func TestSessionEnvWithoutProject(t *testing.T) {
 		if strings.HasPrefix(e, "LICH_PROJECT_DIR=") {
 			t.Fatalf("exported %q for a project that does not resolve", e)
 		}
+	}
+}
+
+// TestSessionStateReachesItsWatcher proves the seam the relay hangs off: a hook
+// report must reach SetSessionState, not only the window's event channel.
+// Everything downstream is unit-tested against a fake, so a break here would
+// look exactly like a feature that simply never fires — which is what an
+// unanswered request looked like on the first real run.
+func TestSessionStateReachesItsWatcher(t *testing.T) {
+	svc := New(stubBins{}, nil, events.New())
+	if svc.ws == nil {
+		t.Skip("no transport on this machine")
+	}
+	type report struct{ id, state string }
+	seen := make(chan report, 4)
+	svc.SetSessionState(func(id, state string) { seen <- report{id, state} })
+
+	url := fmt.Sprintf("http://127.0.0.1:%d/hook?token=%s", svc.ws.port, svc.ws.token)
+	for _, state := range []string{"busy", "done"} {
+		body := fmt.Sprintf(`{"session_id":"sess","state":%q}`, state)
+		resp, err := http.Post(url, "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatalf("post %s: %v", state, err)
+		}
+		_ = resp.Body.Close()
+	}
+
+	for _, want := range []report{{"sess", "busy"}, {"sess", "done"}} {
+		select {
+		case got := <-seen:
+			if got != want {
+				t.Fatalf("watcher saw %+v, want %+v", got, want)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("watcher never saw %+v", want)
+		}
+	}
+}
+
+// TestSessionStateWithoutAWatcherIsHarmless proves the default: nothing is wired
+// until main wires it, and a report arriving first must not take the hook down.
+func TestSessionStateWithoutAWatcherIsHarmless(t *testing.T) {
+	svc := New(stubBins{}, nil, events.New())
+	if svc.ws == nil {
+		t.Skip("no transport on this machine")
+	}
+
+	url := fmt.Sprintf("http://127.0.0.1:%d/hook?token=%s", svc.ws.port, svc.ws.token)
+	resp, err := http.Post(url, "application/json", strings.NewReader(`{"session_id":"s","state":"busy"}`))
+	if err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", resp.StatusCode)
 	}
 }

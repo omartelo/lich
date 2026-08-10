@@ -41,6 +41,63 @@ export const AGENT_EVENT = "session-agent"
 // the session has a known price. Its absence is the answer, not a zero.
 export const USAGE_EVENT = "session-usage"
 
+// Global event the backend emits while one session has a request open with
+// another (see relay.RelayEventName). Payload: { id, peer, direction } — the
+// session whose card changes, the label at the other end, and which way the
+// request runs. An empty direction clears it: the request is over, answered or
+// expired.
+export const RELAY_EVENT = "session-relay"
+
+// Global event the backend emits when a request's target ended its turn without
+// answering through lich (see relay.StalledEventName). Payload:
+// { id, targetId, target } — who asked ("" when it was the command line rather
+// than a session), and the session holding whatever was produced.
+export const RELAY_STALLED_EVENT = "session-relay-stalled"
+
+// One request whose answer, if there is one, is only in the target's terminal.
+export interface RelayStalled {
+  id: string
+  targetId: string
+  target: string
+}
+
+export function isRelayStalledEvent(data: unknown): data is RelayStalled {
+  if (!isIdEvent(data)) {
+    return false
+  }
+  const { targetId, target } = data as { targetId?: unknown; target?: unknown }
+  return typeof targetId === "string" && targetId !== "" && typeof target === "string"
+}
+
+// Which way an open request runs, from the marked card's side: "out" is waiting
+// on someone, "in" is owing someone an answer.
+const RELAY_DIRECTIONS = ["out", "in"] as const
+
+export type RelayDirection = (typeof RELAY_DIRECTIONS)[number]
+
+// One session's open request. peer is the label at the other end, empty when
+// that end is not a session at all — the `lich` command run from a script or a
+// plain shell, which the card names in its own words.
+export interface SessionRelay {
+  peer: string
+  direction: RelayDirection
+}
+
+// toSessionRelay narrows a relay payload to an open request, or null when there
+// is none: the clearing empty direction, and equally a direction from a newer
+// backend that this build cannot draw. Both mean "show nothing", which is
+// safer than stranding a mark no event will ever take down.
+export function toSessionRelay(data: unknown): SessionRelay | null {
+  const { peer, direction } = (data ?? {}) as { peer?: unknown; direction?: unknown }
+  if (typeof direction !== "string") {
+    return null
+  }
+  if (!(RELAY_DIRECTIONS as readonly string[]).includes(direction)) {
+    return null
+  }
+  return { peer: typeof peer === "string" ? peer : "", direction: direction as RelayDirection }
+}
+
 // A session's context-window occupancy as the footer shows it, and what the
 // session has cost so far. costUsd is null whenever the backend sent no number:
 // the setting is off (the case on a subscription, where the figure is noise) or

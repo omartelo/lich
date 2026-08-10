@@ -102,19 +102,34 @@ type at.
 
 Types `<prompt>` at `<session>`'s prompt, submits it, and waits.
 
-- `<session>` is the label on the card. Labels are unique within a project, not
-  across them: a label two live sessions answer to is an error naming both, and
-  `--project` is what narrows it. Guessing which session a prompt lands in is
-  the one mistake this must not make.
+- `<session>` is the label on the card, **or** the name that session answers to
+  in Claude Code's peer roster (`myrepo-a1b2`, the one lich passes as `--name`
+  and a mention writes at a prompt). Both name the same session and both are
+  accepted, because an agent holding one of them should never have to know which
+  door it is standing at — offering one name and accepting the other is what
+  once made an agent treat a single session as two and use both channels at
+  once. The label wins a tie.
+- Labels are unique within a project, not across them: a label two live sessions
+  answer to is an error naming both, and `--project` is what narrows it.
+  Guessing which session a prompt lands in is the one mistake this must not
+  make. A name that matches nothing comes back with every live session's two
+  names, so a miss is one step from a hit.
 - `--timeout` bounds the wait in seconds. Default 100 — under the 120s an
   agent's shell tool typically allows a command, so the wait ends in an answer
   this side controls rather than a killed process. Capped at 30 minutes.
 - Answered: prints the answer alone, exit 0.
-- Not answered in time: the message was still delivered, so it prints the ticket
-  and the command that picks the answer up later, exit 0.
+- Not answered in time: the message was still delivered, so it says so and hands
+  back a ticket, exit 0. **The answer is not lost by giving up on it** — see
+  below.
+- **Answered somewhere else**: the target worked through the request and ended
+  its turn without replying here — it answered over its provider's own channel,
+  or out loud to whoever was watching. The wait ends there rather than running
+  its clock out, and says the answer is in that session and has to be read
+  there. The window raises a toast that opens the card.
 
 ```
-docs has not answered yet. The message was delivered; wait for it with:
+docs is still working. The message was delivered; its answer will be typed at
+the sending session's prompt when it arrives. To hold the line for it instead:
   lich wait a1b2c3d4
 ```
 
@@ -192,6 +207,28 @@ the machine while `/proc/<pid>/environ` is not. A URL registration means
 secret at all — the server inherits the coordinates from the PTY's environment,
 where they already were.
 
+## The answer comes back the way the request went out
+
+A relayed task can take minutes; a tool call cannot sit still that long (Claude
+Code detaches one that runs past 120 seconds). So waiting is optional here.
+
+When the answer lands and **nobody is still holding the line**, lich types it at
+the sending session's own prompt and submits it — the same bracketed paste, the
+same delay, the same submit that carried the request to the target:
+
+```
+[lich] Answer from session "docs", to the request you sent it:
+
+3 failures in foo_test
+```
+
+That is what makes a long errand work without polling: the asker carries on, and
+the answer arrives when it exists. A caller that *is* still waiting carries the
+answer out itself and nothing is typed — delivering both would deliver twice.
+
+A sender that is not a session — the `lich` command from a script — has no
+prompt to answer at. Such a caller waits, or does without.
+
 ## The message a target receives
 
 ```
@@ -227,6 +264,23 @@ receiving agent only because this text describes it.
   message above, types it through the terminal service, and holds the ticket the
   answer comes back on. Tickets live in memory: one exists for as long as its
   errand does, and a lich that restarted has no PTY left to answer into.
+- **UI push** — the relay emits the global app event `session-relay`
+  (`{id, peer, direction}`) for **both** ends when a message lands in a PTY, and
+  again with an empty direction for both when the errand closes. It is raised
+  after the write, never before: a mark that outlived a delivery which never
+  happened would be a card claiming something untrue. A caller with no session
+  of its own gets no mark — there is no card to put one on — and the target's
+  `peer` is then empty, which the card words as the command line.
+- **Store and card** — `frontend/src/lib/session/session-relay-store.ts`, keyed
+  by session id, read by `SessionCard`. The row outranks the tool line while a
+  request is open: it explains the whole turn, and the tool comes back when the
+  errand closes. The store also clears on `idle` (SessionEnd), which the relay's
+  own clear cannot reach — a session that ended can answer nothing, and its
+  ticket would otherwise hold the mark for an hour.
+- **Delegating from the window** — `delegate-targets.ts` lists every other
+  session, `delegate-prompt.ts` decides what is typed: a plain request where the
+  sender has lich's tools, the spelled-out command where it has none. That split
+  mirrors `providers.AcceptsMCPServer` and has to keep mirroring it.
 - **Delivery** — `internal/terminal`, `Service.Write`: the same PTY write the
   window's keyboard input takes. The message is wrapped in bracketed paste
   (`\x1b[200~`…`\x1b[201~`) and followed by a carriage return, so a multi-line
@@ -253,6 +307,33 @@ receiving agent only because this text describes it.
 - **Env** — `internal/terminal`, `Service.sessionEnv`: exports `LICH_BIN`
   alongside the hook coordinates.
 
+## Two channels, one address space
+
+A Claude Code session can reach another one twice over: through its own peer
+messaging, and through lich. That is not a conflict to be settled by a setting —
+it became one only because the two named the same sessions differently, so an
+agent handed a name could not tell which door it was standing at. On the first
+real run one hedged and used both at once: it delivered over its own channel and
+then waited on a lich ticket nobody would ever close.
+
+Three things keep that from repeating, and none of them asks the user to choose:
+
+1. **One address space.** The relay answers to the card label *and* to the peer
+   roster name (`internal/relay/rostername.go`, the Go half of
+   `frontend/src/lib/session/peer-name.ts` — a divergence there delivers a
+   message to the wrong terminal). A mention that slips into lich's tool works
+   instead of erroring.
+2. **Both names travel.** `list_sessions` and every miss report the label and
+   the roster name together, so an agent sees one session with two names.
+3. **One route home.** The relayed message says the ticket is the only way back
+   and that an answer sent any other way is lost; `reply_to_session` says the
+   same.
+
+When all three fail anyway, the fourth catches it: the target's own turn ending
+closes the wait and points the user at that session. That path is the exception,
+not a supported mode — an answer that goes there is one lich cannot hand to
+whoever asked.
+
 ## Known ceilings
 
 - **A relayed prompt carries the sender's reach, not the user's.** It is typed
@@ -270,6 +351,9 @@ receiving agent only because this text describes it.
   handed the server without being asked. This does not widen the trust boundary
   — `LICH_TOKEN` was already in every PTY — but it does mean a user who never
   wanted this has no way to say so short of the provider's own MCP settings.
+- **The card shows what is in flight, never what happened.** Marks live with
+  their ticket and the ticket lives in memory, so a finished request leaves no
+  trace and a reload starts blank — the same ceiling the status readout has.
 - **Only live sessions are addressable.** A parked or never-opened card is
   invisible to `sessions` and unreachable by `send`. Spawning one on demand
   would mean lifting spawn state out of the frontend, which owns it.

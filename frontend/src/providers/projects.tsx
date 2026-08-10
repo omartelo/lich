@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
 import type { ReactNode } from "react"
 import { toast } from "sonner"
-import { Bell, Folder } from "lucide-react"
+import { Bell, Folder, MessageSquareDashed } from "lucide-react"
 import { useMatch, useNavigate } from "react-router-dom"
 import type { Project, RecentProject } from "@/lib/api-types"
 import type { StoredProject as StoreProject } from "@/lib/api-types"
@@ -29,15 +29,17 @@ import { applyOrder, pinFirst } from "@/lib/reorder"
 import { displayPath } from "@/lib/paths"
 import { defaultProviderKind } from "@/lib/providers-store"
 import {
+  RELAY_STALLED_EVENT,
+  STATUS_EVENT,
+  TITLE_EVENT,
+  TOUCHED_EVENT,
   decideStatusNotice,
   isIdEvent,
+  isRelayStalledEvent,
   isStatusEvent,
   isTitleEvent,
   shouldToastAttention,
-  STATUS_EVENT,
-  TITLE_EVENT,
   toSessionStatus,
-  TOUCHED_EVENT,
   type SessionStatus,
 } from "@/lib/session/session-events"
 import { NotificationsOptIn } from "@/components/NotificationsOptIn"
@@ -509,6 +511,49 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     window.addEventListener("keydown", onKey, true)
     return () => window.removeEventListener("keydown", onKey, true)
   }, [activeProjectId, newSession, activateSession, hotkeys])
+
+  // A request whose target worked and then answered somewhere lich cannot read
+  // — its provider's own peer channel, or simply out loud to whoever is watching
+  // — leaves the answer on that session's screen and nowhere else. The toast is
+  // the only thing that says where it went, so it carries the way there.
+  //
+  // Meant to be rare: unifying the two names a session answers to, and telling
+  // the target its ticket is the only route home, are what keep it rare. This is
+  // the escape hatch for when neither held.
+  useEffect(() => {
+    const off = onAppEvent(RELAY_STALLED_EVENT, (data) => {
+      if (!isRelayStalledEvent(data)) {
+        return
+      }
+      const { targetId, target } = data
+      const projectId = projectOfSession(sessionsRef.current, targetId)
+      // The target's project was closed meanwhile: there is no card to open, so
+      // the toast would offer a door to nowhere.
+      if (!sessionsRef.current[projectId]) {
+        return
+      }
+      toast(
+        <div className="flex min-w-0 flex-col">
+          <span>{target || UNLABELED_SESSION} answered in its own session</span>
+          <span className="mt-0.5 text-xs text-muted-foreground">
+            It finished without replying through lich — open it to read the answer.
+          </span>
+        </div>,
+        {
+          duration: ATTENTION_TOAST_MS,
+          icon: <MessageSquareDashed className="size-4 text-sky-500" />,
+          action: {
+            label: "Open",
+            onClick: () => {
+              navigate(`/projects/${projectId}`)
+              activateSession(projectId, targetId)
+            },
+          },
+        },
+      )
+    })
+    return () => off()
+  }, [navigate, activateSession])
 
   // A session that needs the user (permission prompt or idle input) raises a
   // global toast that routes to its card — reachable even when the session lives

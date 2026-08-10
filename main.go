@@ -126,8 +126,12 @@ func main() {
 	dispatcher.Register("system", system.New(env, logPath, version))
 	dispatcher.Register("providers", providers.New())
 	// The relay is the only service whose caller is not the window: the `lich`
-	// CLI running inside a session reaches it over the same listener.
-	dispatcher.Register("relay", relay.New(db, term))
+	// CLI running inside a session reaches it over the same listener. It watches
+	// the hooks' state reports too, to notice a target that ends a turn without
+	// answering the request it was given.
+	rl := relay.New(db, term, hub)
+	term.SetSessionState(rl.Observe)
+	dispatcher.Register("relay", rl)
 	dispatcher.Register("themes", themes.New())
 	dispatcher.Deny("store.Close")
 	// The dropped file's bytes are the request body, so the upload is its own

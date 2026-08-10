@@ -303,6 +303,47 @@ func TestMCPReadsLooseArgumentTypes(t *testing.T) {
 	}
 }
 
+// TestMCPCapsTheWaitBelowTheClientsBackgroundThreshold pins the ceiling that
+// keeps a wait a wait. Claude Code detaches an MCP call that runs past 120
+// seconds, so a caller asking for more than the cap gets the cap — the first
+// real run asked for 120 and then 180, and both stopped waiting.
+func TestMCPCapsTheWaitBelowTheClientsBackgroundThreshold(t *testing.T) {
+	tests := []struct {
+		name  string
+		asked any
+		want  float64
+	}{
+		{"under the cap is honoured", float64(20), 20},
+		{"the cap itself", float64(90), 90},
+		{"over the cap is clamped", float64(180), 90},
+		{"the client's own threshold is already too long", float64(120), 90},
+		{"omitted falls back to the cap", nil, 90},
+		{"zero falls back to the cap", float64(0), 90},
+		{"negative falls back to the cap", float64(-5), 90},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFakeLich(t, `{"ticket":"a1b2c3d4","target":"docs","status":"answered","answer":"ok"}`)
+			args := map[string]any{"session": "docs", "prompt": "hi"}
+			if tt.asked != nil {
+				args["timeout_seconds"] = tt.asked
+			}
+			call, err := json.Marshal(map[string]any{
+				"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+				"params": map[string]any{"name": "send_to_session", "arguments": args},
+			})
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			speak(t, f, string(call))
+
+			if got := f.only(t).args[4]; got != tt.want {
+				t.Errorf("timeout = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestMCPStopsCleanlyAtEndOfInput(t *testing.T) {
 	f := newFakeLich(t, `null`)
 

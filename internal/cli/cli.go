@@ -224,8 +224,14 @@ func (c *client) report(result relay.Result, asJSON bool) error {
 		fmt.Fprintln(c.stdout, result.Answer)
 		return nil
 	}
+	if result.Status == relay.StatusUnanswered {
+		fmt.Fprintln(c.stdout, unansweredText(result.Target))
+		return nil
+	}
 	fmt.Fprintf(c.stdout,
-		"%s has not answered yet. The message was delivered; wait for it with:\n  lich wait %s\n",
+		"%s is still working. The message was delivered; its answer will be typed at the "+
+			"sending session's prompt when it arrives. To hold the line for it instead:\n"+
+			"  lich wait %s\n",
 		result.Target, result.Ticket,
 	)
 	return nil

@@ -9,6 +9,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The sidebar says which session is waiting on which.** One session handing
+  work to another used to happen entirely off screen: the card that asked looked
+  like any card running a tool, and the card doing the work spun with no hint of
+  why. Both now name the other end while the request is open — `→ docs` on the
+  one waiting, `← auth` on the one that was asked — and go back to normal the
+  moment the answer lands. A request from a script rather than a session says so
+  instead of borrowing a name.
+- **A session answers to either of its names.** Every session has two: the label
+  on its card, and the name Claude Code lists it under. Handing work to one used
+  to work with the first and fail with the second, which was enough to make an
+  agent try both channels at once and lose the answer between them. Both names
+  now reach the same session, and both are listed wherever lich names one.
+- **An answer finds you even if you stopped waiting.** A task handed to another
+  session can take minutes, which is longer than an agent can hold a tool call
+  open. So it no longer has to: when the answer comes back and nobody is waiting
+  on it, lich types it at the prompt of the session that asked, exactly as it
+  typed the request at the other one. Ask, carry on, and the answer turns up.
+
+- **A request stops waiting when the answer went elsewhere.** If the session you
+  asked works through the request and then answers in its own window instead of
+  back through lich, the wait ends right there saying so, and a notification
+  opens that session so you can read what it wrote — instead of running out a
+  five-minute clock on an answer that already exists.
+
+- **Delegate to session, from the card menu.** Right-click the session you are
+  in and pick another to hand work to; lich writes the request at your own
+  prompt and leaves the cursor there, so you read it before it is sent. What it
+  writes depends on what your agent has: Claude Code and Codex get it in plain
+  words and reach for the tool themselves, everything else gets the `lich send`
+  command spelled out — which for opencode, oh-my-pi and Crush is the only way
+  they would learn it exists.
+
 - **One session can hand work to another, whatever it is running.** Claude Code
   sessions can already message each other; Codex, OpenCode and Crush cannot, and
   nothing in lich reached across a card. Every session now carries a `lich`

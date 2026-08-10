@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react"
 import type { KeyboardEvent } from "react"
 import {
   ArrowDown,
+  ArrowLeft,
+  ArrowRight,
   AtSign,
   GitBranch,
   GitPullRequestArrow,
@@ -21,6 +23,7 @@ import { peerMention, peerName } from "@/lib/session/peer-name"
 import { useSessionStatus, useSessionStatusAge } from "@/lib/session/use-session-status"
 import { useSessionCwd } from "@/lib/session/use-session-cwd"
 import { useSessionAgent } from "@/lib/session/use-session-agent"
+import { useSessionRelay } from "@/lib/session/use-session-relay"
 import { useSessionTool } from "@/lib/session/use-session-tool"
 import { toolGlyph } from "@/lib/session/tool-glyph"
 import { useGitStatus } from "@/lib/git/use-git-status"
@@ -44,6 +47,8 @@ import {
 } from "@/components/ui/context-menu"
 import { Terminal as TerminalService } from "@/lib/rpc"
 import type { MentionGroup } from "@/lib/session/mention-targets"
+import type { DelegateGroup } from "@/lib/session/delegate-targets"
+import { delegatePrompt } from "@/lib/session/delegate-prompt"
 import { bracketedPaste } from "@/lib/terminal/bracketed-paste"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
 
@@ -68,6 +73,10 @@ interface SessionCardProps {
   // that terminal's prompt, so any other card would be writing somewhere the
   // user cannot see.
   mentionGroups: MentionGroup[]
+  // Sessions this one can hand work to, grouped by project. Offered by the card
+  // on screen for the reason the mention is: the request is written at that
+  // terminal's prompt, and any other card would be writing out of sight.
+  delegateGroups: DelegateGroup[]
 }
 
 // The card itself is the drag grip for reordering the list — no separate handle.
@@ -82,6 +91,7 @@ export function SessionCard({
   onOpenTerminal,
   onPulls,
   mentionGroups,
+  delegateGroups,
 }: SessionCardProps) {
   const pinned = !!session.pinned
   const pathRef = useRef<HTMLSpanElement>(null)
@@ -105,6 +115,10 @@ export function SessionCard({
   // hook: null outside a tool call, which is what keeps the card its usual size
   // whenever nothing is happening in it.
   const tool = useSessionTool(session.id)
+  // The request this session has open with another, reported by the relay when
+  // a message lands in a PTY and cleared when it is answered. null the rest of
+  // the time, which is nearly always.
+  const relay = useSessionRelay(session.id)
   const ToolGlyph = tool && toolGlyph(tool.name)
   // The live working directory the backend's cwd watcher reports ("" until it
   // does): a `cd` in the terminal moves the card with it. Falls back to the
@@ -133,7 +147,18 @@ export function SessionCard({
     requestTerminalFocus(session.id)
   }
 
+  // Write the request at this session's own prompt and hand the cursor back.
+  // lich stops here too: what it types is a request, and the agent reading it
+  // decides whether to reach for the tool or the command (delegatePrompt).
+  const delegate = (label: string) => {
+    void TerminalService.Write(session.id, bracketedPaste(delegatePrompt(session.kind, label)))
+    requestTerminalFocus(session.id)
+  }
+
   const canMention = active && session.kind === "claude" && mentionGroups.length > 0
+  // Every provider can delegate: the relay types at the target's prompt, so
+  // none of this depends on the sender's own messaging channel.
+  const canDelegate = active && delegateGroups.length > 0
 
   const commit = (value: string) => {
     setEditing(false)
@@ -225,20 +250,40 @@ export function SessionCard({
                   </span>
                 </span>
               )}
-              {/* Under the label, so the card reads name → what it is doing →
-                  where. It is the only row that comes and goes with the turn,
-                  which is the cost of putting it where the eye already is. */}
-              {tool && (
+              {/* An open request outranks the tool on the same line. While one
+                  is in flight it explains the whole turn — a card working
+                  because another session asked it to, or one stalled waiting on
+                  a card elsewhere in the list — and the tool line comes back the
+                  moment the errand closes. Only one of the two ever draws, so
+                  the card grows by one row at most. */}
+              {relay ? (
                 <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
-                  {ToolGlyph && <ToolGlyph className="size-3 shrink-0" />}
-                  <span className="shrink-0 font-medium text-foreground">{tool.name}</span>
-                  {tool.detail && (
-                    <>
-                      <span className="shrink-0 opacity-50">·</span>
-                      <span className="truncate font-mono">{tool.detail}</span>
-                    </>
+                  {relay.direction === "out" ? (
+                    <ArrowRight className="size-3 shrink-0" />
+                  ) : (
+                    <ArrowLeft className="size-3 shrink-0" />
+                  )}
+                  {relay.peer ? (
+                    <span className="truncate font-medium text-foreground">{relay.peer}</span>
+                  ) : (
+                    // Not a session, so not a label: the other end is the `lich`
+                    // command run from a script or a shell (docs/cli.md).
+                    <span className="truncate italic">command line</span>
                   )}
                 </span>
+              ) : (
+                tool && (
+                  <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                    {ToolGlyph && <ToolGlyph className="size-3 shrink-0" />}
+                    <span className="shrink-0 font-medium text-foreground">{tool.name}</span>
+                    {tool.detail && (
+                      <>
+                        <span className="shrink-0 opacity-50">·</span>
+                        <span className="truncate font-mono">{tool.detail}</span>
+                      </>
+                    )}
+                  </span>
+                )
               )}
               {/* rtl anchors the tail (project folder) to the right so overflow is
                 clipped on the left; the leading LRM keeps "~/" in logical order
@@ -403,6 +448,30 @@ export function SessionCard({
                         <span className="ml-auto pl-3 font-mono text-xs text-muted-foreground">
                           {target.name}
                         </span>
+                      </ContextMenuItem>
+                    ))}
+                  </ContextMenuGroup>
+                ))}
+              </ContextMenuSubContent>
+            </ContextMenuSub>
+          )}
+          {canDelegate && (
+            <ContextMenuSub>
+              <ContextMenuSubTrigger>
+                <ArrowRight />
+                Delegate to session
+              </ContextMenuSubTrigger>
+              <ContextMenuSubContent>
+                {delegateGroups.map((group) => (
+                  <ContextMenuGroup key={group.projectId}>
+                    {/* The project only earns a heading when there is more than
+                        one to tell apart. */}
+                    {delegateGroups.length > 1 && (
+                      <ContextMenuLabel>{group.projectName}</ContextMenuLabel>
+                    )}
+                    {group.targets.map((target) => (
+                      <ContextMenuItem key={target.id} onClick={() => delegate(target.label)}>
+                        <span className="truncate">{target.label}</span>
                       </ContextMenuItem>
                     ))}
                   </ContextMenuGroup>

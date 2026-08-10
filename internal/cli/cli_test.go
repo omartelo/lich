@@ -204,7 +204,14 @@ func TestSendPointsAtTheTicketWhenTheWaitRunsOut(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit = %d", code)
 	}
-	for _, want := range []string{"docs has not answered yet", "lich wait a1b2c3d4"} {
+	// A wait running out is not a dead end anymore: the answer comes back to the
+	// sending session's prompt on its own, and holding the line again is the
+	// option rather than the instruction.
+	for _, want := range []string{
+		"docs is still working",
+		"typed at the sending session's prompt",
+		"lich wait a1b2c3d4",
+	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("output is missing %q:\n%s", want, stdout)
 		}

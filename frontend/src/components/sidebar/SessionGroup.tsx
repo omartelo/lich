@@ -6,6 +6,7 @@ import { dragStyle, useSortableList, verticalAxis } from "@/lib/use-sortable-lis
 import { cn } from "@/lib/utils"
 import { checkoutLabel } from "@/lib/git/checkout-label"
 import type { MentionGroup } from "@/lib/session/mention-targets"
+import type { DelegateGroup } from "@/lib/session/delegate-targets"
 import { groupKey, type Session } from "@/lib/session/sessions"
 import { useProjects } from "@/providers/projects"
 import { SessionCard } from "./SessionCard"
@@ -41,6 +42,7 @@ interface SessionGroupProps {
   // the Claude sessions the active one can be pointed at, across every open
   // project.
   mentionGroups: MentionGroup[]
+  delegateGroups: DelegateGroup[]
 }
 
 // SessionGroup renders one worktree's sessions under a static divider titled
@@ -67,6 +69,7 @@ export function SessionGroup({
   onPulls,
   onClosePulls,
   mentionGroups,
+  delegateGroups,
 }: SessionGroupProps) {
   const { activateSession, renameSession, pinSession, newSession } = useProjects()
   const navigate = useNavigate()
@@ -129,6 +132,7 @@ export function SessionGroup({
                 onOpenTerminal={(cwd) => newSession(projectId, "shell", cwd)}
                 onPulls={onPulls}
                 mentionGroups={mentionGroups}
+                delegateGroups={delegateGroups}
               />
             ))}
           </div>

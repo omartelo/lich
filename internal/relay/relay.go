@@ -17,6 +17,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -72,13 +74,70 @@ const (
 	// StatusPending means the message was delivered and the wait ran out first.
 	// The ticket is still live: Wait picks the same answer up later.
 	StatusPending = "pending"
+	// StatusUnanswered means the target worked through the request and ended its
+	// turn without replying here. Its answer, if it wrote one, is in that
+	// session's own terminal and nowhere lich can read it — which is what
+	// happens when an agent answers over a channel of its provider's own.
+	StatusUnanswered = "unanswered"
 )
+
+// Session states the relay watches, spelled as the hook contract reports them
+// (docs/hooks/session-state.md).
+const (
+	stateBusy = "busy"
+	stateDone = "done"
+	stateIdle = "idle"
+)
+
+// RelayEventName carries which session is waiting on which, so the sidebar can
+// say it. Global rather than per-session because its consumer — one store keyed
+// by id — outlives any one card, exactly as the status event's does.
+const RelayEventName = "session-relay"
+
+// Directions a RelayEvent carries. An empty direction clears the mark: the
+// request it named is over, answered or expired.
+const (
+	DirectionOut = "out"
+	DirectionIn  = "in"
+)
+
+// StalledEventName carries a request whose target ended its turn without
+// answering through lich. The window turns it into a toast that opens the
+// target's card, because the answer — if there is one — is on that screen and
+// the person who asked has no other way to know where it went.
+const StalledEventName = "session-relay-stalled"
+
+// StalledEvent is the payload of StalledEventName: who asked ("" when the
+// request came from the command line rather than a session), and the session
+// that has whatever was produced.
+type StalledEvent struct {
+	ID       string `json:"id"`
+	TargetID string `json:"targetId"`
+	Target   string `json:"target"`
+}
+
+// RelayEvent is the payload of RelayEventName: the session whose mark changed,
+// the label at the other end, and which way the request runs. Peer is empty
+// when the other end is not a session at all — the CLI run from a script or a
+// shell — which the card words its own way.
+type RelayEvent struct {
+	ID        string `json:"id"`
+	Peer      string `json:"peer"`
+	Direction string `json:"direction"`
+}
 
 // Sessions is the persistence the relay reads: every open session, so a label
 // can be resolved to the session it names and the caller can be told what it
 // may address. The store implements it.
 type Sessions interface {
 	LoadState() ([]store.Project, error)
+}
+
+// Events is where the relay announces a request in flight. The app's event hub
+// implements it; a nil one leaves the feature working and silent, which is the
+// state a test that only exercises delivery is in.
+type Events interface {
+	Emit(name string, data any)
 }
 
 // Terminal is the PTY side: whether a session has a process running right now,
@@ -89,10 +148,17 @@ type Terminal interface {
 }
 
 // Peer is one session a caller may address: the label it is addressed by, the
-// project it belongs to (labels are unique within a project, not across them),
-// and what is running in it.
+// name it answers to in Claude Code's peer roster, the project it belongs to
+// (labels are unique within a project, not across them), and what is running in
+// it.
+//
+// Both names are published because both reach this session and an agent sees
+// them in different places — the label on the card, the roster name in
+// `/list-agents` and in what a mention writes at a prompt. Showing one and
+// accepting the other is what made an agent treat a single session as two.
 type Peer struct {
 	Label   string `json:"label"`
+	Name    string `json:"name"`
 	Project string `json:"project"`
 	Kind    string `json:"kind"`
 }
@@ -108,11 +174,42 @@ type Result struct {
 
 // ticket is one outstanding errand. answer is written once, before done is
 // closed, so every waiter reads it safely after the close.
+//
+// It carries both ends' ids and labels because the marks raised when it opens
+// have to be taken down when it closes, and by then the roster may have moved
+// on: a session renamed, or closed altogether, would otherwise leave a mark
+// nothing can clear.
 type ticket struct {
-	target  string
-	created time.Time
-	done    chan struct{}
-	answer  string
+	fromID   string
+	sender   string
+	targetID string
+	target   string
+	created  time.Time
+	done     chan struct{}
+	answer   string
+
+	// attended is how many callers are blocked on this ticket right now. An
+	// answer that lands while nobody is waiting has nowhere to be returned, so
+	// it is typed at the sender's prompt instead — the same way the request
+	// reached the target.
+	attended int
+	// answered records that the answer is in, for the waiter that gave up in the
+	// same instant it arrived: it leaves last and has to notice it was the one
+	// holding the ticket.
+	answered bool
+
+	// stalled closes when the target finished a turn without replying here. See
+	// Observe for how a turn is told apart from the one already running when the
+	// message arrived.
+	stalled chan struct{}
+	// sawBusy is whether the target has been working since this ticket's turn
+	// began; a turn that ends without it never started here.
+	sawBusy bool
+	// skipTurns is how many turn endings belong to work that was already running
+	// when the message was delivered. Every provider queues typed input, so a
+	// message handed to a busy session is answered a turn later — and the ending
+	// of the turn in progress says nothing about this request.
+	skipTurns int
 }
 
 // Service relays prompts between sessions. Tickets live in memory only: one
@@ -121,19 +218,33 @@ type ticket struct {
 type Service struct {
 	mu      sync.Mutex
 	tickets map[string]*ticket
+	// state is the last thing each session reported, so a delivery knows whether
+	// it is landing in the middle of a turn. Only sessions the relay has heard
+	// about appear; an unknown one is treated as not working, which is what a
+	// session with no hooks installed looks like.
+	state map[string]string
 
 	sessions Sessions
 	term     Terminal
+	events   Events
 	now      func() time.Time
+	// submitDelay separates the paste from the Enter that sends it (see
+	// defaultSubmitDelay). A field so the suite can drop it to zero: the fakes
+	// have no TUI to settle, and paying it per test would buy nothing.
+	submitDelay time.Duration
 }
 
-// New returns a relay reading its roster from sessions and typing through term.
-func New(sessions Sessions, term Terminal) *Service {
+// New returns a relay reading its roster from sessions, typing through term and
+// announcing what is in flight on events.
+func New(sessions Sessions, term Terminal, events Events) *Service {
 	return &Service{
-		tickets:  make(map[string]*ticket),
-		sessions: sessions,
-		term:     term,
-		now:      time.Now,
+		tickets:     make(map[string]*ticket),
+		state:       make(map[string]string),
+		sessions:    sessions,
+		term:        term,
+		events:      events,
+		now:         time.Now,
+		submitDelay: defaultSubmitDelay,
 	}
 }
 
@@ -178,28 +289,56 @@ func (s *Service) Send(fromID, target, project, prompt string, waitSeconds int) 
 	if err != nil {
 		return Result{}, err
 	}
-	t := &ticket{target: dest.Peer.Label, created: s.now(), done: make(chan struct{})}
+	t := &ticket{
+		fromID:   fromID,
+		sender:   sender,
+		targetID: dest.ID,
+		target:   dest.Peer.Label,
+		created:  s.now(),
+		done:     make(chan struct{}),
+		stalled:  make(chan struct{}),
+	}
 	s.mu.Lock()
-	s.sweep()
+	expired := s.sweep()
+	if s.state[dest.ID] == stateBusy {
+		t.skipTurns = 1
+	}
 	s.tickets[id] = t
 	s.mu.Unlock()
+	s.clearAll(expired)
 
-	if err := s.term.Write(dest.ID, paste(compose(sender, id, prompt, dest.Peer.Kind))); err != nil {
+	if err := s.deliver(dest.ID, compose(sender, id, prompt, dest.Peer.Kind)); err != nil {
 		s.mu.Lock()
 		delete(s.tickets, id)
 		s.mu.Unlock()
 		return Result{}, fmt.Errorf("deliver to %q: %w", dest.Peer.Label, err)
 	}
+	// Announced only once the message is actually in the PTY: a mark raised
+	// before the write would survive a delivery that never happened.
+	s.announce(t.targetID, t.sender, DirectionIn)
+	s.announce(t.fromID, t.target, DirectionOut)
 	return s.await(id, t, waitSeconds), nil
+}
+
+// deliver puts message at a session's prompt and sends it — two writes, a beat
+// apart, because the Enter has to arrive after the prompt has taken the paste
+// (see defaultSubmitDelay).
+func (s *Service) deliver(sessionID, message string) error {
+	if err := s.term.Write(sessionID, paste(message)); err != nil {
+		return err
+	}
+	time.Sleep(s.submitDelay)
+	return s.term.Write(sessionID, submit)
 }
 
 // Wait blocks on an already-delivered ticket for another round, so a caller
 // whose first wait ran out can come back without sending the message twice.
 func (s *Service) Wait(ticketID string, waitSeconds int) (Result, error) {
 	s.mu.Lock()
-	s.sweep()
+	expired := s.sweep()
 	t, ok := s.tickets[ticketID]
 	s.mu.Unlock()
+	s.clearAll(expired)
 	if !ok {
 		return Result{}, fmt.Errorf("unknown ticket %q — it was answered long ago, or expired", ticketID)
 	}
@@ -215,37 +354,185 @@ func (s *Service) Reply(ticketID, answer string) error {
 	}
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	t, ok := s.tickets[ticketID]
 	if !ok {
+		s.mu.Unlock()
 		return fmt.Errorf("unknown ticket %q — it was answered already, or expired", ticketID)
 	}
 	select {
 	case <-t.done:
+		s.mu.Unlock()
 		return fmt.Errorf("ticket %q was already answered", ticketID)
 	default:
 	}
 	t.answer = answer
+	t.answered = true
 	close(t.done)
+	// The errand is over the moment the answer lands, whether or not anyone is
+	// still waiting on it: a sender whose wait ran out has moved on, and the
+	// mark on both cards has to go with the ticket rather than with the waiter.
+	delete(s.tickets, ticketID)
+	unattended := t.attended == 0
+	s.mu.Unlock()
+
+	s.clear(t)
+	if unattended {
+		s.returnAnswer(t)
+	}
 	return nil
 }
 
-// await blocks on one ticket until it is answered or the wait runs out. An
-// answered ticket is dropped here rather than in Reply: the answer has to
-// outlive the reply long enough for the waiter to read it, and a caller whose
-// wait expired needs the ticket to still be there.
+// returnAnswer types the answer at the sender's own prompt, the same way the
+// request reached the target. It runs when nobody is blocked on the ticket
+// anymore, which is the normal case for anything that took longer than a tool
+// call may sit still: the answer arrives when it arrives, in the session that
+// asked, instead of being lost because the asker stopped listening.
+//
+// A sender that is not a session at all — the `lich` command from a script —
+// has no prompt to type at. Such a caller waits or does without.
+func (s *Service) returnAnswer(t *ticket) {
+	if t.fromID == "" || t.answer == "" {
+		return
+	}
+	message := fmt.Sprintf(
+		"[lich] Answer from session %q, to the request you sent it:\n\n%s",
+		t.target, t.answer,
+	)
+	if err := s.deliver(t.fromID, message); err != nil {
+		slog.Warn("relay: answer not returned", "session", t.fromID, "err", err)
+	}
+}
+
+// await blocks on one ticket until it is answered or the wait runs out. It only
+// reads: the ticket is dropped by whoever closes it (Reply, or sweep), because
+// a wait that expired leaves an errand that is still open and still has to be
+// waitable, and an answer has to reach a caller who stopped waiting for it too.
 func (s *Service) await(id string, t *ticket, waitSeconds int) Result {
 	timer := time.NewTimer(waitFor(waitSeconds))
 	defer timer.Stop()
 
+	s.mu.Lock()
+	t.attended++
+	s.mu.Unlock()
+
+	// An answer that is already in outranks everything: a target may reply and
+	// end its turn in the same breath, and a select over two ready channels
+	// picks between them at random.
 	select {
 	case <-t.done:
-		s.mu.Lock()
-		delete(s.tickets, id)
-		s.mu.Unlock()
+		s.leave(t)
 		return Result{Ticket: id, Target: t.target, Status: StatusAnswered, Answer: t.answer}
+	default:
+	}
+
+	select {
+	case <-t.done:
+		s.leave(t)
+		return Result{Ticket: id, Target: t.target, Status: StatusAnswered, Answer: t.answer}
+	case <-t.stalled:
+		s.leave(t)
+		return Result{Ticket: id, Target: t.target, Status: StatusUnanswered}
 	case <-timer.C:
+		s.giveUp(t)
 		return Result{Ticket: id, Target: t.target, Status: StatusPending}
+	}
+}
+
+// leave drops this caller's claim on a ticket it is carrying the answer out of.
+func (s *Service) leave(t *ticket) {
+	s.mu.Lock()
+	t.attended--
+	s.mu.Unlock()
+}
+
+// giveUp drops the claim of a caller whose wait ran out, and catches the one
+// race that would lose an answer: the reply landing in the same instant, seeing
+// this caller still attending, and leaving the answer for it — after it had
+// already stopped listening. Whoever leaves last owns what is left behind.
+func (s *Service) giveUp(t *ticket) {
+	s.mu.Lock()
+	t.attended--
+	orphaned := t.answered && t.attended == 0
+	s.mu.Unlock()
+	if orphaned {
+		s.returnAnswer(t)
+	}
+}
+
+// Observe takes one session-state report from the hooks the provider already
+// runs (docs/hooks/session-state.md). It exists for one case: a target that
+// works through a relayed request and then answers somewhere lich cannot read —
+// its provider's own peer channel, or simply out loud to the person watching.
+// Nothing would ever close that ticket, and the sender would sit out the full
+// wait learning nothing.
+//
+// A turn ending is only this request's turn when the target has been working
+// since the request arrived. Every provider queues typed input, so a message
+// handed to a busy session is answered a turn later; the ending of the turn
+// already in progress is skipped rather than mistaken for an answer that never
+// came. Getting that backwards would report "answered elsewhere" about a
+// request the target had not read yet, which is worse than saying nothing.
+func (s *Service) Observe(sessionID, state string) {
+	s.mu.Lock()
+	s.state[sessionID] = state
+
+	var ended []*ticket
+	for id, t := range s.tickets {
+		if t.targetID != sessionID {
+			continue
+		}
+		switch state {
+		case stateBusy:
+			t.sawBusy = true
+		case stateDone, stateIdle:
+			if t.skipTurns > 0 && state == stateDone {
+				// The turn that was already running. Its own busy reports say
+				// nothing about this request either.
+				t.skipTurns--
+				t.sawBusy = false
+				continue
+			}
+			// SessionEnd needs no turn to have run: the CLI has left the PTY and
+			// nothing there can answer anymore.
+			if !t.sawBusy && state != stateIdle {
+				continue
+			}
+			close(t.stalled)
+			delete(s.tickets, id)
+			ended = append(ended, t)
+		}
+	}
+	s.mu.Unlock()
+
+	s.clearAll(ended)
+	for _, t := range ended {
+		if s.events != nil {
+			s.events.Emit(StalledEventName, StalledEvent{
+				ID: t.fromID, TargetID: t.targetID, Target: t.target,
+			})
+		}
+	}
+}
+
+// announce raises or clears one session's mark. Called outside s.mu on every
+// path: Emit blocks on a stalled /events client, and holding the relay's lock
+// across it would stall every other errand behind one unread window.
+func (s *Service) announce(sessionID, peer, direction string) {
+	if s.events == nil || sessionID == "" {
+		return
+	}
+	s.events.Emit(RelayEventName, RelayEvent{ID: sessionID, Peer: peer, Direction: direction})
+}
+
+// clear takes down both ends' marks for a ticket that is over.
+func (s *Service) clear(t *ticket) {
+	s.announce(t.targetID, "", "")
+	s.announce(t.fromID, "", "")
+}
+
+func (s *Service) clearAll(tickets []*ticket) {
+	for _, t := range tickets {
+		s.clear(t)
 	}
 }
 
@@ -260,16 +547,20 @@ func waitFor(seconds int) time.Duration {
 	return MaxWait
 }
 
-// sweep drops tickets nobody answered in time. Called under s.mu on the paths
-// that already take it, which is often enough for a map that grows one entry
-// per errand.
-func (s *Service) sweep() {
+// sweep drops tickets nobody answered in time and returns them, so the caller
+// can take their marks down after releasing s.mu. Called under the lock on the
+// paths that already hold it, which is often enough for a map that grows one
+// entry per errand.
+func (s *Service) sweep() []*ticket {
+	var expired []*ticket
 	cutoff := s.now().Add(-ticketTTL)
 	for id, t := range s.tickets {
 		if t.created.Before(cutoff) {
 			delete(s.tickets, id)
+			expired = append(expired, t)
 		}
 	}
+	return expired
 }
 
 // candidate is a resolved peer together with the session id behind it, which
@@ -291,9 +582,18 @@ func (s *Service) roster(fromID string) ([]candidate, error) {
 			if sess.ID == fromID || !s.term.Live(sess.ID) {
 				continue
 			}
+			cwd := sess.Path
+			if cwd == "" {
+				cwd = p.Path
+			}
 			found = append(found, candidate{
-				ID:   sess.ID,
-				Peer: Peer{Label: sess.Label, Project: p.Name, Kind: sess.Kind},
+				ID: sess.ID,
+				Peer: Peer{
+					Label:   sess.Label,
+					Name:    rosterNameOf(cwd, sess.ID),
+					Project: p.Name,
+					Kind:    sess.Kind,
+				},
 			})
 		}
 	}
@@ -314,22 +614,23 @@ func (s *Service) resolve(fromID, target, project string) (candidate, error) {
 		return candidate{}, err
 	}
 
-	var matches []candidate
-	for _, c := range found {
-		if !strings.EqualFold(c.Peer.Label, target) {
-			continue
-		}
-		if project != "" && !strings.EqualFold(c.Peer.Project, project) {
-			continue
-		}
-		matches = append(matches, c)
+	// The label first, then the roster name. Both address this session, and an
+	// agent may have been handed either — a mention writes the roster name at
+	// the prompt, list_sessions prints both. The label wins a tie because it is
+	// the name the user chose and the one every message and error quotes.
+	matches := matching(found, target, project, func(c candidate) string { return c.Peer.Label })
+	if len(matches) == 0 {
+		matches = matching(found, target, project, func(c candidate) string { return c.Peer.Name })
 	}
 
 	switch len(matches) {
 	case 1:
 		return matches[0], nil
 	case 0:
-		return candidate{}, fmt.Errorf("no live session named %q%s", target, inProject(project))
+		return candidate{}, fmt.Errorf(
+			"no live session named %q%s. %s",
+			target, inProject(project), knownLabels(found),
+		)
 	default:
 		return candidate{}, fmt.Errorf(
 			"%q names %d live sessions (%s) — narrow it with the project",
@@ -359,6 +660,35 @@ func (s *Service) labelOf(id string) string {
 		}
 	}
 	return "unknown"
+}
+
+// matching returns the candidates whose name — read out by naming — is target,
+// narrowed to one project when one was given.
+func matching(found []candidate, target, project string, naming func(candidate) string) []candidate {
+	var matches []candidate
+	for _, c := range found {
+		if !strings.EqualFold(naming(c), target) {
+			continue
+		}
+		if project != "" && !strings.EqualFold(c.Peer.Project, project) {
+			continue
+		}
+		matches = append(matches, c)
+	}
+	return matches
+}
+
+// knownLabels names what is actually reachable, under both names, so a wrong
+// name is one step from a right one rather than a guess.
+func knownLabels(found []candidate) string {
+	if len(found) == 0 {
+		return "No other session is live."
+	}
+	names := make([]string, 0, len(found))
+	for _, c := range found {
+		names = append(names, fmt.Sprintf("%s (%s)", strconv.Quote(c.Peer.Label), c.Peer.Name))
+	}
+	return "Live sessions: " + strings.Join(names, ", ") + "."
 }
 
 func inProject(project string) string {
@@ -392,18 +722,25 @@ func compose(sender, ticketID, prompt, targetKind string) string {
 // shell, so the command is always named; a provider lich registers its MCP
 // server with is offered the tool first, because a session that withholds shell
 // access would otherwise have no way to answer at all.
+//
+// The exclusivity is load-bearing, not emphasis. A Claude Code session has a
+// peer channel of its own and this message names another session, so answering
+// through that channel is the obvious move — and it reaches a sender that is
+// blocked on a ticket instead. That happened on the first real run: the target
+// replied over its own socket and the errand timed out with the answer already
+// written. The ticket is the only route home, and the message has to say so.
 func replyInstruction(kind, ticketID string) string {
-	command := fmt.Sprintf(
-		"  \"$LICH_BIN\" reply %s \"<your answer>\"\nWhoever asked is blocked waiting on it.",
-		ticketID,
-	)
-	if !providers.AcceptsMCPServer(kind) {
-		return "When you have an answer, send it back by running:\n" + command
+	command := fmt.Sprintf("  \"$LICH_BIN\" reply %s \"<your answer>\"", ticketID)
+	route := "When you have an answer, send it back by running:\n" + command
+	if providers.AcceptsMCPServer(kind) {
+		route = fmt.Sprintf(
+			"When you have an answer, send it back with the lich tool `%s` (ticket %s), or by running:\n%s",
+			ToolReply, ticketID, command,
+		)
 	}
-	return fmt.Sprintf(
-		"When you have an answer, send it back with the lich tool `%s` (ticket %s), or by running:\n%s",
-		ToolReply, ticketID, command,
-	)
+	return route + "\n\nThat ticket is the only way back: whoever asked is blocked on it and " +
+		"is reading nothing else. Do not answer by messaging a peer session — an answer " +
+		"sent any other way is lost."
 }
 
 // origin describes the sender in the message's first line. An empty sender is
@@ -416,13 +753,33 @@ func origin(sender string) string {
 	return fmt.Sprintf("Message from session %q", sender)
 }
 
-// paste wraps text in bracketed paste and submits it, which is how a multi-line
-// message reaches a TUI prompt as one prompt instead of as one submission per
-// newline. Every provider lich spawns runs a TUI that enables bracketed paste;
-// one that did not would read the newlines as submissions.
+// paste wraps text in bracketed paste, which is how a multi-line message
+// reaches a TUI prompt as one prompt instead of as one submission per newline.
+// Every provider lich spawns runs a TUI that enables bracketed paste; one that
+// did not would read the newlines as submissions.
+//
+// It does not submit. See submitDelay.
 func paste(text string) string {
-	return "\x1b[200~" + text + "\x1b[201~\r"
+	return "\x1b[200~" + text + "\x1b[201~"
 }
+
+// submit is the Enter that sends what paste put at the prompt.
+const submit = "\r"
+
+// defaultSubmitDelay is how long the relay waits between the paste and the
+// Enter that sends it.
+//
+// Everything else lich pastes into a prompt is left for the user to send, so
+// this is the only place that presses Enter itself — and a carriage return
+// riding in the same write as the paste is swallowed. Claude Code collapses a
+// multi-line paste into a "[Pasted text #2 +7 lines]" placeholder, and the
+// Enter arriving inside that same burst goes into building the placeholder
+// rather than sending it: the message sat unsent at the target's prompt, seen
+// only when someone opened that session by hand. Nothing here can read the
+// target's screen to know when it has settled, so the delay is the instrument,
+// and it is generous on purpose — a tenth of a second nobody notices against a
+// message that otherwise never arrives.
+const defaultSubmitDelay = 150 * time.Millisecond
 
 // sanitize strips the control characters that would either break out of the
 // bracketed paste framing or drive the target's terminal, keeping the
