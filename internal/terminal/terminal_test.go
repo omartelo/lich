@@ -300,7 +300,7 @@ func TestStartIsNoopWhenAlreadyRunning(t *testing.T) {
 	sess := spawnSession(t)
 	svc.sessions["s1"] = sess
 
-	if err := svc.Start("s1", "p1", "", "", "", false, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", "", "", "", "", false, 80, 24); err != nil {
 		t.Errorf("Start(running) = %v, want nil", err)
 	}
 	if svc.sessions["s1"] != sess {
@@ -339,7 +339,7 @@ func TestStartPassesResumeToTheProcess(t *testing.T) {
 	svc := New(stubBins{bin: bin}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "abc-123", false, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "abc-123", "", false, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 
@@ -360,7 +360,7 @@ func TestStartWithoutResumeSpawnsBare(t *testing.T) {
 	svc := New(stubBins{bin: bin}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", false, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 
@@ -381,7 +381,7 @@ func TestStartWithSetupWrapsTheSpawn(t *testing.T) {
 	svc := New(stubBins{bin: bin, setup: "echo setup-ran"}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", true, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", true, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 
@@ -406,7 +406,7 @@ func TestStartWithSetupButNoScriptSpawnsBare(t *testing.T) {
 	svc := New(stubBins{bin: bin}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", true, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", true, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 
@@ -481,6 +481,52 @@ func TestResumeArgs(t *testing.T) {
 			t.Errorf("%s: resumeArgs(%q, %q) = %v, want %v",
 				tc.name, tc.kind, tc.resume, got, tc.want)
 		}
+	}
+}
+
+// TestNameArgs proves only Claude Code is named — the one provider with a peer
+// roster — and that a name which would be parsed as a flag never reaches argv.
+func TestNameArgs(t *testing.T) {
+	cases := []struct {
+		name, kind, peer string
+		want             []string
+	}{
+		{"claude named", "claude", "lich-4f2a", []string{"--name", "lich-4f2a"}},
+		{"claude unnamed", "claude", "", nil},
+		{"claude blank name", "claude", "   ", nil},
+		{"claude name trimmed", "claude", " lich-4f2a ", []string{"--name", "lich-4f2a"}},
+		{"claude flag-like name", "claude", "--dangerously-skip-permissions", nil},
+		{"codex has no roster", "codex", "lich-4f2a", nil},
+		{"opencode has no roster", "opencode", "lich-4f2a", nil},
+		{"shell has no roster", KindShell, "lich-4f2a", nil},
+	}
+	for _, tc := range cases {
+		got := nameArgs(tc.kind, tc.peer)
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("%s: nameArgs(%q, %q) = %v, want %v",
+				tc.name, tc.kind, tc.peer, got, tc.want)
+		}
+	}
+}
+
+// TestStartPassesNameToTheProcess proves the peer name reaches the spawned
+// binary's argv beside the resume id, in the order claude parses.
+func TestStartPassesNameToTheProcess(t *testing.T) {
+	bin := stayAliveBin(t)
+	svc := New(stubBins{bin: bin}, nil, events.New())
+	t.Cleanup(func() { _ = svc.Close("s1") })
+
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "lich-4f2a", false, 80, 24); err != nil {
+		t.Fatalf("Start = %v, want nil", err)
+	}
+
+	svc.mu.Lock()
+	got := spawnedArgs(t, svc, "s1")
+	svc.mu.Unlock()
+
+	want := []string{bin, "--name", "lich-4f2a"}
+	if !slices.Equal(got, want) {
+		t.Errorf("spawned argv = %v, want %v", got, want)
 	}
 }
 

@@ -125,7 +125,7 @@ func waitFor(t *testing.T, cond func() bool, what string) {
 // is all that goroutine has left to do.
 func respawn(t *testing.T, svc *Service, id string) *session {
 	t.Helper()
-	if err := svc.Start(id, "p1", t.TempDir(), "claude", "", false, 80, 24); err != nil {
+	if err := svc.Start(id, "p1", t.TempDir(), "claude", "", "", false, 80, 24); err != nil {
 		t.Fatalf("first start: %v", err)
 	}
 	svc.mu.Lock()
@@ -138,7 +138,7 @@ func respawn(t *testing.T, svc *Service, id string) *session {
 	if err := svc.Close(id); err != nil {
 		t.Fatalf("close: %v", err)
 	}
-	if err := svc.Start(id, "p1", t.TempDir(), "claude", "", false, 80, 24); err != nil {
+	if err := svc.Start(id, "p1", t.TempDir(), "claude", "", "", false, 80, 24); err != nil {
 		t.Fatalf("second start: %v", err)
 	}
 

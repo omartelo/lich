@@ -16,6 +16,8 @@ import { chordSequence, isSearchOpenChord } from "@/lib/terminal/term-keys"
 import { makeReplayBuffer } from "@/lib/terminal/replay-buffer"
 import { takePaste } from "@/lib/terminal/paste-queue"
 import { takeSetup } from "@/lib/terminal/setup-queue"
+import { peerName } from "@/lib/session/peer-name"
+import { onTerminalFocusRequest } from "@/lib/terminal/focus-request"
 import { recordChunk } from "@/lib/terminal/term-perf"
 import { copyToastMessage, COPY_TOAST_DURATION_MS } from "@/lib/terminal/copy-toast"
 import { computeGrid } from "@/lib/terminal/term-fit"
@@ -573,6 +575,7 @@ export function TerminalView({
           cwd,
           kind,
           resume,
+          peerName(cwd, sessionId),
           takeSetup(sessionId),
           live.term.cols,
           live.term.rows,
@@ -652,6 +655,13 @@ export function TerminalView({
     void Service.Resize(sessionId, live.term.cols, live.term.rows)
     live.term.focus()
   }, [visible, sessionId])
+
+  // The sidebar writes a mention at this session's prompt and then asks for the
+  // cursor back, so the user carries on typing where they already were.
+  useEffect(
+    () => onTerminalFocusRequest(sessionId, () => liveRef.current?.term.focus()),
+    [sessionId],
+  )
 
   // Font family and size need no live-update path: changing them means being
   // on the Settings route, where TerminalHost destroys every live terminal —

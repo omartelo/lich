@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Point one Claude session at another.** Claude Code can message your other
+  sessions, but only if it knows what they are called — and left to itself it
+  names a session after its directory, so every session in one checkout looks
+  alike. lich now names each Claude session it starts, shows that name in the
+  card's tooltip, and adds **Mention session** to the context menu of the card
+  you are working in: pick any Claude session from any open project and its name
+  lands at your prompt, ready for you to finish the sentence. lich carries no
+  message itself — the Claude reading your prompt is the one that addresses the
+  other session.
+
 ### Fixed
 
 - **A dragged card keeps its own shape.** Dragging a session card past a taller

@@ -5,6 +5,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-
 import { dragStyle, useSortableList, verticalAxis } from "@/lib/use-sortable-list"
 import { cn } from "@/lib/utils"
 import { checkoutLabel } from "@/lib/git/checkout-label"
+import type { MentionGroup } from "@/lib/session/mention-targets"
 import { groupKey, type Session } from "@/lib/session/sessions"
 import { useProjects } from "@/providers/projects"
 import { SessionCard } from "./SessionCard"
@@ -36,6 +37,10 @@ interface SessionGroupProps {
   pullsActive: boolean
   onPulls: () => void
   onClosePulls: () => void
+  // Workspace-wide, so it is resolved once by the sidebar rather than per group:
+  // the Claude sessions the active one can be pointed at, across every open
+  // project.
+  mentionGroups: MentionGroup[]
 }
 
 // SessionGroup renders one worktree's sessions under a static divider titled
@@ -61,6 +66,7 @@ export function SessionGroup({
   pullsActive,
   onPulls,
   onClosePulls,
+  mentionGroups,
 }: SessionGroupProps) {
   const { activateSession, renameSession, pinSession, newSession } = useProjects()
   const navigate = useNavigate()
@@ -122,6 +128,7 @@ export function SessionGroup({
                 onPin={(pinned) => pinSession(projectId, session.id, pinned)}
                 onOpenTerminal={(cwd) => newSession(projectId, "shell", cwd)}
                 onPulls={onPulls}
+                mentionGroups={mentionGroups}
               />
             ))}
           </div>
