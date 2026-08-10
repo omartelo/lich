@@ -86,6 +86,37 @@ func TestUncleanExit(t *testing.T) {
 	})
 }
 
+// TestDefaultPortIsPinned spells the number out rather than reading the
+// constant: the page's localStorage (lich.* settings) is keyed by the origin
+// this port forms, so moving it wipes every user's preferences. A test that
+// followed the constant would let that move through green.
+func TestDefaultPortIsPinned(t *testing.T) {
+	if DefaultPort != 47821 {
+		t.Fatalf("DefaultPort = %d, want 47821 — moving it wipes the page's localStorage", DefaultPort)
+	}
+}
+
+func TestPortReadsTheOverride(t *testing.T) {
+	cases := map[string]int{
+		"":           DefaultPort,
+		"0":          DefaultPort,
+		"-1":         DefaultPort,
+		"not-a-port": DefaultPort,
+		"1234":       1234,
+	}
+	for value, want := range cases {
+		got := Port(func(key string) string {
+			if key != "LICH_LISTEN_PORT" {
+				t.Errorf("Port read %q, not the listener variable", key)
+			}
+			return value
+		})
+		if got != want {
+			t.Errorf("Port(LICH_LISTEN_PORT=%q) = %d, want %d", value, got, want)
+		}
+	}
+}
+
 func TestDetect(t *testing.T) {
 	const want = 47821
 	seed := func(t *testing.T, port int, token string) string {

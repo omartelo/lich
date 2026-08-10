@@ -43,11 +43,6 @@ var assets embed.FS
 //go:embed CHANGELOG.md
 var changelog string
 
-// defaultListenPort pins the loopback listener so the page origin — and with
-// it the frontend's localStorage (lich.* settings) — survives restarts.
-// LICH_LISTEN_PORT overrides (not LICH_PORT, the per-session hook variable).
-const defaultListenPort = "47821"
-
 // version is the running build's version, injected at build time via
 // -ldflags "-X main.version=<git tag>" (see Taskfile.yml). Unset in dev builds
 // ("dev"), which the update check treats as "not a release".
@@ -86,8 +81,11 @@ func main() {
 		defer closer.Close()
 	}
 
+	// Pinned in the environment, not just resolved: the restart successor and
+	// every spawned session inherit it, so they all agree on the origin the
+	// page's localStorage is keyed by (singleton.DefaultPort).
 	if os.Getenv("LICH_LISTEN_PORT") == "" {
-		if err := os.Setenv("LICH_LISTEN_PORT", defaultListenPort); err != nil {
+		if err := os.Setenv("LICH_LISTEN_PORT", strconv.Itoa(singleton.DefaultPort)); err != nil {
 			slog.Error("set LICH_LISTEN_PORT", "err", err)
 			os.Exit(1)
 		}

@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 )
 
@@ -30,6 +31,23 @@ type Info struct {
 // pingTimeout bounds the liveness probe: a loopback GET answers in microseconds,
 // so a slow one means the recorded instance is gone and the file is stale.
 const pingTimeout = time.Second
+
+// DefaultPort is the loopback port lich pins when LICH_LISTEN_PORT does not
+// override it. It lives here because binding it is the single-instance lock,
+// and because the page's localStorage (lich.* settings) is keyed by the origin
+// it forms — a moved port is a wiped settings store.
+const DefaultPort = 47821
+
+// Port is the listener port this launch pins: LICH_LISTEN_PORT when it holds a
+// number, DefaultPort otherwise. getenv reads the environment (os.Getenv in
+// production), so a caller diagnosing a launch resolves the same port the
+// launch would.
+func Port(getenv func(string) string) int {
+	if port, err := strconv.Atoi(getenv("LICH_LISTEN_PORT")); err == nil && port > 0 {
+		return port
+	}
+	return DefaultPort
+}
 
 // path resolves runtime.json. LICH_DEV (set by `task dev`) selects a separate
 // file, mirroring the store's database split: the dev shell records itself on

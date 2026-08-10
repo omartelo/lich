@@ -13,6 +13,7 @@ Pick your system:
 - [macOS (experimental)](#macos-experimental)
 - [Windows (experimental)](#windows-experimental)
 - [Verifying checksums](#verifying-checksums)
+- [If it does not start](#if-it-does-not-start)
 
 **Runtime dependencies** — lich opens its window in a Chromium-family browser;
 none is bundled. On Linux any of `chromium`, `google-chrome`, `helium-browser` or `brave`
@@ -137,3 +138,28 @@ sha256sum -c --ignore-missing checksums.txt
 
 `install.sh` (the [one-liner in the README](README.md#install)) does this
 verification automatically before installing.
+
+## If it does not start
+
+No window is the one failure lich cannot report through its own settings, so it
+reports it from the terminal instead:
+
+```bash
+lich doctor
+```
+
+It walks the same boot a launch walks — the config directory, the log file, the
+pinned loopback port, the workspace database, the browser, the provider CLIs on
+PATH — and says which step would stop it, exiting non-zero when one does. A port
+already held by the lich you have open is not a failure; a port held by
+something else is, and so is a missing Chromium-family browser.
+
+When you file the issue, attach the bundle:
+
+```bash
+lich rage
+```
+
+That collects the same facts plus your logs into one `lich-rage-*.tar.gz`, with
+values named like a token, key or password reported only as present or absent.
+Nothing is uploaded — read it, then attach it.

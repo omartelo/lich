@@ -98,7 +98,8 @@ version is in [CHANGELOG.md](CHANGELOG.md).
   git the moment it writes a file.
   Settings › Help opens the log folder and a pre-filled bug report; `lich rage`
   packs the whole report — versions, browser, providers, plugin state, logs,
-  secrets masked — into one archive, and works when no window opened at all.
+  secrets masked — into one archive, and `lich doctor` says whether lich would
+  start on this machine at all. Both work when no window opened.
 
 <div align="center">
   <img src="docs/media/pulls-list.png" alt="The pull request list: every open pull request with its author, age and check status, narrowed by a filter box" width="900" />

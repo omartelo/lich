@@ -37,6 +37,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/omartelo/lich/internal/doctor"
 	"github.com/omartelo/lich/internal/rage"
 	"github.com/omartelo/lich/internal/relay"
 	"github.com/omartelo/lich/internal/singleton"
@@ -82,6 +83,11 @@ const usage = `lich talks to the sessions open in the running lich window.
       the logs, with secrets masked — into one .tar.gz to attach to an issue.
       Nothing is uploaded, and it works with no lich running.
 
+  lich doctor
+      Walk the boot lich walks — config dir, log, the pinned port, the
+      workspace database, the browser, the providers — and say whether it
+      would start here. Exits non-zero when something would stop it.
+
 Run inside a lich session these address the sessions beside it. Run anywhere
 else on the machine they find the running lich on their own, and what they
 relay is attributed to the command line rather than to a session.
@@ -117,6 +123,11 @@ func dispatch(args []string, c *client) int {
 		return c.run(c.serveMCP, args[1:])
 	case "rage":
 		return c.run(c.rage, args[1:])
+	case "doctor":
+		// Not through run: this command's failure is the report it just
+		// printed, and a second "lich: …" line on stderr would only say it
+		// again, worse.
+		return c.doctor(args[1:])
 	case "help", "--help", "-h":
 		fmt.Fprint(c.stdout, usage)
 		return 0
@@ -141,6 +152,10 @@ type client struct {
 	// test overrides it because collecting scans PATH, runs the provider CLIs
 	// and asks GitHub for the plugin's latest release.
 	bundle func(w io.Writer, root string) (rage.Report, error)
+	// diagnose walks the boot; nil takes the real one. A test overrides it for
+	// the same reason bundle exists — the real walk binds the pinned port and
+	// opens the workspace database.
+	diagnose func() ([]doctor.Check, error)
 }
 
 // run reports a subcommand's failure the way a command line does — one line on
@@ -278,6 +293,44 @@ func (c *client) rage(args []string) error {
 	fmt.Fprintf(c.stdout, "lich %s on %s, %s.\n", report.Version, report.Platform, report.Instance)
 	fmt.Fprintln(c.stdout, "Read it before you attach it: it carries absolute paths, project and branch names.")
 	return nil
+}
+
+// doctor prints the boot report and returns the process exit code directly: a
+// launch-stopping check is a non-zero exit, which is what a script reads.
+func (c *client) doctor(args []string) int {
+	flags := newFlagSet("doctor")
+	if err := flags.Parse(args); err != nil {
+		fmt.Fprintf(c.stderr, "lich: %v\n", err)
+		return 1
+	}
+	if flags.NArg() != 0 {
+		fmt.Fprintln(c.stderr, "lich: usage: lich doctor")
+		return 1
+	}
+
+	run := c.diagnose
+	if run == nil {
+		run = c.runDoctor
+	}
+	checks, err := run()
+	if err != nil {
+		fmt.Fprintf(c.stderr, "lich: %v\n", err)
+		return 1
+	}
+	doctor.Render(c.stdout, c.version, checks)
+	if doctor.Failed(checks) {
+		return 1
+	}
+	return 0
+}
+
+// runDoctor is the real boot walk, reached when no seam replaced it.
+func (c *client) runDoctor() ([]doctor.Check, error) {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return nil, fmt.Errorf("resolve config directory: %w", err)
+	}
+	return doctor.New(dir, c.env).Run(), nil
 }
 
 // collectRage is the real collector, reached when no seam replaced it.

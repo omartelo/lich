@@ -16,6 +16,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now opens with a notice that the previous run ended unexpectedly, and a button
   onto the log folder where that run's log sits. Closing the window as usual
   says nothing, and neither does the relaunch an in-place update performs.
+- **`lich doctor` says whether lich would start here, and what stops it.** A
+  window that never opens is the one failure lich could not report, because
+  everything it uses to report one is behind that window. The command walks the
+  same boot a launch walks — the config directory, the log file, the pinned
+  loopback port, the workspace database, the browser, the provider CLIs on PATH
+  — and prints a verdict and a timing for each step, ending with whether a
+  launch would get through. A port held by the lich you already have open reads
+  as the single-instance lock working, not as a failure; a port held by anything
+  else, a missing Chromium-family browser or a database that will not open are
+  the three that stop a launch, and the command exits non-zero so a script can
+  read the same answer. It needs no window, no running instance and no network,
+  and it never opens the database behind an instance that is running.
 - **`lich rage` packs a bug report you can actually attach.** Reporting a
   problem meant being walked through it: find the log folder, notice that the
   rotated generation beside it is usually the one holding the crash, say which
