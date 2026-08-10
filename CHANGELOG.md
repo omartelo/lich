@@ -68,6 +68,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The session list's scrollbar no longer sits on the cards.** With enough
+  sessions to scroll, the scrollbar came down flush against the right edge of
+  every card, reading as part of them. It now keeps a gap, and the cards stay
+  the width they were when the list is short enough not to scroll.
+
 - **A dragged card keeps its own shape.** Dragging a session card past a taller
   neighbour — a worktree card with a long title, say — stretched it to that
   neighbour's size, smearing its text until the drop. Cards, session groups and
