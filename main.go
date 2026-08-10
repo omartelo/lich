@@ -59,7 +59,7 @@ func main() {
 	// it must not open the database, take the log file or race the singleton
 	// bind of the lich it is talking to. Anything that is not a subcommand —
 	// including `lich -- <chromium flags>` — falls through and opens the app.
-	if code := cli.Run(os.Args[1:], os.Getenv, os.Stdout, os.Stderr); code != cli.NotACommand {
+	if code := cli.Run(os.Args[1:], version, os.Getenv, os.Stdout, os.Stderr); code != cli.NotACommand {
 		os.Exit(code)
 	}
 

@@ -96,7 +96,9 @@ version is in [CHANGELOG.md](CHANGELOG.md).
   [lich plugin](https://github.com/omartelo/lich-plugin) installed — in Claude
   Code, in Codex, or in both — a session also titles its own card and refreshes
   git the moment it writes a file.
-  Settings › Help opens the log folder and a pre-filled bug report.
+  Settings › Help opens the log folder and a pre-filled bug report; `lich rage`
+  packs the whole report — versions, browser, providers, plugin state, logs,
+  secrets masked — into one archive, and works when no window opened at all.
 
 <div align="center">
   <img src="docs/media/pulls-list.png" alt="The pull request list: every open pull request with its author, age and check status, narrowed by a filter box" width="900" />
@@ -169,7 +171,8 @@ backend is a token-authenticated loopback listener, and nothing leaves
 `localhost` except the update check: a version ping to GitHub Releases at startup
 and hourly. Updates apply in place on Windows/macOS and through the AUR on Arch.
 Settings › Help says what the log file carries — paths, project and branch names,
-your gh login, never a session token — before you attach it to a bug report.
+your gh login, never a session token — before you attach it to a bug report, and
+`lich rage` collects that report into one archive without uploading any of it.
 
 ## Build from source
 

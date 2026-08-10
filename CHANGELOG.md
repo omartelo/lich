@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`lich rage` packs a bug report you can actually attach.** Reporting a
+  problem meant being walked through it: find the log folder, notice that the
+  rotated generation beside it is usually the one holding the crash, say which
+  browser and which provider CLIs the machine has, remember the version. One
+  command now collects all of it — versions and build, platform, whether an
+  instance is running and answering, the browser it found, the providers on
+  PATH, the plugin's state in each of them, the config directory, the
+  environment lich was launched with and both log generations — into a single
+  `.tar.gz` beside you. Values named like a token, key, secret or password are
+  reported as present or absent rather than printed, and lich's own loopback
+  token is masked wherever it had been written. Nothing is uploaded and no issue
+  is filed: the archive stays on disk until you attach it to one you wrote. It
+  reads the file system only, so it still works when the window never opened —
+  the case where there was no Settings › Help to ask through.
+
 - **Closing a project asks when an agent is still working.** The tab's × took a
   project's terminals down with it, killing whatever was mid-turn — with a
   spinner on that very tab as the only warning, and no undo. Closing a project
