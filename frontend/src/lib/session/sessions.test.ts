@@ -3,6 +3,7 @@ import {
   activeSessionId,
   activeTarget,
   addSession,
+  adoptSession,
   closeSession,
   groupByWorktree,
   isLastWorktreeSession,
@@ -588,5 +589,39 @@ describe("orderGroups", () => {
   // drops the whole stale order instead of taking its sessions with it.
   it("contributes nothing for a key naming no group", () => {
     expect(orderGroups(groups, ["/wt/gone"])).toEqual([])
+  })
+})
+
+describe("adoptSession", () => {
+  const opened: Session = { id: "agent-1", label: "auth-fix", kind: "claude", path: "/wt/auth-fix" }
+
+  it("appends a session the backend already created", () => {
+    const state = adoptSession(buildState(2), P, opened, 4)
+    expect(sessionsOf(state, P).map((s) => s.id)).toEqual(["s1", "s2", "agent-1"])
+    expect(state[P].nextSeq).toBe(4)
+  })
+
+  it("leaves focus where the user left it", () => {
+    const before = buildState(2)
+    const state = adoptSession(before, P, opened, 4)
+    expect(activeSessionId(state, P)).toBe(activeSessionId(before, P))
+  })
+
+  it("ignores a session that is already there", () => {
+    const once = adoptSession(buildState(2), P, opened, 4)
+    expect(adoptSession(once, P, opened, 4)).toBe(once)
+  })
+
+  it("ignores a project the window does not hold", () => {
+    const before = buildState(2)
+    expect(adoptSession(before, "other", opened, 4)).toBe(before)
+  })
+
+  // The row was written with the backend's counter; a page that had already
+  // moved past it must not walk the number back and mint a duplicate label.
+  it("never lowers the label counter", () => {
+    const before = buildState(5)
+    const state = adoptSession(before, P, opened, 2)
+    expect(state[P].nextSeq).toBe(before[P].nextSeq)
   })
 })

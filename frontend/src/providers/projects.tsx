@@ -10,6 +10,7 @@ import { onAppEvent } from "@/lib/app-events"
 import {
   activeSessionId,
   addSession,
+  adoptSession,
   closeSession as removeSession,
   isSessionKind,
   neighborSessionId,
@@ -29,6 +30,7 @@ import { applyOrder, pinFirst } from "@/lib/reorder"
 import { displayPath } from "@/lib/paths"
 import { defaultProviderKind } from "@/lib/providers-store"
 import {
+  OPENED_EVENT,
   RELAY_STALLED_EVENT,
   STATUS_EVENT,
   TITLE_EVENT,
@@ -39,6 +41,7 @@ import {
   isStatusEvent,
   isTitleEvent,
   shouldToastAttention,
+  toOpenedSession,
   toSessionStatus,
   type SessionStatus,
 } from "@/lib/session/session-events"
@@ -223,6 +226,25 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         return
       }
       const next = relabelSession(sessionsRef.current, projectId, id, label)
+      if (next !== sessionsRef.current) {
+        setSessions(next)
+      }
+    })
+    return () => off()
+  }, [])
+
+  // A session an agent opened through the CLI or its MCP tools: the backend
+  // wrote the row and started the PTY, so nothing is persisted or spawned here
+  // — only the card is added, unfocused, to the project it belongs to.
+  useEffect(() => {
+    const off = onAppEvent(OPENED_EVENT, (data) => {
+      const opened = toOpenedSession(data)
+      if (!opened) {
+        return
+      }
+      const { id, projectId, label, kind, path, nextSeq } = opened
+      const session: Session = { id, label, kind, ...(path ? { path } : {}) }
+      const next = adoptSession(sessionsRef.current, projectId, session, nextSeq)
       if (next !== sessionsRef.current) {
         setSessions(next)
       }

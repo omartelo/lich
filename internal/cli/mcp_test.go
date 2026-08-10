@@ -142,6 +142,7 @@ func TestMCPListsEveryTool(t *testing.T) {
 
 	want := map[string][]string{
 		"list_sessions":    {},
+		"open_session":     {},
 		"send_to_session":  {"session", "prompt"},
 		"wait_for_answer":  {"ticket"},
 		"reply_to_session": {"ticket", "answer"},
@@ -354,5 +355,57 @@ func TestMCPStopsCleanlyAtEndOfInput(t *testing.T) {
 	}
 	if stdout.Len() != 0 {
 		t.Errorf("an empty conversation produced output: %q", stdout.String())
+	}
+}
+
+func TestMCPOpenSessionReturnsTheNamesItIsAddressedBy(t *testing.T) {
+	f := newFakeLich(t, `{"id":"9f8e","projectId":"p1","project":"lich","label":"auth-fix",
+		"name":"auth-fix-9f8e","kind":"claude","path":"/wt/auth-fix","nextSeq":5}`)
+
+	replies := speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
+		{"name":"open_session","arguments":{"worktree":"auth-fix","base":"main","kind":"codex"}}}`)
+
+	text, failed := textOf(t, replies[0])
+	if failed {
+		t.Fatalf("tool reported a failure: %s", text)
+	}
+	call := f.only(t)
+	if call.method != "spawn.Open" {
+		t.Errorf("method = %q", call.method)
+	}
+	want := []any{"s1", "", "codex", "auth-fix", "main"}
+	if len(call.args) != len(want) {
+		t.Fatalf("args = %v, want %v", call.args, want)
+	}
+	for i := range want {
+		if call.args[i] != want[i] {
+			t.Errorf("argument %d = %v, want %v", i, call.args[i], want[i])
+		}
+	}
+	// send_to_session is the next call the agent makes, and it addresses the
+	// session by one of these two names.
+	for _, phrase := range []string{`"auth-fix"`, `"auth-fix-9f8e"`} {
+		if !strings.Contains(text, phrase) {
+			t.Errorf("result is missing %q:\n%s", phrase, text)
+		}
+	}
+}
+
+func TestMCPOpenSessionDefaultsEveryArgument(t *testing.T) {
+	f := newFakeLich(t, `{"id":"9f8e","projectId":"p1","project":"lich","label":"Session 4",
+		"name":"lich-9f8e","kind":"claude","path":"","nextSeq":5}`)
+
+	replies := speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
+		{"name":"open_session","arguments":{}}}`)
+
+	if text, failed := textOf(t, replies[0]); failed {
+		t.Fatalf("tool reported a failure: %s", text)
+	}
+	call := f.only(t)
+	want := []any{"s1", "", "", "", ""}
+	for i := range want {
+		if call.args[i] != want[i] {
+			t.Errorf("argument %d = %v, want %v", i, call.args[i], want[i])
+		}
 	}
 }

@@ -3,7 +3,7 @@
 An agent running in a lich session has a shell and nothing else — no window, no
 RPC client, no knowledge of this app. The `lich` command is the surface it uses
 to reach the sessions beside it: list them, hand one a task, answer one that
-handed it a task.
+handed it a task, open a new one.
 
 It is not only for agents. The same commands run from any shell on the machine —
 a script, a scheduled job, the user's own terminal — which is what makes lich
@@ -51,6 +51,7 @@ window uses:
 
 ```
 POST http://127.0.0.1:${LICH_PORT}/rpc/relay.<Method>?token=${LICH_TOKEN}
+POST http://127.0.0.1:${LICH_PORT}/rpc/spawn.<Method>?token=${LICH_TOKEN}
 ```
 
 **Outside a session** those are absent, and the command finds the running lich
@@ -79,10 +80,10 @@ Every command prints its result on stdout and its failure as one `lich: …` lin
 on stderr, exiting 0 or 1. Anything that is not a subcommand below — including
 `lich -- <chromium flags>` — opens the app instead.
 
-`--json` on `sessions`, `send` and `wait` replaces the prose with one JSON line:
-the peer array and the result object exactly as this document describes them.
-An empty roster is `[]`, never `null` — a script should not have to tell those
-apart.
+`--json` on `sessions`, `send`, `wait` and `open` replaces the prose with one
+JSON line: the peer array, the result object and the session object exactly as
+this document describes them. An empty roster is `[]`, never `null` — a script
+should not have to tell those apart.
 
 ### `lich sessions [--json]`
 
@@ -150,6 +151,46 @@ This is what a relayed message asks the receiving agent to run. An answer is
 capped at 64 KiB. Replying twice to one ticket is an error — the first answer
 already went home.
 
+### `lich open [--project <name>] [--kind <provider>] [--worktree <branch>] [--base <branch>]`
+
+Opens a new session, starts it, and prints the two names it is addressed by:
+
+```
+Opened session "auth-fix" (claude) in project "lich", in worktree /home/you/.local/share/lich/worktrees/1a2b/auth-fix.
+It answers to "auth-fix" and to "auth-fix-9f8e". It is still starting up — give it a moment before you send it work.
+```
+
+- `--project` names the project it lands in; the default is the caller's own.
+  **Outside a session there is no default** and the project must be named — the
+  error lists what is open.
+- `--kind` is what the session runs: any provider id (`claude`, `codex`,
+  `opencode`, `omp`, `crush`) or `shell`. The default is the caller's own
+  provider, so an agent opening a worker gets another of itself; a caller that
+  is not a session at all gets Claude Code.
+- `--worktree` is the **branch name** of a new git worktree, created off
+  `--base` (the project's current branch by default) under the app data dir. The
+  session is rooted there and labelled after it, and the project's worktree
+  setup script (Settings › Project) runs in its terminal before the provider,
+  exactly as when the window creates one. Without it the session opens in the
+  project's own directory, beside the caller's.
+- `--base` is checked against the repository's branches — local, remote
+  (`origin/…`, fetched and tracked), or one another worktree already holds. A
+  base that is not a branch is refused rather than resolved: git would happily
+  branch off a typo that names a revision, leaving a checkout nobody asked for.
+- A session without a worktree is labelled from the project's own counter
+  (`Session 4`), continuing the numbering the window uses.
+
+The card appears in the sidebar **without taking focus** — nobody in front of
+the window asked for this session — and its PTY is started by lich itself rather
+than by the first person to look at the card. That is what makes it addressable:
+`lich sessions` lists only sessions with a process in them, so a session nobody
+opened would be one nobody could send to.
+
+Failure is one line on stderr and exit 1. A worktree that could not be created
+leaves nothing behind — no row, no card. A session whose *terminal* failed to
+start keeps both, and says so, because the card is the only place its error can
+be read.
+
 ### `lich mcp`
 
 Serves the commands above as MCP tools over stdio: one JSON-RPC 2.0 message per
@@ -166,6 +207,7 @@ at lich.
 | `send_to_session` | `session`, `prompt`, optional `project` and `timeout_seconds`. |
 | `wait_for_answer` | `ticket`, optional `timeout_seconds`. |
 | `reply_to_session` | `ticket`, `answer` — what a relayed message asks for. |
+| `open_session` | optional `project`, `kind`, `worktree`, `base` — `lich open`. |
 
 A tool that fails answers with `isError` and the reason as text, not a JSON-RPC
 error: the agent should read what went wrong and act on it, not lose the turn.
@@ -260,6 +302,18 @@ receiving agent only because this text describes it.
 
 ## lich server side
 
+- **Spawn** — `internal/spawn`: opens a session for a caller that is not the
+  window. It is the one place that does all four things a session is at once —
+  the worktree (`internal/project`), the row (`internal/store`), the PTY
+  (`internal/terminal`) and the card (the `session-opened` event) — because no
+  existing package owns more than one of them. The window does the same four in
+  `frontend/src/providers/projects.tsx`, in its own order.
+- **The card** — `session-opened` carries the whole session
+  (`{id, projectId, project, label, name, kind, path, nextSeq}`) rather than an
+  id to look up: the row is already written and the PTY is already running, so
+  the window has nothing to fetch and nothing to spawn. `adoptSession`
+  (`frontend/src/lib/session/sessions.ts`) appends it **without focusing it** —
+  an agent opening three workers must not drag the view along three times.
 - **Relay** — `internal/relay`: resolves a label to a live session, composes the
   message above, types it through the terminal service, and holds the ticket the
   answer comes back on. Tickets live in memory: one exists for as long as its
@@ -342,7 +396,7 @@ whoever asked.
   every tool it has. This does not widen lich's trust boundary (`LICH_TOKEN` is
   already in every PTY, and any process in one can already write to any
   session), but it is the first feature that uses it, and there is no switch.
-- **The tools cost context in every session, used or not.** Four tool
+- **The tools cost context in every session, used or not.** Five tool
   definitions are in the prompt of every Claude Code and Codex session lich
   spawns, whether or not that session ever talks to another one. The command
   line costs nothing until it is called; the tools are what buy discovery, and
@@ -355,8 +409,25 @@ whoever asked.
   their ticket and the ticket lives in memory, so a finished request leaves no
   trace and a reload starts blank — the same ceiling the status readout has.
 - **Only live sessions are addressable.** A parked or never-opened card is
-  invisible to `sessions` and unreachable by `send`. Spawning one on demand
-  would mean lifting spawn state out of the frontend, which owns it.
+  invisible to `sessions` and unreachable by `send` — the window spawns a
+  session's terminal on its first view and nothing here changes that. `open` is
+  the exception, and only for the session it creates: it starts that PTY itself,
+  which is why the card it leaves behind is one you can send to unseen.
+- **A session is addressable before its agent can read.** `open` returns when
+  the PTY exists, not when the provider inside it has finished starting — there
+  is no signal for the latter that every provider gives. A message sent in that
+  window is written into a TUI that may not be reading yet, and lich cannot tell
+  that apart from a delivered one (delivery is proven, receipt is not). Hence
+  the line the command prints; opening and sending are two steps on purpose.
+- **`open` starts the PTY at 80×24.** Nothing is watching it, so there is no
+  terminal to measure. The window resizes it the first time the card is viewed,
+  and a TUI that drew itself into the smaller grid redraws — but output produced
+  before that view was wrapped for 80 columns, and the replayed scrollback keeps
+  those wraps.
+- **An opened session takes the project's active slot.** The row is written the
+  way the window writes one, so the project's `active_session_id` moves to it —
+  the card is not focused now, but a reload lands on it. Two of them and the
+  last one wins.
 - **Delivery is proven, receipt is not.** `send` knows the bytes reached the
   PTY. Whether the target's TUI queued them, and whether its agent ever runs the
   reply command, is what the wait and the ticket are for. A provider that does

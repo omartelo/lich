@@ -32,6 +32,7 @@ import (
 
 	"github.com/omartelo/lich/internal/relay"
 	"github.com/omartelo/lich/internal/singleton"
+	"github.com/omartelo/lich/internal/spawn"
 )
 
 // NotACommand is returned when the arguments name no lich subcommand at all,
@@ -46,6 +47,13 @@ const callSlack = 30 * time.Second
 
 // shortCall bounds the commands that do not wait on another session.
 const shortCall = 10 * time.Second
+
+// openCall bounds opening a session. It is not a wait on anyone — it is git:
+// a worktree off a remote branch fetches first, and a cold fetch of a large
+// repository is not a ten-second operation. It stays under the 90 seconds an
+// MCP tool call may block for (see mcpMaxWait), so the same budget serves both
+// surfaces.
+const openCall = 60 * time.Second
 
 const usage = `lich talks to the sessions open in the running lich window.
 
@@ -63,6 +71,12 @@ const usage = `lich talks to the sessions open in the running lich window.
   lich reply <ticket> <answer>
       Send <answer> back to whoever is waiting on <ticket>. This is what a
       relayed message asks you to run when you are done.
+
+  lich open [--project <name>] [--kind <provider>] [--worktree <branch>]
+            [--base <branch>] [--json]
+      Open a new session and start it. --worktree creates a git worktree of
+      that branch name first and roots the session in it. Prints the name the
+      new session is addressed by.
 
   lich mcp
       Serve the commands above as MCP tools over stdio. lich registers this
@@ -98,6 +112,8 @@ func dispatch(args []string, c *client) int {
 		return c.run(c.wait, args[1:])
 	case "reply":
 		return c.run(c.reply, args[1:])
+	case "open":
+		return c.run(c.open, args[1:])
 	case "mcp":
 		return c.run(c.serveMCP, args[1:])
 	case "help", "--help", "-h":
@@ -211,6 +227,46 @@ func (c *client) reply(args []string) error {
 	}
 	fmt.Fprintln(c.stdout, "Answer sent.")
 	return nil
+}
+
+func (c *client) open(args []string) error {
+	flags := newFlagSet("open")
+	project := flags.String("project", "", "project to open the session in; defaults to the caller's own")
+	kind := flags.String("kind", "", "what the session runs; defaults to the caller's own provider")
+	worktree := flags.String("worktree", "", "branch name of a new git worktree to root the session in")
+	base := flags.String("base", "", "branch the worktree starts from; defaults to the project's current branch")
+	asJSON := flags.Bool("json", false, "print the result as JSON")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+
+	var opened spawn.Session
+	call := []any{c.sessionID(), *project, *kind, *worktree, *base}
+	if err := c.call("spawn.Open", call, openCall, &opened); err != nil {
+		return err
+	}
+	if *asJSON {
+		return c.emit(opened)
+	}
+	fmt.Fprint(c.stdout, openedText(opened))
+	return nil
+}
+
+// openedText words a new session for whoever asked for one. It names both of
+// its names, because the caller's next move is to address it and either one
+// reaches it, and it says the session is still starting: the PTY exists the
+// moment this prints, and the provider inside it does not.
+func openedText(opened spawn.Session) string {
+	where := fmt.Sprintf("project %q", opened.Project)
+	if opened.Path != "" {
+		where = fmt.Sprintf("%s, in worktree %s", where, opened.Path)
+	}
+	return fmt.Sprintf(
+		"Opened session %q (%s) in %s.\n"+
+			"It answers to %q and to %q. It is still starting up — give it a moment "+
+			"before you send it work.\n",
+		opened.Label, opened.Kind, where, opened.Label, opened.Name,
+	)
 }
 
 // report prints a Send or Wait outcome. An answer goes to stdout on its own so

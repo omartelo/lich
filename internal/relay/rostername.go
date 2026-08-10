@@ -22,11 +22,15 @@ import (
 // roster row.
 const rosterIDChars = 4
 
-// rosterNameOf builds the name a session answers to in the peer roster: the
-// last element of its working directory, then four characters of its id. cwd is
-// the session's own directory when it has one (a worktree) and its project's
+// RosterName builds the name a session answers to in the peer roster: the last
+// element of its working directory, then four characters of its id. cwd is the
+// session's own directory when it has one (a worktree) and its project's
 // otherwise, matching what the frontend passes at spawn.
-func rosterNameOf(cwd, id string) string {
+//
+// Exported for the one caller outside this package that mints a session rather
+// than resolving one: internal/spawn, which passes the name at spawn the way
+// the window does.
+func RosterName(cwd, id string) string {
 	dir := filepath.Base(strings.TrimRight(strings.ReplaceAll(cwd, "\\", "/"), "/"))
 	// filepath.Base answers "." for an empty path and "/" for a bare root;
 	// neither names anything, and Claude Code's own fallback is the app name.

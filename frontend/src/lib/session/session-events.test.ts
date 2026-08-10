@@ -9,6 +9,7 @@ import {
   isTitleEvent,
   isUsageEvent,
   shouldToastAttention,
+  toOpenedSession,
   toSessionStatus,
 } from "./session-events"
 import { addSession, setActiveSession, type SessionState } from "./sessions"
@@ -256,5 +257,49 @@ describe("decideStatusNotice", () => {
   // a second thing to answer, so a repeat "waiting" is not collapsed.
   it("notifies again for a repeated waiting report", () => {
     expect(decideStatusNotice("waiting", "waiting", false, BOTH_ON)).toBe("notify")
+  })
+})
+
+describe("toOpenedSession", () => {
+  const payload = {
+    id: "agent-1",
+    projectId: "p1",
+    project: "lich",
+    label: "auth-fix",
+    name: "auth-fix-agen",
+    kind: "claude",
+    path: "/wt/auth-fix",
+    nextSeq: 5,
+  }
+
+  it("narrows a session opened outside the window", () => {
+    expect(toOpenedSession(payload)).toEqual({
+      id: "agent-1",
+      projectId: "p1",
+      label: "auth-fix",
+      kind: "claude",
+      path: "/wt/auth-fix",
+      nextSeq: 5,
+    })
+  })
+
+  it("keeps a session in the project's own directory", () => {
+    const opened = toOpenedSession({ ...payload, path: "", label: "Session 4" })
+    expect(opened?.path).toBe("")
+    expect(opened?.label).toBe("Session 4")
+  })
+
+  it("rejects a payload with nothing to place the card by", () => {
+    expect(toOpenedSession({ ...payload, id: undefined })).toBeNull()
+    expect(toOpenedSession({ ...payload, projectId: "" })).toBeNull()
+    expect(toOpenedSession({ ...payload, label: 4 })).toBeNull()
+    expect(toOpenedSession(null)).toBeNull()
+  })
+
+  // A provider a newer backend knows and this build cannot spawn: the row is
+  // written either way and the next load reads it, so dropping the card costs
+  // less than adopting one whose terminal can never start.
+  it("rejects a kind this build does not know", () => {
+    expect(toOpenedSession({ ...payload, kind: "gemini" })).toBeNull()
   })
 })

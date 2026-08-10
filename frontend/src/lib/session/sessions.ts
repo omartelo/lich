@@ -87,6 +87,36 @@ export function addSession(
   }
 }
 
+// adoptSession takes in a session the backend already created and persisted —
+// one an agent opened through the `lich` CLI or its MCP tools — and appends its
+// card, carrying the project's label counter forward to the value the row was
+// written with.
+//
+// It deliberately does not focus what it adds, which is the whole difference
+// from addSession: nobody in front of the window asked for this session, and a
+// meta-agent opening three of them would otherwise drag the view along three
+// times while the user is working. An unknown project is ignored — its cards are
+// not on screen to add to, and the next load reads the row anyway.
+export function adoptSession(
+  state: SessionState,
+  projectId: string,
+  session: Session,
+  nextSeq: number,
+): SessionState {
+  const current = state[projectId]
+  if (!current || current.sessions.some((s) => s.id === session.id)) {
+    return state
+  }
+  return {
+    ...state,
+    [projectId]: {
+      ...current,
+      sessions: [...current.sessions, session],
+      nextSeq: Math.max(current.nextSeq, nextSeq),
+    },
+  }
+}
+
 // closeSession removes a session. When the active one is closed, focus moves to
 // a neighbor. The project entry is kept even when empty so nextSeq survives: a
 // project emptied and then reopened keeps counting labels up.

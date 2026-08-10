@@ -14,6 +14,7 @@ import (
 
 	"github.com/omartelo/lich/internal/relay"
 	"github.com/omartelo/lich/internal/singleton"
+	"github.com/omartelo/lich/internal/spawn"
 )
 
 // recorded is one RPC the fake lich received.
@@ -109,7 +110,7 @@ func TestHelpPrintsEveryCommand(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit = %d", code)
 	}
-	for _, want := range []string{"lich sessions", "lich send", "lich wait", "lich reply"} {
+	for _, want := range []string{"lich sessions", "lich send", "lich wait", "lich reply", "lich open"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("help does not document %q", want)
 		}
@@ -450,5 +451,91 @@ func TestEmptyPeersAreAnEmptyJSONArray(t *testing.T) {
 	}
 	if strings.TrimSpace(stdout) != "[]" {
 		t.Errorf("stdout = %q, want [] — a script should not have to handle null", stdout)
+	}
+}
+
+// openedBody is what spawn.Open answers with: a worktree session, the case that
+// exercises every field the CLI prints.
+const openedBody = `{"id":"9f8e","projectId":"p1","project":"lich","label":"auth-fix",
+	"name":"auth-fix-9f8e","kind":"claude","path":"/wt/auth-fix","nextSeq":5}`
+
+func TestOpenNamesBothWaysToAddressTheNewSession(t *testing.T) {
+	f := newFakeLich(t, openedBody)
+
+	code, stdout, stderr := run(t, f, "open", "--worktree", "auth-fix")
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+
+	call := f.only(t)
+	if call.method != "spawn.Open" {
+		t.Errorf("method = %q", call.method)
+	}
+	want := []any{"s1", "", "", "auth-fix", ""}
+	if len(call.args) != len(want) {
+		t.Fatalf("args = %v, want %v", call.args, want)
+	}
+	for i := range want {
+		if call.args[i] != want[i] {
+			t.Errorf("argument %d = %v, want %v", i, call.args[i], want[i])
+		}
+	}
+	// The label and the roster name both address the session (docs/cli.md), and
+	// the caller's next move is to address it — printing one of them would send
+	// half the callers to `sessions` to find the other.
+	for _, phrase := range []string{`"auth-fix"`, `"auth-fix-9f8e"`, "/wt/auth-fix", "lich"} {
+		if !strings.Contains(stdout, phrase) {
+			t.Errorf("output is missing %q:\n%s", phrase, stdout)
+		}
+	}
+}
+
+func TestOpenPassesEveryFlagThrough(t *testing.T) {
+	f := newFakeLich(t, openedBody)
+
+	code, _, stderr := run(t, f,
+		"open", "--project", "revu", "--kind", "codex", "--worktree", "hotfix", "--base", "origin/main")
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+
+	call := f.only(t)
+	want := []any{"s1", "revu", "codex", "hotfix", "origin/main"}
+	for i := range want {
+		if call.args[i] != want[i] {
+			t.Errorf("argument %d = %v, want %v", i, call.args[i], want[i])
+		}
+	}
+}
+
+func TestOpenJSONIsMachineReadable(t *testing.T) {
+	f := newFakeLich(t, openedBody)
+
+	code, stdout, stderr := run(t, f, "open", "--json")
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+	var opened spawn.Session
+	if err := json.Unmarshal([]byte(stdout), &opened); err != nil {
+		t.Fatalf("open --json is not JSON: %v (%q)", err, stdout)
+	}
+	if opened.Label != "auth-fix" || opened.Name != "auth-fix-9f8e" || opened.Path != "/wt/auth-fix" {
+		t.Errorf("opened = %+v", opened)
+	}
+}
+
+func TestOpenReportsTheAppsRefusal(t *testing.T) {
+	f := newFakeLich(t, `{"error":"no open project named \"nope\""}`)
+	f.status = 400
+
+	code, stdout, stderr := run(t, f, "open", "--project", "nope")
+	if code != 1 {
+		t.Fatalf("exit = %d, want 1", code)
+	}
+	if stdout != "" {
+		t.Errorf("stdout = %q, want nothing printed for a session that was not opened", stdout)
+	}
+	if !strings.Contains(stderr, `no open project named "nope"`) {
+		t.Errorf("stderr = %q", stderr)
 	}
 }

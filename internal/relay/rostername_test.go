@@ -58,8 +58,8 @@ func TestRosterNameOfMatchesTheFrontend(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := rosterNameOf(tt.cwd, tt.id); got != tt.want {
-				t.Errorf("rosterNameOf(%q, %q) = %q, want %q", tt.cwd, tt.id, got, tt.want)
+			if got := RosterName(tt.cwd, tt.id); got != tt.want {
+				t.Errorf("RosterName(%q, %q) = %q, want %q", tt.cwd, tt.id, got, tt.want)
 			}
 		})
 	}
@@ -67,8 +67,8 @@ func TestRosterNameOfMatchesTheFrontend(t *testing.T) {
 
 func TestRosterNameSeparatesSessionsSharingACheckout(t *testing.T) {
 	const cwd = "/home/me/code/lich"
-	first := rosterNameOf(cwd, "4f2a1b3c-0000-4000-8000-000000000000")
-	second := rosterNameOf(cwd, "9d8e7f6a-0000-4000-8000-000000000000")
+	first := RosterName(cwd, "4f2a1b3c-0000-4000-8000-000000000000")
+	second := RosterName(cwd, "9d8e7f6a-0000-4000-8000-000000000000")
 
 	if first == second {
 		t.Fatalf("two sessions in one checkout share the name %q", first)

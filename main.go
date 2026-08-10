@@ -25,6 +25,7 @@ import (
 	"github.com/omartelo/lich/internal/restart"
 	"github.com/omartelo/lich/internal/rpc"
 	"github.com/omartelo/lich/internal/singleton"
+	"github.com/omartelo/lich/internal/spawn"
 	"github.com/omartelo/lich/internal/store"
 	"github.com/omartelo/lich/internal/system"
 	"github.com/omartelo/lich/internal/terminal"
@@ -132,6 +133,9 @@ func main() {
 	rl := relay.New(db, term, hub)
 	term.SetSessionState(rl.Observe)
 	dispatcher.Register("relay", rl)
+	// Its caller is not the window either: opening a session for an agent starts
+	// the PTY here rather than waiting for someone to click the card.
+	dispatcher.Register("spawn", spawn.New(db, proj, term, hub))
 	dispatcher.Register("themes", themes.New())
 	dispatcher.Deny("store.Close")
 	// The dropped file's bytes are the request body, so the upload is its own

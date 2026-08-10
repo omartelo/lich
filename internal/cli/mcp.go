@@ -7,6 +7,7 @@ import (
 	"io"
 
 	"github.com/omartelo/lich/internal/relay"
+	"github.com/omartelo/lich/internal/spawn"
 )
 
 // `lich mcp` is the same surface as the commands beside it, offered as MCP
@@ -323,6 +324,38 @@ var mcpTools = []mcpTool{
 				return "", err
 			}
 			return mcpOutcome(result), nil
+		},
+	},
+	{
+		Name: "open_session",
+		Description: "Open a new lich session and start it, so it can be given work with " +
+			"send_to_session. Optionally creates a git worktree first and roots the new " +
+			"session in it, which is how you give a task its own checkout instead of " +
+			"sharing yours. Returns the names the new session is addressed by. " +
+			"It starts empty and idle — nobody has asked it anything yet — and its agent " +
+			"takes a few seconds to come up, so send it work as a separate step.",
+		Schema: schema(map[string]any{
+			"project": property("string",
+				"Project to open the session in, by name. Defaults to your own project."),
+			"kind": property("string",
+				"What the session runs: claude, codex, opencode, omp, crush, or shell. "+
+					"Defaults to the same agent you are."),
+			"worktree": property("string",
+				"Branch name for a new git worktree to root the session in. Omit to open the "+
+					"session in the project's own directory, beside yours."),
+			"base": property("string",
+				"Branch the new worktree starts from. Defaults to the project's current branch."),
+		}),
+		Run: func(c *client, args mcpArgs) (string, error) {
+			var opened spawn.Session
+			call := []any{
+				c.sessionID(), args.text("project"), args.text("kind"),
+				args.text("worktree"), args.text("base"),
+			}
+			if err := c.call("spawn.Open", call, openCall, &opened); err != nil {
+				return "", err
+			}
+			return openedText(opened), nil
 		},
 	},
 	{

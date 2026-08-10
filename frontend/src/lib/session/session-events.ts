@@ -5,7 +5,7 @@
 // alone. Kept pure (no bindings, no React) so the provider and the card only
 // wire it up.
 
-import { projectOfSession, type SessionState } from "./sessions"
+import { isSessionKind, projectOfSession, type SessionKind, type SessionState } from "./sessions"
 
 // Global event carrying a session's Claude Code processing state (see
 // terminal.statusEventName). Payload: { id, state }. Global rather than
@@ -47,6 +47,12 @@ export const USAGE_EVENT = "session-usage"
 // request runs. An empty direction clears it: the request is over, answered or
 // expired.
 export const RELAY_EVENT = "session-relay"
+
+// Global event the backend emits when a session was opened outside the window —
+// an agent running `lich open` or its MCP tool (see spawn.OpenedEventName).
+// Payload: the whole session, because the card is drawn from it rather than
+// looked up: the row is already written and its PTY is already running.
+export const OPENED_EVENT = "session-opened"
 
 // Global event the backend emits when a request's target ended its turn without
 // answering through lich (see relay.StalledEventName). Payload:
@@ -158,6 +164,49 @@ export function statusTool(data: unknown): SessionTool | null {
     return null
   }
   return { name: tool, detail: typeof detail === "string" ? detail : "" }
+}
+
+// A session opened outside the window, as the workspace needs it: the card to
+// draw and the project's label counter after that card took its number.
+export interface OpenedSession {
+  id: string
+  projectId: string
+  label: string
+  kind: SessionKind
+  path: string
+  nextSeq: number
+}
+
+// toOpenedSession narrows a session-opened payload, or null when it names
+// nothing this window can place: no project id, no label, or a kind this build
+// does not know (a provider added by a newer backend). Dropping it costs the
+// card until the next load, which reads the row that is already written —
+// adopting a session whose kind cannot spawn would cost more.
+export function toOpenedSession(data: unknown): OpenedSession | null {
+  if (!isIdEvent(data)) {
+    return null
+  }
+  const { projectId, label, kind, path, nextSeq } = data as {
+    projectId?: unknown
+    label?: unknown
+    kind?: unknown
+    path?: unknown
+    nextSeq?: unknown
+  }
+  if (typeof projectId !== "string" || projectId === "" || typeof label !== "string") {
+    return null
+  }
+  if (typeof kind !== "string" || !isSessionKind(kind)) {
+    return null
+  }
+  return {
+    id: data.id,
+    projectId,
+    label,
+    kind,
+    path: typeof path === "string" ? path : "",
+    nextSeq: typeof nextSeq === "number" ? nextSeq : 1,
+  }
 }
 
 export function isTitleEvent(data: unknown): data is { id: string; label: string } {

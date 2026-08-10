@@ -310,7 +310,7 @@ func TestARosterNameReachesTheSameSession(t *testing.T) {
 	svc := newRelay(workspace(), term, nil)
 
 	go func() { _ = svc.Reply(waitForTicket(svc), "ok") }()
-	got, err := svc.Send("s1", rosterNameOf("/src/lich", "s2"), "", "hello", 30)
+	got, err := svc.Send("s1", RosterName("/src/lich", "s2"), "", "hello", 30)
 	if err != nil {
 		t.Fatalf("Send by roster name: %v", err)
 	}

@@ -590,7 +590,7 @@ func (s *Service) roster(fromID string) ([]candidate, error) {
 				ID: sess.ID,
 				Peer: Peer{
 					Label:   sess.Label,
-					Name:    rosterNameOf(cwd, sess.ID),
+					Name:    RosterName(cwd, sess.ID),
 					Project: p.Name,
 					Kind:    sess.Kind,
 				},

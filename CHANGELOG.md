@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **An agent can open a session, and give it its own worktree.** Until now every
+  session was opened by hand: an agent could hand work to the sessions beside it
+  but not create one, so a task that deserved its own checkout waited for
+  someone to click New Session. `lich open` — and the `open_session` tool beside
+  it — opens one in any project, running any provider lich knows, optionally on
+  a fresh git worktree branched off whatever branch you name. The new card
+  appears in the sidebar without stealing your view, and its terminal is already
+  running: it can be given work straight away, whether or not anybody opens it.
 - **Closing a project asks when an agent is still working.** The tab's × took a
   project's terminals down with it, killing whatever was mid-turn — with a
   spinner on that very tab as the only warning, and no undo. Closing a project
