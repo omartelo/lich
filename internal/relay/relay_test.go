@@ -957,16 +957,22 @@ func TestSanitizeKeepsWhitespaceAndDropsEscapes(t *testing.T) {
 	}
 }
 
+// The numbers are spelled out rather than read from DefaultWait and MaxWait:
+// derived from the constants the test says only that waitFor returns them, and
+// stays green when they move. What the contract promises is these values — 100s
+// under the 120s an agent's shell tool allows, and a 30 minute ceiling — so the
+// cap is pinned from both sides of the boundary rather than from far away.
 func TestWaitForClampsTheRequestedWait(t *testing.T) {
 	tests := []struct {
 		name    string
 		seconds int
 		want    time.Duration
 	}{
-		{"zero falls back to the default", 0, DefaultWait},
-		{"negative falls back to the default", -5, DefaultWait},
+		{"zero falls back to the default", 0, 100 * time.Second},
+		{"negative falls back to the default", -5, 100 * time.Second},
 		{"a plain wait is honoured", 42, 42 * time.Second},
-		{"an over-long wait is capped", 4000, MaxWait},
+		{"a wait just under the cap is honoured", 1799, 1799 * time.Second},
+		{"a wait past the cap is capped", 1801, 30 * time.Minute},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1205,6 +1211,27 @@ func TestTheSenderIsToldAtItsPromptWhenNobodyWasWaiting(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Errorf("the sender was never told: %v", term.writesTo("s1"))
+}
+
+// The two can also land together: the window closes the ticket while the sender
+// is still counted as waiting, so nobody types the news at its prompt, and the
+// sender's own wait runs out a moment later. The waiter that leaves last owns
+// what is left behind — without that it hears "still working" about a task
+// nothing read, on a ticket already gone from the map.
+func TestAWaiterGivingUpAsTheTaskGoesUnreadHearsSo(t *testing.T) {
+	svc := withReceipts(newFakeTerminal("s1", "s2"))
+	tk := &ticket{
+		target:   "docs",
+		done:     make(chan struct{}),
+		stalled:  make(chan struct{}),
+		unread:   make(chan struct{}),
+		attended: 1,
+	}
+	close(tk.unread)
+
+	if got := svc.giveUp(tk); got != StatusUnread {
+		t.Errorf("status = %q, want the sender told nothing read it", got)
+	}
 }
 
 // Which providers carry lich's operations stopped being a fact about the

@@ -600,8 +600,7 @@ func (s *Service) await(id string, t *ticket, waitSeconds int) Result {
 		s.leave(t)
 		return Result{Ticket: id, Target: t.target, Status: StatusUnread}
 	case <-timer.C:
-		s.giveUp(t)
-		return Result{Ticket: id, Target: t.target, Status: StatusPending}
+		return Result{Ticket: id, Target: t.target, Status: s.giveUp(t)}
 	}
 }
 
@@ -612,18 +611,37 @@ func (s *Service) leave(t *ticket) {
 	s.mu.Unlock()
 }
 
-// giveUp drops the claim of a caller whose wait ran out, and catches the one
-// race that would lose an answer: the reply landing in the same instant, seeing
-// this caller still attending, and leaving the answer for it — after it had
+// giveUp drops the claim of a caller whose wait ran out and returns the status
+// that caller should hear. It catches the two races that would lose what became
+// of the errand, both of the same shape: the ticket closing in the same instant,
+// seeing this caller still attending, and leaving the news for it — after it had
 // already stopped listening. Whoever leaves last owns what is left behind.
-func (s *Service) giveUp(t *ticket) {
+//
+// A reply is typed at the sender's prompt, because an answer outlives the wait
+// it missed. The receipt window closing the ticket unread is told to the caller
+// instead: it is still here to hear it, and the alternative is reporting a task
+// nobody read as still in progress, on a ticket already out of the map.
+func (s *Service) giveUp(t *ticket) string {
 	s.mu.Lock()
 	t.attended--
-	orphaned := t.answered && t.attended == 0
+	last := t.attended == 0
+	orphaned := t.answered && last
+	unread := false
+	if last && !t.answered {
+		select {
+		case <-t.unread:
+			unread = true
+		default:
+		}
+	}
 	s.mu.Unlock()
 	if orphaned {
 		s.returnAnswer(t)
 	}
+	if unread {
+		return StatusUnread
+	}
+	return StatusPending
 }
 
 // Observe takes one session-state report from the hooks the provider already
