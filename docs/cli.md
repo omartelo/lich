@@ -144,6 +144,13 @@ A prompt is capped at 8192 characters and stripped of control characters — the
 text is typed into a terminal, and an escape sequence inside it would stop being
 text.
 
+**A target still running its setup script is waited for, not written to.** The
+wait is bounded by the caller's own `--timeout`; running out is an error saying
+nothing was sent, never a ticket — an errand nobody can answer would otherwise
+be waited out in full. `internal/terminal` tells the two apart by a marker the
+setup wrapper prints between the script and the provider (`setupDone`): the PTY
+and the pid are the same across the `exec`, so nothing else can.
+
 ### `lich wait [--timeout <seconds>] <ticket>`
 
 Waits again on a ticket a previous `send` handed back. Same output as `send`.
@@ -486,11 +493,15 @@ whoever asked.
   the exception, and only for the session it creates: it starts that PTY itself,
   which is why the card it leaves behind is one you can send to unseen.
 - **A session is addressable before its agent can read.** `open` returns when
-  the PTY exists, not when the provider inside it has finished starting — there
-  is no signal for the latter that every provider gives. A message sent in that
-  window is written into a TUI that may not be reading yet, and lich cannot tell
-  that apart from a delivered one (delivery is proven, receipt is not). Hence
-  the line the command prints; opening and sending are two steps on purpose.
+  the PTY exists, not when the provider inside it has finished starting. The one
+  stretch lich *can* see is the project's worktree setup script, which owns that
+  PTY before the provider and can run for minutes: `send` waits it out rather
+  than typing into it (see below), because a message handed to a running
+  `pnpm install` is read and discarded, and the sender then waits out a ticket
+  nobody was ever asked to answer. What is left is the second or two the
+  provider's own TUI takes to start reading, which no provider signals and lich
+  cannot tell apart from a delivered message (delivery is proven, receipt is
+  not).
 - **`open` starts the PTY at the size the window last reported**, because there
   is no terminal at this end to measure (`terminal.sizeFor`); 80×24 only when no
   window has ever measured one. It is a copy, not a subscription: a window

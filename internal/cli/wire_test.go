@@ -41,6 +41,8 @@ type wiredTerminal struct {
 // it on every call, which is a race the moment the two are used together.
 func (*wiredTerminal) Live(string) bool { return true }
 
+func (*wiredTerminal) Ready(string) bool { return true }
+
 func (w *wiredTerminal) Write(_, data string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()

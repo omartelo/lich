@@ -13,6 +13,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/omartelo/lich/internal/events"
@@ -94,6 +95,10 @@ type session struct {
 	done   chan struct{}
 	replay *replayBuffer
 	outbox *outbox
+	// settingUp is true while the project's worktree setup script still owns
+	// this PTY, before the provider it execs into. Cleared by the marker the
+	// wrapper prints (see setupDone). Guarded by the service's mu.
+	settingUp bool
 }
 
 // Store is the persistence the terminal service depends on: the binary to spawn
@@ -440,11 +445,12 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, se
 	}, outboxDepth)
 	out := newCoalescer(box.push, visibleFlushInterval, hiddenFlushInterval)
 	sess := &session{
-		pty:    p,
-		out:    out,
-		done:   make(chan struct{}),
-		replay: newReplayBuffer(replayCapBytes),
-		outbox: box,
+		pty:       p,
+		out:       out,
+		done:      make(chan struct{}),
+		replay:    newReplayBuffer(replayCapBytes),
+		outbox:    box,
+		settingUp: spec.bin == "sh" && setup,
 	}
 	s.sessions[id] = sess
 	go s.stream(id, sess)
@@ -462,6 +468,7 @@ func (s *Service) stream(id string, sess *session) {
 	for {
 		n, err := p.Read(buf)
 		if n > 0 {
+			s.noteOutput(sess, buf[:n])
 			sess.replay.append(buf[:n])
 			sess.out.Write(buf[:n])
 		}
@@ -563,6 +570,33 @@ func (s *Service) Resize(id string, cols, rows int) error {
 		return nil
 	}
 	return p.Resize(cols, rows)
+}
+
+// noteOutput reads one chunk of a session's output for the one thing lich has
+// to know about it from outside: whether the worktree setup script is still the
+// program on the other end of this PTY (see setupDone).
+func (s *Service) noteOutput(sess *session, chunk []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if sess.settingUp && strings.Contains(string(chunk), setupDone) {
+		sess.settingUp = false
+	}
+}
+
+// Ready reports whether a session can be given work — whether what reads this
+// PTY is the provider rather than the project's setup script. False for a
+// session that is not running at all.
+//
+// Live is not this question. A session whose checkout is still installing its
+// dependencies has a PTY, appears in the roster, and accepts writes that go
+// straight into `pnpm install`'s stdin and are discarded before the provider
+// ever starts. It looked delivered to everyone involved: the sender waited out
+// its ticket on an agent that was never asked anything.
+func (s *Service) Ready(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sess, ok := s.sessions[id]
+	return ok && !sess.settingUp
 }
 
 // Close terminates a session's shell, if any.

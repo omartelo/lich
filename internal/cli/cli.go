@@ -293,8 +293,13 @@ func (c *client) open(args []string) error {
 
 // openedText words a new session for whoever asked for one. It names both of
 // its names, because the caller's next move is to address it and either one
-// reaches it, and it says the session is still starting: the PTY exists the
-// moment this prints, and the provider inside it does not.
+// reaches it.
+//
+// What it no longer does is tell the caller to wait. A session on a fresh
+// worktree runs the project's setup script before its provider, which can take
+// minutes, and no instruction to "give it a moment" survives that. Sending is
+// what waits now (relay.awaitReady), so the honest thing to say is that the
+// message will be held.
 func openedText(opened spawn.Session) string {
 	where := fmt.Sprintf("project %q", opened.Project)
 	if opened.Path != "" {
@@ -302,8 +307,9 @@ func openedText(opened spawn.Session) string {
 	}
 	return fmt.Sprintf(
 		"Opened session %q (%s) in %s.\n"+
-			"It answers to %q and to %q. It is still starting up — give it a moment "+
-			"before you send it work.\n",
+			"It answers to %q and to %q. Its agent may still be starting — a fresh "+
+			"worktree runs the project's setup script first — so a task you send it "+
+			"is held until the agent is up rather than lost.\n",
 		opened.Label, opened.Kind, where, opened.Label, opened.Name,
 	)
 }

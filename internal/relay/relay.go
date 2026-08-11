@@ -47,6 +47,10 @@ const (
 	// answerLimit bounds one reply. Generous — an answer is a summary, and the
 	// caller reads it as command output.
 	answerLimit = 64 * 1024
+	// readyPoll is how often awaitReady asks whether a target's agent is up. A
+	// setup script runs for tens of seconds at least, so this only has to be
+	// quick against a human's patience, not against the machine.
+	readyPoll = 250 * time.Millisecond
 )
 
 // How lich's own MCP server (internal/cli) is registered and what it calls its
@@ -141,9 +145,11 @@ type Events interface {
 }
 
 // Terminal is the PTY side: whether a session has a process running right now,
+// whether what runs in it is the agent rather than the checkout's setup script,
 // and how to type at it. The terminal service implements it.
 type Terminal interface {
 	Live(id string) bool
+	Ready(id string) bool
 	Write(id, data string) error
 }
 
@@ -307,6 +313,12 @@ func (s *Service) Send(fromID, target, project, prompt string, waitSeconds int) 
 	s.mu.Unlock()
 	s.clearAll(expired)
 
+	if err := s.awaitReady(dest, waitFor(waitSeconds)); err != nil {
+		s.mu.Lock()
+		delete(s.tickets, id)
+		s.mu.Unlock()
+		return Result{}, err
+	}
 	if err := s.deliver(dest.ID, compose(sender, id, prompt, dest.Peer.Kind)); err != nil {
 		s.mu.Lock()
 		delete(s.tickets, id)
@@ -329,6 +341,42 @@ func (s *Service) deliver(sessionID, message string) error {
 	}
 	time.Sleep(s.submitDelay)
 	return s.term.Write(sessionID, submit)
+}
+
+// awaitReady blocks until a target's agent is the program reading its PTY.
+//
+// A session opened on a fresh worktree runs the project's setup script in that
+// PTY first, and the script can take minutes. It is live the whole time, and a
+// message typed into it reaches `pnpm install`, which reads and discards it —
+// so the request never existed, and the sender waits out a ticket nobody was
+// asked to answer. Seen on the first real run of a worktree session.
+//
+// Waiting is bounded by the caller's own wait: there is no point holding a
+// message for a setup that outlasts the errand. Running out is an error rather
+// than a delivery, because a message nobody can be given is not one that was
+// sent.
+func (s *Service) awaitReady(dest candidate, wait time.Duration) error {
+	if s.term.Ready(dest.ID) {
+		return nil
+	}
+	deadline := s.now().Add(wait)
+	for {
+		time.Sleep(readyPoll)
+		if s.term.Ready(dest.ID) {
+			return nil
+		}
+		if !s.term.Live(dest.ID) {
+			return fmt.Errorf("%q stopped before its agent started", dest.Peer.Label)
+		}
+		if s.now().After(deadline) {
+			return fmt.Errorf(
+				"%q is still preparing its checkout — the project's worktree setup script "+
+					"is running in it and its agent has not started yet. Nothing was sent. "+
+					"Try again once it is up; lich sessions lists it as soon as it can take work",
+				dest.Peer.Label,
+			)
+		}
+	}
 }
 
 // Wait blocks on an already-delivered ticket for another round, so a caller

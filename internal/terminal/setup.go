@@ -26,7 +26,28 @@ func wrapSetup(spec ptySpec, script, goos string) ptySpec {
 	spec.bin = "sh"
 	spec.args = []string{
 		"-c",
-		"(\n" + script + "\n) || echo \"[lich] worktree setup failed (exit $?)\"; exec " + strings.Join(argv, " "),
+		"(\n" + script + "\n) || echo \"[lich] worktree setup failed (exit $?)\"; " +
+			"printf '" + setupDoneEscaped + "'; exec " + strings.Join(argv, " "),
 	}
 	return spec
 }
+
+// setupDone is what the wrapper emits between the script and the provider, and
+// the only way lich can tell the two apart from outside: the PTY is the same,
+// the process is the same (exec replaces the image, keeping the pid), and the
+// output of a setup script looks like the output of anything else.
+//
+// It matters because a session running its setup is not a session an agent can
+// be given work in. lich types a relayed message at the prompt, and during the
+// setup the thing reading that PTY is the script — a message handed over then
+// goes to `pnpm install`, which discards it, and the agent that finally starts
+// never sees the request. Nothing reports a failure: the sender waits for an
+// answer nobody was ever asked for.
+//
+// An OSC sequence with a private code carries it. Terminals ignore an OSC they
+// do not know — xterm.js parses and drops it — so the marker never reaches the
+// screen the user is watching.
+const (
+	setupDone        = "\x1b]6969;lich-setup-done\x07"
+	setupDoneEscaped = "\\033]6969;lich-setup-done\\007"
+)

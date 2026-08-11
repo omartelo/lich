@@ -21,14 +21,19 @@ func (f fakeSessions) LoadState() ([]store.Project, error) { return f.projects, 
 // fakeTerminal records what was typed at which session, and answers Live from
 // an explicit set so a test can park a session without a PTY.
 type fakeTerminal struct {
-	mu       sync.Mutex
-	live     map[string]bool
-	writes   map[string][]string
-	writeErr error
+	mu sync.Mutex
+	// live is whether a PTY exists; settingUp is whether what reads it is still
+	// the worktree setup script rather than the agent.
+	live      map[string]bool
+	settingUp map[string]bool
+	writes    map[string][]string
+	writeErr  error
 }
 
 func newFakeTerminal(live ...string) *fakeTerminal {
-	t := &fakeTerminal{live: map[string]bool{}, writes: map[string][]string{}}
+	t := &fakeTerminal{
+		live: map[string]bool{}, writes: map[string][]string{}, settingUp: map[string]bool{},
+	}
 	for _, id := range live {
 		t.live[id] = true
 	}
@@ -39,6 +44,23 @@ func (f *fakeTerminal) Live(id string) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.live[id]
+}
+
+// Ready defaults to "as ready as it is live": most tests are about delivery and
+// answers, not about a checkout that is still installing its dependencies. The
+// ones that are set settingUp.
+func (f *fakeTerminal) Ready(id string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.live[id] && !f.settingUp[id]
+}
+
+// setUp marks a session as still running its worktree setup script: live, and
+// with nothing on the other end that could read a message.
+func (f *fakeTerminal) setUp(id string, running bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.settingUp[id] = running
 }
 
 func (f *fakeTerminal) Write(id, data string) error {
@@ -989,4 +1011,80 @@ func waitForTicket(svc *Service) string {
 	}
 	// Timed out: the caller's own assertion is what reports it.
 	return ""
+}
+
+// A session running its worktree setup script is live and has nothing that can
+// read a message: the script owns the PTY until it execs the provider. Writing
+// into it loses the request outright — `pnpm install` reads the bytes and drops
+// them — and the sender then waits out a ticket nobody was ever asked to
+// answer, which is how this was found.
+
+func TestSendWaitsForTheSetupScriptToFinish(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	term.setUp("s2", true)
+	svc := newRelay(workspace(), term, nil)
+
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		term.setUp("s2", false)
+	}()
+
+	// One second covers both waits here: the setup finishes in 20ms, and nobody
+	// answers, so the errand ends pending on purpose.
+	result, err := svc.Send("s1", "docs", "", "run the tests", 1)
+	if err != nil {
+		t.Fatalf("Send = %v, want the message held until the agent was up", err)
+	}
+	if result.Status != StatusPending {
+		t.Errorf("status = %q, want the errand open", result.Status)
+	}
+	if len(term.writesTo("s2")) == 0 {
+		t.Error("nothing was typed at the target once its agent started")
+	}
+}
+
+func TestSendRefusesRatherThanTypingIntoASetupScript(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	term.setUp("s2", true)
+	svc := newRelay(workspace(), term, nil)
+
+	_, err := svc.Send("s1", "docs", "", "run the tests", 1)
+	if err == nil {
+		t.Fatal("sent a message into a checkout that was still installing")
+	}
+	// The sender has to know nothing was delivered: a ticket here would be an
+	// errand nobody can answer, waited out in full.
+	if !strings.Contains(err.Error(), "Nothing was sent") {
+		t.Errorf("error = %q, want it to say the message was not delivered", err)
+	}
+	if len(term.writesTo("s2")) != 0 {
+		t.Errorf("typed %v into the setup script", term.writesTo("s2"))
+	}
+	svc.mu.Lock()
+	open := len(svc.tickets)
+	svc.mu.Unlock()
+	if open != 0 {
+		t.Errorf("left %d tickets open for a message that was never delivered", open)
+	}
+}
+
+func TestSendGivesUpWhenTheTargetDiesDuringSetup(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	term.setUp("s2", true)
+	svc := newRelay(workspace(), term, nil)
+
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		term.mu.Lock()
+		term.live["s2"] = false
+		term.mu.Unlock()
+	}()
+
+	_, err := svc.Send("s1", "docs", "", "run the tests", 30)
+	if err == nil {
+		t.Fatal("waited on a session that is gone")
+	}
+	if !strings.Contains(err.Error(), "stopped before its agent started") {
+		t.Errorf("error = %q", err)
+	}
 }

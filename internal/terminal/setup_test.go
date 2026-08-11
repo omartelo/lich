@@ -44,3 +44,35 @@ func TestWrapSetup(t *testing.T) {
 		t.Errorf("wrap changed dir/size: %+v", got)
 	}
 }
+
+// TestSetupWrapperMarksItsEnd pins the marker the wrapper prints between the
+// script and the provider. It is the only thing that tells lich the two apart —
+// the PTY and the pid are the same across the exec — and a session still
+// running its setup must not be handed work (see Service.Ready).
+func TestSetupWrapperMarksItsEnd(t *testing.T) {
+	spec := wrapSetup(ptySpec{bin: "claude", args: []string{"--name", "x"}}, "pnpm install", "linux")
+
+	script := spec.args[1]
+	marker := strings.Index(script, `printf '\033]6969;lich-setup-done\007'`)
+	if marker == -1 {
+		t.Fatalf("the wrapper prints no end marker: %q", script)
+	}
+	// Before the exec, and after the script: a marker on the wrong side of
+	// either would report an agent that has not started, or never report one.
+	if exec := strings.Index(script, "exec "); exec < marker {
+		t.Errorf("the marker is printed after the exec that replaces this shell: %q", script)
+	}
+	if install := strings.Index(script, "pnpm install"); install > marker {
+		t.Errorf("the marker is printed before the script runs: %q", script)
+	}
+}
+
+// The escaped form printf receives has to produce the bytes the service scans
+// for; two spellings of one sequence would mean a marker nobody ever matches.
+func TestSetupMarkerSpellingsAgree(t *testing.T) {
+	unescaped := strings.ReplaceAll(setupDoneEscaped, `\033`, "\x1b")
+	unescaped = strings.ReplaceAll(unescaped, `\007`, "\x07")
+	if unescaped != setupDone {
+		t.Errorf("printf writes %q, the service watches for %q", unescaped, setupDone)
+	}
+}

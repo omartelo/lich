@@ -957,3 +957,52 @@ func TestStartWithoutASizeCopiesTheWindow(t *testing.T) {
 		t.Errorf("the agent's session moved the window's size to %dx%d", cols, rows)
 	}
 }
+
+// TestReadyWaitsForTheSetupScript drives the whole seam: a session spawned with
+// the project's setup script is live but has nothing on the other end that can
+// read a message, until the wrapper's marker comes through its own output.
+func TestReadyWaitsForTheSetupScript(t *testing.T) {
+	bin := stayAliveBin(t)
+	svc := New(stubBins{bin: bin, setup: "echo installing"}, nil, events.New())
+	t.Cleanup(func() { _ = svc.Close("s1") })
+
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", true, 80, 24); err != nil {
+		t.Fatalf("Start = %v, want nil", err)
+	}
+	if !svc.Live("s1") {
+		t.Fatal("the session is not live")
+	}
+	if svc.Ready("s1") {
+		t.Fatal("a session still running its setup script was offered work")
+	}
+
+	svc.mu.Lock()
+	sess := svc.sessions["s1"]
+	svc.mu.Unlock()
+	svc.noteOutput(sess, []byte("Progress: resolved 551"+setupDone))
+
+	if !svc.Ready("s1") {
+		t.Error("the session stayed unready after its setup script finished")
+	}
+}
+
+func TestReadyIsImmediateWithoutASetupScript(t *testing.T) {
+	bin := stayAliveBin(t)
+	svc := New(stubBins{bin: bin}, nil, events.New())
+	t.Cleanup(func() { _ = svc.Close("s1") })
+
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, 80, 24); err != nil {
+		t.Fatalf("Start = %v, want nil", err)
+	}
+	if !svc.Ready("s1") {
+		t.Error("a session with no setup script to wait for was held back")
+	}
+}
+
+func TestReadyIsFalseForASessionThatIsNotRunning(t *testing.T) {
+	svc := New(stubBins{}, nil, events.New())
+
+	if svc.Ready("ghost") {
+		t.Error("a session with no PTY was reported ready for work")
+	}
+}
