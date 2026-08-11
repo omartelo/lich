@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/omartelo/lich/internal/providers"
+	"github.com/omartelo/lich/internal/relay"
 	"github.com/omartelo/lich/internal/semver"
 	"github.com/omartelo/lich/internal/shquote"
 )
@@ -85,12 +86,12 @@ func (s *Service) crushInstall() error {
 			return fmt.Errorf("write %s: %w", path, err)
 		}
 	}
-	return s.writeCrushrc(version, dir)
+	return s.writeCrushrc(version, dir, lichBinary())
 }
 
 // writeCrushrc replaces lich's block in Crush's crushrc, creating the file when
 // it is not there yet. Everything outside the markers is carried over verbatim.
-func (s *Service) writeCrushrc(version, scriptDir string) error {
+func (s *Service) writeCrushrc(version, scriptDir, lichBin string) error {
 	path, err := s.crushrcPath()
 	if err != nil {
 		return err
@@ -102,7 +103,7 @@ func (s *Service) writeCrushrc(version, scriptDir string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("create %s: %w", filepath.Dir(path), err)
 	}
-	body := replaceBlock(string(existing), crushrcBlock(version, scriptDir))
+	body := replaceBlock(string(existing), crushrcBlock(version, scriptDir, lichBin))
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
@@ -110,8 +111,9 @@ func (s *Service) writeCrushrc(version, scriptDir string) error {
 }
 
 // crushrcBlock is the block lich owns: its markers, a line saying who wrote it,
-// and one `hook add` per report.
-func crushrcBlock(version, scriptDir string) string {
+// one `hook add` per report, and the `mcp add` that gives the session the tools
+// to drive the others.
+func crushrcBlock(version, scriptDir, lichBin string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, blockOpen+"\n", version)
 	fmt.Fprintf(&b, "%s Managed by lich. Edit through Settings, not by hand.\n", shComment)
@@ -130,8 +132,34 @@ func crushrcBlock(version, scriptDir string) string {
 		}
 		fmt.Fprintf(&b, " --command %s --timeout 5\n", shquote.Quote(command))
 	}
+	if lichBin != "" {
+		// The operations Claude Code and Codex are handed on their own command
+		// line at spawn (docs/cli.md, Registration). Crush takes no such flag,
+		// and this is the only other place it reads a server from — the same
+		// file its hooks come from, under the same markers, removed by the same
+		// uninstall.
+		//
+		// The path is this binary's, resolved now: the registration is a line in
+		// a file, so it cannot name $LICH_BIN and have Crush expand it per
+		// session. It is only the transport — which lich a session talks to is
+		// decided by the coordinates in its PTY, not by which binary runs.
+		fmt.Fprintf(&b, "mcp add %s --type stdio --command %s --args %s --timeout 10\n",
+			relay.MCPServerName, shquote.Quote(lichBin), relay.MCPSubcommand)
+	}
 	b.WriteString(blockClose + "\n")
 	return b.String()
+}
+
+// lichBinary is the lich this install writes into Crush's config. An
+// unresolvable executable leaves the registration out rather than writing a
+// command that cannot run: the hooks are the part Crush needs to be useful, and
+// they do not depend on it.
+func lichBinary() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	return exe
 }
 
 // replaceBlock returns existing with lich's block replaced by block — appended

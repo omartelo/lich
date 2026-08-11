@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Crush sessions get the tools to drive the others.** Installing the plugin
+  already gave them hooks; it now registers lich's MCP server in the same block
+  of the same file, so a Crush session can list the sessions beside it, hand one
+  a task, open a session with a worktree under it and close one — the operations
+  Claude Code and Codex are handed on their own command line at spawn, which
+  Crush has no flag for. It goes away with the same uninstall, and nothing
+  outside lich's markers is touched.
+
+### Added
+
 - **An agent can close a session, and decide what happens to its worktree.** It
   could open one and hand it work, but never tidy up: every checkout an agent
   made stayed until somebody removed it by hand. `lich close` — and the

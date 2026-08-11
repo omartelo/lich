@@ -451,7 +451,7 @@ func TestCrushrcBlockSurvivesAPathWithSpaces(t *testing.T) {
 		}
 	}
 
-	block := crushrcBlock("1.2.3", dir)
+	block := crushrcBlock("1.2.3", dir, "/opt/lich/lich")
 	for _, hook := range crushHooks {
 		command, ok := commandOf(block, hook.name)
 		if !ok {
@@ -497,4 +497,84 @@ func TestVersionOf(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The tools half of the Crush install. Its hooks tell lich what a session is
+// doing; this line is what lets that session act on the ones beside it, and it
+// is the only way Crush can be given them — it takes no flag at spawn the way
+// Claude Code and Codex do.
+
+func TestCrushrcRegistersLichsMCPServer(t *testing.T) {
+	block := crushrcBlock("1.2.3", "/plugins/lich", "/opt/lich/lich")
+
+	line, ok := lineWith(block, "mcp add")
+	if !ok {
+		t.Fatalf("the block registers no MCP server:\n%s", block)
+	}
+	// Pinned as the literal Crush reads: stdio, the binary, and the subcommand
+	// that serves the tools. A registration Crush cannot parse is one that fails
+	// in silence — its whole reason for being checked here.
+	// Quoted like every other path lich writes here: crushrc is read by a shell,
+	// and a path is not the place to find out which characters it minds.
+	want := `mcp add lich --type stdio --command '/opt/lich/lich' --args mcp --timeout 10`
+	if line != want {
+		t.Errorf("registration line:\n  %s\nwant:\n  %s", line, want)
+	}
+}
+
+// A path with a space is the case that decides whether the line survives the
+// shell that reads crushrc.
+func TestCrushrcQuotesTheBinaryPath(t *testing.T) {
+	block := crushrcBlock("1.2.3", "/plugins/lich", "/home/some one/lich")
+
+	line, ok := lineWith(block, "mcp add")
+	if !ok {
+		t.Fatalf("no registration in:\n%s", block)
+	}
+	if !strings.Contains(line, `'/home/some one/lich'`) {
+		t.Errorf("the binary path is not quoted for the shell: %s", line)
+	}
+}
+
+// An unresolvable executable must not write a command that cannot run: the
+// hooks are what make the install worth having, and they do not need it.
+func TestCrushrcWithoutABinaryStillRegistersTheHooks(t *testing.T) {
+	block := crushrcBlock("1.2.3", "/plugins/lich", "")
+
+	if _, ok := lineWith(block, "mcp add"); ok {
+		t.Errorf("registered a server with no binary to run:\n%s", block)
+	}
+	if _, ok := lineWith(block, "hook add"); !ok {
+		t.Errorf("the hooks went with it:\n%s", block)
+	}
+}
+
+// The registration lives inside the markers, so an update replaces it and an
+// uninstall takes it away — the same rule every other line here answers to.
+func TestTheMCPRegistrationIsInsideLichsBlock(t *testing.T) {
+	block := crushrcBlock("1.2.3", "/plugins/lich", "/opt/lich/lich")
+	existing := "# mine\nmodel add something\n"
+
+	updated := replaceBlock(existing, block)
+	if !strings.Contains(updated, "mcp add lich") {
+		t.Fatalf("the registration did not land:\n%s", updated)
+	}
+	// Replacing the block with an empty one is what an uninstall does.
+	cleaned := replaceBlock(updated, "")
+	if strings.Contains(cleaned, "mcp add") {
+		t.Errorf("the registration outlived lich's block:\n%s", cleaned)
+	}
+	if !strings.Contains(cleaned, "model add something") {
+		t.Errorf("a line the user wrote went with it:\n%s", cleaned)
+	}
+}
+
+// lineWith returns the block's first line containing needle.
+func lineWith(block, needle string) (string, bool) {
+	for _, line := range strings.Split(block, "\n") {
+		if strings.Contains(line, needle) {
+			return strings.TrimSpace(line), true
+		}
+	}
+	return "", false
 }

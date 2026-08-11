@@ -122,4 +122,6 @@ nobody knows it and that the call site never shows. The mechanism and the histor
   none, so lich writes the released files itself — a module into opencode's plugin dir, hook scripts plus a
   delimited block in Crush's `crushrc`. Neither harness records what is installed, so the version lives in a marker
   line lich wrote; edit the file by hand and lich reads it as not installed. Crush below 0.88.0 ignores those lines
-  in silence, which is why the install asks its version first.
+  in silence, which is why the install asks its version first. The Crush block also registers lich's MCP server, by
+  the absolute path of the binary that installed it — a line in a file cannot expand `$LICH_BIN` per session, and
+  the binary is only the transport: which lich a session reaches is decided by the coordinates in its PTY.
