@@ -1085,6 +1085,33 @@ func TestReadyStaysTrueThroughABusyTurn(t *testing.T) {
 	}
 }
 
+// The setup script's marker is the exec, and the exec is not instant: the image
+// is replaced, a runtime starts, a splash is composed, and none of that writes a
+// byte. Measured from the script's last line, that silence is long enough to
+// pass for a provider that has finished drawing — so the first byte of the
+// splash would clear the settle, and the message the relay then types lands in a
+// TUI that has not taken the terminal yet.
+func TestTheWaitForTheProviderToStartIsNotItsQuiet(t *testing.T) {
+	svc := New(stubBins{}, nil, events.New())
+	sess := &session{settingUp: true}
+	svc.mu.Lock()
+	svc.sessions["s1"] = sess
+	svc.mu.Unlock()
+
+	svc.noteOutput(sess, []byte("Progress: resolved 551"+setupDone))
+	time.Sleep(readySettle + 100*time.Millisecond)
+	svc.noteOutput(sess, []byte("Claude Code v2.1.227"))
+	if svc.Ready("s1") {
+		t.Error("the wait for the provider to start was credited as the provider going quiet")
+	}
+
+	// Its own quiet, once it has drawn itself, still counts.
+	time.Sleep(readySettle + 100*time.Millisecond)
+	if !svc.Ready("s1") {
+		t.Error("the session stayed unready after its provider settled")
+	}
+}
+
 // The quiet a session settles into is recorded as it passes, not sampled when
 // somebody finally asks. A session live for hours is at its prompt the whole
 // time, but the first thing ever asked of it is a relayed message — and by then

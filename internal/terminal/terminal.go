@@ -614,8 +614,14 @@ func (s *Service) noteOutput(sess *session, chunk []byte) {
 	if sess.settingUp && strings.Contains(string(chunk), setupDone) {
 		sess.settingUp = false
 		// The provider starts drawing from here, so the quiet this waits for is
-		// measured from the exec, not from the setup script's last line.
+		// measured from the exec, not from the setup script's last line. The
+		// clock goes with the flag: the exec itself takes a second or two — the
+		// image is replaced, a runtime starts, a splash is composed — and that
+		// silence is nobody's quiet. Measured from the script's last line it
+		// would clear the settle on the provider's very first byte, mid-splash,
+		// which is the write that lands on screen as literal paste markers.
 		sess.ready = false
+		sess.lastOut = time.Time{}
 	}
 }
 

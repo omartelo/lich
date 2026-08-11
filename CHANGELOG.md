@@ -223,9 +223,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   length, that the project's setup script was still running — in a session with
   no worktree and no setup script. lich now notices the quiet when it happens
   rather than asking after the fact, so a busy session is handed the task and
-  answers it a turn later, the way every other busy session already did. When
-  the check does time out, the message no longer names a cause it cannot see:
-  it says what is certain, and points at the screen that knows the rest.
+  answers it a turn later, the way every other busy session already did. The
+  same check was too eager at the other end: a session whose setup script had
+  just handed over could be handed a task while its agent was still drawing its
+  opening screen, and that task appeared there as literal paste markers instead
+  of reaching the prompt. The wait for an agent to start is no longer mistaken
+  for an agent that has settled. When the check does time out, the message no
+  longer names a cause it cannot see: it says what is certain, and points at the
+  screen that knows the rest.
 
 - **The session list's scrollbar no longer sits on the cards.** With enough
   sessions to scroll, the scrollbar came down flush against the right edge of
