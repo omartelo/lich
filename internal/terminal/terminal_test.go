@@ -981,12 +981,59 @@ func TestReadyWaitsForTheSetupScript(t *testing.T) {
 	svc.mu.Unlock()
 	svc.noteOutput(sess, []byte("Progress: resolved 551"+setupDone))
 
+	// The marker is the exec, not the prompt: the provider draws its opening
+	// screen from here, and a message written into that is the one that landed
+	// on screen as literal paste markers.
+	if svc.Ready("s1") {
+		t.Error("work was offered the instant the setup script exec'd the provider")
+	}
+	time.Sleep(readySettle + 100*time.Millisecond)
 	if !svc.Ready("s1") {
-		t.Error("the session stayed unready after its setup script finished")
+		t.Error("the session stayed unready after its provider settled")
 	}
 }
 
-func TestReadyIsImmediateWithoutASetupScript(t *testing.T) {
+// TestReadyWaitsForTheProviderToStopDrawing covers the spawn with no setup
+// script at all: the provider still takes the terminal over, and a message
+// written before it does is lost the same way.
+func TestReadyWaitsForTheProviderToStopDrawing(t *testing.T) {
+	svc := New(stubBins{}, nil, events.New())
+	sess := &session{}
+
+	svc.noteOutput(sess, []byte("Claude Code v2.1.227"))
+	svc.mu.Lock()
+	svc.sessions["s1"] = sess
+	svc.mu.Unlock()
+
+	if svc.Ready("s1") {
+		t.Error("a session still drawing its opening screen was offered work")
+	}
+	time.Sleep(readySettle + 100*time.Millisecond)
+	if !svc.Ready("s1") {
+		t.Error("a session that went quiet was not offered work")
+	}
+}
+
+// Once a session has been ready it stays ready: a working agent draws
+// continuously, and a target mid-turn has always been written to — its provider
+// queues the input and answers a turn later.
+func TestReadyStaysTrueThroughABusyTurn(t *testing.T) {
+	svc := New(stubBins{}, nil, events.New())
+	sess := &session{lastOut: time.Now().Add(-time.Second)}
+	svc.mu.Lock()
+	svc.sessions["s1"] = sess
+	svc.mu.Unlock()
+
+	if !svc.Ready("s1") {
+		t.Fatal("a settled session was not ready")
+	}
+	svc.noteOutput(sess, []byte("...thinking..."))
+	if !svc.Ready("s1") {
+		t.Error("a session that started working again stopped accepting work")
+	}
+}
+
+func TestReadyWaitsOnlyTheSettleWithoutASetupScript(t *testing.T) {
 	bin := stayAliveBin(t)
 	svc := New(stubBins{bin: bin}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
@@ -994,6 +1041,9 @@ func TestReadyIsImmediateWithoutASetupScript(t *testing.T) {
 	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
+	// No setup script to wait out, but the provider still has to take the
+	// terminal: readiness is the quiet after it draws, never the spawn itself.
+	time.Sleep(readySettle + 100*time.Millisecond)
 	if !svc.Ready("s1") {
 		t.Error("a session with no setup script to wait for was held back")
 	}

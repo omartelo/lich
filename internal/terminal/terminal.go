@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/omartelo/lich/internal/events"
 	"github.com/omartelo/lich/internal/pricing"
@@ -99,6 +100,11 @@ type session struct {
 	// this PTY, before the provider it execs into. Cleared by the marker the
 	// wrapper prints (see setupDone). Guarded by the service's mu.
 	settingUp bool
+	// lastOut is when this PTY last produced output, and ready records that it
+	// has since gone quiet once — that its program finished drawing itself and
+	// is waiting on input. Both guarded by the service's mu.
+	lastOut time.Time
+	ready   bool
 }
 
 // Store is the persistence the terminal service depends on: the binary to spawn
@@ -155,6 +161,13 @@ type Service struct {
 	// sizeFor. Guarded by mu.
 	lastCols, lastRows int
 }
+
+// readySettle is how long a session's PTY must stay quiet before lich hands it
+// work: long enough that a provider drawing its opening screen is not mistaken
+// for one waiting at a prompt, short enough to sit inside the wait an agent
+// gives a tool call. Measured against Claude Code, whose splash lands in
+// several bursts.
+const readySettle = 600 * time.Millisecond
 
 // The size a session is started at when nothing has ever measured a terminal —
 // no window has opened yet, so there is no real one to copy. A conventional
@@ -451,6 +464,10 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, se
 		replay:    newReplayBuffer(replayCapBytes),
 		outbox:    box,
 		settingUp: spec.bin == "sh" && setup,
+		// Timed from the spawn, so a program that never writes anything still
+		// becomes ready once: quiet is the signal, and silence from the start
+		// is quiet too.
+		lastOut: time.Now(),
 	}
 	s.sessions[id] = sess
 	go s.stream(id, sess)
@@ -578,8 +595,12 @@ func (s *Service) Resize(id string, cols, rows int) error {
 func (s *Service) noteOutput(sess *session, chunk []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	sess.lastOut = time.Now()
 	if sess.settingUp && strings.Contains(string(chunk), setupDone) {
 		sess.settingUp = false
+		// The provider starts drawing from here, so the quiet this waits for is
+		// measured from the exec, not from the setup script's last line.
+		sess.ready = false
 	}
 }
 
@@ -596,7 +617,26 @@ func (s *Service) Ready(id string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sess, ok := s.sessions[id]
-	return ok && !sess.settingUp
+	if !ok || sess.settingUp {
+		return false
+	}
+	if sess.ready {
+		return true
+	}
+	// A TUI that has stopped drawing is one that has taken the terminal and is
+	// waiting on input. Before that, a message is written into a program still
+	// setting the tty up, which discards what it finds there — the bracketed
+	// paste then lands on screen as literal text, ahead of a prompt that never
+	// received it.
+	//
+	// Asked once: after the first quiet the session stays ready. A busy agent
+	// draws continuously, and a target mid-turn has always been written to —
+	// its provider queues the input and answers a turn later.
+	if !sess.lastOut.IsZero() && time.Since(sess.lastOut) >= readySettle {
+		sess.ready = true
+		return true
+	}
+	return false
 }
 
 // Close terminates a session's shell, if any.

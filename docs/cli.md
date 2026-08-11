@@ -499,9 +499,9 @@ whoever asked.
   than typing into it (see below), because a message handed to a running
   `pnpm install` is read and discarded, and the sender then waits out a ticket
   nobody was ever asked to answer. What is left is the second or two the
-  provider's own TUI takes to start reading, which no provider signals and lich
-  cannot tell apart from a delivered message (delivery is proven, receipt is
-  not).
+  provider's own TUI takes to start reading. lich waits that out as quiet — a
+  PTY that has stopped drawing has taken the terminal — which is a heuristic and
+  not a signal: no provider offers one.
 - **`open` starts the PTY at the size the window last reported**, because there
   is no terminal at this end to measure (`terminal.sizeFor`); 80×24 only when no
   window has ever measured one. It is a copy, not a subscription: a window
@@ -513,6 +513,15 @@ whoever asked.
   way the window writes one, so the project's `active_session_id` moves to it —
   the card is not focused now, but a reload lands on it. Two of them and the
   last one wins.
+- **A provider may open on a question of its own.** Claude Code asks whether a
+  directory is trusted the first time it runs in one, and a session sitting on
+  that prompt looks exactly like one waiting at its own: quiet, live, ready. The
+  first task sent to it answers the trust prompt instead of being read. It
+  applies to a directory the provider has never seen, so the worktrees of a
+  project already in use are unaffected — but the first worktree of a new one,
+  on a machine where nobody has answered it yet, needs a human at that card
+  once. lich cannot see it without reading the screen, which is the one thing
+  this feature does not do.
 - **Delivery is proven, receipt is not.** `send` knows the bytes reached the
   PTY. Whether the target's TUI queued them, and whether its agent ever runs the
   reply command, is what the wait and the ticket are for. A provider that does

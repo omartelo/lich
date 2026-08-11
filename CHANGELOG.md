@@ -16,7 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it — opens one in any project, running any provider lich knows, optionally on
   a fresh git worktree branched off whatever branch you name. The new card
   appears in the sidebar without stealing your view, and its terminal is already
-  running: it can be given work straight away, whether or not anybody opens it.
+  running, so the session can be given work whether or not anybody opens it — a
+  task sent while the checkout is still running the project's setup script is
+  held until its agent is up, rather than typed into the script.
 - **lich says when its last run ended badly.** A crash, a kill, or a machine
   that went down took the sessions with it — and the next launch restored the
   workspace looking exactly as it does after a deliberate close, so the turn an
