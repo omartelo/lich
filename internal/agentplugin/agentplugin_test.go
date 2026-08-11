@@ -282,8 +282,8 @@ func TestStatus(t *testing.T) {
 }
 
 // TestStatusListsEveryHarness proves the report covers the providers that can
-// run the plugin and nothing else: opencode and Crush have none, so an entry for
-// one would put an install button on a CLI that cannot use it.
+// run the plugin and nothing else: oh-my-pi has none, so an entry for it would
+// put an install button on a CLI that cannot use one.
 func TestStatusListsEveryHarness(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	s := serveBody(t, http.StatusOK, `{"tag_name":"v0.2.0"}`)
@@ -293,8 +293,9 @@ func TestStatusListsEveryHarness(t *testing.T) {
 	for _, entry := range s.Status() {
 		got = append(got, entry.Provider)
 	}
-	if !slices.Equal(got, []string{providers.Claude, providers.Codex}) {
-		t.Fatalf("Status() covers %v, want claude and codex", got)
+	want := []string{providers.Claude, providers.Codex, providers.OpenCode, providers.Crush}
+	if !slices.Equal(got, want) {
+		t.Fatalf("Status() covers %v, want %v", got, want)
 	}
 }
 
@@ -326,12 +327,12 @@ func TestStatusNotInstalled(t *testing.T) {
 }
 
 // TestUnknownProviderIsRefused proves a provider with no plugin never reaches a
-// CLI: opencode has no marketplace to add, and spawning one with the plugin's
-// arguments would be nonsense.
+// CLI or a file: oh-my-pi has no marketplace to add and no plugin directory to
+// write into, so spawning it with the plugin's arguments would be nonsense.
 func TestUnknownProviderIsRefused(t *testing.T) {
 	s, calls := fakeCLI(t, "")
 	for _, run := range []func(string) error{s.Install, s.Update} {
-		if err := run(providers.OpenCode); err == nil {
+		if err := run(providers.OMP); err == nil {
 			t.Error("want an error for a provider with no plugin, got nil")
 		}
 	}
@@ -349,6 +350,10 @@ const (
 	fakeCLIGuard = "LICH_TEST_FAKE_CLI"
 	fakeCLILog   = "LICH_TEST_FAKE_CLI_LOG"
 	fakeCLIFail  = "LICH_TEST_FAKE_CLI_FAIL"
+	// The two questions lich asks Crush rather than tells it, answered from the
+	// environment so a test decides what the machine's Crush says.
+	fakeCLIDirs    = "LICH_TEST_FAKE_CLI_DIRS"
+	fakeCLIVersion = "LICH_TEST_FAKE_CLI_VERSION"
 )
 
 func TestMain(m *testing.M) {
@@ -369,6 +374,16 @@ func TestMain(m *testing.M) {
 	if failOn := os.Getenv(fakeCLIFail); failOn != "" && strings.Contains(strings.Join(os.Args[1:], " "), failOn) {
 		fmt.Fprintln(os.Stderr, "fake cli: refusing "+failOn)
 		os.Exit(1)
+	}
+	switch strings.Join(os.Args[1:], " ") {
+	case "dirs":
+		if dirs := os.Getenv(fakeCLIDirs); dirs != "" {
+			fmt.Println(dirs)
+		}
+	case "--version":
+		if v := os.Getenv(fakeCLIVersion); v != "" {
+			fmt.Println("crush version v" + v)
+		}
 	}
 	os.Exit(0)
 }

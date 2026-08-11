@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **opencode and Crush install the lich plugin from Settings, like the other
+  two.** Their sessions could already report what they were doing, but only for
+  someone willing to place the files by hand — neither harness has a plugin CLI
+  or a marketplace to install from, so the offer stopped at Claude Code and
+  Codex. **Settings › lich plugin** now lists all four, and installs and updates
+  the released version into each: opencode gets its module written into its
+  plugin directory, Crush gets the hook scripts plus two lines added to its
+  `crushrc`. Everything else in that file — every line and every comment you
+  wrote — is left exactly where it was, and an update replaces only what lich
+  put there.
+
+  Two things worth knowing before clicking. **Crush needs 0.88.0 or newer**: the
+  older ones read the file lich writes and ignore it without a word, so lich
+  refuses the install and says which version you have instead of leaving you
+  with a plugin that never reports. And **Crush reports two of the four things**
+  — its session id and the git-status refresh — because `PreToolUse` is the only
+  hook event it has: its cards show no status and keep their own name until it
+  ships an end-of-turn event.
+
 - **A task nobody picks up says so, instead of being waited out.** Handing work
   to another session proved only that the text reached its terminal — and a
   terminal can have something else on it: a provider still starting, a dialog

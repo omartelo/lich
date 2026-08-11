@@ -117,3 +117,9 @@ nobody knows it and that the call site never shows. The mechanism and the histor
   the running window (best-effort, untested against a real window) and exits 0.
 - **Reordering rides dnd-kit's pointer sensors** (`frontend/src/lib/use-sortable-list.ts`); the activation distance
   is load-bearing — without it plain clicks stop selecting a session.
+- **Installing the plugin writes into two harnesses' own directories**
+  (`internal/agentplugin`): Claude Code and Codex are driven through their plugin CLI, but opencode and Crush have
+  none, so lich writes the released files itself — a module into opencode's plugin dir, hook scripts plus a
+  delimited block in Crush's `crushrc`. Neither harness records what is installed, so the version lives in a marker
+  line lich wrote; edit the file by hand and lich reads it as not installed. Crush below 0.88.0 ignores those lines
+  in silence, which is why the install asks its version first.
