@@ -40,8 +40,8 @@ feature history lives in `CHANGELOG.md` — don't duplicate it here.
   are read from there, so an entry written later is an entry that missed its release.
 - Touched an OS seam or a `_test.go` build tag? Run the same cross-compile loop CI runs:
   `for os in linux darwin windows; do GOOS=$os go build ./... && GOOS=$os go vet ./...; done`
-  Cross-compiling only proves it builds — label the PR `ci:os` to run the backend suite on real Windows and macOS
-  runners before the merge.
+  Cross-compiling only proves it builds; the backend suite runs on real Windows and macOS runners on every PR,
+  and that is the answer to trust.
 
 ## Hard Invariants
 

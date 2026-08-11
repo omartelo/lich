@@ -1,13 +1,10 @@
 name: ci
 
-# Fast per-PR gate: format/vet + both suites, with pass/fail counts and
-# coverage rendered into the job summary. A PR runs the linux path only, for
-# quick feedback; the windows and macOS suites ride the os-tests job below.
+# Per-PR gate: format/vet + both suites on linux, with pass/fail counts and
+# coverage rendered into the job summary, plus the backend suite on windows and
+# macOS in parallel (os-tests below).
 on:
   pull_request:
-    # labeled: adding `ci:os` to an open PR is what arms the os-tests job, so the
-    # label has to be an event, not just a state read on the next push.
-    types: [opened, synchronize, reopened, labeled]
   push:
     branches: [main]
 
@@ -16,10 +13,6 @@ permissions:
 
 jobs:
   test:
-    # A `labeled` event exists only to arm os-tests below — any label, on any PR,
-    # fires one. This suite already ran on the push that brought the SHA in, and
-    # its check stays attached to it, so re-running it here buys nothing.
-    if: github.event.action != 'labeled'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -92,13 +85,12 @@ jobs:
   # as relative on Windows, and the tag's release build was the first thing to
   # say so.
   #
-  # Always after a merge to main, so a regression is caught before a tag is ever
-  # pushed; on a PR only when it carries the `ci:os` label, so touching an OS seam
-  # can be checked before the merge without slowing every other PR down.
+  # On every PR and every merge, because opting in never worked: it asked the
+  # author to know which code reads a per-OS location, and the one who did not
+  # left main red for four merges (#220 → #224). It costs about ten seconds —
+  # this runs beside the linux job, which takes longer than either of these — and
+  # the runners are free on a public repository.
   os-tests:
-    if: >-
-      github.event_name == 'push' ||
-      contains(github.event.pull_request.labels.*.name, 'ci:os')
     strategy:
       # One red OS still reports the other, rather than cancelling it.
       fail-fast: false

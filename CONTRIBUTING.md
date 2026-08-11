@@ -53,8 +53,9 @@ Then:
   entry in the same pull request. Release notes are read from that file, so an
   entry written later is an entry that missed its release.
 - **Touched OS-specific code or a `_test.go` build tag?** Run the cross-compile
-  loop, then label the pull request `ci:os` so the backend suite runs on real
-  Windows and macOS runners:
+  loop — CI runs the backend suite on real Windows and macOS runners for every
+  pull request, so that is where the answer comes from; this only saves you a
+  round trip:
   ```bash
   for os in linux darwin windows; do GOOS=$os go build ./... && GOOS=$os go vet ./...; done
   ```
