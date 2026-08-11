@@ -108,7 +108,8 @@ type session struct {
 }
 
 // Store is the persistence the terminal service depends on: the binary to spawn
-// for a provider in a project (empty return spawns the provider's default),
+// for a provider in a project (empty return spawns the provider's default) and
+// whether that spawn drops the provider's permission prompts,
 // that project's own directory, the dev-server port reserved for each checkout,
 // where to record the provider session id a PTY reports through its
 // session-start hook, and the running cost
@@ -116,6 +117,7 @@ type session struct {
 // rest is called). The store implements them all.
 type Store interface {
 	ProviderBin(providerID, projectID string) string
+	SkipPermissions(providerID, projectID, cwd string) bool
 	ProjectPath(projectID string) string
 	WorktreeSetup(projectID string) string
 	WorktreePorts() map[string]int
@@ -433,9 +435,10 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, se
 	if s.ws != nil {
 		mcpBin = lichBin()
 	}
+	skipPermissions := s.store.SkipPermissions(kind, projectID, cwd)
 	spec := ptySpec{
 		bin:  resolveCommand(kind, s.store.ProviderBin(kind, projectID), userShell()),
-		args: providerArgs(kind, name, resume, mcpBin),
+		args: providerArgs(kind, name, resume, mcpBin, skipPermissions),
 		dir:  cwd,
 		env:  s.sessionEnv(id, projectID, cwd),
 		cols: cols,

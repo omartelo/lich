@@ -38,6 +38,7 @@ type stubBins struct {
 	projectPath     string
 	providerSession string
 	providerErr     error
+	skipPerms       bool
 	costOn          bool
 	ledgers         map[string]stubLedger
 	ports           map[string]int
@@ -60,6 +61,7 @@ func newCostStore(providerSession string) stubBins {
 }
 
 func (s stubBins) ProviderBin(_, _ string) string       { return s.bin }
+func (s stubBins) SkipPermissions(_, _, _ string) bool  { return s.skipPerms }
 func (s stubBins) ProjectPath(_ string) string          { return s.projectPath }
 func (s stubBins) WorktreeSetup(_ string) string        { return s.setup }
 func (s stubBins) SetProviderSession(_, _ string) error { return nil }
@@ -536,6 +538,56 @@ func TestNameArgs(t *testing.T) {
 	}
 }
 
+// TestSkipPermissionArgs proves the setting only ever arms Claude Code's flag,
+// and only when it is on: the other providers word it differently, so a true
+// meant for Claude must not be spelled at a shell or at opencode/crush.
+func TestSkipPermissionArgs(t *testing.T) {
+	cases := []struct {
+		name, kind string
+		skip       bool
+		want       []string
+	}{
+		{"claude off", "claude", false, nil},
+		{"claude on", "claude", true, []string{"--dangerously-skip-permissions"}},
+		{"codex is not wired", "codex", true, nil},
+		{"opencode is not wired", "opencode", true, nil},
+		{"shell is never wired", KindShell, true, nil},
+	}
+	for _, tc := range cases {
+		got := skipPermissionArgs(tc.kind, tc.skip)
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("%s: skipPermissionArgs(%q, %v) = %v, want %v",
+				tc.name, tc.kind, tc.skip, got, tc.want)
+		}
+	}
+}
+
+// TestStartPassesSkipPermissionsToTheProcess proves the stored setting reaches
+// the spawned binary's argv — the wiring skipPermissionArgs' unit test cannot
+// see, and the one that decides whether a user who ticked the box actually gets
+// an agent that stops asking.
+func TestStartPassesSkipPermissionsToTheProcess(t *testing.T) {
+	bin := stayAliveBin(t)
+	svc := New(stubBins{bin: bin, skipPerms: true}, nil, events.New())
+	t.Cleanup(func() { _ = svc.Close("s1") })
+
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, 80, 24); err != nil {
+		t.Fatalf("Start = %v, want nil", err)
+	}
+
+	svc.mu.Lock()
+	got := spawnedArgs(t, svc, "s1")
+	svc.mu.Unlock()
+
+	// As above: the MCP registration follows, pinned by its own test. The flag
+	// has to land ahead of it — --mcp-config reads everything after it as another
+	// config path.
+	want := []string{bin, "--dangerously-skip-permissions", "--mcp-config"}
+	if len(got) != len(want)+1 || !slices.Equal(got[:len(want)], want) {
+		t.Errorf("spawned argv = %v, want %v followed by one config", got, want)
+	}
+}
+
 // TestStartPassesNameToTheProcess proves the peer name reaches the spawned
 // binary's argv beside the resume id, in the order claude parses.
 func TestStartPassesNameToTheProcess(t *testing.T) {
@@ -669,7 +721,7 @@ func TestSessionEnvInjectsCoordinates(t *testing.T) {
 func TestProviderArgsRegistersTheMCPServer(t *testing.T) {
 	const bin = "/usr/bin/lich"
 
-	claude := providerArgs(providers.Claude, "", "", bin)
+	claude := providerArgs(providers.Claude, "", "", bin, false)
 	if len(claude) != 2 || claude[0] != "--mcp-config" {
 		t.Fatalf("claude args = %v", claude)
 	}
@@ -693,7 +745,7 @@ func TestProviderArgsRegistersTheMCPServer(t *testing.T) {
 		t.Errorf("a secret reached the argv, which /proc exposes: %q", claude[1])
 	}
 
-	codex := providerArgs(providers.Codex, "", "", bin)
+	codex := providerArgs(providers.Codex, "", "", bin, false)
 	want := []string{
 		"-c", `mcp_servers.lich.command="/usr/bin/lich"`,
 		"-c", `mcp_servers.lich.args=["mcp"]`,
@@ -708,17 +760,17 @@ func TestProviderArgsRegistersTheMCPServer(t *testing.T) {
 // follows it, and Codex reads resume as a subcommand that every global option
 // must precede.
 func TestProviderArgsOrdersEachProvidersConstraint(t *testing.T) {
-	claude := providerArgs(providers.Claude, "lich-4f2a", "conv-1", "/usr/bin/lich")
+	claude := providerArgs(providers.Claude, "lich-4f2a", "conv-1", "/usr/bin/lich", true)
 	if claude[len(claude)-2] != "--mcp-config" {
 		t.Errorf("--mcp-config is not last, so it eats what follows: %v", claude)
 	}
-	for _, want := range []string{"--name", "--resume"} {
+	for _, want := range []string{"--name", "--resume", "--dangerously-skip-permissions"} {
 		if !slices.Contains(claude, want) {
 			t.Errorf("claude args lost %q: %v", want, claude)
 		}
 	}
 
-	codex := providerArgs(providers.Codex, "", "conv-1", "/usr/bin/lich")
+	codex := providerArgs(providers.Codex, "", "conv-1", "/usr/bin/lich", false)
 	resume := slices.Index(codex, "resume")
 	if resume < 0 {
 		t.Fatalf("codex args lost the resume subcommand: %v", codex)
@@ -748,7 +800,7 @@ func TestProviderArgsWithoutARegistration(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if args := providerArgs(tt.kind, "", "", tt.bin); len(args) != 0 {
+			if args := providerArgs(tt.kind, "", "", tt.bin, false); len(args) != 0 {
 				t.Errorf("args = %v, want none", args)
 			}
 		})

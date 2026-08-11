@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Claude Code can be spawned with its permission prompts off.** In a checkout
+  you intend to throw away, confirming every edit and every command is ceremony
+  — but the flag that drops the prompts could only be reached by pointing lich
+  at a launcher script of your own, which then applied to every session it ever
+  spawned. Settings › Providers › Claude Code now carries the switch, twice:
+  once for sessions in the project's own directory, once for sessions in a
+  worktree, so an agent can be let loose in the branch you can delete while the
+  tree you work in keeps asking. Both are off until you turn them on, and what
+  they turn on is `--dangerously-skip-permissions`: the agent then edits files,
+  runs commands and installs things without asking first.
+
 - **A task nobody picks up says so, instead of being waited out.** Handing work
   to another session proved only that the text reached its terminal — and a
   terminal can have something else on it: a provider still starting, a dialog

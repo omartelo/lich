@@ -7,6 +7,7 @@ import {
   enabledProviders,
   readEnabled,
   resolveDefaultProvider,
+  skipPermissionsKey,
   type ProviderState,
 } from "./providers-store"
 
@@ -19,6 +20,14 @@ describe("provider setting keys", () => {
     expect(binKey("claude")).toBe("claude.bin")
     expect(binKey("codex")).toBe("provider.codex.bin")
     expect(binKey("opencode")).toBe("provider.opencode.bin")
+  })
+
+  // The two scopes are separate rows in the settings table, and the Go spawn
+  // reads these exact strings — a rename on either side silently re-arms the
+  // wrong checkout, or none.
+  it("keys the skip-permissions flag per provider and checkout scope", () => {
+    expect(skipPermissionsKey("claude", false)).toBe("provider.claude.skip-permissions")
+    expect(skipPermissionsKey("claude", true)).toBe("provider.claude.skip-permissions.worktree")
   })
 })
 

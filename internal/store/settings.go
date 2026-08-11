@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"path/filepath"
 
 	"github.com/omartelo/lich/internal/providers"
 )
@@ -73,6 +74,38 @@ func (s *Service) ProviderBin(providerID, projectID string) string {
 		return ""
 	}
 	return bin
+}
+
+// skipPermissionsKey is the settings key that spawns a provider with its
+// permission prompts turned off, in one of two scopes: the project's own
+// checkout, and a worktree. Global only, and on only for the literal "true" —
+// this hands the agent the machine, so anything else (absent, unreadable, a
+// value from some other feature) has to mean no.
+//
+// Two keys rather than one because a worktree is a throwaway checkout: giving an
+// agent free rein there while keeping the prompts in the main working tree is
+// the answer most users want, and a single flag cannot express it.
+func skipPermissionsKey(providerID string, worktree bool) string {
+	key := "provider." + providerID + ".skip-permissions"
+	if worktree {
+		key += ".worktree"
+	}
+	return key
+}
+
+// SkipPermissions reports whether a session of this provider, starting in cwd,
+// runs without its permission prompts. cwd picks the scope: anything but the
+// project's own directory is a worktree. A project whose path cannot be read
+// falls back to the main-checkout setting — a session lich cannot place is not
+// one to answer for with the more permissive of two flags.
+func (s *Service) SkipPermissions(providerID, projectID, cwd string) bool {
+	root := s.ProjectPath(projectID)
+	worktree := root != "" && filepath.Clean(cwd) != filepath.Clean(root)
+	value, err := s.GetSetting(skipPermissionsKey(providerID, worktree), globalScope)
+	if err != nil {
+		return false
+	}
+	return value == "true"
 }
 
 // ghAccountKey is the settings key holding the gh account a project's GitHub

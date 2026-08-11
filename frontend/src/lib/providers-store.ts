@@ -29,6 +29,15 @@ export function binKey(id: string): string {
   return id === "claude" ? "claude.bin" : `provider.${id}.bin`
 }
 
+// skipPermissionsKey holds the flag that spawns a provider without its
+// permission prompts, in one of two scopes (mirrors store.skipPermissionsKey in
+// Go, which is what the spawn reads). Two keys because a worktree is a throwaway
+// checkout: letting an agent loose there while the main working tree keeps
+// asking is a position a single flag cannot express.
+export function skipPermissionsKey(id: string, worktree: boolean): string {
+  return `provider.${id}.skip-permissions${worktree ? ".worktree" : ""}`
+}
+
 // readEnabled interprets the stored flag: Claude is enabled by default (it was
 // always offered before the providers feature), every other provider is opt-in.
 // An explicit "1"/"0" overrides the default.
