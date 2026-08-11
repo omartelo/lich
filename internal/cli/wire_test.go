@@ -157,6 +157,17 @@ func (s *spawnStore) AddSession(_, _, _, _, _ string, _ int) error {
 	return nil
 }
 
+func (s *spawnStore) DeleteSession(_, _, _ string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.rows--
+	return nil
+}
+
+func (*spawnStore) CloseSession(_, _, _ string) error { return nil }
+
+func (*spawnStore) PurgeWorktreeSessions(_, _ string) error { return nil }
+
 // spawnGit refuses every worktree: the wire is what these tests prove, and
 // running git would prove something else in a temporary directory.
 type spawnGit struct{}
@@ -169,16 +180,30 @@ func (spawnGit) CreateWorktree(_, _, _, _ string, _ bool) (*project.Worktree, er
 	return nil, errors.New("no git here")
 }
 
+func (spawnGit) ListCheckouts(string) ([]project.Worktree, error) { return nil, nil }
+
+func (spawnGit) RemoveWorktree(_, _ string, _ bool) error { return errors.New("no git here") }
+
+func (spawnGit) WorktreeDirty(string) (bool, error) { return false, nil }
+
 type spawnTerminal struct {
-	mu   sync.Mutex
-	kind string
-	cwd  string
+	mu     sync.Mutex
+	kind   string
+	cwd    string
+	closed string
 }
 
 func (s *spawnTerminal) Start(_, _, cwd, kind, _, _ string, _ bool, _, _ int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cwd, s.kind = cwd, kind
+	return nil
+}
+
+func (s *spawnTerminal) Close(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.closed = id
 	return nil
 }
 

@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **An agent can close a session, and decide what happens to its worktree.** It
+  could open one and hand it work, but never tidy up: every checkout an agent
+  made stayed until somebody removed it by hand. `lich close` — and the
+  `close_session` tool — closes a session by either of its names, and closing the
+  last one in a worktree asks what the checkout is for: keep it, and the session
+  is parked so opening that branch again resumes its conversation, or remove it
+  and the checkout goes with it. A checkout with uncommitted work is only removed
+  when the caller says so explicitly, and no session can close itself. `lich
+  worktrees` (and `list_worktrees`) is the other half: what each checkout is
+  called, whether anything in it is uncommitted, and which sessions are open in
+  it. Opening a session on a branch that is already checked out now opens that
+  checkout instead of failing.
+
 - **A task nobody picks up says so, instead of being waited out.** Handing work
   to another session proved only that the text reached its terminal — and a
   terminal can have something else on it: a provider still starting, a dialog

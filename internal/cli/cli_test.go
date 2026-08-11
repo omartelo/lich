@@ -110,7 +110,10 @@ func TestHelpPrintsEveryCommand(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit = %d", code)
 	}
-	for _, want := range []string{"lich sessions", "lich send", "lich wait", "lich reply", "lich open"} {
+	for _, want := range []string{
+		"lich sessions", "lich send", "lich wait", "lich reply", "lich open",
+		"lich close", "lich worktrees",
+	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("help does not document %q", want)
 		}
@@ -556,5 +559,96 @@ func TestSendSaysWhenTheTaskWasNeverPickedUp(t *testing.T) {
 	}
 	if strings.Contains(stdout, "lich wait") {
 		t.Errorf("offered a ticket to wait on for a task nobody read:\n%s", stdout)
+	}
+}
+
+func TestCloseSaysWhatWentWithTheSession(t *testing.T) {
+	kept := newFakeLich(t, `{"id":"9f8e","projectId":"p1","project":"lich","label":"auth-fix",
+		"worktree":"/wt/auth-fix","kept":true}`)
+	code, stdout, stderr := run(t, kept, "close", "--worktree", "keep", "auth-fix")
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+	call := kept.only(t)
+	if call.method != "spawn.Close" {
+		t.Errorf("method = %q", call.method)
+	}
+	want := []any{"s1", "auth-fix", "", "keep", false}
+	if len(call.args) != len(want) {
+		t.Fatalf("args = %v, want %v", call.args, want)
+	}
+	for i := range want {
+		if call.args[i] != want[i] {
+			t.Errorf("argument %d = %v, want %v", i, call.args[i], want[i])
+		}
+	}
+	// A kept checkout is the one outcome with something to come back to.
+	if !strings.Contains(stdout, "/wt/auth-fix") || !strings.Contains(stdout, "parked") {
+		t.Errorf("output does not say what was kept:\n%s", stdout)
+	}
+
+	removed := newFakeLich(t, `{"id":"9f8e","projectId":"p1","project":"lich","label":"auth-fix",
+		"worktree":"/wt/auth-fix","removed":true}`)
+	code, stdout, _ = run(t, removed, "close", "--worktree", "remove", "--force", "auth-fix")
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if removed.only(t).args[4] != true {
+		t.Errorf("force was not passed through: %v", removed.only(t).args)
+	}
+	if !strings.Contains(stdout, "removed its worktree") {
+		t.Errorf("output = %q", stdout)
+	}
+}
+
+func TestCloseReportsTheRefusalToDecideForYou(t *testing.T) {
+	f := newFakeLich(t, `{"error":"\"auth-fix\" is the last session in the worktree /wt/auth-fix"}`)
+	f.status = 400
+
+	code, stdout, stderr := run(t, f, "close", "auth-fix")
+	if code != 1 {
+		t.Fatalf("exit = %d, want 1", code)
+	}
+	if stdout != "" {
+		t.Errorf("stdout = %q, want nothing for a close that did not happen", stdout)
+	}
+	if !strings.Contains(stderr, "last session in the worktree") {
+		t.Errorf("stderr = %q", stderr)
+	}
+}
+
+func TestWorktreesListsWhatIsInEach(t *testing.T) {
+	f := newFakeLich(t, `[{"name":"auth-fix","path":"/wt/auth-fix","dirty":true,"sessions":["auth-fix"]},
+	                      {"name":"idle","path":"/wt/idle","dirty":false,"sessions":[]}]`)
+
+	code, stdout, stderr := run(t, f, "worktrees")
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+	if f.only(t).method != "spawn.Worktrees" {
+		t.Errorf("method = %q", f.only(t).method)
+	}
+	for _, want := range []string{"auth-fix\tuncommitted\tauth-fix", "idle\tclean\t-"} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("output is missing %q:\n%s", want, stdout)
+		}
+	}
+}
+
+func TestWorktreesSaysWhenThereAreNone(t *testing.T) {
+	f := newFakeLich(t, `null`)
+
+	code, stdout, _ := run(t, f, "worktrees")
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if !strings.Contains(stdout, "No worktrees.") {
+		t.Errorf("stdout = %q", stdout)
+	}
+
+	empty := newFakeLich(t, `null`)
+	_, jsonOut, _ := run(t, empty, "worktrees", "--json")
+	if strings.TrimSpace(jsonOut) != "[]" {
+		t.Errorf("json = %q, want [] — a script should not have to handle null", jsonOut)
 	}
 }

@@ -9,6 +9,7 @@ import {
   isTitleEvent,
   isUsageEvent,
   shouldToastAttention,
+  toClosedSession,
   toOpenedSession,
   toSessionStatus,
 } from "./session-events"
@@ -301,5 +302,28 @@ describe("toOpenedSession", () => {
   // less than adopting one whose terminal can never start.
   it("rejects a kind this build does not know", () => {
     expect(toOpenedSession({ ...payload, kind: "gemini" })).toBeNull()
+  })
+})
+
+describe("toClosedSession", () => {
+  it("narrows a session closed outside the window", () => {
+    expect(toClosedSession({ id: "s2", projectId: "p1", activeId: "s3" })).toEqual({
+      id: "s2",
+      projectId: "p1",
+      activeId: "s3",
+    })
+  })
+
+  // An empty active session is the project having none left, not a missing
+  // field: the last card of a project closes to nothing.
+  it("keeps an empty active session", () => {
+    expect(toClosedSession({ id: "s2", projectId: "p1", activeId: "" })?.activeId).toBe("")
+    expect(toClosedSession({ id: "s2", projectId: "p1" })?.activeId).toBe("")
+  })
+
+  it("rejects a payload with nothing to place the card by", () => {
+    expect(toClosedSession({ projectId: "p1" })).toBeNull()
+    expect(toClosedSession({ id: "s2", projectId: "" })).toBeNull()
+    expect(toClosedSession(null)).toBeNull()
   })
 })

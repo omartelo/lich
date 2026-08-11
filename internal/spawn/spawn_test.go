@@ -24,6 +24,33 @@ type fakeSessions struct {
 	loadErr  error
 	rows     []added
 	addErr   error
+	// deleted/parked/purged record what a close asked the store to do, and
+	// against which active session it left the project.
+	deleted []closedRow
+	parked  []closedRow
+	purged  []string
+}
+
+// closedRow is one session the store was asked to take out of the workspace.
+type closedRow struct {
+	projectID string
+	sessionID string
+	activeID  string
+}
+
+func (f *fakeSessions) DeleteSession(projectID, sessionID, activeID string) error {
+	f.deleted = append(f.deleted, closedRow{projectID, sessionID, activeID})
+	return nil
+}
+
+func (f *fakeSessions) CloseSession(projectID, sessionID, activeID string) error {
+	f.parked = append(f.parked, closedRow{projectID, sessionID, activeID})
+	return nil
+}
+
+func (f *fakeSessions) PurgeWorktreeSessions(_, path string) error {
+	f.purged = append(f.purged, path)
+	return nil
 }
 
 func (f *fakeSessions) LoadState() ([]store.Project, error) {
@@ -54,6 +81,30 @@ type fakeWorktrees struct {
 	listErr   error
 	created   []createdWorktree
 	createErr error
+	// checkouts is what ListCheckouts answers, dirty which of them hold
+	// uncommitted work, and removed what RemoveWorktree was asked to delete.
+	checkouts []project.Worktree
+	dirty     map[string]bool
+	removed   []removedWorktree
+	removeErr error
+}
+
+type removedWorktree struct {
+	path  string
+	force bool
+}
+
+func (f *fakeWorktrees) ListCheckouts(string) ([]project.Worktree, error) {
+	return f.checkouts, f.listErr
+}
+
+func (f *fakeWorktrees) WorktreeDirty(path string) (bool, error) {
+	return f.dirty[path], nil
+}
+
+func (f *fakeWorktrees) RemoveWorktree(_, path string, force bool) error {
+	f.removed = append(f.removed, removedWorktree{path, force})
+	return f.removeErr
 }
 
 func (f *fakeWorktrees) Branch(string) string { return f.branch }
@@ -87,6 +138,12 @@ type started struct {
 type fakeTerminal struct {
 	spawns []started
 	err    error
+	closed []string
+}
+
+func (f *fakeTerminal) Close(id string) error {
+	f.closed = append(f.closed, id)
+	return nil
 }
 
 func (f *fakeTerminal) Start(

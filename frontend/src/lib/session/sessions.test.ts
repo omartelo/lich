@@ -5,6 +5,7 @@ import {
   addSession,
   adoptSession,
   closeSession,
+  dropClosedSession,
   groupByWorktree,
   hasSession,
   isLastWorktreeSession,
@@ -643,5 +644,27 @@ describe("hasSession", () => {
     expect(hasSession(state, "s2")).toBe(false)
     expect(hasSession(state, "never-existed")).toBe(false)
     expect(hasSession({}, "s1")).toBe(false)
+  })
+})
+
+describe("dropClosedSession", () => {
+  it("removes the card and takes the active session the row recorded", () => {
+    const state = dropClosedSession(buildState(3), P, "s2", "s3")
+    expect(sessionsOf(state, P).map((s) => s.id)).toEqual(["s1", "s3"])
+    expect(activeSessionId(state, P)).toBe("s3")
+  })
+
+  // The backend picked the neighbour when it wrote the row; picking a different
+  // one here would put the window and the next launch on different sessions.
+  it("takes an empty active session as the project having none left", () => {
+    const state = dropClosedSession(addSession({}, P, "only"), P, "only", "")
+    expect(sessionsOf(state, P)).toEqual([])
+    expect(activeSessionId(state, P)).toBe("")
+  })
+
+  it("ignores a session or project it does not hold", () => {
+    const before = buildState(2)
+    expect(dropClosedSession(before, P, "ghost", "s1")).toBe(before)
+    expect(dropClosedSession(before, "other", "s1", "")).toBe(before)
   })
 })

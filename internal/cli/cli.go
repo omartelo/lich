@@ -87,6 +87,14 @@ const usage = `lich talks to the sessions open in the running lich window.
       that branch name first and roots the session in it. Prints the name the
       new session is addressed by.
 
+  lich close [--project <name>] [--worktree keep|remove] [--force] [--json] <session>
+      Close a session. Closing the last one in a worktree needs --worktree to
+      say whether the checkout stays; removing a dirty one needs --force.
+
+  lich worktrees [--project <name>] [--json]
+      List a project's git worktrees: what is uncommitted in each and which
+      sessions are open in it.
+
   lich mcp
       Serve the commands above as MCP tools over stdio. lich registers this
       itself for the providers that support it; you only run it by hand to
@@ -135,6 +143,10 @@ func dispatch(args []string, c *client) int {
 		return c.run(c.reply, args[1:])
 	case "open":
 		return c.run(c.open, args[1:])
+	case "close":
+		return c.run(c.close, args[1:])
+	case "worktrees":
+		return c.run(c.worktrees, args[1:])
 	case "mcp":
 		return c.run(c.serveMCP, args[1:])
 	case "rage":
@@ -410,6 +422,87 @@ func archiveRoot(path string) string {
 	base := filepath.Base(path)
 	base = strings.TrimSuffix(base, ".gz")
 	return strings.TrimSuffix(base, ".tar")
+}
+
+func (c *client) close(args []string) error {
+	flags := newFlagSet("close")
+	project := flags.String("project", "", "narrow the target to one project when the label is ambiguous")
+	worktree := flags.String("worktree", "",
+		"what to do with the checkout when this is its last session: keep or remove")
+	force := flags.Bool("force", false, "remove a checkout that still has uncommitted work")
+	asJSON := flags.Bool("json", false, "print the result as JSON")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 1 {
+		return fmt.Errorf(
+			"usage: lich close [--project <name>] [--worktree keep|remove] [--force] [--json] <session>")
+	}
+
+	var closed spawn.Closed
+	call := []any{c.sessionID(), flags.Arg(0), *project, *worktree, *force}
+	if err := c.call("spawn.Close", call, openCall, &closed); err != nil {
+		return err
+	}
+	if *asJSON {
+		return c.emit(closed)
+	}
+	fmt.Fprint(c.stdout, closedText(closed))
+	return nil
+}
+
+// closedText says what is gone and what is not. A checkout that was kept is the
+// one outcome with something left to come back to, so it says how.
+func closedText(closed spawn.Closed) string {
+	switch {
+	case closed.Removed:
+		return fmt.Sprintf("Closed %q and removed its worktree %s.\n", closed.Label, closed.Worktree)
+	case closed.Kept:
+		return fmt.Sprintf(
+			"Closed %q. Its worktree %s is still there, and the session is parked: opening a "+
+				"session on that branch again picks its conversation back up.\n",
+			closed.Label, closed.Worktree,
+		)
+	default:
+		return fmt.Sprintf("Closed %q.\n", closed.Label)
+	}
+}
+
+func (c *client) worktrees(args []string) error {
+	flags := newFlagSet("worktrees")
+	project := flags.String("project", "", "project to list; defaults to the caller's own")
+	asJSON := flags.Bool("json", false, "print the result as JSON")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+
+	var checkouts []spawn.Checkout
+	if err := c.call("spawn.Worktrees", []any{c.sessionID(), *project}, shortCall, &checkouts); err != nil {
+		return err
+	}
+	if checkouts == nil {
+		checkouts = []spawn.Checkout{}
+	}
+	if *asJSON {
+		return c.emit(checkouts)
+	}
+	if len(checkouts) == 0 {
+		fmt.Fprintln(c.stdout, "No worktrees.")
+		return nil
+	}
+	fmt.Fprintln(c.stdout, "worktree\tstate\tsessions")
+	for _, wt := range checkouts {
+		state := "clean"
+		if wt.Dirty {
+			state = "uncommitted"
+		}
+		sessions := "-"
+		if len(wt.Sessions) > 0 {
+			sessions = strings.Join(wt.Sessions, ", ")
+		}
+		fmt.Fprintf(c.stdout, "%s\t%s\t%s\n", wt.Name, state, sessions)
+	}
+	return nil
 }
 
 // report prints a Send or Wait outcome. An answer goes to stdout on its own so

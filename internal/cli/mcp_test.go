@@ -143,6 +143,8 @@ func TestMCPListsEveryTool(t *testing.T) {
 	want := map[string][]string{
 		"list_sessions":    {},
 		"open_session":     {},
+		"close_session":    {"session"},
+		"list_worktrees":   {},
 		"send_to_session":  {"session", "prompt"},
 		"wait_for_answer":  {"ticket"},
 		"reply_to_session": {"ticket", "answer"},
@@ -426,5 +428,63 @@ func TestMCPSendReportsATaskNobodyRead(t *testing.T) {
 	// An agent told to wait on this would poll a ticket that no longer exists.
 	if strings.Contains(text, "wait_for_answer") {
 		t.Errorf("pointed at a ticket for a task nobody read: %q", text)
+	}
+}
+
+func TestMCPCloseSessionPassesTheWorktreeAnswer(t *testing.T) {
+	f := newFakeLich(t, `{"id":"9f8e","projectId":"p1","project":"lich","label":"auth-fix",
+		"worktree":"/wt/auth-fix","removed":true}`)
+
+	replies := speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
+		{"name":"close_session","arguments":{"session":"auth-fix","worktree":"remove","force":true}}}`)
+
+	if text, failed := textOf(t, replies[0]); failed {
+		t.Fatalf("tool reported a failure: %s", text)
+	}
+	call := f.only(t)
+	want := []any{"s1", "auth-fix", "", "remove", true}
+	if len(call.args) != len(want) {
+		t.Fatalf("args = %v, want %v", call.args, want)
+	}
+	for i := range want {
+		if call.args[i] != want[i] {
+			t.Errorf("argument %d = %v, want %v", i, call.args[i], want[i])
+		}
+	}
+}
+
+// force discards work that is in no commit and on no remote, so only a real
+// yes counts — a model that sends the string "false" must not read as consent.
+func TestMCPForceIsOnlyTrueWhenItSaysTrue(t *testing.T) {
+	for _, sent := range []string{`"false"`, `"no"`, `0`, `null`} {
+		f := newFakeLich(t, `{"id":"9f8e","projectId":"p1","label":"auth-fix","removed":true}`)
+		speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
+			{"name":"close_session","arguments":{"session":"auth-fix","worktree":"remove","force":`+sent+`}}}`)
+		if got := f.only(t).args[4]; got != false {
+			t.Errorf("force sent as %s read as %v", sent, got)
+		}
+	}
+}
+
+func TestMCPListWorktreesReturnsThemAsJSON(t *testing.T) {
+	f := newFakeLich(t, `[{"name":"auth-fix","path":"/wt/auth-fix","dirty":true,"sessions":["auth-fix"]}]`)
+
+	replies := speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
+		{"name":"list_worktrees","arguments":{}}}`)
+
+	text, failed := textOf(t, replies[0])
+	if failed {
+		t.Fatalf("tool reported a failure: %s", text)
+	}
+	var checkouts []struct {
+		Name     string   `json:"name"`
+		Dirty    bool     `json:"dirty"`
+		Sessions []string `json:"sessions"`
+	}
+	if err := json.Unmarshal([]byte(text), &checkouts); err != nil {
+		t.Fatalf("list_worktrees did not return JSON: %v (%q)", err, text)
+	}
+	if len(checkouts) != 1 || !checkouts[0].Dirty || len(checkouts[0].Sessions) != 1 {
+		t.Errorf("checkouts = %+v", checkouts)
 	}
 }

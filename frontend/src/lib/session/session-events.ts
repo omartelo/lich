@@ -54,6 +54,12 @@ export const RELAY_EVENT = "session-relay"
 // looked up: the row is already written and its PTY is already running.
 export const OPENED_EVENT = "session-opened"
 
+// Global event the backend emits when a session was closed outside the window —
+// an agent running `lich close` or its MCP tool (see spawn.ClosedEventName).
+// Payload: { id, projectId, activeId } — the session that left, its project,
+// and which card is active now, decided by the row that is already written.
+export const CLOSED_EVENT = "session-closed"
+
 // Global event the backend emits when a request's target ended its turn without
 // answering through lich (see relay.StalledEventName). Payload:
 // { id, targetId, target } — who asked ("" when it was the command line rather
@@ -207,6 +213,25 @@ export function toOpenedSession(data: unknown): OpenedSession | null {
     path: typeof path === "string" ? path : "",
     nextSeq: typeof nextSeq === "number" ? nextSeq : 1,
   }
+}
+
+// A session closed outside the window: which card goes, and which one the
+// project falls back to.
+export interface ClosedSession {
+  id: string
+  projectId: string
+  activeId: string
+}
+
+export function toClosedSession(data: unknown): ClosedSession | null {
+  if (!isIdEvent(data)) {
+    return null
+  }
+  const { projectId, activeId } = data as { projectId?: unknown; activeId?: unknown }
+  if (typeof projectId !== "string" || projectId === "") {
+    return null
+  }
+  return { id: data.id, projectId, activeId: typeof activeId === "string" ? activeId : "" }
 }
 
 export function isTitleEvent(data: unknown): data is { id: string; label: string } {

@@ -212,6 +212,48 @@ leaves nothing behind — no row, no card. A session whose *terminal* failed to
 start keeps both, and says so, because the card is the only place its error can
 be read.
 
+### `lich close [--project <name>] [--worktree keep|remove] [--force] <session>`
+
+Closes a session, addressed by either of its names, and settles what happens to
+the checkout it was the last one in.
+
+```
+Closed "auth-fix". Its worktree /home/you/.local/share/lich/worktrees/1a2b/auth-fix is still
+there, and the session is parked: opening a session on that branch again picks its
+conversation back up.
+```
+
+- **`--worktree` is required when this is the checkout's last session**, and only
+  then. `keep` leaves it on disk and parks the row — the provider conversation
+  goes with it, and `open --worktree <branch>` on that branch resumes it. `remove`
+  deletes the checkout, the row, and any parked rows pointing at it. Without the
+  flag it is an error naming the two answers rather than a guess: the window asks
+  this in a dialog, and there is nobody here to ask.
+- **`--force` is needed to remove a checkout with uncommitted work**, which is
+  the second question the window asks. What it discards is in no commit and on no
+  remote.
+- A session sharing its checkout with another, or living in the project's own
+  directory, has nothing at stake and closes on the spot.
+- **A session cannot close itself.** The answer would have nowhere to go.
+- Unlike `sessions`, this reaches a card whose terminal was never opened: it is
+  still a session, and closing it is the one thing you can do with it.
+
+### `lich worktrees [--project <name>] [--json]`
+
+Lists a project's git worktrees — what each is called, whether it holds
+uncommitted work, and which sessions are open in it:
+
+```
+worktree	state	sessions
+auth-fix	uncommitted	auth-fix
+idle	clean	-
+```
+
+The sessions column is what makes it actionable: a checkout with one session is
+one whose fate that session's close decides, and a checkout with none is one
+nobody is working in. The project's own directory is not listed — it is the
+checkout every project has and the one that cannot be removed.
+
 ### `lich mcp`
 
 Serves the commands above as MCP tools over stdio: one JSON-RPC 2.0 message per
@@ -229,6 +271,8 @@ at lich.
 | `wait_for_answer` | `ticket`, optional `timeout_seconds`. |
 | `reply_to_session` | `ticket`, `answer` — what a relayed message asks for. |
 | `open_session` | optional `project`, `kind`, `worktree`, `base` — `lich open`. |
+| `close_session` | `session`, optional `project`, `worktree` (`keep`/`remove`), `force`. |
+| `list_worktrees` | optional `project` — the checkouts, as JSON. |
 
 A tool that fails answers with `isError` and the reason as text, not a JSON-RPC
 error: the agent should read what went wrong and act on it, not lose the turn.
@@ -389,8 +433,8 @@ receiving agent only because this text describes it.
 
 ## lich server side
 
-- **Spawn** — `internal/spawn`: opens a session for a caller that is not the
-  window. It is the one place that does all four things a session is at once —
+- **Spawn** — `internal/spawn`: opens, lists and closes for a caller that is not
+  the window. It is the one place that does all four things a session is at once —
   the worktree (`internal/project`), the row (`internal/store`), the PTY
   (`internal/terminal`) and the card (the `session-opened` event) — because no
   existing package owns more than one of them. The window does the same four in
@@ -477,13 +521,21 @@ whoever asked.
 
 ## Known ceilings
 
+- **Closing has no undo.** The window offers one for ten seconds after a close;
+  nothing here does. A removed checkout is gone from disk, and a deleted session
+  row with it. `--force` on a dirty checkout is the only step that asks for
+  anything extra, and it asks the agent, not the user.
+- **Nothing says whose session it is.** Any session can close any other in the
+  workspace, its own excepted. That does not widen lich's trust boundary — every
+  PTY already holds the token — but an agent told to "clean up the worktrees"
+  can close cards a person was working in.
 - **A relayed prompt carries the sender's reach, not the user's.** It is typed
   at the target's prompt and submitted, so the receiving agent acts on it under
   its own permissions — in a session running without permission prompts, that is
   every tool it has. This does not widen lich's trust boundary (`LICH_TOKEN` is
   already in every PTY, and any process in one can already write to any
   session), but it is the first feature that uses it, and there is no switch.
-- **The tools cost context in every session, used or not.** Five tool
+- **The tools cost context in every session, used or not.** Seven tool
   definitions are in the prompt of every Claude Code and Codex session lich
   spawns, whether or not that session ever talks to another one. The command
   line costs nothing until it is called; the tools are what buy discovery, and

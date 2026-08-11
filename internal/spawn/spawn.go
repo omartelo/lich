@@ -37,6 +37,19 @@ import (
 // is the workspace state, which outlives any one card.
 const OpenedEventName = "session-opened"
 
+// ClosedEventName carries a session closed outside the window, so the card goes
+// away without a reload. Its payload is ClosedEvent.
+const ClosedEventName = "session-closed"
+
+// ClosedEvent is the payload of ClosedEventName: which session left, the project
+// it left, and which of that project's sessions is active now — the window has
+// no say in the choice, because the row that records it is already written.
+type ClosedEvent struct {
+	ID        string `json:"id"`
+	ProjectID string `json:"projectId"`
+	ActiveID  string `json:"activeId"`
+}
+
 // The size a session opened here starts at: none of its own, which the terminal
 // service reads as "whatever size the window last reported" (terminal.sizeFor).
 //
@@ -51,24 +64,33 @@ const (
 	startRows = 0
 )
 
-// Sessions is the persistence this needs: the workspace to resolve a project in,
-// and the write that adds a session to one. The store implements it.
+// Sessions is the persistence this needs: the workspace to resolve a project
+// in, and the writes that add a session to one, take one away, and park one for
+// a later resume. The store implements it.
 type Sessions interface {
 	LoadState() ([]store.Project, error)
 	AddSession(projectID, sessionID, label, kind, path string, nextSeq int) error
+	DeleteSession(projectID, sessionID, activeID string) error
+	CloseSession(projectID, sessionID, activeID string) error
+	PurgeWorktreeSessions(projectID, path string) error
 }
 
 // Worktrees is the git side. The project service implements it.
 type Worktrees interface {
 	Branch(path string) string
 	ListBranches(path string) (project.Branches, error)
+	ListCheckouts(path string) ([]project.Worktree, error)
 	CreateWorktree(projectPath, projectID, name, base string, baseIsRemote bool) (*project.Worktree, error)
+	RemoveWorktree(projectPath, wtPath string, force bool) error
+	WorktreeDirty(wtPath string) (bool, error)
 }
 
 // Terminal is the PTY side: the same spawn the window asks for when a card is
-// first viewed. The terminal service implements it.
+// first viewed, and the same close it asks for when a card goes away. The
+// terminal service implements it.
 type Terminal interface {
 	Start(id, projectID, cwd, kind, resume, name string, setup bool, cols, rows int) error
+	Close(id string) error
 }
 
 // Events is where an opened session is announced to the window. A nil one leaves
@@ -143,11 +165,27 @@ func (s *Service) Open(fromID, projectName, kind, worktree, base string) (Sessio
 	label := fmt.Sprintf("Session %d", target.NextSeq)
 	setup := false
 	if worktree != "" {
-		wt, err := s.addWorktree(target, worktree, base)
-		if err != nil {
-			return Session{}, err
+		// An existing checkout is opened, not created: asking for a worktree by
+		// the branch it holds is asking to work on that branch, and a caller
+		// that cannot see the repository has no way to know which of the two it
+		// is asking for. Only a fresh one runs the setup script — the checkout
+		// that is already there ran it when it was made.
+		if path, ok := s.checkoutAt(target, worktree); ok {
+			cwd, stored, setup = path, path, false
+		} else {
+			wt, err := s.addWorktree(target, worktree, base)
+			if err != nil {
+				return Session{}, err
+			}
+			cwd, stored, setup = wt.Path, wt.Path, true
 		}
-		cwd, stored, label, setup = wt.Path, wt.Path, wt.Name, true
+		// The card is named after the checkout, as the window names it — unless
+		// a session there already took that name. Two live sessions answering to
+		// one label is the one thing `lich send` cannot resolve, so the second
+		// falls back to the project's own counter.
+		if !labelTaken(target, worktree) {
+			label = worktree
+		}
 	}
 
 	id, err := newSessionID()
@@ -288,6 +326,16 @@ func resolveKind(projects []store.Project, fromID, kind string) (string, error) 
 		}
 	}
 	return providers.Claude, nil
+}
+
+// labelTaken reports whether a project already holds a session under a label.
+func labelTaken(p store.Project, label string) bool {
+	for _, sess := range p.Sessions {
+		if strings.EqualFold(sess.Label, label) {
+			return true
+		}
+	}
+	return false
 }
 
 func knownProjects(projects []store.Project) string {

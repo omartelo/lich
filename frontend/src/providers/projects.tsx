@@ -12,6 +12,7 @@ import {
   addSession,
   adoptSession,
   closeSession as removeSession,
+  dropClosedSession,
   isSessionKind,
   neighborSessionId,
   projectOfSession,
@@ -30,6 +31,7 @@ import { applyOrder, pinFirst } from "@/lib/reorder"
 import { displayPath } from "@/lib/paths"
 import { defaultProviderKind } from "@/lib/providers-store"
 import {
+  CLOSED_EVENT,
   OPENED_EVENT,
   RELAY_STALLED_EVENT,
   STATUS_EVENT,
@@ -41,6 +43,7 @@ import {
   isStatusEvent,
   isTitleEvent,
   shouldToastAttention,
+  toClosedSession,
   toOpenedSession,
   toSessionStatus,
   type SessionStatus,
@@ -245,6 +248,27 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       const { id, projectId, label, kind, path, nextSeq } = opened
       const session: Session = { id, label, kind, ...(path ? { path } : {}) }
       const next = adoptSession(sessionsRef.current, projectId, session, nextSeq)
+      if (next !== sessionsRef.current) {
+        setSessions(next)
+      }
+    })
+    return () => off()
+  }, [])
+
+  // A session an agent closed through the CLI or its MCP tools: the row is
+  // already gone and its PTY with it, so only the card is taken down here.
+  useEffect(() => {
+    const off = onAppEvent(CLOSED_EVENT, (data) => {
+      const closed = toClosedSession(data)
+      if (!closed) {
+        return
+      }
+      const next = dropClosedSession(
+        sessionsRef.current,
+        closed.projectId,
+        closed.id,
+        closed.activeId,
+      )
       if (next !== sessionsRef.current) {
         setSessions(next)
       }

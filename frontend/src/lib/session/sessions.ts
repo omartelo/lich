@@ -117,6 +117,31 @@ export function adoptSession(
   }
 }
 
+// dropClosedSession removes a session the backend already closed — one an agent
+// closed through the CLI or its MCP tools — and focuses whichever card that
+// write recorded as the project's active one. Nothing is persisted from here:
+// the row is gone, and choosing a different card than the row names would put
+// the window and the next launch on different sessions.
+export function dropClosedSession(
+  state: SessionState,
+  projectId: string,
+  sessionId: string,
+  activeId: string,
+): SessionState {
+  const current = state[projectId]
+  if (!current || !current.sessions.some((s) => s.id === sessionId)) {
+    return state
+  }
+  return {
+    ...state,
+    [projectId]: {
+      ...current,
+      sessions: current.sessions.filter((s) => s.id !== sessionId),
+      activeId,
+    },
+  }
+}
+
 // closeSession removes a session. When the active one is closed, focus moves to
 // a neighbor. The project entry is kept even when empty so nextSeq survives: a
 // project emptied and then reopened keeps counting labels up.

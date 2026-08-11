@@ -219,6 +219,20 @@ func (a mcpArgs) text(key string) string {
 	}
 }
 
+// flag reads a boolean, and only "yes" counts. A model that sends the string
+// "false" — or anything else it invented — must not read as consent, because
+// the one flag this carries discards uncommitted work.
+func (a mcpArgs) flag(key string) bool {
+	switch v := a[key].(type) {
+	case bool:
+		return v
+	case string:
+		return v == "true"
+	default:
+		return false
+	}
+}
+
 // seconds reads a wait from the arguments, clamped to what an MCP call may
 // block for (see mcpMaxWait). A caller asking for longer gets the cap, not the
 // detachment it was heading for.
@@ -356,6 +370,62 @@ var mcpTools = []mcpTool{
 				return "", err
 			}
 			return openedText(opened), nil
+		},
+	},
+	{
+		Name: "close_session",
+		Description: "Close a session opened in lich. Closing the last session in a git " +
+			"worktree decides what happens to that checkout, so it needs the worktree " +
+			"argument: keep it on disk (the session is parked, and opening a session on " +
+			"that branch again resumes its conversation) or remove it. A checkout with " +
+			"uncommitted work is only removed with force, because what that discards is in " +
+			"no commit and on no remote. You cannot close the session you are running in.",
+		Schema: schema(map[string]any{
+			"session": property("string",
+				"The session to close, by the label on its card or the name it answers to."),
+			"project": property("string",
+				"Project to narrow to, when the same label exists in more than one."),
+			"worktree": property("string",
+				"Required when this is the last session in a worktree: \"keep\" leaves the "+
+					"checkout on disk, \"remove\" deletes it."),
+			"force": property("boolean",
+				"Remove a checkout that still has uncommitted work. Ask the user first."),
+		}, "session"),
+		Run: func(c *client, args mcpArgs) (string, error) {
+			var closed spawn.Closed
+			call := []any{
+				c.sessionID(), args.text("session"), args.text("project"),
+				args.text("worktree"), args.flag("force"),
+			}
+			if err := c.call("spawn.Close", call, openCall, &closed); err != nil {
+				return "", err
+			}
+			return closedText(closed), nil
+		},
+	},
+	{
+		Name: "list_worktrees",
+		Description: "The git worktrees of a project: what each is called, whether it has " +
+			"uncommitted work, and which sessions are open in it. Use it before opening a " +
+			"session on a branch (one that is already checked out is opened, not created) " +
+			"and before closing one (the last session in a checkout decides its fate).",
+		Schema: schema(map[string]any{
+			"project": property("string", "Project to list. Defaults to your own."),
+		}),
+		Run: func(c *client, args mcpArgs) (string, error) {
+			var checkouts []spawn.Checkout
+			call := []any{c.sessionID(), args.text("project")}
+			if err := c.call("spawn.Worktrees", call, shortCall, &checkouts); err != nil {
+				return "", err
+			}
+			if checkouts == nil {
+				checkouts = []spawn.Checkout{}
+			}
+			out, err := json.Marshal(checkouts)
+			if err != nil {
+				return "", fmt.Errorf("encode the worktrees: %w", err)
+			}
+			return string(out), nil
 		},
 	},
 	{
