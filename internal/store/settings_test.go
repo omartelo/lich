@@ -127,6 +127,50 @@ func TestProviderBinResolution(t *testing.T) {
 	}
 }
 
+// TestSkipPermissionsIsScopedByCheckout pins the two scopes apart: the flag a
+// session in the project's own directory reads is not the one a session in a
+// worktree reads, so turning it on for throwaway checkouts leaves the main
+// working tree prompting.
+func TestSkipPermissionsIsScopedByCheckout(t *testing.T) {
+	svc := newTestStore(t)
+	if err := svc.AddProject("p1", "alpha", "/repo/alpha"); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+
+	// Nothing configured: both scopes prompt.
+	if svc.SkipPermissions(providers.Claude, "p1", "/repo/alpha") {
+		t.Error("unconfigured project directory skips permissions, want prompts")
+	}
+	if svc.SkipPermissions(providers.Claude, "p1", "/repo/alpha-feature") {
+		t.Error("unconfigured worktree skips permissions, want prompts")
+	}
+
+	_ = svc.SetSetting("provider.claude.skip-permissions.worktree", globalScope, "true")
+	if !svc.SkipPermissions(providers.Claude, "p1", "/repo/alpha-feature/") {
+		t.Error("worktree does not skip permissions, want it on")
+	}
+	if svc.SkipPermissions(providers.Claude, "p1", "/repo/alpha/") {
+		t.Error("project directory follows the worktree flag, want its own")
+	}
+
+	// A project lich cannot place answers with the main-checkout flag, never the
+	// worktree one it just read as true.
+	if svc.SkipPermissions(providers.Claude, "gone", "/repo/alpha-feature") {
+		t.Error("unknown project reads the worktree flag, want the main-checkout one")
+	}
+
+	_ = svc.SetSetting("provider.claude.skip-permissions", globalScope, "true")
+	if !svc.SkipPermissions(providers.Claude, "p1", "/repo/alpha") {
+		t.Error("project directory does not skip permissions, want it on")
+	}
+
+	// Only the literal "true" arms it — any other stored value prompts.
+	_ = svc.SetSetting("provider.claude.skip-permissions", globalScope, "1")
+	if svc.SkipPermissions(providers.Claude, "p1", "/repo/alpha") {
+		t.Error("value \"1\" skips permissions, want only \"true\" to")
+	}
+}
+
 // TestWorktreeSetupIsProjectScoped pins the setup script the terminal service
 // reads when it spawns the first session of a fresh worktree. Project-scoped
 // only: a global value must never leak into a project that configured none,

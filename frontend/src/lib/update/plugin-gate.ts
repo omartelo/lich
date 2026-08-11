@@ -22,6 +22,12 @@ export const RESTART_HINT = "restart your sessions to apply."
 // this, and the user would see a plugin that reports nothing.
 export const CODEX_TRUST_HINT = "run /hooks in a Codex session to trust the plugin's hooks."
 
+// Crush has one hook event, so two of the four reports have nowhere to ride.
+// Said here because the gap is invisible otherwise: a card that never shows a
+// spinner reads as a broken install rather than as the harness's own limit.
+export const CRUSH_SCOPE_HINT =
+  "reports its session id and refreshes git status. It has no end-of-turn event, so its cards show no status and keep their own name."
+
 // PluginAction is what the gate should do: an install prompt listing the
 // providers it can install into, an update prompt (with the target version and
 // the providers it covers), or nothing.

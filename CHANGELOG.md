@@ -21,6 +21,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   called, whether anything in it is uncommitted, and which sessions are open in
   it. Opening a session on a branch that is already checked out now opens that
   checkout instead of failing.
+- **opencode and Crush install the lich plugin from Settings, like the other
+  two.** Their sessions could already report what they were doing, but only for
+  someone willing to place the files by hand — neither harness has a plugin CLI
+  or a marketplace to install from, so the offer stopped at Claude Code and
+  Codex. **Settings › lich plugin** now lists all four, and installs and updates
+  the released version into each: opencode gets its module written into its
+  plugin directory, Crush gets the hook scripts plus two lines added to its
+  `crushrc`. Everything else in that file — every line and every comment you
+  wrote — is left exactly where it was, and an update replaces only what lich
+  put there.
+
+  Two things worth knowing before clicking. **Crush needs 0.88.0 or newer**: the
+  older ones read the file lich writes and ignore it without a word, so lich
+  refuses the install and says which version you have instead of leaving you
+  with a plugin that never reports. And **Crush reports two of the four things**
+  — its session id and the git-status refresh — because `PreToolUse` is the only
+  hook event it has: its cards show no status and keep their own name until it
+  ships an end-of-turn event.
+
+- **Claude Code can be spawned with its permission prompts off.** In a checkout
+  you intend to throw away, confirming every edit and every command is ceremony
+  — but the flag that drops the prompts could only be reached by pointing lich
+  at a launcher script of your own, which then applied to every session it ever
+  spawned. Settings › Providers › Claude Code now carries the switch, twice:
+  once for sessions in the project's own directory, once for sessions in a
+  worktree, so an agent can be let loose in the branch you can delete while the
+  tree you work in keeps asking. Both are off until you turn them on, and what
+  they turn on is `--dangerously-skip-permissions`: the agent then edits files,
+  runs commands and installs things without asking first.
 
 - **A task nobody picks up says so, instead of being waited out.** Handing work
   to another session proved only that the text reached its terminal — and a

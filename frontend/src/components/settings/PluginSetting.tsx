@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { ProviderIcon } from "@/components/ProviderIcon"
 import { SettingBlock } from "./SettingBlock"
 import { AgentPlugin } from "@/lib/rpc"
-import { CODEX_TRUST_HINT, RESTART_HINT } from "@/lib/update/plugin-gate"
+import { CODEX_TRUST_HINT, CRUSH_SCOPE_HINT, RESTART_HINT } from "@/lib/update/plugin-gate"
 import { runWithToast } from "@/lib/toast-async"
 import type { PluginStatus } from "@/lib/api-types"
 
@@ -45,6 +45,7 @@ export function PluginSetting({ statuses, onRefresh }: PluginSettingProps) {
 
   const spinner = <LoaderCircle className="size-4 animate-spin" />
   const showTrustHint = statuses?.some((s) => s.provider === "codex" && s.installed)
+  const showCrushHint = statuses?.some((s) => s.provider === "crush" && s.installed)
 
   return (
     <SettingBlock
@@ -103,6 +104,9 @@ export function PluginSetting({ statuses, onRefresh }: PluginSettingProps) {
         ))}
         {showTrustHint && (
           <p className="text-xs text-muted-foreground">Codex: {CODEX_TRUST_HINT}</p>
+        )}
+        {showCrushHint && (
+          <p className="text-xs text-muted-foreground">Crush: {CRUSH_SCOPE_HINT}</p>
         )}
         <div className="flex items-center gap-3 pt-1">
           <Button size="sm" variant="outline" onClick={() => void check()} disabled={busy}>

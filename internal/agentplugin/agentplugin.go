@@ -1,10 +1,19 @@
 // Package agentplugin manages the lich companion plugin inside the provider
-// CLIs that can run it (Claude Code, Codex): whether it is installed, whether a
-// newer release exists, and installing or updating it. Both harnesses ship the
-// same plugin from the same repository, and both are driven through their own
-// CLI — the supported interface — so lich never edits a harness's plugin state
-// files by hand. What differs per provider (the subcommands, and where the
-// installed version is read from) lives in claude.go and codex.go.
+// CLIs that can run it: whether it is installed, whether a newer release
+// exists, and installing or updating it. All four ship the same plugin from the
+// same repository; what differs per provider — the subcommands, where the
+// installed version is read from, and whether there is a CLI at all — lives in
+// claude.go, codex.go, opencode.go and crush.go.
+//
+// Two install shapes, decided by the harness rather than by lich:
+//
+//   - Claude Code and Codex are driven through their own plugin CLI, the
+//     supported interface, so lich never edits their state files by hand.
+//   - opencode and Crush have no plugin CLI, so lich writes the files the
+//     release published: a module into opencode's plugin directory, and hook
+//     scripts plus a delimited block of `hook add` lines into Crush's crushrc.
+//     Both carry a marker naming the version, which is the only record of what
+//     is installed where the harness keeps none.
 package agentplugin
 
 import (
@@ -30,6 +39,12 @@ const (
 	// target, and key in their installed-plugin state.
 	pluginKey        = pluginName + "@" + marketplaceName
 	latestReleaseURL = "https://api.github.com/repos/" + marketplaceRepo + "/releases/latest"
+	// rawBaseURL serves the repository's files at a tag, for the harnesses lich
+	// installs by writing files rather than by calling a CLI.
+	rawBaseURL = "https://raw.githubusercontent.com/" + marketplaceRepo
+	// markerName labels the lines lich writes into a harness's files, so an
+	// update can find what a previous install left there.
+	markerName = marketplaceName
 
 	// cmdTimeout bounds a plugin mutation; a marketplace add clones the repo,
 	// which Claude Code itself caps at 120s. readTimeout bounds the status
@@ -40,10 +55,10 @@ const (
 	httpTimeout = 5 * time.Second
 )
 
-// supported is every provider whose CLI can run the plugin, in the order the UI
+// supported is every provider that can run the plugin, in the order the UI
 // lists them. A provider outside this list has no plugin to offer, so it never
 // reaches a status or an install.
-var supported = []string{providers.Claude, providers.Codex}
+var supported = []string{providers.Claude, providers.Codex, providers.OpenCode, providers.Crush}
 
 // BinResolver supplies the binary to shell out to for a provider. The store
 // implements it; the empty project id asks for the global value, and an empty
@@ -59,6 +74,9 @@ type Service struct {
 	// latestURL is the release endpoint to poll; a field so tests can point it
 	// at a local server.
 	latestURL string
+	// rawBase serves the plugin repository's files at a tag; a field so tests
+	// can point it at a local server.
+	rawBase string
 	// lookPath resolves a binary on PATH, injected so tests decide which
 	// provider CLIs the machine has.
 	lookPath func(string) (string, error)
@@ -70,6 +88,7 @@ func New(bins BinResolver) *Service {
 		bins:      bins,
 		http:      &http.Client{Timeout: httpTimeout},
 		latestURL: latestReleaseURL,
+		rawBase:   rawBaseURL,
 		lookPath:  exec.LookPath,
 	}
 }
@@ -137,25 +156,36 @@ func computeStatus(id string, available, installed bool, installedVer, latestVer
 	}
 }
 
-// Install adds the marketplace and installs the plugin into a provider's CLI.
+// Install puts the plugin into a provider: through its plugin CLI where there
+// is one, by writing the released files where there is not.
 func (s *Service) Install(provider string) error {
 	switch provider {
 	case providers.Claude:
 		return s.claudeInstall()
 	case providers.Codex:
 		return s.codexInstall()
+	case providers.OpenCode:
+		return s.opencodeInstall()
+	case providers.Crush:
+		return s.crushInstall()
 	}
 	return fmt.Errorf("no lich plugin for provider %q", provider)
 }
 
-// Update pulls the latest released version into a provider's CLI. Both apply it
-// on the next session (a restart is required, which the UI signals).
+// Update pulls the latest released version into a provider. Every one applies
+// it on the next session (a restart is required, which the UI signals). For the
+// file-shipped harnesses an update is the same write as an install — the files
+// are replaced wholesale — so they share one path.
 func (s *Service) Update(provider string) error {
 	switch provider {
 	case providers.Claude:
 		return s.claudeUpdate()
 	case providers.Codex:
 		return s.codexUpdate()
+	case providers.OpenCode:
+		return s.opencodeInstall()
+	case providers.Crush:
+		return s.crushInstall()
 	}
 	return fmt.Errorf("no lich plugin for provider %q", provider)
 }
@@ -168,6 +198,10 @@ func (s *Service) installedVersion(provider string) (string, bool) {
 		return claudeInstalledVersion()
 	case providers.Codex:
 		return s.codexInstalledVersion()
+	case providers.OpenCode:
+		return s.opencodeInstalledVersion()
+	case providers.Crush:
+		return s.crushInstalledVersion()
 	}
 	return "", false
 }
