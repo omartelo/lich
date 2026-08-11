@@ -259,7 +259,9 @@ func TestCrushInstallWritesScriptsAndHooks(t *testing.T) {
 			t.Fatalf("stat %s: %v", path, err)
 		}
 		// Crush dispatches a shebang'd script through os/exec, which needs the bit.
-		if info.Mode().Perm()&0o111 == 0 {
+		// Windows has no POSIX mode to carry it — a file written 0o755 stats as
+		// -rw-rw-rw- there — so the bit is asserted where it decides anything.
+		if runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0 {
 			t.Errorf("%s is not executable (mode %v)", path, info.Mode().Perm())
 		}
 		if !strings.Contains(rc, hook.name) {
