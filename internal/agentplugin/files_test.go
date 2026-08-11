@@ -191,13 +191,37 @@ func crushCLI(t *testing.T, s *Service, configDir, version string) {
 	s.bins = stubBin(self)
 }
 
+// lichConfigHome redirects os.UserConfigDir — where lich keeps the scripts it
+// installs for Crush — into a temporary directory, and returns what it will
+// answer.
+//
+// Setting XDG_CONFIG_HOME alone is a Linux-only isolation: os.UserConfigDir
+// reads it there, but $HOME/Library/Application Support on macOS and %AppData%
+// on Windows. A test that sets only XDG therefore looks for the scripts in its
+// temporary directory while the install writes them into the real user's config
+// directory — failing on those two, and leaving files behind on a machine it was
+// never supposed to touch. All three variables are set so the redirect holds
+// wherever the suite runs, and the answer is read back from the standard library
+// rather than rebuilt here, because the per-OS layout is its rule, not lich's.
+func lichConfigHome(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", root)
+	t.Setenv("AppData", root)
+	t.Setenv("HOME", root)
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		t.Fatalf("resolve config directory: %v", err)
+	}
+	return dir
+}
+
 // installCrush runs an install against temporary directories and returns the
 // crushrc it wrote and the directory the scripts went to.
 func installCrush(t *testing.T, s *Service, existingRC string) (string, string) {
 	t.Helper()
 	configDir := t.TempDir()
-	lichConfig := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", lichConfig)
+	lichConfig := lichConfigHome(t)
 	crushCLI(t, s, configDir, "0.88.1")
 
 	rc := filepath.Join(configDir, "crushrc")
