@@ -409,3 +409,22 @@ func TestMCPOpenSessionDefaultsEveryArgument(t *testing.T) {
 		}
 	}
 }
+
+func TestMCPSendReportsATaskNobodyRead(t *testing.T) {
+	f := newFakeLich(t, `{"ticket":"a1b2c3d4","target":"docs","status":"unread"}`)
+
+	replies := speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
+		{"name":"send_to_session","arguments":{"session":"docs","prompt":"run the tests"}}}`)
+
+	text, failed := textOf(t, replies[0])
+	if failed {
+		t.Fatalf("tool reported a failure: %s", text)
+	}
+	if !strings.Contains(text, "never picked the task up") {
+		t.Errorf("text = %q, want it to say the task was not read", text)
+	}
+	// An agent told to wait on this would poll a ticket that no longer exists.
+	if strings.Contains(text, "wait_for_answer") {
+		t.Errorf("pointed at a ticket for a task nobody read: %q", text)
+	}
+}

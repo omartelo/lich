@@ -386,12 +386,30 @@ func mcpOutcome(result relay.Result) string {
 		return result.Answer
 	case relay.StatusUnanswered:
 		return unansweredText(result.Target)
+	case relay.StatusUnread:
+		return unreadText(result.Target)
 	}
 	return fmt.Sprintf(
 		"%s is still working. The task was delivered and its answer will be put at your own "+
 			"prompt when it arrives, so carry on — there is nothing to poll. Ticket %q, if you "+
 			"want to hold the line for it with wait_for_answer instead.",
 		result.Target, result.Ticket,
+	)
+}
+
+// unreadText is what both surfaces say about a task that reached the terminal
+// and nothing read: the session never started working on it. What is usually
+// there is a question only a person can answer, so this has to send the reader
+// to that card rather than suggest waiting or trying the same thing again.
+func unreadText(target string) string {
+	return fmt.Sprintf(
+		"The %q session never picked the task up: it was typed at that prompt and "+
+			"nothing read it, so something else has that terminal — a provider still "+
+			"starting, or a question of its own on screen (Claude Code asks whether a "+
+			"directory is trusted the first time it runs in one). Nothing is queued and "+
+			"nothing was answered. Tell the user to open the %q card and clear what is "+
+			"on it; the task has to be sent again after that.",
+		target, target,
 	)
 }
 

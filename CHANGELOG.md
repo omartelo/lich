@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A task nobody picks up says so, instead of being waited out.** Handing work
+  to another session proved only that the text reached its terminal — and a
+  terminal can have something else on it: a provider still starting, a dialog
+  left open, Claude Code asking whether it should trust a directory it has never
+  seen. The task went into that and was gone, silently, and whoever sent it sat
+  on a ticket nobody had been asked to answer until it expired an hour later.
+  lich now watches whether the session actually starts working on what it was
+  given, and says within half a minute when it does not — naming the session to
+  open and what is usually on its screen. It reads that silence only for the
+  agents that report what they are doing (the lich plugin); the others were
+  always silent, and silence has to mean something before it can be read as
+  anything.
+
 - **An agent can open a session, and give it its own worktree.** Until now every
   session was opened by hand: an agent could hand work to the sessions beside it
   but not create one, so a task that deserved its own checkout waited for

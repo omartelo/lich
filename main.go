@@ -118,7 +118,8 @@ func main() {
 	dispatcher.Register("drop", drops)
 	dispatcher.Register("fonts", fonts.New())
 	dispatcher.Register("project", proj)
-	dispatcher.Register("agentplugin", agentplugin.New(db))
+	plugins := agentplugin.New(db)
+	dispatcher.Register("agentplugin", plugins)
 	dispatcher.Register("appupdate", appupdate.New(version))
 	dispatcher.Register("patchnotes", patchnotes.New(version, changelog))
 	dispatcher.Register("store", db)
@@ -134,6 +135,9 @@ func main() {
 	// answering the request it was given.
 	rl := relay.New(db, term, hub)
 	term.SetSessionState(rl.Observe)
+	// A task nobody picks up can only be told apart from a task in progress
+	// where the provider reports what it is doing, which is the plugin's job.
+	rl.SetPluginCheck(plugins.Installed)
 	dispatcher.Register("relay", rl)
 	// Its caller is not the window either: opening a session for an agent starts
 	// the PTY here rather than waiting for someone to click the card.

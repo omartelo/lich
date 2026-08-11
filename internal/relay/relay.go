@@ -41,6 +41,12 @@ const (
 	// never replies would otherwise leak one entry per attempt for the life of
 	// the process.
 	ticketTTL = time.Hour
+	// defaultReceiptWindow is how long a task has to be picked up by the agent it
+	// was typed at. A provider that read it reports UserPromptSubmit within a
+	// second or two; this is generous against a machine under load, and short
+	// enough that the sender learns in one tool call rather than at the ticket's
+	// expiry an hour later.
+	defaultReceiptWindow = 30 * time.Second
 	// promptLimit bounds one relayed prompt. The message is typed into a TUI a
 	// character at a time; a megabyte of it is a hang, not a prompt.
 	promptLimit = 8192
@@ -78,6 +84,9 @@ const (
 	// StatusPending means the message was delivered and the wait ran out first.
 	// The ticket is still live: Wait picks the same answer up later.
 	StatusPending = "pending"
+	// StatusUnread means the task was typed at the target's prompt and nothing
+	// there read it: the session never started working. See watchReceipt.
+	StatusUnread = "unread"
 	// StatusUnanswered means the target worked through the request and ended its
 	// turn without replying here. Its answer, if it wrote one, is in that
 	// session's own terminal and nowhere lich can read it — which is what
@@ -208,6 +217,9 @@ type ticket struct {
 	// Observe for how a turn is told apart from the one already running when the
 	// message arrived.
 	stalled chan struct{}
+	// unread closes when the target never reacted to the task at all. See
+	// watchReceipt.
+	unread chan struct{}
 	// sawBusy is whether the target has been working since this ticket's turn
 	// began; a turn that ends without it never started here.
 	sawBusy bool
@@ -238,20 +250,37 @@ type Service struct {
 	// defaultSubmitDelay). A field so the suite can drop it to zero: the fakes
 	// have no TUI to settle, and paying it per test would buy nothing.
 	submitDelay time.Duration
+	// receiptWindow is how long a delivered task has to be picked up before it
+	// is called unread (see watchReceipt). A field for the same reason.
+	receiptWindow time.Duration
+	// hooksInstalled reports whether a provider reports its state to lich at
+	// all, which is what makes a missing report mean something. Nil — the state
+	// a test that does not care is in — reads as "no provider does", and no
+	// delivery is ever checked.
+	hooksInstalled func(kind string) bool
 }
 
 // New returns a relay reading its roster from sessions, typing through term and
 // announcing what is in flight on events.
 func New(sessions Sessions, term Terminal, events Events) *Service {
 	return &Service{
-		tickets:     make(map[string]*ticket),
-		state:       make(map[string]string),
-		sessions:    sessions,
-		term:        term,
-		events:      events,
-		now:         time.Now,
-		submitDelay: defaultSubmitDelay,
+		tickets:       make(map[string]*ticket),
+		state:         make(map[string]string),
+		sessions:      sessions,
+		term:          term,
+		events:        events,
+		now:           time.Now,
+		submitDelay:   defaultSubmitDelay,
+		receiptWindow: defaultReceiptWindow,
 	}
+}
+
+// SetPluginCheck wires the test for whether a provider reports session state to
+// lich (its hooks are installed). Without one, a target that never reacts is
+// indistinguishable from a target lich simply cannot hear, so nothing is
+// checked. Called at startup, before any errand exists.
+func (s *Service) SetPluginCheck(installed func(kind string) bool) {
+	s.hooksInstalled = installed
 }
 
 // Peers lists the live sessions fromID may address, in the order the sidebar
@@ -303,10 +332,12 @@ func (s *Service) Send(fromID, target, project, prompt string, waitSeconds int) 
 		created:  s.now(),
 		done:     make(chan struct{}),
 		stalled:  make(chan struct{}),
+		unread:   make(chan struct{}),
 	}
 	s.mu.Lock()
 	expired := s.sweep()
-	if s.state[dest.ID] == stateBusy {
+	busy := s.state[dest.ID] == stateBusy
+	if busy {
 		t.skipTurns = 1
 	}
 	s.tickets[id] = t
@@ -329,6 +360,12 @@ func (s *Service) Send(fromID, target, project, prompt string, waitSeconds int) 
 	// before the write would survive a delivery that never happened.
 	s.announce(t.targetID, t.sender, DirectionIn)
 	s.announce(t.fromID, t.target, DirectionOut)
+	// A target that was already working is not checked: it will read this at the
+	// end of the turn it is in, whenever that is, and its provider is busy the
+	// whole time — there is nothing here to tell apart.
+	if !busy && s.reportsState(dest.Peer.Kind) {
+		go s.watchReceipt(id, t)
+	}
 	return s.await(id, t, waitSeconds), nil
 }
 
@@ -376,6 +413,54 @@ func (s *Service) awaitReady(dest candidate, wait time.Duration) error {
 				dest.Peer.Label,
 			)
 		}
+	}
+}
+
+// reportsState is whether a provider tells lich what it is doing, which is what
+// makes its silence mean something (docs/hooks/session-state.md).
+func (s *Service) reportsState(kind string) bool {
+	return s.hooksInstalled != nil && s.hooksInstalled(kind)
+}
+
+// watchReceipt closes a ticket whose task nobody ever picked up.
+//
+// Delivery has always been provable — the bytes reached the PTY — and receipt
+// never was. Between the two sits everything that can be on a terminal instead
+// of a prompt: Claude Code asking whether a new directory is trusted, a
+// provider still taking over the tty, a dialog left open by whoever was here
+// last. The task is typed into that, and it is gone. Nothing fails: the sender
+// waits out a ticket nobody was asked to answer, and finds out an hour later
+// when it expires, which is how this feature's own first users found it.
+//
+// An agent that reads a prompt reports UserPromptSubmit within a second or two,
+// so the absence of that report inside the window is the answer. It is only
+// asked of providers that report at all — the rest have always been silent, and
+// silence has to mean something to be read as anything.
+func (s *Service) watchReceipt(id string, t *ticket) {
+	timer := time.NewTimer(s.receiptWindow)
+	defer timer.Stop()
+	select {
+	case <-t.done:
+		return
+	case <-t.stalled:
+		return
+	case <-timer.C:
+	}
+
+	s.mu.Lock()
+	current, live := s.tickets[id]
+	if !live || current != t || t.sawBusy {
+		s.mu.Unlock()
+		return
+	}
+	delete(s.tickets, id)
+	close(t.unread)
+	unattended := t.attended == 0
+	s.mu.Unlock()
+
+	s.clear(t)
+	if unattended {
+		s.tellSender(t, unreadNotice(t.target))
 	}
 }
 
@@ -439,15 +524,25 @@ func (s *Service) Reply(ticketID, answer string) error {
 // A sender that is not a session at all — the `lich` command from a script —
 // has no prompt to type at. Such a caller waits or does without.
 func (s *Service) returnAnswer(t *ticket) {
-	if t.fromID == "" || t.answer == "" {
+	if t.answer == "" {
 		return
 	}
-	message := fmt.Sprintf(
+	s.tellSender(t, fmt.Sprintf(
 		"[lich] Answer from session %q, to the request you sent it:\n\n%s",
 		t.target, t.answer,
-	)
+	))
+}
+
+// tellSender types one line of news at the prompt of whoever asked, the same
+// way their request reached the target. A sender that is not a session at all —
+// the `lich` command from a script — has no prompt to type at, and hears this
+// only if it is still waiting.
+func (s *Service) tellSender(t *ticket, message string) {
+	if t.fromID == "" {
+		return
+	}
 	if err := s.deliver(t.fromID, message); err != nil {
-		slog.Warn("relay: answer not returned", "session", t.fromID, "err", err)
+		slog.Warn("relay: news not delivered", "session", t.fromID, "err", err)
 	}
 }
 
@@ -480,6 +575,9 @@ func (s *Service) await(id string, t *ticket, waitSeconds int) Result {
 	case <-t.stalled:
 		s.leave(t)
 		return Result{Ticket: id, Target: t.target, Status: StatusUnanswered}
+	case <-t.unread:
+		s.leave(t)
+		return Result{Ticket: id, Target: t.target, Status: StatusUnread}
 	case <-timer.C:
 		s.giveUp(t)
 		return Result{Ticket: id, Target: t.target, Status: StatusPending}
@@ -789,6 +887,20 @@ func replyInstruction(kind, ticketID string) string {
 	return route + "\n\nThat ticket is the only way back: whoever asked is blocked on it and " +
 		"is reading nothing else. Do not answer by messaging a peer session — an answer " +
 		"sent any other way is lost."
+}
+
+// unreadNotice is what a sender who stopped waiting is told, typed at its own
+// prompt the way an answer would be. It has to be actionable on its own: the
+// sender cannot see the other screen, and what is usually on it is a question
+// only a person can answer.
+func unreadNotice(target string) string {
+	return fmt.Sprintf(
+		"[lich] The %q session never picked up the task you sent it. It was typed at "+
+			"that prompt and nothing read it, so something else has that terminal — a "+
+			"provider still starting, or a question of its own on screen. Nothing is "+
+			"queued and nothing was answered.",
+		target,
+	)
 }
 
 // origin describes the sender in the message's first line. An empty sender is

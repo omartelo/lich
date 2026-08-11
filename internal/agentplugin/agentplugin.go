@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 
@@ -105,6 +106,21 @@ func (s *Service) Status() []Status {
 		out = append(out, computeStatus(id, available, installed, version, latest))
 	}
 	return out
+}
+
+// Installed reports whether the lich plugin is installed for a provider — that
+// its sessions report what they are doing (docs/hooks/). The relay asks before
+// reading a session's silence as an answer: a provider that never reports is
+// silent whatever happens in it.
+//
+// It shells out to the provider's CLI, so it is not for a hot path. The relay
+// calls it once per errand.
+func (s *Service) Installed(provider string) bool {
+	if !slices.Contains(supported, provider) || !s.available(provider) {
+		return false
+	}
+	_, installed := s.installedVersion(provider)
+	return installed
 }
 
 // computeStatus is the pure decision: an update needs the plugin installed, a

@@ -1088,3 +1088,114 @@ func TestSendGivesUpWhenTheTargetDiesDuringSetup(t *testing.T) {
 		t.Errorf("error = %q", err)
 	}
 }
+
+// Delivery was always provable — the bytes reached the PTY — and receipt never
+// was. Between them sits everything that can be on a terminal instead of a
+// prompt: a provider still starting, a dialog left open, Claude Code asking
+// whether a new directory is trusted. The task is typed into that and is gone,
+// and nothing fails: the sender waits out a ticket nobody was asked to answer.
+
+// withReceipts is a relay that checks receipts, on a window a test can outlast.
+func withReceipts(term Terminal) *Service {
+	svc := newRelay(workspace(), term, nil)
+	svc.receiptWindow = 40 * time.Millisecond
+	svc.SetPluginCheck(func(string) bool { return true })
+	return svc
+}
+
+func TestATaskNobodyPicksUpComesBackUnread(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := withReceipts(term)
+
+	result, err := svc.Send("s1", "docs", "", "run the tests", 5)
+	if err != nil {
+		t.Fatalf("Send = %v, want nil", err)
+	}
+	if result.Status != StatusUnread {
+		t.Errorf("status = %q, want the sender told nothing read it", result.Status)
+	}
+	svc.mu.Lock()
+	open := len(svc.tickets)
+	svc.mu.Unlock()
+	if open != 0 {
+		t.Errorf("left %d tickets open on a task that was never read", open)
+	}
+}
+
+func TestATaskTheTargetStartsWorkingOnIsNotUnread(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := withReceipts(term)
+
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		svc.Observe("s2", stateBusy)
+	}()
+
+	result, err := svc.Send("s1", "docs", "", "run the tests", 1)
+	if err != nil {
+		t.Fatalf("Send = %v, want nil", err)
+	}
+	if result.Status != StatusPending {
+		t.Errorf("status = %q, want the errand still open", result.Status)
+	}
+}
+
+// A target that was already working is not checked at all: its provider queues
+// the message for the next turn and is busy the whole time, so there is nothing
+// here to tell apart.
+func TestABusyTargetIsNotCheckedForReceipt(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := withReceipts(term)
+	svc.Observe("s2", stateBusy)
+
+	result, err := svc.Send("s1", "docs", "", "run the tests", 1)
+	if err != nil {
+		t.Fatalf("Send = %v, want nil", err)
+	}
+	if result.Status == StatusUnread {
+		t.Error("a target that was mid-turn was reported as never having read the task")
+	}
+}
+
+// Without the plugin a session reports nothing whatever happens in it, so its
+// silence says nothing either.
+func TestSilenceIsOnlyReadWhereTheProviderReports(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := newRelay(workspace(), term, nil)
+	svc.receiptWindow = 40 * time.Millisecond
+	svc.SetPluginCheck(func(string) bool { return false })
+
+	result, err := svc.Send("s1", "docs", "", "run the tests", 1)
+	if err != nil {
+		t.Fatalf("Send = %v, want nil", err)
+	}
+	if result.Status == StatusUnread {
+		t.Error("read silence as an answer from a provider that never reports")
+	}
+}
+
+// The sender usually stops waiting long before this: it took a ticket and moved
+// on, so the news has to reach its prompt, exactly as an answer would.
+func TestTheSenderIsToldAtItsPromptWhenNobodyWasWaiting(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := withReceipts(term)
+	// A window the sender's own wait runs out before, which is the ordinary
+	// case: an agent holds a tool call for a fraction of what an errand takes.
+	svc.receiptWindow = 1200 * time.Millisecond
+
+	result, err := svc.Send("s1", "docs", "", "run the tests", 1)
+	if err != nil {
+		t.Fatalf("Send = %v, want nil", err)
+	}
+	if result.Status != StatusPending {
+		t.Fatalf("status = %q, want the sender to have given up first", result.Status)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if strings.Contains(strings.Join(term.writesTo("s1"), ""), "never picked up") {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Errorf("the sender was never told: %v", term.writesTo("s1"))
+}

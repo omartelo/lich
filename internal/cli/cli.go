@@ -427,6 +427,10 @@ func (c *client) report(result relay.Result, asJSON bool) error {
 		fmt.Fprintln(c.stdout, unansweredText(result.Target))
 		return nil
 	}
+	if result.Status == relay.StatusUnread {
+		fmt.Fprintln(c.stdout, unreadText(result.Target))
+		return nil
+	}
 	fmt.Fprintf(c.stdout,
 		"%s is still working. The message was delivered; its answer will be typed at the "+
 			"sending session's prompt when it arrives. To hold the line for it instead:\n"+

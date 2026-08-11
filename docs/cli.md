@@ -128,6 +128,14 @@ Types `<prompt>` at `<session>`'s prompt, submits it, and waits.
 - Not answered in time: the message was still delivered, so it says so and hands
   back a ticket, exit 0. **The answer is not lost by giving up on it** — see
   below.
+- **Never read**: the task was typed at the target's prompt and nothing there
+  picked it up — the session never started working. What has that terminal is
+  usually a question of the provider's own (see the ceiling on trust prompts
+  below), and lich cannot see it. The ticket is dropped rather than left open,
+  and the output sends a person to that card: nothing is queued, so the task has
+  to be sent again once the screen is clear. Only reported for providers that
+  report their state at all (the plugin, `docs/hooks/`) — silence has to mean
+  something before it can be read as anything.
 - **Answered somewhere else**: the target worked through the request and ended
   its turn without replying here — it answered over its provider's own channel,
   or out loud to whoever was watching. The wait ends there rather than running
@@ -516,12 +524,15 @@ whoever asked.
 - **A provider may open on a question of its own.** Claude Code asks whether a
   directory is trusted the first time it runs in one, and a session sitting on
   that prompt looks exactly like one waiting at its own: quiet, live, ready. The
-  first task sent to it answers the trust prompt instead of being read. It
-  applies to a directory the provider has never seen, so the worktrees of a
-  project already in use are unaffected — but the first worktree of a new one,
-  on a machine where nobody has answered it yet, needs a human at that card
-  once. lich cannot see it without reading the screen, which is the one thing
-  this feature does not do.
+  first task sent to it answers the trust prompt instead of being read. lich
+  cannot see that without reading the screen, which is the one thing this
+  feature does not do — what it does instead is notice that nothing was picked
+  up and say so (the `unread` result above), so the wait ends in half a minute
+  with somewhere to look rather than at the ticket's expiry an hour later.
+  Measured: the prompt is answered once per **project**, not per worktree — the
+  second checkout of a repository never asks — and the session's own
+  `session-start` hook fires while it sits there, so the report that a session
+  exists is no evidence that anything in it is listening.
 - **Delivery is proven, receipt is not.** `send` knows the bytes reached the
   PTY. Whether the target's TUI queued them, and whether its agent ever runs the
   reply command, is what the wait and the ticket are for. A provider that does

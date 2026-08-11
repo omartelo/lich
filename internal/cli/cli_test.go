@@ -539,3 +539,22 @@ func TestOpenReportsTheAppsRefusal(t *testing.T) {
 		t.Errorf("stderr = %q", stderr)
 	}
 }
+
+func TestSendSaysWhenTheTaskWasNeverPickedUp(t *testing.T) {
+	f := newFakeLich(t, `{"ticket":"a1b2c3d4","target":"docs","status":"unread"}`)
+
+	code, stdout, stderr := run(t, f, "send", "docs", "run the tests")
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+	// The sender cannot see that screen, so the output has to send a person to
+	// it rather than suggest waiting or retrying the same thing.
+	for _, phrase := range []string{"never picked the task up", "open the", "again"} {
+		if !strings.Contains(stdout, phrase) {
+			t.Errorf("output is missing %q:\n%s", phrase, stdout)
+		}
+	}
+	if strings.Contains(stdout, "lich wait") {
+		t.Errorf("offered a ticket to wait on for a task nobody read:\n%s", stdout)
+	}
+}
