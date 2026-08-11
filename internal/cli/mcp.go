@@ -35,11 +35,6 @@ import (
 // only lose a working session over a date.
 const mcpProtocolVersion = "2025-06-18"
 
-// mcpServerName is the name the tools are namespaced under in a client's tool
-// list (`mcp__lich__send_to_session` in Claude Code). It is also the key lich
-// registers itself under at spawn.
-const mcpServerName = "lich"
-
 // mcpMaxWait caps how long any tool here blocks, whatever the caller asks for.
 //
 // Claude Code moves an MCP call that runs past 120 seconds into the background
@@ -153,7 +148,7 @@ func mcpHandshake(params json.RawMessage) map[string]any {
 	return map[string]any{
 		"protocolVersion": version,
 		"capabilities":    map[string]any{"tools": map[string]any{}},
-		"serverInfo":      map[string]any{"name": mcpServerName, "version": "1"},
+		"serverInfo":      map[string]any{"name": relay.MCPServerName, "version": "1"},
 	}
 }
 
