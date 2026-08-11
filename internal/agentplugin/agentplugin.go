@@ -159,8 +159,10 @@ func (s *Service) HasTools(provider string) bool {
 // reading a session's silence as an answer: a provider that never reports is
 // silent whatever happens in it.
 //
-// It shells out to the provider's CLI, so it is not for a hot path. The relay
-// calls it once per errand.
+// It reads the provider's own plugin state — a file for Claude Code and
+// opencode, a CLI call for Codex and Crush — so it is not for a hot path. The
+// relay asks it once per errand, and HasTools once more before that; neither
+// question is cached, so each one pays for itself.
 func (s *Service) Installed(provider string) bool {
 	if !slices.Contains(supported, provider) || !s.available(provider) {
 		return false

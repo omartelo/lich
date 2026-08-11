@@ -7,7 +7,7 @@ describe("delegatePrompt", () => {
     expect(delegatePrompt("codex", "docs")).toBe('Ask the "docs" session to ')
   })
 
-  it("spells the command where the sender has none", () => {
+  it("spells the command for every other sender", () => {
     for (const kind of ["opencode", "crush", "omp", "shell"]) {
       expect(delegatePrompt(kind, "docs")).toBe('lich send "docs" "')
     }

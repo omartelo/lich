@@ -4,9 +4,16 @@
 
 import type { SessionKind } from "./sessions"
 
-// The providers lich registers its MCP server with at spawn. Mirrors
-// providers.AcceptsMCPServer on the Go side — the two have to agree, because an
-// agent offered a tool it does not have would answer the user with an error.
+// The providers whose sessions are handed lich's tools on their own command
+// line at spawn (providers.AcceptsMCPServer). The kind alone answers it, and
+// that answer cannot go stale.
+//
+// opencode and Crush sessions can have the same tools from the companion plugin
+// (agentplugin.HasTools), and are still given the command here on purpose. What
+// the plugin reports is a fact about what is installed now, not about a session
+// started before the install — it only reaches one on its next restart — and an
+// agent offered a tool it does not have answers the user with an error. The
+// command works in all four and costs nothing.
 //
 // The session's declared kind, never the live agent readout: a shell card
 // running `claude` by hand was spawned without the registration, so it has the
