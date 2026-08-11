@@ -18,6 +18,7 @@ import { PatchNotesGate } from "@/components/PatchNotesGate"
 import { ProviderSetupGate } from "@/components/ProviderSetupGate"
 import { UncleanExitGate } from "@/components/UncleanExitGate"
 import { CommandPalette } from "@/components/CommandPalette"
+import { ShortcutsOverlay } from "@/components/ShortcutsOverlay"
 
 // Layout is persistent across navigation: the project tabs, session sidebar and
 // TerminalHost stay mounted while the Outlet swaps screens (Home, Settings) on
@@ -92,6 +93,9 @@ function App() {
           {/* Global quick switcher; also needs the provider (sessions/projects)
               and the router (navigation). */}
           <CommandPalette />
+          {/* Read-only list of what is bound; beside the palette because both
+              are app-wide overlays opened by a shortcut. */}
+          <ShortcutsOverlay />
         </ProjectsProvider>
       </HashRouter>
       {/* Holds its prompt until a provider has been chosen, so a first launch

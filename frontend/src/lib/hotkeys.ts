@@ -8,7 +8,7 @@ import { readPref, writePref } from "@/lib/prefs"
 // Zoom is deliberately absent: those chords shadow Chromium's own accelerators,
 // which are bound to physical keys, so they are matched on event.code in
 // zoom-keys.ts instead of being character combos a user can rebind.
-export type HotkeyId = "commandPalette" | "newSession" | "nextSession" | "prevSession"
+export type HotkeyId = "commandPalette" | "newSession" | "nextSession" | "prevSession" | "shortcuts"
 
 export interface Combo {
   mod: boolean
@@ -49,6 +49,11 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
     id: "prevSession",
     label: "Previous session",
     combo: { mod: true, shift: true, alt: false, key: "ArrowUp" },
+  },
+  {
+    id: "shortcuts",
+    label: "Keyboard shortcuts",
+    combo: { mod: true, shift: false, alt: false, key: "/" },
   },
 ]
 

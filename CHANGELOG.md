@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The shortcuts are readable without going looking for them.** `Ctrl/Cmd + /`
+  opens a list of every keyboard shortcut lich has — the rebindable ones with
+  the combos *this* install has them on, and the chords lich rewrites on the way
+  to the agent's TUI: attaching a clipboard image, inserting a newline without
+  sending, erasing the previous word. The last three were only ever written down
+  in the source, and the rest lived on the one screen you have to already know
+  about to reach. The overlay itself edits nothing and says where to rebind; its
+  own shortcut is rebindable like the others.
+
 ## [0.29.0] - 2026-08-11
 
 ### Added

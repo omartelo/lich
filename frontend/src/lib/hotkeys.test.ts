@@ -97,6 +97,14 @@ describe("mergeHotkeys", () => {
     expect(mergeHotkeys(override).commandPalette).toEqual(DEFAULT_HOTKEYS.commandPalette)
   })
 
+  it("defaults an action absent from stored settings, keeping the rest", () => {
+    // What an install predating a new action has on disk.
+    const stored = { newSession: { mod: true, shift: false, alt: true, key: "n" } }
+    const merged = mergeHotkeys(stored)
+    expect(merged.newSession).toEqual(stored.newSession)
+    expect(merged.shortcuts).toEqual(DEFAULT_HOTKEYS.shortcuts)
+  })
+
   it("ignores ids that are no longer actions (the old zoom hotkeys)", () => {
     expect(mergeHotkeys({ zoomIn: { mod: true, shift: false, alt: false, key: "+" } })).toEqual(
       DEFAULT_HOTKEYS,
