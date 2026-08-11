@@ -425,7 +425,10 @@ shell — opens with `Message relayed by the lich command line` instead. The
 distinction is the point: the receiving agent must not read either as its user
 speaking, and the two are not the same kind of "not your user".
 
-A target whose provider has the registered server is offered the tool first:
+A target that **has** lich's tools is offered one first — Claude Code and Codex
+always, opencode and Crush once the installed plugin is new enough to carry them
+(`agentplugin.HasTools`). A session pointed at a tool it does not have loses the
+turn to an error, where the command works everywhere:
 
 ```
 When you have an answer, send it back with the lich tool `reply_to_session`

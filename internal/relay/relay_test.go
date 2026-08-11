@@ -285,24 +285,20 @@ func TestAMessageFromOutsideLichIsAttributedToTheCommandLine(t *testing.T) {
 }
 
 // TestReplyInstructionOffersTheToolOnlyWhereItExists proves the message names
-// the MCP tool exactly for the providers lich registers its server with, and
-// always names the command — an agent whose shell is locked down could
-// otherwise have no way to answer at all.
+// the tool only for a session that has it, and always names the command — an
+// agent whose shell is locked down could otherwise have no way to answer at
+// all, and one pointed at a tool it does not have loses the turn to an error.
 func TestReplyInstructionOffersTheToolOnlyWhereItExists(t *testing.T) {
 	tests := []struct {
-		kind string
+		name string
 		tool bool
 	}{
-		{"claude", true},
-		{"codex", true},
-		{"opencode", false},
-		{"crush", false},
-		{"omp", false},
-		{"shell", false},
+		{"a session with lich's tools", true},
+		{"a session with none", false},
 	}
 	for _, tt := range tests {
-		t.Run(tt.kind, func(t *testing.T) {
-			got := replyInstruction(tt.kind, "a1b2c3d4")
+		t.Run(tt.name, func(t *testing.T) {
+			got := replyInstruction(tt.tool, "a1b2c3d4")
 			if !strings.Contains(got, `"$LICH_BIN" reply a1b2c3d4`) {
 				t.Errorf("the command is missing:\n%s", got)
 			}
@@ -1099,9 +1095,20 @@ func TestSendGivesUpWhenTheTargetDiesDuringSetup(t *testing.T) {
 func withReceipts(term Terminal) *Service {
 	svc := newRelay(workspace(), term, nil)
 	svc.receiptWindow = 40 * time.Millisecond
-	svc.SetPluginCheck(func(string) bool { return true })
+	svc.SetPlugins(fakePlugins{installed: true})
 	return svc
 }
+
+// fakePlugins answers for the companion plugin: whether a provider's sessions
+// report at all, and whether they carry lich's own operations.
+type fakePlugins struct {
+	installed bool
+	tools     bool
+}
+
+func (f fakePlugins) Installed(string) bool { return f.installed }
+
+func (f fakePlugins) HasTools(string) bool { return f.tools }
 
 func TestATaskNobodyPicksUpComesBackUnread(t *testing.T) {
 	term := newFakeTerminal("s1", "s2")
@@ -1163,7 +1170,7 @@ func TestSilenceIsOnlyReadWhereTheProviderReports(t *testing.T) {
 	term := newFakeTerminal("s1", "s2")
 	svc := newRelay(workspace(), term, nil)
 	svc.receiptWindow = 40 * time.Millisecond
-	svc.SetPluginCheck(func(string) bool { return false })
+	svc.SetPlugins(fakePlugins{installed: false})
 
 	result, err := svc.Send("s1", "docs", "", "run the tests", 1)
 	if err != nil {
@@ -1198,4 +1205,55 @@ func TestTheSenderIsToldAtItsPromptWhenNobodyWasWaiting(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Errorf("the sender was never told: %v", term.writesTo("s1"))
+}
+
+// Which providers carry lich's operations stopped being a fact about the
+// provider the day the plugin started carrying them: Claude Code and Codex are
+// told about the server at spawn, opencode and Crush get it with the plugin, and
+// only if the installed one is new enough. The relay asks rather than assumes.
+
+func TestTheMessageNamesTheToolWhenTheTargetHasIt(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := newRelay(workspace(), term, nil)
+	svc.SetPlugins(fakePlugins{installed: true, tools: true})
+
+	if _, err := svc.Send("s1", "docs", "", "run the tests", 1); err != nil {
+		t.Fatalf("Send = %v", err)
+	}
+	typed := strings.Join(term.writesTo("s2"), "")
+	if !strings.Contains(typed, ToolReply) {
+		t.Errorf("a target holding the tool was told to shell out:\n%s", typed)
+	}
+}
+
+func TestTheMessageNamesOnlyTheCommandWithoutTheTool(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := newRelay(workspace(), term, nil)
+	svc.SetPlugins(fakePlugins{installed: true, tools: false})
+
+	if _, err := svc.Send("s1", "docs", "", "run the tests", 1); err != nil {
+		t.Fatalf("Send = %v", err)
+	}
+	typed := strings.Join(term.writesTo("s2"), "")
+	if strings.Contains(typed, ToolReply) {
+		t.Errorf("named a tool the target does not have:\n%s", typed)
+	}
+	// The command is the route that needs nothing registered anywhere.
+	if !strings.Contains(typed, `"$LICH_BIN" reply`) {
+		t.Errorf("left the target with no way to answer:\n%s", typed)
+	}
+}
+
+// Nothing wired is the state a test — and a lich whose plugin check never ran —
+// is in. It has to read as "no tools", never as "assume they are there".
+func TestWithoutAPluginCheckTheMessageNamesTheCommand(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := newRelay(workspace(), term, nil)
+
+	if _, err := svc.Send("s1", "docs", "", "run the tests", 1); err != nil {
+		t.Fatalf("Send = %v", err)
+	}
+	if typed := strings.Join(term.writesTo("s2"), ""); strings.Contains(typed, ToolReply) {
+		t.Errorf("assumed a tool with nothing to ask:\n%s", typed)
+	}
 }

@@ -585,3 +585,57 @@ func TestRunFallsBackToPath(t *testing.T) {
 		t.Errorf("error %q does not name the codex call", err)
 	}
 }
+
+// Whether a session can answer with a tool is two different facts. Claude Code
+// and Codex are told about lich's server on their own command line at spawn, so
+// they always can; opencode and Crush only get the operations with the plugin,
+// and only from the release that carries them.
+
+func TestHasToolsIsAlwaysTrueForTheHarnessesToldAtSpawn(t *testing.T) {
+	svc := New(stubBins{})
+
+	for _, id := range []string{providers.Claude, providers.Codex} {
+		if !svc.HasTools(id) {
+			t.Errorf("%s cannot answer with a tool, but lich registers its server at spawn", id)
+		}
+	}
+}
+
+func TestHasToolsFollowsThePluginVersionElsewhere(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		installed string
+		want      bool
+	}{
+		// Pinned as literals rather than read off toolsMinVersion: the number is
+		// a contract with a released plugin, and a test that moved with the
+		// constant would follow it anywhere.
+		{name: "the release that brought them", installed: "0.9.0", want: true},
+		{name: "a newer one", installed: "0.10.0", want: true},
+		{name: "the release before", installed: "0.8.0"},
+		{name: "nothing installed"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			config := t.TempDir()
+			t.Setenv("XDG_CONFIG_HOME", config)
+			if tt.installed != "" {
+				// What an install of that version leaves behind: the module with
+				// lich's marker line, which is where the version is read from.
+				dir := filepath.Join(config, "opencode", "plugin")
+				if err := os.MkdirAll(dir, 0o755); err != nil {
+					t.Fatal(err)
+				}
+				marker := jsComment + " " + markerName + " v" + tt.installed + " — installed by lich\n"
+				if err := os.WriteFile(filepath.Join(dir, opencodeFile), []byte(marker), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			svc := New(stubBins{})
+			svc.lookPath = func(string) (string, error) { return "/usr/bin/opencode", nil }
+
+			if got := svc.HasTools(providers.OpenCode); got != tt.want {
+				t.Errorf("HasTools with %q installed = %v, want %v", tt.installed, got, tt.want)
+			}
+		})
+	}
+}

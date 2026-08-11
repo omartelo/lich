@@ -127,6 +127,33 @@ func (s *Service) Status() []Status {
 	return out
 }
 
+// toolsMinVersion is the first plugin release that carries lich's own
+// operations into a session — as tools of opencode's own, and as the MCP server
+// registered in Crush's config. Claude Code and Codex never ask: they are told
+// about the server on their own command line at spawn, whatever the plugin's
+// version.
+//
+// The version is checked rather than assumed because pointing a session at a
+// tool its plugin predates is worse than naming the shell command, which works
+// everywhere.
+const toolsMinVersion = "0.9.0"
+
+// HasTools reports whether a provider's sessions can call lich's own operations
+// — whether a relayed message may name a tool rather than the command line.
+//
+// True for the two lich registers at spawn, and for the two that get them with
+// the plugin, once the installed one is new enough.
+func (s *Service) HasTools(provider string) bool {
+	if providers.AcceptsMCPServer(provider) {
+		return true
+	}
+	if !slices.Contains(supported, provider) || !s.available(provider) {
+		return false
+	}
+	version, installed := s.installedVersion(provider)
+	return installed && !semver.Less(version, toolsMinVersion)
+}
+
 // Installed reports whether the lich plugin is installed for a provider — that
 // its sessions report what they are doing (docs/hooks/). The relay asks before
 // reading a session's silence as an answer: a provider that never reports is

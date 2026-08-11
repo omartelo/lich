@@ -23,7 +23,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/omartelo/lich/internal/providers"
 	"github.com/omartelo/lich/internal/store"
 )
 
@@ -253,11 +252,25 @@ type Service struct {
 	// receiptWindow is how long a delivered task has to be picked up before it
 	// is called unread (see watchReceipt). A field for the same reason.
 	receiptWindow time.Duration
-	// hooksInstalled reports whether a provider reports its state to lich at
-	// all, which is what makes a missing report mean something. Nil — the state
-	// a test that does not care is in — reads as "no provider does", and no
-	// delivery is ever checked.
-	hooksInstalled func(kind string) bool
+	// plugins answers what a provider's sessions can do, which depends on state
+	// this package has none of: whether the companion plugin is installed there,
+	// and whether it is new enough to carry lich's own operations. Nil — the
+	// state a test that does not care is in — reads as "nothing is installed":
+	// no delivery is checked, and a relayed message names the command line.
+	plugins Plugins
+}
+
+// Plugins is what the relay needs to know about the companion plugin
+// (internal/agentplugin implements it). Both questions are about a provider's
+// sessions rather than about one session, because that is the grain the plugin
+// is installed at.
+type Plugins interface {
+	// Installed is whether those sessions report their state to lich at all,
+	// which is what makes a missing report mean something (see watchReceipt).
+	Installed(kind string) bool
+	// HasTools is whether they can call lich's own operations, which decides
+	// whether a relayed message names a tool or the shell command.
+	HasTools(kind string) bool
 }
 
 // New returns a relay reading its roster from sessions, typing through term and
@@ -275,12 +288,12 @@ func New(sessions Sessions, term Terminal, events Events) *Service {
 	}
 }
 
-// SetPluginCheck wires the test for whether a provider reports session state to
-// lich (its hooks are installed). Without one, a target that never reacts is
-// indistinguishable from a target lich simply cannot hear, so nothing is
-// checked. Called at startup, before any errand exists.
-func (s *Service) SetPluginCheck(installed func(kind string) bool) {
-	s.hooksInstalled = installed
+// SetPlugins wires what the relay can ask about the companion plugin. Without
+// it a target that never reacts is indistinguishable from one lich cannot hear,
+// and every relayed message names the command line. Called at startup, before
+// any errand exists.
+func (s *Service) SetPlugins(plugins Plugins) {
+	s.plugins = plugins
 }
 
 // Peers lists the live sessions fromID may address, in the order the sidebar
@@ -350,7 +363,8 @@ func (s *Service) Send(fromID, target, project, prompt string, waitSeconds int) 
 		s.mu.Unlock()
 		return Result{}, err
 	}
-	if err := s.deliver(dest.ID, compose(sender, id, prompt, dest.Peer.Kind)); err != nil {
+	message := compose(sender, id, prompt, s.offersTools(dest.Peer.Kind))
+	if err := s.deliver(dest.ID, message); err != nil {
 		s.mu.Lock()
 		delete(s.tickets, id)
 		s.mu.Unlock()
@@ -419,7 +433,14 @@ func (s *Service) awaitReady(dest candidate, wait time.Duration) error {
 // reportsState is whether a provider tells lich what it is doing, which is what
 // makes its silence mean something (docs/hooks/session-state.md).
 func (s *Service) reportsState(kind string) bool {
-	return s.hooksInstalled != nil && s.hooksInstalled(kind)
+	return s.plugins != nil && s.plugins.Installed(kind)
+}
+
+// offersTools is whether the target can answer with a tool rather than with the
+// shell command. Naming a tool a session does not have is worse than naming the
+// command, which works everywhere — so an unknown answer is no.
+func (s *Service) offersTools(kind string) bool {
+	return s.plugins != nil && s.plugins.HasTools(kind)
 }
 
 // watchReceipt closes a ticket whose task nobody ever picked up.
@@ -857,10 +878,10 @@ func projectsOf(matches []candidate) string {
 // person in front of it, and carries the exact command that sends an answer
 // home — the reply path only exists because this text describes it, so the
 // agent needs no prior knowledge of the feature.
-func compose(sender, ticketID, prompt, targetKind string) string {
+func compose(sender, ticketID, prompt string, hasTools bool) string {
 	return fmt.Sprintf(
 		"[lich] %s, not from your own prompt.\n\n%s\n\n%s",
-		origin(sender), prompt, replyInstruction(targetKind, ticketID),
+		origin(sender), prompt, replyInstruction(hasTools, ticketID),
 	)
 }
 
@@ -875,10 +896,10 @@ func compose(sender, ticketID, prompt, targetKind string) string {
 // blocked on a ticket instead. That happened on the first real run: the target
 // replied over its own socket and the errand timed out with the answer already
 // written. The ticket is the only route home, and the message has to say so.
-func replyInstruction(kind, ticketID string) string {
+func replyInstruction(hasTools bool, ticketID string) string {
 	command := fmt.Sprintf("  \"$LICH_BIN\" reply %s \"<your answer>\"", ticketID)
 	route := "When you have an answer, send it back by running:\n" + command
-	if providers.AcceptsMCPServer(kind) {
+	if hasTools {
 		route = fmt.Sprintf(
 			"When you have an answer, send it back with the lich tool `%s` (ticket %s), or by running:\n%s",
 			ToolReply, ticketID, command,

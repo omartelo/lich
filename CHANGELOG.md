@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A relayed task tells the agent how it can actually answer.** The message
+  lich types offers the `reply_to_session` tool where there is one and names the
+  shell command everywhere; which of the two it offered was decided by the
+  provider alone, from back when only Claude Code and Codex could be handed
+  tools. With opencode and Crush getting them from the plugin, that answer went
+  stale — so lich now asks whether *that* session has them, plugin version
+  included. Pointing an agent at a tool it does not have costs it the turn; the
+  command costs nothing and works everywhere.
 - **Crush sessions get the tools to drive the others.** Installing the plugin
   already gave them hooks; it now registers lich's MCP server in the same block
   of the same file, so a Crush session can list the sessions beside it, hand one

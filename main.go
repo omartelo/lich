@@ -135,9 +135,10 @@ func main() {
 	// answering the request it was given.
 	rl := relay.New(db, term, hub)
 	term.SetSessionState(rl.Observe)
-	// A task nobody picks up can only be told apart from a task in progress
-	// where the provider reports what it is doing, which is the plugin's job.
-	rl.SetPluginCheck(plugins.Installed)
+	// Both questions the relay asks about a provider — whether its sessions
+	// report at all, and whether they can answer with a tool — are about what
+	// the plugin put there.
+	rl.SetPlugins(plugins)
 	dispatcher.Register("relay", rl)
 	// Its caller is not the window either: opening a session for an agent starts
 	// the PTY here rather than waiting for someone to click the card.
