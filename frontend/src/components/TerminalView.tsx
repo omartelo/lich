@@ -156,6 +156,15 @@ export interface TerminalViewProps {
    */
   resume: string
   visible: boolean
+  /**
+   * Whether this session still belongs to the workspace, asked at the moment
+   * this component goes away. Unmounting is not the same event as closing a
+   * session — React unmounts for reasons of its own (StrictMode's double
+   * mount in dev, a hot reload) — and the PTY must only die with the session.
+   * Read through a ref, never as a dependency: the answer is wanted at
+   * teardown, not at render.
+   */
+  stillInWorkspace: () => boolean
 }
 
 interface LiveTerminal {
@@ -179,6 +188,7 @@ export function TerminalView({
   kind,
   resume,
   visible,
+  stillInWorkspace,
 }: TerminalViewProps) {
   const { font, terminalFontSize, resolvedTerminalTheme } = useSettings()
   const terminalColors = resolvedTerminalTheme.terminal
@@ -199,10 +209,12 @@ export function TerminalView({
   const mouseEncodingRef = useRef("")
   const replayRef = useRef(makeReplayBuffer())
   const visibleRef = useRef(visible)
+  const stillInWorkspaceRef = useRef(stillInWorkspace)
   const fontRef = useRef(font)
   const fontSizeRef = useRef(terminalFontSize)
   const themeRef = useRef(terminalColors)
   visibleRef.current = visible
+  stillInWorkspaceRef.current = stillInWorkspace
   fontRef.current = font
   fontSizeRef.current = terminalFontSize
   themeRef.current = terminalColors
@@ -590,10 +602,14 @@ export function TerminalView({
         return
       }
       if (disposed) {
-        // Unmounted during the Start round-trip: the cleanup's Close raced
-        // ahead of the spawn, so close again now that the PTY exists. The
-        // queued paste stays put for the session's next mount.
-        void Service.Close(sessionId)
+        // Unmounted during the Start round-trip. If the session went with it,
+        // the cleanup's Close raced ahead of the spawn, so close again now
+        // that the PTY exists; if the session is still in the workspace this
+        // was React remounting us and the PTY is the one the next mount
+        // attaches to. The queued paste stays put either way.
+        if (!stillInWorkspaceRef.current()) {
+          void Service.Close(sessionId)
+        }
         return
       }
       // Start is a no-op for a session that was already running — one an agent
@@ -625,7 +641,17 @@ export function TerminalView({
       for (const cleanup of cleanups) {
         cleanup()
       }
-      void Service.Close(sessionId)
+      // The PTY dies with the session, never with this component. React
+      // unmounts for reasons that are not a close — StrictMode mounts every
+      // component twice in dev, a hot reload tears the tree down — and a PTY
+      // closed for one of those takes the running agent and its scrollback
+      // with it. That was invisible while every session's PTY was born on
+      // this very mount; a session opened through the CLI or its MCP tools is
+      // already running when the card is first viewed, and the double mount
+      // killed the conversation the user came to read.
+      if (!stillInWorkspaceRef.current()) {
+        void Service.Close(sessionId)
+      }
       liveRef.current?.dispose()
       liveRef.current = null
     }

@@ -6,6 +6,7 @@ import {
   adoptSession,
   closeSession,
   groupByWorktree,
+  hasSession,
   isLastWorktreeSession,
   isSessionKind,
   neighborSessionId,
@@ -623,5 +624,24 @@ describe("adoptSession", () => {
     const before = buildState(5)
     const state = adoptSession(before, P, opened, 2)
     expect(state[P].nextSeq).toBe(before[P].nextSeq)
+  })
+})
+
+describe("hasSession", () => {
+  it("finds a session under any project", () => {
+    let state = buildState(2)
+    state = addSession(state, "other", "x1")
+    expect(hasSession(state, "s1")).toBe(true)
+    expect(hasSession(state, "x1")).toBe(true)
+  })
+
+  // The question a terminal asks as it goes away: a session that left the
+  // workspace is one whose PTY may die, and a session still in it is a card
+  // React took down for reasons of its own.
+  it("is false for a session that left the workspace", () => {
+    const state = closeSession(buildState(2), P, "s2")
+    expect(hasSession(state, "s2")).toBe(false)
+    expect(hasSession(state, "never-existed")).toBe(false)
+    expect(hasSession({}, "s1")).toBe(false)
   })
 })

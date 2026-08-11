@@ -5,7 +5,7 @@ import { TerminalView } from "./TerminalView"
 import { ResumeSessionDialog } from "./ResumeSessionDialog"
 import { Terminal as TerminalService } from "@/lib/rpc"
 import { useProjects } from "@/providers/projects"
-import { activeSessionId, resumableSession, sessionsOf } from "@/lib/session/sessions"
+import { activeSessionId, hasSession, resumableSession, sessionsOf } from "@/lib/session/sessions"
 import { spawnDecision, type SpawnProbe } from "@/lib/session/spawn-gate"
 import type { Session } from "@/lib/session/sessions"
 
@@ -146,6 +146,7 @@ export function TerminalHost() {
                 kind={session.kind}
                 resume={resuming[session.id] ?? ""}
                 visible={visible}
+                stillInWorkspace={() => hasSession(sessionsRef.current, session.id)}
               />
             </div>
           )

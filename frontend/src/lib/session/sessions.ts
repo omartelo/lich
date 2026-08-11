@@ -399,6 +399,14 @@ export function isLastWorktreeSession(sessions: Session[], session: Session): bo
   return !sessions.some((s) => s.id !== session.id && s.path === session.path)
 }
 
+// hasSession reports whether the workspace still holds a session, under any
+// project. It answers one question: whether a card that is going away is going
+// away because its session ended, which is the only reason its PTY may be
+// closed — React unmounts a terminal for reasons of its own.
+export function hasSession(state: SessionState, sessionId: string): boolean {
+  return projectOfSession(state, sessionId) !== ""
+}
+
 export function activeSessionId(state: SessionState, projectId: string): string {
   return state[projectId]?.activeId ?? ""
 }
