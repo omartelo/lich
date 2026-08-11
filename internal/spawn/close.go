@@ -114,6 +114,10 @@ func (s *Service) Close(fromID, target, projectName, worktree string, force bool
 // the checkout does — one left behind would offer a resume into a directory that
 // no longer exists.
 func (s *Service) removeCheckout(found located, active string, force bool) error {
+	// A check that cannot answer costs the message, never the work: `git worktree
+	// remove` without --force refuses a dirty checkout on its own
+	// (project.RemoveWorktree), so an unreadable status ends in git's own refusal
+	// instead of the sentence written for this case.
 	dirty, err := s.worktrees.WorktreeDirty(found.session.Path)
 	if err == nil && dirty && !force {
 		return fmt.Errorf(
@@ -159,7 +163,10 @@ type located struct {
 
 // findSession resolves a session by the label on its card or the name it answers
 // to in the peer roster, exactly as the relay does — an agent holding either
-// should not have to know which one it has.
+// should not have to know which one it has. The label is tried first and wins a
+// tie against another session's roster name, because that is how `lich send`
+// reads the same name (relay.resolve); one product cannot disagree with itself
+// about which session a name addresses.
 //
 // Unlike the relay it looks past the live ones: a card whose terminal was never
 // opened is still a session, and closing it is the one thing you can do with it.
@@ -169,7 +176,7 @@ func findSession(projects []store.Project, fromID, target, projectName string) (
 		return located{}, fmt.Errorf("no session given to close")
 	}
 
-	var matches []located
+	var byLabel, byName []located
 	for _, p := range projects {
 		if projectName != "" && !strings.EqualFold(p.Name, projectName) {
 			continue
@@ -179,11 +186,17 @@ func findSession(projects []store.Project, fromID, target, projectName string) (
 			if cwd == "" {
 				cwd = p.Path
 			}
-			if strings.EqualFold(sess.Label, target) ||
-				strings.EqualFold(relay.RosterName(cwd, sess.ID), target) {
-				matches = append(matches, located{project: p, session: sess})
+			switch {
+			case strings.EqualFold(sess.Label, target):
+				byLabel = append(byLabel, located{project: p, session: sess})
+			case strings.EqualFold(relay.RosterName(cwd, sess.ID), target):
+				byName = append(byName, located{project: p, session: sess})
 			}
 		}
+	}
+	matches := byLabel
+	if len(matches) == 0 {
+		matches = byName
 	}
 
 	switch len(matches) {

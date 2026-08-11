@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/omartelo/lich/internal/project"
+	"github.com/omartelo/lich/internal/relay"
 	"github.com/omartelo/lich/internal/store"
 )
 
@@ -169,6 +170,35 @@ func TestCloseRefusesTheCallersOwnSession(t *testing.T) {
 	}
 	if len(sessions.deleted) != 0 {
 		t.Error("deleted the caller's own session")
+	}
+}
+
+// One string can be a card's label and another session's roster name at the
+// same time, and the two surfaces that resolve it — `lich send` and `lich
+// close` — have to land on the same session. relay.resolve gives the label the
+// tie; so does this.
+func TestCloseResolvesALabelBeforeAnotherSessionsRosterName(t *testing.T) {
+	// The roster name s5 answers to: its project's directory, then four
+	// characters of its id.
+	const name = "lich-s5"
+	if got := relay.RosterName("/src/lich", "s5"); got != name {
+		t.Fatalf("roster name = %q, want %q — the collision this test needs is gone", got, name)
+	}
+	sessions := &fakeSessions{projects: []store.Project{{
+		ID: "p1", Name: "lich", Path: "/src/lich",
+		Sessions: []store.Session{
+			{ID: "s5", Label: "Session 5", Kind: "claude"},
+			{ID: "s6", Label: name, Kind: "claude"},
+		},
+	}}}
+	svc := New(sessions, &fakeWorktrees{}, &fakeTerminal{}, &fakeEvents{})
+
+	closed, err := svc.Close("s1", name, "", "", false)
+	if err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if closed.ID != "s6" {
+		t.Errorf("closed %q, want s6 — the session %q is the label of", closed.ID, name)
 	}
 }
 
