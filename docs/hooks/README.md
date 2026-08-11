@@ -1,9 +1,12 @@
 # Hook contracts
 
-lich observes and drives provider sessions through **hooks**. Each hook is a
-small script that runs inside a session (shipped by the companion plugin
+lich observes and drives provider sessions through **hooks**. Each hook runs
+inside a session (shipped by the companion plugin
 [`omartelo/lich-plugin`](https://github.com/omartelo/lich-plugin), which installs
-on Claude Code and Codex) and talks to lich over a shared local transport.
+on Claude Code, Codex, opencode and Crush) and talks to lich over a shared local
+transport. On the first three it is a small script the harness runs; opencode
+loads a JavaScript module instead, which is a difference in packaging, not in
+what a report is.
 
 The contracts are provider-agnostic: lich injects the same variables into every
 PTY it spawns, so what changes per provider is only which of its lifecycle

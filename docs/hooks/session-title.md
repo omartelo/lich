@@ -28,9 +28,9 @@ Both sides test against the payloads in
 
 ## Event → action mapping
 
-| Claude Code hook | Codex hook | action                                        |
-|------------------|------------|-----------------------------------------------|
-| `Stop`           | `Stop`     | set the session label to `title` (if still auto) |
+| Claude Code hook | Codex hook | opencode event    | Crush hook | action                                           |
+|------------------|------------|-------------------|------------|--------------------------------------------------|
+| `Stop`           | `Stop`     | `session.updated` | —          | set the session label to `title` (if still auto) |
 
 The `ai-title` is an internal Haiku summary of the first prompt, written to the
 transcript **after** the first turn — so it does not exist at `SessionStart`.
@@ -48,6 +48,13 @@ string; where it comes from is the client's business.
 
 Send it on `Stop`. Re-sending on every `Stop` is fine — lich only applies it
 while the label is still automatic (see below), so a stable title is idempotent.
+
+opencode is the one harness that hands the title over instead of being read out
+of a transcript: every `session.updated` carries the whole session, title
+included, and the plugin forwards it when it changed. It arrives more than once
+per turn, which the idempotence above already covers. **Crush has no title to
+report** — its only event is `PreToolUse`, whose payload is about the tool — so a
+Crush card keeps the name lich gave it.
 
 ## lich server side
 

@@ -34,14 +34,27 @@ Both sides test against the payloads in
 
 ## Event → state mapping
 
-| Claude Code hook   | Codex hook          | state     |
-|--------------------|---------------------|-----------|
-| `UserPromptSubmit` | `UserPromptSubmit`  | `busy`    |
-| `PreToolUse`       | `PreToolUse`        | `busy` + `tool` |
-| `PostToolUse`      | `PostToolUse`       | `busy`    |
-| `Notification`     | `PermissionRequest` | `waiting` |
-| `Stop`             | `Stop`              | `done`    |
-| `SessionEnd`       | —                   | `idle`    |
+| Claude Code hook   | Codex hook          | opencode event           | Crush hook | state     |
+|--------------------|---------------------|--------------------------|------------|-----------|
+| `UserPromptSubmit` | `UserPromptSubmit`  | `session.status` (`busy`) | —          | `busy`    |
+| `PreToolUse`       | `PreToolUse`        | `tool.execute.before`    | —          | `busy` + `tool` |
+| `PostToolUse`      | `PostToolUse`       | `tool.execute.after`     | —          | `busy`    |
+| `Notification`     | `PermissionRequest` | `permission.asked`       | —          | `waiting` |
+| `Stop`             | `Stop`              | `session.status` (`idle`) | —          | `done`    |
+| `SessionEnd`       | —                   | —                        | —          | `idle`    |
+
+opencode is the one harness that reports a state rather than an event: its
+`session.status` carries `busy`, `idle` or `retry` for the session named in the
+same payload. Its `idle` means the turn ended, which is lich's `done` — not
+lich's `idle`, which says the CLI itself has left. Nothing in opencode's event
+list says that, so like Codex it never reports `idle`.
+
+**Crush reports no state at all.** Its only hook event is `PreToolUse`, and a
+`busy` with nothing that can end it would leave a spinner on the card until the
+next turn — a state that is wrong for longer than it is right. So the plugin
+registers this contract on the three harnesses that can close it, and a Crush
+card carries no indicator. The day Crush ships `Stop` (its `docs/hooks/FUTURE.md`
+tracks the request, not the event), the column fills in from the existing script.
 
 `Notification` fires when Claude needs a permission decision or has been idle
 waiting for input — both mean "your turn"; lich shows a toast (see below) only
@@ -68,22 +81,24 @@ what that tool acts on. Both are passed through as sent — lich does not
 translate between vocabularies, because the word on the card should be the word
 in the terminal beside it.
 
-The two vocabularies overlap more than the harnesses' own tool sets do. Codex's
+The vocabularies overlap more than the harnesses' own tool sets do. Codex's
 hook payload reports a shell call as `Bash`, the same name and the same
 `tool_input.command` string Claude Code sends, and routes reading and searching
-through it; the one word of its own that reaches a card is `apply_patch`:
+through it; the one word of its own that reaches a card is `apply_patch`.
+opencode spells the same set in lower case:
 
-| Action        | Claude Code                | Codex                    |
-|---------------|----------------------------|--------------------------|
-| run a command | `Bash`                     | `Bash`                   |
-| edit a file   | `Edit` / `Write`           | `apply_patch`            |
-| read a file   | `Read`                     | — (goes through `Bash`)  |
-| search        | `Grep` / `Glob`            | — (goes through `Bash`)  |
-| an MCP tool   | `mcp__srv__tool`           | `mcp__srv__tool`         |
+| Action        | Claude Code                | Codex                    | opencode         |
+|---------------|----------------------------|--------------------------|------------------|
+| run a command | `Bash`                     | `Bash`                   | `bash`           |
+| edit a file   | `Edit` / `Write`           | `apply_patch`            | `edit` / `write` |
+| read a file   | `Read`                     | — (goes through `Bash`)  | `read`           |
+| search        | `Grep` / `Glob`            | — (goes through `Bash`)  | `grep` / `glob`  |
 
-Each row was taken off a real run of both CLIs against a stub listener, not from
-their documentation. A harness is free to report a name outside this table; the
-card shows whatever arrives.
+Each row was taken off a real run of the CLIs against a stub listener, not from
+their documentation — except opencode's MCP tools, which are namespaced by their
+server and were not observed here, which is why the row Claude Code and Codex
+both spell `mcp__srv__tool` is absent above. A harness is free to report a name
+outside this table; the card shows whatever arrives.
 
 `detail` is whatever identifies the call at a glance — the command line, the
 file path, the pattern. It is free text: a harness that offers nothing usable
@@ -168,6 +183,19 @@ a broken script could do was lose a status report.
   next PTY spawn, so what lingers is a check on a card whose provider has left.
   The plugin registers a `SessionEnd` hook anyway: an unknown event name is
   ignored rather than rejected, so it starts working the day Codex adds one.
+- **opencode never reports `idle` either**, for its own reason: its plugin is
+  loaded by the opencode server, so the event that would say "the CLI has left"
+  is the server going away with the plugin inside it. Nothing survives to report
+  it. An opencode card therefore keeps its last indicator until lich respawns
+  that PTY, exactly like a Codex one.
+- **An opencode report is only as precise as the server it runs in.** The plugin
+  reads `LICH_SESSION_ID` from the environment of the process it was loaded by,
+  and one opencode server can hold several conversations. Sub-sessions (the
+  `task` tool) are excluded by their `parentID` — without that, a sub-agent
+  finishing would report `done` while the real turn is still running — but two
+  *top-level* sessions in one server would both report onto the same card. A
+  session lich spawns gets its own server, so this is the shape of the failure,
+  not something the normal path hits.
 - The desktop notification is not clickable: clicking it focuses nothing and
   routes nowhere, which is why its text names the session and the project — the
   user navigates by hand. Making it actionable is per-OS and none of it is

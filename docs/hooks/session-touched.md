@@ -25,16 +25,22 @@ Both sides test against the payloads in
 
 ## Event → action mapping
 
-| Claude Code hook                        | Codex hook                          | action                           |
-|-----------------------------------------|-------------------------------------|----------------------------------|
-| `PostToolUse` (file-mutating tools)     | `PostToolUse` (file-mutating tools) | refresh the session's git status |
+| Claude Code hook                        | Codex hook                          | opencode event | Crush hook                          | action                           |
+|-----------------------------------------|-------------------------------------|----------------|-------------------------------------|----------------------------------|
+| `PostToolUse` (file-mutating tools)     | `PostToolUse` (file-mutating tools) | `file.edited`  | `PreToolUse` (file-mutating tools)  | refresh the session's git status |
 
 Fire it from `PostToolUse` **only for tools that write to disk** — the names are
 the provider's, so match its own: `Edit`, `Write`, `NotebookEdit`, `Bash` on
-Claude Code, `apply_patch` (plus `Bash`) on Codex. Do **not** fire on read-only
-tools (`Read`, `Grep`, `Glob`): a git-status refresh per read would cost more
-than the poll it is meant to beat. The tool name is on the hook's stdin payload
-if a single script filters instead of per-tool matchers.
+Claude Code, `apply_patch` (plus `Bash`) on Codex, and the same set lower-cased
+(`edit`, `write`, `multiedit`, `bash`) on Crush. Do **not** fire on read-only
+tools (`Read`, `Grep`, `Glob`, Crush's `view`): a git-status refresh per read
+would cost more than the poll it is meant to beat. The tool name is on the
+hook's stdin payload if a single script filters instead of per-tool matchers.
+
+opencode needs no matcher: `file.edited` fires only when a file actually
+changed, which is the signal the other harnesses approximate by filtering tool
+names. Crush is the opposite — `PreToolUse` fires *before* the write, so its
+refresh reads a tree the tool has not touched yet (see the ceilings).
 
 ## lich server side
 
@@ -61,3 +67,10 @@ if a single script filters instead of per-tool matchers.
 - **Session id, not path.** The hook sends the session id and lich/the frontend
   resolve the path, so a `cd` inside a Bash tool can't point the refresh at the
   wrong repository.
+- **On Crush the refresh runs one tool early.** `PreToolUse` is the only event
+  Crush has, so the report fires before the write lands and the immediate fetch
+  sees the tree as it was. What it actually front-runs is the *previous* tool's
+  write, and the last write of a turn waits for the poll like it always did.
+  Registering it anyway costs one git call per write tool and makes a burst of
+  edits show up a poll earlier than nothing would; a `PostToolUse` in Crush
+  turns this into the same signal the other three send.

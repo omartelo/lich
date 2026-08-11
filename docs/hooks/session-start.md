@@ -42,15 +42,24 @@ deprecated alias and the defaulted `provider`.
 
 ## Event → action mapping
 
-| Claude Code hook | Codex hook     | action                                       |
-|------------------|----------------|----------------------------------------------|
-| `SessionStart`   | `SessionStart` | store `provider_session_id` on the lich       |
-|                  |                | session row, and mark the card as running     |
-|                  |                | `provider` (the `session-agent` app event)    |
+| Claude Code hook | Codex hook     | opencode event     | Crush hook    | action                                    |
+|------------------|----------------|--------------------|---------------|-------------------------------------------|
+| `SessionStart`   | `SessionStart` | `session.created`  | `PreToolUse`  | store `provider_session_id` on the lich   |
+|                  |                |                    |               | session row, and mark the card as running |
+|                  |                |                    |               | `provider` (the `session-agent` app event)|
 
 `SessionStart` fires on startup, resume, `/clear` and compaction. A resume
 reports the resumed session's id and overwrites the stored value — lich always
 holds the id of the provider session currently in the card.
+
+The other two report the same id from the earliest place each one offers it.
+opencode raises `session.created` when the conversation is created, before the
+first turn, so it lands as early as `SessionStart` does. **Crush has only
+`PreToolUse`**, whose payload carries the same `session_id` every other harness
+reports on stdin — so a Crush session announces itself when it first reaches for
+a tool, and a conversation that answers without one never announces itself at
+all. That is a late report, not a wrong one: nothing downstream of this contract
+cares when the id arrived, only which conversation it names.
 
 ## lich server side
 
@@ -99,6 +108,15 @@ holds the id of the provider session currently in the card.
   (`frontend/src/lib/session/sessions.ts`) list the kinds that have one. A provider
   outside that list reporting an id has it stored and ignored until its own
   invocation is wired.
+- **opencode and Crush report an id lich does not yet resume.** Both spell it
+  (`opencode --session <id>`, `crush --session <id>`), so the invocation is the
+  easy half. The gate is the one below: lich only offers a resume it has proof
+  of, and both keep their conversations in SQLite — `opencode.db` under the data
+  dir, Crush's under its `--data-dir` — where there is no per-session file to
+  glob for. Wiring them means either reading another tool's schema or offering a
+  resume that can die inside the PTY, and neither is worth it for a mark on a
+  card. The id is stored today so the day one of them is wired, the sessions
+  already carry it.
 - **Resume availability is asked of each provider's transcript directory.**
   `ResumeAvailable` (`internal/terminal/resume.go`) globs
   `~/.claude/projects/*/<id>.jsonl` for Claude Code and
