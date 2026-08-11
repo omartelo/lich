@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { Store } from "@/lib/rpc"
 import { useProjects } from "@/providers/projects"
-import { binKey } from "@/lib/providers-store"
+import { binKey, skipPermissionsKey } from "@/lib/providers-store"
 import { useSettings } from "@/providers/settings"
 import { setCostReadout } from "@/lib/cost-readout-store"
 import { useCostReadout } from "@/lib/use-cost-readout"
@@ -10,6 +10,25 @@ import { Switch } from "@/components/ui/switch"
 import { SettingBlock } from "./SettingBlock"
 
 const GLOBAL_SCOPE = ""
+
+// useSkipPermissions is the stored "run without permission prompts" flag for one
+// checkout scope: read once, written through on every toggle. It reads off until
+// the value arrives — this is the switch that hands an agent the machine, so the
+// unknown state must never be drawn as the permissive one.
+function useSkipPermissions(providerId: string, worktree: boolean) {
+  const key = skipPermissionsKey(providerId, worktree)
+  const [on, setOn] = useState(false)
+
+  useEffect(() => {
+    void Store.GetSetting(key, GLOBAL_SCOPE).then((value) => setOn(value === "true"))
+  }, [key])
+
+  const toggle = (next: boolean) => {
+    setOn(next)
+    void Store.SetSetting(key, GLOBAL_SCOPE, String(next))
+  }
+  return [on, toggle] as const
+}
 
 // ProviderBinSettings is the config section a provider gets when enabled: the
 // custom path to its binary or launcher script, as a global default plus an
@@ -32,6 +51,8 @@ export function ProviderBinSettings({
   // The field keeps the raw string so a half-typed "1." survives the keystroke;
   // the stored budget is the parsed value, and an emptied field is no budget.
   const [budget, setBudget] = useState(() => (costBudget > 0 ? String(costBudget) : ""))
+  const [skipHere, setSkipHere] = useSkipPermissions(providerId, false)
+  const [skipInWorktrees, setSkipInWorktrees] = useSkipPermissions(providerId, true)
 
   useEffect(() => {
     void Store.GetSetting(key, GLOBAL_SCOPE).then(setGlobalBin)
@@ -139,6 +160,31 @@ export function ProviderBinSettings({
               />
             </SettingBlock>
           )}
+
+          {/* Both off unless the user says otherwise, and separate on purpose:
+              a worktree is a checkout you can throw away, the project directory
+              is the one you work in. */}
+          <SettingBlock
+            title="Skip permission prompts"
+            description="Spawn Claude Code with --dangerously-skip-permissions in this project's own checkout. It edits files, runs commands and installs things without asking first, and whatever it gets wrong lands in the tree you work in."
+          >
+            <Switch
+              checked={skipHere}
+              onCheckedChange={setSkipHere}
+              aria-label="Skip permission prompts in the project directory"
+            />
+          </SettingBlock>
+
+          <SettingBlock
+            title="Skip permission prompts in worktrees"
+            description="The same flag for sessions started in a git worktree. That checkout is separate from your working tree, so a mistake stays in the branch until you merge it."
+          >
+            <Switch
+              checked={skipInWorktrees}
+              onCheckedChange={setSkipInWorktrees}
+              aria-label="Skip permission prompts in worktree sessions"
+            />
+          </SettingBlock>
         </>
       )}
     </>
