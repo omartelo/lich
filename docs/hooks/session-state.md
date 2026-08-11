@@ -39,7 +39,7 @@ Both sides test against the payloads in
 | `UserPromptSubmit` | `UserPromptSubmit`  | `session.status` (`busy`) | —          | `busy`    |
 | `PreToolUse`       | `PreToolUse`        | `tool.execute.before`    | —          | `busy` + `tool` |
 | `PostToolUse`      | `PostToolUse`       | `tool.execute.after`     | —          | `busy`    |
-| `Notification`     | `PermissionRequest` | `permission.asked`       | —          | `waiting` |
+| `Notification`     | `PermissionRequest` | any `*.asked`            | —          | `waiting` |
 | `Stop`             | `Stop`              | `session.status` (`idle`) | —          | `done`    |
 | `SessionEnd`       | —                   | —                        | —          | `idle`    |
 
@@ -48,6 +48,15 @@ opencode is the one harness that reports a state rather than an event: its
 same payload. Its `idle` means the turn ended, which is lich's `done` — not
 lich's `idle`, which says the CLI itself has left. Nothing in opencode's event
 list says that, so like Codex it never reports `idle`.
+
+**opencode's `waiting` is a rule, not an event name.** It asks the user in more
+than one way — a permission decision and an interactive question, each with a
+`.v2.` spelling published alongside — so the client reports `waiting` for any
+event type ending in `.asked` rather than for a list of names. Its catalogue is
+not exhaustive to enumerate against: a real run emits types (`server.heartbeat`)
+that the 94 event schemas its own `/doc` publishes do not list. Nothing is
+registered for the answer: replying raises `session.status busy` and dismissing
+raises `session.status idle`, each within ~100ms, so the card re-arms itself.
 
 **Crush reports no state at all.** Its only hook event is `PreToolUse`, and a
 `busy` with nothing that can end it would leave a spinner on the card until the
@@ -172,6 +181,14 @@ a broken script could do was lose a status report.
   not clear when the session leaves `waiting` (user handled it in the terminal).
   Fix path: track the toast id per session and dismiss it on the next
   busy/done.
+- **Two `waiting` reports for one prompt are two toasts and two desktop
+  notifications.** The toast reads the raw event by design (a repeat state is no
+  change to the store, which would swallow the second one), and
+  `decideStatusNotice` weighs `previous` for `done` but never for `waiting` — a
+  session already waiting notifies again. Harmless while a harness raises one
+  event per prompt, which every one of them does today; it is the cost a client
+  pays for reporting the same block twice, and the reason to dedupe on the
+  client rather than here.
 - `PostToolUse → busy` recovers from `waiting` only when Claude runs a tool. Deny
   a permission and let Claude end the turn without another tool and the card
   stays `waiting` until `Stop → done`. Rare, and it self-corrects on the next
