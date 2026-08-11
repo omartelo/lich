@@ -420,10 +420,16 @@ func (s *Service) awaitReady(dest candidate, wait time.Duration) error {
 			return fmt.Errorf("%q stopped before its agent started", dest.Peer.Label)
 		}
 		if s.now().After(deadline) {
+			// Which of the two it is, lich cannot see from here, and naming only
+			// the setup script sent whoever read this hunting a script the
+			// project may not even have. What is certain is on that session's own
+			// screen, so the message says to go and look.
 			return fmt.Errorf(
-				"%q is still preparing its checkout — the project's worktree setup script "+
-					"is running in it and its agent has not started yet. Nothing was sent. "+
-					"Try again once it is up; lich sessions lists it as soon as it can take work",
+				"%q has not stopped drawing, so lich cannot tell what is reading its "+
+					"terminal: the project's worktree setup script may still be running in "+
+					"it, or its provider may still be starting up. Nothing was sent — open "+
+					"that session to see what is on its screen, and try again once it is at "+
+					"a prompt",
 				dest.Peer.Label,
 			)
 		}

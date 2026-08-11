@@ -592,12 +592,24 @@ func (s *Service) Resize(id string, cols, rows int) error {
 	return p.Resize(cols, rows)
 }
 
-// noteOutput reads one chunk of a session's output for the one thing lich has
+// noteOutput reads one chunk of a session's output for the two things lich has
 // to know about it from outside: whether the worktree setup script is still the
-// program on the other end of this PTY (see setupDone).
+// program on the other end of this PTY (see setupDone), and whether that
+// program has ever stopped drawing (see Ready).
 func (s *Service) noteOutput(sess *session, chunk []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// The quiet is recorded as it passes, never sampled when somebody finally
+	// asks. A session settles seconds after it starts and is asked hours later,
+	// by then mid-turn: sampling there reads a spinner redrawing every few
+	// frames and calls a session that has been at its prompt all day unready.
+	//
+	// A setup script pauses too — between one package and the next — and that
+	// quiet belongs to a program the provider has not replaced yet, so it is
+	// not the provider's and does not count.
+	if !sess.settingUp && !sess.lastOut.IsZero() && time.Since(sess.lastOut) >= readySettle {
+		sess.ready = true
+	}
 	sess.lastOut = time.Now()
 	if sess.settingUp && strings.Contains(string(chunk), setupDone) {
 		sess.settingUp = false
@@ -632,9 +644,11 @@ func (s *Service) Ready(id string) bool {
 	// paste then lands on screen as literal text, ahead of a prompt that never
 	// received it.
 	//
-	// Asked once: after the first quiet the session stays ready. A busy agent
-	// draws continuously, and a target mid-turn has always been written to —
-	// its provider queues the input and answers a turn later.
+	// Quiet right now answers it too, for the session that has not produced a
+	// byte since its last one; a quiet that passed earlier was recorded when it
+	// happened (see noteOutput). Either way the session stays ready from then
+	// on. A busy agent draws continuously, and a target mid-turn has always
+	// been written to — its provider queues the input and answers a turn later.
 	if !sess.lastOut.IsZero() && time.Since(sess.lastOut) >= readySettle {
 		sess.ready = true
 		return true

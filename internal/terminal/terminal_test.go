@@ -1085,6 +1085,31 @@ func TestReadyStaysTrueThroughABusyTurn(t *testing.T) {
 	}
 }
 
+// The quiet a session settles into is recorded as it passes, not sampled when
+// somebody finally asks. A session live for hours is at its prompt the whole
+// time, but the first thing ever asked of it is a relayed message — and by then
+// it is mid-turn, redrawing a spinner every few frames. Sampled there it looks
+// like a provider that never took the terminal, and the message it was sent is
+// refused instead of queued.
+func TestReadyRemembersAQuietThatAlreadyPassed(t *testing.T) {
+	svc := New(stubBins{}, nil, events.New())
+	sess := &session{}
+	svc.mu.Lock()
+	svc.sessions["s1"] = sess
+	svc.mu.Unlock()
+
+	svc.noteOutput(sess, []byte("Claude Code v2.1.227"))
+	time.Sleep(readySettle + 100*time.Millisecond)
+	// The turn starts. From here the PTY never goes quiet again, and this is the
+	// first time anyone asks whether the session can be given work.
+	svc.noteOutput(sess, []byte("...thinking..."))
+	svc.noteOutput(sess, []byte("...thinking..."))
+
+	if !svc.Ready("s1") {
+		t.Error("a session that sat at its prompt for a whole turn was refused work")
+	}
+}
+
 func TestReadyWaitsOnlyTheSettleWithoutASetupScript(t *testing.T) {
 	bin := stayAliveBin(t)
 	svc := New(stubBins{bin: bin}, nil, events.New())
