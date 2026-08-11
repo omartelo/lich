@@ -453,15 +453,23 @@ func TestMCPCloseSessionPassesTheWorktreeAnswer(t *testing.T) {
 	}
 }
 
-// force discards work that is in no commit and on no remote, so only a real
-// yes counts — a model that sends the string "false" must not read as consent.
+// force discards work that is in no commit and on no remote, so only a real yes
+// counts: the boolean, or the one string that spells it. A model that sends
+// "false" — or "yes", which reads like consent and is not the word — must not.
 func TestMCPForceIsOnlyTrueWhenItSaysTrue(t *testing.T) {
-	for _, sent := range []string{`"false"`, `"no"`, `0`, `null`} {
+	for sent, want := range map[string]bool{
+		`true`:    true,
+		`"true"`:  true,
+		`"false"`: false,
+		`"yes"`:   false,
+		`0`:       false,
+		`null`:    false,
+	} {
 		f := newFakeLich(t, `{"id":"9f8e","projectId":"p1","label":"auth-fix","removed":true}`)
 		speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
 			{"name":"close_session","arguments":{"session":"auth-fix","worktree":"remove","force":`+sent+`}}}`)
-		if got := f.only(t).args[4]; got != false {
-			t.Errorf("force sent as %s read as %v", sent, got)
+		if got := f.only(t).args[4]; got != want {
+			t.Errorf("force sent as %s read as %v, want %v", sent, got, want)
 		}
 	}
 }

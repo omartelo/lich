@@ -16,11 +16,13 @@ const ID_CHARS = 4
 export function peerName(cwd: string, id: string): string {
   // Windows separators too: the name is built the same way wherever lich runs,
   // even though only macOS and Linux have the messaging feature.
-  const dir =
-    cwd
-      .replace(/[\\/]+$/, "")
-      .split(/[\\/]/)
-      .pop() || "lich"
+  const last = cwd
+    .replace(/[\\/]+$/, "")
+    .split(/[\\/]/)
+    .pop()
+  // "." names no directory, and the Go half reads a path that names nothing the
+  // same way: filepath.Base answers "." for it, and falls back to the app name.
+  const dir = !last || last === "." ? "lich" : last
   const tail = id.replace(/[^a-z0-9]/gi, "").slice(0, ID_CHARS)
   return tail ? `${dir}-${tail}` : dir
 }

@@ -30,9 +30,14 @@ describe("peerName", () => {
   it("falls back when there is no directory to name", () => {
     expect(peerName("", "4f2a1b3c")).toBe("lich-4f2a")
     expect(peerName("/", "4f2a1b3c")).toBe("lich-4f2a")
+    expect(peerName(".", "4f2a1b3c")).toBe("lich-4f2a")
   })
 
   it("keeps the directory alone when the id carries nothing usable", () => {
     expect(peerName("/home/me/code/lich", "---")).toBe("lich")
+  })
+
+  it("skips punctuation inside the id rather than counting it", () => {
+    expect(peerName("/home/me/code/lich", "4-f-2-a-1")).toBe("lich-4f2a")
   })
 })

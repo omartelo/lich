@@ -44,6 +44,12 @@ func TestRosterNameOfMatchesTheFrontend(t *testing.T) {
 			want: "lich-4f2a",
 		},
 		{
+			name: "here is not a name either",
+			cwd:  ".",
+			id:   "4f2a1b3c",
+			want: "lich-4f2a",
+		},
+		{
 			name: "id carries nothing usable",
 			cwd:  "/home/me/code/lich",
 			id:   "---",

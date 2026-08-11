@@ -219,9 +219,9 @@ func (a mcpArgs) text(key string) string {
 	}
 }
 
-// flag reads a boolean, and only "yes" counts. A model that sends the string
-// "false" — or anything else it invented — must not read as consent, because
-// the one flag this carries discards uncommitted work.
+// flag reads a boolean, and a string only counts as one when it spells "true".
+// A model that sends "false", "yes", or anything else it invented must not read
+// as consent, because the one flag this carries discards uncommitted work.
 func (a mcpArgs) flag(key string) bool {
 	switch v := a[key].(type) {
 	case bool:
