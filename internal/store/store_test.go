@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/omartelo/lich/internal/providers"
@@ -307,11 +308,26 @@ func TestDatabasePathDev(t *testing.T) {
 
 func TestNewCreatesDatabaseUnderConfigDir(t *testing.T) {
 	tmp := t.TempDir()
-	// Redirect the OS config dir to tmp: XDG_CONFIG_HOME wins on Linux, HOME on
-	// macOS. Either way New writes under the test's temp directory, not the real
-	// user config.
+	// Redirect the OS config dir to tmp. os.UserConfigDir reads a different
+	// variable on each of the three: XDG_CONFIG_HOME on Linux, HOME on macOS
+	// ($HOME/Library/Application Support), AppData on Windows. Miss one and this
+	// test creates the real user's lich.db on that OS.
 	t.Setenv("XDG_CONFIG_HOME", tmp)
 	t.Setenv("HOME", tmp)
+	t.Setenv("AppData", tmp)
+
+	// Asserted before New, not after: databasePath is the same call New makes, so
+	// the two agree on the real config directory just as well as on the temporary
+	// one — which is how a redirect that covers only some platforms stays green
+	// while writing outside the test. Checked first so a redirect that slipped
+	// fails the test instead of creating the developer's own lich.db.
+	want, err := databasePath()
+	if err != nil {
+		t.Fatalf("databasePath: %v", err)
+	}
+	if !strings.HasPrefix(want, tmp) {
+		t.Fatalf("database path %q is outside the test's temp dir %q", want, tmp)
+	}
 
 	svc, err := New()
 	if err != nil {
@@ -319,10 +335,6 @@ func TestNewCreatesDatabaseUnderConfigDir(t *testing.T) {
 	}
 	defer svc.Close()
 
-	want, err := databasePath()
-	if err != nil {
-		t.Fatalf("databasePath: %v", err)
-	}
 	if _, err := os.Stat(want); err != nil {
 		t.Errorf("database not created at %q: %v", want, err)
 	}

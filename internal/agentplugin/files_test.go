@@ -213,6 +213,13 @@ func lichConfigHome(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("resolve config directory: %v", err)
 	}
+	// Asserted, not assumed: a redirect that misses a platform's variable leaves
+	// this answering the real config directory — which the install then writes
+	// into, agreeing with the assertions and staying green while leaking files
+	// onto the machine. The failure has to be the redirect, not the leak.
+	if !strings.HasPrefix(dir, root) {
+		t.Fatalf("config dir %q is outside the test's temp dir %q", dir, root)
+	}
 	return dir
 }
 
