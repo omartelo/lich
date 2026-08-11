@@ -58,6 +58,19 @@ version is in [CHANGELOG.md](CHANGELOG.md).
   you recently closed or opens the OS folder picker for the rest. Session cards
   carry the working directory, branch, a diff badge, an untracked-line count and
   the number of the branch's pull request.
+- **Sessions that work together.** One session can hand a task to another and get
+  the answer back — the request is typed at that session's prompt, and its agent
+  writes the answer itself, so this works the same whatever runs in either card.
+  An agent reaches the others through tools it already has (Claude Code and Codex
+  are handed them at spawn; opencode and Crush get them with the plugin) or
+  through the `lich` command every session carries: `lich sessions`,
+  `lich send "<card>" "<task>"`, `lich reply`. It can also open a session — with a
+  git worktree of its own, if the work deserves one — and close it again,
+  deciding what happens to the checkout. Right-click a card to write the request
+  at your own prompt first, and the sidebar names both ends while it is open. The
+  same commands run from any shell on the machine, `--json` included, so a script
+  or a scheduled job can drive a session without an agent in the loop. The whole
+  surface is [`docs/cli.md`](docs/cli.md).
 - **Git worktrees, built in.** Spin one up from any base branch — search it,
   local or remote, even across dozens of branches — and lich seeds the new
   checkout with your gitignored `.env*` files, hands it a dev-server port of its
@@ -95,9 +108,9 @@ version is in [CHANGELOG.md](CHANGELOG.md).
   a toast and a dot on the bell, collected in a titled dropdown, and — if you let
   it — a desktop notification when the lich window is not the one you are in;
   with the
-  [lich plugin](https://github.com/omartelo/lich-plugin) installed — in Claude
-  Code, in Codex, or in both — a session also titles its own card and refreshes
-  git the moment it writes a file.
+  [lich plugin](https://github.com/omartelo/lich-plugin) installed — in any of
+  the four harnesses that can run it, from Settings — a session also titles its
+  own card and refreshes git the moment it writes a file.
   Settings › Help opens the log folder and a pre-filled bug report; `lich rage`
   packs the whole report — versions, browser, providers, plugin state, logs,
   secrets masked — into one archive, and `lich doctor` says whether lich would

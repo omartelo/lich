@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-08-11
+
 ### Added
 
 - **A relayed task tells the agent how it can actually answer.** The message
@@ -1940,7 +1942,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.28.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.29.0...HEAD
+[0.29.0]: https://github.com/omartelo/lich/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/omartelo/lich/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/omartelo/lich/compare/v0.26.1...v0.27.0
 [0.26.1]: https://github.com/omartelo/lich/compare/v0.26.0...v0.26.1
