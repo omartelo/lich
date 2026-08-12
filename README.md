@@ -39,10 +39,11 @@ lich lets you:
   follows `cd` and names the branch — and, for a Claude session, the model, the
   context window in use and, if you ask, what the session has spent.
 - **Put one session to work for another.** Hand a task to another card and its
-  own agent writes the answer back, whatever runs in either end. The `lich`
-  commands behind it run from any shell on the machine, `--json` included, so a
-  script can drive a session with no agent in the loop
-  ([`docs/cli.md`](docs/cli.md)).
+  own agent writes the answer back, whatever runs in either end: the agent
+  reaches the other sessions through tools handed at spawn — MCP for Claude
+  Code and Codex — or brought by the plugin. The whole surface doubles as the
+  `lich` command in any shell, `--json` included, so a script can drive a
+  session with no agent in the loop ([`docs/cli.md`](docs/cli.md)).
 - **Branch off a worktree without the setup.** Spin one up from any base
   branch and lich seeds it with your gitignored `.env*` files, hands it a
   dev-server port no other checkout and no process on the machine is using, and
