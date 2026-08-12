@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { Store } from "@/lib/rpc"
 import { useProjects } from "@/providers/projects"
-import { binKey, skipPermissionsKey } from "@/lib/providers-store"
+import { binKey, skipPermissionFlags, skipPermissionsKey } from "@/lib/providers-store"
 import { useSettings } from "@/providers/settings"
 import { setCostReadout } from "@/lib/cost-readout-store"
 import { useCostReadout } from "@/lib/use-cost-readout"
@@ -36,9 +36,11 @@ function useSkipPermissions(providerId: string, worktree: boolean) {
 // provider's own name on $PATH. Same keys the Go store resolves (see binKey).
 export function ProviderBinSettings({
   providerId,
+  providerName,
   projectId,
 }: {
   providerId: string
+  providerName: string
   projectId?: string
 }) {
   const { projects } = useProjects()
@@ -53,6 +55,7 @@ export function ProviderBinSettings({
   const [budget, setBudget] = useState(() => (costBudget > 0 ? String(costBudget) : ""))
   const [skipHere, setSkipHere] = useSkipPermissions(providerId, false)
   const [skipInWorktrees, setSkipInWorktrees] = useSkipPermissions(providerId, true)
+  const skipFlag = skipPermissionFlags[providerId]
 
   useEffect(() => {
     void Store.GetSetting(key, GLOBAL_SCOPE).then(setGlobalBin)
@@ -160,13 +163,18 @@ export function ProviderBinSettings({
               />
             </SettingBlock>
           )}
+        </>
+      )}
 
-          {/* Both off unless the user says otherwise, and separate on purpose:
-              a worktree is a checkout you can throw away, the project directory
-              is the one you work in. */}
+      {/* Both off unless the user says otherwise, and separate on purpose: a
+          worktree is a checkout you can throw away, the project directory is
+          the one you work in. Absent for a provider whose flag lich has no
+          spelling for — the switch would store a setting nothing reads. */}
+      {skipFlag && (
+        <>
           <SettingBlock
             title="Skip permission prompts"
-            description="Spawn Claude Code with --dangerously-skip-permissions in this project's own checkout. It edits files, runs commands and installs things without asking first, and whatever it gets wrong lands in the tree you work in."
+            description={`Spawn ${providerName} with ${skipFlag} in this project's own checkout. It edits files, runs commands and installs things without asking first, and whatever it gets wrong lands in the tree you work in.`}
           >
             <Switch
               checked={skipHere}

@@ -38,6 +38,17 @@ export function skipPermissionsKey(id: string, worktree: boolean): string {
   return `provider.${id}.skip-permissions${worktree ? ".worktree" : ""}`
 }
 
+// skipPermissionFlags mirrors terminal.skipPermissionFlags in Go: how each
+// provider spells "run every tool without asking". Settings offers the switch
+// only for a provider listed here, so the UI cannot promise a flag the spawn
+// has no spelling for — which is what oh-my-pi's absence means.
+export const skipPermissionFlags: Record<string, string> = {
+  claude: "--dangerously-skip-permissions",
+  codex: "--dangerously-bypass-approvals-and-sandbox",
+  opencode: "--auto",
+  crush: "--yolo",
+}
+
 // readEnabled interprets the stored flag: Claude is enabled by default (it was
 // always offered before the providers feature), every other provider is opt-in.
 // An explicit "1"/"0" overrides the default.

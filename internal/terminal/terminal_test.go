@@ -538,9 +538,11 @@ func TestNameArgs(t *testing.T) {
 	}
 }
 
-// TestSkipPermissionArgs proves the setting only ever arms Claude Code's flag,
-// and only when it is on: the other providers word it differently, so a true
-// meant for Claude must not be spelled at a shell or at opencode/crush.
+// TestSkipPermissionArgs proves each provider gets its own spelling and only
+// when the setting is on. The literals are pinned rather than read back from
+// skipPermissionFlags: this is the flag that hands an agent the machine, and a
+// test that follows the map would keep passing while the map handed opencode
+// Claude Code's flag. A kind with no spelling — a shell, oh-my-pi — gets none.
 func TestSkipPermissionArgs(t *testing.T) {
 	cases := []struct {
 		name, kind string
@@ -549,8 +551,11 @@ func TestSkipPermissionArgs(t *testing.T) {
 	}{
 		{"claude off", "claude", false, nil},
 		{"claude on", "claude", true, []string{"--dangerously-skip-permissions"}},
-		{"codex is not wired", "codex", true, nil},
-		{"opencode is not wired", "opencode", true, nil},
+		{"codex off", "codex", false, nil},
+		{"codex on", "codex", true, []string{"--dangerously-bypass-approvals-and-sandbox"}},
+		{"opencode on", "opencode", true, []string{"--auto"}},
+		{"crush on", "crush", true, []string{"--yolo"}},
+		{"oh-my-pi is not wired", "omp", true, nil},
 		{"shell is never wired", KindShell, true, nil},
 	}
 	for _, tc := range cases {

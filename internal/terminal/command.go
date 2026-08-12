@@ -34,11 +34,22 @@ const (
 // `/list-agents` prints.
 const claudeNameFlag = "--name"
 
-// claudeSkipPermissionsFlag runs Claude Code without its permission prompts:
-// every edit and every command goes through unconfirmed. Off unless the user
-// turned it on for this checkout's scope in Settings › Providers, which is what
-// store.SkipPermissions answers.
-const claudeSkipPermissionsFlag = "--dangerously-skip-permissions"
+// skipPermissionFlags is how each provider spells "run every tool without
+// asking": every edit and every command goes through unconfirmed. Off unless the
+// user turned it on for this checkout's scope in Settings › Providers, which is
+// what store.SkipPermissions answers.
+//
+// Each spelling was read off that provider's own `--help` — they agree on
+// nothing, and a flag guessed from a sibling is a spawn that dies before the
+// session exists. oh-my-pi is absent because its spelling was never confirmed
+// against the binary; a provider missing here gets no flag rather than
+// somebody else's.
+var skipPermissionFlags = map[string]string{
+	providers.Claude:   "--dangerously-skip-permissions",
+	providers.Codex:    "--dangerously-bypass-approvals-and-sandbox",
+	providers.OpenCode: "--auto",
+	providers.Crush:    "--yolo",
+}
 
 // How each provider is handed an MCP server on its command line: Claude Code
 // takes a JSON string, Codex takes config overrides for its `mcp_servers`
@@ -107,14 +118,15 @@ func providerArgs(kind, name, resume, lichBin string, skipPermissions bool) []st
 }
 
 // skipPermissionArgs returns the flag that drops a provider's permission
-// prompts, or nil. Claude Code is the only spelling wired: the others each word
-// it differently, and none of them is turned on by a setting that says Claude —
-// a stray true must not reach a shell or opencode/crush either.
+// prompts, or nil when it is off or the provider has no spelling wired — a
+// stray true must not reach a shell either. The setting is stored per provider,
+// so the true that arrives here was ticked for this kind and no other.
 func skipPermissionArgs(kind string, skip bool) []string {
-	if !skip || kind != providers.Claude {
+	flag, ok := skipPermissionFlags[kind]
+	if !skip || !ok {
 		return nil
 	}
-	return []string{claudeSkipPermissionsFlag}
+	return []string{flag}
 }
 
 // mcpArgs registers lich's own MCP server with the provider being spawned, so

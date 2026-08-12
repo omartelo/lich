@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Skipping the permission prompts is no longer a Claude Code privilege.** The
+  two switches that spawn an agent with its "run every tool without asking"
+  flag — one for the project's own checkout, one for worktrees — are now offered
+  for Codex, opencode and Crush as well, each wired to that provider's own
+  spelling of the flag, which is named in the setting's description. The setting
+  was always stored per provider; only Claude Code's was ever read. oh-my-pi is
+  the exception and shows no switch: its spelling has not been confirmed against
+  the binary, and a guessed flag is a session that dies before it opens.
+
 - **The shortcuts are readable without going looking for them, and there are
   more of them.** `Ctrl/Cmd + /` opens a list of every keyboard shortcut lich
   has — the rebindable ones with the combos *this* install has them on, and the
