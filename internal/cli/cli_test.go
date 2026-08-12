@@ -121,8 +121,8 @@ func TestHelpPrintsEveryCommand(t *testing.T) {
 }
 
 func TestSessionsListsPeers(t *testing.T) {
-	f := newFakeLich(t, `[{"label":"docs","project":"lich","kind":"codex"},
-	                      {"label":"api","project":"revu","kind":"crush"}]`)
+	f := newFakeLich(t, `[{"label":"docs","name":"lich-s2","project":"lich","kind":"codex"},
+	                      {"label":"api","name":"revu-s5","project":"revu","kind":"crush"}]`)
 
 	code, stdout, stderr := run(t, f, "sessions")
 	if code != 0 {
@@ -139,7 +139,9 @@ func TestSessionsListsPeers(t *testing.T) {
 	if len(call.args) != 1 || call.args[0] != "s1" {
 		t.Errorf("args = %v, want the caller's own session id", call.args)
 	}
-	for _, want := range []string{"docs\tlich\tcodex", "api\trevu\tcrush"} {
+	// Both names travel: a surface that shows only one is what once made an
+	// agent treat a single session as two.
+	for _, want := range []string{"docs\tlich\tcodex\tlich-s2", "api\trevu\tcrush\trevu-s5"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("output is missing %q:\n%s", want, stdout)
 		}
