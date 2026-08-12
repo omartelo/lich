@@ -12,17 +12,19 @@ import {
   isSessionKind,
   neighborSessionId,
   orderGroups,
+  PINNED_GROUP_KEY,
   projectOfSession,
   ROOT_GROUP_KEY,
   removeProject,
   renameSession,
   reorderSessions,
+  reorderSubset,
   restoreSession,
   resumableSession,
   sessionsOf,
   setActiveSession,
   setSessionPinned,
-  sortPinned,
+  sidebarGroups,
   type Session,
   type SessionKind,
   type SessionState,
@@ -266,25 +268,100 @@ describe("reorderSessions", () => {
   })
 })
 
-describe("sortPinned", () => {
-  it("hoists the pinned sessions, keeping both blocks in order", () => {
+describe("sidebarGroups", () => {
+  const ids = (groups: ReturnType<typeof sidebarGroups>) =>
+    groups.map((group) => [group.key, group.sessions.map((s) => s.id)])
+
+  it("draws one block per worktree when nothing is pinned", () => {
+    let state = addSession({}, P, "s1")
+    state = addSession(state, P, "wt1", "claude", "/wt/a")
+    expect(ids(sidebarGroups(sessionsOf(state, P)))).toEqual([
+      [ROOT_GROUP_KEY, ["s1"]],
+      ["/wt/a", ["wt1"]],
+    ])
+  })
+
+  it("lifts the pinned sessions into a first block, keeping stored order", () => {
     let state = setSessionPinned(buildState(4), P, "s3", true)
     state = setSessionPinned(state, P, "s1", true)
-    expect(sortPinned(sessionsOf(state, P)).map((s) => s.id)).toEqual(["s1", "s3", "s2", "s4"])
+    expect(ids(sidebarGroups(sessionsOf(state, P)))).toEqual([
+      [PINNED_GROUP_KEY, ["s1", "s3"]],
+      [ROOT_GROUP_KEY, ["s2", "s4"]],
+    ])
   })
 
-  it("returns the list untouched when nothing is pinned", () => {
-    const list = sessionsOf(buildState(3), P)
-    expect(sortPinned(list)).toBe(list)
+  // The block gathers cards from every checkout, so it is the one group whose
+  // sessions do not share a path — and it leaves their worktree blocks behind.
+  it("takes pinned sessions out of their worktree blocks", () => {
+    let state = addSession({}, P, "s1")
+    state = addSession(state, P, "a1", "claude", "/wt/a")
+    state = addSession(state, P, "b1", "claude", "/wt/b")
+    state = setSessionPinned(state, P, "a1", true)
+    expect(ids(sidebarGroups(sessionsOf(state, P)))).toEqual([
+      [PINNED_GROUP_KEY, ["a1"]],
+      [ROOT_GROUP_KEY, ["s1"]],
+      ["/wt/b", ["b1"]],
+    ])
   })
 
-  // The hoist is display-only, so unpinning drops a session back among the
+  // The block is display-only, so unpinning drops a session back among the
   // neighbours it was lifted over instead of stranding it on top.
   it("puts an unpinned session back where the stored order has it", () => {
     let state = setSessionPinned(buildState(3), P, "s3", true)
-    expect(sortPinned(sessionsOf(state, P)).map((s) => s.id)).toEqual(["s3", "s1", "s2"])
+    expect(ids(sidebarGroups(sessionsOf(state, P)))).toEqual([
+      [PINNED_GROUP_KEY, ["s3"]],
+      [ROOT_GROUP_KEY, ["s1", "s2"]],
+    ])
     state = setSessionPinned(state, P, "s3", false)
-    expect(sortPinned(sessionsOf(state, P)).map((s) => s.id)).toEqual(["s1", "s2", "s3"])
+    expect(ids(sidebarGroups(sessionsOf(state, P)))).toEqual([[ROOT_GROUP_KEY, ["s1", "s2", "s3"]]])
+  })
+
+  it("marks only the pinned block, and gives it no path", () => {
+    const state = setSessionPinned(buildState(2), P, "s2", true)
+    const groups = sidebarGroups(sessionsOf(state, P))
+    expect(groups.map((g) => [g.pinned, g.path])).toEqual([
+      [true, ""],
+      [false, ""],
+    ])
+  })
+
+  it("has no blocks at all for a project with no sessions", () => {
+    expect(sidebarGroups([])).toEqual([])
+  })
+})
+
+describe("reorderSubset", () => {
+  const s = (id: string, pinned?: boolean): Session => ({
+    id,
+    label: id,
+    kind: "shell",
+    ...(pinned ? { pinned } : {}),
+  })
+  const stored = [s("a"), s("p1", true), s("b"), s("c"), s("p2", true)]
+  const unpinned = (session: Session) => !session.pinned
+
+  it("reorders the subset and leaves every other session in place", () => {
+    expect(reorderSubset(stored, ["c", "a", "b"], unpinned)).toEqual(["c", "p1", "a", "b", "p2"])
+  })
+
+  it("reorders the pinned block without moving the sessions between them", () => {
+    expect(reorderSubset(stored, ["p2", "p1"], (x) => !!x.pinned)).toEqual([
+      "a",
+      "p2",
+      "b",
+      "c",
+      "p1",
+    ])
+  })
+
+  // A short list has to come back with a repeat, not a gap: reorderSessions
+  // rejects an id set that does not match, which is what drops a stale drag.
+  it("repeats rather than drops when the ids run out", () => {
+    expect(reorderSubset(stored, ["c"], unpinned)).toEqual(["c", "p1", "b", "c", "p2"])
+  })
+
+  it("leaves the order alone when the predicate picks nothing", () => {
+    expect(reorderSubset(stored, [], () => false)).toEqual(["a", "p1", "b", "c", "p2"])
   })
 })
 
@@ -301,7 +378,7 @@ describe("neighborSessionId", () => {
     expect(neighborSessionId(state, P, "s1", -1)).toBe("s3")
   })
 
-  // The sidebar draws sortPinned's order, so the walk has to follow it — a
+  // The sidebar draws the pinned block first, so the walk has to follow it — a
   // pinned session sits at the top of the list, not where it was created.
   it("walks the pinned order the sidebar shows", () => {
     const state = setSessionPinned(buildState(3), P, "s3", true) // s3, s1, s2
@@ -569,7 +646,7 @@ describe("orderGroups", () => {
     kind: "shell",
     ...(path ? { path } : {}),
   })
-  const groups = groupByWorktree([
+  const groups = sidebarGroups([
     s("r1"),
     s("r2"),
     s("a1", "/wt/a"),

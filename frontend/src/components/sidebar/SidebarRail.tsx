@@ -2,14 +2,7 @@ import { useMatch, useNavigate } from "react-router-dom"
 import { PanelLeft, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useProjects } from "@/providers/projects"
-import {
-  activeSessionId,
-  groupByWorktree,
-  groupKey,
-  sessionsOf,
-  sortPinned,
-  type Session,
-} from "@/lib/session/sessions"
+import { activeSessionId, sessionsOf, sidebarGroups, type Session } from "@/lib/session/sessions"
 import { useSessionAgent } from "@/lib/session/use-session-agent"
 import { useSessionStatus } from "@/lib/session/use-session-status"
 import { SessionStatusIcon } from "./SessionStatusIcon"
@@ -79,7 +72,7 @@ export function SidebarRail({ onExpand }: SidebarRailProps) {
   }
 
   const path = projects.find((p) => p.id === projectId)?.path ?? ""
-  const groups = groupByWorktree(sortPinned(sessionsOf(sessions, projectId)))
+  const groups = sidebarGroups(sessionsOf(sessions, projectId))
   // Unlike the open sidebar, a full-screen route (Settings, Pulls) does not put
   // the highlight out: those screens have no card of their own here to carry
   // it, so dropping it would leave the rail with nothing lit at all.
@@ -126,7 +119,7 @@ export function SidebarRail({ onExpand }: SidebarRailProps) {
       </Tooltip>
       <div className="flex w-full flex-1 flex-col items-center gap-1 overflow-y-auto overflow-x-hidden">
         {groups.map((group, index) => (
-          <div key={groupKey(group.path)} className="flex w-full flex-col items-center gap-1">
+          <div key={group.key} className="flex w-full flex-col items-center gap-1">
             {index > 0 && <span className="my-1 h-px w-5 shrink-0 bg-border" />}
             {group.sessions.map((session) => (
               <RailSession
