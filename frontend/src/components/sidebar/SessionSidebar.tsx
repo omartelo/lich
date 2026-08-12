@@ -31,11 +31,12 @@ import { useProjects } from "@/providers/projects"
 import { queueSetup } from "@/lib/terminal/setup-queue"
 import {
   activeSessionId,
-  groupByWorktree,
-  groupKey,
   orderGroups,
+  reorderSubset,
   sessionsOf,
-  sortPinned,
+  sidebarGroups,
+  type Session,
+  type SidebarGroup,
 } from "@/lib/session/sessions"
 import { useSortableList, verticalAxis } from "@/lib/use-sortable-list"
 import { CloseWorktreeDialog, ForceRemoveWorktreeDialog } from "./CloseWorktreeDialog"
@@ -103,16 +104,20 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   })
   const [worktreeOpen, setWorktreeOpen] = useState(false)
   // Resolved ahead of the no-project bail below: hooks cannot sit behind it.
-  // Pinned first, which also carries their worktree group to the top of the
-  // sidebar — groupByWorktree buckets by first appearance.
-  const list = sortPinned(sessionsOf(sessions, projectId ?? ""))
+  const list = sessionsOf(sessions, projectId ?? "")
   const worktreeClose = useWorktreeClose(projectId ?? "", path, list)
-  const groups = groupByWorktree(list)
-  // Dragging a group moves its whole block of sessions inside the flat list the
-  // groups are read back from — there is no separate group order to store.
-  const { sensors, onDragEnd } = useSortableList(
-    groups.map((group) => groupKey(group.path)),
-    (keys) => reorderSessions(projectId ?? "", orderGroups(groups, keys)),
+  const groups = sidebarGroups(list)
+  // The pinned block is out of the drag list entirely: it is always first, and
+  // the worktree blocks reorder among themselves. Dragging one moves its whole
+  // block of ids inside the flat list the groups are read back from — there is
+  // no separate group order to store — leaving the pinned sessions where they
+  // sit in it, so unpinning still drops a card among its old neighbours.
+  const dragKeys = groups.filter((group) => !group.pinned).map((group) => group.key)
+  const { sensors, onDragEnd } = useSortableList(dragKeys, (keys) =>
+    reorderSessions(
+      projectId ?? "",
+      reorderSubset(list, orderGroups(groups, keys), (session) => !session.pinned),
+    ),
   )
 
   if (!projectId) {
@@ -128,14 +133,14 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   // the view; its own sidebar entry reads as active instead.
   const activeId = onSettings || onPullsRoute ? "" : realActiveId
 
-  // A drag reorders one group only; splice its new order back into the flat list
-  // in group order and persist the whole thing. reorderSessions bails on any
-  // id-set mismatch, so a close that raced the drop drops the stale order.
-  const commitGroupOrder = (groupPath: string, ids: string[]) => {
-    const flat = groups.flatMap((group) =>
-      group.path === groupPath ? ids : group.sessions.map((session) => session.id),
-    )
-    reorderSessions(projectId, flat)
+  // A drag reorders one block only; hand its new order to that block's own
+  // sessions inside the flat list and persist the whole thing. reorderSessions
+  // bails on any id-set mismatch, so a close that raced the drop drops the
+  // stale order.
+  const commitGroupOrder = (group: SidebarGroup, ids: string[]) => {
+    const member = (session: Session) =>
+      group.pinned ? !!session.pinned : !session.pinned && (session.path ?? "") === group.path
+    reorderSessions(projectId, reorderSubset(list, ids, member))
   }
 
   const createWorktree = async (name: string, base: string, baseIsRemote: boolean) => {
@@ -249,24 +254,24 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
           modifiers={[verticalAxis]}
           onDragEnd={onDragEnd}
         >
-          <SortableContext
-            items={groups.map((group) => groupKey(group.path))}
-            strategy={verticalListSortingStrategy}
-          >
+          <SortableContext items={dragKeys} strategy={verticalListSortingStrategy}>
             {groups.map((group) => {
               const groupActive = group.sessions.some((s) => s.id === realActiveId)
               return (
                 <SessionGroup
-                  key={groupKey(group.path)}
+                  key={group.key}
+                  sortId={group.key}
+                  pinned={group.pinned}
                   projectId={projectId}
                   path={group.path}
                   sessions={group.sessions}
                   projectPath={path}
                   activeId={activeId}
-                  // The divider only earns its place once a worktree splits the
-                  // list; a lone group keeps the old flat, header-less look.
+                  // The divider only earns its place once a worktree — or a pin
+                  // — splits the list; a lone group keeps the old flat,
+                  // header-less look.
                   showHeader={groups.length > 1}
-                  onReorder={(ids) => commitGroupOrder(group.path, ids)}
+                  onReorder={(ids) => commitGroupOrder(group, ids)}
                   onClose={worktreeClose.requestClose}
                   pullsActive={onPullsRoute && groupActive}
                   onPulls={() => {

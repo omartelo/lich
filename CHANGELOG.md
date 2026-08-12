@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Pinned sessions get a block of their own.** A pin used to lift a card to the
+  top of the list and, with it, the whole worktree block it belonged to — so
+  pinning one session quietly reordered a group you had arranged by hand. Now
+  the pinned cards gather under a `Pinned` divider above everything else, in the
+  same shape as the worktree dividers beside it, and their old blocks stay put.
+  Each card still names its own directory and branch, so a pin never costs you
+  the checkout it belongs to, and unpinning still drops the card back among the
+  neighbours it was lifted over. `Ctrl/Cmd + Shift + ↓/↑` walks the new order,
+  and dragging inside one block no longer moves the blocks around it.
+
 - **The session sidebar collapses to a rail.** `Ctrl/Cmd + Shift + S`, or the
   button beside New Session, narrows the list to a 3rem column: one provider
   glyph per session, each still wearing the status ring it wears on its card, in

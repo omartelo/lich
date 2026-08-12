@@ -231,16 +231,61 @@ export function renameSession(
   }
 }
 
-// sortPinned hoists the pinned sessions to the head of the list. The partition
-// is stable, so both blocks keep the order the drags gave them.
+// The pinned block's stand-in id, for the same reason ROOT_GROUP_KEY exists: it
+// is not a path. The block gathers sessions from every checkout, so it can
+// collide with no worktree — those paths are absolute.
+export const PINNED_GROUP_KEY = "__pinned__"
+
+// One block of the sidebar: the pinned sessions, or one worktree's.
+export interface SidebarGroup {
+  key: string
+  // True for the pinned block. It is not a checkout — no path of its own, no
+  // pull request, and it never moves: it is always drawn first.
+  pinned: boolean
+  // The checkout root ("" for the project's own directory), empty for pinned.
+  path: string
+  sessions: Session[]
+}
+
+// sidebarGroups splits a project's sessions into the blocks the sidebar draws:
+// the pinned ones first, in one block of their own, then one block per worktree
+// in first-appearance order. Each block keeps the stored (drag) order inside.
 //
-// It sorts for display and never writes the result back into the state: the
-// stored list stays in drag order, which is what lets an unpinned session drop
-// back among its old neighbours instead of being stranded on top. The store
-// hands back that same drag order, so a reload draws what the pin did live.
-export function sortPinned(sessions: Session[]): Session[] {
+// Pinning never rewrites the stored list — it only lifts a card into this first
+// block — which is what lets an unpinned session drop back among its old
+// neighbours instead of being stranded on top. The store hands that same order
+// back, so a reload draws what the pin did live.
+export function sidebarGroups(sessions: Session[]): SidebarGroup[] {
+  const groups: SidebarGroup[] = groupByWorktree(sessions.filter((s) => !s.pinned)).map(
+    (group) => ({
+      key: groupKey(group.path),
+      pinned: false,
+      path: group.path,
+      sessions: group.sessions,
+    }),
+  )
   const pinned = sessions.filter((s) => s.pinned)
-  return pinned.length === 0 ? sessions : [...pinned, ...sessions.filter((s) => !s.pinned)]
+  if (pinned.length === 0) {
+    return groups
+  }
+  return [{ key: PINNED_GROUP_KEY, pinned: true, path: "", sessions: pinned }, ...groups]
+}
+
+// reorderSubset returns the full id order that hands `ids` to the sessions the
+// predicate picks and leaves every other session exactly where it is. A drag
+// inside one block must not move the blocks around it, and the pinned block is
+// not even contiguous in the stored list — it is a filter over it.
+//
+// An `ids` that does not name that subset exactly yields a list with a repeat
+// (or a gap), which reorderSessions rejects wholesale — the same way it rejects
+// an order a close has raced.
+export function reorderSubset(
+  stored: Session[],
+  ids: string[],
+  member: (session: Session) => boolean,
+): string[] {
+  const queue = [...ids]
+  return stored.map((session) => (member(session) ? (queue.shift() ?? session.id) : session.id))
 }
 
 // neighborSessionId returns the session one step from `sessionId` in the order
@@ -252,16 +297,15 @@ export function sortPinned(sessions: Session[]): Session[] {
 // The order is the grouped one, not the stored flat list: a session opened in
 // the project root after a worktree one sits between its own group's cards in
 // the state and under them on screen, so walking the flat list would jump a
-// divider and come back.
+// divider and come back. Pinned cards are walked where they are drawn — in the
+// block at the top, not in the worktree they belong to.
 export function neighborSessionId(
   state: SessionState,
   projectId: string,
   sessionId: string,
   step: 1 | -1,
 ): string {
-  const sessions = groupByWorktree(sortPinned(sessionsOf(state, projectId))).flatMap(
-    (group) => group.sessions,
-  )
+  const sessions = sidebarGroups(sessionsOf(state, projectId)).flatMap((group) => group.sessions)
   if (sessions.length < 2) {
     return ""
   }
@@ -409,8 +453,8 @@ export function groupKey(path: string): string {
 // group means moving its whole block of ids. A key naming no group contributes
 // nothing, which makes the result fail reorderSessions' id-set check rather than
 // silently drop that group's sessions.
-export function orderGroups(groups: SessionGroup[], keys: string[]): string[] {
-  const byKey = new Map(groups.map((group) => [groupKey(group.path), group]))
+export function orderGroups(groups: SidebarGroup[], keys: string[]): string[] {
+  const byKey = new Map(groups.map((group) => [group.key, group]))
   return keys.flatMap((key) => byKey.get(key)?.sessions.map((session) => session.id) ?? [])
 }
 
