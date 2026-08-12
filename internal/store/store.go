@@ -241,22 +241,19 @@ type Recent struct {
 	Path string `json:"path"`
 }
 
-// recentLimit caps the reopen list. Five is what fits above the picker entry
-// without turning the menu into a second project list.
-const recentLimit = 5
-
-// RecentProjects returns the closed projects (is_open = 0) offered for
-// reopening, the last one closed first.
+// RecentProjects returns every closed project (is_open = 0) offered for
+// reopening, the last one closed first. The reopen menu shows the first few and
+// the command palette searches the whole list, so the cap belongs to the caller
+// that has a reason for one.
 //
 // rowid is the tiebreaker, not the order: it dates a project's first open, so
-// on its own it hid a long-standing project behind five newer ones the moment
-// it was closed. Rows closed before closed_seq existed carry 0 and keep falling
-// back to it.
+// on its own it hid a long-standing project behind newer ones the moment it was
+// closed. Rows closed before closed_seq existed carry 0 and keep falling back
+// to it.
 func (s *Service) RecentProjects() ([]Recent, error) {
 	rows, err := s.db.Query(
 		`SELECT id, name, path FROM projects WHERE is_open = 0
-		  ORDER BY closed_seq DESC, rowid DESC LIMIT ?`,
-		recentLimit,
+		  ORDER BY closed_seq DESC, rowid DESC`,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query recent projects: %w", err)

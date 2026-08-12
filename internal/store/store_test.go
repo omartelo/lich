@@ -911,10 +911,12 @@ func TestProjectPathOfAnUnknownProjectIsEmpty(t *testing.T) {
 	}
 }
 
-// TestRecentProjectsListsClosedOnesNewestFirst covers the whole contract of the
-// reopen menu's list: open projects stay out of it, closed ones come back
-// newest first, and the list is capped.
-func TestRecentProjectsListsClosedOnesNewestFirst(t *testing.T) {
+// TestRecentProjectsListsEveryClosedOneNewestFirst covers the whole contract of
+// the list: open projects stay out of it, closed ones come back newest first,
+// and none of them is dropped. The cap this used to assert moved to the reopen
+// menu, which is the only caller that wants one — the palette searches all of
+// them.
+func TestRecentProjectsListsEveryClosedOneNewestFirst(t *testing.T) {
 	svc := newTestStore(t)
 	for _, id := range []string{"p1", "p2", "p3", "p4", "p5", "p6", "p7"} {
 		if err := svc.AddProject(id, id, "/tmp/"+id); err != nil {
@@ -935,7 +937,7 @@ func TestRecentProjectsListsClosedOnesNewestFirst(t *testing.T) {
 	for i, r := range recents {
 		got[i] = r.ID
 	}
-	want := []string{"p6", "p5", "p4", "p3", "p2"} // p7 is open, p1 falls off the limit
+	want := []string{"p6", "p5", "p4", "p3", "p2", "p1"} // p7 is open
 	if len(got) != len(want) {
 		t.Fatalf("recent ids = %v, want %v", got, want)
 	}

@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The palette finds the projects you closed, and lets you filter what it
+  found.** A closed project used to be reachable only from the five the "+" menu
+  offers or by hunting for its directory in the picker; now the command palette
+  searches every one of them by name and path, under a `Closed projects` group,
+  and `Enter` reopens the one you pick. The menu still shows five — past that,
+  the palette is the way back.
+
+  With four kinds of hit — sessions, open projects, closed ones and what was said
+  inside a transcript — one query could fill the list, so the palette grew a
+  filter row: `All` keeps every group but shows the first three of each and says
+  in the group's header how many it is holding back, and `Sessions`, `Projects`
+  or `Messages` lists that one kind whole. `Tab` and `Shift+Tab` walk the
+  filters, a click does the same, and a filter with nothing behind it dims
+  instead of disappearing.
+
 - **Pinned sessions get a block of their own.** A pin used to lift a card to the
   top of the list and, with it, the whole worktree block it belonged to — so
   pinning one session quietly reordered a group you had arranged by hand. Now
