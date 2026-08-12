@@ -7,7 +7,7 @@
   <p><strong>English</strong> · <a href="README.zh-CN.md">简体中文</a></p>
   <p><strong>A terminal-first harness for coding with AI agents.</strong></p>
   <p>
-    Open your projects, run agents like Claude Code, Codex and Opencode in real
+    Open your projects, run agents like Claude Code, Codex and opencode in real
     terminals, and keep git — worktrees, diffs and pull requests — in view
     without leaving the window. One static Go binary, no Electron: the UI opens
     in your system's Chromium-family browser in <code>--app</code> mode.
@@ -36,11 +36,11 @@ lich lets you:
   per session.
 - **Keep a real terminal.** PTY-backed shells, several per project, rendered on
   the GPU — searchable scrollback that survives a full page reload. The footer
-  follows `cd` and names the branch, the model, the context window in use and,
-  if you ask, what the session has spent.
+  follows `cd` and names the branch — and, for a Claude session, the model, the
+  context window in use and, if you ask, what the session has spent.
 - **Put one session to work for another.** Hand a task to another card and its
-  own agent writes the answer back, the same whatever runs in either end. The
-  same commands run from any shell on the machine, `--json` included, so a
+  own agent writes the answer back, whatever runs in either end. The `lich`
+  commands behind it run from any shell on the machine, `--json` included, so a
   script can drive a session with no agent in the loop
   ([`docs/cli.md`](docs/cli.md)).
 - **Branch off a worktree without the setup.** Spin one up from any base
@@ -49,7 +49,7 @@ lich lets you:
   runs your per-project setup script before the agent starts.
 - **Review the diff where you read it.** A CodeMirror dock shows the working
   changes beside a live file tree. Right-click a selection to comment against
-  those lines; the batch is handed to the session as a single prompt.
+  those lines; the batch is pasted into the session as a single prompt, unsent.
 - **Ship the pull request from here.** List the repository's open pull requests,
   check one out into a worktree of its own, then read the diff, review it inline
   and merge it — with the methods the base branch actually accepts.
