@@ -72,7 +72,9 @@ export function Settings() {
     id: `provider-${provider.id}`,
     label: provider.name,
     group: "provider",
-    render: (id) => <ProviderBinSettings providerId={provider.id} projectId={id} />,
+    render: (id) => (
+      <ProviderBinSettings providerId={provider.id} providerName={provider.name} projectId={id} />
+    ),
   }))
   const sections = [...BASE_SECTIONS, ...providerSections, ...FOOTER_SECTIONS]
 

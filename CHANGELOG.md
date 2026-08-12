@@ -36,6 +36,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hiding them to win the width would be the wrong trade. Whether it is open or
   railed survives a restart.
 
+- **Skipping the permission prompts is no longer a Claude Code privilege, and it
+  is now one control instead of two.** Every provider lich has a spelling for —
+  Claude Code, Codex, opencode, Crush — gets the setting, wired to that
+  provider's own flag, which the description names. It was always stored per
+  provider; only Claude Code's was ever read. oh-my-pi shows nothing: its
+  spelling has not been confirmed against the binary, and a guessed flag is a
+  session that dies before it opens.
+
+  The pair of switches is now a ladder — **Never · Worktrees only ·
+  Everywhere** — with a line under it saying what the chosen rung leaves asking.
+  Two independent switches could express a fourth state that is the inversion of
+  the reason the setting exists: free rein in the tree you work in while the
+  throwaway checkout still stops to ask. That combination is no longer
+  reachable, and one already saved reads as *Everywhere* — what it already did
+  to the checkout you work in.
+
 - **The shortcuts are readable without going looking for them, and there are
   more of them.** `Ctrl/Cmd + /` opens a list of every keyboard shortcut lich
   has — the rebindable ones with the combos *this* install has them on, and the
