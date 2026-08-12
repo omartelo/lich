@@ -60,6 +60,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   line the running tool was using rather than a new one, so no card grows, and
   the ring is unchanged.
 
+### Fixed
+
+- **A long message typed into a session on Windows could land with no Enter
+  behind it.** Input reached a PTY through one write call, which is safe on
+  Unix — `*os.File` always writes everything or fails — but not on Windows:
+  ConPTY's input pipe can hand back fewer bytes than it was given, and ports
+  the code was trusting to loop already were not. A paste that landed on that
+  boundary lost its tail, closing bracket included, so the terminal was still
+  mid-paste when the Enter arrived a moment later and read it as more pasted
+  text instead of a submission — visible as a message sitting typed and unsent
+  until someone opened the session and pressed Enter themselves.
+
 ## [0.29.0] - 2026-08-11
 
 ### Added
