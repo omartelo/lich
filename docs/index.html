@@ -21,7 +21,7 @@
     <img src="media/appicon.svg" alt="" />
     <span class="name">lich</span>
     <nav>
-      <a href="#features">Features</a>
+      <a href="#features">Why lich</a>
       <a href="#install">Install</a>
       <a href="index.zh-CN.html" class="lang">简体中文</a>
       <a href="https://github.com/omartelo/lich" class="gh">GitHub</a>
@@ -57,7 +57,7 @@
   </figure>
 
   <section id="features">
-    <h2>What it does</h2>
+    <h2>Why lich</h2>
     <p class="section-lede">
       A single static Go binary that opens its UI in your system's Chromium-family browser
       in <code>--app</code> mode. No Electron, no bundled webview.
@@ -65,35 +65,37 @@
 
     <div class="features">
       <div class="feature">
-        <h3>Bring your own agent</h3>
-        <p>Claude Code, Codex, opencode and more are first-class — point lich at each
-        binary, pick the default, or choose per session.</p>
+        <h3>Run the agent you already have</h3>
+        <p>Claude Code, Codex, opencode, oh-my-pi and Crush are first-class — point lich
+        at each binary once, pick the default, or choose per session.</p>
       </div>
       <div class="feature">
-        <h3>Terminal-first sessions</h3>
-        <p>Real PTY-backed shells rendered on the GPU. The scrollback survives a page
-        reload; the footer follows <code>cd</code>, names the model and fills a ring with
-        the context window in use.</p>
+        <h3>Keep a real terminal</h3>
+        <p>Real PTY-backed shells rendered on the GPU — searchable scrollback that survives
+        a page reload. The footer follows <code>cd</code> and names the branch — and, for a
+        Claude session, the model and the context window in use.</p>
       </div>
       <div class="feature">
-        <h3>Git worktrees, built in</h3>
-        <p>Branch one off any base, seeded with your gitignored <code>.env*</code> files and
-        a stable dev-server port. A kept worktree's session resumes its conversation later.</p>
+        <h3>Put one session to work for another</h3>
+        <p>Hand a task to another card and its own agent writes the answer back, whatever
+        runs in either end — through MCP tools handed at spawn, or the <code>lich</code>
+        command from any shell, <code>--json</code> included.</p>
       </div>
       <div class="feature">
-        <h3>Projects and sessions</h3>
-        <p>Projects on a tab bar, sessions in the sidebar grouped by worktree — each card
-        carrying its directory, branch, diff badge and pull request number.</p>
+        <h3>Branch off a worktree without the setup</h3>
+        <p>Spin one up from any base branch, seeded with your gitignored <code>.env*</code>
+        files, a dev-server port of its own and your per-project setup script — before the
+        agent starts.</p>
       </div>
       <div class="feature">
-        <h3>Review, and hand it back</h3>
+        <h3>Review the diff where you read it</h3>
         <p>A diff dock beside a live file tree. Right-click a selection to comment against
         those lines; the batch lands in the session as one prompt, unsent.</p>
       </div>
       <div class="feature">
-        <h3>Pull requests, end to end</h3>
+        <h3>Ship the pull request from here</h3>
         <p>List them with GitHub's own qualifiers, check one out into its own worktree,
-        review it inline, approve it and merge it — without a browser tab.</p>
+        review it inline and merge it — with the methods the base branch actually accepts.</p>
       </div>
     </div>
   </section>

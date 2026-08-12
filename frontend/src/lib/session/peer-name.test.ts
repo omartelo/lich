@@ -1,11 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { peerMention, peerName } from "./peer-name"
-
-describe("peerMention", () => {
-  it("addresses the name and leaves room for what the user types next", () => {
-    expect(peerMention("lich-4f2a")).toBe("@lich-4f2a ")
-  })
-})
+import { peerName } from "./peer-name"
 
 describe("peerName", () => {
   it("names a session after its directory and its id tail", () => {

@@ -26,11 +26,3 @@ export function peerName(cwd: string, id: string): string {
   const tail = id.replace(/[^a-z0-9]/gi, "").slice(0, ID_CHARS)
   return tail ? `${dir}-${tail}` : dir
 }
-
-/**
- * How a target is named at the sender's prompt. The trailing space is what the
- * drop of a file does too: whatever the user types next must not run into it.
- */
-export function peerMention(name: string): string {
-  return `@${name} `
-}

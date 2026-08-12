@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react"
 import { HashRouter, Outlet, Route, Routes } from "react-router-dom"
 import { SettingsProvider, useSettings } from "@/providers/settings"
 import { useHotkey } from "@/lib/use-hotkey"
+import { parseBoolPref, readPref, writePref } from "@/lib/prefs"
 import { ProjectsProvider } from "@/providers/projects"
 import { ProjectTabs } from "@/components/tabs/ProjectTabs"
 import { SessionSidebar } from "@/components/sidebar/SessionSidebar"
+import { SidebarRail } from "@/components/sidebar/SidebarRail"
 import { TerminalHost } from "@/components/TerminalHost"
 import { RightDock, type DockTab } from "@/components/dock/RightDock"
 import { FooterBar } from "@/components/FooterBar"
@@ -21,12 +23,24 @@ import { UncleanExitGate } from "@/components/UncleanExitGate"
 import { CommandPalette } from "@/components/CommandPalette"
 import { ShortcutsOverlay } from "@/components/ShortcutsOverlay"
 
+// Named here like every other `lich.*` pref rather than spelled at the call
+// site. Unlike the dock — opened for a task and closed after it — a hidden
+// sidebar is a layout choice, so it survives a restart.
+const SIDEBAR_KEY = "lich.sidebar.open"
+
 // Layout is persistent across navigation: the project tabs, session sidebar and
 // TerminalHost stay mounted while the Outlet swaps screens (Home, Settings) on
 // top of the terminals.
 function Layout() {
   const { hotkeys } = useSettings()
   const [dock, setDock] = useState<DockTab | null>(null)
+  const [sidebar, setSidebar] = useState(() => parseBoolPref(readPref(SIDEBAR_KEY), true))
+  const toggleSidebar = () => {
+    const open = !sidebar
+    setSidebar(open)
+    writePref(SIDEBAR_KEY, open)
+  }
+  useHotkey(hotkeys.toggleSidebar, toggleSidebar)
   const toggleDock = (tab: DockTab) => setDock((cur) => (cur === tab ? null : tab))
   // The shortcut toggles the dock as a whole, so it reopens on the tab it was
   // last showing — the two tabs have their own footer buttons.
@@ -41,7 +55,14 @@ function Layout() {
     <div className="flex h-screen w-screen flex-col bg-background">
       <ProjectTabs />
       <div className="flex flex-1 overflow-hidden">
-        <SessionSidebar />
+        {/* Collapsed is a rail, never nothing: the status rings are what a list
+            of running agents is read for, and hiding them to win 12rem of
+            terminal is a trade the width alone does not pay for. */}
+        {sidebar ? (
+          <SessionSidebar onCollapse={toggleSidebar} />
+        ) : (
+          <SidebarRail onExpand={toggleSidebar} />
+        )}
         <main className="flex flex-1 flex-col overflow-hidden">
           {/* relative: RightDock overlays this area when in full screen. */}
           <div className="relative flex flex-1 overflow-hidden">

@@ -4,7 +4,6 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowRight,
-  AtSign,
   CircleQuestionMark,
   GitBranch,
   GitPullRequestArrow,
@@ -20,7 +19,6 @@ import { cn } from "@/lib/utils"
 import { dragStyle } from "@/lib/use-sortable-list"
 import { displayPath } from "@/lib/paths"
 import type { Session } from "@/lib/session/sessions"
-import { peerMention, peerName } from "@/lib/session/peer-name"
 import { useSessionStatus, useSessionStatusAge } from "@/lib/session/use-session-status"
 import { useSessionCwd } from "@/lib/session/use-session-cwd"
 import { useSessionAgent } from "@/lib/session/use-session-agent"
@@ -33,25 +31,21 @@ import { usePullRequest } from "@/lib/pulls/use-pull-request"
 import { CloseButton } from "@/components/common/CloseButton"
 import { DiffStat } from "@/components/DiffStat"
 import { SessionStatusIcon } from "./SessionStatusIcon"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { SessionTooltip } from "./SessionTooltip"
+import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   ContextMenu,
   ContextMenuContent,
-  ContextMenuGroup,
   ContextMenuItem,
-  ContextMenuLabel,
   ContextMenuSeparator,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
 import { Terminal as TerminalService } from "@/lib/rpc"
-import type { MentionGroup } from "@/lib/session/mention-targets"
 import type { DelegateGroup } from "@/lib/session/delegate-targets"
 import { delegatePrompt } from "@/lib/session/delegate-prompt"
 import { bracketedPaste } from "@/lib/terminal/bracketed-paste"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
+import { SessionTargetPicker } from "./SessionTargetPicker"
 
 interface SessionCardProps {
   session: Session
@@ -69,14 +63,10 @@ interface SessionCardProps {
   onOpenTerminal: (cwd: string) => void
   // Open the Pulls screen for this session's worktree, parking its PR card.
   onPulls: () => void
-  // Claude sessions this one can be pointed at, grouped by project. Only the
-  // card whose terminal is on screen offers them — the mention is written at
-  // that terminal's prompt, so any other card would be writing somewhere the
-  // user cannot see.
-  mentionGroups: MentionGroup[]
-  // Sessions this one can hand work to, grouped by project. Offered by the card
-  // on screen for the reason the mention is: the request is written at that
-  // terminal's prompt, and any other card would be writing out of sight.
+  // Sessions this one can hand work to, grouped by project. Only the card
+  // whose terminal is on screen offers them — the request is written at that
+  // terminal's prompt, so any other card would be writing somewhere the user
+  // cannot see.
   delegateGroups: DelegateGroup[]
 }
 
@@ -91,13 +81,13 @@ export function SessionCard({
   onPin,
   onOpenTerminal,
   onPulls,
-  mentionGroups,
   delegateGroups,
 }: SessionCardProps) {
   const pinned = !!session.pinned
   const pathRef = useRef<HTMLSpanElement>(null)
   const [pathOverflow, setPathOverflow] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [delegatePickerOpen, setDelegatePickerOpen] = useState(false)
   // Processing state reported by the lich Claude Code hook, drawn as a ring
   // around the provider icon: a spinning ring while Claude produces output,
   // solid emerald once its turn ends, amber when it is blocked on the user.
@@ -140,26 +130,29 @@ export function SessionCard({
     disabled: editing,
   })
 
-  // Write the target's roster name at this session's own prompt and hand the
-  // cursor back. lich stops here: the Claude reading that prompt is the one that
-  // addresses the other session, with the tool it already has.
-  const mention = (name: string) => {
-    void TerminalService.Write(session.id, bracketedPaste(peerMention(name)))
-    requestTerminalFocus(session.id)
-  }
-
   // Write the request at this session's own prompt and hand the cursor back.
-  // lich stops here too: what it types is a request, and the agent reading it
+  // lich stops here: what it types is a request, and the agent reading it
   // decides whether to reach for the tool or the command (delegatePrompt).
   const delegate = (label: string) => {
     void TerminalService.Write(session.id, bracketedPaste(delegatePrompt(session.kind, label)))
     requestTerminalFocus(session.id)
   }
 
-  const canMention = active && session.kind === "claude" && mentionGroups.length > 0
   // Every provider can delegate: the relay types at the target's prompt, so
   // none of this depends on the sender's own messaging channel.
   const canDelegate = active && delegateGroups.length > 0
+
+  // The picker is only rendered while the card can delegate, so losing that
+  // unmounts it — and an open flag left behind would spring the dialog back up
+  // unasked the moment the card qualifies again. The card can stop being the
+  // active one without a click on it (the palette hotkey is caught in the
+  // window's capture phase, and a session link jumps straight to another card),
+  // so this is reachable with the picker on screen.
+  useEffect(() => {
+    if (!canDelegate) {
+      setDelegatePickerOpen(false)
+    }
+  }, [canDelegate])
 
   const commit = (value: string) => {
     setEditing(false)
@@ -381,114 +374,14 @@ export function SessionCard({
               )}
             </span>
           </ContextMenuTrigger>
-          <TooltipContent
-            side="right"
-            className="max-w-xs border border-border bg-card text-foreground"
-          >
-            <div className="flex flex-col gap-1.5">
-              <span className="font-medium">{session.label}</span>
-              <span className="break-all font-mono text-muted-foreground">{shownPath}</span>
-              {/* The name this session answers to when another Claude Code
-                  session messages it. Built from the start path, not the shown
-                  one: a `cd` in the terminal never renames a running session. */}
-              {session.kind === "claude" && (
-                <span className="flex items-center gap-1 font-mono text-muted-foreground">
-                  <AtSign className="size-3 shrink-0" />
-                  {peerName(session.path || path, session.id)}
-                </span>
-              )}
-              {git?.branch && (
-                <span className="flex flex-wrap items-center gap-2 text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <GitBranch className="size-3 shrink-0" />
-                    {git.branch}
-                  </span>
-                  {pr && (
-                    <span className="flex items-center gap-1">
-                      <GitPullRequestArrow className="size-3 shrink-0" />#{pr.number}
-                    </span>
-                  )}
-                  {git.files > 0 && (
-                    <span className="flex items-center gap-1.5">
-                      <DiffStat added={git.added} deleted={git.deleted} />
-                    </span>
-                  )}
-                </span>
-              )}
-              {/* The base standing spelled out — the card itself has room for a
-                  glyph and a number, and this is the only place the branch it
-                  measures against is named. */}
-              {base?.behind && <span className="text-muted-foreground">{base.behind}</span>}
-              {base?.conflict && (
-                <span className="flex items-center gap-1 text-amber-500">
-                  <TriangleAlert className="size-3 shrink-0" />
-                  {base.conflict}
-                </span>
-              )}
-              {base && base.paths.length > 0 && (
-                <span className="flex flex-col gap-0.5 pl-4 text-muted-foreground">
-                  {base.paths.map((file) => (
-                    <span key={file} className="break-all font-mono">
-                      {file}
-                    </span>
-                  ))}
-                  {base.more > 0 && <span>+{base.more} more</span>}
-                </span>
-              )}
-            </div>
-          </TooltipContent>
+          <SessionTooltip session={session} path={path} />
         </Tooltip>
         <ContextMenuContent>
-          {canMention && (
-            <ContextMenuSub>
-              <ContextMenuSubTrigger>
-                <AtSign />
-                Mention session
-              </ContextMenuSubTrigger>
-              <ContextMenuSubContent>
-                {mentionGroups.map((group) => (
-                  <ContextMenuGroup key={group.projectId}>
-                    {/* The project only earns a heading when there is more than
-                        one to tell apart. */}
-                    {mentionGroups.length > 1 && (
-                      <ContextMenuLabel>{group.projectName}</ContextMenuLabel>
-                    )}
-                    {group.targets.map((target) => (
-                      <ContextMenuItem key={target.id} onClick={() => mention(target.name)}>
-                        <span className="truncate">{target.label}</span>
-                        <span className="ml-auto pl-3 font-mono text-xs text-muted-foreground">
-                          {target.name}
-                        </span>
-                      </ContextMenuItem>
-                    ))}
-                  </ContextMenuGroup>
-                ))}
-              </ContextMenuSubContent>
-            </ContextMenuSub>
-          )}
           {canDelegate && (
-            <ContextMenuSub>
-              <ContextMenuSubTrigger>
-                <ArrowRight />
-                Delegate to session
-              </ContextMenuSubTrigger>
-              <ContextMenuSubContent>
-                {delegateGroups.map((group) => (
-                  <ContextMenuGroup key={group.projectId}>
-                    {/* The project only earns a heading when there is more than
-                        one to tell apart. */}
-                    {delegateGroups.length > 1 && (
-                      <ContextMenuLabel>{group.projectName}</ContextMenuLabel>
-                    )}
-                    {group.targets.map((target) => (
-                      <ContextMenuItem key={target.id} onClick={() => delegate(target.label)}>
-                        <span className="truncate">{target.label}</span>
-                      </ContextMenuItem>
-                    ))}
-                  </ContextMenuGroup>
-                ))}
-              </ContextMenuSubContent>
-            </ContextMenuSub>
+            <ContextMenuItem onClick={() => setDelegatePickerOpen(true)}>
+              <ArrowRight />
+              Delegate to session…
+            </ContextMenuItem>
           )}
           <ContextMenuItem onClick={() => setEditing(true)}>
             <Pencil />
@@ -519,6 +412,14 @@ export function SessionCard({
           )}
         </ContextMenuContent>
       </ContextMenu>
+      {canDelegate && (
+        <SessionTargetPicker
+          open={delegatePickerOpen}
+          onOpenChange={setDelegatePickerOpen}
+          groups={delegateGroups}
+          onPick={(target) => delegate(target.label)}
+        />
+      )}
     </div>
   )
 }
