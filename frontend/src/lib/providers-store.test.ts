@@ -7,6 +7,9 @@ import {
   enabledProviders,
   readEnabled,
   resolveDefaultProvider,
+  skipLevel,
+  skipLevelPair,
+  skipPermissionFlags,
   skipPermissionsKey,
   type ProviderState,
 } from "./providers-store"
@@ -28,6 +31,48 @@ describe("provider setting keys", () => {
   it("keys the skip-permissions flag per provider and checkout scope", () => {
     expect(skipPermissionsKey("claude", false)).toBe("provider.claude.skip-permissions")
     expect(skipPermissionsKey("claude", true)).toBe("provider.claude.skip-permissions.worktree")
+  })
+
+  // Pinned literals, not a read-back of the map: this string is printed to the
+  // user beside the switch that hands an agent the machine, and it has to be
+  // the flag the Go spawn actually passes that provider. oh-my-pi has no
+  // confirmed spelling, so it must stay absent — that is what hides the switch.
+  it("spells the skip-permissions flag per provider, and only where one is wired", () => {
+    expect(skipPermissionFlags.claude).toBe("--dangerously-skip-permissions")
+    expect(skipPermissionFlags.codex).toBe("--dangerously-bypass-approvals-and-sandbox")
+    expect(skipPermissionFlags.opencode).toBe("--auto")
+    expect(skipPermissionFlags.crush).toBe("--yolo")
+    expect(skipPermissionFlags.omp).toBeUndefined()
+  })
+})
+
+describe("the skip-permissions ladder", () => {
+  it("folds the stored pair into a rung", () => {
+    expect(skipLevel(false, false)).toBe("never")
+    expect(skipLevel(false, true)).toBe("worktrees")
+    expect(skipLevel(true, true)).toBe("everywhere")
+  })
+
+  // The pair nothing offers any more: free rein in the tree you work in while
+  // the throwaway checkout still asks. It has to read as the rung it already
+  // behaved like in the project directory, not as the safer one above it.
+  it("reads the pair no rung writes as everywhere", () => {
+    expect(skipLevel(true, false)).toBe("everywhere")
+  })
+
+  it("writes both keys for the chosen rung", () => {
+    expect(skipLevelPair("never")).toEqual({ here: false, worktrees: false })
+    expect(skipLevelPair("worktrees")).toEqual({ here: false, worktrees: true })
+    expect(skipLevelPair("everywhere")).toEqual({ here: true, worktrees: true })
+  })
+
+  // A round trip through the control must not move a setting the user did not
+  // touch — opening the section and choosing what is already chosen is a no-op.
+  it("round-trips every rung", () => {
+    for (const level of ["never", "worktrees", "everywhere"] as const) {
+      const pair = skipLevelPair(level)
+      expect(skipLevel(pair.here, pair.worktrees)).toBe(level)
+    }
   })
 })
 

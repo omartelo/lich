@@ -23,6 +23,12 @@ Chromium, Edge or Brave are looked up as `.app` bundles under `/Applications`
 Edge or Brave are found via their conventional install paths (Edge ships with
 Windows) and the folder picker is native.
 
+**Agent versions** — lich names each Claude Code session with `--name` at spawn,
+a flag added in Claude Code 2.1.76. An older build exits with
+`error: unknown option '--name'` before the session exists, which reads as lich
+failing to start it; upgrade Claude Code. Nothing lich passes the other
+providers unprompted is that recent.
+
 ## Debian / Ubuntu
 
 Download the `.deb` from the releases page, then install it — apt resolves the
