@@ -25,8 +25,7 @@ export function UncleanExitGate() {
 // the user is reading a session is a toast they never saw.
 const prompt = () => {
   toast.warning("lich's previous run ended unexpectedly", {
-    description:
-      "Your sessions were restored, but whatever they were running stopped with it. That run's log is in the log folder.",
+    description: "Your sessions were restored, but whatever they were running stopped with it.",
     duration: Infinity,
     action: {
       label: "Open log folder",

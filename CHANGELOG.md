@@ -132,6 +132,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The crash notice is readable again.** The toast that reports a previous run
+  ending unexpectedly is the only one carrying a description, and sonner lays a
+  toast out as a single row — so its two buttons squeezed the wording into a
+  third of the width. Toasts with a description now put their buttons on a row
+  of their own, and the notice no longer spells out where the log is when the
+  button beside it already says so.
+
 - **A task sent to a session stopped on a permission prompt is no longer
   reported as never read.** The target's `waiting` report was read as "not
   working", so thirty seconds of a human not answering the permission dialog
