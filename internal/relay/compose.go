@@ -62,6 +62,20 @@ func unreadNotice(target string) string {
 	)
 }
 
+// stalledNotice is what a sender who stopped waiting is told when the target
+// ended its turn without replying through lich, typed at its own prompt the way
+// an answer would be. The pending result promised that prompt an answer, so the
+// promise has to be withdrawn the same way it would have been kept — whatever
+// the target produced is on its own screen, which only a person can go read.
+func stalledNotice(target string) string {
+	return fmt.Sprintf(
+		"[lich] The %q session finished its turn without answering through lich. "+
+			"Nothing more is coming back on that ticket — whatever it produced is on "+
+			"that session's own screen, so ask the user to open the %q card to read it.",
+		target, target,
+	)
+}
+
 // origin describes the sender in the message's first line. An empty sender is
 // the lich CLI run outside any session — a script, a scheduled job, the user's
 // own shell — which is a different thing to be told than "another agent".
