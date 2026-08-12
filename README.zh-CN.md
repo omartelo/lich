@@ -99,9 +99,9 @@ Homebrew 安装可以绕开 Gatekeeper 的提示；从 Releases 页面下载的�
 - **版本控制** —— 一个项目可以指定 `gh` 以哪个 GitHub 账号运行（设置 › Version
   Control），用于只有你其中一个账号看得见的仓库。它管的是 lich 从 GitHub 读到什么，
   而不是 git 推送时用谁的身份。
-- **外观与快捷键** —— 主题、字体和组合键都在设置里；UI 偏好以 `lich.*` 为键持久化在
-  `localStorage`（位于 lich 的 Chromium 配置目录 `~/.config/lich/chromium-profile`），
-  导入的主题则以 JSON 存在 `<config-dir>/lich/themes` 下。
+- **外观与快捷键** —— 主题、字体和组合键都在设置里；你选定的主题持久化在工作区数据库里，
+  其余 UI 偏好以 `lich.*` 为键持久化在 `localStorage`（位于 lich 的 Chromium 配置目录
+  `~/.config/lich/chromium-profile`），导入的主题则以 JSON 存在 `<config-dir>/lich/themes` 下。
 - **工作区** —— 项目和会话持久化在 SQLite 里，路径为 `<config-dir>/lich/lich.db`。
   关闭一个会话并不会删除它。
 - **会话钩子** —— 在设置里装上 [lich 插件](https://github.com/omartelo/lich-plugin)

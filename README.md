@@ -110,10 +110,11 @@ hand.
 - **Version control** — a project can name the GitHub account `gh` runs as
   (Settings › Version Control), for a repository only one of your accounts can
   see. It governs what lich reads from GitHub, not what git pushes.
-- **Appearance & hotkeys** — themes, fonts and key combos in Settings; UI
-  preferences persist in `localStorage` under `lich.*` keys (inside lich's
-  Chromium profile at `~/.config/lich/chromium-profile`), imported themes as JSON
-  under `<config-dir>/lich/themes`.
+- **Appearance & hotkeys** — themes, fonts and key combos in Settings; the theme
+  you pick persists in the workspace database, the rest of the UI preferences in
+  `localStorage` under `lich.*` keys (inside lich's Chromium profile at
+  `~/.config/lich/chromium-profile`), and imported themes as JSON under
+  `<config-dir>/lich/themes`.
 - **Workspace** — projects and sessions persist in SQLite at
   `<config-dir>/lich/lich.db`. Closing a session does not delete it.
 - **Session hooks** — with the
