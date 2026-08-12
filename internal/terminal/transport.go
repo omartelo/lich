@@ -201,6 +201,11 @@ func listen(addr string) (net.Listener, error) {
 			}
 			return l, nil
 		}
+		// Only a taken port can free itself; anything else (invalid port,
+		// permission denied) fails the same way every time, so surface it now.
+		if !addrInUse(err) {
+			return nil, err
+		}
 		if time.Now().After(deadline) {
 			return nil, fmt.Errorf("after %d attempts over %s: %w", attempts, time.Since(start).Round(time.Millisecond), err)
 		}

@@ -110,6 +110,21 @@ func TestListenGivesUpAfterBindTimeoutWithoutWaitMarker(t *testing.T) {
 	}
 }
 
+func TestListenBailsOutFastOnUnretryableError(t *testing.T) {
+	// An out-of-range port can never free itself; retrying it only delays the
+	// real error (seen in the field as LICH_LISTEN_PORT=321654 burning the
+	// whole bindTimeout before reporting "invalid port").
+	start := time.Now()
+	l, err := listen("127.0.0.1:321654")
+	if err == nil {
+		_ = l.Close()
+		t.Fatal("listen() = nil error on an invalid port, want immediate failure")
+	}
+	if elapsed := time.Since(start); elapsed >= bindRetryInterval {
+		t.Fatalf("listen() took %s on an unretryable error, want a bail-out before the first retry (%s)", elapsed, bindRetryInterval)
+	}
+}
+
 func TestListenRetriesUntilPortFreesWithoutWaitMarker(t *testing.T) {
 	busy, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/ncruces/zenity"
 	"github.com/omartelo/lich/internal/agentplugin"
 	"github.com/omartelo/lich/internal/appupdate"
 	"github.com/omartelo/lich/internal/chromium"
@@ -252,6 +253,17 @@ func handleBindFailure(configDir string, cause error) {
 	// No "is the port free?" here: on Windows the answer is regularly yes and
 	// the bind still fails, so the OS error is the message.
 	slog.Error("loopback listener failed to start", "port", port, "err", cause)
+	// The window never opens on this path, so a double-click launch dies in
+	// silence with only the log to explain — and nothing on screen says a log
+	// exists. The dialog is the one surface left. Best effort: where no dialog
+	// backend answers, the log line above still has the story.
+	_ = zenity.Error(fmt.Sprintf(
+		"lich could not listen on 127.0.0.1:%s.\n\n%v\n\n"+
+			"If another program is holding the port, set the LICH_LISTEN_PORT "+
+			"environment variable to a free one and launch lich again.\n\n"+
+			"Log: %s",
+		port, cause, logging.Path(filepath.Join(configDir, "lich"))),
+		zenity.Title("lich"))
 	os.Exit(1)
 }
 

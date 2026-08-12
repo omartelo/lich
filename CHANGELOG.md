@@ -5,6 +5,26 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **A launch that loses its port now tells you, instead of dying into a log
+  file.** When the loopback listener cannot bind and no running lich explains
+  it, the app used to exit with nothing but a log line — which a double-click
+  launch never shows, so the window simply failed to appear. Now it raises a
+  native error dialog carrying the port, the OS error and the
+  `LICH_LISTEN_PORT` override, so a taken port is something the user can fix
+  without hunting down the log.
+
+- **A bind that can never succeed fails at once, with its real error.** The
+  launch retry loop treated every bind failure as the transient
+  port-still-releasing race and retried it for the full two seconds — so a
+  misconfigured `LICH_LISTEN_PORT` (say, a port past 65535) burned the whole
+  budget before reporting `invalid port` wrapped in "after 11 attempts". Now
+  only "address in use" earns a retry; any other bind error surfaces
+  immediately, undiluted.
+
 ## [0.30.0] - 2026-08-12
 
 ### Added
