@@ -60,6 +60,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   line the running tool was using rather than a new one, so no card grows, and
   the ring is unchanged.
 
+### Fixed
+
+- **Closing lich and reopening it right away could fail to open at all,
+  mostly on Windows.** The pinned listener port only retried its bind for the
+  in-place self-update handoff; every other launch, including the ordinary
+  one right after quitting, tried once and gave up the instant the OS said the
+  port was still taken — which it briefly could be, since the outgoing
+  process's child processes (Chromium, the PTYs) can hold it a moment longer
+  than the process itself takes to exit. Every launch now gets the same short
+  retry the restart handoff always had, and a retry that pays off is logged —
+  a race that resolves on its own left no trace before, so a failure a few
+  launches later looked unrelated to the ones that quietly won.
+
 ## [0.29.0] - 2026-08-11
 
 ### Added
