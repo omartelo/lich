@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   ArrowRight,
   AtSign,
+  CircleQuestionMark,
   GitBranch,
   GitPullRequestArrow,
   Pencil,
@@ -250,12 +251,17 @@ export function SessionCard({
                   </span>
                 </span>
               )}
-              {/* An open request outranks the tool on the same line. While one
-                  is in flight it explains the whole turn — a card working
-                  because another session asked it to, or one stalled waiting on
-                  a card elsewhere in the list — and the tool line comes back the
-                  moment the errand closes. Only one of the two ever draws, so
-                  the card grows by one row at most. */}
+              {/* One line, three rungs: an open request, then a session blocked
+                  on the user, then the tool. A request in flight explains the
+                  whole turn — a card working because another session asked it
+                  to, or one stalled waiting on a card elsewhere in the list. A
+                  block outranks the tool for the reason it needs words at all:
+                  the amber ring differs from the emerald one by hue alone, so
+                  nothing else on the card says the session wants an answer. It
+                  costs no tool line either — a state other than busy clears the
+                  reported tool (session-tool-store), so by the time a card is
+                  blocked there is nothing left on that rung anyway. Only one
+                  rung ever draws, so the card grows by one row at most. */}
               {relay ? (
                 <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
                   {relay.direction === "out" ? (
@@ -270,6 +276,11 @@ export function SessionCard({
                     // command run from a script or a shell (docs/cli.md).
                     <span className="truncate italic">command line</span>
                   )}
+                </span>
+              ) : status === "waiting" ? (
+                <span className="flex w-full min-w-0 items-center gap-1 text-xs">
+                  <CircleQuestionMark className="size-3 shrink-0 text-amber-500" />
+                  <span className="truncate font-medium text-amber-500">Waiting on you</span>
                 </span>
               ) : (
                 tool && (

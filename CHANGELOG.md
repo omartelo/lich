@@ -34,6 +34,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   other action: lich stores the binding either way, but only one of the two will
   answer to it, and now you can see which pair to fix.
 
+### Changed
+
+- **A session blocked on you says so in words.** Being asked a question looked
+  the same as being finished — a 22px ring differing from the emerald one by
+  hue alone, and nothing naming what the session wanted. A card stopped on a
+  prompt now reads `Waiting on you` in amber, so a sidebar of running agents
+  says which one to answer instead of leaving you to read the hue. It takes the
+  line the running tool was using rather than a new one, so no card grows, and
+  the ring is unchanged.
+
 ## [0.29.0] - 2026-08-11
 
 ### Added
