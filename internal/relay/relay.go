@@ -18,6 +18,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -73,7 +74,15 @@ const (
 	// ToolReply answers a relayed message. It is the one tool named in prose,
 	// because the receiving agent is told what to call.
 	ToolReply = "reply_to_session"
+	// ToolCollect drains the results waiting for a sender. Named in prose too:
+	// the nudge typed at a sender's prompt is what tells it the tool exists.
+	ToolCollect = "wait_for_answer"
 )
+
+// defaultNudgeDelay is how long a result sits before the nudge naming it is
+// typed. Parallel workers finish in bursts — a fan-out answered within seconds
+// of itself would otherwise cost one nudge, and one restarted turn, per worker.
+const defaultNudgeDelay = 2 * time.Second
 
 // Status values a Result carries.
 const (
@@ -186,6 +195,33 @@ type Result struct {
 	Answer string `json:"answer"`
 }
 
+// Collected is what a drain returns: every outcome that was waiting for the
+// caller, oldest first, and the labels of the sessions still owing one.
+type Collected struct {
+	Results []Result `json:"results"`
+	Open    []string `json:"open"`
+}
+
+// inboxEntry is one finished errand whose outcome nobody was holding the line
+// for. The result is kept here until the sender collects it instead of being
+// typed at the sender's prompt in full: N results arriving as N prompt
+// submissions each restart the sender's turn and leave the whole text in its
+// context window — exactly the cost an orchestrating session cannot pay per
+// worker. What is typed instead is one short nudge (nudgeNotice), debounced so
+// a burst of workers finishing together costs one.
+type inboxEntry struct {
+	ticket string
+	fromID string
+	target string
+	status string
+	answer string
+	ready  time.Time
+	// nudged is whether a notice naming this entry was already typed. One nudge
+	// per entry: re-nudging on every turn end would start a turn per nudge,
+	// forever, for a sender that chose not to collect.
+	nudged bool
+}
+
 // ticket is one outstanding errand. answer is written once, before done is
 // closed, so every waiter reads it safely after the close.
 //
@@ -246,6 +282,15 @@ type Service struct {
 	// about appear; an unknown one is treated as not working, which is what a
 	// session with no hooks installed looks like.
 	state map[string]string
+	// ready is the inbox: finished errands waiting to be collected, keyed by
+	// ticket so a Wait on the original ticket still finds its outcome.
+	ready map[string]*inboxEntry
+	// collectors is who is blocked in Collect right now, per sender. A result
+	// stashed while one is registered wakes it instead of arming a nudge.
+	collectors map[string][]chan struct{}
+	// nudgeTimer is the armed debounce per sender, so a burst of results costs
+	// one nudge rather than one per result.
+	nudgeTimer map[string]*time.Timer
 
 	sessions Sessions
 	term     Terminal
@@ -258,6 +303,9 @@ type Service struct {
 	// receiptWindow is how long a delivered task has to be picked up before it
 	// is called unread (see watchReceipt). A field for the same reason.
 	receiptWindow time.Duration
+	// nudgeDelay is the debounce before a nudge is typed (defaultNudgeDelay).
+	// A field for the same reason.
+	nudgeDelay time.Duration
 	// plugins answers what a provider's sessions can do, which depends on state
 	// this package has none of: whether the companion plugin is installed there,
 	// and whether it is new enough to carry lich's own operations. Nil — the
@@ -285,12 +333,16 @@ func New(sessions Sessions, term Terminal, events Events) *Service {
 	return &Service{
 		tickets:       make(map[string]*ticket),
 		state:         make(map[string]string),
+		ready:         make(map[string]*inboxEntry),
+		collectors:    make(map[string][]chan struct{}),
+		nudgeTimer:    make(map[string]*time.Timer),
 		sessions:      sessions,
 		term:          term,
 		events:        events,
 		now:           time.Now,
 		submitDelay:   defaultSubmitDelay,
 		receiptWindow: defaultReceiptWindow,
+		nudgeDelay:    defaultNudgeDelay,
 	}
 }
 
@@ -502,15 +554,22 @@ func (s *Service) watchReceipt(id string, t *ticket) {
 
 	s.clear(t)
 	if unattended {
-		s.tellSender(t, unreadNotice(t.target))
+		s.stash(id, t, StatusUnread, "")
 	}
 }
 
 // Wait blocks on an already-delivered ticket for another round, so a caller
 // whose first wait ran out can come back without sending the message twice.
+// An outcome already sitting in the inbox is handed over on the spot.
 func (s *Service) Wait(ticketID string, waitSeconds int) (Result, error) {
 	s.mu.Lock()
 	expired := s.sweep()
+	if e, ok := s.ready[ticketID]; ok {
+		delete(s.ready, ticketID)
+		s.mu.Unlock()
+		s.clearAll(expired)
+		return Result{Ticket: e.ticket, Target: e.target, Status: e.status, Answer: e.answer}, nil
+	}
 	t, ok := s.tickets[ticketID]
 	s.mu.Unlock()
 	s.clearAll(expired)
@@ -518,6 +577,106 @@ func (s *Service) Wait(ticketID string, waitSeconds int) (Result, error) {
 		return Result{}, fmt.Errorf("unknown ticket %q — it was answered long ago, or expired", ticketID)
 	}
 	return s.await(ticketID, t, waitFor(waitSeconds)), nil
+}
+
+// Collect drains every outcome waiting for fromID, oldest first. With nothing
+// ready and errands still open it holds the line for the next one; with
+// nothing ready and nothing open it returns empty at once. It is the batch
+// half of the nudge: one call picks up what any number of workers produced.
+func (s *Service) Collect(fromID string, waitSeconds int) (Collected, error) {
+	if fromID == "" {
+		return Collected{}, fmt.Errorf(
+			"collecting needs a session of your own — outside one, wait on the ticket instead: lich wait <ticket>")
+	}
+	deadline := s.now().Add(waitFor(waitSeconds))
+	for {
+		s.mu.Lock()
+		expired := s.sweep()
+		results := s.drainLocked(fromID)
+		open := s.openLocked(fromID)
+		if len(results) > 0 || len(open) == 0 {
+			s.mu.Unlock()
+			s.clearAll(expired)
+			return Collected{Results: results, Open: open}, nil
+		}
+		wake := make(chan struct{}, 1)
+		s.collectors[fromID] = append(s.collectors[fromID], wake)
+		s.mu.Unlock()
+		s.clearAll(expired)
+
+		remaining := deadline.Sub(s.now())
+		if remaining <= 0 {
+			s.unregister(fromID, wake)
+			return Collected{Results: []Result{}, Open: open}, nil
+		}
+		timer := time.NewTimer(remaining)
+		select {
+		case <-wake:
+			timer.Stop()
+			s.unregister(fromID, wake)
+		case <-timer.C:
+			s.unregister(fromID, wake)
+			// One last look: the result may have landed in the same instant.
+			s.mu.Lock()
+			results := s.drainLocked(fromID)
+			open := s.openLocked(fromID)
+			s.mu.Unlock()
+			return Collected{Results: results, Open: open}, nil
+		}
+	}
+}
+
+// drainLocked empties fromID's inbox, oldest first. Called under s.mu. It
+// never returns nil: a JSON null where a script expects a list is a bug it
+// should not have to defend against.
+func (s *Service) drainLocked(fromID string) []Result {
+	var found []*inboxEntry
+	for id, e := range s.ready {
+		if e.fromID != fromID {
+			continue
+		}
+		delete(s.ready, id)
+		found = append(found, e)
+	}
+	sort.Slice(found, func(i, j int) bool { return found[i].ready.Before(found[j].ready) })
+	results := make([]Result, 0, len(found))
+	for _, e := range found {
+		results = append(results, Result{Ticket: e.ticket, Target: e.target, Status: e.status, Answer: e.answer})
+	}
+	return results
+}
+
+// openLocked is the labels still owing fromID an answer, deduplicated and
+// sorted. Called under s.mu.
+func (s *Service) openLocked(fromID string) []string {
+	seen := map[string]bool{}
+	for _, t := range s.tickets {
+		if t.fromID == fromID {
+			seen[t.target] = true
+		}
+	}
+	labels := make([]string, 0, len(seen))
+	for label := range seen {
+		labels = append(labels, label)
+	}
+	sort.Strings(labels)
+	return labels
+}
+
+// unregister drops one Collect call's wake channel.
+func (s *Service) unregister(fromID string, wake chan struct{}) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	list := s.collectors[fromID]
+	for i, ch := range list {
+		if ch == wake {
+			s.collectors[fromID] = append(list[:i], list[i+1:]...)
+			break
+		}
+	}
+	if len(s.collectors[fromID]) == 0 {
+		delete(s.collectors, fromID)
+	}
 }
 
 // Reply hands an answer back to whoever is waiting on ticketID. It is what the
@@ -554,39 +713,85 @@ func (s *Service) Reply(ticketID, answer string) error {
 
 	s.clear(t)
 	if unattended {
-		s.returnAnswer(t)
+		s.stash(ticketID, t, StatusAnswered, answer)
 	}
 	return nil
 }
 
-// returnAnswer types the answer at the sender's own prompt, the same way the
-// request reached the target. It runs when nobody is blocked on the ticket
-// anymore, which is the normal case for anything that took longer than a tool
-// call may sit still: the answer arrives when it arrives, in the session that
-// asked, instead of being lost because the asker stopped listening.
-//
-// A sender that is not a session at all — the `lich` command from a script —
-// has no prompt to type at. Such a caller waits or does without.
-func (s *Service) returnAnswer(t *ticket) {
-	if t.answer == "" {
+// stash puts one finished errand's outcome in the inbox and decides how the
+// sender hears about it: a Collect already holding the line is woken, a busy
+// sender is left alone until its turn ends (Observe flushes then), and an idle
+// one gets a nudge after the debounce. A sender that is not a session — the
+// `lich` command from a script — is never nudged; its entry waits to be asked
+// for with `lich wait <ticket>`.
+func (s *Service) stash(id string, t *ticket, status, answer string) {
+	s.mu.Lock()
+	s.ready[id] = &inboxEntry{
+		ticket: id, fromID: t.fromID, target: t.target,
+		status: status, answer: answer, ready: s.now(),
+	}
+	woke := false
+	for _, wake := range s.collectors[t.fromID] {
+		select {
+		case wake <- struct{}{}:
+		default:
+		}
+		woke = true
+	}
+	nudgeable := !woke && t.fromID != "" && s.state[t.fromID] != stateBusy
+	if nudgeable && s.nudgeTimer[t.fromID] == nil {
+		fromID := t.fromID
+		s.nudgeTimer[fromID] = time.AfterFunc(s.nudgeDelay, func() { s.flushNudge(fromID) })
+	}
+	s.mu.Unlock()
+}
+
+// flushNudge types one nudge naming everything waiting for fromID, if any of
+// it has not been nudged before. Ran by the debounce timer and by Observe when
+// the sender's turn ends — a delivery mid-turn would queue as its own turn,
+// which is the cost this whole path exists to avoid.
+func (s *Service) flushNudge(fromID string) {
+	s.mu.Lock()
+	if timer := s.nudgeTimer[fromID]; timer != nil {
+		timer.Stop()
+		delete(s.nudgeTimer, fromID)
+	}
+	if s.state[fromID] == stateBusy {
+		// The prompt is not free; the end of this turn flushes instead.
+		s.mu.Unlock()
 		return
 	}
-	s.tellSender(t, fmt.Sprintf(
-		"[lich] Answer from session %q, to the request you sent it:\n\n%s",
-		t.target, t.answer,
-	))
+	fresh := 0
+	count := 0
+	targets := map[string]bool{}
+	for _, e := range s.ready {
+		if e.fromID != fromID {
+			continue
+		}
+		if !e.nudged {
+			fresh++
+			e.nudged = true
+		}
+		count++
+		targets[e.target] = true
+	}
+	s.mu.Unlock()
+	if fresh == 0 {
+		return
+	}
+	labels := make([]string, 0, len(targets))
+	for label := range targets {
+		labels = append(labels, label)
+	}
+	sort.Strings(labels)
+	s.tellSender(fromID, nudgeNotice(count, labels, s.offersTools(s.kindOf(fromID))))
 }
 
 // tellSender types one line of news at the prompt of whoever asked, the same
-// way their request reached the target. A sender that is not a session at all —
-// the `lich` command from a script — has no prompt to type at, and hears this
-// only if it is still waiting.
-func (s *Service) tellSender(t *ticket, message string) {
-	if t.fromID == "" {
-		return
-	}
-	if err := s.deliver(t.fromID, message); err != nil {
-		slog.Warn("relay: news not delivered", "session", t.fromID, "err", err)
+// way their request reached the target.
+func (s *Service) tellSender(fromID, message string) {
+	if err := s.deliver(fromID, message); err != nil {
+		slog.Warn("relay: news not delivered", "session", fromID, "err", err)
 	}
 }
 
@@ -623,7 +828,7 @@ func (s *Service) await(id string, t *ticket, wait time.Duration) Result {
 		s.leave(t)
 		return Result{Ticket: id, Target: t.target, Status: StatusUnread}
 	case <-timer.C:
-		return Result{Ticket: id, Target: t.target, Status: s.giveUp(t)}
+		return Result{Ticket: id, Target: t.target, Status: s.giveUp(id, t)}
 	}
 }
 
@@ -640,12 +845,12 @@ func (s *Service) leave(t *ticket) {
 // seeing this caller still attending, and leaving the news for it — after it
 // had already stopped listening. Whoever leaves last owns what is left behind.
 //
-// A reply is typed at the sender's prompt, because an answer outlives the wait
-// it missed. The receipt window closing the ticket unread — and a turn ending
+// A reply is stashed for the sender, because an answer outlives the wait it
+// missed. The receipt window closing the ticket unread — and a turn ending
 // with no answer — are told to the caller instead: it is still here to hear
 // them, and the alternative is reporting the errand as still in progress, on a
 // ticket already out of the map.
-func (s *Service) giveUp(t *ticket) string {
+func (s *Service) giveUp(id string, t *ticket) string {
 	s.mu.Lock()
 	t.attended--
 	last := t.attended == 0
@@ -665,7 +870,7 @@ func (s *Service) giveUp(t *ticket) string {
 	}
 	s.mu.Unlock()
 	if orphaned {
-		s.returnAnswer(t)
+		s.stash(id, t, StatusAnswered, t.answer)
 	}
 	if unread {
 		return StatusUnread
@@ -708,7 +913,11 @@ func (s *Service) Observe(sessionID, state string) {
 		s.state[sessionID] = state
 	}
 
-	var ended []*ticket
+	type endedErrand struct {
+		id string
+		t  *ticket
+	}
+	var ended []endedErrand
 	switch state {
 	case stateBusy:
 		for _, t := range s.tickets {
@@ -726,39 +935,43 @@ func (s *Service) Observe(sessionID, state string) {
 			if t.targetID == sessionID && !t.delivered.IsZero() {
 				delete(s.tickets, id)
 				close(t.stalled)
-				ended = append(ended, t)
+				ended = append(ended, endedErrand{id, t})
 			}
 		}
 	case stateDone:
 		if id, t := s.turnErrand(sessionID); t != nil {
 			delete(s.tickets, id)
 			close(t.stalled)
-			ended = append(ended, t)
+			ended = append(ended, endedErrand{id, t})
 		}
 	}
 	// A waiter still holding the line carries the news out through its own
-	// select; an errand nobody is attending has to reach the sender's prompt
-	// instead, the way an answer or an unread notice would. Without it the
-	// promise a pending result makes — "the answer will arrive at your prompt"
-	// — is silently never kept.
-	var quiet []*ticket
-	for _, t := range ended {
-		if t.attended == 0 {
-			quiet = append(quiet, t)
+	// select; an errand nobody is attending is stashed for the sender instead,
+	// the way an answer would be. Without it the promise a pending result makes
+	// — "news will arrive at your prompt" — is silently never kept.
+	var quiet []endedErrand
+	for _, e := range ended {
+		if e.t.attended == 0 {
+			quiet = append(quiet, e)
 		}
 	}
 	s.mu.Unlock()
 
-	s.clearAll(ended)
-	for _, t := range ended {
+	for _, e := range ended {
+		s.clear(e.t)
 		if s.events != nil {
 			s.events.Emit(StalledEventName, StalledEvent{
-				ID: t.fromID, TargetID: t.targetID, Target: t.target,
+				ID: e.t.fromID, TargetID: e.t.targetID, Target: e.t.target,
 			})
 		}
 	}
-	for _, t := range quiet {
-		s.tellSender(t, stalledNotice(t.target))
+	for _, e := range quiet {
+		s.stash(e.id, e.t, StatusUnanswered, "")
+	}
+	// This session as a sender: its turn ending frees its prompt, which is what
+	// a nudge held back during the turn was waiting for.
+	if state == stateDone {
+		s.flushNudge(sessionID)
 	}
 }
 
@@ -832,9 +1045,11 @@ func waitFor(seconds int) time.Duration {
 }
 
 // sweep drops tickets nobody answered in time and returns them, so the caller
-// can take their marks down after releasing s.mu. Called under the lock on the
-// paths that already hold it, which is often enough for a map that grows one
-// entry per errand.
+// can take their marks down after releasing s.mu. Inbox entries nobody
+// collected age out on the same TTL — a sender that never drains would
+// otherwise grow the inbox by one entry per errand for the life of the
+// process. Called under the lock on the paths that already hold it, which is
+// often enough for a map that grows one entry per errand.
 func (s *Service) sweep() []*ticket {
 	var expired []*ticket
 	cutoff := s.now().Add(-ticketTTL)
@@ -842,6 +1057,11 @@ func (s *Service) sweep() []*ticket {
 		if t.created.Before(cutoff) {
 			delete(s.tickets, id)
 			expired = append(expired, t)
+		}
+	}
+	for id, e := range s.ready {
+		if e.ready.Before(cutoff) {
+			delete(s.ready, id)
 		}
 	}
 	return expired

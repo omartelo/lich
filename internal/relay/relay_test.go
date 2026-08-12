@@ -147,12 +147,28 @@ func (f *fakeEvents) awaitMark(id, direction string) bool {
 	return false
 }
 
-// newRelay is New with the paste-to-Enter delay dropped: the fakes have no TUI
-// to settle, and paying it in every test would buy nothing.
+// newRelay is New with the paste-to-Enter delay dropped — the fakes have no
+// TUI to settle, and paying it in every test would buy nothing — and the nudge
+// debounce shrunk for the same reason.
 func newRelay(sessions Sessions, term Terminal, events Events) *Service {
 	svc := New(sessions, term, events)
 	svc.submitDelay = 0
+	svc.nudgeDelay = time.Millisecond
 	return svc
+}
+
+// awaitWritten blocks until want shows up in what a session was typed, and
+// returns whether it did. The nudge rides a debounce timer, so a test asserting
+// on it has to wait it out rather than race it.
+func awaitWritten(term *fakeTerminal, id, want string) bool {
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if strings.Contains(term.written(id), want) {
+			return true
+		}
+		time.Sleep(time.Millisecond)
+	}
+	return false
 }
 
 // workspace is the roster most tests run against: two projects, one label
@@ -314,6 +330,11 @@ func TestReplyInstructionOffersTheToolOnlyWhereItExists(t *testing.T) {
 			}
 			if !strings.Contains(got, "Do not answer by messaging a peer session") {
 				t.Errorf("the instruction does not rule out the peer channel:\n%s", got)
+			}
+			// The sender pays to read the answer, so the instruction pins the
+			// shape: a report, not a transcript.
+			if !strings.Contains(got, "concise report") {
+				t.Errorf("the instruction does not ask for a concise report:\n%s", got)
 			}
 		})
 	}
@@ -559,8 +580,8 @@ func TestATurnThatEndsWithoutAnAnswerEndsTheWait(t *testing.T) {
 
 // The sender usually stops waiting long before the target's turn ends: it took
 // a ticket and moved on, on the promise that news would reach its prompt. A
-// turn that ends with no reply is that news, and it has to arrive the same way
-// an answer would.
+// turn that ends with no reply is that news — what arrives is the short nudge,
+// and the outcome itself is collected, not typed.
 func TestTheSenderIsToldAtItsPromptWhenTheTargetStallsUnattended(t *testing.T) {
 	term := newFakeTerminal("s1", "s2")
 	svc := newRelay(workspace(), term, nil)
@@ -576,12 +597,18 @@ func TestTheSenderIsToldAtItsPromptWhenTheTargetStallsUnattended(t *testing.T) {
 	svc.Observe("s2", "busy")
 	svc.Observe("s2", "done")
 
-	typed := term.written("s1")
-	if !strings.Contains(typed, "finished its turn without answering") {
-		t.Errorf("the sender was never told the errand stalled: %q", typed)
+	if !awaitWritten(term, "s1", "[lich]") {
+		t.Fatalf("the sender was never nudged: %q", term.written("s1"))
 	}
-	if _, err := svc.Wait(got.Ticket, 1); err == nil {
-		t.Error("the ticket outlived the turn that closed it")
+	if typed := term.written("s1"); !strings.Contains(typed, `"docs"`) {
+		t.Errorf("the nudge does not name who the news is from: %q", typed)
+	}
+	res, err := svc.Wait(got.Ticket, 1)
+	if err != nil {
+		t.Fatalf("Wait on the stalled ticket: %v", err)
+	}
+	if res.Status != StatusUnanswered {
+		t.Errorf("status = %q, want %q collected off the inbox", res.Status, StatusUnanswered)
 	}
 }
 
@@ -601,7 +628,7 @@ func TestAWaiterGivingUpAsTheErrandStallsHearsSo(t *testing.T) {
 	}
 	close(tk.stalled)
 
-	if got := svc.giveUp(tk); got != StatusUnanswered {
+	if got := svc.giveUp("tk1", tk); got != StatusUnanswered {
 		t.Errorf("status = %q, want the caller told the target answered elsewhere", got)
 	}
 }
@@ -834,10 +861,12 @@ func TestAnotherSessionsTurnLeavesTheTicketAlone(t *testing.T) {
 	}
 }
 
-// TestAnAnswerNobodyWaitedForIsTypedAtTheSendersPrompt proves the path that
-// makes a long errand work at all: the asker stops holding the line, the answer
-// arrives later, and it comes back the same way the request went out.
-func TestAnAnswerNobodyWaitedForIsTypedAtTheSendersPrompt(t *testing.T) {
+// TestAnAnswerNobodyWaitedForIsStashedAndNudged proves the path that makes a
+// long errand work at all: the asker stops holding the line, the answer
+// arrives later — and what reaches its prompt is one short nudge, never the
+// answer itself. The full text comes back through Collect, inside a turn the
+// sender chose, instead of restarting its turn as a prompt submission.
+func TestAnAnswerNobodyWaitedForIsStashedAndNudged(t *testing.T) {
 	term := newFakeTerminal("s1", "s2")
 	svc := newRelay(workspace(), term, nil)
 
@@ -856,18 +885,37 @@ func TestAnAnswerNobodyWaitedForIsTypedAtTheSendersPrompt(t *testing.T) {
 		t.Fatalf("Reply: %v", err)
 	}
 
+	if !awaitWritten(term, "s1", "[lich]") {
+		t.Fatalf("the sender was never nudged: %q", term.written("s1"))
+	}
 	writes := term.writesTo("s1")
 	if len(writes) != 2 {
 		t.Fatalf("got %d writes to the sender, want the paste and the submit: %q", len(writes), writes)
 	}
 	if writes[1] != "\r" {
-		t.Errorf("the answer was left sitting at the prompt: %q", writes)
+		t.Errorf("the nudge was left sitting at the prompt: %q", writes)
 	}
 	typed := term.written("s1")
-	for _, want := range []string{`Answer from session "docs"`, "3 failures in foo_test"} {
-		if !strings.Contains(typed, want) {
-			t.Errorf("returned answer is missing %q:\n%s", want, typed)
-		}
+	if strings.Contains(typed, "3 failures in foo_test") {
+		t.Errorf("the full answer was typed at the prompt instead of held for Collect:\n%s", typed)
+	}
+	if !strings.Contains(typed, `"docs"`) {
+		t.Errorf("the nudge does not name who answered: %q", typed)
+	}
+
+	collected, err := svc.Collect("s1", 1)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if len(collected.Results) != 1 {
+		t.Fatalf("collected %d results, want the one answer: %+v", len(collected.Results), collected)
+	}
+	res := collected.Results[0]
+	if res.Status != StatusAnswered || res.Answer != "3 failures in foo_test" || res.Ticket != got.Ticket {
+		t.Errorf("collected %+v, want the stashed answer under its own ticket", res)
+	}
+	if len(collected.Open) != 0 {
+		t.Errorf("collect reports %v still open, want none", collected.Open)
 	}
 }
 
@@ -1471,8 +1519,9 @@ func TestSilenceIsOnlyReadWhereTheProviderReports(t *testing.T) {
 	}
 }
 
-// The sender usually stops waiting long before this: it took a ticket and moved
-// on, so the news has to reach its prompt, exactly as an answer would.
+// The sender usually stops waiting long before this: it took a ticket and
+// moved on, so the news has to reach its prompt — as a nudge, with the unread
+// outcome itself waiting in the inbox.
 func TestTheSenderIsToldAtItsPromptWhenNobodyWasWaiting(t *testing.T) {
 	term := newFakeTerminal("s1", "s2")
 	svc := withReceipts(term)
@@ -1487,14 +1536,16 @@ func TestTheSenderIsToldAtItsPromptWhenNobodyWasWaiting(t *testing.T) {
 	if result.Status != StatusPending {
 		t.Fatalf("status = %q, want the sender to have given up first", result.Status)
 	}
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if strings.Contains(strings.Join(term.writesTo("s1"), ""), "never picked up") {
-			return
-		}
-		time.Sleep(5 * time.Millisecond)
+	if !awaitWritten(term, "s1", "[lich]") {
+		t.Fatalf("the sender was never nudged: %v", term.writesTo("s1"))
 	}
-	t.Errorf("the sender was never told: %v", term.writesTo("s1"))
+	collected, err := svc.Collect("s1", 1)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if len(collected.Results) != 1 || collected.Results[0].Status != StatusUnread {
+		t.Errorf("collected %+v, want the unread outcome", collected)
+	}
 }
 
 // The two can also land together: the window closes the ticket while the sender
@@ -1513,7 +1564,7 @@ func TestAWaiterGivingUpAsTheTaskGoesUnreadHearsSo(t *testing.T) {
 	}
 	close(tk.unread)
 
-	if got := svc.giveUp(tk); got != StatusUnread {
+	if got := svc.giveUp("tk1", tk); got != StatusUnread {
 		t.Errorf("status = %q, want the sender told nothing read it", got)
 	}
 }
@@ -1566,5 +1617,242 @@ func TestWithoutAPluginCheckTheMessageNamesTheCommand(t *testing.T) {
 	}
 	if typed := strings.Join(term.writesTo("s2"), ""); strings.Contains(typed, ToolReply) {
 		t.Errorf("assumed a tool with nothing to ask:\n%s", typed)
+	}
+}
+
+// The inbox: a result nobody was holding the line for is stashed and announced
+// with one short nudge, and the text itself comes back through Collect — never
+// typed at the sender's prompt, where every arrival restarts a turn.
+
+// plant registers one delivered errand directly, so inbox tests need not spend
+// real seconds waiting out a Send's own timeout first.
+func plant(svc *Service, id, fromID, targetID, target string) {
+	svc.mu.Lock()
+	svc.tickets[id] = &ticket{
+		fromID: fromID, targetID: targetID, target: target,
+		created:   time.Now(),
+		delivered: time.Now(),
+		done:      make(chan struct{}),
+		stalled:   make(chan struct{}),
+		unread:    make(chan struct{}),
+	}
+	svc.mu.Unlock()
+}
+
+// A fan-out's workers finish in bursts. One nudge per result would restart the
+// sender's turn once per worker — the debounce folds the burst into one line
+// naming everything that is waiting.
+func TestABurstOfAnswersCoalescesIntoOneNudge(t *testing.T) {
+	term := newFakeTerminal("s1", "s2", "s3")
+	svc := newRelay(workspace(), term, nil)
+	svc.nudgeDelay = 20 * time.Millisecond
+	plant(svc, "t1", "s1", "s2", "docs")
+	plant(svc, "t2", "s1", "s3", "api")
+
+	if err := svc.Reply("t1", "done here"); err != nil {
+		t.Fatalf("Reply t1: %v", err)
+	}
+	if err := svc.Reply("t2", "done there"); err != nil {
+		t.Fatalf("Reply t2: %v", err)
+	}
+
+	if !awaitWritten(term, "s1", "[lich]") {
+		t.Fatalf("no nudge arrived: %q", term.writesTo("s1"))
+	}
+	// Long enough for a second nudge to have fired if one were coming.
+	time.Sleep(50 * time.Millisecond)
+	writes := term.writesTo("s1")
+	if len(writes) != 2 {
+		t.Fatalf("got %d writes, want one nudge (paste and submit): %q", len(writes), writes)
+	}
+	typed := term.written("s1")
+	for _, want := range []string{"2 tasks", `"docs"`, `"api"`} {
+		if !strings.Contains(typed, want) {
+			t.Errorf("the nudge is missing %q:\n%s", want, typed)
+		}
+	}
+}
+
+// A delivery mid-turn queues as its own turn, which is the cost this whole
+// path exists to avoid — a busy sender hears nothing until its turn ends.
+func TestABusySenderIsNudgedOnlyWhenItsTurnEnds(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := newRelay(workspace(), term, nil)
+	svc.Observe("s1", stateBusy)
+	plant(svc, "t1", "s1", "s2", "docs")
+
+	if err := svc.Reply("t1", "all green"); err != nil {
+		t.Fatalf("Reply: %v", err)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if typed := term.written("s1"); typed != "" {
+		t.Fatalf("nudged a sender mid-turn: %q", typed)
+	}
+
+	svc.Observe("s1", stateDone)
+	if !awaitWritten(term, "s1", "[lich]") {
+		t.Fatalf("the turn ended and no nudge came: %q", term.writesTo("s1"))
+	}
+}
+
+// One nudge per result. A sender that read the nudge and chose not to collect
+// must not be nudged again at every turn end — each nudge starts a turn, and
+// two of them chasing each other is a loop with a token bill.
+func TestANudgeIsNotRepeatedOnLaterTurnEnds(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := newRelay(workspace(), term, nil)
+	plant(svc, "t1", "s1", "s2", "docs")
+	if err := svc.Reply("t1", "all green"); err != nil {
+		t.Fatalf("Reply: %v", err)
+	}
+	if !awaitWritten(term, "s1", "[lich]") {
+		t.Fatalf("no nudge arrived: %q", term.writesTo("s1"))
+	}
+
+	svc.Observe("s1", stateBusy)
+	svc.Observe("s1", stateDone)
+	time.Sleep(20 * time.Millisecond)
+	if writes := term.writesTo("s1"); len(writes) != 2 {
+		t.Errorf("an uncollected result was nudged again: %q", writes)
+	}
+}
+
+func TestCollectHoldsTheLineForTheNextResult(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := newRelay(workspace(), term, nil)
+	plant(svc, "t1", "s1", "s2", "docs")
+
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		_ = svc.Reply("t1", "all green")
+	}()
+	collected, err := svc.Collect("s1", 2)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if len(collected.Results) != 1 || collected.Results[0].Answer != "all green" {
+		t.Fatalf("collected %+v, want the answer", collected)
+	}
+	// The collector carried the result out itself; a nudge on top would deliver
+	// the news twice.
+	time.Sleep(20 * time.Millisecond)
+	if typed := term.written("s1"); typed != "" {
+		t.Errorf("a result a collector carried out was also nudged: %q", typed)
+	}
+}
+
+func TestCollectReportsWhoStillOwes(t *testing.T) {
+	term := newFakeTerminal("s1", "s2", "s3")
+	svc := newRelay(workspace(), term, nil)
+	plant(svc, "t1", "s1", "s2", "docs")
+	plant(svc, "t2", "s1", "s3", "api")
+	if err := svc.Reply("t1", "all green"); err != nil {
+		t.Fatalf("Reply: %v", err)
+	}
+
+	collected, err := svc.Collect("s1", 1)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if len(collected.Results) != 1 || collected.Results[0].Target != "docs" {
+		t.Fatalf("collected %+v, want the one finished errand", collected)
+	}
+	if len(collected.Open) != 1 || collected.Open[0] != "api" {
+		t.Errorf("open = %v, want the session still owing", collected.Open)
+	}
+}
+
+func TestCollectWithNothingOpenReturnsAtOnce(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1"), nil)
+
+	start := time.Now()
+	collected, err := svc.Collect("s1", 30)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if len(collected.Results) != 0 || len(collected.Open) != 0 {
+		t.Errorf("collected %+v from a caller with no errands", collected)
+	}
+	if time.Since(start) > time.Second {
+		t.Error("Collect held the line with no errand to wait for")
+	}
+}
+
+func TestCollectRefusesACallerWithNoSession(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal(), nil)
+
+	if _, err := svc.Collect("", 1); err == nil {
+		t.Fatal("collected for a caller that has no prompt to be nudged at")
+	}
+}
+
+func TestWaitPicksAStashedOutcomeUp(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := newRelay(workspace(), term, nil)
+	plant(svc, "t1", "s1", "s2", "docs")
+	if err := svc.Reply("t1", "all green"); err != nil {
+		t.Fatalf("Reply: %v", err)
+	}
+
+	res, err := svc.Wait("t1", 1)
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	if res.Status != StatusAnswered || res.Answer != "all green" {
+		t.Fatalf("result = %+v, want the stashed answer", res)
+	}
+	if _, err := svc.Wait("t1", 1); err == nil {
+		t.Error("the same outcome was handed out twice")
+	}
+}
+
+func TestAnUncollectedResultExpiresWithItsTTL(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1"), nil)
+	svc.mu.Lock()
+	svc.ready["old"] = &inboxEntry{
+		ticket: "old", fromID: "s1", target: "docs",
+		status: StatusAnswered, answer: "stale",
+		ready: time.Now().Add(-2 * time.Hour),
+	}
+	svc.mu.Unlock()
+
+	collected, err := svc.Collect("s1", 1)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if len(collected.Results) != 0 {
+		t.Errorf("an hour-old result was still handed over: %+v", collected.Results)
+	}
+}
+
+func TestTheNudgeNamesTheToolOnlyWhereItExists(t *testing.T) {
+	tests := []struct {
+		name  string
+		tools bool
+	}{
+		{"a sender with lich's tools", true},
+		{"a sender with none", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			term := newFakeTerminal("s1", "s2")
+			svc := newRelay(workspace(), term, nil)
+			svc.SetPlugins(fakePlugins{installed: true, tools: tt.tools})
+			plant(svc, "t1", "s1", "s2", "docs")
+			if err := svc.Reply("t1", "all green"); err != nil {
+				t.Fatalf("Reply: %v", err)
+			}
+
+			if !awaitWritten(term, "s1", "[lich]") {
+				t.Fatalf("no nudge arrived: %q", term.writesTo("s1"))
+			}
+			typed := term.written("s1")
+			if named := strings.Contains(typed, ToolCollect); named != tt.tools {
+				t.Errorf("names %s = %v, want %v:\n%s", ToolCollect, named, tt.tools, typed)
+			}
+			if !strings.Contains(typed, `"$LICH_BIN" wait`) {
+				t.Errorf("the command route is missing:\n%s", typed)
+			}
+		})
 	}
 }

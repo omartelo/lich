@@ -110,6 +110,27 @@ func (s *Service) labelOf(id string) string {
 	return "unknown"
 }
 
+// kindOf is what the session runs, read from the workspace so a nudge can
+// offer the tool only where it exists. Empty when lich has no record of it,
+// which offersTools reads as "name the command".
+func (s *Service) kindOf(id string) string {
+	if id == "" {
+		return ""
+	}
+	projects, err := s.sessions.LoadState()
+	if err != nil {
+		return ""
+	}
+	for _, p := range projects {
+		for _, sess := range p.Sessions {
+			if sess.ID == id {
+				return sess.Kind
+			}
+		}
+	}
+	return ""
+}
+
 // matching returns the candidates whose name — read out by naming — is target,
 // narrowed to one project when one was given.
 func matching(found []candidate, target, project string, naming func(candidate) string) []candidate {

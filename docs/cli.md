@@ -149,8 +149,8 @@ Types `<prompt>` at `<session>`'s prompt, submits it, and waits.
   is that news.
 
 ```
-docs is still working. The message was delivered; its answer will be typed at
-the sending session's prompt when it arrives. To hold the line for it instead:
+docs is still working. The message was delivered; a note will be typed at the
+sending session's prompt when its result is ready. To hold the line for it instead:
   lich wait a1b2c3d4
 ```
 
@@ -166,11 +166,22 @@ nobody can answer would otherwise be waited out in full. `internal/terminal` tel
 setup wrapper prints between the script and the provider (`setupDone`): the PTY
 and the pid are the same across the `exec`, so nothing else can.
 
-### `lich wait [--timeout <seconds>] <ticket>`
+### `lich wait [--timeout <seconds>] [<ticket>]`
 
-Waits again on a ticket a previous `send` handed back. Same output as `send`.
-A ticket that was answered, or that nobody answered within an hour, is gone and
-waiting on it is an error.
+With a ticket: waits again on that errand. Same output as `send`. A result that
+already came back unattended is handed over on the spot — it sits in the
+sender's inbox (see below) until collected or expired. A ticket that was
+collected already, or that nobody answered within an hour, is gone and waiting
+on it is an error.
+
+Without a ticket: **collects**. Every result waiting for this session is
+printed at once, oldest first, each in the same words a single wait uses;
+sessions still owing an answer are listed after (`Still working: "docs"`).
+When nothing is ready and errands are open, it holds the line for the next
+result; when nothing is open either, it says so and returns at once. This is
+the command the nudge at a sender's prompt names, and it needs a session of
+its own — run from a plain shell it is an error, because there is no inbox to
+drain.
 
 ### `lich reply <ticket> <answer>`
 
@@ -275,7 +286,7 @@ at lich.
 |------|--------------|
 | `list_sessions` | The live sessions that can be given work, as JSON. |
 | `send_to_session` | `session`, `prompt`, optional `project` and `timeout_seconds`. |
-| `wait_for_answer` | `ticket`, optional `timeout_seconds`. |
+| `wait_for_answer` | optional `ticket` and `timeout_seconds` — with a ticket, `lich wait <ticket>`; without one, the collect: everything ready at once. |
 | `reply_to_session` | `ticket`, `answer` — what a relayed message asks for. |
 | `open_session` | optional `project`, `kind`, `worktree`, `base` — `lich open`. |
 | `close_session` | `session`, optional `project`, `worktree` (`keep`/`remove`), `force`. |
@@ -283,6 +294,13 @@ at lich.
 
 A tool that fails answers with `isError` and the reason as text, not a JSON-RPC
 error: the agent should read what went wrong and act on it, not lose the turn.
+
+`initialize` also carries `instructions` — the server's own briefing, which
+clients inject into the agent's system prompt. It is the one place the whole
+journey (fan out into worktree sessions, carry on, collect) is told as one;
+the tool descriptions each only explain their own door. `list_sessions` and
+`list_worktrees` are annotated `readOnlyHint`, so a client may auto-allow
+them.
 
 ### `lich rage [--output <path>]`
 
@@ -396,27 +414,36 @@ the machine while `/proc/<pid>/environ` is not. A URL registration means
 secret at all — the server inherits the coordinates from the PTY's environment,
 where they already were.
 
-## The answer comes back the way the request went out
+## The answer is announced, and collected
 
 A relayed task can take minutes; a tool call cannot sit still that long (Claude
 Code detaches one that runs past 120 seconds). So waiting is optional here.
 
-When the answer lands and **nobody is still holding the line**, lich types it at
-the sending session's own prompt and submits it — the same bracketed paste, the
-same delay, the same submit that carried the request to the target:
+When a result lands and **nobody is still holding the line**, it goes to the
+sender's **inbox**, and what is typed at the sender's prompt is one short
+nudge — never the result itself:
 
 ```
-[lich] Answer from session "docs", to the request you sent it:
-
-3 failures in foo_test
+[lich] The task you sent "docs" has its result ready. To collect everything at
+once, call the lich tool `wait_for_answer` with no ticket, or run:
+  "$LICH_BIN" wait
 ```
 
-That is what makes a long errand work without polling: the asker carries on, and
-the answer arrives when it exists. A caller that *is* still waiting carries the
-answer out itself and nothing is typed — delivering both would deliver twice.
+The nudge is the whole delivery on purpose. Typing the results themselves was
+the first shape this had, and it is what made orchestrating expensive: every
+arrival is a prompt submission, every submission restarts the sender's turn,
+and the full text stays in its context window — an orchestrator fanning out to
+N workers paid all of that N times. The nudge costs one line, arrives once per
+batch (results landing within a couple of seconds share it, and a sender
+mid-turn hears nothing until its turn ends), and the text comes back through
+the collect call, inside a turn the sender chose. A result nobody collects
+expires with its ticket's TTL, one hour.
 
-A sender that is not a session — the `lich` command from a script — has no
-prompt to answer at. Such a caller waits, or does without.
+A caller that *is* still waiting carries the result out itself and nothing is
+typed — delivering both would deliver twice.
+
+A sender that is not a session — the `lich` command from a script — is never
+nudged: its result waits in the inbox for `lich wait <ticket>`, or expires.
 
 ## The message a target receives
 
@@ -427,7 +454,12 @@ prompt to answer at. Such a caller waits, or does without.
 
 When you have an answer, send it back by running:
   "$LICH_BIN" reply <ticket> "<your answer>"
-Whoever asked is blocked waiting on that command.
+
+That ticket is the only way back: whoever asked is blocked on it and is
+reading nothing else. Do not answer by messaging a peer session — an answer
+sent any other way is lost. Keep the answer a concise report — what was done,
+where, and what remains — never a transcript: the sender pays to read every
+byte, and the detail is in your commits and files anyway.
 ```
 
 A caller with no session of its own — the CLI run from a script or a plain

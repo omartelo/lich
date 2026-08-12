@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **A worker's answer no longer floods the orchestrator's prompt — it is
+  announced, and collected.** A session fanning work out to others used to get
+  every answer typed back at its prompt in full, and every arrival restarted
+  its turn with the whole text left in its context window: orchestrating N
+  workers cost that N times over. Now an unattended result goes to the
+  sender's inbox, and what is typed is one short `[lich]` note — results
+  landing within a couple of seconds share it, and a sender mid-turn hears
+  nothing until its turn ends. `wait_for_answer` with no ticket (or a bare
+  `lich wait`) collects everything at once, inside a turn the sender chose,
+  and reports who still owes an answer. Uncollected results expire with the
+  ticket TTL, one hour.
+
+- **lich's MCP server now briefs the agent on the whole journey.** The
+  `initialize` handshake carries `instructions` — how to fan work out into
+  worktree sessions, that answers announce themselves so polling is waste, and
+  that a relayed reply should be a concise report, not a transcript. Clients
+  inject it into the agent's system prompt, so an agent no longer has to
+  reverse-engineer the orchestration flow from seven tool descriptions. The
+  relayed message asks for the concise report too, and `list_sessions` /
+  `list_worktrees` are annotated read-only so clients may auto-allow them.
+
 ### Fixed
 
 - **A launch that loses its port now tells you, instead of dying into a log

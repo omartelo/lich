@@ -74,8 +74,9 @@ const usage = `lich talks to the sessions open in the running lich window.
       Prints the answer. If the wait runs out first it prints a ticket to
       pick the answer up with.
 
-  lich wait [--timeout <seconds>] [--json] <ticket>
-      Wait again on a ticket a previous send handed back.
+  lich wait [--timeout <seconds>] [--json] [<ticket>]
+      With a ticket, wait again on that errand. Without one, collect every
+      result that is ready — and when none is, wait for the next.
 
   lich reply <ticket> <answer>
       Send <answer> back to whoever is waiting on <ticket>. This is what a
@@ -258,8 +259,20 @@ func (c *client) wait(args []string) error {
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	if flags.NArg() != 1 {
-		return fmt.Errorf("usage: lich wait [--timeout <seconds>] [--json] <ticket>")
+	if flags.NArg() > 1 {
+		return fmt.Errorf("usage: lich wait [--timeout <seconds>] [--json] [<ticket>]")
+	}
+
+	if flags.NArg() == 0 {
+		var collected relay.Collected
+		if err := c.call("relay.Collect", []any{c.sessionID(), *timeout}, waitBudget(*timeout), &collected); err != nil {
+			return err
+		}
+		if *asJSON {
+			return c.emit(collected)
+		}
+		fmt.Fprintln(c.stdout, collectedText(collected))
+		return nil
 	}
 
 	var result relay.Result
@@ -529,8 +542,8 @@ func (c *client) report(result relay.Result, asJSON bool) error {
 		return nil
 	}
 	fmt.Fprintf(c.stdout,
-		"%s is still working. The message was delivered; its answer will be typed at the "+
-			"sending session's prompt when it arrives. To hold the line for it instead:\n"+
+		"%s is still working. The message was delivered; a note will be typed at the "+
+			"sending session's prompt when its result is ready. To hold the line for it instead:\n"+
 			"  lich wait %s\n",
 		result.Target, result.Ticket,
 	)
