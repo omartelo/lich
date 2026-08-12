@@ -118,6 +118,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than one open session is left as plain text too — the terminal has no way to
   tell which one was meant.
 
+- **A bug report can now describe a lich that froze.** A window that stops
+  updating while the process is still there writes nothing to `lich.log` —
+  nothing crashed, so there is nothing to write, and the report arrived saying
+  only "it froze". `lich rage` now asks the running instance for every
+  goroutine's stack and carries it as `goroutines.txt`, so a hang can be read
+  the way a crash already could. An instance that holds its port and will not
+  answer within five seconds leaves that sentence in the file instead, which
+  says as much again.
+
 ### Changed
 
 - **A session blocked on you says so in words.** Being asked a question looked

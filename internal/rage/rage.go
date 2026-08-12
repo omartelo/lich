@@ -14,6 +14,7 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -63,7 +64,7 @@ type Entry struct {
 	Dir  bool
 }
 
-// Collector gathers a Report. The four probes are fields because each one
+// Collector gathers a Report. The five probes are fields because each one
 // reaches the machine — PATH, the provider CLIs, the network, the running
 // instance — and a test must answer for all of them.
 type Collector struct {
@@ -75,6 +76,7 @@ type Collector struct {
 	detect  func() []providers.Detected
 	plugin  func() []agentplugin.Status
 	probe   func() (*singleton.Info, bool)
+	dump    func(port int, token string) ([]byte, error)
 }
 
 // New returns a Collector reading the real machine. configDir is the OS config
@@ -101,7 +103,33 @@ func New(configDir, version string, environ []string) *Collector {
 			}
 			return info, singleton.Ping(info.Port, info.Token)
 		},
+		dump: fetchGoroutines,
 	}
+}
+
+// dumpTimeout bounds the goroutine fetch. A lich that stopped answering is the
+// case this runs in, so the wait has to end on its own: what the file then
+// carries is that it did not answer, which is the finding.
+const dumpTimeout = 5 * time.Second
+
+// maxDumpBytes bounds the dump the bundle carries. A stack per goroutine stays
+// far below this; a runaway instance with tens of thousands of them is
+// diagnosed by the head of the file, not by its tail.
+const maxDumpBytes = 8 << 20
+
+// fetchGoroutines asks the running instance for its goroutine stacks (the
+// transport's /debug/goroutines).
+func fetchGoroutines(port int, token string) ([]byte, error) {
+	client := http.Client{Timeout: dumpTimeout}
+	resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/debug/goroutines?token=%s", port, token))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status %d", resp.StatusCode)
+	}
+	return io.ReadAll(io.LimitReader(resp.Body, maxDumpBytes))
 }
 
 // pathBins resolves every provider to its default name on PATH. The real
@@ -116,7 +144,11 @@ func (pathBins) ProviderBin(_, _ string) string { return "" }
 // the directory every entry sits under, so extracting two bundles side by side
 // does not merge them.
 func (c *Collector) Bundle(w io.Writer, root string) (Report, error) {
-	report, token := c.collect()
+	report, live := c.collect()
+	token := ""
+	if live != nil {
+		token = live.Token
+	}
 
 	gz := gzip.NewWriter(w)
 	archive := tar.NewWriter(gz)
@@ -126,6 +158,9 @@ func (c *Collector) Bundle(w io.Writer, root string) (Report, error) {
 		{"env.txt", []byte(renderEnv(c.environ, token))},
 	}
 	files = append(files, logFiles(report.LogPath, token)...)
+	if live != nil {
+		files = append(files, bundleFile{"goroutines.txt", c.goroutines(live)})
+	}
 
 	for _, f := range files {
 		if err := writeEntry(archive, root+"/"+f.name, f.data); err != nil {
@@ -167,10 +202,25 @@ func logFiles(logPath, token string) []bundleFile {
 	return out
 }
 
-// collect gathers every fact, and returns the running instance's token beside
-// the report rather than inside it: the token is needed to mask the copies of
-// itself that may sit in the log, and must reach nothing else.
-func (c *Collector) collect() (Report, string) {
+// goroutines is the running instance's stacks, or — when it will not answer —
+// the record that it did not. The failure is the point: a lich still holding
+// its port with a window that stopped updating leaves nothing in the log, and
+// "did not answer in 5s" is already half the diagnosis.
+func (c *Collector) goroutines(live *singleton.Info) []byte {
+	data, err := c.dump(live.Port, live.Token)
+	if err != nil {
+		return []byte(fmt.Sprintf(
+			"the running lich (pid %d, port %d) did not answer the goroutine dump: %v\n", live.PID, live.Port, err))
+	}
+	return scrub(data, live.Token)
+}
+
+// collect gathers every fact, and returns the running instance beside the
+// report rather than inside it: its token is needed to mask the copies of
+// itself that may sit in the log, and its port to reach it for the goroutine
+// dump. Nil when nothing is running or the recorded instance does not answer —
+// the report says which.
+func (c *Collector) collect() (Report, *singleton.Info) {
 	lichDir := filepath.Join(c.configDir, "lich")
 	report := Report{
 		Version:   c.version,
@@ -195,20 +245,19 @@ func (c *Collector) collect() (Report, string) {
 		report.Browser = err.Error()
 	}
 
-	token := ""
 	info, alive := c.probe()
 	switch {
 	case info == nil:
 		report.Instance = "not running"
 	case alive:
-		token = info.Token
 		report.Instance = fmt.Sprintf("running (pid %d, port %d)", info.PID, info.Port)
+		return report, info
 	default:
 		// The file outlives a crash, so a recorded instance that does not answer
 		// is itself a finding: lich died without closing its window.
 		report.Instance = fmt.Sprintf("recorded but not answering (pid %d, port %d)", info.PID, info.Port)
 	}
-	return report, token
+	return report, nil
 }
 
 // entries lists the lich config directory one level deep. Directories are named

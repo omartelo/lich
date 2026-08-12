@@ -299,13 +299,16 @@ Read it before you attach it: it carries absolute paths, project and branch name
 It exists for the failure lich cannot report on itself: a window that never
 opened has no Settings › Help to ask through. So it needs no running instance —
 whether one is running, and whether it still answers, is one of the facts it
-reports.
+reports. It answers for the opposite failure too — a window still on screen that
+stopped updating. Nothing crashed there, so the log holds nothing; the stacks it
+collects say where the process is stuck.
 
 | Entry | What it holds |
 |-------|---------------|
 | `report.md` | Version and build, platform, instance state, browser, providers on PATH, plugin state per provider, and the config directory one level deep. |
 | `env.txt` | Every `LICH_*` variable plus a fixed allowlist (`SHELL`, `PATH`, `EDITOR`, the desktop ones). Anything named like a token, key, secret or password is `<SET>` / `<UNSET>`, never a value. |
 | `logs/` | `lich.log` and the rotated `lich.log.old`, each carrying at most its last 4 MiB. |
+| `goroutines.txt` | Every stack in the running instance, blocked ones included — only when one is running. A lich that holds its port but will not answer within 5s leaves that sentence here instead, which is the finding. |
 
 Nothing is uploaded and no issue is filed: the archive sits on disk until the
 user attaches it to one they wrote. The loopback token is masked wherever it

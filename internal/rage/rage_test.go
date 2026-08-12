@@ -35,6 +35,11 @@ func collector(t *testing.T, configDir string, info *singleton.Info, alive bool)
 		return []agentplugin.Status{{Provider: "claude", Name: "Claude Code", Available: true, Installed: true, InstalledVersion: "0.2.0"}}
 	}
 	c.probe = func() (*singleton.Info, bool) { return info, alive }
+	// The stub dump carries the token on purpose: the bundle's masking answers
+	// for it like it answers for the log.
+	c.dump = func(int, string) ([]byte, error) {
+		return []byte("goroutine 1 [running]:\nmain.main()\n\ttoken=" + liveToken + "\n"), nil
+	}
 	return c
 }
 
@@ -183,6 +188,55 @@ func TestReportNamesEveryInstanceState(t *testing.T) {
 				t.Errorf("instance = %q, want %q", report.Instance, tc.want)
 			}
 		})
+	}
+}
+
+func TestBundleCarriesTheStacksOfARunningInstance(t *testing.T) {
+	var gotPort int
+	var gotToken string
+	c := collector(t, lichDir(t, "x\n", ""), &singleton.Info{PID: 7, Port: 47821, Token: liveToken}, true)
+	inner := c.dump
+	c.dump = func(port int, token string) ([]byte, error) {
+		gotPort, gotToken = port, token
+		return inner(port, token)
+	}
+
+	files, _ := bundle(t, c, "r")
+
+	if gotPort != 47821 || gotToken != liveToken {
+		t.Errorf("dump asked port %d token %q, want the recorded instance's", gotPort, gotToken)
+	}
+	if !strings.Contains(files["r/goroutines.txt"], "goroutine 1 [running]") {
+		t.Errorf("goroutines.txt = %q", files["r/goroutines.txt"])
+	}
+}
+
+func TestBundleRecordsAnInstanceThatWillNotDump(t *testing.T) {
+	c := collector(t, lichDir(t, "x\n", ""), &singleton.Info{PID: 7, Port: 47821, Token: liveToken}, true)
+	c.dump = func(int, string) ([]byte, error) { return nil, fmt.Errorf("context deadline exceeded") }
+
+	files, _ := bundle(t, c, "r")
+
+	dump := files["r/goroutines.txt"]
+	if !strings.Contains(dump, "did not answer") || !strings.Contains(dump, "pid 7") {
+		t.Errorf("a lich that would not answer left %q", dump)
+	}
+	if !strings.Contains(dump, "context deadline exceeded") {
+		t.Errorf("the dump failure does not name its cause: %q", dump)
+	}
+}
+
+func TestBundleHasNoStacksWithoutARunningInstance(t *testing.T) {
+	c := collector(t, lichDir(t, "x\n", ""), &singleton.Info{PID: 7, Port: 47821, Token: liveToken}, false)
+	c.dump = func(int, string) ([]byte, error) {
+		t.Error("a recorded but dead instance was asked for its stacks")
+		return nil, nil
+	}
+
+	files, _ := bundle(t, c, "r")
+
+	if _, ok := files["r/goroutines.txt"]; ok {
+		t.Error("bundle carries a goroutine dump with nothing running")
 	}
 }
 
