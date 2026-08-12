@@ -143,6 +143,18 @@ export function SessionCard({
   // none of this depends on the sender's own messaging channel.
   const canDelegate = active && delegateGroups.length > 0
 
+  // The picker is only rendered while the card can delegate, so losing that
+  // unmounts it — and an open flag left behind would spring the dialog back up
+  // unasked the moment the card qualifies again. The card can stop being the
+  // active one without a click on it (the palette hotkey is caught in the
+  // window's capture phase, and a session link jumps straight to another card),
+  // so this is reachable with the picker on screen.
+  useEffect(() => {
+    if (!canDelegate) {
+      setDelegatePickerOpen(false)
+    }
+  }, [canDelegate])
+
   const commit = (value: string) => {
     setEditing(false)
     const label = value.trim()

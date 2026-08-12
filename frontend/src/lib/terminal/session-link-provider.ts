@@ -13,17 +13,17 @@
 
 import type { ILink, ILinkProvider, Terminal } from "@xterm/xterm"
 import type { PaletteSession } from "@/lib/session/command-palette"
-import { findLabelMatches } from "./session-links"
+import { findLabelMatches, type SessionLinkTargets } from "./session-links"
 
 export function createSessionLinkProvider(
   term: Terminal,
-  targetsRef: { current: ReadonlyMap<string, PaletteSession> },
+  targetsRef: { current: SessionLinkTargets },
   activate: (target: PaletteSession) => void,
 ): ILinkProvider {
   return {
     provideLinks(bufferLineNumber, callback) {
       const targets = targetsRef.current
-      const line = targets.size > 0 ? term.buffer.active.getLine(bufferLineNumber - 1) : undefined
+      const line = targets.pattern ? term.buffer.active.getLine(bufferLineNumber - 1) : undefined
       if (!line) {
         callback(undefined)
         return

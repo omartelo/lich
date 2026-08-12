@@ -18,7 +18,7 @@ import { makeReplayBuffer } from "@/lib/terminal/replay-buffer"
 import { takePaste } from "@/lib/terminal/paste-queue"
 import { takeSetup } from "@/lib/terminal/setup-queue"
 import { peerName } from "@/lib/session/peer-name"
-import { paletteSessions, type PaletteSession } from "@/lib/session/command-palette"
+import type { PaletteSession } from "@/lib/session/command-palette"
 import { onTerminalFocusRequest } from "@/lib/terminal/focus-request"
 import { recordChunk } from "@/lib/terminal/term-perf"
 import { copyToastMessage, COPY_TOAST_DURATION_MS } from "@/lib/terminal/copy-toast"
@@ -155,6 +155,12 @@ export interface TerminalViewProps {
    * of the setup effect — a change there would kill and respawn the PTY.
    */
   resume: string
+  /**
+   * Every session in the workspace, flattened by the host: the source for the
+   * link provider that turns another session's label printed here into a jump
+   * to it. This one is filtered out below.
+   */
+  roster: readonly PaletteSession[]
   visible: boolean
   /**
    * Whether this session still belongs to the workspace, asked at the moment
@@ -187,12 +193,13 @@ export function TerminalView({
   cwd,
   kind,
   resume,
+  roster,
   visible,
   stillInWorkspace,
 }: TerminalViewProps) {
   const { font, terminalFontSize, resolvedTerminalTheme } = useSettings()
   const terminalColors = resolvedTerminalTheme.terminal
-  const { projects, sessions, activateSession } = useProjects()
+  const { activateSession } = useProjects()
   const navigate = useNavigate()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const liveRef = useRef<LiveTerminal | null>(null)
@@ -224,10 +231,7 @@ export function TerminalView({
   // Every other open session's label, for the link provider below — read
   // through a ref because xterm calls provideLinks straight from its own
   // render loop, well outside React's.
-  const linkTargets = useMemo(
-    () => sessionLinkTargets(paletteSessions(projects, sessions), sessionId),
-    [projects, sessions, sessionId],
-  )
+  const linkTargets = useMemo(() => sessionLinkTargets(roster, sessionId), [roster, sessionId])
   const linkTargetsRef = useRef(linkTargets)
   linkTargetsRef.current = linkTargets
 
@@ -309,6 +313,10 @@ export function TerminalView({
         }
       }),
     )
+    // After the web-links addon, and load-bearing: xterm asks its providers in
+    // registration order and drops a later provider's link where an earlier
+    // one already claimed the cells. A session called "docs" printed inside
+    // https://docs.example.com must not swallow the URL.
     const sessionLinks = term.registerLinkProvider(
       createSessionLinkProvider(term, linkTargetsRef, activateLink),
     )

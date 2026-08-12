@@ -53,16 +53,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Delegating work to a session is a search now, not a scroll.** "Delegate to
   session" opened a flat, unfiltered submenu of every other open session — fine
   with three, tedious with fifteen, and it named the session but never how it
-  was doing. The submenu is now a searchable picker: type to filter by label or
-  project, and each row carries the same busy/done/waiting ring the sidebar
-  card does, so you can tell which sessions are free before picking one.
+  was doing. The submenu is now the command palette's own surface, scoped to
+  delegating: type to filter by label or project, and each row carries the same
+  busy/done/waiting ring the sidebar card does, so you can tell which sessions
+  are free before picking one.
 
 - **A session's name in another session's terminal output is a link.** When a
-  provider's output mentions the label of another open session — a filename it
-  isn't, a session it's talking about — that text is now clickable, and jumps
-  straight to that session's card the way Pulls' "Open in Session" already
-  does. A label shared by more than one open session is left as plain text: the
-  terminal has no way to tell which one was meant.
+  provider's output mentions the label of another open session, that text is
+  now clickable, and jumps straight to that session's card the way Pulls' "Open
+  in Session" already does. The label has to stand as a word of its own to
+  count: a session called `auth` links where the output says `auth`, and stays
+  plain text inside `authentication` or `src/auth.ts`. A label shared by more
+  than one open session is left as plain text too — the terminal has no way to
+  tell which one was meant.
 
 ### Changed
 

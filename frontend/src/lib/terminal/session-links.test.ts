@@ -16,28 +16,47 @@ function session(overrides: Partial<PaletteSession>): PaletteSession {
 
 describe("sessionLinkTargets", () => {
   it("maps each label to its session", () => {
-    const targets = sessionLinkTargets(
+    const { byLabel } = sessionLinkTargets(
       [session({ sessionId: "a", label: "auth" }), session({ sessionId: "b", label: "docs" })],
       "",
     )
-    expect(targets.get("auth")?.sessionId).toBe("a")
-    expect(targets.get("docs")?.sessionId).toBe("b")
+    expect(byLabel.get("auth")?.sessionId).toBe("a")
+    expect(byLabel.get("docs")?.sessionId).toBe("b")
   })
 
   it("excludes the session doing the printing", () => {
-    const targets = sessionLinkTargets([session({ sessionId: "a", label: "auth" })], "a")
-    expect(targets.size).toBe(0)
+    const { byLabel, pattern } = sessionLinkTargets(
+      [session({ sessionId: "a", label: "auth" })],
+      "a",
+    )
+    expect(byLabel.size).toBe(0)
+    expect(pattern).toBeNull()
   })
 
   it("drops a label shared by more than one open session", () => {
-    const targets = sessionLinkTargets(
+    const { byLabel } = sessionLinkTargets(
       [
         session({ sessionId: "a", label: "Session 1" }),
         session({ sessionId: "b", label: "Session 1" }),
       ],
       "",
     )
-    expect(targets.has("Session 1")).toBe(false)
+    expect(byLabel.has("Session 1")).toBe(false)
+  })
+
+  // An empty alternative matches the empty string at every position without
+  // advancing lastIndex, so the exec loop below would never end.
+  it("drops an empty label instead of building a pattern that never advances", () => {
+    const { byLabel, pattern } = sessionLinkTargets(
+      [session({ sessionId: "a", label: "" }), session({ sessionId: "b", label: "docs" })],
+      "",
+    )
+    expect(byLabel.has("")).toBe(false)
+    expect(findLabelMatches("anything at all", { byLabel, pattern })).toEqual([])
+  })
+
+  it("has no pattern when every session was excluded", () => {
+    expect(sessionLinkTargets([], "").pattern).toBeNull()
   })
 })
 
@@ -69,8 +88,39 @@ describe("findLabelMatches", () => {
     expect(matches[0].session.sessionId).toBe("b")
   })
 
+  it("falls back to the shorter label when the longer one runs into a word", () => {
+    const matches = findLabelMatches("ping auth serviceable now", targets)
+    expect(matches).toHaveLength(1)
+    expect(matches[0]).toMatchObject({ start: 5, end: 9 })
+    expect(matches[0].session.sessionId).toBe("a")
+  })
+
+  it("never links a label glued to a neighbouring word", () => {
+    expect(findLabelMatches("run authentication now", targets)).toEqual([])
+    expect(findLabelMatches("reauth the client", targets)).toEqual([])
+    expect(findLabelMatches("auth-service is up", targets)).toEqual([])
+  })
+
+  it("never links a label that is part of a path or a filename", () => {
+    expect(findLabelMatches("open src/auth.ts", targets)).toEqual([])
+    expect(findLabelMatches("open auth.ts", targets)).toEqual([])
+    expect(findLabelMatches("open auth/main.go", targets)).toEqual([])
+    expect(findLabelMatches("open C:\\auth\\main.go", targets)).toEqual([])
+  })
+
+  it("still links a label that ends a sentence or is punctuated", () => {
+    expect(findLabelMatches("ask auth.", targets).map((m) => m.start)).toEqual([4])
+    expect(findLabelMatches("ask auth, then wait", targets).map((m) => m.start)).toEqual([4])
+    expect(findLabelMatches('ask "auth" first', targets).map((m) => m.start)).toEqual([5])
+  })
+
+  it("walks a fresh line from the top, not from where the last one ended", () => {
+    expect(findLabelMatches("later on auth here", targets).map((m) => m.start)).toEqual([9])
+    expect(findLabelMatches("auth", targets).map((m) => m.start)).toEqual([0])
+  })
+
   it("is empty with no targets", () => {
-    expect(findLabelMatches("auth", new Map())).toEqual([])
+    expect(findLabelMatches("auth", sessionLinkTargets([], ""))).toEqual([])
   })
 
   it("is empty for an empty line", () => {

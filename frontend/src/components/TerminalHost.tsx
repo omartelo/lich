@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useMatch } from "react-router-dom"
 import { toast } from "sonner"
 import { TerminalView } from "./TerminalView"
@@ -6,6 +6,7 @@ import { ResumeSessionDialog } from "./ResumeSessionDialog"
 import { Terminal as TerminalService } from "@/lib/rpc"
 import { useProjects } from "@/providers/projects"
 import { activeSessionId, hasSession, resumableSession, sessionsOf } from "@/lib/session/sessions"
+import { paletteSessions } from "@/lib/session/command-palette"
 import { spawnDecision, type SpawnProbe } from "@/lib/session/spawn-gate"
 import type { Session } from "@/lib/session/sessions"
 
@@ -113,6 +114,12 @@ export function TerminalHost() {
     })
   }, [sessions])
 
+  // The whole roster, for the session links each terminal draws in its own
+  // output. Flattened once here rather than inside every TerminalView: this
+  // host mounts one per spawned session across every project, so a per-view
+  // join would walk the same workspace N times on every session change.
+  const roster = useMemo(() => paletteSessions(projects, sessions), [projects, sessions])
+
   // Answer the prompt and release the spawn: resume is the Claude session id to
   // continue, or "" to start fresh.
   const answerResume = (session: Session, resume: string) => {
@@ -145,6 +152,7 @@ export function TerminalHost() {
                 cwd={session.path || project.path}
                 kind={session.kind}
                 resume={resuming[session.id] ?? ""}
+                roster={roster}
                 visible={visible}
                 stillInWorkspace={() => hasSession(sessionsRef.current, session.id)}
               />

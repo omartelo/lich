@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore } from "react"
+import { useMemo, useState, useSyncExternalStore } from "react"
 import { useMatch, useNavigate } from "react-router-dom"
 import { DndContext, closestCenter } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
@@ -108,15 +108,20 @@ export function SessionSidebar() {
     groups.map((group) => groupKey(group.path)),
     (keys) => reorderSessions(projectId ?? "", orderGroups(groups, keys)),
   )
+  const realActiveId = activeSessionId(sessions, projectId ?? "")
+  // Resolved once here, not per group: the list spans every open project, so
+  // it is the same for every card in the sidebar. Memoised because the picker
+  // downstream keys its own flatten and filter off this array's identity, and
+  // a fresh one per sidebar render would make those caches never hold.
+  const delegateGroups = useMemo(
+    () => delegateTargets(projects, sessions, realActiveId),
+    [projects, sessions, realActiveId],
+  )
 
   if (!projectId) {
     return null
   }
 
-  const realActiveId = activeSessionId(sessions, projectId)
-  // Resolved once here, not per group: the list spans every open project, so
-  // it is the same for every card in the sidebar.
-  const delegateGroups = delegateTargets(projects, sessions, realActiveId)
   // No session card highlights while a full-screen route (Settings, Pulls) owns
   // the view; its own sidebar entry reads as active instead.
   const activeId = onSettings || onPullsRoute ? "" : realActiveId
