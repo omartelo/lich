@@ -3,11 +3,9 @@ import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import { useSettings } from "@/providers/settings"
 import { useHotkey } from "@/lib/use-hotkey"
 import { shortcutGroups } from "@/lib/shortcuts"
+import { isMac, isWindows } from "@/lib/platform"
+import { ShortcutLine } from "@/components/common/ShortcutLine"
 import { Keys } from "@/components/common/Keys"
-
-// Same signal HotkeysSettings and TerminalView read: the OS lich runs on.
-const IS_MAC = navigator.platform.toLowerCase().includes("mac")
-const IS_WINDOWS = navigator.platform.toLowerCase().includes("win")
 
 // ShortcutsOverlay lists what is already bound and edits nothing — the one
 // screen naming the shortcuts is Settings › Hotkeys, which is where a binding is
@@ -23,7 +21,7 @@ export function ShortcutsOverlay() {
 
   useHotkey(hotkeys.shortcuts, () => setOpen((v) => !v))
 
-  const groups = useMemo(() => shortcutGroups(hotkeys, IS_MAC, IS_WINDOWS), [hotkeys])
+  const groups = useMemo(() => shortcutGroups(hotkeys, isMac, isWindows), [hotkeys])
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
@@ -41,13 +39,7 @@ export function ShortcutsOverlay() {
                   {group.title}
                 </div>
                 {group.rows.map((row) => (
-                  <div
-                    key={row.label}
-                    className="flex items-center gap-4 rounded-md px-3 py-2 hover:bg-accent/50"
-                  >
-                    <span className="flex-1 truncate text-sm">{row.label}</span>
-                    <Keys>{row.keys}</Keys>
-                  </div>
+                  <ShortcutLine key={row.label} label={row.label} keys={row.keys} />
                 ))}
               </div>
             ))}

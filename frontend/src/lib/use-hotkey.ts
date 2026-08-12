@@ -11,7 +11,7 @@ import { isRecordingTarget, matchesCombo, type Combo } from "@/lib/hotkeys"
 // The handler may decline by returning false, for the shortcuts whose action is
 // unavailable right now (no project open): the chord then behaves as if lich had
 // never bound it and falls through to whatever is underneath.
-export function useHotkey(combo: Combo, handler: () => unknown): void {
+export function useHotkey(combo: Combo, handler: () => void | false): void {
   // The handler is read through a ref so a caller may pass an inline closure
   // without re-subscribing the listener on every render.
   const latest = useRef(handler)

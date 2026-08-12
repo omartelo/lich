@@ -6,6 +6,7 @@ import {
   DEFAULT_HOTKEYS,
   formatCombo,
   hotkeyConflicts,
+  hotkeyLabel,
   HOTKEY_ACTIONS,
   HOTKEY_GROUPS,
   sameCombo,
@@ -14,17 +15,9 @@ import {
 } from "@/lib/hotkeys"
 import { PASSTHROUGH_TITLE, passthroughRows } from "@/lib/shortcuts"
 import { Button } from "@/components/ui/button"
-import { Keys } from "@/components/common/Keys"
+import { ShortcutLine } from "@/components/common/ShortcutLine"
+import { isMac, isWindows } from "@/lib/platform"
 import { cn } from "@/lib/utils"
-
-const platform = typeof navigator === "undefined" ? "" : navigator.platform.toLowerCase()
-const isMac = platform.includes("mac")
-const isWindows = platform.includes("win")
-
-const LABELS = Object.fromEntries(HOTKEY_ACTIONS.map((a) => [a.id, a.label])) as Record<
-  HotkeyId,
-  string
->
 
 // A dense list rather than one setting block per action: eleven bindings read as
 // a table of rows, and a block each would be a column of near-empty cards.
@@ -72,7 +65,7 @@ function HotkeyRow({ action, conflicts }: { action: HotkeyAction; conflicts?: Ho
           // and whichever listener runs first is the one that will answer to it.
           <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-amber-500">
             <TriangleAlert className="size-3 shrink-0" />
-            Also bound to {conflicts.map((id) => LABELS[id]).join(", ")}
+            Also bound to {conflicts.map(hotkeyLabel).join(", ")}
           </span>
         )}
       </div>
@@ -124,13 +117,7 @@ export function HotkeysSettings() {
           rebindable.
         </p>
         {passthroughRows(isWindows).map((row) => (
-          <div
-            key={row.label}
-            className="flex items-center gap-4 rounded-md px-2 py-1.5 hover:bg-accent/50"
-          >
-            <span className="min-w-0 flex-1 truncate text-sm text-foreground">{row.label}</span>
-            <Keys>{row.keys}</Keys>
-          </div>
+          <ShortcutLine key={row.label} label={row.label} keys={row.keys} />
         ))}
       </Group>
     </>

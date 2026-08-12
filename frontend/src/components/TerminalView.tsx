@@ -28,6 +28,7 @@ import {
   resolveDroppedFiles,
 } from "@/lib/terminal/drop-files"
 import { useSettings } from "@/providers/settings"
+import { isWindows } from "@/lib/platform"
 import type { SessionKind } from "@/lib/session/sessions"
 import "@xterm/xterm/css/xterm.css"
 
@@ -62,12 +63,6 @@ const SEARCH_DECORATIONS = {
   matchOverviewRuler: "#e3b341",
   activeMatchColorOverviewRuler: "#f59e0b",
 }
-
-// Claude Code's clipboard-image-paste chord is Ctrl+V on Linux/macOS but Alt+V
-// on Windows (see term-keys.ts); the host OS is the machine lich runs on.
-// navigator.platform is "Win32" on Windows Chromium — same signal HotkeysSettings
-// uses for isMac.
-const IS_WINDOWS = navigator.platform.toLowerCase().includes("win")
 
 // cellDimensions reads the renderer's measured cell size — the same private
 // API FitAddon relies on ("TODO: Remove reliance" upstream). Null before the
@@ -322,7 +317,9 @@ export function TerminalView({
         closeSearch()
         return false
       }
-      const seq = chordSequence(event, IS_WINDOWS)
+      // Platform-dependent because Claude Code's clipboard-image-paste chord is
+      // Ctrl+V on Linux/macOS but Alt+V on Windows (term-keys.ts).
+      const seq = chordSequence(event, isWindows)
       if (seq === null) {
         return true
       }
@@ -444,7 +441,7 @@ export function TerminalView({
     }
     void (async () => {
       const { paths, skipped } = await resolveDroppedFiles(cwd, dropped)
-      const paste = composeDroppedPaths(paths, IS_WINDOWS)
+      const paste = composeDroppedPaths(paths, isWindows)
       if (paste !== "") {
         writeInput(paste)
         liveRef.current?.term.focus()

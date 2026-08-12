@@ -14,6 +14,7 @@ import {
   type PaletteSession,
 } from "@/lib/session/command-palette"
 import { useTranscriptSearch } from "@/lib/session/use-transcript-search"
+import { Keys } from "@/components/common/Keys"
 import type { Project } from "@/lib/api-types"
 import { cn } from "@/lib/utils"
 
@@ -337,12 +338,7 @@ function Hint({ keys, children }: { keys: string[]; children: React.ReactNode })
     <span className="inline-flex items-center gap-1.5">
       <span className="inline-flex gap-1">
         {keys.map((k) => (
-          <kbd
-            key={k}
-            className="rounded border border-b-2 bg-muted px-1.5 py-0.5 font-mono text-[0.625rem] leading-none text-muted-foreground"
-          >
-            {k}
-          </kbd>
+          <Keys key={k}>{k}</Keys>
         ))}
       </span>
       {children}
