@@ -106,6 +106,16 @@ describe("mergeHotkeys", () => {
     expect(merged.shortcuts).toEqual(DEFAULT_HOTKEYS.shortcuts)
   })
 
+  it("normalizes a stored key, so an uppercase one still fires", () => {
+    // Well formed enough to survive validation, but matchesCombo compares
+    // against a normalized event key: kept as "T" the shortcut would be dead.
+    const merged = mergeHotkeys({ newSession: { mod: true, shift: true, alt: false, key: "T" } })
+    expect(merged.newSession.key).toBe("t")
+    expect(matchesCombo(key({ ctrlKey: true, shiftKey: true, key: "T" }), merged.newSession)).toBe(
+      true,
+    )
+  })
+
   it("ignores ids that are no longer actions (the old zoom hotkeys)", () => {
     expect(mergeHotkeys({ zoomIn: { mod: true, shift: false, alt: false, key: "+" } })).toEqual(
       DEFAULT_HOTKEYS,

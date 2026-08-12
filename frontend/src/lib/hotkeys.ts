@@ -202,6 +202,17 @@ export function sameCombo(a: Combo, b: Combo): boolean {
   return a.mod === b.mod && a.shift === b.shift && a.alt === b.alt && a.key === b.key
 }
 
+// A combo's identity as a map key, so many can be bucketed in one pass where
+// sameCombo only compares two. The separator cannot collide: a key is either a
+// single character or a name like "ArrowDown", and neither contains "|".
+function comboKey(combo: Combo): string {
+  return `${combo.mod}|${combo.shift}|${combo.alt}|${combo.key}`
+}
+
+export function hotkeyLabel(id: HotkeyId): string {
+  return HOTKEY_ACTIONS.find((action) => action.id === id)?.label ?? id
+}
+
 // hotkeyConflicts reports, for every action sharing its combo with another, the
 // other actions holding it — in HOTKEY_ACTIONS order. Recording a taken combo is
 // allowed (lich does not veto the user's choice), but with two listeners on one
@@ -210,9 +221,13 @@ export function sameCombo(a: Combo, b: Combo): boolean {
 export function hotkeyConflicts(hotkeys: Hotkeys): Partial<Record<HotkeyId, HotkeyId[]>> {
   const byCombo = new Map<string, HotkeyId[]>()
   for (const action of HOTKEY_ACTIONS) {
-    const combo = hotkeys[action.id]
-    const key = `${combo.mod}|${combo.shift}|${combo.alt}|${combo.key}`
-    byCombo.set(key, [...(byCombo.get(key) ?? []), action.id])
+    const key = comboKey(hotkeys[action.id])
+    const held = byCombo.get(key)
+    if (held) {
+      held.push(action.id)
+    } else {
+      byCombo.set(key, [action.id])
+    }
   }
   const conflicts: Partial<Record<HotkeyId, HotkeyId[]>> = {}
   for (const ids of byCombo.values()) {
@@ -253,12 +268,18 @@ function isCombo(value: unknown): value is Combo {
 
 // mergeHotkeys layers validated overrides over the defaults, dropping anything
 // malformed. Keeps unknown/corrupt persisted data from breaking shortcuts.
+//
+// The stored key is normalized on the way in, not only on the way out of
+// comboFromEvent: a combo hand-edited into localStorage as "T" is well-formed,
+// so it survives validation, but matchesCombo compares against a normalized
+// event key and would never fire it — a shortcut dead with nothing on screen
+// saying why.
 export function mergeHotkeys(overrides: unknown): Hotkeys {
   const result: Hotkeys = { ...DEFAULT_HOTKEYS }
   if (overrides && typeof overrides === "object") {
     for (const id of Object.keys(DEFAULT_HOTKEYS) as HotkeyId[]) {
       const value = (overrides as Record<string, unknown>)[id]
-      if (isCombo(value)) result[id] = value
+      if (isCombo(value)) result[id] = { ...value, key: normalizeKey(value.key) }
     }
   }
   return result
