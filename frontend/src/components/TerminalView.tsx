@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { Terminal } from "@xterm/xterm"
 import { WebglAddon } from "@xterm/addon-webgl"
 import { SerializeAddon } from "@xterm/addon-serialize"
@@ -17,17 +18,21 @@ import { makeReplayBuffer } from "@/lib/terminal/replay-buffer"
 import { takePaste } from "@/lib/terminal/paste-queue"
 import { takeSetup } from "@/lib/terminal/setup-queue"
 import { peerName } from "@/lib/session/peer-name"
+import { paletteSessions, type PaletteSession } from "@/lib/session/command-palette"
 import { onTerminalFocusRequest } from "@/lib/terminal/focus-request"
 import { recordChunk } from "@/lib/terminal/term-perf"
 import { copyToastMessage, COPY_TOAST_DURATION_MS } from "@/lib/terminal/copy-toast"
 import { computeGrid } from "@/lib/terminal/term-fit"
 import { linkClickIsOurs, mouseEncodingSequence } from "@/lib/terminal/term-modes"
+import { createSessionLinkProvider } from "@/lib/terminal/session-link-provider"
+import { sessionLinkTargets } from "@/lib/terminal/session-links"
 import {
   composeDroppedPaths,
   readDroppedFiles,
   resolveDroppedFiles,
 } from "@/lib/terminal/drop-files"
 import { useSettings } from "@/providers/settings"
+import { useProjects } from "@/providers/projects"
 import { isWindows } from "@/lib/platform"
 import type { SessionKind } from "@/lib/session/sessions"
 import "@xterm/xterm/css/xterm.css"
@@ -187,6 +192,8 @@ export function TerminalView({
 }: TerminalViewProps) {
   const { font, terminalFontSize, resolvedTerminalTheme } = useSettings()
   const terminalColors = resolvedTerminalTheme.terminal
+  const { projects, sessions, activateSession } = useProjects()
+  const navigate = useNavigate()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const liveRef = useRef<LiveTerminal | null>(null)
   // False until the mount effect's async setup builds the first terminal.
@@ -213,6 +220,16 @@ export function TerminalView({
   fontRef.current = font
   fontSizeRef.current = terminalFontSize
   themeRef.current = terminalColors
+
+  // Every other open session's label, for the link provider below — read
+  // through a ref because xterm calls provideLinks straight from its own
+  // render loop, well outside React's.
+  const linkTargets = useMemo(
+    () => sessionLinkTargets(paletteSessions(projects, sessions), sessionId),
+    [projects, sessions, sessionId],
+  )
+  const linkTargetsRef = useRef(linkTargets)
+  linkTargetsRef.current = linkTargets
 
   // In-terminal search (Ctrl+F). The open flag mirrors into a ref so the
   // terminal's key handler — wired once at creation — reads the live value.
@@ -263,6 +280,15 @@ export function TerminalView({
     }
   }
 
+  // A session-link click jumps to that session the same way Pulls' "Open in
+  // Session" does: switch the project, then activate the session — its own
+  // TerminalView focuses itself once it becomes visible (see the visibility
+  // effect below).
+  const activateLink = (target: PaletteSession) => {
+    navigate(`/projects/${target.projectId}`)
+    activateSession(target.projectId, target.sessionId)
+  }
+
   // createTerminal builds a live terminal in the container, wired for input,
   // resize and copy-on-select. Shared by mount and every show-after-hide.
   const createTerminal = (container: HTMLDivElement): LiveTerminal => {
@@ -282,6 +308,9 @@ export function TerminalView({
           void System.OpenExternal(uri)
         }
       }),
+    )
+    const sessionLinks = term.registerLinkProvider(
+      createSessionLinkProvider(term, linkTargetsRef, activateLink),
     )
     term.open(container)
 
@@ -368,6 +397,7 @@ export function TerminalView({
         resizeInput.dispose()
         selection.dispose()
         searchResults.dispose()
+        sessionLinks.dispose()
         // Disposing the WebGL addon only detaches its canvas — the GL context
         // lives on until the canvas is collected, and Chromium force-loses the
         // oldest of them once 16 are alive. Since every hide destroys a
@@ -686,8 +716,9 @@ export function TerminalView({
     live.term.focus()
   }, [visible, sessionId])
 
-  // The sidebar writes a mention at this session's prompt and then asks for the
-  // cursor back, so the user carries on typing where they already were.
+  // The sidebar writes a delegate request at this session's prompt and then
+  // asks for the cursor back, so the user carries on typing where they already
+  // were.
   useEffect(
     () => onTerminalFocusRequest(sessionId, () => liveRef.current?.term.focus()),
     [sessionId],

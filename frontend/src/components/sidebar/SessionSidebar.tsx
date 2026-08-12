@@ -6,7 +6,6 @@ import { GitBranch, GitPullRequestArrow, Plus, Terminal } from "lucide-react"
 import { ProjectService } from "@/lib/rpc"
 import { closeSettings, isSettingsOpen, subscribeSettingsCard } from "@/lib/settings-card-store"
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
-import { mentionTargets } from "@/lib/session/mention-targets"
 import { delegateTargets } from "@/lib/session/delegate-targets"
 import {
   closePullsList,
@@ -117,7 +116,6 @@ export function SessionSidebar() {
   const realActiveId = activeSessionId(sessions, projectId)
   // Resolved once here, not per group: the list spans every open project, so
   // it is the same for every card in the sidebar.
-  const mentionGroups = mentionTargets(projects, sessions, realActiveId)
   const delegateGroups = delegateTargets(projects, sessions, realActiveId)
   // No session card highlights while a full-screen route (Settings, Pulls) owns
   // the view; its own sidebar entry reads as active instead.
@@ -267,7 +265,6 @@ export function SessionSidebar() {
                       navigate(`/projects/${projectId}`)
                     }
                   }}
-                  mentionGroups={mentionGroups}
                   delegateGroups={delegateGroups}
                 />
               )

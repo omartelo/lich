@@ -50,6 +50,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   other action: lich stores the binding either way, but only one of the two will
   answer to it, and now you can see which pair to fix.
 
+- **Delegating work to a session is a search now, not a scroll.** "Delegate to
+  session" opened a flat, unfiltered submenu of every other open session — fine
+  with three, tedious with fifteen, and it named the session but never how it
+  was doing. The submenu is now a searchable picker: type to filter by label or
+  project, and each row carries the same busy/done/waiting ring the sidebar
+  card does, so you can tell which sessions are free before picking one.
+
+- **A session's name in another session's terminal output is a link.** When a
+  provider's output mentions the label of another open session — a filename it
+  isn't, a session it's talking about — that text is now clickable, and jumps
+  straight to that session's card the way Pulls' "Open in Session" already
+  does. A label shared by more than one open session is left as plain text: the
+  terminal has no way to tell which one was meant.
+
 ### Changed
 
 - **A session blocked on you says so in words.** Being asked a question looked

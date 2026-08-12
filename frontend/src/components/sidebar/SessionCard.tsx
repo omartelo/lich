@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils"
 import { dragStyle } from "@/lib/use-sortable-list"
 import { displayPath } from "@/lib/paths"
 import type { Session } from "@/lib/session/sessions"
-import { peerMention, peerName } from "@/lib/session/peer-name"
+import { peerName } from "@/lib/session/peer-name"
 import { useSessionStatus, useSessionStatusAge } from "@/lib/session/use-session-status"
 import { useSessionCwd } from "@/lib/session/use-session-cwd"
 import { useSessionAgent } from "@/lib/session/use-session-agent"
@@ -37,21 +37,16 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import {
   ContextMenu,
   ContextMenuContent,
-  ContextMenuGroup,
   ContextMenuItem,
-  ContextMenuLabel,
   ContextMenuSeparator,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
 import { Terminal as TerminalService } from "@/lib/rpc"
-import type { MentionGroup } from "@/lib/session/mention-targets"
 import type { DelegateGroup } from "@/lib/session/delegate-targets"
 import { delegatePrompt } from "@/lib/session/delegate-prompt"
 import { bracketedPaste } from "@/lib/terminal/bracketed-paste"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
+import { SessionTargetPicker } from "./SessionTargetPicker"
 
 interface SessionCardProps {
   session: Session
@@ -69,14 +64,10 @@ interface SessionCardProps {
   onOpenTerminal: (cwd: string) => void
   // Open the Pulls screen for this session's worktree, parking its PR card.
   onPulls: () => void
-  // Claude sessions this one can be pointed at, grouped by project. Only the
-  // card whose terminal is on screen offers them — the mention is written at
-  // that terminal's prompt, so any other card would be writing somewhere the
-  // user cannot see.
-  mentionGroups: MentionGroup[]
-  // Sessions this one can hand work to, grouped by project. Offered by the card
-  // on screen for the reason the mention is: the request is written at that
-  // terminal's prompt, and any other card would be writing out of sight.
+  // Sessions this one can hand work to, grouped by project. Only the card
+  // whose terminal is on screen offers them — the request is written at that
+  // terminal's prompt, so any other card would be writing somewhere the user
+  // cannot see.
   delegateGroups: DelegateGroup[]
 }
 
@@ -91,13 +82,13 @@ export function SessionCard({
   onPin,
   onOpenTerminal,
   onPulls,
-  mentionGroups,
   delegateGroups,
 }: SessionCardProps) {
   const pinned = !!session.pinned
   const pathRef = useRef<HTMLSpanElement>(null)
   const [pathOverflow, setPathOverflow] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [delegatePickerOpen, setDelegatePickerOpen] = useState(false)
   // Processing state reported by the lich Claude Code hook, drawn as a ring
   // around the provider icon: a spinning ring while Claude produces output,
   // solid emerald once its turn ends, amber when it is blocked on the user.
@@ -140,23 +131,14 @@ export function SessionCard({
     disabled: editing,
   })
 
-  // Write the target's roster name at this session's own prompt and hand the
-  // cursor back. lich stops here: the Claude reading that prompt is the one that
-  // addresses the other session, with the tool it already has.
-  const mention = (name: string) => {
-    void TerminalService.Write(session.id, bracketedPaste(peerMention(name)))
-    requestTerminalFocus(session.id)
-  }
-
   // Write the request at this session's own prompt and hand the cursor back.
-  // lich stops here too: what it types is a request, and the agent reading it
+  // lich stops here: what it types is a request, and the agent reading it
   // decides whether to reach for the tool or the command (delegatePrompt).
   const delegate = (label: string) => {
     void TerminalService.Write(session.id, bracketedPaste(delegatePrompt(session.kind, label)))
     requestTerminalFocus(session.id)
   }
 
-  const canMention = active && session.kind === "claude" && mentionGroups.length > 0
   // Every provider can delegate: the relay types at the target's prompt, so
   // none of this depends on the sender's own messaging channel.
   const canDelegate = active && delegateGroups.length > 0
@@ -439,56 +421,11 @@ export function SessionCard({
           </TooltipContent>
         </Tooltip>
         <ContextMenuContent>
-          {canMention && (
-            <ContextMenuSub>
-              <ContextMenuSubTrigger>
-                <AtSign />
-                Mention session
-              </ContextMenuSubTrigger>
-              <ContextMenuSubContent>
-                {mentionGroups.map((group) => (
-                  <ContextMenuGroup key={group.projectId}>
-                    {/* The project only earns a heading when there is more than
-                        one to tell apart. */}
-                    {mentionGroups.length > 1 && (
-                      <ContextMenuLabel>{group.projectName}</ContextMenuLabel>
-                    )}
-                    {group.targets.map((target) => (
-                      <ContextMenuItem key={target.id} onClick={() => mention(target.name)}>
-                        <span className="truncate">{target.label}</span>
-                        <span className="ml-auto pl-3 font-mono text-xs text-muted-foreground">
-                          {target.name}
-                        </span>
-                      </ContextMenuItem>
-                    ))}
-                  </ContextMenuGroup>
-                ))}
-              </ContextMenuSubContent>
-            </ContextMenuSub>
-          )}
           {canDelegate && (
-            <ContextMenuSub>
-              <ContextMenuSubTrigger>
-                <ArrowRight />
-                Delegate to session
-              </ContextMenuSubTrigger>
-              <ContextMenuSubContent>
-                {delegateGroups.map((group) => (
-                  <ContextMenuGroup key={group.projectId}>
-                    {/* The project only earns a heading when there is more than
-                        one to tell apart. */}
-                    {delegateGroups.length > 1 && (
-                      <ContextMenuLabel>{group.projectName}</ContextMenuLabel>
-                    )}
-                    {group.targets.map((target) => (
-                      <ContextMenuItem key={target.id} onClick={() => delegate(target.label)}>
-                        <span className="truncate">{target.label}</span>
-                      </ContextMenuItem>
-                    ))}
-                  </ContextMenuGroup>
-                ))}
-              </ContextMenuSubContent>
-            </ContextMenuSub>
+            <ContextMenuItem onClick={() => setDelegatePickerOpen(true)}>
+              <ArrowRight />
+              Delegate to session…
+            </ContextMenuItem>
           )}
           <ContextMenuItem onClick={() => setEditing(true)}>
             <Pencil />
@@ -519,6 +456,14 @@ export function SessionCard({
           )}
         </ContextMenuContent>
       </ContextMenu>
+      {canDelegate && (
+        <SessionTargetPicker
+          open={delegatePickerOpen}
+          onOpenChange={setDelegatePickerOpen}
+          groups={delegateGroups}
+          onPick={(target) => delegate(target.label)}
+        />
+      )}
     </div>
   )
 }
