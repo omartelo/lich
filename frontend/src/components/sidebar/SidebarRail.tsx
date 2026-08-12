@@ -11,9 +11,9 @@ import {
   type Session,
 } from "@/lib/session/sessions"
 import { useSessionAgent } from "@/lib/session/use-session-agent"
-import { useSessionCwd } from "@/lib/session/use-session-cwd"
 import { useSessionStatus } from "@/lib/session/use-session-status"
 import { SessionStatusIcon } from "./SessionStatusIcon"
+import { SessionTooltip } from "./SessionTooltip"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 interface RailSessionProps {
@@ -29,10 +29,11 @@ interface RailSessionProps {
 // mark inside the status ring. The ring is the whole reason the rail exists —
 // collapsing the sidebar must not cost the readout you watch all day — so it is
 // drawn from the same component the card uses, not a second implementation.
+// Same for the tooltip: at this width it is the only place the card's words can
+// go, so it is the card's own tooltip, not a shortened one.
 function RailSession({ session, projectPath, active, onSelect }: RailSessionProps) {
   const status = useSessionStatus(session.id)
   const agent = useSessionAgent(session.id)
-  const cwd = useSessionCwd(session.id)
   return (
     <Tooltip>
       <TooltipTrigger
@@ -50,17 +51,7 @@ function RailSession({ session, projectPath, active, onSelect }: RailSessionProp
       >
         <SessionStatusIcon kind={agent ?? session.kind} status={status} />
       </TooltipTrigger>
-      <TooltipContent
-        side="right"
-        className="max-w-xs border border-border bg-card text-foreground"
-      >
-        <div className="flex flex-col gap-1">
-          <span className="font-medium">{session.label}</span>
-          <span className="break-all font-mono text-muted-foreground">
-            {cwd || session.path || projectPath}
-          </span>
-        </div>
-      </TooltipContent>
+      <SessionTooltip session={session} path={projectPath} />
     </Tooltip>
   )
 }

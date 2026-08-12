@@ -14,7 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   glyph per session, each still wearing the status ring it wears on its card, in
   the same order and under the same worktree grouping — a hairline where the
   open sidebar draws a titled divider, since a checkout's name does not fit.
-  Hover names the session and its directory.
+  Hover gives you the card's own tooltip, unabridged — directory, the name the
+  session answers to, branch, pull request, diff and how it stands against its
+  base — because at that width the tooltip is where the card's words go.
 
   The rail selects a session and starts one, and that is deliberately all of it:
   renaming, closing, pinning, reordering and the worktree menus all aim at a
