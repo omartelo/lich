@@ -220,9 +220,13 @@ func (c *client) sessions(args []string) error {
 		fmt.Fprintln(c.stdout, "No other live sessions.")
 		return nil
 	}
-	fmt.Fprintln(c.stdout, "session\tproject\tprovider")
+	// The roster name rides last so a script reading the first columns keeps
+	// working. It has to be here at all: both names reach a session, and a
+	// surface that shows only one is what once made an agent treat a single
+	// session as two.
+	fmt.Fprintln(c.stdout, "session\tproject\tprovider\tname")
 	for _, p := range peers {
-		fmt.Fprintf(c.stdout, "%s\t%s\t%s\n", p.Label, p.Project, p.Kind)
+		fmt.Fprintf(c.stdout, "%s\t%s\t%s\t%s\n", p.Label, p.Project, p.Kind, p.Name)
 	}
 	return nil
 }

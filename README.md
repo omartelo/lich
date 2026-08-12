@@ -7,9 +7,10 @@
   <p><strong>English</strong> · <a href="README.zh-CN.md">简体中文</a></p>
   <p><strong>A terminal-first harness for coding with AI agents.</strong></p>
   <p>
-    Open your projects, run agents like Claude Code, Codex and Opencode in real
+    Open your projects, run agents like Claude Code, Codex and opencode in real
     terminals, and keep git — worktrees, diffs and pull requests — in view
-    without leaving the window.
+    without leaving the window. One static Go binary, no Electron: the UI opens
+    in your system's Chromium-family browser in <code>--app</code> mode.
   </p>
   <p><a href="https://omartelo.github.io/lich/"><strong>omartelo.github.io/lich</strong></a></p>
   <p>
@@ -21,111 +22,47 @@
     <a href="https://github.com/sponsors/omartelo"><img alt="Sponsor" src="https://img.shields.io/github/sponsors/omartelo?color=ea4aaa&logo=githubsponsors&label=sponsors" /></a>
   </p>
   <img src="docs/media/session.png" alt="Four projects on the tab bar and five sessions in the sidebar — each with its worktree, branch and diff badge — while a Claude Code session works in the terminal and the footer shows the model and context ring" width="900" />
-  <!-- sponsor-logos: company logos go here, between the screenshot and About -->
+  <!-- sponsor-logos: company logos go here, between the screenshot and Why lich -->
 </div>
 
-## About
+## Why lich
 
-`lich` is a **harness for AI coding agents** — a desktop app that wraps a
-terminal-first workspace around them. Open several projects, run a session (or
-many) per project, drive an agent in each, and watch git state — branches,
-diffs, worktrees, pull requests — without ever leaving the window. It ships as a
-single static Go binary that opens its UI in your system's Chromium-family
-browser in `--app` mode — no Electron, no bundled webview (decision record:
-[`docs/chromium-shell.md`](docs/chromium-shell.md)).
+lich lets you:
 
-It is built to get out of the way of the work — the terminal stays a real
-terminal, and git stays where you can see it. Development is active: bugs and
-feature requests belong in
+- **Run the agent you already have.** [Claude Code](https://www.anthropic.com/claude-code),
+  [Codex](https://github.com/openai/codex), [opencode](https://github.com/sst/opencode),
+  oh-my-pi and [Crush](https://github.com/charmbracelet/crush) are all
+  first-class. Point lich at each binary once, then pick the default or choose
+  per session.
+- **Keep a real terminal.** PTY-backed shells, several per project, rendered on
+  the GPU — searchable scrollback that survives a full page reload. The footer
+  follows `cd` and names the branch — and, for a Claude session, the model, the
+  context window in use and, if you ask, what the session has spent.
+- **Put one session to work for another.** Hand a task to another card and its
+  own agent writes the answer back, whatever runs in either end: the agent
+  reaches the other sessions through tools handed at spawn — MCP for Claude
+  Code and Codex — or brought by the plugin. The whole surface doubles as the
+  `lich` command in any shell, `--json` included, so a script can drive a
+  session with no agent in the loop ([`docs/cli.md`](docs/cli.md)).
+- **Branch off a worktree without the setup.** Spin one up from any base
+  branch and lich seeds it with your gitignored `.env*` files, hands it a
+  dev-server port no other checkout and no process on the machine is using, and
+  runs your per-project setup script before the agent starts.
+- **Review the diff where you read it.** A CodeMirror dock shows the working
+  changes beside a live file tree. Right-click a selection to comment against
+  those lines; the batch is pasted into the session as a single prompt, unsent.
+- **Ship the pull request from here.** List the repository's open pull requests,
+  check one out into a worktree of its own, then read the diff, review it inline
+  and merge it — with the methods the base branch actually accepts.
+
+Plus: [themes](docs/themes.md) you import as JSON or install from a git
+repository, a `Ctrl`/`Cmd`+`K` palette that jumps by name or by what was said in
+the conversation, a desktop notification when a session is waiting on you, and
+`lich rage` / `lich doctor` for when it will not start at all.
+
+Development is active: bugs and feature requests belong in
 [Issues](https://github.com/omartelo/lich/issues), and what changed in each
 version is in [CHANGELOG.md](CHANGELOG.md).
-
-## Features
-
-- **Bring your own agent.** [Claude Code](https://www.anthropic.com/claude-code)
-  (Anthropic), [Codex](https://github.com/openai/codex) (OpenAI),
-  [opencode](https://github.com/sst/opencode) (SST), oh-my-pi and
-  [Crush](https://github.com/charmbracelet/crush) (Charm) are all first-class:
-  the first launch asks which of them you have, then point lich at each binary in
-  Settings, pick the default, or choose per session.
-- **Terminal-first sessions.** Real PTY-backed shells, several per project,
-  rendered by xterm.js on the GPU (WebGL). Search the scrollback (`Ctrl+F`); the
-  buffer survives a full page reload. A Warp-style footer follows `cd` and
-  surfaces git status, and for a Claude session it names the model, fills a ring
-  with the context window in use, and — if you ask it to — prices what the
-  session has spent.
-- **Projects and sessions.** Projects sit on a top tab bar; the `+` reopens one
-  you recently closed or opens the OS folder picker for the rest. Session cards
-  carry the working directory, branch, a diff badge, an untracked-line count and
-  the number of the branch's pull request.
-- **Sessions that work together.** One session can hand a task to another and get
-  the answer back — the request is typed at that session's prompt, and its agent
-  writes the answer itself, so this works the same whatever runs in either card.
-  An agent reaches the others through tools it already has (Claude Code and Codex
-  are handed them at spawn; opencode and Crush get them with the plugin) or
-  through the `lich` command every session carries: `lich sessions`,
-  `lich send "<card>" "<task>"`, `lich reply`. It can also open a session — with a
-  git worktree of its own, if the work deserves one — and close it again,
-  deciding what happens to the checkout. Right-click a card to write the request
-  at your own prompt first, and the sidebar names both ends while it is open. The
-  same commands run from any shell on the machine, `--json` included, so a script
-  or a scheduled job can drive a session without an agent in the loop. The whole
-  surface is [`docs/cli.md`](docs/cli.md).
-- **Git worktrees, built in.** Spin one up from any base branch — search it,
-  local or remote, even across dozens of branches — and lich seeds the new
-  checkout with your gitignored `.env*` files, hands it a dev-server port of its
-  own that no other checkout and no process on the machine is already using
-  (`LICH_WORKTREE_PORT`) and runs a per-project setup script before the agent
-  starts. The sidebar groups sessions by the worktree they belong to, and a kept
-  worktree's session resumes its conversation later.
-- **Review, and hand the review back.** A CodeMirror diff dock shows the working
-  changes beside a live file tree — collapse or expand every file at once, open
-  one in your editor, attach one to the session. Right-click a selection to write
-  a comment against those lines; the batch is handed over as a single prompt,
-  pasted into the session unsent.
-
-<div align="center">
-  <img src="docs/media/review-comments.png" alt="The review dock with two comments written against lines of the diff, collected at the foot of the panel" width="900" />
-  <p><em>Comments written on the diff, handed to the session as one prompt.</em></p>
-</div>
-
-- **Pull requests, end to end.** A button in the tab bar lists the repository's
-  open pull requests — quick filters plus GitHub's own qualifiers (`is:draft`,
-  `review:approved`, `is:merged`) — and **Open in Session** checks one out into
-  its own worktree. A pull request opens full-screen: overview, checks, commits
-  and the whole diff beside a file tree. Review it where you read it — a thread
-  opens inline under the line it is about, and your own comments wait as pending
-  until **Submit review** sends them together — approve it, and merge it (squash,
-  merge commit or rebase) with the methods the base branch actually accepts.
-- **Themes, yours or someone else's.** Bundled light and dark, plus imported JSON
-  that recolors the interface and the terminal palette independently. Install a
-  pack from a git repository and update it in place when it ships a new version;
-  **Save template** writes a starter naming every supported color. Format and
-  repository layout: [`docs/themes.md`](docs/themes.md).
-- **The rest of the window.** `Ctrl`/`Cmd`+`K` jumps between sessions and
-  projects — by name, or by what was said in the conversation; `Ctrl+Shift+↓`/`↑`
-  steps between them without the palette. A session waiting on your input raises
-  a toast and a dot on the bell, collected in a titled dropdown, and — if you let
-  it — a desktop notification when the lich window is not the one you are in;
-  with the
-  [lich plugin](https://github.com/omartelo/lich-plugin) installed — in any of
-  the four harnesses that can run it, from Settings — a session also titles its
-  own card and refreshes git the moment it writes a file.
-  Settings › Help opens the log folder and a pre-filled bug report; `lich rage`
-  packs the whole report — versions, browser, providers, plugin state, logs,
-  secrets masked — into one archive, and `lich doctor` says whether lich would
-  start on this machine at all. Both work when no window opened.
-
-<div align="center">
-  <img src="docs/media/pulls-list.png" alt="The pull request list: every open pull request with its author, age and check status, narrowed by a filter box" width="900" />
-  <p><em>The repository's pull requests, filtered by GitHub's own qualifiers.</em></p>
-  <img src="docs/media/pull-request.png" alt="The pull request screen: state, checks, mergeability and the pull request body, with Approve and Merge in the header" width="900" />
-  <p><em>Read, approved and merged in place.</em></p>
-  <img src="docs/media/pull-request-review.png" alt="A comment written on the pull request's diff, sitting inline under the lines it is about and marked as pending until the review is submitted" width="900" />
-  <p><em>A review written on the diff itself — each comment pending until you submit them together.</em></p>
-  <img src="docs/media/themes.png" alt="Settings, Appearance: the bundled themes beside an imported pack showing the repository it came from and its version" width="900" />
-  <p><em>A theme pack installed from a git repository, updated in place.</em></p>
-</div>
 
 ## Install
 
@@ -179,6 +116,9 @@ hand.
   under `<config-dir>/lich/themes`.
 - **Workspace** — projects and sessions persist in SQLite at
   `<config-dir>/lich/lich.db`. Closing a session does not delete it.
+- **Session hooks** — with the
+  [lich plugin](https://github.com/omartelo/lich-plugin) installed from Settings,
+  a session titles its own card and refreshes git the moment it writes a file.
 
 ## Privacy & updates
 
@@ -195,8 +135,10 @@ your gh login, never a session token — before you attach it to a bug report, a
 Pure-Go backend (Go 1.25, `CGO_ENABLED=0`) serving an embedded React 18 /
 TypeScript / Vite frontend over a token-authenticated loopback listener (HTTP RPC
 + WebSockets). Terminals are xterm.js with the WebGL addon; the code and diff
-surfaces are CodeMirror 6. Prerequisites are **Go 1.25+**, **Node + pnpm** and
-**[Task](https://taskfile.dev)** — no C toolchain, no system dev libraries.
+surfaces are CodeMirror 6. The Chromium shell is a decision record:
+[`docs/chromium-shell.md`](docs/chromium-shell.md). Prerequisites are **Go
+1.25+**, **Node + pnpm** and **[Task](https://taskfile.dev)** — no C toolchain,
+no system dev libraries.
 
 ```bash
 task dev      # hot-reload dev mode (Vite on :9245)

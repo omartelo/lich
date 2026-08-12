@@ -101,6 +101,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   other action: lich stores the binding either way, but only one of the two will
   answer to it, and now you can see which pair to fix.
 
+- **Delegating work to a session is a search now, not a scroll.** "Delegate to
+  session" opened a flat, unfiltered submenu of every other open session — fine
+  with three, tedious with fifteen, and it named the session but never how it
+  was doing. The submenu is now the command palette's own surface, scoped to
+  delegating: type to filter by label or project, and each row carries the same
+  busy/done/waiting ring the sidebar card does, so you can tell which sessions
+  are free before picking one.
+
+- **A session's name in another session's terminal output is a link.** When a
+  provider's output mentions the label of another open session, that text is
+  now clickable, and jumps straight to that session's card the way Pulls' "Open
+  in Session" already does. The label has to stand as a word of its own to
+  count: a session called `auth` links where the output says `auth`, and stays
+  plain text inside `authentication` or `src/auth.ts`. A label shared by more
+  than one open session is left as plain text too — the terminal has no way to
+  tell which one was meant.
+
 ### Changed
 
 - **A session blocked on you says so in words.** Being asked a question looked
@@ -111,7 +128,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   line the running tool was using rather than a new one, so no card grows, and
   the ring is unchanged.
 
+- **`lich sessions` prints both of a session's names.** The table gains a
+  `name` column with the peer-roster name beside the label — both reach the
+  session, and a surface that showed only one is what once made an agent treat
+  a single session as two. The column rides last, so a script reading the first
+  three keeps working.
+
+### Removed
+
+- **"Mention session" is gone from the card's context menu.** It shipped one
+  release ago and only ever appeared on Claude Code cards, because writing
+  `@name` at the prompt only means anything to a Claude that has the messaging
+  tool — so a menu of four providers had an entry that three of them never saw,
+  with nothing on screen saying why. "Delegate to session" right above it aims
+  at the same thing and works from any provider to any provider, so the
+  asymmetric half is the one to drop rather than the one to keep explaining.
+  The name a session answers to is still on its card's tooltip, and nothing
+  changed about what Claude Code can do with it once you type it yourself.
+
 ### Fixed
+
+- **A task sent to a session stopped on a permission prompt is no longer
+  reported as never read.** The target's `waiting` report was read as "not
+  working", so thirty seconds of a human not answering the permission dialog
+  became "nothing read your task — nothing is queued" while the task sat
+  queued behind the open turn; the eventual reply then hit a dead ticket and
+  was lost. `waiting` now reads as the turn it belongs to.
+
+- **`send` no longer blocks for up to twice its timeout.** Waiting out the
+  target's setup script and waiting for the answer each spent a full budget;
+  a send into a fresh worktree could outlive the CLI's own HTTP timeout and
+  report a failure on a message that was in fact delivered. One deadline now
+  covers the whole call.
+
+- **A turn ending closes only the errand it belongs to.** Two tasks delivered
+  to one session queue as two turns, but the first turn's end used to close
+  every open ticket on that target — the second errand was reported "answered
+  elsewhere" while its message was still queued, unread, and its real answer
+  then hit a dead ticket. A turn now answers for at most one errand, oldest
+  delivery first.
+
+- **A sender that stopped waiting is told when its errand stalls.** An answer
+  and an unread task already came back typed at the sender's prompt; a target
+  ending its turn without replying reached only the window, as a toast — the
+  agent that was promised "the answer will arrive at your prompt" waited on a
+  promise nothing would keep, and a later `wait` on the ticket claimed it had
+  been answered long ago. The stall is now typed at the sender's prompt like
+  any other news, and a wait that races the stall reports it instead of
+  "still working".
 
 - **A long message typed into a session on Windows could land with no Enter
   behind it.** Input reached a PTY through one write call, which is safe on
@@ -122,6 +186,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mid-paste when the Enter arrived a moment later and read it as more pasted
   text instead of a submission — visible as a message sitting typed and unsent
   until someone opened the session and pressed Enter themselves.
+
+- **Closing lich and reopening it right away could fail to open at all,
+  mostly on Windows.** The pinned listener port only retried its bind for the
+  in-place self-update handoff; every other launch, including the ordinary
+  one right after quitting, tried once and gave up the instant the OS said the
+  port was still taken — which it briefly could be, since the outgoing
+  process's child processes (Chromium, the PTYs) can hold it a moment longer
+  than the process itself takes to exit. Every launch now gets the same short
+  retry the restart handoff always had, and a retry that pays off is logged —
+  a race that resolves on its own left no trace before, so a failure a few
+  launches later looked unrelated to the ones that quietly won.
 
 ## [0.29.0] - 2026-08-11
 

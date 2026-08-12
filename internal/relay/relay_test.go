@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/omartelo/lich/internal/store"
 )
@@ -521,7 +522,8 @@ func TestAnExpiredTicketTakesItsMarksDown(t *testing.T) {
 // read. The wait ends there, saying so, instead of running its full clock out.
 func TestATurnThatEndsWithoutAnAnswerEndsTheWait(t *testing.T) {
 	events := &fakeEvents{}
-	svc := newRelay(workspace(), newFakeTerminal("s1", "s2"), events)
+	term := newFakeTerminal("s1", "s2")
+	svc := newRelay(workspace(), term, events)
 
 	done := make(chan Result, 1)
 	go func() {
@@ -547,6 +549,60 @@ func TestATurnThatEndsWithoutAnAnswerEndsTheWait(t *testing.T) {
 		if mark, _ := events.markOf(id); mark.Direction != "" {
 			t.Errorf("session %q kept the mark %+v", id, mark)
 		}
+	}
+	// The waiter carried the news out itself; typing it at the prompt as well
+	// would deliver it twice.
+	if typed := term.written("s1"); typed != "" {
+		t.Errorf("the stall was also typed at a prompt whose waiter already heard it: %q", typed)
+	}
+}
+
+// The sender usually stops waiting long before the target's turn ends: it took
+// a ticket and moved on, on the promise that news would reach its prompt. A
+// turn that ends with no reply is that news, and it has to arrive the same way
+// an answer would.
+func TestTheSenderIsToldAtItsPromptWhenTheTargetStallsUnattended(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := newRelay(workspace(), term, nil)
+
+	got, err := svc.Send("s1", "docs", "", "run the tests", 1)
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if got.Status != StatusPending {
+		t.Fatalf("status = %q, want the sender to have given up first", got.Status)
+	}
+
+	svc.Observe("s2", "busy")
+	svc.Observe("s2", "done")
+
+	typed := term.written("s1")
+	if !strings.Contains(typed, "finished its turn without answering") {
+		t.Errorf("the sender was never told the errand stalled: %q", typed)
+	}
+	if _, err := svc.Wait(got.Ticket, 1); err == nil {
+		t.Error("the ticket outlived the turn that closed it")
+	}
+}
+
+// The stall and the give-up can also land together: Observe sees the waiter
+// still attending, so nobody types the news, and the waiter's own timer fires
+// in the same instant. The waiter that leaves last owns what is left behind —
+// without that it hears "still working" about an errand already closed, on a
+// ticket already gone from the map.
+func TestAWaiterGivingUpAsTheErrandStallsHearsSo(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1", "s2"), nil)
+	tk := &ticket{
+		target:   "docs",
+		done:     make(chan struct{}),
+		stalled:  make(chan struct{}),
+		unread:   make(chan struct{}),
+		attended: 1,
+	}
+	close(tk.stalled)
+
+	if got := svc.giveUp(tk); got != StatusUnanswered {
+		t.Errorf("status = %q, want the caller told the target answered elsewhere", got)
 	}
 }
 
@@ -581,6 +637,127 @@ func TestAQueuedRequestIgnoresTheTurnAlreadyRunning(t *testing.T) {
 	}
 	if err := svc.Reply(ticketID, "late"); err == nil {
 		t.Error("the ticket outlived the turn that closed it")
+	}
+}
+
+// awaitDelivered blocks until n tickets have their message actually in a PTY.
+// A ticket appears in the map before its delivery, so waiting on the map alone
+// would let a test race the write it is about to assert on.
+func awaitDelivered(t *testing.T, svc *Service, n int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		svc.mu.Lock()
+		count := 0
+		for _, tk := range svc.tickets {
+			if !tk.delivered.IsZero() {
+				count++
+			}
+		}
+		svc.mu.Unlock()
+		if count == n {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("never saw %d delivered tickets", n)
+}
+
+// TestADoneClosesOnlyTheTurnsOwnErrand proves a turn answers for one errand.
+// Two messages delivered back to back — inside the second or two before the
+// target's busy report lands — queue as two turns; the first turn's end must
+// not report the second errand as answered elsewhere while its message is
+// still queued, unread.
+func TestADoneClosesOnlyTheTurnsOwnErrand(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1", "s2", "s3"), nil)
+
+	first := make(chan Result, 1)
+	go func() {
+		got, _ := svc.Send("s1", "docs", "", "task one", 5)
+		first <- got
+	}()
+	awaitDelivered(t, svc, 1)
+	second := make(chan Result, 1)
+	go func() {
+		got, _ := svc.Send("s3", "docs", "", "task two", 5)
+		second <- got
+	}()
+	awaitDelivered(t, svc, 2)
+
+	// The target picks the first task up and ends that turn without replying.
+	svc.Observe("s2", "busy")
+	svc.Observe("s2", "done")
+	if got := <-first; got.Status != StatusUnanswered {
+		t.Fatalf("first errand = %q, want %q", got.Status, StatusUnanswered)
+	}
+	select {
+	case got := <-second:
+		t.Fatalf("the first turn's end closed the second errand too: %+v", got)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	// The queued second task runs as its own turn.
+	svc.Observe("s2", "busy")
+	svc.Observe("s2", "done")
+	if got := <-second; got.Status != StatusUnanswered {
+		t.Fatalf("second errand = %q, want %q", got.Status, StatusUnanswered)
+	}
+}
+
+// TestASecondErrandQueuedMidTurnSurvivesTheFirstsEnd is the same guarantee with
+// the second message arriving while the first errand's turn is already running:
+// its skipped turn is the same done that closes the first errand.
+func TestASecondErrandQueuedMidTurnSurvivesTheFirstsEnd(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1", "s2", "s3"), nil)
+
+	first := make(chan Result, 1)
+	go func() {
+		got, _ := svc.Send("s1", "docs", "", "task one", 5)
+		first <- got
+	}()
+	awaitDelivered(t, svc, 1)
+	svc.Observe("s2", "busy")
+
+	second := make(chan Result, 1)
+	go func() {
+		got, _ := svc.Send("s3", "docs", "", "task two", 5)
+		second <- got
+	}()
+	awaitDelivered(t, svc, 2)
+
+	svc.Observe("s2", "done")
+	if got := <-first; got.Status != StatusUnanswered {
+		t.Fatalf("first errand = %q, want %q", got.Status, StatusUnanswered)
+	}
+	svc.Observe("s2", "busy")
+	svc.Observe("s2", "done")
+	if got := <-second; got.Status != StatusUnanswered {
+		t.Fatalf("second errand = %q, want %q", got.Status, StatusUnanswered)
+	}
+}
+
+// TestAnUndeliveredTicketIgnoresTheTargetsTurns proves turn accounting starts
+// at delivery: a ticket still waiting out the target's setup script has no
+// message in that PTY, so nothing that happens there can close it.
+func TestAnUndeliveredTicketIgnoresTheTargetsTurns(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1", "s2"), nil)
+	svc.tickets["held"] = &ticket{
+		fromID: "s1", targetID: "s2", target: "docs",
+		created: time.Now(),
+		done:    make(chan struct{}),
+		stalled: make(chan struct{}),
+		unread:  make(chan struct{}),
+	}
+
+	svc.Observe("s2", "busy")
+	svc.Observe("s2", "done")
+	svc.Observe("s2", "idle")
+
+	svc.mu.Lock()
+	_, still := svc.tickets["held"]
+	svc.mu.Unlock()
+	if !still {
+		t.Fatal("a turn on the target closed a ticket whose message was never delivered")
 	}
 }
 
@@ -919,20 +1096,55 @@ func TestSendBoundsThePrompt(t *testing.T) {
 }
 
 func TestReplyTruncatesAnOversizedAnswer(t *testing.T) {
+	tests := []struct {
+		name   string
+		answer string
+		want   int
+	}{
+		{"ascii is cut at the cap", strings.Repeat("a", 65537), 65536},
+		// The byte cut lands inside the trailing rune; the half-rune is dropped
+		// rather than typed into a PTY as garbage keystrokes.
+		{"a rune is never cut in half", strings.Repeat("a", 65535) + "é", 65535},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := newRelay(workspace(), newFakeTerminal("s1", "s2"), nil)
+
+			done := make(chan Result, 1)
+			go func() {
+				got, _ := svc.Send("s1", "docs", "", "hello", 30)
+				done <- got
+			}()
+			ticketID := waitForTicket(svc)
+			if err := svc.Reply(ticketID, tt.answer); err != nil {
+				t.Fatalf("Reply: %v", err)
+			}
+
+			got := <-done
+			if len(got.Answer) != tt.want {
+				t.Errorf("answer is %d bytes, want %d", len(got.Answer), tt.want)
+			}
+			if !utf8.ValidString(got.Answer) {
+				t.Error("the truncated answer is not valid UTF-8")
+			}
+		})
+	}
+}
+
+// An ended session's row in the state map would never be read again — absent
+// and idle mean the same "not working" — so it is dropped rather than kept for
+// the life of the process.
+func TestAnEndedSessionLeavesNoStateBehind(t *testing.T) {
 	svc := newRelay(workspace(), newFakeTerminal("s1", "s2"), nil)
 
-	done := make(chan Result, 1)
-	go func() {
-		got, _ := svc.Send("s1", "docs", "", "hello", 30)
-		done <- got
-	}()
-	ticketID := waitForTicket(svc)
-	if err := svc.Reply(ticketID, strings.Repeat("a", 65537)); err != nil {
-		t.Fatalf("Reply: %v", err)
-	}
+	svc.Observe("s2", "busy")
+	svc.Observe("s2", "idle")
 
-	if got := <-done; len(got.Answer) != 65536 {
-		t.Errorf("answer is %d characters, want it capped at 65536", len(got.Answer))
+	svc.mu.Lock()
+	_, kept := svc.state["s2"]
+	svc.mu.Unlock()
+	if kept {
+		t.Error("a session that ended still holds a row in the state map")
 	}
 }
 
@@ -1070,6 +1282,37 @@ func TestSendRefusesRatherThanTypingIntoASetupScript(t *testing.T) {
 	}
 }
 
+// TestSendSpendsOneBudgetAcrossSetupAndAnswer pins the deadline being shared:
+// a setup that eats most of the wait leaves only the remainder for the answer,
+// instead of a fresh full wait on top. Two full budgets would block past the
+// HTTP client's own timeout (internal/cli, waitBudget) and report a failure on
+// a message that was in fact delivered.
+func TestSendSpendsOneBudgetAcrossSetupAndAnswer(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	term.setUp("s2", true)
+	svc := newRelay(workspace(), term, nil)
+
+	go func() {
+		time.Sleep(750 * time.Millisecond)
+		term.setUp("s2", false)
+	}()
+
+	start := time.Now()
+	result, err := svc.Send("s1", "docs", "", "run the tests", 1)
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("Send = %v, want the message delivered", err)
+	}
+	if result.Status != StatusPending {
+		t.Errorf("status = %q, want the errand still open", result.Status)
+	}
+	// The old shape waited the setup out and then a full second more, ending
+	// past 1.75s. The shared budget ends the call at the one second asked for.
+	if elapsed > 1500*time.Millisecond {
+		t.Errorf("Send blocked %v on a 1s wait — the setup and the answer each spent a full budget", elapsed)
+	}
+}
+
 func TestSendGivesUpWhenTheTargetDiesDuringSetup(t *testing.T) {
 	term := newFakeTerminal("s1", "s2")
 	term.setUp("s2", true)
@@ -1167,6 +1410,47 @@ func TestABusyTargetIsNotCheckedForReceipt(t *testing.T) {
 	}
 	if result.Status == StatusUnread {
 		t.Error("a target that was mid-turn was reported as never having read the task")
+	}
+}
+
+// A target sitting on a mid-turn permission prompt reports waiting, and its
+// silence afterwards is a human not answering — not a task nobody read. The
+// message queues behind the open turn, so calling it unread would drop a ticket
+// whose answer is still coming.
+func TestAWaitingTargetIsTreatedAsMidTurn(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := withReceipts(term)
+	svc.Observe("s2", stateBusy)
+	svc.Observe("s2", stateWaiting)
+
+	result, err := svc.Send("s1", "docs", "", "run the tests", 1)
+	if err != nil {
+		t.Fatalf("Send = %v, want nil", err)
+	}
+	if result.Status == StatusUnread {
+		t.Error("a target blocked on its own permission prompt was reported as never reading the task")
+	}
+	if result.Status != StatusPending {
+		t.Errorf("status = %q, want the errand still open", result.Status)
+	}
+}
+
+// waiting after done is the provider nudging its user, not an open turn: the
+// target is at its prompt, so a task typed there is read within seconds and the
+// receipt check has to stay armed.
+func TestWaitingAfterDoneStillArmsTheReceiptCheck(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := withReceipts(term)
+	svc.Observe("s2", stateBusy)
+	svc.Observe("s2", stateDone)
+	svc.Observe("s2", stateWaiting)
+
+	result, err := svc.Send("s1", "docs", "", "run the tests", 5)
+	if err != nil {
+		t.Fatalf("Send = %v, want nil", err)
+	}
+	if result.Status != StatusUnread {
+		t.Errorf("status = %q, want the silence read as unread", result.Status)
 	}
 }
 

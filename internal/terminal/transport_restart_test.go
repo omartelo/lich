@@ -90,21 +90,60 @@ func TestRestartUnavailableWhenUnset(t *testing.T) {
 	}
 }
 
-func TestListenBindsOnceWithoutWaitMarker(t *testing.T) {
+func TestListenGivesUpAfterBindTimeoutWithoutWaitMarker(t *testing.T) {
 	busy, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("occupy port: %v", err)
 	}
 	defer func() { _ = busy.Close() }()
 
-	// No WaitEnv: a busy address fails immediately rather than retrying.
+	// No WaitEnv: still retries (a plain relaunch can race the exiting lich's
+	// child processes too — see CHANGELOG), but on the shorter bindTimeout
+	// budget, and gives up once that runs out.
+	start := time.Now()
 	if l, err := listen(busy.Addr().String()); err == nil {
 		_ = l.Close()
-		t.Fatal("listen() = nil error on a busy port, want immediate failure")
+		t.Fatal("listen() = nil error on a port that stayed busy, want failure once bindTimeout elapses")
+	}
+	if elapsed := time.Since(start); elapsed < bindTimeout {
+		t.Fatalf("listen() gave up after %s, want it to retry for at least bindTimeout (%s)", elapsed, bindTimeout)
 	}
 }
 
-func TestListenRetriesUntilPortFrees(t *testing.T) {
+func TestListenRetriesUntilPortFreesWithoutWaitMarker(t *testing.T) {
+	busy, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("occupy port: %v", err)
+	}
+	addr := busy.Addr().String()
+
+	type result struct {
+		l   net.Listener
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		l, err := listen(addr)
+		done <- result{l, err}
+	}()
+
+	// Free the port well inside the bindTimeout budget; listen must then bind
+	// without LICH_RESTART_WAIT set — this is the ordinary relaunch path.
+	time.Sleep(2 * bindRetryInterval)
+	_ = busy.Close()
+
+	select {
+	case r := <-done:
+		if r.err != nil {
+			t.Fatalf("listen() = %v, want a successful bind after the port freed", r.err)
+		}
+		_ = r.l.Close()
+	case <-time.After(bindTimeout):
+		t.Fatal("listen() never bound after the port was freed")
+	}
+}
+
+func TestListenRetriesUntilPortFreesWithWaitMarker(t *testing.T) {
 	busy, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("occupy port: %v", err)
@@ -123,7 +162,7 @@ func TestListenRetriesUntilPortFrees(t *testing.T) {
 	}()
 
 	// Free the port after a couple of retry intervals; listen must then bind.
-	time.Sleep(2 * restartBindInterval)
+	time.Sleep(2 * bindRetryInterval)
 	_ = busy.Close()
 
 	select {

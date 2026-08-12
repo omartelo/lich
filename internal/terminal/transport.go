@@ -163,30 +163,46 @@ func newTransport(
 	return t, nil
 }
 
-// restartBindTimeout / restartBindInterval bound the wait a successor process
-// spends retrying the pinned port while the process it replaces still holds it.
+// bindTimeout / restartBindTimeout / bindRetryInterval bound the wait any
+// launch spends retrying the pinned port while a just-exited lich still holds
+// it: closing the window ends the process, but on Windows its child processes
+// (Chromium, the PTYs) can take a moment longer to release the port than the
+// parent takes to exit, so even a plain relaunch can lose that race. A
+// restarting lich (restart.WaitEnv set) gets the longer bound: install.sh
+// hands off immediately after spawning it, before the predecessor it is
+// replacing has even been told to close its window.
 const (
-	restartBindTimeout  = 10 * time.Second
-	restartBindInterval = 200 * time.Millisecond
+	bindTimeout        = 2 * time.Second
+	restartBindTimeout = 10 * time.Second
+	bindRetryInterval  = 200 * time.Millisecond
 )
 
-// listen binds addr. A normal launch binds once; a launch that succeeds a
-// restarting lich (restart.WaitEnv set) retries, because the outgoing process
-// holds the pinned port for a moment after it is told to exit.
+// listen binds addr, retrying while the port stays taken. A retry that pays
+// off is logged too: it never surfaces as a failure, so the log is the only
+// trace this race is happening at all — the diagnosis a prior bind failure on
+// this port needed and did not have (see CHANGELOG).
 func listen(addr string) (net.Listener, error) {
-	if os.Getenv(restart.WaitEnv) == "" {
-		return net.Listen("tcp", addr)
+	timeout := bindTimeout
+	if os.Getenv(restart.WaitEnv) != "" {
+		timeout = restartBindTimeout
 	}
-	deadline := time.Now().Add(restartBindTimeout)
+	start := time.Now()
+	deadline := start.Add(timeout)
+	attempts := 0
 	for {
+		attempts++
 		l, err := net.Listen("tcp", addr)
 		if err == nil {
+			if attempts > 1 {
+				slog.Info("bind succeeded after retry",
+					"addr", addr, "attempts", attempts, "waited", time.Since(start).Round(time.Millisecond))
+			}
 			return l, nil
 		}
 		if time.Now().After(deadline) {
-			return nil, err
+			return nil, fmt.Errorf("after %d attempts over %s: %w", attempts, time.Since(start).Round(time.Millisecond), err)
 		}
-		time.Sleep(restartBindInterval)
+		time.Sleep(bindRetryInterval)
 	}
 }
 
