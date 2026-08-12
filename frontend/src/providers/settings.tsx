@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
 import type { ReactNode } from "react"
 import {
   DEFAULT_HOTKEYS,
@@ -17,8 +17,9 @@ import {
   readPref,
   writePref,
 } from "@/lib/prefs"
-import { Themes as ThemeRPC } from "@/lib/rpc"
+import { Store, Themes as ThemeRPC } from "@/lib/rpc"
 import {
+  adoptStoredSelections,
   applyAppTheme,
   BUNDLED_THEMES,
   DARK_THEME_SCHEME,
@@ -47,6 +48,18 @@ const CONTEXT_USAGE_STORAGE_KEY = "lich.footer.contextUsage"
 const COST_BUDGET_STORAGE_KEY = "lich.footer.costBudget"
 const DESKTOP_NOTIFICATIONS_STORAGE_KEY = "lich.notifications.desktop"
 const FINISHED_TURN_NOTIFICATIONS_STORAGE_KEY = "lich.notifications.finishedTurn"
+
+// The workspace keys the two theme selections actually live under. The
+// localStorage pair above keeps them too, but only as the cache the first frame
+// paints from: it sits in the Chromium profile, which Chromium recreates from
+// scratch when its storage comes back damaged — a window killed rather than
+// closed (#209) is how that happened — taking every `lich.*` pref with it
+// (#236). The database is the same store the sessions survive in, and it is
+// where the "what's new" flag went for the same reason (#199).
+const THEME_SETTING_KEY = "appearance.theme"
+const TERMINAL_THEME_SETTING_KEY = "appearance.terminalTheme"
+// The selections answer for this install, not for a project.
+const GLOBAL_SCOPE = ""
 
 // DEFAULT_FONT is the bundled FiraCode Nerd Font Mono. It is not installed via
 // fontconfig, so it must be offered explicitly alongside the system fonts.
@@ -200,6 +213,62 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     readFinishedTurnNotifications,
   )
 
+  // A selection the user (or a reconcile) has already written must not be
+  // overwritten by the stored one still in flight, so the load below stands down
+  // once anything has been persisted.
+  const selectionsTouched = useRef(false)
+
+  const persistTheme = useCallback((next: Theme) => {
+    selectionsTouched.current = true
+    writePref(THEME_STORAGE_KEY, next)
+    // A failed write costs the selection only if the profile is later recreated
+    // — the cache answers every ordinary launch — so it stays quiet.
+    void Store.SetSetting(THEME_SETTING_KEY, GLOBAL_SCOPE, next).catch(() => {})
+  }, [])
+
+  const persistTerminalTheme = useCallback((next: TerminalTheme) => {
+    selectionsTouched.current = true
+    writePref(TERMINAL_THEME_STORAGE_KEY, next)
+    void Store.SetSetting(TERMINAL_THEME_SETTING_KEY, GLOBAL_SCOPE, next).catch(() => {})
+  }, [])
+
+  // The stored selections land after the first paint, which the cache has
+  // already answered for: a theme that is only in the database repaints once,
+  // and a custom one waits for the theme list either way.
+  useEffect(() => {
+    let cancelled = false
+    const cached = { theme: readTheme(), terminalTheme: readTerminalTheme() }
+    Promise.all([
+      Store.GetSetting(THEME_SETTING_KEY, GLOBAL_SCOPE),
+      Store.GetSetting(TERMINAL_THEME_SETTING_KEY, GLOBAL_SCOPE),
+    ])
+      .then(([storedTheme, storedTerminalTheme]) => {
+        if (cancelled || selectionsTouched.current) return
+        const { selections, persist } = adoptStoredSelections(
+          { theme: storedTheme, terminalTheme: storedTerminalTheme },
+          cached,
+        )
+        if (selections.theme !== cached.theme) {
+          setThemeState(selections.theme)
+          writePref(THEME_STORAGE_KEY, selections.theme)
+        }
+        if (selections.terminalTheme !== cached.terminalTheme) {
+          setTerminalThemeState(selections.terminalTheme)
+          writePref(TERMINAL_THEME_STORAGE_KEY, selections.terminalTheme)
+        }
+        if (persist) {
+          persistTheme(selections.theme)
+          persistTerminalTheme(selections.terminalTheme)
+        }
+      })
+      .catch((error) => {
+        console.warn("[settings] failed to load the stored theme selections", error)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [persistTheme, persistTerminalTheme])
+
   useEffect(() => {
     let cancelled = false
     ThemeRPC.List()
@@ -222,13 +291,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const reconciled = reconcileThemeSelections({ theme, terminalTheme }, themes)
     if (reconciled.theme !== theme) {
       setThemeState(reconciled.theme)
-      writePref(THEME_STORAGE_KEY, reconciled.theme)
+      persistTheme(reconciled.theme)
     }
     if (reconciled.terminalTheme !== terminalTheme) {
       setTerminalThemeState(reconciled.terminalTheme)
-      writePref(TERMINAL_THEME_STORAGE_KEY, reconciled.terminalTheme)
+      persistTerminalTheme(reconciled.terminalTheme)
     }
-  }, [theme, terminalTheme, themes, themesLoaded])
+  }, [theme, terminalTheme, themes, themesLoaded, persistTheme, persistTerminalTheme])
 
   const setFont = useCallback((next: string) => {
     setFontState(next)
@@ -241,10 +310,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     writePref(TERMINAL_FONT_SIZE_STORAGE_KEY, clamped)
   }, [])
 
-  const setTheme = useCallback((next: Theme) => {
-    setThemeState(next)
-    writePref(THEME_STORAGE_KEY, next)
-  }, [])
+  const setTheme = useCallback(
+    (next: Theme) => {
+      setThemeState(next)
+      persistTheme(next)
+    },
+    [persistTheme],
+  )
 
   // Neither of these persists: the zoom is mirrored to localStorage by the
   // effect that applies it, so the one updater that has to be functional (see
@@ -259,10 +331,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setZoomState((prev) => clampZoom(prev + delta))
   }, [])
 
-  const setTerminalTheme = useCallback((next: TerminalTheme) => {
-    setTerminalThemeState(next)
-    writePref(TERMINAL_THEME_STORAGE_KEY, next)
-  }, [])
+  const setTerminalTheme = useCallback(
+    (next: TerminalTheme) => {
+      setTerminalThemeState(next)
+      persistTerminalTheme(next)
+    },
+    [persistTerminalTheme],
+  )
 
   const importTheme = useCallback(
     async (path: string, overwrite: boolean) => {
@@ -316,14 +391,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       const next = selectionsAfterThemeRemoval(id, { theme, terminalTheme })
       if (next.theme !== theme) {
         setThemeState(next.theme)
-        writePref(THEME_STORAGE_KEY, next.theme)
+        persistTheme(next.theme)
       }
       if (next.terminalTheme !== terminalTheme) {
         setTerminalThemeState(next.terminalTheme)
-        writePref(TERMINAL_THEME_STORAGE_KEY, next.terminalTheme)
+        persistTerminalTheme(next.terminalTheme)
       }
     },
-    [theme, terminalTheme],
+    [theme, terminalTheme, persistTheme, persistTerminalTheme],
   )
 
   const setHotkey = useCallback((id: HotkeyId, combo: Combo) => {

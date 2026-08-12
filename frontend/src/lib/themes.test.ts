@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { ThemeDefinition } from "./api-types"
 import {
+  adoptStoredSelections,
   APP_COLOR_TOKENS,
   applyAppTheme,
   BUNDLED_THEMES,
@@ -120,6 +121,44 @@ describe("themes", () => {
     expect(
       reconcileThemeSelections({ theme: "dark", terminalTheme: "light" }, BUNDLED_THEMES),
     ).toEqual({ theme: "dark", terminalTheme: "light" })
+  })
+
+  it("prefers the stored selections over the boot cache", () => {
+    expect(
+      adoptStoredSelections(
+        { theme: "dracula", terminalTheme: "dark" },
+        { theme: SYSTEM_THEME, terminalTheme: DEFAULT_TERMINAL_THEME },
+      ),
+    ).toEqual({
+      selections: { theme: "dracula", terminalTheme: "dark" },
+      persist: false,
+    })
+  })
+
+  it("adopts the boot cache and asks for a write-back when nothing is stored", () => {
+    expect(
+      adoptStoredSelections(
+        { theme: "", terminalTheme: "" },
+        { theme: "dracula", terminalTheme: "light" },
+      ),
+    ).toEqual({
+      selections: { theme: "dracula", terminalTheme: "light" },
+      persist: true,
+    })
+  })
+
+  // The two keys are written together but read apart: an install that stored one
+  // selection before the other must not have the missing one left unwritten.
+  it("writes back when only one selection is stored", () => {
+    expect(
+      adoptStoredSelections(
+        { theme: "dracula", terminalTheme: "" },
+        { theme: SYSTEM_THEME, terminalTheme: "light" },
+      ),
+    ).toEqual({
+      selections: { theme: "dracula", terminalTheme: "light" },
+      persist: true,
+    })
   })
 
   it("resets only selections that use a removed theme", () => {

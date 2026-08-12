@@ -132,6 +132,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Your theme survives an update.** The theme and terminal theme you picked
+  were kept only in the app window's own storage — the Chromium profile — and a
+  profile whose storage comes back damaged is one Chromium empties and starts
+  again, taking both selections with it. On Windows that was the ordinary end of
+  an update until v0.29.0, because the window was killed rather than asked to
+  close, so an update was the likeliest moment to open lich on the default theme
+  with the theme you had imported still sitting in the list. Both selections now
+  live in the workspace database, beside the projects and sessions that already
+  survive anything the window does; the window's copy stays as the cache the
+  first frame paints from, so nothing about starting up changed, and an install
+  that had a theme picked before this keeps it.
+
 - **A task sent to a session stopped on a permission prompt is no longer
   reported as never read.** The target's `waiting` report was read as "not
   working", so thirty seconds of a human not answering the permission dialog

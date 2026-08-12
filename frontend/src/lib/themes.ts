@@ -142,6 +142,25 @@ export function reconcileThemeSelections(
   }
 }
 
+// adoptStoredSelections resolves the selections a launch starts from against
+// the workspace copy, which is the durable one: the boot cache lives in the
+// Chromium profile, and a profile Chromium recreates comes back empty while the
+// workspace database survives. A setting that was never written reads as "" —
+// an install whose cache is still the only record — so the cache is adopted and
+// written back once, which is what `persist` reports.
+export function adoptStoredSelections(
+  stored: ThemeSelections,
+  cached: ThemeSelections,
+): { selections: ThemeSelections; persist: boolean } {
+  return {
+    selections: {
+      theme: stored.theme || cached.theme,
+      terminalTheme: stored.terminalTheme || cached.terminalTheme,
+    },
+    persist: !stored.theme || !stored.terminalTheme,
+  }
+}
+
 export function selectionsAfterThemeRemoval(
   removedID: string,
   selections: ThemeSelections,
