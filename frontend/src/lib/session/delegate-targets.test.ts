@@ -33,6 +33,18 @@ describe("delegateTargets", () => {
     expect(groups[1].targets.map((target) => target.label)).toEqual(["web"])
   })
 
+  // The picker draws each row's provider icon from this, so a target that
+  // forgot its kind renders the wrong agent's mark.
+  it("carries each target's provider along", () => {
+    const groups = delegateTargets(PROJECTS, state, "aaaa1111")
+
+    expect(groups[0].targets).toEqual([
+      { id: "bbbb2222", label: "docs", kind: "codex" },
+      { id: "cccc3333", label: "api", kind: "crush" },
+    ])
+    expect(groups[1].targets[0].kind).toBe("opencode")
+  })
+
   it("never offers the session doing the sending", () => {
     const labels = delegateTargets(PROJECTS, state, "bbbb2222")
       .flatMap((group) => group.targets)

@@ -19,6 +19,10 @@ interface FileTreeProps {
   /** Start folders expanded — a pull request's changed files, where every row
    * is part of the review. The repo browser starts collapsed instead. */
   defaultOpen?: boolean
+  /** Hold every folder open, whatever was toggled by hand — a filtered tree,
+   * where a match has to be visible without opening its ancestors first. The
+   * toggles are only suspended, so clearing the filter restores the browse. */
+  expandAll?: boolean
   /** Per-file diff counts keyed by path; a row with an entry shows its +/-. */
   stats?: Map<string, DiffFile>
   /** Right-click → Open in editor. Absent = no file context menu, which is the
@@ -36,6 +40,7 @@ export function FileTree({
   tree,
   active = null,
   defaultOpen = false,
+  expandAll = false,
   stats,
   onEditor,
   className,
@@ -44,7 +49,7 @@ export function FileTree({
   // The set holds the rows toggled *away* from defaultOpen, so a folder's state
   // survives its parent closing and reopening.
   const [toggled, setToggled] = useState<Set<string>>(new Set())
-  const isOpen = (path: string) => toggled.has(path) !== defaultOpen
+  const isOpen = (path: string) => expandAll || toggled.has(path) !== defaultOpen
 
   const toggle = (path: string) =>
     setToggled((prev) => {

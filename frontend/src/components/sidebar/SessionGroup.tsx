@@ -5,9 +5,8 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-
 import { dragStyle, useSortableList, verticalAxis } from "@/lib/use-sortable-list"
 import { cn } from "@/lib/utils"
 import { checkoutLabel } from "@/lib/git/checkout-label"
-import type { MentionGroup } from "@/lib/session/mention-targets"
 import type { DelegateGroup } from "@/lib/session/delegate-targets"
-import { groupKey, type Session } from "@/lib/session/sessions"
+import type { Session } from "@/lib/session/sessions"
 import { useProjects } from "@/providers/projects"
 import { SessionCard } from "./SessionCard"
 import { PullRequestCard } from "./PullRequestCard"
@@ -15,7 +14,15 @@ import { isPullsOpen, subscribePullsCard } from "@/lib/pulls-card-store"
 
 interface SessionGroupProps {
   projectId: string
-  // "" for the project's own root, else the worktree checkout path.
+  // This block's sortable id — the checkout path, or a stand-in for the two
+  // blocks that have none (the project root, the pinned sessions).
+  sortId: string
+  // The block of pinned sessions, gathered from every checkout: titled after
+  // the pin rather than a worktree, no pull request of its own, and never
+  // dragged — it is always the first block.
+  pinned: boolean
+  // "" for the project's own root or the pinned block, else the worktree
+  // checkout path.
   path: string
   sessions: Session[]
   projectPath: string
@@ -39,9 +46,7 @@ interface SessionGroupProps {
   onPulls: () => void
   onClosePulls: () => void
   // Workspace-wide, so it is resolved once by the sidebar rather than per group:
-  // the Claude sessions the active one can be pointed at, across every open
-  // project.
-  mentionGroups: MentionGroup[]
+  // the sessions the active one can hand work to, across every open project.
   delegateGroups: DelegateGroup[]
 }
 
@@ -58,6 +63,8 @@ interface SessionGroupProps {
 // sidebar, which keeps only the ones carrying its own state.
 export function SessionGroup({
   projectId,
+  sortId,
+  pinned,
   path,
   sessions,
   projectPath,
@@ -68,15 +75,14 @@ export function SessionGroup({
   pullsActive,
   onPulls,
   onClosePulls,
-  mentionGroups,
   delegateGroups,
 }: SessionGroupProps) {
   const { activateSession, renameSession, pinSession, newSession } = useProjects()
   const navigate = useNavigate()
   const ids = sessions.map((session) => session.id)
   const { sensors, onDragEnd } = useSortableList(ids, onReorder)
-  const name = checkoutLabel(path, projectPath, projectId)
-  const group = useSortable({ id: groupKey(path), disabled: !showHeader })
+  const name = pinned ? "Pinned" : checkoutLabel(path, projectPath, projectId)
+  const group = useSortable({ id: sortId, disabled: !showHeader || pinned })
   // The PR card keys off the group's real checkout — the project root for the
   // root group (empty path), else the worktree — so a root project on a feature
   // branch parks its card too, not only worktrees.
@@ -101,7 +107,7 @@ export function SessionGroup({
     >
       {showHeader && (
         <div
-          className="flex cursor-grab items-center gap-2 px-1 pb-0.5 pt-1.5"
+          className={cn("flex items-center gap-2 px-1 pb-0.5 pt-1.5", !pinned && "cursor-grab")}
           {...group.attributes}
           {...group.listeners}
         >
@@ -131,14 +137,15 @@ export function SessionGroup({
                 onPin={(pinned) => pinSession(projectId, session.id, pinned)}
                 onOpenTerminal={(cwd) => newSession(projectId, "shell", cwd)}
                 onPulls={onPulls}
-                mentionGroups={mentionGroups}
                 delegateGroups={delegateGroups}
               />
             ))}
           </div>
         </SortableContext>
       </DndContext>
-      {pullsOpen && (
+      {/* The pinned block spans every checkout, so no single pull request
+          belongs under it — the card stays with the worktree's own block. */}
+      {!pinned && pullsOpen && (
         <PullRequestCard
           path={checkout}
           active={pullsActive}

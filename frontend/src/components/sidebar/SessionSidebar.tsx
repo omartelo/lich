@@ -1,12 +1,11 @@
-import { useState, useSyncExternalStore } from "react"
+import { useMemo, useState, useSyncExternalStore } from "react"
 import { useMatch, useNavigate } from "react-router-dom"
 import { DndContext, closestCenter } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
-import { GitBranch, GitPullRequestArrow, Plus, Terminal } from "lucide-react"
+import { GitBranch, GitPullRequestArrow, PanelLeftClose, Plus, Terminal } from "lucide-react"
 import { ProjectService } from "@/lib/rpc"
 import { closeSettings, isSettingsOpen, subscribeSettingsCard } from "@/lib/settings-card-store"
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
-import { mentionTargets } from "@/lib/session/mention-targets"
 import { delegateTargets } from "@/lib/session/delegate-targets"
 import {
   closePullsList,
@@ -31,11 +30,12 @@ import { useProjects } from "@/providers/projects"
 import { queueSetup } from "@/lib/terminal/setup-queue"
 import {
   activeSessionId,
-  groupByWorktree,
-  groupKey,
   orderGroups,
+  reorderSubset,
   sessionsOf,
-  sortPinned,
+  sidebarGroups,
+  type Session,
+  type SidebarGroup,
 } from "@/lib/session/sessions"
 import { useSortableList, verticalAxis } from "@/lib/use-sortable-list"
 import { CloseWorktreeDialog, ForceRemoveWorktreeDialog } from "./CloseWorktreeDialog"
@@ -53,6 +53,11 @@ const MIN_REM = 12
 const MAX_REM = 30
 const DEFAULT_REM = 15
 
+interface SessionSidebarProps {
+  // Collapses the sidebar to its rail (SidebarRail), which carries the way back.
+  onCollapse: () => void
+}
+
 // SessionSidebar lists the active project's sessions and can be drag-resized
 // within a fixed pixel range. Width persists across restarts. It renders nothing
 // when no project is active (Home, Settings), so it never competes with those
@@ -60,7 +65,7 @@ const DEFAULT_REM = 15
 //
 // Resizing only changes this element's width; the terminal keeps its PTY in sync
 // on its own via a ResizeObserver, so the sidebar does not need to know about it.
-export function SessionSidebar() {
+export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   const {
     projects,
     sessions,
@@ -98,39 +103,47 @@ export function SessionSidebar() {
   })
   const [worktreeOpen, setWorktreeOpen] = useState(false)
   // Resolved ahead of the no-project bail below: hooks cannot sit behind it.
-  // Pinned first, which also carries their worktree group to the top of the
-  // sidebar — groupByWorktree buckets by first appearance.
-  const list = sortPinned(sessionsOf(sessions, projectId ?? ""))
+  const list = sessionsOf(sessions, projectId ?? "")
   const worktreeClose = useWorktreeClose(projectId ?? "", path, list)
-  const groups = groupByWorktree(list)
-  // Dragging a group moves its whole block of sessions inside the flat list the
-  // groups are read back from — there is no separate group order to store.
-  const { sensors, onDragEnd } = useSortableList(
-    groups.map((group) => groupKey(group.path)),
-    (keys) => reorderSessions(projectId ?? "", orderGroups(groups, keys)),
+  const groups = sidebarGroups(list)
+  // The pinned block is out of the drag list entirely: it is always first, and
+  // the worktree blocks reorder among themselves. Dragging one moves its whole
+  // block of ids inside the flat list the groups are read back from — there is
+  // no separate group order to store — leaving the pinned sessions where they
+  // sit in it, so unpinning still drops a card among its old neighbours.
+  const dragKeys = groups.filter((group) => !group.pinned).map((group) => group.key)
+  const { sensors, onDragEnd } = useSortableList(dragKeys, (keys) =>
+    reorderSessions(
+      projectId ?? "",
+      reorderSubset(list, orderGroups(groups, keys), (session) => !session.pinned),
+    ),
+  )
+  const realActiveId = activeSessionId(sessions, projectId ?? "")
+  // Resolved once here, not per group: the list spans every open project, so
+  // it is the same for every card in the sidebar. Memoised because the picker
+  // downstream keys its own flatten and filter off this array's identity, and
+  // a fresh one per sidebar render would make those caches never hold.
+  const delegateGroups = useMemo(
+    () => delegateTargets(projects, sessions, realActiveId),
+    [projects, sessions, realActiveId],
   )
 
   if (!projectId) {
     return null
   }
 
-  const realActiveId = activeSessionId(sessions, projectId)
-  // Resolved once here, not per group: the list spans every open project, so
-  // it is the same for every card in the sidebar.
-  const mentionGroups = mentionTargets(projects, sessions, realActiveId)
-  const delegateGroups = delegateTargets(projects, sessions, realActiveId)
   // No session card highlights while a full-screen route (Settings, Pulls) owns
   // the view; its own sidebar entry reads as active instead.
   const activeId = onSettings || onPullsRoute ? "" : realActiveId
 
-  // A drag reorders one group only; splice its new order back into the flat list
-  // in group order and persist the whole thing. reorderSessions bails on any
-  // id-set mismatch, so a close that raced the drop drops the stale order.
-  const commitGroupOrder = (groupPath: string, ids: string[]) => {
-    const flat = groups.flatMap((group) =>
-      group.path === groupPath ? ids : group.sessions.map((session) => session.id),
-    )
-    reorderSessions(projectId, flat)
+  // A drag reorders one block only; hand its new order to that block's own
+  // sessions inside the flat list and persist the whole thing. reorderSessions
+  // bails on any id-set mismatch, so a close that raced the drop drops the
+  // stale order.
+  const commitGroupOrder = (group: SidebarGroup, ids: string[]) => {
+    const member = (session: Session) =>
+      group.pinned ? !!session.pinned : !session.pinned && (session.path ?? "") === group.path
+    reorderSessions(projectId, reorderSubset(list, ids, member))
   }
 
   const createWorktree = async (name: string, base: string, baseIsRemote: boolean) => {
@@ -153,45 +166,56 @@ export function SessionSidebar() {
       className="relative flex shrink-0 flex-col border-r border-border bg-sidebar p-2"
       style={{ width: `${width}rem` }}
     >
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          title="New session"
-          aria-label="New session"
-          render={
-            <Button
-              variant="ghost"
-              className="mb-2 w-full justify-start gap-2 text-foreground hover:bg-accent aria-expanded:bg-accent"
-            />
-          }
-        >
-          <Plus className="size-4 text-muted-foreground" />
-          New Session
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="max-w-56">
-          <DropdownMenuGroup>
-            {enabled.map((provider) => (
-              <DropdownMenuItem
-                key={provider.id}
-                onClick={() => newSession(projectId, provider.id)}
-              >
-                <ProviderIcon kind={provider.id} />
-                {provider.name}
+      <div className="mb-2 flex items-center gap-1">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            title="New session"
+            aria-label="New session"
+            render={
+              <Button
+                variant="ghost"
+                className="w-full flex-1 justify-start gap-2 text-foreground hover:bg-accent aria-expanded:bg-accent"
+              />
+            }
+          >
+            <Plus className="size-4 text-muted-foreground" />
+            New Session
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="max-w-56">
+            <DropdownMenuGroup>
+              {enabled.map((provider) => (
+                <DropdownMenuItem
+                  key={provider.id}
+                  onClick={() => newSession(projectId, provider.id)}
+                >
+                  <ProviderIcon kind={provider.id} />
+                  {provider.name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={() => newSession(projectId, "shell")}>
+                <Terminal />
+                Terminal
               </DropdownMenuItem>
-            ))}
-          </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuGroup>
-            <DropdownMenuItem onClick={() => newSession(projectId, "shell")}>
-              <Terminal />
-              Terminal
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled={!git?.branch} onClick={() => setWorktreeOpen(true)}>
-              <GitBranch />
-              Worktree
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
+              <DropdownMenuItem disabled={!git?.branch} onClick={() => setWorktreeOpen(true)}>
+                <GitBranch />
+                Worktree
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <Button
+          variant="ghost"
+          title="Collapse sidebar"
+          aria-label="Collapse sidebar"
+          onClick={onCollapse}
+          className="size-8 shrink-0 justify-center px-0 text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <PanelLeftClose className="size-4" />
+        </Button>
+      </div>
       {/* The scrollbar takes width, so it rides the aside's own padding (-mr-2)
           and the padding is re-applied inside — a gap between thumb and card
           when it shows, no shift in card width when it doesn't. */}
@@ -233,24 +257,24 @@ export function SessionSidebar() {
           modifiers={[verticalAxis]}
           onDragEnd={onDragEnd}
         >
-          <SortableContext
-            items={groups.map((group) => groupKey(group.path))}
-            strategy={verticalListSortingStrategy}
-          >
+          <SortableContext items={dragKeys} strategy={verticalListSortingStrategy}>
             {groups.map((group) => {
               const groupActive = group.sessions.some((s) => s.id === realActiveId)
               return (
                 <SessionGroup
-                  key={groupKey(group.path)}
+                  key={group.key}
+                  sortId={group.key}
+                  pinned={group.pinned}
                   projectId={projectId}
                   path={group.path}
                   sessions={group.sessions}
                   projectPath={path}
                   activeId={activeId}
-                  // The divider only earns its place once a worktree splits the
-                  // list; a lone group keeps the old flat, header-less look.
+                  // The divider only earns its place once a worktree — or a pin
+                  // — splits the list; a lone group keeps the old flat,
+                  // header-less look.
                   showHeader={groups.length > 1}
-                  onReorder={(ids) => commitGroupOrder(group.path, ids)}
+                  onReorder={(ids) => commitGroupOrder(group, ids)}
                   onClose={worktreeClose.requestClose}
                   pullsActive={onPullsRoute && groupActive}
                   onPulls={() => {
@@ -267,7 +291,6 @@ export function SessionSidebar() {
                       navigate(`/projects/${projectId}`)
                     }
                   }}
-                  mentionGroups={mentionGroups}
                   delegateGroups={delegateGroups}
                 />
               )

@@ -9,6 +9,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Pinned sessions get a block of their own.** A pin used to lift a card to the
+  top of the list and, with it, the whole worktree block it belonged to — so
+  pinning one session quietly reordered a group you had arranged by hand. Now
+  the pinned cards gather under a `Pinned` divider above everything else, in the
+  same shape as the worktree dividers beside it, and their old blocks stay put.
+  Each card still names its own directory and branch, so a pin never costs you
+  the checkout it belongs to, and unpinning still drops the card back among the
+  neighbours it was lifted over. `Ctrl/Cmd + Shift + ↓/↑` walks the new order,
+  and dragging inside one block no longer moves the blocks around it.
+
+- **The session sidebar collapses to a rail.** `Ctrl/Cmd + Shift + S`, or the
+  button beside New Session, narrows the list to a 3rem column: one provider
+  glyph per session, each still wearing the status ring it wears on its card, in
+  the same order and under the same worktree grouping — a hairline where the
+  open sidebar draws a titled divider, since a checkout's name does not fit.
+  Hover gives you the card's own tooltip, unabridged — directory, the name the
+  session answers to, branch, pull request, diff and how it stands against its
+  base — because at that width the tooltip is where the card's words go.
+
+  The rail selects a session and starts one, and that is deliberately all of it:
+  renaming, closing, pinning, reordering and the worktree menus all aim at a
+  32px target for something the open sidebar already does better, so the rail
+  sends you back to it rather than growing a poorer copy of the card. Collapsed
+  is never *gone* — the rings are what a list of running agents is read for, and
+  hiding them to win the width would be the wrong trade. Whether it is open or
+  railed survives a restart.
+
+- **The dock's file tree has a filter, and it keeps its place.** A field above
+  the tree narrows it to the paths matching what you type — every token has to
+  appear, so a directory name is a search too, and what it matches comes back
+  already expanded. Opening a file no longer collapses the tree behind it: the
+  preview covers the tree instead of replacing it, so Back lands on the folders
+  you opened, scrolled where you left them, with the file you were reading
+  marked.
+
 - **Skipping the permission prompts is no longer a Claude Code privilege, and it
   is now one control instead of two.** Every provider lich has a spelling for —
   Claude Code, Codex, opencode, Crush — gets the setting, wired to that
@@ -50,6 +85,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   other action: lich stores the binding either way, but only one of the two will
   answer to it, and now you can see which pair to fix.
 
+- **Delegating work to a session is a search now, not a scroll.** "Delegate to
+  session" opened a flat, unfiltered submenu of every other open session — fine
+  with three, tedious with fifteen, and it named the session but never how it
+  was doing. The submenu is now the command palette's own surface, scoped to
+  delegating: type to filter by label or project, and each row carries the same
+  busy/done/waiting ring the sidebar card does, so you can tell which sessions
+  are free before picking one.
+
+- **A session's name in another session's terminal output is a link.** When a
+  provider's output mentions the label of another open session, that text is
+  now clickable, and jumps straight to that session's card the way Pulls' "Open
+  in Session" already does. The label has to stand as a word of its own to
+  count: a session called `auth` links where the output says `auth`, and stays
+  plain text inside `authentication` or `src/auth.ts`. A label shared by more
+  than one open session is left as plain text too — the terminal has no way to
+  tell which one was meant.
+
 ### Changed
 
 - **A session blocked on you says so in words.** Being asked a question looked
@@ -65,6 +117,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   session, and a surface that showed only one is what once made an agent treat
   a single session as two. The column rides last, so a script reading the first
   three keeps working.
+
+### Removed
+
+- **"Mention session" is gone from the card's context menu.** It shipped one
+  release ago and only ever appeared on Claude Code cards, because writing
+  `@name` at the prompt only means anything to a Claude that has the messaging
+  tool — so a menu of four providers had an entry that three of them never saw,
+  with nothing on screen saying why. "Delegate to session" right above it aims
+  at the same thing and works from any provider to any provider, so the
+  asymmetric half is the one to drop rather than the one to keep explaining.
+  The name a session answers to is still on its card's tooltip, and nothing
+  changed about what Claude Code can do with it once you type it yourself.
 
 ### Fixed
 
@@ -96,6 +160,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   been answered long ago. The stall is now typed at the sender's prompt like
   any other news, and a wait that races the stall reports it instead of
   "still working".
+
+- **A long message typed into a session on Windows could land with no Enter
+  behind it.** Input reached a PTY through one write call, which is safe on
+  Unix — `*os.File` always writes everything or fails — but not on Windows:
+  ConPTY's input pipe can hand back fewer bytes than it was given, and ports
+  the code was trusting to loop already were not. A paste that landed on that
+  boundary lost its tail, closing bracket included, so the terminal was still
+  mid-paste when the Enter arrived a moment later and read it as more pasted
+  text instead of a submission — visible as a message sitting typed and unsent
+  until someone opened the session and pressed Enter themselves.
 
 ## [0.29.0] - 2026-08-11
 

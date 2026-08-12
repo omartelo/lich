@@ -16,6 +16,7 @@ export type HotkeyId =
   | "focusTerminal"
   | "nextProject"
   | "prevProject"
+  | "toggleSidebar"
   | "toggleDock"
   | "settings"
   | "pulls"
@@ -101,6 +102,12 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
     label: "Previous project",
     group: "view",
     combo: { mod: true, shift: true, alt: false, key: "ArrowLeft" },
+  },
+  {
+    id: "toggleSidebar",
+    label: "Toggle the session sidebar",
+    group: "view",
+    combo: { mod: true, shift: true, alt: false, key: "s" },
   },
   {
     id: "toggleDock",
