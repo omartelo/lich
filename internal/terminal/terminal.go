@@ -535,13 +535,28 @@ func (s *Service) Write(id, data string) error {
 // writeBytes delivers input bytes to a session's PTY; unknown sessions are a
 // no-op. It is the shared sink for the RPC Write and the WebSocket
 // transport's input frames.
+//
+// It loops until every byte is written. A single call is not enough:
+// ConPTY's input pipe (pty_windows.go) is a plain Windows anonymous pipe, and
+// WriteFile on one can legitimately return fewer bytes than given rather than
+// blocking for the rest — the caller is documented to retry. A large paste
+// landing exactly on that boundary lost its tail silently, closing bracket
+// and all, so bracketed paste never closed and the Enter that followed
+// landed inside it instead of submitting it. Unix's *os.File already loops
+// internally, so this is a no-op extra check there.
 func (s *Service) writeBytes(id string, data []byte) error {
 	p := s.ptyOf(id)
 	if p == nil {
 		return nil
 	}
-	_, err := p.Write(data)
-	return err
+	for len(data) > 0 {
+		n, err := p.Write(data)
+		if err != nil {
+			return err
+		}
+		data = data[n:]
+	}
+	return nil
 }
 
 // SetVisible tells the session's output coalescer whether its terminal is on
