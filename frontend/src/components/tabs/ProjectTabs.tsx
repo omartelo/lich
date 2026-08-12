@@ -12,6 +12,8 @@ import { runningSessions } from "@/lib/session/use-session-status"
 import type { Project } from "@/lib/api-types"
 import { openSettings } from "@/lib/settings-card-store"
 import { openPullsList } from "@/lib/pulls-list-card-store"
+import { useSettings } from "@/providers/settings"
+import { useHotkey } from "@/lib/use-hotkey"
 import { NotificationsButton } from "./NotificationsButton"
 import { horizontalAxis, useSortableList } from "@/lib/use-sortable-list"
 import { ProjectTab } from "./ProjectTab"
@@ -52,6 +54,14 @@ export function ProjectTabs() {
     openPullsList(activeProjectId)
     navigate(`/projects/${activeProjectId}/pulls/all`)
   }
+  // Both shortcuts open exactly what their toolbar button opens, and decline the
+  // press when that button would be disabled — with no project there is nothing
+  // to configure and no repository to read. The pull request screen speaks for
+  // itself when the project has no repository or no open pull request.
+  const { hotkeys } = useSettings()
+  useHotkey(hotkeys.settings, () => (activeProjectId ? openProjectSettings() : false))
+  useHotkey(hotkeys.pulls, () => (activeProjectId ? openProjectPulls() : false))
+
   const requestClose = (project: Project) => {
     const running = runningSessions(sessionsOf(sessions, project.id).map((s) => s.id))
     if (running.length === 0) {

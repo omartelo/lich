@@ -9,14 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **The shortcuts are readable without going looking for them.** `Ctrl/Cmd + /`
-  opens a list of every keyboard shortcut lich has — the rebindable ones with
-  the combos *this* install has them on, and the chords lich rewrites on the way
-  to the agent's TUI: attaching a clipboard image, inserting a newline without
-  sending, erasing the previous word. The last three were only ever written down
-  in the source, and the rest lived on the one screen you have to already know
-  about to reach. The overlay itself edits nothing and says where to rebind; its
-  own shortcut is rebindable like the others.
+- **The shortcuts are readable without going looking for them, and there are
+  more of them.** `Ctrl/Cmd + /` opens a list of every keyboard shortcut lich
+  has — the rebindable ones with the combos *this* install has them on, and the
+  chords lich rewrites on the way to the agent's TUI: attaching a clipboard
+  image, inserting a newline without sending, erasing the previous word. The
+  last three were only ever written down in the source, and the rest lived on
+  the one screen you have to already know about to reach. The overlay edits
+  nothing and says where to rebind.
+
+  Six more actions the app already performed are now on the keyboard: walk the
+  project tabs (`Ctrl/Cmd + Shift + ←/→`, the sideways twin of the session
+  pair), toggle the right dock (`Ctrl/Cmd + Shift + D`), put the cursor back in
+  the active session's terminal from wherever you are (`Ctrl/Cmd + Shift +
+  Enter`), open Settings (`Ctrl/Cmd + ,`) and the repository's pull requests
+  (`Ctrl/Cmd + Shift + P`). Every default was chosen against what the terminal
+  underneath does with it: each one was pressed into a live session first, and
+  the only chords taken are ones the TUI either never receives or receives as a
+  duplicate of a key you still have.
+
+  Settings › Hotkeys is now one dense list grouped by what it acts on —
+  sessions, view, app — with the passed-through chords listed read-only at the
+  bottom. Bind two actions to the same combo and both rows say so, naming the
+  other action: lich stores the binding either way, but only one of the two will
+  answer to it, and now you can see which pair to fix.
 
 ## [0.29.0] - 2026-08-11
 

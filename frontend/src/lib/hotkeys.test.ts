@@ -3,6 +3,7 @@ import {
   comboFromEvent,
   DEFAULT_HOTKEYS,
   formatCombo,
+  hotkeyConflicts,
   matchesCombo,
   mergeHotkeys,
   sameCombo,
@@ -115,6 +116,39 @@ describe("mergeHotkeys", () => {
     expect(mergeHotkeys({ newSession: { mod: 1, key: "" } })).toEqual(DEFAULT_HOTKEYS)
     expect(mergeHotkeys(null)).toEqual(DEFAULT_HOTKEYS)
     expect(mergeHotkeys("nope")).toEqual(DEFAULT_HOTKEYS)
+  })
+})
+
+describe("hotkeyConflicts", () => {
+  it("reports nothing when every action holds its own combo", () => {
+    expect(hotkeyConflicts(DEFAULT_HOTKEYS)).toEqual({})
+  })
+
+  it("names the other action on both sides of a collision", () => {
+    const clashing = { ...DEFAULT_HOTKEYS, newSession: DEFAULT_HOTKEYS.commandPalette }
+    const conflicts = hotkeyConflicts(clashing)
+    expect(conflicts.newSession).toEqual(["commandPalette"])
+    expect(conflicts.commandPalette).toEqual(["newSession"])
+    expect(conflicts.nextSession).toBeUndefined()
+  })
+
+  it("names both others when three actions share a combo", () => {
+    const combo: Combo = { mod: true, shift: true, alt: false, key: "j" }
+    const conflicts = hotkeyConflicts({
+      ...DEFAULT_HOTKEYS,
+      newSession: combo,
+      nextSession: combo,
+      prevSession: combo,
+    })
+    expect(conflicts.nextSession).toEqual(["newSession", "prevSession"])
+  })
+
+  it("treats combos differing only in a modifier as distinct", () => {
+    const conflicts = hotkeyConflicts({
+      ...DEFAULT_HOTKEYS,
+      newSession: { ...DEFAULT_HOTKEYS.commandPalette, alt: true },
+    })
+    expect(conflicts).toEqual({})
   })
 })
 

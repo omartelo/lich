@@ -51,7 +51,9 @@ import {
 import { NotificationsOptIn } from "@/components/NotificationsOptIn"
 import { refreshGitStatus } from "@/lib/git/use-git-status"
 import { markSessionSeen } from "@/lib/session/use-session-status"
-import { isRecordingTarget, matchesCombo } from "@/lib/hotkeys"
+import { useHotkey } from "@/lib/use-hotkey"
+import { neighborProjectId } from "@/lib/project-order"
+import { requestTerminalFocus } from "@/lib/terminal/focus-request"
 import { useSettings } from "./settings"
 
 interface ProjectsValue {
@@ -514,49 +516,52 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // The session shortcuts act on the active project: one opens a session
-  // (mirroring the "+" button), the other two walk its sidebar list. They fire
-  // even with terminal focus, so they stay reachable while working in a terminal
-  // — the capture-phase listener sees the chord before the terminal does and
-  // stops propagation so the PTY never receives it. Bails while a hotkey is
-  // being recorded so rebinding does not trigger it.
-  useEffect(() => {
-    if (!activeProjectId) {
-      return
+  // (mirroring the "+" button), two walk its sidebar list, and one puts the
+  // cursor back in the active session's terminal. They fire even with terminal
+  // focus — see useHotkey for how the chord is kept out of the PTY. A press with
+  // no project open is declined, so the chord falls through instead of being
+  // swallowed for nothing.
+  useHotkey(hotkeys.newSession, () => {
+    if (!activeProjectId) return false
+    newSession(activeProjectId)
+  })
+
+  const stepSession = (step: 1 | -1) => {
+    if (!activeProjectId) return false
+    // Swallowed even with nowhere to go: the chord belongs to lich, so a project
+    // with a single session must not leak it into that session's PTY.
+    const current = sessionsRef.current
+    const target = neighborSessionId(
+      current,
+      activeProjectId,
+      activeSessionId(current, activeProjectId),
+      step,
+    )
+    if (target) {
+      activateSession(activeProjectId, target)
     }
-    const onKey = (event: KeyboardEvent) => {
-      if (isRecordingTarget(event)) return
-      if (matchesCombo(event, hotkeys.newSession)) {
-        event.preventDefault()
-        event.stopPropagation()
-        newSession(activeProjectId)
-        return
-      }
-      const step = matchesCombo(event, hotkeys.nextSession)
-        ? 1
-        : matchesCombo(event, hotkeys.prevSession)
-          ? -1
-          : 0
-      if (step === 0) {
-        return
-      }
-      // Swallowed even with nowhere to go: the chord belongs to lich, so a
-      // project with a single session must not leak it into that session's PTY.
-      event.preventDefault()
-      event.stopPropagation()
-      const current = sessionsRef.current
-      const target = neighborSessionId(
-        current,
-        activeProjectId,
-        activeSessionId(current, activeProjectId),
-        step,
-      )
-      if (target) {
-        activateSession(activeProjectId, target)
-      }
-    }
-    window.addEventListener("keydown", onKey, true)
-    return () => window.removeEventListener("keydown", onKey, true)
-  }, [activeProjectId, newSession, activateSession, hotkeys])
+  }
+  useHotkey(hotkeys.nextSession, () => stepSession(1))
+  useHotkey(hotkeys.prevSession, () => stepSession(-1))
+
+  // Settings and the pull requests render over the terminals rather than beside
+  // them, so handing focus to a session that is behind one of those screens would
+  // type into something the user cannot see: leave the screen first.
+  useHotkey(hotkeys.focusTerminal, () => {
+    if (!activeProjectId) return false
+    const target = activeSessionId(sessionsRef.current, activeProjectId)
+    if (!target) return false
+    navigate(`/projects/${activeProjectId}`)
+    requestTerminalFocus(target)
+  })
+
+  const stepProject = (step: 1 | -1) => {
+    const target = neighborProjectId(projectsRef.current, homeIdRef.current, activeProjectId, step)
+    if (!target) return false
+    navigate(`/projects/${target}`)
+  }
+  useHotkey(hotkeys.nextProject, () => stepProject(1))
+  useHotkey(hotkeys.prevProject, () => stepProject(-1))
 
   // A request whose target worked and then answered somewhere lich cannot read
   // — its provider's own peer channel, or simply out loud to whoever is watching

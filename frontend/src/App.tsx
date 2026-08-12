@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { HashRouter, Outlet, Route, Routes } from "react-router-dom"
-import { SettingsProvider } from "@/providers/settings"
+import { SettingsProvider, useSettings } from "@/providers/settings"
+import { useHotkey } from "@/lib/use-hotkey"
 import { ProjectsProvider } from "@/providers/projects"
 import { ProjectTabs } from "@/components/tabs/ProjectTabs"
 import { SessionSidebar } from "@/components/sidebar/SessionSidebar"
@@ -24,8 +25,18 @@ import { ShortcutsOverlay } from "@/components/ShortcutsOverlay"
 // TerminalHost stay mounted while the Outlet swaps screens (Home, Settings) on
 // top of the terminals.
 function Layout() {
+  const { hotkeys } = useSettings()
   const [dock, setDock] = useState<DockTab | null>(null)
   const toggleDock = (tab: DockTab) => setDock((cur) => (cur === tab ? null : tab))
+  // The shortcut toggles the dock as a whole, so it reopens on the tab it was
+  // last showing — the two tabs have their own footer buttons.
+  const lastTab = useRef<DockTab>("files")
+  useEffect(() => {
+    if (dock) {
+      lastTab.current = dock
+    }
+  }, [dock])
+  useHotkey(hotkeys.toggleDock, () => setDock((cur) => (cur ? null : lastTab.current)))
   return (
     <div className="flex h-screen w-screen flex-col bg-background">
       <ProjectTabs />

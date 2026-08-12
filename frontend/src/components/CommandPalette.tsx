@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom"
 import { CornerDownLeft, Folder, MessageSquareText, Search } from "lucide-react"
 import { useProjects } from "@/providers/projects"
 import { useSettings } from "@/providers/settings"
-import { isRecordingTarget, matchesCombo } from "@/lib/hotkeys"
+import { useHotkey } from "@/lib/use-hotkey"
 import { useSessionStatus } from "@/lib/session/use-session-status"
 import { SessionStatusIcon } from "@/components/sidebar/SessionStatusIcon"
 import {
@@ -34,22 +34,11 @@ export function CommandPalette() {
   const [query, setQuery] = useState("")
   const [selected, setSelected] = useState(0)
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (isRecordingTarget(event)) {
-        return
-      }
-      if (matchesCombo(event, hotkeys.commandPalette)) {
-        event.preventDefault()
-        event.stopPropagation()
-        setOpen((v) => !v)
-        setQuery("")
-        setSelected(0)
-      }
-    }
-    window.addEventListener("keydown", onKey, true)
-    return () => window.removeEventListener("keydown", onKey, true)
-  }, [hotkeys])
+  useHotkey(hotkeys.commandPalette, () => {
+    setOpen((v) => !v)
+    setQuery("")
+    setSelected(0)
+  })
 
   const all = useMemo(() => paletteSessions(projects, sessions), [projects, sessions])
   const results = useMemo(() => filterPalette(query, all, projects), [query, all, projects])
