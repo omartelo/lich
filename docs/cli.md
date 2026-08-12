@@ -86,19 +86,22 @@ Every command prints its result on stdout and its failure as one `lich: …` lin
 on stderr, exiting 0 or 1. Anything that is not a subcommand below — including
 `lich -- <chromium flags>` — opens the app instead.
 
-`--json` on `sessions`, `send`, `wait` and `open` replaces the prose with one
-JSON line: the peer array, the result object and the session object exactly as
-this document describes them. An empty roster is `[]`, never `null` — a script
-should not have to tell those apart.
+`--json` on `sessions`, `send`, `wait`, `open`, `close` and `worktrees` replaces
+the prose with one JSON line: the peer array, the result object and the session
+object exactly as this document describes them. An empty roster is `[]`, never
+`null` — a script should not have to tell those apart.
 
 ### `lich sessions [--json]`
 
-Lists the live sessions the caller can address, tab-separated with a header:
+Lists the live sessions the caller can address, tab-separated with a header.
+The last column is the peer-roster name — both names reach a session, and a
+surface that showed only one is what once made an agent treat a single session
+as two. It rides last so a script reading the first columns keeps working:
 
 ```
-session	project	provider
-docs	lich	codex
-api	revu	crush
+session	project	provider	name
+docs	lich	codex	lich-a1b2
+api	revu	crush	revu-9f8e
 ```
 
 `No other live sessions.` when there are none. A session is listed only while a
@@ -140,7 +143,10 @@ Types `<prompt>` at `<session>`'s prompt, submits it, and waits.
   its turn without replying here — it answered over its provider's own channel,
   or out loud to whoever was watching. The wait ends there rather than running
   its clock out, and says the answer is in that session and has to be read
-  there. The window raises a toast that opens the card.
+  there. The window raises a toast that opens the card. A sender that had
+  already stopped waiting is told at its own prompt instead, the same way an
+  answer would arrive — a pending result promises that prompt news, and a stall
+  is that news.
 
 ```
 docs is still working. The message was delivered; its answer will be typed at
@@ -148,14 +154,15 @@ the sending session's prompt when it arrives. To hold the line for it instead:
   lich wait a1b2c3d4
 ```
 
-A prompt is capped at 8192 characters and stripped of control characters — the
-text is typed into a terminal, and an escape sequence inside it would stop being
+A prompt is capped at 8192 bytes and stripped of control characters — the text
+is typed into a terminal, and an escape sequence inside it would stop being
 text.
 
 **A target still running its setup script is waited for, not written to.** The
-wait is bounded by the caller's own `--timeout`; running out is an error saying
-nothing was sent, never a ticket — an errand nobody can answer would otherwise
-be waited out in full. `internal/terminal` tells the two apart by a marker the
+wait shares the caller's own `--timeout` with the wait for the answer — one
+budget covers the whole call, so `send` never blocks past what was asked.
+Running out is an error saying nothing was sent, never a ticket — an errand
+nobody can answer would otherwise be waited out in full. `internal/terminal` tells the two apart by a marker the
 setup wrapper prints between the script and the provider (`setupDone`): the PTY
 and the pid are the same across the `exec`, so nothing else can.
 
@@ -178,7 +185,7 @@ Opens a new session, starts it, and prints the two names it is addressed by:
 
 ```
 Opened session "auth-fix" (claude) in project "lich", in worktree /home/you/.local/share/lich/worktrees/1a2b/auth-fix.
-It answers to "auth-fix" and to "auth-fix-9f8e". It is still starting up — give it a moment before you send it work.
+It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting — a fresh worktree runs the project's setup script first — so a task you send it is held until the agent is up rather than lost.
 ```
 
 - `--project` names the project it lands in; the default is the caller's own.
@@ -212,7 +219,7 @@ leaves nothing behind — no row, no card. A session whose *terminal* failed to
 start keeps both, and says so, because the card is the only place its error can
 be read.
 
-### `lich close [--project <name>] [--worktree keep|remove] [--force] <session>`
+### `lich close [--project <name>] [--worktree keep|remove] [--force] [--json] <session>`
 
 Closes a session, addressed by either of its names, and settles what happens to
 the checkout it was the last one in.

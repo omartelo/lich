@@ -60,6 +60,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   line the running tool was using rather than a new one, so no card grows, and
   the ring is unchanged.
 
+- **`lich sessions` prints both of a session's names.** The table gains a
+  `name` column with the peer-roster name beside the label — both reach the
+  session, and a surface that showed only one is what once made an agent treat
+  a single session as two. The column rides last, so a script reading the first
+  three keeps working.
+
+### Fixed
+
+- **A task sent to a session stopped on a permission prompt is no longer
+  reported as never read.** The target's `waiting` report was read as "not
+  working", so thirty seconds of a human not answering the permission dialog
+  became "nothing read your task — nothing is queued" while the task sat
+  queued behind the open turn; the eventual reply then hit a dead ticket and
+  was lost. `waiting` now reads as the turn it belongs to.
+
+- **`send` no longer blocks for up to twice its timeout.** Waiting out the
+  target's setup script and waiting for the answer each spent a full budget;
+  a send into a fresh worktree could outlive the CLI's own HTTP timeout and
+  report a failure on a message that was in fact delivered. One deadline now
+  covers the whole call.
+
+- **A turn ending closes only the errand it belongs to.** Two tasks delivered
+  to one session queue as two turns, but the first turn's end used to close
+  every open ticket on that target — the second errand was reported "answered
+  elsewhere" while its message was still queued, unread, and its real answer
+  then hit a dead ticket. A turn now answers for at most one errand, oldest
+  delivery first.
+
+- **A sender that stopped waiting is told when its errand stalls.** An answer
+  and an unread task already came back typed at the sender's prompt; a target
+  ending its turn without replying reached only the window, as a toast — the
+  agent that was promised "the answer will arrive at your prompt" waited on a
+  promise nothing would keep, and a later `wait` on the ticket claimed it had
+  been answered long ago. The stall is now typed at the sender's prompt like
+  any other news, and a wait that races the stall reports it instead of
+  "still working".
+
 ## [0.29.0] - 2026-08-11
 
 ### Added
