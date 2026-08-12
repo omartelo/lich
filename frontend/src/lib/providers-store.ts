@@ -49,6 +49,29 @@ export const skipPermissionFlags: Record<string, string> = {
   crush: "--yolo",
 }
 
+// How far a provider runs without asking, as one ladder ordered by risk. The
+// two settings keys stay exactly as they are — this is the shape the user
+// chooses in, not the shape lich stores.
+export type SkipLevel = "never" | "worktrees" | "everywhere"
+
+// skipLevel folds the stored pair into a rung. The fourth combination — skip in
+// the working tree, ask in worktrees — is the inversion of the whole argument
+// for the setting, and reads as "everywhere": it is what that pair already did
+// to the checkout the user works in.
+export function skipLevel(here: boolean, worktrees: boolean): SkipLevel {
+  if (here) {
+    return "everywhere"
+  }
+  return worktrees ? "worktrees" : "never"
+}
+
+// skipLevelPair is the inverse: the pair a chosen rung writes back. Composing
+// it with skipLevel is the identity on all three rungs, which is what keeps a
+// round trip through the control from moving a setting the user did not touch.
+export function skipLevelPair(level: SkipLevel): { here: boolean; worktrees: boolean } {
+  return { here: level === "everywhere", worktrees: level !== "never" }
+}
+
 // readEnabled interprets the stored flag: Claude is enabled by default (it was
 // always offered before the providers feature), every other provider is opt-in.
 // An explicit "1"/"0" overrides the default.

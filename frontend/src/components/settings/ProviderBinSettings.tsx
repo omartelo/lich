@@ -1,15 +1,44 @@
 import { useEffect, useState } from "react"
 import { Store } from "@/lib/rpc"
 import { useProjects } from "@/providers/projects"
-import { binKey, skipPermissionFlags, skipPermissionsKey } from "@/lib/providers-store"
+import {
+  binKey,
+  skipLevel,
+  skipLevelPair,
+  skipPermissionFlags,
+  skipPermissionsKey,
+  type SkipLevel,
+} from "@/lib/providers-store"
 import { useSettings } from "@/providers/settings"
 import { setCostReadout } from "@/lib/cost-readout-store"
 import { useCostReadout } from "@/lib/use-cost-readout"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { SettingBlock } from "./SettingBlock"
 
 const GLOBAL_SCOPE = ""
+
+// The ladder as the user reads it: the rung's label, and what the rung leaves
+// asking. The second line is the half of the answer the two switches made
+// people assemble in their heads.
+const SKIP_LEVELS: { level: SkipLevel; label: string; consequence: string }[] = [
+  {
+    level: "never",
+    label: "Never",
+    consequence: "Every edit and command waits for you, in every checkout.",
+  },
+  {
+    level: "worktrees",
+    label: "Worktrees only",
+    consequence: "Sessions in the project directory keep asking.",
+  },
+  {
+    level: "everywhere",
+    label: "Everywhere",
+    consequence: "Including the tree you work in. Nothing will ask.",
+  },
+]
 
 // useSkipPermissions is the stored "run without permission prompts" flag for one
 // checkout scope: read once, written through on every toggle. It reads off until
@@ -56,6 +85,17 @@ export function ProviderBinSettings({
   const [skipHere, setSkipHere] = useSkipPermissions(providerId, false)
   const [skipInWorktrees, setSkipInWorktrees] = useSkipPermissions(providerId, true)
   const skipFlag = skipPermissionFlags[providerId]
+  const level = skipLevel(skipHere, skipInWorktrees)
+  const consequence = SKIP_LEVELS.find((rung) => rung.level === level)?.consequence ?? ""
+
+  // One rung writes both keys, always: the pair is the storage, the rung is the
+  // choice. Writing only the one that changed would leave the other holding an
+  // answer to a question the user is no longer being asked.
+  const setLevel = (next: SkipLevel) => {
+    const pair = skipLevelPair(next)
+    setSkipHere(pair.here)
+    setSkipInWorktrees(pair.worktrees)
+  }
 
   useEffect(() => {
     void Store.GetSetting(key, GLOBAL_SCOPE).then(setGlobalBin)
@@ -166,34 +206,33 @@ export function ProviderBinSettings({
         </>
       )}
 
-      {/* Both off unless the user says otherwise, and separate on purpose: a
-          worktree is a checkout you can throw away, the project directory is
-          the one you work in. Absent for a provider whose flag lich has no
-          spelling for — the switch would store a setting nothing reads. */}
+      {/* Never unless the user says otherwise. A worktree is its own rung
+          because it is a checkout you can throw away, while the project
+          directory is the one you work in. Absent for a provider whose flag
+          lich has no spelling for — the control would store a setting nothing
+          reads. */}
       {skipFlag && (
-        <>
-          <SettingBlock
-            title="Skip permission prompts"
-            description={`Spawn ${providerName} with ${skipFlag} in this project's own checkout. It edits files, runs commands and installs things without asking first, and whatever it gets wrong lands in the tree you work in.`}
+        <SettingBlock
+          title="Skip permission prompts"
+          description={`How far ${providerName} runs without asking: it edits files, runs commands and installs things unconfirmed, and lich spawns it with ${skipFlag}.`}
+        >
+          <ToggleGroup
+            value={[level]}
+            // An empty array is the pressed rung being pressed again. There is
+            // no fourth answer to fall back to, so it stays where it was.
+            onValueChange={(next) => next[0] && setLevel(next[0] as SkipLevel)}
+            spacing={1}
+            aria-label={`How far ${providerName} runs without asking`}
+            className="border border-border p-[3px]"
           >
-            <Switch
-              checked={skipHere}
-              onCheckedChange={setSkipHere}
-              aria-label="Skip permission prompts in the project directory"
-            />
-          </SettingBlock>
-
-          <SettingBlock
-            title="Skip permission prompts in worktrees"
-            description="The same flag for sessions started in a git worktree. That checkout is separate from your working tree, so a mistake stays in the branch until you merge it."
-          >
-            <Switch
-              checked={skipInWorktrees}
-              onCheckedChange={setSkipInWorktrees}
-              aria-label="Skip permission prompts in worktree sessions"
-            />
-          </SettingBlock>
-        </>
+            {SKIP_LEVELS.map((rung) => (
+              <ToggleGroupItem key={rung.level} value={rung.level} size="sm">
+                {rung.label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+          <p className="mt-2 text-xs text-muted-foreground">{consequence}</p>
+        </SettingBlock>
       )}
     </>
   )
