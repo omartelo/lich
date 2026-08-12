@@ -2,7 +2,7 @@ import { useState, useSyncExternalStore } from "react"
 import { useMatch, useNavigate } from "react-router-dom"
 import { DndContext, closestCenter } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
-import { GitBranch, GitPullRequestArrow, Plus, Terminal } from "lucide-react"
+import { GitBranch, GitPullRequestArrow, PanelLeftClose, Plus, Terminal } from "lucide-react"
 import { ProjectService } from "@/lib/rpc"
 import { closeSettings, isSettingsOpen, subscribeSettingsCard } from "@/lib/settings-card-store"
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
@@ -53,6 +53,11 @@ const MIN_REM = 12
 const MAX_REM = 30
 const DEFAULT_REM = 15
 
+interface SessionSidebarProps {
+  // Collapses the sidebar to its rail (SidebarRail), which carries the way back.
+  onCollapse: () => void
+}
+
 // SessionSidebar lists the active project's sessions and can be drag-resized
 // within a fixed pixel range. Width persists across restarts. It renders nothing
 // when no project is active (Home, Settings), so it never competes with those
@@ -60,7 +65,7 @@ const DEFAULT_REM = 15
 //
 // Resizing only changes this element's width; the terminal keeps its PTY in sync
 // on its own via a ResizeObserver, so the sidebar does not need to know about it.
-export function SessionSidebar() {
+export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   const {
     projects,
     sessions,
@@ -153,45 +158,56 @@ export function SessionSidebar() {
       className="relative flex shrink-0 flex-col border-r border-border bg-sidebar p-2"
       style={{ width: `${width}rem` }}
     >
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          title="New session"
-          aria-label="New session"
-          render={
-            <Button
-              variant="ghost"
-              className="mb-2 w-full justify-start gap-2 text-foreground hover:bg-accent aria-expanded:bg-accent"
-            />
-          }
-        >
-          <Plus className="size-4 text-muted-foreground" />
-          New Session
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="max-w-56">
-          <DropdownMenuGroup>
-            {enabled.map((provider) => (
-              <DropdownMenuItem
-                key={provider.id}
-                onClick={() => newSession(projectId, provider.id)}
-              >
-                <ProviderIcon kind={provider.id} />
-                {provider.name}
+      <div className="mb-2 flex items-center gap-1">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            title="New session"
+            aria-label="New session"
+            render={
+              <Button
+                variant="ghost"
+                className="w-full flex-1 justify-start gap-2 text-foreground hover:bg-accent aria-expanded:bg-accent"
+              />
+            }
+          >
+            <Plus className="size-4 text-muted-foreground" />
+            New Session
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="max-w-56">
+            <DropdownMenuGroup>
+              {enabled.map((provider) => (
+                <DropdownMenuItem
+                  key={provider.id}
+                  onClick={() => newSession(projectId, provider.id)}
+                >
+                  <ProviderIcon kind={provider.id} />
+                  {provider.name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={() => newSession(projectId, "shell")}>
+                <Terminal />
+                Terminal
               </DropdownMenuItem>
-            ))}
-          </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuGroup>
-            <DropdownMenuItem onClick={() => newSession(projectId, "shell")}>
-              <Terminal />
-              Terminal
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled={!git?.branch} onClick={() => setWorktreeOpen(true)}>
-              <GitBranch />
-              Worktree
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
+              <DropdownMenuItem disabled={!git?.branch} onClick={() => setWorktreeOpen(true)}>
+                <GitBranch />
+                Worktree
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <Button
+          variant="ghost"
+          title="Collapse sidebar"
+          aria-label="Collapse sidebar"
+          onClick={onCollapse}
+          className="size-8 shrink-0 justify-center px-0 text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <PanelLeftClose className="size-4" />
+        </Button>
+      </div>
       {/* The scrollbar takes width, so it rides the aside's own padding (-mr-2)
           and the padding is re-applied inside — a gap between thumb and card
           when it shows, no shift in card width when it doesn't. */}

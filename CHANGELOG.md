@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The session sidebar collapses to a rail.** `Ctrl/Cmd + Shift + S`, or the
+  button beside New Session, narrows the list to a 3rem column: one provider
+  glyph per session, each still wearing the status ring it wears on its card, in
+  the same order and under the same worktree grouping — a hairline where the
+  open sidebar draws a titled divider, since a checkout's name does not fit.
+  Hover names the session and its directory.
+
+  The rail selects a session and starts one, and that is deliberately all of it:
+  renaming, closing, pinning, reordering and the worktree menus all aim at a
+  32px target for something the open sidebar already does better, so the rail
+  sends you back to it rather than growing a poorer copy of the card. Collapsed
+  is never *gone* — the rings are what a list of running agents is read for, and
+  hiding them to win the width would be the wrong trade. Whether it is open or
+  railed survives a restart.
+
 - **The shortcuts are readable without going looking for them, and there are
   more of them.** `Ctrl/Cmd + /` opens a list of every keyboard shortcut lich
   has — the rebindable ones with the combos *this* install has them on, and the
