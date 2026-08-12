@@ -36,6 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hiding them to win the width would be the wrong trade. Whether it is open or
   railed survives a restart.
 
+- **The dock's file tree has a filter, and it keeps its place.** A field above
+  the tree narrows it to the paths matching what you type — every token has to
+  appear, so a directory name is a search too, and what it matches comes back
+  already expanded. Opening a file no longer collapses the tree behind it: the
+  preview covers the tree instead of replacing it, so Back lands on the folders
+  you opened, scrolled where you left them, with the file you were reading
+  marked.
+
 - **Skipping the permission prompts is no longer a Claude Code privilege, and it
   is now one control instead of two.** Every provider lich has a spelling for —
   Claude Code, Codex, opencode, Crush — gets the setting, wired to that
@@ -86,6 +94,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   says which one to answer instead of leaving you to read the hue. It takes the
   line the running tool was using rather than a new one, so no card grows, and
   the ring is unchanged.
+
+### Fixed
+
+- **A long message typed into a session on Windows could land with no Enter
+  behind it.** Input reached a PTY through one write call, which is safe on
+  Unix — `*os.File` always writes everything or fails — but not on Windows:
+  ConPTY's input pipe can hand back fewer bytes than it was given, and ports
+  the code was trusting to loop already were not. A paste that landed on that
+  boundary lost its tail, closing bracket included, so the terminal was still
+  mid-paste when the Enter arrived a moment later and read it as more pasted
+  text instead of a submission — visible as a message sitting typed and unsent
+  until someone opened the session and pressed Enter themselves.
 
 ## [0.29.0] - 2026-08-11
 

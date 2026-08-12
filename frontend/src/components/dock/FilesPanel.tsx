@@ -2,6 +2,7 @@ import { ChevronLeft } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 import { Notice } from "@/components/common/Notice"
+import { SearchInput } from "@/components/common/SearchInput"
 import { CommentBatch } from "@/components/diff/CommentBatch"
 import { InjectMenu } from "@/components/diff/InjectMenu"
 import { type Composer, ReviewSlot } from "@/components/diff/ReviewSlots"
@@ -10,6 +11,7 @@ import { threadSlots, type SlotElements } from "@/lib/codemirror-threads"
 import { formatLineRef, parseDiff, type DiffFile } from "@/lib/git/diff"
 import { buildTree, type TreeNode } from "@/lib/git/file-tree"
 import { COMPOSER_KEY } from "@/lib/pulls/review-slots"
+import { matchesQuery } from "@/lib/session/command-palette"
 import { addReviewComment } from "@/lib/review-comments"
 import { queuePaste } from "@/lib/terminal/paste-queue"
 import { useProjects } from "@/providers/projects"
@@ -34,10 +36,14 @@ export function FilesPanel() {
   const { newSession, activateSession } = useProjects()
   const inject = useInject(sessionId)
   const status = useGitStatus(path)
-  const [tree, setTree] = useState<TreeNode[] | null>(null)
+  const [files, setFiles] = useState<string[] | null>(null)
   const [stats, setStats] = useState<Map<string, DiffFile>>(new Map())
   const [failed, setFailed] = useState(false)
   const [open, setOpen] = useState<string | null>(null)
+  // Outlives the preview: after Back the tree still marks the file just read,
+  // which is where the eye left off.
+  const [selected, setSelected] = useState<string | null>(null)
+  const [query, setQuery] = useState("")
 
   const refresh = useCallback(async () => {
     if (!path) {
@@ -50,15 +56,22 @@ export function FilesPanel() {
         ProjectService.Tree(path),
         ProjectService.DiffText(path).catch(() => ""),
       ])
-      setTree(buildTree(files ?? []))
+      setFiles(files ?? [])
       setStats(diffStatsByPath(parseDiff(diffText)))
       setFailed(false)
     } catch {
-      setTree([])
+      setFiles([])
       setStats(new Map())
       setFailed(true)
     }
   }, [path])
+
+  // The filter reads the whole repo-relative path, so a directory name narrows
+  // the tree to what is under it — one field for both halves of "find a file".
+  const tree = useMemo(
+    () => (files === null ? null : buildTree(files.filter((file) => matchesQuery(file, query)))),
+    [files, query],
+  )
 
   // Same invalidation as the diff panel: the git-status poll doubles as the
   // signal, so a new or removed file shows up without a watcher.
@@ -66,9 +79,11 @@ export function FilesPanel() {
     void refresh()
   }, [refresh, status?.files, status?.added, status?.deleted])
 
-  // A worktree switch changes path; drop any preview from the old tree.
+  // A worktree switch changes path; drop any preview and filter from the old tree.
   useEffect(() => {
     setOpen(null)
+    setSelected(null)
+    setQuery("")
   }, [path])
 
   if (!projectId) {
@@ -97,23 +112,44 @@ export function FilesPanel() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {open !== null ? (
-          <FilePreview
-            path={path}
-            rel={open}
-            onBack={() => setOpen(null)}
-            onInject={inject}
-            onComment={(lines, text) => addReviewComment(path, open, lines, text)}
-          />
-        ) : (
+      {/* The preview covers the tree instead of replacing it: the folders that
+          were opened to reach a file — and the scroll that got there — are the
+          tree's own state, and unmounting it throws both away on every Back. */}
+      <div className="relative flex flex-1 flex-col overflow-hidden">
+        <div className="flex h-full flex-col overflow-hidden">
+          <div className="shrink-0 border-b border-border p-1.5">
+            <SearchInput
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Filter by name"
+              aria-label="Filter files by name"
+              spellCheck={false}
+              className="h-7 text-xs"
+            />
+          </div>
           <TreeBody
             tree={tree}
+            query={query}
+            active={selected}
             stats={stats}
             failed={failed}
-            onOpen={setOpen}
+            onOpen={(rel) => {
+              setOpen(rel)
+              setSelected(rel)
+            }}
             onEditor={openInEditor}
           />
+        </div>
+        {open !== null && (
+          <div className="absolute inset-0 z-10 bg-sidebar">
+            <FilePreview
+              path={path}
+              rel={open}
+              onBack={() => setOpen(null)}
+              onInject={inject}
+              onComment={(lines, text) => addReviewComment(path, open, lines, text)}
+            />
+          </div>
         )}
       </div>
       {/* Below the tree as well as the preview: a batch written file by file
@@ -139,13 +175,18 @@ function diffStatsByPath(files: DiffFile[]): Map<string, DiffFile> {
 
 interface TreeBodyProps {
   tree: TreeNode[] | null
+  /** The filter the tree was narrowed by; empty means the whole checkout. */
+  query: string
+  /** The file last opened, so Back lands on a row that reads as current. */
+  active: string | null
   stats: Map<string, DiffFile>
   failed: boolean
   onOpen: (rel: string) => void
   onEditor: (rel: string) => void
 }
 
-function TreeBody({ tree, stats, failed, onOpen, onEditor }: TreeBodyProps) {
+function TreeBody({ tree, query, active, stats, failed, onOpen, onEditor }: TreeBodyProps) {
+  const filtering = query.trim() !== ""
   if (failed) {
     return <Notice>Not a git repository</Notice>
   }
@@ -153,11 +194,15 @@ function TreeBody({ tree, stats, failed, onOpen, onEditor }: TreeBodyProps) {
     return <Notice>Loading…</Notice>
   }
   if (tree.length === 0) {
-    return <Notice>No tracked files</Notice>
+    return <Notice>{filtering ? "No file matches" : "No tracked files"}</Notice>
   }
   return (
     <FileTree
       tree={tree}
+      active={active}
+      // Suspended, not replaced: clearing the filter gives back the folders the
+      // browse had open rather than a tree collapsed to the root.
+      expandAll={filtering}
       stats={stats}
       onEditor={onEditor}
       className="h-full overflow-y-auto"
