@@ -16,7 +16,8 @@ import { useProjects } from "@/providers/projects"
 
 // MENU_LIMIT is how many closed projects the menu offers. Five is what fits
 // above the picker entry without turning the menu into a second project list;
-// the store returns every one of them and the command palette searches the rest.
+// the store returns a longer list than this and the command palette searches
+// the rest of it.
 const MENU_LIMIT = 5
 
 // OpenProjectMenu is the top strip's "+": the projects closed earlier, newest

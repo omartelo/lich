@@ -59,8 +59,8 @@ export function matchesQuery(haystack: string, query: string): boolean {
 export interface PaletteResults {
   sessions: PaletteSession[]
   projects: Project[]
-  // The closed projects, which the reopen menu caps at five and this list does
-  // not: past that cap the palette is the only way back to one.
+  // The closed projects, which the reopen menu shows five of: past that the
+  // palette is the only way back to one.
   closed: Project[]
 }
 

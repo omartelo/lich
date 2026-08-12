@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -911,12 +912,10 @@ func TestProjectPathOfAnUnknownProjectIsEmpty(t *testing.T) {
 	}
 }
 
-// TestRecentProjectsListsEveryClosedOneNewestFirst covers the whole contract of
-// the list: open projects stay out of it, closed ones come back newest first,
-// and none of them is dropped. The cap this used to assert moved to the reopen
-// menu, which is the only caller that wants one — the palette searches all of
-// them.
-func TestRecentProjectsListsEveryClosedOneNewestFirst(t *testing.T) {
+// TestRecentProjectsListsClosedOnesNewestFirst covers the shape of the list:
+// open projects stay out of it and closed ones come back newest first. Well
+// under the cap, so nothing here is dropped — the cap has its own test.
+func TestRecentProjectsListsClosedOnesNewestFirst(t *testing.T) {
 	svc := newTestStore(t)
 	for _, id := range []string{"p1", "p2", "p3", "p4", "p5", "p6", "p7"} {
 		if err := svc.AddProject(id, id, "/tmp/"+id); err != nil {
@@ -948,6 +947,41 @@ func TestRecentProjectsListsEveryClosedOneNewestFirst(t *testing.T) {
 	}
 	if recents[0].Name != "p6" || recents[0].Path != "/tmp/p6" {
 		t.Errorf("recent metadata = %+v", recents[0])
+	}
+}
+
+// TestRecentProjectsStopAtTwentyFive pins the cap the palette searches within:
+// one project past it is closed, and the one that falls off is the oldest close,
+// never the newest. The number is written out rather than read from the constant
+// so moving the constant has to move this line too.
+func TestRecentProjectsStopAtTwentyFive(t *testing.T) {
+	svc := newTestStore(t)
+	ids := make([]string, 0, 26)
+	for i := 1; i <= 26; i++ {
+		id := "p" + strconv.Itoa(i)
+		ids = append(ids, id)
+		if err := svc.AddProject(id, id, "/tmp/"+id); err != nil {
+			t.Fatalf("AddProject(%s): %v", id, err)
+		}
+	}
+	for _, id := range ids {
+		if err := svc.CloseProject(id); err != nil {
+			t.Fatalf("CloseProject(%s): %v", id, err)
+		}
+	}
+
+	got := recentIDs(t, svc)
+	if len(got) != 25 {
+		t.Fatalf("recent count = %d, want 25", len(got))
+	}
+	if got[0] != "p26" {
+		t.Errorf("first recent = %q, want p26 — the last project closed", got[0])
+	}
+	if got[24] != "p2" {
+		t.Errorf("last recent = %q, want p2 — p1 is the close that falls off", got[24])
+	}
+	if slices.Contains(got, "p1") {
+		t.Errorf("recent ids = %v, want the oldest close dropped", got)
 	}
 }
 

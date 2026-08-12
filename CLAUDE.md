@@ -109,7 +109,9 @@ nobody knows it and that the call site never shows. The mechanism and the histor
   pinned at 47821; `LICH_LISTEN_PORT` overrides it, `LICH_PORT` is the distinct per-session hook variable), the
   workspace in SQLite (`<config-dir>/lich/lich.db`, `internal/store`). Closing a session deletes its row; keeping a
   worktree parks its session for a later resume; closing a project hides it, but reopening one whose directory is
-  gone silently deletes it and its sessions.
+  gone silently deletes it and its sessions. Only the 25 most recent closes are offered back
+  (`recentLimit`, `internal/store/store.go`) — the row survives, but past that a project is reachable only through
+  the directory picker, and neither the menu nor the palette says so.
 - **Hidden sessions are serialized and destroyed**: 2MB replay rings on both sides
   (`frontend/src/lib/terminal/replay-buffer.ts` page-side, `internal/terminal/replay.go` backend-side — the latter
   survives a full page reload). Scrollback past the ring is gone, not paged.

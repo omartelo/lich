@@ -12,9 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The palette finds the projects you closed, and lets you filter what it
   found.** A closed project used to be reachable only from the five the "+" menu
   offers or by hunting for its directory in the picker; now the command palette
-  searches every one of them by name and path, under a `Closed projects` group,
-  and `Enter` reopens the one you pick. The menu still shows five — past that,
-  the palette is the way back.
+  searches the last 25 you closed by name and path, under a `Closed projects`
+  group, and `Enter` reopens the one you pick. The menu still shows five — past
+  that, the palette is the way back, and past 25 closes ago the directory picker
+  still is.
 
   With four kinds of hit — sessions, open projects, closed ones and what was said
   inside a transcript — one query could fill the list, so the palette grew a
