@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The dock's file tree has a filter, and it keeps its place.** A field above
+  the tree narrows it to the paths matching what you type — every token has to
+  appear, so a directory name is a search too, and what it matches comes back
+  already expanded. Opening a file no longer collapses the tree behind it: the
+  preview covers the tree instead of replacing it, so Back lands on the folders
+  you opened, scrolled where you left them, with the file you were reading
+  marked.
+
 - **Skipping the permission prompts is no longer a Claude Code privilege, and it
   is now one control instead of two.** Every provider lich has a spelling for —
   Claude Code, Codex, opencode, Crush — gets the setting, wired to that
