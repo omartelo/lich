@@ -14,6 +14,12 @@ import { displayPath } from "@/lib/paths"
 import { Store } from "@/lib/rpc"
 import { useProjects } from "@/providers/projects"
 
+// MENU_LIMIT is how many closed projects the menu offers. Five is what fits
+// above the picker entry without turning the menu into a second project list;
+// the store returns a longer list than this and the command palette searches
+// the rest of it.
+const MENU_LIMIT = 5
+
 // OpenProjectMenu is the top strip's "+": the projects closed earlier, newest
 // first, above the directory picker that opens any other one. With no closed
 // project to offer there is no menu at all — the button is the picker, which is
@@ -28,7 +34,7 @@ export function OpenProjectMenu() {
     let live = true
     void Store.RecentProjects().then((rows) => {
       if (live) {
-        setRecents(rows ?? [])
+        setRecents((rows ?? []).slice(0, MENU_LIMIT))
       }
     })
     return () => {
@@ -41,7 +47,7 @@ export function OpenProjectMenu() {
   // list has to be asked again, or the dead entry stays on offer.
   const pick = async (recent: RecentProject) => {
     await openRecent(recent)
-    setRecents((await Store.RecentProjects()) ?? [])
+    setRecents(((await Store.RecentProjects()) ?? []).slice(0, MENU_LIMIT))
   }
 
   if (recents.length === 0) {

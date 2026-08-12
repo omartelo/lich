@@ -236,6 +236,31 @@
   border-radius: 3px;
 }
 
+/* sonner lays a toast out as a single row — icon, text, then the buttons — so a
+   toast carrying a description leaves its copy in a sliver of the 356px width.
+   Keyed on the description, so the title-only toasts keep their buttons inline.
+   Every rule here has to out-specify sonner's own, which the Toaster injects
+   into the head after this stylesheet — hence the `[data-styled]` repeat. */
+[data-sonner-toast][data-styled="true"]:has([data-description]) {
+  flex-wrap: wrap;
+  row-gap: 12px;
+  align-items: flex-start;
+}
+/* Wide enough that no button can share the first row (the icon and the gap are
+   23px; the rest is slack against a future padding change), and it grows back
+   over whatever slack is left. */
+[data-sonner-toast][data-styled="true"]:has([data-description]) [data-content] {
+  flex: 1 1 calc(100% - 32px);
+}
+/* sonner gives every button `margin-left: auto`, which on a row of their own
+   would spread them apart instead of grouping them at the right edge. */
+[data-sonner-toast][data-styled="true"]:has([data-description]) [data-button] {
+  margin-left: 0;
+}
+[data-sonner-toast][data-styled="true"]:has([data-description]) [data-button]:first-of-type {
+  margin-left: auto;
+}
+
 /* Desktop app: the page itself never scrolls. Without this, Chromium's
    classic (width-taking, dark) scrollbars appear the moment anything
    overflows 100vw/100vh by a pixel — w-screen includes the scrollbar width,

@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The palette finds the projects you closed, and lets you filter what it
+  found.** A closed project used to be reachable only from the five the "+" menu
+  offers or by hunting for its directory in the picker; now the command palette
+  searches the last 25 you closed by name and path, under a `Closed projects`
+  group, and `Enter` reopens the one you pick. The menu still shows five — past
+  that, the palette is the way back, and past 25 closes ago the directory picker
+  still is.
+
+  With four kinds of hit — sessions, open projects, closed ones and what was said
+  inside a transcript — one query could fill the list, so the palette grew a
+  filter row: `All` keeps every group but shows the first three of each and says
+  in the group's header how many it is holding back, and `Sessions`, `Projects`
+  or `Messages` lists that one kind whole. `Tab` and `Shift+Tab` walk the
+  filters, a click does the same, and a filter with nothing behind it dims
+  instead of disappearing.
+
 - **Pinned sessions get a block of their own.** A pin used to lift a card to the
   top of the list and, with it, the whole worktree block it belonged to — so
   pinning one session quietly reordered a group you had arranged by hand. Now
@@ -102,6 +118,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than one open session is left as plain text too — the terminal has no way to
   tell which one was meant.
 
+- **A bug report can now describe a lich that froze.** A window that stops
+  updating while the process is still there writes nothing to `lich.log` —
+  nothing crashed, so there is nothing to write, and the report arrived saying
+  only "it froze". `lich rage` now asks the running instance for every
+  goroutine's stack and carries it as `goroutines.txt`, so a hang can be read
+  the way a crash already could. An instance that holds its port and will not
+  answer within five seconds leaves that sentence in the file instead, which
+  says as much again.
+
 ### Changed
 
 - **A session blocked on you says so in words.** Being asked a question looked
@@ -143,6 +168,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   survive anything the window does; the window's copy stays as the cache the
   first frame paints from, so nothing about starting up changed, and an install
   that had a theme picked before this keeps it.
+
+- **The crash notice is readable again.** The toast that reports a previous run
+  ending unexpectedly is the only one carrying a description, and sonner lays a
+  toast out as a single row — so its two buttons squeezed the wording into a
+  third of the width. Toasts with a description now put their buttons on a row
+  of their own, and the notice no longer spells out where the log is when the
+  button beside it already says so.
 
 - **A task sent to a session stopped on a permission prompt is no longer
   reported as never read.** The target's `waiting` report was read as "not

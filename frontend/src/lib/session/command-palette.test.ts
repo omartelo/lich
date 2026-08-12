@@ -1,11 +1,27 @@
 import { describe, expect, it } from "vitest"
-import { filterPalette, matchesQuery, paletteMessages, paletteSessions } from "./command-palette"
+import {
+  filterPalette,
+  matchesQuery,
+  nextTab,
+  paletteGroups,
+  paletteMessages,
+  paletteSessions,
+  paletteTabCount,
+  rowKey,
+} from "./command-palette"
 import type { Project } from "@/lib/api-types"
 import type { SessionState } from "./sessions"
 
 const projects: Project[] = [
   { id: "p1", name: "lich", path: "/home/u/try/skipo" },
   { id: "p2", name: "revu", path: "/home/u/try/revu" },
+]
+
+const closed: Project[] = [
+  { id: "c1", name: "lich-plugin", path: "/home/u/try/lich-plugin" },
+  { id: "c2", name: "controle-de-licitacao", path: "/home/u/snk/controle-de-licitacao" },
+  { id: "c3", name: "gh-turnkey", path: "/home/u/snk/gh-turnkey" },
+  { id: "c4", name: "policy-engine", path: "/home/u/hycastle/policy-engine" },
 ]
 
 const sessions: SessionState = {
@@ -85,6 +101,92 @@ describe("filterPalette", () => {
     const r = filterPalette("", all, projects)
     expect(r.sessions).toHaveLength(3)
     expect(r.projects).toHaveLength(2)
+  })
+
+  it("filters closed projects by name and path", () => {
+    expect(filterPalette("plugin", all, projects, closed).closed.map((p) => p.id)).toEqual(["c1"])
+    expect(filterPalette("snk", all, projects, closed).closed.map((p) => p.id)).toEqual([
+      "c2",
+      "c3",
+    ])
+  })
+
+  it("has no closed projects when none were passed", () => {
+    expect(filterPalette("plugin", all, projects).closed).toEqual([])
+  })
+})
+
+describe("paletteGroups", () => {
+  const all = paletteSessions(projects, sessions)
+  const results = filterPalette("", all, projects, closed)
+  const messages = paletteMessages([{ id: "s1", snippet: "flaky again", count: 1 }], all)
+
+  it("shows every kind on All, three rows each, and says what it left out", () => {
+    const groups = paletteGroups("All", results, messages)
+    expect(groups.map((g) => g.label)).toEqual([
+      "Sessions",
+      "Projects",
+      "Closed projects",
+      "Messages",
+    ])
+    const closedGroup = groups.find((g) => g.label === "Closed projects")
+    expect(closedGroup?.rows).toHaveLength(3)
+    expect(closedGroup?.total).toBe(4)
+    // Nothing was cut here, so the header has nothing to report.
+    const projectGroup = groups.find((g) => g.label === "Projects")
+    expect(projectGroup?.rows).toHaveLength(2)
+    expect(projectGroup?.total).toBe(2)
+  })
+
+  it("lists one kind whole under its own tab", () => {
+    const groups = paletteGroups("Projects", results, messages)
+    expect(groups.map((g) => g.label)).toEqual(["Open", "Closed"])
+    expect(groups[1]?.rows).toHaveLength(4)
+    expect(paletteGroups("Sessions", results, messages)[0]?.rows).toHaveLength(3)
+  })
+
+  it("drops a group with no rows", () => {
+    const empty = filterPalette("nothing-matches-this", all, projects, closed)
+    expect(paletteGroups("All", empty, [])).toEqual([])
+    expect(paletteGroups("Projects", empty, [])).toEqual([])
+  })
+
+  it("carries what a row needs to be run", () => {
+    const rows = paletteGroups("All", results, messages).flatMap((g) => g.rows)
+    expect(rows[0]).toEqual({ kind: "session", session: all[0] })
+    expect(rows.find((r) => r.kind === "closed")).toEqual({ kind: "closed", project: closed[0] })
+  })
+})
+
+describe("rowKey", () => {
+  // The session and the message about it share an id on purpose: they key the
+  // same string and never land in the same group.
+  it("keys every row by what it opens", () => {
+    const all = paletteSessions(projects, sessions)
+    const results = filterPalette("", all, projects, closed)
+    const messages = paletteMessages([{ id: "s1", snippet: "x", count: 1 }], all)
+    const rows = paletteGroups("All", results, messages).flatMap((g) => g.rows)
+    expect(rows.map(rowKey)).toEqual(["s1", "s2", "s3", "p1", "p2", "c1", "c2", "c3", "s1"])
+  })
+})
+
+describe("paletteTabCount", () => {
+  const all = paletteSessions(projects, sessions)
+  const results = filterPalette("", all, projects, closed)
+
+  it("counts open and closed projects together, and nothing for All", () => {
+    expect(paletteTabCount("Projects", results, [])).toBe(6)
+    expect(paletteTabCount("Sessions", results, [])).toBe(3)
+    expect(paletteTabCount("Messages", results, [])).toBe(0)
+    expect(paletteTabCount("All", results, [])).toBeNull()
+  })
+})
+
+describe("nextTab", () => {
+  it("wraps at both ends", () => {
+    expect(nextTab("All", 1)).toBe("Sessions")
+    expect(nextTab("Messages", 1)).toBe("All")
+    expect(nextTab("All", -1)).toBe("Messages")
   })
 })
 

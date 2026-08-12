@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"runtime/pprof"
 	"strings"
 	"sync"
 	"time"
@@ -146,6 +147,7 @@ func newTransport(
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", t.handle)
 	mux.HandleFunc("/ping", t.ping)
+	mux.HandleFunc("/debug/goroutines", t.goroutines)
 	mux.HandleFunc("/hook", t.hook)
 	mux.HandleFunc("/session-start", t.sessionStart)
 	mux.HandleFunc("/session-title", t.sessionTitle)
@@ -259,6 +261,26 @@ func (t *transport) ping(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// goroutines dumps every goroutine's stack, blocked ones included. It answers
+// the failure a log cannot describe: the window stops updating while the
+// process is still alive, so nothing panicked, nothing exited, and nothing was
+// ever written. `lich rage` fetches this into the bug report; an instance that
+// holds its port and will not answer here is itself the finding. Token-gated
+// like every other endpoint, and deliberately not net/http/pprof: this is one
+// dump of one thing, not a profiling surface.
+func (t *transport) goroutines(w http.ResponseWriter, r *http.Request) {
+	if !t.authorized(r) {
+		http.Error(w, "invalid token", http.StatusUnauthorized)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	// debug level 2 is the readable form — the same layout a panic prints, so a
+	// hang and a crash are read side by side.
+	if err := pprof.Lookup("goroutine").WriteTo(w, 2); err != nil {
+		slog.Warn("goroutine dump", "err", err)
+	}
 }
 
 // mount adds a handler to the transport listener behind the same token check

@@ -31,6 +31,12 @@ interface PickerDialogProps {
   onKeyDown: (event: KeyboardEvent) => void
   /** What Enter does, for the hint bar: "open", "pick". */
   actionHint: string
+  /**
+   * Narrows the results by kind, between the query and the list. Tab is what
+   * walks it — the caller handles the key, and the hint bar says so on its
+   * behalf, since a surface without filters has nothing to report there.
+   */
+  filters?: ReactNode
   children: ReactNode
 }
 
@@ -45,6 +51,7 @@ export function PickerDialog({
   onQueryChange,
   onKeyDown,
   actionHint,
+  filters,
   children,
 }: PickerDialogProps) {
   return (
@@ -70,6 +77,8 @@ export function PickerDialog({
             />
           </div>
 
+          {filters && <div className="border-b px-2.5 py-1.5">{filters}</div>}
+
           {/* listbox/option, not bare buttons: `aria-selected` is meaningless
               on a button's implicit role, so the row the arrow keys are on was
               painted for the eye and announced to nobody. */}
@@ -80,6 +89,7 @@ export function PickerDialog({
           <div className="flex items-center gap-4 border-t bg-black/10 px-4 py-2 text-xs text-muted-foreground">
             <Hint keys={["↑", "↓"]}>navigate</Hint>
             <Hint keys={["↵"]}>{actionHint}</Hint>
+            {filters && <Hint keys={["⇥"]}>filter</Hint>}
             <Hint keys={["esc"]}>close</Hint>
           </div>
         </DialogPrimitive.Popup>
@@ -95,18 +105,24 @@ export function PickerDialog({
 export function PickerGroup({
   label,
   showLabel = true,
+  trailing,
   children,
 }: {
   label: string
   showLabel?: boolean
+  /** Opposite the heading: what the group is holding back, when it holds any. */
+  trailing?: ReactNode
   children: ReactNode
 }) {
   return (
     // biome-ignore lint/a11y/useSemanticElements: the rule offers <fieldset>, which groups form controls and is not a valid child of a listbox.
     <div role="group" aria-label={label}>
       {showLabel && (
-        <div className="px-3 pb-1 pt-3 text-[0.65625rem] font-semibold uppercase tracking-wider text-muted-foreground">
-          {label}
+        <div className="flex items-baseline justify-between gap-2 px-3 pb-1 pt-3 text-[0.65625rem] font-semibold uppercase tracking-wider text-muted-foreground">
+          <span>{label}</span>
+          {trailing && (
+            <span className="font-mono font-normal normal-case tracking-normal">{trailing}</span>
+          )}
         </div>
       )}
       {children}

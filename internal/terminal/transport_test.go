@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -286,6 +287,46 @@ func TestPingRejectsBadToken(t *testing.T) {
 		t.Fatalf("newTransport: %v", err)
 	}
 	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/ping?token=wrong", tr.port))
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", resp.StatusCode)
+	}
+}
+
+func TestGoroutineDumpAnswersWithTheStacks(t *testing.T) {
+	tr, err := newTransport(func(string, []byte) {}, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("newTransport: %v", err)
+	}
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/debug/goroutines?token=%s", tr.port, tr.token))
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	// The dump this very request is served by is in there, stack and all: the
+	// hang it exists for is read off the frames, not off the count.
+	if !strings.Contains(string(body), "terminal.(*transport).goroutines") ||
+		!strings.Contains(string(body), "TestGoroutineDumpAnswersWithTheStacks") {
+		t.Errorf("dump carries no stacks: %q", string(body))
+	}
+}
+
+func TestGoroutineDumpRejectsBadToken(t *testing.T) {
+	tr, err := newTransport(func(string, []byte) {}, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("newTransport: %v", err)
+	}
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/debug/goroutines?token=wrong", tr.port))
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
