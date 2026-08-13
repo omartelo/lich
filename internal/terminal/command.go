@@ -41,14 +41,39 @@ const claudeNameFlag = "--name"
 //
 // Each spelling was read off that provider's own `--help` — they agree on
 // nothing, and a flag guessed from a sibling is a spawn that dies before the
-// session exists. oh-my-pi is absent because its spelling was never confirmed
-// against the binary; a provider missing here gets no flag rather than
-// somebody else's.
+// session exists. A provider missing here gets no flag rather than somebody
+// else's.
 var skipPermissionFlags = map[string]string{
 	providers.Claude:   "--dangerously-skip-permissions",
 	providers.Codex:    "--dangerously-bypass-approvals-and-sandbox",
 	providers.OpenCode: "--auto",
+	providers.OMP:      "--auto-approve",
 	providers.Crush:    "--yolo",
+}
+
+// modelFlags is how each provider is told which model to run, for a session
+// opened with one named (internal/spawn). Read off each provider's own `--help`,
+// like skipPermissionFlags, and every one of them takes the value as a separate
+// argument.
+//
+// Crush is absent and stays absent: its `-m` lives on the non-interactive `run`
+// subcommand only, and the TUI lich spawns has no model flag at all (measured
+// against 0.88.0). Naming a model there would mean writing the config file the
+// user owns, which is the same line lich already draws for MCP registration.
+var modelFlags = map[string]string{
+	providers.Claude:   "--model",
+	providers.Codex:    "--model",
+	providers.OpenCode: "--model",
+	providers.OMP:      "--model",
+}
+
+// SupportsModel reports whether a provider can be told which model to run when
+// lich spawns it. It is what rejects `--model` for a kind that would silently
+// drop it, so the caller hears about it instead of getting a session on the
+// wrong model.
+func SupportsModel(kind string) bool {
+	_, ok := modelFlags[kind]
+	return ok
 }
 
 // How each provider is handed an MCP server on its command line: Claude Code
@@ -106,15 +131,32 @@ func nameArgs(kind, name string) []string {
 // subcommand, so its global options have to come first, while Claude Code's
 // --mcp-config is variadic and reads everything after it as another config
 // path, so it has to come last.
-func providerArgs(kind, name, resume, lichBin string, skipPermissions bool) []string {
+func providerArgs(kind, name, resume, model, lichBin string, skipPermissions bool) []string {
 	mcp := mcpArgs(kind, lichBin)
 	args := append([]string{}, nameArgs(kind, name)...)
 	args = append(args, resumeArgs(kind, resume)...)
 	args = append(args, skipPermissionArgs(kind, skipPermissions)...)
+	args = append(args, modelArgs(kind, model)...)
 	if kind == providers.Codex {
 		return append(mcp, args...)
 	}
 	return append(args, mcp...)
+}
+
+// modelArgs returns the arguments that pick the model a provider runs, or nil
+// when none was named or the provider has no flag for it. The name is passed
+// through unchecked — every provider spells its own model names, they change
+// with each release, and a list kept here would reject a model that works. A
+// wrong one dies in the provider's own error message, which is the one the user
+// can act on. A value that would be read as a flag is dropped instead, as it is
+// for a session name.
+func modelArgs(kind, model string) []string {
+	flag, ok := modelFlags[kind]
+	model = strings.TrimSpace(model)
+	if !ok || model == "" || strings.HasPrefix(model, "-") {
+		return nil
+	}
+	return []string{flag, model}
 }
 
 // skipPermissionArgs returns the flag that drops a provider's permission

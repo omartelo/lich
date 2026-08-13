@@ -5,6 +5,26 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **A session can be opened on a specific model.** `lich open --model <model>`
+  and the `open_session` MCP tool's `model` argument start the new session's
+  provider on the model you name, in that provider's own spelling — Claude Code,
+  Codex, opencode and oh-my-pi each take the name their own `--model` accepts. Fanning work out to a worktree can now put the cheap model on the
+  mechanical half of the job and keep the expensive one where it earns its
+  price. The model is recorded on the session, so a reload, a respawn or the
+  resume of a parked worktree session all come back on it. Crush and `shell`
+  sessions are refused rather than silently opened on the default: Crush spells
+  `--model` only on its non-interactive `run` subcommand, so the TUI lich spawns
+  has nowhere to receive one.
+
+- **oh-my-pi can run without permission prompts.** Settings › Providers now
+  offers oh-my-pi the same "run without asking" ladder as the other providers,
+  spawning it with `--auto-approve`. It was the one provider left out, because
+  its spelling had never been checked against the binary.
+
 ## [0.31.0] - 2026-08-13
 
 ### Added
