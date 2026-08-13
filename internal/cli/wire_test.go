@@ -141,8 +141,9 @@ func ticketFrom(term *wiredTerminal) string {
 
 // spawnStore is the workspace `lich open` writes into, over the real dispatcher.
 type spawnStore struct {
-	mu   sync.Mutex
-	rows int
+	mu    sync.Mutex
+	rows  int
+	model string
 }
 
 func (*spawnStore) LoadState() ([]store.Project, error) {
@@ -154,6 +155,13 @@ func (s *spawnStore) AddSession(_, _, _, _, _ string, _ int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.rows++
+	return nil
+}
+
+func (s *spawnStore) SetSessionModel(_, model string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.model = model
 	return nil
 }
 
@@ -207,7 +215,7 @@ func (s *spawnTerminal) Close(id string) error {
 	return nil
 }
 
-// TestOpenOverTheRealDispatcher proves the five arguments `lich open` posts land
+// TestOpenOverTheRealDispatcher proves the six arguments `lich open` posts land
 // on spawn.Open in the order it declares them — a positional mismatch here would
 // otherwise open a session in a project named after a provider.
 func TestOpenOverTheRealDispatcher(t *testing.T) {
@@ -232,7 +240,8 @@ func TestOpenOverTheRealDispatcher(t *testing.T) {
 	}
 
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"open", "--kind", "codex"}, "test", env, &stdout, &stderr); code != 0 {
+	args := []string{"open", "--kind", "codex", "--model", "gpt-5.2"}
+	if code := Run(args, "test", env, &stdout, &stderr); code != 0 {
 		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
 	}
 	if !strings.Contains(stdout.String(), `"Session 4"`) {
@@ -243,5 +252,8 @@ func TestOpenOverTheRealDispatcher(t *testing.T) {
 	}
 	if term.kind != "codex" || term.cwd != "/src/lich" {
 		t.Errorf("started %q in %q, want codex in the project directory", term.kind, term.cwd)
+	}
+	if rows.model != "gpt-5.2" {
+		t.Errorf("row model = %q, want the one the flag named", rows.model)
 	}
 }

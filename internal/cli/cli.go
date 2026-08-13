@@ -83,10 +83,11 @@ const usage = `lich talks to the sessions open in the running lich window.
       relayed message asks you to run when you are done.
 
   lich open [--project <name>] [--kind <provider>] [--worktree <branch>]
-            [--base <branch>] [--json]
+            [--base <branch>] [--model <model>] [--json]
       Open a new session and start it. --worktree creates a git worktree of
-      that branch name first and roots the session in it. Prints the name the
-      new session is addressed by.
+      that branch name first and roots the session in it. --model runs the
+      provider on that model, in the provider's own spelling. Prints the name
+      the new session is addressed by.
 
   lich close [--project <name>] [--worktree keep|remove] [--force] [--json] <session>
       Close a session. Closing the last one in a worktree needs --worktree to
@@ -303,13 +304,14 @@ func (c *client) open(args []string) error {
 	kind := flags.String("kind", "", "what the session runs; defaults to the caller's own provider")
 	worktree := flags.String("worktree", "", "branch name of a new git worktree to root the session in")
 	base := flags.String("base", "", "branch the worktree starts from; defaults to the project's current branch")
+	model := flags.String("model", "", "model the provider runs, in the provider's own spelling")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 
 	var opened spawn.Session
-	call := []any{c.sessionID(), *project, *kind, *worktree, *base}
+	call := []any{c.sessionID(), *project, *kind, *worktree, *base, *model}
 	if err := c.call("spawn.Open", call, openCall, &opened); err != nil {
 		return err
 	}

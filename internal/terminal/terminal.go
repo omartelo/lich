@@ -124,6 +124,7 @@ type Store interface {
 	SetWorktreePort(path string, port int) error
 	SetProviderSession(sessionID, providerSessionID string) error
 	ProviderSession(sessionID string) (string, error)
+	SessionModel(sessionID string) string
 	SetSessionTitle(sessionID, title string) (bool, error)
 	CostReadout() bool
 	CostLedger(sessionID, transcriptID string) (int64, string, float64, error)
@@ -436,9 +437,12 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, se
 		mcpBin = lichBin()
 	}
 	skipPermissions := s.store.SkipPermissions(kind, projectID, cwd)
+	// The model is read from the row rather than passed in, so it survives every
+	// spawn this session ever gets: the window's first view, a respawn after a
+	// reload, and the resume of a parked worktree session all arrive here.
 	spec := ptySpec{
 		bin:  resolveCommand(kind, s.store.ProviderBin(kind, projectID), userShell()),
-		args: providerArgs(kind, name, resume, mcpBin, skipPermissions),
+		args: providerArgs(kind, name, resume, s.store.SessionModel(id), mcpBin, skipPermissions),
 		dir:  cwd,
 		env:  s.sessionEnv(id, projectID, cwd),
 		cols: cols,
