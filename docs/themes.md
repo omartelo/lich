@@ -99,7 +99,11 @@ The stored theme records where it came from:
 ```
 
 Updating re-clones that URL and installs the pack again when the manifest
-carries a newer version; an equal or older one is reported as up to date.
+carries a newer version; an equal or older one is reported as up to date. A
+theme the new pack no longer carries — its file removed or renamed — is kept
+where it is and stamped with the version that was just installed, so it stops
+being offered the same update forever. Remove it yourself if you no longer want
+it.
 
 Accepted remotes are `https://`, `ssh://`, `file://`, an absolute path, and
 git's `user@host:path` shorthand. Everything else is rejected before git runs:
@@ -146,7 +150,10 @@ bump and lich reports the pack as already up to date.
   a file, and those still address a device even with an extension.
 - `name` is required, cannot be blank, and cannot exceed 128 characters.
 - `scheme` must be `light` or `dark`.
-- `app` is required and must include every token shown in the example.
+- `app` is required and must include every token shown in the example. This is
+  checked on import: an already installed theme that lacks a token added by a
+  later lich release keeps working, and the missing token takes its value from
+  the bundled theme of the same `scheme`.
 - `terminal.background` and `terminal.foreground` are required.
 - Optional terminal tokens are: `cursor`, `cursorAccent`, `selectionBackground`,
   `selectionForeground`, `black`, `red`, `green`, `yellow`, `blue`, `magenta`,

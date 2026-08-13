@@ -90,6 +90,26 @@ func TestCurrentReportsNormalizedVersion(t *testing.T) {
 	}
 }
 
+// An item written above the first "### Label" belongs to no group, and the
+// parser drops it rather than inventing a heading for it. The changelog format
+// is the contract — a release note that skips its group heading is malformed,
+// and the popup shows what the format promises.
+func TestSectionDropsItemsBeforeTheFirstGroup(t *testing.T) {
+	const cl = `## [1.0.0]
+
+- An item with no group above it.
+
+### Added
+
+- A grouped item.
+`
+	got := Section(cl, "1.0.0")
+	want := []Group{{Label: "Added", Items: []string{"A grouped item."}}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ungrouped item not dropped:\n got %#v\nwant %#v", got, want)
+	}
+}
+
 func TestSectionDropsEmptyGroups(t *testing.T) {
 	const cl = `## [1.0.0]
 

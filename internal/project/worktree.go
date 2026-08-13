@@ -315,7 +315,8 @@ func (s *Service) RemoveWorktree(projectPath, wtPath string, force bool) error {
 	if force {
 		args = append(args, "--force")
 	}
-	args = append(args, wtPath)
+	// "--": same guard CreateWorktree uses — the path is unvalidated here too.
+	args = append(args, "--", wtPath)
 	_, err := runGit(projectPath, args...)
 	return err
 }

@@ -33,6 +33,17 @@ func TestValidateRejectsTraversal(t *testing.T) {
 	}
 }
 
+// TestValidateRejectsTheRoot proves the work-tree root itself is not a path to
+// a file. Every one of these cleans to "." — the empty string included — and a
+// caller that takes it for one file operates on the whole repository.
+func TestValidateRejectsTheRoot(t *testing.T) {
+	for _, rel := range []string{".", "", "./", "a/.."} {
+		if err := Validate(rel); err == nil {
+			t.Errorf("Validate(%q): want error, got nil", rel)
+		}
+	}
+}
+
 // TestValidateAcceptsWorkTreePaths proves the ordinary shapes still pass —
 // including a traversal that stays inside the root.
 func TestValidateAcceptsWorkTreePaths(t *testing.T) {

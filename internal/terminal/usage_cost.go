@@ -73,11 +73,16 @@ func scanTranscriptCost(path string, from costLedger, rates rateSource) (costLed
 // accumulate walks complete lines from r, folding each priced assistant message
 // into the ledger. A trailing line with no newline is left unconsumed: the
 // provider is still writing it, and the next scan reads it whole.
+//
+// Only io.EOF means the scan reached the end. Any other read error stopped it
+// somewhere in the middle, and a total that stops in the middle of a transcript
+// is a money number that is simply too small — the caller shows nothing and the
+// next turn resumes from the same offset.
 func accumulate(r *bufio.Reader, ledger costLedger, rates rateSource) (costLedger, bool) {
 	for {
 		line, err := r.ReadBytes('\n')
 		if err != nil {
-			return ledger, true
+			return ledger, err == io.EOF
 		}
 		entry, ok := parseCostLine(line)
 		// An id is what makes a repeat recognisable; a line carrying none is

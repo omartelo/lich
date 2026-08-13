@@ -27,6 +27,30 @@ func TestParseTag(t *testing.T) {
 	}
 }
 
+// GitHub serves a different JSON shape without the Accept header and rejects
+// an unidentified client outright, so every read lich makes carries both.
+func TestGetCarriesTheGitHubHeaders(t *testing.T) {
+	var accept, agent string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		accept, agent = r.Header.Get("Accept"), r.Header.Get("User-Agent")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(srv.Close)
+
+	resp, err := Get(srv.Client(), srv.URL)
+	if err != nil {
+		t.Fatalf("Get() = %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if accept != "application/vnd.github+json" {
+		t.Errorf("Accept = %q", accept)
+	}
+	if agent != "lich" {
+		t.Errorf("User-Agent = %q", agent)
+	}
+}
+
 // serveBody starts a test server returning status/body.
 func serveBody(t *testing.T, status int, body string) (*http.Client, string) {
 	t.Helper()
@@ -72,12 +96,12 @@ func TestLatestTagNetworkFailure(t *testing.T) {
 }
 
 func TestLatestTagCapsBody(t *testing.T) {
-	// The tag is valid but padded past bodyLimit: the cap truncates the body
+	// The tag is valid but padded past BodyLimit: the cap truncates the body
 	// mid-JSON, so a parse failure here proves the read is bounded.
-	body := `{"tag_name":"v9.9.9","body":"` + strings.Repeat("x", bodyLimit*2) + `"}`
+	body := `{"tag_name":"v9.9.9","body":"` + strings.Repeat("x", BodyLimit*2) + `"}`
 	client, url := serveBody(t, http.StatusOK, body)
 	if got := LatestTag(client, url); got != "" {
-		t.Fatalf("LatestTag() = %q, want %q — body read past bodyLimit", got, "")
+		t.Fatalf("LatestTag() = %q, want %q — body read past BodyLimit", got, "")
 	}
 }
 

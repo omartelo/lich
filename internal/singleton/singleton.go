@@ -91,8 +91,12 @@ func UncleanExit(configDir, restartWait string) bool {
 	if restartWait != "" {
 		return false
 	}
+	// Only an absent file proves the previous run cleaned up after itself. A
+	// stat that failed for any other reason (a permission or I/O error) says
+	// nothing about the file, and reading it as "clean" swallows the crash
+	// notice on exactly the machine that is already misbehaving.
 	_, err := os.Stat(path(configDir))
-	return err == nil
+	return !errors.Is(err, fs.ErrNotExist)
 }
 
 // Read loads runtime.json. A missing file returns (nil, nil): no instance

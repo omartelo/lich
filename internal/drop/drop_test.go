@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -110,6 +111,57 @@ func TestResolveRefusesTwins(t *testing.T) {
 
 	if got := newService(t).Resolve(root, []Item{item}); got[0] != "" {
 		t.Fatalf("Resolve = %q, want no match for twins", got[0])
+	}
+}
+
+// TestResolveRefusesTwinsSplitByTheBudget is the twin rule at the one place it
+// could quietly break: the budget dies inside a level, so one twin was seen and
+// the other never will be. A lone candidate in a level nobody finished reading
+// is not a unique match, and answering with it hands the session the wrong file
+// — the exact failure the whole rule exists to prevent.
+func TestResolveRefusesTwinsSplitByTheBudget(t *testing.T) {
+	root := t.TempDir()
+	mtime := time.Now().Add(-time.Hour).Truncate(time.Second)
+	item := writeFile(t, filepath.Join(root, "a", "app.ts"), 41, mtime)
+	writeFile(t, filepath.Join(root, "b", "app.ts"), 41, mtime)
+	// Noise inside the first directory only, named to sort after the twin it
+	// hides behind: the hit lands, then the budget runs out before the level's
+	// second directory is read at all.
+	for i := 0; i <= maxEntries; i++ {
+		name := filepath.Join(root, "a", fmt.Sprintf("z%d", i))
+		if err := os.WriteFile(name, nil, 0o644); err != nil {
+			t.Fatalf("write noise: %v", err)
+		}
+	}
+
+	if got := newService(t).Resolve(root, []Item{item}); got[0] != "" {
+		t.Fatalf("Resolve = %q, want no match for twins the budget split", got[0])
+	}
+}
+
+// TestResolveSurvivesAnUnreadableDir: a directory the user cannot read costs
+// its own items their path and nothing else — the sibling tree is still
+// searched, and the walk does not end there.
+func TestResolveSurvivesAnUnreadableDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("directory mode bits do not gate reads on Windows")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a directory whatever its mode")
+	}
+	root := t.TempDir()
+	mtime := time.Now().Add(-time.Hour).Truncate(time.Second)
+	// Sorts before the readable sibling, so the failed read happens first.
+	locked := filepath.Join(root, "a-locked")
+	if err := os.Mkdir(locked, 0o000); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
+	want := filepath.Join(root, "b-src", "app.ts")
+	item := writeFile(t, want, 41, mtime)
+
+	if got := newService(t).Resolve(root, []Item{item}); got[0] != want {
+		t.Fatalf("Resolve = %q, want %q", got[0], want)
 	}
 }
 
@@ -243,6 +295,22 @@ func TestUploadAnswersPreflight(t *testing.T) {
 	}
 	if got := recorder.Header().Get("Access-Control-Allow-Origin"); got != "*" {
 		t.Fatalf("preflight Allow-Origin = %q, want %q", got, "*")
+	}
+}
+
+// TestUploadRefusesOtherMethods: the endpoint writes a file, so a method that
+// is not the POST the page makes is refused rather than answered.
+func TestUploadRefusesOtherMethods(t *testing.T) {
+	for _, method := range []string{http.MethodGet, http.MethodPut} {
+		t.Run(method, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+
+			New(t.TempDir()).Upload(recorder, httptest.NewRequest(method, "/drop?name=shot.png", nil))
+
+			if recorder.Code != http.StatusMethodNotAllowed {
+				t.Fatalf("%s = %d, want %d", method, recorder.Code, http.StatusMethodNotAllowed)
+			}
+		})
 	}
 }
 
@@ -433,5 +501,35 @@ func TestSaveKeepsEarlierDrops(t *testing.T) {
 	}
 	if want := "shot-2.png"; filepath.Base(second) != want {
 		t.Fatalf("second copy named %q, want %q", filepath.Base(second), want)
+	}
+}
+
+// TestSaveRefusesAnExhaustedName is the far end of the no-overwrite rule: with
+// every suffix taken there is no path left to hand out, and the drop has to
+// fail rather than truncate the copy holding that name. The 999 names are
+// written as literals — deriving them from maxCopies would follow the constant
+// wherever it moved and never fail.
+func TestSaveRefusesAnExhaustedName(t *testing.T) {
+	service := New(t.TempDir())
+	if err := os.MkdirAll(service.dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	last := filepath.Join(service.dir, "shot-999.png")
+	for i := 1; i <= 999; i++ {
+		name := "shot.png"
+		if i > 1 {
+			name = fmt.Sprintf("shot-%d.png", i)
+		}
+		if err := os.WriteFile(filepath.Join(service.dir, name), []byte("taken"), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+
+	if _, err := service.Save("shot.png", strings.NewReader("new bytes")); err == nil {
+		t.Fatal("Save reported success with every name taken")
+	}
+
+	if got, err := os.ReadFile(last); err != nil || string(got) != "taken" {
+		t.Fatalf("last copy = %q (%v), want it untouched", got, err)
 	}
 }

@@ -179,7 +179,7 @@ func (s *Service) Diff(path string) DiffStats {
 	// one "?? dir/" line: an agent writing 25 files into fresh packages would
 	// count as one changed file.
 	if out, ok := gitQuiet(path, "status", "--porcelain", "--untracked-files=all"); ok {
-		stats.Files = countLines(out)
+		stats.Files = len(splitLines(out))
 	}
 	head, base := diffBase(path)
 	stats.Head = head
@@ -238,16 +238,6 @@ func countFileLines(name string) int {
 	n := bytes.Count(data, []byte{'\n'})
 	if data[len(data)-1] != '\n' {
 		n++ // last line without trailing newline still counts
-	}
-	return n
-}
-
-func countLines(out string) int {
-	n := 0
-	for line := range strings.Lines(out) {
-		if strings.TrimSpace(line) != "" {
-			n++
-		}
 	}
 	return n
 }

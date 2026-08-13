@@ -201,6 +201,10 @@ func dash(s string) string {
 	return s
 }
 
+// sizeUnits are the steps humanSize climbs past bytes. The largest one is also
+// the loop's ceiling below, so adding a unit here is the whole change.
+var sizeUnits = [...]string{"KiB", "MiB", "GiB"}
+
 // humanSize renders a byte count for a human reading a table, not for a
 // machine: one decimal, binary units.
 func humanSize(n int64) string {
@@ -209,9 +213,9 @@ func humanSize(n int64) string {
 		return fmt.Sprintf("%d B", n)
 	}
 	value, exp := float64(n)/unit, 0
-	for value >= unit && exp < 2 {
+	for value >= unit && exp < len(sizeUnits)-1 {
 		value /= unit
 		exp++
 	}
-	return fmt.Sprintf("%.1f %s", value, [...]string{"KiB", "MiB", "GiB"}[exp])
+	return fmt.Sprintf("%.1f %s", value, sizeUnits[exp])
 }

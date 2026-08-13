@@ -172,6 +172,28 @@ func TestStatus(t *testing.T) {
 			t.Fatalf("CurrentVersion = %q, want dev", got.CurrentVersion)
 		}
 	})
+
+	// The lookup runs at startup: a GitHub that answers 500 must leave the
+	// readout empty rather than claim an update or block the boot.
+	t.Run("a failed lookup reports nothing", func(t *testing.T) {
+		failing := serveBody(t, http.StatusInternalServerError, "upstream is down")
+		failing.version = "0.7.0"
+
+		got := failing.Status()
+
+		if got.UpdateAvailable {
+			t.Error("UpdateAvailable = true, want false when the lookup failed")
+		}
+		if got.LatestVersion != "" {
+			t.Errorf("LatestVersion = %q, want empty", got.LatestVersion)
+		}
+		if got.ReleaseURL != "" {
+			t.Errorf("ReleaseURL = %q, want empty — there is no release to point at", got.ReleaseURL)
+		}
+		if got.CurrentVersion != "0.7.0" {
+			t.Errorf("CurrentVersion = %q, want the running build", got.CurrentVersion)
+		}
+	})
 }
 
 func TestInstallCommand(t *testing.T) {
@@ -220,17 +242,24 @@ func TestApplyRejectedWhenNotSelfApply(t *testing.T) {
 	}
 }
 
+// applyAsset is the release asset the apply tests drive: the goos/goarch pair
+// is pinned on the Service, so the test runs the same on every host.
+const applyAsset = "lich-v0.8.0-darwin-arm64"
+
 // applyServer serves the release endpoints Apply hits: the latest-tag JSON,
-// checksums.txt (with a matching hash for asset), and the asset bytes.
-func applyServer(t *testing.T, asset string) *httptest.Server {
+// checksums.txt (with a matching hash for applyAsset), and the asset bytes
+// under assetStatus — 404 is the window between a pushed tag and a published
+// binary.
+func applyServer(t *testing.T, assetStatus int) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/latest"):
 			_, _ = io.WriteString(w, `{"tag_name":"v0.8.0"}`)
 		case strings.HasSuffix(r.URL.Path, "checksums.txt"):
-			_, _ = io.WriteString(w, "deadbeef  "+asset+"\n")
+			_, _ = io.WriteString(w, "deadbeef  "+applyAsset+"\n")
 		default:
+			w.WriteHeader(assetStatus)
 			_, _ = io.WriteString(w, "FAKEBINARY")
 		}
 	}))
@@ -238,28 +267,32 @@ func applyServer(t *testing.T, asset string) *httptest.Server {
 	return srv
 }
 
-func TestApplyDownloadsVerifiesAndSwaps(t *testing.T) {
-	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
-		t.Skipf("no darwin asset for %s", runtime.GOARCH)
-	}
-	asset := "lich-v0.8.0-darwin-" + runtime.GOARCH
-	srv := applyServer(t, asset)
-
-	var gotBody string
-	var gotChecksum []byte
-	s := &Service{
+// applyService is a Service pinned to darwin/arm64 — the self-apply path driven
+// off whatever host runs the suite.
+func applyService(t *testing.T, srv *httptest.Server, apply func(io.Reader, []byte) error) *Service {
+	t.Helper()
+	return &Service{
 		http:         srv.Client(),
-		goos:         "darwin", // drive the self-apply path off a Linux CI host
+		goos:         "darwin",
+		goarch:       "arm64",
 		exePath:      filepath.Join(t.TempDir(), "lich"),
 		latestURL:    srv.URL + "/latest",
 		downloadBase: srv.URL + "/dl/",
-		applyBinary: func(r io.Reader, checksum []byte) error {
-			b, _ := io.ReadAll(r)
-			gotBody = string(b)
-			gotChecksum = checksum
-			return nil
-		},
+		applyBinary:  apply,
 	}
+}
+
+func TestApplyDownloadsVerifiesAndSwaps(t *testing.T) {
+	srv := applyServer(t, http.StatusOK)
+
+	var gotBody string
+	var gotChecksum []byte
+	s := applyService(t, srv, func(r io.Reader, checksum []byte) error {
+		b, _ := io.ReadAll(r)
+		gotBody = string(b)
+		gotChecksum = checksum
+		return nil
+	})
 
 	if err := s.Apply(); err != nil {
 		t.Fatalf("Apply() = %v, want nil", err)
@@ -275,43 +308,97 @@ func TestApplyDownloadsVerifiesAndSwaps(t *testing.T) {
 }
 
 func TestApplyPropagatesSwapError(t *testing.T) {
-	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
-		t.Skipf("no darwin asset for %s", runtime.GOARCH)
-	}
-	asset := "lich-v0.8.0-darwin-" + runtime.GOARCH
-	srv := applyServer(t, asset)
-	s := &Service{
-		http:         srv.Client(),
-		goos:         "darwin",
-		exePath:      filepath.Join(t.TempDir(), "lich"),
-		latestURL:    srv.URL + "/latest",
-		downloadBase: srv.URL + "/dl/",
-		applyBinary:  func(io.Reader, []byte) error { return io.ErrUnexpectedEOF },
-	}
+	srv := applyServer(t, http.StatusOK)
+	s := applyService(t, srv, func(io.Reader, []byte) error { return io.ErrUnexpectedEOF })
 	if err := s.Apply(); err == nil {
 		t.Fatal("Apply() = nil, want the swap error propagated")
 	}
 }
 
+// A tag is pushed before the release job finishes uploading, so the asset can
+// be missing while the version lookup already reports the new release.
+func TestApplyFailsWhenTheAssetIsNotPublishedYet(t *testing.T) {
+	srv := applyServer(t, http.StatusNotFound)
+	swapped := false
+	s := applyService(t, srv, func(io.Reader, []byte) error {
+		swapped = true
+		return nil
+	})
+
+	err := s.Apply()
+
+	if err == nil {
+		t.Fatal("Apply() = nil, want an error when the asset download 404s")
+	}
+	if !strings.Contains(err.Error(), "404") {
+		t.Errorf("error = %q, want the status in it", err)
+	}
+	if swapped {
+		t.Error("Apply swapped the binary for a 404 body")
+	}
+}
+
+// No asset ships for every self-apply platform: a darwin/386 build has nothing
+// to download, and saying so beats fetching a URL that cannot exist.
+func TestApplyRefusesAnArchWithNoAsset(t *testing.T) {
+	srv := applyServer(t, http.StatusOK)
+	s := applyService(t, srv, func(io.Reader, []byte) error { return nil })
+	s.goarch = "386"
+
+	err := s.Apply()
+
+	if err == nil {
+		t.Fatal("Apply() = nil, want an error when no asset ships for the arch")
+	}
+	if !strings.Contains(err.Error(), "darwin/386") {
+		t.Errorf("error = %q, want it to name the platform", err)
+	}
+}
+
 func TestFetchChecksum(t *testing.T) {
-	body := "aaaa  lich-v0.8.0-darwin-arm64\nbbbb  other\n"
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = io.WriteString(w, body)
-	}))
-	t.Cleanup(srv.Close)
-	s := &Service{http: srv.Client()}
+	t.Run("reads the asset's hash", func(t *testing.T) {
+		s := serveBody(t, http.StatusOK, "aaaa  lich-v0.8.0-darwin-arm64\nbbbb  other\n")
 
-	sum, err := s.fetchChecksum(srv.URL, "lich-v0.8.0-darwin-arm64")
-	if err != nil {
-		t.Fatalf("fetchChecksum() error: %v", err)
-	}
-	if len(sum) != 2 || sum[0] != 0xaa || sum[1] != 0xaa {
-		t.Fatalf("sum = %x, want aaaa", sum)
-	}
+		sum, err := s.fetchChecksum(s.latestURL, "lich-v0.8.0-darwin-arm64")
+		if err != nil {
+			t.Fatalf("fetchChecksum() error: %v", err)
+		}
+		if len(sum) != 2 || sum[0] != 0xaa || sum[1] != 0xaa {
+			t.Fatalf("sum = %x, want aaaa", sum)
+		}
 
-	if _, err := s.fetchChecksum(srv.URL, "missing-asset"); err == nil {
-		t.Fatal("fetchChecksum(missing) = nil error, want failure")
-	}
+		if _, err := s.fetchChecksum(s.latestURL, "missing-asset"); err == nil {
+			t.Fatal("fetchChecksum(missing) = nil error, want failure")
+		}
+	})
+
+	t.Run("a non-200 is not a checksums file", func(t *testing.T) {
+		s := serveBody(t, http.StatusNotFound, "Not Found")
+
+		_, err := s.fetchChecksum(s.latestURL, "lich-v0.8.0-darwin-arm64")
+
+		if err == nil {
+			t.Fatal("fetchChecksum() = nil error, want failure on a non-200")
+		}
+		if !strings.Contains(err.Error(), "404") {
+			t.Errorf("error = %q, want the status in it", err)
+		}
+	})
+
+	// checksums.txt is remote data: a truncated or corrupted line must fail the
+	// update, never reach selfupdate as a half-decoded checksum.
+	t.Run("a malformed hash is refused", func(t *testing.T) {
+		s := serveBody(t, http.StatusOK, "zzzz  lich-v0.8.0-darwin-arm64\n")
+
+		_, err := s.fetchChecksum(s.latestURL, "lich-v0.8.0-darwin-arm64")
+
+		if err == nil {
+			t.Fatal("fetchChecksum() = nil error, want failure on a non-hex hash")
+		}
+		if !strings.Contains(err.Error(), "checksums") {
+			t.Errorf("error = %q, want the checksums context on it", err)
+		}
+	})
 }
 
 func TestNewResolvesExe(t *testing.T) {
@@ -329,6 +416,9 @@ func TestNewResolvesExe(t *testing.T) {
 	}
 	if s.latestURL != latestReleaseURL {
 		t.Fatalf("latestURL = %q", s.latestURL)
+	}
+	if s.goos != runtime.GOOS || s.goarch != runtime.GOARCH {
+		t.Fatalf("platform = %s/%s, want this build's %s/%s", s.goos, s.goarch, runtime.GOOS, runtime.GOARCH)
 	}
 	exe, _ := os.Executable()
 	if s.exePath != exe {

@@ -24,7 +24,7 @@ Content-Type: application/json
   Code and Codex, the hook payload's `session_id` field on stdin. Must be
   non-empty.
 - `provider` — which CLI is reporting, as a provider id from
-  `internal/providers.Registry` (`claude`, `codex`, `opencode`, `crush`).
+  `internal/providers.Registry` (`claude`, `codex`, `opencode`, `omp`, `crush`).
   Optional: absent means `claude`, the only provider that reported before the
   field existed. An id outside the registry is rejected, like an unknown state
   on `/hook` — lich ships its side of a contract first, so a provider it has no
@@ -42,19 +42,22 @@ deprecated alias and the defaulted `provider`.
 
 ## Event → action mapping
 
-| Claude Code hook | Codex hook     | opencode event     | Crush hook    | action                                    |
-|------------------|----------------|--------------------|---------------|-------------------------------------------|
-| `SessionStart`   | `SessionStart` | `session.created`  | `PreToolUse`  | store `provider_session_id` on the lich   |
-|                  |                |                    |               | session row, and mark the card as running |
-|                  |                |                    |               | `provider` (the `session-agent` app event)|
+| Claude Code hook | Codex hook     | opencode event     | oh-my-pi event  | Crush hook    | action                                    |
+|------------------|----------------|--------------------|-----------------|---------------|-------------------------------------------|
+| `SessionStart`   | `SessionStart` | `session.created`  | `session_start` | `PreToolUse`  | store `provider_session_id` on the lich   |
+|                  |                |                    |                 |               | session row, and mark the card as running |
+|                  |                |                    |                 |               | `provider` (the `session-agent` app event)|
 
 `SessionStart` fires on startup, resume, `/clear` and compaction. A resume
 reports the resumed session's id and overwrites the stored value — lich always
 holds the id of the provider session currently in the card.
 
-The other two report the same id from the earliest place each one offers it.
+The others report the same id from the earliest place each one offers it.
 opencode raises `session.created` when the conversation is created, before the
-first turn, so it lands as early as `SessionStart` does. **Crush has only
+first turn, so it lands as early as `SessionStart` does; oh-my-pi's
+`session_start` fires before the first turn too, and the id is read off the
+session manager the event hands the extension — omp puts nothing about the
+session in the environment. **Crush has only
 `PreToolUse`**, whose payload carries the same `session_id` every other harness
 reports on stdin — so a Crush session announces itself when it first reaches for
 a tool, and a conversation that answers without one never announces itself at
@@ -101,14 +104,13 @@ cares when the id arrived, only which conversation it names.
 - **Not the transcript path.** The path is reconstructable from the id and cwd;
   storing it too is a contract change — add a field only when a feature needs
   it, per the versioning note in the README.
-- **Only Claude Code and Codex resume.** The field and the column are
-  provider-agnostic, but each CLI spells resume its own way (`claude --resume
-  <id>`, `codex resume <id>`), so both `resumeArgs`
-  (`internal/terminal/command.go`) and `resumableSession`
-  (`frontend/src/lib/session/sessions.ts`) list the kinds that have one. A provider
-  outside that list reporting an id has it stored and ignored until its own
-  invocation is wired.
-- **opencode and Crush report an id lich does not yet resume.** Both spell it
+- **Three providers resume.** The field and the column are provider-agnostic,
+  but each CLI spells resume its own way (`claude --resume <id>`, `codex resume
+  <id>`, `omp -r <id>`), so both `resumeArgs` (`internal/terminal/command.go`)
+  and `resumableSession` (`frontend/src/lib/session/sessions.ts`) list the kinds
+  that have one. A provider outside that list reporting an id has it stored and
+  ignored until its own invocation is wired.
+- **opencode and Crush report an id lich does not resume.** Both spell it
   (`opencode --session <id>`, `crush --session <id>`), so the invocation is the
   easy half. The gate is the one below: lich only offers a resume it has proof
   of, and both keep their conversations in SQLite — `opencode.db` under the data
@@ -116,14 +118,19 @@ cares when the id arrived, only which conversation it names.
   glob for. Wiring them means either reading another tool's schema or offering a
   resume that can die inside the PTY, and neither is worth it for a mark on a
   card. The id is stored today so the day one of them is wired, the sessions
-  already carry it.
+  already carry it. oh-my-pi is the counterexample that shows where the line is:
+  it files one JSONL per session, so there is something to glob for, and it
+  resumes.
 - **Resume availability is asked of each provider's transcript directory.**
   `ResumeAvailable` (`internal/terminal/resume.go`) globs
-  `~/.claude/projects/*/<id>.jsonl` for Claude Code and
-  `~/.codex/sessions/*/*/*/rollout-*-<id>.jsonl` for Codex
-  (`CLAUDE_CONFIG_DIR` / `CODEX_HOME` override the roots). Both layouts are
-  internal to the provider: one that moves its files makes every restored card
-  start fresh instead of erroring, which is the direction this fails in.
+  `~/.claude/projects/*/<id>.jsonl` for Claude Code,
+  `~/.codex/sessions/*/*/*/rollout-*-<id>.jsonl` for Codex and
+  `~/.omp/agent/sessions/*/*_<id>.jsonl` for oh-my-pi (`CLAUDE_CONFIG_DIR`,
+  `CODEX_HOME` and `OMP_PROFILE`/`PI_CODING_AGENT_DIR` override the roots; a
+  named omp profile wins over the explicit override, which is the order
+  `omp config path` applies). Every layout is internal to the provider: one that
+  moves its files makes every restored card start fresh instead of erroring,
+  which is the direction this fails in.
 - **The deprecated `claude_session_id` alias stays until the install gate can
   no longer meet a plugin older than v0.3.0.** Dropping it earlier silently
   breaks resume for anyone who has not updated the plugin.

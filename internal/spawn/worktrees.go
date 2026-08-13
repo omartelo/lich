@@ -2,6 +2,7 @@ package spawn
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/omartelo/lich/internal/store"
 )
@@ -81,8 +82,12 @@ func (s *Service) checkoutAt(target store.Project, name string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
+	// Case-insensitively, as every other name lookup here reads a branch
+	// (resolveBase, labelTaken, findSession): an exact match would tell an
+	// existing checkout apart from the name the caller typed for it, and answer
+	// by creating a second branch beside it.
 	for _, wt := range found {
-		if wt.Name == name {
+		if strings.EqualFold(wt.Name, name) {
 			return wt.Path, true
 		}
 	}

@@ -239,6 +239,49 @@ func TestAFailedRefreshChangesNothing(t *testing.T) {
 	}
 }
 
+// TestARefreshOfAnUnreadableBodyChangesNothing covers the answer a captive
+// portal or a proxy error page gives: a 200 whose body is not the table at all.
+// It must read exactly like an unreachable source — nothing learned, nothing
+// lost, and no cache written for the next run to trust.
+func TestARefreshOfAnUnreadableBodyChangesNothing(t *testing.T) {
+	srv, _ := serveRemote(t, "<html>we are having trouble</html>")
+	cache := filepath.Join(t.TempDir(), "prices.json")
+	table := newTable(srv.URL, cache, srv.Client())
+	t.Cleanup(table.awaitRefresh)
+
+	table.refreshFor("claude-opus-9")
+
+	if _, ok := table.Rate("claude-opus-9"); ok {
+		t.Error("Rate: an unparsable body must not invent a price")
+	}
+	if _, ok := table.Rate("claude-opus-4-5"); !ok {
+		t.Error("Rate: an unparsable body must not lose the prices already held")
+	}
+	if _, err := os.Stat(cache); err == nil {
+		t.Error("an unparsable body was cached, and the next run would start from it")
+	}
+}
+
+// TestARefreshWithNothingPricedChangesNothing covers the table that parses and
+// still teaches nothing — every entry priced at zero, which parseRemote drops.
+// Caching that empty result would overlay the baked floor with a layer holding
+// no prices at all.
+func TestARefreshWithNothingPricedChangesNothing(t *testing.T) {
+	srv, _ := serveRemote(t, `{"sample_spec": {"input_cost_per_token": 0.0, "output_cost_per_token": 0.0}}`)
+	cache := filepath.Join(t.TempDir(), "prices.json")
+	table := newTable(srv.URL, cache, srv.Client())
+	t.Cleanup(table.awaitRefresh)
+
+	table.refreshFor("claude-opus-9")
+
+	if _, ok := table.Rate("claude-opus-4-5"); !ok {
+		t.Error("Rate: a refresh with nothing priced must not lose the baked prices")
+	}
+	if _, err := os.Stat(cache); err == nil {
+		t.Error("a refresh with nothing priced was cached")
+	}
+}
+
 // TestCostBillsEveryCounterSeparately proves the four counters are priced at
 // their own rates — a cache read is an order of magnitude cheaper than fresh
 // input, and folding them together would overstate a long session badly.
