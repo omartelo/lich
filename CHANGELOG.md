@@ -5,7 +5,7 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.32.0] - 2026-08-13
 
 ### Added
 
@@ -16,9 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   conversation's title once omp has written one. The install also registers
   lich's MCP server in omp's `mcp.json`, merged in beside whatever is already
   there, which puts the tools for reaching the other sessions in an omp agent's
-  own tool list. Two gaps are
-  the harness's own and Settings names them: omp has no observed approval event,
-  so a session waiting on your permission shows a spinner rather than a bell.
+  own tool list. Two gaps are the harness's own, and Settings says the first out
+  loud: omp has no observed approval event, so a session waiting on your
+  permission shows a spinner rather than a bell; and the extension runs inside
+  omp, so nothing survives to report that the CLI has left — a card keeps its
+  last indicator until lich respawns it, exactly as an opencode one does.
 
 - **An omp session resumes its conversation.** Reopening a card that ran omp
   before a restart offers the same "continue where it left off" prompt Claude
@@ -28,10 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A session can be opened on a specific model.** `lich open --model <model>`
   and the `open_session` MCP tool's `model` argument start the new session's
   provider on the model you name, in that provider's own spelling — Claude Code,
-  Codex, opencode and oh-my-pi each take the name their own `--model` accepts. Fanning work out to a worktree can now put the cheap model on the
-  mechanical half of the job and keep the expensive one where it earns its
-  price. The model is recorded on the session, so a reload, a respawn or the
-  resume of a parked worktree session all come back on it. Crush and `shell`
+  Codex, opencode and oh-my-pi each take the name their own `--model` accepts.
+  Fanning work out to a worktree can now put the cheap model on the mechanical
+  half of the job and keep the expensive one where it earns its price. The model
+  is recorded on the session, so a reload, a respawn or the resume of a parked
+  worktree session all come back on it. Crush and `shell`
   sessions are refused rather than silently opened on the default: Crush spells
   `--model` only on its non-interactive `run` subcommand, so the TUI lich spawns
   has nowhere to receive one.
@@ -101,6 +104,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   already seen — pasting a path to the wrong file, which an agent then edits.
   A level the search could not finish now resolves to nothing, which falls back
   to the copy, as two twins always should have.
+
 - **A copy could overwrite an earlier drop.** With 999 copies of one name
   already stored, the next drop of it reused the last name and truncated that
   copy, whose path may still have been sitting unsent in a prompt. The drop is
@@ -151,6 +155,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   closing a worker moved you off the card you were reading. Only closing the
   active card moves the focus now, which is what the window has always done on
   its own.
+
+- **An unreadable `.worktreeinclude` no longer seeds the files it exists to
+  block.** A file lich could not read fell back to the built-in defaults, so a
+  new worktree got the `.env*` copies the override was written to stop. Only a
+  missing file means "use the defaults" now; a present one that cannot be read
+  seeds nothing.
+
+- **A relayed task no longer names a tool the target does not have.** A Crush or
+  oh-my-pi session gets its lich tools from an MCP server registered at install
+  time, and that registration is skipped when lich cannot resolve its own binary
+  path — but the prompt lich typed still told the worker to answer with
+  `reply_to_session`. It now asks for `lich reply` instead, the shell command
+  that works everywhere, as it already did for a session with no tools at all.
 
 - **A worktree is opened, not duplicated, when its branch is typed in another
   case.** Asking for `--worktree Auth-Fix` with a checkout of `auth-fix` already
@@ -2426,8 +2443,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.31.0...HEAD
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.31.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.32.0...HEAD
+[0.32.0]: https://github.com/omartelo/lich/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/omartelo/lich/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/omartelo/lich/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/omartelo/lich/compare/v0.28.0...v0.29.0
