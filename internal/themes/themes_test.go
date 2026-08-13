@@ -117,6 +117,16 @@ func TestImportRejectsInvalidID(t *testing.T) {
 	}
 }
 
+// The pattern's repeat counts every character after the first, so it is built
+// from themeIDMaxLength. Paired with the 65-character rejection above, this
+// pins the boundary against a drift between constant and pattern.
+func TestImportAcceptsTheLongestID(t *testing.T) {
+	s := NewInDir(t.TempDir())
+	if _, err := importTheme(t, s, customTheme(strings.Repeat("a", 64))); err != nil {
+		t.Fatalf("Import of a 64-character id: %v", err)
+	}
+}
+
 func TestImportRejectsInvalidMetadata(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -386,6 +396,50 @@ func TestListSortsCustomThemesByName(t *testing.T) {
 	want := []string{"light", "dark", "alpha", "zeta"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("theme order = %v, want %v", got, want)
+	}
+}
+
+// An installed theme predates every token a later release adds, so loading it
+// defaults what it lacks instead of dropping it. Import stays strict — see
+// TestImportRejectsMissingToken.
+func TestListDefaultsATokenAStoredThemePredates(t *testing.T) {
+	for _, tt := range []struct{ name, scheme string }{
+		{name: "light", scheme: SchemeLight},
+		{name: "dark", scheme: SchemeDark},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			aged := customTheme("aged")
+			aged.Scheme = tt.scheme
+			delete(aged.App, "ring")
+			path := filepath.Join(dir, "aged.json")
+			if err := os.WriteFile(path, []byte(rawTheme(t, aged)), 0o600); err != nil {
+				t.Fatalf("write stored theme: %v", err)
+			}
+			s := NewInDir(dir)
+			want := bundledThemes[0].App["ring"]
+			if tt.scheme == SchemeDark {
+				want = bundledThemes[1].App["ring"]
+			}
+
+			listed, err := s.List()
+			if err != nil {
+				t.Fatalf("List: %v", err)
+			}
+			if len(listed) != 3 || listed[2].ID != "aged" {
+				t.Fatalf("aged theme is missing from List: %#v", listed)
+			}
+			if listed[2].App["ring"] != want {
+				t.Fatalf("listed ring = %q, want %q", listed[2].App["ring"], want)
+			}
+			stored, err := s.read("aged")
+			if err != nil {
+				t.Fatalf("read aged theme: %v", err)
+			}
+			if stored.App["ring"] != want {
+				t.Fatalf("read ring = %q, want %q", stored.App["ring"], want)
+			}
+		})
 	}
 }
 

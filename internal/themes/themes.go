@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -24,7 +25,6 @@ const (
 	themeNameMaxLength  = 128
 	colorValueMaxLength = 128
 	maxThemeFileSize    = 1 << 20
-	themeIDPattern      = `^[a-z0-9][a-z0-9._-]{0,63}$`
 	// App colors are set as CSS custom properties, so the allowlist is what
 	// both a CSS color context and xterm's parser accept — anything able to
 	// name a resource (url(), image-set()) or defer a value (var(), attr())
@@ -37,7 +37,8 @@ const (
 )
 
 var (
-	idPattern          = regexp.MustCompile(themeIDPattern)
+	// The first character is spelled separately, so the repeat counts the rest.
+	idPattern          = regexp.MustCompile(fmt.Sprintf(`^[a-z0-9][a-z0-9._-]{0,%d}$`, themeIDMaxLength-1))
 	appColorValue      = regexp.MustCompile(appColorPattern)
 	terminalColorValue = regexp.MustCompile(terminalColorPattern)
 	reserved           = map[string]struct{}{
@@ -195,15 +196,46 @@ func (s *Service) read(id string) (Theme, error) {
 	if err != nil {
 		return Theme{}, fmt.Errorf("read theme %q: %w", id, err)
 	}
+	theme, err := decodeStored(data)
+	if err != nil {
+		return Theme{}, fmt.Errorf("theme %q: %w", id, err)
+	}
+	return theme, nil
+}
+
+// decodeStored reads a theme that is already installed. Unlike an import it
+// tolerates an app token the file predates: a release that adds one would
+// otherwise invalidate every theme installed before it, and the user would see
+// their theme simply disappear from Appearance with nothing but a log line.
+func decodeStored(data []byte) (Theme, error) {
 	var theme Theme
 	if err := json.Unmarshal(data, &theme); err != nil {
-		return Theme{}, fmt.Errorf("parse theme %q: %w", id, err)
+		return Theme{}, fmt.Errorf("parse theme JSON: %w", err)
 	}
 	theme.Origin = OriginCustom
+	fillMissingAppTokens(&theme)
 	if err := validateCustom(theme); err != nil {
 		return Theme{}, err
 	}
 	return theme, nil
+}
+
+// fillMissingAppTokens defaults from the bundled theme of the same scheme, the
+// closest thing to the value the author would have written. A theme with no app
+// block at all is left alone: that is a malformed file, not an aged one.
+func fillMissingAppTokens(theme *Theme) {
+	if theme.App == nil {
+		return
+	}
+	defaults := bundledThemes[0]
+	if theme.Scheme == SchemeDark {
+		defaults = bundledThemes[1]
+	}
+	for token := range appTokens {
+		if _, ok := theme.App[token]; !ok {
+			theme.App[token] = defaults.App[token]
+		}
+	}
 }
 
 // SaveTemplate writes the bundled starter theme to a destination the user
@@ -307,13 +339,8 @@ func (s *Service) customThemes() ([]Theme, error) {
 			slog.Warn("themes: read custom theme", "file", entry.Name(), "err", err)
 			continue
 		}
-		var theme Theme
-		if err := json.Unmarshal(data, &theme); err != nil {
-			slog.Warn("themes: parse custom theme", "file", entry.Name(), "err", err)
-			continue
-		}
-		theme.Origin = OriginCustom
-		if err := validateCustom(theme); err != nil {
+		theme, err := decodeStored(data)
+		if err != nil {
 			slog.Warn("themes: invalid custom theme", "file", entry.Name(), "err", err)
 			continue
 		}
@@ -425,20 +452,12 @@ func cloneTheme(theme Theme) Theme {
 		Name:     theme.Name,
 		Scheme:   theme.Scheme,
 		Origin:   theme.Origin,
-		App:      cloneMap(theme.App),
-		Terminal: cloneMap(theme.Terminal),
+		App:      maps.Clone(theme.App),
+		Terminal: maps.Clone(theme.Terminal),
 	}
 	if theme.Source != nil {
 		source := *theme.Source
 		out.Source = &source
-	}
-	return out
-}
-
-func cloneMap(in map[string]string) map[string]string {
-	out := make(map[string]string, len(in))
-	for key, value := range in {
-		out[key] = value
 	}
 	return out
 }

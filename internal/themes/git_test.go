@@ -222,6 +222,49 @@ func TestUpdateFromGitInstallsANewerManifest(t *testing.T) {
 	}
 }
 
+// A pack is free to drop a theme, and the copy already installed then answers
+// to no file in the repository. It keeps its place in Appearance, but it has to
+// stop asking to be updated to a version that will never contain it again.
+func TestUpdateFromGitConvergesAThemeThePackDropped(t *testing.T) {
+	s := NewInDir(t.TempDir())
+	repo := themeRepo(t, map[string]string{
+		manifestName:       manifestJSON(t, "Sample pack", "1.0.0"),
+		"tokyo-night.json": rawTheme(t, customTheme("tokyo-night")),
+		"gruvbox.json":     rawTheme(t, customTheme("gruvbox")),
+	})
+	if _, err := s.InstallFromGit(repo, false); err != nil {
+		t.Fatalf("InstallFromGit: %v", err)
+	}
+
+	if err := os.Remove(filepath.Join(repo, "gruvbox.json")); err != nil {
+		t.Fatalf("drop theme from repo: %v", err)
+	}
+	writeFile(t, repo, manifestName, manifestJSON(t, "Sample pack", "1.1.0"))
+	commitAll(t, repo, "drop gruvbox")
+
+	result, err := s.UpdateFromGit("gruvbox")
+	if err != nil {
+		t.Fatalf("UpdateFromGit: %v", err)
+	}
+	if result.UpToDate || result.Version != "1.1.0" {
+		t.Fatalf("result = %#v", result)
+	}
+	stored, err := s.read("gruvbox")
+	if err != nil {
+		t.Fatalf("dropped theme was not kept: %v", err)
+	}
+	if stored.Source == nil || stored.Source.Version != "1.1.0" {
+		t.Fatalf("dropped theme source = %#v", stored.Source)
+	}
+	again, err := s.UpdateFromGit("gruvbox")
+	if err != nil {
+		t.Fatalf("UpdateFromGit again: %v", err)
+	}
+	if !again.UpToDate {
+		t.Fatalf("update offers the same version forever: %#v", again)
+	}
+}
+
 func TestUpdateFromGitKeepsAnUpToDatePack(t *testing.T) {
 	s := NewInDir(t.TempDir())
 	repo := themeRepo(t, map[string]string{
@@ -312,6 +355,60 @@ func TestInstallFromGitRejectsAnUnsupportedRemote(t *testing.T) {
 	s := NewInDir(t.TempDir())
 	if _, err := s.InstallFromGit("ext::sh -c 'touch /tmp/pwned'", false); err == nil {
 		t.Fatal("InstallFromGit accepted a remote-helper URL")
+	}
+}
+
+// The scan cannot see a file Stat reports as missing, so the write is what has
+// to refuse. A dangling symlink is that state on purpose: invisible to the
+// scan, and O_EXCL still fails on it — the deterministic stand-in for a theme
+// imported between the two.
+func TestInstallFromGitDoesNotClobberWhatTheScanMissed(t *testing.T) {
+	dir := t.TempDir()
+	link := filepath.Join(dir, "tokyo-night.json")
+	target := filepath.Join(dir, "gone.json")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks are unavailable here: %v", err)
+	}
+	s := NewInDir(dir)
+	repo := themeRepo(t, map[string]string{
+		manifestName:       manifestJSON(t, "Sample pack", "1.0.0"),
+		"tokyo-night.json": rawTheme(t, customTheme("tokyo-night")),
+	})
+
+	result, err := s.InstallFromGit(repo, false)
+	if err != nil {
+		t.Fatalf("InstallFromGit: %v", err)
+	}
+	if len(result.Conflicts) != 1 || result.Conflicts[0] != "tokyo-night" {
+		t.Fatalf("conflicts = %#v", result.Conflicts)
+	}
+	if len(result.Themes) != 0 {
+		t.Fatalf("themes were installed over the conflict: %#v", result.Themes)
+	}
+	if _, err := os.Lstat(link); err != nil {
+		t.Fatalf("the existing entry was replaced: %v", err)
+	}
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Fatalf("the install wrote through the link: %v", err)
+	}
+}
+
+// gitError picks the line naming the failure out of git's output. Without a
+// clone that actually fails, the whole picker never runs.
+func TestInstallFromGitReportsWhatGitSaid(t *testing.T) {
+	requireGit(t)
+	missing := filepath.Join(t.TempDir(), "no-such-repo")
+	_, err := NewInDir(t.TempDir()).InstallFromGit(missing, false)
+	if err == nil {
+		t.Fatal("InstallFromGit cloned a path that does not exist")
+	}
+	if !strings.Contains(err.Error(), "clone "+missing) {
+		t.Fatalf("error does not name the clone: %v", err)
+	}
+	// Not pinning git's wording, which is localized; pinning that the message is
+	// git's line and not the bare exit status the picker falls back to.
+	if strings.Contains(err.Error(), "exit status") {
+		t.Fatalf("error carries the exit status instead of git's own line: %v", err)
 	}
 }
 

@@ -5,6 +5,30 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **A theme repository's update stops asking forever.** When a pack dropped or
+  renamed the file a theme came from, updating installed the new pack but left
+  that theme stamped with the version it arrived at — so the next check saw a
+  newer manifest again, said "Updated", and changed nothing. The dropped theme
+  is now kept where it is and takes the version that was just installed:
+  Appearance stops offering the same update, and nothing you may be wearing is
+  deleted behind your back.
+
+- **A custom theme no longer disappears when lich adds a color.** An installed
+  theme was checked against the full token list at load time, so the first
+  release to add an app token would have dropped every theme imported before it
+  from Settings › Appearance, silently. A stored theme now fills what it lacks
+  from the bundled theme of its own scheme and keeps working; imports are still
+  refused for a missing token, where the file is in front of you to fix.
+
+- **A theme imported mid-install is no longer overwritten.** Installing a
+  repository checked for existing ids and then wrote regardless, so a theme that
+  appeared between the two was replaced without the confirmation the check
+  exists to ask for. The write now refuses it and reports it as a conflict.
+
 ## [0.31.0] - 2026-08-13
 
 ### Added

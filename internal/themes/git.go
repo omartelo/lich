@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,9 +26,11 @@ const (
 // remote is usually copied in.
 var scpLike = regexp.MustCompile(`^[a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+:[^\s]+$`)
 
-// GitInstallResult reports what installing a repository produced. Conflicts is
-// non-empty only when the install was refused because those theme ids already
-// exist locally; nothing was written in that case.
+// GitInstallResult reports what installing a repository produced. Conflicts
+// names the theme ids that already exist locally: found by the scan that runs
+// before any write, nothing was installed at all; found by the write itself — a
+// theme that appeared in between — that one id was left alone and Themes says
+// what did go in.
 type GitInstallResult struct {
 	Pack      string   `json:"pack"`
 	Version   string   `json:"version"`
@@ -44,8 +47,9 @@ type pack struct {
 }
 
 // InstallFromGit clones a theme repository and installs every theme in it. The
-// install is all-or-nothing: one unreadable or invalid theme fails the whole
-// repository instead of leaving half a pack behind.
+// pack is validated as a whole before anything is written, so one unreadable or
+// invalid theme fails the whole repository. The writing is per file, though: a
+// disk error partway through leaves the themes already written in place.
 func (s *Service) InstallFromGit(url string, overwrite bool) (GitInstallResult, error) {
 	if s.initErr != nil {
 		return GitInstallResult{}, s.initErr
@@ -80,7 +84,32 @@ func (s *Service) UpdateFromGit(id string) (GitInstallResult, error) {
 		result.UpToDate = true
 		return result, nil
 	}
-	return s.installPack(latest, true)
+	result, err = s.installPack(latest, true)
+	if err != nil {
+		return GitInstallResult{}, err
+	}
+	// The new pack may have dropped or renamed the file this id came from. Left
+	// as it is the stored copy keeps the version it was installed at, so every
+	// later check finds a newer manifest and offers the same update forever;
+	// adopting the pack's version converges it without deleting a theme the user
+	// may be wearing right now.
+	if err := s.adoptPackVersion(id, result.Version); err != nil {
+		slog.Warn("themes: stamp theme the pack no longer carries", "id", id, "err", err)
+	}
+	return result, nil
+}
+
+func (s *Service) adoptPackVersion(id, version string) error {
+	theme, err := s.read(id)
+	if err != nil {
+		return err
+	}
+	if theme.Source == nil || theme.Source.Version == version {
+		return nil
+	}
+	theme.Source.Version = version
+	_, err = s.install(theme, true)
+	return err
 }
 
 func (s *Service) installPack(installed pack, overwrite bool) (GitInstallResult, error) {
@@ -90,8 +119,11 @@ func (s *Service) installPack(installed pack, overwrite bool) (GitInstallResult,
 	}
 	if !overwrite {
 		for _, theme := range installed.themes {
-			if _, err := os.Stat(s.path(theme.ID)); err == nil {
+			switch _, err := os.Stat(s.path(theme.ID)); {
+			case err == nil:
 				result.Conflicts = append(result.Conflicts, theme.ID)
+			case !os.IsNotExist(err):
+				return GitInstallResult{}, fmt.Errorf("check existing theme %q: %w", theme.ID, err)
 			}
 		}
 		if len(result.Conflicts) > 0 {
@@ -102,11 +134,18 @@ func (s *Service) installPack(installed pack, overwrite bool) (GitInstallResult,
 		return GitInstallResult{}, fmt.Errorf("create themes dir: %w", err)
 	}
 	for _, theme := range installed.themes {
-		if _, err := s.install(theme, true); err != nil {
+		// The scan above is a moment old, and it is the write that has to keep
+		// the promise: an id that turned up in between is refused, not replaced.
+		written, err := s.install(theme, overwrite)
+		if err != nil {
 			return GitInstallResult{}, err
 		}
+		if !written {
+			result.Conflicts = append(result.Conflicts, theme.ID)
+			continue
+		}
+		result.Themes = append(result.Themes, theme)
 	}
-	result.Themes = installed.themes
 	return result, nil
 }
 
