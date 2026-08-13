@@ -14,15 +14,16 @@ import (
 // order can never be decided against a stale count.
 const nextSessionPosition = `(SELECT COALESCE(MAX(position), -1) + 1 FROM sessions WHERE project_id = ?)`
 
+// setActiveSessionSQL is shared by the transactional helper below and the
+// standalone SetActiveSession, so the two can never drift apart.
+const setActiveSessionSQL = `UPDATE projects SET active_session_id = ? WHERE id = ?`
+
 // setActiveSession points a project at the session that should hold focus. Every
 // mutation that adds, parks or removes a session ends by calling it inside the
 // same transaction: the active id and the session set have to move together, or
 // a reload restores a project focused on a session that is no longer there.
 func setActiveSession(tx *sql.Tx, projectID, sessionID string) error {
-	if _, err := tx.Exec(
-		`UPDATE projects SET active_session_id = ? WHERE id = ?`,
-		sessionID, projectID,
-	); err != nil {
+	if _, err := tx.Exec(setActiveSessionSQL, sessionID, projectID); err != nil {
 		return fmt.Errorf("set active session of %q: %w", projectID, err)
 	}
 	return nil
@@ -322,10 +323,7 @@ func (s *Service) ReorderSessions(projectID string, ids []string) error {
 
 // SetActiveSession records which session is focused within a project.
 func (s *Service) SetActiveSession(projectID, sessionID string) error {
-	if _, err := s.db.Exec(
-		`UPDATE projects SET active_session_id = ? WHERE id = ?`,
-		sessionID, projectID,
-	); err != nil {
+	if _, err := s.db.Exec(setActiveSessionSQL, sessionID, projectID); err != nil {
 		return fmt.Errorf("set active session %q on %q: %w", sessionID, projectID, err)
 	}
 	return nil

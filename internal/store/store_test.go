@@ -400,6 +400,16 @@ func TestOperationsOnClosedStoreReturnErrors(t *testing.T) {
 		t.Error("SetSessionTitle on closed store = nil error, want error")
 	}
 	assertErr("SetSetting", svc.SetSetting("k", "", "v"))
+	assertErr("SetWorktreePort", svc.SetWorktreePort("/wt/foo", 5173))
+	assertErr("SaveCostLedger", svc.SaveCostLedger("s1", "t1", 10, "m1", 0.5))
+	if _, _, _, err := svc.CostLedger("s1", "t1"); err == nil {
+		t.Error("CostLedger on closed store = nil error, want error")
+	}
+	// WorktreePorts answers with an empty map rather than an error: a read that
+	// fails degrades allocation to the hash instead of failing the spawn.
+	if got := svc.WorktreePorts(); len(got) != 0 {
+		t.Errorf("WorktreePorts on closed store = %v, want empty", got)
+	}
 
 	if _, err := svc.GetSetting("k", ""); err == nil {
 		t.Error("GetSetting on closed store = nil error, want error")

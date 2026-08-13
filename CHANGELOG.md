@@ -5,7 +5,20 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.31.0] - 2026-08-13
+## [Unreleased]
+
+### Fixed
+
+- **A dropped file could resolve to the wrong twin.** The search that turns a
+  pathless drop back into a real file gives up after a fixed number of entries,
+  and when it ran out between two same-named files it kept the one it had
+  already seen — pasting a path to the wrong file, which an agent then edits.
+  A level the search could not finish now resolves to nothing, which falls back
+  to the copy, as two twins always should have.
+- **A copy could overwrite an earlier drop.** With 999 copies of one name
+  already stored, the next drop of it reused the last name and truncated that
+  copy, whose path may still have been sitting unsent in a prompt. The drop is
+  refused instead.
 
 ### Added
 
