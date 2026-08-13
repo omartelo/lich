@@ -5,7 +5,7 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.31.0] - 2026-08-13
 
 ### Changed
 
@@ -2234,7 +2234,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.30.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.31.0...HEAD
+[0.31.0]: https://github.com/omartelo/lich/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/omartelo/lich/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/omartelo/lich/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/omartelo/lich/compare/v0.27.0...v0.28.0
