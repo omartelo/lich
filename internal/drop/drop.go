@@ -49,6 +49,11 @@ var homeDir = os.UserHomeDir
 // File.lastModified and the filesystem's timestamp.
 const mtimeSlackMs = 2_000
 
+// maxCopies bounds how many copies of one name live side by side (the name
+// itself plus its -2… suffixes). Past it a caller is looping on something other
+// than collisions, and the drop is refused rather than overwriting.
+const maxCopies = 999
+
 // keepDropped is how long a copy outlives its drop. Long enough that a path
 // pasted into a prompt still resolves after a weekend of it sitting unsent,
 // and short enough that the directory cannot grow without bound, which is the
@@ -129,43 +134,75 @@ func find(root string, skipHidden bool, items []Item, pending map[int]bool, path
 	for i, item := range items {
 		wanted[item.Name] = append(wanted[item.Name], i)
 	}
-	budget := maxEntries
-	for level := []string{root}; len(level) > 0 && len(pending) > 0 && budget > 0; {
-		hits := make(map[int][]string)
-		var next []string
-		for _, dir := range level {
-			entries, err := os.ReadDir(dir)
-			if err != nil {
-				// An unreadable directory costs its items their real path,
-				// nothing more.
-				continue
-			}
-			for _, entry := range entries {
-				budget--
-				if budget <= 0 {
-					break
+	scan := &levelScan{
+		items:      items,
+		wanted:     wanted,
+		pending:    pending,
+		skipHidden: skipHidden,
+		budget:     maxEntries,
+	}
+	for dirs := []string{root}; len(dirs) > 0 && len(pending) > 0 && scan.budget > 0; {
+		scan.hits = make(map[int][]string)
+		scan.next = nil
+		for _, dir := range dirs {
+			scan.read(dir)
+		}
+		// A level the budget cut short was never seen whole, so a lone candidate
+		// in it may still have a twin among the entries never read: deciding
+		// here is how the ambiguity rule hands back the wrong file instead of
+		// nothing.
+		if scan.budget > 0 {
+			for i, candidates := range scan.hits {
+				if len(candidates) == 1 {
+					paths[i] = candidates[0]
 				}
-				path := filepath.Join(dir, entry.Name())
-				if entry.IsDir() && !skipDirs[entry.Name()] &&
-					!(skipHidden && strings.HasPrefix(entry.Name(), ".")) {
-					next = append(next, path)
-				}
-				for _, i := range wanted[entry.Name()] {
-					if pending[i] && matches(items[i], entry) {
-						hits[i] = append(hits[i], path)
-					}
-				}
+				// Ambiguous at this depth is answered here and not deeper: a
+				// match further down is not the one the shallow twins were
+				// competing for.
+				delete(pending, i)
 			}
 		}
-		for i, candidates := range hits {
-			if len(candidates) == 1 {
-				paths[i] = candidates[0]
-			}
-			// Ambiguous at this depth is answered here and not deeper: a match
-			// further down is not the one the shallow twins were competing for.
-			delete(pending, i)
+		dirs = scan.next
+	}
+}
+
+// levelScan is one breadth-first level in progress: what is still being looked
+// for, what this level has hit, the directories the next level will read, and
+// what is left of the search budget.
+type levelScan struct {
+	items      []Item
+	wanted     map[string][]int
+	pending    map[int]bool
+	skipHidden bool
+
+	hits   map[int][]string
+	next   []string
+	budget int
+}
+
+// read walks one directory into the level, stopping the moment the budget runs
+// out — which leaves the level undecided rather than half-decided.
+func (l *levelScan) read(dir string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		// An unreadable directory costs its items their real path, nothing more.
+		return
+	}
+	for _, entry := range entries {
+		l.budget--
+		if l.budget <= 0 {
+			return
 		}
-		level = next
+		path := filepath.Join(dir, entry.Name())
+		if entry.IsDir() && !skipDirs[entry.Name()] &&
+			!(l.skipHidden && strings.HasPrefix(entry.Name(), ".")) {
+			l.next = append(l.next, path)
+		}
+		for _, i := range l.wanted[entry.Name()] {
+			if l.pending[i] && matches(l.items[i], entry) {
+				l.hits[i] = append(l.hits[i], path)
+			}
+		}
 	}
 }
 
@@ -228,7 +265,10 @@ func (s *Service) Save(name string, body io.Reader) (string, error) {
 	if err := os.MkdirAll(s.dir, 0o755); err != nil {
 		return "", fmt.Errorf("dropped-files dir: %w", err)
 	}
-	path := uniquePath(s.dir, name)
+	path, err := uniquePath(s.dir, name)
+	if err != nil {
+		return "", err
+	}
 	file, err := os.Create(path)
 	if err != nil {
 		return "", fmt.Errorf("create %s: %w", path, err)
@@ -283,17 +323,21 @@ func (s *Service) Prune() {
 	}
 }
 
-// uniquePath is name, or name-2, name-3… up to a bound past which a caller is
-// looping on something other than collisions.
-func uniquePath(dir, name string) string {
-	path := filepath.Join(dir, name)
+// uniquePath is name, or name-2, name-3… up to maxCopies of them. Past that the
+// namespace is exhausted and there is no path left to give: answering with the
+// last one would overwrite a copy whose path may still be sitting in a prompt,
+// which is the one thing Save promises never to do.
+func uniquePath(dir, name string) (string, error) {
 	ext := filepath.Ext(name)
 	stem := strings.TrimSuffix(name, ext)
-	for i := 2; i < 1_000; i++ {
-		if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
-			break
+	for i := 1; i <= maxCopies; i++ {
+		path := filepath.Join(dir, name)
+		if i > 1 {
+			path = filepath.Join(dir, fmt.Sprintf("%s-%d%s", stem, i, ext))
 		}
-		path = filepath.Join(dir, fmt.Sprintf("%s-%d%s", stem, i, ext))
+		if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
+			return path, nil
+		}
 	}
-	return path
+	return "", fmt.Errorf("%s: %d copies already, no free name left", name, maxCopies)
 }

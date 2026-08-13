@@ -19,16 +19,16 @@ func TestWrapSetup(t *testing.T) {
 		rows: 24,
 	}
 
-	if got := wrapSetup(base, "", "linux"); got.bin != base.bin || len(got.args) != 2 {
-		t.Errorf("empty script rewrote the spec: %+v", got)
+	if got, wrapped := wrapSetup(base, "", "linux"); got.bin != base.bin || len(got.args) != 2 || wrapped {
+		t.Errorf("empty script rewrote the spec: %+v (wrapped=%v)", got, wrapped)
 	}
-	if got := wrapSetup(base, "pnpm i", "windows"); got.bin != base.bin {
-		t.Errorf("windows rewrote the spec: %+v", got)
+	if got, wrapped := wrapSetup(base, "pnpm i", "windows"); got.bin != base.bin || wrapped {
+		t.Errorf("windows rewrote the spec: %+v (wrapped=%v)", got, wrapped)
 	}
 
-	got := wrapSetup(base, "pnpm i", "linux")
-	if got.bin != "sh" || len(got.args) != 2 || got.args[0] != "-c" {
-		t.Fatalf("wrapped spec = %+v, want sh -c", got)
+	got, wrapped := wrapSetup(base, "pnpm i", "linux")
+	if got.bin != "sh" || len(got.args) != 2 || got.args[0] != "-c" || !wrapped {
+		t.Fatalf("wrapped spec = %+v (wrapped=%v), want sh -c", got, wrapped)
 	}
 	cmd := got.args[1]
 	for _, want := range []string{
@@ -50,7 +50,7 @@ func TestWrapSetup(t *testing.T) {
 // the PTY and the pid are the same across the exec — and a session still
 // running its setup must not be handed work (see Service.Ready).
 func TestSetupWrapperMarksItsEnd(t *testing.T) {
-	spec := wrapSetup(ptySpec{bin: "claude", args: []string{"--name", "x"}}, "pnpm install", "linux")
+	spec, _ := wrapSetup(ptySpec{bin: "claude", args: []string{"--name", "x"}}, "pnpm install", "linux")
 
 	script := spec.args[1]
 	marker := strings.Index(script, `printf '\033]6969;lich-setup-done\007'`)

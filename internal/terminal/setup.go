@@ -15,9 +15,14 @@ import (
 // decision stays pure and testable off-Windows (wrapArgv's pattern): Windows
 // is skipped — composing a cmd.exe chain around wrapArgv's own cmd.exe
 // handling is not worth it while the port stays experimental.
-func wrapSetup(spec ptySpec, script, goos string) ptySpec {
+//
+// The bool reports whether the wrap happened, and it is the only honest answer
+// to "will this PTY print the end marker". Re-deriving it from the returned
+// spec reads sh — which a provider's own binary may already be — and a session
+// armed to wait for a marker nothing will print never becomes ready.
+func wrapSetup(spec ptySpec, script, goos string) (ptySpec, bool) {
 	if script == "" || goos == "windows" {
-		return spec
+		return spec, false
 	}
 	argv := make([]string, 0, len(spec.args)+1)
 	for _, arg := range append([]string{spec.bin}, spec.args...) {
@@ -29,7 +34,7 @@ func wrapSetup(spec ptySpec, script, goos string) ptySpec {
 		"(\n" + script + "\n) || echo \"[lich] worktree setup failed (exit $?)\"; " +
 			"printf '" + setupDoneEscaped + "'; exec " + strings.Join(argv, " "),
 	}
-	return spec
+	return spec, true
 }
 
 // setupDone is what the wrapper emits between the script and the provider, and

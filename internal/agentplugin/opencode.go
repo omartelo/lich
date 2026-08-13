@@ -44,11 +44,7 @@ func (s *Service) opencodeInstall() error {
 	}
 	body := fmt.Sprintf("%s %s v%s — installed by lich, replace with the file from %s\n%s",
 		jsComment, markerName, version, marketplaceRepo, data)
-	path := filepath.Join(dir, opencodeFile)
-	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
-		return fmt.Errorf("write %s: %w", path, err)
-	}
-	return nil
+	return writeFile(filepath.Join(dir, opencodeFile), []byte(body), 0o644)
 }
 
 // opencodeInstalledVersion reads the version off the marker line lich wrote, or

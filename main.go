@@ -145,11 +145,7 @@ func main() {
 	// the PTY here rather than waiting for someone to click the card.
 	dispatcher.Register("spawn", spawn.New(db, proj, term, hub))
 	dispatcher.Register("themes", themes.New())
-	dispatcher.Deny("store.Close")
-	// The dropped file's bytes are the request body, so the upload is its own
-	// endpoint: the RPC envelope is a JSON argument array with a 1MB bound.
-	dispatcher.Deny("drop.Upload")
-	dispatcher.Deny("drop.Save")
+	denyInternal(dispatcher)
 	term.Mount("/rpc/", dispatcher)
 	term.Mount("/drop", http.HandlerFunc(drops.Upload))
 	term.Mount("/events", hub)
@@ -167,6 +163,33 @@ func main() {
 	term.SetRestart(coord.Do)
 
 	runChromium(term, configDir, coord)
+}
+
+// denyInternal hides the methods that exist for Go callers inside this process
+// but must never answer a page POST. Registration exposes every exported method
+// of a service (internal/rpc), so each of these is one /rpc/ path away from the
+// window:
+//
+//   - store.Close ends the database the whole app is still using.
+//   - drop.Upload and drop.Save take the dropped file's bytes as the request
+//     body, so the upload is its own endpoint — the RPC envelope is a JSON
+//     argument array with a 1MB bound.
+//   - relay.Observe is the hooks' session-state stream, which arrives over
+//     /hook: forging a SessionEnd here closes another session's errands.
+//   - relay.SetPlugins and project.SetAccounts are startup wiring. Called with
+//     [null] they silently nil what they wired (encoding/json leaves a func or
+//     pointer alone on null), and the write races the readers already serving.
+func denyInternal(d *rpc.Handler) {
+	for _, method := range []string{
+		"store.Close",
+		"drop.Upload",
+		"drop.Save",
+		"relay.Observe",
+		"relay.SetPlugins",
+		"project.SetAccounts",
+	} {
+		d.Deny(method)
+	}
 }
 
 // runChromium serves the embedded frontend on the loopback listener and opens

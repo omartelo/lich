@@ -83,6 +83,39 @@ func TestDiffTextClean(t *testing.T) {
 	}
 }
 
+// TestUntrackedDiffYieldsNothingItCannotRender pins the three ways an untracked
+// file produces no hunk instead of an error: it is gone by the time the diff
+// runs (ls-files listed it a moment earlier), it is past the read cap, or git
+// itself cannot open it — the last one is the "any other failure" branch, which
+// has to be told apart from git's exit 1 for "the files differ".
+func TestUntrackedDiffYieldsNothingItCannotRender(t *testing.T) {
+	repo, _ := initRepo(t)
+
+	if got := untrackedDiff(repo, "vanished.txt"); got != "" {
+		t.Errorf("untrackedDiff(vanished) = %q, want empty", got)
+	}
+
+	sparseTextFile(t, filepath.Join(repo, "huge.txt"), 10<<20+1)
+	// Length, not content: a regression here renders the whole 10MiB file.
+	if got := untrackedDiff(repo, "huge.txt"); got != "" {
+		t.Errorf("untrackedDiff(over 10MiB) = %d bytes, want empty", len(got))
+	}
+
+	unreadable := filepath.Join(repo, "unreadable.txt")
+	if err := os.WriteFile(unreadable, []byte("x\ny\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(unreadable, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.ReadFile(unreadable); err == nil {
+		t.Skip("file permissions do not apply here")
+	}
+	if got := untrackedDiff(repo, "unreadable.txt"); got != "" {
+		t.Errorf("untrackedDiff(unreadable) = %q, want empty", got)
+	}
+}
+
 // TestDiffTextBinaryUntracked proves an untracked binary shows up as git's
 // "Binary files ... differ" stanza rather than a textual hunk.
 func TestDiffTextBinaryUntracked(t *testing.T) {

@@ -44,9 +44,15 @@ func (s *Service) fetchFile(version, path string) ([]byte, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("fetch %s: %s", url, resp.Status)
 	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, fileBodyLimit))
+	// One byte past the cap, so a file over it is rejected rather than truncated:
+	// a cut-off module still carries lich's version marker, and a harness would
+	// load it as the release lich says is installed.
+	data, err := io.ReadAll(io.LimitReader(resp.Body, fileBodyLimit+1))
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", url, err)
+	}
+	if len(data) > fileBodyLimit {
+		return nil, fmt.Errorf("fetch %s: file is larger than %d bytes", url, fileBodyLimit)
 	}
 	if len(data) == 0 {
 		return nil, fmt.Errorf("fetch %s: empty file", url)

@@ -12,11 +12,15 @@ import (
 	"strings"
 )
 
-// Validate rejects rooted paths and parent-directory escapes, so joining rel
-// onto a work-tree root can never leave it.
+// Validate rejects rooted paths, parent-directory escapes and the work-tree
+// root itself, so joining rel onto a work-tree root can never leave it — and
+// can never name the whole tree. The root is refused because a caller that
+// means one file is handed every file instead: `git rm -f --cached -- .`
+// empties the index (see project.DiscardFile). It is also what an empty path
+// cleans to, so a missing argument stops here rather than at the git call.
 func Validate(rel string) error {
 	clean := filepath.Clean(rel)
-	if isRooted(clean) || clean == ".." ||
+	if clean == "." || isRooted(clean) || clean == ".." ||
 		strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("invalid repository path %q", rel)
 	}

@@ -7,12 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/omartelo/lich/internal/winexec"
 )
 
 // gh network calls are capped so a slow forge or a hung auth prompt never
@@ -49,14 +46,13 @@ var errNoPullRequest = errors.New("no pull request for this branch")
 func runGH(timeout time.Duration, dir, token string, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "gh", args...)
+	cmd := commandContext(ctx, "gh", args...)
 	cmd.Dir = dir
 	if token != "" {
 		cmd.Env = append(os.Environ(), "GH_TOKEN="+token)
 	}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	winexec.Hide(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		if isNoPullRequest(stderr.String()) {
