@@ -5,6 +5,19 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **A task the target picks up the instant it lands is no longer given up on.**
+  lich types a relayed message and presses Enter a beat later, and anything the
+  target reported in that beat counted for nothing. A session that started
+  working right there looked like one that had never read the task: the errand
+  was closed as "unread" while the message was queued and running, and the
+  worker's own `lich reply` then failed with "unknown ticket". The same beat
+  could swallow the end of a turn that was already in progress instead, leaving
+  an errand whose answering turn was skipped and which never closed at all.
+
 ## [0.31.0] - 2026-08-13
 
 ### Added

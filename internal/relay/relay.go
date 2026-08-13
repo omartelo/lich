@@ -247,7 +247,7 @@ type ticket struct {
 	targetID string
 	target   string
 	created  time.Time
-	// delivered is when the message actually reached the target's PTY — zero
+	// delivered is when the message started going into the target's PTY — zero
 	// while the ticket is still waiting out the target's setup script. Turn
 	// accounting reads it twice over: a turn observed on the target says nothing
 	// about an undelivered message, and when one turn ends with several errands
@@ -441,15 +441,21 @@ func (s *Service) Send(fromID, target, project, prompt string, waitSeconds int) 
 		return Result{}, err
 	}
 	message := compose(sender, id, prompt, s.offersTools(dest.Peer.Kind))
+	// Stamped before the write, not after: a delivery is two writes a beat apart
+	// (see deliver), and turn accounting ignores an undelivered ticket. A target
+	// reporting inside that beat would be lost — its busy report, and the ticket
+	// is closed unread with the message queued and the reply that follows landing
+	// on nothing; its done, and the skip meant for the turn already running is
+	// spent on the turn that carries the answer.
+	s.mu.Lock()
+	t.delivered = s.now()
+	s.mu.Unlock()
 	if err := s.deliver(dest.ID, message); err != nil {
 		s.mu.Lock()
 		delete(s.tickets, id)
 		s.mu.Unlock()
 		return Result{}, fmt.Errorf("deliver to %q: %w", dest.Peer.Label, err)
 	}
-	s.mu.Lock()
-	t.delivered = s.now()
-	s.mu.Unlock()
 	// Announced only once the message is actually in the PTY: a mark raised
 	// before the write would survive a delivery that never happened.
 	s.announce(t.targetID, t.sender, DirectionIn)
