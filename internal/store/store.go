@@ -43,7 +43,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     label_auto          INTEGER NOT NULL DEFAULT 1,
     is_open             INTEGER NOT NULL DEFAULT 1,
     position            INTEGER NOT NULL DEFAULT 0,
-    pinned              INTEGER NOT NULL DEFAULT 0
+    pinned              INTEGER NOT NULL DEFAULT 0,
+    model               TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
 
@@ -155,6 +156,7 @@ func open(path string) (*Service, error) {
 		`ALTER TABLE sessions ADD COLUMN is_open INTEGER NOT NULL DEFAULT 1`,
 		`ALTER TABLE sessions ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE sessions ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE sessions ADD COLUMN model TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE projects ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE projects ADD COLUMN closed_seq INTEGER NOT NULL DEFAULT 0`,
 	}

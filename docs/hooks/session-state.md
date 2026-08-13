@@ -34,20 +34,25 @@ Both sides test against the payloads in
 
 ## Event → state mapping
 
-| Claude Code hook   | Codex hook          | opencode event           | Crush hook | state     |
-|--------------------|---------------------|--------------------------|------------|-----------|
-| `UserPromptSubmit` | `UserPromptSubmit`  | `session.status` (`busy`) | —          | `busy`    |
-| `PreToolUse`       | `PreToolUse`        | `tool.execute.before`    | —          | `busy` + `tool` |
-| `PostToolUse`      | `PostToolUse`       | `tool.execute.after`     | —          | `busy`    |
-| `Notification`     | `PermissionRequest` | any `*.asked`            | —          | `waiting` |
-| `Stop`             | `Stop`              | `session.status` (`idle`) | —          | `done`    |
-| `SessionEnd`       | —                   | —                        | —          | `idle`    |
+| Claude Code hook   | Codex hook          | opencode event           | oh-my-pi event | Crush hook | state     |
+|--------------------|---------------------|--------------------------|----------------|------------|-----------|
+| `UserPromptSubmit` | `UserPromptSubmit`  | `session.status` (`busy`) | `input`        | —          | `busy`    |
+| `PreToolUse`       | `PreToolUse`        | `tool.execute.before`    | `tool_call`    | —          | `busy` + `tool` |
+| `PostToolUse`      | `PostToolUse`       | `tool.execute.after`     | `turn_start`   | —          | `busy`    |
+| `Notification`     | `PermissionRequest` | any `*.asked`            | —              | —          | `waiting` |
+| `Stop`             | `Stop`              | `session.status` (`idle`) | `session_stop` | —          | `done`    |
+| `SessionEnd`       | —                   | —                        | —              | —          | `idle`    |
 
 opencode is the one harness that reports a state rather than an event: its
 `session.status` carries `busy`, `idle` or `retry` for the session named in the
 same payload. Its `idle` means the turn ended, which is lich's `done` — not
 lich's `idle`, which says the CLI itself has left. Nothing in opencode's event
 list says that, so like Codex it never reports `idle`.
+
+**oh-my-pi carries `busy` on `turn_start` rather than after a tool.** Its
+non-interactive runs never emit `input` at all, so the turn boundary is the one
+event every turn passes through — the same place the title is re-read, since omp
+writes it asynchronously after the turn.
 
 **opencode's `waiting` is a rule, not an event name.** It asks the user in more
 than one way — a permission decision and an interactive question, each with a
@@ -205,6 +210,14 @@ a broken script could do was lose a status report.
   is the server going away with the plugin inside it. Nothing survives to report
   it. An opencode card therefore keeps its last indicator until lich respawns
   that PTY, exactly like a Codex one.
+- **oh-my-pi reports neither `waiting` nor `idle`.** Its extension runs
+  in-process, so `idle` dies with the process that would send it, exactly as
+  opencode's does. `waiting` is absent for a different reason: omp declares a
+  `tool_approval_requested` event, but no real run was ever observed emitting it
+  — and a report wired to an event name that never fires is one that silently
+  never arrives. So an omp session waiting on a permission shows a spinner
+  rather than a bell, which Settings says out loud (`OMP_APPROVAL_HINT`) because
+  a missing bell reads as a broken install.
 - **An opencode report is only as precise as the server it runs in.** The plugin
   reads `LICH_SESSION_ID` from the environment of the process it was loaded by,
   and one opencode server can hold several conversations. Sub-sessions (the

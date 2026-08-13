@@ -24,6 +24,9 @@ func (*Service) ResumeAvailable(kind, providerSessionID string) bool {
 	case providers.Codex:
 		_, ok := codexTranscriptPath(providerSessionID)
 		return ok
+	case providers.OMP:
+		_, ok := ompTranscriptPath(providerSessionID)
+		return ok
 	}
 	return false
 }
