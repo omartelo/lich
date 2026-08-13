@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   could swallow the end of a turn that was already in progress instead, leaving
   an errand whose answering turn was skipped and which never closed at all.
 
+- **A result whose notice never reached the prompt is announced again.** The
+  `[lich]` line naming waiting results is the only thing that tells an agent to
+  collect them — the results themselves are never typed. A write that failed
+  used to count as a notice given, and the sender was never told again. It now
+  goes out at the end of the sender's next turn.
+
 ## [0.31.0] - 2026-08-13
 
 ### Added

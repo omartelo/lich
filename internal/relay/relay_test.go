@@ -29,6 +29,7 @@ type fakeTerminal struct {
 	settingUp map[string]bool
 	writes    map[string][]string
 	writeErr  error
+	refused   int
 	// onWrite runs after a write is recorded, outside the fake's own lock, so a
 	// test can make the target report state from inside a delivery.
 	onWrite func(id, data string)
@@ -68,17 +69,37 @@ func (f *fakeTerminal) setUp(id string, running bool) {
 }
 
 func (f *fakeTerminal) Write(id, data string) error {
-	if f.writeErr != nil {
-		return f.writeErr
-	}
 	f.mu.Lock()
-	f.writes[id] = append(f.writes[id], data)
+	err := f.writeErr
+	if err != nil {
+		f.refused++
+	} else {
+		f.writes[id] = append(f.writes[id], data)
+	}
 	hook := f.onWrite
 	f.mu.Unlock()
+	if err != nil {
+		return err
+	}
 	if hook != nil {
 		hook(id, data)
 	}
 	return nil
+}
+
+// failWrites makes every write fail from here on, and refusals counts what was
+// turned away — a test waiting for a failed delivery has nothing else to look
+// at, and sleeping instead would race it.
+func (f *fakeTerminal) failWrites(err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.writeErr = err
+}
+
+func (f *fakeTerminal) refusals() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.refused
 }
 
 // writesTo is every write a session received, in order — the submit is its own,
@@ -1848,6 +1869,34 @@ func TestANudgeIsNotRepeatedOnLaterTurnEnds(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 	if writes := term.writesTo("s1"); len(writes) != 2 {
 		t.Errorf("an uncollected result was nudged again: %q", writes)
+	}
+}
+
+// One nudge per result, unless the one nudge never landed. The results
+// themselves are never typed, so a notice lost to a failed write is a result
+// the sender is never told about — the entry has to go back to unnudged and be
+// tried again at the next turn end.
+func TestANudgeThatNeverLandedIsSentAgain(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := newRelay(workspace(), term, nil)
+	term.failWrites(errors.New("pty closed"))
+	plant(svc, "t1", "s1", "s2", "docs")
+
+	if err := svc.Reply("t1", "all green"); err != nil {
+		t.Fatalf("Reply: %v", err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for term.refusals() == 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if term.refusals() == 0 {
+		t.Fatal("the nudge was never attempted")
+	}
+
+	term.failWrites(nil)
+	svc.Observe("s1", stateDone)
+	if !awaitWritten(term, "s1", "[lich]") {
+		t.Fatalf("a nudge that failed to land was never sent again: %q", term.writesTo("s1"))
 	}
 }
 

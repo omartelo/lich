@@ -820,22 +820,22 @@ func (s *Service) flushNudge(fromID string) {
 		s.mu.Unlock()
 		return
 	}
-	fresh := 0
+	var marked []string
 	count := 0
 	targets := map[string]bool{}
-	for _, e := range s.ready {
+	for id, e := range s.ready {
 		if e.fromID != fromID {
 			continue
 		}
 		if !e.nudged {
-			fresh++
 			e.nudged = true
+			marked = append(marked, id)
 		}
 		count++
 		targets[e.target] = true
 	}
 	s.mu.Unlock()
-	if fresh == 0 {
+	if len(marked) == 0 {
 		return
 	}
 	labels := make([]string, 0, len(targets))
@@ -843,15 +843,23 @@ func (s *Service) flushNudge(fromID string) {
 		labels = append(labels, label)
 	}
 	sort.Strings(labels)
-	sender, _ := s.sessionOf(fromID)
-	s.tellSender(fromID, nudgeNotice(count, labels, s.offersTools(sender.Kind)))
-}
 
-// tellSender types one line of news at the prompt of whoever asked, the same
-// way their request reached the target.
-func (s *Service) tellSender(fromID, message string) {
-	if err := s.deliver(fromID, message); err != nil {
+	sender, _ := s.sessionOf(fromID)
+	if err := s.deliver(fromID, nudgeNotice(count, labels, s.offersTools(sender.Kind))); err != nil {
+		// The notice is the only thing that tells an agent results are waiting —
+		// the results themselves are never typed — so one that never reached the
+		// prompt has to be sendable again: the entries take their mark back and the
+		// sender's next turn end tries once more. Marking before the write and
+		// giving it back after is what keeps a burst to one nudge; marking only on
+		// success would let two flushes racing each find the same entry fresh.
 		slog.Warn("relay: news not delivered", "session", fromID, "err", err)
+		s.mu.Lock()
+		for _, id := range marked {
+			if e, ok := s.ready[id]; ok {
+				e.nudged = false
+			}
+		}
+		s.mu.Unlock()
 	}
 }
 
