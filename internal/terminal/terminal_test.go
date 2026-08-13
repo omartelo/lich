@@ -491,8 +491,9 @@ func TestResolveCommand(t *testing.T) {
 }
 
 // TestResumeArgs proves each provider resumes in its own spelling — a flag for
-// Claude Code, a subcommand for Codex — and that a provider with none wired
-// never grows one: a shell, opencode or Crush must not be handed a stray id.
+// Claude Code and oh-my-pi, a subcommand for Codex — and that a provider with
+// none wired never grows one: a shell, opencode or Crush must not be handed a
+// stray id.
 func TestResumeArgs(t *testing.T) {
 	cases := []struct {
 		name, kind, resume string
@@ -502,7 +503,10 @@ func TestResumeArgs(t *testing.T) {
 		{"claude resume", "claude", "abc-123", []string{"--resume", "abc-123"}},
 		{"codex fresh", "codex", "", nil},
 		{"codex resume", "codex", "abc-123", []string{"resume", "abc-123"}},
+		{"omp fresh", "omp", "", nil},
+		{"omp resume", "omp", "abc-123", []string{"-r", "abc-123"}},
 		{"opencode never resumes", "opencode", "abc-123", nil},
+		{"crush never resumes", "crush", "abc-123", nil},
 		{"shell never resumes", KindShell, "abc-123", nil},
 		{"shell fresh", KindShell, "", nil},
 	}

@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **oh-my-pi runs the lich plugin.** Settings › lich plugin now offers omp the
+  same install as the others, writing the released extension into omp's own
+  `extensions/` directory — so an omp card shows what its session is doing,
+  renames itself from the conversation's title, and refreshes git status as
+  files change. The install also registers lich's MCP server in omp's
+  `mcp.json`, merged in beside whatever is already there, which puts the tools
+  for reaching the other sessions in an omp agent's own tool list. Two gaps are
+  the harness's own and Settings names them: omp has no observed approval event,
+  so a session waiting on your permission shows a spinner rather than a bell.
+
+- **An omp session resumes its conversation.** Reopening a card that ran omp
+  before a restart offers the same "continue where it left off" prompt Claude
+  Code and Codex cards get, and lich only offers it when omp's own transcript
+  for that conversation is still on disk.
+
 - **A session can be opened on a specific model.** `lich open --model <model>`
   and the `open_session` MCP tool's `model` argument start the new session's
   provider on the model you name, in that provider's own spelling — Claude Code,

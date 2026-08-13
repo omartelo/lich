@@ -1,6 +1,7 @@
 package agentplugin
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/omartelo/lich/internal/providers"
+	"github.com/omartelo/lich/internal/relay"
 )
 
 // The harnesses lich installs by writing files rather than by calling a CLI.
@@ -173,6 +175,161 @@ func TestOpencodeInstallWritesNothingWhenTheFetchFails(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(config, "opencode", "plugin", opencodeFile)); !os.IsNotExist(err) {
 		t.Errorf("a failed install left a module behind (stat err = %v)", err)
 	}
+}
+
+// --------------------------------------------------------------------- omp --
+
+// ompHome points an install at a temporary agent directory and returns it. The
+// explicit override is used rather than a redirected home, so the isolation
+// holds on every OS without depending on which variable that OS reads a home
+// from — and the profile variable is cleared, because a machine that has one set
+// would otherwise send the install somewhere else entirely.
+func ompHome(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("OMP_PROFILE", "")
+	t.Setenv("PI_CODING_AGENT_DIR", dir)
+	return dir
+}
+
+func TestOMPInstallWritesTheExtensionAndRegistersTheServer(t *testing.T) {
+	agent := ompHome(t)
+	s, asked := fileServer(t, map[string]string{
+		tagged(ompSource): "export default function lichPlugin(pi) {}\n",
+	})
+
+	if err := s.Install(providers.OMP); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(agent, "extensions", ompFile))
+	if err != nil {
+		t.Fatalf("read the installed extension: %v", err)
+	}
+	body := string(data)
+	if !strings.Contains(body, "export default function lichPlugin") {
+		t.Errorf("installed extension lost the release's body:\n%s", body)
+	}
+	if !strings.HasPrefix(body, jsComment+" "+markerName+" v"+testVersion+" ") {
+		t.Errorf("installed extension has no version marker on its first line:\n%s", body)
+	}
+	if got := asked(); len(got) != 1 || got[0] != tagged(ompSource) {
+		t.Errorf("fetched %v, want just %q", got, tagged(ompSource))
+	}
+
+	// omp takes no --mcp-config flag, so this document is the only way a session
+	// of its own reaches the other sessions.
+	servers := readOMPServers(t, agent)
+	lich, ok := servers[relay.MCPServerName].(map[string]any)
+	if !ok {
+		t.Fatalf("no %q server in %v", relay.MCPServerName, servers)
+	}
+	if lich["command"] == "" || lich["command"] == nil {
+		t.Errorf("registered server has no command: %v", lich)
+	}
+	if args, _ := lich["args"].([]any); len(args) != 1 || args[0] != relay.MCPSubcommand {
+		t.Errorf("registered server args = %v, want [%q]", lich["args"], relay.MCPSubcommand)
+	}
+
+	if got, ok := s.installedVersion(providers.OMP); !ok || got != testVersion {
+		t.Errorf("installedVersion = (%q,%v), want (%q,true)", got, ok, testVersion)
+	}
+}
+
+// The document belongs to the user: lich rewrites it, so everything it did not
+// come for has to survive the round trip — other servers, and the keys lich
+// knows nothing about.
+func TestOMPInstallKeepsEveryOtherServer(t *testing.T) {
+	agent := ompHome(t)
+	existing := `{
+  "mcpServers": {
+    "notes": {"command": "notes-server", "args": ["--stdio"]}
+  },
+  "somethingElse": {"kept": true}
+}`
+	if err := os.WriteFile(filepath.Join(agent, ompMCPFile), []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s, _ := fileServer(t, map[string]string{tagged(ompSource): "export default () => {}\n"})
+
+	if err := s.Install(providers.OMP); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
+	servers := readOMPServers(t, agent)
+	if _, ok := servers["notes"]; !ok {
+		t.Errorf("the user's own server is gone: %v", servers)
+	}
+	if _, ok := servers[relay.MCPServerName]; !ok {
+		t.Errorf("lich did not register itself: %v", servers)
+	}
+	raw, err := os.ReadFile(filepath.Join(agent, ompMCPFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "somethingElse") {
+		t.Errorf("a key lich does not know about was dropped:\n%s", raw)
+	}
+}
+
+// A document lich cannot parse is refused rather than replaced: overwriting it
+// would delete servers lich never got to see.
+func TestOMPInstallRefusesAnUnreadableDocument(t *testing.T) {
+	agent := ompHome(t)
+	const garbage = "{ not json"
+	path := filepath.Join(agent, ompMCPFile)
+	if err := os.WriteFile(path, []byte(garbage), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s, _ := fileServer(t, map[string]string{tagged(ompSource): "export default () => {}\n"})
+
+	if err := s.Install(providers.OMP); err == nil {
+		t.Fatal("Install: want an error for a document lich cannot merge into, got nil")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != garbage {
+		t.Errorf("the document was rewritten anyway: %q (err %v)", data, err)
+	}
+	// And nothing else was written either: an extension reporting into a session
+	// that never got the tools is the half-install this ordering exists to avoid.
+	if _, err := os.Stat(filepath.Join(agent, "extensions", ompFile)); !os.IsNotExist(err) {
+		t.Errorf("the refused install wrote the extension anyway (stat err = %v)", err)
+	}
+}
+
+// A release that does not carry the extension must leave nothing behind — no
+// module, and no registration pointing at reports that will never come.
+func TestOMPInstallWritesNothingWhenTheFetchFails(t *testing.T) {
+	agent := ompHome(t)
+	s, _ := fileServer(t, nil) // every path 404s
+
+	if err := s.Install(providers.OMP); err == nil {
+		t.Fatal("Install: want an error when the release has no extension, got nil")
+	}
+	if _, err := os.Stat(filepath.Join(agent, "extensions", ompFile)); !os.IsNotExist(err) {
+		t.Errorf("a failed install left an extension behind (stat err = %v)", err)
+	}
+	if _, err := os.Stat(filepath.Join(agent, ompMCPFile)); !os.IsNotExist(err) {
+		t.Errorf("a failed install registered a server anyway (stat err = %v)", err)
+	}
+}
+
+// readOMPServers returns the mcpServers table lich wrote.
+func readOMPServers(t *testing.T, agent string) map[string]any {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(agent, ompMCPFile))
+	if err != nil {
+		t.Fatalf("read the mcp document: %v", err)
+	}
+	var config map[string]any
+	if err := json.Unmarshal(data, &config); err != nil {
+		t.Fatalf("the mcp document is not JSON: %v\n%s", err, data)
+	}
+	servers, ok := config[ompMCPServers].(map[string]any)
+	if !ok {
+		t.Fatalf("no %s table in:\n%s", ompMCPServers, data)
+	}
+	return servers
 }
 
 // ------------------------------------------------------------------- crush --

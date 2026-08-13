@@ -399,14 +399,14 @@ own command line (`providers.AcceptsMCPServer`):
 | Codex | `-c mcp_servers.lich.command=…` and `…args=["mcp"]` | at spawn |
 | Crush | an `mcp add` line in the block the plugin install writes into `crushrc` | with the plugin |
 | opencode | its plugin defines the same seven as tools of its own — a plugin there cannot register an MCP server | with the plugin |
-| oh-my-pi | no flag, no plugin | no |
+| oh-my-pi | a `lich` entry merged into `mcp.json` beside the extension the plugin install writes | with the plugin |
 
 Only the first two can be told on their own command line, which is what makes
-their registration per-session and secret-free. The next two arrive with the
-plugin instead (Settings › lich plugin), because that install already writes
-into those harnesses' own directories — so the server is registered where the
-hooks are, removed by the same uninstall, and absent for anyone who never
-installed it. oh-my-pi has neither, and its sessions use the command line above.
+their registration per-session and secret-free. The rest arrive with the plugin
+instead (Settings › lich plugin), because that install already writes into
+those harnesses' own directories — so the server is registered where the hooks
+are, removed by the same uninstall, and absent for anyone who never installed
+it.
 
 Two rules the registration must keep:
 

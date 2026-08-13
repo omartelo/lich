@@ -282,8 +282,8 @@ func TestStatus(t *testing.T) {
 }
 
 // TestStatusListsEveryHarness proves the report covers the providers that can
-// run the plugin and nothing else: oh-my-pi has none, so an entry for it would
-// put an install button on a CLI that cannot use one.
+// run the plugin and nothing else: an entry for one that cannot would put an
+// install button on a CLI with nothing to install.
 func TestStatusListsEveryHarness(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	s := serveBody(t, http.StatusOK, `{"tag_name":"v0.2.0"}`)
@@ -293,7 +293,9 @@ func TestStatusListsEveryHarness(t *testing.T) {
 	for _, entry := range s.Status() {
 		got = append(got, entry.Provider)
 	}
-	want := []string{providers.Claude, providers.Codex, providers.OpenCode, providers.Crush}
+	want := []string{
+		providers.Claude, providers.Codex, providers.OpenCode, providers.OMP, providers.Crush,
+	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("Status() covers %v, want %v", got, want)
 	}
@@ -326,14 +328,14 @@ func TestStatusNotInstalled(t *testing.T) {
 	}
 }
 
-// TestUnknownProviderIsRefused proves a provider with no plugin never reaches a
-// CLI or a file: oh-my-pi has no marketplace to add and no plugin directory to
-// write into, so spawning it with the plugin's arguments would be nonsense.
+// TestUnknownProviderIsRefused proves a kind with no plugin never reaches a CLI
+// or a file: a shell session has no marketplace to add and no plugin directory
+// to write into, so spawning it with the plugin's arguments would be nonsense.
 func TestUnknownProviderIsRefused(t *testing.T) {
 	s, calls := fakeCLI(t, "")
 	for _, run := range []func(string) error{s.Install, s.Update} {
-		if err := run(providers.OMP); err == nil {
-			t.Error("want an error for a provider with no plugin, got nil")
+		if err := run("shell"); err == nil {
+			t.Error("want an error for a kind with no plugin, got nil")
 		}
 	}
 	if got := calls(); len(got) > 0 {

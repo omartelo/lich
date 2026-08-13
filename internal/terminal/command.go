@@ -22,11 +22,12 @@ const defaultBin = providers.Claude
 // KindShell marks a session that runs the user's shell instead of a provider.
 const KindShell = "shell"
 
-// How each provider reopens an existing conversation by id: Claude Code takes a
-// flag, Codex a subcommand.
+// How each provider reopens an existing conversation by id: Claude Code and
+// oh-my-pi take a flag, Codex a subcommand.
 const (
 	claudeResumeFlag  = "--resume"
 	codexResumeSubcmd = "resume"
+	ompResumeFlag     = "-r"
 )
 
 // claudeNameFlag sets the name a session answers to in Claude Code's peer
@@ -237,6 +238,8 @@ func resumeArgs(kind, resume string) []string {
 		return []string{claudeResumeFlag, resume}
 	case providers.Codex:
 		return []string{codexResumeSubcmd, resume}
+	case providers.OMP:
+		return []string{ompResumeFlag, resume}
 	}
 	return nil
 }
