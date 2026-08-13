@@ -122,6 +122,18 @@ const (
 	DirectionIn  = "in"
 )
 
+// InboxEventName carries how many uncollected results a session has waiting,
+// so its card can say so — the nudge tells the agent, and this tells the
+// person. Emitted whenever a sender's inbox changes size; zero clears the
+// mark. Global for the same reason the relay event is.
+const InboxEventName = "session-inbox"
+
+// InboxEvent is the payload of InboxEventName.
+type InboxEvent struct {
+	ID    string `json:"id"`
+	Count int    `json:"count"`
+}
+
 // StalledEventName carries a request whose target ended its turn without
 // answering through lich. The window turns it into a toast that opens the
 // target's card, because the answer — if there is one — is on that screen and
@@ -406,7 +418,7 @@ func (s *Service) Send(fromID, target, project, prompt string, waitSeconds int) 
 		unread:   make(chan struct{}),
 	}
 	s.mu.Lock()
-	expired := s.sweep()
+	expired, inboxEvents := s.sweep()
 	busy := s.state[dest.ID] == stateBusy
 	if busy {
 		t.skipTurns = 1
@@ -414,6 +426,7 @@ func (s *Service) Send(fromID, target, project, prompt string, waitSeconds int) 
 	s.tickets[id] = t
 	s.mu.Unlock()
 	s.clearAll(expired)
+	s.announceInboxAll(inboxEvents)
 
 	// One deadline covers the whole call: the setup wait and the answer wait
 	// spend the same budget. Each taking a full waitFor of its own would let a
@@ -563,16 +576,20 @@ func (s *Service) watchReceipt(id string, t *ticket) {
 // An outcome already sitting in the inbox is handed over on the spot.
 func (s *Service) Wait(ticketID string, waitSeconds int) (Result, error) {
 	s.mu.Lock()
-	expired := s.sweep()
+	expired, inboxEvents := s.sweep()
 	if e, ok := s.ready[ticketID]; ok {
 		delete(s.ready, ticketID)
+		count := s.countLocked(e.fromID)
 		s.mu.Unlock()
 		s.clearAll(expired)
+		s.announceInboxAll(inboxEvents)
+		s.announceInbox(e.fromID, count)
 		return Result{Ticket: e.ticket, Target: e.target, Status: e.status, Answer: e.answer}, nil
 	}
 	t, ok := s.tickets[ticketID]
 	s.mu.Unlock()
 	s.clearAll(expired)
+	s.announceInboxAll(inboxEvents)
 	if !ok {
 		return Result{}, fmt.Errorf("unknown ticket %q — it was answered long ago, or expired", ticketID)
 	}
@@ -591,18 +608,23 @@ func (s *Service) Collect(fromID string, waitSeconds int) (Collected, error) {
 	deadline := s.now().Add(waitFor(waitSeconds))
 	for {
 		s.mu.Lock()
-		expired := s.sweep()
+		expired, inboxEvents := s.sweep()
 		results := s.drainLocked(fromID)
 		open := s.openLocked(fromID)
 		if len(results) > 0 || len(open) == 0 {
 			s.mu.Unlock()
 			s.clearAll(expired)
+			s.announceInboxAll(inboxEvents)
+			if len(results) > 0 {
+				s.announceInbox(fromID, 0)
+			}
 			return Collected{Results: results, Open: open}, nil
 		}
 		wake := make(chan struct{}, 1)
 		s.collectors[fromID] = append(s.collectors[fromID], wake)
 		s.mu.Unlock()
 		s.clearAll(expired)
+		s.announceInboxAll(inboxEvents)
 
 		remaining := deadline.Sub(s.now())
 		if remaining <= 0 {
@@ -621,6 +643,9 @@ func (s *Service) Collect(fromID string, waitSeconds int) (Collected, error) {
 			results := s.drainLocked(fromID)
 			open := s.openLocked(fromID)
 			s.mu.Unlock()
+			if len(results) > 0 {
+				s.announceInbox(fromID, 0)
+			}
 			return Collected{Results: results, Open: open}, nil
 		}
 	}
@@ -730,6 +755,7 @@ func (s *Service) stash(id string, t *ticket, status, answer string) {
 		ticket: id, fromID: t.fromID, target: t.target,
 		status: status, answer: answer, ready: s.now(),
 	}
+	count := s.countLocked(t.fromID)
 	woke := false
 	for _, wake := range s.collectors[t.fromID] {
 		select {
@@ -744,6 +770,33 @@ func (s *Service) stash(id string, t *ticket, status, answer string) {
 		s.nudgeTimer[fromID] = time.AfterFunc(s.nudgeDelay, func() { s.flushNudge(fromID) })
 	}
 	s.mu.Unlock()
+	s.announceInbox(t.fromID, count)
+}
+
+// countLocked is how many results wait for fromID. Called under s.mu.
+func (s *Service) countLocked(fromID string) int {
+	count := 0
+	for _, e := range s.ready {
+		if e.fromID == fromID {
+			count++
+		}
+	}
+	return count
+}
+
+// announceInbox tells the window a sender's inbox changed size. Outside s.mu,
+// like every Emit here.
+func (s *Service) announceInbox(fromID string, count int) {
+	if s.events == nil || fromID == "" {
+		return
+	}
+	s.events.Emit(InboxEventName, InboxEvent{ID: fromID, Count: count})
+}
+
+func (s *Service) announceInboxAll(events []InboxEvent) {
+	for _, e := range events {
+		s.announceInbox(e.ID, e.Count)
+	}
 }
 
 // flushNudge types one nudge naming everything waiting for fromID, if any of
@@ -1050,7 +1103,7 @@ func waitFor(seconds int) time.Duration {
 // otherwise grow the inbox by one entry per errand for the life of the
 // process. Called under the lock on the paths that already hold it, which is
 // often enough for a map that grows one entry per errand.
-func (s *Service) sweep() []*ticket {
+func (s *Service) sweep() ([]*ticket, []InboxEvent) {
 	var expired []*ticket
 	cutoff := s.now().Add(-ticketTTL)
 	for id, t := range s.tickets {
@@ -1059,12 +1112,20 @@ func (s *Service) sweep() []*ticket {
 			expired = append(expired, t)
 		}
 	}
+	touched := map[string]bool{}
 	for id, e := range s.ready {
 		if e.ready.Before(cutoff) {
 			delete(s.ready, id)
+			if e.fromID != "" {
+				touched[e.fromID] = true
+			}
 		}
 	}
-	return expired
+	var inbox []InboxEvent
+	for fromID := range touched {
+		inbox = append(inbox, InboxEvent{ID: fromID, Count: s.countLocked(fromID)})
+	}
+	return expired, inbox
 }
 
 // ticketIDBytes is the length of a ticket id before hex encoding. Short enough

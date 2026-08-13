@@ -140,6 +140,22 @@ export function toSessionStatus(data: unknown): SessionStatus | null {
   return (RENDERED_STATUSES as readonly string[]).includes(data) ? (data as SessionStatus) : null
 }
 
+// Global event the backend emits when a session's relay inbox changes size —
+// results waiting to be collected (see relay.InboxEventName). Payload:
+// { id, count }; zero clears the mark.
+export const INBOX_EVENT = "session-inbox"
+
+// toInboxCount narrows an inbox payload to a drawable count. Anything that is
+// not a positive number — a malformed payload, a shape from another build —
+// reads as zero, which clears the mark rather than stranding a stale one.
+export function toInboxCount(data: unknown): number {
+  const { count } = (data ?? {}) as { count?: unknown }
+  if (typeof count !== "number" || !Number.isFinite(count) || count <= 0) {
+    return 0
+  }
+  return Math.floor(count)
+}
+
 // session-touched carries only a session id.
 export function isIdEvent(data: unknown): data is { id: string } {
   return (

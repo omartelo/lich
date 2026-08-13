@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Delegate can open the fan-out.** The delegate picker gains a pinned "New
+  worktree session…" row — sticky under the list, never filtered by the
+  query, and offered even when no other session is live, which is exactly
+  when fanning out is most useful. Picking it hands the orchestrator a
+  delegation into a fresh worktree checkout; the agent opens the session and
+  sends the task itself, picking the branch name from the task it was given.
+
+- **The card says when results are back.** A session with uncollected
+  results — answers to tasks it delegated, waiting in the relay's inbox —
+  now says so on its card ("2 results ready"), in the same quiet line the
+  relay marks use. The nudge tells the agent; this tells you. It clears the
+  moment the agent collects, and never interrupts a turn in progress.
+
 ### Changed
 
 - **Delegate types a delegation, not a question.** Picking a session in

@@ -91,6 +91,7 @@ type fakeEvents struct {
 	mu    sync.Mutex
 	sent  []RelayEvent
 	halts []StalledEvent
+	inbox []InboxEvent
 }
 
 func (f *fakeEvents) Emit(name string, data any) {
@@ -105,6 +106,10 @@ func (f *fakeEvents) Emit(name string, data any) {
 		if name == StalledEventName {
 			f.halts = append(f.halts, event)
 		}
+	case InboxEvent:
+		if name == InboxEventName {
+			f.inbox = append(f.inbox, event)
+		}
 	}
 }
 
@@ -112,6 +117,19 @@ func (f *fakeEvents) stalled() []StalledEvent {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]StalledEvent(nil), f.halts...)
+}
+
+// inboxCounts is every inbox size announced for one session, in order.
+func (f *fakeEvents) inboxCounts(id string) []int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var counts []int
+	for _, e := range f.inbox {
+		if e.ID == id {
+			counts = append(counts, e.Count)
+		}
+	}
+	return counts
 }
 
 func (f *fakeEvents) snapshot() []RelayEvent {
@@ -1822,6 +1840,70 @@ func TestAnUncollectedResultExpiresWithItsTTL(t *testing.T) {
 	}
 	if len(collected.Results) != 0 {
 		t.Errorf("an hour-old result was still handed over: %+v", collected.Results)
+	}
+}
+
+// The window hears the inbox change size, so the card can say results are
+// waiting: the nudge tells the agent, the event tells the person.
+func TestTheInboxSizeIsAnnouncedAsItGrowsAndDrains(t *testing.T) {
+	events := &fakeEvents{}
+	term := newFakeTerminal("s1", "s2", "s3")
+	svc := newRelay(workspace(), term, events)
+	plant(svc, "t1", "s1", "s2", "docs")
+	plant(svc, "t2", "s1", "s3", "api")
+
+	if err := svc.Reply("t1", "one"); err != nil {
+		t.Fatalf("Reply t1: %v", err)
+	}
+	if err := svc.Reply("t2", "two"); err != nil {
+		t.Fatalf("Reply t2: %v", err)
+	}
+	if got := events.inboxCounts("s1"); len(got) != 2 || got[0] != 1 || got[1] != 2 {
+		t.Fatalf("counts = %v, want [1 2]", got)
+	}
+
+	if _, err := svc.Collect("s1", 1); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	counts := events.inboxCounts("s1")
+	if len(counts) != 3 || counts[2] != 0 {
+		t.Errorf("counts = %v, want the drain announced as 0", counts)
+	}
+}
+
+func TestASingleTicketPickupAnnouncesTheSmallerInbox(t *testing.T) {
+	events := &fakeEvents{}
+	svc := newRelay(workspace(), newFakeTerminal("s1", "s2"), events)
+	plant(svc, "t1", "s1", "s2", "docs")
+	if err := svc.Reply("t1", "one"); err != nil {
+		t.Fatalf("Reply: %v", err)
+	}
+
+	if _, err := svc.Wait("t1", 1); err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	counts := events.inboxCounts("s1")
+	if len(counts) != 2 || counts[1] != 0 {
+		t.Errorf("counts = %v, want the pickup announced as 0", counts)
+	}
+}
+
+func TestAnExpiredInboxEntryAnnouncesItsAbsence(t *testing.T) {
+	events := &fakeEvents{}
+	svc := newRelay(workspace(), newFakeTerminal("s1"), events)
+	svc.mu.Lock()
+	svc.ready["old"] = &inboxEntry{
+		ticket: "old", fromID: "s1", target: "docs",
+		status: StatusAnswered, ready: time.Now().Add(-2 * time.Hour),
+	}
+	svc.mu.Unlock()
+
+	if _, err := svc.Collect("s1", 1); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	counts := events.inboxCounts("s1")
+	if len(counts) != 1 || counts[0] != 0 {
+		t.Errorf("counts = %v, want the expiry announced as 0", counts)
 	}
 }
 

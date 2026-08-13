@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { delegatePrompt } from "./delegate-prompt"
+import { delegatePrompt, delegateWorktreePrompt } from "./delegate-prompt"
 
 describe("delegatePrompt", () => {
   it("delegates in plain words where the sender has lich's tools", () => {
@@ -24,5 +24,21 @@ describe("delegatePrompt", () => {
   it("carries the label through verbatim", () => {
     expect(delegatePrompt("claude", "fix login 2")).toBe('Delegate to the "fix login 2" session: ')
     expect(delegatePrompt("crush", "fix login 2")).toBe('lich send "fix login 2" "')
+  })
+})
+
+describe("delegateWorktreePrompt", () => {
+  it("stays plain prose where the sender has lich's tools", () => {
+    expect(delegateWorktreePrompt("claude")).toBe("Delegate to a new worktree session: ")
+    expect(delegateWorktreePrompt("codex")).toBe("Delegate to a new worktree session: ")
+  })
+
+  it("names both commands for every other sender — nothing else would", () => {
+    for (const kind of ["opencode", "crush", "omp", "shell", "something-new"]) {
+      const prompt = delegateWorktreePrompt(kind)
+      expect(prompt).toContain("lich open --worktree")
+      expect(prompt).toContain("lich send")
+      expect(prompt.endsWith(": ")).toBe(true)
+    }
   })
 })

@@ -40,3 +40,22 @@ export function delegatePrompt(senderKind: SessionKind | string, target: string)
   }
   return `lich send "${target}" "`
 }
+
+/**
+ * The text for delegating to a session that does not exist yet: the agent
+ * opens a worktree session and hands it the task, picking the branch name
+ * itself — it knows the task, and the user typed only the task.
+ *
+ * Prose for every kind, because a two-command errand cannot be one fill-in
+ * command the way `lich send` can. A sender without lich's tools is told the
+ * commands by name — nothing else would tell it they exist.
+ */
+export function delegateWorktreePrompt(senderKind: SessionKind | string): string {
+  if (TOOL_KINDS.includes(senderKind)) {
+    return "Delegate to a new worktree session: "
+  }
+  return (
+    "Delegate to a new worktree session (run `lich open --worktree <branch>`, " +
+    "then `lich send` the task to the session it opens): "
+  )
+}

@@ -7,6 +7,7 @@ import {
   CircleQuestionMark,
   GitBranch,
   GitPullRequestArrow,
+  Inbox,
   Pencil,
   Pin,
   PinOff,
@@ -23,6 +24,7 @@ import { useSessionStatus, useSessionStatusAge } from "@/lib/session/use-session
 import { useSessionCwd } from "@/lib/session/use-session-cwd"
 import { useSessionAgent } from "@/lib/session/use-session-agent"
 import { useSessionRelay } from "@/lib/session/use-session-relay"
+import { useSessionInbox } from "@/lib/session/use-session-inbox"
 import { useSessionTool } from "@/lib/session/use-session-tool"
 import { toolGlyph } from "@/lib/session/tool-glyph"
 import { useGitStatus } from "@/lib/git/use-git-status"
@@ -42,7 +44,7 @@ import {
 } from "@/components/ui/context-menu"
 import { Terminal as TerminalService } from "@/lib/rpc"
 import type { DelegateGroup } from "@/lib/session/delegate-targets"
-import { delegatePrompt } from "@/lib/session/delegate-prompt"
+import { delegatePrompt, delegateWorktreePrompt } from "@/lib/session/delegate-prompt"
 import { bracketedPaste } from "@/lib/terminal/bracketed-paste"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
 import { SessionTargetPicker } from "./SessionTargetPicker"
@@ -110,6 +112,9 @@ export function SessionCard({
   // a message lands in a PTY and cleared when it is answered. null the rest of
   // the time, which is nearly always.
   const relay = useSessionRelay(session.id)
+  // How many results this session has waiting in the relay's inbox: results of
+  // tasks it delegated, uncollected. Zero — the usual case — draws nothing.
+  const inbox = useSessionInbox(session.id)
   const ToolGlyph = tool && toolGlyph(tool.name)
   // The live working directory the backend's cwd watcher reports ("" until it
   // does): a `cd` in the terminal moves the card with it. Falls back to the
@@ -137,10 +142,15 @@ export function SessionCard({
     void TerminalService.Write(session.id, bracketedPaste(delegatePrompt(session.kind, label)))
     requestTerminalFocus(session.id)
   }
+  const delegateWorktree = () => {
+    void TerminalService.Write(session.id, bracketedPaste(delegateWorktreePrompt(session.kind)))
+    requestTerminalFocus(session.id)
+  }
 
-  // Every provider can delegate: the relay types at the target's prompt, so
-  // none of this depends on the sender's own messaging channel.
-  const canDelegate = active && delegateGroups.length > 0
+  // Every provider can delegate, and no live target is required: the picker's
+  // pinned row delegates into a fresh worktree session, which is most useful
+  // exactly when there is nobody else to hand work to yet.
+  const canDelegate = active
 
   // The picker is only rendered while the card can delegate, so losing that
   // unmounts it — and an open flag left behind would spring the dialog back up
@@ -244,17 +254,18 @@ export function SessionCard({
                   </span>
                 </span>
               )}
-              {/* One line, three rungs: an open request, then a session blocked
-                  on the user, then the tool. A request in flight explains the
-                  whole turn — a card working because another session asked it
-                  to, or one stalled waiting on a card elsewhere in the list. A
-                  block outranks the tool for the reason it needs words at all:
-                  the amber ring differs from the emerald one by hue alone, so
-                  nothing else on the card says the session wants an answer. It
-                  costs no tool line either — a state other than busy clears the
-                  reported tool (session-tool-store), so by the time a card is
-                  blocked there is nothing left on that rung anyway. Only one
-                  rung ever draws, so the card grows by one row at most. */}
+              {/* One line, four rungs: an open request, then a session blocked
+                  on the user, then results waiting to be collected, then the
+                  tool. A request in flight explains the whole turn — a card
+                  working because another session asked it to, or one stalled
+                  waiting on a card elsewhere in the list. A block outranks the
+                  rest for the reason it needs words at all: the amber ring
+                  differs from the emerald one by hue alone, so nothing else on
+                  the card says the session wants an answer. The inbox sits
+                  under those and over the tool: mid-turn the live tool is the
+                  news, and the count takes the rung when the card goes quiet —
+                  the same rule the relay's own nudge follows. Only one rung
+                  ever draws, so the card grows by one row at most. */}
               {relay ? (
                 <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
                   {relay.direction === "out" ? (
@@ -274,6 +285,13 @@ export function SessionCard({
                 <span className="flex w-full min-w-0 items-center gap-1 text-xs">
                   <CircleQuestionMark className="size-3 shrink-0 text-amber-500" />
                   <span className="truncate font-medium text-amber-500">Waiting on you</span>
+                </span>
+              ) : status !== "busy" && inbox > 0 ? (
+                <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                  <Inbox className="size-3 shrink-0" />
+                  <span className="truncate font-medium text-foreground">
+                    {inbox === 1 ? "1 result ready" : `${inbox} results ready`}
+                  </span>
                 </span>
               ) : (
                 tool && (
@@ -418,6 +436,7 @@ export function SessionCard({
           onOpenChange={setDelegatePickerOpen}
           groups={delegateGroups}
           onPick={(target) => delegate(target.label)}
+          onPickWorktree={delegateWorktree}
         />
       )}
     </div>
