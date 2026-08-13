@@ -5,6 +5,20 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **The RPC surface no longer exposes lich's own wiring.** Three methods that
+  exist for lich to call itself — the hooks' session-state stream and two
+  startup wiring calls — answered a request from the page like any other
+  service method. A call to the first could close another session's pending
+  delegations; a call to either of the others could unwire the relay's plugin
+  lookup or a project's gh account while the app was running. They are now
+  refused. Discarding a file is guarded the same way: a path that names the
+  repository root instead of a file is rejected, where before it would have
+  emptied the whole index.
+
 ## [0.31.0] - 2026-08-13
 
 ### Added
