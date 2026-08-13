@@ -129,24 +129,32 @@ export function AppUpdateGate() {
   // Linux: three choices — paste the install command into a terminal, open the
   // release page, or dismiss for this version. sonner's default toast has only
   // two buttons, so this is a custom one styled with the popover tokens.
+  //
+  // There is no install command where lich cannot name one: a Windows or macOS
+  // binary in a directory it may not write cannot self-apply and belongs to no
+  // package manager either. Install is then dropped rather than offered as a
+  // button that pastes an empty line, and the release page — where the reader
+  // gets the binary themselves — becomes the primary action.
   const promptInstall = (version: string, releaseUrl: string, installCommand: string) => {
     toast.custom(
       (id) => (
         <div className="flex flex-col gap-3 rounded-md border bg-popover p-4 text-sm text-popover-foreground shadow-lg">
           <span>lich {version} is available</span>
           <div className="flex gap-2">
+            {installCommand !== "" && (
+              <Button
+                size="sm"
+                onClick={() => {
+                  toast.dismiss(id)
+                  void openInstall(releaseUrl, installCommand)
+                }}
+              >
+                Install
+              </Button>
+            )}
             <Button
               size="sm"
-              onClick={() => {
-                toast.dismiss(id)
-                void openInstall(releaseUrl, installCommand)
-              }}
-            >
-              Install
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
+              variant={installCommand === "" ? "default" : "ghost"}
               onClick={() => {
                 toast.dismiss(id)
                 void System.OpenExternal(releaseUrl)

@@ -12,20 +12,27 @@ import (
 	"strings"
 )
 
-// bodyLimit caps the response read; a releases/latest payload is a few KiB, so
-// anything larger is malformed or hostile.
-const bodyLimit = 1 << 20
+// BodyLimit caps a metadata response read; a releases/latest payload — or a
+// release's checksums.txt — is a few KiB, so anything larger is malformed or
+// hostile.
+const BodyLimit = 1 << 20
+
+// Get issues a GET carrying lich's identifying headers. Every GitHub read lich
+// makes goes through here so the request shape is stated once.
+func Get(client *http.Client, url string) (*http.Response, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "lich")
+	return client.Do(req)
+}
 
 // LatestTag GETs a GitHub releases/latest URL and returns its tag as a bare
 // semver (leading "v" stripped), or "" on any failure.
 func LatestTag(client *http.Client, url string) string {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return ""
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "lich")
-	resp, err := client.Do(req)
+	resp, err := Get(client, url)
 	if err != nil {
 		return ""
 	}
@@ -33,7 +40,7 @@ func LatestTag(client *http.Client, url string) string {
 	if resp.StatusCode != http.StatusOK {
 		return ""
 	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, bodyLimit))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, BodyLimit))
 	if err != nil {
 		return ""
 	}

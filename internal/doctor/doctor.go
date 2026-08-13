@@ -14,12 +14,10 @@ import (
 	"io"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/omartelo/lich/internal/chromium"
 	"github.com/omartelo/lich/internal/logging"
 	"github.com/omartelo/lich/internal/providers"
 	"github.com/omartelo/lich/internal/singleton"
@@ -80,22 +78,10 @@ func New(configDir string, getenv func(string) string) *Doctor {
 		configDir: configDir,
 		port:      singleton.Port(getenv),
 		bind:      bindProbe,
-		instance: func() (*singleton.Info, bool) {
-			info, err := singleton.Read(configDir)
-			if err != nil || info == nil {
-				return nil, false
-			}
-			return info, singleton.Ping(info.Port, info.Token)
-		},
-		browser: func() (string, error) { return chromium.FindBrowser(exec.LookPath) },
-		detect: func() []providers.Detected {
-			found, err := providers.New().Detect()
-			if err != nil {
-				return nil
-			}
-			return found
-		},
-		store: func() (io.Closer, error) { return store.New() },
+		instance:  func() (*singleton.Info, bool) { return Instance(configDir) },
+		browser:   Browser,
+		detect:    Providers,
+		store:     func() (io.Closer, error) { return store.New() },
 	}
 }
 

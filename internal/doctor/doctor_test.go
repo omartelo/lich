@@ -145,6 +145,31 @@ func TestADatabaseThatWillNotOpenStopsALaunch(t *testing.T) {
 	}
 }
 
+// A database that opens but will not close is not a launch failure — lich runs
+// on it — yet it is the shape of a store about to corrupt, so it warns instead
+// of passing silently.
+func TestADatabaseThatWillNotCloseWarns(t *testing.T) {
+	d := healthy(t)
+	d.store = func() (io.Closer, error) {
+		return closerFunc(func() error { return errors.New("disk I/O error") }), nil
+	}
+
+	checks := d.Run()
+
+	got := statuses(checks)["store"]
+	if got.Status != Warn || !strings.Contains(got.Detail, "disk I/O error") {
+		t.Errorf("store = %s (%s), want warn carrying the cause", got.Status, got.Detail)
+	}
+	if Failed(checks) {
+		t.Error("a store that opens is reported as launch-stopping")
+	}
+}
+
+// closerFunc is an io.Closer whose Close is the test's.
+type closerFunc func() error
+
+func (c closerFunc) Close() error { return c() }
+
 func TestAMissingBrowserStopsALaunchAndMissingProvidersDoNot(t *testing.T) {
 	d := healthy(t)
 	d.browser = func() (string, error) { return "", errors.New("no chromium-family browser found") }

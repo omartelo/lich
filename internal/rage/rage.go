@@ -16,14 +16,13 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"time"
 
 	"github.com/omartelo/lich/internal/agentplugin"
-	"github.com/omartelo/lich/internal/chromium"
+	"github.com/omartelo/lich/internal/doctor"
 	"github.com/omartelo/lich/internal/logging"
 	"github.com/omartelo/lich/internal/providers"
 	"github.com/omartelo/lich/internal/singleton"
@@ -87,23 +86,11 @@ func New(configDir, version string, environ []string) *Collector {
 		configDir: configDir,
 		version:   version,
 		environ:   environ,
-		browser:   func() (string, error) { return chromium.FindBrowser(exec.LookPath) },
-		detect: func() []providers.Detected {
-			found, err := providers.New().Detect()
-			if err != nil {
-				return nil
-			}
-			return found
-		},
-		plugin: func() []agentplugin.Status { return agentplugin.New(pathBins{}).Status() },
-		probe: func() (*singleton.Info, bool) {
-			info, err := singleton.Read(configDir)
-			if err != nil || info == nil {
-				return nil, false
-			}
-			return info, singleton.Ping(info.Port, info.Token)
-		},
-		dump: fetchGoroutines,
+		browser:   doctor.Browser,
+		detect:    doctor.Providers,
+		plugin:    func() []agentplugin.Status { return agentplugin.New(pathBins{}).Status() },
+		probe:     func() (*singleton.Info, bool) { return doctor.Instance(configDir) },
+		dump:      fetchGoroutines,
 	}
 }
 

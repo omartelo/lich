@@ -5,6 +5,17 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **The update prompt no longer offers an Install that installs nothing.** On
+  Windows and macOS, a lich whose own directory is not writable can neither
+  swap its binary nor name a package manager to update it — and the prompt
+  still showed an Install button, which opened a terminal and pasted an empty
+  line. The button is now offered only where there is a command to run, and the
+  release page takes its place as the prompt's main action.
+
 ## [0.31.0] - 2026-08-13
 
 ### Added

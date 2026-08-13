@@ -52,10 +52,9 @@ const (
 	// whole body read, so the metadata timeout above would cut a multi-MiB
 	// asset mid-stream on any modest link; this one is a hang stop, not a pace.
 	downloadTimeout = 5 * time.Minute
-	// bodyLimit caps the JSON/checksums reads; assetLimit caps the binary
-	// download (lich is a ~10-20 MiB static binary — 256 MiB is slack, not a
-	// target).
-	bodyLimit  = 1 << 20
+	// assetLimit caps the binary download (lich is a ~10-20 MiB static binary —
+	// 256 MiB is slack, not a target). The metadata reads ride
+	// ghrelease.BodyLimit.
 	assetLimit = 256 << 20
 )
 
@@ -69,9 +68,11 @@ type Service struct {
 	download *http.Client
 	version  string
 	exePath  string
-	// goos is the platform, a field so tests can drive the self-apply path
-	// without running on that OS; defaults to runtime.GOOS.
-	goos string
+	// goos and goarch are the platform, fields so tests can drive the
+	// self-apply path — and the platform that ships no asset — without running
+	// on that OS or CPU; they default to runtime.GOOS/runtime.GOARCH.
+	goos   string
+	goarch string
 	// latestURL is the release endpoint to poll; a field so tests can point it
 	// at a local server. downloadBase / tagBase back the same seam for Apply.
 	latestURL    string
@@ -96,6 +97,7 @@ func New(version string) *Service {
 		version:       version,
 		exePath:       exe,
 		goos:          runtime.GOOS,
+		goarch:        runtime.GOARCH,
 		latestURL:     latestReleaseURL,
 		downloadBase:  releaseBase,
 		tagBase:       releaseTagBase,
@@ -152,9 +154,9 @@ func (s *Service) Apply() error {
 	if latest == "" {
 		return fmt.Errorf("could not resolve the latest release")
 	}
-	asset := assetName(s.goos, runtime.GOARCH, latest)
+	asset := assetName(s.goos, s.goarch, latest)
 	if asset == "" {
-		return fmt.Errorf("no release asset for %s/%s", s.goos, runtime.GOARCH)
+		return fmt.Errorf("no release asset for %s/%s", s.goos, s.goarch)
 	}
 	base := s.downloadBase + "v" + latest + "/"
 
@@ -290,7 +292,7 @@ func (s *Service) fetchChecksum(url, asset string) ([]byte, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("download checksums: status %d", resp.StatusCode)
 	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, bodyLimit))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, ghrelease.BodyLimit))
 	if err != nil {
 		return nil, fmt.Errorf("read checksums: %w", err)
 	}
@@ -298,7 +300,11 @@ func (s *Service) fetchChecksum(url, asset string) ([]byte, error) {
 	if sum == "" {
 		return nil, fmt.Errorf("no checksum for %s", asset)
 	}
-	return hex.DecodeString(sum)
+	decoded, err := hex.DecodeString(sum)
+	if err != nil {
+		return nil, fmt.Errorf("decode checksums: %w", err)
+	}
+	return decoded, nil
 }
 
 // parseChecksum finds asset's hash in sha256sum-format lines ("<hex>  <name>").
@@ -320,24 +326,13 @@ func (s *Service) latestVersion() string {
 
 // get issues a metadata GET (JSON, checksums) on the short-timeout client.
 func (s *Service) get(url string) (*http.Response, error) {
-	return s.getWith(s.http, url)
+	return ghrelease.Get(s.http, url)
 }
 
 // getAsset issues the binary download on the long-timeout client.
 func (s *Service) getAsset(url string) (*http.Response, error) {
 	if s.download != nil {
-		return s.getWith(s.download, url)
+		return ghrelease.Get(s.download, url)
 	}
-	return s.getWith(s.http, url)
-}
-
-// getWith issues a GET with lich's identifying headers.
-func (s *Service) getWith(c *http.Client, url string) (*http.Response, error) {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "lich")
-	return c.Do(req)
+	return ghrelease.Get(s.http, url)
 }

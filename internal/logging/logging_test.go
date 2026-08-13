@@ -144,6 +144,41 @@ func TestInitRotatesOversizedLog(t *testing.T) {
 	}
 }
 
+// TestInitReportsAFailedRotation proves a rotation that cannot happen is
+// reported rather than silently skipped: Init still returns a working stderr
+// logger, but the caller is told why the file half is missing. The .old name is
+// held by a non-empty directory, which no rename can replace.
+func TestInitReportsAFailedRotation(t *testing.T) {
+	restoreDefault(t)
+	t.Setenv("LICH_DEV", "")
+	dir := logDir(t)
+	path := filepath.Join(dir, "lich.log")
+	if err := os.WriteFile(path, []byte("old generation\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Truncate(path, maxLogSize); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(path+".old", "occupied"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	closer, err := Init(dir)
+
+	if err == nil {
+		t.Fatal("Init = nil error, want the rotation failure reported")
+	}
+	if !strings.Contains(err.Error(), "rotate log") {
+		t.Errorf("error = %q, want it to name the rotation", err)
+	}
+	if closer != nil {
+		t.Error("Init returned a closer for a file it never opened")
+		_ = closer.Close()
+	}
+	// Logging must survive it: stderr alone is still a logger.
+	slog.Info("a record after a failed rotation")
+}
+
 // TestInitKeepsUndersizedLog proves a log below the threshold is appended to
 // rather than rotated. Rotating on every boot would overwrite .old with the
 // session that just started — destroying the generation a bug report is told
