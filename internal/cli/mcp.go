@@ -387,12 +387,17 @@ var mcpTools = []mcpTool{
 					"session in the project's own directory, beside yours."),
 			"base": property("string",
 				"Branch the new worktree starts from. Defaults to the project's current branch."),
+			"model": property("string",
+				"Model the new session's provider runs, spelled exactly as that provider's own "+
+					"--model flag takes it — the name or alias, never a lich name for it. Omit "+
+					"to leave the provider on its default. Crush and shell sessions cannot be "+
+					"given one."),
 		}),
 		Run: func(c *client, args mcpArgs) (string, error) {
 			var opened spawn.Session
 			call := []any{
 				c.sessionID(), args.text("project"), args.text("kind"),
-				args.text("worktree"), args.text("base"),
+				args.text("worktree"), args.text("base"), args.text("model"),
 			}
 			if err := c.call("spawn.Open", call, openCall, &opened); err != nil {
 				return "", err

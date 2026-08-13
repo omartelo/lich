@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -164,7 +165,7 @@ func transcriptText(line []byte) (string, bool) {
 // false when the text does not mention q at all.
 func snippetAround(text, q string) (string, bool) {
 	flat := strings.Join(strings.Fields(text), " ")
-	at := strings.Index(strings.ToLower(flat), q)
+	at := matchRuneIndex(flat, q)
 	if at < 0 {
 		return "", false
 	}
@@ -172,7 +173,7 @@ func snippetAround(text, q string) (string, bool) {
 	if len(runes) <= snippetWidth {
 		return flat, true
 	}
-	start := utf8.RuneCountInString(flat[:at]) - snippetWidth/3
+	start := at - snippetWidth/3
 	if start < 0 {
 		start = 0
 	}
@@ -189,4 +190,29 @@ func snippetAround(text, q string) (string, bool) {
 		snippet += "…"
 	}
 	return snippet, true
+}
+
+// matchRuneIndex is where text first mentions q (already lowercased), counted in
+// runes of text itself; -1 when it does not.
+//
+// Lowercasing is not length-preserving — "Ⱥ" lowers to a rune one byte longer,
+// "İ" to two runes — so an offset read off a lowered copy can point past the end
+// of the original. The lowered text is built here alongside the rune of text
+// each of its bytes came from, which is what keeps the offset addressing text.
+func matchRuneIndex(text, q string) int {
+	var lowered strings.Builder
+	lowered.Grow(len(text))
+	origin := make([]int, 0, len(text))
+	for index, r := range []rune(text) {
+		before := lowered.Len()
+		lowered.WriteRune(unicode.ToLower(r))
+		for range lowered.Len() - before {
+			origin = append(origin, index)
+		}
+	}
+	at := strings.Index(lowered.String(), q)
+	if at < 0 {
+		return -1
+	}
+	return origin[at]
 }

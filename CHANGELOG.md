@@ -7,7 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **oh-my-pi runs the lich plugin.** Settings › lich plugin now offers omp the
+  same install as the others, writing the released extension into omp's own
+  `extensions/` directory — so an omp card shows what its session is doing,
+  refreshes git status as files change, and takes its name from the
+  conversation's title once omp has written one. The install also registers
+  lich's MCP server in omp's `mcp.json`, merged in beside whatever is already
+  there, which puts the tools for reaching the other sessions in an omp agent's
+  own tool list. Two gaps are
+  the harness's own and Settings names them: omp has no observed approval event,
+  so a session waiting on your permission shows a spinner rather than a bell.
+
+- **An omp session resumes its conversation.** Reopening a card that ran omp
+  before a restart offers the same "continue where it left off" prompt Claude
+  Code and Codex cards get, and lich only offers it when omp's own transcript
+  for that conversation is still on disk.
+
+- **A session can be opened on a specific model.** `lich open --model <model>`
+  and the `open_session` MCP tool's `model` argument start the new session's
+  provider on the model you name, in that provider's own spelling — Claude Code,
+  Codex, opencode and oh-my-pi each take the name their own `--model` accepts. Fanning work out to a worktree can now put the cheap model on the
+  mechanical half of the job and keep the expensive one where it earns its
+  price. The model is recorded on the session, so a reload, a respawn or the
+  resume of a parked worktree session all come back on it. Crush and `shell`
+  sessions are refused rather than silently opened on the default: Crush spells
+  `--model` only on its non-interactive `run` subcommand, so the TUI lich spawns
+  has nowhere to receive one.
+
+- **oh-my-pi can run without permission prompts.** Settings › Providers now
+  offers oh-my-pi the same "run without asking" ladder as the other providers,
+  spawning it with `--auto-approve`. It was the one provider left out, because
+  its spelling had never been checked against the binary.
+
 ### Fixed
+
+- **The RPC surface no longer exposes lich's own wiring.** Three methods that
+  exist for lich to call itself — the hooks' session-state stream and two
+  startup wiring calls — answered a request from the page like any other
+  service method. A call to the first could close another session's pending
+  delegations; a call to either of the others could unwire the relay's plugin
+  lookup or a project's gh account while the app was running. They are now
+  refused. Discarding a file is guarded the same way: a path that names the
+  repository root instead of a file is rejected, where before it would have
+  emptied the whole index.
+
+- **Searching sessions no longer crashes on some accented text.** A palette
+  search that matched a conversation containing certain uppercase letters —
+  ones that grow when lowercased, like `Ⱥ` or `İ` — brought the window down
+  instead of showing the result.
+
+- **A session no longer gets stuck waiting for a setup that already
+  finished.** Two ways a fresh worktree's session could stay "not ready"
+  forever, refusing every message relayed to it until the sender's ticket
+  timed out: the marker the setup wrapper prints was matched one PTY read at
+  a time, so a read that cut it in half missed it for good; and a session
+  spawned into a worktree with no setup script at all could still be armed
+  to wait for a marker nothing would ever print, whenever the provider's
+  binary happened to be named `sh`.
+
+- **A transcript that fails mid-read no longer shows a short cost.** A
+  transient read error while adding up a session's spend was treated as the
+  end of the file, so the footer showed the total of the lines that made it
+  through, as if that were the whole bill. Such a read now shows no number
+  and resumes on the next turn.
 
 - **Closing another session no longer steals your focus.** `lich close` and the
   `close_session` tool wrote a new active card for the project whichever session
@@ -2283,6 +2347,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.31.0...HEAD
 [Unreleased]: https://github.com/omartelo/lich/compare/v0.31.0...HEAD
 [0.31.0]: https://github.com/omartelo/lich/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/omartelo/lich/compare/v0.29.0...v0.30.0
