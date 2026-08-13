@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest"
 import { delegatePrompt } from "./delegate-prompt"
 
 describe("delegatePrompt", () => {
-  it("asks in plain words where the sender has lich's tools", () => {
-    expect(delegatePrompt("claude", "docs")).toBe('Ask the "docs" session to ')
-    expect(delegatePrompt("codex", "docs")).toBe('Ask the "docs" session to ')
+  it("delegates in plain words where the sender has lich's tools", () => {
+    // A colon, never a preposition: the task typed after it can be an order, a
+    // question or pasted context, and none of them bends into "to <verb>".
+    expect(delegatePrompt("claude", "docs")).toBe('Delegate to the "docs" session: ')
+    expect(delegatePrompt("codex", "docs")).toBe('Delegate to the "docs" session: ')
   })
 
   it("spells the command for every other sender", () => {
@@ -20,7 +22,7 @@ describe("delegatePrompt", () => {
   })
 
   it("carries the label through verbatim", () => {
-    expect(delegatePrompt("claude", "fix login 2")).toBe('Ask the "fix login 2" session to ')
+    expect(delegatePrompt("claude", "fix login 2")).toBe('Delegate to the "fix login 2" session: ')
     expect(delegatePrompt("crush", "fix login 2")).toBe('lich send "fix login 2" "')
   })
 })

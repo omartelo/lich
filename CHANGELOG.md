@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Delegate types a delegation, not a question.** Picking a session in
+  "Delegate to session…" used to put `Ask the "docs" session to ` at the
+  prompt, and whatever you typed next had to bend into "to <verb>" — a
+  question or pasted context read wrong, and "Ask" was not even the button's
+  word. It now types `Delegate to the "docs" session: `, and anything can
+  follow the colon: an order, a question, a dump of context.
+
 - **A worker's answer no longer floods the orchestrator's prompt — it is
   announced, and collected.** A session fanning work out to others used to get
   every answer typed back at its prompt in full, and every arrival restarted

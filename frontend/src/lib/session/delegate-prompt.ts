@@ -29,10 +29,14 @@ const TOOL_KINDS: readonly string[] = ["claude", "codex"]
  * nothing else would tell it the command exists. The quote is left open on
  * purpose there — the user types the task inside it, which is where the cursor
  * lands.
+ *
+ * The prose form ends in a colon, not a preposition: what follows can be an
+ * order, a question, or pasted context, and none of them should have to bend
+ * into "to <verb>". The verb is the UI's own — the button says Delegate.
  */
 export function delegatePrompt(senderKind: SessionKind | string, target: string): string {
   if (TOOL_KINDS.includes(senderKind)) {
-    return `Ask the "${target}" session to `
+    return `Delegate to the "${target}" session: `
   }
   return `lich send "${target}" "`
 }
