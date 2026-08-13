@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -100,6 +101,10 @@ type session struct {
 	// this PTY, before the provider it execs into. Cleared by the marker the
 	// wrapper prints (see setupDone). Guarded by the service's mu.
 	settingUp bool
+	// setupTail is the end of the previous chunk, held only while settingUp so
+	// the marker still matches when a PTY read splits it. Guarded by the
+	// service's mu.
+	setupTail string
 	// lastOut is when this PTY last produced output, and ready records that it
 	// has since gone quiet once — that its program finished drawing itself and
 	// is waiting on input. Both guarded by the service's mu.
@@ -124,6 +129,7 @@ type Store interface {
 	SetWorktreePort(path string, port int) error
 	SetProviderSession(sessionID, providerSessionID string) error
 	ProviderSession(sessionID string) (string, error)
+	SessionModel(sessionID string) string
 	SetSessionTitle(sessionID, title string) (bool, error)
 	CostReadout() bool
 	CostLedger(sessionID, transcriptID string) (int64, string, float64, error)
@@ -214,8 +220,11 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 		sessions: make(map[string]*session),
 		store:    store,
 		hub:      hub,
-		env:      append(childEnv(env), "TERM=xterm-256color"),
-		prices:   pricing.New(),
+		// Clipped before the append: outside an AppImage childEnv hands back the
+		// caller's own slice, and appending into its spare capacity would write
+		// TERM into the array main still holds.
+		env:    append(slices.Clip(childEnv(env)), "TERM=xterm-256color"),
+		prices: pricing.New(),
 	}
 	ws, err := newTransport(
 		func(id string, data []byte) {
@@ -436,16 +445,20 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, se
 		mcpBin = lichBin()
 	}
 	skipPermissions := s.store.SkipPermissions(kind, projectID, cwd)
+	// The model is read from the row rather than passed in, so it survives every
+	// spawn this session ever gets: the window's first view, a respawn after a
+	// reload, and the resume of a parked worktree session all arrive here.
 	spec := ptySpec{
 		bin:  resolveCommand(kind, s.store.ProviderBin(kind, projectID), userShell()),
-		args: providerArgs(kind, name, resume, mcpBin, skipPermissions),
+		args: providerArgs(kind, name, resume, s.store.SessionModel(id), mcpBin, skipPermissions),
 		dir:  cwd,
 		env:  s.sessionEnv(id, projectID, cwd),
 		cols: cols,
 		rows: rows,
 	}
+	settingUp := false
 	if setup {
-		spec = wrapSetup(spec, s.store.WorktreeSetup(projectID), runtime.GOOS)
+		spec, settingUp = wrapSetup(spec, s.store.WorktreeSetup(projectID), runtime.GOOS)
 	}
 	p, err := startPTY(spec)
 	if err != nil {
@@ -466,7 +479,7 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, se
 		done:      make(chan struct{}),
 		replay:    newReplayBuffer(replayCapBytes),
 		outbox:    box,
-		settingUp: spec.bin == "sh" && setup,
+		settingUp: settingUp,
 		// Timed from the spawn, so a program that never writes anything still
 		// becomes ready once: quiet is the signal, and silence from the start
 		// is quiet too.
@@ -627,7 +640,7 @@ func (s *Service) noteOutput(sess *session, chunk []byte) {
 		sess.ready = true
 	}
 	sess.lastOut = time.Now()
-	if sess.settingUp && strings.Contains(string(chunk), setupDone) {
+	if sess.settingUp && sess.setupEnded(chunk) {
 		sess.settingUp = false
 		// The provider starts drawing from here, so the quiet this waits for is
 		// measured from the exec, not from the setup script's last line. The
@@ -639,6 +652,26 @@ func (s *Service) noteOutput(sess *session, chunk []byte) {
 		sess.ready = false
 		sess.lastOut = time.Time{}
 	}
+}
+
+// setupEnded reports whether chunk completes the wrapper's end marker, matching
+// across the seam between two reads: the wrapper prints the marker in one write,
+// but a PTY read can cut it anywhere, and neither half matches on its own — a
+// session that missed it waits out every relay it is ever sent.
+//
+// Called under s.mu.
+func (sess *session) setupEnded(chunk []byte) bool {
+	joined := sess.setupTail + string(chunk)
+	if strings.Contains(joined, setupDone) {
+		sess.setupTail = ""
+		return true
+	}
+	// One byte short of the marker is the most that can still be its beginning.
+	if keep := len(setupDone) - 1; len(joined) > keep {
+		joined = joined[len(joined)-keep:]
+	}
+	sess.setupTail = joined
+	return false
 }
 
 // Ready reports whether a session can be given work — whether what reads this

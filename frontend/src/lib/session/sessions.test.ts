@@ -480,6 +480,14 @@ describe("resumableSession", () => {
     })
   })
 
+  it("returns an omp session carrying a provider session id", () => {
+    const state = withClaudeSession(buildState(2), "s1", "019ffb38-ceab", "omp")
+    expect(resumableSession(state, P, "s1")).toMatchObject({
+      id: "s1",
+      providerSessionId: "019ffb38-ceab",
+    })
+  })
+
   // opencode reports no id and has no resume invocation wired; one arriving
   // anyway must not raise a prompt lich cannot honour.
   it("returns null for a provider with no resume wired", () => {

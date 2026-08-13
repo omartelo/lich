@@ -244,6 +244,7 @@ func serveBody(t *testing.T, status int, body string) *Service {
 		latestURL: srv.URL,
 		bins:      stubBins{},
 		lookPath:  func(name string) (string, error) { return "/usr/bin/" + name, nil },
+		lichBin:   lichBinary,
 	}
 }
 
@@ -282,8 +283,8 @@ func TestStatus(t *testing.T) {
 }
 
 // TestStatusListsEveryHarness proves the report covers the providers that can
-// run the plugin and nothing else: oh-my-pi has none, so an entry for it would
-// put an install button on a CLI that cannot use one.
+// run the plugin and nothing else: an entry for one that cannot would put an
+// install button on a CLI with nothing to install.
 func TestStatusListsEveryHarness(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	s := serveBody(t, http.StatusOK, `{"tag_name":"v0.2.0"}`)
@@ -293,7 +294,9 @@ func TestStatusListsEveryHarness(t *testing.T) {
 	for _, entry := range s.Status() {
 		got = append(got, entry.Provider)
 	}
-	want := []string{providers.Claude, providers.Codex, providers.OpenCode, providers.Crush}
+	want := []string{
+		providers.Claude, providers.Codex, providers.OpenCode, providers.OMP, providers.Crush,
+	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("Status() covers %v, want %v", got, want)
 	}
@@ -326,14 +329,14 @@ func TestStatusNotInstalled(t *testing.T) {
 	}
 }
 
-// TestUnknownProviderIsRefused proves a provider with no plugin never reaches a
-// CLI or a file: oh-my-pi has no marketplace to add and no plugin directory to
-// write into, so spawning it with the plugin's arguments would be nonsense.
+// TestUnknownProviderIsRefused proves a kind with no plugin never reaches a CLI
+// or a file: a shell session has no marketplace to add and no plugin directory
+// to write into, so spawning it with the plugin's arguments would be nonsense.
 func TestUnknownProviderIsRefused(t *testing.T) {
 	s, calls := fakeCLI(t, "")
 	for _, run := range []func(string) error{s.Install, s.Update} {
-		if err := run(providers.OMP); err == nil {
-			t.Error("want an error for a provider with no plugin, got nil")
+		if err := run("shell"); err == nil {
+			t.Error("want an error for a kind with no plugin, got nil")
 		}
 	}
 	if got := calls(); len(got) > 0 {
@@ -415,7 +418,7 @@ func fakeCLI(t *testing.T, failOn string) (*Service, func() []string) {
 		}
 		return strings.Split(strings.TrimSpace(string(data)), "\n")
 	}
-	return &Service{bins: stubBin(self)}, calls
+	return &Service{bins: stubBin(self), lichBin: lichBinary}, calls
 }
 
 // TestInstallAddsMarketplaceThenPlugin pins the order and the exact targets per
@@ -598,6 +601,71 @@ func TestHasToolsIsAlwaysTrueForTheHarnessesToldAtSpawn(t *testing.T) {
 		if !svc.HasTools(id) {
 			t.Errorf("%s cannot answer with a tool, but lich registers its server at spawn", id)
 		}
+	}
+}
+
+// Which providers depend on a registration lich writes with its own path — the
+// two whose installs leave that registration out when the path cannot be
+// resolved (crushrcBlock, ompMCPDocument). Pinned as a list rather than derived,
+// because a provider added to one side and not the other is exactly the drift
+// that promises tools nobody registered.
+func TestRegistersServerAtInstall(t *testing.T) {
+	for _, provider := range []string{providers.Crush, providers.OMP} {
+		if !registersServerAtInstall(provider) {
+			t.Errorf("%s writes lich's server at install, but is not treated as doing so", provider)
+		}
+	}
+	for _, provider := range []string{providers.Claude, providers.Codex, providers.OpenCode} {
+		if registersServerAtInstall(provider) {
+			t.Errorf("%s does not get its tools from a registration lich writes", provider)
+		}
+	}
+}
+
+// And the decision that rule feeds: an installed oh-my-pi whose lich cannot name
+// its own binary has the plugin's reports and no tool list, so a relayed message
+// must name the shell command instead of a tool that is not there.
+func TestHasToolsIsFalseWhenTheServerCouldNotBeRegistered(t *testing.T) {
+	agent := ompHome(t)
+	writeMarkedModule(t, filepath.Join(agent, ompExtensionsDir, ompFile), toolsMinVersion)
+	s := New(stubBins{})
+	s.lookPath = func(string) (string, error) { return "/usr/bin/omp", nil }
+
+	if !s.HasTools(providers.OMP) {
+		t.Fatal("HasTools(omp) = false with the plugin installed and a binary to register")
+	}
+
+	s.lichBin = func() string { return "" }
+	if s.HasTools(providers.OMP) {
+		t.Error("HasTools(omp) = true, but no server could be registered for it")
+	}
+}
+
+// opencode is the other side of that rule: its plugin defines the tools itself,
+// so there is no binary to name and an unresolvable one changes nothing.
+func TestHasToolsIgnoresTheBinaryForOpencode(t *testing.T) {
+	config := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", config)
+	writeMarkedModule(t, filepath.Join(config, "opencode", "plugin", opencodeFile), toolsMinVersion)
+	s := New(stubBins{})
+	s.lookPath = func(string) (string, error) { return "/usr/bin/opencode", nil }
+	s.lichBin = func() string { return "" }
+
+	if !s.HasTools(providers.OpenCode) {
+		t.Error("HasTools(opencode) = false, but its tools come from the plugin, not from a server")
+	}
+}
+
+// writeMarkedModule lays down what an install of that version leaves behind: the
+// module with lich's marker line, which is where the version is read back from.
+func writeMarkedModule(t *testing.T, path, version string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	marker := jsComment + " " + markerName + " v" + version + " — installed by lich\n"
+	if err := os.WriteFile(path, []byte(marker), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 
