@@ -56,6 +56,14 @@ tasks:
       - cmd: CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build {{.GO_BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}-darwin-arm64 .
       - cmd: CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build {{.GO_BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}-darwin-amd64 .
 
+  bundle:mac:
+    desc: Wrap the macOS binary in bin/Lich.app (macOS host only)
+    deps: [build:mac]
+    cmds:
+      # The binary cross-compiles from anywhere; the bundle needs Apple's sips
+      # and iconutil for the icon, so this task only runs on a Mac.
+      - cmd: build/darwin/bundle.sh {{.BIN_DIR}}/{{.APP_NAME}}-darwin-{{ARCH}} {{.VERSION}} {{.BIN_DIR}}
+
   run:
     desc: Build and run
     deps: [build]

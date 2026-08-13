@@ -100,17 +100,41 @@ From the [tap](https://github.com/omartelo/homebrew-tap) — Apple Silicon and
 Intel both:
 
 ```bash
-brew install omartelo/tap/lich
+brew install --cask omartelo/tap/lich
 ```
 
-The formula installs the release binary, so `brew upgrade` tracks new versions
-and lich's own update button steps aside on a Homebrew install.
+The cask installs `Lich.app` into `/Applications` — Launchpad, Spotlight and
+the Finder list it under its own icon — and symlinks the same binary onto
+`PATH` as `lich`, so the app and the command are one install. `brew upgrade
+--cask omartelo/tap/lich` tracks new versions, and lich's own update button
+steps aside on a Homebrew install.
 
-Without Homebrew, download `lich-*-darwin-arm64` (Apple Silicon) or
-`lich-*-darwin-amd64` (Intel) from the releases page and install it by hand.
-The binary is unsigned, so a browser or `curl` download carries a quarantine
-flag Gatekeeper refuses to run — clear it after verifying the checksum (see
-below):
+The Dock, while lich runs, shows the icon of the Chromium-family browser: the
+window belongs to that browser, and macOS has no equivalent of the window class
+Linux matches against the lich launcher. The lich icon is the one you launch
+from, not the one you switch to.
+
+**Upgrading from the old formula** — releases up to v0.32.0 shipped a bare CLI
+as `Formula/lich.rb`. Homebrew refuses to install the cask over it (both want
+`lich` on `PATH`), so remove the formula first:
+
+```bash
+brew uninstall lich
+brew install --cask omartelo/tap/lich
+```
+
+Without Homebrew, download `lich-*-darwin-arm64.zip` (Apple Silicon) or
+`lich-*-darwin-amd64.zip` (Intel) from the releases page, unzip it and drag
+`Lich.app` into `/Applications`. It is ad-hoc signed and not notarized, so
+after verifying the checksum (see below) clear the quarantine flag Gatekeeper
+would otherwise refuse:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Lich.app
+```
+
+The bare `lich-*-darwin-arm64` and `lich-*-darwin-amd64` binaries are still
+published for a CLI-only install by hand:
 
 ```bash
 install -m755 lich-*-darwin-arm64 ~/.local/bin/lich

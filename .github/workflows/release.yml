@@ -198,12 +198,19 @@ jobs:
       - name: Build macOS binaries
         run: task build:mac
 
+      # Two assets per arch: the .app the cask installs, and the bare binary the
+      # in-app self-update and hand installs still download.
       - name: Assemble macOS assets
         run: |
           cd bin
           tag="${GITHUB_REF_NAME//\//-}"
-          mv lich-darwin-arm64 "lich-${tag}-darwin-arm64"
-          mv lich-darwin-amd64 "lich-${tag}-darwin-amd64"
+          for arch in arm64 amd64; do
+            ../build/darwin/bundle.sh "lich-darwin-${arch}" "${tag#v}" "stage-${arch}"
+            # ditto, not zip: it is the archiver that keeps a bundle's symlinks,
+            # permissions and signature intact for Homebrew Cask to unpack.
+            ditto -c -k --keepParent "stage-${arch}/Lich.app" "lich-${tag}-darwin-${arch}.zip"
+            mv "lich-darwin-${arch}" "lich-${tag}-darwin-${arch}"
+          done
           ls -la lich-${tag}-*
 
       - name: Upload macOS assets
@@ -280,7 +287,7 @@ jobs:
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           commit_message: "Update to ${{ github.ref_name }}"
 
-  # The formula pins the macOS assets by checksum, so it can only be rendered
+  # The cask pins the macOS assets by checksum, so it can only be rendered
   # once `release` has published them and their checksums.txt.
   # HOMEBREW_TAP_SSH_KEY is a deploy key with write access on
   # omartelo/homebrew-tap — GITHUB_TOKEN is scoped to this repository and cannot
@@ -292,7 +299,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Render formula
+      - name: Render cask
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -301,9 +308,9 @@ jobs:
           sum() {
             awk -v file="$1" '$2 == file { print $1 }' checksums.txt
           }
-          arm64="$(sum "lich-v${version}-darwin-arm64")"
-          amd64="$(sum "lich-v${version}-darwin-amd64")"
-          # An empty checksum would publish a formula that fails every install.
+          arm64="$(sum "lich-v${version}-darwin-arm64.zip")"
+          amd64="$(sum "lich-v${version}-darwin-amd64.zip")"
+          # An empty checksum would publish a cask that fails every install.
           if [ -z "$arm64" ] || [ -z "$amd64" ]; then
             echo "missing darwin checksums in checksums.txt" >&2
             cat checksums.txt >&2
@@ -328,15 +335,18 @@ jobs:
           # and getting rejected before this one is tried.
           export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o UserKnownHostsFile=$known"
           git clone --depth 1 git@github.com:omartelo/homebrew-tap.git tap
-          mkdir -p tap/Formula
-          cp lich.rb tap/Formula/lich.rb
+          mkdir -p tap/Casks
+          cp lich.rb tap/Casks/lich.rb
           cd tap
           git config user.name omartelo
           git config user.email meopedevts@proton.me
-          git add Formula/lich.rb
-          # A re-run of the same tag renders an identical formula; nothing to push.
+          # The formula shipped a bare CLI and the cask supersedes it; leaving
+          # both in the tap makes `brew install omartelo/tap/lich` ambiguous.
+          git rm -q --ignore-unmatch Formula/lich.rb
+          git add Casks/lich.rb
+          # A re-run of the same tag renders an identical cask; nothing to push.
           if git diff --cached --quiet; then
-            echo "formula already up to date"
+            echo "cask already up to date"
             exit 0
           fi
           git commit -m "lich: update to ${GITHUB_REF_NAME}"

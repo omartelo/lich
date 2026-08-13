@@ -76,14 +76,16 @@ curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh
 | Platform | Get it | Needs at runtime |
 | --- | --- | --- |
 | **Linux** | `install.sh` above, or AUR [`lich-bin`](https://aur.archlinux.org/packages/lich-bin) (`yay -S lich-bin`) | chromium / google-chrome / brave on `PATH`, plus `zenity` |
-| **macOS** *(experimental)* | `brew install omartelo/tap/lich` | Chrome / Chromium / Edge / Brave in `/Applications` |
+| **macOS** *(experimental)* | `brew install --cask omartelo/tap/lich` | Chrome / Chromium / Edge / Brave in `/Applications` |
 | **Windows** *(experimental)* | installer from [Releases](https://github.com/omartelo/lich/releases) | Chrome / Edge / Brave |
 
 Manual per-distro packages and the static binary: [INSTALL.md](INSTALL.md). The
 macOS and Windows binaries are unsigned — Gatekeeper and SmartScreen warn until
 notarization/signing ship. Homebrew installs sidestep the Gatekeeper prompt;
-a binary downloaded from the Releases page needs its quarantine flag cleared by
-hand.
+a download from the Releases page needs its quarantine flag cleared by hand.
+On macOS the cask installs `Lich.app`, so lich has its own icon in
+`/Applications`; the Dock, while it runs, shows the browser that owns the
+window.
 
 ## Getting started
 

@@ -31,9 +31,9 @@ const (
 
 	// aurPackage is the AUR name Arch users update through their helper.
 	aurPackage = "lich-bin"
-	// brewFormula is the tap-qualified formula name Homebrew users update
-	// through; brew owns the Cellar copy, so lich never swaps it itself.
-	brewFormula = "omartelo/tap/lich"
+	// brewPackage is the tap-qualified name Homebrew users update through; brew
+	// owns its copy, so lich never swaps it itself.
+	brewPackage = "omartelo/tap/lich"
 	// installScript is the deb/rpm/other-distro update path: install.sh detects
 	// the distro, installs the matching package, and POSTs /restart itself.
 	installScript = "curl -fsSL https://raw.githubusercontent.com/" + repo + "/main/install.sh | sh"
@@ -207,7 +207,7 @@ func canSelfApply(goos, exePath string) bool {
 	if exePath == "" {
 		return false
 	}
-	if brewOwned(exePath) {
+	if brewOwned(exePath) || bundled(exePath) {
 		return false
 	}
 	return dirWritable(filepath.Dir(exePath))
@@ -227,15 +227,27 @@ func brewOwned(exePath string) bool {
 	return slices.Contains(strings.Split(resolved, string(filepath.Separator)), "Cellar")
 }
 
+// bundled reports whether exePath is the executable inside lich's macOS .app —
+// what the Homebrew cask installs into /Applications. Swapping that binary
+// would invalidate the bundle's code signature and leave an app macOS reads as
+// damaged, so a bundled install updates through Homebrew rather than the
+// button.
+func bundled(exePath string) bool {
+	return strings.Contains(filepath.ToSlash(exePath), ".app/Contents/MacOS/")
+}
+
 // installCommand is the shell command the UI pastes to update this install, or
 // "" on the self-apply platforms (they swap the binary through the button).
 // Arch goes through its AUR helper plus an explicit restart — yay knows nothing
 // about lich's /restart — while every other distro uses install.sh, which
 // restarts itself. A Homebrew install is package-manager owned like Arch's, on
-// whichever platform it runs.
+// whichever platform it runs, and macOS ships as a cask.
 func (s *Service) installCommand() string {
+	if bundled(s.exePath) {
+		return "brew upgrade --cask " + brewPackage + restartChain
+	}
 	if brewOwned(s.exePath) {
-		return "brew upgrade " + brewFormula + restartChain
+		return "brew upgrade " + brewPackage + restartChain
 	}
 	if s.goos != "linux" {
 		return ""

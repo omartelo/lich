@@ -67,6 +67,7 @@ func TestCanSelfApply(t *testing.T) {
 		{"no exe path", "darwin", "", false},
 		{"unwritable dir", "darwin", filepath.Join("/nonexistent-abc123", "lich"), false},
 		{"homebrew cellar is brew's", "darwin", cellarExe(t), false},
+		{"app bundle keeps its signature", "darwin", bundleExe(t), false},
 	}
 	for _, tc := range tests {
 		if got := canSelfApply(tc.goos, tc.exePath); got != tc.want {
@@ -81,6 +82,18 @@ func TestCanSelfApply(t *testing.T) {
 func cellarExe(t *testing.T) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "Cellar", "lich", "0.21.1", "bin")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return filepath.Join(dir, "lich")
+}
+
+// bundleExe returns a writable path shaped like the cask install
+// (/Applications/Lich.app/Contents/MacOS/lich), so the bundle is the only
+// reason canSelfApply can refuse it.
+func bundleExe(t *testing.T) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "Lich.app", "Contents", "MacOS")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -199,6 +212,7 @@ func TestStatus(t *testing.T) {
 func TestInstallCommand(t *testing.T) {
 	arch := "yay -S lich-bin" + restartChain
 	brew := "brew upgrade omartelo/tap/lich" + restartChain
+	cask := "brew upgrade --cask omartelo/tap/lich" + restartChain
 
 	tests := []struct {
 		name      string
@@ -210,6 +224,7 @@ func TestInstallCommand(t *testing.T) {
 		{"windows self-apply", "windows", "", "", ""},
 		{"darwin self-apply", "darwin", "", "", ""},
 		{"homebrew install", "darwin", cellarExe(t), "", brew},
+		{"cask install", "darwin", bundleExe(t), "", cask},
 		{"arch by ID", "linux", "", "ID=arch\n", arch},
 		{"arch quoted ID", "linux", "", "ID=\"arch\"\n", arch},
 		{"arch derivative via ID_LIKE", "linux", "", "ID=manjaro\nID_LIKE=arch\n", arch},

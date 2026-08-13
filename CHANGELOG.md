@@ -5,6 +5,21 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **lich is an application on macOS.** The Homebrew install shipped a bare
+  command-line binary, so nothing landed in `/Applications`: lich was absent
+  from Launchpad, from Spotlight and from the Finder, and had no icon anywhere.
+  The tap now publishes a cask that installs `Lich.app` under its own icon and
+  keeps `lich` on `PATH` as before. The Dock still shows the browser while lich
+  runs — the window belongs to it, and macOS offers nothing like the window
+  class Linux matches against the launcher — so the app deliberately claims no
+  Dock tile of its own rather than flashing one that vanishes a second later.
+  Upgrading from the old formula means `brew uninstall lich` first; INSTALL.md
+  says so.
+
 ## [0.32.0] - 2026-08-13
 
 ### Added
