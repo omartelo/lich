@@ -119,11 +119,19 @@ nobody knows it and that the call site never shows. The mechanism and the histor
   the running window (best-effort, untested against a real window) and exits 0.
 - **Reordering rides dnd-kit's pointer sensors** (`frontend/src/lib/use-sortable-list.ts`); the activation distance
   is load-bearing — without it plain clicks stop selecting a session.
-- **Installing the plugin writes into two harnesses' own directories**
-  (`internal/agentplugin`): Claude Code and Codex are driven through their plugin CLI, but opencode and Crush have
-  none, so lich writes the released files itself — a module into opencode's plugin dir, hook scripts plus a
-  delimited block in Crush's `crushrc`. Neither harness records what is installed, so the version lives in a marker
-  line lich wrote; edit the file by hand and lich reads it as not installed. Crush below 0.88.0 ignores those lines
-  in silence, which is why the install asks its version first. The Crush block also registers lich's MCP server, by
-  the absolute path of the binary that installed it — a line in a file cannot expand `$LICH_BIN` per session, and
-  the binary is only the transport: which lich a session reaches is decided by the coordinates in its PTY.
+- **Installing the plugin writes into three harnesses' own directories**
+  (`internal/agentplugin`): Claude Code and Codex are driven through their plugin CLI, but opencode, oh-my-pi and
+  Crush have none, so lich writes the released files itself — a module into opencode's plugin dir, another into
+  omp's `extensions/`, hook scripts plus a delimited block in Crush's `crushrc`. None of them records what is
+  installed, so the version lives in a marker line lich wrote; edit the file by hand and lich reads it as not
+  installed. Crush below 0.88.0 ignores those lines in silence, which is why the install asks its version first.
+  The Crush block and omp's `mcp.json` also register lich's MCP server, by the absolute path of the binary that
+  installed it — a line in a file cannot expand `$LICH_BIN` per session, and the binary is only the transport:
+  which lich a session reaches is decided by the coordinates in its PTY. omp's is a JSON document rather than an
+  appendable one, so lich rewrites it: every key survives, the user's formatting does not, and a file lich cannot
+  parse aborts the install rather than being replaced.
+- **omp's state directory answers to two variables, and the profile wins**
+  (`internal/agentplugin/omp.go`, `internal/terminal/resume.go`, both resolving it independently as the Claude Code
+  pair do): `OMP_PROFILE` moves the whole directory under `~/.omp/profiles/<name>/agent` and beats an explicit
+  `PI_CODING_AGENT_DIR`, which is the order `omp config path` was measured to apply. Get it backwards and the
+  install lands where omp is not reading and every restored card silently starts fresh.

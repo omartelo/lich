@@ -1,19 +1,20 @@
 // Package agentplugin manages the lich companion plugin inside the provider
 // CLIs that can run it: whether it is installed, whether a newer release
-// exists, and installing or updating it. All four ship the same plugin from the
+// exists, and installing or updating it. All five ship the same plugin from the
 // same repository; what differs per provider — the subcommands, where the
 // installed version is read from, and whether there is a CLI at all — lives in
-// claude.go, codex.go, opencode.go and crush.go.
+// claude.go, codex.go, opencode.go, omp.go and crush.go.
 //
 // Two install shapes, decided by the harness rather than by lich:
 //
 //   - Claude Code and Codex are driven through their own plugin CLI, the
 //     supported interface, so lich never edits their state files by hand.
-//   - opencode and Crush have no plugin CLI, so lich writes the files the
-//     release published: a module into opencode's plugin directory, and hook
-//     scripts plus a delimited block of `hook add` lines into Crush's crushrc.
-//     Both carry a marker naming the version, which is the only record of what
-//     is installed where the harness keeps none.
+//   - opencode, oh-my-pi and Crush have no plugin CLI, so lich writes the files
+//     the release published: a module into opencode's plugin directory, another
+//     into oh-my-pi's extensions directory, and hook scripts plus a delimited
+//     block of `hook add` lines into Crush's crushrc. Each carries a marker
+//     naming the version, which is the only record of what is installed where
+//     the harness keeps none.
 package agentplugin
 
 import (
@@ -58,7 +59,9 @@ const (
 // supported is every provider that can run the plugin, in the order the UI
 // lists them. A provider outside this list has no plugin to offer, so it never
 // reaches a status or an install.
-var supported = []string{providers.Claude, providers.Codex, providers.OpenCode, providers.Crush}
+var supported = []string{
+	providers.Claude, providers.Codex, providers.OpenCode, providers.OMP, providers.Crush,
+}
 
 // BinResolver supplies the binary to shell out to for a provider. The store
 // implements it; the empty project id asks for the global value, and an empty
@@ -131,7 +134,9 @@ func (s *Service) Status() []Status {
 // operations into a session — as tools of opencode's own, and as the MCP server
 // registered in Crush's config. Claude Code and Codex never ask: they are told
 // about the server on their own command line at spawn, whatever the plugin's
-// version.
+// version. oh-my-pi clears it by arriving later: its module only exists in
+// releases well past this one, and its MCP registration is written by the same
+// install.
 //
 // The version is checked rather than assumed because pointing a session at a
 // tool its plugin predates is worse than naming the shell command, which works
@@ -141,8 +146,8 @@ const toolsMinVersion = "0.9.0"
 // HasTools reports whether a provider's sessions can call lich's own operations
 // — whether a relayed message may name a tool rather than the command line.
 //
-// True for the two lich registers at spawn, and for the two that get them with
-// the plugin, once the installed one is new enough.
+// True for the two lich registers at spawn, and for the three that get them
+// with the plugin, once the installed one is new enough.
 func (s *Service) HasTools(provider string) bool {
 	if providers.AcceptsMCPServer(provider) {
 		return true
@@ -159,8 +164,8 @@ func (s *Service) HasTools(provider string) bool {
 // reading a session's silence as an answer: a provider that never reports is
 // silent whatever happens in it.
 //
-// It reads the provider's own plugin state — a file for Claude Code and
-// opencode, a CLI call for Codex and Crush — so it is not for a hot path. The
+// It reads the provider's own plugin state — a file for Claude Code, opencode
+// and oh-my-pi, a CLI call for Codex and Crush — so it is not for a hot path. The
 // relay asks it once per errand, and HasTools once more before that; neither
 // question is cached, so each one pays for itself.
 func (s *Service) Installed(provider string) bool {
@@ -195,6 +200,8 @@ func (s *Service) Install(provider string) error {
 		return s.codexInstall()
 	case providers.OpenCode:
 		return s.opencodeInstall()
+	case providers.OMP:
+		return s.ompInstall()
 	case providers.Crush:
 		return s.crushInstall()
 	}
@@ -213,6 +220,8 @@ func (s *Service) Update(provider string) error {
 		return s.codexUpdate()
 	case providers.OpenCode:
 		return s.opencodeInstall()
+	case providers.OMP:
+		return s.ompInstall()
 	case providers.Crush:
 		return s.crushInstall()
 	}
@@ -229,6 +238,8 @@ func (s *Service) installedVersion(provider string) (string, bool) {
 		return s.codexInstalledVersion()
 	case providers.OpenCode:
 		return s.opencodeInstalledVersion()
+	case providers.OMP:
+		return s.ompInstalledVersion()
 	case providers.Crush:
 		return s.crushInstalledVersion()
 	}

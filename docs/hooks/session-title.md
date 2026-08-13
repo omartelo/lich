@@ -28,9 +28,9 @@ Both sides test against the payloads in
 
 ## Event → action mapping
 
-| Claude Code hook | Codex hook | opencode event    | Crush hook | action                                           |
-|------------------|------------|-------------------|------------|--------------------------------------------------|
-| `Stop`           | `Stop`     | `session.updated` | —          | set the session label to `title` (if still auto) |
+| Claude Code hook | Codex hook | opencode event    | oh-my-pi event                | Crush hook | action                                           |
+|------------------|------------|-------------------|-------------------------------|------------|--------------------------------------------------|
+| `Stop`           | `Stop`     | `session.updated` | `session_stop` + `turn_start` | —          | set the session label to `title` (if still auto) |
 
 The `ai-title` is an internal Haiku summary of the first prompt, written to the
 transcript **after** the first turn — so it does not exist at `SessionStart`.
@@ -51,7 +51,10 @@ while the label is still automatic (see below), so a stable title is idempotent.
 
 opencode is the one harness that hands the title over instead of being read out
 of a transcript: every `session.updated` carries the whole session, title
-included, and the plugin forwards it when it changed. It arrives more than once
+included, and the plugin forwards it when it changed. oh-my-pi hands it over too
+— off the session manager every event carries — but writes it asynchronously
+after the turn, which is why the client reads it again on the next `turn_start`
+and sends only what changed. It arrives more than once
 per turn, which the idempotence above already covers. **Crush has no title to
 report** — its only event is `PreToolUse`, whose payload is about the tool — so a
 Crush card keeps the name lich gave it.

@@ -38,6 +38,7 @@ type stubBins struct {
 	projectPath     string
 	providerSession string
 	providerErr     error
+	model           string
 	skipPerms       bool
 	costOn          bool
 	ledgers         map[string]stubLedger
@@ -64,6 +65,7 @@ func (s stubBins) ProviderBin(_, _ string) string       { return s.bin }
 func (s stubBins) SkipPermissions(_, _, _ string) bool  { return s.skipPerms }
 func (s stubBins) ProjectPath(_ string) string          { return s.projectPath }
 func (s stubBins) WorktreeSetup(_ string) string        { return s.setup }
+func (s stubBins) SessionModel(_ string) string         { return s.model }
 func (s stubBins) SetProviderSession(_, _ string) error { return nil }
 
 func (s stubBins) WorktreePorts() map[string]int {
@@ -489,8 +491,9 @@ func TestResolveCommand(t *testing.T) {
 }
 
 // TestResumeArgs proves each provider resumes in its own spelling — a flag for
-// Claude Code, a subcommand for Codex — and that a provider with none wired
-// never grows one: a shell, opencode or Crush must not be handed a stray id.
+// Claude Code and oh-my-pi, a subcommand for Codex — and that a provider with
+// none wired never grows one: a shell, opencode or Crush must not be handed a
+// stray id.
 func TestResumeArgs(t *testing.T) {
 	cases := []struct {
 		name, kind, resume string
@@ -500,7 +503,10 @@ func TestResumeArgs(t *testing.T) {
 		{"claude resume", "claude", "abc-123", []string{"--resume", "abc-123"}},
 		{"codex fresh", "codex", "", nil},
 		{"codex resume", "codex", "abc-123", []string{"resume", "abc-123"}},
+		{"omp fresh", "omp", "", nil},
+		{"omp resume", "omp", "abc-123", []string{"-r", "abc-123"}},
 		{"opencode never resumes", "opencode", "abc-123", nil},
+		{"crush never resumes", "crush", "abc-123", nil},
 		{"shell never resumes", KindShell, "abc-123", nil},
 		{"shell fresh", KindShell, "", nil},
 	}
@@ -542,7 +548,7 @@ func TestNameArgs(t *testing.T) {
 // when the setting is on. The literals are pinned rather than read back from
 // skipPermissionFlags: this is the flag that hands an agent the machine, and a
 // test that follows the map would keep passing while the map handed opencode
-// Claude Code's flag. A kind with no spelling — a shell, oh-my-pi — gets none.
+// Claude Code's flag. A kind with no spelling — a shell — gets none.
 func TestSkipPermissionArgs(t *testing.T) {
 	cases := []struct {
 		name, kind string
@@ -555,7 +561,8 @@ func TestSkipPermissionArgs(t *testing.T) {
 		{"codex on", "codex", true, []string{"--dangerously-bypass-approvals-and-sandbox"}},
 		{"opencode on", "opencode", true, []string{"--auto"}},
 		{"crush on", "crush", true, []string{"--yolo"}},
-		{"oh-my-pi is not wired", "omp", true, nil},
+		{"oh-my-pi off", "omp", false, nil},
+		{"oh-my-pi on", "omp", true, []string{"--auto-approve"}},
 		{"shell is never wired", KindShell, true, nil},
 	}
 	for _, tc := range cases {
@@ -610,6 +617,82 @@ func TestStartPassesNameToTheProcess(t *testing.T) {
 
 	// As above: the registration follows, pinned by its own test.
 	want := []string{bin, "--name", "lich-4f2a", "--mcp-config"}
+	if len(got) != len(want)+1 || !slices.Equal(got[:len(want)], want) {
+		t.Errorf("spawned argv = %v, want %v followed by one config", got, want)
+	}
+}
+
+// TestModelArgs pins each provider's own flag, and the two kinds that must never
+// be handed one: Crush spells --model only on its non-interactive `run`
+// subcommand, and a shell is not a provider. The flag literals are pinned rather
+// than read back from modelFlags, for the same reason skipPermissionArgs' test
+// pins its own — a test that follows the map cannot see the map hand a provider
+// somebody else's flag.
+//
+// The model values are only carriers for the passthrough rule: an alias, a full
+// name and a provider/model pair all reach the argv untouched. lich knows no
+// model names, so none of these is a catalogue entry to keep up to date.
+func TestModelArgs(t *testing.T) {
+	cases := []struct {
+		name, kind, model string
+		want              []string
+	}{
+		{"claude, an alias", providers.Claude, "opus", []string{"--model", "opus"}},
+		{"codex, a full name", providers.Codex, "gpt-5.2", []string{"--model", "gpt-5.2"}},
+		{"opencode, a provider/model pair", providers.OpenCode, "openai/gpt-5.2",
+			[]string{"--model", "openai/gpt-5.2"}},
+		{"oh-my-pi, a fuzzy match", providers.OMP, "opus", []string{"--model", "opus"}},
+		{"crush takes none at spawn", providers.Crush, "opus", nil},
+		{"a shell is not a provider", KindShell, "opus", nil},
+		{"no model named", providers.Claude, "", nil},
+		{"blank model", providers.Claude, "   ", nil},
+		{"model trimmed", providers.Claude, " opus ", []string{"--model", "opus"}},
+		{"flag-like model", providers.Claude, "--dangerously-skip-permissions", nil},
+	}
+	for _, tc := range cases {
+		got := modelArgs(tc.kind, tc.model)
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("%s: modelArgs(%q, %q) = %v, want %v", tc.name, tc.kind, tc.model, got, tc.want)
+		}
+	}
+}
+
+// TestSupportsModel pins what the spawn service rejects on: a caller that names
+// a model for a provider lich cannot pass one to hears about it instead of
+// getting a session quietly running the provider's default.
+func TestSupportsModel(t *testing.T) {
+	for _, kind := range []string{providers.Claude, providers.Codex, providers.OpenCode, providers.OMP} {
+		if !SupportsModel(kind) {
+			t.Errorf("SupportsModel(%q) = false, want true", kind)
+		}
+	}
+	for _, kind := range []string{providers.Crush, KindShell, "gemini"} {
+		if SupportsModel(kind) {
+			t.Errorf("SupportsModel(%q) = true, want false", kind)
+		}
+	}
+}
+
+// TestStartPassesTheStoredModelToTheProcess proves the model recorded on the row
+// reaches the spawned binary's argv. It is read from the store rather than
+// passed to Start precisely so it survives a respawn, and this is the wiring
+// that carries it there.
+func TestStartPassesTheStoredModelToTheProcess(t *testing.T) {
+	bin := stayAliveBin(t)
+	svc := New(stubBins{bin: bin, model: "opus"}, nil, events.New())
+	t.Cleanup(func() { _ = svc.Close("s1") })
+
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, 80, 24); err != nil {
+		t.Fatalf("Start = %v, want nil", err)
+	}
+
+	svc.mu.Lock()
+	got := spawnedArgs(t, svc, "s1")
+	svc.mu.Unlock()
+
+	// Ahead of the registration, as every other flag is: --mcp-config reads what
+	// follows it as another config path, so a model behind it is a model lost.
+	want := []string{bin, "--model", "opus", "--mcp-config"}
 	if len(got) != len(want)+1 || !slices.Equal(got[:len(want)], want) {
 		t.Errorf("spawned argv = %v, want %v followed by one config", got, want)
 	}
@@ -726,7 +809,7 @@ func TestSessionEnvInjectsCoordinates(t *testing.T) {
 func TestProviderArgsRegistersTheMCPServer(t *testing.T) {
 	const bin = "/usr/bin/lich"
 
-	claude := providerArgs(providers.Claude, "", "", bin, false)
+	claude := providerArgs(providers.Claude, "", "", "", bin, false)
 	if len(claude) != 2 || claude[0] != "--mcp-config" {
 		t.Fatalf("claude args = %v", claude)
 	}
@@ -750,7 +833,7 @@ func TestProviderArgsRegistersTheMCPServer(t *testing.T) {
 		t.Errorf("a secret reached the argv, which /proc exposes: %q", claude[1])
 	}
 
-	codex := providerArgs(providers.Codex, "", "", bin, false)
+	codex := providerArgs(providers.Codex, "", "", "", bin, false)
 	want := []string{
 		"-c", `mcp_servers.lich.command="/usr/bin/lich"`,
 		"-c", `mcp_servers.lich.args=["mcp"]`,
@@ -765,7 +848,7 @@ func TestProviderArgsRegistersTheMCPServer(t *testing.T) {
 // follows it, and Codex reads resume as a subcommand that every global option
 // must precede.
 func TestProviderArgsOrdersEachProvidersConstraint(t *testing.T) {
-	claude := providerArgs(providers.Claude, "lich-4f2a", "conv-1", "/usr/bin/lich", true)
+	claude := providerArgs(providers.Claude, "lich-4f2a", "conv-1", "", "/usr/bin/lich", true)
 	if claude[len(claude)-2] != "--mcp-config" {
 		t.Errorf("--mcp-config is not last, so it eats what follows: %v", claude)
 	}
@@ -775,7 +858,7 @@ func TestProviderArgsOrdersEachProvidersConstraint(t *testing.T) {
 		}
 	}
 
-	codex := providerArgs(providers.Codex, "", "conv-1", "/usr/bin/lich", false)
+	codex := providerArgs(providers.Codex, "", "conv-1", "", "/usr/bin/lich", false)
 	resume := slices.Index(codex, "resume")
 	if resume < 0 {
 		t.Fatalf("codex args lost the resume subcommand: %v", codex)
@@ -785,6 +868,16 @@ func TestProviderArgsOrdersEachProvidersConstraint(t *testing.T) {
 	}
 	if codex[len(codex)-1] != "conv-1" {
 		t.Errorf("codex args = %v, want the conversation id last", codex)
+	}
+
+	// The model is the one flag Codex takes on both sides of the subcommand
+	// (`codex resume --help` lists it), and it goes after: a flag the resumed
+	// conversation's own parser accepts is one less thing riding on where the
+	// global options end.
+	resumed := providerArgs(providers.Codex, "", "conv-1", "gpt-5.2", "/usr/bin/lich", false)
+	model := slices.Index(resumed, "--model")
+	if model < 0 || model < slices.Index(resumed, "resume") {
+		t.Errorf("codex args = %v, want --model after the resume subcommand", resumed)
 	}
 }
 
@@ -805,7 +898,7 @@ func TestProviderArgsWithoutARegistration(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if args := providerArgs(tt.kind, "", "", tt.bin, false); len(args) != 0 {
+			if args := providerArgs(tt.kind, "", "", "", tt.bin, false); len(args) != 0 {
 				t.Errorf("args = %v, want none", args)
 			}
 		})

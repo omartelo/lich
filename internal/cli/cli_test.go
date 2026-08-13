@@ -502,7 +502,7 @@ func TestOpenNamesBothWaysToAddressTheNewSession(t *testing.T) {
 	if call.method != "spawn.Open" {
 		t.Errorf("method = %q", call.method)
 	}
-	want := []any{"s1", "", "", "auth-fix", ""}
+	want := []any{"s1", "", "", "auth-fix", "", ""}
 	if len(call.args) != len(want) {
 		t.Fatalf("args = %v, want %v", call.args, want)
 	}
@@ -525,13 +525,17 @@ func TestOpenPassesEveryFlagThrough(t *testing.T) {
 	f := newFakeLich(t, openedBody)
 
 	code, _, stderr := run(t, f,
-		"open", "--project", "revu", "--kind", "codex", "--worktree", "hotfix", "--base", "origin/main")
+		"open", "--project", "revu", "--kind", "codex", "--worktree", "hotfix",
+		"--base", "origin/main", "--model", "gpt-5.2")
 	if code != 0 {
 		t.Fatalf("exit = %d, stderr = %q", code, stderr)
 	}
 
 	call := f.only(t)
-	want := []any{"s1", "revu", "codex", "hotfix", "origin/main"}
+	want := []any{"s1", "revu", "codex", "hotfix", "origin/main", "gpt-5.2"}
+	if len(call.args) != len(want) {
+		t.Fatalf("args = %v, want %v", call.args, want)
+	}
 	for i := range want {
 		if call.args[i] != want[i] {
 			t.Errorf("argument %d = %v, want %v", i, call.args[i], want[i])

@@ -70,6 +70,7 @@ const (
 type Sessions interface {
 	LoadState() ([]store.Project, error)
 	AddSession(projectID, sessionID, label, kind, path string, nextSeq int) error
+	SetSessionModel(sessionID, model string) error
 	DeleteSession(projectID, sessionID, activeID string) error
 	CloseSession(projectID, sessionID, activeID string) error
 	PurgeWorktreeSessions(projectID, path string) error
@@ -144,7 +145,10 @@ func New(sessions Sessions, worktrees Worktrees, term Terminal, events Events) *
 // base (the project's current branch when base is empty); the session is rooted
 // there, labelled after it, and runs the project's worktree setup script before
 // its provider, exactly as the window's own worktree flow does.
-func (s *Service) Open(fromID, projectName, kind, worktree, base string) (Session, error) {
+//
+// model, when given, is the model the provider is spawned on, in that provider's
+// own spelling. It is recorded on the row so every later spawn repeats it.
+func (s *Service) Open(fromID, projectName, kind, worktree, base, model string) (Session, error) {
 	projects, err := s.sessions.LoadState()
 	if err != nil {
 		return Session{}, fmt.Errorf("read the workspace: %w", err)
@@ -156,6 +160,13 @@ func (s *Service) Open(fromID, projectName, kind, worktree, base string) (Sessio
 	kind, err = resolveKind(projects, fromID, kind)
 	if err != nil {
 		return Session{}, err
+	}
+	model = strings.TrimSpace(model)
+	if model != "" && !terminal.SupportsModel(kind) {
+		return Session{}, fmt.Errorf(
+			"%s cannot be told which model to run when lich starts it — open the session without a model and pick one inside it",
+			kindName(kind),
+		)
 	}
 
 	// cwd is where the PTY starts; stored is what the row records, which is
@@ -204,6 +215,11 @@ func (s *Service) Open(fromID, projectName, kind, worktree, base string) (Sessio
 	}
 	if err := s.sessions.AddSession(target.ID, id, label, kind, stored, opened.NextSeq); err != nil {
 		return Session{}, err
+	}
+	if model != "" {
+		if err := s.sessions.SetSessionModel(id, model); err != nil {
+			return Session{}, err
+		}
 	}
 	// Announced before the spawn, and regardless of how it goes: the row exists
 	// either way, so the card has to exist either way too — a session only the
@@ -347,6 +363,17 @@ func knownProjects(projects []store.Project) string {
 		names = append(names, p.Name)
 	}
 	return "Open projects: " + strings.Join(names, ", ") + "."
+}
+
+// kindName is what a provider is called in an error the user reads, falling
+// back to the kind itself — which is what a shell session has.
+func kindName(kind string) string {
+	for _, p := range providers.Registry {
+		if p.ID == kind {
+			return p.Name
+		}
+	}
+	return kind
 }
 
 func knownKinds() string {

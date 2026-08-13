@@ -25,9 +25,9 @@ Both sides test against the payloads in
 
 ## Event → action mapping
 
-| Claude Code hook                        | Codex hook                          | opencode event | Crush hook                          | action                           |
-|-----------------------------------------|-------------------------------------|----------------|-------------------------------------|----------------------------------|
-| `PostToolUse` (file-mutating tools)     | `PostToolUse` (file-mutating tools) | `file.edited`  | `PreToolUse` (file-mutating tools)  | refresh the session's git status |
+| Claude Code hook                        | Codex hook                          | opencode event | oh-my-pi event                       | Crush hook                          | action                           |
+|-----------------------------------------|-------------------------------------|----------------|--------------------------------------|-------------------------------------|----------------------------------|
+| `PostToolUse` (file-mutating tools)     | `PostToolUse` (file-mutating tools) | `file.edited`  | `tool_result` (file-mutating tools)  | `PreToolUse` (file-mutating tools)  | refresh the session's git status |
 
 Fire it from `PostToolUse` **only for tools that write to disk** — the names are
 the provider's, so match its own: `Edit`, `Write`, `NotebookEdit`, `Bash` on
@@ -39,7 +39,10 @@ hook's stdin payload if a single script filters instead of per-tool matchers.
 
 opencode needs no matcher: `file.edited` fires only when a file actually
 changed, which is the signal the other harnesses approximate by filtering tool
-names. Crush is the opposite — `PreToolUse` fires *before* the write, so its
+names. oh-my-pi filters like Claude Code does, on the result rather than the
+call so the refresh sees the tree after the write; its `python` tool is left out
+on purpose, being a general evaluator that would fire a refresh per
+computation. Crush is the opposite — `PreToolUse` fires *before* the write, so its
 refresh reads a tree the tool has not touched yet (see the ceilings).
 
 ## lich server side
