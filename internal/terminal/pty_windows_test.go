@@ -19,7 +19,10 @@ func TestWindowsPTYCloseIsSingleShot(t *testing.T) {
 	p, err := startPTY(ptySpec{
 		bin:  "cmd.exe",
 		args: []string{"/c", "pause"},
-		dir:  t.TempDir(),
+		// Not t.TempDir(): the child holds its working directory open for as
+		// long as it takes Windows to tear it down after the close, and the
+		// cleanup that cannot delete it fails the test for the wrong reason.
+		dir:  os.TempDir(),
 		cols: 80,
 		rows: 24,
 	})
