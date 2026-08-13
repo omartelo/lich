@@ -146,8 +146,10 @@ type spawnStore struct {
 }
 
 func (*spawnStore) LoadState() ([]store.Project, error) {
-	return []store.Project{{ID: "p1", Name: "lich", Path: "/src/lich", NextSeq: 4,
-		Sessions: []store.Session{{ID: "s1", Label: "sender", Kind: "claude"}}}}, nil
+	return []store.Project{{ID: "p1", Name: "lich", Path: "/src/lich", NextSeq: 4, Sessions: []store.Session{
+		{ID: "s1", Label: "sender", Kind: "claude"},
+		{ID: "s2", Label: "auth-fix", Kind: "claude", Path: "/wt/auth-fix"},
+	}}}, nil
 }
 
 func (s *spawnStore) AddSession(_, _, _, _, _ string, _ int) error {
@@ -168,23 +170,33 @@ func (*spawnStore) CloseSession(_, _, _ string) error { return nil }
 
 func (*spawnStore) PurgeWorktreeSessions(_, _ string) error { return nil }
 
-// spawnGit refuses every worktree: the wire is what these tests prove, and
-// running git would prove something else in a temporary directory.
-type spawnGit struct{}
+// spawnGit stands in for the repository: creating a checkout is refused because
+// the wire is what these tests prove, and running git would prove something else
+// in a temporary directory. What it lists, reports dirty and records removed is
+// the fixture each test sets.
+type spawnGit struct {
+	checkouts []project.Worktree
+	dirty     bool
+	removed   string
+	forced    bool
+}
 
-func (spawnGit) Branch(string) string { return "main" }
+func (*spawnGit) Branch(string) string { return "main" }
 
-func (spawnGit) ListBranches(string) (project.Branches, error) { return project.Branches{}, nil }
+func (*spawnGit) ListBranches(string) (project.Branches, error) { return project.Branches{}, nil }
 
-func (spawnGit) CreateWorktree(_, _, _, _ string, _ bool) (*project.Worktree, error) {
+func (*spawnGit) CreateWorktree(_, _, _, _ string, _ bool) (*project.Worktree, error) {
 	return nil, errors.New("no git here")
 }
 
-func (spawnGit) ListCheckouts(string) ([]project.Worktree, error) { return nil, nil }
+func (g *spawnGit) ListCheckouts(string) ([]project.Worktree, error) { return g.checkouts, nil }
 
-func (spawnGit) RemoveWorktree(_, _ string, _ bool) error { return errors.New("no git here") }
+func (g *spawnGit) RemoveWorktree(_, path string, force bool) error {
+	g.removed, g.forced = path, force
+	return nil
+}
 
-func (spawnGit) WorktreeDirty(string) (bool, error) { return false, nil }
+func (g *spawnGit) WorktreeDirty(string) (bool, error) { return g.dirty, nil }
 
 type spawnTerminal struct {
 	mu     sync.Mutex
@@ -207,19 +219,19 @@ func (s *spawnTerminal) Close(id string) error {
 	return nil
 }
 
-// TestOpenOverTheRealDispatcher proves the five arguments `lich open` posts land
-// on spawn.Open in the order it declares them — a positional mismatch here would
-// otherwise open a session in a project named after a provider.
-func TestOpenOverTheRealDispatcher(t *testing.T) {
+// wiredSpawn serves spawn behind the real RPC dispatcher and returns the session
+// environment a PTY would carry, plus the workspace and the terminal it drives.
+func wiredSpawn(t *testing.T, git *spawnGit) (func(string) string, *spawnStore, *spawnTerminal) {
+	t.Helper()
 	rows := &spawnStore{}
 	term := &spawnTerminal{}
 	dispatcher := rpc.New()
-	dispatcher.Register("spawn", spawn.New(rows, spawnGit{}, term, nil))
+	dispatcher.Register("spawn", spawn.New(rows, git, term, nil))
 
 	server := httptest.NewServer(dispatcher)
 	t.Cleanup(server.Close)
 	port := strconv.Itoa(server.Listener.Addr().(*net.TCPAddr).Port)
-	env := func(key string) string {
+	return func(key string) string {
 		switch key {
 		case "LICH_PORT":
 			return port
@@ -229,7 +241,14 @@ func TestOpenOverTheRealDispatcher(t *testing.T) {
 			return "s1"
 		}
 		return ""
-	}
+	}, rows, term
+}
+
+// TestOpenOverTheRealDispatcher proves the five arguments `lich open` posts land
+// on spawn.Open in the order it declares them — a positional mismatch here would
+// otherwise open a session in a project named after a provider.
+func TestOpenOverTheRealDispatcher(t *testing.T) {
+	env, rows, term := wiredSpawn(t, &spawnGit{})
 
 	var stdout, stderr bytes.Buffer
 	if code := Run([]string{"open", "--kind", "codex"}, "test", env, &stdout, &stderr); code != 0 {
@@ -243,5 +262,46 @@ func TestOpenOverTheRealDispatcher(t *testing.T) {
 	}
 	if term.kind != "codex" || term.cwd != "/src/lich" {
 		t.Errorf("started %q in %q, want codex in the project directory", term.kind, term.cwd)
+	}
+}
+
+// TestCloseOverTheRealDispatcher proves the five arguments `lich close` posts
+// land on spawn.Close in the order it declares them. It closes the last session
+// in a dirty checkout, the case that reads every one of them: a worktree word in
+// the project's slot resolves no session at all, and a --force that misses its
+// own is a removal refused rather than the one the caller asked for.
+func TestCloseOverTheRealDispatcher(t *testing.T) {
+	git := &spawnGit{dirty: true}
+	env, _, term := wiredSpawn(t, git)
+
+	var stdout, stderr bytes.Buffer
+	args := []string{"close", "--project", "lich", "--worktree", "remove", "--force", "auth-fix"}
+	if code := Run(args, "test", env, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
+	}
+	if term.closed != "s2" {
+		t.Errorf("closed terminal %q, want the target session's", term.closed)
+	}
+	if git.removed != "/wt/auth-fix" || !git.forced {
+		t.Errorf("removed %q (forced %v), want the target's checkout, forced", git.removed, git.forced)
+	}
+	if !strings.Contains(stdout.String(), "/wt/auth-fix") {
+		t.Errorf("stdout = %q, want the checkout that went with the session", stdout.String())
+	}
+}
+
+// TestWorktreesOverTheRealDispatcher proves `lich worktrees` posts the caller's
+// session before the project name: swapped, the app resolves the project by a
+// session id and finds none.
+func TestWorktreesOverTheRealDispatcher(t *testing.T) {
+	git := &spawnGit{dirty: true, checkouts: []project.Worktree{{Name: "auth-fix", Path: "/wt/auth-fix"}}}
+	env, _, _ := wiredSpawn(t, git)
+
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"worktrees", "--project", "lich"}, "test", env, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "auth-fix\tuncommitted\tauth-fix") {
+		t.Errorf("stdout = %q, want the checkout, its state and the session in it", stdout.String())
 	}
 }

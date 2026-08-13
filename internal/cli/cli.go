@@ -204,16 +204,15 @@ func (c *client) sessions(args []string) error {
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
+	if flags.NArg() != 0 {
+		return fmt.Errorf("usage: lich sessions [--json]")
+	}
 
 	var peers []relay.Peer
 	if err := c.call("relay.Peers", []any{c.sessionID()}, shortCall, &peers); err != nil {
 		return err
 	}
-	if peers == nil {
-		// Decoding a JSON null leaves the slice nil, and a script reading --json
-		// should never have to tell that apart from an empty roster.
-		peers = []relay.Peer{}
-	}
+	peers = asList(peers)
 	if *asJSON {
 		return c.emit(peers)
 	}
@@ -306,6 +305,11 @@ func (c *client) open(args []string) error {
 	asJSON := flags.Bool("json", false, "print the result as JSON")
 	if err := flags.Parse(args); err != nil {
 		return err
+	}
+	if flags.NArg() != 0 {
+		return fmt.Errorf(
+			"usage: lich open [--project <name>] [--kind <provider>] [--worktree <branch>] " +
+				"[--base <branch>] [--json]")
 	}
 
 	var opened spawn.Session
@@ -492,14 +496,15 @@ func (c *client) worktrees(args []string) error {
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
+	if flags.NArg() != 0 {
+		return fmt.Errorf("usage: lich worktrees [--project <name>] [--json]")
+	}
 
 	var checkouts []spawn.Checkout
 	if err := c.call("spawn.Worktrees", []any{c.sessionID(), *project}, shortCall, &checkouts); err != nil {
 		return err
 	}
-	if checkouts == nil {
-		checkouts = []spawn.Checkout{}
-	}
+	checkouts = asList(checkouts)
 	if *asJSON {
 		return c.emit(checkouts)
 	}
@@ -548,6 +553,16 @@ func (c *client) report(result relay.Result, asJSON bool) error {
 		result.Target, result.Ticket,
 	)
 	return nil
+}
+
+// asList is a decoded list as a caller should be handed it. Decoding a JSON
+// null leaves the slice nil, and neither a script reading --json nor an agent
+// reading a tool result should have to tell that apart from an empty one.
+func asList[T any](items []T) []T {
+	if items == nil {
+		return []T{}
+	}
+	return items
 }
 
 // emit writes one JSON line — the shape a script reads instead of the prose

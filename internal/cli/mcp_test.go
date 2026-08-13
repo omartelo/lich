@@ -117,6 +117,65 @@ func TestMCPHandshakeFallsBackToItsOwnVersion(t *testing.T) {
 	}
 }
 
+// The version a client shows beside the server is the build it is talking to.
+// A literal would make every install of every release report the same thing,
+// which is the one number a bug report needs from the other side.
+func TestMCPHandshakeReportsTheBuildVersion(t *testing.T) {
+	f := newFakeLich(t, `null`)
+
+	var stdout, stderr bytes.Buffer
+	c := &client{
+		env:     f.env,
+		version: "v9.9.9",
+		stdin:   strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}` + "\n"),
+		stdout:  &stdout,
+		stderr:  &stderr,
+		running: noInstance,
+	}
+	if code := dispatch([]string{"mcp"}, c); code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
+	}
+
+	var reply jsonRPC
+	if err := json.NewDecoder(&stdout).Decode(&reply); err != nil {
+		t.Fatalf("undecodable response: %v", err)
+	}
+	var result struct {
+		ServerInfo struct {
+			Version string `json:"version"`
+		} `json:"serverInfo"`
+	}
+	resultOf(t, reply, &result)
+	if result.ServerInfo.Version != "v9.9.9" {
+		t.Errorf("serverInfo.version = %q, want the running build's", result.ServerInfo.Version)
+	}
+}
+
+// A line that is not a message ends the server: the transport is one JSON
+// object per line, so a decoder that cannot read one has lost the stream and
+// carrying on would answer the wrong message with the wrong id.
+func TestMCPUnreadableInputEndsTheServer(t *testing.T) {
+	f := newFakeLich(t, `null`)
+
+	var stdout, stderr bytes.Buffer
+	c := &client{
+		env:     f.env,
+		stdin:   strings.NewReader("not a message\n"),
+		stdout:  &stdout,
+		stderr:  &stderr,
+		running: noInstance,
+	}
+	if code := dispatch([]string{"mcp"}, c); code != 1 {
+		t.Fatalf("exit = %d, want 1", code)
+	}
+	if !strings.Contains(stderr.String(), "read message") {
+		t.Errorf("stderr = %q, want the failure named", stderr.String())
+	}
+	if stdout.String() != "" {
+		t.Errorf("stdout = %q, want protocol and nothing else", stdout.String())
+	}
+}
+
 func TestMCPNotificationsGetNoReply(t *testing.T) {
 	f := newFakeLich(t, `null`)
 

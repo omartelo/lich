@@ -137,7 +137,7 @@ func (c *client) handleMCP(request jsonRPC) (jsonRPC, bool) {
 
 	switch request.Method {
 	case "initialize":
-		response.Result = mcpHandshake(request.Params)
+		response.Result = mcpHandshake(request.Params, c.version)
 	case "tools/list":
 		response.Result = map[string]any{"tools": mcpToolList()}
 	case "tools/call":
@@ -152,19 +152,19 @@ func (c *client) handleMCP(request jsonRPC) (jsonRPC, bool) {
 
 // mcpHandshake answers initialize, echoing the client's protocol version when
 // it named one (see mcpProtocolVersion).
-func mcpHandshake(params json.RawMessage) map[string]any {
+func mcpHandshake(params json.RawMessage, version string) map[string]any {
 	var asked struct {
 		ProtocolVersion string `json:"protocolVersion"`
 	}
 	_ = json.Unmarshal(params, &asked)
-	version := asked.ProtocolVersion
-	if version == "" {
-		version = mcpProtocolVersion
+	protocol := asked.ProtocolVersion
+	if protocol == "" {
+		protocol = mcpProtocolVersion
 	}
 	return map[string]any{
-		"protocolVersion": version,
+		"protocolVersion": protocol,
 		"capabilities":    map[string]any{"tools": map[string]any{}},
-		"serverInfo":      map[string]any{"name": relay.MCPServerName, "version": "1"},
+		"serverInfo":      map[string]any{"name": relay.MCPServerName, "version": version},
 		"instructions":    mcpInstructions,
 	}
 }
@@ -339,7 +339,7 @@ var mcpTools = []mcpTool{
 		},
 	},
 	{
-		Name: "wait_for_answer",
+		Name: relay.ToolCollect,
 		Description: "Collect the results of tasks you sent with send_to_session. Without a " +
 			"ticket it returns every result that is ready — the one call to make when a " +
 			"[lich] note says results are waiting — and, when none is, holds the line for " +
@@ -447,10 +447,7 @@ var mcpTools = []mcpTool{
 			if err := c.call("spawn.Worktrees", call, shortCall, &checkouts); err != nil {
 				return "", err
 			}
-			if checkouts == nil {
-				checkouts = []spawn.Checkout{}
-			}
-			out, err := json.Marshal(checkouts)
+			out, err := json.Marshal(asList(checkouts))
 			if err != nil {
 				return "", fmt.Errorf("encode the worktrees: %w", err)
 			}
@@ -458,7 +455,7 @@ var mcpTools = []mcpTool{
 		},
 	},
 	{
-		Name: "reply_to_session",
+		Name: relay.ToolReply,
 		Description: "Answer a task another session gave you. Call this when a message at your prompt " +
 			"came from lich and carried a ticket; whoever asked is blocked until you do. " +
 			"It is the only route back — a peer message does not reach them, because they are " +

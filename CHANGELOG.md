@@ -5,6 +5,17 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`lich open feature-x` no longer opens a session and says nothing.**
+  `sessions`, `open` and `worktrees` took a positional argument and ignored
+  it, so a branch name typed without `--worktree` opened a session in the
+  caller's own checkout while reading like it had made one of its own. All
+  three now refuse the stray argument and print the command's usage, as
+  `send`, `wait`, `reply` and `close` already did.
+
 ## [0.31.0] - 2026-08-13
 
 ### Added

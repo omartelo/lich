@@ -298,6 +298,13 @@ func TestWrongArgumentCountsFailWithUsage(t *testing.T) {
 		{"send", "docs", "a prompt", "extra"},
 		{"wait", "a1b2c3d4", "extra"},
 		{"reply", "a1b2c3d4"},
+		// A positional argument these take no notice of is a caller who believes
+		// it asked for something else: `lich open feature-x` reads as a worktree
+		// on that branch, and silently opening a session beside the caller's own
+		// checkout is the one answer nobody asked for.
+		{"sessions", "docs"},
+		{"open", "feature-x"},
+		{"worktrees", "lich"},
 	}
 	for _, args := range tests {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
