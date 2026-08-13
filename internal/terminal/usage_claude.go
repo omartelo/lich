@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -60,25 +59,6 @@ func claudeContextUsage(providerSessionID string) (contextUsage, bool) {
 		return contextUsage{}, false
 	}
 	return parseContextUsage(tail)
-}
-
-// claudeTranscriptPath locates a conversation's transcript by its UUID under the
-// Claude config dir ($CLAUDE_CONFIG_DIR, else ~/.claude). The UUID is unique, so
-// at most one file matches; false when none does yet.
-func claudeTranscriptPath(providerSessionID string) (string, bool) {
-	base := os.Getenv("CLAUDE_CONFIG_DIR")
-	if base == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", false
-		}
-		base = filepath.Join(home, ".claude")
-	}
-	matches, err := filepath.Glob(filepath.Join(base, "projects", "*", providerSessionID+".jsonl"))
-	if err != nil || len(matches) == 0 {
-		return "", false
-	}
-	return matches[0], true
 }
 
 // readTail returns up to the last max bytes of a file. false when it can't be
