@@ -3,6 +3,7 @@ package spawn
 import (
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/omartelo/lich/internal/project"
@@ -62,6 +63,13 @@ func (f *fakeSessions) AddSession(projectID, sessionID, label, kind, path string
 		return f.addErr
 	}
 	f.rows = append(f.rows, added{projectID, sessionID, label, kind, path, nextSeq})
+	// The counter moves with the write, as it does in the store: a fake that kept
+	// answering the old number would hide two sessions taking one label.
+	for i := range f.projects {
+		if f.projects[i].ID == projectID {
+			f.projects[i].NextSeq = nextSeq
+		}
+	}
 	return nil
 }
 
@@ -136,14 +144,15 @@ type started struct {
 }
 
 type fakeTerminal struct {
-	spawns []started
-	err    error
-	closed []string
+	spawns   []started
+	err      error
+	closed   []string
+	closeErr error
 }
 
 func (f *fakeTerminal) Close(id string) error {
 	f.closed = append(f.closed, id)
-	return nil
+	return f.closeErr
 }
 
 func (f *fakeTerminal) Start(
@@ -446,6 +455,158 @@ func TestOpenRefusesADetachedHeadWithoutABase(t *testing.T) {
 	}
 	if len(worktrees.created) != 0 {
 		t.Error("reached git with an empty base")
+	}
+}
+
+// A checkout is opened rather than created whatever case its branch is typed in:
+// the name lookups around it all fold case (resolveBase, labelTaken), and a
+// second branch beside the one asked for is the worst way to answer.
+func TestOpenReusesACheckoutWhoseNameIsSpeltInAnotherCase(t *testing.T) {
+	svc, sessions, worktrees, term, _ := newService(t)
+	worktrees.checkouts = []project.Worktree{{Name: "auth-fix", Path: "/wt/auth-fix"}}
+
+	opened, err := svc.Open("s1", "", "", "Auth-Fix", "")
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if len(worktrees.created) != 0 {
+		t.Errorf("created %+v, want the checkout that is already there", worktrees.created)
+	}
+	if opened.Path != "/wt/auth-fix" || sessions.rows[0].path != "/wt/auth-fix" {
+		t.Errorf("path %q / row %q, want the existing checkout", opened.Path, sessions.rows[0].path)
+	}
+	if term.spawns[0].setup {
+		t.Error("ran the setup script again in a checkout that already ran it")
+	}
+}
+
+// A base is what a worktree branches off, so one without a worktree describes
+// nothing. Accepting it silently drops it, and the session lands on a branch
+// whoever asked never named.
+func TestOpenRefusesABaseWithoutAWorktree(t *testing.T) {
+	svc, sessions, worktrees, term, _ := newService(t)
+
+	_, err := svc.Open("s1", "", "", "", "main")
+	if err == nil {
+		t.Fatal("accepted a base with no worktree to start")
+	}
+	if !strings.Contains(err.Error(), "main") {
+		t.Errorf("error = %q, want the base it refused named", err)
+	}
+	if len(sessions.rows) != 0 || len(worktrees.created) != 0 || len(term.spawns) != 0 {
+		t.Error("a refused open still created something")
+	}
+}
+
+// Every RPC call runs on its own goroutine, and the label counter is read from
+// the workspace and written back — two opens at once must not walk away with the
+// same number.
+func TestConcurrentOpensDoNotShareALabel(t *testing.T) {
+	svc, sessions, _, _, _ := newService(t)
+
+	var wg sync.WaitGroup
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := svc.Open("s1", "", "", "", ""); err != nil {
+				t.Errorf("Open: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	if len(sessions.rows) != 2 {
+		t.Fatalf("wrote %d rows, want 2", len(sessions.rows))
+	}
+	if sessions.rows[0].label == sessions.rows[1].label {
+		t.Errorf("both sessions took the label %q — `lich send` cannot tell them apart", sessions.rows[0].label)
+	}
+}
+
+func TestOpenReportsAnUnreadableWorkspace(t *testing.T) {
+	svc, sessions, _, term, _ := newService(t)
+	sessions.loadErr = errors.New("database is locked")
+
+	_, err := svc.Open("s1", "", "", "", "")
+	if err == nil {
+		t.Fatal("opened a session against a workspace it could not read")
+	}
+	if !strings.Contains(err.Error(), "database is locked") {
+		t.Errorf("error = %q, want the store's own reason kept", err)
+	}
+	if len(term.spawns) != 0 {
+		t.Error("started a terminal for a session that was never created")
+	}
+}
+
+// A row that was refused is a session that does not exist: no PTY, and no card
+// announcing one.
+func TestOpenStartsNothingWhenTheRowIsRefused(t *testing.T) {
+	svc, sessions, _, term, events := newService(t)
+	sessions.addErr = errors.New("disk full")
+
+	if _, err := svc.Open("s1", "", "", "", ""); err == nil {
+		t.Fatal("opened a session whose row was never written")
+	}
+	if len(term.spawns) != 0 || len(events.events) != 0 {
+		t.Error("a refused row left a terminal or a card behind")
+	}
+}
+
+func TestOpenReportsAnUnreadableBranchList(t *testing.T) {
+	svc, sessions, worktrees, _, _ := newService(t)
+	worktrees.listErr = errors.New("not a git repository")
+
+	_, err := svc.Open("s1", "", "", "hotfix", "main")
+	if err == nil {
+		t.Fatal("created a worktree off a base it could not check")
+	}
+	if !strings.Contains(err.Error(), "not a git repository") {
+		t.Errorf("error = %q, want git's own reason kept", err)
+	}
+	if len(worktrees.created) != 0 || len(sessions.rows) != 0 {
+		t.Error("wrote something for a base that was never resolved")
+	}
+}
+
+// Two projects can carry one name — the same directory opened twice, or two
+// checkouts of one repository — and a name that addresses both addresses
+// neither.
+func TestOpenRefusesAProjectNameThatNamesTwo(t *testing.T) {
+	sessions := &fakeSessions{projects: []store.Project{
+		{ID: "p1", Name: "lich", Path: "/src/lich", NextSeq: 1},
+		{ID: "p2", Name: "lich", Path: "/other/lich", NextSeq: 1},
+	}}
+	svc := New(sessions, &fakeWorktrees{branch: "main"}, &fakeTerminal{}, &fakeEvents{})
+
+	_, err := svc.Open("", "lich", "", "", "")
+	if err == nil {
+		t.Fatal("opened a session in one of two projects that answer to the same name")
+	}
+	if !strings.Contains(err.Error(), "told apart") {
+		t.Errorf("error = %q, want it to say the two cannot be told apart", err)
+	}
+	if len(sessions.rows) != 0 {
+		t.Error("wrote a row for an ambiguous project")
+	}
+}
+
+func TestWorktreesReportsAnUnreadableWorkspace(t *testing.T) {
+	svc, sessions, _, _, _ := newService(t)
+	sessions.loadErr = errors.New("database is locked")
+
+	if _, err := svc.Worktrees("s1", ""); err == nil {
+		t.Fatal("listed the checkouts of a workspace it could not read")
+	}
+}
+
+func TestWorktreesReportsAnUnreadableRepository(t *testing.T) {
+	svc, _, worktrees, _, _ := newService(t)
+	worktrees.listErr = errors.New("not a git repository")
+
+	if _, err := svc.Worktrees("s1", ""); err == nil {
+		t.Fatal("listed the checkouts of a repository git refused to read")
 	}
 }
 

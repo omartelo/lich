@@ -2,6 +2,7 @@ package spawn
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/omartelo/lich/internal/relay"
@@ -145,8 +146,10 @@ func (s *Service) removeCheckout(found located, active string, force bool) error
 func (s *Service) finish(found located, active string) {
 	if err := s.term.Close(found.session.ID); err != nil {
 		// The row is already gone, so there is nothing to undo and nothing the
-		// caller could do about it. The window's own close ignores this too.
-		return
+		// caller could do about it. The window's own close ignores this too — but
+		// the card still has to come down, or a failed PTY close leaves one on
+		// screen for a session that no longer exists anywhere else.
+		slog.Warn("spawn: close the session's terminal", "session", found.session.ID, "err", err)
 	}
 	if s.events != nil {
 		s.events.Emit(ClosedEventName, ClosedEvent{
@@ -237,6 +240,13 @@ func lastInWorktree(p store.Project, sess store.Session) bool {
 // else none. The same rule the window applies (sessions.ts, neighborId) — the
 // row it writes is the one the window reads back on the next launch.
 func neighborOf(p store.Project, id string) string {
+	// Only the active card's close moves the focus. The window applies whatever
+	// this returns without a second thought (sessions.ts, dropClosedSession), so
+	// naming a neighbour for a card nobody was looking at takes the user off the
+	// session they were reading.
+	if p.ActiveSessionID != id {
+		return p.ActiveSessionID
+	}
 	index := -1
 	for i, sess := range p.Sessions {
 		if sess.ID == id {

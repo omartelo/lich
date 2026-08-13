@@ -5,6 +5,33 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Closing another session no longer steals your focus.** `lich close` and the
+  `close_session` tool wrote a new active card for the project whichever session
+  was closed, and the window applies that without a say of its own — so an agent
+  closing a worker moved you off the card you were reading. Only closing the
+  active card moves the focus now, which is what the window has always done on
+  its own.
+
+- **A worktree is opened, not duplicated, when its branch is typed in another
+  case.** Asking for `--worktree Auth-Fix` with a checkout of `auth-fix` already
+  on disk created a second branch and a second checkout beside it. The lookup
+  now folds case, like every other branch name lookup around it.
+
+- **A session that fails to close no longer leaves a ghost card.** When the
+  terminal refused to go down, the card stayed on screen until a reload even
+  though the session was already gone from the workspace.
+
+- **`lich open --base` without `--worktree` says so.** The base was silently
+  dropped and the session opened on whatever branch was current.
+
+- **Two sessions opened at once no longer take the same label.** Concurrent
+  opens in one project read the same label counter, and `lich send` cannot tell
+  two cards with one name apart.
+
 ## [0.31.0] - 2026-08-13
 
 ### Added
