@@ -24,6 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   used to count as a notice given, and the sender was never told again. It now
   goes out at the end of the sender's next turn.
 
+- **The card's "results ready" count no longer settles on the wrong number.**
+  Two workers answering at the same instant could announce their counts out of
+  order, leaving the card saying one result with two of them waiting until
+  something else changed.
+
 ## [0.31.0] - 2026-08-13
 
 ### Added
