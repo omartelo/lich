@@ -5,6 +5,15 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Searching sessions no longer crashes on some accented text.** A palette
+  search that matched a conversation containing certain uppercase letters —
+  ones that grow when lowercased, like `Ⱥ` or `İ` — brought the window down
+  instead of showing the result.
+
 ## [0.31.0] - 2026-08-13
 
 ### Added
