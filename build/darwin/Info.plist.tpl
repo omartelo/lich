@@ -2,12 +2,13 @@
 <!--
   Rendered by build/darwin/bundle.sh (@VERSION@ -> the release version).
 
-  LSUIElement is the measured answer, not a preference: lich is a pure-Go
-  binary that never touches AppKit, so macOS shows its Dock tile only while
-  LaunchServices is starting it and drops the tile as soon as the process
-  fails to register with the window server. Without this key the user watches
-  an icon appear and vanish; with it the app lives in /Applications, Launchpad
-  and Spotlight, and the Dock shows only the browser that owns the window.
+  lich is a pure-Go binary that never touches AppKit, so it never registers
+  with the window server: macOS shows a Dock tile while LaunchServices starts
+  it and drops that tile once the window belongs to the browser instead.
+  Measured on a Mac, LSUIElement does not suppress that launch tile — it is
+  here because an app that owns no window of its own has no business in the
+  Dock or in Cmd-Tab once it is running. The icon that matters is the one in
+  /Applications, Launchpad and Spotlight.
 -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">

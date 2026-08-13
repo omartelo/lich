@@ -14,11 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from Launchpad, from Spotlight and from the Finder, and had no icon anywhere.
   The tap now publishes a cask that installs `Lich.app` under its own icon and
   keeps `lich` on `PATH` as before. The Dock still shows the browser while lich
-  runs — the window belongs to it, and macOS offers nothing like the window
-  class Linux matches against the launcher — so the app deliberately claims no
-  Dock tile of its own rather than flashing one that vanishes a second later.
-  Upgrading from the old formula means `brew uninstall lich` first; INSTALL.md
-  says so.
+  runs: the window belongs to it, and macOS offers nothing like the window
+  class Linux matches against the launcher, so the lich icon is the one you
+  launch from rather than the one you switch to. Upgrading from the old formula
+  means `brew uninstall lich` first; INSTALL.md says so.
 
 ## [0.32.0] - 2026-08-13
 
