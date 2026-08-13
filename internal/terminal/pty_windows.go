@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"sync"
 
 	"github.com/UserExistsError/conpty"
 	"golang.org/x/sys/windows"
@@ -26,7 +27,8 @@ func startPTY(spec ptySpec) (ptyHandle, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &windowsPTY{cpty}, nil
+	waitCtx, cancelWait := context.WithCancel(context.Background())
+	return &windowsPTY{ConPty: cpty, waitCtx: waitCtx, cancelWait: cancelWait}, nil
 }
 
 // commandLine turns bin+args into the single quoted command line
@@ -42,13 +44,51 @@ func commandLine(bin string, args []string) (string, error) {
 }
 
 // windowsPTY adapts a ConPTY to the seam. The embedded type already carries
-// Read, Write, Close (which terminates the child) and a same-shape Resize;
-// only Wait needs its context-and-exit-code signature narrowed.
+// Read, Write and a same-shape Resize; Wait and Close are wrapped because
+// conpty's cannot be called twice or overlap each other.
+//
+// conpty's Close is not idempotent: it calls ClosePseudoConsole on the HPCON
+// and CloseHandle on six handles unconditionally, and its Wait reads the
+// process handle among them. A second Close therefore hands CloseHandle values
+// Windows has already reissued to whatever this process opened next — the
+// loopback listener's socket, the log file, another session's pipes — and the
+// app stops answering with nothing panicking and nothing logged. Every
+// user-driven close reaches that second call: Service.Close closes the PTY and
+// the read loop, freed by the same close, reaps it again (see stream). The
+// Unix seam is *os.File, whose repeat Close is the harmless no-op stream's
+// comment describes; this one has to be made into it.
 type windowsPTY struct {
 	*conpty.ConPty
+	waitCtx    context.Context
+	cancelWait context.CancelFunc
+
+	mu     sync.Mutex
+	closed bool
 }
 
+// Wait reaps the child, or returns immediately once Close has taken the handles
+// it would read.
 func (p *windowsPTY) Wait() error {
-	_, err := p.ConPty.Wait(context.Background())
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.closed {
+		return nil
+	}
+	_, err := p.ConPty.Wait(p.waitCtx)
 	return err
+}
+
+// Close hangs up and terminates the child, once. The pending Wait is cancelled
+// before the lock is taken because it only returns when the child exits, and
+// the child exits because of this very call — conpty polls the process handle
+// on a one-second tick, so that is the longest a close waits for it.
+func (p *windowsPTY) Close() error {
+	p.cancelWait()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.closed {
+		return nil
+	}
+	p.closed = true
+	return p.ConPty.Close()
 }

@@ -498,8 +498,9 @@ func (s *Service) stream(id string, sess *session) {
 	}
 	_ = p.Wait()
 	// Release the PTY handle: on a natural child exit nobody else closes it
-	// (Close only reaps sessions still in the map), and the user-driven Close
-	// path tolerates this as a no-op double close.
+	// (Close only reaps sessions still in the map), and after a user-driven
+	// Close this is the second one — a no-op each seam has to make safe, since
+	// the handles are already gone (see windowsPTY, where they are reissued).
 	_ = p.Close()
 	// Flush any batched output and wait for it to be delivered before the exit
 	// event, so the frontend always sees the final bytes ahead of the exit

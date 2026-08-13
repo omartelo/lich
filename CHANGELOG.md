@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Closing a session on Windows no longer takes the app down with it.** The
+  service closed the session's ConPTY and its output reader, freed by that very
+  close, then closed the same one again — a repeat the Unix PTY absorbs and
+  ConPTY does not: it releases the pseudoconsole and six handles unconditionally,
+  so the second pass acted on handle values Windows had already reissued to
+  whatever the app opened next. Whichever one it hit went with it — the loopback
+  listener, another session's pipes, the log file — leaving a window whose
+  terminals had stopped answering and no crash, error or log line to say why.
+  The PTY now closes once, and a reap that arrives after it is the no-op it was
+  always assumed to be.
+
 - **A launch that loses its port now tells you, instead of dying into a log
   file.** When the loopback listener cannot bind and no running lich explains
   it, the app used to exit with nothing but a log line — which a double-click
