@@ -260,6 +260,12 @@ type Service struct {
 	// nudgeTimer is the armed debounce per sender, so a burst of results costs
 	// one nudge rather than one per result.
 	nudgeTimer map[string]*time.Timer
+	// nudging serializes flushNudge per sender: it marks an entry nudged before
+	// attempting delivery and only unmarks it after a failed attempt, so a second
+	// flush racing that window — the debounce timer and Observe's end-of-turn
+	// call both reach the same sender — must see the outcome of the first before
+	// deciding, or it finds the entry still marked and gives up wrongly silent.
+	nudging map[string]*sync.Mutex
 
 	sessions Sessions
 	term     Terminal
@@ -305,6 +311,7 @@ func New(sessions Sessions, term Terminal, events Events) *Service {
 		ready:         make(map[string]*inboxEntry),
 		collectors:    make(map[string][]chan struct{}),
 		nudgeTimer:    make(map[string]*time.Timer),
+		nudging:       make(map[string]*sync.Mutex),
 		sessions:      sessions,
 		term:          term,
 		events:        events,

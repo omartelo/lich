@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -229,8 +230,21 @@ func (s *Service) announceInboxAll(senders []string) {
 // flushNudge types one nudge naming everything waiting for fromID, if any of
 // it has not been nudged before. Ran by the debounce timer and by Observe when
 // the sender's turn ends — a delivery mid-turn would queue as its own turn,
-// which is the cost this whole path exists to avoid.
+// which is the cost this whole path exists to avoid. The two triggers can land
+// on the same fromID close together, so the whole attempt is serialized per
+// sender: the later call waits for the earlier one's outcome — including its
+// unmark on failure — instead of finding the entry still marked and giving up.
 func (s *Service) flushNudge(fromID string) {
+	s.mu.Lock()
+	nm, ok := s.nudging[fromID]
+	if !ok {
+		nm = &sync.Mutex{}
+		s.nudging[fromID] = nm
+	}
+	s.mu.Unlock()
+	nm.Lock()
+	defer nm.Unlock()
+
 	s.mu.Lock()
 	if timer := s.nudgeTimer[fromID]; timer != nil {
 		timer.Stop()
