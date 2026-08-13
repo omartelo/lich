@@ -41,11 +41,12 @@ export function skipPermissionsKey(id: string, worktree: boolean): string {
 // skipPermissionFlags mirrors terminal.skipPermissionFlags in Go: how each
 // provider spells "run every tool without asking". Settings offers the switch
 // only for a provider listed here, so the UI cannot promise a flag the spawn
-// has no spelling for — which is what oh-my-pi's absence means.
+// has no spelling for.
 export const skipPermissionFlags: Record<string, string> = {
   claude: "--dangerously-skip-permissions",
   codex: "--dangerously-bypass-approvals-and-sandbox",
   opencode: "--auto",
+  omp: "--auto-approve",
   crush: "--yolo",
 }
 

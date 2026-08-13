@@ -5,17 +5,24 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
 type pickerStub struct {
+	dirPath   string
+	dirError  error
+	dirTitle  string
 	filePath  string
 	fileError error
 	fileTitle string
 	saveName  string
 }
 
-func (*pickerStub) PickDirectory(string) (string, error) { return "", nil }
+func (p *pickerStub) PickDirectory(title string) (string, error) {
+	p.dirTitle = title
+	return p.dirPath, p.dirError
+}
 
 func (p *pickerStub) PickFile(title string) (string, error) {
 	p.fileTitle = title
@@ -54,6 +61,39 @@ func TestPickSaveFileSeedsTheDefaultName(t *testing.T) {
 	picker.fileError = errors.New("picker failed")
 	if _, err := New(picker).PickSaveFile("Save Theme Template", "x.json"); err == nil {
 		t.Fatal("PickSaveFile error was swallowed")
+	}
+}
+
+// TestOpen covers the three answers the dialog can give. The cancelled one is
+// the contract that matters: the frontend reads Project-or-null, so a cancel
+// has to come back as nil with no error — an error there would put a failure
+// dialog on a user who simply closed the picker.
+func TestOpen(t *testing.T) {
+	dir := t.TempDir()
+	picker := &pickerStub{dirPath: dir}
+	p, err := New(picker).Open()
+	if err != nil {
+		t.Fatalf("Open() error: %v", err)
+	}
+	if p == nil || p.Path != dir || p.ID != projectID(dir) {
+		t.Fatalf("Open() = %+v, want the project for %q", p, dir)
+	}
+	if picker.dirTitle != "Open Project" {
+		t.Errorf("dialog title = %q, want Open Project", picker.dirTitle)
+	}
+
+	cancelled := &pickerStub{dirPath: ""}
+	if p, err := New(cancelled).Open(); p != nil || err != nil {
+		t.Errorf("Open(cancelled) = %+v, %v; want nil, nil", p, err)
+	}
+
+	failed := &pickerStub{dirError: errors.New("zenity missing")}
+	p, err = New(failed).Open()
+	if err == nil {
+		t.Fatal("Open() swallowed the picker error")
+	}
+	if p != nil {
+		t.Errorf("Open(failed) = %+v, want nil", p)
 	}
 }
 
@@ -260,6 +300,46 @@ func TestDiffNoCommits(t *testing.T) {
 	// tree hash the numstat falls back to.
 	if got.Head != "" {
 		t.Errorf("Diff(no-commit repo).Head = %q, want empty", got.Head)
+	}
+}
+
+// sparseTextFile writes a text prefix and stretches the file to size with a
+// hole, so a file past the read cap costs neither disk nor a 10MiB write. The
+// prefix has to cover the whole binary sniff window: a shorter one leaves NULs
+// inside it, and the file would be refused as binary whether or not the cap
+// exists — a test that could not tell the two apart.
+func sparseTextFile(t *testing.T, name string, size int64) {
+	t.Helper()
+	f, err := os.Create(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if _, err := f.WriteString(strings.Repeat("text\n", binarySniffBytes)); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Truncate(size); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestCountFileLinesRefusesAFileOverTheCap pins maxTextFileBytes at 10MiB: an
+// untracked file past it adds no lines to the diff counters rather than being
+// read whole into memory.
+func TestCountFileLinesRefusesAFileOverTheCap(t *testing.T) {
+	dir := t.TempDir()
+	small := filepath.Join(dir, "small.txt")
+	if err := os.WriteFile(small, []byte("one\ntwo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := countFileLines(small); got != 2 {
+		t.Errorf("countFileLines(small) = %d, want 2", got)
+	}
+
+	big := filepath.Join(dir, "big.txt")
+	sparseTextFile(t, big, 10<<20+1)
+	if got := countFileLines(big); got != 0 {
+		t.Errorf("countFileLines(over 10MiB) = %d, want 0", got)
 	}
 }
 

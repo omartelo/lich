@@ -35,14 +35,15 @@ describe("provider setting keys", () => {
 
   // Pinned literals, not a read-back of the map: this string is printed to the
   // user beside the switch that hands an agent the machine, and it has to be
-  // the flag the Go spawn actually passes that provider. oh-my-pi has no
-  // confirmed spelling, so it must stay absent — that is what hides the switch.
+  // the flag the Go spawn actually passes that provider. A provider with no
+  // confirmed spelling stays absent — that is what hides the switch.
   it("spells the skip-permissions flag per provider, and only where one is wired", () => {
     expect(skipPermissionFlags.claude).toBe("--dangerously-skip-permissions")
     expect(skipPermissionFlags.codex).toBe("--dangerously-bypass-approvals-and-sandbox")
     expect(skipPermissionFlags.opencode).toBe("--auto")
+    expect(skipPermissionFlags.omp).toBe("--auto-approve")
     expect(skipPermissionFlags.crush).toBe("--yolo")
-    expect(skipPermissionFlags.omp).toBeUndefined()
+    expect(skipPermissionFlags.shell).toBeUndefined()
   })
 })
 

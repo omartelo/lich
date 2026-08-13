@@ -3,10 +3,10 @@
 lich observes and drives provider sessions through **hooks**. Each hook runs
 inside a session (shipped by the companion plugin
 [`omartelo/lich-plugin`](https://github.com/omartelo/lich-plugin), which installs
-on Claude Code, Codex, opencode and Crush) and talks to lich over a shared local
-transport. On the first three it is a small script the harness runs; opencode
-loads a JavaScript module instead, which is a difference in packaging, not in
-what a report is.
+on Claude Code, Codex, opencode, oh-my-pi and Crush) and talks to lich over a
+shared local transport. On Claude Code, Codex and Crush it is a small script the
+harness runs; opencode and oh-my-pi load a JavaScript module instead, which is a
+difference in packaging, not in what a report is.
 
 The contracts are provider-agnostic: lich injects the same variables into every
 PTY it spawns, so what changes per provider is only which of its lifecycle

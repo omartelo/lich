@@ -1,0 +1,82 @@
+package terminal
+
+import (
+	"os"
+	"path/filepath"
+)
+
+// globTranscript completes a transcript path under base: the parts lich does not
+// know — the project slug, the date a rollout started, the timestamp in a file
+// name — are the provider's own encoding of things it never told us, so they are
+// globbed rather than reconstructed. The conversation id in the pattern keeps at
+// most one file matching. False when nothing matches yet.
+func globTranscript(base string, pattern ...string) (string, bool) {
+	matches, err := filepath.Glob(filepath.Join(append([]string{base}, pattern...)...))
+	if err != nil || len(matches) == 0 {
+		return "", false
+	}
+	return matches[0], true
+}
+
+// harnessDir is where a harness keeps its state: the directory its own
+// environment variable names, else sub under the user's home. False when there
+// is no home to hang it off.
+func harnessDir(homeVar, sub string) (string, bool) {
+	if base := os.Getenv(homeVar); base != "" {
+		return base, true
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", false
+	}
+	return filepath.Join(home, sub), true
+}
+
+// claudeTranscriptPath locates a Claude conversation by its UUID under
+// $CLAUDE_CONFIG_DIR, else ~/.claude.
+func claudeTranscriptPath(providerSessionID string) (string, bool) {
+	base, ok := harnessDir("CLAUDE_CONFIG_DIR", ".claude")
+	if !ok {
+		return "", false
+	}
+	return globTranscript(base, "projects", "*", providerSessionID+".jsonl")
+}
+
+// codexTranscriptPath locates a Codex rollout by its UUID under $CODEX_HOME,
+// else ~/.codex. Codex files a rollout by the date it started —
+// sessions/<yyyy>/<mm>/<dd>/rollout-<timestamp>-<uuid>.jsonl.
+func codexTranscriptPath(providerSessionID string) (string, bool) {
+	base, ok := harnessDir("CODEX_HOME", ".codex")
+	if !ok {
+		return "", false
+	}
+	return globTranscript(base, "sessions", "*", "*", "*", "rollout-*-"+providerSessionID+".jsonl")
+}
+
+// ompTranscriptPath locates an oh-my-pi conversation by its id under omp's agent
+// directory. omp files one JSONL per session, in a directory named after the cwd
+// it ran in — sessions/<encoded-cwd>/<timestamp>_<id>.jsonl.
+func ompTranscriptPath(providerSessionID string) (string, bool) {
+	base, ok := ompAgentDir()
+	if !ok {
+		return "", false
+	}
+	return globTranscript(base, "sessions", "*", "*_"+providerSessionID+".jsonl")
+}
+
+// ompAgentDir resolves oh-my-pi's agent directory, or false when there is no
+// home to hang it off. It does not go through harnessDir because omp answers to
+// two variables and a named profile wins outright over the explicit override —
+// the order `omp config path` was measured to apply. The same rule lives in
+// internal/agentplugin/omp.go, which installs into it: each package resolves its
+// own harness paths, as the Claude Code pair does.
+func ompAgentDir() (string, bool) {
+	if profile := os.Getenv("OMP_PROFILE"); profile != "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", false
+		}
+		return filepath.Join(home, ".omp", "profiles", profile, "agent"), true
+	}
+	return harnessDir("PI_CODING_AGENT_DIR", filepath.Join(".omp", "agent"))
+}

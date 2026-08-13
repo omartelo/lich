@@ -24,6 +24,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/omartelo/lich/internal/project"
 	"github.com/omartelo/lich/internal/providers"
@@ -70,6 +71,7 @@ const (
 type Sessions interface {
 	LoadState() ([]store.Project, error)
 	AddSession(projectID, sessionID, label, kind, path string, nextSeq int) error
+	SetSessionModel(sessionID, model string) error
 	DeleteSession(projectID, sessionID, activeID string) error
 	CloseSession(projectID, sessionID, activeID string) error
 	PurgeWorktreeSessions(projectID, path string) error
@@ -127,6 +129,11 @@ type Service struct {
 	worktrees Worktrees
 	term      Terminal
 	events    Events
+	// open serializes Open. Every RPC call arrives on its own goroutine, and
+	// Open reads the project's label counter and writes it back — two of them at
+	// once read the same number and hand both sessions the same label, which is
+	// the one thing `lich send` cannot resolve.
+	open sync.Mutex
 }
 
 func New(sessions Sessions, worktrees Worktrees, term Terminal, events Events) *Service {
@@ -143,8 +150,26 @@ func New(sessions Sessions, worktrees Worktrees, term Terminal, events Events) *
 // worktree, when given, is the branch name of a new git worktree created off
 // base (the project's current branch when base is empty); the session is rooted
 // there, labelled after it, and runs the project's worktree setup script before
-// its provider, exactly as the window's own worktree flow does.
-func (s *Service) Open(fromID, projectName, kind, worktree, base string) (Session, error) {
+// its provider, exactly as the window's own worktree flow does. A base without a
+// worktree has nothing to branch, and is refused rather than ignored.
+//
+// model, when given, is the model the provider is spawned on, in that provider's
+// own spelling. It is recorded on the row so every later spawn repeats it.
+func (s *Service) Open(fromID, projectName, kind, worktree, base, model string) (Session, error) {
+	if base != "" && worktree == "" {
+		return Session{}, fmt.Errorf(
+			"a base is the branch a new worktree starts from, and no worktree was asked "+
+				"for, so %q would be dropped in silence — name the worktree to create, or "+
+				"leave the base out",
+			base,
+		)
+	}
+
+	// Held across the spawn as well as the write: the checkout and the PTY are
+	// cheap beside a duplicate label, and one lock is one thing to reason about.
+	s.open.Lock()
+	defer s.open.Unlock()
+
 	projects, err := s.sessions.LoadState()
 	if err != nil {
 		return Session{}, fmt.Errorf("read the workspace: %w", err)
@@ -156,6 +181,13 @@ func (s *Service) Open(fromID, projectName, kind, worktree, base string) (Sessio
 	kind, err = resolveKind(projects, fromID, kind)
 	if err != nil {
 		return Session{}, err
+	}
+	model = strings.TrimSpace(model)
+	if model != "" && !terminal.SupportsModel(kind) {
+		return Session{}, fmt.Errorf(
+			"%s cannot be told which model to run when lich starts it — open the session without a model and pick one inside it",
+			kindName(kind),
+		)
 	}
 
 	// cwd is where the PTY starts; stored is what the row records, which is
@@ -210,6 +242,15 @@ func (s *Service) Open(fromID, projectName, kind, worktree, base string) (Sessio
 	// database knows about is one the user cannot reach to see what went wrong.
 	if s.events != nil {
 		s.events.Emit(OpenedEventName, opened)
+	}
+	// After the card, for that same reason: the model is an override on a row
+	// that already exists, so a write that fails must not be what hides the
+	// session. The spawn below reads the model back from the row, so a failure
+	// here costs the provider's default and nothing else.
+	if model != "" {
+		if err := s.sessions.SetSessionModel(id, model); err != nil {
+			return Session{}, err
+		}
 	}
 	if err := s.term.Start(id, target.ID, cwd, kind, "", opened.Name, setup, startCols, startRows); err != nil {
 		return Session{}, fmt.Errorf("session %q was created but its terminal did not start: %w", label, err)
@@ -347,6 +388,17 @@ func knownProjects(projects []store.Project) string {
 		names = append(names, p.Name)
 	}
 	return "Open projects: " + strings.Join(names, ", ") + "."
+}
+
+// kindName is what a provider is called in an error the user reads, falling
+// back to the kind itself — which is what a shell session has.
+func kindName(kind string) string {
+	for _, p := range providers.Registry {
+		if p.ID == kind {
+			return p.Name
+		}
+	}
+	return kind
 }
 
 func knownKinds() string {

@@ -362,7 +362,9 @@ export interface ThemeImportResult {
 
 /**
  * internal/themes.GitInstallResult — a repository install. A non-empty
- * conflicts means nothing was written and those ids need confirmation.
+ * conflicts names the ids that need confirmation: the scan before the write
+ * refuses the whole pack, while an id that appeared in between is the only one
+ * left alone and themes says what did go in.
  */
 export interface ThemeGitInstallResult {
   pack: string
