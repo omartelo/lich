@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/omartelo/lich/internal/store"
 )
 
 // The roster: which sessions a caller may address, and how a name it typed
@@ -87,6 +89,27 @@ func (s *Service) resolve(fromID, target, project string) (candidate, error) {
 	}
 }
 
+// sessionOf finds one session in the workspace by id. The three ways there is
+// no answer — no id at all, an unreadable store, an id lich has no record of —
+// are one false here, because every caller treats them the same.
+func (s *Service) sessionOf(id string) (store.Session, bool) {
+	if id == "" {
+		return store.Session{}, false
+	}
+	projects, err := s.sessions.LoadState()
+	if err != nil {
+		return store.Session{}, false
+	}
+	for _, p := range projects {
+		for _, sess := range p.Sessions {
+			if sess.ID == id {
+				return sess, true
+			}
+		}
+	}
+	return store.Session{}, false
+}
+
 // labelOf names the sending session for the message it is about to deliver.
 // An empty id is a caller with no session at all — the CLI run from a plain
 // shell or a script — and stays empty, which compose words differently. A
@@ -96,39 +119,10 @@ func (s *Service) labelOf(id string) string {
 	if id == "" {
 		return ""
 	}
-	projects, err := s.sessions.LoadState()
-	if err != nil {
-		return "unknown"
-	}
-	for _, p := range projects {
-		for _, sess := range p.Sessions {
-			if sess.ID == id {
-				return sess.Label
-			}
-		}
+	if sess, ok := s.sessionOf(id); ok {
+		return sess.Label
 	}
 	return "unknown"
-}
-
-// kindOf is what the session runs, read from the workspace so a nudge can
-// offer the tool only where it exists. Empty when lich has no record of it,
-// which offersTools reads as "name the command".
-func (s *Service) kindOf(id string) string {
-	if id == "" {
-		return ""
-	}
-	projects, err := s.sessions.LoadState()
-	if err != nil {
-		return ""
-	}
-	for _, p := range projects {
-		for _, sess := range p.Sessions {
-			if sess.ID == id {
-				return sess.Kind
-			}
-		}
-	}
-	return ""
 }
 
 // matching returns the candidates whose name — read out by naming — is target,

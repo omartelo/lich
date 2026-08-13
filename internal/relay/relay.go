@@ -843,7 +843,8 @@ func (s *Service) flushNudge(fromID string) {
 		labels = append(labels, label)
 	}
 	sort.Strings(labels)
-	s.tellSender(fromID, nudgeNotice(count, labels, s.offersTools(s.kindOf(fromID))))
+	sender, _ := s.sessionOf(fromID)
+	s.tellSender(fromID, nudgeNotice(count, labels, s.offersTools(sender.Kind)))
 }
 
 // tellSender types one line of news at the prompt of whoever asked, the same
