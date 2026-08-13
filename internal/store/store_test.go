@@ -131,6 +131,40 @@ func TestSetProviderSessionPersistsAndDefaults(t *testing.T) {
 	}
 }
 
+// TestSessionModelRoundTrips pins the pair the terminal service spawns off: the
+// model written when the session was opened is what every later spawn reads
+// back, a session opened without one reads "", and so does a session that is not
+// there at all — the read has no error to report with, and the provider's own
+// default is what "" means.
+func TestSessionModelRoundTrips(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "s1", "Session 1", "claude", "", 2)
+	_ = svc.AddSession("p1", "s2", "Session 2", "claude", "", 3)
+
+	if err := svc.SetSessionModel("s1", "opus"); err != nil {
+		t.Fatalf("SetSessionModel: %v", err)
+	}
+	if got := svc.SessionModel("s1"); got != "opus" {
+		t.Errorf("SessionModel(s1) = %q, want opus", got)
+	}
+	if got := svc.SessionModel("s2"); got != "" {
+		t.Errorf("SessionModel(s2) = %q, want empty", got)
+	}
+	if got := svc.SessionModel("ghost"); got != "" {
+		t.Errorf("SessionModel(ghost) = %q, want empty", got)
+	}
+}
+
+// A model reported for a session whose row is gone matches nothing and is not an
+// error, exactly as the provider session id is.
+func TestSetSessionModelUnknownSessionNoop(t *testing.T) {
+	svc := newTestStore(t)
+	if err := svc.SetSessionModel("ghost", "opus"); err != nil {
+		t.Errorf("SetSessionModel unknown = %v, want nil", err)
+	}
+}
+
 // TestSetProviderSessionUnknownSessionNoop proves reporting for a session whose
 // row does not exist (the hook racing persistence) is not an error.
 func TestSetProviderSessionUnknownSessionNoop(t *testing.T) {
@@ -677,6 +711,14 @@ CREATE TABLE sessions (
 	}
 	if s := got[0].Sessions[0]; s.Kind != "shell" || s.Path != "/data/wt" {
 		t.Errorf("migrated session = %+v, want kind=shell path=/data/wt", s)
+	}
+	// The model column arrived by migration too, and a database that never had it
+	// is exactly the one a spawn reads on the next launch.
+	if err := svc.SetSessionModel("s1", "opus"); err != nil {
+		t.Fatalf("SetSessionModel on a migrated database: %v", err)
+	}
+	if model := svc.SessionModel("s1"); model != "opus" {
+		t.Errorf("migrated session model = %q, want opus", model)
 	}
 }
 

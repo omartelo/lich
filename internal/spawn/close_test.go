@@ -1,6 +1,7 @@
 package spawn
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -226,6 +227,7 @@ func TestCloseRefusesAnUnknownWorktreeAnswer(t *testing.T) {
 // the window and the next launch land on the same session.
 func TestCloseHandsTheProjectToTheNeighbour(t *testing.T) {
 	svc, sessions, _, _, events := closer(t)
+	sessions.projects[0].ActiveSessionID = "s2"
 
 	if _, err := svc.Close("s1", "shared-a", "", "", false); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -239,6 +241,124 @@ func TestCloseHandsTheProjectToTheNeighbour(t *testing.T) {
 	}
 	if closed.ActiveID != "s3" {
 		t.Errorf("the window was told %q is active, the row says s3", closed.ActiveID)
+	}
+}
+
+// Closing a card nobody was looking at leaves the focus where it is. The window
+// applies what this writes without a choice of its own (dropClosedSession), so a
+// neighbour named here would move the user off the session they are reading.
+func TestCloseAnInactiveSessionLeavesTheFocusAlone(t *testing.T) {
+	svc, sessions, _, _, events := closer(t)
+
+	if _, err := svc.Close("s3", "shared-a", "", "", false); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if got := sessions.deleted[0].activeID; got != "s1" {
+		t.Errorf("active session = %q, want the active card untouched", got)
+	}
+	closed, ok := events.events[0].data.(ClosedEvent)
+	if !ok {
+		t.Fatalf("event payload = %T", events.events[0].data)
+	}
+	if closed.ActiveID != "s1" {
+		t.Errorf("the window was told %q is active, the row says s1", closed.ActiveID)
+	}
+}
+
+// The row is deleted before the PTY is asked to go, so a terminal that refuses
+// to close leaves nothing to undo — and a card that stayed would point at a
+// session no other part of lich still knows about.
+func TestCloseTakesTheCardDownEvenWhenThePTYRefuses(t *testing.T) {
+	svc, sessions, _, term, events := closer(t)
+	term.closeErr = errors.New("process already gone")
+
+	if _, err := svc.Close("s1", "shared-a", "", "", false); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if len(sessions.deleted) != 1 {
+		t.Fatalf("deleted = %+v, want the row gone", sessions.deleted)
+	}
+	if len(events.events) != 1 || events.events[0].name != ClosedEventName {
+		t.Errorf("events = %+v, want the card taken down anyway", events.events)
+	}
+}
+
+func TestCloseNeedsSomethingToClose(t *testing.T) {
+	for _, target := range []string{"", "   "} {
+		t.Run("target="+target, func(t *testing.T) {
+			svc, sessions, _, _, _ := closer(t)
+
+			_, err := svc.Close("s1", target, "", "", false)
+			if err == nil {
+				t.Fatal("closed a session that was never named")
+			}
+			if len(sessions.deleted) != 0 || len(sessions.parked) != 0 {
+				t.Error("wrote something for a close with no target")
+			}
+		})
+	}
+}
+
+// One name across two projects addresses two sessions, and closing either would
+// be a guess about which agent the caller meant to take down.
+func TestCloseRefusesANameThatFitsTwoSessions(t *testing.T) {
+	sessions := &fakeSessions{projects: []store.Project{
+		{ID: "p1", Name: "lich", Path: "/src/lich", Sessions: []store.Session{
+			{ID: "s1", Label: "worker", Kind: "claude"},
+		}},
+		{ID: "p2", Name: "revu", Path: "/src/revu", Sessions: []store.Session{
+			{ID: "s2", Label: "worker", Kind: "claude"},
+		}},
+	}}
+	svc := New(sessions, &fakeWorktrees{}, &fakeTerminal{}, &fakeEvents{})
+
+	_, err := svc.Close("s9", "worker", "", "", false)
+	if err == nil {
+		t.Fatal("closed one of two sessions that answer to the same name")
+	}
+	if !strings.Contains(err.Error(), "narrow it with the project") {
+		t.Errorf("error = %q, want it to say how to pick one", err)
+	}
+	if len(sessions.deleted) != 0 {
+		t.Error("deleted a session picked by a name that named two")
+	}
+	// Naming the project settles it.
+	if _, err := svc.Close("s9", "worker", "revu", "", false); err != nil {
+		t.Fatalf("Close with the project named: %v", err)
+	}
+	if len(sessions.deleted) != 1 || sessions.deleted[0].sessionID != "s2" {
+		t.Errorf("deleted = %+v, want the session in the named project", sessions.deleted)
+	}
+}
+
+func TestCloseReportsAnUnreadableWorkspace(t *testing.T) {
+	svc, sessions, _, term, _ := closer(t)
+	sessions.loadErr = errors.New("database is locked")
+
+	_, err := svc.Close("s1", "shared-a", "", "", false)
+	if err == nil {
+		t.Fatal("closed a session out of a workspace it could not read")
+	}
+	if !strings.Contains(err.Error(), "database is locked") {
+		t.Errorf("error = %q, want the store's own reason kept", err)
+	}
+	if len(term.closed) != 0 {
+		t.Error("took down a PTY for a session it never resolved")
+	}
+}
+
+// git's refusal is the caller's answer: the session is already gone from the
+// workspace, and only git can say why the directory stayed.
+func TestCloseReportsAWorktreeGitWouldNotRemove(t *testing.T) {
+	svc, _, worktrees, _, _ := closer(t)
+	worktrees.removeErr = errors.New("worktree is locked")
+
+	_, err := svc.Close("s1", "alone", "", RemoveWorktree, false)
+	if err == nil {
+		t.Fatal("reported a checkout removed that git kept")
+	}
+	if !strings.Contains(err.Error(), "worktree is locked") {
+		t.Errorf("error = %q, want git's own reason kept", err)
 	}
 }
 

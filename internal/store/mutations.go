@@ -254,6 +254,37 @@ func (s *Service) SetSessionTitle(sessionID, title string) (bool, error) {
 	return n > 0, nil
 }
 
+// SetSessionModel records the model a session's provider was asked to run, so
+// every later spawn of that session repeats the flag: a reload, a respawn, and
+// the resume of a parked worktree session all go through the same path, and a
+// model that only survived the first spawn would silently become the provider's
+// default on the second.
+//
+// It is written once, right after the row is created. A session whose row is
+// gone matches nothing and is not an error.
+func (s *Service) SetSessionModel(sessionID, model string) error {
+	if _, err := s.db.Exec(
+		`UPDATE sessions SET model = ? WHERE id = ?`, model, sessionID,
+	); err != nil {
+		return fmt.Errorf("set model on %q: %w", sessionID, err)
+	}
+	return nil
+}
+
+// SessionModel returns the model recorded for a session, or "" for none — which
+// is what a session opened from the window has, and what leaves the provider on
+// its own default. A read failure answers "" for the same reason: the model is
+// an override, and the provider's default is the safe thing to fall back to.
+func (s *Service) SessionModel(sessionID string) string {
+	var model sql.NullString
+	if err := s.db.QueryRow(
+		`SELECT model FROM sessions WHERE id = ?`, sessionID,
+	).Scan(&model); err != nil {
+		return ""
+	}
+	return model.String
+}
+
 // SetProviderSession records the provider conversation id running inside a lich
 // session's PTY, reported by the provider's session-start hook. A session whose
 // row does not exist yet (the hook racing session persistence) matches nothing

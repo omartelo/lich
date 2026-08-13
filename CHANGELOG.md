@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **oh-my-pi runs the lich plugin.** Settings › lich plugin now offers omp the
+  same install as the others, writing the released extension into omp's own
+  `extensions/` directory — so an omp card shows what its session is doing,
+  refreshes git status as files change, and takes its name from the
+  conversation's title once omp has written one. The install also registers
+  lich's MCP server in omp's `mcp.json`, merged in beside whatever is already
+  there, which puts the tools for reaching the other sessions in an omp agent's
+  own tool list. Two gaps are
+  the harness's own and Settings names them: omp has no observed approval event,
+  so a session waiting on your permission shows a spinner rather than a bell.
+
+- **An omp session resumes its conversation.** Reopening a card that ran omp
+  before a restart offers the same "continue where it left off" prompt Claude
+  Code and Codex cards get, and lich only offers it when omp's own transcript
+  for that conversation is still on disk.
+
+- **A session can be opened on a specific model.** `lich open --model <model>`
+  and the `open_session` MCP tool's `model` argument start the new session's
+  provider on the model you name, in that provider's own spelling — Claude Code,
+  Codex, opencode and oh-my-pi each take the name their own `--model` accepts. Fanning work out to a worktree can now put the cheap model on the
+  mechanical half of the job and keep the expensive one where it earns its
+  price. The model is recorded on the session, so a reload, a respawn or the
+  resume of a parked worktree session all come back on it. Crush and `shell`
+  sessions are refused rather than silently opened on the default: Crush spells
+  `--model` only on its non-interactive `run` subcommand, so the TUI lich spawns
+  has nowhere to receive one.
+
+- **oh-my-pi can run without permission prompts.** Settings › Providers now
+  offers oh-my-pi the same "run without asking" ladder as the other providers,
+  spawning it with `--auto-approve`. It was the one provider left out, because
+  its spelling had never been checked against the binary.
+
 ### Fixed
 
 - **A dropped file could resolve to the wrong twin.** The search that turns a
@@ -19,6 +53,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   already stored, the next drop of it reused the last name and truncated that
   copy, whose path may still have been sitting unsent in a prompt. The drop is
   refused instead.
+
+- **A plugin install is whole or it fails.** Installing the plugin into
+  opencode or Crush wrote what it fetched straight onto the file the harness
+  loads: a release file larger than the 1MB cap was silently cut short, and a
+  crash or a full disk mid-write left a half-written module or hook script —
+  either one still carrying the version marker that says the install
+  succeeded. An oversized file is now refused, and every file is written
+  through a temporary one, so an interrupted install leaves the previous
+  version in place rather than a broken one lich reports as current.
+
+- **The RPC surface no longer exposes lich's own wiring.** Three methods that
+  exist for lich to call itself — the hooks' session-state stream and two
+  startup wiring calls — answered a request from the page like any other
+  service method. A call to the first could close another session's pending
+  delegations; a call to either of the others could unwire the relay's plugin
+  lookup or a project's gh account while the app was running. They are now
+  refused. Discarding a file is guarded the same way: a path that names the
+  repository root instead of a file is rejected, where before it would have
+  emptied the whole index.
+
+- **Searching sessions no longer crashes on some accented text.** A palette
+  search that matched a conversation containing certain uppercase letters —
+  ones that grow when lowercased, like `Ⱥ` or `İ` — brought the window down
+  instead of showing the result.
+
+- **A session no longer gets stuck waiting for a setup that already
+  finished.** Two ways a fresh worktree's session could stay "not ready"
+  forever, refusing every message relayed to it until the sender's ticket
+  timed out: the marker the setup wrapper prints was matched one PTY read at
+  a time, so a read that cut it in half missed it for good; and a session
+  spawned into a worktree with no setup script at all could still be armed
+  to wait for a marker nothing would ever print, whenever the provider's
+  binary happened to be named `sh`.
+
+- **A transcript that fails mid-read no longer shows a short cost.** A
+  transient read error while adding up a session's spend was treated as the
+  end of the file, so the footer showed the total of the lines that made it
+  through, as if that were the whole bill. Such a read now shows no number
+  and resumes on the next turn.
+
+- **Closing another session no longer steals your focus.** `lich close` and the
+  `close_session` tool wrote a new active card for the project whichever session
+  was closed, and the window applies that without a say of its own — so an agent
+  closing a worker moved you off the card you were reading. Only closing the
+  active card moves the focus now, which is what the window has always done on
+  its own.
+
+- **A worktree is opened, not duplicated, when its branch is typed in another
+  case.** Asking for `--worktree Auth-Fix` with a checkout of `auth-fix` already
+  on disk created a second branch and a second checkout beside it. The lookup
+  now folds case, like every other branch name lookup around it.
+
+- **A session that fails to close no longer leaves a ghost card.** When the
+  terminal refused to go down, the card stayed on screen until a reload even
+  though the session was already gone from the workspace.
+
+- **`lich open --base` without `--worktree` says so.** The base was silently
+  dropped and the session opened on whatever branch was current.
+
+- **`lich open feature-x` no longer opens a session and says nothing.**
+  `sessions`, `open` and `worktrees` took a positional argument and ignored
+  it, so a branch name typed without `--worktree` opened a session in the
+  caller's own checkout while reading like it had made one of its own. All
+  three now refuse the stray argument and print the command's usage, as
+  `send`, `wait`, `reply` and `close` already did.
+
+- **Two sessions opened at once no longer take the same label.** Concurrent
+  opens in one project read the same label counter, and `lich send` cannot tell
+  two cards with one name apart.
+
+## [0.31.0] - 2026-08-13
 
 ### Added
 
@@ -2269,6 +2374,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.31.0...HEAD
 [Unreleased]: https://github.com/omartelo/lich/compare/v0.31.0...HEAD
 [0.31.0]: https://github.com/omartelo/lich/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/omartelo/lich/compare/v0.29.0...v0.30.0

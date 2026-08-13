@@ -68,7 +68,7 @@ func TestWorktreesRefusesAProjectItCannotResolve(t *testing.T) {
 func TestOpenUsesACheckoutThatIsAlreadyThere(t *testing.T) {
 	svc, sessions, worktrees, term, _ := closer(t)
 
-	opened, err := svc.Open("s1", "", "", "shared", "")
+	opened, err := svc.Open("s1", "", "", "shared", "", "")
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestOpenUsesACheckoutThatIsAlreadyThere(t *testing.T) {
 func TestOpenFallsBackWhenTheBranchNameIsAlreadyACard(t *testing.T) {
 	svc, _, _, _, _ := closer(t)
 
-	opened, err := svc.Open("s1", "", "", "alone", "")
+	opened, err := svc.Open("s1", "", "", "alone", "", "")
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
