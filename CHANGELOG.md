@@ -12,10 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **oh-my-pi runs the lich plugin.** Settings › lich plugin now offers omp the
   same install as the others, writing the released extension into omp's own
   `extensions/` directory — so an omp card shows what its session is doing,
-  renames itself from the conversation's title, and refreshes git status as
-  files change. The install also registers lich's MCP server in omp's
-  `mcp.json`, merged in beside whatever is already there, which puts the tools
-  for reaching the other sessions in an omp agent's own tool list. Two gaps are
+  refreshes git status as files change, and takes its name from the
+  conversation's title once omp has written one. The install also registers
+  lich's MCP server in omp's `mcp.json`, merged in beside whatever is already
+  there, which puts the tools for reaching the other sessions in an omp agent's
+  own tool list. Two gaps are
   the harness's own and Settings names them: omp has no observed approval event,
   so a session waiting on your permission shows a spinner rather than a bell.
 

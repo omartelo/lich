@@ -24,9 +24,11 @@ import (
 
 const (
 	// ompSource is the module's path inside the plugin repository, and ompFile
-	// the name it takes in omp's extensions directory.
-	ompSource = "omp/lich.js"
-	ompFile   = "lich.js"
+	// the name it takes in omp's extensions directory — the directory omp scans
+	// unprompted, which is what makes the file being there the whole install.
+	ompSource        = "omp/lich.js"
+	ompFile          = "lich.js"
+	ompExtensionsDir = "extensions"
 
 	// ompMCPFile is the document omp reads MCP servers from, in the same agent
 	// directory as the extensions.
@@ -53,11 +55,11 @@ func (s *Service) ompInstall() error {
 	// Merged before anything is written, because the only way this step fails is
 	// a document lich must not replace — and an install that leaves an extension
 	// behind while refusing the registration is worse than one the user retries.
-	registration, err := ompMCPDocument(dir, lichBinary())
+	registration, err := ompMCPDocument(dir, s.lichBin())
 	if err != nil {
 		return err
 	}
-	extensions := filepath.Join(dir, "extensions")
+	extensions := filepath.Join(dir, ompExtensionsDir)
 	if err := os.MkdirAll(extensions, 0o755); err != nil {
 		return fmt.Errorf("create %s: %w", extensions, err)
 	}
@@ -84,7 +86,7 @@ func (s *Service) ompInstalledVersion() (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	data, err := os.ReadFile(filepath.Join(dir, "extensions", ompFile))
+	data, err := os.ReadFile(filepath.Join(dir, ompExtensionsDir, ompFile))
 	if err != nil {
 		return "", false
 	}

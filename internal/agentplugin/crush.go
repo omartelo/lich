@@ -86,7 +86,7 @@ func (s *Service) crushInstall() error {
 			return fmt.Errorf("write %s: %w", path, err)
 		}
 	}
-	return s.writeCrushrc(version, dir, lichBinary())
+	return s.writeCrushrc(version, dir, s.lichBin())
 }
 
 // writeCrushrc replaces lich's block in Crush's crushrc, creating the file when

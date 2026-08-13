@@ -119,11 +119,24 @@ func nameArgs(kind, name string) []string {
 	if kind != providers.Claude {
 		return nil
 	}
-	name = strings.TrimSpace(name)
-	if name == "" || strings.HasPrefix(name, "-") {
+	name, ok := flagValue(name)
+	if !ok {
 		return nil
 	}
 	return []string{claudeNameFlag, name}
+}
+
+// flagValue trims a value lich is about to hand a provider flag and reports
+// whether it can be passed at all. Nothing to pass is one answer; a value that
+// starts with a dash is the other — the provider would read it as another flag,
+// and the one thing lich must never do is turn a name or a model somebody typed
+// into an argument that changes how the agent runs.
+func flagValue(value string) (string, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" || strings.HasPrefix(value, "-") {
+		return "", false
+	}
+	return value, true
 }
 
 // providerArgs assembles the whole argument list for one spawn. Ordering is
@@ -152,9 +165,9 @@ func providerArgs(kind, name, resume, model, lichBin string, skipPermissions boo
 // can act on. A value that would be read as a flag is dropped instead, as it is
 // for a session name.
 func modelArgs(kind, model string) []string {
-	flag, ok := modelFlags[kind]
-	model = strings.TrimSpace(model)
-	if !ok || model == "" || strings.HasPrefix(model, "-") {
+	flag, wired := modelFlags[kind]
+	model, usable := flagValue(model)
+	if !wired || !usable {
 		return nil
 	}
 	return []string{flag, model}

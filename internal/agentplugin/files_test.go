@@ -52,6 +52,7 @@ func fileServer(t *testing.T, files map[string]string) (*Service, func() []strin
 		rawBase:   srv.URL,
 		bins:      stubBins{},
 		lookPath:  func(name string) (string, error) { return "/usr/bin/" + name, nil },
+		lichBin:   lichBinary,
 	}, func() []string { return asked }
 }
 
@@ -192,6 +193,43 @@ func ompHome(t *testing.T) string {
 	return dir
 }
 
+// The profile beats the explicit override, which is the order `omp config path`
+// applies and the opposite of how the two read. Asserted through a real install
+// rather than on the resolver alone: getting it backwards writes the extension
+// into a directory omp never scans, and every report goes missing in silence.
+// (internal/terminal resolves the same rule for resume, and pins it separately.)
+func TestOMPInstallFollowsTheProfileOverTheOverride(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	// Asserted, not assumed: a platform whose home this redirect misses would
+	// send the install into the real user's directory and still pass.
+	if dir, err := os.UserHomeDir(); err != nil || dir != home {
+		t.Fatalf("home redirect missed: %q (err %v)", dir, err)
+	}
+	t.Setenv("PI_CODING_AGENT_DIR", t.TempDir())
+	t.Setenv("OMP_PROFILE", "work")
+	s, _ := fileServer(t, map[string]string{tagged(ompSource): "export default () => {}\n"})
+
+	if err := s.Install(providers.OMP); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
+	profile := filepath.Join(home, ".omp", "profiles", "work", "agent")
+	if _, err := os.Stat(filepath.Join(profile, ompExtensionsDir, ompFile)); err != nil {
+		t.Fatalf("the extension is not in the profile's directory: %v", err)
+	}
+	if override := os.Getenv("PI_CODING_AGENT_DIR"); override != "" {
+		if _, err := os.Stat(filepath.Join(override, ompExtensionsDir, ompFile)); !os.IsNotExist(err) {
+			t.Errorf("the override was written too (stat err = %v)", err)
+		}
+	}
+	// And the version reads back from the same place it was written to.
+	if got, ok := s.installedVersion(providers.OMP); !ok || got != testVersion {
+		t.Errorf("installedVersion = (%q,%v), want (%q,true)", got, ok, testVersion)
+	}
+}
+
 func TestOMPInstallWritesTheExtensionAndRegistersTheServer(t *testing.T) {
 	agent := ompHome(t)
 	s, asked := fileServer(t, map[string]string{
@@ -202,7 +240,7 @@ func TestOMPInstallWritesTheExtensionAndRegistersTheServer(t *testing.T) {
 		t.Fatalf("Install: %v", err)
 	}
 
-	data, err := os.ReadFile(filepath.Join(agent, "extensions", ompFile))
+	data, err := os.ReadFile(filepath.Join(agent, ompExtensionsDir, ompFile))
 	if err != nil {
 		t.Fatalf("read the installed extension: %v", err)
 	}
@@ -292,7 +330,7 @@ func TestOMPInstallRefusesAnUnreadableDocument(t *testing.T) {
 	}
 	// And nothing else was written either: an extension reporting into a session
 	// that never got the tools is the half-install this ordering exists to avoid.
-	if _, err := os.Stat(filepath.Join(agent, "extensions", ompFile)); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(agent, ompExtensionsDir, ompFile)); !os.IsNotExist(err) {
 		t.Errorf("the refused install wrote the extension anyway (stat err = %v)", err)
 	}
 }
@@ -306,7 +344,7 @@ func TestOMPInstallWritesNothingWhenTheFetchFails(t *testing.T) {
 	if err := s.Install(providers.OMP); err == nil {
 		t.Fatal("Install: want an error when the release has no extension, got nil")
 	}
-	if _, err := os.Stat(filepath.Join(agent, "extensions", ompFile)); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(agent, ompExtensionsDir, ompFile)); !os.IsNotExist(err) {
 		t.Errorf("a failed install left an extension behind (stat err = %v)", err)
 	}
 	if _, err := os.Stat(filepath.Join(agent, ompMCPFile)); !os.IsNotExist(err) {

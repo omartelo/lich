@@ -216,16 +216,20 @@ func (s *Service) Open(fromID, projectName, kind, worktree, base, model string) 
 	if err := s.sessions.AddSession(target.ID, id, label, kind, stored, opened.NextSeq); err != nil {
 		return Session{}, err
 	}
-	if model != "" {
-		if err := s.sessions.SetSessionModel(id, model); err != nil {
-			return Session{}, err
-		}
-	}
 	// Announced before the spawn, and regardless of how it goes: the row exists
 	// either way, so the card has to exist either way too — a session only the
 	// database knows about is one the user cannot reach to see what went wrong.
 	if s.events != nil {
 		s.events.Emit(OpenedEventName, opened)
+	}
+	// After the card, for that same reason: the model is an override on a row
+	// that already exists, so a write that fails must not be what hides the
+	// session. The spawn below reads the model back from the row, so a failure
+	// here costs the provider's default and nothing else.
+	if model != "" {
+		if err := s.sessions.SetSessionModel(id, model); err != nil {
+			return Session{}, err
+		}
 	}
 	if err := s.term.Start(id, target.ID, cwd, kind, "", opened.Name, setup, startCols, startRows); err != nil {
 		return Session{}, fmt.Errorf("session %q was created but its terminal did not start: %w", label, err)

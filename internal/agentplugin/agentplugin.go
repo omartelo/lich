@@ -83,6 +83,11 @@ type Service struct {
 	// lookPath resolves a binary on PATH, injected so tests decide which
 	// provider CLIs the machine has.
 	lookPath func(string) (string, error)
+	// lichBin names this lich for the registrations written into a harness's
+	// config. Injected for the same reason lookPath is: a test has to be able to
+	// say "this binary cannot be resolved", which is the branch that decides
+	// whether a session is promised tools it does not have.
+	lichBin func() string
 }
 
 // New returns a service that shells out through bins.
@@ -93,6 +98,7 @@ func New(bins BinResolver) *Service {
 		latestURL: latestReleaseURL,
 		rawBase:   rawBaseURL,
 		lookPath:  exec.LookPath,
+		lichBin:   lichBinary,
 	}
 }
 
@@ -155,8 +161,24 @@ func (s *Service) HasTools(provider string) bool {
 	if !slices.Contains(supported, provider) || !s.available(provider) {
 		return false
 	}
+	if registersServerAtInstall(provider) && s.lichBin() == "" {
+		return false
+	}
 	version, installed := s.installedVersion(provider)
 	return installed && !semver.Less(version, toolsMinVersion)
+}
+
+// registersServerAtInstall reports whether a provider's tools come from the MCP
+// server the install writes into its config, rather than from the plugin itself.
+//
+// It is what stops HasTools promising tools the install could not register: both
+// of these write the lich binary's own path, and both leave the registration out
+// when it cannot be resolved (crushrcBlock, ompMCPDocument) — so a session there
+// has the plugin's reports and no tool list, and must be told the command line
+// instead. opencode is absent because its plugin defines the tools itself, with
+// no binary to name.
+func registersServerAtInstall(provider string) bool {
+	return provider == providers.Crush || provider == providers.OMP
 }
 
 // Installed reports whether the lich plugin is installed for a provider — that

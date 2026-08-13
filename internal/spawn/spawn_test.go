@@ -25,7 +25,8 @@ type fakeSessions struct {
 	rows     []added
 	addErr   error
 	// models records the model written on each session row, keyed by session id.
-	models map[string]string
+	models   map[string]string
+	modelErr error
 	// deleted/parked/purged record what a close asked the store to do, and
 	// against which active session it left the project.
 	deleted []closedRow
@@ -68,6 +69,9 @@ func (f *fakeSessions) AddSession(projectID, sessionID, label, kind, path string
 }
 
 func (f *fakeSessions) SetSessionModel(sessionID, model string) error {
+	if f.modelErr != nil {
+		return f.modelErr
+	}
 	if f.models == nil {
 		f.models = map[string]string{}
 	}
@@ -335,6 +339,25 @@ func TestOpenRecordsTheModelOnTheRow(t *testing.T) {
 	}
 	if got := sessions.models[opened.ID]; got != "opus" {
 		t.Errorf("row model = %q, want opus", got)
+	}
+}
+
+// The model is written after the card is announced, and this is why: a row with
+// no card is a session the user cannot reach to see what went wrong, so the one
+// write that can fail after the row exists must not be what hides it. The model
+// is an override — losing it costs the provider's default and nothing more.
+func TestOpenAnnouncesTheCardEvenWhenTheModelCannotBeRecorded(t *testing.T) {
+	svc, sessions, _, _, events := newService(t)
+	sessions.modelErr = errors.New("database is locked")
+
+	if _, err := svc.Open("s1", "", "claude", "", "", "opus"); err == nil {
+		t.Fatal("Open: want the write error reported, got nil")
+	}
+	if len(sessions.rows) != 1 {
+		t.Fatalf("wrote %d rows, want the session's own", len(sessions.rows))
+	}
+	if len(events.events) != 1 || events.events[0].name != OpenedEventName {
+		t.Errorf("events = %+v, want the card announced for the row that exists", events.events)
 	}
 }
 
