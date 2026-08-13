@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/omartelo/lich/internal/relay"
 	"github.com/omartelo/lich/internal/spawn"
@@ -73,12 +74,27 @@ const (
 // mcpTool is one entry in the tool list. run returns the text the agent sees;
 // an error it returns is reported as a failed tool call rather than as a
 // protocol error, so the agent reads what went wrong and can act on it.
+// ReadOnly marks the tools that change nothing, which a client may auto-allow.
 type mcpTool struct {
 	Name        string
 	Description string
 	Schema      map[string]any
+	ReadOnly    bool
 	Run         func(c *client, args mcpArgs) (string, error)
 }
+
+// mcpInstructions is the server's own briefing, injected into the client's
+// system prompt at initialize. The tool descriptions each explain one door;
+// this is the only place the whole journey — fan out, carry on, collect — is
+// told as one, and the difference between an agent that orchestrates and one
+// that never realizes it could.
+const mcpInstructions = `lich runs coding-agent sessions side by side in one window; these tools are how this session works with the others.
+
+Delegate in parallel: for work that can run beside yours, open a worker session in its own git worktree (open_session with worktree) so it gets its own checkout, then hand it the task with send_to_session. Check list_worktrees first — a branch already checked out is opened, not created. Workers are full sessions on the user's screen: visible, steerable, and yours to close (close_session) when the work is done.
+
+Never poll for results. A send that outlives its wait hands back a ticket and you carry on with your own work; when results are ready, one short [lich] note arrives at your prompt — collect everything at once with wait_for_answer (no ticket). Polling in a loop burns the tokens this design exists to save.
+
+When a [lich] message carrying a ticket arrives at YOUR prompt, you are the worker: do the task, then answer with ` + relay.ToolReply + ` — a concise report (what was done, where, what remains), never a transcript.`
 
 // serveMCP runs the stdio server until its input ends.
 func (c *client) serveMCP(args []string) error {
@@ -149,6 +165,7 @@ func mcpHandshake(params json.RawMessage) map[string]any {
 		"protocolVersion": version,
 		"capabilities":    map[string]any{"tools": map[string]any{}},
 		"serverInfo":      map[string]any{"name": relay.MCPServerName, "version": "1"},
+		"instructions":    mcpInstructions,
 	}
 }
 
@@ -189,11 +206,15 @@ func mcpText(text string, failed bool) map[string]any {
 func mcpToolList() []map[string]any {
 	list := make([]map[string]any, 0, len(mcpTools))
 	for _, tool := range mcpTools {
-		list = append(list, map[string]any{
+		entry := map[string]any{
 			"name":        tool.Name,
 			"description": tool.Description,
 			"inputSchema": tool.Schema,
-		})
+		}
+		if tool.ReadOnly {
+			entry["annotations"] = map[string]any{"readOnlyHint": true}
+		}
+		list = append(list, entry)
 	}
 	return list
 }
@@ -270,7 +291,8 @@ var mcpTools = []mcpTool{
 		Name: "list_sessions",
 		Description: "List the other lich sessions that are live right now and can be given work. " +
 			"Returns each session's label (how it is addressed), its project, and which agent runs in it.",
-		Schema: schema(map[string]any{}),
+		Schema:   schema(map[string]any{}),
+		ReadOnly: true,
 		Run: func(c *client, _ mcpArgs) (string, error) {
 			var peers []relay.Peer
 			if err := c.call("relay.Peers", []any{c.sessionID()}, shortCall, &peers); err != nil {
@@ -290,8 +312,8 @@ var mcpTools = []mcpTool{
 		Name: "send_to_session",
 		Description: "Give another lich session a task. The task is put at that session's prompt " +
 			"as if typed there. Returns the answer when it comes back quickly; for anything " +
-			"slower the answer is delivered to your own prompt as soon as it exists, so you can " +
-			"carry on and do not need to poll. " +
+			"slower you get a ticket and carry on — when the result is ready, a short note " +
+			"arrives at your own prompt and wait_for_answer collects it, so you never poll. " +
 			"Sessions are addressed by the label on their lich card — call list_sessions for " +
 			"the labels. If you were given a name like `myrepo-a1b2`, that is a peer-roster " +
 			"name from your own cross-session messaging, not a lich label: reach it with your " +
@@ -318,21 +340,32 @@ var mcpTools = []mcpTool{
 	},
 	{
 		Name: "wait_for_answer",
-		Description: "Hold the line again on a ticket send_to_session handed back. Optional: the " +
-			"answer reaches your prompt on its own whether or not you call this. Use it only when " +
-			"you have nothing else to do and want the answer inside this turn.",
+		Description: "Collect the results of tasks you sent with send_to_session. Without a " +
+			"ticket it returns every result that is ready — the one call to make when a " +
+			"[lich] note says results are waiting — and, when none is, holds the line for " +
+			"the next one. With a ticket it waits on that one errand. Use it to pick " +
+			"results up, or when you have nothing to do but wait; results announce " +
+			"themselves at your prompt either way, so there is never a reason to poll.",
 		Schema: schema(map[string]any{
-			"ticket": property("string", "The ticket send_to_session returned."),
+			"ticket": property("string",
+				"A ticket send_to_session returned. Omit to collect everything that is ready."),
 			"timeout_seconds": property("number",
-				"Seconds to wait, at most 90. Call this again with the same ticket for longer."),
-		}, "ticket"),
+				"Seconds to hold the line when nothing is ready yet, at most 90. Call again for longer."),
+		}),
 		Run: func(c *client, args mcpArgs) (string, error) {
-			var result relay.Result
 			timeout := args.seconds("timeout_seconds")
-			if err := c.call("relay.Wait", []any{args.text("ticket"), timeout}, waitBudget(timeout), &result); err != nil {
+			if ticket := args.text("ticket"); ticket != "" {
+				var result relay.Result
+				if err := c.call("relay.Wait", []any{ticket, timeout}, waitBudget(timeout), &result); err != nil {
+					return "", err
+				}
+				return mcpOutcome(result), nil
+			}
+			var collected relay.Collected
+			if err := c.call("relay.Collect", []any{c.sessionID(), timeout}, waitBudget(timeout), &collected); err != nil {
 				return "", err
 			}
-			return mcpOutcome(result), nil
+			return collectedText(collected), nil
 		},
 	},
 	{
@@ -407,6 +440,7 @@ var mcpTools = []mcpTool{
 		Schema: schema(map[string]any{
 			"project": property("string", "Project to list. Defaults to your own."),
 		}),
+		ReadOnly: true,
 		Run: func(c *client, args mcpArgs) (string, error) {
 			var checkouts []spawn.Checkout
 			call := []any{c.sessionID(), args.text("project")}
@@ -455,11 +489,42 @@ func mcpOutcome(result relay.Result) string {
 		return unreadText(result.Target)
 	}
 	return fmt.Sprintf(
-		"%s is still working. The task was delivered and its answer will be put at your own "+
-			"prompt when it arrives, so carry on — there is nothing to poll. Ticket %q, if you "+
-			"want to hold the line for it with wait_for_answer instead.",
+		"%s is still working. The task was delivered; when its result is ready a short note "+
+			"will arrive at your own prompt, so carry on — there is nothing to poll. Collect "+
+			"it with wait_for_answer (ticket %q, or no ticket for everything at once).",
 		result.Target, result.Ticket,
 	)
+}
+
+// collectedText words a drain: each result in the order it arrived, then who
+// still owes one. Statuses reuse the same words a single wait answers with —
+// the reader should not meet two spellings of one outcome.
+func collectedText(collected relay.Collected) string {
+	if len(collected.Results) == 0 && len(collected.Open) == 0 {
+		return "Nothing to collect: no results are waiting and no errand of yours is open."
+	}
+	var parts []string
+	for _, result := range collected.Results {
+		switch result.Status {
+		case relay.StatusAnswered:
+			parts = append(parts, fmt.Sprintf(
+				"Answer from %q (ticket %s):\n%s", result.Target, result.Ticket, result.Answer))
+		case relay.StatusUnread:
+			parts = append(parts, unreadText(result.Target))
+		case relay.StatusUnanswered:
+			parts = append(parts, unansweredText(result.Target))
+		}
+	}
+	if len(collected.Open) > 0 {
+		quoted := make([]string, 0, len(collected.Open))
+		for _, label := range collected.Open {
+			quoted = append(quoted, fmt.Sprintf("%q", label))
+		}
+		parts = append(parts, fmt.Sprintf(
+			"Still working: %s. Their results will announce themselves at your prompt.",
+			strings.Join(quoted, ", ")))
+	}
+	return strings.Join(parts, "\n\n")
 }
 
 // unreadText is what both surfaces say about a task that reached the terminal

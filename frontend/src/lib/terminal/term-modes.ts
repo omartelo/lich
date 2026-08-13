@@ -27,16 +27,11 @@ export function mouseEncodingSequence(encoding: string | undefined): string {
 }
 
 /**
- * Whether a click on a link is ours to open. Only Shift bypasses xterm's mouse
- * reporting, so an app that asked for mouse events gets the Ctrl+Click too —
- * and an app that opens its own links (Claude Code does) then opens the same
- * URL a second time, one browser tab each. The app owns the click; we stand
- * down. The cost is that a mouse-reporting TUI which ignores link clicks makes
- * Ctrl+Click open nothing.
+ * Whether a click on a link is ours to open: Ctrl+Click, or Cmd+Click on macOS.
+ * The click is also swallowed before it reaches the PTY (TerminalView), because
+ * an app that reads the mouse and opens its own links (Claude Code does) would
+ * otherwise serve the same click a second time, one browser tab each.
  */
-export function linkClickIsOurs(
-  event: Pick<MouseEvent, "ctrlKey" | "metaKey">,
-  mouseTrackingMode: string,
-): boolean {
-  return (event.ctrlKey || event.metaKey) && mouseTrackingMode === "none"
+export function linkClickIsOurs(event: Pick<MouseEvent, "ctrlKey" | "metaKey">): boolean {
+  return event.ctrlKey || event.metaKey
 }

@@ -45,35 +45,39 @@ func replyInstruction(hasTools bool, ticketID string) string {
 	}
 	return route + "\n\nThat ticket is the only way back: whoever asked is blocked on it and " +
 		"is reading nothing else. Do not answer by messaging a peer session — an answer " +
-		"sent any other way is lost."
+		"sent any other way is lost. Keep the answer a concise report — what was done, " +
+		"where, and what remains — never a transcript: the sender pays to read every byte, " +
+		"and the detail is in your commits and files anyway."
 }
 
-// unreadNotice is what a sender who stopped waiting is told, typed at its own
-// prompt the way an answer would be. It has to be actionable on its own: the
-// sender cannot see the other screen, and what is usually on it is a question
-// only a person can answer.
-func unreadNotice(target string) string {
-	return fmt.Sprintf(
-		"[lich] The %q session never picked up the task you sent it. It was typed at "+
-			"that prompt and nothing read it, so something else has that terminal — a "+
-			"provider still starting, or a question of its own on screen. Nothing is "+
-			"queued and nothing was answered.",
-		target,
-	)
+// nudgeNotice is the one line typed at a sender's prompt when results are
+// waiting and nobody is holding the line for them. It replaces typing the
+// results themselves: N results landing as N prompt submissions each restart
+// the sender's turn and leave the full text sitting in its context window,
+// while one short line lets the agent drain everything in a single tool call.
+// count and targets cover everything waiting, not only what this nudge is the
+// first to mention — the reader acts on the total.
+func nudgeNotice(count int, targets []string, hasTools bool) string {
+	what := fmt.Sprintf("Results from %d tasks you sent are ready (%s)", count, quotedList(targets))
+	if count == 1 {
+		what = fmt.Sprintf("The task you sent %s has its result ready", quotedList(targets))
+	}
+	route := "run:\n  \"$LICH_BIN\" wait"
+	if hasTools {
+		route = fmt.Sprintf(
+			"call the lich tool `%s` with no ticket, or run:\n  \"$LICH_BIN\" wait", ToolCollect,
+		)
+	}
+	return fmt.Sprintf("[lich] %s. To collect everything at once, %s", what, route)
 }
 
-// stalledNotice is what a sender who stopped waiting is told when the target
-// ended its turn without replying through lich, typed at its own prompt the way
-// an answer would be. The pending result promised that prompt an answer, so the
-// promise has to be withdrawn the same way it would have been kept — whatever
-// the target produced is on its own screen, which only a person can go read.
-func stalledNotice(target string) string {
-	return fmt.Sprintf(
-		"[lich] The %q session finished its turn without answering through lich. "+
-			"Nothing more is coming back on that ticket — whatever it produced is on "+
-			"that session's own screen, so ask the user to open the %q card to read it.",
-		target, target,
-	)
+// quotedList words a list of session labels for a message.
+func quotedList(labels []string) string {
+	quoted := make([]string, 0, len(labels))
+	for _, label := range labels {
+		quoted = append(quoted, fmt.Sprintf("%q", label))
+	}
+	return strings.Join(quoted, ", ")
 }
 
 // origin describes the sender in the message's first line. An empty sender is

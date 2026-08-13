@@ -244,6 +244,32 @@ func TestWaitPicksUpAnAnswer(t *testing.T) {
 	}
 }
 
+// Without a ticket, wait collects everything that is ready — the command the
+// nudge at a sender's prompt names.
+func TestWaitWithoutATicketCollectsEverything(t *testing.T) {
+	f := newFakeLich(t, `{"results":[
+		{"ticket":"t1","target":"auth","status":"answered","answer":"all green"}],
+		"open":["docs"]}`)
+
+	code, stdout, _ := run(t, f, "wait")
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+
+	call := f.only(t)
+	if call.method != "relay.Collect" {
+		t.Fatalf("method = %q, want relay.Collect", call.method)
+	}
+	if call.args[0] != "s1" {
+		t.Errorf("session = %v", call.args[0])
+	}
+	for _, want := range []string{`Answer from "auth" (ticket t1):`, "all green", `Still working: "docs"`} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("output is missing %q:\n%s", want, stdout)
+		}
+	}
+}
+
 func TestReplySendsTheAnswerHome(t *testing.T) {
 	f := newFakeLich(t, `null`)
 
@@ -270,7 +296,7 @@ func TestWrongArgumentCountsFailWithUsage(t *testing.T) {
 	tests := [][]string{
 		{"send", "docs"},
 		{"send", "docs", "a prompt", "extra"},
-		{"wait"},
+		{"wait", "a1b2c3d4", "extra"},
 		{"reply", "a1b2c3d4"},
 	}
 	for _, args := range tests {

@@ -81,6 +81,7 @@ func TestMCPHandshakeAdvertisesTools(t *testing.T) {
 		ServerInfo struct {
 			Name string `json:"name"`
 		} `json:"serverInfo"`
+		Instructions string `json:"instructions"`
 	}
 	resultOf(t, replies[0], &result)
 
@@ -92,6 +93,14 @@ func TestMCPHandshakeAdvertisesTools(t *testing.T) {
 	}
 	if result.ServerInfo.Name != "lich" {
 		t.Errorf("serverInfo.name = %q", result.ServerInfo.Name)
+	}
+	// The instructions are the one place the whole journey — fan out, carry
+	// on, collect — is told as one; clients inject them into the system
+	// prompt, so an empty field is an agent that never learns it can delegate.
+	for _, want := range []string{"open_session", "send_to_session", "wait_for_answer", "worktree"} {
+		if !strings.Contains(result.Instructions, want) {
+			t.Errorf("instructions are missing %q:\n%s", want, result.Instructions)
+		}
 	}
 }
 
@@ -136,6 +145,9 @@ func TestMCPListsEveryTool(t *testing.T) {
 				Properties map[string]json.RawMessage `json:"properties"`
 				Required   []string                   `json:"required"`
 			} `json:"inputSchema"`
+			Annotations *struct {
+				ReadOnlyHint bool `json:"readOnlyHint"`
+			} `json:"annotations"`
 		} `json:"tools"`
 	}
 	resultOf(t, replies[0], &result)
@@ -146,9 +158,12 @@ func TestMCPListsEveryTool(t *testing.T) {
 		"close_session":    {"session"},
 		"list_worktrees":   {},
 		"send_to_session":  {"session", "prompt"},
-		"wait_for_answer":  {"ticket"},
+		"wait_for_answer":  {},
 		"reply_to_session": {"ticket", "answer"},
 	}
+	// The read-only ones, which a client may auto-allow. wait_for_answer is
+	// not among them: collecting drains the inbox.
+	readOnly := map[string]bool{"list_sessions": true, "list_worktrees": true}
 	if len(result.Tools) != len(want) {
 		t.Fatalf("got %d tools, want %d", len(result.Tools), len(want))
 	}
@@ -171,6 +186,9 @@ func TestMCPListsEveryTool(t *testing.T) {
 			if _, ok := tool.InputSchema.Properties[name]; !ok {
 				t.Errorf("%s requires %q but does not declare it", tool.Name, name)
 			}
+		}
+		if marked := tool.Annotations != nil && tool.Annotations.ReadOnlyHint; marked != readOnly[tool.Name] {
+			t.Errorf("%s readOnlyHint = %v, want %v", tool.Name, marked, readOnly[tool.Name])
 		}
 	}
 }
@@ -215,6 +233,72 @@ func TestMCPSendPointsAtTheTicketWhenItRunsOut(t *testing.T) {
 		if !strings.Contains(text, want) {
 			t.Errorf("text is missing %q: %s", want, text)
 		}
+	}
+}
+
+// Without a ticket, wait_for_answer is the drain: one call collects every
+// result the nudge announced, over relay.Collect.
+func TestMCPWaitWithoutATicketCollectsEverything(t *testing.T) {
+	f := newFakeLich(t, `{"results":[
+		{"ticket":"t1","target":"auth","status":"answered","answer":"all green"},
+		{"ticket":"t2","target":"api","status":"unanswered","answer":""}],
+		"open":["docs"]}`)
+
+	replies := speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
+		{"name":"wait_for_answer","arguments":{"timeout_seconds":20}}}`)
+
+	text, failed := textOf(t, replies[0])
+	if failed {
+		t.Fatalf("tool reported a failure: %s", text)
+	}
+	call := f.only(t)
+	if call.method != "relay.Collect" {
+		t.Fatalf("method = %q, want relay.Collect", call.method)
+	}
+	if call.args[0] != "s1" || call.args[1] != float64(20) {
+		t.Errorf("args = %v", call.args)
+	}
+	for _, want := range []string{
+		`Answer from "auth" (ticket t1):`, "all green",
+		`The "api" session finished its turn`,
+		`Still working: "docs"`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("text is missing %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestMCPWaitWithNothingToCollectSaysSo(t *testing.T) {
+	f := newFakeLich(t, `{"results":[],"open":[]}`)
+
+	replies := speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
+		{"name":"wait_for_answer","arguments":{}}}`)
+
+	text, failed := textOf(t, replies[0])
+	if failed {
+		t.Fatalf("tool reported a failure: %s", text)
+	}
+	if !strings.Contains(text, "Nothing to collect") {
+		t.Errorf("text = %q, want it to say there is nothing", text)
+	}
+}
+
+func TestMCPWaitWithATicketWaitsOnIt(t *testing.T) {
+	f := newFakeLich(t, `{"ticket":"a1b2c3d4","target":"docs","status":"answered","answer":"done"}`)
+
+	replies := speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
+		{"name":"wait_for_answer","arguments":{"ticket":"a1b2c3d4"}}}`)
+
+	text, failed := textOf(t, replies[0])
+	if failed {
+		t.Fatalf("tool reported a failure: %s", text)
+	}
+	if text != "done" {
+		t.Errorf("text = %q, want the answer alone", text)
+	}
+	if call := f.only(t); call.method != "relay.Wait" {
+		t.Errorf("method = %q, want relay.Wait", call.method)
 	}
 }
 

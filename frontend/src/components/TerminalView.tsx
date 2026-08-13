@@ -296,6 +296,26 @@ export function TerminalView({
   // createTerminal builds a live terminal in the container, wired for input,
   // resize and copy-on-select. Shared by mount and every show-after-hide.
   const createTerminal = (container: HTMLDivElement): LiveTerminal => {
+    // Tracks the pointer sitting on a link, so the mousedown listener below only
+    // swallows a click the link layer is about to serve.
+    let linkHovered = false
+    // The two kinds of link answer to one policy: URLs printed as text, found by
+    // the web-links addon's regex, and OSC 8 hyperlinks (gh, eza, bun), which
+    // xterm hands to this handler. Without the handler xterm's own default takes
+    // the OSC 8 click — a confirm() dialog and a window.open lich never opened.
+    const linkActions = {
+      activate: (event: MouseEvent, uri: string) => {
+        if (linkClickIsOurs(event)) {
+          void System.OpenExternal(uri)
+        }
+      },
+      hover: () => {
+        linkHovered = true
+      },
+      leave: () => {
+        linkHovered = false
+      },
+    }
     const term = new Terminal({
       fontSize: fontSizeRef.current,
       fontFamily: `"${fontRef.current}", monospace`,
@@ -303,16 +323,11 @@ export function TerminalView({
       scrollback: SCROLLBACK_LINES,
       allowProposedApi: true,
       theme: themeRef.current,
+      linkHandler: linkActions,
     })
     const serialize = new SerializeAddon()
     term.loadAddon(serialize)
-    term.loadAddon(
-      new WebLinksAddon((event, uri) => {
-        if (linkClickIsOurs(event, term.modes.mouseTrackingMode)) {
-          void System.OpenExternal(uri)
-        }
-      }),
-    )
+    term.loadAddon(new WebLinksAddon(linkActions.activate, linkActions))
     // After the web-links addon, and load-bearing: xterm asks its providers in
     // registration order and drops a later provider's link where an earlier
     // one already claimed the cells. A session called "docs" printed inside
@@ -321,6 +336,24 @@ export function TerminalView({
       createSessionLinkProvider(term, linkTargetsRef, activateLink),
     )
     term.open(container)
+
+    // A link click must not also reach the PTY: an app that reads the mouse and
+    // opens the links it prints (Claude Code does) would open the same URL a
+    // second time, one browser tab each. xterm reports the mouse from a listener
+    // on its outer element while the link layer listens on .xterm-screen inside
+    // it, so stopping the event here keeps the click out of the session and
+    // leaves the link working. Focus is xterm's own mousedown job, done here
+    // because that handler no longer runs.
+    term.element
+      ?.querySelector<HTMLElement>(".xterm-screen")
+      ?.addEventListener("mousedown", (event) => {
+        if (!linkHovered || !linkClickIsOurs(event)) {
+          return
+        }
+        event.preventDefault()
+        event.stopPropagation()
+        term.focus()
+      })
 
     const search = new SearchAddon()
     term.loadAddon(search)

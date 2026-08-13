@@ -7,7 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **A worker's answer no longer floods the orchestrator's prompt — it is
+  announced, and collected.** A session fanning work out to others used to get
+  every answer typed back at its prompt in full, and every arrival restarted
+  its turn with the whole text left in its context window: orchestrating N
+  workers cost that N times over. Now an unattended result goes to the
+  sender's inbox, and what is typed is one short `[lich]` note — results
+  landing within a couple of seconds share it, and a sender mid-turn hears
+  nothing until its turn ends. `wait_for_answer` with no ticket (or a bare
+  `lich wait`) collects everything at once, inside a turn the sender chose,
+  and reports who still owes an answer. Uncollected results expire with the
+  ticket TTL, one hour.
+
+- **lich's MCP server now briefs the agent on the whole journey.** The
+  `initialize` handshake carries `instructions` — how to fan work out into
+  worktree sessions, that answers announce themselves so polling is waste, and
+  that a relayed reply should be a concise report, not a transcript. Clients
+  inject it into the agent's system prompt, so an agent no longer has to
+  reverse-engineer the orchestration flow from seven tool descriptions. The
+  relayed message asks for the concise report too, and `list_sessions` /
+  `list_worktrees` are annotated read-only so clients may auto-allow them.
+
 ### Fixed
+
+- **Ctrl+Click opens a link in every session again, not only where the agent
+  opens it for you.** Since the fix for the duplicated browser tab, lich stood
+  down from any session whose app reads the mouse — which left the click dead
+  wherever that app ignores links (opencode, among others): the URL underlined
+  on hover and nothing happened. Now lich keeps the click out of the session
+  instead of standing down, so one Ctrl+Click (Cmd+Click on macOS) opens one
+  tab, in every provider.
+
+- **A hyperlink printed by a tool opens like any other link.** Output that
+  carries its URL as a terminal hyperlink rather than as plain text (`gh`,
+  `eza`, and anything else speaking OSC 8) was left to xterm's own fallback: a
+  browser-style "do you want to navigate to…" prompt, outside lich's opener.
+  Now Ctrl+Click serves both kinds of link the same way.
 
 - **Closing a session on Windows no longer takes the app down with it.** The
   service closed the session's ConPTY and its output reader, freed by that very

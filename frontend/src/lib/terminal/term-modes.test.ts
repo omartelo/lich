@@ -24,18 +24,12 @@ describe("mouseEncodingSequence", () => {
 })
 
 describe("linkClickIsOurs", () => {
-  it("opens the link when no app is reading the mouse", () => {
-    expect(linkClickIsOurs({ ctrlKey: true, metaKey: false }, "none")).toBe(true)
-    expect(linkClickIsOurs({ ctrlKey: false, metaKey: true }, "none")).toBe(true)
-  })
-
-  it("stands down while an app reads the mouse — it got the same click", () => {
-    for (const mode of ["x10", "vt200", "drag", "any"]) {
-      expect(linkClickIsOurs({ ctrlKey: true, metaKey: false }, mode)).toBe(false)
-    }
+  it("opens the link on Ctrl+Click, and on Cmd+Click for macOS", () => {
+    expect(linkClickIsOurs({ ctrlKey: true, metaKey: false })).toBe(true)
+    expect(linkClickIsOurs({ ctrlKey: false, metaKey: true })).toBe(true)
   })
 
   it("ignores a plain click, which selects rather than opens", () => {
-    expect(linkClickIsOurs({ ctrlKey: false, metaKey: false }, "none")).toBe(false)
+    expect(linkClickIsOurs({ ctrlKey: false, metaKey: false })).toBe(false)
   })
 })
