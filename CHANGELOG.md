@@ -5,6 +5,25 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **A session no longer gets stuck waiting for a setup that already
+  finished.** Two ways a fresh worktree's session could stay "not ready"
+  forever, refusing every message relayed to it until the sender's ticket
+  timed out: the marker the setup wrapper prints was matched one PTY read at
+  a time, so a read that cut it in half missed it for good; and a session
+  spawned into a worktree with no setup script at all could still be armed
+  to wait for a marker nothing would ever print, whenever the provider's
+  binary happened to be named `sh`.
+
+- **A transcript that fails mid-read no longer shows a short cost.** A
+  transient read error while adding up a session's spend was treated as the
+  end of the file, so the footer showed the total of the lines that made it
+  through, as if that were the whole bill. Such a read now shows no number
+  and resumes on the next turn.
+
 ## [0.31.0] - 2026-08-13
 
 ### Added
@@ -2256,6 +2275,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.31.0...HEAD
 [Unreleased]: https://github.com/omartelo/lich/compare/v0.31.0...HEAD
 [0.31.0]: https://github.com/omartelo/lich/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/omartelo/lich/compare/v0.29.0...v0.30.0

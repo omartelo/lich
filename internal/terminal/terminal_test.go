@@ -42,6 +42,11 @@ type stubBins struct {
 	costOn          bool
 	ledgers         map[string]stubLedger
 	ports           map[string]int
+	// One field per cost method, because the three failures are three different
+	// stories: a ledger that cannot be read, one that cannot be written, and a
+	// total that cannot be summed. A single error field would let a test claim
+	// the path it never reached.
+	ledgerErr, saveLedgerErr, sessionCostErr error
 }
 
 // stubLedger mirrors one session_costs row.
@@ -88,6 +93,9 @@ func (s stubBins) SetSessionTitle(_, _ string) (bool, error) { return false, nil
 func (s stubBins) CostReadout() bool { return s.costOn }
 
 func (s stubBins) CostLedger(sessionID, transcriptID string) (int64, string, float64, error) {
+	if s.ledgerErr != nil {
+		return 0, "", 0, s.ledgerErr
+	}
 	ledger := s.ledgers[sessionID+"\x00"+transcriptID]
 	return ledger.offset, ledger.lastMessage, ledger.cost, nil
 }
@@ -95,11 +103,17 @@ func (s stubBins) CostLedger(sessionID, transcriptID string) (int64, string, flo
 func (s stubBins) SaveCostLedger(
 	sessionID, transcriptID string, offset int64, lastMessage string, cost float64,
 ) error {
+	if s.saveLedgerErr != nil {
+		return s.saveLedgerErr
+	}
 	s.ledgers[sessionID+"\x00"+transcriptID] = stubLedger{offset, lastMessage, cost}
 	return nil
 }
 
 func (s stubBins) SessionCost(sessionID string) (float64, error) {
+	if s.sessionCostErr != nil {
+		return 0, s.sessionCostErr
+	}
 	total := 0.0
 	for key, ledger := range s.ledgers {
 		if strings.HasPrefix(key, sessionID+"\x00") {
