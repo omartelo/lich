@@ -13,6 +13,12 @@ import (
 // The account resolution is the same as every other gh call (ghaccount.go): the
 // query runs inside the checkout, and gh substitutes {owner}/{repo} from its
 // remote.
+//
+// Ceiling: every collection is capped and unpaged — the last 50 reviews, the
+// last 50 pull request comments, the last 100 threads and the last 50 comments
+// inside each thread. `last` throughout, because a conversation is read at its
+// end: what a screen has to show is the newest reply, and the tail past the cap
+// is on github.com until somebody hits it.
 const prConversationQuery = `query($owner:String!,$repo:String!,$number:Int!){
   repository(owner:$owner,name:$repo){
     pullRequest(number:$number){
@@ -21,7 +27,7 @@ const prConversationQuery = `query($owner:String!,$repo:String!,$number:Int!){
       comments(last:50){nodes{author{login} body createdAt}}
       reviewThreads(last:100){nodes{
         id isResolved isOutdated path line originalLine startLine originalStartLine diffSide
-        comments(first:50){nodes{databaseId author{login} body createdAt diffHunk}}
+        comments(last:50){nodes{databaseId author{login} body createdAt diffHunk}}
       }}
     }
   }

@@ -63,6 +63,29 @@ func TestIncludePatterns(t *testing.T) {
 	}
 }
 
+// TestIncludePatternsRefusesAnUnreadableFile proves an unreadable
+// .worktreeinclude is not an absent one: only a missing file falls back to the
+// defaults. A present file governs alone, so seeding the default .env* patterns
+// off a file nobody could read would copy exactly what the override may exist
+// to keep out of the worktree.
+func TestIncludePatternsRefusesAnUnreadableFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, includeFile)
+	if err := os.WriteFile(path, []byte("config/*.json\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.ReadFile(path); err == nil {
+		t.Skip("file permissions do not apply here")
+	}
+
+	if got := includePatterns(dir); len(got) != 0 {
+		t.Errorf("unreadable file: patterns = %v, want none", got)
+	}
+}
+
 // seedRepo builds a repository with a .gitignore and the ignored files the
 // seed should (and should not) pick up.
 func seedRepo(t *testing.T) (string, func(args ...string) string) {

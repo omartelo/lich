@@ -1,7 +1,9 @@
 package project
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path"
@@ -67,10 +69,19 @@ func seedWorktree(projectPath, wtPath string) []string {
 
 // includePatterns returns the seed patterns: .worktreeinclude at the repo
 // root when present, defaultIncludes otherwise.
+//
+// Only a missing file means "absent". A file that is there but cannot be read
+// seeds nothing: it governs alone, and nobody knows what it says — falling back
+// to the default would seed the .env files the override may exist to keep out
+// of a worktree, which is the one mistake this file cannot make.
 func includePatterns(projectPath string) []string {
 	data, err := os.ReadFile(filepath.Join(projectPath, includeFile))
-	if err != nil {
+	if errors.Is(err, fs.ErrNotExist) {
 		return defaultIncludes
+	}
+	if err != nil {
+		slog.Warn("worktree seed: read "+includeFile, "err", err)
+		return nil
 	}
 	patterns := []string{}
 	for _, line := range splitLines(string(data)) {
