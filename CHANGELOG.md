@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of standing down, so one Ctrl+Click (Cmd+Click on macOS) opens one
   tab, in every provider.
 
+- **A hyperlink printed by a tool opens like any other link.** Output that
+  carries its URL as a terminal hyperlink rather than as plain text (`gh`,
+  `eza`, and anything else speaking OSC 8) was left to xterm's own fallback: a
+  browser-style "do you want to navigate to…" prompt, outside lich's opener.
+  Now Ctrl+Click serves both kinds of link the same way.
+
 - **A launch that loses its port now tells you, instead of dying into a log
   file.** When the loopback listener cannot bind and no running lich explains
   it, the app used to exit with nothing but a log line — which a double-click
