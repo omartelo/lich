@@ -5,6 +5,19 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **A plugin install is whole or it fails.** Installing the plugin into
+  opencode or Crush wrote what it fetched straight onto the file the harness
+  loads: a release file larger than the 1MB cap was silently cut short, and a
+  crash or a full disk mid-write left a half-written module or hook script —
+  either one still carrying the version marker that says the install
+  succeeded. An oversized file is now refused, and every file is written
+  through a temporary one, so an interrupted install leaves the previous
+  version in place rather than a broken one lich reports as current.
+
 ## [0.31.0] - 2026-08-13
 
 ### Added

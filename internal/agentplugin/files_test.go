@@ -56,6 +56,36 @@ func fileServer(t *testing.T, files map[string]string) (*Service, func() []strin
 // tagged is the URL path a release file is served at.
 func tagged(path string) string { return "/v" + testVersion + "/" + path }
 
+// A body lich cannot trust is refused rather than trimmed to fit: what it
+// fetches is written where a harness loads and runs it, under a marker line
+// saying which release it is — and a truncated file carries that line too.
+func TestFetchFileBodyLimit(t *testing.T) {
+	tests := []struct {
+		name    string
+		size    int
+		wantErr bool
+	}{
+		{name: "an empty file is no release file", size: 0, wantErr: true},
+		{name: "a file at the cap is whole", size: fileBodyLimit},
+		{name: "one byte past it is refused", size: fileBodyLimit + 1, wantErr: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _ := fileServer(t, map[string]string{
+				tagged(opencodeSource): strings.Repeat("x", tc.size),
+			})
+
+			data, err := s.fetchFile(testVersion, opencodeSource)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("fetchFile with a %d byte body: err = %v, want an error: %v", tc.size, err, tc.wantErr)
+			}
+			if err == nil && len(data) != tc.size {
+				t.Errorf("fetchFile returned %d bytes, want the %d the release served", len(data), tc.size)
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------- opencode --
 
 func TestOpencodeInstallWritesTheModule(t *testing.T) {
@@ -371,6 +401,18 @@ func TestCrushInstallProceedsOnAnUnreadableVersion(t *testing.T) {
 
 	if err := s.Install(providers.Crush); err != nil {
 		t.Fatalf("Install with an unreadable crush version: %v", err)
+	}
+}
+
+// A `crush dirs` that prints nothing leaves lich without the directory it was
+// asked for. Joining "crushrc" onto an empty one would write the file into
+// whatever the process's working directory happens to be.
+func TestCrushrcPathWithoutAConfigDir(t *testing.T) {
+	s, _ := fileServer(t, nil)
+	crushCLI(t, s, "", "0.88.1")
+
+	if path, err := s.crushrcPath(); err == nil {
+		t.Fatalf("crushrcPath = %q, want an error when crush dirs prints no directory", path)
 	}
 }
 

@@ -38,6 +38,15 @@ const (
 	// Crush's tool names are whole lower-case words.
 	crushWriteTools = "^(edit|write|multiedit|bash)$"
 
+	// crushHookTimeout and crushMCPTimeout are the seconds Crush's own flags
+	// take. A hook is one POST to lich's loopback listener, so five is already
+	// far past a run that will ever succeed; the MCP registration has a binary to
+	// spawn and a handshake to finish before Crush can use a tool, so it is given
+	// longer. Both bound a session's own turn — a hung one is what they exist to
+	// end.
+	crushHookTimeout = 5
+	crushMCPTimeout  = 10
+
 	// shComment is how the marker lines hide from the shell that runs crushrc.
 	shComment = "#"
 	// blockOpen and blockClose delimit lich's lines inside crushrc, so an update
@@ -81,9 +90,8 @@ func (s *Service) crushInstall() error {
 		}
 		// Executable: Crush dispatches a shebang'd script through os/exec, which
 		// needs the bit the way any other shell would.
-		path := filepath.Join(dir, filepath.Base(hook.script))
-		if err := os.WriteFile(path, data, 0o755); err != nil {
-			return fmt.Errorf("write %s: %w", path, err)
+		if err := writeFile(filepath.Join(dir, filepath.Base(hook.script)), data, 0o755); err != nil {
+			return err
 		}
 	}
 	return s.writeCrushrc(version, dir, lichBinary())
@@ -104,10 +112,7 @@ func (s *Service) writeCrushrc(version, scriptDir, lichBin string) error {
 		return fmt.Errorf("create %s: %w", filepath.Dir(path), err)
 	}
 	body := replaceBlock(string(existing), crushrcBlock(version, scriptDir, lichBin))
-	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
-		return fmt.Errorf("write %s: %w", path, err)
-	}
-	return nil
+	return writeFile(path, []byte(body), 0o644)
 }
 
 // crushrcBlock is the block lich owns: its markers, a line saying who wrote it,
@@ -130,21 +135,21 @@ func crushrcBlock(version, scriptDir, lichBin string) string {
 		if hook.matcher != "" {
 			fmt.Fprintf(&b, " --matcher %s", shquote.Quote(hook.matcher))
 		}
-		fmt.Fprintf(&b, " --command %s --timeout 5\n", shquote.Quote(command))
+		fmt.Fprintf(&b, " --command %s --timeout %d\n", shquote.Quote(command), crushHookTimeout)
 	}
 	if lichBin != "" {
 		// The operations Claude Code and Codex are handed on their own command
 		// line at spawn (docs/cli.md, Registration). Crush takes no such flag,
 		// and this is the only other place it reads a server from — the same
-		// file its hooks come from, under the same markers, removed by the same
-		// uninstall.
+		// file its hooks come from, under the same markers, so an update
+		// replaces it and an uninstall would take it away with them.
 		//
 		// The path is this binary's, resolved now: the registration is a line in
 		// a file, so it cannot name $LICH_BIN and have Crush expand it per
 		// session. It is only the transport — which lich a session talks to is
 		// decided by the coordinates in its PTY, not by which binary runs.
-		fmt.Fprintf(&b, "mcp add %s --type stdio --command %s --args %s --timeout 10\n",
-			relay.MCPServerName, shquote.Quote(lichBin), relay.MCPSubcommand)
+		fmt.Fprintf(&b, "mcp add %s --type stdio --command %s --args %s --timeout %d\n",
+			relay.MCPServerName, shquote.Quote(lichBin), relay.MCPSubcommand, crushMCPTimeout)
 	}
 	b.WriteString(blockClose + "\n")
 	return b.String()

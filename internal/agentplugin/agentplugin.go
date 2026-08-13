@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 	"slices"
 	"strings"
@@ -292,4 +293,20 @@ func (s *Service) exec(provider string, timeout time.Duration, args ...string) (
 // failure — the caller treats an empty result as "no update known".
 func (s *Service) latestVersion() string {
 	return ghrelease.LatestTag(s.http, s.latestURL)
+}
+
+// writeFile writes data to path through a temporary file in the same directory.
+// Every path this package writes is one a harness loads and runs, and a crash or
+// a full disk halfway through os.WriteFile leaves a truncated one that still
+// loads — with lich's version marker on its first line saying it is whole.
+func writeFile(path string, data []byte, perm os.FileMode) error {
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, perm); err != nil {
+		return fmt.Errorf("write %s: %w", tmp, err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
 }
