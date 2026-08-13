@@ -37,13 +37,18 @@ CREATE TABLE IF NOT EXISTS sessions (
     id                  TEXT NOT NULL PRIMARY KEY,
     project_id          TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     label               TEXT NOT NULL,
+    -- 'claude' is providers.Claude, which SQL cannot interpolate: renaming that
+    -- constant has to move this literal and the migration below with it, or a
+    -- row inserted without a kind (mutations.go's AddSession default) reads back
+    -- as a provider nothing is registered under.
     kind                TEXT NOT NULL DEFAULT 'claude',
     path                TEXT NOT NULL DEFAULT '',
     provider_session_id TEXT NOT NULL DEFAULT '',
     label_auto          INTEGER NOT NULL DEFAULT 1,
     is_open             INTEGER NOT NULL DEFAULT 1,
     position            INTEGER NOT NULL DEFAULT 0,
-    pinned              INTEGER NOT NULL DEFAULT 0
+    pinned              INTEGER NOT NULL DEFAULT 0,
+    model               TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
 
@@ -147,6 +152,7 @@ func open(path string) (*Service, error) {
 	// a duplicate), or predating the column entirely (rename finds nothing, add
 	// creates it).
 	migrations := []string{
+		// 'claude' is providers.Claude spelled out — see the schema above.
 		`ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'claude'`,
 		`ALTER TABLE sessions ADD COLUMN path TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE sessions RENAME COLUMN claude_session_id TO provider_session_id`,
@@ -155,6 +161,7 @@ func open(path string) (*Service, error) {
 		`ALTER TABLE sessions ADD COLUMN is_open INTEGER NOT NULL DEFAULT 1`,
 		`ALTER TABLE sessions ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE sessions ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE sessions ADD COLUMN model TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE projects ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE projects ADD COLUMN closed_seq INTEGER NOT NULL DEFAULT 0`,
 	}
@@ -216,7 +223,6 @@ func (s *Service) LoadState() ([]Project, error) {
 		if err := rows.Scan(&p.ID, &p.Name, &p.Path, &p.NextSeq, &p.ActiveSessionID); err != nil {
 			return nil, fmt.Errorf("scan project: %w", err)
 		}
-		p.Sessions = []Session{}
 		projects = append(projects, p)
 	}
 	if err := rows.Err(); err != nil {

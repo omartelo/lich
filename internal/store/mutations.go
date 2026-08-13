@@ -14,15 +14,16 @@ import (
 // order can never be decided against a stale count.
 const nextSessionPosition = `(SELECT COALESCE(MAX(position), -1) + 1 FROM sessions WHERE project_id = ?)`
 
+// setActiveSessionSQL is shared by the transactional helper below and the
+// standalone SetActiveSession, so the two can never drift apart.
+const setActiveSessionSQL = `UPDATE projects SET active_session_id = ? WHERE id = ?`
+
 // setActiveSession points a project at the session that should hold focus. Every
 // mutation that adds, parks or removes a session ends by calling it inside the
 // same transaction: the active id and the session set have to move together, or
 // a reload restores a project focused on a session that is no longer there.
 func setActiveSession(tx *sql.Tx, projectID, sessionID string) error {
-	if _, err := tx.Exec(
-		`UPDATE projects SET active_session_id = ? WHERE id = ?`,
-		sessionID, projectID,
-	); err != nil {
+	if _, err := tx.Exec(setActiveSessionSQL, sessionID, projectID); err != nil {
 		return fmt.Errorf("set active session of %q: %w", projectID, err)
 	}
 	return nil
@@ -253,6 +254,37 @@ func (s *Service) SetSessionTitle(sessionID, title string) (bool, error) {
 	return n > 0, nil
 }
 
+// SetSessionModel records the model a session's provider was asked to run, so
+// every later spawn of that session repeats the flag: a reload, a respawn, and
+// the resume of a parked worktree session all go through the same path, and a
+// model that only survived the first spawn would silently become the provider's
+// default on the second.
+//
+// It is written once, right after the row is created. A session whose row is
+// gone matches nothing and is not an error.
+func (s *Service) SetSessionModel(sessionID, model string) error {
+	if _, err := s.db.Exec(
+		`UPDATE sessions SET model = ? WHERE id = ?`, model, sessionID,
+	); err != nil {
+		return fmt.Errorf("set model on %q: %w", sessionID, err)
+	}
+	return nil
+}
+
+// SessionModel returns the model recorded for a session, or "" for none — which
+// is what a session opened from the window has, and what leaves the provider on
+// its own default. A read failure answers "" for the same reason: the model is
+// an override, and the provider's default is the safe thing to fall back to.
+func (s *Service) SessionModel(sessionID string) string {
+	var model sql.NullString
+	if err := s.db.QueryRow(
+		`SELECT model FROM sessions WHERE id = ?`, sessionID,
+	).Scan(&model); err != nil {
+		return ""
+	}
+	return model.String
+}
+
 // SetProviderSession records the provider conversation id running inside a lich
 // session's PTY, reported by the provider's session-start hook. A session whose
 // row does not exist yet (the hook racing session persistence) matches nothing
@@ -322,10 +354,7 @@ func (s *Service) ReorderSessions(projectID string, ids []string) error {
 
 // SetActiveSession records which session is focused within a project.
 func (s *Service) SetActiveSession(projectID, sessionID string) error {
-	if _, err := s.db.Exec(
-		`UPDATE projects SET active_session_id = ? WHERE id = ?`,
-		sessionID, projectID,
-	); err != nil {
+	if _, err := s.db.Exec(setActiveSessionSQL, sessionID, projectID); err != nil {
 		return fmt.Errorf("set active session %q on %q: %w", sessionID, projectID, err)
 	}
 	return nil

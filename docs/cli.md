@@ -190,7 +190,7 @@ This is what a relayed message asks the receiving agent to run. An answer is
 capped at 64 KiB. Replying twice to one ticket is an error — the first answer
 already went home.
 
-### `lich open [--project <name>] [--kind <provider>] [--worktree <branch>] [--base <branch>]`
+### `lich open [--project <name>] [--kind <provider>] [--worktree <branch>] [--base <branch>] [--model <model>]`
 
 Opens a new session, starts it, and prints the two names it is addressed by:
 
@@ -216,6 +216,17 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
   (`origin/…`, fetched and tracked), or one another worktree already holds. A
   base that is not a branch is refused rather than resolved: git would happily
   branch off a typo that names a revision, leaving a checkout nobody asked for.
+- `--model` is the model the session's provider starts on. The value is whatever
+  that provider's own `--model` takes — an alias, a full name, a
+  `provider/model` pair — and lich passes it through unchecked: the accepted
+  names differ per provider and change with every release, so a wrong one fails
+  in the provider's own error rather than against a list kept here (and no list
+  here could go stale into a session on the wrong model). **Crush and `shell`
+  are refused**: Crush spells `--model` on its non-interactive `run` subcommand
+  only, so the TUI lich spawns has nowhere to receive one, and naming a model
+  for it would silently give you a session on the default. The model is
+  recorded on the session, so every later spawn of it — a page reload, a
+  respawn, the resume of a parked worktree session — starts on the same model.
 - A session without a worktree is labelled from the project's own counter
   (`Session 4`), continuing the numbering the window uses.
 
@@ -288,7 +299,7 @@ at lich.
 | `send_to_session` | `session`, `prompt`, optional `project` and `timeout_seconds`. |
 | `wait_for_answer` | optional `ticket` and `timeout_seconds` — with a ticket, `lich wait <ticket>`; without one, the collect: everything ready at once. |
 | `reply_to_session` | `ticket`, `answer` — what a relayed message asks for. |
-| `open_session` | optional `project`, `kind`, `worktree`, `base` — `lich open`. |
+| `open_session` | optional `project`, `kind`, `worktree`, `base`, `model` — `lich open`. |
 | `close_session` | `session`, optional `project`, `worktree` (`keep`/`remove`), `force`. |
 | `list_worktrees` | optional `project` — the checkouts, as JSON. |
 
@@ -388,14 +399,14 @@ own command line (`providers.AcceptsMCPServer`):
 | Codex | `-c mcp_servers.lich.command=…` and `…args=["mcp"]` | at spawn |
 | Crush | an `mcp add` line in the block the plugin install writes into `crushrc` | with the plugin |
 | opencode | its plugin defines the same seven as tools of its own — a plugin there cannot register an MCP server | with the plugin |
-| oh-my-pi | no flag, no plugin | no |
+| oh-my-pi | a `lich` entry merged into `mcp.json` beside the extension the plugin install writes | with the plugin |
 
 Only the first two can be told on their own command line, which is what makes
-their registration per-session and secret-free. The next two arrive with the
-plugin instead (Settings › lich plugin), because that install already writes
-into those harnesses' own directories — so the server is registered where the
-hooks are, removed by the same uninstall, and absent for anyone who never
-installed it. oh-my-pi has neither, and its sessions use the command line above.
+their registration per-session and secret-free. The rest arrive with the plugin
+instead (Settings › lich plugin), because that install already writes into
+those harnesses' own directories — so the server is registered where the hooks
+are, removed by the same uninstall, and absent for anyone who never installed
+it.
 
 Two rules the registration must keep:
 
