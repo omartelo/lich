@@ -41,7 +41,7 @@ func TestASetupSpawnWithNoScriptIsReadyAnyway(t *testing.T) {
 // arms the wait, and the session is held back until the marker clears it.
 func TestASetupSpawnWithAScriptWaitsForItsMarker(t *testing.T) {
 	t.Setenv("SHELL", "sh")
-	svc := New(stubBins{setup: "sleep 30"}, nil, events.New())
+	svc := New(stubBins{projectPath: projectWithSetup(t, "sleep 30")}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
 	if err := svc.Start("s1", "p1", t.TempDir(), KindShell, "", "", true, 80, 24); err != nil {

@@ -3,6 +3,7 @@ import type { KeyboardEvent } from "react"
 import { ProjectService } from "@/lib/rpc"
 import type { Branches, Worktree } from "@/lib/api-types"
 import { SearchInput } from "@/components/common/SearchInput"
+import { WorktreeSetupRow } from "@/components/sidebar/WorktreeSetupRow"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -221,7 +222,7 @@ export function WorktreeDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Fixed-height dialog: the base-branch section takes the leftover row
         (minmax(0,1fr)) so its list scrolls instead of growing the modal. */}
-      <DialogContent className="h-[85vh] grid-rows-[auto_auto_minmax(0,1fr)_auto_auto] sm:max-w-2xl">
+      <DialogContent className="h-[85vh] grid-rows-[auto_auto_minmax(0,1fr)_auto_auto_auto] sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>New worktree</DialogTitle>
           <DialogDescription>
@@ -317,6 +318,8 @@ export function WorktreeDialog({
             )}
           </div>
         </div>
+
+        <WorktreeSetupRow projectPath={projectPath} />
 
         {(loadError || submitError) && (
           <span className="text-xs break-words text-destructive">{loadError || submitError}</span>

@@ -19,6 +19,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The worktree setup script moved into the repository, and the dialog now
+  shows it.** What ran before a new worktree's agent used to live in a one-line
+  Settings field nobody found until an agent crashed into a missing
+  `node_modules`. The script is now a plain file, `.lich/setup-worktree.sh` in
+  the project checkout — versioned and shared with everyone who clones the repo,
+  or kept untracked for a private one — and the New worktree dialog states what
+  will run before you create anything. A repo that ships no script gets a
+  suggestion instead, detected from its root (`pnpm-lock.yaml`, `go.mod`,
+  `Cargo.lock`…): accept it as-is or edit it inline, and either writes the file
+  for next time. Nothing runs without that explicit accept, and the script is
+  always read from the main checkout — never from the branch being checked out,
+  so opening a stranger's PR cannot execute a stranger's setup. The
+  Settings › Worktree pane is gone with the stored setting; a script configured
+  there before this release is not carried over — put it in the file.
+
 - **A mistyped command no longer opens the app.** `lich sesions` used to name no
   subcommand, and anything that named none launched the whole window — an answer
   that says nothing about the command that was run. It is now refused with

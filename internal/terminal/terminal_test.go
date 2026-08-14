@@ -23,7 +23,7 @@ import (
 	"github.com/omartelo/lich/internal/shquote"
 )
 
-// stubBins is a Store returning a fixed binary path and worktree setup script,
+// stubBins is a Store returning a fixed binary path and project directory,
 // for tests that never spawn. Its write methods are no-ops — none of these tests
 // exercise the SessionStart or ai-title paths — while providerSession and its
 // error drive the context-usage read (usage_test.go).
@@ -34,7 +34,7 @@ import (
 // value receivers can still write to it; a test that exercises cost builds one
 // with newCostStore.
 type stubBins struct {
-	bin, setup      string
+	bin             string
 	projectPath     string
 	providerSession string
 	providerErr     error
@@ -48,6 +48,21 @@ type stubBins struct {
 	// total that cannot be summed. A single error field would let a test claim
 	// the path it never reached.
 	ledgerErr, saveLedgerErr, sessionCostErr error
+}
+
+// projectWithSetup is a project checkout shipping .lich/setup-worktree.sh —
+// the source the spawn reads since the script moved out of the store and into
+// the repository.
+func projectWithSetup(t *testing.T, script string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".lich"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".lich", "setup-worktree.sh"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return dir
 }
 
 // stubLedger mirrors one session_costs row.
@@ -69,7 +84,6 @@ func newCostStore(providerSession string) stubBins {
 func (s stubBins) ProviderBin(_, _ string) string       { return s.bin }
 func (s stubBins) SkipPermissions(_, _, _ string) bool  { return s.skipPerms }
 func (s stubBins) ProjectPath(_ string) string          { return s.projectPath }
-func (s stubBins) WorktreeSetup(_ string) string        { return s.setup }
 func (s stubBins) SessionModel(_ string) string         { return s.model }
 func (s stubBins) SetProviderSession(_, _ string) error { return nil }
 
@@ -442,7 +456,7 @@ func TestStartCarriesTheBriefingIntoTheSpawn(t *testing.T) {
 // wiring wrapSetup's unit test cannot see.
 func TestStartWithSetupWrapsTheSpawn(t *testing.T) {
 	bin := stayAliveBin(t)
-	svc := New(stubBins{bin: bin, setup: "echo setup-ran"}, nil, events.New())
+	svc := New(stubBins{bin: bin, projectPath: projectWithSetup(t, "echo setup-ran")}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
 	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", true, 80, 24); err != nil {
@@ -1212,7 +1226,7 @@ func TestStartWithoutASizeCopiesTheWindow(t *testing.T) {
 // read a message, until the wrapper's marker comes through its own output.
 func TestReadyWaitsForTheSetupScript(t *testing.T) {
 	bin := stayAliveBin(t)
-	svc := New(stubBins{bin: bin, setup: "echo installing"}, nil, events.New())
+	svc := New(stubBins{bin: bin, projectPath: projectWithSetup(t, "echo installing")}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
 	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", true, 80, 24); err != nil {

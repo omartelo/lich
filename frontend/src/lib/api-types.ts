@@ -269,6 +269,16 @@ export interface Branches {
   worktrees: Worktree[] | null
 }
 
+/** internal/project.WorktreeSetup — what the New-worktree dialog shows about
+ * the project's setup: the .lich/setup-worktree.sh content, or a suggestion
+ * detected from the repository root when the file is absent. */
+export interface WorktreeSetup {
+  script: string
+  suggestion?: string
+  /** The files behind suggestion, e.g. "pnpm-lock.yaml". */
+  detected?: string
+}
+
 /** internal/store.Session — a persisted terminal session (metadata only). */
 export interface StoredSession {
   id: string

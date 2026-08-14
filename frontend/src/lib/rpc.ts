@@ -34,6 +34,7 @@ import type {
   ThemeImportResult,
   TranscriptMatch,
   Worktree,
+  WorktreeSetup,
 } from "./api-types"
 
 export interface Endpoint {
@@ -168,6 +169,12 @@ export const ProjectService = {
   ReadFile: (path: string, rel: string) => call<string>("project.ReadFile", [path, rel]),
   DiscardFile: (path: string, rel: string) => call<null>("project.DiscardFile", [path, rel]),
   ListBranches: (path: string) => call<Branches>("project.ListBranches", [path]),
+  /** The setup script a new worktree of this project will run, or the
+   * suggestion to offer when the repo ships none. */
+  WorktreeSetup: (path: string) => call<WorktreeSetup>("project.WorktreeSetup", [path]),
+  /** Write .lich/setup-worktree.sh in the project checkout ("" removes it). */
+  SaveWorktreeSetup: (path: string, script: string) =>
+    call<null>("project.SaveWorktreeSetup", [path, script]),
   /** The logins gh is authenticated as, for the project's account picker;
    * errors when gh is missing or logged out. */
   GitHubAccounts: () => call<string[] | null>("project.GitHubAccounts", []),
