@@ -18,7 +18,7 @@ import {
 import { SettingBlock } from "./SettingBlock"
 import { Switch } from "@/components/ui/switch"
 
-// ProvidersSettings lists every known harness with its install state and an
+// ProvidersSettings lists every known provider with its install state and an
 // enable toggle, and picks the one new sessions spawn by default. Enabling a
 // provider surfaces its config section (a ProviderBinSettings entry) and offers
 // it in New Session. A provider that is not installed cannot be turned on — but
@@ -44,7 +44,7 @@ export function ProvidersSettings({ installedOnly = false }: { installedOnly?: b
       {enabled.length > 0 && (
         <SettingBlock
           title="Default provider"
-          description="The harness implicit session actions use unless the current project has its own choice in Project Settings › Sessions."
+          description="The provider implicit session actions use unless the current project has its own choice in Project Settings › Providers."
         >
           <Select
             value={defaultProvider}

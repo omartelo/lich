@@ -5,7 +5,7 @@ import { AppearanceSettings } from "./AppearanceSettings"
 import { NotificationsSettings } from "./NotificationsSettings"
 import { HotkeysSettings } from "./HotkeysSettings"
 import { ProvidersSettings } from "./ProvidersSettings"
-import { SessionSettings } from "./SessionSettings"
+import { ProjectProvidersSettings } from "./ProjectProvidersSettings"
 import { ProviderBinSettings } from "./ProviderBinSettings"
 import { VersionControlSettings } from "./VersionControlSettings"
 import { UpdatesSettings } from "./UpdatesSettings"
@@ -15,7 +15,7 @@ import { enabledProviders, useProviders } from "@/lib/providers-store"
 import { cn } from "@/lib/utils"
 
 // A settings category: a nav entry plus the pane it renders. Global and project
-// sections name their scope in the nav; enabled harnesses get provider sections,
+// sections name their scope in the nav; enabled providers get their own sections,
 // and footer sections sit at the bottom apart from configuration.
 interface Section {
   id: string
@@ -47,10 +47,10 @@ const BASE_SECTIONS: Section[] = [
     render: () => <ProvidersSettings />,
   },
   {
-    id: "sessions",
-    label: "Sessions",
+    id: "project-providers",
+    label: "Providers",
     group: "project",
-    render: (id) => <SessionSettings projectId={id} />,
+    render: (id) => <ProjectProvidersSettings projectId={id} />,
   },
   {
     id: "version-control",

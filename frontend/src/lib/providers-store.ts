@@ -1,4 +1,4 @@
-// Shared provider state: which harnesses are installed on the machine and which
+// Shared provider state: which providers are installed on the machine and which
 // the user enabled. Both the New Session menu and the Settings screen read it,
 // so a toggle in one place is reflected in the other without a refetch. Detection
 // runs once (providers.Detect); enabled flags are global settings ("1"/"0").

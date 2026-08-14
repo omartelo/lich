@@ -9,13 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **A project's usual harness can differ from the global default.** Settings now
-  gives each project an optional default harness of its own, used by implicit
-  new-session actions and fresh worktrees. Clearing it with **Use default** puts
-  the project back on the unchanged global choice.
+- **A project's usual provider can differ from the global default.** Settings now
+  gives each project an optional default provider of its own, used by implicit
+  new-session actions and fresh worktrees. **Use default** selects the current
+  global provider for the project without leaving its selection blank.
 
 - **Every visible checkout group can open another session in place.** Its `+`
-  menu offers every enabled coding harness and a plain terminal, rooted in that
+  menu offers every enabled coding provider and a plain terminal, rooted in that
   exact project directory or worktree instead of requiring a trip through the
   project-level menu. Clicking the checkout header collapses or expands all of
   its cards when the sidebar needs less noise.

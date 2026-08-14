@@ -60,7 +60,7 @@ interface SessionGroupProps {
   // Workspace-wide, so it is resolved once by the sidebar rather than per group:
   // the sessions the active one can hand work to, across every open project.
   delegateGroups: DelegateGroup[]
-  // The globally enabled harnesses, already resolved by the sidebar for its
+  // The globally enabled providers, already resolved by the sidebar for its
   // own New Session menu. A group offers the same roster in its checkout.
   providers: ProviderState[]
 }

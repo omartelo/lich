@@ -19,10 +19,10 @@ import type { ProviderKind } from "@/lib/session/sessions"
 import { useProjects } from "@/providers/projects"
 import { SettingBlock } from "./SettingBlock"
 
-// SessionSettings holds the project half of provider selection. The global
-// fallback stays in Providers: an empty value here is meaningful inheritance,
-// not an unconfigured error, which is why clearing gets its own explicit action.
-export function SessionSettings({ projectId }: { projectId?: string }) {
+// ProjectProvidersSettings holds the project half of provider selection. An
+// empty or invalid stored value still falls back safely, but Use default copies
+// the resolved global provider into this project rather than leaving it empty.
+export function ProjectProvidersSettings({ projectId }: { projectId?: string }) {
   const { projects } = useProjects()
   const providers = useProviders()
   const globalDefault = useDefaultProvider()
@@ -32,20 +32,21 @@ export function SessionSettings({ projectId }: { projectId?: string }) {
   const globalName =
     providers.find((provider) => provider.id === globalDefault)?.name ?? globalDefault
   const selected = enabled.some((provider) => provider.id === projectDefault) ? projectDefault : ""
+  const usingGlobalDefault = selected === globalDefault
   const items = Object.fromEntries(enabled.map((provider) => [provider.id, provider.name]))
 
   if (!project || !projectId) {
     return (
       <p className="py-4 text-sm text-muted-foreground">
-        Open a project to configure its sessions.
+        Open a project to configure its providers.
       </p>
     )
   }
 
   return (
     <SettingBlock
-      title={`Default harness for ${project.name}`}
-      description="Which harness implicit session actions use in this project: the shortcut, an empty project's New session button, and newly created worktrees."
+      title={`Default provider for ${project.name}`}
+      description="Which provider implicit session actions use in this project: the shortcut, an empty project's New session button, and newly created worktrees."
     >
       <p className="mb-2 text-xs text-muted-foreground">{project.path}</p>
       <div className="flex flex-wrap items-center gap-2">
@@ -57,7 +58,7 @@ export function SessionSettings({ projectId }: { projectId?: string }) {
           }
         >
           <SelectTrigger className="w-64">
-            <SelectValue placeholder="Select a harness" />
+            <SelectValue placeholder="Select a provider" />
           </SelectTrigger>
           <SelectContent>
             <SelectGroup>
@@ -74,14 +75,14 @@ export function SessionSettings({ projectId }: { projectId?: string }) {
         </Select>
         <Button
           variant="outline"
-          disabled={!projectDefault}
-          onClick={() => setProjectProviderDefault(projectId, "")}
+          disabled={usingGlobalDefault}
+          onClick={() => setProjectProviderDefault(projectId, globalDefault)}
         >
           Use default
         </Button>
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
-        {selected ? "Global default" : "Using global default"}: {globalName}
+        {usingGlobalDefault ? "Using global default" : "Global default"}: {globalName}
       </p>
     </SettingBlock>
   )
