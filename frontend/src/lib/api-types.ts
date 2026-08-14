@@ -277,6 +277,10 @@ export interface StoredSession {
   path: string
   providerSessionId: string
   pinned: boolean
+  /** The session that asked for this one, "" for a session nobody delegated. */
+  originSessionId: string
+  /** What that session was called at the time; all that survives its close. */
+  originLabel: string
 }
 
 /** internal/terminal.TranscriptMatch — a session whose conversation mentions a

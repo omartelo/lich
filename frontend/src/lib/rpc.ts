@@ -278,6 +278,32 @@ export const Store = {
     path: string,
     nextSeq: number,
   ) => call<null>("store.AddSession", [projectID, sessionID, label, kind, path, nextSeq]),
+  /**
+   * AddSession for a session that was opened by delegation: originID is the
+   * session that asked for it and originLabel what that one was called then.
+   * The window only ever uses it to re-create a row it already had — an origin
+   * is minted backend-side, in internal/spawn.
+   */
+  AddSessionFrom: (
+    projectID: string,
+    sessionID: string,
+    label: string,
+    kind: string,
+    path: string,
+    nextSeq: number,
+    originID: string,
+    originLabel: string,
+  ) =>
+    call<null>("store.AddSessionFrom", [
+      projectID,
+      sessionID,
+      label,
+      kind,
+      path,
+      nextSeq,
+      originID,
+      originLabel,
+    ]),
   DeleteSession: (projectID: string, sessionID: string, activeID: string) =>
     call<null>("store.DeleteSession", [projectID, sessionID, activeID]),
   /** Park a session (keep its row for a later resume) instead of deleting it. */

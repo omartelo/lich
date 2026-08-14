@@ -6,7 +6,7 @@ import { dragStyle, useSortableList, verticalAxis } from "@/lib/use-sortable-lis
 import { cn } from "@/lib/utils"
 import { checkoutLabel } from "@/lib/git/checkout-label"
 import type { DelegateGroup } from "@/lib/session/delegate-targets"
-import type { Session } from "@/lib/session/sessions"
+import { type Session, sessionOrigin } from "@/lib/session/sessions"
 import { useProjects } from "@/providers/projects"
 import { SessionCard } from "./SessionCard"
 import { PullRequestCard } from "./PullRequestCard"
@@ -77,7 +77,13 @@ export function SessionGroup({
   onClosePulls,
   delegateGroups,
 }: SessionGroupProps) {
-  const { activateSession, renameSession, pinSession, newSession } = useProjects()
+  const {
+    sessions: workspace,
+    activateSession,
+    renameSession,
+    pinSession,
+    newSession,
+  } = useProjects()
   const navigate = useNavigate()
   const ids = sessions.map((session) => session.id)
   const { sensors, onDragEnd } = useSortableList(ids, onReorder)
@@ -130,6 +136,10 @@ export function SessionGroup({
                 key={session.id}
                 session={session}
                 path={projectPath}
+                // Resolved here rather than in the card: the parent can be a
+                // session in another project, which only the workspace-wide
+                // state knows about.
+                origin={sessionOrigin(workspace, session)}
                 active={session.id === activeId}
                 onSelect={() => select(session.id)}
                 onClose={() => onClose(session)}

@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   ArrowRight,
   CircleQuestionMark,
+  CornerDownLeft,
   GitBranch,
   GitPullRequestArrow,
   Inbox,
@@ -52,6 +53,9 @@ import { SessionTargetPicker } from "./SessionTargetPicker"
 interface SessionCardProps {
   session: Session
   path: string
+  // The session this one was opened from, named as it is called now; "" for a
+  // session nobody delegated, which is most of them (sessionOrigin).
+  origin: string
   active: boolean
   onSelect: () => void
   onClose: () => void
@@ -76,6 +80,7 @@ interface SessionCardProps {
 export function SessionCard({
   session,
   path,
+  origin,
   active,
   onSelect,
   onClose,
@@ -254,18 +259,23 @@ export function SessionCard({
                   </span>
                 </span>
               )}
-              {/* One line, four rungs: an open request, then a session blocked
+              {/* One line, five rungs: an open request, then a session blocked
                   on the user, then results waiting to be collected, then the
-                  tool. A request in flight explains the whole turn — a card
-                  working because another session asked it to, or one stalled
-                  waiting on a card elsewhere in the list. A block outranks the
-                  rest for the reason it needs words at all: the amber ring
-                  differs from the emerald one by hue alone, so nothing else on
-                  the card says the session wants an answer. The inbox sits
-                  under those and over the tool: mid-turn the live tool is the
-                  news, and the count takes the rung when the card goes quiet —
-                  the same rule the relay's own nudge follows. Only one rung
-                  ever draws, so the card grows by one row at most. */}
+                  tool, then where the session came from. A request in flight
+                  explains the whole turn — a card working because another
+                  session asked it to, or one stalled waiting on a card
+                  elsewhere in the list. A block outranks the rest for the
+                  reason it needs words at all: the amber ring differs from the
+                  emerald one by hue alone, so nothing else on the card says the
+                  session wants an answer. The inbox sits under those and over
+                  the tool: mid-turn the live tool is the news, and the count
+                  takes the rung when the card goes quiet — the same rule the
+                  relay's own nudge follows. The origin is last precisely
+                  because it is never news: it says something that has been true
+                  since the card was created, so it surfaces only once the card
+                  is quiet, which is when somebody scanning the sidebar is
+                  working out where a card came from. Only one rung ever draws,
+                  so the card grows by one row at most. */}
               {relay ? (
                 <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
                   {relay.direction === "out" ? (
@@ -293,17 +303,29 @@ export function SessionCard({
                     {inbox === 1 ? "1 result ready" : `${inbox} results ready`}
                   </span>
                 </span>
+              ) : tool ? (
+                <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                  {ToolGlyph && <ToolGlyph className="size-3 shrink-0" />}
+                  <span className="shrink-0 font-medium text-foreground">{tool.name}</span>
+                  {tool.detail && (
+                    <>
+                      <span className="shrink-0 opacity-50">·</span>
+                      <span className="truncate font-mono">{tool.detail}</span>
+                    </>
+                  )}
+                </span>
               ) : (
-                tool && (
+                // Quieter than the rungs above it, on purpose: muted throughout
+                // and at normal weight, where an open request puts its peer in
+                // text-foreground. The word "from" earns its place — an arrow
+                // and a name alone read as traffic happening now, which is the
+                // confusion this rung exists to end. Not a link either: the
+                // parent may be closed, and a dead link is worse than a
+                // sentence.
+                origin && (
                   <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
-                    {ToolGlyph && <ToolGlyph className="size-3 shrink-0" />}
-                    <span className="shrink-0 font-medium text-foreground">{tool.name}</span>
-                    {tool.detail && (
-                      <>
-                        <span className="shrink-0 opacity-50">·</span>
-                        <span className="truncate font-mono">{tool.detail}</span>
-                      </>
-                    )}
+                    <CornerDownLeft className="size-3 shrink-0" />
+                    <span className="truncate">from {origin}</span>
                   </span>
                 )
               )}

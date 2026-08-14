@@ -21,6 +21,7 @@ import {
   reorderSubset,
   restoreSession,
   resumableSession,
+  sessionOrigin,
   sessionsOf,
   setActiveSession,
   setSessionPinned,
@@ -719,6 +720,52 @@ describe("adoptSession", () => {
     const before = buildState(5)
     const state = adoptSession(before, P, opened, 2)
     expect(state[P].nextSeq).toBe(before[P].nextSeq)
+  })
+})
+
+describe("sessionOrigin", () => {
+  // The child of s1, as the backend hands it over: the id of the session that
+  // asked for it, plus the name that session went by at the time.
+  const child: Session = {
+    id: "worker",
+    label: "auth-fix",
+    kind: "claude",
+    originSessionId: "s1",
+    originLabel: "Session 1",
+  }
+
+  it("names nothing for a session nobody delegated", () => {
+    const state = buildState(2)
+    expect(sessionOrigin(state, state[P].sessions[0])).toBe("")
+  })
+
+  // The whole reason the id is stored beside the label: a renamed parent is
+  // still the parent, and the card has to say what it is called now.
+  it("follows a rename of the parent", () => {
+    const state = renameSession(adoptSession(buildState(2), P, child, 3), P, "s1", "planner")
+    expect(sessionOrigin(state, child)).toBe("planner")
+  })
+
+  // And the whole reason the label is stored beside the id: the delegation
+  // happened, and a closed parent does not make that untrue.
+  it("falls back to the name the parent had when it is gone", () => {
+    const state = closeSession(adoptSession(buildState(2), P, child, 3), P, "s1")
+    expect(sessionOrigin(state, child)).toBe("Session 1")
+  })
+
+  // Delegation crosses projects, so the lookup has to: the sidebar shows one
+  // project at a time and the parent can be in any of them.
+  it("finds a parent in another project", () => {
+    const state = adoptSession(addSession(buildState(2), "other", "o1"), "other", child, 2)
+    expect(sessionOrigin(state, state.other.sessions[1])).toBe("Session 1")
+  })
+
+  // An origin whose parent is gone and that never carried a name draws nothing
+  // rather than an empty "from".
+  it("names nothing when neither half resolves", () => {
+    expect(
+      sessionOrigin(buildState(1), { ...child, originSessionId: "ghost", originLabel: "" }),
+    ).toBe("")
   })
 })
 

@@ -720,6 +720,21 @@ CREATE TABLE sessions (
 	if model := svc.SessionModel("s1"); model != "opus" {
 		t.Errorf("migrated session model = %q, want opus", model)
 	}
+	// So did the origin columns, and a workspace carried over from the previous
+	// version keeps its sessions: the ones already there simply have no origin.
+	if s := got[0].Sessions[0]; s.OriginSessionID != "" || s.OriginLabel != "" {
+		t.Errorf("migrated session origin = %+v, want none", s)
+	}
+	if err := svc.AddSessionFrom("p1", "s2", "worker", "shell", "", 3, "s1", "mellow-otter"); err != nil {
+		t.Fatalf("AddSessionFrom on a migrated database: %v", err)
+	}
+	after, err := svc.LoadState()
+	if err != nil {
+		t.Fatalf("LoadState: %v", err)
+	}
+	if s := after[0].Sessions[1]; s.OriginSessionID != "s1" || s.OriginLabel != "mellow-otter" {
+		t.Errorf("origin on a migrated database = %+v", s)
+	}
 }
 
 // TestOpenRenamesClaudeSessionColumn proves the multi-provider rename carries

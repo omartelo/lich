@@ -82,14 +82,28 @@ func (s *Service) DeleteProject(id string) error {
 // The session takes the position after the project's last one, so it appends to
 // the card list even once the user has dragged the others around.
 func (s *Service) AddSession(projectID, sessionID, label, kind, path string, nextSeq int) error {
+	return s.AddSessionFrom(projectID, sessionID, label, kind, path, nextSeq, "", "")
+}
+
+// AddSessionFrom is AddSession for a session opened by delegation: originID is
+// the session that asked for it and originLabel what that session was called at
+// the time. Both are written with the row rather than after it, so a card can
+// never exist without the origin it was created with.
+//
+// It is a second entry point rather than two more arguments on AddSession
+// because the window — the only caller reaching this over RPC — never has an
+// origin to pass. Only internal/spawn does.
+func (s *Service) AddSessionFrom(
+	projectID, sessionID, label, kind, path string, nextSeq int, originID, originLabel string,
+) error {
 	if kind == "" {
 		kind = providers.Claude
 	}
 	return s.tx(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(
-			`INSERT INTO sessions (id, project_id, label, kind, path, position)
-			 VALUES (?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
-			sessionID, projectID, label, kind, path, projectID,
+			`INSERT INTO sessions (id, project_id, label, kind, path, origin_session_id, origin_label, position)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
+			sessionID, projectID, label, kind, path, originID, originLabel, projectID,
 		); err != nil {
 			return fmt.Errorf("insert session %q: %w", sessionID, err)
 		}
@@ -133,7 +147,7 @@ func (s *Service) CloseSession(projectID, sessionID, activeID string) error {
 // ReopenWorktreeSession resumes a parked worktree session. It finds the parked
 // (is_open = 0) session for the worktree at path and re-adds it to the workspace
 // under a fresh id (newSessionID), carrying over the old label, kind, provider
-// session id and label_auto flag. The fresh id is deliberate: it makes the frontend treat the card
+// session id, label_auto flag and origin. The fresh id is deliberate: it makes the frontend treat the card
 // as never-spawned, so its resume prompt fires and the provider conversation
 // continues instead of starting cold. Returns nil when nothing is parked at path
 // — the caller then opens a brand-new session.
@@ -146,13 +160,16 @@ func (s *Service) ReopenWorktreeSession(projectID, path, newSessionID string) (*
 		// stomp the chosen name, breaking SetSessionTitle's contract.
 		var labelAuto int
 		row := tx.QueryRow(
-			`SELECT id, label, kind, provider_session_id, label_auto
+			`SELECT id, label, kind, provider_session_id, label_auto, origin_session_id, origin_label
 			   FROM sessions
 			  WHERE project_id = ? AND path = ? AND is_open = 0
 			  ORDER BY rowid DESC LIMIT 1`,
 			projectID, path,
 		)
-		if err := row.Scan(&old.ID, &old.Label, &old.Kind, &old.ProviderSessionID, &labelAuto); err != nil {
+		if err := row.Scan(
+			&old.ID, &old.Label, &old.Kind, &old.ProviderSessionID, &labelAuto,
+			&old.OriginSessionID, &old.OriginLabel,
+		); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil // nothing parked here; caller creates a new session
 			}
@@ -169,9 +186,12 @@ func (s *Service) ReopenWorktreeSession(projectID, path, newSessionID string) (*
 			return fmt.Errorf("drop parked session %q: %w", old.ID, err)
 		}
 		if _, err := tx.Exec(
-			`INSERT INTO sessions (id, project_id, label, kind, path, provider_session_id, label_auto, position)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
-			newSessionID, projectID, old.Label, old.Kind, path, old.ProviderSessionID, labelAuto, projectID,
+			`INSERT INTO sessions
+			   (id, project_id, label, kind, path, provider_session_id, label_auto,
+			    origin_session_id, origin_label, position)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
+			newSessionID, projectID, old.Label, old.Kind, path, old.ProviderSessionID, labelAuto,
+			old.OriginSessionID, old.OriginLabel, projectID,
 		); err != nil {
 			return fmt.Errorf("reinsert session %q: %w", newSessionID, err)
 		}
@@ -181,7 +201,15 @@ func (s *Service) ReopenWorktreeSession(projectID, path, newSessionID string) (*
 		if err := setActiveSession(tx, projectID, newSessionID); err != nil {
 			return err
 		}
-		restored = &Session{ID: newSessionID, Label: old.Label, Kind: old.Kind, Path: path, ProviderSessionID: old.ProviderSessionID}
+		restored = &Session{
+			ID:                newSessionID,
+			Label:             old.Label,
+			Kind:              old.Kind,
+			Path:              path,
+			ProviderSessionID: old.ProviderSessionID,
+			OriginSessionID:   old.OriginSessionID,
+			OriginLabel:       old.OriginLabel,
+		}
 		return nil
 	})
 	if err != nil {

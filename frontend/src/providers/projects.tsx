@@ -136,6 +136,9 @@ function buildSessionState(loaded: StoreProject[]): SessionState {
       ...(s.path ? { path: s.path } : {}),
       ...(s.providerSessionId ? { providerSessionId: s.providerSessionId } : {}),
       ...(s.pinned ? { pinned: true } : {}),
+      ...(s.originSessionId
+        ? { originSessionId: s.originSessionId, originLabel: s.originLabel }
+        : {}),
     }))
     state[p.id] = {
       sessions,
@@ -247,8 +250,14 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       if (!opened) {
         return
       }
-      const { id, projectId, label, kind, path, nextSeq } = opened
-      const session: Session = { id, label, kind, ...(path ? { path } : {}) }
+      const { id, projectId, label, kind, path, nextSeq, originSessionId, originLabel } = opened
+      const session: Session = {
+        id,
+        label,
+        kind,
+        ...(path ? { path } : {}),
+        ...(originSessionId ? { originSessionId, originLabel } : {}),
+      }
       const next = adoptSession(sessionsRef.current, projectId, session, nextSeq)
       if (next !== sessionsRef.current) {
         setSessions(next)
@@ -392,6 +401,9 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         kind: isSessionKind(restored.kind) ? restored.kind : "claude",
         path: restored.path,
         ...(restored.providerSessionId ? { providerSessionId: restored.providerSessionId } : {}),
+        ...(restored.originSessionId
+          ? { originSessionId: restored.originSessionId, originLabel: restored.originLabel }
+          : {}),
       }
       setSessions(restoreSession(sessionsRef.current, projectId, session))
     },
@@ -440,8 +452,25 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       }
       setSessions(next)
       const order = sessionsOf(next, projectId).map((s) => s.id)
-      const { id, label, kind, path = "", providerSessionId } = session
-      void Store.AddSession(projectId, id, label, kind, path, nextSeq)
+      const {
+        id,
+        label,
+        kind,
+        path = "",
+        providerSessionId,
+        originSessionId = "",
+        originLabel = "",
+      } = session
+      void Store.AddSessionFrom(
+        projectId,
+        id,
+        label,
+        kind,
+        path,
+        nextSeq,
+        originSessionId,
+        originLabel,
+      )
         .then(() => providerSessionId && Store.SetProviderSession(id, providerSessionId))
         // AddSession appends: the slot the card went back to is a reorder.
         .then(() => Store.ReorderSessions(projectId, order))

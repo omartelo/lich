@@ -280,8 +280,13 @@ absent without `--prompt`, so a reader that branches on it is never handed an
 empty one to interpret:
 
 ```json
-{"id":"9f8e","projectId":"p1","project":"lich","label":"auth-fix","name":"auth-fix-9f8e","kind":"claude","path":"/wt/auth-fix","nextSeq":5,"delivery":{"ticket":"a1b2c3d4","target":"auth-fix","status":"pending","answer":""}}
+{"id":"9f8e","projectId":"p1","project":"lich","label":"auth-fix","name":"auth-fix-9f8e","kind":"claude","path":"/wt/auth-fix","nextSeq":5,"originSessionId":"3c4d","originLabel":"planner","delivery":{"ticket":"a1b2c3d4","target":"auth-fix","status":"pending","answer":""}}
 ```
+
+`originSessionId` and `originLabel` name the session this one was opened from —
+the id it answers to, and the label its card carried at that moment. Both are
+`""` when `lich open` runs outside a session, which is the normal case for the
+command line.
 
 The card appears in the sidebar **without taking focus** — nobody in front of
 the window asked for this session — and its PTY is started by lich itself rather
@@ -561,7 +566,8 @@ receiving agent only because this text describes it.
   existing package owns more than one of them. The window does the same four in
   `frontend/src/providers/projects.tsx`, in its own order.
 - **The card** — `session-opened` carries the whole session
-  (`{id, projectId, project, label, name, kind, path, nextSeq}`) rather than an
+  (`{id, projectId, project, label, name, kind, path, nextSeq, originSessionId,
+  originLabel}`) rather than an
   id to look up: the row is already written and the PTY is already running, so
   the window has nothing to fetch and nothing to spawn. `adoptSession`
   (`frontend/src/lib/session/sessions.ts`) appends it **without focusing it** —

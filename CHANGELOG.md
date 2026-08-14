@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A delegated session keeps saying where it came from.** A card opened by
+  another session used to show that only while the request was still open: the
+  moment the worker answered, the mark came down and three workers of a fan-out
+  looked like three unrelated cards. The card now carries a quiet `from <the
+  session that asked>` line for as long as it exists, under everything the card
+  has to say about what is happening right now — so it surfaces exactly when the
+  session goes quiet, which is when you are trying to work out where a card came
+  from. It survives a reload and a restart, follows the parent through a rename,
+  and keeps naming it after it is closed: the delegation happened, whatever
+  became of the session that asked. Sessions opened from the window have no
+  origin and show nothing.
+
 - **The session roster says what each session is doing.** `lich sessions` grew a
   `state` column and the `list_sessions` tool a `state` field, carrying what that
   session last reported: `busy` mid-turn, `done` at a prompt and free, and

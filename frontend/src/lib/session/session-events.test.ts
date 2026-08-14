@@ -271,6 +271,8 @@ describe("toOpenedSession", () => {
     kind: "claude",
     path: "/wt/auth-fix",
     nextSeq: 5,
+    originSessionId: "s1",
+    originLabel: "planner",
   }
 
   it("narrows a session opened outside the window", () => {
@@ -281,7 +283,17 @@ describe("toOpenedSession", () => {
       kind: "claude",
       path: "/wt/auth-fix",
       nextSeq: 5,
+      originSessionId: "s1",
+      originLabel: "planner",
     })
+  })
+
+  // A session opened from the window, or by `lich open` from a plain shell, has
+  // no origin at all — absent is the normal case, not a malformed payload.
+  it("keeps a session that nobody delegated", () => {
+    const opened = toOpenedSession({ ...payload, originSessionId: undefined, originLabel: 4 })
+    expect(opened?.originSessionId).toBe("")
+    expect(opened?.originLabel).toBe("")
   })
 
   it("keeps a session in the project's own directory", () => {

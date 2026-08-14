@@ -12,12 +12,14 @@ import (
 
 // added is one session row the fake store was asked to write.
 type added struct {
-	projectID string
-	sessionID string
-	label     string
-	kind      string
-	path      string
-	nextSeq   int
+	projectID   string
+	sessionID   string
+	label       string
+	kind        string
+	path        string
+	nextSeq     int
+	originID    string
+	originLabel string
 }
 
 type fakeSessions struct {
@@ -61,11 +63,15 @@ func (f *fakeSessions) LoadState() ([]store.Project, error) {
 	return f.projects, f.loadErr
 }
 
-func (f *fakeSessions) AddSession(projectID, sessionID, label, kind, path string, nextSeq int) error {
+func (f *fakeSessions) AddSessionFrom(
+	projectID, sessionID, label, kind, path string, nextSeq int, originID, originLabel string,
+) error {
 	if f.addErr != nil {
 		return f.addErr
 	}
-	f.rows = append(f.rows, added{projectID, sessionID, label, kind, path, nextSeq})
+	f.rows = append(f.rows, added{
+		projectID, sessionID, label, kind, path, nextSeq, originID, originLabel,
+	})
 	// The counter moves with the write, as it does in the store: a fake that kept
 	// answering the old number would hide two sessions taking one label.
 	for i := range f.projects {
@@ -228,7 +234,7 @@ func TestOpenLandsInTheCallersProject(t *testing.T) {
 		t.Fatalf("wrote %d rows, want 1", len(sessions.rows))
 	}
 	row := sessions.rows[0]
-	if row != (added{"p1", opened.ID, "Session 4", "codex", "", 5}) {
+	if row != (added{"p1", opened.ID, "Session 4", "codex", "", 5, "s1", "Session 3"}) {
 		t.Errorf("row = %+v", row)
 	}
 	if len(term.spawns) != 1 {
@@ -380,6 +386,55 @@ func TestOpenWithoutAModelWritesNone(t *testing.T) {
 	}
 	if len(sessions.models) != 0 {
 		t.Errorf("wrote %v, want the model column left alone", sessions.models)
+	}
+}
+
+// The origin is the caller, not the project: a session opened into another
+// project still came from the card that asked for it, and the label written
+// beside the id is the one that caller answers to right now.
+func TestOpenRecordsTheCallerAsTheOrigin(t *testing.T) {
+	svc, sessions, _, _, events := newService(t)
+
+	opened, err := svc.Open("s1", "revu", "shell", "", "", "")
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	row := sessions.rows[0]
+	if row.originID != "s1" || row.originLabel != "Session 3" {
+		t.Errorf("row origin = (%q, %q), want (s1, Session 3)", row.originID, row.originLabel)
+	}
+	// The window draws the rung off the event, so an origin only on the row is
+	// one that appears a reload late.
+	if opened.OriginSessionID != "s1" || opened.OriginLabel != "Session 3" {
+		t.Errorf("announced origin = (%q, %q), want (s1, Session 3)",
+			opened.OriginSessionID, opened.OriginLabel)
+	}
+	if events.events[0].data != any(opened) {
+		t.Errorf("the window was told %+v, the caller %+v", events.events[0].data, opened)
+	}
+}
+
+// No caller, no origin: `lich open` from a plain shell opens a session nobody
+// delegated, and a card that claims a parent it never had is worse than a quiet
+// one. A fromID that names no session in the workspace is the same case — there
+// is nothing left to name.
+func TestOpenWithoutACallerRecordsNoOrigin(t *testing.T) {
+	for _, from := range []string{"", "gone"} {
+		t.Run("from="+from, func(t *testing.T) {
+			svc, sessions, _, _, _ := newService(t)
+
+			opened, err := svc.Open(from, "lich", "", "", "", "")
+			if err != nil {
+				t.Fatalf("Open: %v", err)
+			}
+			row := sessions.rows[0]
+			if row.originID != "" || row.originLabel != "" {
+				t.Errorf("row origin = (%q, %q), want none", row.originID, row.originLabel)
+			}
+			if opened.OriginSessionID != "" || opened.OriginLabel != "" {
+				t.Errorf("announced origin = %+v, want none", opened)
+			}
+		})
 	}
 }
 

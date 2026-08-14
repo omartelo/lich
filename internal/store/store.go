@@ -48,7 +48,13 @@ CREATE TABLE IF NOT EXISTS sessions (
     is_open             INTEGER NOT NULL DEFAULT 1,
     position            INTEGER NOT NULL DEFAULT 0,
     pinned              INTEGER NOT NULL DEFAULT 0,
-    model               TEXT NOT NULL DEFAULT ''
+    model               TEXT NOT NULL DEFAULT '',
+    -- The session that asked for this one, when it was opened by delegation.
+    -- Two columns rather than a foreign key: the id resolves to whatever the
+    -- parent is called now, and the label is what it was called when the
+    -- delegation happened — which is all that survives the parent being closed.
+    origin_session_id   TEXT NOT NULL DEFAULT '',
+    origin_label        TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
 
@@ -91,7 +97,10 @@ type Service struct {
 // sessions), it is the key for features that need to reach a session's
 // transcript or resume it. Only Claude Code reports one today. Pinned keeps a
 // session at the head of its project's list and withholds its close affordances
-// until it is unpinned.
+// until it is unpinned. OriginSessionID and OriginLabel record the session that
+// asked for this one, empty for a session nobody delegated: the id names the
+// parent while it is still in the workspace, the label is what that parent was
+// called at the time and is all that is left once it is closed.
 type Session struct {
 	ID                string `json:"id"`
 	Label             string `json:"label"`
@@ -99,6 +108,8 @@ type Session struct {
 	Path              string `json:"path"`
 	ProviderSessionID string `json:"providerSessionId"`
 	Pinned            bool   `json:"pinned"`
+	OriginSessionID   string `json:"originSessionId"`
+	OriginLabel       string `json:"originLabel"`
 }
 
 // Project is a persisted project together with its restorable session state.
@@ -162,6 +173,8 @@ func open(path string) (*Service, error) {
 		`ALTER TABLE sessions ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE sessions ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE sessions ADD COLUMN model TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE sessions ADD COLUMN origin_session_id TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE sessions ADD COLUMN origin_label TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE projects ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE projects ADD COLUMN closed_seq INTEGER NOT NULL DEFAULT 0`,
 	}
@@ -307,7 +320,7 @@ func (s *Service) ProjectPath(projectID string) string {
 // the frontend would have no order left to put an unpinned card back into.
 func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	rows, err := s.db.Query(
-		`SELECT id, label, kind, path, provider_session_id, pinned
+		`SELECT id, label, kind, path, provider_session_id, pinned, origin_session_id, origin_label
 		   FROM sessions WHERE project_id = ? AND is_open = 1 ORDER BY position, rowid`,
 		projectID,
 	)
@@ -321,6 +334,7 @@ func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 		var sess Session
 		if err := rows.Scan(
 			&sess.ID, &sess.Label, &sess.Kind, &sess.Path, &sess.ProviderSessionID, &sess.Pinned,
+			&sess.OriginSessionID, &sess.OriginLabel,
 		); err != nil {
 			return nil, fmt.Errorf("scan session: %w", err)
 		}

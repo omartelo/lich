@@ -70,7 +70,9 @@ const (
 // a later resume. The store implements it.
 type Sessions interface {
 	LoadState() ([]store.Project, error)
-	AddSession(projectID, sessionID, label, kind, path string, nextSeq int) error
+	AddSessionFrom(
+		projectID, sessionID, label, kind, path string, nextSeq int, originID, originLabel string,
+	) error
 	SetSessionModel(sessionID, model string) error
 	DeleteSession(projectID, sessionID, activeID string) error
 	CloseSession(projectID, sessionID, activeID string) error
@@ -111,16 +113,19 @@ type Events interface {
 // name on its card. Both address it (see internal/relay). Path is the worktree
 // the session lives in, empty for a session in the project's own directory —
 // the store's own spelling. NextSeq is the project's label counter after this
-// session took its number.
+// session took its number. OriginSessionID and OriginLabel name the session that
+// asked for this one — empty when the caller was not a session at all.
 type Session struct {
-	ID        string `json:"id"`
-	ProjectID string `json:"projectId"`
-	Project   string `json:"project"`
-	Label     string `json:"label"`
-	Name      string `json:"name"`
-	Kind      string `json:"kind"`
-	Path      string `json:"path"`
-	NextSeq   int    `json:"nextSeq"`
+	ID              string `json:"id"`
+	ProjectID       string `json:"projectId"`
+	Project         string `json:"project"`
+	Label           string `json:"label"`
+	Name            string `json:"name"`
+	Kind            string `json:"kind"`
+	Path            string `json:"path"`
+	NextSeq         int    `json:"nextSeq"`
+	OriginSessionID string `json:"originSessionId"`
+	OriginLabel     string `json:"originLabel"`
 }
 
 // Service opens sessions on behalf of a caller outside the window.
@@ -145,7 +150,10 @@ func New(sessions Sessions, worktrees Worktrees, term Terminal, events Events) *
 // fromID is the session the caller runs in, empty for the command line run
 // outside one. It decides two defaults: the project the session lands in and the
 // provider it runs, both taken from the caller unless named. A caller with no
-// session of its own must name the project — there is nothing to inherit.
+// session of its own must name the project — there is nothing to inherit. It is
+// also recorded on the row as the new session's origin, which outlives the
+// request that created it: the card says where it came from for as long as it
+// exists.
 //
 // worktree, when given, is the branch name of a new git worktree created off
 // base (the project's current branch when base is empty); the session is rooted
@@ -224,17 +232,22 @@ func (s *Service) Open(fromID, projectName, kind, worktree, base, model string) 
 	if err != nil {
 		return Session{}, err
 	}
+	originID, originLabel := originOf(projects, fromID)
 	opened := Session{
-		ID:        id,
-		ProjectID: target.ID,
-		Project:   target.Name,
-		Label:     label,
-		Name:      relay.RosterName(cwd, id),
-		Kind:      kind,
-		Path:      stored,
-		NextSeq:   target.NextSeq + 1,
+		ID:              id,
+		ProjectID:       target.ID,
+		Project:         target.Name,
+		Label:           label,
+		Name:            relay.RosterName(cwd, id),
+		Kind:            kind,
+		Path:            stored,
+		NextSeq:         target.NextSeq + 1,
+		OriginSessionID: originID,
+		OriginLabel:     originLabel,
 	}
-	if err := s.sessions.AddSession(target.ID, id, label, kind, stored, opened.NextSeq); err != nil {
+	if err := s.sessions.AddSessionFrom(
+		target.ID, id, label, kind, stored, opened.NextSeq, originID, originLabel,
+	); err != nil {
 		return Session{}, err
 	}
 	// Announced before the spawn, and regardless of how it goes: the row exists
@@ -367,6 +380,24 @@ func resolveKind(projects []store.Project, fromID, kind string) (string, error) 
 		}
 	}
 	return providers.Claude, nil
+}
+
+// originOf names the session that asked for this one: its id, and the label it
+// answers to at this moment. A fromID that names no session in the workspace —
+// the command line run outside one, or a caller whose card has since gone — is
+// no origin at all, because there would be nothing to draw for it.
+func originOf(projects []store.Project, fromID string) (string, string) {
+	if fromID == "" {
+		return "", ""
+	}
+	for _, p := range projects {
+		for _, sess := range p.Sessions {
+			if sess.ID == fromID {
+				return fromID, sess.Label
+			}
+		}
+	}
+	return "", ""
 }
 
 // labelTaken reports whether a project already holds a session under a label.

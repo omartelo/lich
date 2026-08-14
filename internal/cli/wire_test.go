@@ -153,7 +153,7 @@ func (*spawnStore) LoadState() ([]store.Project, error) {
 	}}}, nil
 }
 
-func (s *spawnStore) AddSession(_, _, _, _, _ string, _ int) error {
+func (s *spawnStore) AddSessionFrom(_, _, _, _, _ string, _ int, _, _ string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.rows++

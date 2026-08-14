@@ -38,6 +38,13 @@ export interface Session {
   providerSessionId?: string
   // Kept at the head of the project's list and refused a close until unpinned.
   pinned?: boolean
+  // The session that asked for this one, when it was opened by delegation:
+  // absent for every session opened from the window. The id is the live half —
+  // it resolves to whatever that session is called now — and the label is the
+  // name the delegation happened under, which is what is left once the parent
+  // is closed. Read them through sessionOrigin, never on their own.
+  originSessionId?: string
+  originLabel?: string
 }
 
 export interface ProjectSessions {
@@ -473,6 +480,24 @@ export function isLastWorktreeSession(sessions: Session[], session: Session): bo
 // closed — React unmounts a terminal for reasons of its own.
 export function hasSession(state: SessionState, sessionId: string): boolean {
   return projectOfSession(state, sessionId) !== ""
+}
+
+// sessionOrigin names the session a card was opened from, as the sidebar should
+// spell it now: the label the parent answers to at this moment, so a rename
+// shows through without a reload, falling back to the name it had when the
+// delegation happened. "" for a session nobody delegated — the usual case — and
+// for one whose parent is gone without a name ever having been recorded.
+//
+// The lookup spans every project because delegation does: a card can hand work
+// to a session in another project, and its own project alone would answer "" for
+// a parent that plainly exists.
+export function sessionOrigin(state: SessionState, session: Session): string {
+  if (!session.originSessionId) {
+    return ""
+  }
+  const projectId = projectOfSession(state, session.originSessionId)
+  const parent = state[projectId]?.sessions.find((s) => s.id === session.originSessionId)
+  return parent?.label ?? session.originLabel ?? ""
 }
 
 export function activeSessionId(state: SessionState, projectId: string): string {
