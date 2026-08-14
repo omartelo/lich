@@ -828,9 +828,19 @@ func (s *Service) Observe(sessionID, state string) {
 	// The roster publishes the report itself rather than the turn state above:
 	// waiting is exactly what a caller has to see, and idle drops the row for
 	// the same reason it does there — an ended session reports nothing more.
-	if state == stateIdle {
+	switch {
+	case state == stateIdle:
 		delete(s.reported, sessionID)
-	} else {
+	case state == stateWaiting && s.state[sessionID] != stateBusy:
+		// Except when that waiting is not a block at all. One Notification
+		// means both "I need a permission decision" and "I have been sitting at
+		// my prompt" (docs/hooks/session-state.md, and internal/terminal's
+		// turnLog, which keeps the card honest about the same pair). Only the
+		// first is a session a caller must not send work into; the second is
+		// the most available a session ever is, and publishing it as waiting
+		// tells every peer to hold off. The turn state above is what tells them
+		// apart, and it is left standing here.
+	default:
 		s.reported[sessionID] = state
 	}
 

@@ -100,7 +100,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the turn — a permission can only be asked inside one — so the bell and the
   toast are raised only while a turn is genuinely stuck on you. A session idling
   at its prompt keeps whatever its card already showed: the finished turn, its
-  results waiting to be collected, or nothing at all.
+  results waiting to be collected, or nothing at all. The session roster an agent
+  reads gets the same correction: a session at an idle prompt no longer tells its
+  peers it is waiting on a human, which read as "do not send work here" about the
+  one session most able to take it.
 
 - **A helper that outlives a lich restart can talk to lich again.** The `lich`
   command line and lich's own MCP tools read the loopback coordinates the session

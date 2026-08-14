@@ -151,10 +151,15 @@ a broken script could do was lose a status report.
   desktop notification. The card keeps whatever it was already showing (the
   finished turn, an inbox count, nothing), which is what an unchanged session
   should show. `waiting` itself is not recorded: it interrupts a turn rather than
-  replacing it, so two permission prompts in one turn are two blocks. The relay
-  (`internal/relay`, `Observe`) reads the same stream raw and makes the same
-  distinction from its own record, for a different question — which turn an
-  errand belongs to.
+  replacing it, so two permission prompts in one turn are two blocks.
+- **The peer roster** — `internal/relay`, `Observe` and `roster.go`: reads the
+  same stream raw, for two questions of its own. Which turn an errand belongs to
+  is one (`s.state`, where a mid-turn `waiting` has to keep reading as `busy`).
+  What each session is doing, published to an agent listing its peers
+  (`Peer.State`, `lich list`, `list_sessions`), is the other — and it applies the
+  same rule as `turnLog`: a `waiting` inside a turn is published, because it is
+  the state that means "do not send work here", and one outside a turn is not,
+  because a session idle at its prompt is the most available it will ever be.
 - **Store** — `frontend/src/lib/session/session-status-store.ts`: one subscription taken
   at page load keeps the last state of every session, keyed by id. The card
   cannot hold it: the sidebar only renders cards for the active project, so

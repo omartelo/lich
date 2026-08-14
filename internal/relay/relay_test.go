@@ -310,6 +310,32 @@ func TestPeersCarryTheStateEachSessionReported(t *testing.T) {
 	}
 }
 
+// The other half of that pair: a waiting reported after the turn ended is the
+// provider saying "your turn" to nobody in particular, not a session stuck on a
+// human. Published as waiting it would tell every caller reading the roster to
+// hold off from the one session most able to take work.
+func TestPeersDoNotCallAnIdlePromptWaiting(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1", "s2", "s3"), nil)
+
+	svc.Observe("s2", "busy")
+	svc.Observe("s2", "done")
+	svc.Observe("s2", "waiting")
+	// One that never reported a turn at all: its first word is the notification.
+	svc.Observe("s3", "waiting")
+
+	peers, err := svc.Peers("s1")
+	if err != nil {
+		t.Fatalf("Peers: %v", err)
+	}
+	want := map[string]string{"lich-s2": "done", "lich-s3": ""}
+	for _, p := range peers {
+		state, watched := want[p.Name]
+		if watched && p.State != state {
+			t.Errorf("%s state = %q, want %q", p.Name, p.State, state)
+		}
+	}
+}
+
 func TestPeersReportsAStoreFailure(t *testing.T) {
 	svc := newRelay(fakeSessions{err: errors.New("database is locked")}, newFakeTerminal(), nil)
 
