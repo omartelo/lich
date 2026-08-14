@@ -8,12 +8,15 @@ import "github.com/omartelo/lich/internal/providers"
 // The session row keeps its provider session id for good, but a provider prunes
 // its own transcripts, so the id outlives the conversation it points at. Resuming
 // one then dies inside the PTY with the provider's error in place of a session —
-// the shortcut Start's doc names. The transcript on disk is what answers the
-// question; this asks it for existence alone.
+// the shortcut Start's doc names. What the provider left on disk is what answers
+// the question; this asks it for existence alone.
+//
+// cwd is the session's working directory, needed only by Crush: it keeps one
+// database per checkout rather than one per machine.
 //
 // False for a provider with no resume wired (resumeArgs): there is nothing to
 // offer where the CLI cannot reopen a conversation by id.
-func (*Service) ResumeAvailable(kind, providerSessionID string) bool {
+func (*Service) ResumeAvailable(kind, providerSessionID, cwd string) bool {
 	if providerSessionID == "" {
 		return false
 	}
@@ -27,6 +30,12 @@ func (*Service) ResumeAvailable(kind, providerSessionID string) bool {
 	case providers.OMP:
 		_, ok := ompTranscriptPath(providerSessionID)
 		return ok
+	case providers.OpenCode:
+		path, ok := opencodeSessionDB()
+		return ok && sessionRowExists(path, opencodeSessionTable, providerSessionID)
+	case providers.Crush:
+		path, ok := crushSessionDB(cwd)
+		return ok && sessionRowExists(path, crushSessionTable, providerSessionID)
 	}
 	return false
 }

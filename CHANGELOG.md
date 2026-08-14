@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **opencode and Crush sessions resume.** A restored card running either of them
+  used to start a fresh conversation every time, even though lich had been
+  storing the id of the one it ran before. Both now offer the same resume prompt
+  Claude Code, Codex and oh-my-pi have: accept and the conversation continues
+  where it stopped. lich still only offers a resume it can honour — the two keep
+  their conversations in a database rather than one file per session, so it asks
+  that database whether the conversation is still there, read-only. Crush files
+  its own per checkout, so a card resumes the conversation belonging to its own
+  worktree.
+
 ### Fixed
 
 - **lich is an application on macOS.** The Homebrew install shipped a bare

@@ -103,10 +103,11 @@ export const Terminal = {
    * provable absence closes a session. */
   WorkdirMissing: (cwd: string) => call<boolean>("terminal.WorkdirMissing", [cwd]),
   /** Whether the conversation providerSessionID names can still be reopened —
-   * false once the provider has pruned its transcript, which is the resume the
-   * prompt must not offer. */
-  ResumeAvailable: (kind: string, providerSessionID: string) =>
-    call<boolean>("terminal.ResumeAvailable", [kind, providerSessionID]),
+   * false once the provider has dropped it, which is the resume the prompt must
+   * not offer. cwd is the session's working directory: Crush keeps its
+   * conversations per checkout, so the same id answers differently in another. */
+  ResumeAvailable: (kind: string, providerSessionID: string, cwd: string) =>
+    call<boolean>("terminal.ResumeAvailable", [kind, providerSessionID, cwd]),
   /** resume: a provider session id to reopen (--resume); "" starts fresh.
    * name: what the session answers to in its provider's peer roster (lib/session/peer-name);
    * only Claude Code has one, every other kind ignores it.

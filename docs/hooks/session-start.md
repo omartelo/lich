@@ -4,7 +4,7 @@ Reports the provider conversation id running inside a lich session's PTY, so
 lich can persist the link between its own session (the card) and the provider's
 session. That id is what lets a restored card offer to resume the conversation
 it ran before the last restart, and the key for later features that need to
-reach a session's transcript. Claude Code and Codex report one today.
+reach a session's transcript. Every provider lich registers reports one.
 
 See [README.md](README.md) for the shared transport (`LICH_PORT` / `LICH_TOKEN`
 / `LICH_SESSION_ID`) and the client rules every hook follows.
@@ -88,8 +88,7 @@ cares when the id arrived, only which conversation it names.
   frontend session (`resumableSession` in `frontend/src/lib/session/sessions.ts`), and
   the first time a restored card is opened `TerminalHost` asks before spawning:
   accepting passes the id to `terminal.Start`, which spawns the kind's resume
-  invocation (`resumeArgs` in `internal/terminal/command.go`: `claude --resume
-  <id>`, `codex resume <id>`).
+  invocation (`resumeArgs` in `internal/terminal/command.go`).
 
 ## Known ceilings
 
@@ -104,33 +103,40 @@ cares when the id arrived, only which conversation it names.
 - **Not the transcript path.** The path is reconstructable from the id and cwd;
   storing it too is a contract change — add a field only when a feature needs
   it, per the versioning note in the README.
-- **Three providers resume.** The field and the column are provider-agnostic,
-  but each CLI spells resume its own way (`claude --resume <id>`, `codex resume
-  <id>`, `omp -r <id>`), so both `resumeArgs` (`internal/terminal/command.go`)
-  and `resumableSession` (`frontend/src/lib/session/sessions.ts`) list the kinds
-  that have one. A provider outside that list reporting an id has it stored and
-  ignored until its own invocation is wired.
-- **opencode and Crush report an id lich does not resume.** Both spell it
-  (`opencode --session <id>`, `crush --session <id>`), so the invocation is the
-  easy half. The gate is the one below: lich only offers a resume it has proof
-  of, and both keep their conversations in SQLite — `opencode.db` under the data
-  dir, Crush's under its `--data-dir` — where there is no per-session file to
-  glob for. Wiring them means either reading another tool's schema or offering a
-  resume that can die inside the PTY, and neither is worth it for a mark on a
-  card. The id is stored today so the day one of them is wired, the sessions
-  already carry it. oh-my-pi is the counterexample that shows where the line is:
-  it files one JSONL per session, so there is something to glob for, and it
-  resumes.
-- **Resume availability is asked of each provider's transcript directory.**
+- **Every provider resumes; the shell does not.** The field and the column are
+  provider-agnostic, but each CLI spells resume its own way (`claude --resume
+  <id>`, `codex resume <id>`, `omp -r <id>`, `opencode --session <id>`, `crush
+  --session <id>`), so both `resumeArgs` (`internal/terminal/command.go`) and
+  `resumableSession` (`frontend/src/lib/session/sessions.ts`) list the kinds that
+  have one. A shell session that had a provider CLI run inside it by hand carries
+  an id and is still never offered a resume — the shell cannot reopen it.
+- **Resume availability is asked of whatever the provider left on disk.**
   `ResumeAvailable` (`internal/terminal/resume.go`) globs
   `~/.claude/projects/*/<id>.jsonl` for Claude Code,
   `~/.codex/sessions/*/*/*/rollout-*-<id>.jsonl` for Codex and
   `~/.omp/agent/sessions/*/*_<id>.jsonl` for oh-my-pi (`CLAUDE_CONFIG_DIR`,
   `CODEX_HOME` and `OMP_PROFILE`/`PI_CODING_AGENT_DIR` override the roots; a
   named omp profile wins over the explicit override, which is the order
-  `omp config path` applies). Every layout is internal to the provider: one that
-  moves its files makes every restored card start fresh instead of erroring,
-  which is the direction this fails in.
+  `omp config path` applies). opencode and Crush file no per-session transcript,
+  so the proof is a row in their own SQLite database instead
+  (`internal/terminal/sessiondb.go`): `SELECT 1` on the `id` of `session` in
+  `$XDG_DATA_HOME/opencode/opencode.db`, and of `sessions` in
+  `<cwd>/.crush/crush.db`. Every layout is internal to the provider — a database
+  that moved, a table that was renamed, a directory that changed — and all of
+  them make a restored card start fresh instead of erroring, which is the
+  direction this fails in.
+- **Crush resumes per checkout, and never through `--data-dir`.** Crush keeps
+  its database inside the directory it was started in, so `ResumeAvailable`
+  takes the session's cwd and the same id answers differently in another
+  worktree — which is the correct answer, since the conversation belongs to that
+  checkout. A user who runs Crush with `--data-dir` outside lich moves the
+  database somewhere lich does not look; lich itself never passes the flag, so
+  the default is what its own sessions use.
+- **The database is opened read-only, and only for existence.** lich reads one
+  column of one table and never writes: a resume is offered for a row that is
+  there and withheld for one that is not. A lock held by the provider running
+  right now is waited out briefly and then read as absent — the failure that
+  costs a live conversation, which is why the wait exists at all.
 - **The deprecated `claude_session_id` alias stays until the install gate can
   no longer meet a plugin older than v0.3.0.** Dropping it earlier silently
   breaks resume for anyone who has not updated the plugin.

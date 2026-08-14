@@ -488,11 +488,20 @@ describe("resumableSession", () => {
     })
   })
 
-  // opencode reports no id and has no resume invocation wired; one arriving
-  // anyway must not raise a prompt lich cannot honour.
-  it("returns null for a provider with no resume wired", () => {
-    const state = withClaudeSession(buildState(2), "s1", "some-id", "opencode")
-    expect(resumableSession(state, P, "s1")).toBeNull()
+  it("returns an opencode session carrying a provider session id", () => {
+    const state = withClaudeSession(buildState(2), "s1", "ses_0031a382dffe", "opencode")
+    expect(resumableSession(state, P, "s1")).toMatchObject({
+      id: "s1",
+      providerSessionId: "ses_0031a382dffe",
+    })
+  })
+
+  it("returns a crush session carrying a provider session id", () => {
+    const state = withClaudeSession(buildState(2), "s1", "18345afc-f497", "crush")
+    expect(resumableSession(state, P, "s1")).toMatchObject({
+      id: "s1",
+      providerSessionId: "18345afc-f497",
+    })
   })
 
   it("returns null for unknown project and session ids", () => {

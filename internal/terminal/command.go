@@ -23,11 +23,14 @@ const defaultBin = providers.Claude
 const KindShell = "shell"
 
 // How each provider reopens an existing conversation by id: Claude Code and
-// oh-my-pi take a flag, Codex a subcommand.
+// oh-my-pi take a flag of their own, Codex a subcommand, and opencode and Crush
+// happen to agree on one spelling. Every one of them was read off that CLI's own
+// --help.
 const (
 	claudeResumeFlag  = "--resume"
 	codexResumeSubcmd = "resume"
 	ompResumeFlag     = "-r"
+	sessionResumeFlag = "--session"
 )
 
 // claudeNameFlag sets the name a session answers to in Claude Code's peer
@@ -241,7 +244,7 @@ func claudeMCPConfig(lichBin string) string {
 // when the session must start fresh. Each provider spells resume its own way,
 // and a provider with no spelling here never grows one — the frontend only
 // passes a resume id for a kind it knows resumes, but a stray one must not reach
-// a shell or opencode/crush either.
+// a shell either.
 func resumeArgs(kind, resume string) []string {
 	if resume == "" {
 		return nil
@@ -253,6 +256,8 @@ func resumeArgs(kind, resume string) []string {
 		return []string{codexResumeSubcmd, resume}
 	case providers.OMP:
 		return []string{ompResumeFlag, resume}
+	case providers.OpenCode, providers.Crush:
+		return []string{sessionResumeFlag, resume}
 	}
 	return nil
 }

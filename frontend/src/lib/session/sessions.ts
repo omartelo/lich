@@ -368,10 +368,8 @@ export function removeProject(state: SessionState, projectId: string): SessionSt
 }
 
 // The provider kinds whose CLI can reopen a conversation by id, mirrored from
-// resumeArgs (Go) — keep in sync. opencode and Crush keep their conversations in
-// SQLite with no per-session file to prove one still exists, so an id reported
-// for either is stored and never offered.
-const RESUMABLE_KINDS: readonly SessionKind[] = ["claude", "codex", "omp"]
+// resumeArgs (Go) — keep in sync.
+const RESUMABLE_KINDS: readonly SessionKind[] = ["claude", "codex", "omp", "opencode", "crush"]
 
 // resumableSession returns the session whose PTY should ask before it spawns,
 // because it carries the provider conversation it ran before the last restart.

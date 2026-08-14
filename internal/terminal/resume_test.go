@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
@@ -51,32 +52,78 @@ func TestResumeAvailable(t *testing.T) {
 	t.Setenv("OMP_PROFILE", "")
 	t.Setenv("PI_CODING_AGENT_DIR", ompBase)
 
+	// opencode keeps every conversation in one database under its data
+	// directory; Crush keeps one database per checkout. The table names are
+	// spelled out rather than taken from the constants, so renaming a constant
+	// to match a schema lich never measured fails here instead of silently
+	// passing.
+	opencodeBase := t.TempDir()
+	const opencodeLive = "ses_0031a382dffe1QdVbfzi6AZmbs"
+	writeSessionDB(t, filepath.Join(opencodeBase, "opencode", "opencode.db"), "session", opencodeLive)
+	t.Setenv("XDG_DATA_HOME", opencodeBase)
+
+	crushCwd := t.TempDir()
+	const crushLive = "18345afc-f497-4d53-8dfd-f7c4e4d9b313"
+	writeSessionDB(t, filepath.Join(crushCwd, ".crush", "crush.db"), "sessions", crushLive)
+	otherCwd := t.TempDir()
+
 	svc := &Service{}
 	tests := []struct {
 		name              string
 		kind              string
 		providerSessionID string
+		cwd               string
 		want              bool
 	}{
-		{"transcript on disk", providers.Claude, live, true},
-		{"pruned transcript", providers.Claude, "gone-uuid", false},
-		{"no id at all", providers.Claude, "", false},
-		{"shell session", KindShell, live, false},
-		{"codex rollout on disk", providers.Codex, codexLive, true},
-		{"codex rollout deleted", providers.Codex, "019fe876-0000-0000-0000-000000000000", false},
-		{"codex never sees a claude transcript", providers.Codex, live, false},
-		{"omp transcript on disk", providers.OMP, ompLive, true},
-		{"omp transcript deleted", providers.OMP, "019ffb38-0000-0000-0000-000000000000", false},
-		{"omp never sees a codex rollout", providers.OMP, codexLive, false},
-		{"provider with no resume wired", providers.OpenCode, live, false},
+		{"transcript on disk", providers.Claude, live, "", true},
+		{"pruned transcript", providers.Claude, "gone-uuid", "", false},
+		{"no id at all", providers.Claude, "", "", false},
+		{"shell session", KindShell, live, "", false},
+		{"codex rollout on disk", providers.Codex, codexLive, "", true},
+		{"codex rollout deleted", providers.Codex, "019fe876-0000-0000-0000-000000000000", "", false},
+		{"codex never sees a claude transcript", providers.Codex, live, "", false},
+		{"omp transcript on disk", providers.OMP, ompLive, "", true},
+		{"omp transcript deleted", providers.OMP, "019ffb38-0000-0000-0000-000000000000", "", false},
+		{"omp never sees a codex rollout", providers.OMP, codexLive, "", false},
+		{"opencode row in its database", providers.OpenCode, opencodeLive, "", true},
+		{"opencode conversation deleted", providers.OpenCode, "ses_gone", "", false},
+		{"opencode never sees a crush row", providers.OpenCode, crushLive, "", false},
+		{"crush row in the checkout's database", providers.Crush, crushLive, crushCwd, true},
+		{"crush conversation deleted", providers.Crush, "00000000-0000-0000-0000-000000000000", crushCwd, false},
+		// Crush's database lives in the checkout, so the same id proves nothing
+		// about another one — and a session whose cwd lich cannot name has no
+		// database to ask at all.
+		{"crush row belongs to another checkout", providers.Crush, crushLive, otherCwd, false},
+		{"crush without a working directory", providers.Crush, crushLive, "", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := svc.ResumeAvailable(tt.kind, tt.providerSessionID); got != tt.want {
-				t.Errorf("ResumeAvailable(%q, %q) = %v, want %v",
-					tt.kind, tt.providerSessionID, got, tt.want)
+			if got := svc.ResumeAvailable(tt.kind, tt.providerSessionID, tt.cwd); got != tt.want {
+				t.Errorf("ResumeAvailable(%q, %q, %q) = %v, want %v",
+					tt.kind, tt.providerSessionID, tt.cwd, got, tt.want)
 			}
 		})
+	}
+}
+
+// writeSessionDB builds the smallest database that answers the existence
+// question the way a provider's own does: one table keyed by a text id, holding
+// one row. The id column is all lich reads, so it is all this creates.
+func writeSessionDB(t *testing.T, path, table, id string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	if _, err := db.Exec("CREATE TABLE " + table + " (id TEXT PRIMARY KEY, title TEXT)"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("INSERT INTO "+table+" (id, title) VALUES (?, ?)", id, "a conversation"); err != nil {
+		t.Fatal(err)
 	}
 }
 

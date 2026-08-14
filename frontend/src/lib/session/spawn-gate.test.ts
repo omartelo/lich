@@ -35,6 +35,24 @@ describe("spawnDecision", () => {
     expect(decision).toEqual({ verdict: "fresh", notice: CONVERSATION_GONE })
   })
 
+  // Crush keeps one conversation database per checkout, so the directory is
+  // part of the question: asked without it, every restored Crush card would be
+  // told its conversation is gone.
+  it("asks about the conversation in the session's own directory", async () => {
+    const asked: string[] = []
+    await spawnDecision(
+      "/repo/worktrees/feature",
+      { ...resumable, kind: "crush" },
+      probe({
+        resumeAvailable: (_kind, _id, cwd) => {
+          asked.push(cwd)
+          return Promise.resolve(true)
+        },
+      }),
+    )
+    expect(asked).toEqual(["/repo/worktrees/feature"])
+  })
+
   it("parks when the checkout is gone, without asking about the conversation", async () => {
     let asked = false
     const decision = await spawnDecision(

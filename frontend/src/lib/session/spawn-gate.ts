@@ -18,7 +18,7 @@ export type SpawnDecision =
 /** The two backend checks, injected so the decision is testable without the RPC. */
 export interface SpawnProbe {
   workdirMissing: (cwd: string) => Promise<boolean>
-  resumeAvailable: (kind: string, providerSessionID: string) => Promise<boolean>
+  resumeAvailable: (kind: string, providerSessionID: string, cwd: string) => Promise<boolean>
 }
 
 export const CHECKOUT_GONE =
@@ -50,7 +50,7 @@ export async function spawnDecision(
     return { verdict: "spawn" }
   }
   const available = await probe
-    .resumeAvailable(resumable.kind, resumable.providerSessionId ?? "")
+    .resumeAvailable(resumable.kind, resumable.providerSessionId ?? "", cwd)
     .catch(() => true)
   return available ? { verdict: "ask" } : { verdict: "fresh", notice: CONVERSATION_GONE }
 }
