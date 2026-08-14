@@ -120,8 +120,10 @@ cares when the id arrived, only which conversation it names.
   `omp config path` applies). opencode and Crush file no per-session transcript,
   so the proof is a row in their own SQLite database instead
   (`internal/terminal/sessiondb.go`): `SELECT 1` on the `id` of `session` in
-  `$XDG_DATA_HOME/opencode/opencode.db`, and of `sessions` in
-  `<cwd>/.crush/crush.db`. Every layout is internal to the provider — a database
+  `$XDG_DATA_HOME/opencode/opencode.db` (`~/.local/share` when the variable is
+  unset, on every platform — opencode applies xdg-basedir rather than the
+  OS-native data location), and of `sessions` in `<cwd>/.crush/crush.db`. Every
+  layout is internal to the provider — a database
   that moved, a table that was renamed, a directory that changed — and all of
   them make a restored card start fresh instead of erroring, which is the
   direction this fails in.

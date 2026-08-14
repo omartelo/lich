@@ -26,10 +26,6 @@ const (
 	opencodeSessionTable = "session"
 	crushSessionTable    = "sessions"
 
-	// crushDataDir is the directory Crush creates inside the checkout it runs
-	// in — its database is per project, not per machine.
-	crushDataDir = ".crush"
-
 	// sessionDBBusyMS caps the wait for a database the provider is writing to
 	// right now. A read that gives up reads as "no conversation", which costs a
 	// resume that was there, so it is worth waiting out a lock; it is short
@@ -44,25 +40,23 @@ const (
 // (internal/agentplugin/opencode.go) — so os.UserCacheDir and friends would
 // point somewhere opencode never writes.
 func opencodeSessionDB() (string, bool) {
-	base := os.Getenv("XDG_DATA_HOME")
-	if base == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", false
-		}
-		base = filepath.Join(home, ".local", "share")
+	base, ok := harnessDir("XDG_DATA_HOME", filepath.Join(".local", "share"))
+	if !ok {
+		return "", false
 	}
 	return filepath.Join(base, "opencode", "opencode.db"), true
 }
 
 // crushSessionDB is the database Crush keeps in the checkout it was started in.
 // cwd is the session's own working directory, which is the directory lich
-// spawned Crush in.
+// spawned Crush in. False without one: a directory lich cannot name has no
+// database to ask, and answering from the process's own cwd would be asking
+// about somebody else's checkout.
 func crushSessionDB(cwd string) (string, bool) {
 	if cwd == "" {
 		return "", false
 	}
-	return filepath.Join(cwd, crushDataDir, "crush.db"), true
+	return filepath.Join(cwd, ".crush", "crush.db"), true
 }
 
 // sessionRowExists reports whether table in the SQLite database at path holds a

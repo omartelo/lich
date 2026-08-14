@@ -127,6 +127,63 @@ func writeSessionDB(t *testing.T, path, table, id string) {
 	}
 }
 
+// TestSessionRowExistsSurvivesAnotherToolsSchema pins the promise that makes
+// reading another tool's database acceptable at all: every shape lich did not
+// measure answers "no conversation" rather than erroring. A card that starts
+// fresh has lost a resume; one that errors has lost the session, inside the PTY,
+// with the provider's message in place of it.
+func TestSessionRowExistsSurvivesAnotherToolsSchema(t *testing.T) {
+	dir := t.TempDir()
+
+	renamed := filepath.Join(dir, "renamed.db")
+	writeSessionDB(t, renamed, "conversations", "live-id")
+	if sessionRowExists(renamed, "session", "live-id") {
+		t.Error("a renamed table answered true; the schema lich reads is not the one on disk")
+	}
+
+	notADatabase := filepath.Join(dir, "corrupt.db")
+	if err := os.WriteFile(notADatabase, []byte("this is not a database"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if sessionRowExists(notADatabase, "session", "live-id") {
+		t.Error("a file that is not a database answered true")
+	}
+
+	if sessionRowExists(filepath.Join(dir, "absent.db"), "session", "live-id") {
+		t.Error("a database that is not there answered true")
+	}
+
+	empty := filepath.Join(dir, "empty-id.db")
+	writeSessionDB(t, empty, "session", "live-id")
+	if sessionRowExists(empty, "session", "") {
+		t.Error("an empty id answered true; every row would match a LIKE, none may match this")
+	}
+}
+
+// TestOpencodeSessionDB pins where opencode's database is looked for. opencode
+// applies the xdg-basedir convention on every platform rather than the
+// OS-native data location, so the fallback is ~/.local/share even where the OS
+// keeps application data elsewhere — resolve it the OS way and every restored
+// opencode card silently starts fresh.
+func TestOpencodeSessionDB(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	override := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", override)
+	want := filepath.Join(override, "opencode", "opencode.db")
+	if got, ok := opencodeSessionDB(); !ok || got != want {
+		t.Errorf("with XDG_DATA_HOME set = (%q,%v), want %q", got, ok, want)
+	}
+
+	t.Setenv("XDG_DATA_HOME", "")
+	want = filepath.Join(home, ".local", "share", "opencode", "opencode.db")
+	if got, ok := opencodeSessionDB(); !ok || got != want {
+		t.Errorf("with XDG_DATA_HOME unset = (%q,%v), want %q", got, ok, want)
+	}
+}
+
 // TestOMPAgentDirPrecedence pins the order `omp config path` was measured to
 // apply: a named profile moves the whole directory and wins over the explicit
 // override, which is the opposite of the way the two read. Get it backwards and
