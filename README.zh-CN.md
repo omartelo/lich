@@ -70,13 +70,15 @@ curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh
 | 平台 | 安装方式 | 运行时依赖 |
 | --- | --- | --- |
 | **Linux** | 上面的 `install.sh`，或 AUR 的 [`lich-bin`](https://aur.archlinux.org/packages/lich-bin)（`yay -S lich-bin`） | `PATH` 上有 chromium / google-chrome / brave，外加 `zenity` |
-| **macOS** *(实验性)* | `brew install omartelo/tap/lich` | `/Applications` 里有 Chrome / Chromium / Edge / Brave |
+| **macOS** *(实验性)* | `brew install --cask omartelo/tap/lich` | `/Applications` 里有 Chrome / Chromium / Edge / Brave |
 | **Windows** *(实验性)* | 从 [Releases](https://github.com/omartelo/lich/releases) 下载安装程序 | Chrome / Edge / Brave |
 
 手动的分发版软件包和静态二进制文件见 [INSTALL.md](INSTALL.md)。macOS 和 Windows 的
 二进制文件未签名 —— 在公证/签名做好之前，Gatekeeper 和 SmartScreen 会发出警告。用
 Homebrew 安装可以绕开 Gatekeeper 的提示；从 Releases 页面下载的二进制文件则需要手动
-清除隔离标记。
+清除隔离标记。在 macOS 上，cask 会把 `Lich.app` 装进 `/Applications`，lich 因此有了
+自己的图标；而它运行期间，Dock 里显示的仍是持有那个窗口的浏览器。从旧的 formula 升级
+需要先 `brew uninstall lich`，[INSTALL.md](INSTALL.md) 里写了这一点。
 
 ## 快速上手
 
