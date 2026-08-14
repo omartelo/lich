@@ -191,48 +191,59 @@ export function SessionGroup({
           )}
         </div>
       )}
-      {!collapsed && (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          modifiers={[verticalAxis]}
-          onDragEnd={onDragEnd}
-        >
-          <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-            <div className="flex flex-col gap-1.5">
-              {sessions.map((session) => (
-                <SessionCard
-                  key={session.id}
-                  session={session}
-                  path={projectPath}
-                  // Resolved here rather than in the card: the parent can be a
-                  // session in another project, which only the workspace-wide
-                  // state knows about.
-                  origin={sessionOrigin(workspace, session)}
-                  active={session.id === activeId}
-                  onSelect={() => select(session.id)}
-                  onClose={() => onClose(session)}
-                  onRename={(label) => renameSession(projectId, session.id, label)}
-                  onPin={(pinned) => pinSession(projectId, session.id, pinned)}
-                  onOpenTerminal={(cwd) => newSession(projectId, "shell", cwd)}
-                  onPulls={onPulls}
-                  delegateGroups={delegateGroups}
-                />
-              ))}
-            </div>
-          </SortableContext>
-        </DndContext>
-      )}
-      {/* The pinned block spans every checkout, so no single pull request
-          belongs under it — the card stays with the worktree's own block. */}
-      {!collapsed && !pinned && pullsOpen && (
-        <PullRequestCard
-          path={checkout}
-          active={pullsActive}
-          onSelect={onPulls}
-          onClose={onClosePulls}
-        />
-      )}
+      <div
+        aria-hidden={collapsed}
+        {...(collapsed ? { inert: "" } : {})}
+        className={cn(
+          "grid transition-[grid-template-rows,opacity] duration-200 ease-out",
+          collapsed
+            ? "pointer-events-none grid-rows-[0fr] opacity-0"
+            : "grid-rows-[1fr] opacity-100",
+        )}
+      >
+        <div className="flex min-h-0 flex-col gap-1.5 overflow-hidden">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            modifiers={[verticalAxis]}
+            onDragEnd={onDragEnd}
+          >
+            <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+              <div className="flex flex-col gap-1.5">
+                {sessions.map((session) => (
+                  <SessionCard
+                    key={session.id}
+                    session={session}
+                    path={projectPath}
+                    // Resolved here rather than in the card: the parent can be a
+                    // session in another project, which only the workspace-wide
+                    // state knows about.
+                    origin={sessionOrigin(workspace, session)}
+                    active={session.id === activeId}
+                    onSelect={() => select(session.id)}
+                    onClose={() => onClose(session)}
+                    onRename={(label) => renameSession(projectId, session.id, label)}
+                    onPin={(pinned) => pinSession(projectId, session.id, pinned)}
+                    onOpenTerminal={(cwd) => newSession(projectId, "shell", cwd)}
+                    onPulls={onPulls}
+                    delegateGroups={delegateGroups}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+          {/* The pinned block spans every checkout, so no single pull request
+              belongs under it — the card stays with the worktree's own block. */}
+          {!pinned && pullsOpen && (
+            <PullRequestCard
+              path={checkout}
+              active={pullsActive}
+              onSelect={onPulls}
+              onClose={onClosePulls}
+            />
+          )}
+        </div>
+      </div>
     </div>
   )
 }
