@@ -6,7 +6,6 @@ import { NotificationsSettings } from "./NotificationsSettings"
 import { HotkeysSettings } from "./HotkeysSettings"
 import { ProvidersSettings } from "./ProvidersSettings"
 import { ProviderBinSettings } from "./ProviderBinSettings"
-import { WorktreeSetupSettings } from "./WorktreeSetupSettings"
 import { VersionControlSettings } from "./VersionControlSettings"
 import { UpdatesSettings } from "./UpdatesSettings"
 import { HelpSettings } from "./HelpSettings"
@@ -37,12 +36,6 @@ const BASE_SECTIONS: Section[] = [
   },
   { id: "hotkeys", label: "Hotkeys", group: "app", render: () => <HotkeysSettings /> },
   { id: "providers", label: "Providers", group: "app", render: () => <ProvidersSettings /> },
-  {
-    id: "worktree",
-    label: "Worktree",
-    group: "app",
-    render: (id) => <WorktreeSetupSettings projectId={id} />,
-  },
   {
     id: "version-control",
     label: "Version Control",

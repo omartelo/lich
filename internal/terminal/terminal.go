@@ -20,6 +20,7 @@ import (
 
 	"github.com/omartelo/lich/internal/events"
 	"github.com/omartelo/lich/internal/pricing"
+	"github.com/omartelo/lich/internal/project"
 )
 
 // Event names. A terminal I/O event carries the session ID as a suffix (e.g.
@@ -143,7 +144,6 @@ type Store interface {
 	ProviderBin(providerID, projectID string) string
 	SkipPermissions(providerID, projectID, cwd string) bool
 	ProjectPath(projectID string) string
-	WorktreeSetup(projectID string) string
 	WorktreePorts() map[string]int
 	SetWorktreePort(path string, port int) error
 	SetProviderSession(sessionID, providerSessionID string) error
@@ -493,7 +493,7 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, se
 	}
 	settingUp := false
 	if setup {
-		spec, settingUp = wrapSetup(spec, s.store.WorktreeSetup(projectID), runtime.GOOS)
+		spec, settingUp = wrapSetup(spec, project.SetupScript(s.store.ProjectPath(projectID)), runtime.GOOS)
 	}
 	p, err := startPTY(spec)
 	if err != nil {

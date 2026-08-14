@@ -8,6 +8,3 @@
 
 /** Which authenticated GitHub account lich's gh calls run as for a project. */
 export const GH_ACCOUNT_KEY = "vcs.account"
-
-/** The script a fresh worktree runs before its provider starts. */
-export const WORKTREE_SETUP_KEY = "worktree.setup"

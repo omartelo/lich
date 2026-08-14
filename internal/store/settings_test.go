@@ -170,26 +170,3 @@ func TestSkipPermissionsIsScopedByCheckout(t *testing.T) {
 		t.Error("value \"1\" skips permissions, want only \"true\" to")
 	}
 }
-
-// TestWorktreeSetupIsProjectScoped pins the setup script the terminal service
-// reads when it spawns the first session of a fresh worktree. Project-scoped
-// only: a global value must never leak into a project that configured none,
-// because the script it would run is another repository's.
-func TestWorktreeSetupIsProjectScoped(t *testing.T) {
-	svc := newTestStore(t)
-
-	if got := svc.WorktreeSetup("p1"); got != "" {
-		t.Errorf("unconfigured project = %q, want \"\"", got)
-	}
-	if err := svc.SetSetting(worktreeSetupKey, "p1", "pnpm install"); err != nil {
-		t.Fatalf("SetSetting: %v", err)
-	}
-	if got := svc.WorktreeSetup("p1"); got != "pnpm install" {
-		t.Errorf("p1 setup = %q, want \"pnpm install\"", got)
-	}
-
-	_ = svc.SetSetting(worktreeSetupKey, globalScope, "make bootstrap")
-	if got := svc.WorktreeSetup("p2"); got != "" {
-		t.Errorf("p2 setup = %q, want \"\" — a global value must not apply", got)
-	}
-}

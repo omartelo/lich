@@ -105,6 +105,10 @@ nobody knows it and that the call site never shows. The mechanism and the histor
   drop is matched by name + size + mtime under the session directory, then home. Twins resolve to nothing; a file
   in neither tree is *copied*, so an agent told to edit it edits the copy — and that copy is deleted 3 days on,
   so a path pasted into a prompt eventually stops resolving.
+- **The worktree setup script answers to the main checkout, never the new branch**
+  (`internal/project/setup.go`, read again at every setup spawn): running a stranger's PR must not run a
+  stranger's `.lich/setup-worktree.sh`. The flip side is the trap — improve the script on a feature branch
+  and fresh worktrees keep running the old one until the change reaches the checkout the project points at.
 - **git status is polled** — one shared poller per repository path (`frontend/src/lib/git/git-status-store.ts`); the
   lich plugin's `session-touched` hook nudges an immediate refresh.
 - **lich fetches on its own** — the base-branch readout (`internal/project/basestatus.go`) runs
