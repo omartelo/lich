@@ -61,13 +61,12 @@ Non-negotiable rules. A violation means the work is not done.
 4. **Clean code.** Small focused functions (< 50 lines); cohesive files (200–400 lines typical, 800 max); no
    nesting deeper than 4 levels; comments only for the *why*; errors handled explicitly, never swallowed; no magic
    values; no secrets in source.
-5. **A session feature is traced across every provider, never built for Claude Code alone.**
-   `internal/providers.Registry` is the checklist — Claude Code, Codex, opencode, oh-my-pi, Crush. Anything a
-   session touches (spawn flags, hooks, resume, transcripts, plugin install, MCP) is designed against all five
-   before it is coded for one. Providers differ in what they can take, so equal behaviour is not always possible —
-   but the gap must be deliberate and written down in the same PR: a Known Ceilings bullet naming which providers
-   are out and why (the briefing-flags and plugin-install bullets below are the model). A feature that silently
-   works only on Claude Code is not done.
+5. **A session feature is traced across every provider.** `internal/providers.Registry` is the checklist —
+   Claude Code, Codex, opencode, oh-my-pi, Crush. Anything a session touches (spawn flags, hooks, resume,
+   transcripts, plugin install, MCP) is designed against all five, not just the provider at hand. Equal behaviour
+   is not always possible — but the gap must be deliberate and written down in the same PR: a Known Ceilings
+   bullet naming which providers are out and why (the briefing-flags and plugin-install bullets below are the
+   model). A feature that silently works on a single provider is not done.
 
 ## Releases
 
