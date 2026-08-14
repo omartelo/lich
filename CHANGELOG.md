@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A project's usual harness can differ from the global default.** Settings now
+  gives each project an optional default harness of its own, used by implicit
+  new-session actions and fresh worktrees. Clearing it with **Use default** puts
+  the project back on the unchanged global choice.
+
+- **Every visible checkout group can open another session in place.** Its `+`
+  menu offers every enabled coding harness and a plain terminal, rooted in that
+  exact project directory or worktree instead of requiring a trip through the
+  project-level menu.
+
 ## [0.34.0] - 2026-08-14
 
 ### Added
@@ -58,7 +70,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   itself: when the receipt window closes with nothing having read the task, it
   is typed in a second time — same ticket, one retry — and only silence after
   that is reported as unread.
-
 ## [0.33.0] - 2026-08-14
 
 ### Added

@@ -44,7 +44,7 @@ export function ProvidersSettings({ installedOnly = false }: { installedOnly?: b
       {enabled.length > 0 && (
         <SettingBlock
           title="Default provider"
-          description="Which harness a new worktree, the new-session hotkey, and a project's first session spawn."
+          description="The harness implicit session actions use unless the current project has its own choice in Project Settings › Sessions."
         >
           <Select
             value={defaultProvider}

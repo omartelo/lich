@@ -7,6 +7,7 @@ import {
   enabledProviders,
   readEnabled,
   resolveDefaultProvider,
+  resolveProjectDefaultProvider,
   skipLevel,
   skipLevelPair,
   skipPermissionFlags,
@@ -129,6 +130,30 @@ describe("resolveDefaultProvider", () => {
   })
 })
 
+describe("resolveProjectDefaultProvider", () => {
+  const p = (id: string, enabled: boolean): ProviderState => ({
+    id: id as ProviderState["id"],
+    name: id,
+    installed: true,
+    enabled,
+  })
+
+  it("prefers an enabled project override to the global default", () => {
+    const list = [p("claude", true), p("codex", true)]
+    expect(resolveProjectDefaultProvider(list, "claude", "codex")).toBe("codex")
+  })
+
+  it("inherits the global default when the project value is empty", () => {
+    const list = [p("claude", true), p("codex", true)]
+    expect(resolveProjectDefaultProvider(list, "codex", "")).toBe("codex")
+  })
+
+  it("ignores a disabled project override and resolves the global fallback", () => {
+    const list = [p("claude", true), p("codex", false)]
+    expect(resolveProjectDefaultProvider(list, "claude", "codex")).toBe("claude")
+  })
+})
+
 describe("createProvidersStore", () => {
   const detected: DetectedProvider[] = [
     { id: "claude", name: "Claude Code", installed: true, path: "/usr/bin/claude" },
@@ -136,17 +161,24 @@ describe("createProvidersStore", () => {
     { id: "mystery", name: "Mystery", installed: true, path: "/x" }, // unknown id
   ]
 
-  function build(enabledValues: Record<string, string> = {}, defaultValue = "") {
+  function build(
+    enabledValues: Record<string, string> = {},
+    defaultValue = "",
+    projectValues: Record<string, string> = {},
+  ) {
     const persistEnabled = vi.fn()
     const persistDefault = vi.fn()
+    const persistProjectDefault = vi.fn()
     const store = createProvidersStore({
       detect: async () => detected,
       getEnabled: async (id) => enabledValues[id] ?? "",
       persistEnabled,
       getDefault: async () => defaultValue,
       persistDefault,
+      getProjectDefault: async (projectId) => projectValues[projectId] ?? "",
+      persistProjectDefault,
     })
-    return { store, persistEnabled, persistDefault }
+    return { store, persistEnabled, persistDefault, persistProjectDefault }
   }
 
   it("loads only known providers with their install + default enabled state", async () => {
@@ -191,6 +223,8 @@ describe("createProvidersStore", () => {
       persistEnabled: vi.fn(),
       getDefault: async () => "",
       persistDefault: vi.fn(),
+      getProjectDefault: async () => "",
+      persistProjectDefault: vi.fn(),
     })
     store.ensureLoaded()
     store.ensureLoaded()
@@ -217,5 +251,40 @@ describe("createProvidersStore", () => {
     store.setDefault("claude")
     expect(seen).toHaveBeenCalledTimes(1) // unsubscribed
     expect(persistDefault).toHaveBeenLastCalledWith("claude")
+  })
+
+  it("loads each project default once and notifies subscribers", async () => {
+    const getProjectDefault = vi.fn(async () => "codex")
+    const customStore = createProvidersStore({
+      detect: async () => detected,
+      getEnabled: async () => "1",
+      persistEnabled: vi.fn(),
+      getDefault: async () => "claude",
+      persistDefault: vi.fn(),
+      getProjectDefault,
+      persistProjectDefault: vi.fn(),
+    })
+    const seen = vi.fn()
+    customStore.subscribe(seen)
+
+    await Promise.all([customStore.loadProjectDefault("p1"), customStore.loadProjectDefault("p1")])
+    expect(customStore.getProjectDefaultSnapshot("p1")).toBe("codex")
+    expect(getProjectDefault).toHaveBeenCalledTimes(1)
+    expect(seen).toHaveBeenCalledTimes(1)
+  })
+
+  it("sets and clears a project override synchronously", () => {
+    const { store, persistProjectDefault } = build()
+    const seen = vi.fn()
+    store.subscribe(seen)
+
+    store.setProjectDefault("p1", "codex")
+    expect(store.getProjectDefaultSnapshot("p1")).toBe("codex")
+    expect(persistProjectDefault).toHaveBeenLastCalledWith("p1", "codex")
+
+    store.setProjectDefault("p1", "")
+    expect(store.getProjectDefaultSnapshot("p1")).toBe("")
+    expect(persistProjectDefault).toHaveBeenLastCalledWith("p1", "")
+    expect(seen).toHaveBeenCalledTimes(2)
   })
 })

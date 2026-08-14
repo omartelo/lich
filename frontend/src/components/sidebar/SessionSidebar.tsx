@@ -292,6 +292,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
                     }
                   }}
                   delegateGroups={delegateGroups}
+                  providers={enabled}
                 />
               )
             })}

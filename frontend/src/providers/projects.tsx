@@ -29,7 +29,11 @@ import {
 } from "@/lib/session/sessions"
 import { applyOrder, pinFirst } from "@/lib/reorder"
 import { displayPath } from "@/lib/paths"
-import { defaultProviderKind } from "@/lib/providers-store"
+import {
+  loadProjectProviderDefault,
+  loadProviders,
+  projectDefaultProviderKind,
+} from "@/lib/providers-store"
 import {
   CLOSED_EVENT,
   OPENED_EVENT,
@@ -73,9 +77,9 @@ interface ProjectsValue {
   /** Close a project's tab (kept in the store so it can be reopened later). */
   closeProject: (id: string) => void
   /** Open a new session in a project and focus it, returning its id. Kind
-   * defaults to Claude Code; path defaults to the project's own directory. */
+   * defaults to the project's provider choice; path to its own directory. */
   newSession: (projectId: string, kind?: SessionKind, path?: string) => string
-  /** Open a Claude Code session rooted at a git worktree, labeled after it,
+  /** Open a project-default session rooted at a git worktree, labeled after it,
    * returning its id. */
   newWorktreeSession: (projectId: string, wt: { name: string; path: string }) => string
   /** Resume a worktree: reopen its parked session (continuing its Claude
@@ -215,6 +219,10 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
           loaded = (await Store.LoadState()) ?? []
         }
       }
+      await Promise.all([
+        loadProviders().catch(() => undefined),
+        ...loaded.map((project) => loadProjectProviderDefault(project.id).catch(() => undefined)),
+      ])
       applyLoaded(loaded)
     })()
   }, [applyLoaded])
@@ -292,6 +300,10 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const adopt = useCallback(
     async (project: Project) => {
       await Store.AddProject(project.id, project.name, project.path)
+      await Promise.all([
+        loadProviders().catch(() => undefined),
+        loadProjectProviderDefault(project.id).catch(() => undefined),
+      ])
       applyLoaded((await Store.LoadState()) ?? [])
       navigate(`/projects/${project.id}`)
     },
@@ -358,23 +370,21 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     [projects, activeProjectId, navigate],
   )
 
-  const newSession = useCallback(
-    (projectId: string, kind: SessionKind = defaultProviderKind(), path = "") => {
-      const sessionId = newSessionId()
-      const next = addSession(sessionsRef.current, projectId, sessionId, kind, path)
-      const project = next[projectId]
-      const created = project.sessions[project.sessions.length - 1]
-      setSessions(next)
-      void Store.AddSession(projectId, sessionId, created.label, kind, path, project.nextSeq)
-      return sessionId
-    },
-    [],
-  )
+  const newSession = useCallback((projectId: string, kind?: SessionKind, path = "") => {
+    const sessionId = newSessionId()
+    const resolvedKind = kind ?? projectDefaultProviderKind(projectId)
+    const next = addSession(sessionsRef.current, projectId, sessionId, resolvedKind, path)
+    const project = next[projectId]
+    const created = project.sessions[project.sessions.length - 1]
+    setSessions(next)
+    void Store.AddSession(projectId, sessionId, created.label, resolvedKind, path, project.nextSeq)
+    return sessionId
+  }, [])
 
   const newWorktreeSession = useCallback(
     (projectId: string, wt: { name: string; path: string }) => {
       const sessionId = newSessionId()
-      const kind = defaultProviderKind()
+      const kind = projectDefaultProviderKind(projectId)
       const next = addSession(sessionsRef.current, projectId, sessionId, kind, wt.path, wt.name)
       const project = next[projectId]
       const created = project.sessions[project.sessions.length - 1]

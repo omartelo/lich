@@ -2,9 +2,21 @@ import { useSyncExternalStore } from "react"
 import { useNavigate } from "react-router-dom"
 import { DndContext, closestCenter } from "@dnd-kit/core"
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
+import { Plus, Terminal } from "lucide-react"
+import { ProviderIcon } from "@/components/ProviderIcon"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { dragStyle, useSortableList, verticalAxis } from "@/lib/use-sortable-list"
 import { cn } from "@/lib/utils"
 import { checkoutLabel } from "@/lib/git/checkout-label"
+import type { ProviderState } from "@/lib/providers-store"
 import type { DelegateGroup } from "@/lib/session/delegate-targets"
 import { type Session, sessionOrigin } from "@/lib/session/sessions"
 import { useProjects } from "@/providers/projects"
@@ -48,6 +60,9 @@ interface SessionGroupProps {
   // Workspace-wide, so it is resolved once by the sidebar rather than per group:
   // the sessions the active one can hand work to, across every open project.
   delegateGroups: DelegateGroup[]
+  // The globally enabled harnesses, already resolved by the sidebar for its
+  // own New Session menu. A group offers the same roster in its checkout.
+  providers: ProviderState[]
 }
 
 // SessionGroup renders one worktree's sessions under a static divider titled
@@ -76,6 +91,7 @@ export function SessionGroup({
   onPulls,
   onClosePulls,
   delegateGroups,
+  providers,
 }: SessionGroupProps) {
   const {
     sessions: workspace,
@@ -112,15 +128,48 @@ export function SessionGroup({
       )}
     >
       {showHeader && (
-        <div
-          className={cn("flex items-center gap-2 px-1 pb-0.5 pt-1.5", !pinned && "cursor-grab")}
-          {...group.attributes}
-          {...group.listeners}
-        >
-          <span className="min-w-0 truncate text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground/70">
-            {name}
-          </span>
-          <span className="h-px flex-1 bg-border" />
+        <div className="flex items-center gap-1 px-1 pb-0.5 pt-1.5">
+          <div
+            className={cn("flex min-w-0 flex-1 items-center gap-2", !pinned && "cursor-grab")}
+            {...group.attributes}
+            {...group.listeners}
+          >
+            <span className="min-w-0 truncate text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground/70">
+              {name}
+            </span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          {!pinned && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                aria-label={`New session in ${name}`}
+                title={`New session in ${name}`}
+                render={<Button variant="ghost" size="icon-xs" />}
+              >
+                <Plus />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="max-w-56">
+                <DropdownMenuGroup>
+                  {providers.map((provider) => (
+                    <DropdownMenuItem
+                      key={provider.id}
+                      onClick={() => newSession(projectId, provider.id, path)}
+                    >
+                      <ProviderIcon kind={provider.id} />
+                      {provider.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem onClick={() => newSession(projectId, "shell", path)}>
+                    <Terminal />
+                    New Terminal
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       )}
       <DndContext
