@@ -43,11 +43,21 @@ func (s *Service) roster(fromID string) ([]candidate, error) {
 					Name:    RosterName(cwd, sess.ID),
 					Project: p.Name,
 					Kind:    sess.Kind,
+					State:   s.reportedState(sess.ID),
 				},
 			})
 		}
 	}
 	return found, nil
+}
+
+// reportedState is what a session last told lich it was doing, empty when it
+// has told lich nothing. Taken under the lock because reports arrive on the
+// hook handler's own goroutines while a roster is being built.
+func (s *Service) reportedState(id string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.reported[id]
 }
 
 // resolve finds the single live session named by target, optionally narrowed to

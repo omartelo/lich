@@ -94,19 +94,34 @@ object exactly as this document describes them. An empty roster is `[]`, never
 ### `lich sessions [--json]`
 
 Lists the live sessions the caller can address, tab-separated with a header.
-The last column is the peer-roster name — both names reach a session, and a
-surface that showed only one is what once made an agent treat a single session
-as two. It rides last so a script reading the first columns keeps working:
+The peer-roster name is there because both names reach a session, and a surface
+that showed only one is what once made an agent treat a single session as two.
+New columns are appended rather than inserted, so a script reading the first
+ones keeps working:
 
 ```
-session	project	provider	name
-docs	lich	codex	lich-a1b2
-api	revu	crush	revu-9f8e
+session	project	provider	name	state
+docs	lich	codex	lich-a1b2	busy
+api	revu	crush	revu-9f8e	-
 ```
 
 `No other live sessions.` when there are none. A session is listed only while a
 process is running in it: a card whose terminal was never opened has nothing to
 type at.
+
+The `state` column is what that session last reported through the session-state
+hook (`docs/hooks/session-state.md`), and it is the same thing its card shows:
+
+- `busy` — mid-turn. A message sent now is queued and read when the turn ends.
+- `done` — the turn ended. The session is at a prompt and free.
+- `waiting` — **blocked on a human.** The agent hit a permission prompt and
+  nothing there can move until someone answers it, so this session cannot pick
+  up work at all: say so to the user instead of sending into it. What was typed
+  would sit behind the prompt, unread, for as long as nobody is at that screen.
+- `-` (`""` in `--json`) — **not reported**, which is not the same as idle.
+  Only providers whose companion plugin reports state have one at all (Crush
+  reports none, and a session that has not had a turn yet has said nothing
+  either), so an empty state says nothing about whether that session is free.
 
 ### `lich send [--project <name>] [--timeout <seconds>] <session> <prompt>`
 
@@ -295,7 +310,7 @@ at lich.
 
 | Tool | What it does |
 |------|--------------|
-| `list_sessions` | The live sessions that can be given work, as JSON. |
+| `list_sessions` | The live sessions that can be given work, as JSON — each with the state it last reported, `waiting` among them. |
 | `send_to_session` | `session`, `prompt`, optional `project` and `timeout_seconds`. |
 | `wait_for_answer` | optional `ticket` and `timeout_seconds` — with a ticket, `lich wait <ticket>`; without one, the collect: everything ready at once. |
 | `reply_to_session` | `ticket`, `answer` — what a relayed message asks for. |

@@ -368,7 +368,8 @@ func TestMCPWaitWithATicketWaitsOnIt(t *testing.T) {
 }
 
 func TestMCPListSessionsReturnsThemAsJSON(t *testing.T) {
-	f := newFakeLich(t, `[{"label":"docs","project":"lich","kind":"codex"}]`)
+	f := newFakeLich(t, `[{"label":"docs","project":"lich","kind":"codex","state":"waiting"},
+	                      {"label":"api","project":"lich","kind":"crush"}]`)
 
 	replies := speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
 		{"name":"list_sessions","arguments":{}}}`)
@@ -379,12 +380,19 @@ func TestMCPListSessionsReturnsThemAsJSON(t *testing.T) {
 	}
 	var peers []struct {
 		Label string `json:"label"`
+		State string `json:"state"`
 	}
 	if err := json.Unmarshal([]byte(text), &peers); err != nil {
 		t.Fatalf("list_sessions did not return JSON: %v (%q)", err, text)
 	}
-	if len(peers) != 1 || peers[0].Label != "docs" {
-		t.Errorf("peers = %+v", peers)
+	if len(peers) != 2 || peers[0].Label != "docs" {
+		t.Fatalf("peers = %+v", peers)
+	}
+	// An orchestrator reads the state to decide where work can go: waiting means
+	// blocked on a human, and a provider that reports nothing carries an empty
+	// state rather than one that reads as free.
+	if peers[0].State != "waiting" || peers[1].State != "" {
+		t.Errorf("states = %q, %q, want waiting and an empty one", peers[0].State, peers[1].State)
 	}
 }
 

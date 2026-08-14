@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The session roster says what each session is doing.** `lich sessions` grew a
+  `state` column and the `list_sessions` tool a `state` field, carrying what that
+  session last reported: `busy` mid-turn, `done` at a prompt and free, and
+  `waiting` — blocked on a permission prompt only a human can answer. That last
+  one is the point: work handed to a waiting session sits behind that prompt
+  unread for as long as nobody is at the screen, so an agent reading the roster
+  now knows to tell you rather than send into it. Only the providers whose
+  companion plugin reports state have one at all, so a session that reported
+  nothing shows `-` (`""` in `--json`), which means "not reported" and never
+  "idle".
+
 - **Asking for work to be fanned out opens lich sessions, not invisible
   subagents.** Every coding agent lich runs also has subagents of its own, and
   its harness describes those to it at length, from its first turn — so "spin

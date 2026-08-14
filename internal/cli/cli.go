@@ -221,15 +221,26 @@ func (c *client) sessions(args []string) error {
 		fmt.Fprintln(c.stdout, "No other live sessions.")
 		return nil
 	}
-	// The roster name rides last so a script reading the first columns keeps
-	// working. It has to be here at all: both names reach a session, and a
-	// surface that shows only one is what once made an agent treat a single
-	// session as two.
-	fmt.Fprintln(c.stdout, "session\tproject\tprovider\tname")
+	// New columns are appended, never inserted, so a script reading the first
+	// ones keeps working. The roster name has to be here at all: both names
+	// reach a session, and a surface that shows only one is what once made an
+	// agent treat a single session as two.
+	fmt.Fprintln(c.stdout, "session\tproject\tprovider\tname\tstate")
 	for _, p := range peers {
-		fmt.Fprintf(c.stdout, "%s\t%s\t%s\t%s\n", p.Label, p.Project, p.Kind, p.Name)
+		fmt.Fprintf(c.stdout, "%s\t%s\t%s\t%s\t%s\n", p.Label, p.Project, p.Kind, p.Name, sessionState(p.State))
 	}
 	return nil
+}
+
+// sessionState words a peer's state for the table. A session that has reported
+// nothing gets a dash rather than a blank cell: the column is never empty by
+// accident, and "not reported" is a different thing from a session sitting
+// idle — only the providers whose plugin reports state have one at all.
+func sessionState(state string) string {
+	if state == "" {
+		return "-"
+	}
+	return state
 }
 
 func (c *client) send(args []string) error {

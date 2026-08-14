@@ -165,18 +165,25 @@ type Terminal interface {
 
 // Peer is one session a caller may address: the label it is addressed by, the
 // name it answers to in Claude Code's peer roster, the project it belongs to
-// (labels are unique within a project, not across them), and what is running in
-// it.
+// (labels are unique within a project, not across them), what is running in it,
+// and what that session last reported it was doing.
 //
 // Both names are published because both reach this session and an agent sees
 // them in different places — the label on the card, the roster name in
 // `/list-agents` and in what a mention writes at a prompt. Showing one and
 // accepting the other is what made an agent treat a single session as two.
+//
+// State is stateBusy, stateWaiting or stateDone, and empty when the session has
+// reported nothing — which is a provider whose plugin does not report state as
+// much as a session that has not had a turn yet. Empty is "not known", never
+// "idle": guessing the second is how a caller ends up sending work into a
+// session that cannot take it.
 type Peer struct {
 	Label   string `json:"label"`
 	Name    string `json:"name"`
 	Project string `json:"project"`
 	Kind    string `json:"kind"`
+	State   string `json:"state"`
 }
 
 // Result is what a caller gets back from Send or Wait. Answer is empty unless
@@ -251,6 +258,12 @@ type Service struct {
 	// about appear; an unknown one is treated as not working, which is what a
 	// session with no hooks installed looks like.
 	state map[string]string
+	// reported is what each session last said out loud, which is what the roster
+	// publishes. It is not s.state: that one answers "is a turn running", and
+	// there a waiting mid-turn has to keep reading as busy (see Observe). Here
+	// waiting has to read as waiting — it is the one state that means a caller
+	// must not send work in at all.
+	reported map[string]string
 	// ready is the inbox: finished errands waiting to be collected, keyed by
 	// ticket so a Wait on the original ticket still finds its outcome.
 	ready map[string]*inboxEntry
@@ -308,6 +321,7 @@ func New(sessions Sessions, term Terminal, events Events) *Service {
 	return &Service{
 		tickets:       make(map[string]*ticket),
 		state:         make(map[string]string),
+		reported:      make(map[string]string),
 		ready:         make(map[string]*inboxEntry),
 		collectors:    make(map[string][]chan struct{}),
 		nudgeTimer:    make(map[string]*time.Timer),
@@ -720,6 +734,14 @@ func (s *Service) Observe(sessionID, state string) {
 		delete(s.state, sessionID)
 	default:
 		s.state[sessionID] = state
+	}
+	// The roster publishes the report itself rather than the turn state above:
+	// waiting is exactly what a caller has to see, and idle drops the row for
+	// the same reason it does there — an ended session reports nothing more.
+	if state == stateIdle {
+		delete(s.reported, sessionID)
+	} else {
+		s.reported[sessionID] = state
 	}
 
 	type endedErrand struct {

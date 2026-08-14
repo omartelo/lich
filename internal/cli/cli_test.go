@@ -145,7 +145,7 @@ func TestHelpPrintsEveryCommand(t *testing.T) {
 }
 
 func TestSessionsListsPeers(t *testing.T) {
-	f := newFakeLich(t, `[{"label":"docs","name":"lich-s2","project":"lich","kind":"codex"},
+	f := newFakeLich(t, `[{"label":"docs","name":"lich-s2","project":"lich","kind":"codex","state":"waiting"},
 	                      {"label":"api","name":"revu-s5","project":"revu","kind":"crush"}]`)
 
 	code, stdout, stderr := run(t, f, "sessions")
@@ -164,8 +164,9 @@ func TestSessionsListsPeers(t *testing.T) {
 		t.Errorf("args = %v, want the caller's own session id", call.args)
 	}
 	// Both names travel: a surface that shows only one is what once made an
-	// agent treat a single session as two.
-	for _, want := range []string{"docs\tlich\tcodex\tlich-s2", "api\trevu\tcrush\trevu-s5"} {
+	// agent treat a single session as two. The state travels with them, and a
+	// provider that reports none gets a dash — "not reported", never idle.
+	for _, want := range []string{"docs\tlich\tcodex\tlich-s2\twaiting", "api\trevu\tcrush\trevu-s5\t-"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("output is missing %q:\n%s", want, stdout)
 		}
@@ -561,7 +562,7 @@ func TestTheRuntimeFileFailureIsReported(t *testing.T) {
 }
 
 func TestJSONOutputIsMachineReadable(t *testing.T) {
-	peers := newFakeLich(t, `[{"label":"docs","project":"lich","kind":"codex"}]`)
+	peers := newFakeLich(t, `[{"label":"docs","project":"lich","kind":"codex","state":"waiting"}]`)
 	code, stdout, stderr := run(t, peers, "sessions", "--json")
 	if code != 0 {
 		t.Fatalf("exit = %d, stderr = %q", code, stderr)
@@ -572,6 +573,11 @@ func TestJSONOutputIsMachineReadable(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].Label != "docs" {
 		t.Errorf("peers = %+v", got)
+	}
+	// The state is what a script decides on — a waiting session is blocked on a
+	// human and can pick nothing up — so it has to survive the round trip.
+	if got[0].State != "waiting" {
+		t.Errorf("state = %q, want waiting", got[0].State)
 	}
 
 	answered := newFakeLich(t, `{"ticket":"a1b2c3d4","target":"docs","status":"answered","answer":"3 failures"}`)

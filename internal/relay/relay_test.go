@@ -273,6 +273,43 @@ func TestPeersListsLiveSessionsWithoutTheCaller(t *testing.T) {
 	}
 }
 
+// The roster carries what each session last said it was doing. waiting is the
+// one that has to travel intact: mid-turn it is a permission prompt stuck on a
+// human, so a caller reading the roster must see that rather than a session it
+// can hand work to. A session that reported nothing carries no state at all —
+// never "idle", which would read as free.
+func TestPeersCarryTheStateEachSessionReported(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1", "s2", "s3", "s5"), nil)
+
+	svc.Observe("s2", "busy")
+	svc.Observe("s2", "waiting")
+	svc.Observe("s3", "done")
+
+	peers, err := svc.Peers("s1")
+	if err != nil {
+		t.Fatalf("Peers: %v", err)
+	}
+	want := map[string]string{"lich-s2": "waiting", "lich-s3": "done", "revu-s5": ""}
+	if len(peers) != len(want) {
+		t.Fatalf("got %d peers %+v, want %d", len(peers), peers, len(want))
+	}
+	for _, p := range peers {
+		if p.State != want[p.Name] {
+			t.Errorf("%s state = %q, want %q", p.Name, p.State, want[p.Name])
+		}
+	}
+
+	// And the roster's view of waiting did not become the delivery's: a message
+	// handed to a session mid-permission-prompt still queues behind the turn it
+	// is in, which is what the turn state answers for.
+	svc.mu.Lock()
+	turn := svc.state["s2"]
+	svc.mu.Unlock()
+	if turn != stateBusy {
+		t.Errorf("turn state = %q, want %q — waiting mid-turn is still a turn", turn, stateBusy)
+	}
+}
+
 func TestPeersReportsAStoreFailure(t *testing.T) {
 	svc := newRelay(fakeSessions{err: errors.New("database is locked")}, newFakeTerminal(), nil)
 
@@ -1315,9 +1352,15 @@ func TestAnEndedSessionLeavesNoStateBehind(t *testing.T) {
 
 	svc.mu.Lock()
 	_, kept := svc.state["s2"]
+	_, published := svc.reported["s2"]
 	svc.mu.Unlock()
 	if kept {
 		t.Error("a session that ended still holds a row in the state map")
+	}
+	// Same for what the roster publishes: an ended session is gone, and a stale
+	// "busy" beside it would read as work in progress forever.
+	if published {
+		t.Error("a session that ended still reports a state to the roster")
 	}
 }
 

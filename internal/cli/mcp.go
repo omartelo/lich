@@ -290,7 +290,13 @@ var mcpTools = []mcpTool{
 	{
 		Name: "list_sessions",
 		Description: "List the other lich sessions that are live right now and can be given work. " +
-			"Returns each session's label (how it is addressed), its project, and which agent runs in it.",
+			"Returns each session's label (how it is addressed), its project, which agent runs " +
+			"in it, and the state it last reported: `busy` is mid-turn, `done` finished its turn " +
+			"and is free, and `waiting` is blocked on a human — a permission prompt nobody has " +
+			"answered, so that session can take nothing on until someone does. Tell the user a " +
+			"session is waiting instead of sending work into it. An empty state is not reported: " +
+			"only some providers report at all, so it says nothing about whether that session is " +
+			"free.",
 		Schema:   schema(map[string]any{}),
 		ReadOnly: true,
 		Run: func(c *client, _ mcpArgs) (string, error) {
