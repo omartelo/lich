@@ -1,8 +1,8 @@
-import { useSyncExternalStore } from "react"
+import { useState, useSyncExternalStore } from "react"
 import { useNavigate } from "react-router-dom"
 import { DndContext, closestCenter } from "@dnd-kit/core"
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
-import { Plus, Terminal } from "lucide-react"
+import { ChevronRight, Plus, Terminal } from "lucide-react"
 import { ProviderIcon } from "@/components/ProviderIcon"
 import { Button } from "@/components/ui/button"
 import {
@@ -101,6 +101,7 @@ export function SessionGroup({
     newSession,
   } = useProjects()
   const navigate = useNavigate()
+  const [collapsed, setCollapsed] = useState(false)
   const ids = sessions.map((session) => session.id)
   const { sensors, onDragEnd } = useSortableList(ids, onReorder)
   const name = pinned ? "Pinned" : checkoutLabel(path, projectPath, projectId)
@@ -129,16 +130,33 @@ export function SessionGroup({
     >
       {showHeader && (
         <div className="flex items-center gap-1 px-1 pb-0.5 pt-1.5">
-          <div
-            className={cn("flex min-w-0 flex-1 items-center gap-2", !pinned && "cursor-grab")}
+          <button
+            ref={group.setActivatorNodeRef}
+            type="button"
             {...group.attributes}
             {...group.listeners}
+            aria-expanded={!collapsed}
+            onClick={() => {
+              if (!group.isDragging) {
+                setCollapsed((current) => !current)
+              }
+            }}
+            className={cn(
+              "flex min-w-0 flex-1 items-center gap-1.5 text-left",
+              pinned ? "cursor-pointer" : "cursor-grab",
+            )}
           >
+            <ChevronRight
+              className={cn(
+                "size-3 shrink-0 text-muted-foreground/70 transition-transform",
+                !collapsed && "rotate-90",
+              )}
+            />
             <span className="min-w-0 truncate text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground/70">
               {name}
             </span>
             <span className="h-px flex-1 bg-border" />
-          </div>
+          </button>
           {!pinned && (
             <DropdownMenu>
               <DropdownMenuTrigger
@@ -172,39 +190,41 @@ export function SessionGroup({
           )}
         </div>
       )}
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        modifiers={[verticalAxis]}
-        onDragEnd={onDragEnd}
-      >
-        <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-          <div className="flex flex-col gap-1.5">
-            {sessions.map((session) => (
-              <SessionCard
-                key={session.id}
-                session={session}
-                path={projectPath}
-                // Resolved here rather than in the card: the parent can be a
-                // session in another project, which only the workspace-wide
-                // state knows about.
-                origin={sessionOrigin(workspace, session)}
-                active={session.id === activeId}
-                onSelect={() => select(session.id)}
-                onClose={() => onClose(session)}
-                onRename={(label) => renameSession(projectId, session.id, label)}
-                onPin={(pinned) => pinSession(projectId, session.id, pinned)}
-                onOpenTerminal={(cwd) => newSession(projectId, "shell", cwd)}
-                onPulls={onPulls}
-                delegateGroups={delegateGroups}
-              />
-            ))}
-          </div>
-        </SortableContext>
-      </DndContext>
+      {!collapsed && (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          modifiers={[verticalAxis]}
+          onDragEnd={onDragEnd}
+        >
+          <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+            <div className="flex flex-col gap-1.5">
+              {sessions.map((session) => (
+                <SessionCard
+                  key={session.id}
+                  session={session}
+                  path={projectPath}
+                  // Resolved here rather than in the card: the parent can be a
+                  // session in another project, which only the workspace-wide
+                  // state knows about.
+                  origin={sessionOrigin(workspace, session)}
+                  active={session.id === activeId}
+                  onSelect={() => select(session.id)}
+                  onClose={() => onClose(session)}
+                  onRename={(label) => renameSession(projectId, session.id, label)}
+                  onPin={(pinned) => pinSession(projectId, session.id, pinned)}
+                  onOpenTerminal={(cwd) => newSession(projectId, "shell", cwd)}
+                  onPulls={onPulls}
+                  delegateGroups={delegateGroups}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+      )}
       {/* The pinned block spans every checkout, so no single pull request
           belongs under it — the card stays with the worktree's own block. */}
-      {!pinned && pullsOpen && (
+      {!collapsed && !pinned && pullsOpen && (
         <PullRequestCard
           path={checkout}
           active={pullsActive}

@@ -11,7 +11,7 @@ This is the approved implementation inventory for the per-project default harnes
 | `frontend/src/components/settings/Settings.tsx` | Group navigation into Global, Project, and Provider settings and register the Sessions pane. |
 | `frontend/src/components/settings/ProvidersSettings.tsx` | Clarify that the global default is the fallback for projects without an override. |
 | `frontend/src/components/sidebar/SessionSidebar.tsx` | Pass the enabled-provider roster into checkout groups. |
-| `frontend/src/components/sidebar/SessionGroup.tsx` | Add the checkout-header `+` menu for enabled harnesses and a new terminal, without adding it to Pinned or lone headerless groups. |
+| `frontend/src/components/sidebar/SessionGroup.tsx` | Add the checkout-header `+` menu for enabled harnesses and a new terminal, without adding it to Pinned or lone headerless groups; make visible group headers collapse and expand their cards when clicked. |
 | `CHANGELOG.md` | Document both user-visible improvements under `[Unreleased]`. |
 
 No SQLite schema, Go service, RPC method, or API type change is planned: the existing `settings` table and `Store.GetSetting`/`Store.SetSetting` RPC methods already support project-scoped values.

@@ -17,7 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Every visible checkout group can open another session in place.** Its `+`
   menu offers every enabled coding harness and a plain terminal, rooted in that
   exact project directory or worktree instead of requiring a trip through the
-  project-level menu.
+  project-level menu. Clicking the checkout header collapses or expands all of
+  its cards when the sidebar needs less noise.
 
 ## [0.34.0] - 2026-08-14
 
