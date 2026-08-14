@@ -39,6 +39,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   session parked with its worktree. The exit banner's **Restart** is a fresh
   spawn with no conversation behind it, so it still gets the derived name.
 
+### Changed
+
+- **Building lich from source now needs Go 1.26.6.** The pin is exact so that
+  every release binary carries the current toolchain's own security fixes, and
+  the module is what CI reads its Go version from. `GOTOOLCHAIN=auto` — the
+  default — fetches 1.26.6 on its own; a build pinned to `local` on anything
+  older will refuse the module.
+
 ### Removed
 
 - **The session tooltip no longer prints an `@name` line.** It showed the name

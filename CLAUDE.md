@@ -13,7 +13,7 @@ feature history lives in `CHANGELOG.md` — don't duplicate it here.
 
 ## Stack
 
-- **Backend**: Go 1.25, pure Go (CGO_ENABLED=0, fully static binary). One token-authenticated loopback listener
+- **Backend**: Go 1.26, pure Go (CGO_ENABLED=0, fully static binary). One token-authenticated loopback listener
   carries everything: HTTP RPC (`internal/rpc`) plus WebSockets for terminal I/O (`internal/terminal/transport.go`)
   and app events (`internal/events`). OS-specific code is selected by build tags behind small seams, never by
   runtime checks — the PTY is the model (`internal/terminal`: creack/pty on Unix, ConPTY on Windows).

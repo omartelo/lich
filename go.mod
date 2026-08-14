@@ -1,6 +1,6 @@
 module github.com/omartelo/lich
 
-go 1.25.0
+go 1.26.6
 
 require (
 	github.com/UserExistsError/conpty v0.1.4
@@ -24,8 +24,8 @@ require (
 	github.com/randall77/makefat v0.0.0-20210315173500-7ddd0e42c844 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
-	golang.org/x/crypto v0.0.0-20211209193657-4570a0811e8b // indirect
-	golang.org/x/image v0.40.0 // indirect
+	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/image v0.45.0 // indirect
 	modernc.org/libc v1.73.4 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect

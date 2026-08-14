@@ -141,7 +141,7 @@ your gh login, never a session token — before you attach it to a bug report, a
 
 ## Build from source
 
-Pure-Go backend (Go 1.25, `CGO_ENABLED=0`) serving an embedded React 18 /
+Pure-Go backend (Go 1.26, `CGO_ENABLED=0`) serving an embedded React 18 /
 TypeScript / Vite frontend over a token-authenticated loopback listener (HTTP RPC
 + WebSockets). Terminals are xterm.js with the WebGL addon; the code and diff
 surfaces are CodeMirror 6. The Chromium shell is a decision record:
