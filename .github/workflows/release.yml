@@ -224,7 +224,8 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-      # Checkout only for CHANGELOG.md — the notes come from it.
+      # Checkout for CHANGELOG.md — the notes come from it — and to prove the
+      # banner is still where the notes are about to point at it.
       - uses: actions/checkout@v7
 
       - name: Download build assets
@@ -239,17 +240,34 @@ jobs:
           sha256sum lich-* > checksums.txt
           cat checksums.txt
 
-      - name: Extract changelog notes
+      # The notes open with the same banner the site and the social cards use.
+      # It is addressed at this tag's tree, not at a branch, so a release keeps
+      # the banner it shipped with however the file changes later.
+      - name: Compose release notes
+        env:
+          BANNER: docs/media/og.png
         run: |
           version="${GITHUB_REF_NAME#v}"
           awk -v ver="$version" '
             $0 ~ "^## \\[" ver "\\]" { grab = 1; next }
             grab && /^## \[/ { exit }
             grab { print }
-          ' CHANGELOG.md > notes.md
-          if [ ! -s notes.md ]; then
-            echo "Release ${GITHUB_REF_NAME}" > notes.md
+          ' CHANGELOG.md > body.md
+          if [ ! -s body.md ]; then
+            echo "Release ${GITHUB_REF_NAME}" > body.md
           fi
+          # A moved or renamed banner would otherwise put a broken image at the
+          # top of this release and of every one after it, with nothing to
+          # notice it but a reader.
+          if [ ! -f "$BANNER" ]; then
+            echo "banner not found at $BANNER" >&2
+            exit 1
+          fi
+          {
+            printf '<img src="https://raw.githubusercontent.com/%s/%s/%s" alt="lich — a terminal-first harness for coding with AI agents" width="900" />\n\n' \
+              "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME" "$BANNER"
+            cat body.md
+          } > notes.md
           cat notes.md
 
       - name: Create GitHub Release
