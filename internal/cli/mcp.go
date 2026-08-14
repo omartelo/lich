@@ -90,7 +90,7 @@ type mcpTool struct {
 // that never realizes it could.
 const mcpInstructions = `lich runs coding-agent sessions side by side in one window; these tools are how this session works with the others.
 
-Delegate in parallel: for work that can run beside yours, open a worker session in its own git worktree (open_session with worktree) so it gets its own checkout, then hand it the task with send_to_session. Check list_worktrees first — a branch already checked out is opened, not created. Workers are full sessions on the user's screen: visible, steerable, and yours to close (close_session) when the work is done.
+Delegate in parallel: for work that can run beside yours, open a worker session in its own git worktree (open_session with worktree) so it gets its own checkout, then hand it the task with send_to_session. Check list_worktrees first — a branch already checked out is opened, not created. Workers are full sessions on the user's screen: visible, steerable, and yours to close (close_session) when the work is done. That is the difference from the subagents your own harness runs, and it is what the user is asking for when they say to fan work out across branches or worktrees: a subagent has no checkout of its own and no card they can open, read or take over mid-task. Reach for one of those to read something and throw it away, not to run the implementation somebody asked to see.
 
 Never poll for results. A send that outlives its wait hands back a ticket and you carry on with your own work; when results are ready, one short [lich] note arrives at your prompt — collect everything at once with wait_for_answer (no ticket). Polling in a loop burns the tokens this design exists to save.
 
@@ -370,12 +370,13 @@ var mcpTools = []mcpTool{
 	},
 	{
 		Name: "open_session",
-		Description: "Open a new lich session and start it, so it can be given work with " +
-			"send_to_session. Optionally creates a git worktree first and roots the new " +
-			"session in it, which is how you give a task its own checkout instead of " +
-			"sharing yours. Returns the names the new session is addressed by. " +
-			"It starts empty and idle — nobody has asked it anything yet — and its agent " +
-			"takes a few seconds to come up, so send it work as a separate step.",
+		Description: "Open a new lich session and start it. Optionally creates a git worktree " +
+			"first and roots the new session in it, which is how you give a task its own " +
+			"checkout instead of sharing yours — and optionally hands it the task in the same " +
+			"call, so fanning work out costs one call per worker instead of two. Returns the " +
+			"names the new session is addressed by, and, when a task came with it, that task's " +
+			"outcome: the answer if it was quick, otherwise a ticket to carry on from, exactly " +
+			"as send_to_session returns one.",
 		Schema: schema(map[string]any{
 			"project": property("string",
 				"Project to open the session in, by name. Defaults to your own project."),
@@ -392,6 +393,9 @@ var mcpTools = []mcpTool{
 					"--model flag takes it — the name or alias, never a lich name for it. Omit "+
 					"to leave the provider on its default. Crush and shell sessions cannot be "+
 					"given one."),
+			"prompt": property("string",
+				"Task to hand the new session as soon as its agent is up. Omit to open it idle "+
+					"and send later."),
 		}),
 		Run: func(c *client, args mcpArgs) (string, error) {
 			var opened spawn.Session
@@ -402,7 +406,11 @@ var mcpTools = []mcpTool{
 			if err := c.call("spawn.Open", call, openCall, &opened); err != nil {
 				return "", err
 			}
-			return openedText(opened), nil
+			prompt := args.text("prompt")
+			if prompt == "" {
+				return openedText(opened), nil
+			}
+			return openedText(opened) + "\n" + c.handOver(opened, prompt), nil
 		},
 	},
 	{
@@ -476,6 +484,39 @@ var mcpTools = []mcpTool{
 			return "Answer sent.", nil
 		},
 	},
+}
+
+// deliverWait bounds handing a task to a session that was opened a moment ago:
+// how long the delivery waits for that session's agent to be the program reading
+// its PTY (relay.awaitReady).
+//
+// It is not a wait for an answer. The worker was created seconds ago and its
+// task is minutes of work, so a ticket is the expected outcome and the sender
+// carries on. It is short because opening may already have spent up to openCall
+// seconds on a worktree, and the two together have to stay under the 120 seconds
+// past which the client stops waiting and detaches the call (see mcpMaxWait).
+const deliverWait = 30
+
+// handOver gives a just-opened session its first task, wording the outcome the
+// way send_to_session words it — the caller should not have to learn two
+// spellings of one answer.
+//
+// A delivery that fails is reported beside the opened session rather than as a
+// failed call. The session exists either way, and a failed call would read as if
+// nothing had happened — leaving an agent that opens three workers convinced it
+// has none.
+func (c *client) handOver(opened spawn.Session, prompt string) string {
+	var result relay.Result
+	call := []any{c.sessionID(), opened.Label, opened.Project, prompt, deliverWait}
+	if err := c.call("relay.Send", call, waitBudget(deliverWait), &result); err != nil {
+		return fmt.Sprintf(
+			"The task did not reach it: %v. The session is open and idle, so send the task "+
+				"with send_to_session — a fresh worktree runs the project's setup script "+
+				"before its agent, and that can outlast this call.",
+			err,
+		)
+	}
+	return mcpOutcome(result)
 }
 
 // mcpOutcome words a Send or Wait result for an agent: the answer alone when

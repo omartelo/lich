@@ -2103,3 +2103,31 @@ func TestTheNudgeNamesTheToolOnlyWhereItExists(t *testing.T) {
 		})
 	}
 }
+
+// TestSpawnBriefingNamesTheRouteThisSpawnGave pins the same rule the reply
+// instruction follows: a session handed lich's MCP server is pointed at the
+// tools, and one that was not is pointed at the command line every provider
+// has. Naming tools that are not in the list would leave that session believing
+// it has no way to open anything.
+func TestSpawnBriefingNamesTheRouteThisSpawnGave(t *testing.T) {
+	withTools, withCommand := SpawnBriefing(true), SpawnBriefing(false)
+
+	if strings.Contains(withTools, "lich open") {
+		t.Errorf("a session with the tools is sent to the command line:\n%s", withTools)
+	}
+	if !strings.Contains(withTools, "tools in your list") {
+		t.Errorf("the tool route is missing:\n%s", withTools)
+	}
+	for _, want := range []string{"lich open --worktree", "lich send"} {
+		if !strings.Contains(withCommand, want) {
+			t.Errorf("the command route is missing %q:\n%s", want, withCommand)
+		}
+	}
+	// The distinction is the whole reason this text is spawned with: without it
+	// the agent reaches for the subagents its own harness describes at length.
+	for _, briefing := range []string{withTools, withCommand} {
+		if !strings.Contains(briefing, "subagent") {
+			t.Errorf("the briefing draws no line against a subagent:\n%s", briefing)
+		}
+	}
+}

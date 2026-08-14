@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Asking for work to be fanned out opens lich sessions, not invisible
+  subagents.** Every coding agent lich runs also has subagents of its own, and
+  its harness describes those to it at length, from its first turn — so "spin
+  these three tasks up in worktrees" produced three processes with no checkout,
+  no card, and nothing to open, read or take over. lich now says the one thing
+  that was missing: sessions it opens are visible and steerable and subagents
+  are not, so parallel work belongs in sessions. Claude Code and oh-my-pi are
+  told at spawn (both take `--append-system-prompt`); the rest read the same
+  point in lich's own MCP instructions, since none of them has a flag that
+  appends to a system prompt and lich will not rewrite config that belongs to
+  the user. Opening a worker also got cheaper: `open_session` now takes the task
+  itself, so fanning work out costs one call per worker instead of two, and the
+  task waits for that session's agent to come up rather than landing in a setup
+  script.
+
 - **opencode and Crush sessions resume.** A restored card running either of them
   used to start a fresh conversation every time, even though lich had been
   storing the id of the one it ran before. Both now offer the same resume prompt

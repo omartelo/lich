@@ -17,6 +17,13 @@ import (
 	"github.com/omartelo/lich/internal/spawn"
 )
 
+// answer is one method's canned reply: an RPC failure is a 4xx/5xx carrying
+// {"error"}, so a test that exercises one has to set both (internal/rpc).
+type answer struct {
+	status int
+	body   string
+}
+
 // recorded is one RPC the fake lich received.
 type recorded struct {
 	method string
@@ -31,6 +38,10 @@ type fakeLich struct {
 	calls  []recorded
 	status int
 	body   string
+	// answers overrides the canned reply for one RPC method, which is what a
+	// conversation making more than one call needs: a tool that opens a session
+	// and then hands it a task reads two different shapes back.
+	answers map[string]answer
 	// token, when set, is the only one this listener accepts — every other is
 	// refused the way the real transport refuses it (internal/terminal:
 	// mount answers 403). Empty accepts anything, which is what every test
@@ -54,9 +65,13 @@ func newFakeLich(t *testing.T, body string) *fakeLich {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
+		status, body := f.status, f.body
+		if override, ok := f.answers[strings.TrimPrefix(r.URL.Path, "/rpc/")]; ok {
+			status, body = override.status, override.body
+		}
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(f.status)
-		_, _ = io.WriteString(w, f.body)
+		w.WriteHeader(status)
+		_, _ = io.WriteString(w, body)
 	}))
 	t.Cleanup(f.server.Close)
 	return f

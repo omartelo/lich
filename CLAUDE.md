@@ -119,6 +119,14 @@ nobody knows it and that the call site never shows. The mechanism and the histor
   the running window (best-effort, untested against a real window) and exits 0.
 - **Reordering rides dnd-kit's pointer sensors** (`frontend/src/lib/use-sortable-list.ts`); the activation distance
   is load-bearing — without it plain clicks stop selecting a session.
+- **lich appends to the agent's system prompt, for two providers only**
+  (`internal/terminal/command.go`, `briefingFlags` → `relay.SpawnBriefing`): Claude Code and oh-my-pi
+  are spawned with `--append-system-prompt` carrying lich's own briefing, so text the user never
+  wrote is in every session's prompt and in `/proc/<pid>/cmdline`. Codex, opencode and Crush get
+  nothing there — none has an append (Codex's `model_instructions_file` *replaces* the base
+  instructions; the other two are config keys, not flags), so for them the same point exists only in
+  lich's MCP instructions, and behaviour between providers differs by that much.
+
 - **Installing the plugin writes into three harnesses' own directories**
   (`internal/agentplugin`): Claude Code and Codex are driven through their plugin CLI, but opencode, oh-my-pi and
   Crush have none, so lich writes the released files itself — a module into opencode's plugin dir, another into

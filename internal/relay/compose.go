@@ -11,6 +11,41 @@ import (
 // this text: the words are the whole protocol, which is what lets a provider
 // lich has never heard of answer a relayed request.
 
+// SpawnBriefing is what a provider is told about lich when lich starts it: two
+// sentences appended to its system prompt, for the providers whose command line
+// accepts one (internal/terminal, briefingFlags).
+//
+// It exists because the agent's own harness offers subagents of its own, and
+// those are described to it at length, in its system prompt, from its first
+// turn. lich's tools are described in a server block far below that — so an
+// agent asked to "fan this out across worktrees" reaches for the subagent it was
+// told about, and the user watches work they meant to supervise disappear into a
+// process they cannot open, on a checkout that does not exist. Reported twice by
+// the same user before this text existed.
+//
+// It draws the line rather than forbidding anything: a subagent is still the
+// right tool for a throwaway read. What it fixes is the one case the agent
+// cannot get right on its own, because nothing in its prompt says lich sessions
+// are visible and steerable and subagents are not.
+//
+// hasTools is whether this provider was handed lich's MCP server at spawn. The
+// command line works everywhere and is named for the ones that were not, on the
+// same rule replyInstruction follows: naming a tool a session does not have is
+// worse than naming the command.
+func SpawnBriefing(hasTools bool) string {
+	route := "Open one with `lich open --worktree <branch>`, then hand it the task with " +
+		"`lich send <session> \"<task>\"`."
+	if hasTools {
+		route = "The lich tools in your list open one and hand it the task."
+	}
+	return "You are running inside lich, which runs coding-agent sessions side by side and can " +
+		"open more of them beside this one — each a card the user watches and can take over " +
+		"mid-task, in its own git worktree when the work needs its own checkout. When work is " +
+		"to be fanned out — several tasks at once, one per branch or checkout — those sessions " +
+		"are what to open, not the subagents your own harness runs: a subagent has no checkout, " +
+		"no card, and nothing the user can steer or resume. " + route
+}
+
 // compose is the message typed at the target's prompt. It names where the
 // request came from so the receiving agent knows this did not come from the
 // person in front of it, and carries the exact command that sends an answer

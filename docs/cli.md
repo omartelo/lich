@@ -299,7 +299,7 @@ at lich.
 | `send_to_session` | `session`, `prompt`, optional `project` and `timeout_seconds`. |
 | `wait_for_answer` | optional `ticket` and `timeout_seconds` — with a ticket, `lich wait <ticket>`; without one, the collect: everything ready at once. |
 | `reply_to_session` | `ticket`, `answer` — what a relayed message asks for. |
-| `open_session` | optional `project`, `kind`, `worktree`, `base`, `model` — `lich open`. |
+| `open_session` | optional `project`, `kind`, `worktree`, `base`, `model` — `lich open` — plus optional `prompt`, which hands the new session that task in the same call (`lich open` then `lich send`, in one). |
 | `close_session` | `session`, optional `project`, `worktree` (`keep`/`remove`), `force`. |
 | `list_worktrees` | optional `project` — the checkouts, as JSON. |
 

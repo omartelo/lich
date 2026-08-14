@@ -80,6 +80,23 @@ func SupportsModel(kind string) bool {
 	return ok
 }
 
+// briefingFlags is how each provider spells "append this to your system
+// prompt", for the two that spell it at all: Claude Code and oh-my-pi share
+// --append-system-prompt (read off both `--help`, like every other table here).
+//
+// The other three are absent because none of them has an append. Codex takes
+// `model_instructions_file`, which *replaces* its base instructions — swapping
+// the whole system prompt of a provider for a file lich wrote is not a thing
+// lich does for one paragraph. opencode's `instructions` and Crush's
+// `system_prompt_prefix` are config keys, not flags, so using them means writing
+// a file the user owns — the line lich already draws at MCP registration
+// (providers.AcceptsMCPServer). Those three read the same point in lich's MCP
+// instructions instead, which costs nothing and needs no file.
+var briefingFlags = map[string]string{
+	providers.Claude: "--append-system-prompt",
+	providers.OMP:    "--append-system-prompt",
+}
+
 // How each provider is handed an MCP server on its command line: Claude Code
 // takes a JSON string, Codex takes config overrides for its `mcp_servers`
 // table. Which providers accept one at all is providers.AcceptsMCPServer.
@@ -154,6 +171,7 @@ func providerArgs(kind, name, resume, model, lichBin string, skipPermissions boo
 	args = append(args, resumeArgs(kind, resume)...)
 	args = append(args, skipPermissionArgs(kind, skipPermissions)...)
 	args = append(args, modelArgs(kind, model)...)
+	args = append(args, briefingArgs(kind)...)
 	if kind == providers.Codex {
 		return append(mcp, args...)
 	}
@@ -174,6 +192,19 @@ func modelArgs(kind, model string) []string {
 		return nil
 	}
 	return []string{flag, model}
+}
+
+// briefingArgs returns the arguments that append lich's own briefing to a
+// provider's system prompt, or nil for a provider with no spelling for it. The
+// briefing is worded for what this spawn actually registered: a provider handed
+// lich's MCP server is pointed at the tools, everyone else at the command line
+// (relay.SpawnBriefing).
+func briefingArgs(kind string) []string {
+	flag, ok := briefingFlags[kind]
+	if !ok {
+		return nil
+	}
+	return []string{flag, relay.SpawnBriefing(providers.AcceptsMCPServer(kind))}
 }
 
 // skipPermissionArgs returns the flag that drops a provider's permission

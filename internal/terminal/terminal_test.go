@@ -386,9 +386,7 @@ func TestStartPassesResumeToTheProcess(t *testing.T) {
 	// TestProviderArgsRegistersTheMCPServer pins; this test owns the resume id
 	// reaching argv ahead of it.
 	want := []string{bin, "--resume", "abc-123", "--mcp-config"}
-	if len(got) != len(want)+1 || !slices.Equal(got[:len(want)], want) {
-		t.Errorf("spawned argv = %v, want %v followed by one config", got, want)
-	}
+	spawnPins(t, got, want...)
 }
 
 // TestStartWithoutResumeSpawnsBare proves a session with no id to resume spawns
@@ -410,9 +408,7 @@ func TestStartWithoutResumeSpawnsBare(t *testing.T) {
 	// whose content TestProviderArgsRegistersTheMCPServer pins. What this test
 	// owns is that no resume flag was invented alongside it.
 	want := []string{bin, "--mcp-config"}
-	if len(got) != len(want)+1 || !slices.Equal(got[:len(want)], want) {
-		t.Errorf("spawned argv = %v, want %v followed by one config", got, want)
-	}
+	spawnPins(t, got, want...)
 }
 
 // TestStartWithSetupWrapsTheSpawn proves the setup flag reroutes the spawn
@@ -459,9 +455,7 @@ func TestStartWithSetupButNoScriptSpawnsBare(t *testing.T) {
 	// As above: the registration is expected, an sh indirection is not — argv
 	// still starts at the provider binary itself.
 	want := []string{bin, "--mcp-config"}
-	if len(got) != len(want)+1 || !slices.Equal(got[:len(want)], want) {
-		t.Errorf("spawned argv = %v, want %v followed by one config", got, want)
-	}
+	spawnPins(t, got, want...)
 }
 
 // TestResolveBin proves an empty custom path falls back to the provider's
@@ -611,9 +605,7 @@ func TestStartPassesSkipPermissionsToTheProcess(t *testing.T) {
 	// has to land ahead of it — --mcp-config reads everything after it as another
 	// config path.
 	want := []string{bin, "--dangerously-skip-permissions", "--mcp-config"}
-	if len(got) != len(want)+1 || !slices.Equal(got[:len(want)], want) {
-		t.Errorf("spawned argv = %v, want %v followed by one config", got, want)
-	}
+	spawnPins(t, got, want...)
 }
 
 // TestStartPassesNameToTheProcess proves the peer name reaches the spawned
@@ -633,9 +625,7 @@ func TestStartPassesNameToTheProcess(t *testing.T) {
 
 	// As above: the registration follows, pinned by its own test.
 	want := []string{bin, "--name", "lich-4f2a", "--mcp-config"}
-	if len(got) != len(want)+1 || !slices.Equal(got[:len(want)], want) {
-		t.Errorf("spawned argv = %v, want %v followed by one config", got, want)
-	}
+	spawnPins(t, got, want...)
 }
 
 // TestModelArgs pins each provider's own flag, and the two kinds that must never
@@ -709,9 +699,7 @@ func TestStartPassesTheStoredModelToTheProcess(t *testing.T) {
 	// Ahead of the registration, as every other flag is: --mcp-config reads what
 	// follows it as another config path, so a model behind it is a model lost.
 	want := []string{bin, "--model", "opus", "--mcp-config"}
-	if len(got) != len(want)+1 || !slices.Equal(got[:len(want)], want) {
-		t.Errorf("spawned argv = %v, want %v followed by one config", got, want)
-	}
+	spawnPins(t, got, want...)
 }
 
 // TestPTYEcho proves the core assumption of the service: a process spawns
@@ -820,13 +808,38 @@ func TestSessionEnvInjectsCoordinates(t *testing.T) {
 	}
 }
 
+// spawnPins asserts a spawn's argv: it starts with the binary, carries these
+// flags in this order, and ends with the MCP registration plus its one config
+// value.
+//
+// lich's own briefing is dropped before the comparison. Every Claude Code spawn
+// carries it, and each of these tests owns one flag of its own — pinning the
+// briefing's presence six more times would only mean six failures the day its
+// wording moves. What it says is pinned once, by
+// TestTheBriefingGoesToTheProvidersThatTakeOne.
+func spawnPins(t *testing.T, got []string, want ...string) {
+	t.Helper()
+	trimmed := make([]string, 0, len(got))
+	for i := 0; i < len(got); i++ {
+		if got[i] == "--append-system-prompt" {
+			i++ // and the text it carries
+			continue
+		}
+		trimmed = append(trimmed, got[i])
+	}
+	if len(trimmed) != len(want)+1 || !slices.Equal(trimmed[:len(want)], want) {
+		t.Errorf("spawned argv = %v, want %v followed by one config", got, want)
+	}
+}
+
 // TestProviderArgsRegistersTheMCPServer proves each provider that can be handed
 // an MCP server at spawn is handed lich's, spelled its own way.
 func TestProviderArgsRegistersTheMCPServer(t *testing.T) {
 	const bin = "/usr/bin/lich"
 
 	claude := providerArgs(providers.Claude, "", "", "", bin, false)
-	if len(claude) != 2 || claude[0] != "--mcp-config" {
+	at := slices.Index(claude, "--mcp-config")
+	if at < 0 || at+1 >= len(claude) {
 		t.Fatalf("claude args = %v", claude)
 	}
 	var config struct {
@@ -835,18 +848,18 @@ func TestProviderArgsRegistersTheMCPServer(t *testing.T) {
 			Args    []string `json:"args"`
 		} `json:"mcpServers"`
 	}
-	if err := json.Unmarshal([]byte(claude[1]), &config); err != nil {
-		t.Fatalf("--mcp-config value is not JSON: %v (%q)", err, claude[1])
+	if err := json.Unmarshal([]byte(claude[at+1]), &config); err != nil {
+		t.Fatalf("--mcp-config value is not JSON: %v (%q)", err, claude[at+1])
 	}
 	server, ok := config.MCPServers["lich"]
 	if !ok {
-		t.Fatalf("no lich server in %q", claude[1])
+		t.Fatalf("no lich server in %q", claude[at+1])
 	}
 	if server.Command != bin || !slices.Equal(server.Args, []string{"mcp"}) {
 		t.Errorf("server = %+v, want %q mcp", server, bin)
 	}
-	if strings.Contains(claude[1], "token") {
-		t.Errorf("a secret reached the argv, which /proc exposes: %q", claude[1])
+	if strings.Contains(claude[at+1], "token") {
+		t.Errorf("a secret reached the argv, which /proc exposes: %q", claude[at+1])
 	}
 
 	codex := providerArgs(providers.Codex, "", "", "", bin, false)
@@ -900,22 +913,66 @@ func TestProviderArgsOrdersEachProvidersConstraint(t *testing.T) {
 // TestProviderArgsWithoutARegistration proves the providers with no way to be
 // told at spawn are spawned exactly as before, and that a lich which cannot
 // name its own binary registers nothing rather than something broken.
+//
+// bare is the stronger claim: nothing at all on the command line. It does not
+// hold for the two that take a briefing without taking an MCP server — for
+// those, what is proven is that no registration rode along with it.
 func TestProviderArgsWithoutARegistration(t *testing.T) {
 	tests := []struct {
 		name string
 		kind string
 		bin  string
+		bare bool
 	}{
-		{"opencode has no flag for it", providers.OpenCode, "/usr/bin/lich"},
-		{"crush has no flag for it", providers.Crush, "/usr/bin/lich"},
-		{"oh-my-pi has no flag for it", providers.OMP, "/usr/bin/lich"},
-		{"a shell session is not a provider", KindShell, "/usr/bin/lich"},
-		{"no binary to point at", providers.Claude, ""},
+		{"opencode has no flag for it", providers.OpenCode, "/usr/bin/lich", true},
+		{"crush has no flag for it", providers.Crush, "/usr/bin/lich", true},
+		{"a shell session is not a provider", KindShell, "/usr/bin/lich", true},
+		{"oh-my-pi takes a briefing but no server", providers.OMP, "/usr/bin/lich", false},
+		{"no binary to point at", providers.Claude, "", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if args := providerArgs(tt.kind, "", "", "", tt.bin, false); len(args) != 0 {
+			args := providerArgs(tt.kind, "", "", "", tt.bin, false)
+			if tt.bare && len(args) != 0 {
 				t.Errorf("args = %v, want none", args)
+			}
+			for _, flag := range []string{claudeMCPFlag, codexConfigFlag} {
+				if slices.Contains(args, flag) {
+					t.Errorf("args = %v, want no MCP registration", args)
+				}
+			}
+		})
+	}
+}
+
+// TestTheBriefingGoesToTheProvidersThatTakeOne proves the two halves of the
+// briefing: who is handed it at all, and that its wording follows what this
+// spawn registered — a provider given no MCP server is pointed at the command
+// line, because naming a tool it does not have is the one thing that leaves it
+// with no route at all.
+func TestTheBriefingGoesToTheProvidersThatTakeOne(t *testing.T) {
+	briefed := map[string]string{
+		providers.Claude: "tools in your list",
+		providers.OMP:    "lich open --worktree",
+	}
+	for kind, want := range briefed {
+		t.Run(kind, func(t *testing.T) {
+			args := providerArgs(kind, "", "", "", "/usr/bin/lich", false)
+			flag := slices.Index(args, "--append-system-prompt")
+			if flag < 0 || flag+1 >= len(args) {
+				t.Fatalf("args = %v, want a briefing", args)
+			}
+			if !strings.Contains(args[flag+1], want) {
+				t.Errorf("briefing = %q, want it to name %q", args[flag+1], want)
+			}
+		})
+	}
+
+	for _, kind := range []string{providers.Codex, providers.OpenCode, providers.Crush, KindShell} {
+		t.Run(kind+" takes none", func(t *testing.T) {
+			args := providerArgs(kind, "", "", "", "/usr/bin/lich", false)
+			if slices.Contains(args, "--append-system-prompt") {
+				t.Errorf("args = %v, want no briefing: %s has no flag that appends one", args, kind)
 			}
 		})
 	}
