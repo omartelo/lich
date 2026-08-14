@@ -32,9 +32,16 @@ import (
 // command line works everywhere and is named for the ones that were not, on the
 // same rule replyInstruction follows: naming a tool a session does not have is
 // worse than naming the command.
+//
+// The example spells its placeholders in capitals and quotes with ' rather than
+// the usual <angle brackets> and ": this string is passed as one argv entry, and
+// a provider shipped as a .cmd is spawned through `cmd.exe /c`
+// (internal/terminal, wrapArgv). Windows escapes a double quote as \" for
+// CommandLineToArgvW, cmd.exe does not read that as an escape, and the < and >
+// left outside quotes by it are redirection.
 func SpawnBriefing(hasTools bool) string {
-	route := "Open one with `lich open --worktree <branch>`, then hand it the task with " +
-		"`lich send <session> \"<task>\"`."
+	route := "Open one with `lich open --worktree BRANCH`, then hand it the task with " +
+		"`lich send SESSION 'the task'`."
 	if hasTools {
 		route = "The lich tools in your list open one and hand it the task."
 	}

@@ -97,7 +97,13 @@ func TestMCPHandshakeAdvertisesTools(t *testing.T) {
 	// The instructions are the one place the whole journey — fan out, carry
 	// on, collect — is told as one; clients inject them into the system
 	// prompt, so an empty field is an agent that never learns it can delegate.
-	for _, want := range []string{"open_session", "send_to_session", "wait_for_answer", "worktree"} {
+	// "subagent" is in the list because the instructions are the only place the
+	// providers with no --append-system-prompt (Codex, opencode, Crush) are told
+	// the one thing they get wrong on their own: that fanning work out means
+	// these sessions and not the subagents their own harness offers.
+	for _, want := range []string{
+		"open_session", "send_to_session", "wait_for_answer", "worktree", "subagent",
+	} {
 		if !strings.Contains(result.Instructions, want) {
 			t.Errorf("instructions are missing %q:\n%s", want, result.Instructions)
 		}
@@ -558,8 +564,12 @@ func TestMCPOpenSessionHandsOverTheTaskItCameWith(t *testing.T) {
 		t.Fatalf("calls = %+v, want spawn.Open then relay.Send", f.calls)
 	}
 	// The new session is addressed by the label lich just gave it, in its own
-	// project — the sender cannot have been told either one yet.
-	want := []any{"s1", "auth-fix", "lich", "port the parser", float64(deliverWait)}
+	// project — the sender cannot have been told either one yet. The wait is
+	// spelled out rather than read from deliverWait: what has to hold is that
+	// opening (up to openCall) and delivering together stay under the 120s at
+	// which the client detaches the call, and a constant this test follows
+	// could be raised past that with the suite still green.
+	want := []any{"s1", "auth-fix", "lich", "port the parser", float64(20)}
 	if len(f.calls[1].args) != len(want) {
 		t.Fatalf("send args = %v, want %v", f.calls[1].args, want)
 	}

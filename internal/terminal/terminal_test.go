@@ -411,6 +411,32 @@ func TestStartWithoutResumeSpawnsBare(t *testing.T) {
 	spawnPins(t, got, want...)
 }
 
+// TestStartCarriesTheBriefingIntoTheSpawn proves lich's briefing reaches the
+// process itself, and not only providerArgs. Every argv assertion around it
+// goes through spawnPins, which drops the briefing before comparing — so
+// nothing else here would notice it being lost between the two.
+func TestStartCarriesTheBriefingIntoTheSpawn(t *testing.T) {
+	bin := stayAliveBin(t)
+	svc := New(stubBins{bin: bin}, nil, events.New())
+	t.Cleanup(func() { _ = svc.Close("s1") })
+
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, 80, 24); err != nil {
+		t.Fatalf("Start = %v, want nil", err)
+	}
+
+	svc.mu.Lock()
+	got := spawnedArgs(t, svc, "s1")
+	svc.mu.Unlock()
+
+	flag := slices.Index(got, "--append-system-prompt")
+	if flag < 0 || flag+1 >= len(got) {
+		t.Fatalf("spawned argv = %v, want a briefing", got)
+	}
+	if !strings.Contains(got[flag+1], "subagent") {
+		t.Errorf("briefing = %q, want the line it exists to draw", got[flag+1])
+	}
+}
+
 // TestStartWithSetupWrapsTheSpawn proves the setup flag reroutes the spawn
 // through sh -c with the project's script ahead of the exec'd provider — the
 // wiring wrapSetup's unit test cannot see.

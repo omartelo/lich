@@ -492,10 +492,14 @@ var mcpTools = []mcpTool{
 //
 // It is not a wait for an answer. The worker was created seconds ago and its
 // task is minutes of work, so a ticket is the expected outcome and the sender
-// carries on. It is short because opening may already have spent up to openCall
-// seconds on a worktree, and the two together have to stay under the 120 seconds
-// past which the client stops waiting and detaches the call (see mcpMaxWait).
-const deliverWait = 30
+// carries on.
+//
+// The number is what is left of the call's budget. Opening can spend openCall
+// (60s) before this starts, and the client detaches anything still running at
+// 120s (see mcpMaxWait) — so the delivery gets 20, plus the callSlack the HTTP
+// timeout adds for the trip back, and the worst case lands at 110 rather than
+// on the line.
+const deliverWait = 20
 
 // handOver gives a just-opened session its first task, wording the outcome the
 // way send_to_session words it — the caller should not have to learn two
