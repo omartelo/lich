@@ -91,6 +91,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   target that is merely busy is unchanged: the task queues at its prompt and it
   answers a turn later.
 
+- **"Waiting on you" now means somebody is actually waiting on you.** Claude Code
+  raises one and the same notification when it needs a permission decision and
+  when a session has simply been sitting at its prompt with nothing to do, and
+  lich read both as a session blocked on a human: a worker that had just finished
+  its task and reported back lit up the amber bell on its card and threw a toast
+  that took you there, to find nothing to answer. lich now tells the two apart by
+  the turn — a permission can only be asked inside one — so the bell and the
+  toast are raised only while a turn is genuinely stuck on you. A session idling
+  at its prompt keeps whatever its card already showed: the finished turn, its
+  results waiting to be collected, or nothing at all.
+
 - **A helper that outlives a lich restart can talk to lich again.** The `lich`
   command line and lich's own MCP tools read the loopback coordinates the session
   they run in was given, and the connect token behind them is minted fresh every

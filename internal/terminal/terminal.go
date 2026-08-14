@@ -183,6 +183,12 @@ type Service struct {
 	// without answering (internal/relay). Guarded by mu: wired after the
 	// transport is already serving.
 	onState func(id, state string)
+	// turns is which sessions have a turn open right now, which is what tells a
+	// `waiting` report that a human is blocking from one that only says the
+	// session is sitting at its prompt (see turnLog). It carries its own lock:
+	// nothing else about a report needs mu, and a hook must never queue behind a
+	// PTY spawn.
+	turns turnLog
 	// lastCols/lastRows is the last terminal size the window reported, and the
 	// size a session spawned with none of its own is started at. See
 	// sizeFor. Guarded by mu.
@@ -252,12 +258,19 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 			}
 		},
 		func(req hookRequest) {
-			hub.Emit(statusEventName, statusEvent{
-				ID:     req.SessionID,
-				State:  req.State,
-				Tool:   req.Tool,
-				Detail: req.Detail,
-			})
+			// The window is told what the report means, not what it said: a
+			// `waiting` outside a turn is a session idle at its prompt, and the
+			// card would draw it as a human being blocked (see turnLog).
+			if s.turns.report(req.SessionID, req.State) {
+				hub.Emit(statusEventName, statusEvent{
+					ID:     req.SessionID,
+					State:  req.State,
+					Tool:   req.Tool,
+					Detail: req.Detail,
+				})
+			}
+			// The relay reads the stream raw: it keeps its own turn accounting,
+			// and a report held back from the window still moves an errand.
 			if watch := s.stateWatcher(); watch != nil {
 				watch(req.SessionID, req.State)
 			}
@@ -446,6 +459,9 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, se
 	if _, running := s.sessions[id]; running {
 		return nil, "", nil
 	}
+	// Whatever the previous provider left open under this id died with its PTY,
+	// and the first report of the new one has to be read against its own turn.
+	s.turns.forget(id)
 	cols, rows = s.sizeFor(cols, rows)
 
 	if cwd == "" {

@@ -70,12 +70,14 @@ registers this contract on the three harnesses that can close it, and a Crush
 card carries no indicator. The day Crush ships `Stop` (its `docs/hooks/FUTURE.md`
 tracks the request, not the event), the column fills in from the existing script.
 
-`Notification` fires when Claude needs a permission decision or has been idle
-waiting for input — both mean "your turn"; lich shows a toast (see below) only
-for `waiting`. Codex has no `Notification`: the same meaning arrives as
-`PermissionRequest`, where a hook exiting `2` would *deny* the request — which
-is why the contract's client rules (silent, always exit 0) are load-bearing
-there and not merely polite.
+`Notification` fires when Claude needs a permission decision **or** when the
+session has simply been sitting at its prompt with nothing to do. Only the first
+of those blocks a human, and the client cannot tell them apart — the event
+carries the same shape either way — so it reports `waiting` for both and **lich
+decides which one arrived** (see `turnLog` below). Codex has no `Notification`:
+the permission half arrives as `PermissionRequest`, where a hook exiting `2`
+would *deny* the request — which is why the contract's client rules (silent,
+always exit 0) are load-bearing there and not merely polite.
 
 `SessionEnd → idle` clears the card's indicator (no spinner/check/bell). It
 fires when the Claude session ends or is reset, so a stale state does not linger
@@ -140,6 +142,19 @@ a broken script could do was lose a status report.
 - **UI push** — `internal/terminal/terminal.go`: emits the global app event
   `session-status` (`{id, state, tool, detail}`). Global rather than per-session
   because its consumers outlive any one card.
+- **What `waiting` meant** — `internal/terminal/hookstate.go`, `turnLog`: the one
+  report lich does not pass through as sent. A permission decision only ever
+  happens inside a turn, so the report before it settles which `Notification`
+  arrived: after `busy` a human is blocking an open turn and the report is
+  published; after `done`, after `idle`, or after nothing at all, the session is
+  merely idle at its prompt and **nothing is emitted** — no bell, no toast, no
+  desktop notification. The card keeps whatever it was already showing (the
+  finished turn, an inbox count, nothing), which is what an unchanged session
+  should show. `waiting` itself is not recorded: it interrupts a turn rather than
+  replacing it, so two permission prompts in one turn are two blocks. The relay
+  (`internal/relay`, `Observe`) reads the same stream raw and makes the same
+  distinction from its own record, for a different question — which turn an
+  errand belongs to.
 - **Store** — `frontend/src/lib/session/session-status-store.ts`: one subscription taken
   at page load keeps the last state of every session, keyed by id. The card
   cannot hold it: the sidebar only renders cards for the active project, so
@@ -194,6 +209,12 @@ a broken script could do was lose a status report.
   event per prompt, which every one of them does today; it is the cost a client
   pays for reporting the same block twice, and the reason to dedupe on the
   client rather than here.
+- **A block lich never heard start is not read as a block.** `turnLog` lives in
+  memory, so a `waiting` arriving with no `busy` on record for that session — the
+  first report after lich restarts under a session already mid-turn — is read as
+  an idle prompt and shows nothing. Every provider opens a turn before it can ask
+  for a permission, so the normal path never hits this; the card catches up on
+  the session's next report either way.
 - `PostToolUse → busy` recovers from `waiting` only when Claude runs a tool. Deny
   a permission and let Claude end the turn without another tool and the card
   stays `waiting` until `Stop → done`. Rare, and it self-corrects on the next
