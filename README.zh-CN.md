@@ -96,8 +96,9 @@ Homebrew 安装可以绕开 Gatekeeper 的提示；从 Releases 页面下载的�
 - **智能体** —— 在设置里为每个 provider 设定二进制文件路径，并选定新会话默认用哪一个。
   Claude Code 那一节还管着底栏的上下文圆环和费用读数 —— 费用默认关闭，因为只有当你按
   token 计费时这个数字才有意义。
-- **Worktree** —— 按项目配置的初始化脚本（设置 › Worktree）会在新 worktree 的终端里
-  先于智能体运行；`.worktreeinclude` 文件用来调整哪些被 gitignore 的文件会被复制过去。
+- **Worktree** —— 项目仓库里的 `.lich/setup-worktree.sh` 会在新 worktree 的终端里
+  先于智能体运行；New worktree 对话框会展示这个脚本，若仓库没有则给出检测到的建议。
+  `.worktreeinclude` 文件用来调整哪些被 gitignore 的文件会被复制过去。
 - **版本控制** —— 一个项目可以指定 `gh` 以哪个 GitHub 账号运行（设置 › Version
   Control），用于只有你其中一个账号看得见的仓库。它管的是 lich 从 GitHub 读到什么，
   而不是 git 推送时用谁的身份。

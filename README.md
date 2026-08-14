@@ -106,9 +106,10 @@ window.
   new sessions default to. Claude Code's section also holds the footer's context
   ring and its cost readout — the cost one off by default, since the figure only
   means something when you are billed per token.
-- **Worktrees** — a per-project setup script (Settings › Worktree) runs in a new
-  worktree's terminal ahead of the agent; a `.worktreeinclude` file tunes which
-  gitignored files get copied over.
+- **Worktrees** — `.lich/setup-worktree.sh` in the project checkout runs in a
+  new worktree's terminal ahead of the agent; the New worktree dialog shows it
+  and offers a detected suggestion when the repo ships none. A
+  `.worktreeinclude` file tunes which gitignored files get copied over.
 - **Version control** — a project can name the GitHub account `gh` runs as
   (Settings › Version Control), for a repository only one of your accounts can
   see. It governs what lich reads from GitHub, not what git pushes.
