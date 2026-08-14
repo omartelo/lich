@@ -38,6 +38,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A helper that outlives a lich restart can talk to lich again.** The `lich`
+  command line and lich's own MCP tools read the loopback coordinates the session
+  they run in was given, and the connect token behind them is minted fresh every
+  time lich starts. Anything still holding the old one — a background agent the
+  coding agent parked outside the session, a `nohup`, a detached pane — got
+  `403 Forbidden` on every call from then on, with nothing saying why, and the
+  only cure was starting it over. A refused call now retries once with the token
+  the running lich recorded, so the helper simply keeps working. It is retried
+  only against the same port: a machine can run an installed lich beside a
+  development build, and a message delivered to the wrong one lands in a window
+  its sender cannot see — so that case, and every other refusal, now says what
+  happened instead of printing the status code.
+
 - **lich is an application on macOS.** The Homebrew install shipped a bare
   command-line binary, so nothing landed in `/Applications`: lich was absent
   from Launchpad, from Spotlight and from the Finder, and had no icon anywhere.

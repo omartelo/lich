@@ -31,6 +31,11 @@ type fakeLich struct {
 	calls  []recorded
 	status int
 	body   string
+	// token, when set, is the only one this listener accepts — every other is
+	// refused the way the real transport refuses it (internal/terminal:
+	// mount answers 403). Empty accepts anything, which is what every test
+	// about something else needs.
+	token string
 }
 
 func newFakeLich(t *testing.T, body string) *fakeLich {
@@ -45,6 +50,10 @@ func newFakeLich(t *testing.T, body string) *fakeLich {
 			token:  r.URL.Query().Get("token"),
 			args:   args,
 		})
+		if f.token != "" && r.URL.Query().Get("token") != f.token {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(f.status)
 		_, _ = io.WriteString(w, f.body)
@@ -433,6 +442,90 @@ func TestTheEnvironmentWinsOverTheRuntimeFile(t *testing.T) {
 	}
 	if len(other.calls) != 0 {
 		t.Errorf("a session answered to the wrong lich: %+v", other.calls)
+	}
+}
+
+// The connect token is minted per launch and never written into a live PTY
+// again, so a caller that outlives the lich that spawned it holds one the
+// listener refuses from then on — measured on a background agent's `lich mcp`,
+// which the harness keeps alive in its own daemon across a lich restart.
+func TestARefusedTokenIsRetriedWithTheRecordedOne(t *testing.T) {
+	f := newFakeLich(t, `[{"label":"docs","project":"lich","kind":"claude"}]`)
+	f.token = "fresh"
+	port := f.server.Listener.Addr().(*net.TCPAddr).Port
+
+	var stdout, stderr bytes.Buffer
+	c := &client{
+		env:     f.env,
+		stdout:  &stdout,
+		stderr:  &stderr,
+		running: func() (*singleton.Info, error) { return &singleton.Info{Port: port, Token: "fresh"}, nil },
+	}
+	if code := dispatch([]string{"sessions"}, c); code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
+	}
+
+	if len(f.calls) != 2 {
+		t.Fatalf("got %d calls, want the refused one and one retry", len(f.calls))
+	}
+	if f.calls[0].token != "tok en" || f.calls[1].token != "fresh" {
+		t.Errorf(
+			"tokens = %q then %q, want the environment's then the recorded one",
+			f.calls[0].token, f.calls[1].token,
+		)
+	}
+	if !strings.Contains(stdout.String(), "docs") {
+		t.Errorf("stdout = %q, want the retry's answer", stdout.String())
+	}
+}
+
+// The retry is the same lich or nothing: a machine can run a daily driver and a
+// `task dev` build at once, and a message delivered to the wrong one lands in a
+// window this caller cannot see.
+func TestARefusedTokenIsNotRetriedElsewhere(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		running func(port int) *singleton.Info
+		want    string
+	}{
+		{
+			name:    "another instance answers on another port",
+			running: func(port int) *singleton.Info { return &singleton.Info{Port: port + 1, Token: "fresh"} },
+			want:    "cannot see",
+		},
+		{
+			name:    "no instance is recorded at all",
+			running: func(int) *singleton.Info { return nil },
+			want:    "no running instance is recorded",
+		},
+		{
+			name:    "the recorded token is the refused one",
+			running: func(port int) *singleton.Info { return &singleton.Info{Port: port, Token: "tok en"} },
+			want:    "something other than lich is answering",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFakeLich(t, `[]`)
+			f.token = "fresh"
+			port := f.server.Listener.Addr().(*net.TCPAddr).Port
+
+			var stdout, stderr bytes.Buffer
+			c := &client{
+				env:     f.env,
+				stdout:  &stdout,
+				stderr:  &stderr,
+				running: func() (*singleton.Info, error) { return tc.running(port), nil },
+			}
+			if code := dispatch([]string{"sessions"}, c); code != 1 {
+				t.Fatalf("exit = %d, want 1 — stdout = %q", code, stdout.String())
+			}
+			if len(f.calls) != 1 {
+				t.Errorf("got %d calls, want the refused one and no retry", len(f.calls))
+			}
+			if !strings.Contains(stderr.String(), tc.want) {
+				t.Errorf("stderr = %q, want it to carry %q", stderr.String(), tc.want)
+			}
+		})
 	}
 }
 

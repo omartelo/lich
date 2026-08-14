@@ -578,7 +578,7 @@ func (c *client) emit(payload any) error {
 
 // call posts one RPC to the lich this session belongs to.
 func (c *client) call(method string, args []any, timeout time.Duration, out any) error {
-	endpoint, err := c.endpoint(method)
+	port, token, err := c.coordinates()
 	if err != nil {
 		return err
 	}
@@ -588,18 +588,24 @@ func (c *client) call(method string, args []any, timeout time.Duration, out any)
 	}
 
 	httpClient := &http.Client{Timeout: timeout}
-	resp, err := httpClient.Post(endpoint, "application/json", bytes.NewReader(body))
+	status, payload, err := post(httpClient, endpoint(port, token, method), body)
 	if err != nil {
-		return fmt.Errorf("reach lich: %w", err)
+		return err
 	}
-	defer resp.Body.Close()
-
-	payload, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("read the reply: %w", err)
+	// A refused token is not this caller's mistake — the coordinates it was given
+	// can have gone stale under it (see reissued). Retried once, on the same port,
+	// with the token the running instance recorded.
+	if status == http.StatusForbidden || status == http.StatusUnauthorized {
+		token, err = c.reissued(port, token)
+		if err != nil {
+			return err
+		}
+		if status, payload, err = post(httpClient, endpoint(port, token, method), body); err != nil {
+			return err
+		}
 	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s", failureOf(payload, resp.Status))
+	if status != http.StatusOK {
+		return fmt.Errorf("%s", failureOf(payload, status))
 	}
 	if out == nil {
 		return nil
@@ -610,16 +616,78 @@ func (c *client) call(method string, args []any, timeout time.Duration, out any)
 	return nil
 }
 
-// endpoint builds the RPC URL for one call.
-func (c *client) endpoint(method string) (string, error) {
-	port, token, err := c.coordinates()
+// post sends one RPC and reads the whole reply. The body is read here rather
+// than returned open because a refused call is sent a second time, and the
+// first response has to be finished with before the second one starts.
+func post(httpClient *http.Client, endpoint string, body []byte) (int, []byte, error) {
+	resp, err := httpClient.Post(endpoint, "application/json", bytes.NewReader(body))
 	if err != nil {
-		return "", err
+		return 0, nil, fmt.Errorf("reach lich: %w", err)
 	}
+	defer resp.Body.Close()
+	payload, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, nil, fmt.Errorf("read the reply: %w", err)
+	}
+	return resp.StatusCode, payload, nil
+}
+
+// endpoint builds the RPC URL for one call.
+func endpoint(port, token, method string) string {
 	return fmt.Sprintf(
 		"http://127.0.0.1:%s/rpc/%s?token=%s",
 		url.PathEscape(port), method, url.QueryEscape(token),
-	), nil
+	)
+}
+
+// reissued answers a listener that refused this call's token, with the token the
+// lich on that same port recorded — or with why there is none to try.
+//
+// The connect token is minted per launch and lives only in memory, so a lich
+// closed and opened again answers on the pinned port with a token no older
+// process can know. The coordinates in a PTY's environment are that older
+// process's, and a caller that outlives the session it was started in keeps
+// them: a background agent the harness parks in its own daemon, a nohup, a
+// detached pane. Every call it makes 403s from then on, forever, with nothing
+// on screen saying why — measured on a Claude Code background agent whose
+// `lich mcp` outlived a restart of the lich that spawned it.
+//
+// Only the same port is retried. The runtime file names one instance, and a
+// machine running a daily driver beside a `task dev` build has two: answering to
+// the other one would put this message in a window the caller cannot see, which
+// is the rule coordinates() follows too.
+func (c *client) reissued(port, refused string) (string, error) {
+	stale := fmt.Sprintf(
+		"lich refused this token on port %s: the coordinates in this environment "+
+			"were exported by an earlier lich, and the one running now cannot be "+
+			"reached with them", port,
+	)
+	if c.running == nil {
+		return "", fmt.Errorf("%s. Run this from a session of the running lich", stale)
+	}
+	info, err := c.running()
+	if err != nil {
+		return "", fmt.Errorf("%s, and the running instance could not be read: %w", stale, err)
+	}
+	if info == nil || info.Token == "" {
+		return "", fmt.Errorf("%s, and no running instance is recorded to ask instead", stale)
+	}
+	if strconv.Itoa(info.Port) != port {
+		return "", fmt.Errorf(
+			"%s. The lich recorded on this machine listens on port %d, and a message "+
+				"sent there would land in a window this caller cannot see — start it "+
+				"again from a session of that lich",
+			stale, info.Port,
+		)
+	}
+	if info.Token == refused {
+		return "", fmt.Errorf(
+			"lich refused this token on port %s, and it is the token the running "+
+				"instance recorded — so something other than lich is answering there",
+			port,
+		)
+	}
+	return info.Token, nil
 }
 
 // coordinates finds the lich to talk to: the one that spawned this PTY when
@@ -668,14 +736,14 @@ func (c *client) sessionID() string {
 
 // failureOf unwraps the RPC's {"error": "..."} envelope, falling back to the
 // HTTP status for a body that is not one.
-func failureOf(payload []byte, status string) string {
+func failureOf(payload []byte, status int) string {
 	var envelope struct {
 		Error string `json:"error"`
 	}
 	if err := json.Unmarshal(payload, &envelope); err == nil && envelope.Error != "" {
 		return envelope.Error
 	}
-	return status
+	return fmt.Sprintf("%d %s", status, http.StatusText(status))
 }
 
 // waitBudget is how long the client gives a call that blocks on another
