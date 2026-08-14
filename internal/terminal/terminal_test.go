@@ -1153,10 +1153,10 @@ func TestReadyWaitsForTheSetupScript(t *testing.T) {
 	if svc.Ready("s1") {
 		t.Error("work was offered the instant the setup script exec'd the provider")
 	}
-	time.Sleep(readySettle + 100*time.Millisecond)
-	if !svc.Ready("s1") {
-		t.Error("the session stayed unready after its provider settled")
-	}
+	// This session has a real PTY behind it, still writing the script's own
+	// output and marker on its own schedule, so the settle runs from whenever
+	// that last byte lands rather than from here.
+	waitFor(t, func() bool { return svc.Ready("s1") }, "the provider to settle")
 }
 
 // TestReadyWaitsForTheProviderToStopDrawing covers the spawn with no setup

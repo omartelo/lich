@@ -29,10 +29,12 @@ func TestASetupSpawnWithNoScriptIsReadyAnyway(t *testing.T) {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 
-	time.Sleep(readySettle + 100*time.Millisecond)
-	if !svc.Ready("s1") {
-		t.Error("a session with no setup script to run was left waiting for its marker")
-	}
+	// Waited for, never slept out: a real shell's prompt is the session's first
+	// byte and it arrives whenever the machine gets to it — on a loaded macOS
+	// runner, /etc/profile alone puts it hundreds of milliseconds past the spawn,
+	// and the settle is measured from that byte, not from Start.
+	waitFor(t, func() bool { return svc.Ready("s1") },
+		"a session with no setup script to run to stop waiting for its marker")
 }
 
 // The other side of the same decision: a project that does have a setup script
