@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -237,6 +238,38 @@ func TestExitEventCarriesTheExitCode(t *testing.T) {
 	}
 	if got := fields["code"]; got != float64(3) {
 		t.Errorf("code = %v, want 3", got)
+	}
+}
+
+// TestExitEventOmitsAnUnobservedStatus is the other half of that contract, on
+// the path that produces it: a child killed by a signal left no exit status, so
+// the event has to say nothing rather than report the 0 of a clean exit.
+func TestExitEventOmitsAnUnobservedStatus(t *testing.T) {
+	hub, rec := newProbeHub(t)
+	// echoBin execs cat, so the pid below is the process holding the PTY —
+	// a script that forked one would leave the slave open and never reach EOF.
+	svc := New(stubBins{bin: echoBin(t)}, nil, hub)
+	t.Cleanup(func() { _ = svc.Close("s1") })
+
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, 80, 24); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	// Killed behind the service's back: Close would evict the session first and
+	// the reap would then emit nothing at all (see stream).
+	if err := syscall.Kill(svc.ptyOf("s1").Pid(), syscall.SIGKILL); err != nil {
+		t.Fatalf("kill child: %v", err)
+	}
+
+	name := exitEventPrefix + "s1"
+	waitFor(t, func() bool {
+		_, ok := rec.payloadOf(name)
+		return ok
+	}, "the exit event")
+
+	payload, _ := rec.payloadOf(name)
+	fields, _ := payload.(map[string]any)
+	if code, ok := fields["code"]; ok {
+		t.Errorf("code = %v, want no code at all", code)
 	}
 }
 

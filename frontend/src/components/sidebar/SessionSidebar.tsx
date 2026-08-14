@@ -38,7 +38,7 @@ import {
   type SidebarGroup,
 } from "@/lib/session/sessions"
 import { useSortableList, verticalAxis } from "@/lib/use-sortable-list"
-import { WorktreeCloseDialogs } from "./CloseWorktreeDialog"
+import { WorktreeCloseDialogs } from "./WorktreeCloseDialogs"
 import { SessionGroup } from "./SessionGroup"
 import { WorktreeDialog } from "./WorktreeDialog"
 import { useWorktreeClose } from "./useWorktreeClose"

@@ -5,7 +5,7 @@ import { WebglAddon } from "@xterm/addon-webgl"
 import { SerializeAddon } from "@xterm/addon-serialize"
 import { SearchAddon } from "@xterm/addon-search"
 import { WebLinksAddon } from "@xterm/addon-web-links"
-import { ArrowDown, ArrowUp, RotateCw, X } from "lucide-react"
+import { ArrowDown, ArrowUp, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -23,12 +23,8 @@ import { onTerminalFocusRequest } from "@/lib/terminal/focus-request"
 import { recordChunk } from "@/lib/terminal/term-perf"
 import { copyToastMessage, COPY_TOAST_DURATION_MS } from "@/lib/terminal/copy-toast"
 import { computeGrid } from "@/lib/terminal/term-fit"
-import {
-  exitMarker,
-  exitNotice,
-  readSessionExit,
-  type SessionExit,
-} from "@/lib/terminal/session-exit"
+import { exitMarker, readSessionExit, type SessionExit } from "@/lib/terminal/session-exit"
+import { TerminalExitBanner } from "./TerminalExitBanner"
 import { linkClickIsOurs, mouseEncodingSequence } from "@/lib/terminal/term-modes"
 import { createSessionLinkProvider } from "@/lib/terminal/session-link-provider"
 import { sessionLinkTargets } from "@/lib/terminal/session-links"
@@ -308,6 +304,10 @@ export function TerminalView({
   // The scrollback is left alone — it is the evidence of what happened.
   const restart = () => {
     const live = liveRef.current
+    // The band raising this is inside a terminal that is on screen, so there is
+    // always one to measure: a hidden layer is visibility:hidden and takes no
+    // click at all. Guarded rather than asserted because the size is the only
+    // thing wanted from it, and a spawn into a grid nobody measured draws wrong.
     if (!live) {
       return
     }
@@ -851,23 +851,7 @@ export function TerminalView({
           </span>
         </div>
       )}
-      {/* Anchored to the terminal, not raised as a dialog: the scrollback above
-          it is what says why the process is gone, and a modal would cover the
-          one thing the user needs to read before deciding. */}
-      {exited && (
-        <div className="absolute inset-x-0 bottom-0 z-20 flex items-center gap-3 border-t border-border bg-card px-3 py-2">
-          <span className="text-xs text-muted-foreground">{exitNotice(exited)}</span>
-          <div className="ml-auto flex items-center gap-1">
-            <Button size="xs" variant="ghost" onClick={restart}>
-              <RotateCw />
-              Restart
-            </Button>
-            <Button size="xs" variant="destructive" onClick={onClose}>
-              Close
-            </Button>
-          </div>
-        </div>
-      )}
+      {exited && <TerminalExitBanner exit={exited} onRestart={restart} onClose={onClose} />}
       {searchOpen && (
         <div className="absolute right-3 top-3 z-20 flex items-center gap-1 rounded-md border bg-popover p-1 text-popover-foreground shadow-lg">
           <Input

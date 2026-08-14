@@ -88,7 +88,9 @@ type exitEvent struct {
 	Code *int `json:"code,omitempty"`
 }
 
-// exitPayload turns what Wait reaped into that payload.
+// exitPayload turns what Wait reaped into that payload. Every negative code is
+// noExitStatus, not only the constant: a process cannot exit negative, so a
+// negative is the seam saying it has nothing to report.
 func exitPayload(code int) exitEvent {
 	if code < 0 {
 		return exitEvent{}

@@ -14,11 +14,7 @@ interface RunningSessionDialogProps {
 // RunningSessionDialog is the question a close raises while the agent is still
 // working, or blocked on a prompt nobody answered: the card's × kills the PTY,
 // and neither the turn nor the answer it was waiting for survives that.
-export function RunningSessionDialog({
-  session,
-  onCancel,
-  onCloseAnyway,
-}: RunningSessionDialogProps) {
+function RunningSessionDialog({ session, onCancel, onCloseAnyway }: RunningSessionDialogProps) {
   return (
     <ConfirmDialog
       open={session !== null}
@@ -51,12 +47,7 @@ interface CloseWorktreeDialogProps {
 // CloseWorktreeDialog asks what to do with the worktree a closing session lives
 // in: keep it on disk (it reappears in the new-worktree picker) or remove the
 // checkout via git. The branch is never deleted either way.
-export function CloseWorktreeDialog({
-  session,
-  onCancel,
-  onKeep,
-  onRemove,
-}: CloseWorktreeDialogProps) {
+function CloseWorktreeDialog({ session, onCancel, onKeep, onRemove }: CloseWorktreeDialogProps) {
   return (
     <ConfirmDialog
       open={session !== null}
@@ -91,7 +82,7 @@ interface ForceRemoveWorktreeDialogProps {
 // ForceRemoveWorktreeDialog is the second confirmation shown when the worktree
 // picked for removal has uncommitted changes: git refuses a plain remove, so
 // proceeding means --force and the changes are gone for good.
-export function ForceRemoveWorktreeDialog({
+function ForceRemoveWorktreeDialog({
   session,
   onCancel,
   onForceRemove,
