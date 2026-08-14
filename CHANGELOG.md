@@ -5,6 +5,20 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **A task nothing read is typed in once more before being given up on.** A
+  session opened with a task in the same call could lose it: lich types a task
+  in once the terminal has been quiet for a beat, and a provider that pauses
+  mid-startup — opencode does — passes for one at a prompt, then flushes what
+  was typed at it when it takes the terminal for real. The sender was told the
+  task went unread and had to send it again by hand. The relay now does that
+  itself: when the receipt window closes with nothing having read the task, it
+  is typed in a second time — same ticket, one retry — and only silence after
+  that is reported as unread.
+
 ## [0.33.0] - 2026-08-14
 
 ### Added

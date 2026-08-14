@@ -1675,6 +1675,69 @@ func TestATaskNobodyPicksUpComesBackUnread(t *testing.T) {
 	if open != 0 {
 		t.Errorf("left %d tickets open on a task that was never read", open)
 	}
+	// Typed in twice — the retry — and no more: paste and Enter, then paste and
+	// Enter again. A third pair would be the retry retrying itself.
+	if got := len(term.writesTo("s2")); got != 4 {
+		t.Errorf("target got %d writes, want 4: the task typed in exactly twice", got)
+	}
+}
+
+// A task typed into a terminal nothing was reading yet is typed in again before
+// the errand is written off: what sat under the first write is a provider still
+// taking over the tty, and by the end of the receipt window it is at its real
+// prompt. The second write is the manual resend automated — seen with opencode,
+// whose startup goes quiet long enough to pass for a prompt.
+func TestATaskNobodyReadIsTypedInAgain(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := withReceipts(term)
+
+	// The target reads the second delivery: it reports busy on its Enter.
+	var submits int
+	term.onWrite = func(id, data string) {
+		if id != "s2" || data != submit {
+			return
+		}
+		submits++
+		if submits == 2 {
+			svc.Observe("s2", stateBusy)
+		}
+	}
+
+	result, err := svc.Send("s1", "docs", "", "run the tests", 1)
+	if err != nil {
+		t.Fatalf("Send = %v, want nil", err)
+	}
+	if result.Status == StatusUnread {
+		t.Error("a task the target picked up on the second write was reported unread")
+	}
+	if result.Status != StatusPending {
+		t.Errorf("status = %q, want the errand still open", result.Status)
+	}
+}
+
+// The retry is only worth typing at a terminal whose agent is there to read it;
+// one that is no longer ready — the provider died back to a setup script, the
+// session ended — gets the unread verdict without a second write into whatever
+// holds it now.
+func TestNoRetryIntoATerminalThatIsNotReady(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := withReceipts(term)
+	term.onWrite = func(id, data string) {
+		if id == "s2" && data == submit {
+			term.setUp("s2", true)
+		}
+	}
+
+	result, err := svc.Send("s1", "docs", "", "run the tests", 5)
+	if err != nil {
+		t.Fatalf("Send = %v, want nil", err)
+	}
+	if result.Status != StatusUnread {
+		t.Errorf("status = %q, want unread", result.Status)
+	}
+	if got := len(term.writesTo("s2")); got != 2 {
+		t.Errorf("target got %d writes, want 2: no retry into a terminal that is not ready", got)
+	}
 }
 
 func TestATaskTheTargetStartsWorkingOnIsNotUnread(t *testing.T) {

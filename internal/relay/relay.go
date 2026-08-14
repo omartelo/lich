@@ -248,6 +248,9 @@ type ticket struct {
 	// unread closes when the target never reacted to the task at all. See
 	// watchReceipt.
 	unread chan struct{}
+	// redelivered is whether the task was already typed in a second time, which
+	// is what bounds watchReceipt's retry at one.
+	redelivered bool
 	// undelivered closes when the message never got into the target's PTY at
 	// all. See queueDelivery.
 	undelivered chan struct{}
@@ -448,9 +451,10 @@ func (s *Service) Send(fromID, target, project, prompt string, waitSeconds int) 
 }
 
 // handOff puts a composed message in the target's PTY and starts everything
-// that watches what becomes of it. Called once per ticket, either on the
-// caller's goroutine or, for a target that was not at a prompt yet, on the one
-// holding the message back.
+// that watches what becomes of it. Called either on the caller's goroutine or,
+// for a target that was not at a prompt yet, on the one holding the message
+// back — and once more from watchReceipt, when the first write reached a
+// terminal nothing was reading.
 func (s *Service) handOff(id string, t *ticket, kind, message string) error {
 	s.mu.Lock()
 	// Read here rather than at Send: a queued message can wait out a whole setup
@@ -480,7 +484,7 @@ func (s *Service) handOff(id string, t *ticket, kind, message string) error {
 	// end of the turn it is in, whenever that is, and its provider is busy the
 	// whole time — there is nothing here to tell apart.
 	if !busy && s.reportsState(kind) {
-		go s.watchReceipt(id, t)
+		go s.watchReceipt(id, t, kind, message)
 	}
 	return nil
 }
@@ -605,7 +609,17 @@ func (s *Service) offersTools(kind string) bool {
 // so the absence of that report inside the window is the answer. It is only
 // asked of providers that report at all — the rest have always been silent, and
 // silence has to mean something to be read as anything.
-func (s *Service) watchReceipt(id string, t *ticket) {
+//
+// Before the errand is written off, the task is typed in once more. The
+// commonest thing under an unread write is a provider that was still taking
+// over the tty when Ready's quiet heuristic cleared — opencode's startup pauses
+// long enough mid-splash to pass for a prompt, then flushes what was typed at
+// it — and by the time the window has run out that same provider has been
+// sitting at its real prompt for most of it. The second write is the manual
+// resend automated, it carries the same ticket, and it costs nothing new: a
+// terminal that swallows it was going to be reported unread anyway, and one
+// mid-dialog got the first write already.
+func (s *Service) watchReceipt(id string, t *ticket, kind, message string) {
 	timer := time.NewTimer(s.receiptWindow)
 	defer timer.Stop()
 	select {
@@ -621,6 +635,21 @@ func (s *Service) watchReceipt(id string, t *ticket) {
 	if !live || current != t || t.sawBusy {
 		s.mu.Unlock()
 		return
+	}
+	if !t.redelivered && s.term.Ready(t.targetID) {
+		t.redelivered = true
+		s.mu.Unlock()
+		slog.Warn("relay: task was typed and nothing read it, typing it again", "target", t.target)
+		if err := s.handOff(id, t, kind, message); err == nil {
+			return
+		}
+		// The second write was refused — the session died under it. Nothing read
+		// the task, which is what unread says.
+		s.mu.Lock()
+		if current, live = s.tickets[id]; !live || current != t || t.sawBusy {
+			s.mu.Unlock()
+			return
+		}
 	}
 	delete(s.tickets, id)
 	close(t.unread)
