@@ -109,6 +109,17 @@ nobody knows it and that the call site never shows. The mechanism and the histor
   (`internal/project/setup.go`, read again at every setup spawn): running a stranger's PR must not run a
   stranger's `.lich/setup-worktree.sh`. The flip side is the trap — improve the script on a feature branch
   and fresh worktrees keep running the old one until the change reaches the checkout the project points at.
+- **A session is named at birth, never on resume** (`internal/terminal/command.go`, `nameArgs`): Claude Code's
+  peer-roster name goes out as `--name` only on a spawn with no resume id. It then lives in the transcript (a
+  `custom-title` record, and an `agent-name` one per `/rename`) and is restored on `--resume` — but an explicit
+  `--name` overrides what was restored, measured both ways, so naming a resuming session would erase a
+  `/rename` typed inside it. Note which spawns are which: the Resume answer and a parked worktree's session
+  carry a resume id and keep their name, while the exit banner's Restart is deliberately a fresh spawn
+  (`TerminalView.tsx`, `resume` passed as `""`) and is named again. The trap is that lich still *derives* that
+  name (`internal/relay/rostername.go`, its page-side half `frontend/src/lib/session/peer-name.ts`) for the
+  relay to resolve against, and the derived string goes stale the moment anyone renames: it then addresses a
+  session that no longer answers to it. Nothing reads the real name back — no hook reports it — so
+  `/list-agents` inside the session is the only place it is true.
 - **git status is polled** — one shared poller per repository path (`frontend/src/lib/git/git-status-store.ts`); the
   lich plugin's `session-touched` hook nudges an immediate refresh.
 - **lich fetches on its own** — the base-branch readout (`internal/project/basestatus.go`) runs

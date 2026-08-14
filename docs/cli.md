@@ -136,13 +136,17 @@ hook (`docs/hooks/session-state.md`), and it is the same thing its card shows:
 
 Types `<prompt>` at `<session>`'s prompt, submits it, and waits.
 
-- `<session>` is the label on the card, **or** the name that session answers to
-  in Claude Code's peer roster (`myrepo-a1b2`, the one lich passes as `--name`
-  and a mention writes at a prompt). Both name the same session and both are
-  accepted, because an agent holding one of them should never have to know which
-  door it is standing at — offering one name and accepting the other is what
-  once made an agent treat a single session as two and use both channels at
-  once. The label wins a tie.
+- `<session>` is the label on the card, **or** the roster name lich derived for
+  it at spawn (`myrepo-a1b2`, the one passed as `--name` and written at a prompt
+  by a mention). Both name the same session and both are accepted, because an
+  agent holding one of them should never have to know which door it is standing
+  at — offering one name and accepting the other is what once made an agent
+  treat a single session as two and use both channels at once. The label wins a
+  tie. lich derives the roster name rather than reading it back, so a `/rename`
+  typed inside a Claude Code session moves the name *that* roster answers to and
+  not this one: the derived string keeps reaching the session here, and stops
+  reaching it through Claude Code's own messaging. `/list-agents`, in the
+  session, is what prints the name that side is using.
 - Labels are unique within a project, not across them: a label two live sessions
   answer to is an error naming both, and `--project` is what narrows it.
   Guessing which session a prompt lands in is the one mistake this must not

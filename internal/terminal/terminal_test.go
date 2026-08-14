@@ -570,26 +570,30 @@ func TestResumeArgs(t *testing.T) {
 }
 
 // TestNameArgs proves only Claude Code is named — the one provider with a peer
-// roster — and that a name which would be parsed as a flag never reaches argv.
+// roster — that a name which would be parsed as a flag never reaches argv, and
+// that a resuming session is not named at all: Claude Code restores the name
+// from the transcript, and naming it again would overwrite a /rename the user
+// typed inside the session.
 func TestNameArgs(t *testing.T) {
 	cases := []struct {
-		name, kind, peer string
-		want             []string
+		name, kind, peer, resume string
+		want                     []string
 	}{
-		{"claude named", "claude", "lich-4f2a", []string{"--name", "lich-4f2a"}},
-		{"claude unnamed", "claude", "", nil},
-		{"claude blank name", "claude", "   ", nil},
-		{"claude name trimmed", "claude", " lich-4f2a ", []string{"--name", "lich-4f2a"}},
-		{"claude flag-like name", "claude", "--dangerously-skip-permissions", nil},
-		{"codex has no roster", "codex", "lich-4f2a", nil},
-		{"opencode has no roster", "opencode", "lich-4f2a", nil},
-		{"shell has no roster", KindShell, "lich-4f2a", nil},
+		{"claude named", "claude", "lich-4f2a", "", []string{"--name", "lich-4f2a"}},
+		{"claude unnamed", "claude", "", "", nil},
+		{"claude blank name", "claude", "   ", "", nil},
+		{"claude name trimmed", "claude", " lich-4f2a ", "", []string{"--name", "lich-4f2a"}},
+		{"claude flag-like name", "claude", "--dangerously-skip-permissions", "", nil},
+		{"claude resuming keeps its own name", "claude", "lich-4f2a", "conv-1", nil},
+		{"codex has no roster", "codex", "lich-4f2a", "", nil},
+		{"opencode has no roster", "opencode", "lich-4f2a", "", nil},
+		{"shell has no roster", KindShell, "lich-4f2a", "", nil},
 	}
 	for _, tc := range cases {
-		got := nameArgs(tc.kind, tc.peer)
+		got := nameArgs(tc.kind, tc.peer, tc.resume)
 		if !slices.Equal(got, tc.want) {
-			t.Errorf("%s: nameArgs(%q, %q) = %v, want %v",
-				tc.name, tc.kind, tc.peer, got, tc.want)
+			t.Errorf("%s: nameArgs(%q, %q, %q) = %v, want %v",
+				tc.name, tc.kind, tc.peer, tc.resume, got, tc.want)
 		}
 	}
 }
@@ -649,7 +653,7 @@ func TestStartPassesSkipPermissionsToTheProcess(t *testing.T) {
 }
 
 // TestStartPassesNameToTheProcess proves the peer name reaches the spawned
-// binary's argv beside the resume id, in the order claude parses.
+// binary's argv when a session is born, in the order claude parses.
 func TestStartPassesNameToTheProcess(t *testing.T) {
 	bin := stayAliveBin(t)
 	svc := New(stubBins{bin: bin}, nil, events.New())
@@ -921,10 +925,20 @@ func TestProviderArgsOrdersEachProvidersConstraint(t *testing.T) {
 	if claude[len(claude)-2] != "--mcp-config" {
 		t.Errorf("--mcp-config is not last, so it eats what follows: %v", claude)
 	}
-	for _, want := range []string{"--name", "--resume", "--dangerously-skip-permissions"} {
+	for _, want := range []string{"--resume", "--dangerously-skip-permissions"} {
 		if !slices.Contains(claude, want) {
 			t.Errorf("claude args lost %q: %v", want, claude)
 		}
+	}
+
+	// A resuming session is not named (nameArgs), so --name is pinned on the
+	// spawn that carries it: a session being born.
+	born := providerArgs(providers.Claude, "lich-4f2a", "", "", "/usr/bin/lich", true)
+	if born[len(born)-2] != "--mcp-config" {
+		t.Errorf("--mcp-config is not last, so it eats what follows: %v", born)
+	}
+	if !slices.Contains(born, "--name") {
+		t.Errorf("claude args lost --name: %v", born)
 	}
 
 	codex := providerArgs(providers.Codex, "", "conv-1", "", "/usr/bin/lich", false)

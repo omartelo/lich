@@ -130,13 +130,22 @@ func resolveBin(kind, bin string) string {
 }
 
 // nameArgs returns the arguments that name a session in the provider's peer
-// roster, or nil when the provider keeps no roster or the name is unusable.
-// Claude Code is the only one with a roster, and left to itself it names a
-// session after its working directory — the same directory for every session
-// lich runs in one checkout, which is exactly the set the user has to tell
-// apart. A name that would be read as a flag is dropped rather than passed on.
-func nameArgs(kind, name string) []string {
-	if kind != providers.Claude {
+// roster, or nil when the provider keeps no roster, the session is resuming, or
+// the name is unusable. Claude Code is the only one with a roster, and left to
+// itself it names a session after its working directory — the same directory
+// for every session lich runs in one checkout, which is exactly the set the
+// user has to tell apart. A name that would be read as a flag is dropped rather
+// than passed on.
+//
+// lich names a session at birth only. Claude Code writes the name into the
+// transcript and restores it on --resume, including one the user changed with
+// /rename; passing --name again overrides that silently, so a resume would undo
+// a decision the user made inside their own session. The cost is a transcript
+// carrying no name at all — a spawn whose name flagValue rejected — which
+// resumes into Claude Code's own fallback, the working directory, and that is
+// the same string for every session in one checkout.
+func nameArgs(kind, name, resume string) []string {
+	if kind != providers.Claude || resume != "" {
 		return nil
 	}
 	name, ok := flagValue(name)
@@ -167,7 +176,7 @@ func flagValue(value string) (string, bool) {
 // path, so it has to come last.
 func providerArgs(kind, name, resume, model, lichBin string, skipPermissions bool) []string {
 	mcp := mcpArgs(kind, lichBin)
-	args := append([]string{}, nameArgs(kind, name)...)
+	args := append([]string{}, nameArgs(kind, name, resume)...)
 	args = append(args, resumeArgs(kind, resume)...)
 	args = append(args, skipPermissionArgs(kind, skipPermissions)...)
 	args = append(args, modelArgs(kind, model)...)

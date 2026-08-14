@@ -29,6 +29,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   database, and a project identifies itself by its path: recreating a checkout
   where a deleted one stood silently handed the new project the dead one's
   overrides. They are now deleted with it.
+- **`/rename` inside a Claude Code session now survives being resumed.** lich
+  passed the name it derives (`myrepo-a1b2`) on every spawn, including a resume
+  — and Claude Code takes that flag over the name in its transcript, so
+  reopening a session silently undid a `/rename` the user had typed inside it.
+  lich now names a session only when it is born; one that resumes keeps whatever
+  it is called, which is a decision that belongs to the session, not to the
+  harness. This is the Resume answer on a restored card, and the reopening of a
+  session parked with its worktree. The exit banner's **Restart** is a fresh
+  spawn with no conversation behind it, so it still gets the derived name.
+
+### Removed
+
+- **The session tooltip no longer prints an `@name` line.** It showed the name
+  lich derives at spawn rather than the one the session answers to, and the two
+  part company the moment anyone runs `/rename` — so the one place that named a
+  session for cross-session messaging was also the one place that could name it
+  wrong. `/list-agents`, inside the session, is where that name is true.
 
 ## [0.34.0] - 2026-08-14
 
