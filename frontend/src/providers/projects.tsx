@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { ReactNode } from "react"
 import { toast } from "sonner"
 import { Bell, Folder, MessageSquareDashed } from "lucide-react"
@@ -30,10 +30,14 @@ import {
 import { applyOrder, pinFirst } from "@/lib/reorder"
 import { displayPath } from "@/lib/paths"
 import {
-  loadProjectProviderDefault,
+  hydrateProjectProviderDefaults,
   loadProviders,
   projectDefaultProviderKind,
 } from "@/lib/providers-store"
+import {
+  resolveNewSessionKind,
+  resolveNewWorktreeSessionKind,
+} from "@/lib/session/new-session-kind"
 import {
   CLOSED_EVENT,
   OPENED_EVENT,
@@ -59,54 +63,10 @@ import { useHotkey } from "@/lib/use-hotkey"
 import { neighborProjectId } from "@/lib/project-order"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
 import { useSettings } from "./settings"
+import { buildSessionState, toProject } from "./project-workspace"
+import { ProjectsContext } from "./projects-context"
 
-interface ProjectsValue {
-  projects: Project[]
-  /** Sessions keyed by project id, with the active session per project. */
-  sessions: SessionState
-  /** The pinned Home tab's project id, or null until resolved at launch. */
-  homeId: string | null
-  /** Show the OS directory picker, add the chosen project and navigate to it. */
-  openProject: () => Promise<void>
-  /** Reopen a closed project without the picker. A project whose directory is
-   * gone is dropped from the store instead, with a toast saying so. */
-  openRecent: (recent: RecentProject) => Promise<void>
-  /** Ensure a project rooted at $HOME exists (no picker) and return its id — the
-   * update flow's install terminal when no project is in view. */
-  ensureHomeProject: () => Promise<string>
-  /** Close a project's tab (kept in the store so it can be reopened later). */
-  closeProject: (id: string) => void
-  /** Open a new session in a project and focus it, returning its id. Kind
-   * defaults to the project's provider choice; path to its own directory. */
-  newSession: (projectId: string, kind?: SessionKind, path?: string) => string
-  /** Open a project-default session rooted at a git worktree, labeled after it,
-   * returning its id. */
-  newWorktreeSession: (projectId: string, wt: { name: string; path: string }) => string
-  /** Resume a worktree: reopen its parked session (continuing its Claude
-   * conversation) when one exists, else open a fresh session on it. */
-  reopenWorktreeSession: (projectId: string, wt: { name: string; path: string }) => Promise<void>
-  /** Permanently delete a session, offering an Undo toast for the stray click;
-   * deleting the last one leaves the project with none. */
-  closeSession: (projectId: string, sessionId: string) => void
-  /** Delete a session with no undo offered — the worktree flows, where the
-   * checkout the session lives in is going away with it. */
-  discardSession: (projectId: string, sessionId: string) => void
-  /** Close a worktree session but park its row so it can be resumed later. */
-  keepSession: (projectId: string, sessionId: string) => void
-  /** Focus an existing session within a project. */
-  activateSession: (projectId: string, sessionId: string) => void
-  /** Rename a session's display label. */
-  renameSession: (projectId: string, sessionId: string, label: string) => void
-  /** Pin a session to the head of its project's list, or unpin it. A pinned
-   * session refuses to close until it is unpinned. */
-  pinSession: (projectId: string, sessionId: string, pinned: boolean) => void
-  /** Rearrange the project tabs to the given id order (drag-and-drop). */
-  reorderProjects: (ids: string[]) => void
-  /** Rearrange a project's session cards to the given id order (drag-and-drop). */
-  reorderSessions: (projectId: string, ids: string[]) => void
-}
-
-const ProjectsContext = createContext<ProjectsValue | null>(null)
+export { useProjects } from "./projects-context"
 
 const newSessionId = (): string => crypto.randomUUID()
 
@@ -114,12 +74,6 @@ const newSessionId = (): string => crypto.randomUUID()
 // points at 2 for the next one.
 const FIRST_LABEL = "Session 1"
 const FIRST_NEXT_SEQ = 2
-
-const toProject = (p: StoreProject): Project => ({
-  id: p.id,
-  name: p.name,
-  path: p.path,
-})
 
 const ATTENTION_TOAST_MS = 10_000
 
@@ -129,29 +83,6 @@ const ATTENTION_TOAST_MS = 10_000
 const UNDO_TOAST_MS = 10_000
 
 const UNLABELED_SESSION = "A session"
-
-function buildSessionState(loaded: StoreProject[]): SessionState {
-  const state: SessionState = {}
-  for (const p of loaded) {
-    const sessions = (p.sessions ?? []).map((s) => ({
-      id: s.id,
-      label: s.label,
-      kind: isSessionKind(s.kind) ? s.kind : "claude",
-      ...(s.path ? { path: s.path } : {}),
-      ...(s.providerSessionId ? { providerSessionId: s.providerSessionId } : {}),
-      ...(s.pinned ? { pinned: true } : {}),
-      ...(s.originSessionId
-        ? { originSessionId: s.originSessionId, originLabel: s.originLabel }
-        : {}),
-    }))
-    state[p.id] = {
-      sessions,
-      activeId: p.activeSessionId || sessions[0]?.id || "",
-      nextSeq: p.nextSeq,
-    }
-  }
-  return state
-}
 
 // ProjectsProvider is the write-through layer over the SQLite store: it mirrors
 // every mutation to the store and hydrates from it on launch so open projects
@@ -219,11 +150,9 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
           loaded = (await Store.LoadState()) ?? []
         }
       }
-      await Promise.all([
-        loadProviders().catch(() => undefined),
-        ...loaded.map((project) => loadProjectProviderDefault(project.id).catch(() => undefined)),
-      ])
+      hydrateProjectProviderDefaults(loaded)
       applyLoaded(loaded)
+      void loadProviders().catch(() => undefined)
     })()
   }, [applyLoaded])
 
@@ -300,11 +229,9 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const adopt = useCallback(
     async (project: Project) => {
       await Store.AddProject(project.id, project.name, project.path)
-      await Promise.all([
-        loadProviders().catch(() => undefined),
-        loadProjectProviderDefault(project.id).catch(() => undefined),
-      ])
-      applyLoaded((await Store.LoadState()) ?? [])
+      const loaded = (await Store.LoadState()) ?? []
+      hydrateProjectProviderDefaults(loaded)
+      applyLoaded(loaded)
       navigate(`/projects/${project.id}`)
     },
     [applyLoaded, navigate],
@@ -372,7 +299,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
   const newSession = useCallback((projectId: string, kind?: SessionKind, path = "") => {
     const sessionId = newSessionId()
-    const resolvedKind = kind ?? projectDefaultProviderKind(projectId)
+    const resolvedKind = resolveNewSessionKind(kind, projectDefaultProviderKind(projectId))
     const next = addSession(sessionsRef.current, projectId, sessionId, resolvedKind, path)
     const project = next[projectId]
     const created = project.sessions[project.sessions.length - 1]
@@ -384,7 +311,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const newWorktreeSession = useCallback(
     (projectId: string, wt: { name: string; path: string }) => {
       const sessionId = newSessionId()
-      const kind = projectDefaultProviderKind(projectId)
+      const kind = resolveNewWorktreeSessionKind(projectDefaultProviderKind(projectId))
       const next = addSession(sessionsRef.current, projectId, sessionId, kind, wt.path, wt.name)
       const project = next[projectId]
       const created = project.sessions[project.sessions.length - 1]
@@ -862,12 +789,4 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       />
     </ProjectsContext.Provider>
   )
-}
-
-export function useProjects(): ProjectsValue {
-  const ctx = useContext(ProjectsContext)
-  if (!ctx) {
-    throw new Error("useProjects must be used within a ProjectsProvider")
-  }
-  return ctx
 }

@@ -58,6 +58,53 @@ func TestLoadStateRestoresOpenProjectsAndSessions(t *testing.T) {
 	}
 }
 
+func TestLoadStateHydratesProjectProviderDefaults(t *testing.T) {
+	svc := newTestStore(t)
+	for _, id := range []string{"override", "empty", "missing"} {
+		if err := svc.AddProject(id, id, "/tmp/"+id); err != nil {
+			t.Fatalf("AddProject(%q): %v", id, err)
+		}
+	}
+	if err := svc.SetSetting(providerDefaultKey, globalScope, providers.Claude); err != nil {
+		t.Fatalf("SetSetting(global): %v", err)
+	}
+	if err := svc.SetSetting(providerDefaultKey, "override", providers.Codex); err != nil {
+		t.Fatalf("SetSetting(override): %v", err)
+	}
+	if err := svc.SetSetting(providerDefaultKey, "empty", ""); err != nil {
+		t.Fatalf("SetSetting(empty): %v", err)
+	}
+
+	projects, err := svc.LoadState()
+	if err != nil {
+		t.Fatalf("LoadState: %v", err)
+	}
+	want := map[string]string{"override": providers.Codex, "empty": "", "missing": ""}
+	for _, project := range projects {
+		if project.DefaultProvider != want[project.ID] {
+			t.Errorf("project %q default = %q, want %q", project.ID, project.DefaultProvider, want[project.ID])
+		}
+	}
+}
+
+func TestLoadStateIgnoresProjectProviderDefaultReadFailure(t *testing.T) {
+	svc := newTestStore(t)
+	if err := svc.AddProject("p1", "alpha", "/tmp/alpha"); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if _, err := svc.db.Exec(`DROP TABLE settings`); err != nil {
+		t.Fatalf("drop settings: %v", err)
+	}
+
+	projects, err := svc.LoadState()
+	if err != nil {
+		t.Fatalf("LoadState: %v", err)
+	}
+	if len(projects) != 1 || projects[0].DefaultProvider != "" {
+		t.Fatalf("projects = %+v, want restored project inheriting its provider", projects)
+	}
+}
+
 // TestSessionPathPersistsAndDefaults proves a worktree session's path survives
 // a reload and that rows written before the column existed load as "".
 func TestSessionPathPersistsAndDefaults(t *testing.T) {

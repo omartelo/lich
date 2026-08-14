@@ -11,8 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **A project's usual provider can differ from the global default.** Settings now
   gives each project an optional default provider of its own, used by implicit
-  new-session actions and fresh worktrees. **Use default** selects the current
-  global provider for the project without leaving its selection blank.
+  new-session actions and fresh worktrees. **Use default** removes that override:
+  the select still shows the resolved global provider, and follows later changes
+  to the global choice.
 
 - **Every visible checkout group can open another session in place.** Its `+`
   menu offers every enabled coding provider and a plain terminal, rooted in that

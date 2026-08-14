@@ -2,7 +2,7 @@ import { useMemo, useState, useSyncExternalStore } from "react"
 import { useMatch, useNavigate } from "react-router-dom"
 import { DndContext, closestCenter } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
-import { GitBranch, GitPullRequestArrow, PanelLeftClose, Plus, Terminal } from "lucide-react"
+import { GitPullRequestArrow, PanelLeftClose, Plus } from "lucide-react"
 import { ProjectService } from "@/lib/rpc"
 import { closeSettings, isSettingsOpen, subscribeSettingsCard } from "@/lib/settings-card-store"
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
@@ -13,7 +13,6 @@ import {
   subscribePullsListCard,
 } from "@/lib/pulls-list-card-store"
 import { enabledProviders, useProviders } from "@/lib/providers-store"
-import { ProviderIcon } from "@/components/ProviderIcon"
 import { ResizeHandle } from "@/components/common/ResizeHandle"
 import { SettingsCard } from "./SettingsCard"
 import { SidebarCard } from "@/components/common/SidebarCard"
@@ -21,9 +20,6 @@ import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useProjects } from "@/providers/projects"
@@ -44,6 +40,7 @@ import { WorktreeDialog } from "./WorktreeDialog"
 import { useWorktreeClose } from "./useWorktreeClose"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { usePanelWidth } from "@/lib/use-panel-width"
+import { SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
 
 // Named here like every other `lich.*` pref rather than spelled at the call
 // site. The bounds go with it: wide enough for a session label and its branch,
@@ -182,28 +179,15 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
             New Session
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="max-w-56">
-            <DropdownMenuGroup>
-              {enabled.map((provider) => (
-                <DropdownMenuItem
-                  key={provider.id}
-                  onClick={() => newSession(projectId, provider.id)}
-                >
-                  <ProviderIcon kind={provider.id} />
-                  {provider.name}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem onClick={() => newSession(projectId, "shell")}>
-                <Terminal />
-                Terminal
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled={!git?.branch} onClick={() => setWorktreeOpen(true)}>
-                <GitBranch />
-                Worktree
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
+            <SessionLaunchMenuItems
+              providers={enabled}
+              terminalLabel="Terminal"
+              onNewSession={(kind) => newSession(projectId, kind)}
+              worktree={{
+                disabled: !git?.branch,
+                onSelect: () => setWorktreeOpen(true),
+              }}
+            />
           </DropdownMenuContent>
         </DropdownMenu>
         <Button

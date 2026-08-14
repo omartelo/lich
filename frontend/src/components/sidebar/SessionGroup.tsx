@@ -2,17 +2,6 @@ import { useState, useSyncExternalStore } from "react"
 import { useNavigate } from "react-router-dom"
 import { DndContext, closestCenter } from "@dnd-kit/core"
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
-import { ChevronRight, Plus, Terminal } from "lucide-react"
-import { ProviderIcon } from "@/components/ProviderIcon"
-import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { dragStyle, useSortableList, verticalAxis } from "@/lib/use-sortable-list"
 import { cn } from "@/lib/utils"
 import { checkoutLabel } from "@/lib/git/checkout-label"
@@ -23,6 +12,7 @@ import { useProjects } from "@/providers/projects"
 import { SessionCard } from "./SessionCard"
 import { PullRequestCard } from "./PullRequestCard"
 import { isPullsOpen, subscribePullsCard } from "@/lib/pulls-card-store"
+import { SessionGroupHeader } from "./SessionGroupHeader"
 
 interface SessionGroupProps {
   projectId: string
@@ -129,67 +119,17 @@ export function SessionGroup({
       )}
     >
       {showHeader && (
-        <div className="flex items-center gap-1 px-1 pb-0.5 pt-1.5">
-          <button
-            ref={group.setActivatorNodeRef}
-            type="button"
-            {...group.attributes}
-            {...group.listeners}
-            aria-expanded={!collapsed}
-            title={`${collapsed ? "Expand" : "Collapse"} ${name}`}
-            onClick={() => {
-              if (!group.isDragging) {
-                setCollapsed((current) => !current)
-              }
-            }}
-            className={cn(
-              "group/collapse -ml-1 flex min-w-0 flex-1 items-center gap-1.5 rounded-sm px-1 py-0.5 text-left transition-colors hover:bg-accent/50",
-              pinned ? "cursor-pointer" : "cursor-grab",
-            )}
-          >
-            <ChevronRight
-              className={cn(
-                "size-3 shrink-0 text-muted-foreground/70 transition-[color,transform] group-hover/collapse:text-muted-foreground",
-                !collapsed && "rotate-90",
-              )}
-            />
-            <span className="min-w-0 truncate text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground/70 transition-colors group-hover/collapse:text-muted-foreground">
-              {name}
-            </span>
-            <span className="h-px flex-1 bg-border" />
-          </button>
-          {!pinned && (
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                aria-label={`New session in ${name}`}
-                title={`New session in ${name}`}
-                render={<Button variant="ghost" size="icon-xs" />}
-              >
-                <Plus />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="max-w-56">
-                <DropdownMenuGroup>
-                  {providers.map((provider) => (
-                    <DropdownMenuItem
-                      key={provider.id}
-                      onClick={() => newSession(projectId, provider.id, path)}
-                    >
-                      <ProviderIcon kind={provider.id} />
-                      {provider.name}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuGroup>
-                  <DropdownMenuItem onClick={() => newSession(projectId, "shell", path)}>
-                    <Terminal />
-                    New Terminal
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
+        <SessionGroupHeader
+          name={name}
+          pinned={pinned}
+          collapsed={collapsed}
+          isDragging={group.isDragging}
+          providers={providers}
+          activatorRef={group.setActivatorNodeRef}
+          activatorProps={{ ...group.attributes, ...group.listeners }}
+          onToggle={() => setCollapsed((current) => !current)}
+          onNewSession={(kind) => newSession(projectId, kind, path)}
+        />
       )}
       <div
         aria-hidden={collapsed}

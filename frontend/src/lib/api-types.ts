@@ -308,6 +308,8 @@ export interface StoredProject {
   path: string
   nextSeq: number
   activeSessionId: string
+  /** Explicit project provider override; empty means inherit the global default. */
+  defaultProvider: string
   sessions: StoredSession[] | null
 }
 

@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils"
 interface Section {
   id: string
   label: string
+  accessibleLabel?: string
   group: "global" | "project" | "provider" | "footer"
   render: (projectId?: string) => ReactNode
 }
@@ -43,12 +44,14 @@ const BASE_SECTIONS: Section[] = [
   {
     id: "providers",
     label: "Providers",
+    accessibleLabel: "Global Providers",
     group: "global",
     render: () => <ProvidersSettings />,
   },
   {
     id: "project-providers",
     label: "Providers",
+    accessibleLabel: "Project Providers",
     group: "project",
     render: (id) => <ProjectProvidersSettings projectId={id} />,
   },
@@ -102,6 +105,7 @@ export function Settings() {
     <button
       key={section.id}
       type="button"
+      aria-label={section.accessibleLabel}
       onClick={() => setActive(section.id)}
       className={cn(
         "rounded-md px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",

@@ -18,6 +18,11 @@ const claudeBinKey = "claude.bin"
 // project. A concrete project id scopes the setting to that project only.
 const globalScope = ""
 
+// providerDefaultKey holds a provider id in either the global scope or a
+// project scope. An absent or empty project value means the project inherits
+// the global default dynamically.
+const providerDefaultKey = "provider.default"
+
 // GetSetting returns a setting's value for the given scope. An empty projectID
 // reads the global value. A missing setting returns "" and no error.
 func (s *Service) GetSetting(key, projectID string) (string, error) {

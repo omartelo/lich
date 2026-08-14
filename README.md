@@ -93,19 +93,24 @@ window.
 2. **Open a project** — the `+` in the tab strip lists what you closed recently
    and opens your OS folder picker; point it at a git repository.
 3. **Point lich at your agent** — the first launch lists the agents it found on
-   your machine; in Settings › Providers you can set each binary path and change
-   which one new sessions default to.
+   your machine; in Global Settings › Providers you can set each binary path and
+   choose the default. A project can inherit it or choose a different provider
+   in Project Settings › Providers.
 4. **Start a session** — *New Session* spawns a terminal running your agent in
-   the project.
+   the project. Each checkout header also has a `+` menu for opening any enabled
+   provider or a plain terminal in that exact checkout; click the header itself
+   to collapse or expand its sessions.
 5. **Branch off a worktree** *(optional)* — create one from any base branch;
    lich seeds it and drops you into a fresh session.
 
 ## Configuration
 
-- **Agents** — set each provider's binary path in Settings, and pick which one
-  new sessions default to. Claude Code's section also holds the footer's context
-  ring and its cost readout — the cost one off by default, since the figure only
-  means something when you are billed per token.
+- **Providers** — set each provider's binary path and the global default in
+  Global Settings › Providers. Project Settings › Providers can override that
+  choice for one project; **Use default** removes the override, so later changes
+  to the global default flow through automatically. Claude Code's section also
+  holds the footer's context ring and its cost readout — the cost one off by
+  default, since the figure only means something when you are billed per token.
 - **Worktrees** — `.lich/setup-worktree.sh` in the project checkout runs in a
   new worktree's terminal ahead of the agent; the New worktree dialog shows it
   and offers a detected suggestion when the repo ships none. A

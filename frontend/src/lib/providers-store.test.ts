@@ -161,11 +161,7 @@ describe("createProvidersStore", () => {
     { id: "mystery", name: "Mystery", installed: true, path: "/x" }, // unknown id
   ]
 
-  function build(
-    enabledValues: Record<string, string> = {},
-    defaultValue = "",
-    projectValues: Record<string, string> = {},
-  ) {
+  function build(enabledValues: Record<string, string> = {}, defaultValue = "") {
     const persistEnabled = vi.fn()
     const persistDefault = vi.fn()
     const persistProjectDefault = vi.fn()
@@ -175,7 +171,6 @@ describe("createProvidersStore", () => {
       persistEnabled,
       getDefault: async () => defaultValue,
       persistDefault,
-      getProjectDefault: async (projectId) => projectValues[projectId] ?? "",
       persistProjectDefault,
     })
     return { store, persistEnabled, persistDefault, persistProjectDefault }
@@ -223,7 +218,6 @@ describe("createProvidersStore", () => {
       persistEnabled: vi.fn(),
       getDefault: async () => "",
       persistDefault: vi.fn(),
-      getProjectDefault: async () => "",
       persistProjectDefault: vi.fn(),
     })
     store.ensureLoaded()
@@ -253,24 +247,40 @@ describe("createProvidersStore", () => {
     expect(persistDefault).toHaveBeenLastCalledWith("claude")
   })
 
-  it("loads each project default once and notifies subscribers", async () => {
-    const getProjectDefault = vi.fn(async () => "codex")
-    const customStore = createProvidersStore({
-      detect: async () => detected,
-      getEnabled: async () => "1",
+  it("hydrates project overrides synchronously and notifies subscribers", () => {
+    const { store } = build()
+    const seen = vi.fn()
+    store.subscribe(seen)
+
+    store.hydrateProjectDefaults([
+      { id: "p1", defaultProvider: "codex" },
+      { id: "p2", defaultProvider: "" },
+    ])
+
+    expect(store.getProjectDefaultSnapshot("p1")).toBe("codex")
+    expect(store.getProjectDefaultSnapshot("p2")).toBe("")
+    expect(seen).toHaveBeenCalledTimes(1)
+  })
+
+  it("retries a failed provider load", async () => {
+    const detect = vi
+      .fn<() => Promise<DetectedProvider[]>>()
+      .mockRejectedValueOnce(new Error("detection failed"))
+      .mockResolvedValue(detected)
+    const store = createProvidersStore({
+      detect,
+      getEnabled: async () => "",
       persistEnabled: vi.fn(),
       getDefault: async () => "claude",
       persistDefault: vi.fn(),
-      getProjectDefault,
       persistProjectDefault: vi.fn(),
     })
-    const seen = vi.fn()
-    customStore.subscribe(seen)
 
-    await Promise.all([customStore.loadProjectDefault("p1"), customStore.loadProjectDefault("p1")])
-    expect(customStore.getProjectDefaultSnapshot("p1")).toBe("codex")
-    expect(getProjectDefault).toHaveBeenCalledTimes(1)
-    expect(seen).toHaveBeenCalledTimes(1)
+    await expect(store.load()).rejects.toThrow("detection failed")
+    expect(store.getSnapshot()).toEqual([])
+    await expect(store.load()).resolves.toBeUndefined()
+    expect(store.getSnapshot().map((provider) => provider.id)).toEqual(["claude", "codex"])
+    expect(detect).toHaveBeenCalledTimes(2)
   })
 
   it("sets and clears a project override synchronously", () => {
@@ -286,5 +296,25 @@ describe("createProvidersStore", () => {
     expect(store.getProjectDefaultSnapshot("p1")).toBe("")
     expect(persistProjectDefault).toHaveBeenLastCalledWith("p1", "")
     expect(seen).toHaveBeenCalledTimes(2)
+  })
+
+  it("keeps a cleared project override inherited across later global changes", async () => {
+    const { store } = build({ codex: "1", opencode: "1" }, "claude")
+    await store.load()
+    store.setProjectDefault("p1", "codex")
+    store.setProjectDefault("p1", "")
+
+    expect(store.getProjectProviderKind("p1")).toBe("claude")
+
+    store.setDefault("codex")
+    expect(store.getProjectProviderKind("p1")).toBe("codex")
+  })
+
+  it("falls back to the global default when a hydrated override is disabled", async () => {
+    const { store } = build({ claude: "1", codex: "0" }, "claude")
+    store.hydrateProjectDefaults([{ id: "p1", defaultProvider: "codex" }])
+    await store.load()
+
+    expect(store.getProjectProviderKind("p1")).toBe("claude")
   })
 })
