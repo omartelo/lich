@@ -45,7 +45,7 @@ func TestWindowsPTYCloseIsSingleShot(t *testing.T) {
 	if _, err := witness.WriteString("still open"); err != nil {
 		t.Fatalf("second Close took another handle: %v", err)
 	}
-	if err := p.Wait(); err != nil {
+	if _, err := p.Wait(); err != nil {
 		t.Fatalf("Wait after Close: %v", err)
 	}
 }

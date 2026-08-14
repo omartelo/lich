@@ -33,7 +33,8 @@ const (
 	// because raw PTY bytes may split a multi-byte UTF-8 sequence mid-read, which
 	// the JSON event bridge would otherwise corrupt.
 	dataEventPrefix = "terminal:data:"
-	// exitEventPrefix is emitted once when a session's shell process exits.
+	// exitEventPrefix is emitted once when a session's shell process exits,
+	// carrying the status it exited with (see exitEvent).
 	exitEventPrefix = "terminal:exit:"
 	// statusEventName carries a session's processing state ({id, state, tool,
 	// detail} — "busy"/"done"/"waiting"/"idle", plus the tool a pre-tool report
@@ -77,6 +78,22 @@ type titleEvent struct {
 // likely changed.
 type touchedEvent struct {
 	ID string `json:"id"`
+}
+
+// exitEvent is the payload of exitEventPrefix: the status the session's PTY
+// child exited with. Code is absent when the child left none — killed by a
+// signal, or a wait that failed — so the window can say the session ended
+// without reporting a clean exit nobody observed.
+type exitEvent struct {
+	Code *int `json:"code,omitempty"`
+}
+
+// exitPayload turns what Wait reaped into that payload.
+func exitPayload(code int) exitEvent {
+	if code < 0 {
+		return exitEvent{}
+	}
+	return exitEvent{Code: &code}
 }
 
 // agentEvent is the payload of agentEventName: the session and the provider
@@ -509,7 +526,7 @@ func (s *Service) stream(id string, sess *session) {
 			break
 		}
 	}
-	_ = p.Wait()
+	code, _ := p.Wait()
 	// Release the PTY handle: on a natural child exit nobody else closes it
 	// (Close only reaps sessions still in the map), and after a user-driven
 	// Close this is the second one — a no-op each seam has to make safe, since
@@ -537,7 +554,7 @@ func (s *Service) stream(id string, sess *session) {
 	// Emit blocks on a stalled /events client, and holding s.mu across it would
 	// freeze every session's I/O.
 	if reaped {
-		s.hub.Emit(exitEventPrefix+id, nil)
+		s.hub.Emit(exitEventPrefix+id, exitPayload(code))
 	}
 }
 

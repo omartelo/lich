@@ -17,10 +17,17 @@ type ptySpec struct {
 	cols, rows int
 }
 
+// noExitStatus is the code Wait reports for a child that left none behind — one
+// killed by a signal, or a wait that failed or was cancelled. It is what a
+// process actually exited with that is worth telling the user, and reporting 0
+// for the rest would claim a clean exit nobody observed.
+const noExitStatus = -1
+
 // ptyHandle is a running session's PTY end, the seam between the service and
 // the platform PTY API: Read streams the child's output, Write delivers
 // input, Resize changes the window size, Pid identifies the child (0 when
-// unknown), Wait reaps the exited child and Close hangs up and terminates it.
+// unknown), Wait reaps the exited child and reports its exit status
+// (noExitStatus when there is none), and Close hangs up and terminates it.
 // Each OS provides startPTY(spec) plus an implementation of this interface
 // (build tags select the file, the Go idiom for OS-specific code) —
 // terminal.go never touches a platform PTY API directly.
@@ -29,7 +36,7 @@ type ptyHandle interface {
 	Write(p []byte) (int, error)
 	Resize(cols, rows int) error
 	Pid() int
-	Wait() error
+	Wait() (int, error)
 	Close() error
 }
 

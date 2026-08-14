@@ -19,6 +19,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its own per checkout, so a card resumes the conversation belonging to its own
   worktree.
 
+- **A session whose process ended says so, and offers a way on.** When the
+  program inside a card's terminal exits — a double Ctrl+C, `/exit`, a provider
+  that crashed — the card used to print a bare `[process exited]` and sit there,
+  useful for nothing until you closed it by hand. The terminal now keeps its
+  scrollback, which is the only account of what happened, and shows a band under
+  it naming the outcome (with the exit status when the process left one) beside
+  **Restart** and **Close**. Restart spawns the same kind of session again in the
+  same directory, as a new conversation. lich never closes the card for you:
+  a crash's output and a resume that died at boot are both worth reading before
+  anything decides they are not.
+
+- **Closing a session mid-turn asks first.** The card's × killed the process
+  outright, taking whatever the agent was doing — or the permission prompt it was
+  blocked on — with it. Closing a session that is working or waiting now asks
+  once, the way closing a project already did. A session with nothing in flight,
+  or one whose provider reports no state at all, still closes on the first click.
+
 ### Fixed
 
 - **lich is an application on macOS.** The Homebrew install shipped a bare

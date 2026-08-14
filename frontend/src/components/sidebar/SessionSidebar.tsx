@@ -38,7 +38,7 @@ import {
   type SidebarGroup,
 } from "@/lib/session/sessions"
 import { useSortableList, verticalAxis } from "@/lib/use-sortable-list"
-import { CloseWorktreeDialog, ForceRemoveWorktreeDialog } from "./CloseWorktreeDialog"
+import { WorktreeCloseDialogs } from "./CloseWorktreeDialog"
 import { SessionGroup } from "./SessionGroup"
 import { WorktreeDialog } from "./WorktreeDialog"
 import { useWorktreeClose } from "./useWorktreeClose"
@@ -307,17 +307,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
         onCreate={createWorktree}
         onResume={resumeWorktree}
       />
-      <CloseWorktreeDialog
-        session={worktreeClose.pendingClose}
-        onCancel={worktreeClose.cancel}
-        onKeep={worktreeClose.keep}
-        onRemove={worktreeClose.remove}
-      />
-      <ForceRemoveWorktreeDialog
-        session={worktreeClose.pendingForce}
-        onCancel={worktreeClose.cancel}
-        onForceRemove={worktreeClose.forceRemove}
-      />
+      <WorktreeCloseDialogs close={worktreeClose} />
 
       <ResizeHandle edge="right" label="Resize sidebar" handleProps={handleProps} />
     </aside>

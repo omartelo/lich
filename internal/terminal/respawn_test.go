@@ -8,7 +8,10 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -32,16 +35,30 @@ const reapSettle = 250 * time.Millisecond
 const probeReadyEvent = "probe-ready"
 
 // eventRecorder collects, in order, the name of every event the hub pushed to
-// its client.
+// its client, plus the payload each name last carried.
 type eventRecorder struct {
-	mu    sync.Mutex
-	names []string
+	mu       sync.Mutex
+	names    []string
+	payloads map[string]any
 }
 
-func (r *eventRecorder) add(name string) {
+func (r *eventRecorder) add(name string, data any) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.names = append(r.names, name)
+	if r.payloads == nil {
+		r.payloads = make(map[string]any)
+	}
+	r.payloads[name] = data
+}
+
+// payloadOf returns the payload of the last event pushed under this name, and
+// whether any was pushed at all.
+func (r *eventRecorder) payloadOf(name string) (any, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	data, ok := r.payloads[name]
+	return data, ok
 }
 
 func (r *eventRecorder) snapshot() []string {
@@ -54,6 +71,7 @@ func (r *eventRecorder) reset() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.names = nil
+	r.payloads = nil
 }
 
 // newProbeHub returns a hub with a real websocket client attached plus a
@@ -86,7 +104,7 @@ func newProbeHub(t *testing.T) (*events.Hub, *eventRecorder) {
 			if err := json.Unmarshal(payload, &envelope); err != nil {
 				return
 			}
-			rec.add(envelope.Name)
+			rec.add(envelope.Name, envelope.Data)
 		}
 	}()
 
@@ -191,6 +209,47 @@ func TestRespawnedSessionKeepsItsPTY(t *testing.T) {
 	waitFor(t, func() bool {
 		return strings.Contains(replayOf(t, svc, "s1"), marker)
 	}, "input to reach the respawned PTY")
+}
+
+// TestExitEventCarriesTheExitCode proves the status the child exited with
+// travels all the way to the window: the seam's Wait, the payload and the event.
+// The card reads it as the reason the session ended, and only a real spawn shows
+// whether the number survives the trip.
+func TestExitEventCarriesTheExitCode(t *testing.T) {
+	hub, rec := newProbeHub(t)
+	svc := New(stubBins{bin: exitBin(t, 3)}, nil, hub)
+	t.Cleanup(func() { _ = svc.Close("s1") })
+
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, 80, 24); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	name := exitEventPrefix + "s1"
+	waitFor(t, func() bool {
+		_, ok := rec.payloadOf(name)
+		return ok
+	}, "the exit event")
+
+	payload, _ := rec.payloadOf(name)
+	fields, ok := payload.(map[string]any)
+	if !ok {
+		t.Fatalf("exit payload is %T, want a JSON object", payload)
+	}
+	if got := fields["code"]; got != float64(3) {
+		t.Errorf("code = %v, want 3", got)
+	}
+}
+
+// exitBin writes a script that exits with code straight away, so a test can read
+// the status a session reports when its process is gone.
+func exitBin(t *testing.T, code int) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "fake-claude")
+	script := fmt.Sprintf("#!/bin/sh\nexit %d\n", code)
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("write stub bin: %v", err)
+	}
+	return path
 }
 
 // replayOf returns a session's replay buffer decoded back to raw output.

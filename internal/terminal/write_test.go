@@ -24,7 +24,7 @@ func (p *shortWritePTY) Write(b []byte) (int, error) {
 func (p *shortWritePTY) Read([]byte) (int, error) { return 0, nil }
 func (p *shortWritePTY) Resize(int, int) error    { return nil }
 func (p *shortWritePTY) Pid() int                 { return 0 }
-func (p *shortWritePTY) Wait() error              { return nil }
+func (p *shortWritePTY) Wait() (int, error)       { return 0, nil }
 func (p *shortWritePTY) Close() error             { return nil }
 
 // TestWriteBytesSurvivesShortWrites proves a PTY that only ever accepts part

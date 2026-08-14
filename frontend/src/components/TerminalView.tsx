@@ -5,7 +5,7 @@ import { WebglAddon } from "@xterm/addon-webgl"
 import { SerializeAddon } from "@xterm/addon-serialize"
 import { SearchAddon } from "@xterm/addon-search"
 import { WebLinksAddon } from "@xterm/addon-web-links"
-import { ArrowDown, ArrowUp, X } from "lucide-react"
+import { ArrowDown, ArrowUp, RotateCw, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -23,6 +23,12 @@ import { onTerminalFocusRequest } from "@/lib/terminal/focus-request"
 import { recordChunk } from "@/lib/terminal/term-perf"
 import { copyToastMessage, COPY_TOAST_DURATION_MS } from "@/lib/terminal/copy-toast"
 import { computeGrid } from "@/lib/terminal/term-fit"
+import {
+  exitMarker,
+  exitNotice,
+  readSessionExit,
+  type SessionExit,
+} from "@/lib/terminal/session-exit"
 import { linkClickIsOurs, mouseEncodingSequence } from "@/lib/terminal/term-modes"
 import { createSessionLinkProvider } from "@/lib/terminal/session-link-provider"
 import { sessionLinkTargets } from "@/lib/terminal/session-links"
@@ -163,6 +169,12 @@ export interface TerminalViewProps {
   roster: readonly PaletteSession[]
   visible: boolean
   /**
+   * Close this session's card, through the same flow the sidebar's × runs —
+   * raised by the exit banner, which is the only affordance here that ends a
+   * session rather than talking to one.
+   */
+  onClose: () => void
+  /**
    * Whether this session still belongs to the workspace, asked at the moment
    * this component goes away. Unmounting is not the same event as closing a
    * session — React unmounts for reasons of its own (StrictMode's double
@@ -195,6 +207,7 @@ export function TerminalView({
   resume,
   roster,
   visible,
+  onClose,
   stillInWorkspace,
 }: TerminalViewProps) {
   const { font, terminalFontSize, resolvedTerminalTheme } = useSettings()
@@ -241,6 +254,11 @@ export function TerminalView({
   const [dropping, setDropping] = useState(false)
   const dragDepth = useRef(0)
 
+  // Set once this session's process is gone, and the whole of the card's
+  // terminal state: the scrollback stays on screen, the banner below offers the
+  // two ways out of it.
+  const [exited, setExited] = useState<SessionExit | null>(null)
+
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<SearchResults | null>(null)
@@ -282,6 +300,35 @@ export function TerminalView({
     if (!sendInput(sessionId, data)) {
       void Service.Write(sessionId, data)
     }
+  }
+
+  // Restart spawns the same kind in the same directory again, as a conversation
+  // of its own: the process that died took its with it, and a --resume here
+  // would reopen whatever the provider last saved rather than what is on screen.
+  // The scrollback is left alone — it is the evidence of what happened.
+  const restart = () => {
+    const live = liveRef.current
+    if (!live) {
+      return
+    }
+    void Service.Start(
+      sessionId,
+      projectId,
+      cwd,
+      kind,
+      "",
+      peerName(cwd, sessionId),
+      false,
+      live.term.cols,
+      live.term.rows,
+    )
+      .then(() => {
+        setExited(null)
+        liveRef.current?.term.focus()
+      })
+      .catch((error: unknown) => {
+        toast.error(`Session failed to restart: ${errorText(error)}`)
+      })
   }
 
   // A session-link click jumps to that session the same way Pulls' "Open in
@@ -628,8 +675,10 @@ export function TerminalView({
         feed(bytes, performance.now() - t0)
       })
       const offWsData = onSessionData(sessionId, (payload) => feed(payload, 0))
-      const offExit = onAppEvent(EXIT_EVENT_PREFIX + sessionId, () => {
-        feed(new TextEncoder().encode("\r\n[process exited]\r\n"), 0)
+      const offExit = onAppEvent(EXIT_EVENT_PREFIX + sessionId, (data) => {
+        const exit = readSessionExit(data)
+        feed(new TextEncoder().encode(exitMarker(exit)), 0)
+        setExited(exit)
       })
       cleanups.push(offData, offWsData, offExit)
 
@@ -800,6 +849,23 @@ export function TerminalView({
           <span className="rounded-md bg-popover px-2 py-1 text-xs text-muted-foreground shadow-lg">
             Drop to paste at the prompt
           </span>
+        </div>
+      )}
+      {/* Anchored to the terminal, not raised as a dialog: the scrollback above
+          it is what says why the process is gone, and a modal would cover the
+          one thing the user needs to read before deciding. */}
+      {exited && (
+        <div className="absolute inset-x-0 bottom-0 z-20 flex items-center gap-3 border-t border-border bg-card px-3 py-2">
+          <span className="text-xs text-muted-foreground">{exitNotice(exited)}</span>
+          <div className="ml-auto flex items-center gap-1">
+            <Button size="xs" variant="ghost" onClick={restart}>
+              <RotateCw />
+              Restart
+            </Button>
+            <Button size="xs" variant="destructive" onClick={onClose}>
+              Close
+            </Button>
+          </div>
         </div>
       )}
       {searchOpen && (

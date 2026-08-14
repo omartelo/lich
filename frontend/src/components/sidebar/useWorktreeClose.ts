@@ -1,14 +1,19 @@
 import { useState } from "react"
 import { toast } from "sonner"
 import { ProjectService, Store } from "@/lib/rpc"
-import { isLastWorktreeSession, type Session } from "@/lib/session/sessions"
+import { closeIntent } from "@/lib/session/close-intent"
+import { runningSessions } from "@/lib/session/use-session-status"
+import type { Session } from "@/lib/session/sessions"
 import { useProjects } from "@/providers/projects"
 import { errorText } from "@/lib/utils"
 
 export interface WorktreeClose {
-  /** Close a session. The last one in a worktree opens the keep-or-remove
-   * question instead, since it is the last thing holding that checkout. */
+  /** Close a session, asking whatever its state calls for first (closeIntent). */
   requestClose: (session: Session) => void
+  /** The session whose mid-turn confirmation is open, or null. */
+  pendingRunning: Session | null
+  /** Confirmed: close the session even though a turn is running in it. */
+  closeAnyway: () => void
   /** The session whose keep-or-remove dialog is open, or null. */
   pendingClose: Session | null
   /** The dirty worktree waiting on a --force confirmation, or null. */
@@ -23,20 +28,20 @@ export interface WorktreeClose {
   forceRemove: () => void
 }
 
-// useWorktreeClose owns the two-step question closing a worktree's last session
-// raises — keep the checkout for later, or remove it, and if it is dirty, say so
+// useWorktreeClose owns every question a close raises — is a turn still running
+// in there, keep the checkout for later or remove it, and if it is dirty, say so
 // once more before --force discards work that lives nowhere else. Every step
 // past the first is a dialog, which is why this is a state machine and not a
 // handler: the answer arrives renders later than the click.
 //
-// Closing a session that is not the last of its worktree never gets here; it
-// goes straight through, because nothing is at stake.
+// A close with nothing at stake never opens one; it goes straight through.
 export function useWorktreeClose(
   projectId: string,
   projectPath: string,
   sessions: Session[],
 ): WorktreeClose {
   const { closeSession, discardSession, keepSession } = useProjects()
+  const [pendingRunning, setPendingRunning] = useState<Session | null>(null)
   const [pendingClose, setPendingClose] = useState<Session | null>(null)
   const [pendingForce, setPendingForce] = useState<Session | null>(null)
 
@@ -57,25 +62,45 @@ export function useWorktreeClose(
     })
   }
 
+  // Each step of the close, taken as closeIntent decides it. The card hides
+  // every close affordance while pinned; the refusal here is the contract behind
+  // them, so no dialog can open on a pinned session either.
+  const step = (session: Session, running: boolean) => {
+    switch (closeIntent(session, sessions, running)) {
+      case "refuse":
+        return
+      case "confirm-running":
+        setPendingRunning(session)
+        return
+      case "ask-worktree":
+        setPendingClose(session)
+        return
+      case "close":
+        closeSession(projectId, session.id)
+    }
+  }
+
   return {
+    pendingRunning,
     pendingClose,
     pendingForce,
 
     requestClose(session) {
-      // The card hides both close affordances while pinned; this is the contract
-      // behind them, so a keep-or-remove dialog can never open on a pinned
-      // session either.
-      if (session.pinned) {
-        return
+      // Read at the click rather than subscribed to: what matters is whether a
+      // turn is running at the moment the user asked to close it.
+      step(session, runningSessions([session.id]).length > 0)
+    },
+
+    closeAnyway() {
+      const session = pendingRunning
+      setPendingRunning(null)
+      if (session) {
+        step(session, false)
       }
-      if (isLastWorktreeSession(sessions, session)) {
-        setPendingClose(session)
-        return
-      }
-      closeSession(projectId, session.id)
     },
 
     cancel() {
+      setPendingRunning(null)
       setPendingClose(null)
       setPendingForce(null)
     },

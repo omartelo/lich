@@ -35,7 +35,17 @@ func (p *unixPTY) Resize(cols, rows int) error {
 
 func (p *unixPTY) Pid() int { return p.cmd.Process.Pid }
 
-func (p *unixPTY) Wait() error { return p.cmd.Wait() }
+// Wait reaps the child and reports its exit status. ProcessState carries it
+// even when Wait errors, because a non-zero exit is itself an *exec.ExitError;
+// os.ProcessState.ExitCode already answers noExitStatus for a child killed by a
+// signal.
+func (p *unixPTY) Wait() (int, error) {
+	err := p.cmd.Wait()
+	if p.cmd.ProcessState == nil {
+		return noExitStatus, err
+	}
+	return p.cmd.ProcessState.ExitCode(), err
+}
 
 func (p *unixPTY) Close() error {
 	err := p.File.Close()

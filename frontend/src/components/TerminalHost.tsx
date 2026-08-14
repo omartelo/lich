@@ -3,6 +3,8 @@ import { useMatch } from "react-router-dom"
 import { toast } from "sonner"
 import { TerminalView } from "./TerminalView"
 import { ResumeSessionDialog } from "./ResumeSessionDialog"
+import { WorktreeCloseDialogs } from "./sidebar/CloseWorktreeDialog"
+import { useWorktreeClose } from "./sidebar/useWorktreeClose"
 import { Terminal as TerminalService } from "@/lib/rpc"
 import { useProjects } from "@/providers/projects"
 import { activeSessionId, hasSession, resumableSession, sessionsOf } from "@/lib/session/sessions"
@@ -39,6 +41,17 @@ export function TerminalHost() {
   const activeProjectId = match?.params.projectId ?? null
 
   const visibleSessionId = activeProjectId ? activeSessionId(sessions, activeProjectId) : ""
+
+  // The close an exited session's banner raises, on its own instance of the
+  // sidebar's flow — the sidebar is not always mounted (collapsed to the rail)
+  // and this host always is. Bound to the active project, which is the only one
+  // a click can reach: every other layer is visibility:hidden.
+  const activeProjectPath = projects.find((p) => p.id === activeProjectId)?.path ?? ""
+  const worktreeClose = useWorktreeClose(
+    activeProjectId ?? "",
+    activeProjectPath,
+    sessionsOf(sessions, activeProjectId ?? ""),
+  )
 
   // Session ids that have been viewed at least once, which keeps a terminal
   // mounted after the user navigates away. A session that leaves the workspace
@@ -154,6 +167,7 @@ export function TerminalHost() {
                 resume={resuming[session.id] ?? ""}
                 roster={roster}
                 visible={visible}
+                onClose={() => worktreeClose.requestClose(session)}
                 stillInWorkspace={() => hasSession(sessionsRef.current, session.id)}
               />
             </div>
@@ -165,6 +179,7 @@ export function TerminalHost() {
         onStartNew={() => asking && answerResume(asking, "")}
         onResume={() => asking && answerResume(asking, asking.providerSessionId ?? "")}
       />
+      <WorktreeCloseDialogs close={worktreeClose} />
     </>
   )
 }

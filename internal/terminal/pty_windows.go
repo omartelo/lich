@@ -66,16 +66,20 @@ type windowsPTY struct {
 	closed bool
 }
 
-// Wait reaps the child, or returns immediately once Close has taken the handles
-// it would read.
-func (p *windowsPTY) Wait() error {
+// Wait reaps the child and reports its exit status, or returns immediately once
+// Close has taken the handles it would read — there is no status to read then,
+// and none after a wait that failed either.
+func (p *windowsPTY) Wait() (int, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.closed {
-		return nil
+		return noExitStatus, nil
 	}
-	_, err := p.ConPty.Wait(p.waitCtx)
-	return err
+	code, err := p.ConPty.Wait(p.waitCtx)
+	if err != nil {
+		return noExitStatus, err
+	}
+	return int(code), nil
 }
 
 // Close hangs up and terminates the child, once. The pending Wait is cancelled
