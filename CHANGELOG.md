@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Every `lich` command explains itself.** `lich send --help` used to answer
+  `lich: flag: help requested` on stderr and exit 1 — the command line telling
+  someone asking how to run it that they had failed. Each command now prints
+  what it does, how it is spelled and every flag it takes with the description
+  that flag was declared with, so the help cannot drift from what the command
+  parses. `lich help <command>` reaches the same page, and `lich version` prints
+  the running build.
+
+### Changed
+
+- **A mistyped command no longer opens the app.** `lich sesions` used to name no
+  subcommand, and anything that named none launched the whole window — an answer
+  that says nothing about the command that was run. It is now refused with
+  `lich: unknown command "sesions" — did you mean "sessions"?` and exit 1. The
+  arguments the app itself takes are unchanged: bare `lich` opens it, and
+  `lich -- <chromium flags>` still passes them through.
+
 ### Fixed
 
 - **A task nothing read is typed in once more before being given up on.** A

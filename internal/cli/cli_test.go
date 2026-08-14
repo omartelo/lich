@@ -99,6 +99,11 @@ func (f *fakeLich) only(t *testing.T) recorded {
 	return f.calls[0]
 }
 
+// testVersion is what the build under test calls itself. Pinned as a literal
+// rather than read from anywhere, so a command that prints the wrong string
+// fails here.
+const testVersion = "v9.9.9-test"
+
 // run executes one command against a fake lich and returns its streams. It
 // never goes through Run: that would resolve the runtime file of the lich
 // actually running on this machine, and a test that reached it would deliver a
@@ -106,7 +111,10 @@ func (f *fakeLich) only(t *testing.T) recorded {
 func run(t *testing.T, f *fakeLich, args ...string) (int, string, string) {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
-	code := dispatch(args, &client{env: f.env, stdout: &stdout, stderr: &stderr, running: noInstance})
+	code := dispatch(args, &client{
+		env: f.env, version: testVersion,
+		stdout: &stdout, stderr: &stderr, running: noInstance,
+	})
 	return code, stdout.String(), stderr.String()
 }
 
@@ -114,16 +122,109 @@ func run(t *testing.T, f *fakeLich, args ...string) (int, string, string) {
 // so only the environment can point a command anywhere.
 func noInstance() (*singleton.Info, error) { return nil, nil }
 
-func TestUnknownArgumentsAreNotACommand(t *testing.T) {
+// The app's own arguments still fall through to it. A word that is not a
+// subcommand no longer does — see TestAnUnknownCommandDoesNotOpenTheApp.
+func TestTheAppsOwnArgumentsAreNotACommand(t *testing.T) {
 	f := newFakeLich(t, `null`)
 
-	for _, args := range [][]string{{}, {"--"}, {"--", "--ozone-platform=wayland"}, {"nonsense"}} {
+	for _, args := range [][]string{
+		{}, {"--"}, {"--", "--ozone-platform=wayland"}, {"--ozone-platform=wayland"},
+	} {
 		if code, _, _ := run(t, f, args...); code != NotACommand {
 			t.Errorf("Run(%q) = %d, want NotACommand", args, code)
 		}
 	}
 	if len(f.calls) != 0 {
 		t.Errorf("a non-command reached the app: %+v", f.calls)
+	}
+}
+
+// A mistyped subcommand used to return NotACommand, which opened the whole app:
+// a window that says nothing about the command that was run is not an answer to
+// a typo.
+func TestAnUnknownCommandDoesNotOpenTheApp(t *testing.T) {
+	f := newFakeLich(t, `null`)
+
+	code, _, stderr := run(t, f, "sesions")
+	if code != 1 {
+		t.Fatalf("exit = %d, want 1", code)
+	}
+	for _, want := range []string{`unknown command "sesions"`, `did you mean "sessions"`, "lich help"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr = %q, want it to carry %q", stderr, want)
+		}
+	}
+
+	// Nothing close enough to guess at is still refused, without a guess.
+	code, _, stderr = run(t, f, "xyzzy")
+	if code != 1 {
+		t.Fatalf("exit = %d, want 1", code)
+	}
+	if strings.Contains(stderr, "did you mean") {
+		t.Errorf("stderr = %q, want no guess for a word that resembles no command", stderr)
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("an unknown command reached the app: %+v", f.calls)
+	}
+}
+
+func TestVersionPrintsTheBuild(t *testing.T) {
+	f := newFakeLich(t, `null`)
+
+	for _, args := range [][]string{{"version"}, {"--version"}, {"-v"}} {
+		code, stdout, _ := run(t, f, args...)
+		if code != 0 {
+			t.Errorf("Run(%q) = %d, want 0", args, code)
+		}
+		if !strings.Contains(stdout, testVersion) {
+			t.Errorf("Run(%q) printed %q, want the running version", args, stdout)
+		}
+	}
+}
+
+// Every command answers --help with its own help rather than with the flag
+// package's "flag: help requested" on stderr, which is what a user asking how to
+// run something used to be handed — as a failure, exit 1.
+func TestEveryCommandPrintsItsOwnHelp(t *testing.T) {
+	f := newFakeLich(t, `null`)
+
+	for _, cmd := range commands {
+		t.Run(cmd.name, func(t *testing.T) {
+			for _, args := range [][]string{{cmd.name, "--help"}, {cmd.name, "-h"}, {"help", cmd.name}} {
+				code, stdout, stderr := run(t, f, args...)
+				if code != 0 {
+					t.Fatalf("Run(%q) = %d (stderr %q), want 0", args, code, stderr)
+				}
+				if !strings.Contains(stdout, "usage: "+cmd.line()) {
+					t.Errorf("Run(%q) printed %q, want the command's usage line", args, stdout)
+				}
+			}
+		})
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("asking for help reached the app: %+v", f.calls)
+	}
+}
+
+// The help lists a flag with the description it was declared with, so the two
+// cannot drift: a flag added to a command shows up here without anyone editing
+// prose.
+func TestPerCommandHelpListsTheFlags(t *testing.T) {
+	f := newFakeLich(t, `null`)
+
+	_, stdout, _ := run(t, f, "send", "--help")
+	for _, want := range []string{
+		"--project string", "narrow the target to one project",
+		"--timeout int", "--json",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("send --help = %q, want it to carry %q", stdout, want)
+		}
+	}
+	// One dash is what flag.PrintDefaults would have written, and every lich
+	// surface documents two.
+	if strings.Contains(stdout, "\n  -project") {
+		t.Errorf("send --help spells a flag with one dash: %q", stdout)
 	}
 }
 

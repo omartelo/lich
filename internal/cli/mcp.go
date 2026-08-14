@@ -99,7 +99,7 @@ When a [lich] message carrying a ticket arrives at YOUR prompt, you are the work
 // serveMCP runs the stdio server until its input ends.
 func (c *client) serveMCP(args []string) error {
 	flags := newFlagSet("mcp")
-	if err := flags.Parse(args); err != nil {
+	if err := c.parse(flags, args); err != nil {
 		return err
 	}
 	if c.stdin == nil {

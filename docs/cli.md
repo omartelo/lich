@@ -83,8 +83,16 @@ relayed message spells the reply command that way.
 ## Commands
 
 Every command prints its result on stdout and its failure as one `lich: …` line
-on stderr, exiting 0 or 1. Anything that is not a subcommand below — including
-`lich -- <chromium flags>` — opens the app instead.
+on stderr, exiting 0 or 1.
+
+`lich help` lists every command below; `lich <command> --help` prints that one's
+own description and every flag it takes, generated from the flags the command
+actually parses. `lich version` prints the running build.
+
+A word that names no subcommand is refused with `lich: unknown command "…"`, a
+guess at the one it resembles, and exit 1 — a typo does not open a window.
+Arguments the app itself takes still do: bare `lich`, and `lich --` with the
+Chromium flags behind it.
 
 `--json` on `sessions`, `send`, `wait`, `open`, `close` and `worktrees` replaces
 the prose with one JSON line: the peer array, the result object and the session

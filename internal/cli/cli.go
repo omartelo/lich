@@ -26,6 +26,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -81,61 +82,6 @@ const openCall = 60 * time.Second
 // on the line.
 const deliverWait = 20
 
-const usage = `lich talks to the sessions open in the running lich window.
-
-  lich sessions [--json]
-      List the live sessions that can be reached.
-
-  lich send [--project <name>] [--timeout <seconds>] [--json] <session> <prompt>
-      Put <prompt> at <session>'s prompt and wait for its agent to answer.
-      Prints the answer. If the wait runs out first it prints a ticket to
-      pick the answer up with.
-
-  lich wait [--timeout <seconds>] [--json] [<ticket>]
-      With a ticket, wait again on that errand. Without one, collect every
-      result that is ready — and when none is, wait for the next.
-
-  lich reply <ticket> <answer>
-      Send <answer> back to whoever is waiting on <ticket>. This is what a
-      relayed message asks you to run when you are done.
-
-  lich open [--project <name>] [--kind <provider>] [--worktree <branch>]
-            [--base <branch>] [--model <model>] [--prompt <task>] [--json]
-      Open a new session and start it. --worktree creates a git worktree of
-      that branch name first and roots the session in it. --model runs the
-      provider on that model, in the provider's own spelling. --prompt hands
-      the new session that task as soon as its agent is up, so opening a
-      worker for a task is one command rather than two. Prints the name the
-      new session is addressed by.
-
-  lich close [--project <name>] [--worktree keep|remove] [--force] [--json] <session>
-      Close a session. Closing the last one in a worktree needs --worktree to
-      say whether the checkout stays; removing a dirty one needs --force.
-
-  lich worktrees [--project <name>] [--json]
-      List a project's git worktrees: what is uncommitted in each and which
-      sessions are open in it.
-
-  lich mcp
-      Serve the commands above as MCP tools over stdio. lich registers this
-      itself for the providers that support it; you only run it by hand to
-      point another MCP client at lich.
-
-  lich rage [--output <path>]
-      Collect a bug report — versions, browser, providers, plugin state and
-      the logs, with secrets masked — into one .tar.gz to attach to an issue.
-      Nothing is uploaded, and it works with no lich running.
-
-  lich doctor
-      Walk the boot lich walks — config dir, log, the pinned port, the
-      workspace database, the browser, the providers — and say whether it
-      would start here. Exits non-zero when something would stop it.
-
-Run inside a lich session these address the sessions beside it. Run anywhere
-else on the machine they find the running lich on their own, and what they
-relay is attributed to the command line rather than to a session.
-`
-
 // Run executes one subcommand and returns the process exit code, or
 // NotACommand when args name none. env reads the process environment, and
 // version is the running build's, which only the bug report needs.
@@ -178,10 +124,30 @@ func dispatch(args []string, c *client) int {
 		// again, worse.
 		return c.doctor(args[1:])
 	case "help", "--help", "-h":
+		// `lich help <command>` is the command's own help, which is the flags
+		// and not just the paragraph the list above shows.
+		if len(args) > 1 {
+			return dispatch([]string{args[1], "--help"}, c)
+		}
 		fmt.Fprint(c.stdout, usage)
 		return 0
+	case "version", "--version", "-v":
+		fmt.Fprintf(c.stdout, "lich %s\n", c.version)
+		return 0
 	}
-	return NotACommand
+	// A word that names no subcommand is a typo, and opening the whole app for
+	// one is an answer nobody reads: the window it puts on screen says nothing
+	// about the command that was run. A leading dash is not a typo — that is
+	// `lich --` and the Chromium flags behind it, which the app still takes.
+	if strings.HasPrefix(args[0], "-") {
+		return NotACommand
+	}
+	fmt.Fprintf(c.stderr, "lich: unknown command %q", args[0])
+	if near := nearest(args[0]); near != "" {
+		fmt.Fprintf(c.stderr, " — did you mean %q?", near)
+	}
+	fmt.Fprint(c.stderr, "\nRun `lich help` for the list.\n")
+	return 1
 }
 
 type client struct {
@@ -207,25 +173,44 @@ type client struct {
 	diagnose func() ([]doctor.Check, error)
 }
 
+// errHelpShown ends a subcommand that was asked for its help rather than for
+// its work. It travels the error path because that is the only way out of a
+// parse, and is the one error run does not report: the help is already printed,
+// and asking for it succeeded.
+var errHelpShown = errors.New("help printed")
+
 // run reports a subcommand's failure the way a command line does — one line on
 // stderr, a non-zero exit — so an agent reading the output is told what went
 // wrong instead of being handed an empty answer.
 func (c *client) run(fn func([]string) error, args []string) int {
-	if err := fn(args); err != nil {
-		fmt.Fprintf(c.stderr, "lich: %v\n", err)
-		return 1
+	err := fn(args)
+	if err == nil || errors.Is(err, errHelpShown) {
+		return 0
 	}
-	return 0
+	fmt.Fprintf(c.stderr, "lich: %v\n", err)
+	return 1
+}
+
+// parse reads a subcommand's flags, answering -h/--help with that command's own
+// help. Without this the flag package's "flag: help requested" is what a user
+// asking how to run something is handed, on stderr, as a failure.
+func (c *client) parse(flags *flag.FlagSet, args []string) error {
+	err := flags.Parse(args)
+	if errors.Is(err, flag.ErrHelp) {
+		printHelp(c.stdout, flags)
+		return errHelpShown
+	}
+	return err
 }
 
 func (c *client) sessions(args []string) error {
 	flags := newFlagSet("sessions")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
-	if err := flags.Parse(args); err != nil {
+	if err := c.parse(flags, args); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 {
-		return fmt.Errorf("usage: lich sessions [--json]")
+		return usageError("sessions")
 	}
 
 	var peers []relay.Peer
@@ -267,11 +252,11 @@ func (c *client) send(args []string) error {
 	project := flags.String("project", "", "narrow the target to one project when the label is ambiguous")
 	timeout := flags.Int("timeout", 0, "seconds to wait for an answer before handing back a ticket")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
-	if err := flags.Parse(args); err != nil {
+	if err := c.parse(flags, args); err != nil {
 		return err
 	}
 	if flags.NArg() != 2 {
-		return fmt.Errorf("usage: lich send [--project <name>] [--timeout <seconds>] [--json] <session> <prompt>")
+		return usageError("send")
 	}
 
 	var result relay.Result
@@ -286,11 +271,11 @@ func (c *client) wait(args []string) error {
 	flags := newFlagSet("wait")
 	timeout := flags.Int("timeout", 0, "seconds to wait before handing the ticket back again")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
-	if err := flags.Parse(args); err != nil {
+	if err := c.parse(flags, args); err != nil {
 		return err
 	}
 	if flags.NArg() > 1 {
-		return fmt.Errorf("usage: lich wait [--timeout <seconds>] [--json] [<ticket>]")
+		return usageError("wait")
 	}
 
 	if flags.NArg() == 0 {
@@ -314,11 +299,11 @@ func (c *client) wait(args []string) error {
 
 func (c *client) reply(args []string) error {
 	flags := newFlagSet("reply")
-	if err := flags.Parse(args); err != nil {
+	if err := c.parse(flags, args); err != nil {
 		return err
 	}
 	if flags.NArg() != 2 {
-		return fmt.Errorf("usage: lich reply <ticket> <answer>")
+		return usageError("reply")
 	}
 	if err := c.call("relay.Reply", []any{flags.Arg(0), flags.Arg(1)}, shortCall, nil); err != nil {
 		return err
@@ -336,13 +321,11 @@ func (c *client) open(args []string) error {
 	model := flags.String("model", "", "model the provider runs, in the provider's own spelling")
 	prompt := flags.String("prompt", "", "task to hand the new session as soon as its agent is up")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
-	if err := flags.Parse(args); err != nil {
+	if err := c.parse(flags, args); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 {
-		return fmt.Errorf(
-			"usage: lich open [--project <name>] [--kind <provider>] [--worktree <branch>] " +
-				"[--base <branch>] [--model <model>] [--prompt <task>] [--json]")
+		return usageError("open")
 	}
 
 	var opened spawn.Session
@@ -438,11 +421,11 @@ func openedText(opened spawn.Session) string {
 func (c *client) rage(args []string) error {
 	flags := newFlagSet("rage")
 	output := flags.String("output", "", "write the bundle here instead of ./lich-rage-<timestamp>.tar.gz")
-	if err := flags.Parse(args); err != nil {
+	if err := c.parse(flags, args); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 {
-		return fmt.Errorf("usage: lich rage [--output <path>]")
+		return usageError("rage")
 	}
 
 	path := *output
@@ -479,12 +462,15 @@ func (c *client) rage(args []string) error {
 // launch-stopping check is a non-zero exit, which is what a script reads.
 func (c *client) doctor(args []string) int {
 	flags := newFlagSet("doctor")
-	if err := flags.Parse(args); err != nil {
+	if err := c.parse(flags, args); err != nil {
+		if errors.Is(err, errHelpShown) {
+			return 0
+		}
 		fmt.Fprintf(c.stderr, "lich: %v\n", err)
 		return 1
 	}
 	if flags.NArg() != 0 {
-		fmt.Fprintln(c.stderr, "lich: usage: lich doctor")
+		fmt.Fprintf(c.stderr, "lich: %v\n", usageError("doctor"))
 		return 1
 	}
 
@@ -537,12 +523,11 @@ func (c *client) close(args []string) error {
 		"what to do with the checkout when this is its last session: keep or remove")
 	force := flags.Bool("force", false, "remove a checkout that still has uncommitted work")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
-	if err := flags.Parse(args); err != nil {
+	if err := c.parse(flags, args); err != nil {
 		return err
 	}
 	if flags.NArg() != 1 {
-		return fmt.Errorf(
-			"usage: lich close [--project <name>] [--worktree keep|remove] [--force] [--json] <session>")
+		return usageError("close")
 	}
 
 	var closed spawn.Closed
@@ -578,11 +563,11 @@ func (c *client) worktrees(args []string) error {
 	flags := newFlagSet("worktrees")
 	project := flags.String("project", "", "project to list; defaults to the caller's own")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
-	if err := flags.Parse(args); err != nil {
+	if err := c.parse(flags, args); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 {
-		return fmt.Errorf("usage: lich worktrees [--project <name>] [--json]")
+		return usageError("worktrees")
 	}
 
 	var checkouts []spawn.Checkout
