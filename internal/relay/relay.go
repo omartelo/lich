@@ -17,6 +17,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -44,6 +45,15 @@ const (
 	// enough that the sender learns in one tool call rather than at the ticket's
 	// expiry an hour later.
 	defaultReceiptWindow = 30 * time.Second
+	// defaultDeliveryLimit is how long a queued task waits for its target to
+	// reach a prompt before the errand is reported undelivered (see
+	// queueDelivery). A worktree setup script that installs dependencies and
+	// warms a build runs minutes on a cold cache, so the number has to be
+	// generous; past it the checkout is broken or waiting on a person, and
+	// neither ends by itself. It is well inside ticketTTL on purpose: the sender
+	// hears a failure it can act on rather than watching a ticket expire an hour
+	// later with nothing said.
+	defaultDeliveryLimit = 10 * time.Minute
 	// promptLimit bounds one relayed prompt. The message is typed into a TUI a
 	// character at a time; a megabyte of it is a hang, not a prompt.
 	promptLimit = 8192
@@ -92,6 +102,10 @@ const (
 	// session's own terminal and nowhere lich can read it — which is what
 	// happens when an agent answers over a channel of its provider's own.
 	StatusUnanswered = "unanswered"
+	// StatusUndelivered means the task never reached a prompt: it was held back
+	// for a session that was not at one, and that session died or stayed busy
+	// past defaultDeliveryLimit. Nothing is queued anymore and nothing was read.
+	StatusUndelivered = "undelivered"
 )
 
 // Session states the relay watches, spelled as the hook contract reports them
@@ -227,6 +241,9 @@ type ticket struct {
 	// unread closes when the target never reacted to the task at all. See
 	// watchReceipt.
 	unread chan struct{}
+	// undelivered closes when the message never got into the target's PTY at
+	// all. See queueDelivery.
+	undelivered chan struct{}
 	// sawBusy is whether the target has been working since this ticket's turn
 	// began; a turn that ends without it never started here.
 	sawBusy bool
@@ -278,6 +295,9 @@ type Service struct {
 	// receiptWindow is how long a delivered task has to be picked up before it
 	// is called unread (see watchReceipt). A field for the same reason.
 	receiptWindow time.Duration
+	// deliveryLimit is how long a queued task waits for a prompt to reach
+	// (defaultDeliveryLimit). A field for the same reason.
+	deliveryLimit time.Duration
 	// nudgeDelay is the debounce before a nudge is typed (defaultNudgeDelay).
 	// A field for the same reason.
 	nudgeDelay time.Duration
@@ -318,6 +338,7 @@ func New(sessions Sessions, term Terminal, events Events) *Service {
 		now:           time.Now,
 		submitDelay:   defaultSubmitDelay,
 		receiptWindow: defaultReceiptWindow,
+		deliveryLimit: defaultDeliveryLimit,
 		nudgeDelay:    defaultNudgeDelay,
 	}
 }
@@ -350,8 +371,10 @@ func (s *Service) Peers(fromID string) ([]Peer, error) {
 // more than one project; empty searches them all. waitSeconds bounds the wait —
 // 0 uses DefaultWait.
 //
-// The wait running out is not a failure: the message was delivered, and the
-// returned ticket is what picks the answer up later.
+// The wait running out is not a failure: the errand is open, and the returned
+// ticket is what picks its outcome up later. A target that is not at a prompt
+// yet is not a failure either — the task is queued and delivered when it is
+// (see queueDelivery).
 func (s *Service) Send(fromID, target, project, prompt string, waitSeconds int) (Result, error) {
 	prompt = sanitize(prompt)
 	if strings.TrimSpace(prompt) == "" {
@@ -372,53 +395,68 @@ func (s *Service) Send(fromID, target, project, prompt string, waitSeconds int) 
 		return Result{}, err
 	}
 	t := &ticket{
-		fromID:   fromID,
-		sender:   sender,
-		targetID: dest.ID,
-		target:   dest.Peer.Label,
-		created:  s.now(),
-		done:     make(chan struct{}),
-		stalled:  make(chan struct{}),
-		unread:   make(chan struct{}),
+		fromID:      fromID,
+		sender:      sender,
+		targetID:    dest.ID,
+		target:      dest.Peer.Label,
+		created:     s.now(),
+		done:        make(chan struct{}),
+		stalled:     make(chan struct{}),
+		unread:      make(chan struct{}),
+		undelivered: make(chan struct{}),
 	}
 	s.mu.Lock()
 	expired, senders := s.sweep()
-	busy := s.state[dest.ID] == stateBusy
-	if busy {
-		t.skipTurns = 1
-	}
 	s.tickets[id] = t
 	s.mu.Unlock()
 	s.clearAll(expired)
 	s.announceInboxAll(senders)
 
-	// One deadline covers the whole call: the setup wait and the answer wait
-	// spend the same budget. Each taking a full waitFor of its own would let a
-	// Send block for twice what the caller asked — past the HTTP client's own
-	// budget (internal/cli, waitBudget), which would report a timeout on a
-	// message that was in fact delivered.
-	deadline := s.now().Add(waitFor(waitSeconds))
-	if err := s.awaitReady(dest, deadline); err != nil {
-		s.mu.Lock()
-		delete(s.tickets, id)
-		s.mu.Unlock()
-		return Result{}, err
-	}
 	message := compose(sender, id, prompt, s.offersTools(dest.Peer.Kind))
+	if s.term.Ready(dest.ID) {
+		// A target that is at a prompt is written to on the caller's own
+		// goroutine, so a PTY that refuses the write is the error this call
+		// returns rather than an outcome mailed to the sender later.
+		if err := s.handOff(id, t, dest.Peer.Kind, message); err != nil {
+			s.mu.Lock()
+			delete(s.tickets, id)
+			s.mu.Unlock()
+			return Result{}, err
+		}
+	} else {
+		go s.queueDelivery(id, t, dest, message)
+	}
+	// The caller's own wait bounds this call and nothing else: the errand
+	// outlives it either way, and blocking past what was asked would run past
+	// the HTTP client's own budget (internal/cli, waitBudget) and report a
+	// timeout on an errand that is running perfectly well.
+	return s.await(id, t, waitFor(waitSeconds)), nil
+}
+
+// handOff puts a composed message in the target's PTY and starts everything
+// that watches what becomes of it. Called once per ticket, either on the
+// caller's goroutine or, for a target that was not at a prompt yet, on the one
+// holding the message back.
+func (s *Service) handOff(id string, t *ticket, kind, message string) error {
+	s.mu.Lock()
+	// Read here rather than at Send: a queued message can wait out a whole setup
+	// script, and what the target was doing back then decides nothing about the
+	// turn this message lands in.
+	busy := s.state[t.targetID] == stateBusy
+	if busy {
+		t.skipTurns = 1
+	}
 	// Stamped before the write, not after: a delivery is two writes a beat apart
 	// (see deliver), and turn accounting ignores an undelivered ticket. A target
 	// reporting inside that beat would be lost — its busy report, and the ticket
 	// is closed unread with the message queued and the reply that follows landing
 	// on nothing; its done, and the skip meant for the turn already running is
 	// spent on the turn that carries the answer.
-	s.mu.Lock()
 	t.delivered = s.now()
 	s.mu.Unlock()
-	if err := s.deliver(dest.ID, message); err != nil {
-		s.mu.Lock()
-		delete(s.tickets, id)
-		s.mu.Unlock()
-		return Result{}, fmt.Errorf("deliver to %q: %w", dest.Peer.Label, err)
+
+	if err := s.deliver(t.targetID, message); err != nil {
+		return fmt.Errorf("deliver to %q: %w", t.target, err)
 	}
 	// Announced only once the message is actually in the PTY: a mark raised
 	// before the write would survive a delivery that never happened.
@@ -427,10 +465,59 @@ func (s *Service) Send(fromID, target, project, prompt string, waitSeconds int) 
 	// A target that was already working is not checked: it will read this at the
 	// end of the turn it is in, whenever that is, and its provider is busy the
 	// whole time — there is nothing here to tell apart.
-	if !busy && s.reportsState(dest.Peer.Kind) {
+	if !busy && s.reportsState(kind) {
 		go s.watchReceipt(id, t)
 	}
-	return s.await(id, t, deadline.Sub(s.now())), nil
+	return nil
+}
+
+// queueDelivery holds a task back until its target is at a prompt, then hands
+// it over.
+//
+// A session opened on a fresh worktree runs the project's setup script in that
+// PTY first, and the script routinely outlasts the budget of the call that
+// sent the task — that is the main path of a fan-out, where every worker is a
+// checkout that has never been installed. Failing there loses the task
+// outright and leaves the sender guessing when to try again, so the wait moved
+// off the caller: it gets its ticket, and the message goes in when there is
+// something there to read it.
+//
+// A wait that can never end is reported rather than left open. The sender
+// hears it the way it hears any other outcome — through the inbox, or on the
+// ticket it is still holding — because a promise of news at your prompt has to
+// be kept by the failures too.
+func (s *Service) queueDelivery(id string, t *ticket, dest candidate, message string) {
+	err := s.awaitReady(dest, s.now().Add(s.deliveryLimit))
+	if err == nil {
+		err = s.handOff(id, t, dest.Peer.Kind, message)
+	}
+	if err != nil {
+		s.failDelivery(id, t, err)
+	}
+}
+
+// failDelivery closes an errand whose message never reached a prompt, and tells
+// the sender: the one still holding the ticket hears it from its own wait,
+// anyone who has moved on finds it in the inbox. The ticket is checked to be
+// the live one first — a delivery that failed after the message went in races
+// Observe, which may have closed the same errand from the other side.
+func (s *Service) failDelivery(id string, t *ticket, cause error) {
+	slog.Warn("relay: task never reached a prompt", "target", t.target, "err", cause)
+	s.mu.Lock()
+	current, live := s.tickets[id]
+	if !live || current != t {
+		s.mu.Unlock()
+		return
+	}
+	delete(s.tickets, id)
+	close(t.undelivered)
+	unattended := t.attended == 0
+	s.mu.Unlock()
+
+	s.clear(t)
+	if unattended {
+		s.stash(id, t, StatusUndelivered, "")
+	}
 }
 
 // deliver puts message at a session's prompt and sends it — two writes, a beat
@@ -444,7 +531,9 @@ func (s *Service) deliver(sessionID, message string) error {
 	return s.term.Write(sessionID, submit)
 }
 
-// awaitReady blocks until a target's agent is the program reading its PTY.
+// awaitReady blocks until a target's agent is the program reading its PTY, and
+// errors when that will never happen: the session stopped, or it is still not
+// at a prompt by deadline.
 //
 // A session opened on a fresh worktree runs the project's setup script in that
 // PTY first, and the script can take minutes. It is live the whole time, and a
@@ -452,15 +541,10 @@ func (s *Service) deliver(sessionID, message string) error {
 // so the request never existed, and the sender waits out a ticket nobody was
 // asked to answer. Seen on the first real run of a worktree session.
 //
-// Waiting is bounded by the caller's own deadline — the same one the answer is
-// waited on, so setup and answer spend one budget between them: there is no
-// point holding a message for a setup that outlasts the errand. Running out is
-// an error rather than a delivery, because a message nobody can be given is not
-// one that was sent.
+// What comes back is a cause for a log line and for the status the sender is
+// given, not prose for a person: whoever reads about this reads it in the
+// window or at an agent's prompt, where internal/cli words it.
 func (s *Service) awaitReady(dest candidate, deadline time.Time) error {
-	if s.term.Ready(dest.ID) {
-		return nil
-	}
 	for {
 		time.Sleep(readyPoll)
 		if s.term.Ready(dest.ID) {
@@ -470,17 +554,11 @@ func (s *Service) awaitReady(dest candidate, deadline time.Time) error {
 			return fmt.Errorf("%q stopped before its agent started", dest.Peer.Label)
 		}
 		if s.now().After(deadline) {
-			// Which of the two it is, lich cannot see from here, and naming only
-			// the setup script sent whoever read this hunting a script the
-			// project may not even have. What is certain is on that session's own
-			// screen, so the message says to go and look.
 			return fmt.Errorf(
-				"%q has not stopped drawing, so lich cannot tell what is reading its "+
-					"terminal: the project's worktree setup script may still be running in "+
-					"it, or its provider may still be starting up. Nothing was sent — open "+
-					"that session to see what is on its screen, and try again once it is at "+
-					"a prompt",
-				dest.Peer.Label,
+				"%q was still not at a prompt after %s: whatever holds that terminal — "+
+					"the project's worktree setup script, a provider that never came up — "+
+					"outlasted the wait",
+				dest.Peer.Label, s.deliveryLimit,
 			)
 		}
 	}
@@ -636,6 +714,9 @@ func (s *Service) await(id string, t *ticket, wait time.Duration) Result {
 	case <-t.unread:
 		s.leave(t)
 		return Result{Ticket: id, Target: t.target, Status: StatusUnread}
+	case <-t.undelivered:
+		s.leave(t)
+		return Result{Ticket: id, Target: t.target, Status: StatusUndelivered}
 	case <-timer.C:
 		return Result{Ticket: id, Target: t.target, Status: s.giveUp(id, t)}
 	}
@@ -655,8 +736,9 @@ func (s *Service) leave(t *ticket) {
 // had already stopped listening. Whoever leaves last owns what is left behind.
 //
 // A reply is stashed for the sender, because an answer outlives the wait it
-// missed. The receipt window closing the ticket unread — and a turn ending
-// with no answer — are told to the caller instead: it is still here to hear
+// missed. The three ways an errand ends without one — the receipt window
+// closing it unread, a turn ending with no answer, a message that never
+// reached a prompt — are told to the caller instead: it is still here to hear
 // them, and the alternative is reporting the errand as still in progress, on a
 // ticket already out of the map.
 func (s *Service) giveUp(id string, t *ticket) string {
@@ -664,7 +746,7 @@ func (s *Service) giveUp(id string, t *ticket) string {
 	t.attended--
 	last := t.attended == 0
 	orphaned := t.answered && last
-	unread, stalled := false, false
+	unread, stalled, undelivered := false, false, false
 	if last && !t.answered {
 		select {
 		case <-t.unread:
@@ -674,6 +756,11 @@ func (s *Service) giveUp(id string, t *ticket) string {
 		select {
 		case <-t.stalled:
 			stalled = true
+		default:
+		}
+		select {
+		case <-t.undelivered:
+			undelivered = true
 		default:
 		}
 	}
@@ -686,6 +773,9 @@ func (s *Service) giveUp(id string, t *ticket) string {
 	}
 	if stalled {
 		return StatusUnanswered
+	}
+	if undelivered {
+		return StatusUndelivered
 	}
 	return StatusPending
 }
@@ -738,8 +828,9 @@ func (s *Service) Observe(sessionID, state string) {
 		}
 	case stateIdle:
 		// SessionEnd needs no turn to have run: the CLI has left the PTY and
-		// nothing there can answer anymore. An undelivered ticket is left for
-		// awaitReady, which sees the session die and fails the Send itself.
+		// nothing there can answer anymore. A ticket still queued is left for
+		// awaitReady, which sees the session die and reports it undelivered —
+		// a different thing to be told, and its own message to be told it in.
 		for id, t := range s.tickets {
 			if t.targetID == sessionID && !t.delivered.IsZero() {
 				delete(s.tickets, id)

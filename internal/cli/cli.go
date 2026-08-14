@@ -548,9 +548,14 @@ func (c *client) report(result relay.Result, asJSON bool) error {
 		fmt.Fprintln(c.stdout, unreadText(result.Target))
 		return nil
 	}
+	if result.Status == relay.StatusUndelivered {
+		fmt.Fprintln(c.stdout, undeliveredText(result.Target))
+		return nil
+	}
 	fmt.Fprintf(c.stdout,
-		"%s is still working. The message was delivered; a note will be typed at the "+
-			"sending session's prompt when its result is ready. To hold the line for it instead:\n"+
+		"%s is still working. The errand is open — a message that session was not ready "+
+			"for is held until it is — and a note will be typed at the sending session's "+
+			"prompt when its result is ready. To hold the line for it instead:\n"+
 			"  lich wait %s\n",
 		result.Target, result.Ticket,
 	)

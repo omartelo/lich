@@ -1404,9 +1404,11 @@ func waitForTicket(svc *Service) string {
 // read a message: the script owns the PTY until it execs the provider. Writing
 // into it loses the request outright — `pnpm install` reads the bytes and drops
 // them — and the sender then waits out a ticket nobody was ever asked to
-// answer, which is how this was found.
+// answer, which is how this was found. So the task is queued instead: the
+// sender gets its ticket now, and the message goes in when there is something
+// there to read it.
 
-func TestSendWaitsForTheSetupScriptToFinish(t *testing.T) {
+func TestSendDeliversOnceTheSetupScriptFinishes(t *testing.T) {
 	term := newFakeTerminal("s1", "s2")
 	term.setUp("s2", true)
 	svc := newRelay(workspace(), term, nil)
@@ -1416,8 +1418,8 @@ func TestSendWaitsForTheSetupScriptToFinish(t *testing.T) {
 		term.setUp("s2", false)
 	}()
 
-	// One second covers both waits here: the setup finishes in 20ms, and nobody
-	// answers, so the errand ends pending on purpose.
+	// One second is long enough for the setup to finish and the delivery to
+	// land inside the call; nobody answers, so the errand ends pending.
 	result, err := svc.Send("s1", "docs", "", "run the tests", 1)
 	if err != nil {
 		t.Fatalf("Send = %v, want the message held until the agent was up", err)
@@ -1430,19 +1432,87 @@ func TestSendWaitsForTheSetupScriptToFinish(t *testing.T) {
 	}
 }
 
-func TestSendRefusesRatherThanTypingIntoASetupScript(t *testing.T) {
+// TestSendQueuesForASessionThatIsNotAtAPromptYet is the case the whole feature
+// exists for: a fan-out hands a task to a worktree that has never been
+// installed, and the setup script outlasts the caller's own budget. What used
+// to happen was a failed Send with the task gone; what has to happen is a
+// ticket now and a delivery later, on an errand that still answers.
+func TestSendQueuesForASessionThatIsNotAtAPromptYet(t *testing.T) {
 	term := newFakeTerminal("s1", "s2")
 	term.setUp("s2", true)
 	svc := newRelay(workspace(), term, nil)
 
-	_, err := svc.Send("s1", "docs", "", "run the tests", 1)
-	if err == nil {
-		t.Fatal("sent a message into a checkout that was still installing")
+	result, err := svc.Send("s1", "docs", "", "run the tests", 1)
+	if err != nil {
+		t.Fatalf("Send = %v, want a ticket for a task that is queued", err)
 	}
-	// The sender has to know nothing was delivered: a ticket here would be an
-	// errand nobody can answer, waited out in full.
-	if !strings.Contains(err.Error(), "Nothing was sent") {
-		t.Errorf("error = %q, want it to say the message was not delivered", err)
+	if result.Status != StatusPending {
+		t.Errorf("status = %q, want the errand open", result.Status)
+	}
+	if len(term.writesTo("s2")) != 0 {
+		t.Errorf("typed %v into the setup script", term.writesTo("s2"))
+	}
+
+	term.setUp("s2", false)
+	if !awaitWritten(term, "s2", "run the tests") {
+		t.Fatal("the queued task never reached the target once its agent was up")
+	}
+
+	// The ticket the caller left with is the one that answers: an errand
+	// delivered late is not a different errand.
+	if err := svc.Reply(result.Ticket, "green"); err != nil {
+		t.Fatalf("Reply: %v", err)
+	}
+	answered, err := svc.Wait(result.Ticket, 1)
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	if answered.Status != StatusAnswered || answered.Answer != "green" {
+		t.Errorf("wait = %+v, want the answer to the queued task", answered)
+	}
+}
+
+// TestSendDoesNotBlockOnASessionThatIsNotReady pins the caller's wait bounding
+// the call and nothing else. Blocking past it would run past the HTTP client's
+// own timeout (internal/cli, waitBudget) and report a failure on an errand that
+// is running perfectly well.
+func TestSendDoesNotBlockOnASessionThatIsNotReady(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	term.setUp("s2", true)
+	svc := newRelay(workspace(), term, nil)
+
+	start := time.Now()
+	result, err := svc.Send("s1", "docs", "", "run the tests", 1)
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("Send = %v, want a ticket", err)
+	}
+	if result.Status != StatusPending {
+		t.Errorf("status = %q, want the errand still open", result.Status)
+	}
+	if elapsed > 1500*time.Millisecond {
+		t.Errorf("Send blocked %v on a 1s wait — the readiness wait is spending the caller's budget", elapsed)
+	}
+}
+
+// A queued delivery that can never happen is an outcome, not a ticket left to
+// expire: the sender is told, on the ticket it is still holding or in its
+// inbox, and told that nothing is queued anymore.
+
+func TestQueuedTaskGivesUpWhenTheTargetNeverReachesAPrompt(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	term.setUp("s2", true)
+	svc := newRelay(workspace(), term, nil)
+	// A tenth of the caller's own wait, so the give-up lands while it is still
+	// holding the line and is what it hears.
+	svc.deliveryLimit = 100 * time.Millisecond
+
+	result, err := svc.Send("s1", "docs", "", "run the tests", 1)
+	if err != nil {
+		t.Fatalf("Send = %v, want a ticket", err)
+	}
+	if result.Status != StatusUndelivered {
+		t.Errorf("status = %q, want the sender told the task never reached a prompt", result.Status)
 	}
 	if len(term.writesTo("s2")) != 0 {
 		t.Errorf("typed %v into the setup script", term.writesTo("s2"))
@@ -1451,59 +1521,46 @@ func TestSendRefusesRatherThanTypingIntoASetupScript(t *testing.T) {
 	open := len(svc.tickets)
 	svc.mu.Unlock()
 	if open != 0 {
-		t.Errorf("left %d tickets open for a message that was never delivered", open)
+		t.Errorf("left %d tickets open for a task that was never delivered", open)
 	}
 }
 
-// TestSendSpendsOneBudgetAcrossSetupAndAnswer pins the deadline being shared:
-// a setup that eats most of the wait leaves only the remainder for the answer,
-// instead of a fresh full wait on top. Two full budgets would block past the
-// HTTP client's own timeout (internal/cli, waitBudget) and report a failure on
-// a message that was in fact delivered.
-func TestSendSpendsOneBudgetAcrossSetupAndAnswer(t *testing.T) {
+func TestQueuedTaskReportsTheTargetDyingToTheInbox(t *testing.T) {
 	term := newFakeTerminal("s1", "s2")
 	term.setUp("s2", true)
-	svc := newRelay(workspace(), term, nil)
+	events := &fakeEvents{}
+	svc := newRelay(workspace(), term, events)
 
-	go func() {
-		time.Sleep(750 * time.Millisecond)
-		term.setUp("s2", false)
-	}()
-
-	start := time.Now()
+	// The wait runs out with the task still queued: the sender has moved on, so
+	// the news has to reach it the way an answer would.
 	result, err := svc.Send("s1", "docs", "", "run the tests", 1)
-	elapsed := time.Since(start)
 	if err != nil {
-		t.Fatalf("Send = %v, want the message delivered", err)
+		t.Fatalf("Send = %v, want a ticket", err)
 	}
 	if result.Status != StatusPending {
-		t.Errorf("status = %q, want the errand still open", result.Status)
+		t.Fatalf("status = %q, want the errand still queued", result.Status)
 	}
-	// The old shape waited the setup out and then a full second more, ending
-	// past 1.75s. The shared budget ends the call at the one second asked for.
-	if elapsed > 1500*time.Millisecond {
-		t.Errorf("Send blocked %v on a 1s wait — the setup and the answer each spent a full budget", elapsed)
+
+	term.mu.Lock()
+	term.live["s2"] = false
+	term.mu.Unlock()
+
+	if !awaitWritten(term, "s1", "[lich]") {
+		t.Fatal("the sender was never told its queued task died with the target")
 	}
-}
-
-func TestSendGivesUpWhenTheTargetDiesDuringSetup(t *testing.T) {
-	term := newFakeTerminal("s1", "s2")
-	term.setUp("s2", true)
-	svc := newRelay(workspace(), term, nil)
-
-	go func() {
-		time.Sleep(20 * time.Millisecond)
-		term.mu.Lock()
-		term.live["s2"] = false
-		term.mu.Unlock()
-	}()
-
-	_, err := svc.Send("s1", "docs", "", "run the tests", 30)
-	if err == nil {
-		t.Fatal("waited on a session that is gone")
+	collected, err := svc.Collect("s1", 1)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
 	}
-	if !strings.Contains(err.Error(), "stopped before its agent started") {
-		t.Errorf("error = %q", err)
+	if len(collected.Results) != 1 || collected.Results[0].Status != StatusUndelivered {
+		t.Fatalf("collected = %+v, want one undelivered result", collected.Results)
+	}
+	if collected.Results[0].Ticket != result.Ticket {
+		t.Errorf("ticket = %q, want the one the sender left with (%q)",
+			collected.Results[0].Ticket, result.Ticket)
+	}
+	if counts := events.inboxCounts("s1"); len(counts) == 0 || counts[len(counts)-1] != 0 {
+		t.Errorf("inbox counts = %v, want the card to have said one result and then none", counts)
 	}
 }
 

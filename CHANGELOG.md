@@ -53,6 +53,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A task handed to a session that is not up yet is queued, not lost.** Giving
+  a task to a session on a fresh worktree meant racing that checkout's setup
+  script: the install runs in the same terminal the agent will use, it can take
+  minutes, and a task typed into it is read by `pnpm install` and dropped. lich
+  refused to type into it — but the refusal came back as a failed send with the
+  task gone, and it fell on whoever sent it to guess when to try again. That is
+  the main path of a fan-out, where every worker is a checkout nobody has
+  installed yet. Now the sender gets its ticket immediately and the task goes in
+  the moment that session's agent is the program reading its terminal, however
+  long the setup takes. A queue that can never end — the session ends, or ten
+  minutes pass with nothing at a prompt — comes back as a reported failure at
+  the sender's own prompt, saying the task is gone rather than waiting
+  somewhere, instead of a ticket that hangs until it expires an hour later. A
+  target that is merely busy is unchanged: the task queues at its prompt and it
+  answers a turn later.
+
 - **A helper that outlives a lich restart can talk to lich again.** The `lich`
   command line and lich's own MCP tools read the loopback coordinates the session
   they run in was given, and the connect token behind them is minted fresh every

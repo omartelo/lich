@@ -311,7 +311,9 @@ var mcpTools = []mcpTool{
 	{
 		Name: "send_to_session",
 		Description: "Give another lich session a task. The task is put at that session's prompt " +
-			"as if typed there. Returns the answer when it comes back quickly; for anything " +
+			"as if typed there, or held and delivered when it gets to one — a session on a " +
+			"fresh worktree runs the project's setup script before its agent, and the task " +
+			"waits that out rather than being lost. Returns the answer when it comes back quickly; for anything " +
 			"slower you get a ticket and carry on — when the result is ready, a short note " +
 			"arrives at your own prompt and wait_for_answer collects it, so you never poll. " +
 			"Sessions are addressed by the label on their lich card — call list_sessions for " +
@@ -486,13 +488,14 @@ var mcpTools = []mcpTool{
 	},
 }
 
-// deliverWait bounds handing a task to a session that was opened a moment ago:
-// how long the delivery waits for that session's agent to be the program reading
-// its PTY (relay.awaitReady).
+// deliverWait bounds holding the line when a task is handed to a session that
+// was opened a moment ago.
 //
-// It is not a wait for an answer. The worker was created seconds ago and its
-// task is minutes of work, so a ticket is the expected outcome and the sender
-// carries on.
+// It is not a wait for an answer, and no longer a wait for the session to come
+// up either: a task sent to a session that is still running its worktree setup
+// script is queued and delivered when its agent is there (relay.queueDelivery).
+// The worker was created seconds ago and its task is minutes of work, so a
+// ticket is the expected outcome and the sender carries on.
 //
 // The number is what is left of the call's budget. Opening can spend openCall
 // (60s) before this starts, and the client detaches anything still running at
@@ -514,9 +517,8 @@ func (c *client) handOver(opened spawn.Session, prompt string) string {
 	call := []any{c.sessionID(), opened.Label, opened.Project, prompt, deliverWait}
 	if err := c.call("relay.Send", call, waitBudget(deliverWait), &result); err != nil {
 		return fmt.Sprintf(
-			"The task did not reach it: %v. The session is open and idle, so send the task "+
-				"with send_to_session — a fresh worktree runs the project's setup script "+
-				"before its agent, and that can outlast this call.",
+			"The task did not reach it: %v. The session is open, so hand it the task with "+
+				"send_to_session once whatever that says is dealt with.",
 			err,
 		)
 	}
@@ -534,9 +536,12 @@ func mcpOutcome(result relay.Result) string {
 		return unansweredText(result.Target)
 	case relay.StatusUnread:
 		return unreadText(result.Target)
+	case relay.StatusUndelivered:
+		return undeliveredText(result.Target)
 	}
 	return fmt.Sprintf(
-		"%s is still working. The task was delivered; when its result is ready a short note "+
+		"%s is still working. The errand is open — if that session was not at a prompt yet, "+
+			"the task is held and goes in when it is. When its result is ready a short note "+
 			"will arrive at your own prompt, so carry on — there is nothing to poll. Collect "+
 			"it with wait_for_answer (ticket %q, or no ticket for everything at once).",
 		result.Target, result.Ticket,
@@ -560,6 +565,8 @@ func collectedText(collected relay.Collected) string {
 			parts = append(parts, unreadText(result.Target))
 		case relay.StatusUnanswered:
 			parts = append(parts, unansweredText(result.Target))
+		case relay.StatusUndelivered:
+			parts = append(parts, undeliveredText(result.Target))
 		}
 	}
 	if len(collected.Open) > 0 {
@@ -586,6 +593,22 @@ func unreadText(target string) string {
 			"directory is trusted the first time it runs in one). Nothing is queued and "+
 			"nothing was answered. Tell the user to open the %q card and clear what is "+
 			"on it; the task has to be sent again after that.",
+		target, target,
+	)
+}
+
+// undeliveredText is what both surfaces say about a task that was held for a
+// session that never reached a prompt. It is the one outcome where nothing was
+// read and nothing was typed, so the reader has to hear that the task is gone
+// rather than queued somewhere — and that the session itself is what needs
+// looking at before it is sent again.
+func undeliveredText(target string) string {
+	return fmt.Sprintf(
+		"The task never reached the %q session: it was held back because that terminal "+
+			"was not at a prompt — a worktree setup script still running, a provider that "+
+			"never came up — and the session ended or stayed that way for too long. Nothing "+
+			"is queued anymore and nothing was answered. Tell the user to open the %q card "+
+			"to see what happened there; the task has to be sent again after that.",
 		target, target,
 	)
 }

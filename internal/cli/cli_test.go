@@ -709,6 +709,26 @@ func TestSendSaysWhenTheTaskWasNeverPickedUp(t *testing.T) {
 	}
 }
 
+func TestSendSaysWhenTheTaskNeverReachedAPrompt(t *testing.T) {
+	f := newFakeLich(t, `{"ticket":"a1b2c3d4","target":"docs","status":"undelivered"}`)
+
+	code, stdout, stderr := run(t, f, "send", "docs", "run the tests")
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+	// A queued task that never landed reads as a delivery to anyone who is not
+	// told otherwise, so the output has to say the task is gone rather than
+	// waiting somewhere.
+	for _, phrase := range []string{"never reached", "Nothing is queued anymore", "again"} {
+		if !strings.Contains(stdout, phrase) {
+			t.Errorf("output is missing %q:\n%s", phrase, stdout)
+		}
+	}
+	if strings.Contains(stdout, "lich wait") {
+		t.Errorf("offered a ticket to wait on for a task that was never delivered:\n%s", stdout)
+	}
+}
+
 func TestCloseSaysWhatWentWithTheSession(t *testing.T) {
 	kept := newFakeLich(t, `{"id":"9f8e","projectId":"p1","project":"lich","label":"auth-fix",
 		"worktree":"/wt/auth-fix","kept":true}`)

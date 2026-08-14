@@ -139,6 +139,12 @@ Types `<prompt>` at `<session>`'s prompt, submits it, and waits.
   to be sent again once the screen is clear. Only reported for providers that
   report their state at all (the plugin, `docs/hooks/`) — silence has to mean
   something before it can be read as anything.
+- **Never delivered**: the task was held for a session that never reached a
+  prompt — it ended, or whatever had its terminal outlasted the queue (10
+  minutes). The ticket is dropped rather than left to expire, and the output
+  says the task is gone rather than waiting anywhere: it has to be sent again
+  once that card shows what happened. A sender that had already stopped waiting
+  finds it in its inbox, like any other outcome.
 - **Answered somewhere else**: the target worked through the request and ended
   its turn without replying here — it answered over its provider's own channel,
   or out loud to whoever was watching. The wait ends there rather than running
@@ -149,8 +155,9 @@ Types `<prompt>` at `<session>`'s prompt, submits it, and waits.
   is that news.
 
 ```
-docs is still working. The message was delivered; a note will be typed at the
-sending session's prompt when its result is ready. To hold the line for it instead:
+docs is still working. The errand is open — a message that session was not ready
+for is held until it is — and a note will be typed at the sending session's
+prompt when its result is ready. To hold the line for it instead:
   lich wait a1b2c3d4
 ```
 
@@ -158,13 +165,16 @@ A prompt is capped at 8192 bytes and stripped of control characters — the text
 is typed into a terminal, and an escape sequence inside it would stop being
 text.
 
-**A target still running its setup script is waited for, not written to.** The
-wait shares the caller's own `--timeout` with the wait for the answer — one
-budget covers the whole call, so `send` never blocks past what was asked.
-Running out is an error saying nothing was sent, never a ticket — an errand
-nobody can answer would otherwise be waited out in full. `internal/terminal` tells the two apart by a marker the
-setup wrapper prints between the script and the provider (`setupDone`): the PTY
-and the pid are the same across the `exec`, so nothing else can.
+**A target still running its setup script is queued for, not written to.** The
+ticket comes back at once and the message goes in when that session's agent is
+the program reading its PTY — a fresh worktree installs its dependencies before
+its agent, which routinely outlasts the caller's own `--timeout`, and losing the
+task there is exactly what a fan-out cannot afford. `send` never blocks past
+what was asked. A queue that can never end — the session dies, or 10 minutes
+pass — is reported as a failure the sender can act on, never a ticket left to
+expire. `internal/terminal` tells the setup script and the agent apart by a
+marker the setup wrapper prints between them (`setupDone`): the PTY and the pid
+are the same across the `exec`, so nothing else can.
 
 ### `lich wait [--timeout <seconds>] [<ticket>]`
 
@@ -617,8 +627,8 @@ whoever asked.
 - **A session is addressable before its agent can read.** `open` returns when
   the PTY exists, not when the provider inside it has finished starting. The one
   stretch lich *can* see is the project's worktree setup script, which owns that
-  PTY before the provider and can run for minutes: `send` waits it out rather
-  than typing into it (see below), because a message handed to a running
+  PTY before the provider and can run for minutes: `send` queues the task for it
+  rather than typing into it (see below), because a message handed to a running
   `pnpm install` is read and discarded, and the sender then waits out a ticket
   nobody was ever asked to answer. What is left is the second or two the
   provider's own TUI takes to start reading. lich waits that out as quiet — a

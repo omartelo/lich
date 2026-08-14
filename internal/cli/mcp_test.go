@@ -645,6 +645,26 @@ func TestMCPSendReportsATaskNobodyRead(t *testing.T) {
 	}
 }
 
+func TestMCPSendReportsATaskThatNeverReachedAPrompt(t *testing.T) {
+	f := newFakeLich(t, `{"ticket":"a1b2c3d4","target":"docs","status":"undelivered"}`)
+
+	replies := speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
+		{"name":"send_to_session","arguments":{"session":"docs","prompt":"run the tests"}}}`)
+
+	text, failed := textOf(t, replies[0])
+	if failed {
+		t.Fatalf("tool reported a failure: %s", text)
+	}
+	if !strings.Contains(text, "never reached") {
+		t.Errorf("text = %q, want it to say the task was never delivered", text)
+	}
+	// The ticket is gone with the errand; an agent told to collect it would be
+	// waiting on nothing.
+	if strings.Contains(text, "wait_for_answer") {
+		t.Errorf("pointed at a ticket for a task that never landed: %q", text)
+	}
+}
+
 func TestMCPCloseSessionPassesTheWorktreeAnswer(t *testing.T) {
 	f := newFakeLich(t, `{"id":"9f8e","projectId":"p1","project":"lich","label":"auth-fix",
 		"worktree":"/wt/auth-fix","removed":true}`)
