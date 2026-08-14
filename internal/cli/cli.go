@@ -64,6 +64,23 @@ const shortCall = 10 * time.Second
 // surfaces.
 const openCall = 60 * time.Second
 
+// deliverWait bounds holding the line when a task is handed to a session that
+// was opened a moment ago.
+//
+// It is not a wait for an answer, and no longer a wait for the session to come
+// up either: a task sent to a session that is still running its worktree setup
+// script is queued and delivered when its agent is there (relay.queueDelivery).
+// The worker was created seconds ago and its task is minutes of work, so a
+// ticket is the expected outcome and the sender carries on.
+//
+// The number is what is left of an MCP call's budget, and the command line
+// shares it rather than growing a timeout of its own: opening can spend openCall
+// (60s) before this starts, and the client detaches anything still running at
+// 120s (see mcpMaxWait) — so the delivery gets 20, plus the callSlack the HTTP
+// timeout adds for the trip back, and the worst case lands at 110 rather than
+// on the line.
+const deliverWait = 20
+
 const usage = `lich talks to the sessions open in the running lich window.
 
   lich sessions [--json]
@@ -83,11 +100,13 @@ const usage = `lich talks to the sessions open in the running lich window.
       relayed message asks you to run when you are done.
 
   lich open [--project <name>] [--kind <provider>] [--worktree <branch>]
-            [--base <branch>] [--model <model>] [--json]
+            [--base <branch>] [--model <model>] [--prompt <task>] [--json]
       Open a new session and start it. --worktree creates a git worktree of
       that branch name first and roots the session in it. --model runs the
-      provider on that model, in the provider's own spelling. Prints the name
-      the new session is addressed by.
+      provider on that model, in the provider's own spelling. --prompt hands
+      the new session that task as soon as its agent is up, so opening a
+      worker for a task is one command rather than two. Prints the name the
+      new session is addressed by.
 
   lich close [--project <name>] [--worktree keep|remove] [--force] [--json] <session>
       Close a session. Closing the last one in a worktree needs --worktree to
@@ -315,6 +334,7 @@ func (c *client) open(args []string) error {
 	worktree := flags.String("worktree", "", "branch name of a new git worktree to root the session in")
 	base := flags.String("base", "", "branch the worktree starts from; defaults to the project's current branch")
 	model := flags.String("model", "", "model the provider runs, in the provider's own spelling")
+	prompt := flags.String("prompt", "", "task to hand the new session as soon as its agent is up")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -322,7 +342,7 @@ func (c *client) open(args []string) error {
 	if flags.NArg() != 0 {
 		return fmt.Errorf(
 			"usage: lich open [--project <name>] [--kind <provider>] [--worktree <branch>] " +
-				"[--base <branch>] [--json]")
+				"[--base <branch>] [--model <model>] [--prompt <task>] [--json]")
 	}
 
 	var opened spawn.Session
@@ -330,11 +350,63 @@ func (c *client) open(args []string) error {
 	if err := c.call("spawn.Open", call, openCall, &opened); err != nil {
 		return err
 	}
+	delivered, failure := c.handOff(opened, *prompt)
 	if *asJSON {
-		return c.emit(opened)
+		if err := c.emit(opening{Session: opened, Delivery: delivered}); err != nil {
+			return err
+		}
+		return failure
 	}
 	fmt.Fprint(c.stdout, openedText(opened))
-	return nil
+	if failure != nil {
+		return failure
+	}
+	if delivered == nil {
+		return nil
+	}
+	return c.report(*delivered, false)
+}
+
+// opening is what `lich open --json` prints. The session's fields stay at the
+// top level, where every reader of this command has always found them, and the
+// hand-off rides beside them under one key — absent unless --prompt asked for
+// one. Two objects, or two lines, would make a script tell the flags apart
+// before it could read the output; --json promises one line and one shape.
+//
+// A hand-off that failed leaves the key absent and exits non-zero: the session
+// is real and printing it is the point, but a script that read exit 0 would
+// believe the task landed.
+type opening struct {
+	spawn.Session
+	Delivery *relay.Result `json:"delivery,omitempty"`
+}
+
+// handOff gives a just-opened session its first task, and nothing at all when
+// no task came with it. The failure it returns names the session, because the
+// session outlives it: what went wrong is one send, not the open.
+func (c *client) handOff(opened spawn.Session, prompt string) (*relay.Result, error) {
+	if prompt == "" {
+		return nil, nil
+	}
+	result, err := c.deliver(opened, prompt)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"the session is open, but the task did not reach it: %w — hand it the task with "+
+				"`lich send %q '<task>'` once whatever that says is dealt with",
+			err, opened.Label,
+		)
+	}
+	return &result, nil
+}
+
+// deliver hands a just-opened session its first task, on both surfaces: the
+// command line's --prompt and the open_session tool's, which differ in how they
+// word the outcome and in nothing else.
+func (c *client) deliver(opened spawn.Session, prompt string) (relay.Result, error) {
+	var result relay.Result
+	call := []any{c.sessionID(), opened.Label, opened.Project, prompt, deliverWait}
+	err := c.call("relay.Send", call, waitBudget(deliverWait), &result)
+	return result, err
 }
 
 // openedText words a new session for whoever asked for one. It names both of

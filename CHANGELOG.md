@@ -20,6 +20,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nothing shows `-` (`""` in `--json`), which means "not reported" and never
   "idle".
 
+- **`lich open` can hand the new session its task.** `--prompt "<task>"` opens a
+  session and gives it that task in one command, which is what the `open_session`
+  tool has been doing and the command line could not. It matters for the agents
+  that reach lich through a shell rather than through tools — opencode, Crush,
+  anything spawned without lich's MCP server — where fanning work out cost two
+  commands per worker, and the second one was the one an agent forgot. The task
+  is queued for a worker still running its setup script, exactly as `lich send`
+  queues one, and the outcome is printed under the session's own lines in the
+  words `send` uses, ticket included. `--json` still prints one object: the
+  session, plus a `delivery` key with the send's result when a task came with it.
+
 - **Asking for work to be fanned out opens lich sessions, not invisible
   subagents.** Every coding agent lich runs also has subagents of its own, and
   its harness describes those to it at length, from its first turn — so "spin

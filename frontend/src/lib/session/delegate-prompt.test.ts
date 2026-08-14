@@ -33,11 +33,14 @@ describe("delegateWorktreePrompt", () => {
     expect(delegateWorktreePrompt("codex")).toBe("Delegate to a new worktree session: ")
   })
 
-  it("names both commands for every other sender — nothing else would", () => {
+  it("names the one command for every other sender — nothing else would", () => {
     for (const kind of ["opencode", "crush", "omp", "shell", "something-new"]) {
       const prompt = delegateWorktreePrompt(kind)
       expect(prompt).toContain("lich open --worktree")
-      expect(prompt).toContain("lich send")
+      // Opening and handing over is one command now, so sending the agent to a
+      // second one would spend a turn it no longer needs.
+      expect(prompt).toContain("--prompt")
+      expect(prompt).not.toContain("lich send")
       expect(prompt.endsWith(": ")).toBe(true)
     }
   })

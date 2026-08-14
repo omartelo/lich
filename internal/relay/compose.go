@@ -40,8 +40,8 @@ import (
 // CommandLineToArgvW, cmd.exe does not read that as an escape, and the < and >
 // left outside quotes by it are redirection.
 func SpawnBriefing(hasTools bool) string {
-	route := "Open one with `lich open --worktree BRANCH`, then hand it the task with " +
-		"`lich send SESSION 'the task'`."
+	route := "Open one with `lich open --worktree BRANCH --prompt 'the task'`, which opens the " +
+		"session and hands it the task in one command."
 	if hasTools {
 		route = "The lich tools in your list open one and hand it the task."
 	}

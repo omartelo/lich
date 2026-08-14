@@ -678,6 +678,125 @@ func TestOpenJSONIsMachineReadable(t *testing.T) {
 	if opened.Label != "auth-fix" || opened.Name != "auth-fix-9f8e" || opened.Path != "/wt/auth-fix" {
 		t.Errorf("opened = %+v", opened)
 	}
+	// Nothing was handed over, so nothing is reported: a reader that branches on
+	// the key must not find an empty one to interpret.
+	if strings.Contains(stdout, "delivery") {
+		t.Errorf("an open with no --prompt carries a delivery:\n%s", stdout)
+	}
+}
+
+// The whole point of the flag: opening a worker for a task is one command
+// rather than two, exactly as the open_session tool has been.
+func TestOpenHandsOverTheTaskItCameWith(t *testing.T) {
+	f := newFakeLich(t, openedBody)
+	f.answers = map[string]answer{
+		"relay.Send": {status: 200, body: `{"ticket":"a1b2c3d4","target":"auth-fix","status":"pending"}`},
+	}
+
+	code, stdout, stderr := run(t, f, "open", "--worktree", "auth-fix", "--prompt", "port the parser")
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+
+	if len(f.calls) != 2 || f.calls[0].method != "spawn.Open" || f.calls[1].method != "relay.Send" {
+		t.Fatalf("calls = %+v, want spawn.Open then relay.Send", f.calls)
+	}
+	// The new session is addressed by the label lich just gave it, in its own
+	// project — the caller cannot have been told either one yet. The wait is
+	// spelled out rather than read from deliverWait, which could be raised past
+	// what the surfaces sharing it allow with the suite still green.
+	want := []any{"s1", "auth-fix", "lich", "port the parser", float64(20)}
+	if len(f.calls[1].args) != len(want) {
+		t.Fatalf("send args = %v, want %v", f.calls[1].args, want)
+	}
+	for i := range want {
+		if f.calls[1].args[i] != want[i] {
+			t.Errorf("send argument %d = %v, want %v", i, f.calls[1].args[i], want[i])
+		}
+	}
+	// Both halves are reported: the session's names, then what became of the
+	// task — and the next step is this command line's own, not the tool's.
+	for _, phrase := range []string{`"auth-fix-9f8e"`, "lich wait a1b2c3d4"} {
+		if !strings.Contains(stdout, phrase) {
+			t.Errorf("output is missing %q:\n%s", phrase, stdout)
+		}
+	}
+}
+
+func TestOpenJSONCarriesTheHandOffBesideTheSession(t *testing.T) {
+	f := newFakeLich(t, openedBody)
+	f.answers = map[string]answer{
+		"relay.Send": {status: 200, body: `{"ticket":"a1b2c3d4","target":"auth-fix","status":"pending"}`},
+	}
+
+	code, stdout, stderr := run(t, f, "open", "--json", "--worktree", "auth-fix", "--prompt", "port the parser")
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+
+	if lines := strings.Count(strings.TrimSpace(stdout), "\n"); lines != 0 {
+		t.Fatalf("--json printed %d extra lines — the contract is one line:\n%s", lines, stdout)
+	}
+	var got struct {
+		spawn.Session
+		Delivery *relay.Result `json:"delivery"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+		t.Fatalf("open --json is not JSON: %v (%q)", err, stdout)
+	}
+	// The session's fields stay where a reader of this command has always found
+	// them; only the hand-off is new, and it is under one key.
+	if got.Label != "auth-fix" || got.Name != "auth-fix-9f8e" {
+		t.Errorf("session = %+v", got.Session)
+	}
+	if got.Delivery == nil {
+		t.Fatalf("no delivery reported for a task that was handed over:\n%s", stdout)
+	}
+	if got.Delivery.Ticket != "a1b2c3d4" || got.Delivery.Status != "pending" {
+		t.Errorf("delivery = %+v", got.Delivery)
+	}
+}
+
+// The session outlives a delivery that failed, so it is still printed — but the
+// exit code has to say the task did not land, or a script reading 0 believes it
+// did.
+func TestOpenKeepsTheSessionWhenTheTaskDoesNotLand(t *testing.T) {
+	f := newFakeLich(t, openedBody)
+	f.answers = map[string]answer{
+		"relay.Send": {status: 500, body: `{"error":"the setup script is still running"}`},
+	}
+
+	code, stdout, stderr := run(t, f, "open", "--worktree", "auth-fix", "--prompt", "port the parser")
+	if code != 1 {
+		t.Fatalf("exit = %d, want 1 — the task never reached the session", code)
+	}
+	if !strings.Contains(stdout, `"auth-fix"`) {
+		t.Errorf("the session that was opened is not reported:\n%s", stdout)
+	}
+	for _, phrase := range []string{"the setup script is still running", `lich send "auth-fix"`} {
+		if !strings.Contains(stderr, phrase) {
+			t.Errorf("stderr is missing %q:\n%s", phrase, stderr)
+		}
+	}
+
+	// In JSON the same failure leaves the key absent rather than inventing a
+	// shape for it: the reader branches on the exit code, then on the key.
+	asJSON := newFakeLich(t, openedBody)
+	asJSON.answers = f.answers
+	code, stdout, _ = run(t, asJSON, "open", "--json", "--worktree", "auth-fix", "--prompt", "port the parser")
+	if code != 1 {
+		t.Fatalf("exit = %d, want 1", code)
+	}
+	var got map[string]any
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+		t.Fatalf("open --json is not JSON: %v (%q)", err, stdout)
+	}
+	if got["label"] != "auth-fix" {
+		t.Errorf("the session that was opened is not in the JSON: %v", got)
+	}
+	if _, reported := got["delivery"]; reported {
+		t.Errorf("a delivery that failed is reported as one: %v", got)
+	}
 }
 
 func TestOpenReportsTheAppsRefusal(t *testing.T) {

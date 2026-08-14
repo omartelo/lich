@@ -2218,7 +2218,10 @@ func TestSpawnBriefingNamesTheRouteThisSpawnGave(t *testing.T) {
 	if !strings.Contains(withTools, "tools in your list") {
 		t.Errorf("the tool route is missing:\n%s", withTools)
 	}
-	for _, want := range []string{"lich open --worktree", "lich send"} {
+	// One command, not two: the tool route opens a worker and hands it the task
+	// in one call, and a command route that cost two is what made the harness's
+	// own subagents the cheaper thing to reach for.
+	for _, want := range []string{"lich open --worktree", "--prompt"} {
 		if !strings.Contains(withCommand, want) {
 			t.Errorf("the command route is missing %q:\n%s", want, withCommand)
 		}

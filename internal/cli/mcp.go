@@ -494,22 +494,6 @@ var mcpTools = []mcpTool{
 	},
 }
 
-// deliverWait bounds holding the line when a task is handed to a session that
-// was opened a moment ago.
-//
-// It is not a wait for an answer, and no longer a wait for the session to come
-// up either: a task sent to a session that is still running its worktree setup
-// script is queued and delivered when its agent is there (relay.queueDelivery).
-// The worker was created seconds ago and its task is minutes of work, so a
-// ticket is the expected outcome and the sender carries on.
-//
-// The number is what is left of the call's budget. Opening can spend openCall
-// (60s) before this starts, and the client detaches anything still running at
-// 120s (see mcpMaxWait) — so the delivery gets 20, plus the callSlack the HTTP
-// timeout adds for the trip back, and the worst case lands at 110 rather than
-// on the line.
-const deliverWait = 20
-
 // handOver gives a just-opened session its first task, wording the outcome the
 // way send_to_session words it — the caller should not have to learn two
 // spellings of one answer.
@@ -519,9 +503,8 @@ const deliverWait = 20
 // nothing had happened — leaving an agent that opens three workers convinced it
 // has none.
 func (c *client) handOver(opened spawn.Session, prompt string) string {
-	var result relay.Result
-	call := []any{c.sessionID(), opened.Label, opened.Project, prompt, deliverWait}
-	if err := c.call("relay.Send", call, waitBudget(deliverWait), &result); err != nil {
+	result, err := c.deliver(opened, prompt)
+	if err != nil {
 		return fmt.Sprintf(
 			"The task did not reach it: %v. The session is open, so hand it the task with "+
 				"send_to_session once whatever that says is dealt with.",

@@ -89,7 +89,8 @@ on stderr, exiting 0 or 1. Anything that is not a subcommand below — including
 `--json` on `sessions`, `send`, `wait`, `open`, `close` and `worktrees` replaces
 the prose with one JSON line: the peer array, the result object and the session
 object exactly as this document describes them. An empty roster is `[]`, never
-`null` — a script should not have to tell those apart.
+`null` — a script should not have to tell those apart. One line is the contract:
+`open --prompt` does two things and still prints one object (see below).
 
 ### `lich sessions [--json]`
 
@@ -215,7 +216,7 @@ This is what a relayed message asks the receiving agent to run. An answer is
 capped at 64 KiB. Replying twice to one ticket is an error — the first answer
 already went home.
 
-### `lich open [--project <name>] [--kind <provider>] [--worktree <branch>] [--base <branch>] [--model <model>]`
+### `lich open [--project <name>] [--kind <provider>] [--worktree <branch>] [--base <branch>] [--model <model>] [--prompt <task>]`
 
 Opens a new session, starts it, and prints the two names it is addressed by:
 
@@ -252,8 +253,35 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
   for it would silently give you a session on the default. The model is
   recorded on the session, so every later spawn of it — a page reload, a
   respawn, the resume of a parked worktree session — starts on the same model.
+- `--prompt` hands the new session that task as soon as its agent is up, so
+  opening a worker *for* a task is one command rather than `open` then `send`.
+  It is the same delivery `lich send` makes — a worker still running its setup
+  script is queued for, not written to — with the wait fixed at **20 seconds**
+  and no flag to raise it: the worker was created a moment ago and its task is
+  minutes of work, so a ticket is the expected outcome and the caller carries
+  on. Waiting for the answer is `lich wait`'s job, and it takes the timeout.
 - A session without a worktree is labelled from the project's own counter
   (`Session 4`), continuing the numbering the window uses.
+
+With `--prompt` the hand-off is printed under the session's own lines, in the
+words `send` words it with, ticket included:
+
+```
+Opened session "auth-fix" (claude) in project "lich", in worktree /home/you/.local/share/lich/worktrees/1a2b/auth-fix.
+It answers to "auth-fix" and to "auth-fix-9f8e". …
+auth-fix is still working. The message was delivered; a note will be typed at the
+sending session's prompt when its result is ready. To hold the line for it instead:
+  lich wait a1b2c3d4
+```
+
+`--json` prints **one object** either way: the session exactly as above, plus a
+`delivery` key carrying the same result object `send --json` prints. The key is
+absent without `--prompt`, so a reader that branches on it is never handed an
+empty one to interpret:
+
+```json
+{"id":"9f8e","projectId":"p1","project":"lich","label":"auth-fix","name":"auth-fix-9f8e","kind":"claude","path":"/wt/auth-fix","nextSeq":5,"delivery":{"ticket":"a1b2c3d4","target":"auth-fix","status":"pending","answer":""}}
+```
 
 The card appears in the sidebar **without taking focus** — nobody in front of
 the window asked for this session — and its PTY is started by lich itself rather
@@ -265,6 +293,12 @@ Failure is one line on stderr and exit 1. A worktree that could not be created
 leaves nothing behind — no row, no card. A session whose *terminal* failed to
 start keeps both, and says so, because the card is the only place its error can
 be read.
+
+**A `--prompt` that never reached the session does not undo the open.** The
+session is printed as usual — prose or JSON, on stdout — and the failure is that
+same `lich: …` line and exit 1, naming the `lich send` that tries again. The
+`delivery` key stays absent rather than growing a shape for the failure: what
+went wrong is one send, and the exit code is what says so.
 
 ### `lich close [--project <name>] [--worktree keep|remove] [--force] [--json] <session>`
 
@@ -324,7 +358,7 @@ at lich.
 | `send_to_session` | `session`, `prompt`, optional `project` and `timeout_seconds`. |
 | `wait_for_answer` | optional `ticket` and `timeout_seconds` — with a ticket, `lich wait <ticket>`; without one, the collect: everything ready at once. |
 | `reply_to_session` | `ticket`, `answer` — what a relayed message asks for. |
-| `open_session` | optional `project`, `kind`, `worktree`, `base`, `model` — `lich open` — plus optional `prompt`, which hands the new session that task in the same call (`lich open` then `lich send`, in one). |
+| `open_session` | optional `project`, `kind`, `worktree`, `base`, `model` — `lich open` — plus optional `prompt` — `lich open --prompt`, the same hand-off in the same call. |
 | `close_session` | `session`, optional `project`, `worktree` (`keep`/`remove`), `force`. |
 | `list_worktrees` | optional `project` — the checkouts, as JSON. |
 
