@@ -21,6 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   project-level menu. Clicking the checkout header collapses or expands all of
   its cards when the sidebar needs less noise.
 
+### Fixed
+
+- **A deleted project no longer leaves its settings behind for the next one.**
+  A project whose directory is gone is dropped from the workspace, but its
+  per-project settings — provider, gh account, binary paths — stayed in the
+  database, and a project identifies itself by its path: recreating a checkout
+  where a deleted one stood silently handed the new project the dead one's
+  overrides. They are now deleted with it.
+
 ## [0.34.0] - 2026-08-14
 
 ### Added
@@ -72,6 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   itself: when the receipt window closes with nothing having read the task, it
   is typed in a second time — same ticket, one retry — and only silence after
   that is reported as unread.
+
 ## [0.33.0] - 2026-08-14
 
 ### Added

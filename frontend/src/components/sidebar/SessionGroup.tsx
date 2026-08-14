@@ -126,7 +126,10 @@ export function SessionGroup({
           isDragging={group.isDragging}
           providers={providers}
           activatorRef={group.setActivatorNodeRef}
-          activatorProps={{ ...group.attributes, ...group.listeners }}
+          // The pinned block is never dragged, and dnd-kit answers a disabled
+          // sortable with aria-disabled + aria-roledescription="draggable" —
+          // which would announce a working collapse button as a dead handle.
+          activatorProps={pinned ? {} : { ...group.attributes, ...group.listeners }}
           onToggle={() => setCollapsed((current) => !current)}
           onNewSession={(kind) => newSession(projectId, kind, path)}
         />

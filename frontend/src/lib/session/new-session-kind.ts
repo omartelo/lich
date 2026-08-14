@@ -8,7 +8,3 @@ export function resolveNewSessionKind(
 ): SessionKind {
   return requestedKind ?? projectDefault
 }
-
-export function resolveNewWorktreeSessionKind(projectDefault: ProviderKind): ProviderKind {
-  return projectDefault
-}

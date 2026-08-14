@@ -35,6 +35,13 @@ export function ProjectProvidersSettings({ projectId }: ProjectProvidersSettings
     )
   }
 
+  // Detection has not answered yet: the select would offer nothing to pick and
+  // the readout would print a raw provider id, so say what is happening instead
+  // — the same answer the global pane gives for this state.
+  if (enabled.length === 0) {
+    return <p className="py-4 text-sm text-muted-foreground">Detecting providers…</p>
+  }
+
   return (
     <SettingBlock
       title={`Default provider for ${project.name}`}
@@ -57,7 +64,7 @@ export function ProjectProvidersSettings({ projectId }: ProjectProvidersSettings
         </Button>
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
-        {inherited || !override ? "Using global default" : "Global default"}: {globalName}
+        {override ? "Global default" : "Using global default"}: {globalName}
       </p>
     </SettingBlock>
   )

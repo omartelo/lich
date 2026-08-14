@@ -90,8 +90,11 @@ export function Settings() {
   }))
   const sections = [...BASE_SECTIONS, ...providerSections, ...FOOTER_SECTIONS]
 
+  // Matched against the accessible label too: two sections are both labeled
+  // "Providers", and their scope lives only in that longer name.
+  const needle = query.toLowerCase()
   const filtered = sections.filter((section) =>
-    section.label.toLowerCase().includes(query.toLowerCase()),
+    `${section.label} ${section.accessibleLabel ?? ""}`.toLowerCase().includes(needle),
   )
   const globalSections = filtered.filter((section) => section.group === "global")
   const projectSections = filtered.filter((section) => section.group === "project")

@@ -242,9 +242,6 @@ func (s *Service) LoadState() ([]Project, error) {
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate projects: %w", err)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, fmt.Errorf("close project rows: %w", err)
-	}
 
 	s.loadProjectDefaults(projects)
 
@@ -263,10 +260,8 @@ func (s *Service) LoadState() ([]Project, error) {
 // leaves the zero value, which means inherit, rather than blocking restoration.
 func (s *Service) loadProjectDefaults(projects []Project) {
 	rows, err := s.db.Query(
-		`SELECT settings.project_id, settings.value
-		   FROM settings JOIN projects ON projects.id = settings.project_id
-		  WHERE settings.key = ? AND projects.is_open = 1`,
-		providerDefaultKey,
+		`SELECT project_id, value FROM settings WHERE key = ? AND project_id <> ?`,
+		providerDefaultKey, globalScope,
 	)
 	if err != nil {
 		return

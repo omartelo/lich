@@ -67,7 +67,20 @@ func (s *Service) CloseProject(id string) error {
 // DeleteProject removes a project and, through ON DELETE CASCADE, its sessions.
 // Closing keeps a project for a later reopen; this is for the row that outlived
 // the directory it points at, which nothing can reopen anymore.
+//
+// Its settings go by hand, because the settings table carries no foreign key and
+// a project id is derived from its path: a directory recreated where a deleted
+// one stood would otherwise inherit that project's provider, gh account and
+// binary overrides with nothing in the UI saying where they came from. An empty
+// id is refused for the same reason — it is the global scope, and deleting a
+// project must never take every global setting with it.
 func (s *Service) DeleteProject(id string) error {
+	if id == globalScope {
+		return fmt.Errorf("delete project: empty id")
+	}
+	if _, err := s.db.Exec(`DELETE FROM settings WHERE project_id = ?`, id); err != nil {
+		return fmt.Errorf("delete project settings %q: %w", id, err)
+	}
 	if _, err := s.db.Exec(`DELETE FROM projects WHERE id = ?`, id); err != nil {
 		return fmt.Errorf("delete project %q: %w", id, err)
 	}

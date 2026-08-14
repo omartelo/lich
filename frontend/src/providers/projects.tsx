@@ -34,10 +34,7 @@ import {
   loadProviders,
   projectDefaultProviderKind,
 } from "@/lib/providers-store"
-import {
-  resolveNewSessionKind,
-  resolveNewWorktreeSessionKind,
-} from "@/lib/session/new-session-kind"
+import { resolveNewSessionKind } from "@/lib/session/new-session-kind"
 import {
   CLOSED_EVENT,
   OPENED_EVENT,
@@ -311,7 +308,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const newWorktreeSession = useCallback(
     (projectId: string, wt: { name: string; path: string }) => {
       const sessionId = newSessionId()
-      const kind = resolveNewWorktreeSessionKind(projectDefaultProviderKind(projectId))
+      const kind = projectDefaultProviderKind(projectId)
       const next = addSession(sessionsRef.current, projectId, sessionId, kind, wt.path, wt.name)
       const project = next[projectId]
       const created = project.sessions[project.sessions.length - 1]

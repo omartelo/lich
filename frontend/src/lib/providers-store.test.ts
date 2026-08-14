@@ -283,6 +283,25 @@ describe("createProvidersStore", () => {
     expect(detect).toHaveBeenCalledTimes(2)
   })
 
+  it("shares one in-flight load between concurrent callers", async () => {
+    const detect = vi.fn<() => Promise<DetectedProvider[]>>().mockResolvedValue(detected)
+    const store = createProvidersStore({
+      detect,
+      getEnabled: async () => "",
+      persistEnabled: vi.fn(),
+      getDefault: async () => "claude",
+      persistDefault: vi.fn(),
+      persistProjectDefault: vi.fn(),
+    })
+
+    await Promise.all([store.load(), store.load(), store.load()])
+    expect(detect).toHaveBeenCalledTimes(1)
+
+    // And a later caller finds it ready rather than detecting again.
+    await store.load()
+    expect(detect).toHaveBeenCalledTimes(1)
+  })
+
   it("sets and clears a project override synchronously", () => {
     const { store, persistProjectDefault } = build()
     const seen = vi.fn()

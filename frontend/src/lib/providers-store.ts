@@ -13,9 +13,11 @@ import { PROVIDER_KINDS, type ProviderKind } from "@/lib/session/sessions"
 
 const GLOBAL_SCOPE = ""
 
-// defaultKey holds the global id of the provider new sessions spawn by default
-// (worktrees, the new-session hotkey, a project's first session). Empty resolves
-// to the first enabled provider — Claude, until the user turns others on.
+// defaultKey holds the id of the provider new sessions spawn by default
+// (worktrees, the new-session hotkey, a project's first session), in either
+// scope: global, or one project overriding it. Empty resolves to the first
+// enabled provider — Claude, until the user turns others on. Mirrors
+// store.providerDefaultKey in Go, which is what LoadState hydrates from.
 const defaultKey = "provider.default"
 
 // enabledKey holds a provider's global enabled flag; binKey its custom binary

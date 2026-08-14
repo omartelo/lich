@@ -523,6 +523,51 @@ func TestDeleteProjectCascadesSessions(t *testing.T) {
 	}
 }
 
+// TestDeleteProjectRemovesItsSettings proves a deleted project cannot hand its
+// overrides to whatever is created at the same path later: ids are derived from
+// the path, so the settings rows have to go with the project row.
+func TestDeleteProjectRemovesItsSettings(t *testing.T) {
+	svc := newTestStore(t)
+	if err := svc.AddProject("p1", "alpha", "/tmp/alpha"); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if err := svc.SetSetting(providerDefaultKey, "p1", providers.Codex); err != nil {
+		t.Fatalf("SetSetting(project): %v", err)
+	}
+	if err := svc.SetSetting(providerDefaultKey, globalScope, providers.Claude); err != nil {
+		t.Fatalf("SetSetting(global): %v", err)
+	}
+
+	if err := svc.DeleteProject("p1"); err != nil {
+		t.Fatalf("DeleteProject: %v", err)
+	}
+
+	if got, err := svc.GetSetting(providerDefaultKey, "p1"); err != nil || got != "" {
+		t.Errorf("project setting after delete = %q (err %v), want empty", got, err)
+	}
+	if got, err := svc.GetSetting(providerDefaultKey, globalScope); err != nil || got != providers.Claude {
+		t.Errorf("global setting after delete = %q (err %v), want %q", got, err, providers.Claude)
+	}
+}
+
+// TestDeleteProjectRefusesTheGlobalScope pins the guard: an empty id addresses
+// the settings rows every project shares, so the delete must refuse rather than
+// wipe the workspace's global configuration.
+func TestDeleteProjectRefusesTheGlobalScope(t *testing.T) {
+	svc := newTestStore(t)
+	if err := svc.SetSetting(providerDefaultKey, globalScope, providers.Claude); err != nil {
+		t.Fatalf("SetSetting(global): %v", err)
+	}
+
+	if err := svc.DeleteProject(""); err == nil {
+		t.Fatal("DeleteProject(\"\") = nil, want an error")
+	}
+
+	if got, err := svc.GetSetting(providerDefaultKey, globalScope); err != nil || got != providers.Claude {
+		t.Errorf("global setting = %q (err %v), want %q", got, err, providers.Claude)
+	}
+}
+
 // sessionIDs returns a project's session ids in stored order.
 func sessionIDs(t *testing.T, svc *Service, projectID string) []string {
 	t.Helper()
