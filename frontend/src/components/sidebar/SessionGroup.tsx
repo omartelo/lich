@@ -136,23 +136,24 @@ export function SessionGroup({
             {...group.attributes}
             {...group.listeners}
             aria-expanded={!collapsed}
+            title={`${collapsed ? "Expand" : "Collapse"} ${name}`}
             onClick={() => {
               if (!group.isDragging) {
                 setCollapsed((current) => !current)
               }
             }}
             className={cn(
-              "flex min-w-0 flex-1 items-center gap-1.5 text-left",
+              "group/collapse -ml-1 flex min-w-0 flex-1 items-center gap-1.5 rounded-sm px-1 py-0.5 text-left transition-colors hover:bg-accent/50",
               pinned ? "cursor-pointer" : "cursor-grab",
             )}
           >
             <ChevronRight
               className={cn(
-                "size-3 shrink-0 text-muted-foreground/70 transition-transform",
+                "size-3 shrink-0 text-muted-foreground/70 transition-[color,transform] group-hover/collapse:text-muted-foreground",
                 !collapsed && "rotate-90",
               )}
             />
-            <span className="min-w-0 truncate text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground/70">
+            <span className="min-w-0 truncate text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground/70 transition-colors group-hover/collapse:text-muted-foreground">
               {name}
             </span>
             <span className="h-px flex-1 bg-border" />
