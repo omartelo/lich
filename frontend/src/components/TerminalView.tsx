@@ -60,6 +60,10 @@ const REFIT_DEBOUNCE_MS = 100
 const COPY_DEBOUNCE_MS = 150
 const SCROLLBACK_LINES = 5000
 
+// Left gutter so the first column doesn't sit flush against the sidebar/panel
+// seam. Subtracted before the grid fit (below) so it doesn't cost a column.
+const TERMINAL_PADDING_LEFT = 4
+
 // Search match styling. Passing decorations is also what makes xterm's
 // SearchAddon compute the match count (onDidChangeResults reports -1 without
 // them); it highlights every match too, not just the active one. Amber reads on
@@ -99,16 +103,20 @@ function mouseEncoding(term: Terminal): string | undefined {
     ?.coreMouseService?.activeEncoding
 }
 
-// fitTerminal resizes the grid to fill the container edge to edge (replacing
-// xterm's FitAddon, which reserves a scrollbar gutter on the right — see
-// term-fit.ts). No-op when metrics or size aren't ready, or the grid already
-// fits.
+// fitTerminal resizes the grid to fill the container edge to edge on the
+// right/bottom (replacing xterm's FitAddon, which reserves a scrollbar
+// gutter on the right — see term-fit.ts), minus the fixed left gutter above.
+// No-op when metrics or size aren't ready, or the grid already fits.
 function fitTerminal(term: Terminal, container: HTMLElement): void {
   const cell = cellDimensions(term)
   if (!cell) {
     return
   }
-  const grid = computeGrid(container.clientWidth, container.clientHeight, cell)
+  const grid = computeGrid(
+    container.clientWidth - TERMINAL_PADDING_LEFT,
+    container.clientHeight,
+    cell,
+  )
   if (grid && (grid.cols !== term.cols || grid.rows !== term.rows)) {
     term.resize(grid.cols, grid.rows)
   }
@@ -842,7 +850,10 @@ export function TerminalView({
       <div
         ref={containerRef}
         className="h-full w-full"
-        style={{ backgroundColor: terminalColors.background }}
+        style={{
+          backgroundColor: terminalColors.background,
+          paddingLeft: TERMINAL_PADDING_LEFT,
+        }}
       />
       {dropping && (
         <div className="pointer-events-none absolute inset-0 z-10 flex items-end justify-center bg-accent/10 pb-6 ring-2 ring-inset ring-ring">

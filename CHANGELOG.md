@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   arguments the app itself takes are unchanged: bare `lich` opens it, and
   `lich -- <chromium flags>` still passes them through.
 
+- **The terminal keeps a 4px left gutter.** Text used to start flush against the
+  panel seam. The grid fit now reserves the 4px on the left before dividing the
+  rest into cells, so the fix costs no column.
+
 ### Fixed
 
 - **A task nothing read is typed in once more before being given up on.** A
