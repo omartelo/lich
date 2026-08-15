@@ -58,6 +58,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   session parked with its worktree. The exit banner's **Restart** is a fresh
   spawn with no conversation behind it, so it still gets the derived name.
 
+- **The cost readout was billing about a quarter of a session too little.** Two
+  things went uncounted. A cached prompt is priced by how long the cache entry
+  is kept, and Claude Code keeps its entries for an hour — the dearer of the two
+  rates — while lich billed every cache write at the five-minute price. And a
+  sub-agent now runs its own transcript beside the conversation that spawned it,
+  where its tokens used to be written into the parent's, so everything delegated
+  to one was missing from the total. Measured across 30 real transcripts and the
+  107 sub-agent transcripts beside them, the readout moved from $1417.18 to
+  $1757.81 — 24.0% of the bill it was not showing. A model whose hour-long rate
+  the price table has never published keeps the readout absent rather than
+  cheap, which is the rule the number has always answered to.
+
 ### Changed
 
 - **Building lich from source now needs Go 1.26.6.** The pin is exact so that

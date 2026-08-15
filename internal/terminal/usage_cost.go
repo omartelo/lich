@@ -27,9 +27,12 @@ type costLedger struct {
 }
 
 // costLine is the one transcript line the cost scan cares about: an assistant
-// message with the four token counters a provider bills. Unlike the context
-// read, a sidechain line counts — a Task sub-agent's tokens are billed to the
-// same account as the turn that spawned it.
+// message with the token counters a provider bills. Unlike the context read,
+// nothing here is filtered out for belonging to a sub-agent: its tokens are
+// billed to the same account as the turn that spawned it. Where a sub-agent's
+// lines live has moved — a Claude conversation now files them in transcripts of
+// their own (see claudeSubagentPaths), and the scan is pointed at those too —
+// but a run that still writes them inline is counted the same way.
 type costLine struct {
 	messageID string
 	model     string
@@ -99,7 +102,13 @@ func accumulate(r *bufio.Reader, ledger costLedger, rates rateSource) (costLedge
 		if !priced {
 			return ledger, false
 		}
-		ledger.cost += rate.Cost(entry.tokens)
+		// A rate that cannot price every counter on the line is the same miss as
+		// no rate at all — see Rate.Cost for the counter that can be missing.
+		cost, complete := rate.Cost(entry.tokens)
+		if !complete {
+			return ledger, false
+		}
+		ledger.cost += cost
 		ledger.lastMessage = entry.messageID
 		ledger.offset += int64(len(line))
 	}
@@ -120,6 +129,13 @@ func parseCostLine(line []byte) (costLine, bool) {
 				Output      int `json:"output_tokens"`
 				CacheRead   int `json:"cache_read_input_tokens"`
 				CacheCreate int `json:"cache_creation_input_tokens"`
+				// CacheCreate is the whole cache write; this names the share of
+				// it held for an hour, which is billed at its own higher rate.
+				// Absent on a transcript written before the provider reported
+				// the split, which reads as the short-lived write it used to be.
+				ByLifetime struct {
+					Hour int `json:"ephemeral_1h_input_tokens"`
+				} `json:"cache_creation"`
 			} `json:"usage"`
 		} `json:"message"`
 	}
@@ -130,11 +146,16 @@ func parseCostLine(line []byte) (costLine, bool) {
 		return costLine{}, false
 	}
 	u := entry.Message.Usage
+	// The hour share is taken out of the total rather than read from its own
+	// five-minute counter: whatever the provider adds to the split later, the
+	// tokens still add up to the total it bills.
+	hour := min(u.ByLifetime.Hour, u.CacheCreate)
 	tokens := pricing.Tokens{
-		Input:      u.Input,
-		Output:     u.Output,
-		CacheRead:  u.CacheRead,
-		CacheWrite: u.CacheCreate,
+		Input:        u.Input,
+		Output:       u.Output,
+		CacheRead:    u.CacheRead,
+		CacheWrite:   u.CacheCreate - hour,
+		CacheWrite1h: hour,
 	}
 	if tokens == (pricing.Tokens{}) {
 		return costLine{}, false

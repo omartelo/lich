@@ -103,6 +103,8 @@ nobody knows it and that the call site never shows. The mechanism and the histor
 - **The cost readout is priced from a table, not from the provider** (`internal/pricing`): an unpriced model makes
   the readout go *absent* rather than wrong, and billing is per `(session, transcript)` — a conversation forked
   inside the PTY bills its copied history twice. lich's own resume continues the same transcript and is unaffected.
+  A conversation is more than one transcript: each sub-agent writes its own beside it and is counted in
+  (`claudeSubagentPaths`), so one unreadable or unpriceable sub-agent withholds the whole session's number.
 - **A dropped file has no path, so lich guesses it** (`internal/drop`): Chromium never hands the page a path, so a
   drop is matched by name + size + mtime under the session directory, then home. Twins resolve to nothing; a file
   in neither tree is *copied*, so an agent told to edit it edits the copy — and that copy is deleted 3 days on,

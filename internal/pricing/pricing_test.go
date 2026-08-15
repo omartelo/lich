@@ -18,6 +18,7 @@ const remoteBody = `{
     "output_cost_per_token": 5e-05,
     "cache_read_input_token_cost": 1e-06,
     "cache_creation_input_token_cost": 1.25e-05,
+    "cache_creation_input_token_cost_above_1hr": 2e-05,
     "litellm_provider": "anthropic",
     "supports_pdf_input": true
   },
@@ -137,7 +138,7 @@ func TestRefreshTeachesAModelReleasedAfterTheBuild(t *testing.T) {
 	if !ok {
 		t.Fatal("Rate after refresh: want the freshly published price")
 	}
-	if rate.Input != 1e-05 || rate.CacheWrite != 1.25e-05 {
+	if rate.Input != 1e-05 || rate.CacheWrite != 1.25e-05 || rate.CacheWrite1h != 2e-05 {
 		t.Errorf("Rate = %+v, want the remote opus-9 rates", rate)
 	}
 	if got := hits.Load(); got != 1 {
@@ -282,18 +283,58 @@ func TestARefreshWithNothingPricedChangesNothing(t *testing.T) {
 	}
 }
 
-// TestCostBillsEveryCounterSeparately proves the four counters are priced at
-// their own rates — a cache read is an order of magnitude cheaper than fresh
-// input, and folding them together would overstate a long session badly.
+// TestCostBillsEveryCounterSeparately proves each counter is priced at its own
+// rate — a cache read is an order of magnitude cheaper than fresh input, an
+// hour-long cache write dearer than a five-minute one, and folding any of them
+// together misreads a long session badly. The total is written out rather than
+// rebuilt from the rates, so a counter that starts billing at a neighbour's
+// price fails here instead of agreeing with itself.
 func TestCostBillsEveryCounterSeparately(t *testing.T) {
+	rate := Rate{Input: 1e-05, Output: 5e-05, CacheRead: 1e-06, CacheWrite: 1.25e-05, CacheWrite1h: 2e-05}
+
+	got, ok := rate.Cost(Tokens{Input: 100, Output: 200, CacheRead: 300, CacheWrite: 400, CacheWrite1h: 500})
+
+	if !ok {
+		t.Fatal("Cost: want a priced total, every counter has a rate")
+	}
+	if !nearly(got, 0.0263) {
+		t.Errorf("Cost = %v, want 0.0263", got)
+	}
+}
+
+// TestAnHourCacheWriteWithNoHourPriceIsUnpriced is the money rule reaching the
+// counter that arrived last: a table that never learnt what an hour-long cache
+// write costs must not bill it at the five-minute price, which is the cheaper
+// one and would report a total that is quietly too small.
+func TestAnHourCacheWriteWithNoHourPriceIsUnpriced(t *testing.T) {
 	rate := Rate{Input: 1e-05, Output: 5e-05, CacheRead: 1e-06, CacheWrite: 1.25e-05}
 
-	got := rate.Cost(Tokens{Input: 100, Output: 200, CacheRead: 300, CacheWrite: 400})
-
-	want := 100*1e-05 + 200*5e-05 + 300*1e-06 + 400*1.25e-05
-	if got != want {
-		t.Errorf("Cost = %v, want %v", got, want)
+	if cost, ok := rate.Cost(Tokens{Input: 100, CacheWrite1h: 500}); ok {
+		t.Errorf("Cost = %v, want no total while the hour rate is unknown", cost)
 	}
+	// Without those tokens the same rate still answers: the miss is about what
+	// the line asks to be priced, not about the rate being incomplete.
+	if _, ok := rate.Cost(Tokens{Input: 100, CacheWrite: 500}); !ok {
+		t.Error("Cost: want a total for a line with no hour-long write on it")
+	}
+}
+
+// TestEveryBakedHourRateOutpricesItsFiveMinute guards the generated table: an
+// entry kept longer cannot cost less, so a row that says otherwise came from a
+// broken source row and would underbill every session running that model.
+func TestEveryBakedHourRateOutpricesItsFiveMinute(t *testing.T) {
+	for model, rate := range parseRates(bakedPrices) {
+		if rate.CacheWrite1h != 0 && rate.CacheWrite1h < rate.CacheWrite {
+			t.Errorf("baked rate for %q = %+v, want the hour write to cost at least the five-minute one", model, rate)
+		}
+	}
+}
+
+// nearly compares two dollar amounts built from float multiplications, where
+// the last bits of a sum are not worth asserting on.
+func nearly(got, want float64) bool {
+	diff := got - want
+	return diff < 1e-12 && diff > -1e-12
 }
 
 // TestEveryBakedRateIsPriced guards the generated table itself: an entry that

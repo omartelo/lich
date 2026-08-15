@@ -46,29 +46,48 @@ const (
 )
 
 // Rate is one model's price per token, in USD, split the way a provider bills
-// them: fresh input, generated output, a cache hit, and writing the cache.
+// them: fresh input, generated output, a cache hit, and writing the cache —
+// which is two prices, because a cache entry is priced by how long it is kept.
+// CacheWrite is the short-lived entry (five minutes); CacheWrite1h is the hour
+// one, and it is the more expensive of the two.
 type Rate struct {
-	Input      float64 `json:"input"`
-	Output     float64 `json:"output"`
-	CacheRead  float64 `json:"cacheRead"`
-	CacheWrite float64 `json:"cacheWrite"`
+	Input        float64 `json:"input"`
+	Output       float64 `json:"output"`
+	CacheRead    float64 `json:"cacheRead"`
+	CacheWrite   float64 `json:"cacheWrite"`
+	CacheWrite1h float64 `json:"cacheWrite1h"`
 }
 
 // Tokens is a turn's (or a whole conversation's) token counts, named after the
-// four counters a provider transcript reports.
+// counters a provider transcript reports, with the cache write split by the
+// entry's lifetime the way the bill is.
 type Tokens struct {
-	Input      int
-	Output     int
-	CacheRead  int
-	CacheWrite int
+	Input        int
+	Output       int
+	CacheRead    int
+	CacheWrite   int
+	CacheWrite1h int
 }
 
-// Cost is what these tokens cost at this rate, in USD.
-func (r Rate) Cost(t Tokens) float64 {
+// Cost is what these tokens cost at this rate, in USD. ok is false when the
+// tokens include hour-long cache writes and the rate carries no price for them:
+// billing them at the five-minute price is a total that is quietly too small,
+// and this package's whole rule is that a number it cannot stand behind is not
+// reported at all.
+//
+// A rate can miss that price because the source table never published one for
+// the model. The next refresh any unknown model triggers overlays the whole
+// remote table, so this heals on its own if the price appears there — it is not
+// worth a refresh of its own.
+func (r Rate) Cost(t Tokens) (float64, bool) {
+	if t.CacheWrite1h > 0 && r.CacheWrite1h == 0 {
+		return 0, false
+	}
 	return r.Input*float64(t.Input) +
 		r.Output*float64(t.Output) +
 		r.CacheRead*float64(t.CacheRead) +
-		r.CacheWrite*float64(t.CacheWrite)
+		r.CacheWrite*float64(t.CacheWrite) +
+		r.CacheWrite1h*float64(t.CacheWrite1h), true
 }
 
 // Table resolves model ids to rates. The zero value is not usable — call New.
@@ -240,10 +259,11 @@ func (t *Table) fetch() (map[string]Rate, error) {
 // remoteEntry is the subset of a LiteLLM table entry lich reads. Its other forty
 // fields are ignored, so a change to any of them cannot break this.
 type remoteEntry struct {
-	Input      float64 `json:"input_cost_per_token"`
-	Output     float64 `json:"output_cost_per_token"`
-	CacheRead  float64 `json:"cache_read_input_token_cost"`
-	CacheWrite float64 `json:"cache_creation_input_token_cost"`
+	Input        float64 `json:"input_cost_per_token"`
+	Output       float64 `json:"output_cost_per_token"`
+	CacheRead    float64 `json:"cache_read_input_token_cost"`
+	CacheWrite   float64 `json:"cache_creation_input_token_cost"`
+	CacheWrite1h float64 `json:"cache_creation_input_token_cost_above_1hr"`
 }
 
 // parseRemote converts the remote table to lich's shape, dropping every entry
@@ -260,10 +280,11 @@ func parseRemote(data []byte) (map[string]Rate, error) {
 			continue
 		}
 		rates[model] = Rate{
-			Input:      entry.Input,
-			Output:     entry.Output,
-			CacheRead:  entry.CacheRead,
-			CacheWrite: entry.CacheWrite,
+			Input:        entry.Input,
+			Output:       entry.Output,
+			CacheRead:    entry.CacheRead,
+			CacheWrite:   entry.CacheWrite,
+			CacheWrite1h: entry.CacheWrite1h,
 		}
 	}
 	return rates, nil

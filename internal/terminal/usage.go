@@ -1,6 +1,9 @@
 package terminal
 
-import "log/slog"
+import (
+	"log/slog"
+	"path/filepath"
+)
 
 // usageEventName carries a session's context-window usage ({id, percent, tokens}),
 // emitted after a turn ends. Global like the other session events: the card that
@@ -80,6 +83,11 @@ func (s *Service) sessionUsage(id string) (usageEvent, bool) {
 // table knows — see scanTranscriptCost for why an unpriced line stops the count
 // instead of being skipped.
 //
+// A conversation is more than one file: what its sub-agents spent is billed to
+// the same account and written to transcripts of their own, so each is counted
+// into the same session. One of them falling short withholds the whole number,
+// for the same reason a single unpriced line does.
+//
 // The accounting is persisted per transcript, so it survives both a `/clear`
 // (a new conversation under the same session, counted into its own row) and a
 // restart of lich itself.
@@ -91,26 +99,13 @@ func (s *Service) sessionCost(id, providerSessionID string) (float64, bool) {
 	if !ok {
 		return 0, false
 	}
-	offset, lastMessage, cost, err := s.store.CostLedger(id, providerSessionID)
-	if err != nil {
-		slog.Warn("terminal: read cost ledger", "session", id, "err", err)
+	if !s.countTranscript(id, providerSessionID, path) {
 		return 0, false
 	}
-	from := costLedger{offset: offset, lastMessage: lastMessage, cost: cost}
-	ledger, complete, ok := scanTranscriptCost(path, from, s.prices)
-	if !ok {
-		return 0, false
-	}
-	if ledger != from {
-		if err := s.store.SaveCostLedger(
-			id, providerSessionID, ledger.offset, ledger.lastMessage, ledger.cost,
-		); err != nil {
-			slog.Warn("terminal: save cost ledger", "session", id, "err", err)
+	for _, sub := range claudeSubagentPaths(providerSessionID) {
+		if !s.countTranscript(id, providerSessionID+"/"+filepath.Base(sub), sub) {
 			return 0, false
 		}
-	}
-	if !complete {
-		return 0, false
 	}
 	total, err := s.store.SessionCost(id)
 	if err != nil {
@@ -118,4 +113,34 @@ func (s *Service) sessionCost(id, providerSessionID string) (float64, bool) {
 		return 0, false
 	}
 	return total, true
+}
+
+// countTranscript folds one transcript into the session's ledger, resuming from
+// where the last turn stopped and saving how far this one got. false is "this
+// file has no total to contribute yet" — it could not be read, its accounting
+// could not be stored, or the scan stopped at a line it cannot price.
+//
+// transcriptID is what the ledger row is keyed by, which is the provider's
+// conversation id for the conversation itself and that id plus the file name for
+// each sub-agent beside it: one row per file, so a re-read resumes per file.
+func (s *Service) countTranscript(id, transcriptID, path string) bool {
+	offset, lastMessage, cost, err := s.store.CostLedger(id, transcriptID)
+	if err != nil {
+		slog.Warn("terminal: read cost ledger", "session", id, "err", err)
+		return false
+	}
+	from := costLedger{offset: offset, lastMessage: lastMessage, cost: cost}
+	ledger, complete, ok := scanTranscriptCost(path, from, s.prices)
+	if !ok {
+		return false
+	}
+	if ledger != from {
+		if err := s.store.SaveCostLedger(
+			id, transcriptID, ledger.offset, ledger.lastMessage, ledger.cost,
+		); err != nil {
+			slog.Warn("terminal: save cost ledger", "session", id, "err", err)
+			return false
+		}
+	}
+	return complete
 }

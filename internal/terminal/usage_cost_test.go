@@ -24,9 +24,11 @@ func (f fixedRates) Rate(model string) (pricing.Rate, bool) {
 }
 
 // testRate is round enough to read totals off by eye: 1 unit of anything is
-// $0.001, except output at $0.01.
+// $0.001, except output at $0.01 and the hour-long cache write at $0.002 — the
+// two cache writes are deliberately different, so a total billed at one rate for
+// both is visible in the number.
 var testRate = fixedRates{
-	modelOpus: {Input: 0.001, Output: 0.01, CacheRead: 0.001, CacheWrite: 0.001},
+	modelOpus: {Input: 0.001, Output: 0.01, CacheRead: 0.001, CacheWrite: 0.001, CacheWrite1h: 0.002},
 }
 
 // costLine renders an assistant transcript line with an explicit message id and
@@ -37,6 +39,17 @@ func costLineJSON(id, model string, input, output, cacheRead, cacheCreate int) s
 		`,"output_tokens":` + itoa(output) +
 		`,"cache_read_input_tokens":` + itoa(cacheRead) +
 		`,"cache_creation_input_tokens":` + itoa(cacheCreate) + `}}}`
+}
+
+// cacheLineJSON renders an assistant line whose whole bill is one cache write,
+// split the way the provider reports it: a total, and the share of that total
+// held for an hour.
+func cacheLineJSON(id, model string, cacheCreate, hour int) string {
+	return `{"type":"assistant","message":{"id":"` + id + `","model":"` + model +
+		`","usage":{"input_tokens":0,"output_tokens":0,"cache_read_input_tokens":0` +
+		`,"cache_creation_input_tokens":` + itoa(cacheCreate) +
+		`,"cache_creation":{"ephemeral_5m_input_tokens":` + itoa(cacheCreate-hour) +
+		`,"ephemeral_1h_input_tokens":` + itoa(hour) + `}}}}`
 }
 
 func itoa(n int) string {
@@ -208,9 +221,70 @@ func TestASyntheticLineIsNotAModelToPrice(t *testing.T) {
 	}
 }
 
+// TestACacheWriteIsPricedByHowLongItIsKept is the split the bill makes and the
+// counter hides: cache_creation_input_tokens is the whole write, and the hour
+// share of it costs more than the five-minute one. Billing the total at a single
+// rate reads a session as cheaper than it was. The wants are written out, not
+// rebuilt from testRate, so a rate applied to the wrong counter fails here.
+func TestACacheWriteIsPricedByHowLongItIsKept(t *testing.T) {
+	tests := []struct {
+		name        string
+		cacheCreate int
+		hour        int
+		want        float64
+	}{
+		{"every token held for an hour", 1000, 1000, 2.0},
+		{"a write split across both lifetimes", 1000, 600, 1.6},
+		{"nothing held for an hour", 1000, 0, 1.0},
+		// A transcript from before the provider reported the split says nothing
+		// about lifetimes, and the whole write reads as the five-minute one.
+		{"a transcript with no split at all", 1000, -1, 1.0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			line := cacheLineJSON("m1", modelOpus, tc.cacheCreate, tc.hour)
+			if tc.hour < 0 {
+				line = costLineJSON("m1", modelOpus, 0, 0, 0, tc.cacheCreate)
+			}
+			ledger, complete, ok := scanTranscriptCost(writeFile(t, line+"\n"), costLedger{}, testRate)
+
+			if !ok || !complete {
+				t.Fatalf("scan: ok=%v complete=%v, want both true", ok, complete)
+			}
+			if !nearly(ledger.cost, tc.want) {
+				t.Errorf("cost = %v, want %v", ledger.cost, tc.want)
+			}
+		})
+	}
+}
+
+// TestAnUnpricedCacheLifetimeStopsTheCount carries the unpriced-model rule down
+// to the counter: a model whose hour-long write has no published price cannot be
+// billed at the five-minute one, because that total is wrong in the direction
+// that flatters the bill.
+func TestAnUnpricedCacheLifetimeStopsTheCount(t *testing.T) {
+	fiveMinuteOnly := fixedRates{modelOpus: {Input: 0.001, Output: 0.01, CacheRead: 0.001, CacheWrite: 0.001}}
+	path := writeFile(t, cacheLineJSON("m1", modelOpus, 1000, 1000)+"\n")
+
+	ledger, complete, ok := scanTranscriptCost(path, costLedger{}, fiveMinuteOnly)
+
+	if !ok {
+		t.Fatal("scan: want ok")
+	}
+	if complete {
+		t.Error("complete = true, want false — an hour-long write with no price must withhold the total")
+	}
+	if ledger.cost != 0 {
+		t.Errorf("cost = %v, want nothing counted past the line it cannot price", ledger.cost)
+	}
+}
+
 // TestASubAgentsTokensAreBilled is where cost parts ways with the context
-// gauge: a Task sub-agent's sidechain lines are excluded from the window the
-// user sees, but they are billed to the same account.
+// gauge: a sub-agent's sidechain lines are excluded from the window the user
+// sees, but they are billed to the same account. This is the shape a Claude
+// conversation used to have — the lines inline in the parent — and it is still
+// counted; where the same tokens live now is
+// TestASubAgentTranscriptIsBilledIntoTheSession.
 func TestASubAgentsTokensAreBilled(t *testing.T) {
 	sidechain := `{"type":"assistant","isSidechain":true,"message":{"id":"m2","model":"` + modelOpus +
 		`","usage":{"input_tokens":100,"output_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}`
@@ -304,6 +378,47 @@ func TestTheCostIsAbsentWhileAModelIsUnpriced(t *testing.T) {
 	}
 	if got.CostUSD != nil {
 		t.Errorf("CostUSD = %v, want absent while a model has no price", *got.CostUSD)
+	}
+}
+
+// TestASubAgentTranscriptIsBilledIntoTheSession is the file the conversation
+// does not contain: a sub-agent runs its own transcript, and its tokens are
+// billed to the account that spawned it. Counting only the parent bills a
+// session for delegating the work and not for doing it.
+func TestASubAgentTranscriptIsBilledIntoTheSession(t *testing.T) {
+	writeTranscript(t, "uuid-cost", costLineJSON("m1", modelOpus, 100, 0, 0, 0)+"\n")
+	writeSubagentTranscript(t, "uuid-cost", "agent-one", costLineJSON("m2", modelOpus, 300, 0, 0, 0)+"\n")
+	writeSubagentTranscript(t, "uuid-cost", "agent-two", costLineJSON("m3", modelOpus, 600, 0, 0, 0)+"\n")
+	svc := New(newCostStore("uuid-cost"), nil, events.New())
+	svc.prices = testRate
+
+	got, ok := svc.sessionUsage("s1")
+
+	if !ok {
+		t.Fatal("sessionUsage: want ok")
+	}
+	if got.CostUSD == nil || !nearly(*got.CostUSD, 1.0) {
+		t.Errorf("CostUSD = %v, want 1.0 — both sub-agents count into the session", got.CostUSD)
+	}
+}
+
+// TestAnUnpricedSubAgentWithholdsTheTotal carries the money rule across files: a
+// session's cost is only as reportable as the least readable transcript behind
+// it, and a total missing one sub-agent is wrong in the flattering direction.
+func TestAnUnpricedSubAgentWithholdsTheTotal(t *testing.T) {
+	writeTranscript(t, "uuid-cost", costLineJSON("m1", modelOpus, 100, 0, 0, 0)+"\n")
+	writeSubagentTranscript(t, "uuid-cost", "agent-one",
+		costLineJSON("m2", "model-from-the-future", 300, 0, 0, 0)+"\n")
+	svc := New(newCostStore("uuid-cost"), nil, events.New())
+	svc.prices = testRate
+
+	got, ok := svc.sessionUsage("s1")
+
+	if !ok {
+		t.Fatal("sessionUsage: want ok — the context readout is unaffected")
+	}
+	if got.CostUSD != nil {
+		t.Errorf("CostUSD = %v, want absent while a sub-agent has an unpriced model", *got.CostUSD)
 	}
 }
 

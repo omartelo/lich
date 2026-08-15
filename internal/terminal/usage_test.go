@@ -30,6 +30,22 @@ func writeTranscript(t *testing.T, providerSessionID, body string) {
 	t.Setenv("CLAUDE_CONFIG_DIR", dir)
 }
 
+// writeSubagentTranscript plants the transcript of one sub-agent beside the
+// conversation that spawned it. It writes into the directory writeTranscript
+// pointed CLAUDE_CONFIG_DIR at, so the parent is planted first.
+func writeSubagentTranscript(t *testing.T, providerSessionID, agent, body string) {
+	t.Helper()
+	dir := filepath.Join(
+		os.Getenv("CLAUDE_CONFIG_DIR"), "projects", "-home-user-repo", providerSessionID, "subagents",
+	)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, agent+".jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestSessionUsageReportsTheTranscriptTail proves the whole read the card's
 // context gauge rides on: session id → recorded provider session → transcript →
 // the event's numbers.

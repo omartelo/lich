@@ -42,6 +42,26 @@ func claudeTranscriptPath(providerSessionID string) (string, bool) {
 	return globTranscript(base, "projects", "*", providerSessionID+".jsonl")
 }
 
+// claudeSubagentPaths locates the transcripts of the sub-agents a Claude
+// conversation spawned. A sub-agent's conversation is a file of its own beside
+// the parent's — projects/<slug>/<id>/subagents/agent-<id>.jsonl — where it used
+// to be sidechain lines written into the parent itself, and its tokens are
+// billed to the same account. Empty for a conversation that spawned none, which
+// is most of them.
+func claudeSubagentPaths(providerSessionID string) []string {
+	base, ok := harnessDir("CLAUDE_CONFIG_DIR", ".claude")
+	if !ok {
+		return nil
+	}
+	matches, err := filepath.Glob(
+		filepath.Join(base, "projects", "*", providerSessionID, "subagents", "*.jsonl"),
+	)
+	if err != nil {
+		return nil
+	}
+	return matches
+}
+
 // codexTranscriptPath locates a Codex rollout by its UUID under $CODEX_HOME,
 // else ~/.codex. Codex files a rollout by the date it started —
 // sessions/<yyyy>/<mm>/<dd>/rollout-<timestamp>-<uuid>.jsonl.
