@@ -155,6 +155,12 @@ export const ProjectService = {
   Home: () => call<Project>("project.Home", []),
   /** Whether a stored project's directory is still there, before reopening it. */
   Exists: (path: string) => call<boolean>("project.Exists", [path]),
+  /** Which of these project directories are gone, so the lists that offer them
+   * can mark the rows that need relocating first. */
+  Missing: (paths: string[]) => call<string[]>("project.Missing", [paths]),
+  /** Point a stored project at a new directory, keeping id — hence its sessions
+   * and its worktrees. null when the user cancels the picker. */
+  Relocate: (id: string) => call<Project | null>("project.Relocate", [id]),
   PickFile: (title: string) => call<string>("project.PickFile", [title]),
   /** Native save dialog seeded with defaultName. "" when the user cancels. */
   PickSaveFile: (title: string, defaultName: string) =>
@@ -279,8 +285,6 @@ export const Store = {
   CloseProject: (id: string) => call<null>("store.CloseProject", [id]),
   /** The closed projects offered for reopening, newest first (capped backend-side). */
   RecentProjects: () => call<RecentProject[] | null>("store.RecentProjects", []),
-  /** Drop a project and its sessions for good — the row whose directory is gone. */
-  DeleteProject: (id: string) => call<null>("store.DeleteProject", [id]),
   AddSession: (
     projectID: string,
     sessionID: string,

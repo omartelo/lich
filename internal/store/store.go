@@ -343,6 +343,20 @@ func (s *Service) ProjectPath(projectID string) string {
 	return path
 }
 
+// ProjectAt names the project rooted at path — id and name — or two empty
+// strings when no project is. Closed projects answer too: a row hidden from the
+// tab strip still owns its directory, and relocating another project onto it
+// would be the same collision.
+func (s *Service) ProjectAt(path string) (string, string) {
+	var id, name string
+	if err := s.db.QueryRow(
+		`SELECT id, name FROM projects WHERE path = ?`, path,
+	).Scan(&id, &name); err != nil {
+		return "", ""
+	}
+	return id, name
+}
+
 // sessionsOf returns a project's sessions in the order the user dragged them
 // into, falling back to insertion order for rows never reordered.
 //

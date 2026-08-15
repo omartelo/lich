@@ -60,6 +60,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A project whose directory moved is relocated, not deleted.** Reopening a
+  closed project whose folder had been renamed or moved used to drop it from the
+  workspace on the spot — the project, its sessions and the conversations parked
+  with them, gone with one click and no way back. Those rows now say so before
+  they are clicked: the reopen menu and the command palette mark them
+  `relocate`, and picking one opens the directory chooser instead of the
+  project. Choose where the folder went and the project comes back with its
+  identity intact — same sessions, same worktrees, the name following the new
+  directory. Cancel and nothing changes; the entry is still there to try again.
+  Choosing a directory another project already sits on is refused by name,
+  rather than leaving the workspace with two projects on one folder.
 - **Building lich from source now needs Go 1.26.6.** The pin is exact so that
   every release binary carries the current toolchain's own security fixes, and
   the module is what CI reads its Go version from. `GOTOOLCHAIN=auto` — the

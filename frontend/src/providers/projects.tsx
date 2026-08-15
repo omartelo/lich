@@ -29,6 +29,7 @@ import {
 } from "@/lib/session/sessions"
 import { applyOrder, pinFirst } from "@/lib/reorder"
 import { displayPath } from "@/lib/paths"
+import { errorText } from "@/lib/utils"
 import {
   hydrateProjectProviderDefaults,
   loadProviders,
@@ -243,16 +244,27 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   }, [adopt])
 
   // Reopening skips the picker, so nothing guarantees the directory is still
-  // there — a project whose folder was moved or deleted can never be opened
-  // again, so its row goes with it rather than sitting in the list forever.
+  // there. A project whose folder was moved or renamed is not dropped — the
+  // picker asks where it went and the project is repointed under its own id,
+  // which is what its sessions and its worktree directory hang off. Cancelling
+  // leaves the row exactly as it was, to relocate on the next attempt; a
+  // directory another project already holds is refused backend-side.
   const openRecent = useCallback(
     async (recent: RecentProject) => {
       if (await ProjectService.Exists(recent.path)) {
         await adopt(recent)
         return
       }
-      await Store.DeleteProject(recent.id)
-      toast.error(`Project not found: ${displayPath(recent.path)}`)
+      try {
+        const moved = await ProjectService.Relocate(recent.id)
+        if (!moved) {
+          return
+        }
+        await adopt(moved)
+        toast.success(`${moved.name} now opens ${displayPath(moved.path)}`)
+      } catch (error) {
+        toast.error(`Relocate failed: ${errorText(error)}`)
+      }
     },
     [adopt],
   )

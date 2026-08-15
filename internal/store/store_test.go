@@ -1071,6 +1071,28 @@ func TestProjectPathOfAnUnknownProjectIsEmpty(t *testing.T) {
 	}
 }
 
+// TestProjectAtNamesTheHolderOfADirectory covers what the relocation guard
+// asks: a closed project still holds its path (it is reopened, never gone), and
+// a directory no project sits on has to answer empty rather than name the last
+// row the query happened to read.
+func TestProjectAtNamesTheHolderOfADirectory(t *testing.T) {
+	svc := newTestStore(t)
+	if err := svc.AddProject("p1", "alpha", "/tmp/alpha"); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if err := svc.CloseProject("p1"); err != nil {
+		t.Fatalf("CloseProject: %v", err)
+	}
+
+	id, name := svc.ProjectAt("/tmp/alpha")
+	if id != "p1" || name != "alpha" {
+		t.Errorf("ProjectAt(/tmp/alpha) = %q, %q; want p1, alpha", id, name)
+	}
+	if id, name := svc.ProjectAt("/tmp/free"); id != "" || name != "" {
+		t.Errorf("ProjectAt(free path) = %q, %q; want empty", id, name)
+	}
+}
+
 // TestRecentProjectsListsClosedOnesNewestFirst covers the shape of the list:
 // open projects stay out of it and closed ones come back newest first. Well
 // under the cap, so nothing here is dropped — the cap has its own test.

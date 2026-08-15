@@ -43,6 +43,11 @@ type Service struct {
 	// default, and every test that does not wire it) means gh's own active
 	// account. Wired to the store in main (ghaccount.go).
 	accounts accountLookup
+	// projects names the project a directory already belongs to, so Relocate can
+	// refuse one the workspace is holding twice. Wired to the store in main;
+	// nil answers "nobody owns it", which is what a picked directory is until
+	// there is a workspace to ask.
+	projects projectLookup
 	// bases memoises the base-branch readout and throttles the fetch behind it
 	// (basestatus.go). Zero value ready; it holds a mutex, so a Service is
 	// passed by pointer and never copied.
@@ -65,6 +70,44 @@ func (s *Service) Open() (*Project, error) {
 		return nil, nil // cancelled
 	}
 	return newProject(path), nil
+}
+
+// projectLookup names the project already rooted at a directory — its id and
+// its name — or two empty strings when no project is.
+type projectLookup func(path string) (id, name string)
+
+// SetProjects wires the workspace lookup Relocate validates against. Left
+// unset, any picked directory is taken as free.
+func (s *Service) SetProjects(lookup projectLookup) {
+	s.projects = lookup
+}
+
+// Relocate points a stored project at a directory chosen from the picker,
+// keeping id rather than deriving a new one from the path. The id is the
+// project's identity in the store — what its sessions hang off and what names
+// its worktree directory — so a checkout that was moved or renamed keeps both.
+// The name follows the new directory. nil when the user cancels.
+//
+// A directory another project already sits on is refused: the two rows would
+// hold the same path under different ids, and every path-addressed lookup the
+// app makes — which project a checkout belongs to, which account its gh calls
+// run as — answers with whichever row the query reached first.
+func (s *Service) Relocate(id string) (*Project, error) {
+	path, err := s.picker.PickDirectory("Relocate Project")
+	if err != nil {
+		return nil, fmt.Errorf("open dialog failed: %w", err)
+	}
+	if path == "" {
+		return nil, nil // cancelled
+	}
+	if s.projects != nil {
+		if owner, name := s.projects(path); owner != "" && owner != id {
+			return nil, fmt.Errorf("That directory is already the project %q. Open that one instead.", name)
+		}
+	}
+	project := newProject(path)
+	project.ID = id
+	return project, nil
 }
 
 // Home returns a project rooted at the user's home directory, without a picker.
@@ -138,6 +181,19 @@ func parsePullRequest(out []byte) *PullRequest {
 func (s *Service) Exists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
+}
+
+// Missing returns the subset of paths whose directory is no longer there. The
+// lists that offer closed projects ask about all their rows at once, so a row
+// that cannot be opened as it stands says so before it is clicked.
+func (s *Service) Missing(paths []string) []string {
+	gone := []string{}
+	for _, path := range paths {
+		if !s.Exists(path) {
+			gone = append(gone, path)
+		}
+	}
+	return gone
 }
 
 // PickFile shows the native file picker and returns the chosen file path, or ""

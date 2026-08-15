@@ -107,6 +107,9 @@ func main() {
 	proj := project.New(project.ZenityPicker{})
 	// gh has one active account per host; a project can name a different one.
 	proj.SetAccounts(db.GHAccountForPath)
+	// Relocating a project is the one flow that can point two rows at the same
+	// directory, so it validates the picked one against the workspace.
+	proj.SetProjects(db.ProjectAt)
 
 	// Every service the frontend uses goes through the loopback RPC
 	// (internal/rpc). store.Close manages the DB lifecycle and stays Go-only.
@@ -176,9 +179,11 @@ func main() {
 //     argument array with a 1MB bound.
 //   - relay.Observe is the hooks' session-state stream, which arrives over
 //     /hook: forging a SessionEnd here closes another session's errands.
-//   - relay.SetPlugins and project.SetAccounts are startup wiring. Called with
-//     [null] they silently nil what they wired (encoding/json leaves a func or
-//     pointer alone on null), and the write races the readers already serving.
+//   - relay.SetPlugins, project.SetAccounts and project.SetProjects are startup
+//     wiring. Called with [null] they silently nil what they wired
+//     (encoding/json leaves a func or pointer alone on null), and the write
+//     races the readers already serving — nilling SetProjects also disarms the
+//     guard that keeps two projects off the same directory.
 func denyInternal(d *rpc.Handler) {
 	for _, method := range []string{
 		"store.Close",
@@ -187,6 +192,7 @@ func denyInternal(d *rpc.Handler) {
 		"relay.Observe",
 		"relay.SetPlugins",
 		"project.SetAccounts",
+		"project.SetProjects",
 	} {
 		d.Deny(method)
 	}

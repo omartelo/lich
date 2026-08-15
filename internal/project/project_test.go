@@ -363,3 +363,97 @@ func TestExistsAcceptsOnlyDirectories(t *testing.T) {
 		t.Errorf("Exists(missing) = true, want false")
 	}
 }
+
+// TestMissingNamesOnlyTheGoneDirectories: the answer is what the lists mark, so
+// a path that is still there must never appear in it.
+func TestMissingNamesOnlyTheGoneDirectories(t *testing.T) {
+	svc := New(nil)
+	dir := t.TempDir()
+	gone := filepath.Join(dir, "gone")
+
+	missing := svc.Missing([]string{dir, gone})
+	if len(missing) != 1 || missing[0] != gone {
+		t.Fatalf("Missing = %v, want [%q]", missing, gone)
+	}
+	if got := svc.Missing(nil); len(got) != 0 {
+		t.Errorf("Missing(nil) = %v, want empty", got)
+	}
+}
+
+// TestRelocateKeepsTheProjectIdentity pins the whole point of the call: the id
+// comes from the caller, not from the new path. Deriving it the way Open does
+// would hand back a project the store has never seen, and the sessions and the
+// worktree directory of the one that moved would stay with the dead id.
+func TestRelocateKeepsTheProjectIdentity(t *testing.T) {
+	moved := filepath.Join(t.TempDir(), "renamed")
+	picker := &pickerStub{dirPath: moved}
+	svc := New(picker)
+
+	project, err := svc.Relocate("stored-id")
+	if err != nil {
+		t.Fatalf("Relocate: %v", err)
+	}
+	if project == nil {
+		t.Fatal("Relocate = nil, want the repointed project")
+	}
+	if project.ID != "stored-id" {
+		t.Errorf("id = %q, want the stored one", project.ID)
+	}
+	if project.Path != moved || project.Name != "renamed" {
+		t.Errorf("project = %+v, want path %q named after it", project, moved)
+	}
+	if picker.dirTitle != "Relocate Project" {
+		t.Errorf("dialog title = %q", picker.dirTitle)
+	}
+}
+
+// TestRelocateRefusesADirectoryAnotherProjectHolds: the path comes from a
+// dialog, so it is user input and the workspace is what validates it. Two rows
+// on one directory under different ids is a workspace no path-addressed lookup
+// can read — and no undo puts the sessions back afterwards.
+func TestRelocateRefusesADirectoryAnotherProjectHolds(t *testing.T) {
+	taken := filepath.Join(t.TempDir(), "taken")
+	svc := New(&pickerStub{dirPath: taken})
+	svc.SetProjects(func(path string) (string, string) {
+		if path == taken {
+			return "other-id", "warm-fjord"
+		}
+		return "", ""
+	})
+
+	project, err := svc.Relocate("stored-id")
+	if project != nil {
+		t.Fatalf("Relocate = %+v, want nothing relocated", project)
+	}
+	if err == nil || !strings.Contains(err.Error(), "warm-fjord") {
+		t.Fatalf("Relocate error = %v, want the project holding it named", err)
+	}
+}
+
+// TestRelocateAcceptsTheProjectsOwnDirectory: the guard is about a *second*
+// project on a path. A row pointed at the directory it is already stored with
+// is the relocation being repeated, not a collision, and refusing it would
+// dead-end the only flow that can fix a project.
+func TestRelocateAcceptsTheProjectsOwnDirectory(t *testing.T) {
+	own := filepath.Join(t.TempDir(), "own")
+	svc := New(&pickerStub{dirPath: own})
+	svc.SetProjects(func(string) (string, string) { return "stored-id", "own" })
+
+	project, err := svc.Relocate("stored-id")
+	if err != nil || project == nil || project.Path != own {
+		t.Fatalf("Relocate = %+v, %v; want the project repointed at %q", project, err, own)
+	}
+}
+
+// TestRelocateCancelledChangesNothing: a cancelled dialog must not read as a
+// chosen directory — the caller writes whatever comes back over the stored row.
+func TestRelocateCancelledChangesNothing(t *testing.T) {
+	project, err := New(&pickerStub{}).Relocate("stored-id")
+	if err != nil || project != nil {
+		t.Fatalf("Relocate(cancelled) = %+v, %v; want nil, nil", project, err)
+	}
+
+	if _, err := New(&pickerStub{dirError: errors.New("picker failed")}).Relocate("stored-id"); err == nil {
+		t.Fatal("Relocate error was swallowed")
+	}
+}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Folder, MessageSquareText } from "lucide-react"
+import { Folder, FolderX, MessageSquareText } from "lucide-react"
 import { useProjects } from "@/providers/projects"
 import { useSettings } from "@/providers/settings"
 import { useHotkey } from "@/lib/use-hotkey"
@@ -22,7 +22,7 @@ import {
 import { useTranscriptSearch } from "@/lib/session/use-transcript-search"
 import { PickerDialog, PickerEmpty, PickerGroup, PickerRow } from "@/components/common/PickerDialog"
 import type { Project, RecentProject } from "@/lib/api-types"
-import { Store } from "@/lib/rpc"
+import { ProjectService, Store } from "@/lib/rpc"
 import { cn } from "@/lib/utils"
 
 // CommandPalette is the app-wide quick switcher: one shortcut (Ctrl/Cmd+K by
@@ -43,6 +43,7 @@ export function CommandPalette() {
   const [tab, setTab] = useState<PaletteTab>("All")
   const [selected, setSelected] = useState(0)
   const [closed, setClosed] = useState<RecentProject[]>([])
+  const [missing, setMissing] = useState<ReadonlySet<string>>(new Set())
 
   useHotkey(hotkeys.commandPalette, () => {
     setOpen((v) => !v)
@@ -53,16 +54,26 @@ export function CommandPalette() {
 
   // The closed projects live in the store, not in the projects state, so they
   // are fetched per opening — a project closed or reopened since the last one
-  // moves in or out of this list.
+  // moves in or out of this list. Their directories are read with them: one
+  // whose folder moved is relocated rather than reopened, and the row says so.
   useEffect(() => {
     if (!open) {
       return
     }
     let live = true
     void Store.RecentProjects().then((rows) => {
-      if (live) {
-        setClosed(rows ?? [])
+      const recents = rows ?? []
+      if (!live) {
+        return
       }
+      setClosed(recents)
+      // Asked for after the rows are up: the mark is what a row says about
+      // itself, and a failed check must not cost the palette its entries.
+      void ProjectService.Missing(recents.map((row) => row.path)).then((gone) => {
+        if (live) {
+          setMissing(new Set(gone ?? []))
+        }
+      })
     })
     return () => {
       live = false
@@ -118,9 +129,9 @@ export function CommandPalette() {
       case "project":
         openProject(row.project.id)
         return
-      // Reopening navigates on its own once the project is adopted, and drops
-      // the row instead when its directory is gone — either way the palette has
-      // nothing left to show.
+      // Reopening navigates on its own once the project is adopted, and asks
+      // for the new directory first when the stored one is gone — either way
+      // the palette has nothing left to show.
       case "closed":
         close()
         void openRecent(row.project)
@@ -198,6 +209,7 @@ export function CommandPalette() {
                 sessionCount={
                   row.kind === "project" ? (sessions[row.project.id]?.sessions.length ?? 0) : 0
                 }
+                missing={row.kind === "closed" && missing.has(row.project.path)}
                 selected={offset + i === active}
                 onSelect={() => setSelected(offset + i)}
                 onRun={() => runIndex(offset + i)}
@@ -259,12 +271,15 @@ function FilterTabs({
 function ListRow({
   row,
   sessionCount,
+  missing,
   selected,
   onSelect,
   onRun,
 }: {
   row: PaletteRow
   sessionCount: number
+  /** Closed projects only: the stored directory is gone, so the row relocates. */
+  missing: boolean
   selected: boolean
   onSelect: () => void
   onRun: () => void
@@ -292,6 +307,7 @@ function ListRow({
       return (
         <ClosedProjectRow
           project={row.project}
+          missing={missing}
           selected={selected}
           onSelect={onSelect}
           onRun={onRun}
@@ -384,26 +400,32 @@ function ProjectRow({
 }
 
 // A closed project has no session to count, so the slot the open ones use for
-// theirs names what Enter does with this one instead.
+// theirs names what Enter does with this one instead — which is not the same
+// thing once the directory has moved: that row asks for the new one first.
 function ClosedProjectRow({
   project,
+  missing,
   selected,
   onSelect,
   onRun,
 }: {
   project: Project
+  missing: boolean
   selected: boolean
   onSelect: () => void
   onRun: () => void
 }) {
+  const Icon = missing ? FolderX : Folder
   return (
     <PickerRow selected={selected} onSelect={onSelect} onRun={onRun}>
-      <Folder className="size-4 shrink-0 text-muted-foreground" />
+      <Icon className="size-4 shrink-0 text-muted-foreground" />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-sm">{project.name}</span>
         <span className="truncate font-mono text-xs text-muted-foreground">{project.path}</span>
       </span>
-      <span className="shrink-0 font-mono text-[0.625rem] text-muted-foreground">reopen</span>
+      <span className="shrink-0 font-mono text-[0.625rem] text-muted-foreground">
+        {missing ? "relocate" : "reopen"}
+      </span>
     </PickerRow>
   )
 }

@@ -26,6 +26,7 @@ var denied = map[string]reflect.Type{
 	"relay.Observe":       reflect.TypeFor[*relay.Service](),
 	"relay.SetPlugins":    reflect.TypeFor[*relay.Service](),
 	"project.SetAccounts": reflect.TypeFor[*project.Service](),
+	"project.SetProjects": reflect.TypeFor[*project.Service](),
 }
 
 // stubService stands in for the four registered services: dispatch resolves a
@@ -39,6 +40,7 @@ func (stubService) Save() error        { return nil }
 func (stubService) Observe() error     { return nil }
 func (stubService) SetPlugins() error  { return nil }
 func (stubService) SetAccounts() error { return nil }
+func (stubService) SetProjects() error { return nil }
 func (stubService) Allowed() error     { return nil }
 
 func denyingDispatcher() *rpc.Handler {

@@ -11,7 +11,7 @@ export interface ProjectsValue {
   /** Show the OS directory picker, add the chosen project and navigate to it. */
   openProject: () => Promise<void>
   /** Reopen a closed project without the picker. A project whose directory is
-   * gone is dropped from the store instead, with a toast saying so. */
+   * gone asks for the new one instead, keeping its id and its sessions. */
   openRecent: (recent: RecentProject) => Promise<void>
   /** Ensure a project rooted at $HOME exists (no picker) and return its id — the
    * update flow's install terminal when no project is in view. */
