@@ -123,9 +123,9 @@ nobody knows it and that the call site never shows. The mechanism and the histor
 - **git status is polled** — one shared poller per repository path (`frontend/src/lib/git/git-status-store.ts`); the
   lich plugin's `session-touched` hook nudges an immediate refresh.
 - **lich fetches on its own** — the base-branch readout (`internal/project/basestatus.go`) runs
-  `git fetch --no-tags origin` in the background, at most once every 2 minutes per repository, for as long as a
-  card is on screen. It is the only git write lich makes outside the worktree flows, nothing in the UI announces
-  it, and it moves remote refs in the user's own repository.
+  `git fetch --no-tags origin` in the background, at most once every 30 seconds per repository, for as long as a
+  card is on screen. It is the only git write lich makes outside the worktree flows, nothing announces it, and it
+  moves remote refs in the user's own repository.
 - **Persistence is hybrid**: UI prefs in the page's localStorage (`lich.*` keys — the reason the listener port is
   pinned at 47821; `LICH_LISTEN_PORT` overrides it, `LICH_PORT` is the distinct per-session hook variable), the
   workspace in SQLite (`<config-dir>/lich/lich.db`, `internal/store`). Closing a session deletes its row; keeping a

@@ -53,6 +53,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the module is what CI reads its Go version from. `GOTOOLCHAIN=auto` — the
   default — fetches 1.26.6 on its own; a build pinned to `local` on anything
   older will refuse the module.
+- **A card notices sooner that its base moved.** The behind count and the
+  conflict list beside a branch refresh at most every 30 seconds, not every 2
+  minutes.
 
 ### Removed
 

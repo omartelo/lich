@@ -25,7 +25,9 @@ type BaseStatus struct {
 // else in lich fetches after a worktree is created, and a branch lands on the
 // forge, not here — so without this the readout would answer from refs frozen at
 // creation time and never notice the very thing it exists to report.
-const baseFetchInterval = 2 * time.Minute
+// The interval is a network round trip per repository with a card on screen,
+// all day, so it is a cost as much as a cadence.
+const baseFetchInterval = 30 * time.Second
 
 // baseFetchTimeout caps the fetch subprocess. It already runs off the poll, but
 // an ssh key prompt with nowhere to prompt would sit there for the app's life.
