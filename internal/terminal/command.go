@@ -84,6 +84,14 @@ func SupportsModel(kind string) bool {
 // prompt", for the two that spell it at all: Claude Code and oh-my-pi share
 // --append-system-prompt (read off both `--help`, like every other table here).
 //
+// Claude Code also has an `--append-system-prompt-file`, which would keep the
+// briefing out of argv and out of /proc/<pid>/cmdline — it works (measured on
+// 2.1.233), and it is absent from `--help`, named only inside `--bare`'s own
+// description. That is the whole reason lich still passes the text flag: an
+// undocumented flag that goes away is a spawn that dies before the session
+// exists, which is the rule skipPermissionFlags states above. Revisit when it
+// appears in `--help`; the briefing has two variants, so it is two files.
+//
 // They do not mean the same thing by the value. omp's flag takes text *or* a
 // file, and picks between them by looking for a newline: a value without one is
 // opened as a path, and a read that fails falls back to the literal string. The
@@ -102,6 +110,14 @@ func SupportsModel(kind string) bool {
 // briefing written there would tell a session started outside lich that it is
 // inside one. Those three read the same point in lich's MCP instructions
 // instead, which costs nothing and is true only where it is read.
+//
+// What could ask, if the gap is ever worth closing, is the plugin's own hooks —
+// they run code and can read LICH_SESSION_ID. Two of the three have somewhere to
+// put it: Codex's SessionStart returns `additionalContext` (0.144.5) and
+// opencode's plugin API has `experimental.chat.system.transform`, which mutates
+// the system messages (1.18.18). Crush has neither: `PreToolUse` is its only
+// event (0.88.0), so its briefing would arrive at the first tool call, and a
+// turn that answers without one would never see it at all.
 var briefingFlags = map[string]string{
 	providers.Claude: "--append-system-prompt",
 	providers.OMP:    "--append-system-prompt",
