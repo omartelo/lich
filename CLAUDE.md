@@ -146,9 +146,16 @@ nobody knows it and that the call site never shows. The mechanism and the histor
   (`internal/terminal/command.go`, `briefingFlags` → `relay.SpawnBriefing`): Claude Code and oh-my-pi
   are spawned with `--append-system-prompt` carrying lich's own briefing, so text the user never
   wrote is in every session's prompt and in `/proc/<pid>/cmdline`. Codex, opencode and Crush get
-  nothing there — none has an append (Codex's `model_instructions_file` *replaces* the base
-  instructions; the other two are config keys, not flags), so for them the same point exists only in
-  lich's MCP instructions, and behaviour between providers differs by that much.
+  nothing there — none has an append flag, and their only static channels (Codex's
+  `model_instructions_file`, opencode's `instructions`, Crush's `system_prompt_prefix`) are
+  machine-wide config that cannot ask whether it is running inside lich, so a briefing written there
+  would lie to every session started outside it. The channels that *can* ask are the plugin's hooks —
+  Codex's `SessionStart` and opencode's `experimental.chat.system.transform` both take text at
+  session start, while Crush has only `PreToolUse` and no session-start hook at all — so for those
+  three the point exists only in lich's MCP instructions, and behaviour between providers differs by
+  that much. Claude Code also takes a `--append-system-prompt-file` that would keep the briefing out
+  of argv, but it is absent from `--help` (measured on 2.1.233), so lich passes the text flag rather
+  than bet a spawn on an undocumented one.
 
 - **Installing the plugin writes into three harnesses' own directories**
   (`internal/agentplugin`): Claude Code and Codex are driven through their plugin CLI, but opencode, oh-my-pi and

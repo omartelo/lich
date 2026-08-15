@@ -84,14 +84,24 @@ func SupportsModel(kind string) bool {
 // prompt", for the two that spell it at all: Claude Code and oh-my-pi share
 // --append-system-prompt (read off both `--help`, like every other table here).
 //
-// The other three are absent because none of them has an append. Codex takes
-// `model_instructions_file`, which *replaces* its base instructions — swapping
-// the whole system prompt of a provider for a file lich wrote is not a thing
-// lich does for one paragraph. opencode's `instructions` and Crush's
-// `system_prompt_prefix` are config keys, not flags, so using them means writing
-// a file the user owns — the line lich already draws at MCP registration
-// (providers.AcceptsMCPServer). Those three read the same point in lich's MCP
-// instructions instead, which costs nothing and needs no file.
+// They do not mean the same thing by the value. omp's flag takes text *or* a
+// file, and picks between them by looking for a newline: a value without one is
+// opened as a path, and a read that fails falls back to the literal string. The
+// briefing is a single line, so on omp it takes the file branch, fails
+// ENAMETOOLONG on a 600-byte "path" and arrives as text — right by fallback
+// rather than by design (measured on 17.3.4). Give the briefing a newline and it
+// takes the literal branch instead, which lands the same text; what must not
+// happen is a briefing short enough to name a real file.
+//
+// The other three are absent because none of them has an append flag. Codex
+// takes `model_instructions_file`, which *replaces* its base instructions —
+// swapping the whole system prompt of a provider for a file lich wrote is not a
+// thing lich does for one paragraph. opencode's `instructions` and Crush's
+// `system_prompt_prefix` are config keys read by every run of that provider on
+// the machine, and static config cannot ask whether it is running inside lich: a
+// briefing written there would tell a session started outside lich that it is
+// inside one. Those three read the same point in lich's MCP instructions
+// instead, which costs nothing and is true only where it is read.
 var briefingFlags = map[string]string{
 	providers.Claude: "--append-system-prompt",
 	providers.OMP:    "--append-system-prompt",
