@@ -30,6 +30,7 @@ import { createSessionLinkProvider } from "@/lib/terminal/session-link-provider"
 import { sessionLinkTargets } from "@/lib/terminal/session-links"
 import {
   composeDroppedPaths,
+  KEEP_DROPPED_DAYS,
   readDroppedFiles,
   resolveDroppedFiles,
 } from "@/lib/terminal/drop-files"
@@ -566,7 +567,7 @@ export function TerminalView({
       return
     }
     void (async () => {
-      const { paths, skipped } = await resolveDroppedFiles(cwd, dropped)
+      const { paths, skipped, copied } = await resolveDroppedFiles(cwd, dropped)
       const paste = composeDroppedPaths(paths, isWindows)
       if (paste !== "") {
         writeInput(paste)
@@ -574,6 +575,13 @@ export function TerminalView({
       }
       if (skipped.length > 0) {
         toast.error(`Not attached: ${skipped.join(", ")}`)
+      }
+      // Nothing failed here — the path pasted is simply a copy's, and the two
+      // read alike at the prompt.
+      if (copied.length > 0) {
+        toast.info(`Pasted as a copy: ${copied.join(", ")}`, {
+          description: `Not found under this session or your home, so edits land on the copy, not on your file — and the copy is deleted after ${KEEP_DROPPED_DAYS} days.`,
+        })
       }
     })()
   }

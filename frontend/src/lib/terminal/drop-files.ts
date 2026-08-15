@@ -18,6 +18,10 @@ import { bracketedPaste } from "./bracketed-paste"
 // mis-drag, and the backend refuses it anyway.
 const MAX_UPLOAD_BYTES = 32 << 20
 
+// Matches internal/drop's keepDropped: how long a copy outlives its drop, which
+// is the half of the notice the user cannot find out any other way.
+export const KEEP_DROPPED_DAYS = 3
+
 /** One dropped entry: what the page can say about it, plus its bytes. */
 export interface DroppedFile extends DropItem {
   /** Null for a directory — the page has no bytes to upload for one. */
@@ -57,6 +61,12 @@ export interface DropResult {
   paths: string[]
   /** Names of entries that yielded no path, with why. */
   skipped: string[]
+  /**
+   * Names of entries neither tree held, whose path is a copy's — an edit there
+   * never reaches the user's file, and the copy expires. Nothing else in the UI
+   * distinguishes those paths from the real ones.
+   */
+  copied: string[]
 }
 
 /**
@@ -69,8 +79,9 @@ export async function resolveDroppedFiles(
 ): Promise<DropResult> {
   const paths: string[] = []
   const skipped: string[] = []
+  const copied: string[] = []
   if (dropped.length === 0) {
-    return { paths, skipped }
+    return { paths, skipped, copied }
   }
   const items = dropped.map(({ name, size, mtime, dir }) => ({ name, size, mtime, dir }))
   const found = await DropService.Resolve(cwd, items)
@@ -92,11 +103,12 @@ export async function resolveDroppedFiles(
     }
     try {
       paths.push(await uploadDroppedFile(entry.name, entry.blob))
+      copied.push(entry.name)
     } catch {
       skipped.push(entry.name)
     }
   }
-  return { paths, skipped }
+  return { paths, skipped, copied }
 }
 
 // uploadDroppedFile stores one file's bytes on the backend and answers with the

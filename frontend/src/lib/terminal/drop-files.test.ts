@@ -1,5 +1,24 @@
-import { describe, expect, it } from "vitest"
-import { composeDroppedPaths } from "./drop-files"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { composeDroppedPaths, type DroppedFile, resolveDroppedFiles } from "./drop-files"
+
+// The backend is the boundary: the lookup is an RPC and the upload its own
+// endpoint, so both are stubbed and the test asserts which branch each entry
+// took — the whole point of the copied list.
+const resolve = vi.fn()
+vi.mock("@/lib/rpc", () => ({
+  DropService: {
+    Resolve: (root: string, items: unknown[]) => resolve(root, items),
+  },
+  endpoint: () => ({ base: "http://127.0.0.1:47821", token: "t" }),
+}))
+
+const file = (name: string): DroppedFile => ({
+  name,
+  size: 3,
+  mtime: 1,
+  dir: false,
+  blob: new Blob(["abc"]),
+})
 
 const PASTE_START = "\x1b[200~"
 const PASTE_END = "\x1b[201~"
@@ -48,5 +67,76 @@ describe("composeDroppedPaths", () => {
     expect(composeDroppedPaths(["C:\\Program Files\\a.ts"], true)).toBe(
       `${PASTE_START}"C:\\Program Files\\a.ts" ${PASTE_END}`,
     )
+  })
+})
+
+describe("resolveDroppedFiles", () => {
+  const upload = vi.fn()
+
+  beforeEach(() => {
+    resolve.mockReset()
+    upload.mockReset()
+    upload.mockResolvedValue({
+      ok: true,
+      json: async () => ({ path: "/cfg/lich/dropped/b.png" }),
+    })
+    vi.stubGlobal("fetch", upload)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("reports no copy for a file the tree holds", async () => {
+    resolve.mockResolvedValue(["/home/u/a.ts"])
+
+    const result = await resolveDroppedFiles("/home/u", [file("a.ts")])
+
+    expect(result).toEqual({ paths: ["/home/u/a.ts"], skipped: [], copied: [] })
+    expect(upload).not.toHaveBeenCalled()
+  })
+
+  // The path pasted for b.png is a copy's, and only this list says so.
+  it("names the entries pasted as a copy", async () => {
+    resolve.mockResolvedValue(["/home/u/a.ts", ""])
+
+    const result = await resolveDroppedFiles("/home/u", [file("a.ts"), file("b.png")])
+
+    expect(result).toEqual({
+      paths: ["/home/u/a.ts", "/cfg/lich/dropped/b.png"],
+      skipped: [],
+      copied: ["b.png"],
+    })
+  })
+
+  // A copy that was never written has no path to warn about.
+  it("leaves a failed upload out of the copies", async () => {
+    resolve.mockResolvedValue([""])
+    upload.mockResolvedValue({ ok: false, status: 500 })
+
+    const result = await resolveDroppedFiles("/home/u", [file("b.png")])
+
+    expect(result).toEqual({ paths: [], skipped: ["b.png"], copied: [] })
+  })
+
+  // A directory has no bytes to copy, so it is skipped, never listed as one.
+  it("does not call a missing folder a copy", async () => {
+    resolve.mockResolvedValue([""])
+    const folder: DroppedFile = { name: "docs", size: 0, mtime: 1, dir: true, blob: null }
+
+    const result = await resolveDroppedFiles("/home/u", [folder])
+
+    expect(result.copied).toEqual([])
+    expect(result.skipped).toHaveLength(1)
+    expect(upload).not.toHaveBeenCalled()
+  })
+
+  it("answers an empty drop without touching the backend", async () => {
+    expect(await resolveDroppedFiles("/home/u", [])).toEqual({
+      paths: [],
+      skipped: [],
+      copied: [],
+    })
+    expect(resolve).not.toHaveBeenCalled()
   })
 })

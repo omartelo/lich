@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   project-level menu. Clicking the checkout header collapses or expands all of
   its cards when the sidebar needs less noise.
 
+- **A dropped file that became a copy now says so.** When lich cannot find a
+  dropped file under the session's directory or your home, it keeps a copy of
+  it and pastes the copy's path — the agent then edits the copy, your own file
+  never changes, and three days later the path stops resolving because the copy
+  is deleted. Nothing in the window ever said which of the two you got. A drop
+  that took that route now raises a notice naming the files and what it means.
+
 ### Fixed
 
 - **A deleted project no longer leaves its settings behind for the next one.**
