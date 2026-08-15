@@ -62,6 +62,29 @@ func TestDosPathRunesRejectsUnusableLengths(t *testing.T) {
 	}
 }
 
+// TestParseTpgidSurvivesComm proves the foreground group is read past a comm
+// holding the very characters a naive field split trips on, and that a process
+// with no controlling terminal (tpgid -1, what every non-PTY child reports)
+// yields no group rather than a negative pid the cwd read would chase.
+func TestParseTpgidSurvivesComm(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want int
+	}{
+		{"plain", "42 (zsh) S 41 42 42 34816 4242 4194304 ...", 4242},
+		{"comm with spaces and parens", "42 (sh (deploy)) S 41 42 42 34816 4242 0 ...", 4242},
+		{"no controlling terminal", "42 (go) S 41 42 42 0 -1 0 ...", 0},
+		{"truncated", "42 (zsh) S 41 42", 0},
+		{"no comm close", "42 (zsh S 41 42 42 34816 4242 0", 0},
+	}
+	for _, tc := range cases {
+		if got := parseTpgid([]byte(tc.in)); got != tc.want {
+			t.Errorf("%s: parseTpgid = %d, want %d", tc.name, got, tc.want)
+		}
+	}
+}
+
 // TestProcessCwdReadsSelf proves the platform read resolves a live process's
 // working directory — exercised against the test process itself.
 func TestProcessCwdReadsSelf(t *testing.T) {

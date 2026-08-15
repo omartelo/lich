@@ -5,6 +5,8 @@ import (
 	"syscall"
 	"unsafe"
 	_ "unsafe" // for go:linkname
+
+	"golang.org/x/sys/unix"
 )
 
 const cwdTracked = true
@@ -40,11 +42,25 @@ type procVnodePathInfo struct {
 	Rdir vnodeInfoPath
 }
 
-// processCwd returns pid's current working directory, or "" when it cannot be
-// read (the process exited, or was never ours to inspect). proc_pidinfo
-// returns the number of bytes filled; anything short of the full struct is a
-// failure.
-func processCwd(pid int) string {
+// foregroundPgrp returns the process group that owns pid's controlling
+// terminal, or 0 when pid has no terminal (e_tpgid is -1 then) or the process
+// cannot be read. sysctl answers it from the process itself, the way Linux
+// reads tpgid out of /proc, so no PTY file descriptor has to cross the
+// ptyHandle seam for a directory read — TIOCGPGRP on the master would have
+// forced one. Unlike proc_pidinfo above, this call is exposed by x/sys/unix,
+// so there is no trampoline to write.
+func foregroundPgrp(pid int) int {
+	proc, err := unix.SysctlKinfoProc("kern.proc.pid", pid)
+	if err != nil || proc.Eproc.Tpgid < 0 {
+		return 0
+	}
+	return int(proc.Eproc.Tpgid)
+}
+
+// readCwd returns pid's own working directory, or "" when it cannot be read
+// (the process exited, or was never ours to inspect). proc_pidinfo returns the
+// number of bytes filled; anything short of the full struct is a failure.
+func readCwd(pid int) string {
 	var info procVnodePathInfo
 	n, _, _ := syscall_syscall6(
 		libc_proc_pidinfo_trampoline_addr,

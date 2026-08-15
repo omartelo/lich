@@ -1,6 +1,8 @@
 package terminal
 
 import (
+	"bytes"
+	"strconv"
 	"time"
 
 	"github.com/omartelo/lich/internal/events"
@@ -36,6 +38,28 @@ func dosPathRunes(n uint16) int {
 		return 0
 	}
 	return int(n / 2)
+}
+
+// parseTpgid returns the foreground process group of a /proc/<pid>/stat line —
+// tpgid, the sixth field after the comm — and 0 when the line does not carry
+// one. Counting starts at the last ')' because comm sits in parens and may hold
+// spaces and parens of its own ("(sh (deploy))"), which is the whole reason a
+// field split of the raw line is wrong. Kept out of the build-tagged file so
+// the parse tests on any OS (dosPathRunes' pattern).
+func parseTpgid(stat []byte) int {
+	i := bytes.LastIndexByte(stat, ')')
+	if i < 0 {
+		return 0
+	}
+	fields := bytes.Fields(stat[i+1:])
+	if len(fields) < 6 {
+		return 0
+	}
+	pgrp, err := strconv.Atoi(string(fields[5]))
+	if err != nil || pgrp < 0 {
+		return 0
+	}
+	return pgrp
 }
 
 // watchCwd reports the session child's working directory to the frontend

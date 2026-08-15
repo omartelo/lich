@@ -42,6 +42,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A session's path now follows the shell you started inside it.** The
+  directory on a card was read from the process lich spawned in the PTY, so a
+  `cd` made inside a nested shell — `sh`, `su`, `nix develop` — moved nothing:
+  the path line, the git status beside it and the tree a dropped file is
+  searched for all went on naming the directory that shell was launched from.
+  lich now reads the terminal's foreground process group, which is where that
+  `cd` happened, on Linux and macOS; Windows still tracks the process it
+  spawned. A session running a coding agent reads the same as before, and
+  deliberately: the subprocesses an agent runs for a tool call have no terminal
+  of their own, so a `cd /tmp && …` inside one no longer risks dragging the card
+  along with it. A shell hosted somewhere else — tmux, ssh, a container — is
+  still beyond reach, and keeps reporting the directory the session started in.
 - **A deleted project no longer leaves its settings behind for the next one.**
   A project whose directory is gone is dropped from the workspace, but its
   per-project settings — provider, gh account, binary paths — stayed in the
