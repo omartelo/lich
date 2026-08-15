@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react"
+import type { CommitIdentity } from "@/lib/api-types"
 import { ProjectService, Store } from "@/lib/rpc"
+import { commitIdentityRow } from "@/lib/commit-identity"
 import { accountLabel, accountSelectItems, upgradeAccount } from "@/lib/gh-account"
 import { GH_ACCOUNT_KEY } from "@/lib/project-settings"
 import { errorText } from "@/lib/utils"
@@ -30,7 +32,18 @@ export function VersionControlSettings({ projectId }: { projectId?: string }) {
   const project = projects.find((p) => p.id === projectId)
   const [accounts, setAccounts] = useState<string[]>([])
   const [account, setAccount] = useState("")
+  const [identity, setIdentity] = useState<CommitIdentity | null>(null)
   const [error, setError] = useState("")
+
+  // Read once per project: git's config changes outside lich, but so rarely
+  // that polling the settings page for it would buy nothing.
+  useEffect(() => {
+    const path = project?.path
+    if (!path) {
+      return
+    }
+    void ProjectService.CommitIdentity(path).then(setIdentity)
+  }, [project?.path])
 
   useEffect(() => {
     void ProjectService.GitHubAccounts()
@@ -81,6 +94,9 @@ export function VersionControlSettings({ projectId }: { projectId?: string }) {
   // The configured account survives a gh that no longer lists it, so a stale
   // value is visible (and changeable) instead of silently reading as default.
   const options = Array.from(new Set([...accounts, ...(account ? [account] : [])]))
+  // The account governs what lich asks gh; this says who the commits are
+  // authored as. Both facts, no comparison — see commitIdentityRow.
+  const row = identity && commitIdentityRow(identity)
 
   return (
     <SettingBlock
@@ -88,8 +104,7 @@ export function VersionControlSettings({ projectId }: { projectId?: string }) {
       description={
         "Which account lich runs gh as for this project — pull requests, checks and PR checkouts. " +
         "gh keeps one active account per host, so a repository only another account can see reads " +
-        "as not found. Accounts on an enterprise host are listed with it. Pushes are unaffected: " +
-        "they still ride the remote's ssh key and the git user.email."
+        "as not found. Accounts on an enterprise host are listed with it."
       }
     >
       <p className="mb-2 text-xs text-muted-foreground">{project.path}</p>
@@ -115,6 +130,19 @@ export function VersionControlSettings({ projectId }: { projectId?: string }) {
       {error && (
         <p className="mt-2 text-xs text-destructive">
           Could not list GitHub accounts: {error}. Run `gh auth login` to authenticate.
+        </p>
+      )}
+      {row && (
+        <p className="mt-3 border-t border-border pt-2 text-xs text-muted-foreground">
+          {row.email ? (
+            <>
+              {row.lead} <span className="font-mono">{row.email}</span> {row.note}
+            </>
+          ) : (
+            <>
+              <span className="text-foreground">{row.lead}</span> {row.note}
+            </>
+          )}
         </p>
       )}
     </SettingBlock>

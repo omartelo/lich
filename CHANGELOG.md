@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the select still shows the resolved global provider, and follows later changes
   to the global choice.
 
+- **The GitHub account picker now says who your commits are authored as.** The
+  account it selects governs what lich asks gh — reading pull requests, checks,
+  PR checkouts — and nothing else: a push rides the remote's ssh key and signs
+  with `git user.email`, so a PR read by one account can land commits under
+  another with no error anywhere. Version control settings now name that second
+  identity under the picker, saying when it comes from the repository's own
+  config rather than your global one, and when the checkout has none at all and
+  git will refuse the commit. Both facts, no comparison between them: noreply
+  addresses, vanity domains and org aliases make a mismatch warning a
+  false-positive farm, and the two values side by side tell you more than a
+  guess would. lich never writes `user.email`.
+
 - **Every visible checkout group can open another session in place.** Its `+`
   menu offers every enabled coding provider and a plain terminal, rooted in that
   exact project directory or worktree instead of requiring a trip through the

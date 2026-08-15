@@ -279,6 +279,16 @@ export interface WorktreeSetup {
   detected?: string
 }
 
+/** internal/project.CommitIdentity — who the next commit in a checkout would
+ * be authored as, which the project's gh account does not govern. Every field
+ * empty means the checkout has no identity configured. */
+export interface CommitIdentity {
+  name: string
+  email: string
+  /** The email comes from the checkout's own config, not the global one. */
+  local: boolean
+}
+
 /** internal/store.Session — a persisted terminal session (metadata only). */
 export interface StoredSession {
   id: string

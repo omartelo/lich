@@ -11,6 +11,7 @@ import type {
   BaseStatus,
   BranchRules,
   Branches,
+  CommitIdentity,
   DetectedProvider,
   Diagnostics as DiagnosticsData,
   DiffStats,
@@ -178,6 +179,9 @@ export const ProjectService = {
   /** The logins gh is authenticated as, for the project's account picker;
    * errors when gh is missing or logged out. */
   GitHubAccounts: () => call<string[] | null>("project.GitHubAccounts", []),
+  /** Who the next commit in this checkout would be authored as — the fact the
+   * account picker does not govern. Empty fields = no identity configured. */
+  CommitIdentity: (path: string) => call<CommitIdentity>("project.CommitIdentity", [path]),
   /** Every checkout holding a branch, the project's own directory included —
    * which ListBranches omits, since it cannot be resumed as a worktree. */
   ListCheckouts: (path: string) => call<Worktree[] | null>("project.ListCheckouts", [path]),

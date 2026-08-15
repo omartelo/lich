@@ -93,7 +93,9 @@ nobody knows it and that the call site never shows. The mechanism and the histor
 - **A project's gh account governs gh, not git**: `vcs.account` (`internal/project/ghaccount.go`) puts one
   account's token in `GH_TOKEN` for every gh call lich makes for that project. A push still rides the remote's
   ssh key and signs with the global `user.email`, so a PR can be *read* by one account and its commits *land*
-  under another, with no error anywhere.
+  under another, with no error anywhere. The Version Control settings print the second identity beside the
+  picker (`internal/project/commitidentity.go`) — both facts, never a comparison: noreply forms, vanity domains
+  and org aliases make a mismatch warning a false-positive farm. lich never writes `user.email`.
 - **`LICH_WORKTREE_PORT` is reserved, never held** (`internal/terminal/worktreeport.go`, table `worktree_ports`):
   the number is checked against the other checkouts and bound once to prove it is free, then released — the dev
   server starts minutes later, after the setup script, and anything on the machine can take the port in between.
