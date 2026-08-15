@@ -88,15 +88,11 @@ Deliberate limits and shortcuts. A bullet earns its place by naming a trap — s
 nobody knows it and that the call site never shows. The mechanism and the history stay in the code and
 `CHANGELOG.md`.
 
-- **Session cwd is polled, and anything that re-hosts the shell reports the wrong directory in silence**
-  (`internal/terminal/cwd.go`, per-OS readers behind build tags): a failed read degrades to the session's start
-  directory. Linux and macOS follow the terminal's foreground process group, so a nested shell's `cd` moves the
-  card; Windows still tracks the direct child, so the same `cd` moves nothing there. Neither reaches tmux/screen
-  (the server is not in the process tree), ssh (the directory is on another machine) or docker (another mount
-  namespace) — the readout keeps naming a real local directory that is not where the user is, and nothing on
-  screen says so. A root shell (`sudo -i`, `su`) freezes it at its last value. What consumes the wrong answer:
-  the card's path line, its git status and PR badge, and `internal/drop`'s search root — that last one silently
-  *copies* the dropped file when the tree is wrong.
+- **Session cwd is polled** from the terminal's foreground process group (`internal/terminal/cwd.go`, per-OS
+  readers behind build tags); a failed read degrades to the session's start directory, and Windows tracks the
+  PTY child instead, where the same nested-shell `cd` moves nothing. A shell hosted elsewhere — tmux, ssh, a
+  container — is beyond all of them: the readout goes on naming a real local directory that is not where the
+  user is, with nothing on screen saying so.
 - **A project's gh account governs gh, not git**: `vcs.account` (`internal/project/ghaccount.go`) puts one
   account's token in `GH_TOKEN` for every gh call lich makes for that project. A push still rides the remote's
   ssh key and signs with the global `user.email`, so a PR can be *read* by one account and its commits *land*
