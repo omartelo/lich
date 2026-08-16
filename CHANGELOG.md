@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-08-16
+
 ### Added
 
 - **A project's usual provider can differ from the global default.** Settings now
@@ -2737,7 +2739,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.34.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.35.0...HEAD
+[0.35.0]: https://github.com/omartelo/lich/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/omartelo/lich/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/omartelo/lich/compare/v0.32.0...v0.33.0
 [0.32.0]: https://github.com/omartelo/lich/compare/v0.31.0...v0.32.0

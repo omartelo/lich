@@ -15,7 +15,7 @@
   </p>
   <p>
     <a href="https://github.com/omartelo/lich/releases"><img alt="Release" src="https://img.shields.io/github/v/release/omartelo/lich?color=4285F4&label=release" /></a>
-    <img alt="Go" src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white" />
+    <img alt="Go" src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white" />
     <img alt="Shell" src="https://img.shields.io/badge/shell-Chromium%20--app-4285F4?logo=googlechrome&logoColor=white" />
     <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-333" />
     <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-blue" /></a>
@@ -86,14 +86,19 @@ Homebrew 安装可以绕开 Gatekeeper 的提示；从 Releases 页面下载的�
 2. **打开一个项目** —— 标签栏里的 `+` 会列出你最近关掉的项目，也能调起系统的文件夹
    选择器；指向一个 git 仓库即可。
 3. **把 lich 指向你的智能体** —— 首次启动会列出在你机器上找到的智能体；之后可以在
-   设置 › Providers 里设置各自的二进制文件路径，并改掉新会话默认用哪一个。
-4. **开一个会话** —— *New Session* 会在项目里启动一个跑着你的智能体的终端。
+   全局设置 › Providers 里设置各自的二进制文件路径，并选定默认用哪一个。项目可以沿用
+   这个默认，也可以在项目设置 › Providers 里选另一个 provider。
+4. **开一个会话** —— *New Session* 会在项目里启动一个跑着你的智能体的终端。每个
+   checkout 的标题栏也有一个 `+` 菜单，可以在那个 checkout 里直接打开任意已启用的
+   provider 或一个纯终端；点标题栏本身则会折叠或展开它下面的会话。
 5. **分出一个 worktree**（可选）—— 从任意基础分支创建一个；lich 会为它播种文件，并把你
    带进一个新的会话。
 
 ## 配置
 
-- **智能体** —— 在设置里为每个 provider 设定二进制文件路径，并选定新会话默认用哪一个。
+- **智能体** —— 在全局设置 › Providers 里为每个 provider 设定二进制文件路径，并选定
+  全局默认。项目设置 › Providers 可以为单个项目覆盖这个选择；**Use default** 会移除
+  这层覆盖，之后全局默认的变化便会自动流过来。
   Claude Code 那一节还管着底栏的上下文圆环和费用读数 —— 费用默认关闭，因为只有当你按
   token 计费时这个数字才有意义。
 - **Worktree** —— 项目仓库里的 `.lich/setup-worktree.sh` 会在新 worktree 的终端里
