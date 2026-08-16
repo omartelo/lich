@@ -27,9 +27,12 @@ type fakeTerminal struct {
 	// the worktree setup script rather than the agent.
 	live      map[string]bool
 	settingUp map[string]bool
-	writes    map[string][]string
-	writeErr  error
-	refused   int
+	// typing is whether the person at that session has a half-written line at its
+	// prompt, which the terminal service reports through the same Ready.
+	typing   map[string]bool
+	writes   map[string][]string
+	writeErr error
+	refused  int
 	// onWrite runs after a write is recorded, outside the fake's own lock, so a
 	// test can make the target report state from inside a delivery.
 	onWrite func(id, data string)
@@ -37,7 +40,8 @@ type fakeTerminal struct {
 
 func newFakeTerminal(live ...string) *fakeTerminal {
 	t := &fakeTerminal{
-		live: map[string]bool{}, writes: map[string][]string{}, settingUp: map[string]bool{},
+		live: map[string]bool{}, writes: map[string][]string{},
+		settingUp: map[string]bool{}, typing: map[string]bool{},
 	}
 	for _, id := range live {
 		t.live[id] = true
@@ -52,12 +56,20 @@ func (f *fakeTerminal) Live(id string) bool {
 }
 
 // Ready defaults to "as ready as it is live": most tests are about delivery and
-// answers, not about a checkout that is still installing its dependencies. The
-// ones that are set settingUp.
+// answers, not about a checkout that is still installing its dependencies, nor
+// about a prompt its own user is typing at. The ones that are set settingUp or
+// typing.
 func (f *fakeTerminal) Ready(id string) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.live[id] && !f.settingUp[id]
+	return f.live[id] && !f.settingUp[id] && !f.typing[id]
+}
+
+// typeAt marks a session as having the user's own unsent line at its prompt.
+func (f *fakeTerminal) typeAt(id string, drafting bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.typing[id] = drafting
 }
 
 // setUp marks a session as still running its worktree setup script: live, and
@@ -2086,6 +2098,32 @@ func TestANudgeThatNeverLandedIsSentAgain(t *testing.T) {
 	svc.Observe("s1", stateDone)
 	if !awaitWritten(term, "s1", "[lich]") {
 		t.Fatalf("a nudge that failed to land was never sent again: %q", term.writesTo("s1"))
+	}
+}
+
+// Every write this package makes is a paste with an Enter behind it, and that
+// Enter sends the whole line — so one landing while the person at that session
+// is mid-sentence submits their half-written text along with lich's, and their
+// half is gone. The nudge is the path that has no other gate: it is typed at an
+// idle sender, which is exactly the session somebody is sitting at.
+func TestNothingIsTypedIntoAPromptItsUserIsHolding(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := newRelay(workspace(), term, nil)
+	term.typeAt("s1", true)
+	plant(svc, "t1", "s1", "s2", "docs")
+
+	if err := svc.Reply("t1", "all green"); err != nil {
+		t.Fatalf("Reply: %v", err)
+	}
+	// Long enough for the nudge's debounce to have fired and typed.
+	time.Sleep(50 * time.Millisecond)
+	if typed := term.written("s1"); typed != "" {
+		t.Fatalf("typed into a prompt its user was using: %q", typed)
+	}
+
+	term.typeAt("s1", false)
+	if !awaitWritten(term, "s1", "[lich]") {
+		t.Fatalf("the prompt came free and nothing was delivered: %q", term.writesTo("s1"))
 	}
 }
 

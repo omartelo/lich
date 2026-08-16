@@ -130,6 +130,13 @@ type session struct {
 	// is waiting on input. Both guarded by the service's mu.
 	lastOut time.Time
 	ready   bool
+	// draftAt is when the user last typed something at this prompt without
+	// sending it, and zero when there is nothing of theirs on the line.
+	// escPending is the beginning of an escape sequence a PTY write split, held
+	// until the rest of it arrives. Both guarded by the service's mu. See
+	// draft.go.
+	draftAt    time.Time
+	escPending []byte
 }
 
 // Store is the persistence the terminal service depends on: the binary to spawn
@@ -253,6 +260,7 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 	}
 	ws, err := newTransport(
 		func(id string, data []byte) {
+			s.noteInput(id, data)
 			if err := s.writeBytes(id, data); err != nil {
 				slog.Warn("terminal: input write failed", "session", id, "err", err)
 			}
@@ -710,8 +718,9 @@ func (sess *session) setupEnded(chunk []byte) bool {
 }
 
 // Ready reports whether a session can be given work — whether what reads this
-// PTY is the provider rather than the project's setup script. False for a
-// session that is not running at all.
+// PTY is the provider rather than the project's setup script, and whether the
+// prompt is free rather than half-filled by the person sitting at it. False for
+// a session that is not running at all.
 //
 // Live is not this question. A session whose checkout is still installing its
 // dependencies has a PTY, appears in the roster, and accepts writes that go
@@ -723,6 +732,12 @@ func (s *Service) Ready(id string) bool {
 	defer s.mu.Unlock()
 	sess, ok := s.sessions[id]
 	if !ok || sess.settingUp {
+		return false
+	}
+	// Unlike the rest of this, being ready is not a state a session reaches and
+	// keeps: the user starts typing and the prompt is theirs again until they
+	// send it (see draft.go).
+	if sess.drafting(time.Now()) {
 		return false
 	}
 	if sess.ready {

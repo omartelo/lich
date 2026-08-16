@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A relayed message no longer sends the sentence you were typing with it.** A
+  peer's answer or task arriving while you had a half-written prompt was pasted
+  onto your line and submitted with it, and your half was gone. lich now waits
+  for the prompt to be free — you send your line, or you leave it alone for a
+  minute — before typing anything into it. Same for every provider: it is the
+  session's terminal that is watched, not the agent running in it.
+
 - **A session card being dragged stays visible, and stays a card.** Dragged past
   the end of its group the card slid under the edge that clips the group and
   disappeared; short of that it read as if it were dissolving into its

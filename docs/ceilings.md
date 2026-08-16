@@ -53,6 +53,14 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   prompt and in `/proc/<pid>/cmdline`. Codex, opencode and Crush get nothing there — none has a per-spawn append
   flag, so for those three the point exists only in lich's MCP instructions, and behaviour between providers
   differs by that much.
+- **A prompt in use is recognised from the bytes going in, never from the line itself**
+  (`internal/terminal/draft.go`): a relayed message pastes at the prompt and sends an Enter behind it, so lich
+  holds the delivery back while the user has unsent input there. What it counts is printable input since the last
+  Enter, escape sequences skipped — it cannot see the line, so an edit that leaves it empty by another route
+  (Ctrl+W, a click into the middle of it) reads as a draft that is still there, and a delivery waits out
+  `draftIdle` for nothing. The stale-draft release is what keeps that a delay instead of a wedged relay. Two gaps
+  stay open: input arriving in the ~150ms between the paste and its Enter (`defaultSubmitDelay`) still rides along,
+  and a provider that takes keystrokes through anything other than this PTY is invisible here.
 - **Installing the plugin writes into three harnesses' own directories** (`internal/agentplugin`): Claude Code and
   Codex are driven through their plugin CLI, but opencode, oh-my-pi and Crush have none, so lich writes the
   released files itself. None of them records what is installed, so the version lives in a marker line lich wrote —

@@ -46,14 +46,14 @@ const (
 	// expiry an hour later.
 	defaultReceiptWindow = 30 * time.Second
 	// defaultDeliveryLimit is how long a queued task waits for its target to
-	// reach a prompt before the errand is reported undelivered (see
-	// queueDelivery). A worktree setup script that installs dependencies and
-	// warms a build runs minutes on a cold cache, so the number has to be
-	// generous; past it the checkout is broken or waiting on a person, and
-	// neither ends by itself. It is well inside ticketTTL on purpose: the sender
-	// hears a failure it can act on rather than watching a ticket expire an hour
-	// later with nothing said.
-	defaultDeliveryLimit = 10 * time.Minute
+	// reach a free prompt before the errand is reported undelivered (see
+	// queueDelivery and awaitFree). A worktree setup script that installs
+	// dependencies and warms a build runs minutes on a cold cache, so the number
+	// has to be generous; past it the checkout is broken or waiting on a person,
+	// and neither ends by itself. It is well inside ticketTTL on purpose: the
+	// sender hears a failure it can act on rather than watching a ticket expire
+	// an hour later with nothing said.
+	defaultDeliveryLimit = 5 * time.Minute
 	// promptLimit bounds one relayed prompt. The message is typed into a TUI a
 	// character at a time; a megabyte of it is a hang, not a prompt.
 	promptLimit = 8192
@@ -540,13 +540,43 @@ func (s *Service) failDelivery(id string, t *ticket, cause error) {
 
 // deliver puts message at a session's prompt and sends it — two writes, a beat
 // apart, because the Enter has to arrive after the prompt has taken the paste
-// (see defaultSubmitDelay).
+// (see defaultSubmitDelay). It waits for a prompt that is free first: this
+// Enter sends everything on the line, including whatever the person at that
+// session had started typing.
 func (s *Service) deliver(sessionID, message string) error {
+	if err := s.awaitFree(sessionID); err != nil {
+		return err
+	}
 	if err := s.term.Write(sessionID, paste(message)); err != nil {
 		return err
 	}
 	time.Sleep(s.submitDelay)
 	return s.term.Write(sessionID, submit)
+}
+
+// awaitFree blocks while a session's prompt belongs to somebody else — the
+// checkout's setup script, or the user mid-sentence at it, both of which
+// terminal.Ready answers. Every write this package makes goes through deliver,
+// so this one gate covers the task, the nudge and the retry alike; a check at
+// each call site would be three places to forget it in and would still leave
+// the window between the check and the write open.
+//
+// It is bounded by the same budget a queued delivery gets and, in practice,
+// cannot spend it: unsent input goes stale on its own well inside that
+// (terminal.draftIdle), so somebody who walked away mid-word costs a delivery
+// its delay, never its outcome.
+func (s *Service) awaitFree(sessionID string) error {
+	deadline := s.now().Add(s.deliveryLimit)
+	for !s.term.Ready(sessionID) {
+		if !s.term.Live(sessionID) {
+			return fmt.Errorf("session stopped before its prompt was free")
+		}
+		if s.now().After(deadline) {
+			return fmt.Errorf("prompt was still not free after %s", s.deliveryLimit)
+		}
+		time.Sleep(readyPoll)
+	}
+	return nil
 }
 
 // awaitReady blocks until a target's agent is the program reading its PTY, and
