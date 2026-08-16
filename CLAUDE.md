@@ -1,34 +1,33 @@
 # lich
 
-## What it is
+`lich` is a **harness for AI coding agents**: a Go backend serving an embedded React frontend to a system
+Chromium window in `--app` mode — no Electron, no webview toolkit (`docs/chromium-shell.md`). It is built for
+other developers to use, not only its author: docs, errors and defaults answer to a stranger. Linux first;
+Windows and macOS are experimental, and there is no hardware here for either.
 
-`lich` is a **harness for AI coding agents** — a desktop app whose Go backend serves an embedded React frontend to
-a system Chromium window in `--app` mode (no Electron, no webview toolkit; decision record:
-`docs/chromium-shell.md`). It is built for other developers to use, not only its author: docs, errors and defaults
-answer to a stranger. Linux first; Windows and macOS are experimental and there is no hardware here for either —
-a cross-compile proves the code builds, never that the platform works.
+**This file is instruction, not documentation.** Rules, gates and the workflow live here. What the project *is*
+lives in the code, `docs/` and `CHANGELOG.md` — never restate any of it here.
 
-This file records only what the code cannot say: invariants, deliberate ceilings, and the workflow. User-facing
-feature history lives in `CHANGELOG.md` — don't duplicate it here.
+## Where things are written down
 
-## Stack
-
-- **Backend**: Go 1.26, pure Go (CGO_ENABLED=0, fully static binary). One token-authenticated loopback listener
-  carries everything: HTTP RPC (`internal/rpc`) plus WebSockets for terminal I/O (`internal/terminal/transport.go`)
-  and app events (`internal/events`). OS-specific code is selected by build tags behind small seams, never by
-  runtime checks — the PTY is the model (`internal/terminal`: creack/pty on Unix, ConPTY on Windows).
-- **Shell**: system Chromium-family browser launched in `--app` mode (`internal/chromium`), persistent profile under
-  the user config dir (`os.UserConfigDir` + `lich/chromium-profile`). Window closed = app exit.
-- **Frontend**: React 18 + TypeScript + Vite; the UI rules and the visual system are `frontend/CLAUDE.md` and
-  `frontend/DESIGN.md`. Sessions spawn any registered provider (`internal/providers`: Claude Code, Codex, OpenCode,
-  Crush). Service shapes are hand-owned in `frontend/src/lib/api-types.ts` — touch a Go struct's JSON tags and that
-  mirror moves in the same change; there is no codegen.
+- **Deliberate limits and the traps they set**: `docs/ceilings.md`. Read it before changing anything a session
+  touches — spawn and naming, hooks, transcripts and cost, git and worktree flows, persistence, plugin install.
+  A change that sets a new trap or closes an old one moves that file in the same PR.
+- **Frontend rules and the visual system**: `frontend/CLAUDE.md` and `frontend/DESIGN.md`.
 - **Session hooks**: `docs/hooks/` is the canonical, contract-first spec. lich owns the server side; the scripts
-  live in the companion repo `omartelo/lich-plugin`, so an endpoint or payload change breaks a repo this one cannot
-  see — move the contract first, then both sides.
-- **Build/tasks**: [Task](https://taskfile.dev) — `task --list` describes every one of them, so they are not
-  copied here. `task dev` gets its own DB, port and Chromium profile: it never touches an installed lich's
-  workspace.
+  live in the companion repo `omartelo/lich-plugin`, so an endpoint or payload change breaks a repo this one
+  cannot see — move the contract first, then both sides.
+- **Every task**: `task --list`. `task dev` gets its own DB, port and Chromium profile; it never touches an
+  installed lich's workspace.
+- **User-facing feature history**: `CHANGELOG.md`.
+
+## Rules of the codebase
+
+- Go 1.26, pure Go: `CGO_ENABLED=0` and a fully static binary are a constraint, not a default.
+- OS-specific code is selected by build tags behind small seams, never by runtime checks — the PTY is the model
+  (`internal/terminal`).
+- Service shapes are hand-owned in `frontend/src/lib/api-types.ts`: touch a Go struct's JSON tags and that mirror
+  moves in the same change. There is no codegen.
 
 ## Local Gate (before every commit / PR)
 
@@ -64,111 +63,14 @@ Non-negotiable rules. A violation means the work is not done.
 5. **A session feature is traced across every provider.** `internal/providers.Registry` is the checklist —
    Claude Code, Codex, opencode, oh-my-pi, Crush. Anything a session touches (spawn flags, hooks, resume,
    transcripts, plugin install, MCP) is designed against all five, not just the provider at hand. Equal behaviour
-   is not always possible — but the gap must be deliberate and written down in the same PR: a Known Ceilings
-   bullet naming which providers are out and why (the briefing-flags and plugin-install bullets below are the
-   model). A feature that silently works on a single provider is not done.
+   is not always possible — but the gap must be deliberate and written down in the same PR: a `docs/ceilings.md`
+   bullet naming which providers are out and why. A feature that silently works on a single provider is not done.
 
 ## Releases
 
-Push a `vX.Y.Z` tag — `.github/workflows/release.yml` builds every OS, runs the backend suite on each, publishes the
-artifacts and the AUR `lich-bin`, and takes the release notes from the matching `CHANGELOG.md` section. A
-`workflow_dispatch` run from any branch exercises the whole pipeline without publishing. The version comes from the
-git tag (`git describe` in the Taskfile, env `VERSION` overrides) and is injected into `build/linux/nfpm/nfpm.yaml`
-— never hand-edit it there.
-
-Before tagging:
+The version comes from the git tag (`git describe` in the Taskfile, env `VERSION` overrides) and is injected into
+`build/linux/nfpm/nfpm.yaml` — never hand-edit it there. Before tagging:
 
 - [ ] Local gate green, backend with `-race`.
 - [ ] Move `CHANGELOG.md`'s `[Unreleased]` entries under a new `vX.Y.Z` heading and refresh the compare links.
-- [ ] Tag `vX.Y.Z` and push.
-
-## Known Ceilings
-
-Deliberate limits and shortcuts. A bullet earns its place by naming a trap — something that breaks work when
-nobody knows it and that the call site never shows. The mechanism and the history stay in the code and
-`CHANGELOG.md`.
-
-- **Session cwd is polled** from the terminal's foreground process group (`internal/terminal/cwd.go`, per-OS
-  readers behind build tags); a failed read degrades to the session's start directory, and Windows tracks the
-  PTY child instead, where the same nested-shell `cd` moves nothing. A shell hosted elsewhere — tmux, ssh, a
-  container — is beyond all of them: the readout goes on naming a real local directory that is not where the
-  user is, with nothing on screen saying so.
-- **A project's gh account governs gh, not git**: `vcs.account` (`internal/project/ghaccount.go`) puts one
-  account's token in `GH_TOKEN` for every gh call lich makes for that project. A push still rides the remote's
-  ssh key and signs with the global `user.email`, so a PR can be *read* by one account and its commits *land*
-  under another, with no error anywhere. The Version Control settings print the second identity beside the
-  picker (`internal/project/commitidentity.go`) — both facts, never a comparison: noreply forms, vanity domains
-  and org aliases make a mismatch warning a false-positive farm. lich never writes `user.email`.
-- **`LICH_WORKTREE_PORT` is reserved, never held** (`internal/terminal/worktreeport.go`, table `worktree_ports`):
-  the number is checked against the other checkouts and bound once to prove it is free, then released — the dev
-  server starts minutes later, after the setup script, and anything on the machine can take the port in between.
-  A reservation is released only when its directory stops existing, which is read at allocation time.
-- **The cost readout is priced from a table, not from the provider** (`internal/pricing`): an unpriced model makes
-  the readout go *absent* rather than wrong, and billing is per `(session, transcript)` — a conversation forked
-  inside the PTY bills its copied history twice. lich's own resume continues the same transcript and is unaffected.
-  A conversation is more than one transcript: each sub-agent writes its own beside it and is counted in
-  (`claudeSubagentPaths`), so one unreadable or unpriceable sub-agent withholds the whole session's number.
-- **A dropped file has no path, so lich guesses it** (`internal/drop`): Chromium never hands the page a path, so a
-  drop is matched by name + size + mtime under the session directory, then home. Twins resolve to nothing; a file
-  in neither tree is *copied*, so an agent told to edit it edits the copy — and that copy is deleted 3 days on,
-  so a path pasted into a prompt eventually stops resolving.
-- **The worktree setup script answers to the main checkout, never the new branch**
-  (`internal/project/setup.go`, read again at every setup spawn): running a stranger's PR must not run a
-  stranger's `.lich/setup-worktree.sh`. The flip side is the trap — improve the script on a feature branch
-  and fresh worktrees keep running the old one until the change reaches the checkout the project points at.
-- **A session is named at birth, never on resume** (`internal/terminal/command.go`, `nameArgs`): Claude Code's
-  peer-roster name goes out as `--name` only on a spawn with no resume id. It then lives in the transcript (a
-  `custom-title` record, and an `agent-name` one per `/rename`) and is restored on `--resume` — but an explicit
-  `--name` overrides what was restored, measured both ways, so naming a resuming session would erase a
-  `/rename` typed inside it. Note which spawns are which: the Resume answer and a parked worktree's session
-  carry a resume id and keep their name, while the exit banner's Restart is deliberately a fresh spawn
-  (`TerminalView.tsx`, `resume` passed as `""`) and is named again. The trap is that lich still *derives* that
-  name (`internal/relay/rostername.go`, its page-side half `frontend/src/lib/session/peer-name.ts`) for the
-  relay to resolve against, and the derived string goes stale the moment anyone renames: it then addresses a
-  session that no longer answers to it. Nothing reads the real name back — no hook reports it — so
-  `/list-agents` inside the session is the only place it is true.
-- **git status is polled** — one shared poller per repository path (`frontend/src/lib/git/git-status-store.ts`); the
-  lich plugin's `session-touched` hook nudges an immediate refresh.
-- **lich fetches on its own** — the base-branch readout (`internal/project/basestatus.go`) runs
-  `git fetch --no-tags origin` in the background, at most once every 30 seconds per repository, for as long as a
-  card is on screen. It is the only git write lich makes outside the worktree flows, nothing announces it, and it
-  moves remote refs in the user's own repository.
-- **Persistence is hybrid**: UI prefs in the page's localStorage (`lich.*` keys — the reason the listener port is
-  pinned at 47821; `LICH_LISTEN_PORT` overrides it, `LICH_PORT` is the distinct per-session hook variable), the
-  workspace in SQLite (`<config-dir>/lich/lich.db`, `internal/store`). Closing a session deletes its row; keeping a
-  worktree parks its session for a later resume; closing a project hides it, and reopening one whose directory is
-  gone relocates it instead (`project.Relocate`, which keeps the stored id — the identity its sessions and its
-  worktree directory hang off, so it no longer hashes its own path). Only the 25 most recent closes are offered back
-  (`recentLimit`, `internal/store/store.go`) — the row survives, but past that a project is reachable only through
-  the directory picker, and neither the menu nor the palette says so.
-- **Hidden sessions are serialized and destroyed**: 2MB replay rings on both sides
-  (`frontend/src/lib/terminal/replay-buffer.ts` page-side, `internal/terminal/replay.go` backend-side — the latter
-  survives a full page reload). Scrollback past the ring is gone, not paged.
-- **Single instance via the pinned port**: the bind is the lock (`internal/singleton`); a duplicate launch focuses
-  the running window (best-effort, untested against a real window) and exits 0.
-- **Reordering rides dnd-kit's pointer sensors** (`frontend/src/lib/use-sortable-list.ts`); the activation distance
-  is load-bearing — without it plain clicks stop selecting a session.
-- **lich appends to the agent's system prompt, for two providers only**
-  (`internal/terminal/command.go`, `briefingFlags` → `relay.SpawnBriefing`): Claude Code and oh-my-pi
-  are spawned with `--append-system-prompt` carrying lich's own briefing, so text the user never
-  wrote is in every session's prompt and in `/proc/<pid>/cmdline`. Codex, opencode and Crush get
-  nothing there — none has an append flag, and their config keys are machine-wide, so a briefing
-  written into one would lie to every session started outside lich. For those three the point exists
-  only in lich's MCP instructions, and behaviour between providers differs by that much.
-
-- **Installing the plugin writes into three harnesses' own directories**
-  (`internal/agentplugin`): Claude Code and Codex are driven through their plugin CLI, but opencode, oh-my-pi and
-  Crush have none, so lich writes the released files itself — a module into opencode's plugin dir, another into
-  omp's `extensions/`, hook scripts plus a delimited block in Crush's `crushrc`. None of them records what is
-  installed, so the version lives in a marker line lich wrote; edit the file by hand and lich reads it as not
-  installed. Crush below 0.88.0 ignores those lines in silence, which is why the install asks its version first.
-  The Crush block and omp's `mcp.json` also register lich's MCP server, by the absolute path of the binary that
-  installed it — a line in a file cannot expand `$LICH_BIN` per session, and the binary is only the transport:
-  which lich a session reaches is decided by the coordinates in its PTY. omp's is a JSON document rather than an
-  appendable one, so lich rewrites it: every key survives, the user's formatting does not, and a file lich cannot
-  parse aborts the install rather than being replaced.
-- **omp's state directory answers to two variables, and the profile wins**
-  (`internal/agentplugin/omp.go`, `internal/terminal/transcript.go`, both resolving it independently as the Claude
-  Code pair do): `OMP_PROFILE` moves the whole directory under `~/.omp/profiles/<name>/agent` and beats an explicit
-  `PI_CODING_AGENT_DIR`, which is the order `omp config path` was measured to apply. Get it backwards and the
-  install lands where omp is not reading and every restored card silently starts fresh.
+- [ ] Push the `vX.Y.Z` tag — `.github/workflows/release.yml` does the rest, and reads the notes from that section.

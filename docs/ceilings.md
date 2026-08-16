@@ -1,0 +1,66 @@
+# Known Ceilings
+
+Deliberate limits and shortcuts, and the traps they set. A bullet earns its place by naming something that breaks
+work when nobody knows it and that the call site never shows. The mechanism and the history stay in the code and
+`CHANGELOG.md`; this file is the trap alone.
+
+- **Session cwd is polled** from the terminal's foreground process group (`internal/terminal/cwd.go`): a shell
+  hosted elsewhere — tmux, ssh, a container — is beyond every reader, and the readout goes on naming a real
+  local directory that is not where the user is, with nothing on screen saying so.
+- **A project's gh account governs gh, not git**: `vcs.account` (`internal/project/ghaccount.go`) puts one
+  account's token in `GH_TOKEN` for every gh call lich makes for that project. A push still rides the remote's
+  ssh key and signs with the global `user.email`, so a PR can be *read* by one account and its commits *land*
+  under another, with no error anywhere. The Version Control settings print both identities and never compare
+  them: noreply forms, vanity domains and org aliases make a mismatch warning a false-positive farm. lich never
+  writes `user.email`.
+- **`LICH_WORKTREE_PORT` is reserved, never held** (`internal/terminal/worktreeport.go`): the number is a name the
+  checkout owns, nothing binds it, and anything on the machine can take the port before the dev server starts.
+- **The cost readout bills per `(session, transcript)`** (`internal/pricing`, `internal/terminal/usage_cost.go`): a
+  conversation forked inside the PTY bills its copied history twice — lich's own resume continues the same
+  transcript and is unaffected — and each sub-agent's own transcript is counted in, so one unreadable or
+  unpriceable sub-agent withholds the whole session's number.
+- **A dropped file has no path, so lich guesses it** (`internal/drop`): a file under neither the session directory
+  nor home is *copied*, so an agent told to edit it edits the copy — and that copy is deleted 3 days on, so a path
+  pasted into a prompt eventually stops resolving.
+- **The worktree setup script answers to the main checkout, never the new branch** (`internal/project/setup.go`):
+  improve `.lich/setup-worktree.sh` on a feature branch and fresh worktrees keep running the old one until the
+  change reaches the checkout the project points at.
+- **A session is named at birth, never on resume** (`internal/terminal/command.go`, `nameArgs`): the trap is that
+  lich still *derives* that name (`internal/relay/rostername.go`, its page-side half
+  `frontend/src/lib/session/peer-name.ts`) for the relay to resolve against, and the derived string goes stale the
+  moment anyone renames — it then addresses a session that no longer answers to it. Nothing reads the real name
+  back, so `/list-agents` inside the session is the only place it is true.
+- **git status is polled** — one shared poller per repository path (`frontend/src/lib/git/git-status-store.ts`); the
+  lich plugin's `session-touched` hook nudges an immediate refresh.
+- **lich fetches on its own** (`internal/project/basestatus.go`) — the only git write lich makes outside the
+  worktree flows: it moves remote refs in the user's own repository, unannounced, for as long as a card is on
+  screen.
+- **Persistence is hybrid**: UI prefs in the page's localStorage (`lich.*` keys — the reason the listener port is
+  pinned at 47821; `LICH_LISTEN_PORT` overrides it, `LICH_PORT` is the distinct per-session hook variable), the
+  workspace in SQLite (`<config-dir>/lich/lich.db`, `internal/store`). Closing a session deletes its row; keeping a
+  worktree parks its session for a later resume; closing a project hides it, and reopening one whose directory is
+  gone relocates it instead, keeping the stored id its sessions and its worktree directory hang off. Only the 25
+  most recent closes are offered back (`recentLimit`, `internal/store/store.go`) — the row survives, but past that
+  a project is reachable only through the directory picker, and neither the menu nor the palette says so.
+- **Hidden sessions are serialized and destroyed**: 2MB replay rings on both sides
+  (`frontend/src/lib/terminal/replay-buffer.ts` page-side, `internal/terminal/replay.go` backend-side — the latter
+  survives a full page reload). Scrollback past the ring is gone, not paged.
+- **Single instance via the pinned port**: the bind is the lock (`internal/singleton`); a duplicate launch focuses
+  the running window (best-effort, untested against a real window) and exits 0.
+- **lich appends to the agent's system prompt, for two providers only**
+  (`internal/terminal/command.go`, `briefingFlags` → `relay.SpawnBriefing`): Claude Code and oh-my-pi are spawned
+  with `--append-system-prompt` carrying lich's own briefing, so text the user never wrote is in every session's
+  prompt and in `/proc/<pid>/cmdline`. Codex, opencode and Crush get nothing there — none has a per-spawn append
+  flag, so for those three the point exists only in lich's MCP instructions, and behaviour between providers
+  differs by that much.
+- **Installing the plugin writes into three harnesses' own directories** (`internal/agentplugin`): Claude Code and
+  Codex are driven through their plugin CLI, but opencode, oh-my-pi and Crush have none, so lich writes the
+  released files itself. None of them records what is installed, so the version lives in a marker line lich wrote —
+  edit the file by hand and lich reads it as not installed. Crush below 0.88.0 ignores those lines in silence,
+  which is why the install asks its version first. Crush's block and omp's `mcp.json` register lich's MCP server by
+  the absolute path of the binary that installed it, and omp's is a JSON document lich rewrites rather than appends
+  to: every key survives, the user's formatting does not.
+- **omp's state directory answers to two variables, and the profile wins** (`internal/agentplugin/omp.go`,
+  `internal/terminal/transcript.go`, resolving it independently as the Claude Code pair do): `OMP_PROFILE` moves
+  the whole directory and beats an explicit `PI_CODING_AGENT_DIR`. Get it backwards and the install lands where omp
+  is not reading and every restored card silently starts fresh.
