@@ -33,7 +33,7 @@ import {
   type Session,
   type SidebarGroup,
 } from "@/lib/session/sessions"
-import { useSortableList, verticalAxis } from "@/lib/use-sortable-list"
+import { useSortableList, verticalAxis, withinList } from "@/lib/use-sortable-list"
 import { WorktreeCloseDialogs } from "./WorktreeCloseDialogs"
 import { SessionGroup } from "./SessionGroup"
 import { WorktreeDialog } from "./WorktreeDialog"
@@ -238,7 +238,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
-          modifiers={[verticalAxis]}
+          modifiers={[verticalAxis, withinList]}
           onDragEnd={onDragEnd}
         >
           <SortableContext items={dragKeys} strategy={verticalListSortingStrategy}>

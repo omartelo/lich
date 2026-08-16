@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A session card being dragged stays visible, and stays a card.** Dragged past
+  the end of its group the card slid under the edge that clips the group and
+  disappeared; short of that it read as if it were dissolving into its
+  neighbour, because a card in flight had no background of its own and the
+  labels underneath showed straight through it. A dragged card now carries a
+  raised surface and stops at the ends of the list it is being reordered in —
+  the same for checkout groups and project tabs.
+
 ## [0.35.0] - 2026-08-16
 
 ### Added

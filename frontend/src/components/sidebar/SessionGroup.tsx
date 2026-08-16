@@ -2,7 +2,7 @@ import { useState, useSyncExternalStore } from "react"
 import { useNavigate } from "react-router-dom"
 import { DndContext, closestCenter } from "@dnd-kit/core"
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
-import { dragStyle, useSortableList, verticalAxis } from "@/lib/use-sortable-list"
+import { dragStyle, useSortableList, verticalAxis, withinList } from "@/lib/use-sortable-list"
 import { cn } from "@/lib/utils"
 import { checkoutLabel } from "@/lib/git/checkout-label"
 import type { ProviderState } from "@/lib/providers-store"
@@ -148,7 +148,7 @@ export function SessionGroup({
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
-            modifiers={[verticalAxis]}
+            modifiers={[verticalAxis, withinList]}
             onDragEnd={onDragEnd}
           >
             <SortableContext items={ids} strategy={verticalListSortingStrategy}>

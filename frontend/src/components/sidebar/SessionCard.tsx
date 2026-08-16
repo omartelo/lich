@@ -204,7 +204,15 @@ export function SessionCard({
     <div
       ref={setNodeRef}
       style={dragStyle(transform, transition)}
-      className={cn("relative", isDragging && "pointer-events-none z-10 rounded-lg shadow-md")}
+      // A card in flight floats over its neighbours, so it carries a background
+      // of its own: the card's own fill is transparent until it is hovered or
+      // active, and without one the labels underneath read straight through the
+      // card being dragged.
+      className={cn(
+        "relative",
+        isDragging &&
+          "pointer-events-none z-10 rounded-lg bg-popover shadow-lg ring-1 ring-foreground/10",
+      )}
       {...attributes}
       {...listeners}
     >

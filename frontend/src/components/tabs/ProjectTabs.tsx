@@ -15,7 +15,7 @@ import { openPullsList } from "@/lib/pulls-list-card-store"
 import { useSettings } from "@/providers/settings"
 import { useHotkey } from "@/lib/use-hotkey"
 import { NotificationsButton } from "./NotificationsButton"
-import { horizontalAxis, useSortableList } from "@/lib/use-sortable-list"
+import { horizontalAxis, useSortableList, withinList } from "@/lib/use-sortable-list"
 import { ProjectTab } from "./ProjectTab"
 import { HomeTab } from "./HomeTab"
 import { OpenProjectMenu } from "./OpenProjectMenu"
@@ -85,7 +85,7 @@ export function ProjectTabs() {
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
-            modifiers={[horizontalAxis]}
+            modifiers={[horizontalAxis, withinList]}
             onDragEnd={onDragEnd}
           >
             <SortableContext items={ids} strategy={horizontalListSortingStrategy}>

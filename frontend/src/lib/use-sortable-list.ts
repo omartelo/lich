@@ -17,6 +17,31 @@ const DRAG_THRESHOLD_PX = 5
 export const horizontalAxis: Modifier = ({ transform }) => ({ ...transform, y: 0 })
 export const verticalAxis: Modifier = ({ transform }) => ({ ...transform, x: 0 })
 
+// Holds a dragged node inside the list it is being reordered in. Every list
+// here is clipped by an ancestor — the group's collapse animation needs
+// overflow-hidden, the tab strip scrolls — so a node dragged past either end
+// slides under that edge and vanishes mid-drag. Reordering cannot follow the
+// pointer out there anyway: the drop it would land is the end of this list.
+export const withinList: Modifier = ({ containerNodeRect, draggingNodeRect, transform }) => {
+  if (!containerNodeRect || !draggingNodeRect) {
+    return transform
+  }
+  const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
+  return {
+    ...transform,
+    x: clamp(
+      transform.x,
+      containerNodeRect.left - draggingNodeRect.left,
+      containerNodeRect.right - draggingNodeRect.right,
+    ),
+    y: clamp(
+      transform.y,
+      containerNodeRect.top - draggingNodeRect.top,
+      containerNodeRect.bottom - draggingNodeRect.bottom,
+    ),
+  }
+}
+
 // The style every sortable node wears while it moves. Translate, never
 // Transform: dnd-kit's transform also carries the scale needed to match the
 // item being displaced, so a card dragged past a taller neighbour would stretch
