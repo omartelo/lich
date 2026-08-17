@@ -30,8 +30,10 @@ func windowForModel(model string, tokens int) int {
 // assistant message. One JSONL line (a single message, tool results and all) can
 // run to tens of KB, so this holds several — the read stays O(tail), not
 // O(file), yet still reaches the last assistant line past a couple of large user
-// turns. ponytail: a turn larger than this whole window makes the read miss and
-// the readout keep its prior number — widen it then, nothing breaks.
+// turns.
+//
+// Ceiling: a turn larger than this whole window makes the read miss and the
+// readout keep its prior number — widen it then, nothing breaks.
 const usageTailBytes = 512 * 1024
 
 // contextUsage is one provider conversation's context-window occupancy.

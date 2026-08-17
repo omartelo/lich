@@ -19,9 +19,8 @@ const minSearchQuery = 3
 // the search is re-run as the user types; the bound is what keeps a keystroke
 // from turning into a full disk read per session.
 //
-// ponytail: the ceiling means a mention old enough to have fallen out of the
-// tail is not found. Indexing is the fix if that ever bites — not a bigger
-// number.
+// Ceiling: a mention old enough to have fallen out of the tail is not found.
+// Indexing is the fix if that ever bites — not a bigger number.
 const searchTailBytes = 4 << 20
 
 // snippetWidth is how many runes of the matched message the palette row shows.
