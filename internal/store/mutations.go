@@ -74,17 +74,23 @@ func (s *Service) CloseProject(id string) error {
 // binary overrides with nothing in the UI saying where they came from. An empty
 // id is refused for the same reason — it is the global scope, and deleting a
 // project must never take every global setting with it.
+//
+// Both deletes are one transaction: the settings are only orphaned once the
+// project they belong to is gone, so a failure between them would leave the row
+// standing with its provider, gh account and binary overrides silently wiped.
 func (s *Service) DeleteProject(id string) error {
 	if id == globalScope {
 		return fmt.Errorf("delete project: empty id")
 	}
-	if _, err := s.db.Exec(`DELETE FROM settings WHERE project_id = ?`, id); err != nil {
-		return fmt.Errorf("delete project settings %q: %w", id, err)
-	}
-	if _, err := s.db.Exec(`DELETE FROM projects WHERE id = ?`, id); err != nil {
-		return fmt.Errorf("delete project %q: %w", id, err)
-	}
-	return nil
+	return s.tx(func(tx *sql.Tx) error {
+		if _, err := tx.Exec(`DELETE FROM settings WHERE project_id = ?`, id); err != nil {
+			return fmt.Errorf("delete project settings %q: %w", id, err)
+		}
+		if _, err := tx.Exec(`DELETE FROM projects WHERE id = ?`, id); err != nil {
+			return fmt.Errorf("delete project %q: %w", id, err)
+		}
+		return nil
+	})
 }
 
 // AddSession inserts a session, makes it the project's active one and records the
