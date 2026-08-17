@@ -822,9 +822,18 @@ func failureOf(payload []byte, status int) string {
 // waitBudget is how long the client gives a call that blocks on another
 // session: the wait it asked for, plus room for the answer's trip back. A zero
 // timeout means the relay's own default.
+//
+// It is capped at the relay's own bound, and capped in seconds rather than in
+// Duration for the reason relay.waitFor gives: a number past about 9.2e9
+// overflows into a negative Duration, which http.Client reads as a deadline
+// already past — the POST fails on the spot and reports the send as unreachable
+// while the task it carried is being delivered.
 func waitBudget(seconds int) time.Duration {
 	if seconds <= 0 {
 		return relay.DefaultWait + callSlack
+	}
+	if seconds > relay.MaxWaitSeconds {
+		seconds = relay.MaxWaitSeconds
 	}
 	return time.Duration(seconds)*time.Second + callSlack
 }

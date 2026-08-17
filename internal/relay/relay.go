@@ -1024,15 +1024,27 @@ func (s *Service) clearAll(tickets []*ticket) {
 	}
 }
 
+// MaxWaitSeconds is MaxWait in the unit every caller states a wait in. Exported
+// because the clamp has to happen before the multiplication that would overflow
+// it, which means every surface taking a number of seconds needs the bound
+// itself rather than the Duration (internal/cli, waitBudget).
+const MaxWaitSeconds = int(MaxWait / time.Second)
+
 // waitFor clamps a caller's requested wait into the supported range.
+//
+// The seconds are clamped before they become a Duration, not after: a Duration
+// is int64 nanoseconds, so a number past about 9.2e9 overflows into a negative
+// one — which reads as shorter than MaxWait and hands back a timer that has
+// already fired, answering a caller that asked to wait longer by not waiting at
+// all.
 func waitFor(seconds int) time.Duration {
 	if seconds <= 0 {
 		return DefaultWait
 	}
-	if d := time.Duration(seconds) * time.Second; d < MaxWait {
-		return d
+	if seconds > MaxWaitSeconds {
+		return MaxWait
 	}
-	return MaxWait
+	return time.Duration(seconds) * time.Second
 }
 
 // sweep drops tickets nobody answered in time and returns them, so the caller
