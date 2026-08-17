@@ -45,6 +45,17 @@ export function mouseEncoding(term: Terminal): string | undefined {
     ?.coreMouseService?.activeEncoding
 }
 
+// cursorHidden reads whether the app turned the cursor off (DECRST 25) — a
+// third private, and the third mode a snapshot cannot carry (term-modes.ts).
+// False if xterm ever moves it, which restores nothing and matches a fresh
+// terminal's own default.
+export function cursorHidden(term: Terminal): boolean {
+  return (
+    (term as unknown as { _core?: { coreService?: { isCursorHidden?: boolean } } })._core
+      ?.coreService?.isCursorHidden === true
+  )
+}
+
 // fitTerminal resizes the grid to fill the container edge to edge on the
 // right/bottom (replacing xterm's FitAddon, which reserves a scrollbar
 // gutter on the right — see term-fit.ts), minus the fixed left gutter above.

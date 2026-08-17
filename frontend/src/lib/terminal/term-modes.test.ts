@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { linkClickIsOurs, mouseEncodingSequence } from "./term-modes"
+import { cursorVisibilitySequence, linkClickIsOurs, mouseEncodingSequence } from "./term-modes"
 
 describe("mouseEncodingSequence", () => {
   it("restores SGR, the encoding every modern TUI selects", () => {
@@ -20,6 +20,16 @@ describe("mouseEncodingSequence", () => {
     expect(mouseEncodingSequence(undefined)).toBe("")
     expect(mouseEncodingSequence("")).toBe("")
     expect(mouseEncodingSequence("SOMETHING_NEW")).toBe("")
+  })
+})
+
+describe("cursorVisibilitySequence", () => {
+  it("hides the cursor again for a TUI that had turned it off", () => {
+    expect(cursorVisibilitySequence(true)).toBe("\x1b[?25l")
+  })
+
+  it("writes nothing when it was visible, which a fresh terminal already is", () => {
+    expect(cursorVisibilitySequence(false)).toBe("")
   })
 })
 

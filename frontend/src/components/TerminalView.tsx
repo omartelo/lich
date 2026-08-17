@@ -21,6 +21,7 @@ import { recordChunk } from "@/lib/terminal/term-perf"
 import { copyToastMessage, COPY_TOAST_DURATION_MS } from "@/lib/terminal/copy-toast"
 import { decodeBase64 } from "@/lib/terminal/term-frame"
 import {
+  cursorHidden,
   ensureFontLoaded,
   fitTerminal,
   mouseEncoding,
@@ -30,7 +31,11 @@ import { exitMarker, readSessionExit, type SessionExit } from "@/lib/terminal/se
 import { TerminalExitBanner } from "./TerminalExitBanner"
 import { TerminalSearchBar, type SearchResults } from "./TerminalSearchBar"
 import { useTerminalDrop } from "./useTerminalDrop"
-import { linkClickIsOurs, mouseEncodingSequence } from "@/lib/terminal/term-modes"
+import {
+  cursorVisibilitySequence,
+  linkClickIsOurs,
+  mouseEncodingSequence,
+} from "@/lib/terminal/term-modes"
 import { createSessionLinkProvider } from "@/lib/terminal/session-link-provider"
 import { sessionLinkTargets } from "@/lib/terminal/session-links"
 import { useSettings } from "@/providers/settings"
@@ -137,10 +142,10 @@ export function TerminalView({
   const startedRef = useRef(false)
   // Snapshot + queued output of a hidden (destroyed) terminal.
   const serializedRef = useRef<string | null>(null)
-  // The mouse encoding the snapshot cannot carry (term-modes.ts). Kept apart
-  // from it because it survives the overflow path, where the snapshot is
-  // dropped: it describes the app, not the buffer.
-  const mouseEncodingRef = useRef("")
+  // The modes the snapshot cannot carry (term-modes.ts). Kept apart from it
+  // because they survive the overflow path, where the snapshot is dropped:
+  // they describe the app, not the buffer.
+  const carriedModesRef = useRef("")
   const replayRef = useRef(makeReplayBuffer())
   const visibleRef = useRef(visible)
   const stillInWorkspaceRef = useRef(stillInWorkspace)
@@ -422,7 +427,9 @@ export function TerminalView({
       return
     }
     serializedRef.current = live.serialize.serialize()
-    mouseEncodingRef.current = mouseEncodingSequence(mouseEncoding(live.term))
+    carriedModesRef.current =
+      mouseEncodingSequence(mouseEncoding(live.term)) +
+      cursorVisibilitySequence(cursorHidden(live.term))
     live.dispose()
     liveRef.current = null
   }
@@ -446,14 +453,14 @@ export function TerminalView({
     }
     // Between the snapshot and the queued tail: the tail is newer output, so
     // anything the app changed there still wins.
-    if (mouseEncodingRef.current) {
-      live.term.write(mouseEncodingRef.current)
+    if (carriedModesRef.current) {
+      live.term.write(carriedModesRef.current)
     }
     for (const chunk of replayRef.current.drain()) {
       live.term.write(chunk)
     }
     serializedRef.current = null
-    mouseEncodingRef.current = ""
+    carriedModesRef.current = ""
     liveRef.current = live
   }
 

@@ -55,6 +55,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A full-screen TUI no longer gets a stray blinking cursor back.** Switching
+  away from a card and back rebuilt its terminal from a snapshot, and that
+  snapshot does not record whether the app had hidden the cursor — so every TUI
+  that draws its own (bubbletea, and anything else that hides the real one) came
+  back with lich's blinking block parked in the middle of its output. Cursor
+  visibility now rides along with the mouse encoding as state the snapshot is
+  known not to carry.
+
 - **A relayed message no longer sends the sentence you were typing with it.** A
   peer's answer or task arriving while you had a half-written prompt was pasted
   onto your line and submitted with it, and your half was gone. lich now waits

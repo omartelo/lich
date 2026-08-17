@@ -44,7 +44,11 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   a project is reachable only through the directory picker, and neither the menu nor the palette says so.
 - **Hidden sessions are serialized and destroyed**: 2MB replay rings on both sides
   (`frontend/src/lib/terminal/replay-buffer.ts` page-side, `internal/terminal/replay.go` backend-side — the latter
-  survives a full page reload). Scrollback past the ring is gone, not paged.
+  survives a full page reload). Scrollback past the ring is gone, not paged. The snapshot carries only the modes
+  xterm's SerializeAddon reads off `term.modes`; the ones an app relies on and it does not record are restored by
+  hand in `frontend/src/lib/terminal/term-modes.ts` — today the mouse encoding and cursor visibility. Cursor
+  *shape* (DECSCUSR) is not among them: a TUI that chose a bar or underline cursor gets lich's block back after a
+  card switch.
 - **Single instance via the pinned port**: the bind is the lock (`internal/singleton`); a duplicate launch focuses
   the running window (best-effort, untested against a real window) and exits 0.
 - **lich appends to the agent's system prompt, for two providers only**
