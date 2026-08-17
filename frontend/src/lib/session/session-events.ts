@@ -7,6 +7,12 @@
 
 import { isSessionKind, projectOfSession, type SessionKind, type SessionState } from "./sessions"
 
+// A subscription to one of the global session events, injected so every store
+// below is testable without standing up the /events socket. Returns its
+// unsubscribe. One type for all of them: the channel is the same, and a store
+// naming its own alias said nothing the event name it subscribes to did not.
+export type SessionEventSource = (handler: (data: unknown) => void) => () => void
+
 // Global event carrying a session's Claude Code processing state (see
 // terminal.statusEventName). Payload: { id, state }. Global rather than
 // per-session so one subscription taken at load covers every session: a card is
@@ -165,6 +171,14 @@ export function isIdEvent(data: unknown): data is { id: string } {
 
 export function isStatusEvent(data: unknown): data is { id: string; state: string } {
   return isIdEvent(data) && typeof (data as { state?: unknown }).state === "string"
+}
+
+// isIdleEvent reports the status the contract calls SessionEnd — the provider
+// CLI leaving the PTY. Three stores clear a live mark on it (the agent, the
+// relay request, the inbox count), and each of them was spelling the narrowing
+// out for itself, two through a cast that stepped around isStatusEvent above.
+export function isIdleEvent(data: unknown): data is { id: string; state: "idle" } {
+  return isStatusEvent(data) && data.state === "idle"
 }
 
 // The tool a session's turn is running: the harness's own name for it, and its

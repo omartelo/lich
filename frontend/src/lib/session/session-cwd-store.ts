@@ -1,9 +1,5 @@
 import { createKeyedStore, type ReadableKeyedStore } from "@/lib/keyed-store"
-import { isCwdEvent } from "./session-events"
-
-// A subscription to the global cwd event, injected so the store is testable
-// without standing up the /events socket. Returns its unsubscribe.
-export type CwdEventSource = (handler: (data: unknown) => void) => () => void
+import { isCwdEvent, type SessionEventSource } from "./session-events"
 
 // createSessionCwdStore keeps the last reported working directory of every
 // session, keyed by session id, fed by one subscription taken at creation —
@@ -11,7 +7,7 @@ export type CwdEventSource = (handler: (data: unknown) => void) => () => void
 // the card falls back to the session's static path. The backend re-reports the
 // start directory on every PTY spawn, so a respawn overwrites whatever the
 // previous shell left here.
-export function createSessionCwdStore(source: CwdEventSource): ReadableKeyedStore<string> {
+export function createSessionCwdStore(source: SessionEventSource): ReadableKeyedStore<string> {
   const store = createKeyedStore("")
   source((data) => {
     if (isCwdEvent(data)) {

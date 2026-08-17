@@ -1,9 +1,10 @@
 import { createKeyedStore, type ReadableKeyedStore } from "@/lib/keyed-store"
-import { isStatusEvent, statusTool, type SessionTool } from "./session-events"
-
-// A subscription to the global status event, injected so the store is testable
-// without standing up the /events socket. Returns its unsubscribe.
-export type ToolEventSource = (handler: (data: unknown) => void) => () => void
+import {
+  isStatusEvent,
+  statusTool,
+  type SessionEventSource,
+  type SessionTool,
+} from "./session-events"
 
 // Two reports name the same tool when both fields match. The store rebuilds the
 // object on every event, so without this a repeat report would hand
@@ -32,7 +33,7 @@ function sameTool(a: SessionTool | null, b: SessionTool | null): boolean {
 // Leaving "busy" is what clears, never "idle" alone: Codex has no SessionEnd
 // event and would otherwise hold a dead tool name until its next PTY spawn.
 export function createSessionToolStore(
-  statusSource: ToolEventSource,
+  statusSource: SessionEventSource,
 ): ReadableKeyedStore<SessionTool | null> {
   const store = createKeyedStore<SessionTool | null>(null, sameTool)
 

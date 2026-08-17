@@ -5,6 +5,7 @@ import {
   isAgentEvent,
   isCwdEvent,
   isIdEvent,
+  isIdleEvent,
   isStatusEvent,
   isTitleEvent,
   isUsageEvent,
@@ -40,6 +41,22 @@ describe("isStatusEvent", () => {
     expect(isStatusEvent({ id: 1, state: "busy" })).toBe(false)
     expect(isStatusEvent(null)).toBe(false)
     expect(isStatusEvent("busy")).toBe(false)
+  })
+})
+
+describe("isIdleEvent", () => {
+  it("accepts the state the contract calls SessionEnd", () => {
+    expect(isIdleEvent({ id: "abc", state: "idle" })).toBe(true)
+  })
+
+  // Every other report leaves the marks that clear on this one alone: a card
+  // going quiet is not the CLI leaving its PTY.
+  it("rejects every other state, and a malformed payload", () => {
+    expect(isIdleEvent({ id: "abc", state: "busy" })).toBe(false)
+    expect(isIdleEvent({ id: "abc", state: "" })).toBe(false)
+    expect(isIdleEvent({ id: "abc" })).toBe(false)
+    expect(isIdleEvent({ state: "idle" })).toBe(false)
+    expect(isIdleEvent(null)).toBe(false)
   })
 })
 

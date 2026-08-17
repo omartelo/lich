@@ -1,10 +1,6 @@
 import { createKeyedStore, type ReadableKeyedStore } from "@/lib/keyed-store"
-import { isAgentEvent, isStatusEvent } from "./session-events"
+import { isAgentEvent, isIdleEvent, type SessionEventSource } from "./session-events"
 import { isSessionKind, type SessionKind } from "./sessions"
-
-// A subscription to one of the global session events, injected so the store is
-// testable without standing up the /events socket. Returns its unsubscribe.
-export type AgentEventSource = (handler: (data: unknown) => void) => () => void
 
 // createSessionAgentStore keeps the provider CLI currently live inside each
 // session's PTY, keyed by session id — the hand-run `claude` or `codex` in a
@@ -19,8 +15,8 @@ export type AgentEventSource = (handler: (data: unknown) => void) => () => void
 //
 // Never persisted: the mark is live PTY state, like the cwd.
 export function createSessionAgentStore(
-  agentSource: AgentEventSource,
-  statusSource: AgentEventSource,
+  agentSource: SessionEventSource,
+  statusSource: SessionEventSource,
 ): ReadableKeyedStore<SessionKind | null> {
   const store = createKeyedStore<SessionKind | null>(null)
 
@@ -34,7 +30,7 @@ export function createSessionAgentStore(
   })
 
   statusSource((data) => {
-    if (isStatusEvent(data) && data.state === "idle") {
+    if (isIdleEvent(data)) {
       store.set(data.id, null)
     }
   })

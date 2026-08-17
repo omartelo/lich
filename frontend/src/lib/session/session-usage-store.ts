@@ -1,9 +1,10 @@
 import { createKeyedStore, type ReadableKeyedStore } from "@/lib/keyed-store"
-import { isUsageEvent, usageCost, type SessionUsage } from "./session-events"
-
-// A subscription to the global usage event, injected so the store is testable
-// without standing up the /events socket. Returns its unsubscribe.
-export type UsageEventSource = (handler: (data: unknown) => void) => () => void
+import {
+  isUsageEvent,
+  usageCost,
+  type SessionEventSource,
+  type SessionUsage,
+} from "./session-events"
 
 // Every report rebuilds the object, so identity cannot decide whether anything
 // moved — compare the fields, and an unchanged report keeps the old reference
@@ -24,7 +25,7 @@ const sameUsage = (a: SessionUsage | null, b: SessionUsage | null): boolean =>
 // before any card mounts. get() answers null until the backend reports one, and
 // the footer shows no context badge at all.
 export function createSessionUsageStore(
-  source: UsageEventSource,
+  source: SessionEventSource,
 ): ReadableKeyedStore<SessionUsage | null> {
   const store = createKeyedStore<SessionUsage | null>(null, sameUsage)
   source((data) => {

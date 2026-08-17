@@ -1,8 +1,9 @@
-import { isStatusEvent, toSessionStatus, type SessionStatus } from "./session-events"
-
-// A subscription to the global status event, injected so the store is testable
-// without standing up the /events socket. Returns its unsubscribe.
-export type StatusEventSource = (handler: (data: unknown) => void) => () => void
+import {
+  isStatusEvent,
+  toSessionStatus,
+  type SessionEventSource,
+  type SessionStatus,
+} from "./session-events"
 
 // A session needing attention: blocked waiting on the user, or a turn that
 // finished but has not been seen yet. The notification queue is a flat list of
@@ -51,7 +52,7 @@ const BADGE_PRIORITY = ["waiting", "busy", "done"] as const
 // back to the project showed no spinner for a session Claude was still working
 // on. Entries therefore outlive their listeners: unsubscribing on unmount drops
 // the listener, never the status.
-export function createSessionStatusStore(source: StatusEventSource) {
+export function createSessionStatusStore(source: SessionEventSource) {
   const entries = new Map<string, Entry>()
 
   const entryOf = (id: string): Entry => {

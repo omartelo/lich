@@ -1,9 +1,11 @@
 import { createKeyedStore, type ReadableKeyedStore } from "@/lib/keyed-store"
-import { isIdEvent, toSessionRelay, type SessionRelay } from "./session-events"
-
-// A subscription to one of the global session events, injected so the store is
-// testable without standing up the /events socket. Returns its unsubscribe.
-export type RelayEventSource = (handler: (data: unknown) => void) => () => void
+import {
+  isIdEvent,
+  isIdleEvent,
+  toSessionRelay,
+  type SessionEventSource,
+  type SessionRelay,
+} from "./session-events"
 
 // Two marks are the same when both fields match. The store rebuilds the object
 // on every event, so without this a repeat report would hand
@@ -25,8 +27,8 @@ function sameRelay(a: SessionRelay | null, b: SessionRelay | null): boolean {
 // otherwise sit on a dead card until its next spawn — the relay's own clear
 // only comes when someone answers or the ticket expires an hour later.
 export function createSessionRelayStore(
-  relaySource: RelayEventSource,
-  statusSource: RelayEventSource,
+  relaySource: SessionEventSource,
+  statusSource: SessionEventSource,
 ): ReadableKeyedStore<SessionRelay | null> {
   const store = createKeyedStore<SessionRelay | null>(null, sameRelay)
 
@@ -37,7 +39,7 @@ export function createSessionRelayStore(
   })
 
   statusSource((data) => {
-    if (isIdEvent(data) && (data as { state?: unknown }).state === "idle") {
+    if (isIdleEvent(data)) {
       store.set(data.id, null)
     }
   })
