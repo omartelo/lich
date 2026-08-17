@@ -40,6 +40,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Terminals no longer offer to delegate.** *Delegate to session…* was on every
+  card, terminals included, where the thing reading the prompt it writes is a
+  shell — so the request landed as a command line rather than as a request. The
+  action now belongs to sessions running an agent, which are the ones that can
+  act on it.
+
 - **The binary setting says which binary, and whether it is there.** *Custom
   path* and *Override for <project>* were two fields and a sentence about
   inheritance, and neither said what a session would actually spawn — a typo sat

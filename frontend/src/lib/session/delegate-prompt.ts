@@ -15,9 +15,11 @@ import type { SessionKind } from "./sessions"
 // agent offered a tool it does not have answers the user with an error. The
 // command works in all four and costs nothing.
 //
-// The session's declared kind, never the live agent readout: a shell card
-// running `claude` by hand was spawned without the registration, so it has the
-// command and not the tools.
+// The session's declared kind, never the live agent readout. A terminal is not
+// offered the action at all (SessionCard's canDelegate) — the thing reading its
+// prompt is a shell — so the only kind that ever reaches here is the one the
+// session was spawned as, and that is also the one the registration was decided
+// by.
 const TOOL_KINDS: readonly string[] = ["claude", "codex"]
 
 /**
