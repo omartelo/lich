@@ -65,18 +65,13 @@ func (s *Service) ompInstall() error {
 	}
 	body := fmt.Sprintf("%s %s v%s — installed by lich, replace with the file from %s\n%s",
 		jsComment, markerName, version, marketplaceRepo, data)
-	path := filepath.Join(extensions, ompFile)
-	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
-		return fmt.Errorf("write %s: %w", path, err)
+	if err := writeFile(filepath.Join(extensions, ompFile), []byte(body), 0o644); err != nil {
+		return err
 	}
 	if registration == nil {
 		return nil
 	}
-	mcp := filepath.Join(dir, ompMCPFile)
-	if err := os.WriteFile(mcp, registration, 0o644); err != nil {
-		return fmt.Errorf("write %s: %w", mcp, err)
-	}
-	return nil
+	return writeFile(filepath.Join(dir, ompMCPFile), registration, 0o644)
 }
 
 // ompInstalledVersion reads the version off the marker line lich wrote, or
