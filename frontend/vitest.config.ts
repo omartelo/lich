@@ -42,11 +42,13 @@ export default defineConfig({
         "src/**/use-*.ts",
         "src/components/**/use*.ts",
         // OS/framework boundaries: fetch, EventSource, WebSocket, CodeMirror
-        // wiring, and the DEV-only paint reporter that production drops.
+        // wiring, the xterm privates and font loading a live terminal needs, and
+        // the DEV-only paint reporter that production drops.
         "src/lib/rpc.ts",
         "src/lib/app-events.ts",
         "src/lib/codemirror.ts",
         "src/lib/terminal/term-transport.ts",
+        "src/lib/terminal/term-view.ts",
         "src/lib/terminal/term-perf.ts",
       ],
     },

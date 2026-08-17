@@ -10,6 +10,13 @@
 // Slots arrive through a StateEffect rather than through the view's extensions:
 // resolving a thread or adding a comment must not rebuild the editor, which is
 // what replacing an extension does.
+//
+// Only buildSlots is covered by the suite, so this file reads low in the
+// coverage report on purpose. The rest of it is the DOM boundary invariant #1
+// exempts, and it cannot be reached without one: the widget's element, and
+// therefore the register callback and the microtask that announces it, only
+// exist once CodeMirror calls toDOM. The mapping that decides where a gap goes
+// is the part that can be wrong, and that part is buildSlots.
 
 import {
   RangeSetBuilder,

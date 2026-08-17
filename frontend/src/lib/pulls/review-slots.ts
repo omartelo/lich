@@ -53,8 +53,10 @@ export interface ReviewSlotInput {
   drafts: DraftReviewComment[]
 }
 
-// reviewSlots resolves every gap this file's diff should open, in document
-// order. Anything the diff cannot anchor is left out rather than guessed at: an
+// reviewSlots resolves every gap this file's diff should open — threads first,
+// then drafts, which is not document order: sorting the gaps is buildSlots' job
+// (codemirror-threads.ts), because a RangeSet is what has to be built in order.
+// Anything the diff cannot anchor is left out rather than guessed at: an
 // outdated thread has a line number that addresses code this diff no longer
 // shows, and a thread on an unchanged line has no line here at all. Both are
 // rendered in the Conversation tab, where nothing pretends to point at code.
