@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { composeDroppedPaths, type DroppedFile, resolveDroppedFiles } from "./drop-files"
+import {
+  composeDroppedPaths,
+  type DroppedFile,
+  readDroppedFiles,
+  resolveDroppedFiles,
+} from "./drop-files"
 
 // The backend is the boundary: the lookup is an RPC and the upload its own
 // endpoint, so both are stubbed and the test asserts which branch each entry
@@ -131,6 +136,26 @@ describe("resolveDroppedFiles", () => {
     expect(upload).not.toHaveBeenCalled()
   })
 
+  // Bigger than internal/drop's maxUpload: refused here rather than sent for the
+  // backend to refuse, and the reason names the ceiling.
+  it("skips a file too big to upload instead of sending it", async () => {
+    resolve.mockResolvedValue([""])
+    const huge: DroppedFile = {
+      name: "core.dump",
+      size: 33 * 1024 * 1024,
+      mtime: 1,
+      dir: false,
+      blob: { size: 33 * 1024 * 1024 } as Blob,
+    }
+
+    const result = await resolveDroppedFiles("/home/u", [huge])
+
+    expect(result.paths).toEqual([])
+    expect(result.copied).toEqual([])
+    expect(result.skipped).toEqual(["core.dump (over 32MB)"])
+    expect(upload).not.toHaveBeenCalled()
+  })
+
   it("answers an empty drop without touching the backend", async () => {
     expect(await resolveDroppedFiles("/home/u", [])).toEqual({
       paths: [],
@@ -138,5 +163,56 @@ describe("resolveDroppedFiles", () => {
       copied: [],
     })
     expect(resolve).not.toHaveBeenCalled()
+  })
+})
+
+// DataTransfer is the browser's, but every field readDroppedFiles takes off it
+// is read synchronously through a plain interface — which is what lets the drop
+// be described here without a DOM.
+describe("readDroppedFiles", () => {
+  const item = (file: unknown, dir?: boolean): DataTransferItem =>
+    ({
+      kind: file === null ? "string" : "file",
+      getAsFile: () => file,
+      webkitGetAsEntry: dir === undefined ? undefined : () => ({ isDirectory: dir }),
+    }) as unknown as DataTransferItem
+
+  const transfer = (items: DataTransferItem[]): DataTransfer =>
+    ({ items }) as unknown as DataTransfer
+
+  it("reads what the page can say about a dropped file", () => {
+    const dropped = readDroppedFiles(
+      transfer([item({ name: "a.ts", size: 12, lastModified: 1699, type: "" }, false)]),
+    )
+
+    expect(dropped).toHaveLength(1)
+    expect(dropped[0]).toMatchObject({ name: "a.ts", size: 12, mtime: 1699, dir: false })
+    expect(dropped[0].blob).not.toBeNull()
+  })
+
+  // A folder has no bytes for the page to upload, and its size is not the
+  // backend's to match on — the lookup is by name and mtime alone.
+  it("marks a directory, zeroes its size and carries no blob", () => {
+    const dropped = readDroppedFiles(
+      transfer([item({ name: "docs", size: 4096, lastModified: 42, type: "" }, true)]),
+    )
+
+    expect(dropped).toEqual([{ name: "docs", size: 0, mtime: 42, dir: true, blob: null }])
+  })
+
+  // Text dragged out of the app's own UI, and an item the browser hands over
+  // without a file behind it: neither is a drop.
+  it("skips a non-file item and a file that resolves to nothing", () => {
+    expect(readDroppedFiles(transfer([item(null), item(undefined, false)]))).toEqual([])
+  })
+
+  // webkitGetAsEntry is the only carrier of the directory flag and it is not
+  // guaranteed: without it the entry is read as a file rather than dropped.
+  it("reads an entry as a file when the browser offers no entry API", () => {
+    const dropped = readDroppedFiles(
+      transfer([item({ name: "a.ts", size: 3, lastModified: 7, type: "" })]),
+    )
+
+    expect(dropped[0]).toMatchObject({ name: "a.ts", size: 3, dir: false })
   })
 })

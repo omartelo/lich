@@ -165,6 +165,33 @@ describe("createGitStatusStore", () => {
     expect(store.get("/repo")).toBeNull()
   })
 
+  // The fetcher's other failure: a rejection, not a null. The poll has to
+  // survive it — an RPC that goes down for a moment must not silently end the
+  // loop for the rest of the session.
+  it("keeps polling after a fetcher rejects", async () => {
+    let fail = true
+    const fetch = vi.fn(async () => {
+      if (fail) {
+        throw new Error("rpc down")
+      }
+      return status(2)
+    })
+    const store = createGitStatusStore(fetch, CADENCE)
+    const notify = vi.fn()
+    store.subscribe("/repo", notify)
+
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(store.get("/repo")).toBeNull()
+    expect(notify).not.toHaveBeenCalled()
+
+    fail = false
+    await vi.advanceTimersByTimeAsync(FAST_MS)
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(store.get("/repo")).toEqual(status(2))
+    expect(notify).toHaveBeenCalledTimes(1)
+  })
+
   it("stops polling when the last subscriber leaves", async () => {
     const fetch = vi.fn(async () => status(0))
     const store = createGitStatusStore(fetch, CADENCE)

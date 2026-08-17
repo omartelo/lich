@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest"
-import { isAppContextMenu, isBrowserChord } from "./browser-defaults"
+import { describe, expect, it, vi } from "vitest"
+import { installBrowserDefaults, isAppContextMenu, isBrowserChord } from "./browser-defaults"
 
 const chord = (over: Partial<KeyboardEvent>) =>
   ({
@@ -57,5 +57,61 @@ describe("isAppContextMenu", () => {
 
   it("claims a null target rather than letting the browser menu through", () => {
     expect(isAppContextMenu(null)).toBe(true)
+  })
+})
+
+// The window is injected, so the wiring is checked without one: which phase each
+// listener takes, and which events it is allowed to cancel. Both matter more than
+// the matchers above — a keydown listener on the bubble phase reaches the browser
+// too late, and Ctrl+W closes the window, which quits lich.
+describe("installBrowserDefaults", () => {
+  const install = () => {
+    const listeners = new Map<string, { handler: (event: unknown) => void; capture: unknown }>()
+    const target = {
+      addEventListener: (type: string, handler: (event: unknown) => void, capture?: unknown) => {
+        listeners.set(type, { handler, capture })
+      },
+    } as unknown as Window
+    installBrowserDefaults(target)
+    const fire = (type: string, event: Record<string, unknown>) => {
+      const preventDefault = vi.fn()
+      listeners.get(type)?.handler({ preventDefault, ...event })
+      return preventDefault
+    }
+    return { listeners, fire }
+  }
+
+  it("takes the keydown in the capture phase, ahead of the browser", () => {
+    expect(install().listeners.get("keydown")?.capture).toBe(true)
+  })
+
+  it("cancels a browser chord and leaves everything else through", () => {
+    const { fire } = install()
+
+    expect(
+      fire("keydown", { ctrlKey: true, shiftKey: false, altKey: false, key: "w" }),
+    ).toHaveBeenCalled()
+    expect(
+      fire("keydown", { ctrlKey: true, shiftKey: false, altKey: false, key: "r" }),
+    ).not.toHaveBeenCalled()
+  })
+
+  // The terminal keeps Chromium's menu — that is where its Copy and Paste live.
+  it("cancels the context menu on the app's chrome only", () => {
+    const { fire } = install()
+
+    expect(fire("contextmenu", { target: { closest: () => null } })).toHaveBeenCalled()
+    expect(fire("contextmenu", { target: { closest: () => ({}) } })).not.toHaveBeenCalled()
+  })
+
+  // Bubble phase, so a drop zone of our own runs first; unconditional, because
+  // whatever is left has nowhere to land but over the app itself.
+  it("cancels every unclaimed drag and drop, in the bubble phase", () => {
+    const { listeners, fire } = install()
+
+    expect(listeners.get("drop")?.capture).toBeUndefined()
+    expect(listeners.get("dragover")?.capture).toBeUndefined()
+    expect(fire("drop", {})).toHaveBeenCalled()
+    expect(fire("dragover", {})).toHaveBeenCalled()
   })
 })

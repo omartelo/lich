@@ -1,15 +1,33 @@
-import { describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import {
   comboFromEvent,
   DEFAULT_HOTKEYS,
   formatCombo,
   hotkeyConflicts,
+  hotkeyLabel,
+  loadHotkeys,
   matchesCombo,
   mergeHotkeys,
   sameCombo,
+  saveHotkeys,
   type Combo,
   type KeyState,
 } from "./hotkeys"
+
+// The suite runs in node, which has no localStorage; the stored half of the
+// hotkeys is the point of the two functions below, so the storage is stubbed and
+// the round-trip through it is what is checked.
+const stored = new Map<string, string>()
+
+vi.stubGlobal("localStorage", {
+  getItem: (key: string) => stored.get(key) ?? null,
+  setItem: (key: string, value: string) => {
+    stored.set(key, value)
+  },
+  removeItem: (key: string) => {
+    stored.delete(key)
+  },
+})
 
 const key = (over: Partial<KeyState>): KeyState => ({
   ctrlKey: false,
@@ -166,5 +184,64 @@ describe("sameCombo", () => {
   it("compares every field", () => {
     expect(sameCombo(DEFAULT_HOTKEYS.newSession, DEFAULT_HOTKEYS.newSession)).toBe(true)
     expect(sameCombo(DEFAULT_HOTKEYS.newSession, DEFAULT_HOTKEYS.commandPalette)).toBe(false)
+  })
+})
+
+describe("loadHotkeys", () => {
+  beforeEach(() => {
+    stored.clear()
+  })
+
+  it("answers the defaults with nothing stored", () => {
+    expect(loadHotkeys()).toEqual(DEFAULT_HOTKEYS)
+  })
+
+  it("round-trips what saveHotkeys wrote", () => {
+    const mine: Combo = { mod: true, shift: true, alt: false, key: "j" }
+    saveHotkeys({ ...DEFAULT_HOTKEYS, newSession: mine })
+
+    expect(loadHotkeys().newSession).toEqual(mine)
+  })
+
+  // A pref must never be able to break a launch: the value is a string somebody
+  // can hand-edit, and half of one is what an interrupted write leaves.
+  it("falls back to the defaults for a value that is not JSON", () => {
+    stored.set("lich.hotkeys", '{"newSession":')
+
+    expect(loadHotkeys()).toEqual(DEFAULT_HOTKEYS)
+  })
+
+  it("falls back for JSON that is not an object at all", () => {
+    stored.set("lich.hotkeys", '"ctrl+shift+t"')
+
+    expect(loadHotkeys()).toEqual(DEFAULT_HOTKEYS)
+  })
+
+  // Stored under a key the build no longer has, beside one it does: the known
+  // override stands and the stranger is dropped.
+  it("keeps a valid override and ignores what is not an action", () => {
+    stored.set(
+      "lich.hotkeys",
+      JSON.stringify({
+        newSession: { mod: true, shift: true, alt: false, key: "J" },
+        zoomIn: { mod: true, shift: false, alt: false, key: "+" },
+      }),
+    )
+
+    const loaded = loadHotkeys()
+    expect(loaded.newSession.key).toBe("j")
+    expect(loaded).not.toHaveProperty("zoomIn")
+  })
+})
+
+describe("hotkeyLabel", () => {
+  it("names an action", () => {
+    expect(hotkeyLabel("commandPalette")).toBe("Command palette")
+  })
+
+  // Nothing in the app can ask for an id that is not an action, but the label is
+  // what a settings row renders — an empty one would be a blank line.
+  it("falls back to the id for an action this build does not have", () => {
+    expect(hotkeyLabel("zoomIn" as never)).toBe("zoomIn")
   })
 })
