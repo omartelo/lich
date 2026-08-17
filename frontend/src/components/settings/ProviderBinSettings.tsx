@@ -1,27 +1,49 @@
 import { useEffect, useState } from "react"
 import { Store } from "@/lib/rpc"
-import { useProjects } from "@/providers/projects"
 import {
-  binKey,
+  footerReadout,
+  footerReadoutPair,
   skipLevel,
   skipLevelPair,
   skipPermissionFlags,
   skipPermissionsKey,
+  type FooterReadout,
   type SkipLevel,
 } from "@/lib/providers-store"
 import { useSettings } from "@/providers/settings"
 import { setCostReadout } from "@/lib/cost-readout-store"
 import { useCostReadout } from "@/lib/use-cost-readout"
 import { Input } from "@/components/ui/input"
-import { Switch } from "@/components/ui/switch"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { PlanUsageSetting } from "./PlanUsageSetting"
+import { ProviderBinary } from "./ProviderBinary"
 import { SettingBlock } from "./SettingBlock"
 
 const GLOBAL_SCOPE = ""
 
-// The ladder as the user reads it: the rung's label, and what the rung leaves
-// asking. The second line is the half of the answer the two switches made
-// people assemble in their heads.
+// Each rung says what lands in the footer, and the line under it says what that
+// means — the half of the answer the two switches made people assemble in their
+// heads.
+const FOOTER_READOUTS: { level: FooterReadout; label: string; consequence: string }[] = [
+  {
+    level: "off",
+    label: "Nothing",
+    consequence: "The footer keeps only the branch, the path and the clock.",
+  },
+  {
+    level: "context",
+    label: "Model & context",
+    consequence: "The model a session runs, and a ring showing how full its context window is.",
+  },
+  {
+    level: "cost",
+    label: "And cost",
+    consequence:
+      "Plus what the session has cost at API prices, summed from its transcript. That figure only means something when you are billed per token, not on a subscription.",
+  },
+]
+
+// The same shape for how far the provider runs without asking, ordered by risk.
 const SKIP_LEVELS: { level: SkipLevel; label: string; consequence: string }[] = [
   {
     level: "never",
@@ -59,10 +81,10 @@ function useSkipPermissions(providerId: string, worktree: boolean) {
   return [on, toggle] as const
 }
 
-// ProviderBinSettings is the config section a provider gets when enabled: the
-// custom path to its binary or launcher script, as a global default plus an
-// optional per-project override. Empty inherits: project → global → the
-// provider's own name on $PATH. Same keys the Go store resolves (see binKey).
+// ProviderBinSettings is the config section a provider gets when enabled: what
+// its plan has left, which binary its sessions spawn, and how far it runs
+// without asking. Claude Code adds the footer readout, which is the only
+// provider reporting one.
 export function ProviderBinSettings({
   providerId,
   providerName,
@@ -72,13 +94,8 @@ export function ProviderBinSettings({
   providerName: string
   projectId?: string
 }) {
-  const { projects } = useProjects()
   const { showContextUsage, setShowContextUsage, costBudget, setCostBudget } = useSettings()
   const showCost = useCostReadout()
-  const project = projects.find((p) => p.id === projectId)
-  const key = binKey(providerId)
-  const [globalBin, setGlobalBin] = useState("")
-  const [projectBin, setProjectBin] = useState("")
   // The field keeps the raw string so a half-typed "1." survives the keystroke;
   // the stored budget is the parsed value, and an emptied field is no budget.
   const [budget, setBudget] = useState(() => (costBudget > 0 ? String(costBudget) : ""))
@@ -87,6 +104,17 @@ export function ProviderBinSettings({
   const skipFlag = skipPermissionFlags[providerId]
   const level = skipLevel(skipHere, skipInWorktrees)
   const consequence = SKIP_LEVELS.find((rung) => rung.level === level)?.consequence ?? ""
+  const readout = footerReadout(showContextUsage, showCost)
+  const readoutConsequence =
+    FOOTER_READOUTS.find((rung) => rung.level === readout)?.consequence ?? ""
+
+  // One rung writes both settings, for the same reason the permission ladder
+  // does: the pair is the storage, the rung is the choice.
+  const setReadout = (next: FooterReadout) => {
+    const pair = footerReadoutPair(next)
+    setShowContextUsage(pair.context)
+    setCostReadout(pair.cost)
+  }
 
   // One rung writes both keys, always: the pair is the storage, the rung is the
   // choice. Writing only the one that changed would leave the other holding an
@@ -97,96 +125,47 @@ export function ProviderBinSettings({
     setSkipInWorktrees(pair.worktrees)
   }
 
-  useEffect(() => {
-    void Store.GetSetting(key, GLOBAL_SCOPE).then(setGlobalBin)
-  }, [key])
-
-  useEffect(() => {
-    if (!projectId) {
-      return
-    }
-    void Store.GetSetting(key, projectId).then(setProjectBin)
-  }, [key, projectId])
-
-  const persistGlobal = (value: string) => {
-    setGlobalBin(value)
-    void Store.SetSetting(key, GLOBAL_SCOPE, value.trim())
-  }
-
   const persistBudget = (value: string) => {
     setBudget(value)
     setCostBudget(Number(value))
   }
 
-  const persistProject = (value: string) => {
-    setProjectBin(value)
-    if (projectId) {
-      void Store.SetSetting(key, projectId, value.trim())
-    }
-  }
-
   return (
     <>
-      <SettingBlock
-        title="Custom path"
-        description="Path to the binary or a launcher script spawned in each terminal. Leave empty to run it from your $PATH."
-      >
-        <Input
-          value={globalBin}
-          onChange={(event) => persistGlobal(event.target.value)}
-          placeholder={providerId}
-          spellCheck={false}
-          aria-label={`${providerId} custom path`}
-          className="w-96 max-w-full font-mono"
-        />
-      </SettingBlock>
+      {/* What the plan has left comes first: it is the state of this provider,
+          and everything under it is configuration. Renders itself away for a
+          provider that meters no subscription. */}
+      <PlanUsageSetting providerId={providerId} />
 
-      {project && (
-        <SettingBlock
-          title={`Override for ${project.name}`}
-          description="A path used only in this project's terminals. Leave empty to inherit the global custom path."
-        >
-          <p className="mb-2 text-xs text-muted-foreground">{project.path}</p>
-          <Input
-            value={projectBin}
-            onChange={(event) => persistProject(event.target.value)}
-            placeholder={globalBin || providerId}
-            spellCheck={false}
-            aria-label={`${providerId} path for ${project.name}`}
-            className="w-96 max-w-full font-mono"
-          />
-        </SettingBlock>
-      )}
+      <ProviderBinary providerId={providerId} providerName={providerName} projectId={projectId} />
 
       {/* Only Claude Code reports context-window usage (via the lich plugin), so
-          the footer readout toggles live in its section, not the generic hub. */}
+          the footer readout control lives in its section, not the generic hub. */}
       {providerId === "claude" && (
         <>
           <SettingBlock
-            title="Model & context in the footer"
-            description="Show this session's model and context-window usage in the footer — the model name plus a ring with the percent, read from the transcript."
+            title="Session readout in the footer"
+            description="How much of what a session is spending the footer carries, read from its transcript."
           >
-            <Switch
-              checked={showContextUsage}
-              onCheckedChange={setShowContextUsage}
-              aria-label="Show model and context usage in the footer"
-            />
-          </SettingBlock>
-
-          <SettingBlock
-            title="Session cost in the footer"
-            description="Show what each session has cost at API prices, summed from its transcript. Leave this off on a subscription plan — the figure only means something when you are billed per token."
-          >
-            <Switch
-              checked={showCost}
-              onCheckedChange={setCostReadout}
-              aria-label="Show session cost in the footer"
-            />
+            <ToggleGroup
+              value={[readout]}
+              onValueChange={(next) => next[0] && setReadout(next[0] as FooterReadout)}
+              spacing={1}
+              aria-label="What the footer says about the session"
+              className="border border-border p-[3px]"
+            >
+              {FOOTER_READOUTS.map((rung) => (
+                <ToggleGroupItem key={rung.level} value={rung.level} size="sm">
+                  {rung.label}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+            <p className="mt-2 max-w-prose text-xs text-muted-foreground">{readoutConsequence}</p>
           </SettingBlock>
 
           {/* A ceiling is only ever seen through the readout, so it is offered
               beside it and hidden with it. */}
-          {showCost && (
+          {readout === "cost" && (
             <SettingBlock
               title="Spend ceiling"
               description="Colour the cost in the footer as a session approaches this many dollars — amber at 80%, red at 95%. It is a warning, not a limit: nothing is stopped, and the figure it watches is API pricing from a table. Leave empty for none."

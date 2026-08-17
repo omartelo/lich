@@ -5,6 +5,8 @@ import {
   createProvidersStore,
   enabledKey,
   enabledProviders,
+  footerReadout,
+  footerReadoutPair,
   readEnabled,
   resolveDefaultProvider,
   resolveProjectDefaultProvider,
@@ -74,6 +76,34 @@ describe("the skip-permissions ladder", () => {
     for (const level of ["never", "worktrees", "everywhere"] as const) {
       const pair = skipLevelPair(level)
       expect(skipLevel(pair.here, pair.worktrees)).toBe(level)
+    }
+  })
+})
+
+describe("the footer readout ladder", () => {
+  it("folds the stored pair into a rung", () => {
+    expect(footerReadout(false, false)).toBe("off")
+    expect(footerReadout(true, false)).toBe("context")
+    expect(footerReadout(true, true)).toBe("cost")
+  })
+
+  // The pair nothing offers any more: the cost on its own, with no model and no
+  // ring beside it. The cost was always the addition, so it reads as the rung
+  // that carries it.
+  it("reads the pair no rung writes as the cost rung", () => {
+    expect(footerReadout(false, true)).toBe("cost")
+  })
+
+  it("writes both settings for the chosen rung", () => {
+    expect(footerReadoutPair("off")).toEqual({ context: false, cost: false })
+    expect(footerReadoutPair("context")).toEqual({ context: true, cost: false })
+    expect(footerReadoutPair("cost")).toEqual({ context: true, cost: true })
+  })
+
+  it("round-trips every rung", () => {
+    for (const level of ["off", "context", "cost"] as const) {
+      const pair = footerReadoutPair(level)
+      expect(footerReadout(pair.context, pair.cost)).toBe(level)
     }
   })
 })

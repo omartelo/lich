@@ -1,6 +1,6 @@
 import { useMatch } from "react-router-dom"
 import { useProjects } from "@/providers/projects"
-import { activeTarget } from "./sessions"
+import { activeTarget, type SessionKind } from "./sessions"
 import { useSessionCwd } from "./use-session-cwd"
 
 // useActiveSession resolves what is currently in focus: the routed project, its
@@ -26,6 +26,8 @@ export function useActiveSession(): {
   /** The session's static checkout — what the sidebar keys a worktree's pull
    * request card on, so a `cd` cannot open a card no group can show. */
   checkout: string
+  /** Which provider the active session runs, "" when none is active. */
+  kind: SessionKind | ""
 } {
   const { projects, sessions } = useProjects()
   const match = useMatch({ path: "/projects/:projectId", end: false })
@@ -38,5 +40,6 @@ export function useActiveSession(): {
     sessionId: target.sessionId,
     path: cwd || target.path,
     checkout: target.path,
+    kind: target.kind,
   }
 }

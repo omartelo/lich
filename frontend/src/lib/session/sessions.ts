@@ -400,22 +400,24 @@ export function sessionsOf(state: SessionState, projectId: string): Session[] {
   return state[projectId]?.sessions ?? []
 }
 
-// activeTarget resolves what a project screen acts on: the active session's id
-// and the path it lives in — a worktree session resolves to its checkout,
-// everything else to the project root. Pure, and the whole of useActiveSession's
-// answer: every screen inside a project — the terminal, its settings, its pull
-// requests — reads this same triple, and so does the chrome beside them.
+// activeTarget resolves what a project screen acts on: the active session's id,
+// the path it lives in — a worktree session resolves to its checkout, everything
+// else to the project root — and which provider it runs. Pure, and the whole of
+// useActiveSession's answer: every screen inside a project — the terminal, its
+// settings, its pull requests — reads this same triple, and so does the chrome
+// beside them. kind is "" when no session is active, which is not a SessionKind:
+// a screen with nothing running has no provider, and "shell" would be a claim.
 export function activeTarget(
   state: SessionState,
   projectId: string | null,
   projectPath: string,
-): { sessionId: string; path: string } {
+): { sessionId: string; path: string; kind: SessionKind | "" } {
   if (!projectId) {
-    return { sessionId: "", path: projectPath }
+    return { sessionId: "", path: projectPath, kind: "" }
   }
   const sessionId = activeSessionId(state, projectId)
   const session = sessionsOf(state, projectId).find((s) => s.id === sessionId)
-  return { sessionId, path: session?.path || projectPath }
+  return { sessionId, path: session?.path || projectPath, kind: session?.kind ?? "" }
 }
 
 // A worktree's sessions under one roof. `path` is the checkout root ("" for the

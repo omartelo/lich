@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react"
+import type { ReactNode } from "react"
 import { useNavigate } from "react-router-dom"
 import { openPulls } from "@/lib/pulls-card-store"
 import { toast } from "sonner"
@@ -21,32 +21,14 @@ import { displayPath } from "@/lib/paths"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { usePullRequest } from "@/lib/pulls/use-pull-request"
 import { useSettings } from "@/providers/settings"
+import { useNow } from "@/lib/use-now"
 import { cn } from "@/lib/utils"
 import { DiffStat } from "./DiffStat"
 import { ContextRing, usageColor } from "./ContextRing"
+import { PlanQuota } from "./PlanQuota"
 import { SessionModel } from "./SessionModel"
 import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-
-const MINUTE_MS = 60_000
-
-// The readout is HH:MM, so it is scheduled on the minute rather than on a fixed
-// interval: a 10s tick spent five of every six renders redrawing the same
-// string, and still showed a minute that could be ten seconds stale.
-function useNow(): Date {
-  const [now, setNow] = useState(() => new Date())
-  useEffect(() => {
-    let timer = 0
-    const tick = () => {
-      const at = new Date()
-      setNow(at)
-      timer = window.setTimeout(tick, MINUTE_MS - (at.getTime() % MINUTE_MS))
-    }
-    timer = window.setTimeout(tick, MINUTE_MS - (Date.now() % MINUTE_MS))
-    return () => window.clearTimeout(timer)
-  }, [])
-  return now
-}
 
 const two = (n: number): string => String(n).padStart(2, "0")
 
@@ -102,7 +84,7 @@ interface FooterBarProps {
 // shows its checkout's path, branch and diff.
 export function FooterBar({ dock, onDock }: FooterBarProps) {
   const navigate = useNavigate()
-  const { projectId, sessionId, path, checkout } = useActiveSession()
+  const { projectId, sessionId, path, checkout, kind } = useActiveSession()
   // Context-window occupancy of the active session, read off its transcript at
   // each turn's end (null until the first turn of a Claude session lands).
   const usage = useSessionUsage(sessionId)
@@ -246,6 +228,7 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
 
       <span className="ml-auto flex items-center gap-4">
         {showContextUsage && <SessionModel sessionId={sessionId} />}
+        <PlanQuota kind={kind} />
         {costReadout}
         {contextReadout}
         {(contextReadout || costReadout) && (status?.branch || path) && (

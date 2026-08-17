@@ -431,3 +431,30 @@ export interface DetectedProvider {
   installed: boolean
   path: string
 }
+
+/** internal/providers.Check — what a configured binary resolves to. `path` is
+ * the executable a session would spawn, empty for every status but "ok". */
+export interface BinaryCheck {
+  path: string
+  status: "ok" | "empty" | "not-found" | "not-executable" | "home-shortcut" | "relative"
+}
+
+/** internal/quota.Window — one metered window of a subscription: how much of it
+ * is spent, how long it runs (0 when the provider does not say), and when it
+ * starts over (RFC 3339, empty when unreported). */
+export interface QuotaWindow {
+  label: string
+  seconds: number
+  percent: number
+  resetsAt?: string
+}
+
+/** internal/quota.Plan — one provider's quota reading. Windows are empty for
+ * every status other than "ok". */
+export interface QuotaPlan {
+  provider: string
+  name: string
+  plan?: string
+  windows?: QuotaWindow[]
+  status: "ok" | "signed-out" | "error"
+}

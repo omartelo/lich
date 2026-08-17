@@ -72,3 +72,11 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   `internal/terminal/transcript.go`, resolving it independently as the Claude Code pair do): `OMP_PROFILE` moves
   the whole directory and beats an explicit `PI_CODING_AGENT_DIR`. Get it backwards and the install lands where omp
   is not reading and every restored card silently starts fresh.
+- **The plan gauge answers to two undocumented endpoints, and only two providers have one**
+  (`internal/quota`): Claude Code's and Codex's usage routes are what their own CLIs poll, not published API. A
+  field renamed upstream drops the window it fed rather than raising anything — an entry lich has no name for is
+  skipped in silence, so a new kind of limit is invisible instead of wrong. The other three providers run on the
+  user's own API keys and can never report a plan, so the readout is provider-asymmetric by design. lich reads
+  those logins and never writes them: it does not refresh the token, so an expired one reads as signed out until
+  the provider's own CLI rotates it. A reading is cached for five minutes because both endpoints rate-limit hard —
+  the number on screen is up to that old, and nothing on it says so.

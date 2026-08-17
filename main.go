@@ -22,6 +22,7 @@ import (
 	"github.com/omartelo/lich/internal/patchnotes"
 	"github.com/omartelo/lich/internal/project"
 	"github.com/omartelo/lich/internal/providers"
+	"github.com/omartelo/lich/internal/quota"
 	"github.com/omartelo/lich/internal/relay"
 	"github.com/omartelo/lich/internal/restart"
 	"github.com/omartelo/lich/internal/rpc"
@@ -133,6 +134,7 @@ func main() {
 	uncleanExit := singleton.UncleanExit(configDir, os.Getenv(restart.WaitEnv))
 	dispatcher.Register("system", system.New(env, logPath, version, uncleanExit))
 	dispatcher.Register("providers", providers.New())
+	dispatcher.Register("quota", quota.New())
 	// The relay is the only service whose caller is not the window: the `lich`
 	// CLI running inside a session reaches it over the same listener. It watches
 	// the hooks' state reports too, to notice a target that ends a turn without

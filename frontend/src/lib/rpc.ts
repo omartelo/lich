@@ -9,6 +9,7 @@
 import type {
   AppUpdateStatus,
   BaseStatus,
+  BinaryCheck,
   BranchRules,
   Branches,
   CommitIdentity,
@@ -25,6 +26,7 @@ import type {
   PullRequestConversation,
   PullRequestDetail,
   PullRequestSummary,
+  QuotaPlan,
   RecentProject,
   ReviewCandidate,
   ReviewEvent,
@@ -398,6 +400,16 @@ export const System = {
 export const Providers = {
   /** Every known provider with its install state (binary found on PATH). */
   Detect: () => call<DetectedProvider[]>("providers.Detect", []),
+  /** Resolve a configured binary the way the spawn does, and report whether it
+   * can be run. "" answers `empty` — the layer below is what will be used. */
+  Verify: (bin: string) => call<BinaryCheck>("providers.Verify", [bin]),
+}
+
+export const Quota = {
+  /** Plan usage for every provider that meters a subscription. Served from a
+   * five-minute cache, so calling it often is cheap and asks nothing extra of
+   * endpoints that rate-limit. */
+  Plans: () => call<QuotaPlan[]>("quota.Plans", []),
 }
 
 export const Themes = {

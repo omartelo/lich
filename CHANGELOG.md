@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **How much of your plan is left, without leaving lich.** Claude Code and Codex
+  both report what a subscription has spent of its rolling windows, and lich now
+  reads it: the footer carries the window closest to running out beside the
+  context ring — `5h 2%`, `wk 84%` — with every window, its share and its reset
+  time behind the tooltip. Each provider's own settings section opens with the
+  same reading in full, including the weekly caps Anthropic scopes to a single
+  model. Windows are named by the length the provider reports, so a Codex free
+  plan's 30-day window is labelled as one rather than mistaken for the five-hour
+  one a paid plan reports in its place.
+
+  lich reads the login its provider's CLI already wrote and never refreshes or
+  rewrites it — token rotation stays with the CLI that owns it. A rejected token
+  reads as signed out, with the command that fixes it. opencode, oh-my-pi and
+  Crush run on your own API keys, where there is no plan to meter, so they are
+  absent from the block rather than shown empty.
+
+### Changed
+
+- **The binary setting says which binary, and whether it is there.** *Custom
+  path* and *Override for <project>* were two fields and a sentence about
+  inheritance, and neither said what a session would actually spawn — a typo sat
+  there until a terminal refused to start. A provider's section now opens with
+  the answer: the executable a session here would run, where it came from, and a
+  tick that it exists and can be executed. **Use a different binary** unfolds the
+  whole resolution — this project, all projects, `$PATH` — in the order lich
+  reads it, with the layer that wins marked and the others shown as overridden.
+  Paths can be picked from a file dialog rather than typed.
+
+  It also names the two mistakes a shell would have hidden, because lich spawns
+  the binary directly: a leading `~` is never expanded, and a relative path means
+  a different binary in every session. A layer that resolves to nothing runnable
+  unfolds the block by itself.
+
+- **The two footer switches are one ladder.** *Model & context in the footer* and
+  *Session cost in the footer* asked the same question twice and left you to
+  assemble the answer; Claude Code's settings now offer **Nothing · Model &
+  context · And cost**, in the same shape as the permission ladder above it, with
+  a line under it saying what each rung puts on screen. The spend ceiling still
+  appears with the rung that shows a cost. Nothing needs setting again: an
+  install already showing both reads as the top rung, one showing neither as the
+  bottom.
+
 ## [0.35.1] - 2026-08-17
 
 ### Fixed

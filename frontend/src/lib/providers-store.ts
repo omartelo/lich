@@ -75,6 +75,27 @@ export function skipLevelPair(level: SkipLevel): { here: boolean; worktrees: boo
   return { here: level === "everywhere", worktrees: level !== "never" }
 }
 
+// How much of a session's own accounting the footer carries, as one ladder
+// ordered by how much it says. The two settings keys stay exactly as they are —
+// this is the shape the user chooses in, not the shape lich stores.
+export type FooterReadout = "off" | "context" | "cost"
+
+// footerReadout folds the stored pair into a rung. The fourth combination — the
+// cost without the model and the ring — is a readout nobody chose: the cost
+// setting was always the extra one, offered beside a readout that was already
+// there. It reads as the top rung, and choosing that rung back turns both on.
+export function footerReadout(context: boolean, cost: boolean): FooterReadout {
+  if (cost) {
+    return "cost"
+  }
+  return context ? "context" : "off"
+}
+
+// footerReadoutPair is the inverse: the pair a chosen rung writes back.
+export function footerReadoutPair(level: FooterReadout): { context: boolean; cost: boolean } {
+  return { context: level !== "off", cost: level === "cost" }
+}
+
 // readEnabled interprets the stored flag: Claude is enabled by default (it was
 // always offered before the providers feature), every other provider is opt-in.
 // An explicit "1"/"0" overrides the default.

@@ -576,10 +576,14 @@ describe("activeTarget", () => {
   const root = "/repo"
 
   it("falls back to the project root when the active session has no checkout", () => {
-    expect(activeTarget(buildState(2), P, root)).toEqual({ sessionId: "s2", path: root })
+    expect(activeTarget(buildState(2), P, root)).toEqual({
+      sessionId: "s2",
+      path: root,
+      kind: "claude",
+    })
   })
 
-  it("resolves a worktree session to its checkout", () => {
+  it("resolves a worktree session to its checkout, and reports what it runs", () => {
     const state = restoreSession(buildState(1), P, {
       id: "wt1",
       label: "swift-rabbit",
@@ -589,15 +593,16 @@ describe("activeTarget", () => {
     expect(activeTarget(state, P, root)).toEqual({
       sessionId: "wt1",
       path: "/repo/.worktrees/swift-rabbit",
+      kind: "shell",
     })
   })
 
   it("keeps the project root when there is no session at all", () => {
-    expect(activeTarget({}, P, root)).toEqual({ sessionId: "", path: root })
+    expect(activeTarget({}, P, root)).toEqual({ sessionId: "", path: root, kind: "" })
   })
 
   it("is empty off a project route", () => {
-    expect(activeTarget(buildState(2), null, "")).toEqual({ sessionId: "", path: "" })
+    expect(activeTarget(buildState(2), null, "")).toEqual({ sessionId: "", path: "", kind: "" })
   })
 })
 
