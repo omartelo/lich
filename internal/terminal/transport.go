@@ -471,10 +471,33 @@ func parseSessionStart(body []byte) (startRequest, error) {
 	if req.ProviderSessionID == "" {
 		return startRequest{}, errors.New("session-start missing provider_session_id")
 	}
+	if !opaqueID(req.ProviderSessionID) {
+		return startRequest{}, fmt.Errorf(
+			"session-start has an unusable provider_session_id %q", req.ProviderSessionID)
+	}
 	if !providers.Known(req.Provider) {
 		return startRequest{}, fmt.Errorf("session-start has unknown provider %q", req.Provider)
 	}
 	return req, nil
+}
+
+// opaqueID reports whether a provider's conversation id is the opaque token
+// every provider actually reports — a UUID, or something spelled like one.
+//
+// It is checked here, at the only door such an id comes through, because
+// downstream it is pasted into a filesystem glob: the transcript a conversation
+// is read from is located by joining the id onto the harness's directory and
+// globbing what lich cannot reconstruct (transcript.go). A path separator there
+// climbs out of that directory — "../../../../etc/passwd" resolves to a real
+// path — and a glob metacharacter widens the pattern until it matches somebody
+// else's conversation, whose text the palette search would then show and whose
+// tokens the cost readout would bill to this session.
+//
+// Spelled as the characters that make an id something other than a token,
+// rather than as one provider's id format: five providers report these and each
+// picks its own shape.
+func opaqueID(id string) bool {
+	return !strings.ContainsAny(id, `/\*?[]`) && !strings.Contains(id, "..")
 }
 
 // titleRequest is an ai-title POST body.
