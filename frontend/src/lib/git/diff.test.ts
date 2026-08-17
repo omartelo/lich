@@ -227,6 +227,13 @@ describe("gutterNumber", () => {
     expect(gutterNumber(meta[2])).toBe("2") // add → new line
     expect(gutterNumber(meta[5])).toBe("") // separator
   })
+
+  // parseDiff always numbers the side it keeps, but this also draws hunks
+  // assembled elsewhere (thread-hunk.ts, off a GitHub diffHunk), and a gutter
+  // reading the string "null" is worse than an empty one.
+  it("draws nothing for a line whose own side has no number", () => {
+    expect(gutterNumber({ kind: "del", text: "-x", oldLine: null, newLine: 4 })).toBe("")
+  })
 })
 
 describe("docLineAt", () => {

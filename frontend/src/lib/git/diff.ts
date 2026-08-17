@@ -215,11 +215,12 @@ export function discardTargets(file: DiffFile): string[] {
 
 // gutterNumber renders the single-column line gutter: deleted lines show
 // their old-file number, everything else the new-file one, separators nothing.
+// Either number is nullable by type, and a missing one renders as nothing rather
+// than as the string "null" — parseDiff always numbers the side it keeps, but
+// this also draws hunks assembled elsewhere (a GitHub diffHunk, thread-hunk.ts).
 export function gutterNumber(line: DiffLine): string {
-  if (line.kind === "del") {
-    return String(line.oldLine)
-  }
-  return line.newLine === null ? "" : String(line.newLine)
+  const number = line.kind === "del" ? line.oldLine : line.newLine
+  return number === null ? "" : String(number)
 }
 
 export interface NewLineRange {

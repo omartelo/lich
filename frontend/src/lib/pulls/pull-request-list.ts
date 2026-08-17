@@ -69,7 +69,10 @@ export interface PullsQuery {
   review: ReviewFilter | null
   /** true for `is:draft`, false for `is:ready`, null when the query is silent. */
   draft: boolean | null
-  fork: boolean | null
+  /** true for `is:fork`, null when the query is silent. Deliberately not a
+   * boolean: GitHub spells no "not a fork" qualifier, so nothing can ask for the
+   * complement, and a `false` here would be a filter no query can reach. */
+  fork: true | null
   /** Everything that was not a qualifier, matched against the row's text. */
   text: string
 }
@@ -130,7 +133,7 @@ function matchesQualifiers(pr: PullRequestSummary, query: PullsQuery): boolean {
   if (query.draft !== null && pr.isDraft !== query.draft) {
     return false
   }
-  if (query.fork !== null && pr.isCrossRepository !== query.fork) {
+  if (query.fork !== null && !pr.isCrossRepository) {
     return false
   }
   if (query.review !== null && REVIEW_OF[pr.reviewDecision] !== query.review) {
