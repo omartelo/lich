@@ -24,6 +24,7 @@ import {
   sessionOrigin,
   sessionsOf,
   setActiveSession,
+  setSessionEntrypoint,
   setSessionPinned,
   sidebarGroups,
   type Session,
@@ -208,6 +209,52 @@ describe("renameSession", () => {
     const state = buildState(2)
     expect(renameSession(state, "nope", "s1", "x")).toBe(state)
     expect(renameSession(state, P, "ghost", "x")).toBe(state)
+  })
+})
+
+describe("setSessionEntrypoint", () => {
+  // A terminal beside an agent session, which is the shape every assertion here
+  // is about: only the terminal can carry a command.
+  const withTerminal = () => addSession(buildState(1), P, "t1", "shell")
+
+  it("records the command and names the card after it while lich owns the name", () => {
+    const state = setSessionEntrypoint(withTerminal(), P, "t1", "lazygit", true)
+    const terminal = sessionsOf(state, P).find((s) => s.id === "t1")
+    expect(terminal?.entrypoint).toBe("lazygit")
+    expect(terminal?.label).toBe("lazygit")
+  })
+
+  it("leaves a name the user chose alone", () => {
+    const named = renameSession(withTerminal(), P, "t1", "Containers")
+    const state = setSessionEntrypoint(named, P, "t1", "lazydocker", false)
+    const terminal = sessionsOf(state, P).find((s) => s.id === "t1")
+    expect(terminal?.entrypoint).toBe("lazydocker")
+    expect(terminal?.label).toBe("Containers")
+  })
+
+  it("clears the command without blanking the card's name", () => {
+    const set = setSessionEntrypoint(withTerminal(), P, "t1", "lazygit", true)
+    const state = setSessionEntrypoint(set, P, "t1", "", true)
+    const terminal = sessionsOf(state, P).find((s) => s.id === "t1")
+    expect(terminal?.entrypoint).toBe("")
+    expect(terminal?.label).toBe("lazygit")
+  })
+
+  it("refuses a provider session, matching what the store will accept", () => {
+    const state = withTerminal()
+    expect(setSessionEntrypoint(state, P, "s1", "lazygit", true)).toBe(state)
+  })
+
+  it("does not mutate the input state", () => {
+    const before = withTerminal()
+    setSessionEntrypoint(before, P, "t1", "lazygit", true)
+    expect(sessionsOf(before, P).find((s) => s.id === "t1")?.entrypoint).toBeUndefined()
+  })
+
+  it("ignores unknown project or session ids", () => {
+    const state = withTerminal()
+    expect(setSessionEntrypoint(state, "nope", "t1", "x", true)).toBe(state)
+    expect(setSessionEntrypoint(state, P, "ghost", "x", true)).toBe(state)
   })
 })
 

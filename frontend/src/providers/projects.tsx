@@ -22,6 +22,7 @@ import {
   restoreSession,
   sessionsOf,
   setActiveSession,
+  setSessionEntrypoint as recordEntrypoint,
   setSessionPinned,
   type Session,
   type SessionKind,
@@ -347,6 +348,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         kind: isSessionKind(restored.kind) ? restored.kind : "claude",
         path: restored.path,
         ...(restored.providerSessionId ? { providerSessionId: restored.providerSessionId } : {}),
+        ...(restored.entrypoint ? { entrypoint: restored.entrypoint } : {}),
         ...(restored.originSessionId
           ? { originSessionId: restored.originSessionId, originLabel: restored.originLabel }
           : {}),
@@ -733,6 +735,29 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     void Store.RenameSession(sessionId, label)
   }, [])
 
+  // setEntrypoint records the command a terminal opens into and reports back,
+  // because saving it changes nothing the user can see: the running PTY keeps
+  // whatever is in it, and the command only takes over on the next spawn. The
+  // card is left to say the rest — its name once lich still owns the name, its
+  // tooltip once the user has taken it over.
+  const setEntrypoint = useCallback((projectId: string, sessionId: string, entrypoint: string) => {
+    Store.SetSessionEntrypoint(sessionId, entrypoint)
+      // The store answers whether the label actually moved; it refuses a card
+      // the user has renamed, and that answer is what decides the card here.
+      .then(() => (entrypoint ? Store.SetSessionTitle(sessionId, entrypoint) : false))
+      .then((renamed) => {
+        setSessions(
+          recordEntrypoint(sessionsRef.current, projectId, sessionId, entrypoint, !!renamed),
+        )
+        toast.success(entrypoint ? "Entrypoint set" : "Entrypoint cleared", {
+          description: entrypoint
+            ? "Runs the next time this terminal starts."
+            : "This terminal starts a plain shell again.",
+        })
+      })
+      .catch((error: unknown) => toast.error(`Could not save the entrypoint: ${errorText(error)}`))
+  }, [])
+
   const pinSession = useCallback((projectId: string, sessionId: string, pinned: boolean) => {
     const next = setSessionPinned(sessionsRef.current, projectId, sessionId, pinned)
     if (next === sessionsRef.current) {
@@ -759,6 +784,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       keepSession,
       activateSession,
       renameSession,
+      setEntrypoint,
       pinSession,
       reorderProjects,
       reorderSessions,
@@ -779,6 +805,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       keepSession,
       activateSession,
       renameSession,
+      setEntrypoint,
       pinSession,
       reorderProjects,
       reorderSessions,

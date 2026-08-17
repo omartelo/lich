@@ -37,6 +37,9 @@ export interface ProjectsValue {
   activateSession: (projectId: string, sessionId: string) => void
   /** Rename a session's display label. */
   renameSession: (projectId: string, sessionId: string, label: string) => void
+  // Record the command a terminal session opens into, "" to clear it. Refused
+  // by the store on anything but a shell session.
+  setEntrypoint: (projectId: string, sessionId: string, entrypoint: string) => void
   /** Pin a session to the head of its project's list, or unpin it. */
   pinSession: (projectId: string, sessionId: string, pinned: boolean) => void
   /** Rearrange the project tabs to the given id order. */

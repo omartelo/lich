@@ -334,6 +334,15 @@ export const Store = {
     call<null>("store.PurgeWorktreeSessions", [projectID, path]),
   RenameSession: (sessionID: string, label: string) =>
     call<null>("store.RenameSession", [sessionID, label]),
+  /** The command a terminal session opens into; "" clears it back to a plain
+   * shell. The store refuses it on anything but a shell session. */
+  SetSessionEntrypoint: (sessionID: string, entrypoint: string) =>
+    call<null>("store.SetSessionEntrypoint", [sessionID, entrypoint]),
+  /** Name a session from an automatic source — the provider's ai-title, or a
+   * terminal's own entrypoint. A no-op once the user has renamed the card;
+   * answers whether the label actually moved. */
+  SetSessionTitle: (sessionID: string, title: string) =>
+    call<boolean>("store.SetSessionTitle", [sessionID, title]),
   /** The provider conversation id recorded for a session, "" when none. */
   ProviderSession: (sessionID: string) => call<string>("store.ProviderSession", [sessionID]),
   /** Re-attach a provider conversation id to a session row. */

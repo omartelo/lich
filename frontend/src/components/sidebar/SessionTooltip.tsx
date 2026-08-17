@@ -1,4 +1,4 @@
-import { GitBranch, GitPullRequestArrow, TriangleAlert } from "lucide-react"
+import { GitBranch, GitPullRequestArrow, Play, TriangleAlert } from "lucide-react"
 import type { Session } from "@/lib/session/sessions"
 import { useSessionCwd } from "@/lib/session/use-session-cwd"
 import { useGitStatus } from "@/lib/git/use-git-status"
@@ -38,6 +38,15 @@ export function SessionTooltip({ session, path }: SessionTooltipProps) {
       <div className="flex flex-col gap-1.5">
         <span className="font-medium">{session.label}</span>
         <span className="break-all font-mono text-muted-foreground">{shownPath}</span>
+        {/* The command this terminal opens into. The card's label already says
+            it while the label is still automatic — this is the only place it is
+            named once the user has renamed the card. */}
+        {session.entrypoint && (
+          <span className="flex items-center gap-1.5 text-muted-foreground">
+            <Play className="size-3 shrink-0" />
+            <span className="break-all font-mono">{session.entrypoint}</span>
+          </span>
+        )}
         {git?.branch && (
           <span className="flex flex-wrap items-center gap-2 text-muted-foreground">
             <span className="flex items-center gap-1">

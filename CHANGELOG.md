@@ -25,6 +25,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Crush run on your own API keys, where there is no plan to meter, so they are
   absent from the block rather than shown empty.
 
+- **A terminal can open straight into a tool.** Right-click a terminal card and
+  set its **Entrypoint** — `lazygit`, `lazydocker`, `k9s`, `pnpm dev` — and that
+  command runs every time the terminal starts: the card's first view, a reload,
+  a respawn, the resume of a parked worktree. Quit the tool and you are back at
+  the prompt in the same card, so a crashed dev server leaves its error on
+  screen with a shell under it. The card takes the command as its name until you
+  rename it yourself, and then says what it runs in its tooltip. Emptying the
+  field puts the terminal back on a plain shell.
+
+  It belongs to that one terminal card and nothing else: a session running an
+  agent has no entrypoint to set, and it is not the project-wide
+  `.lich/setup-worktree.sh`, which still runs once when a worktree is born.
+
 ### Changed
 
 - **The binary setting says which binary, and whether it is there.** *Custom
@@ -50,6 +63,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   appears with the rung that shows a cost. Nothing needs setting again: an
   install already showing both reads as the top rung, one showing neither as the
   bottom.
+
+### Fixed
+
+- **Resuming a parked worktree session no longer forgets how it was started.** A
+  session opened with `lich open --model` came back on the provider's default
+  model after the worktree was kept and reopened, with nothing on screen saying
+  the model had changed.
 
 ## [0.35.1] - 2026-08-17
 

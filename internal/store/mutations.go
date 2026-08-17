@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/omartelo/lich/internal/providers"
 )
@@ -166,7 +167,7 @@ func (s *Service) CloseSession(projectID, sessionID, activeID string) error {
 // ReopenWorktreeSession resumes a parked worktree session. It finds the parked
 // (is_open = 0) session for the worktree at path and re-adds it to the workspace
 // under a fresh id (newSessionID), carrying over the old label, kind, provider
-// session id, label_auto flag and origin. The fresh id is deliberate: it makes the frontend treat the card
+// session id, label_auto flag, model, entrypoint and origin. The fresh id is deliberate: it makes the frontend treat the card
 // as never-spawned, so its resume prompt fires and the provider conversation
 // continues instead of starting cold. Returns nil when nothing is parked at path
 // — the caller then opens a brand-new session.
@@ -177,16 +178,25 @@ func (s *Service) ReopenWorktreeSession(projectID, path, newSessionID string) (*
 		// label_auto rides along so a user rename survives the park/resume
 		// cycle — reinserting without it would reset to 1 and let the ai-title
 		// stomp the chosen name, breaking SetSessionTitle's contract.
+		//
+		// model and entrypoint ride along for the same reason, one rung lower:
+		// both are spawn overrides their own doc comments promise survive every
+		// later spawn of the session, and a reinsert that dropped them would put
+		// the provider back on its default model and the terminal back on a bare
+		// shell — silently, on the one path where the card keeps its identity but
+		// not its id.
 		var labelAuto int
+		var model, entrypoint string
 		row := tx.QueryRow(
-			`SELECT id, label, kind, provider_session_id, label_auto, origin_session_id, origin_label
+			`SELECT id, label, kind, provider_session_id, label_auto, model, entrypoint,
+			        origin_session_id, origin_label
 			   FROM sessions
 			  WHERE project_id = ? AND path = ? AND is_open = 0
 			  ORDER BY rowid DESC LIMIT 1`,
 			projectID, path,
 		)
 		if err := row.Scan(
-			&old.ID, &old.Label, &old.Kind, &old.ProviderSessionID, &labelAuto,
+			&old.ID, &old.Label, &old.Kind, &old.ProviderSessionID, &labelAuto, &model, &entrypoint,
 			&old.OriginSessionID, &old.OriginLabel,
 		); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
@@ -207,10 +217,10 @@ func (s *Service) ReopenWorktreeSession(projectID, path, newSessionID string) (*
 		if _, err := tx.Exec(
 			`INSERT INTO sessions
 			   (id, project_id, label, kind, path, provider_session_id, label_auto,
-			    origin_session_id, origin_label, position)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
+			    model, entrypoint, origin_session_id, origin_label, position)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
 			newSessionID, projectID, old.Label, old.Kind, path, old.ProviderSessionID, labelAuto,
-			old.OriginSessionID, old.OriginLabel, projectID,
+			model, entrypoint, old.OriginSessionID, old.OriginLabel, projectID,
 		); err != nil {
 			return fmt.Errorf("reinsert session %q: %w", newSessionID, err)
 		}
@@ -226,6 +236,7 @@ func (s *Service) ReopenWorktreeSession(projectID, path, newSessionID string) (*
 			Kind:              old.Kind,
 			Path:              path,
 			ProviderSessionID: old.ProviderSessionID,
+			Entrypoint:        entrypoint,
 			OriginSessionID:   old.OriginSessionID,
 			OriginLabel:       old.OriginLabel,
 		}
@@ -330,6 +341,46 @@ func (s *Service) SessionModel(sessionID string) string {
 		return ""
 	}
 	return model.String
+}
+
+// SetSessionEntrypoint records the command a terminal session opens into, so
+// every later spawn of that session runs it again — a reload, a respawn, and the
+// resume of a parked worktree session all go through the same path. An empty
+// command clears it and leaves a plain shell.
+//
+// The kind clause is the guard that keeps this out of every other session: lich
+// has one project-wide way to put something in front of a PTY already
+// (.lich/setup-worktree.sh), and this is deliberately the opposite — one row,
+// one shell. Written in SQL rather than checked in Go because that is the only
+// spelling no future caller can skip: an RPC or an MCP tool that aims this at a
+// provider row changes nothing instead of parking a setting nothing reads.
+// 'shell' is terminal.KindShell, which SQL cannot interpolate — the same
+// coupling the schema's 'claude' default already carries.
+//
+// A session whose row is gone, or whose kind is not shell, matches nothing and
+// is not an error.
+func (s *Service) SetSessionEntrypoint(sessionID, entrypoint string) error {
+	if _, err := s.db.Exec(
+		`UPDATE sessions SET entrypoint = ? WHERE id = ? AND kind = 'shell'`,
+		strings.TrimSpace(entrypoint), sessionID,
+	); err != nil {
+		return fmt.Errorf("set entrypoint on %q: %w", sessionID, err)
+	}
+	return nil
+}
+
+// SessionEntrypoint returns the command recorded for a session, or "" for none —
+// which is what every provider session has, and what leaves a terminal on a
+// plain shell. A read failure answers "" for the same reason SessionModel does:
+// the entrypoint is an override, and the bare shell is the safe fallback.
+func (s *Service) SessionEntrypoint(sessionID string) string {
+	var entrypoint sql.NullString
+	if err := s.db.QueryRow(
+		`SELECT entrypoint FROM sessions WHERE id = ?`, sessionID,
+	).Scan(&entrypoint); err != nil {
+		return ""
+	}
+	return entrypoint.String
 }
 
 // SetProviderSession records the provider conversation id running inside a lich

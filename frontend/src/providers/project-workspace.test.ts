@@ -8,6 +8,7 @@ const storedSession = (overrides: Partial<StoredSession> = {}): StoredSession =>
   kind: "claude",
   path: "",
   providerSessionId: "",
+  entrypoint: "",
   pinned: false,
   originSessionId: "",
   originLabel: "",
@@ -43,6 +44,19 @@ describe("buildSessionState", () => {
   it("reads a null session list as a project with no sessions", () => {
     const state = buildSessionState([storedProject({ sessions: null })])
     expect(state.p1).toEqual({ sessions: [], activeId: "", nextSeq: 2 })
+  })
+
+  it("restores a terminal's entrypoint, and leaves the field off a plain shell", () => {
+    const state = buildSessionState([
+      storedProject({
+        sessions: [
+          storedSession({ id: "t1", kind: "shell", entrypoint: "lazygit" }),
+          storedSession({ id: "t2", kind: "shell" }),
+        ],
+      }),
+    ])
+    expect(state.p1.sessions[0].entrypoint).toBe("lazygit")
+    expect(state.p1.sessions[1]).not.toHaveProperty("entrypoint")
   })
 
   it("falls back to Claude for a kind this build does not know", () => {

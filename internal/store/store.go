@@ -49,6 +49,11 @@ CREATE TABLE IF NOT EXISTS sessions (
     position            INTEGER NOT NULL DEFAULT 0,
     pinned              INTEGER NOT NULL DEFAULT 0,
     model               TEXT NOT NULL DEFAULT '',
+    -- The command a terminal session opens into, empty for a plain shell. Only
+    -- a kind = 'shell' row ever holds one (SetSessionEntrypoint's WHERE clause):
+    -- on a provider row the entrypoint is the provider, and a value parked there
+    -- would be a setting nothing reads.
+    entrypoint          TEXT NOT NULL DEFAULT '',
     -- The session that asked for this one, when it was opened by delegation.
     -- Two columns rather than a foreign key: the id resolves to whatever the
     -- parent is called now, and the label is what it was called when the
@@ -107,9 +112,13 @@ type Session struct {
 	Kind              string `json:"kind"`
 	Path              string `json:"path"`
 	ProviderSessionID string `json:"providerSessionId"`
-	Pinned            bool   `json:"pinned"`
-	OriginSessionID   string `json:"originSessionId"`
-	OriginLabel       string `json:"originLabel"`
+	// Entrypoint is the command a terminal session opens into; always empty for
+	// a provider session. The window reads it to prefill its dialog and to say
+	// on the card what a renamed terminal actually runs.
+	Entrypoint      string `json:"entrypoint"`
+	Pinned          bool   `json:"pinned"`
+	OriginSessionID string `json:"originSessionId"`
+	OriginLabel     string `json:"originLabel"`
 }
 
 // Project is a persisted project together with its restorable session state.
@@ -174,6 +183,7 @@ func open(path string) (*Service, error) {
 		`ALTER TABLE sessions ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE sessions ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE sessions ADD COLUMN model TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE sessions ADD COLUMN entrypoint TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE sessions ADD COLUMN origin_session_id TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE sessions ADD COLUMN origin_label TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE projects ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
@@ -366,7 +376,8 @@ func (s *Service) ProjectAt(path string) (string, string) {
 // the frontend would have no order left to put an unpinned card back into.
 func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	rows, err := s.db.Query(
-		`SELECT id, label, kind, path, provider_session_id, pinned, origin_session_id, origin_label
+		`SELECT id, label, kind, path, provider_session_id, entrypoint, pinned,
+		        origin_session_id, origin_label
 		   FROM sessions WHERE project_id = ? AND is_open = 1 ORDER BY position, rowid`,
 		projectID,
 	)
@@ -379,8 +390,8 @@ func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	for rows.Next() {
 		var sess Session
 		if err := rows.Scan(
-			&sess.ID, &sess.Label, &sess.Kind, &sess.Path, &sess.ProviderSessionID, &sess.Pinned,
-			&sess.OriginSessionID, &sess.OriginLabel,
+			&sess.ID, &sess.Label, &sess.Kind, &sess.Path, &sess.ProviderSessionID,
+			&sess.Entrypoint, &sess.Pinned, &sess.OriginSessionID, &sess.OriginLabel,
 		); err != nil {
 			return nil, fmt.Errorf("scan session: %w", err)
 		}

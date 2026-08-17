@@ -87,6 +87,7 @@ export function SessionGroup({
     sessions: workspace,
     activateSession,
     renameSession,
+    setEntrypoint,
     pinSession,
     newSession,
   } = useProjects()
@@ -166,6 +167,9 @@ export function SessionGroup({
                     onSelect={() => select(session.id)}
                     onClose={() => onClose(session)}
                     onRename={(label) => renameSession(projectId, session.id, label)}
+                    onSetEntrypoint={(entrypoint) =>
+                      setEntrypoint(projectId, session.id, entrypoint)
+                    }
                     onPin={(pinned) => pinSession(projectId, session.id, pinned)}
                     onOpenTerminal={(cwd) => newSession(projectId, "shell", cwd)}
                     onPulls={onPulls}

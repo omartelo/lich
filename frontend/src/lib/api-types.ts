@@ -296,6 +296,8 @@ export interface StoredSession {
   kind: string
   path: string
   providerSessionId: string
+  /** The command a terminal session opens into; always "" for a provider one. */
+  entrypoint: string
   pinned: boolean
   /** The session that asked for this one, "" for a session nobody delegated. */
   originSessionId: string

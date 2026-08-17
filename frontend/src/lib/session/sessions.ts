@@ -36,6 +36,10 @@ export interface Session {
   // set by the store: a session created in this run has none, and the hook's
   // later report is not mirrored here — a running session has nothing to resume.
   providerSessionId?: string
+  // The command this terminal opens into, absent for a plain shell and for
+  // every provider session — the store refuses to record one against a card
+  // whose PTY runs an agent.
+  entrypoint?: string
   // Kept at the head of the project's list and refused a close until unpinned.
   pinned?: boolean
   // The session that asked for this one, when it was opened by delegation:
@@ -234,6 +238,42 @@ export function renameSession(
     [projectId]: {
       ...current,
       sessions: current.sessions.map((s) => (s.id === sessionId ? { ...s, label } : s)),
+    },
+  }
+}
+
+// setSessionEntrypoint records the command a terminal session opens into, and
+// takes the command as the card's label while that label is still whatever lich
+// named it — a card called "Terminal 2" that runs lazygit is a card the user has
+// to open to identify. `auto` is what the store answered about the rename it was
+// asked for in the same breath, so the decision is never guessed here: a card
+// the user named keeps its name, and the command shows in its tooltip instead.
+//
+// Unknown project or session ids are ignored, returning the input state
+// unchanged, and a session that is not a terminal is left alone — the store
+// refuses the write for it, so accepting it here would draw a card that does not
+// match the row behind it.
+export function setSessionEntrypoint(
+  state: SessionState,
+  projectId: string,
+  sessionId: string,
+  entrypoint: string,
+  auto: boolean,
+): SessionState {
+  const current = state[projectId]
+  const session = current?.sessions.find((s) => s.id === sessionId)
+  if (!current || !session || session.kind !== "shell") {
+    return state
+  }
+  return {
+    ...state,
+    [projectId]: {
+      ...current,
+      sessions: current.sessions.map((s) =>
+        s.id === sessionId
+          ? { ...s, entrypoint, ...(auto && entrypoint ? { label: entrypoint } : {}) }
+          : s,
+      ),
     },
   }
 }

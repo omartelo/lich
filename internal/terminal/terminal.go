@@ -156,6 +156,7 @@ type Store interface {
 	SetProviderSession(sessionID, providerSessionID string) error
 	ProviderSession(sessionID string) (string, error)
 	SessionModel(sessionID string) string
+	SessionEntrypoint(sessionID string) string
 	SetSessionTitle(sessionID, title string) (bool, error)
 	CostReadout() bool
 	CostLedger(sessionID, transcriptID string) (int64, string, float64, error)
@@ -499,6 +500,9 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, se
 		cols: cols,
 		rows: rows,
 	}
+	// Before wrapSetup, so a fresh worktree terminal carrying both runs the
+	// project's setup script first, then the entrypoint, then the shell.
+	spec = wrapEntrypoint(spec, kind, s.store.SessionEntrypoint(id), runtime.GOOS)
 	settingUp := false
 	if setup {
 		spec, settingUp = wrapSetup(spec, project.SetupScript(s.store.ProjectPath(projectID)), runtime.GOOS)
