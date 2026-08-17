@@ -205,26 +205,13 @@ func (s *Service) Open(fromID, projectName, kind, worktree, base, model string) 
 	label := fmt.Sprintf("Session %d", target.NextSeq)
 	setup := false
 	if worktree != "" {
-		// An existing checkout is opened, not created: asking for a worktree by
-		// the branch it holds is asking to work on that branch, and a caller
-		// that cannot see the repository has no way to know which of the two it
-		// is asking for. Only a fresh one runs the setup script — the checkout
-		// that is already there ran it when it was made.
-		if path, ok := s.checkoutAt(target, worktree); ok {
-			cwd, stored, setup = path, path, false
-		} else {
-			wt, err := s.addWorktree(target, worktree, base)
-			if err != nil {
-				return Session{}, err
-			}
-			cwd, stored, setup = wt.Path, wt.Path, true
+		found, err := s.resolveCheckout(target, worktree, base)
+		if err != nil {
+			return Session{}, err
 		}
-		// The card is named after the checkout, as the window names it — unless
-		// a session there already took that name. Two live sessions answering to
-		// one label is the one thing `lich send` cannot resolve, so the second
-		// falls back to the project's own counter.
-		if !labelTaken(target, worktree) {
-			label = worktree
+		cwd, stored, setup = found.path, found.path, found.fresh
+		if found.label != "" {
+			label = found.label
 		}
 	}
 
@@ -258,17 +245,66 @@ func (s *Service) Open(fromID, projectName, kind, worktree, base, model string) 
 	}
 	// After the card, for that same reason: the model is an override on a row
 	// that already exists, so a write that fails must not be what hides the
-	// session. The spawn below reads the model back from the row, so a failure
-	// here costs the provider's default and nothing else.
+	// session — and must not cost it its terminal either. A card with no PTY
+	// behind it is invisible to `lich sessions` and unreachable by `lich send`,
+	// which is the state this package exists to prevent; the spawn below reads
+	// the model back from the row, so the session starts on the provider's own
+	// default and the failure is reported once it is running.
+	var modelErr error
 	if model != "" {
 		if err := s.sessions.SetSessionModel(id, model); err != nil {
-			return Session{}, err
+			modelErr = fmt.Errorf(
+				"session %q is open, but the model could not be recorded, so it runs on the "+
+					"provider's own default: %w",
+				label, err,
+			)
 		}
 	}
 	if err := s.term.Start(id, target.ID, cwd, kind, "", opened.Name, setup, startCols, startRows); err != nil {
 		return Session{}, fmt.Errorf("session %q was created but its terminal did not start: %w", label, err)
 	}
+	if modelErr != nil {
+		return Session{}, modelErr
+	}
 	return opened, nil
+}
+
+// checkout is the worktree a session is being opened in: where it lives,
+// whether it was just created, and what the card should be called — empty when
+// the branch's name is already taken and the caller should fall back to the
+// project's own counter.
+type checkout struct {
+	path  string
+	fresh bool
+	label string
+}
+
+// resolveCheckout settles the worktree a session is opened in: the one already
+// holding that branch, or a new one created off base.
+//
+// An existing checkout is opened, not created: asking for a worktree by the
+// branch it holds is asking to work on that branch, and a caller that cannot
+// see the repository has no way to know which of the two it is asking for. Only
+// a fresh one runs the setup script — the checkout that is already there ran it
+// when it was made.
+//
+// The card is named after the checkout, as the window names it — unless a
+// session there already took that name. Two live sessions answering to one
+// label is the one thing `lich send` cannot resolve, so the second is left
+// unnamed here and takes the project's counter instead.
+func (s *Service) resolveCheckout(target store.Project, worktree, base string) (checkout, error) {
+	label := worktree
+	if labelTaken(target, worktree) {
+		label = ""
+	}
+	if path, ok := s.checkoutAt(target, worktree); ok {
+		return checkout{path: path, label: label}, nil
+	}
+	wt, err := s.addWorktree(target, worktree, base)
+	if err != nil {
+		return checkout{}, err
+	}
+	return checkout{path: wt.Path, fresh: true, label: label}, nil
 }
 
 // addWorktree creates the checkout a worktree session lives in.
