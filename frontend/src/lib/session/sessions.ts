@@ -449,7 +449,7 @@ export function groupByWorktree(sessions: Session[]): SessionGroup[] {
 // dnd-kit sortable id cannot be.
 export const ROOT_GROUP_KEY = "__root__"
 
-export function groupKey(path: string): string {
+function groupKey(path: string): string {
   return path || ROOT_GROUP_KEY
 }
 

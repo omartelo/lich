@@ -6,10 +6,10 @@ export const SYSTEM_THEME = "system"
 export const MATCH_TERMINAL_THEME = "match"
 export const DEFAULT_THEME = SYSTEM_THEME
 export const DEFAULT_TERMINAL_THEME = MATCH_TERMINAL_THEME
-export const LIGHT_THEME_ID = "light"
-export const DARK_THEME_ID = "dark"
-export const BUNDLED_THEME_ORIGIN = "bundled"
-export const CUSTOM_THEME_ORIGIN = "custom"
+const LIGHT_THEME_ID = "light"
+const DARK_THEME_ID = "dark"
+const BUNDLED_THEME_ORIGIN = "bundled"
+const CUSTOM_THEME_ORIGIN = "custom"
 export const DARK_THEME_SCHEME = "dark"
 export const THEME_TEMPLATE_FILENAME = "lich-theme-template.json"
 

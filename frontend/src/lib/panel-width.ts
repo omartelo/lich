@@ -2,7 +2,7 @@
 // pointer deltas arrive in CSS pixels and are converted with the 16px root
 // font size Tailwind assumes.
 
-export const REM_PX = 16
+const REM_PX = 16
 
 export interface WidthBounds {
   minRem: number

@@ -121,7 +121,7 @@ export type PaletteTab = (typeof PALETTE_TABS)[number]
 // ALL_TAB_ROWS is how much of a group the All tab shows. Three is enough for the
 // hit that is obviously the one and short enough that four groups still fit
 // without scrolling.
-export const ALL_TAB_ROWS = 3
+const ALL_TAB_ROWS = 3
 
 // PaletteRow is one option in the list, carrying what running it needs. The
 // groups are rendered in order and the rows flattened back out for the arrow

@@ -118,7 +118,7 @@ const readContextUsage = (): boolean => parseBoolPref(readPref(CONTEXT_USAGE_STO
 // prints. Anything that is not a number at all is no ceiling, which is what an
 // emptied input has to mean — the alternative is a NaN budget that colours the
 // readout forever.
-export function clampCostBudget(value: number): number {
+function clampCostBudget(value: number): number {
   if (!Number.isFinite(value)) {
     return 0
   }
