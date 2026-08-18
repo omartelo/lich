@@ -101,8 +101,15 @@ func (s *Service) DeleteProject(id string) error {
 // working directory when it lives in a git worktree; empty means the project's.
 // The session takes the position after the project's last one, so it appends to
 // the card list even once the user has dragged the others around.
-func (s *Service) AddSession(projectID, sessionID, label, kind, path string, nextSeq int) error {
-	return s.AddSessionFrom(projectID, sessionID, label, kind, path, nextSeq, "", "")
+// sandbox is whether this session runs confined ("on"/"off", empty to follow the
+// provider's rung). It is written with the row rather than after it because the
+// PTY reads it on the very first spawn: a second call would race the card the
+// insert is about to put on screen, and lose that race silently — the session
+// would open unconfined and stay that way until something respawned it.
+func (s *Service) AddSession(
+	projectID, sessionID, label, kind, path string, nextSeq int, sandbox string,
+) error {
+	return s.addSession(projectID, sessionID, label, kind, path, nextSeq, "", "", sandbox)
 }
 
 // AddSessionFrom is AddSession for a session opened by delegation: originID is
@@ -116,14 +123,27 @@ func (s *Service) AddSession(projectID, sessionID, label, kind, path string, nex
 func (s *Service) AddSessionFrom(
 	projectID, sessionID, label, kind, path string, nextSeq int, originID, originLabel string,
 ) error {
+	// No sandbox answer: a delegated session is opened by another session, which
+	// has nobody to ask, so it follows the provider's rung like every other
+	// caller that cannot put the question on screen.
+	return s.addSession(projectID, sessionID, label, kind, path, nextSeq, originID, originLabel, "")
+}
+
+// addSession is the one insert behind both entry points.
+func (s *Service) addSession(
+	projectID, sessionID, label, kind, path string, nextSeq int, originID, originLabel, sandbox string,
+) error {
 	if kind == "" {
 		kind = providers.Claude
 	}
+	if sandbox != SessionConfined && sandbox != SessionUnconfined {
+		sandbox = ""
+	}
 	return s.tx(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(
-			`INSERT INTO sessions (id, project_id, label, kind, path, origin_session_id, origin_label, position)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
-			sessionID, projectID, label, kind, path, originID, originLabel, projectID,
+			`INSERT INTO sessions (id, project_id, label, kind, path, origin_session_id, origin_label, sandbox, position)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
+			sessionID, projectID, label, kind, path, originID, originLabel, sandbox, projectID,
 		); err != nil {
 			return fmt.Errorf("insert session %q: %w", sessionID, err)
 		}
@@ -186,9 +206,9 @@ func (s *Service) ReopenWorktreeSession(projectID, path, newSessionID string) (*
 		// shell — silently, on the one path where the card keeps its identity but
 		// not its id.
 		var labelAuto int
-		var model, entrypoint string
+		var model, entrypoint, sandbox string
 		row := tx.QueryRow(
-			`SELECT id, label, kind, provider_session_id, label_auto, model, entrypoint,
+			`SELECT id, label, kind, provider_session_id, label_auto, model, entrypoint, sandbox,
 			        origin_session_id, origin_label
 			   FROM sessions
 			  WHERE project_id = ? AND path = ? AND is_open = 0
@@ -197,7 +217,7 @@ func (s *Service) ReopenWorktreeSession(projectID, path, newSessionID string) (*
 		)
 		if err := row.Scan(
 			&old.ID, &old.Label, &old.Kind, &old.ProviderSessionID, &labelAuto, &model, &entrypoint,
-			&old.OriginSessionID, &old.OriginLabel,
+			&sandbox, &old.OriginSessionID, &old.OriginLabel,
 		); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil // nothing parked here; caller creates a new session
@@ -217,10 +237,10 @@ func (s *Service) ReopenWorktreeSession(projectID, path, newSessionID string) (*
 		if _, err := tx.Exec(
 			`INSERT INTO sessions
 			   (id, project_id, label, kind, path, provider_session_id, label_auto,
-			    model, entrypoint, origin_session_id, origin_label, position)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
+			    model, entrypoint, sandbox, origin_session_id, origin_label, position)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
 			newSessionID, projectID, old.Label, old.Kind, path, old.ProviderSessionID, labelAuto,
-			model, entrypoint, old.OriginSessionID, old.OriginLabel, projectID,
+			model, entrypoint, sandbox, old.OriginSessionID, old.OriginLabel, projectID,
 		); err != nil {
 			return fmt.Errorf("reinsert session %q: %w", newSessionID, err)
 		}
@@ -237,6 +257,7 @@ func (s *Service) ReopenWorktreeSession(projectID, path, newSessionID string) (*
 			Path:              path,
 			ProviderSessionID: old.ProviderSessionID,
 			Entrypoint:        entrypoint,
+			Sandbox:           sandbox,
 			OriginSessionID:   old.OriginSessionID,
 			OriginLabel:       old.OriginLabel,
 		}
@@ -381,6 +402,50 @@ func (s *Service) SessionEntrypoint(sessionID string) string {
 		return ""
 	}
 	return entrypoint.String
+}
+
+// Session sandbox answers, the row's own spelling. Empty is not one of them: it
+// is the absence of an answer, and it means the provider's rung decides.
+const (
+	// SessionConfined runs this session in the sandbox whatever the rung says.
+	SessionConfined = "on"
+	// SessionUnconfined runs it on the machine whatever the rung says.
+	SessionUnconfined = "off"
+)
+
+// SetSessionSandbox records whether one session runs confined, overriding the
+// provider's rung for that session alone. It is written when a session is
+// opened — the dialog's answer — and read on every later spawn, so a respawn
+// after a reload and the resume of a parked worktree session are confined the
+// same way the user opened them.
+//
+// Anything that is not one of the two answers clears the override rather than
+// parking an unreadable value: a row that says neither is a row that follows
+// the setting, which is the state every session starts in.
+func (s *Service) SetSessionSandbox(sessionID, sandbox string) error {
+	if sandbox != SessionConfined && sandbox != SessionUnconfined {
+		sandbox = ""
+	}
+	if _, err := s.db.Exec(
+		`UPDATE sessions SET sandbox = ? WHERE id = ?`, sandbox, sessionID,
+	); err != nil {
+		return fmt.Errorf("set sandbox on %q: %w", sessionID, err)
+	}
+	return nil
+}
+
+// SessionSandbox returns the answer recorded for a session, or "" when nobody
+// decided for this one and the provider's rung stands. A read failure answers
+// "" for SessionEntrypoint's reason: the row is an override, and deferring to
+// the setting is the honest fallback.
+func (s *Service) SessionSandbox(sessionID string) string {
+	var sandbox sql.NullString
+	if err := s.db.QueryRow(
+		`SELECT sandbox FROM sessions WHERE id = ?`, sessionID,
+	).Scan(&sandbox); err != nil {
+		return ""
+	}
+	return sandbox.String
 }
 
 // SetProviderSession records the provider conversation id running inside a lich

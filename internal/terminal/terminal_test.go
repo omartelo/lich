@@ -40,6 +40,8 @@ type stubBins struct {
 	providerErr     error
 	model           string
 	entrypoint      string
+	sandbox         string
+	sandboxOn       bool
 	skipPerms       bool
 	costOn          bool
 	ledgers         map[string]stubLedger
@@ -87,6 +89,9 @@ func (s stubBins) SkipPermissions(_, _, _ string) bool  { return s.skipPerms }
 func (s stubBins) ProjectPath(_ string) string          { return s.projectPath }
 func (s stubBins) SessionModel(_ string) string         { return s.model }
 func (s stubBins) SessionEntrypoint(_ string) string    { return s.entrypoint }
+func (s stubBins) SessionSandbox(_ string) string       { return s.sandbox }
+func (s stubBins) SetSessionSandbox(_, _ string) error  { return nil }
+func (s stubBins) SandboxDefault(_, _, _ string) bool   { return s.sandboxOn }
 func (s stubBins) SetProviderSession(_, _ string) error { return nil }
 
 func (s stubBins) WorktreePorts() map[string]int {

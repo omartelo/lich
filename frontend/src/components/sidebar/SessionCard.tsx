@@ -13,6 +13,7 @@ import {
   Pin,
   PinOff,
   Play,
+  Shield,
   Terminal,
   TriangleAlert,
   X,
@@ -276,6 +277,16 @@ export function SessionCard({
                     <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                       {age}
                     </span>
+                  )}
+                  {/* Permanent state, so it sits with the status and the age
+                      rather than on the line below, which is a ladder where one
+                      rung draws at a time and every rung is news. Muted and
+                      wordless: the tooltip carries what it means. */}
+                  {session.sandboxed && (
+                    <Shield
+                      aria-label="Sandboxed"
+                      className="size-3 shrink-0 text-muted-foreground"
+                    />
                   )}
                   <span className="truncate text-sm font-medium text-foreground">
                     {session.label}

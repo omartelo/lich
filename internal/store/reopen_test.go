@@ -10,12 +10,12 @@ import "testing"
 func TestReopenWorktreeSessionTakesTheNewestParkedRow(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "base", "Session 1", "claude", "", 2)
+	_ = svc.AddSession("p1", "base", "Session 1", "claude", "", 2, "")
 
-	_ = svc.AddSession("p1", "wt1", "older", "claude", "/wt/foo", 3)
+	_ = svc.AddSession("p1", "wt1", "older", "claude", "/wt/foo", 3, "")
 	_ = svc.SetProviderSession("wt1", "conv-older")
 	_ = svc.CloseSession("p1", "wt1", "base")
-	_ = svc.AddSession("p1", "wt2", "newer", "claude", "/wt/foo", 4)
+	_ = svc.AddSession("p1", "wt2", "newer", "claude", "/wt/foo", 4, "")
 	_ = svc.SetProviderSession("wt2", "conv-newer")
 	_ = svc.CloseSession("p1", "wt2", "base")
 

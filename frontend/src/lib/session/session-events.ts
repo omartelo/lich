@@ -38,6 +38,13 @@ export const CWD_EVENT = "session-cwd"
 // Payload: { id, agent }; an empty agent (every PTY spawn) clears the mark.
 export const AGENT_EVENT = "session-agent"
 
+// Global event the backend emits on every spawn with whether that PTY runs
+// inside the sandbox (see terminal.sandboxEventName). Payload: { id, confined }.
+// The verdict is the spawn's — it resolves the provider's rung, the checkout and
+// any per-session override — and it is persisted with the row too, which is what
+// a page reload hydrates from.
+export const SANDBOX_EVENT = "session-sandbox"
+
 // Global event the backend emits after a turn ends with the session's
 // context-window usage (see terminal.usageEventName). Payload: { id, percent,
 // tokens, window, model, effort } — percent is 0–100 of the window, tokens the
@@ -167,6 +174,10 @@ export function isIdEvent(data: unknown): data is { id: string } {
   return (
     typeof data === "object" && data !== null && typeof (data as { id?: unknown }).id === "string"
   )
+}
+
+export function isSandboxEvent(data: unknown): data is { id: string; confined: boolean } {
+  return isIdEvent(data) && typeof (data as { confined?: unknown }).confined === "boolean"
 }
 
 export function isStatusEvent(data: unknown): data is { id: string; state: string } {

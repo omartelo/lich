@@ -9,6 +9,7 @@ const storedSession = (overrides: Partial<StoredSession> = {}): StoredSession =>
   path: "",
   providerSessionId: "",
   entrypoint: "",
+  sandbox: "",
   pinned: false,
   originSessionId: "",
   originLabel: "",
@@ -124,5 +125,25 @@ describe("buildSessionState", () => {
     ])
     expect(Object.keys(state)).toEqual(["p1", "p2"])
     expect(state.p2).toMatchObject({ activeId: "s9", nextSeq: 5 })
+  })
+})
+
+describe("confined sessions", () => {
+  it("marks a session the spawn recorded as confined", () => {
+    const state = buildSessionState([
+      storedProject({ sessions: [storedSession({ id: "s1", sandbox: "on" })] }),
+    ])
+    expect(state.p1?.sessions[0]?.sandboxed).toBe(true)
+  })
+
+  // "off" and "" are both "not confined" — the card carries no mark either way,
+  // and the difference (nobody decided yet) belongs to the spawn, not here.
+  it("leaves every other value unmarked", () => {
+    for (const sandbox of ["", "off", "maybe"]) {
+      const state = buildSessionState([
+        storedProject({ sessions: [storedSession({ id: "s1", sandbox })] }),
+      ])
+      expect(state.p1?.sessions[0]?.sandboxed).toBeUndefined()
+    }
   })
 })

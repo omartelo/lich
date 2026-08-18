@@ -1,4 +1,4 @@
-import { GitBranch, GitPullRequestArrow, Play, TriangleAlert } from "lucide-react"
+import { GitBranch, GitPullRequestArrow, Play, Shield, TriangleAlert } from "lucide-react"
 import type { Session } from "@/lib/session/sessions"
 import { useSessionCwd } from "@/lib/session/use-session-cwd"
 import { useGitStatus } from "@/lib/git/use-git-status"
@@ -45,6 +45,24 @@ export function SessionTooltip({ session, path }: SessionTooltipProps) {
           <span className="flex items-center gap-1.5 text-muted-foreground">
             <Play className="size-3 shrink-0" />
             <span className="break-all font-mono">{session.entrypoint}</span>
+          </span>
+        )}
+        {/* What the shield on the card means. Directly under the path, because
+            what it says is about that path: the sandbox is the difference
+            between a session that can write anywhere and one that can write
+            here. The last line is the part nothing else says — the answer was
+            taken when the session opened, and moving the rung in Settings will
+            not move this card. */}
+        {session.sandboxed && (
+          <span className="flex flex-col gap-0.5">
+            <span className="flex items-center gap-1.5">
+              <Shield className="size-3 shrink-0" />
+              Sandboxed
+            </span>
+            <span className="text-muted-foreground">
+              Empty home, machine read-only, writes only in this checkout. Set when the session
+              opened; reopen it to change.
+            </span>
           </span>
         )}
         {git?.branch && (

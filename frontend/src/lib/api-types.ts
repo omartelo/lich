@@ -298,6 +298,9 @@ export interface StoredSession {
   providerSessionId: string
   /** The command a terminal session opens into; always "" for a provider one. */
   entrypoint: string
+  /** Whether this session runs confined: "on", "off", or "" for a row nothing
+   * has spawned yet. Written by the spawn, which is what resolves the rung. */
+  sandbox: string
   pinned: boolean
   /** The session that asked for this one, "" for a session nobody delegated. */
   originSessionId: string

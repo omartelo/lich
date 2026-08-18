@@ -40,6 +40,11 @@ export interface Session {
   // every provider session — the store refuses to record one against a card
   // whose PTY runs an agent.
   entrypoint?: string
+  // Whether this session's PTY runs inside the sandbox (internal/sandbox).
+  // Absent means it does not — the spawn decides it, from the provider's rung,
+  // the checkout and any per-session override, and reports the verdict back;
+  // the card never re-derives it.
+  sandboxed?: boolean
   // Kept at the head of the project's list and refused a close until unpinned.
   pinned?: boolean
   // The session that asked for this one, when it was opened by delegation:
@@ -238,6 +243,34 @@ export function renameSession(
     [projectId]: {
       ...current,
       sessions: current.sessions.map((s) => (s.id === sessionId ? { ...s, label } : s)),
+    },
+  }
+}
+
+// setSessionSandboxed records whether a session's PTY runs confined, as the
+// spawn reported it. Unknown ids leave the state untouched, and a value that
+// already matches returns the same object — the event fires on every spawn, and
+// a re-render per respawn of an unchanged card is a card that flickers.
+export function setSessionSandboxed(
+  state: SessionState,
+  sessionId: string,
+  sandboxed: boolean,
+): SessionState {
+  const projectId = projectOfSession(state, sessionId)
+  const current = projectId ? state[projectId] : undefined
+  const session = current?.sessions.find((s) => s.id === sessionId)
+  if (!projectId || !current || !session || (session.sandboxed ?? false) === sandboxed) {
+    return state
+  }
+  return {
+    ...state,
+    [projectId]: {
+      ...current,
+      sessions: current.sessions.map((s) =>
+        s.id === sessionId
+          ? { ...s, ...(sandboxed ? { sandboxed: true } : { sandboxed: undefined }) }
+          : s,
+      ),
     },
   }
 }

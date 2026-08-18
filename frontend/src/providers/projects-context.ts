@@ -22,8 +22,13 @@ export interface ProjectsValue {
    * defaults to the project's provider choice; path to its own directory. */
   newSession: (projectId: string, kind?: SessionKind, path?: string) => string
   /** Open a project-default session rooted at a git worktree, labeled after it,
-   * returning its id. */
-  newWorktreeSession: (projectId: string, wt: { name: string; path: string }) => string
+   * returning its id. sandbox is the dialog's confinement answer ("on"/"off"),
+   * "" to follow the provider's rung. */
+  newWorktreeSession: (
+    projectId: string,
+    wt: { name: string; path: string },
+    sandbox?: string,
+  ) => string
   /** Resume a worktree: reopen its parked session when one exists, else open a
    * fresh session on it. */
   reopenWorktreeSession: (projectId: string, wt: { name: string; path: string }) => Promise<void>

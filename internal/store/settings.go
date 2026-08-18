@@ -113,6 +113,76 @@ func (s *Service) SkipPermissions(providerID, projectID, cwd string) bool {
 	return value == "true"
 }
 
+// Sandbox rungs, ordered by how much of the machine a session can reach. They
+// are the stored spelling of the control in Settings › Providers, and anything
+// this list does not name reads as SandboxOff — an unknown value must never be
+// the answer that leaves a session unconfined by accident, but it must also
+// never confine one the user never asked to confine.
+const (
+	// SandboxOff runs sessions straight on the machine. The default.
+	SandboxOff = "off"
+	// SandboxAsk leaves the answer to the session about to open: the dialog
+	// carries the choice, and a session opened any other way is not confined.
+	SandboxAsk = "ask"
+	// SandboxWorktrees confines sessions in a worktree and leaves the project's
+	// own checkout alone — a worktree is the throwaway one, which is the split
+	// skipPermissionsKey already makes for the opposite reason.
+	SandboxWorktrees = "worktrees"
+	// SandboxEverywhere confines every session of the provider.
+	SandboxEverywhere = "everywhere"
+)
+
+// sandboxKey is the settings key holding a provider's sandbox rung. Scoped like
+// ProviderBin — a project value wins over the global one — because confining is
+// a decision about a repository as much as about a provider: the checkout full
+// of other people's code is the one to confine, and the user's own scratch
+// project is not.
+func sandboxKey(providerID string) string {
+	return "provider." + providerID + ".sandbox"
+}
+
+// SandboxLevel returns the rung configured for a provider in a project: the
+// project's own value, then the global one, then SandboxOff. An unreadable or
+// unrecognised value is SandboxOff for the reason the constants give.
+func (s *Service) SandboxLevel(providerID, projectID string) string {
+	level := ""
+	if projectID != globalScope {
+		if value, err := s.GetSetting(sandboxKey(providerID), projectID); err == nil {
+			level = value
+		}
+	}
+	if level == "" {
+		if value, err := s.GetSetting(sandboxKey(providerID), globalScope); err == nil {
+			level = value
+		}
+	}
+	switch level {
+	case SandboxAsk, SandboxWorktrees, SandboxEverywhere:
+		return level
+	}
+	return SandboxOff
+}
+
+// SandboxDefault reports whether a session of this provider, starting in cwd,
+// is confined unless something says otherwise. cwd picks the scope the same way
+// SkipPermissions does: anything but the project's own directory is a worktree,
+// and a project whose path cannot be read falls back to the main checkout.
+//
+// SandboxAsk answers false here on purpose. It is the rung that hands the
+// decision to whoever opens the session, and every caller that cannot ask —
+// a respawn, an MCP tool, a delegation — has to be left with the answer the
+// user would get by closing the dialog rather than with one nobody chose.
+func (s *Service) SandboxDefault(providerID, projectID, cwd string) bool {
+	switch s.SandboxLevel(providerID, projectID) {
+	case SandboxEverywhere:
+		return true
+	case SandboxWorktrees:
+		root := s.ProjectPath(projectID)
+		return root != "" && filepath.Clean(cwd) != filepath.Clean(root)
+	}
+	return false
+}
+
 // ghAccountKey is the settings key holding the gh account a project's GitHub
 // calls run as. Project-scoped only, no global fallback: gh already has a
 // global answer (its active account), and this exists precisely to override it

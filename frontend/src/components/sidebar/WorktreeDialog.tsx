@@ -3,6 +3,7 @@ import type { KeyboardEvent } from "react"
 import { ProjectService } from "@/lib/rpc"
 import type { Branches, Worktree } from "@/lib/api-types"
 import { SearchInput } from "@/components/common/SearchInput"
+import { WorktreeSandboxRow } from "@/components/sidebar/WorktreeSandboxRow"
 import { WorktreeSetupRow } from "@/components/sidebar/WorktreeSetupRow"
 import { Button } from "@/components/ui/button"
 import {
@@ -17,16 +18,28 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { isValidBranchName } from "@/lib/git/branch-name"
+import { useSandboxChoice, type SandboxAnswer } from "@/lib/use-sandbox-choice"
 import { cn, errorText } from "@/lib/utils"
 
 interface WorktreeDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   projectPath: string
+  /** The project the worktree belongs to, and the provider its session will
+   * run: together they scope the sandbox rung the confinement row starts on. */
+  projectId: string
+  providerId: string
   /** The repo's checked-out branch, preselected as the base. */
   currentBranch: string
-  /** Create the worktree and open its session; rejections show in the dialog. */
-  onCreate: (name: string, base: string, baseIsRemote: boolean) => Promise<void>
+  /** Create the worktree and open its session; rejections show in the dialog.
+   * sandbox is the confinement answer for that session ("on"/"off", "" when the
+   * machine cannot confine and nothing was asked). */
+  onCreate: (
+    name: string,
+    base: string,
+    baseIsRemote: boolean,
+    sandbox: SandboxAnswer,
+  ) => Promise<void>
   /** Reopen a session on an already-existing worktree. */
   onResume: (wt: { name: string; path: string }) => void
 }
@@ -105,6 +118,8 @@ export function WorktreeDialog({
   open,
   onOpenChange,
   projectPath,
+  projectId,
+  providerId,
   currentBranch,
   onCreate,
   onResume,
@@ -117,6 +132,8 @@ export function WorktreeDialog({
   const [submitError, setSubmitError] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
+  // A worktree is always the linked checkout, so the rung is read on that side.
+  const sandbox = useSandboxChoice(providerId, projectId, true)
 
   const vis = filterBranches(branches, filter)
   const flat = flatValues(vis)
@@ -211,7 +228,7 @@ export function WorktreeDialog({
     setSubmitting(true)
     setSubmitError("")
     try {
-      await onCreate(trimmed, id, group === "remote")
+      await onCreate(trimmed, id, group === "remote", sandbox.answer)
     } catch (err) {
       setSubmitError(errorText(err))
       setSubmitting(false)
@@ -320,6 +337,8 @@ export function WorktreeDialog({
         </div>
 
         <WorktreeSetupRow projectPath={projectPath} />
+
+        <WorktreeSandboxRow choice={sandbox} />
 
         {(loadError || submitError) && (
           <span className="text-xs break-words text-destructive">{loadError || submitError}</span>

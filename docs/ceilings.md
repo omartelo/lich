@@ -89,3 +89,33 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   those logins and never writes them: it does not refresh the token, so an expired one reads as signed out until
   the provider's own CLI rotates it. A reading is cached for five minutes because both endpoints rate-limit hard —
   the number on screen is up to that old, and nothing on it says so.
+- **The sandbox confines a working agent, not hostile code** (`internal/sandbox`): namespaces and mounts on
+  Linux, a path policy on macOS, and nothing else — no seccomp filter, no Landlock ruleset. The network is
+  never cut (the agent needs its API and the plugin's hooks report over loopback), so anything readable
+  inside is exfiltrable, and `~/.config` *is* readable: a token stored there, `gh`'s among them, is in
+  reach. The private home is writable and vanishes with the session, so a dotfile an agent writes is gone
+  next spawn with nothing saying so. On Ubuntu and Debian the kernel may refuse the user namespace outright
+  (an AppArmor policy), which surfaces as bubblewrap's own error in the card and no session. `~/.ssh` is not
+  mounted at all: a push over ssh from inside a confined session fails, and lich's own PR flows run outside
+  it and are unaffected. macOS has no hardware here — its profile is unit-tested and has never run.
+- **A symlink in the home is not mounted into the sandbox** (`internal/sandbox`): every path lich binds is
+  taken as it is on disk, and a link is skipped — following one would let a dotfile manager point the
+  private home at whatever it likes, and binding one fails the spawn outright when a parent directory is
+  already mounted (bubblewrap resolves a mount destination through symlinks). So a `~/.gitconfig` symlinked
+  out of a dotfiles repository is absent inside a confined session, with nothing on screen saying so. The
+  binaries are the exception: their symlink chains are walked and the *directory* of every hop is mounted
+  (`BinaryDirs`), which is what makes an agent installed the usual way — a link on `PATH` into a versioned
+  store — runnable at all.
+- **Only the New worktree dialog asks** (`frontend/src/lib/use-sandbox-choice.ts`): the `Ask each time` rung
+  has one place to put the question, so a session opened from the New Session menu, by a delegation, or
+  through the MCP tool is not confined on that rung — it takes the answer closing the dialog would give.
+  `Worktrees only` and `Everywhere` reach every caller; `Ask` reaches one.
+- **A confined session is frozen at the answer it opened with** (`internal/terminal/sandbox.go`): the row
+  wins over the rung in both directions, so moving the ladder afterwards changes nothing for the cards
+  already on screen — including a parked worktree session resumed months later. The card's shield is the only
+  thing that says so, and it says confined or not, never why: a card with no shield beside a rung set to
+  Everywhere is a session that opened before the rung moved, and reopening it is the only way to change it.
+- **A terminal session is never confined by a rung** (`internal/store/settings.go`): the rung is keyed by
+  provider, and `shell` is not one — the sandbox exists to confine an agent working unattended, not the
+  user's own prompt. A terminal opened in a project whose provider is on `Everywhere` still runs on the
+  machine, and nothing says so.

@@ -59,7 +59,13 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- parent is called now, and the label is what it was called when the
     -- delegation happened — which is all that survives the parent being closed.
     origin_session_id   TEXT NOT NULL DEFAULT '',
-    origin_label        TEXT NOT NULL DEFAULT ''
+    origin_label        TEXT NOT NULL DEFAULT '',
+    -- Whether this session runs confined, when the answer belongs to the session
+    -- rather than to the provider's rung: 'on', 'off', or empty to follow the
+    -- setting. Three states rather than a boolean because the row has to be able
+    -- to say "nobody decided this one" — a session opened before the user picked
+    -- a rung, or by a caller with nowhere to ask.
+    sandbox             TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
 
@@ -115,7 +121,12 @@ type Session struct {
 	// Entrypoint is the command a terminal session opens into; always empty for
 	// a provider session. The window reads it to prefill its dialog and to say
 	// on the card what a renamed terminal actually runs.
-	Entrypoint      string `json:"entrypoint"`
+	Entrypoint string `json:"entrypoint"`
+	// Sandbox is whether this session runs confined: "on", "off", or empty for a
+	// row nothing has spawned yet. The spawn writes its own verdict here, so the
+	// window can mark a confined card without re-deriving a decision that took
+	// the provider's rung, the checkout and a per-session override to reach.
+	Sandbox         string `json:"sandbox"`
 	Pinned          bool   `json:"pinned"`
 	OriginSessionID string `json:"originSessionId"`
 	OriginLabel     string `json:"originLabel"`
@@ -186,6 +197,7 @@ func open(path string) (*Service, error) {
 		`ALTER TABLE sessions ADD COLUMN entrypoint TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE sessions ADD COLUMN origin_session_id TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE sessions ADD COLUMN origin_label TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE sessions ADD COLUMN sandbox TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE projects ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE projects ADD COLUMN closed_seq INTEGER NOT NULL DEFAULT 0`,
 	}
@@ -376,7 +388,7 @@ func (s *Service) ProjectAt(path string) (string, string) {
 // the frontend would have no order left to put an unpinned card back into.
 func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	rows, err := s.db.Query(
-		`SELECT id, label, kind, path, provider_session_id, entrypoint, pinned,
+		`SELECT id, label, kind, path, provider_session_id, entrypoint, sandbox, pinned,
 		        origin_session_id, origin_label
 		   FROM sessions WHERE project_id = ? AND is_open = 1 ORDER BY position, rowid`,
 		projectID,
@@ -391,7 +403,7 @@ func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 		var sess Session
 		if err := rows.Scan(
 			&sess.ID, &sess.Label, &sess.Kind, &sess.Path, &sess.ProviderSessionID,
-			&sess.Entrypoint, &sess.Pinned, &sess.OriginSessionID, &sess.OriginLabel,
+			&sess.Entrypoint, &sess.Sandbox, &sess.Pinned, &sess.OriginSessionID, &sess.OriginLabel,
 		); err != nil {
 			return nil, fmt.Errorf("scan session: %w", err)
 		}

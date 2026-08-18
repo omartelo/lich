@@ -60,6 +60,23 @@ func gitQuiet(dir string, args ...string) (string, bool) {
 	return string(out), true
 }
 
+// GitCommonDir returns the repository metadata directory shared by a checkout
+// and every worktree linked to it, or "" when dir is not in a repository. It is
+// the same question basestatus.go asks, in the same spelling, and absolute
+// because the caller needs a path rather than something to resolve against dir.
+//
+// A linked worktree's `.git` is a file naming that directory, so a process that
+// can see the worktree and not the common directory has a checkout git refuses
+// to read at all. It is asked of git rather than parsed out of the `.git` file
+// because git is the one thing that cannot be wrong about its own layout.
+func GitCommonDir(dir string) string {
+	out, ok := gitQuiet(dir, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(out)
+}
+
 // splitNUL splits the -z output of a git list command into its entries. git
 // terminates each with a NUL, so the trailing empty element is dropped along
 // with any other.

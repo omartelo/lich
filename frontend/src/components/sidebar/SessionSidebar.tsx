@@ -12,7 +12,7 @@ import {
   isPullsListOpen,
   subscribePullsListCard,
 } from "@/lib/pulls-list-card-store"
-import { enabledProviders, useProviders } from "@/lib/providers-store"
+import { enabledProviders, projectDefaultProviderKind, useProviders } from "@/lib/providers-store"
 import { ResizeHandle } from "@/components/common/ResizeHandle"
 import { SettingsCard } from "./SettingsCard"
 import { SidebarCard } from "@/components/common/SidebarCard"
@@ -143,12 +143,17 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
     reorderSessions(projectId, reorderSubset(list, ids, member))
   }
 
-  const createWorktree = async (name: string, base: string, baseIsRemote: boolean) => {
+  const createWorktree = async (
+    name: string,
+    base: string,
+    baseIsRemote: boolean,
+    sandbox: string,
+  ) => {
     const wt = await ProjectService.CreateWorktree(path, projectId, name, base, baseIsRemote)
     if (wt) {
       // A fresh checkout is the one moment the project's setup script runs;
       // reopening an existing worktree never queues it.
-      queueSetup(newWorktreeSession(projectId, wt))
+      queueSetup(newWorktreeSession(projectId, wt, sandbox))
     }
     setWorktreeOpen(false)
   }
@@ -288,6 +293,8 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
         open={worktreeOpen}
         onOpenChange={setWorktreeOpen}
         projectPath={path}
+        projectId={projectId}
+        providerId={projectDefaultProviderKind(projectId)}
         currentBranch={git?.branch ?? ""}
         onCreate={createWorktree}
         onResume={resumeWorktree}

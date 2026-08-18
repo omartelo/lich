@@ -29,10 +29,10 @@ func TestLoadStateRestoresOpenProjectsAndSessions(t *testing.T) {
 	if err := svc.AddProject("p1", "alpha", "/tmp/alpha"); err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
-	if err := svc.AddSession("p1", "s1", "Session 1", "", "", 2); err != nil {
+	if err := svc.AddSession("p1", "s1", "Session 1", "", "", 2, ""); err != nil {
 		t.Fatalf("AddSession: %v", err)
 	}
-	if err := svc.AddSession("p1", "s2", "Session 2", "", "", 3); err != nil {
+	if err := svc.AddSession("p1", "s2", "Session 2", "", "", 3, ""); err != nil {
 		t.Fatalf("AddSession: %v", err)
 	}
 
@@ -110,7 +110,7 @@ func TestLoadStateIgnoresProjectProviderDefaultReadFailure(t *testing.T) {
 func TestSessionPathPersistsAndDefaults(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	if err := svc.AddSession("p1", "s1", "mellow-otter", "claude", "/data/wt/mellow-otter", 2); err != nil {
+	if err := svc.AddSession("p1", "s1", "mellow-otter", "claude", "/data/wt/mellow-otter", 2, ""); err != nil {
 		t.Fatalf("AddSession: %v", err)
 	}
 	// Row without the path column, as written before the migration.
@@ -135,10 +135,10 @@ func TestSessionPathPersistsAndDefaults(t *testing.T) {
 func TestSessionKindPersistsAndDefaults(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	if err := svc.AddSession("p1", "s1", "Session 1", "shell", "", 2); err != nil {
+	if err := svc.AddSession("p1", "s1", "Session 1", "shell", "", 2, ""); err != nil {
 		t.Fatalf("AddSession: %v", err)
 	}
-	if err := svc.AddSession("p1", "s2", "Session 2", "", "", 3); err != nil {
+	if err := svc.AddSession("p1", "s2", "Session 2", "", "", 3, ""); err != nil {
 		t.Fatalf("AddSession: %v", err)
 	}
 
@@ -158,8 +158,8 @@ func TestSessionKindPersistsAndDefaults(t *testing.T) {
 func TestSetProviderSessionPersistsAndDefaults(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2)
-	_ = svc.AddSession("p1", "s2", "Session 2", "", "", 3)
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2, "")
+	_ = svc.AddSession("p1", "s2", "Session 2", "", "", 3, "")
 
 	if err := svc.SetProviderSession("s1", "uuid-abc"); err != nil {
 		t.Fatalf("SetProviderSession: %v", err)
@@ -186,8 +186,8 @@ func TestSetProviderSessionPersistsAndDefaults(t *testing.T) {
 func TestSessionModelRoundTrips(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "s1", "Session 1", "claude", "", 2)
-	_ = svc.AddSession("p1", "s2", "Session 2", "claude", "", 3)
+	_ = svc.AddSession("p1", "s1", "Session 1", "claude", "", 2, "")
+	_ = svc.AddSession("p1", "s2", "Session 2", "claude", "", 3, "")
 
 	if err := svc.SetSessionModel("s1", "opus"); err != nil {
 		t.Fatalf("SetSessionModel: %v", err)
@@ -229,8 +229,8 @@ func TestSetProviderSessionUnknownSessionNoop(t *testing.T) {
 func TestProviderSessionReadsBackWhatWasReported(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2)
-	_ = svc.AddSession("p1", "shell", "Shell", "shell", "", 3)
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2, "")
+	_ = svc.AddSession("p1", "shell", "Shell", "shell", "", 3, "")
 
 	_ = svc.SetProviderSession("s1", "uuid-abc")
 	_ = svc.SetProviderSession("s1", "uuid-def")
@@ -266,7 +266,7 @@ func mustLoadSessions(t *testing.T, svc *Service) []Session {
 func TestCloseProjectHidesButKeepsSessions(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2)
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2, "")
 
 	if err := svc.CloseProject("p1"); err != nil {
 		t.Fatalf("CloseProject: %v", err)
@@ -291,8 +291,8 @@ func TestCloseProjectHidesButKeepsSessions(t *testing.T) {
 func TestDeleteSessionRemovesRowAndUpdatesActive(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2)
-	_ = svc.AddSession("p1", "s2", "Session 2", "", "", 3)
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2, "")
+	_ = svc.AddSession("p1", "s2", "Session 2", "", "", 3, "")
 
 	if err := svc.DeleteSession("p1", "s2", "s1"); err != nil {
 		t.Fatalf("DeleteSession: %v", err)
@@ -311,8 +311,8 @@ func TestDeleteSessionRemovesRowAndUpdatesActive(t *testing.T) {
 func TestRenameAndActivateSession(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2)
-	_ = svc.AddSession("p1", "s2", "Session 2", "", "", 3)
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2, "")
+	_ = svc.AddSession("p1", "s2", "Session 2", "", "", 3, "")
 
 	if err := svc.RenameSession("s1", "build"); err != nil {
 		t.Fatalf("RenameSession: %v", err)
@@ -337,7 +337,7 @@ func TestRenameAndActivateSession(t *testing.T) {
 func TestSetSessionTitleRespectsManualRename(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2)
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2, "")
 
 	applied, err := svc.SetSessionTitle("s1", "Fixing the auth bug")
 	if err != nil {
@@ -438,11 +438,11 @@ func TestOpenFailsWhenParentIsAFile(t *testing.T) {
 func TestAddSessionRollsBackOnDuplicate(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	if err := svc.AddSession("p1", "s1", "Session 1", "", "", 2); err != nil {
+	if err := svc.AddSession("p1", "s1", "Session 1", "", "", 2, ""); err != nil {
 		t.Fatalf("AddSession: %v", err)
 	}
 
-	if err := svc.AddSession("p1", "s1", "dup", "", "", 9); err == nil {
+	if err := svc.AddSession("p1", "s1", "dup", "", "", 9, ""); err == nil {
 		t.Fatal("duplicate session id = nil error, want error")
 	}
 	projects, _ := svc.LoadState()
@@ -472,7 +472,7 @@ func TestOperationsOnClosedStoreReturnErrors(t *testing.T) {
 	}
 	assertErr("AddProject", svc.AddProject("p2", "b", "/b"))
 	assertErr("CloseProject", svc.CloseProject("p1"))
-	assertErr("AddSession", svc.AddSession("p1", "s1", "Session 1", "", "", 2))
+	assertErr("AddSession", svc.AddSession("p1", "s1", "Session 1", "", "", 2, ""))
 	assertErr("DeleteSession", svc.DeleteSession("p1", "s1", ""))
 	assertErr("RenameSession", svc.RenameSession("s1", "x"))
 	assertErr("SetProviderSession", svc.SetProviderSession("s1", "uuid"))
@@ -506,7 +506,7 @@ func TestOperationsOnClosedStoreReturnErrors(t *testing.T) {
 func TestDeleteProjectCascadesSessions(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2)
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2, "")
 
 	// Direct row delete exercises the ON DELETE CASCADE foreign key (the
 	// future "forget project" path); close does not delete, so it is not used
@@ -611,9 +611,9 @@ func equalIDs(got, want []string) bool {
 func TestReorderSessionsPersistsOrder(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2)
-	_ = svc.AddSession("p1", "s2", "Session 2", "", "", 3)
-	_ = svc.AddSession("p1", "s3", "Session 3", "", "", 4)
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2, "")
+	_ = svc.AddSession("p1", "s2", "Session 2", "", "", 3, "")
+	_ = svc.AddSession("p1", "s3", "Session 3", "", "", 4, "")
 
 	if err := svc.ReorderSessions("p1", []string{"s3", "s1", "s2"}); err != nil {
 		t.Fatalf("ReorderSessions: %v", err)
@@ -628,11 +628,11 @@ func TestReorderSessionsPersistsOrder(t *testing.T) {
 func TestAddSessionAppendsAfterReorder(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2)
-	_ = svc.AddSession("p1", "s2", "Session 2", "", "", 3)
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2, "")
+	_ = svc.AddSession("p1", "s2", "Session 2", "", "", 3, "")
 	_ = svc.ReorderSessions("p1", []string{"s2", "s1"})
 
-	_ = svc.AddSession("p1", "s3", "Session 3", "", "", 4)
+	_ = svc.AddSession("p1", "s3", "Session 3", "", "", 4, "")
 
 	if got := sessionIDs(t, svc, "p1"); !equalIDs(got, []string{"s2", "s1", "s3"}) {
 		t.Errorf("session order = %v, want [s2 s1 s3]", got)
@@ -644,9 +644,9 @@ func TestReorderSessionsIgnoresForeignSession(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
 	_ = svc.AddProject("p2", "beta", "/tmp/beta")
-	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2)
-	_ = svc.AddSession("p1", "s2", "Session 2", "", "", 3)
-	_ = svc.AddSession("p2", "other", "Session 1", "", "", 2)
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2, "")
+	_ = svc.AddSession("p1", "s2", "Session 2", "", "", 3, "")
+	_ = svc.AddSession("p2", "other", "Session 1", "", "", 2, "")
 
 	if err := svc.ReorderSessions("p1", []string{"other", "s2", "s1"}); err != nil {
 		t.Fatalf("ReorderSessions: %v", err)
@@ -665,9 +665,9 @@ func TestReorderSessionsIgnoresForeignSession(t *testing.T) {
 func TestSetSessionPinnedPersistsWithoutMovingTheRow(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2)
-	_ = svc.AddSession("p1", "s2", "Session 2", "", "", 3)
-	_ = svc.AddSession("p1", "s3", "Session 3", "", "", 4)
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2, "")
+	_ = svc.AddSession("p1", "s2", "Session 2", "", "", 3, "")
+	_ = svc.AddSession("p1", "s3", "Session 3", "", "", 4, "")
 	_ = svc.ReorderSessions("p1", []string{"s2", "s3", "s1"})
 
 	if err := svc.SetSessionPinned("s1", true); err != nil {
@@ -791,7 +791,7 @@ CREATE TABLE sessions (
 	if err := svc.AddProject("p1", "alpha", "/tmp/alpha"); err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
-	if err := svc.AddSession("p1", "s1", "mellow-otter", "shell", "/data/wt", 2); err != nil {
+	if err := svc.AddSession("p1", "s1", "mellow-otter", "shell", "/data/wt", 2, ""); err != nil {
 		t.Fatalf("AddSession: %v", err)
 	}
 	got, err := svc.LoadState()
@@ -895,10 +895,10 @@ INSERT INTO sessions (id, project_id, label, claude_session_id)
 func TestCloseSessionParksAndReopenRestores(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	if err := svc.AddSession("p1", "base", "Session 1", "claude", "", 2); err != nil {
+	if err := svc.AddSession("p1", "base", "Session 1", "claude", "", 2, ""); err != nil {
 		t.Fatalf("AddSession base: %v", err)
 	}
-	if err := svc.AddSession("p1", "wt", "swift-rabbit", "claude", "/data/wt/swift-rabbit", 3); err != nil {
+	if err := svc.AddSession("p1", "wt", "swift-rabbit", "claude", "/data/wt/swift-rabbit", 3, ""); err != nil {
 		t.Fatalf("AddSession worktree: %v", err)
 	}
 	if err := svc.SetProviderSession("wt", "claude-uuid-1"); err != nil {
@@ -957,8 +957,8 @@ func TestCloseSessionParksAndReopenRestores(t *testing.T) {
 func TestReopenWorktreeSessionKeepsManualRename(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "base", "Session 1", "claude", "", 2)
-	_ = svc.AddSession("p1", "wt1", "auto name", "claude", "/wt/foo", 3)
+	_ = svc.AddSession("p1", "base", "Session 1", "claude", "", 2, "")
+	_ = svc.AddSession("p1", "wt1", "auto name", "claude", "/wt/foo", 3, "")
 	if err := svc.RenameSession("wt1", "my name"); err != nil {
 		t.Fatalf("RenameSession: %v", err)
 	}
@@ -988,7 +988,7 @@ func TestReopenWorktreeSessionKeepsManualRename(t *testing.T) {
 func TestReopenWorktreeSessionNoParked(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "base", "Session 1", "claude", "", 2)
+	_ = svc.AddSession("p1", "base", "Session 1", "claude", "", 2, "")
 
 	restored, err := svc.ReopenWorktreeSession("p1", "/data/wt/never-parked", "wt2")
 	if err != nil {
@@ -1018,13 +1018,13 @@ func countSessions(t *testing.T, svc *Service, projectID, path string) int {
 func TestPurgeWorktreeSessions(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "base", "Session 1", "claude", "", 2) // project's own, no path
-	_ = svc.AddSession("p1", "wtA", "foo", "claude", "/wt/foo", 3) // worktree foo
-	_ = svc.AddSession("p1", "wtB", "bar", "claude", "/wt/bar", 4) // worktree bar
-	if err := svc.CloseSession("p1", "wtA", "base"); err != nil {  // park foo (stale leftover)
+	_ = svc.AddSession("p1", "base", "Session 1", "claude", "", 2, "") // project's own, no path
+	_ = svc.AddSession("p1", "wtA", "foo", "claude", "/wt/foo", 3, "") // worktree foo
+	_ = svc.AddSession("p1", "wtB", "bar", "claude", "/wt/bar", 4, "") // worktree bar
+	if err := svc.CloseSession("p1", "wtA", "base"); err != nil {      // park foo (stale leftover)
 		t.Fatalf("CloseSession: %v", err)
 	}
-	_ = svc.AddSession("p1", "wtA2", "foo", "claude", "/wt/foo", 5) // live foo again, same path
+	_ = svc.AddSession("p1", "wtA2", "foo", "claude", "/wt/foo", 5, "") // live foo again, same path
 
 	if err := svc.PurgeWorktreeSessions("p1", "/wt/foo"); err != nil {
 		t.Fatalf("PurgeWorktreeSessions: %v", err)
@@ -1265,7 +1265,7 @@ INSERT INTO projects (id, name, path, is_open) VALUES ('open', 'open', '/tmp/ope
 func TestReopeningARecentProjectRestoresItsSessions(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2)
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2, "")
 	_ = svc.CloseProject("p1")
 
 	if err := svc.AddProject("p1", "alpha", "/tmp/alpha"); err != nil {
@@ -1292,7 +1292,7 @@ func TestReopeningARecentProjectRestoresItsSessions(t *testing.T) {
 func TestDeleteProjectRemovesItsSessions(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2)
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2, "")
 	_ = svc.CloseProject("p1")
 
 	if err := svc.DeleteProject("p1"); err != nil {

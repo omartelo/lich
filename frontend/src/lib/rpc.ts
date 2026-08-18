@@ -287,6 +287,9 @@ export const Store = {
   CloseProject: (id: string) => call<null>("store.CloseProject", [id]),
   /** The closed projects offered for reopening, newest first (capped backend-side). */
   RecentProjects: () => call<RecentProject[] | null>("store.RecentProjects", []),
+  /** sandbox is whether this session runs confined ("on"/"off", "" to follow the
+   * provider's rung). It rides the insert because the PTY reads it on the first
+   * spawn — a second call would race the card this one puts on screen. */
   AddSession: (
     projectID: string,
     sessionID: string,
@@ -294,7 +297,8 @@ export const Store = {
     kind: string,
     path: string,
     nextSeq: number,
-  ) => call<null>("store.AddSession", [projectID, sessionID, label, kind, path, nextSeq]),
+    sandbox = "",
+  ) => call<null>("store.AddSession", [projectID, sessionID, label, kind, path, nextSeq, sandbox]),
   /**
    * AddSession for a session that was opened by delegation: originID is the
    * session that asked for it and originLabel what that one was called then.
@@ -338,6 +342,11 @@ export const Store = {
    * shell. The store refuses it on anything but a shell session. */
   SetSessionEntrypoint: (sessionID: string, entrypoint: string) =>
     call<null>("store.SetSessionEntrypoint", [sessionID, entrypoint]),
+  /** Whether this one session runs confined, overriding the provider's rung for
+   * it alone: "on", "off", or "" to follow the setting. Read on every later
+   * spawn, so a reload and a resume keep the answer the session opened with. */
+  SetSessionSandbox: (sessionID: string, sandbox: string) =>
+    call<null>("store.SetSessionSandbox", [sessionID, sandbox]),
   /** Name a session from an automatic source — the provider's ai-title, or a
    * terminal's own entrypoint. A no-op once the user has renamed the card;
    * answers whether the label actually moved. */
@@ -404,6 +413,9 @@ export const System = {
   /** Raise a desktop notification: a headline and an optional second line.
    * The caller decides it is warranted — the backend only delivers. */
   Notify: (summary: string, detail: string) => call<null>("system.Notify", [summary, detail]),
+  /** Whether this machine can run a session confined (bubblewrap on Linux,
+   * sandbox-exec on macOS). A fact about the machine, not about a provider. */
+  SandboxAvailable: () => call<boolean>("system.SandboxAvailable", []),
 }
 
 export const Providers = {

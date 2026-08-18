@@ -17,6 +17,7 @@ import (
 
 	"github.com/ncruces/zenity"
 	"github.com/omartelo/lich/internal/relpath"
+	"github.com/omartelo/lich/internal/sandbox"
 )
 
 type Service struct {
@@ -78,6 +79,17 @@ func (s *Service) Diagnostics() Diagnostics {
 		Platform: runtime.GOOS + "/" + runtime.GOARCH,
 		LogPath:  s.logPath,
 	}
+}
+
+// SandboxAvailable reports whether this machine can run a session confined
+// (internal/sandbox). It answers here rather than beside the provider list
+// because it is a fact about the machine — bubblewrap installed, or macOS —
+// and the same answer for every provider on it.
+//
+// The frontend hides the sandbox control when this is false rather than
+// offering one that saves a setting nothing can act on.
+func (s *Service) SandboxAvailable() bool {
+	return sandbox.Available()
 }
 
 // RevealLog opens the log's directory with the platform's file manager, not the

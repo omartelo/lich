@@ -68,7 +68,7 @@ func TestGHAccountForPath(t *testing.T) {
 	}
 	// A worktree lives outside the project directory; only its session row ties
 	// the path back to the project.
-	if err := svc.AddSession("p1", "s1", "fix", "claude", "/data/worktrees/p1/fix", 2); err != nil {
+	if err := svc.AddSession("p1", "s1", "fix", "claude", "/data/worktrees/p1/fix", 2, ""); err != nil {
 		t.Fatalf("AddSession: %v", err)
 	}
 	if err := svc.SetSetting(ghAccountKey, "p1", "octocat"); err != nil {

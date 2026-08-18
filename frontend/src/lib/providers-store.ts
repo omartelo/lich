@@ -75,6 +75,40 @@ export function skipLevelPair(level: SkipLevel): { here: boolean; worktrees: boo
   return { here: level === "everywhere", worktrees: level !== "never" }
 }
 
+// sandboxKey holds which sessions of a provider run confined (mirrors
+// store.sandboxKey in Go, which is what the spawn reads). Scoped like binKey —
+// a project value wins over the global one — because the checkout full of
+// somebody else's code is the one to confine, and a scratch project is not.
+export function sandboxKey(id: string): string {
+  return `provider.${id}.sandbox`
+}
+
+// Which sessions of a provider run confined, as one ladder ordered by how much
+// of the machine a session can reach. "ask" sits second because a session
+// nobody answered for runs unconfined, exactly like "off" — it moves who
+// decides, not what the sandbox is. Mirrors the Sandbox* constants in Go.
+export type SandboxLevel = "off" | "ask" | "worktrees" | "everywhere"
+
+const SANDBOX_LEVELS: readonly SandboxLevel[] = ["off", "ask", "worktrees", "everywhere"]
+
+// sandboxLevel reads the stored value. Anything the ladder does not name is
+// "off": an unknown value must never confine a session nobody asked to confine,
+// nor leave one unconfined that the user meant to protect — and "off" is the
+// only answer that surprises no one, because it is what lich did before.
+export function sandboxLevel(value: string): SandboxLevel {
+  return SANDBOX_LEVELS.find((level) => level === value) ?? "off"
+}
+
+// sandboxDefaultFor is what the new-session dialog arrives showing: the rung
+// applied to the checkout the session will start in. It is the frontend's copy
+// of store.SandboxDefault in Go — the dialog has to show the same answer the
+// spawn would reach on its own, or the box the user leaves untouched means
+// something other than what it shows.
+export function sandboxDefaultFor(level: SandboxLevel, worktree: boolean): boolean {
+  if (level === "everywhere") return true
+  return level === "worktrees" && worktree
+}
+
 // How much of a session's own accounting the footer carries, as one ladder
 // ordered by how much it says. The two settings keys stay exactly as they are —
 // this is the shape the user chooses in, not the shape lich stores.

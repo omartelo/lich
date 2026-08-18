@@ -24,6 +24,7 @@ import {
   setActiveSession,
   setSessionEntrypoint as recordEntrypoint,
   setSessionPinned,
+  setSessionSandboxed,
   type Session,
   type SessionKind,
   type SessionState,
@@ -41,12 +42,14 @@ import {
   CLOSED_EVENT,
   OPENED_EVENT,
   RELAY_STALLED_EVENT,
+  SANDBOX_EVENT,
   STATUS_EVENT,
   TITLE_EVENT,
   TOUCHED_EVENT,
   decideStatusNotice,
   isIdEvent,
   isRelayStalledEvent,
+  isSandboxEvent,
   isStatusEvent,
   isTitleEvent,
   shouldToastAttention,
@@ -170,6 +173,22 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         return
       }
       const next = relabelSession(sessionsRef.current, projectId, id, label)
+      if (next !== sessionsRef.current) {
+        setSessions(next)
+      }
+    })
+    return () => off()
+  }, [])
+
+  // Every spawn reports whether its PTY runs confined. Mirrored into local
+  // state so the card wears its mark the moment the session opens, rather than
+  // at the next reload — the row is already written, so this never writes back.
+  useEffect(() => {
+    const off = onAppEvent(SANDBOX_EVENT, (data) => {
+      if (!isSandboxEvent(data)) {
+        return
+      }
+      const next = setSessionSandboxed(sessionsRef.current, data.id, data.confined)
       if (next !== sessionsRef.current) {
         setSessions(next)
       }
@@ -318,15 +337,25 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     return sessionId
   }, [])
 
+  // sandbox is the answer the new-worktree dialog collected: "on", "off", or ""
+  // when the machine cannot confine anything and nothing was asked.
   const newWorktreeSession = useCallback(
-    (projectId: string, wt: { name: string; path: string }) => {
+    (projectId: string, wt: { name: string; path: string }, sandbox = "") => {
       const sessionId = newSessionId()
       const kind = projectDefaultProviderKind(projectId)
       const next = addSession(sessionsRef.current, projectId, sessionId, kind, wt.path, wt.name)
       const project = next[projectId]
       const created = project.sessions[project.sessions.length - 1]
       setSessions(next)
-      void Store.AddSession(projectId, sessionId, created.label, kind, wt.path, project.nextSeq)
+      void Store.AddSession(
+        projectId,
+        sessionId,
+        created.label,
+        kind,
+        wt.path,
+        project.nextSeq,
+        sandbox,
+      )
       return sessionId
     },
     [],
@@ -349,6 +378,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         path: restored.path,
         ...(restored.providerSessionId ? { providerSessionId: restored.providerSessionId } : {}),
         ...(restored.entrypoint ? { entrypoint: restored.entrypoint } : {}),
+        ...(restored.sandbox === "on" ? { sandboxed: true } : {}),
         ...(restored.originSessionId
           ? { originSessionId: restored.originSessionId, originLabel: restored.originLabel }
           : {}),

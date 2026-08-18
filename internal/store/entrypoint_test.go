@@ -9,8 +9,8 @@ import "testing"
 func TestSetSessionEntrypointOnlyReachesShellSessions(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "term", "Terminal 1", "shell", "", 2)
-	_ = svc.AddSession("p1", "agent", "Session 1", "claude", "", 3)
+	_ = svc.AddSession("p1", "term", "Terminal 1", "shell", "", 2, "")
+	_ = svc.AddSession("p1", "agent", "Session 1", "claude", "", 3, "")
 
 	if err := svc.SetSessionEntrypoint("term", "lazygit"); err != nil {
 		t.Fatalf("SetSessionEntrypoint on a shell session: %v", err)
@@ -40,7 +40,7 @@ func TestSetSessionEntrypointOnlyReachesShellSessions(t *testing.T) {
 func TestSetSessionEntrypointTrimsAndClears(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "term", "Terminal 1", "shell", "", 2)
+	_ = svc.AddSession("p1", "term", "Terminal 1", "shell", "", 2, "")
 
 	_ = svc.SetSessionEntrypoint("term", "  lazydocker\n")
 	if got := svc.SessionEntrypoint("term"); got != "lazydocker" {
@@ -60,7 +60,7 @@ func TestSetSessionEntrypointTrimsAndClears(t *testing.T) {
 func TestSessionsCarryTheirEntrypoint(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "term", "Terminal 1", "shell", "", 2)
+	_ = svc.AddSession("p1", "term", "Terminal 1", "shell", "", 2, "")
 	_ = svc.SetSessionEntrypoint("term", "k9s")
 
 	projects, err := svc.LoadState()
@@ -84,13 +84,13 @@ func TestSessionsCarryTheirEntrypoint(t *testing.T) {
 func TestReopenWorktreeSessionCarriesSpawnOverrides(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "base", "Session 1", "claude", "", 2)
+	_ = svc.AddSession("p1", "base", "Session 1", "claude", "", 2, "")
 
-	_ = svc.AddSession("p1", "wt1", "worker", "claude", "/wt/foo", 3)
+	_ = svc.AddSession("p1", "wt1", "worker", "claude", "/wt/foo", 3, "")
 	_ = svc.SetSessionModel("wt1", "opus")
 	_ = svc.CloseSession("p1", "wt1", "base")
 
-	_ = svc.AddSession("p1", "sh1", "Terminal 1", "shell", "/wt/bar", 4)
+	_ = svc.AddSession("p1", "sh1", "Terminal 1", "shell", "/wt/bar", 4, "")
 	_ = svc.SetSessionEntrypoint("sh1", "lazygit")
 	_ = svc.CloseSession("p1", "sh1", "base")
 

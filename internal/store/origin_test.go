@@ -11,7 +11,7 @@ func TestSessionOriginPersistsAndDefaults(t *testing.T) {
 	if err := svc.AddProject("p1", "alpha", "/tmp/alpha"); err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
-	if err := svc.AddSession("p1", "parent", "planner", "claude", "", 2); err != nil {
+	if err := svc.AddSession("p1", "parent", "planner", "claude", "", 2, ""); err != nil {
 		t.Fatalf("AddSession: %v", err)
 	}
 	if err := svc.AddSessionFrom("p1", "child", "worker", "claude", "/wt/a", 3, "parent", "planner"); err != nil {
@@ -42,7 +42,7 @@ func TestSessionOriginPersistsAndDefaults(t *testing.T) {
 func TestSessionOriginSurvivesARenameOfTheParent(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "parent", "planner", "claude", "", 2)
+	_ = svc.AddSession("p1", "parent", "planner", "claude", "", 2, "")
 	_ = svc.AddSessionFrom("p1", "child", "worker", "claude", "", 3, "parent", "planner")
 
 	if err := svc.RenameSession("parent", "the boss"); err != nil {
@@ -68,7 +68,7 @@ func TestSessionOriginSurvivesARenameOfTheParent(t *testing.T) {
 func TestReopenWorktreeSessionCarriesTheOrigin(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
-	_ = svc.AddSession("p1", "parent", "planner", "claude", "", 2)
+	_ = svc.AddSession("p1", "parent", "planner", "claude", "", 2, "")
 	_ = svc.AddSessionFrom("p1", "child", "worker", "claude", "/wt/a", 3, "parent", "planner")
 	_ = svc.CloseSession("p1", "child", "parent")
 

@@ -55,6 +55,13 @@ const (
 	// CLI runs in it. An empty agent clears the mark; every PTY spawn emits that
 	// clear so a respawned session never wears a dead agent's icon.
 	agentEventName = "session-agent"
+	// sandboxEventName carries whether a session's PTY runs confined ({id,
+	// confined}), emitted by every spawn. The card marks a confined session, and
+	// the answer is the spawn's own — it takes the provider's rung, the checkout
+	// and a per-session override to reach, so the window is told rather than
+	// asked to work it out again. Persisted with the row too (store.Session's
+	// Sandbox), which is what a page reload hydrates from.
+	sandboxEventName = "session-sandbox"
 )
 
 // statusEvent is the payload of statusEventName: the session whose processing
@@ -106,6 +113,13 @@ type agentEvent struct {
 	Agent string `json:"agent"`
 }
 
+// sandboxEvent is the payload of sandboxEventName: the session and whether its
+// PTY is confined.
+type sandboxEvent struct {
+	ID       string `json:"id"`
+	Confined bool   `json:"confined"`
+}
+
 // session is a single running PTY-backed shell. done closes when the session
 // is reaped (by stream or Close — whichever removes it from the map), stopping
 // its cwd watcher. replay holds a capped tail of the PTY's output so a
@@ -137,11 +151,15 @@ type session struct {
 	// draft.go.
 	draftAt    time.Time
 	escPending []byte
+	// confined records whether this PTY was spawned inside the sandbox, so Start
+	// can report it once the spawn is out of the lock.
+	confined bool
 }
 
 // Store is the persistence the terminal service depends on: the binary to spawn
-// for a provider in a project (empty return spawns the provider's default) and
-// whether that spawn drops the provider's permission prompts,
+// for a provider in a project (empty return spawns the provider's default),
+// whether that spawn drops the provider's permission prompts and whether it runs
+// confined,
 // that project's own directory, the dev-server port reserved for each checkout,
 // where to record the provider session id a PTY reports through its
 // session-start hook, and the running cost
@@ -157,6 +175,9 @@ type Store interface {
 	ProviderSession(sessionID string) (string, error)
 	SessionModel(sessionID string) string
 	SessionEntrypoint(sessionID string) string
+	SessionSandbox(sessionID string) string
+	SetSessionSandbox(sessionID, sandbox string) error
+	SandboxDefault(providerID, projectID, cwd string) bool
 	SetSessionTitle(sessionID, title string) (bool, error)
 	CostReadout() bool
 	CostLedger(sessionID, transcriptID string) (int64, string, float64, error)
@@ -453,6 +474,7 @@ func (s *Service) Start(id, projectID, cwd, kind, resume, name string, setup boo
 	// overwrites whatever the previous PTY left in the frontend's stores.
 	s.hub.Emit(cwdEventName, cwdEvent{ID: id, Cwd: cwd})
 	s.hub.Emit(agentEventName, agentEvent{ID: id, Agent: ""})
+	s.hub.Emit(sandboxEventName, sandboxEvent{ID: id, Confined: sess.confined})
 	go watchCwd(id, sess.pty.Pid(), cwd, sess.done, s.hub)
 	return nil
 }
@@ -507,6 +529,10 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, se
 	if setup {
 		spec, settingUp = wrapSetup(spec, project.SetupScript(s.store.ProjectPath(projectID)), runtime.GOOS)
 	}
+	// Outermost, so the setup script and the entrypoint are confined with the
+	// session they run in front of.
+	inSandbox := confined(s.store, id, kind, projectID, cwd)
+	spec = wrapSandbox(spec, kind, userHome(), inSandbox)
 	p, err := startPTY(spec)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to start pty for %q: %w", id, err)
@@ -530,7 +556,8 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, se
 		// Timed from the spawn, so a program that never writes anything still
 		// becomes ready once: quiet is the signal, and silence from the start
 		// is quiet too.
-		lastOut: time.Now(),
+		lastOut:  time.Now(),
+		confined: inSandbox,
 	}
 	s.sessions[id] = sess
 	go s.stream(id, sess)

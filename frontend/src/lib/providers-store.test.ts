@@ -10,11 +10,15 @@ import {
   readEnabled,
   resolveDefaultProvider,
   resolveProjectDefaultProvider,
+  sandboxDefaultFor,
+  sandboxKey,
+  sandboxLevel,
   skipLevel,
   skipLevelPair,
   skipPermissionFlags,
   skipPermissionsKey,
   type ProviderState,
+  type SandboxLevel,
 } from "./providers-store"
 
 describe("provider setting keys", () => {
@@ -365,5 +369,44 @@ describe("createProvidersStore", () => {
     await store.load()
 
     expect(store.getProjectProviderKind("p1")).toBe("claude")
+  })
+})
+
+describe("sandbox rung", () => {
+  it("keys the setting per provider, mirroring the Go spelling", () => {
+    expect(sandboxKey("claude")).toBe("provider.claude.sandbox")
+    expect(sandboxKey("crush")).toBe("provider.crush.sandbox")
+  })
+
+  it("reads every rung the ladder names", () => {
+    for (const level of ["off", "ask", "worktrees", "everywhere"] as const) {
+      expect(sandboxLevel(level)).toBe(level)
+    }
+  })
+
+  // An unknown value must never confine a session nobody asked to confine, and
+  // "off" is the only answer that surprises no one — it is what lich did before.
+  it("reads anything else as off", () => {
+    for (const value of ["", "true", "on", "Everywhere", " worktrees", "always"]) {
+      expect(sandboxLevel(value)).toBe("off")
+    }
+  })
+
+  // The dialog has to arrive showing the answer the spawn would reach on its
+  // own, or the box the user leaves untouched means something else.
+  it("matches store.SandboxDefault on both sides of the checkout", () => {
+    const cases: [SandboxLevel, boolean, boolean][] = [
+      ["off", false, false],
+      ["off", true, false],
+      ["ask", false, false],
+      ["ask", true, false],
+      ["worktrees", false, false],
+      ["worktrees", true, true],
+      ["everywhere", false, true],
+      ["everywhere", true, true],
+    ]
+    for (const [level, worktree, want] of cases) {
+      expect(sandboxDefaultFor(level, worktree)).toBe(want)
+    }
   })
 })

@@ -26,6 +26,7 @@ import {
   setActiveSession,
   setSessionEntrypoint,
   setSessionPinned,
+  setSessionSandboxed,
   sidebarGroups,
   type Session,
   type SessionKind,
@@ -859,5 +860,35 @@ describe("dropClosedSession", () => {
     const before = buildState(2)
     expect(dropClosedSession(before, P, "ghost", "s1")).toBe(before)
     expect(dropClosedSession(before, "other", "s1", "")).toBe(before)
+  })
+})
+
+describe("setSessionSandboxed", () => {
+  const state = () => buildState(2)
+
+  it("marks the session the spawn reported", () => {
+    const next = setSessionSandboxed(state(), "s1", true)
+    expect(next[P]?.sessions[0]?.sandboxed).toBe(true)
+    expect(next[P]?.sessions[1]?.sandboxed).toBeUndefined()
+  })
+
+  it("clears the mark when a respawn reports it unconfined", () => {
+    const confined = setSessionSandboxed(state(), "s1", true)
+    const next = setSessionSandboxed(confined, "s1", false)
+    expect(next[P]?.sessions[0]?.sandboxed).toBeUndefined()
+  })
+
+  // The event fires on every spawn, so an unchanged answer has to return the
+  // same object: a new one re-renders every card in the project for nothing.
+  it("returns the same state when nothing changed", () => {
+    const current = state()
+    expect(setSessionSandboxed(current, "s1", false)).toBe(current)
+    const confined = setSessionSandboxed(current, "s1", true)
+    expect(setSessionSandboxed(confined, "s1", true)).toBe(confined)
+  })
+
+  it("ignores a session it does not know", () => {
+    const current = state()
+    expect(setSessionSandboxed(current, "gone", true)).toBe(current)
   })
 })

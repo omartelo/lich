@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Sessions can run confined.** Settings › Providers gains a **Sandbox** ladder
+  beside the permission one — Off, Ask each time, Worktrees only, Everywhere —
+  and a session on a confined rung opens inside an OS sandbox: a fresh empty
+  home holding only that provider's own state, the rest of the machine
+  read-only, and write access to the checkout it was opened for. Your ssh keys,
+  your cloud credentials and every other repository on the disk are simply not
+  there. The network stays on, so the agent still reaches its API and lich still
+  hears its hooks, and the plan gauge, the cost readout and resume all keep
+  working — the provider writes its transcript to the same place it always did.
+
+  It is the counterweight to skipping permission prompts: the two rungs are read
+  together, and an agent turned loose in a worktree can be turned loose inside a
+  sandbox. The rung is per provider and can be set for one project alone, and
+  the New worktree dialog carries a **Run confined** box that starts on whatever
+  the rung would do and overrides it for that session alone — including every
+  later spawn of it, so a reload or a resume opens the way you opened it.
+
+  A confined card wears a shield beside its status dot, and its tooltip says
+  what that means and that the answer was taken when the session opened.
+
+  Linux runs bubblewrap and macOS `sandbox-exec`; the control is absent on a
+  machine with neither, and on Windows. It is not a boundary against hostile
+  code — see `docs/ceilings.md` for what it does not stop.
+
 - **How much of your plan is left, without leaving lich.** Claude Code and Codex
   both report what a subscription has spent of its rolling windows, and lich now
   reads it: the footer carries the window closest to running out beside the

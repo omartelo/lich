@@ -9,7 +9,7 @@ func newCostSession(t *testing.T) *Service {
 	if err := svc.AddProject("p1", "alpha", "/tmp/alpha"); err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
-	if err := svc.AddSession("p1", "s1", "Session 1", "", "", 2); err != nil {
+	if err := svc.AddSession("p1", "s1", "Session 1", "", "", 2, ""); err != nil {
 		t.Fatalf("AddSession: %v", err)
 	}
 	return svc
@@ -139,7 +139,7 @@ func TestAResumedSessionKeepsWhatItSpent(t *testing.T) {
 	if err := svc.AddProject("p1", "alpha", "/tmp/alpha"); err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
-	if err := svc.AddSession("p1", "s1", "Session 1", "claude", "/tmp/alpha-wt", 2); err != nil {
+	if err := svc.AddSession("p1", "s1", "Session 1", "claude", "/tmp/alpha-wt", 2, ""); err != nil {
 		t.Fatalf("AddSession: %v", err)
 	}
 	if err := svc.SaveCostLedger("s1", "uuid-a", 100, "m1", 0.4); err != nil {
