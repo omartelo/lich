@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-08-18
+
 ### Added
 
 - **Codex sessions now carry their model and context usage in the footer.** The
@@ -2869,7 +2871,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.36.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.37.0...HEAD
+[0.37.0]: https://github.com/omartelo/lich/compare/v0.36.0...v0.37.0
 [0.36.0]: https://github.com/omartelo/lich/compare/v0.35.1...v0.36.0
 [0.35.1]: https://github.com/omartelo/lich/compare/v0.35.0...v0.35.1
 [0.35.0]: https://github.com/omartelo/lich/compare/v0.34.0...v0.35.0
