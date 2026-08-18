@@ -86,7 +86,7 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
   const navigate = useNavigate()
   const { projectId, sessionId, path, checkout, kind } = useActiveSession()
   // Context-window occupancy of the active session, read off its transcript at
-  // each turn's end (null until the first turn of a Claude session lands).
+  // each turn's end (null until the first turn of a supported session lands).
   const usage = useSessionUsage(sessionId)
   // The footer context readout is opt-out (Settings › Providers); the cost
   // beside it is opt-in, and off for everyone not billed per token.
@@ -227,7 +227,7 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
       )}
 
       <span className="ml-auto flex items-center gap-4">
-        {showContextUsage && <SessionModel sessionId={sessionId} />}
+        {showContextUsage && <SessionModel sessionId={sessionId} kind={kind} />}
         <PlanQuota kind={kind} />
         {costReadout}
         {contextReadout}

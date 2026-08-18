@@ -5,6 +5,9 @@
 // "claude-fable-5" → "fable 5". An id that doesn't fit the shape (no family +
 // version split) is shown stripped but otherwise untouched.
 export function formatModel(id: string): string {
+  if (!id.startsWith("claude-")) {
+    return id
+  }
   const stripped = id.replace(/^claude-/, "").replace(/-\d{8}$/, "")
   const [family, ...version] = stripped.split("-")
   return version.length > 0 ? `${family} ${version.join(".")}` : stripped

@@ -19,6 +19,10 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   conversation forked inside the PTY bills its copied history twice — lich's own resume continues the same
   transcript and is unaffected — and each sub-agent's own transcript is counted in, so one unreadable or
   unpriceable sub-agent withholds the whole session's number.
+- **The session readout understands Claude Code and Codex transcripts only**
+  (`internal/terminal/usage_claude.go`, `internal/terminal/usage_codex.go`): oh-my-pi, opencode and Crush record
+  token usage but not the model's context-window size, so lich cannot turn those counts into a trustworthy
+  percentage. Their footer therefore carries no model or context ring.
 - **A dropped file has no path, so lich guesses it** (`internal/drop`): a file under neither the session directory
   nor home is *copied*, so an agent told to edit it edits the copy — and that copy is deleted 3 days on, so a path
   pasted into a prompt eventually stops resolving.

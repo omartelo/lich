@@ -106,7 +106,7 @@ type Service struct {
 // provider CLI assigns the conversation running in the PTY, reported by that
 // provider's session-start hook; empty until a hook fires (or for shell
 // sessions), it is the key for features that need to reach a session's
-// transcript or resume it. Only Claude Code reports one today. Pinned keeps a
+// transcript or resume it. Pinned keeps a
 // session at the head of its project's list and withholds its close affordances
 // until it is unpinned. OriginSessionID and OriginLabel record the session that
 // asked for this one, empty for a session nobody delegated: the id names the

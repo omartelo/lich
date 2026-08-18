@@ -15,4 +15,8 @@ describe("formatModel", () => {
   it("leaves an id without a version split stripped but intact", () => {
     expect(formatModel("claude-experimental")).toBe("experimental")
   })
+
+  it("leaves another provider's model id intact", () => {
+    expect(formatModel("gpt-5.6-sol")).toBe("gpt-5.6-sol")
+  })
 })

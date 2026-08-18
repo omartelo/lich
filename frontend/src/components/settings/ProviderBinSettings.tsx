@@ -144,8 +144,8 @@ function useSkipPermissions(providerId: string, worktree: boolean) {
 
 // ProviderBinSettings is the config section a provider gets when enabled: what
 // its plan has left, which binary its sessions spawn, and how far it runs
-// without asking. Claude Code adds the footer readout, which is the only
-// provider reporting one.
+// without asking. Claude Code and Codex add the footer readout because their
+// transcripts report the model and context-window usage.
 export function ProviderBinSettings({
   providerId,
   providerName,
@@ -206,9 +206,9 @@ export function ProviderBinSettings({
 
       <ProviderBinary providerId={providerId} providerName={providerName} projectId={projectId} />
 
-      {/* Only Claude Code reports context-window usage (via the lich plugin), so
-          the footer readout control lives in its section, not the generic hub. */}
-      {providerId === "claude" && (
+      {/* Only providers with a context-window transcript reader carry this
+          control; the underlying preference stays global. */}
+      {(providerId === "claude" || providerId === "codex") && (
         <>
           <SettingBlock
             title="Session readout in the footer"
