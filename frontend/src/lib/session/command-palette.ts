@@ -112,16 +112,37 @@ export function paletteMessages(
 }
 
 // PALETTE_TABS is the filter row, in the order Tab walks it. A query can hit
-// four kinds of thing at once, which is a page of rows nobody reads: All keeps
-// every kind but shows the first few of each, and a tab lists one kind whole.
+// four kinds of thing at once, which is a page of rows nobody reads: All shows
+// the first few of the three worth interrupting for, and a tab lists one kind
+// whole — including the closed projects, which only their tab carries.
 export const PALETTE_TABS = ["All", "Sessions", "Projects", "Messages"] as const
 
 export type PaletteTab = (typeof PALETTE_TABS)[number]
 
-// ALL_TAB_ROWS is how much of a group the All tab shows. Three is enough for the
-// hit that is obviously the one and short enough that four groups still fit
-// without scrolling.
-const ALL_TAB_ROWS = 3
+// ALL_TAB_ROWS is how much of a group the All tab shows. Enough that a project
+// with a handful of sessions is not represented by its first two, and short
+// enough that the three groups still fit without scrolling.
+const ALL_TAB_ROWS = 5
+
+// rankSessions puts the sessions worth jumping to at the top of the list the
+// All tab then cuts to ALL_TAB_ROWS. Order alone is what decides which sessions
+// survive that cut, and the natural one — the tab strip's, Home pinned first —
+// hands the whole group to whatever sits in the first project: a shell parked
+// on a TUI is what somebody keeps in Home, and never what Ctrl+K is opened for.
+//
+// running is a snapshot of the sessions holding a turn (busy or blocked on a
+// prompt), taken when the palette opens; a shell is last because it has no turn
+// to hold and no agent to come back to.
+export function rankSessions(
+  sessions: readonly PaletteSession[],
+  running: ReadonlySet<string>,
+): PaletteSession[] {
+  const rank = (session: PaletteSession): number =>
+    running.has(session.sessionId) ? 0 : session.kind === "shell" ? 2 : 1
+  // Sort is stable, so sessions of equal rank keep the order the tabs put them
+  // in — the ranking reorders what the user wants first, never everything.
+  return [...sessions].sort((a, b) => rank(a) - rank(b))
+}
 
 // PaletteRow is one option in the list, carrying what running it needs. The
 // groups are rendered in order and the rows flattened back out for the arrow
@@ -173,11 +194,14 @@ export function paletteGroups(
         return [group("Open", open, 0), group("Closed", closed, 0)]
       case "Messages":
         return [group("Messages", said, 0)]
+      // No closed projects here: reopening one is not what the palette is
+      // reached for mid-work, and the rows it costs are rows the sessions and
+      // the open projects are cut to make room for. The Projects tab lists
+      // them whole, which is where somebody looking for one already goes.
       default:
         return [
           group("Sessions", sessions, ALL_TAB_ROWS),
           group("Projects", open, ALL_TAB_ROWS),
-          group("Closed projects", closed, ALL_TAB_ROWS),
           group("Messages", said, ALL_TAB_ROWS),
         ]
     }

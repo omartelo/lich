@@ -7,6 +7,7 @@ import {
   paletteMessages,
   paletteSessions,
   paletteTabCount,
+  rankSessions,
   rowKey,
 } from "./command-palette"
 import type { Project } from "@/lib/api-types"
@@ -121,21 +122,21 @@ describe("paletteGroups", () => {
   const results = filterPalette("", all, projects, closed)
   const messages = paletteMessages([{ id: "s1", snippet: "flaky again", count: 1 }], all)
 
-  it("shows every kind on All, three rows each, and says what it left out", () => {
+  it("shows the kinds worth interrupting for, and leaves the closed projects to their tab", () => {
     const groups = paletteGroups("All", results, messages)
-    expect(groups.map((g) => g.label)).toEqual([
-      "Sessions",
-      "Projects",
-      "Closed projects",
-      "Messages",
-    ])
-    const closedGroup = groups.find((g) => g.label === "Closed projects")
-    expect(closedGroup?.rows).toHaveLength(3)
-    expect(closedGroup?.total).toBe(4)
+    expect(groups.map((g) => g.label)).toEqual(["Sessions", "Projects", "Messages"])
     // Nothing was cut here, so the header has nothing to report.
     const projectGroup = groups.find((g) => g.label === "Projects")
     expect(projectGroup?.rows).toHaveLength(2)
     expect(projectGroup?.total).toBe(2)
+  })
+
+  it("cuts a group to five rows and says what it left out", () => {
+    const many = Array.from({ length: 7 }, (_, i) => ({ ...all[0], sessionId: `x${i}` }))
+    const groups = paletteGroups("All", { ...results, sessions: many }, [])
+    const sessionGroup = groups.find((g) => g.label === "Sessions")
+    expect(sessionGroup?.rows).toHaveLength(5)
+    expect(sessionGroup?.total).toBe(7)
   })
 
   it("lists one kind whole under its own tab", () => {
@@ -154,7 +155,31 @@ describe("paletteGroups", () => {
   it("carries what a row needs to be run", () => {
     const rows = paletteGroups("All", results, messages).flatMap((g) => g.rows)
     expect(rows[0]).toEqual({ kind: "session", session: all[0] })
-    expect(rows.find((r) => r.kind === "closed")).toEqual({ kind: "closed", project: closed[0] })
+    const reopen = paletteGroups("Projects", results, messages).flatMap((g) => g.rows)
+    expect(reopen.find((r) => r.kind === "closed")).toEqual({ kind: "closed", project: closed[0] })
+  })
+})
+
+describe("rankSessions", () => {
+  const all = paletteSessions(projects, sessions)
+
+  it("puts the sessions holding a turn first and the shells last", () => {
+    const ranked = rankSessions(all, new Set(["s3"]))
+    expect(ranked.map((r) => r.sessionId)).toEqual(["s3", "s1", "s2"])
+  })
+
+  it("keeps the tab order between sessions of equal rank", () => {
+    expect(rankSessions(all, new Set()).map((r) => r.sessionId)).toEqual(["s1", "s3", "s2"])
+  })
+
+  it("ranks a running shell with the running sessions", () => {
+    expect(rankSessions(all, new Set(["s2"])).map((r) => r.sessionId)).toEqual(["s2", "s1", "s3"])
+  })
+
+  it("leaves the list it was given alone", () => {
+    const before = all.map((r) => r.sessionId)
+    rankSessions(all, new Set(["s3"]))
+    expect(all.map((r) => r.sessionId)).toEqual(before)
   })
 })
 
@@ -166,7 +191,7 @@ describe("rowKey", () => {
     const results = filterPalette("", all, projects, closed)
     const messages = paletteMessages([{ id: "s1", snippet: "x", count: 1 }], all)
     const rows = paletteGroups("All", results, messages).flatMap((g) => g.rows)
-    expect(rows.map(rowKey)).toEqual(["s1", "s2", "s3", "p1", "p2", "c1", "c2", "c3", "s1"])
+    expect(rows.map(rowKey)).toEqual(["s1", "s2", "s3", "p1", "p2", "s1"])
   })
 })
 

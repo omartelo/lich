@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The command palette leads with the sessions worth interrupting.** Its `All`
+  view now lists the sessions holding a turn first and the plain shells last,
+  so a project of parked terminals no longer fills the list ahead of the agent
+  that is actually running. It shows five rows per group instead of three, and
+  closed projects moved out of `All` into the `Projects` tab, which lists them
+  whole.
+
 ### Fixed
 
 - **Codex context usage now follows the session's configured window.** A default

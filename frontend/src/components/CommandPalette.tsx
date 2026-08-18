@@ -4,7 +4,7 @@ import { Folder, FolderX, MessageSquareText } from "lucide-react"
 import { useProjects } from "@/providers/projects"
 import { useSettings } from "@/providers/settings"
 import { useHotkey } from "@/lib/use-hotkey"
-import { useSessionStatus } from "@/lib/session/use-session-status"
+import { runningSessions, useSessionStatus } from "@/lib/session/use-session-status"
 import { SessionStatusIcon } from "@/components/sidebar/SessionStatusIcon"
 import {
   filterPalette,
@@ -13,6 +13,7 @@ import {
   paletteSessions,
   paletteTabCount,
   PALETTE_TABS,
+  rankSessions,
   rowKey,
   type PaletteMessage,
   type PaletteRow,
@@ -43,6 +44,7 @@ export function CommandPalette() {
   const [tab, setTab] = useState<PaletteTab>("All")
   const [selected, setSelected] = useState(0)
   const [closed, setClosed] = useState<RecentProject[]>([])
+  const [running, setRunning] = useState<ReadonlySet<string>>(new Set())
   const [missing, setMissing] = useState<ReadonlySet<string>>(new Set())
 
   useHotkey(hotkeys.commandPalette, () => {
@@ -80,7 +82,19 @@ export function CommandPalette() {
     }
   }, [open])
 
-  const all = useMemo(() => paletteSessions(projects, sessions), [projects, sessions])
+  const flat = useMemo(() => paletteSessions(projects, sessions), [projects, sessions])
+  // Which sessions hold a turn, sampled once per opening rather than
+  // subscribed to. The palette is mounted for the whole app's life, so a
+  // subscription would re-render it for every status report with nothing on
+  // screen; and an order that moved under the cursor while a row is being
+  // aimed at costs more than the freshness is worth — the same reason the
+  // transcript hits are listed last.
+  useEffect(() => {
+    if (open) {
+      setRunning(new Set(runningSessions(flat.map((session) => session.sessionId))))
+    }
+  }, [open])
+  const all = useMemo(() => rankSessions(flat, running), [flat, running])
   const results = useMemo(
     () => filterPalette(query, all, projects, closed),
     [query, all, projects, closed],
