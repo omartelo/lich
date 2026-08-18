@@ -48,10 +48,11 @@ export const SANDBOX_EVENT = "session-sandbox"
 // Global event the backend emits after a turn ends with the session's
 // context-window usage (see terminal.usageEventName). Payload: { id, percent,
 // tokens, window, model, effort } — percent is 0–100 of the window, tokens the
-// raw input-side count, window the model's context size, model its id, effort
-// the reasoning level ("" when the turn records none) — plus an optional
-// costUsd, which is present only when the cost readout is on and every model in
-// the session has a known price. Its absence is the answer, not a zero.
+// provider's active context count, window the model's effective context size,
+// model its id, effort the reasoning level ("" when the turn records none) —
+// plus an optional costUsd, which is present only when the cost readout is on
+// and every model in the session has a known price. Its absence is the answer,
+// not a zero.
 export const USAGE_EVENT = "session-usage"
 
 // Global event the backend emits while one session has a request open with

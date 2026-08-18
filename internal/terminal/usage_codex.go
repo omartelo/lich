@@ -5,8 +5,12 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"path/filepath"
 )
 
+// A rollout line can be much larger than a normal event. Reading 64 KiB at a
+// time keeps allocations bounded without turning a long transcript into many
+// tiny reads; lines spanning blocks are carried into the next iteration.
 const codexScanBlockBytes int64 = 64 * 1024
 
 type codexRolloutEntry struct {
@@ -24,15 +28,62 @@ type codexRolloutEntry struct {
 	} `json:"payload"`
 }
 
+type codexModelsCache struct {
+	Models []struct {
+		Slug                          string `json:"slug"`
+		ContextWindow                 int    `json:"context_window"`
+		MaxContextWindow              int    `json:"max_context_window"`
+		EffectiveContextWindowPercent int    `json:"effective_context_window_percent"`
+	} `json:"models"`
+}
+
 // codexContextUsage reads the latest active context size, model and effort from
-// a Codex rollout. The reverse scan stops at the current turn's turn_context,
-// so an old conversation costs no more to read than a new one.
+// a Codex rollout. Codex writes the current context tranche into the rollout,
+// while its own readout uses the model cache's maximum effective window; prefer
+// that maximum and keep the rollout value as the fallback. The reverse scan
+// stops at the current turn's turn_context, so an old conversation costs no
+// more to read than a new one.
 func codexContextUsage(providerSessionID string) (contextUsage, bool) {
 	path, ok := codexTranscriptPath(providerSessionID)
 	if !ok {
 		return contextUsage{}, false
 	}
-	return scanCodexContextUsage(path)
+	usage, ok := scanCodexContextUsage(path)
+	if !ok {
+		return contextUsage{}, false
+	}
+	if window, ok := codexMaxContextWindow(usage.model); ok {
+		usage.window = window
+		usage.percent = min(usage.tokens*100/window, 100)
+	}
+	return usage, true
+}
+
+func codexMaxContextWindow(model string) (int, bool) {
+	base, ok := harnessDir("CODEX_HOME", ".codex")
+	if !ok {
+		return 0, false
+	}
+	data, err := os.ReadFile(filepath.Join(base, "models_cache.json"))
+	if err != nil {
+		return 0, false
+	}
+	var cache codexModelsCache
+	if json.Unmarshal(data, &cache) != nil {
+		return 0, false
+	}
+	for _, candidate := range cache.Models {
+		if candidate.Slug != model {
+			continue
+		}
+		window := max(candidate.ContextWindow, candidate.MaxContextWindow)
+		percent := candidate.EffectiveContextWindowPercent
+		if window <= 0 || percent <= 0 || percent > 100 {
+			return 0, false
+		}
+		return window * percent / 100, true
+	}
+	return 0, false
 }
 
 func scanCodexContextUsage(path string) (contextUsage, bool) {

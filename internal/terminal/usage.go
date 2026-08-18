@@ -12,9 +12,10 @@ import (
 const usageEventName = "session-usage"
 
 // usageEvent is the payload of usageEventName. Percent is the share of the
-// context window the turn left occupied (0–100); Tokens is the raw input-side
-// count behind it, Window the model's context window, Model the model id, and
-// Effort the reasoning effort level ("" when the line records none).
+// context window the turn left occupied (0–100); Tokens is the provider's active
+// context count behind it, Window the model's effective context window, Model
+// the model id, and Effort the reasoning effort level ("" when the line records
+// none).
 //
 // CostUSD is what the session has cost so far, and is omitted — not zeroed —
 // whenever there is no number worth showing: the setting is off, or a model in

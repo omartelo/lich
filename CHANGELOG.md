@@ -10,8 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Codex sessions now carry their model and context usage in the footer.** The
-  same readout setting Claude Code offers is available for Codex, backed by the
-  active context count, model and reasoning effort in its rollout transcript.
+  model-and-context readout is available for Codex, backed by the active context
+  count, model and reasoning effort in its rollout transcript and the maximum
+  effective window advertised by its model cache.
 
 ## [0.36.0] - 2026-08-18
 

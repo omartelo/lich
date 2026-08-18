@@ -1,14 +1,31 @@
 import { describe, expect, it } from "vitest"
 import { createSessionUsageStore } from "./session-usage-store"
 
-// harness wires a store to a hand-driven event source, returning the emitter.
+// harness wires a store to hand-driven event sources, returning their emitters.
 function harness() {
-  let handler: (data: unknown) => void = () => {}
-  const store = createSessionUsageStore((h) => {
-    handler = h
-    return () => {}
-  })
-  return { store, emit: (data: unknown) => handler(data) }
+  let onUsage: (data: unknown) => void = () => {}
+  let onAgent: (data: unknown) => void = () => {}
+  let onStatus: (data: unknown) => void = () => {}
+  const store = createSessionUsageStore(
+    (h) => {
+      onUsage = h
+      return () => {}
+    },
+    (h) => {
+      onAgent = h
+      return () => {}
+    },
+    (h) => {
+      onStatus = h
+      return () => {}
+    },
+  )
+  return {
+    store,
+    emit: (data: unknown) => onUsage(data),
+    agent: (data: unknown) => onAgent(data),
+    status: (data: unknown) => onStatus(data),
+  }
 }
 
 describe("createSessionUsageStore", () => {
@@ -94,6 +111,30 @@ describe("createSessionUsageStore", () => {
       effort: eff,
       costUsd: null,
     })
+  })
+
+  it("clears stale usage when a provider starts, the PTY respawns, or the provider exits", () => {
+    const { store, emit, agent, status } = harness()
+    const report = {
+      id: "s1",
+      percent: 30,
+      tokens: 60000,
+      window: 200000,
+      model: opus,
+      effort: eff,
+    }
+
+    emit(report)
+    agent({ id: "s1", agent: "codex" })
+    expect(store.get("s1")).toBeNull()
+
+    emit(report)
+    agent({ id: "s1", agent: "" })
+    expect(store.get("s1")).toBeNull()
+
+    emit(report)
+    status({ id: "s1", state: "idle" })
+    expect(store.get("s1")).toBeNull()
   })
 
   it("carries the session cost when the backend sent one", () => {
