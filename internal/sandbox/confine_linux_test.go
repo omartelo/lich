@@ -159,3 +159,17 @@ func TestAnAgentInstalledAsASymlinkRuns(t *testing.T) {
 		t.Errorf("the agent did not run: %q", out)
 	}
 }
+
+// The hostname is what somebody checks from inside a session to tell whether it
+// is confined at all, so it is pinned to a literal here rather than derived from
+// the constant: reading the constant would let a rename pass this test and break
+// every instruction that names it.
+func TestConfinedSessionReportsItsHostname(t *testing.T) {
+	if !Available() {
+		t.Skip("bubblewrap is not installed")
+	}
+	home, cwd := confinedHome(t)
+	if out := runConfined(t, home, cwd, "hostname"); strings.TrimSpace(out) != "lich-sandbox" {
+		t.Errorf("hostname inside the sandbox = %q, want %q", strings.TrimSpace(out), "lich-sandbox")
+	}
+}

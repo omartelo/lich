@@ -12,8 +12,6 @@ export interface SandboxChoice {
   /** Whether the session opens confined. */
   confined: boolean
   setConfined: (confined: boolean) => void
-  /** Whether the rung — rather than the user — is what set the box. */
-  fromRung: boolean
   /** What to record on the session row. */
   answer: SandboxAnswer
 }
@@ -24,18 +22,28 @@ export interface SandboxChoice {
 // exactly what it shows.
 //
 // worktree says which side of the rung this session lands on: a linked checkout,
-// or the project's own directory.
+// or the project's own directory. open is whether the dialog is on screen, and it
+// is what the rung is read on: the dialog lives inside the sidebar, which stays
+// mounted while Settings takes the screen (App.tsx), so a read done at mount
+// would show — and then record — the rung as it was before the user changed it.
 //
 // The answer is recorded either way, never left empty once the machine can
 // confine: an untouched box is still this session's answer, and freezing it on
 // the row is what keeps a later change to the rung from quietly confining — or
 // releasing — a session the user already opened.
-export function useSandboxChoice(providerId: string, projectId: string, worktree: boolean) {
+export function useSandboxChoice(
+  providerId: string,
+  projectId: string,
+  worktree: boolean,
+  open: boolean,
+) {
   const [available, setAvailable] = useState(false)
   const [confined, setChoice] = useState(false)
-  const [fromRung, setFromRung] = useState(true)
 
   useEffect(() => {
+    if (!open) {
+      return
+    }
     let stale = false
     const load = async () => {
       const canConfine = await System.SandboxAvailable()
@@ -50,7 +58,6 @@ export function useSandboxChoice(providerId: string, projectId: string, worktree
       }
       setAvailable(canConfine)
       setChoice(sandboxDefaultFor(sandboxLevel(scoped || global), worktree))
-      setFromRung(true)
     }
     // A settings read that fails leaves the row absent and the session
     // unconfined, which is what lich did before the sandbox existed.
@@ -58,13 +65,8 @@ export function useSandboxChoice(providerId: string, projectId: string, worktree
     return () => {
       stale = true
     }
-  }, [providerId, projectId, worktree])
-
-  const setConfined = (next: boolean) => {
-    setChoice(next)
-    setFromRung(false)
-  }
+  }, [providerId, projectId, worktree, open])
 
   const answer: SandboxAnswer = available ? (confined ? "on" : "off") : ""
-  return { available, confined, setConfined, fromRung, answer }
+  return { available, confined, setConfined: setChoice, answer }
 }

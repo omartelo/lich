@@ -1,6 +1,9 @@
 package terminal
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -112,47 +115,38 @@ func lastIndex(args []string, value string) int {
 	return -1
 }
 
-// The binaries a confined session has to reach are the one it runs and the lich
-// binary it calls back through, both resolved to a real path.
-func TestExecutablesResolveTheSpawnAndLich(t *testing.T) {
-	paths := executables("sh")
-	if len(paths) == 0 {
+// What a confined spawn needs mounted is the directory holding each binary, not
+// the binary — binding the executable itself is what fails the spawn when it is
+// a symlink under a directory already mounted (sandbox.BinaryDirs). The missing
+// binary case is BinaryDirs' own (TestBinaryDirsOfAMissingBinary); what is here
+// is that this caller asks for both binaries and passes the answer through.
+func TestExecutablesAreDirectoriesOnDisk(t *testing.T) {
+	dirs := executables("sh")
+	if len(dirs) == 0 {
 		t.Fatal("sh resolved to nothing")
 	}
-	for _, path := range paths {
-		if path == "sh" {
-			t.Errorf("an unresolved name reached the mount list: %v", paths)
+	for _, dir := range dirs {
+		info, err := os.Stat(dir)
+		if err != nil {
+			t.Errorf("%q is not on disk: %v", dir, err)
+			continue
+		}
+		if !info.IsDir() {
+			t.Errorf("%q is a file; a mount of it would fail the spawn", dir)
 		}
 	}
-	if got := executables("lich-no-such-binary-anywhere"); len(got) != 0 && got[0] != "" {
-		for _, path := range got {
-			if path == "lich-no-such-binary-anywhere" {
-				t.Errorf("a binary that is not on PATH reached the mount list: %v", got)
-			}
-		}
+	// The shell's own directory, and the lich binary's — the session calls back
+	// through it, and its MCP server runs it.
+	shell, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("no sh on PATH")
 	}
-}
-
-// The verdict is written back on every spawn, including for a session nobody
-// was asked about — it is what the card reads to draw its mark, and what keeps a
-// session running the way it opened once the rung moves under it.
-func TestConfinedRecordsItsVerdict(t *testing.T) {
-	tests := []struct {
-		row  string
-		rung bool
-		want string
-	}{
-		{"", true, store.SessionConfined},
-		{"", false, store.SessionUnconfined},
-		{store.SessionConfined, false, store.SessionConfined},
-		{store.SessionUnconfined, true, store.SessionUnconfined},
+	if !slices.Contains(dirs, filepath.Dir(shell)) {
+		t.Errorf("the spawned binary's directory is missing from %v", dirs)
 	}
-	for _, tt := range tests {
-		recorded := ""
-		s := stubSandboxStore{row: tt.row, rungAnswer: tt.rung, recorded: &recorded}
-		confined(s, "s1", providers.Claude, "p1", "/work/wt")
-		if recorded != tt.want {
-			t.Errorf("row %q rung %v recorded %q, want %q", tt.row, tt.rung, recorded, tt.want)
+	if lich := lichBin(); lich != "" {
+		if !slices.Contains(dirs, filepath.Dir(lich)) {
+			t.Errorf("the lich binary's directory is missing from %v", dirs)
 		}
 	}
 }

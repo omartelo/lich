@@ -266,11 +266,15 @@ export function setSessionSandboxed(
     ...state,
     [projectId]: {
       ...current,
-      sessions: current.sessions.map((s) =>
-        s.id === sessionId
-          ? { ...s, ...(sandboxed ? { sandboxed: true } : { sandboxed: undefined }) }
-          : s,
-      ),
+      sessions: current.sessions.map((s) => {
+        if (s.id !== sessionId) {
+          return s
+        }
+        // Dropped rather than set to undefined, so an unconfined session carries
+        // no key at all — the shape the two hydration paths produce.
+        const { sandboxed: _was, ...rest } = s
+        return sandboxed ? { ...rest, sandboxed: true } : rest
+      }),
     },
   }
 }

@@ -133,7 +133,7 @@ export function WorktreeDialog({
   const [submitting, setSubmitting] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
   // A worktree is always the linked checkout, so the rung is read on that side.
-  const sandbox = useSandboxChoice(providerId, projectId, true)
+  const sandbox = useSandboxChoice(providerId, projectId, true, open)
 
   const vis = filterBranches(branches, filter)
   const flat = flatValues(vis)

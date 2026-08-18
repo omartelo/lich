@@ -892,3 +892,15 @@ describe("setSessionSandboxed", () => {
     expect(setSessionSandboxed(current, "gone", true)).toBe(current)
   })
 })
+
+// The mark is dropped rather than set to undefined: the two hydration paths omit
+// the key entirely, and a session that reached the same state two ways must not
+// carry two different shapes.
+describe("setSessionSandboxed shape", () => {
+  it("leaves no sandboxed key on an unconfined session", () => {
+    const confined = setSessionSandboxed(buildState(1), "s1", true)
+    const cleared = setSessionSandboxed(confined, "s1", false)
+    const session = cleared[P]?.sessions[0]
+    expect(session && "sandboxed" in session).toBe(false)
+  })
+})

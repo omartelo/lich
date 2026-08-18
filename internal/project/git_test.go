@@ -121,3 +121,57 @@ func TestSplitNULDropsTheTrailingTerminator(t *testing.T) {
 		t.Errorf("splitNUL(\"\") = %q, want nil", got)
 	}
 }
+
+// GitCommonDir is what a confined session mounts so git works at all
+// (internal/sandbox): a linked worktree's `.git` is a file naming that
+// directory, so a sandbox that mounts the worktree and not the common directory
+// hands the agent a checkout git refuses to read.
+func TestGitCommonDirOfARepositoryAndItsWorktree(t *testing.T) {
+	repo := initBareRepo(t)
+	if err := os.WriteFile(filepath.Join(repo, "a.txt"), []byte("a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"-c", "user.email=t@example.com", "-c", "user.name=t", "add", "a.txt"},
+		{"-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-m", "first"},
+	} {
+		cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Skipf("git %v unavailable: %v (%s)", args, err, out)
+		}
+	}
+
+	// The repository's own checkout answers with its own metadata directory.
+	own := GitCommonDir(repo)
+	if own == "" {
+		t.Fatalf("GitCommonDir(%q) = \"\", want its .git", repo)
+	}
+	if !filepath.IsAbs(own) {
+		t.Errorf("GitCommonDir = %q, want an absolute path — a mount source cannot be relative", own)
+	}
+	if filepath.Base(own) != ".git" {
+		t.Errorf("GitCommonDir = %q, want the repository's .git", own)
+	}
+
+	// A linked worktree answers with the *main* repository's directory, which is
+	// the whole reason this is asked of git rather than derived from the path.
+	linked := filepath.Join(t.TempDir(), "wt")
+	cmd := exec.Command("git", "-C", repo, "worktree", "add", "-b", "side", linked)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Skipf("git worktree unavailable: %v (%s)", err, out)
+	}
+	if got := GitCommonDir(linked); got != own {
+		t.Errorf("GitCommonDir(worktree) = %q, want the main repository's %q", got, own)
+	}
+}
+
+// A directory that is not in a repository is not an error: a session can be
+// opened anywhere, and the sandbox simply has no common directory to mount.
+func TestGitCommonDirOutsideARepository(t *testing.T) {
+	if got := GitCommonDir(t.TempDir()); got != "" {
+		t.Errorf("GitCommonDir outside a repository = %q, want \"\"", got)
+	}
+	if got := GitCommonDir(filepath.Join(t.TempDir(), "gone")); got != "" {
+		t.Errorf("GitCommonDir of a missing directory = %q, want \"\"", got)
+	}
+}

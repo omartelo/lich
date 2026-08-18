@@ -14,6 +14,13 @@ import (
 // below, and no setuid helper of lich's own.
 const bwrapBin = "bwrap"
 
+// sandboxHostname is what a confined session reports as its host name. It is the
+// cheapest proof from inside that the sandbox is on — `hostname` cannot answer
+// this anywhere else — so it is named here and pinned by a test rather than
+// spelled inline where a rename would cost nothing and silently invalidate the
+// check.
+const sandboxHostname = "lich-sandbox"
+
 // systemDirs are the top-level directories that make the sandbox an operating
 // system rather than an empty namespace, all read-only. /nix and /opt are here
 // for the machines that have them and cost nothing on the machines that do not:
@@ -146,7 +153,7 @@ func bwrapArgs(spec Spec, roots []root) []string {
 		"--unshare-pid",
 		"--unshare-uts",
 		"--unshare-ipc",
-		"--hostname", "lich-sandbox",
+		"--hostname", sandboxHostname,
 		// The sandbox dies with the PTY rather than outliving it as an orphan
 		// nothing on screen accounts for. No --new-session: it calls setsid,
 		// which would take the session's controlling terminal away from the PTY
