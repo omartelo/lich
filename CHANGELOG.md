@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Codex context usage now follows the session's configured window.** A default
+  272k session no longer appears to use the model catalog's optional 872k
+  maximum; sessions configured for either size report their own effective
+  window from the rollout.
+
 ## [0.37.0] - 2026-08-18
 
 ### Added

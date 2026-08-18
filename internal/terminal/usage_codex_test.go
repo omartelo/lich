@@ -49,38 +49,3 @@ func TestCodexContextUsageMisses(t *testing.T) {
 		t.Error("a missing rollout should be not-ok")
 	}
 }
-
-func TestCodexMaxContextWindow(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv("CODEX_HOME", dir)
-	path := filepath.Join(dir, "models_cache.json")
-	write := func(body string) {
-		t.Helper()
-		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	write(`{"models":[{"slug":"gpt-5.6-sol","context_window":272000,"max_context_window":872000,"effective_context_window_percent":95}]}`)
-	if got, ok := codexMaxContextWindow("gpt-5.6-sol"); !ok || got != 828400 {
-		t.Errorf("codexMaxContextWindow = %d, %v; want 828400, true", got, ok)
-	}
-	if _, ok := codexMaxContextWindow("unknown"); ok {
-		t.Error("unknown model should be not-ok")
-	}
-
-	write(`{"models":[{"slug":"gpt-5.6-sol","max_context_window":872000,"effective_context_window_percent":101}]}`)
-	if _, ok := codexMaxContextWindow("gpt-5.6-sol"); ok {
-		t.Error("invalid effective percent should be not-ok")
-	}
-	write(`not json`)
-	if _, ok := codexMaxContextWindow("gpt-5.6-sol"); ok {
-		t.Error("malformed cache should be not-ok")
-	}
-	if err := os.Remove(path); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := codexMaxContextWindow("gpt-5.6-sol"); ok {
-		t.Error("missing cache should be not-ok")
-	}
-}
