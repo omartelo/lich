@@ -31,41 +31,61 @@ func TestStateDirsCoversEveryRegisteredProvider(t *testing.T) {
 	}
 }
 
+// testHome is a home directory spelled the way the running OS spells one, so the
+// assertions below answer for what filepath.Join produces rather than for POSIX
+// separators. The paths need not exist: stateDirs only composes them.
+func testHome() string {
+	return filepath.Join(string(filepath.Separator), "home", "u")
+}
+
 func TestStateDirsPerProvider(t *testing.T) {
 	clearHarnessEnv(t)
+	home := testHome()
 	tests := []struct {
 		provider string
 		want     []string
 	}{
-		{providers.Claude, []string{"/home/u/.claude", "/home/u/.claude.json"}},
-		{providers.Codex, []string{"/home/u/.codex"}},
-		{providers.OMP, []string{"/home/u/.omp/agent"}},
-		{providers.OpenCode, []string{"/home/u/.config/opencode", "/home/u/.local/share/opencode"}},
-		{providers.Crush, []string{"/home/u/.config/crush", "/home/u/.local/share/crush"}},
+		{providers.Claude, []string{filepath.Join(home, ".claude"), filepath.Join(home, ".claude.json")}},
+		{providers.Codex, []string{filepath.Join(home, ".codex")}},
+		{providers.OMP, []string{filepath.Join(home, ".omp", "agent")}},
+		{providers.OpenCode, []string{
+			filepath.Join(home, ".config", "opencode"),
+			filepath.Join(home, ".local", "share", "opencode"),
+		}},
+		{providers.Crush, []string{
+			filepath.Join(home, ".config", "crush"),
+			filepath.Join(home, ".local", "share", "crush"),
+		}},
 	}
 	for _, tt := range tests {
-		if got := stateDirs(tt.provider, "/home/u"); !slices.Equal(got, tt.want) {
+		if got := stateDirs(tt.provider, home); !slices.Equal(got, tt.want) {
 			t.Errorf("stateDirs(%q) = %v, want %v", tt.provider, got, tt.want)
 		}
 	}
-	if got := stateDirs("shell", "/home/u"); got != nil {
+	if got := stateDirs("shell", home); got != nil {
 		t.Errorf("stateDirs for a shell session = %v, want none", got)
 	}
 }
 
+// The overrides come from t.TempDir rather than from a literal: envDir only
+// honours an absolute path, and what counts as absolute is the OS's own answer —
+// "/srv/claude" is not one on Windows, where a path needs its volume.
 func TestStateDirsFollowsHarnessEnvironment(t *testing.T) {
 	clearHarnessEnv(t)
-	t.Setenv("CLAUDE_CONFIG_DIR", "/srv/claude")
-	t.Setenv("CODEX_HOME", "/srv/codex")
-	t.Setenv("XDG_CONFIG_HOME", "/srv/cfg")
+	home := testHome()
+	root := t.TempDir()
+	claude, codex, config := filepath.Join(root, "claude"), filepath.Join(root, "codex"), filepath.Join(root, "cfg")
+	t.Setenv("CLAUDE_CONFIG_DIR", claude)
+	t.Setenv("CODEX_HOME", codex)
+	t.Setenv("XDG_CONFIG_HOME", config)
 
-	if got := stateDirs(providers.Claude, "/home/u"); got[0] != "/srv/claude" {
+	if got := stateDirs(providers.Claude, home); got[0] != claude {
 		t.Errorf("CLAUDE_CONFIG_DIR ignored: got %v", got)
 	}
-	if got := stateDirs(providers.Codex, "/home/u"); got[0] != "/srv/codex" {
+	if got := stateDirs(providers.Codex, home); got[0] != codex {
 		t.Errorf("CODEX_HOME ignored: got %v", got)
 	}
-	if got := stateDirs(providers.Crush, "/home/u"); got[0] != "/srv/cfg/crush" {
+	if got := stateDirs(providers.Crush, home); got[0] != filepath.Join(config, "crush") {
 		t.Errorf("XDG_CONFIG_HOME ignored: got %v", got)
 	}
 }
@@ -74,13 +94,15 @@ func TestStateDirsFollowsHarnessEnvironment(t *testing.T) {
 // order `omp config path` applies.
 func TestOMPProfileBeatsDirectoryOverride(t *testing.T) {
 	clearHarnessEnv(t)
-	t.Setenv("PI_CODING_AGENT_DIR", "/srv/omp")
-	if got := ompAgentDir("/home/u"); got != "/srv/omp" {
+	home := testHome()
+	override := t.TempDir()
+	t.Setenv("PI_CODING_AGENT_DIR", override)
+	if got := ompAgentDir(home); got != override {
 		t.Errorf("PI_CODING_AGENT_DIR ignored: got %q", got)
 	}
 	t.Setenv("OMP_PROFILE", "work")
-	want := "/home/u/.omp/profiles/work/agent"
-	if got := ompAgentDir("/home/u"); got != want {
+	want := filepath.Join(home, ".omp", "profiles", "work", "agent")
+	if got := ompAgentDir(home); got != want {
 		t.Errorf("ompAgentDir with a profile = %q, want %q", got, want)
 	}
 }
@@ -88,8 +110,9 @@ func TestOMPProfileBeatsDirectoryOverride(t *testing.T) {
 // A relative override is not a bind mount source: it resolves against a working
 // directory this package does not own, so the fallback stands.
 func TestEnvDirRejectsRelativeOverride(t *testing.T) {
+	fallback := filepath.Join(testHome(), ".codex")
 	t.Setenv("CODEX_HOME", "codex")
-	if got := envDir("CODEX_HOME", "/home/u/.codex"); got != "/home/u/.codex" {
+	if got := envDir("CODEX_HOME", fallback); got != fallback {
 		t.Errorf("relative override honoured: got %q", got)
 	}
 }

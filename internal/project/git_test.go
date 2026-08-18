@@ -160,7 +160,9 @@ func TestGitCommonDirOfARepositoryAndItsWorktree(t *testing.T) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Skipf("git worktree unavailable: %v (%s)", err, out)
 	}
-	if got := GitCommonDir(linked); got != own {
+	// Cleaned before comparing: git answers with forward slashes on Windows, and
+	// the contract is the same directory, not the same string.
+	if got := GitCommonDir(linked); filepath.Clean(got) != filepath.Clean(own) {
 		t.Errorf("GitCommonDir(worktree) = %q, want the main repository's %q", got, own)
 	}
 }
