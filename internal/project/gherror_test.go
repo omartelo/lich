@@ -137,3 +137,33 @@ func TestErrUnreadableAnswer(t *testing.T) {
 		t.Errorf("errUnreadableAnswer() = %q, want %q", err, want)
 	}
 }
+
+// TestGHFailureCarriesTheMessageAndNotTheStderr walks the wrapper the pull
+// request flows actually call: the error that reaches the screen is ghMessage's
+// sentence, and gh's own words stay behind in the log.
+func TestGHFailureCarriesTheMessageAndNotTheStderr(t *testing.T) {
+	stderr := "GraphQL: Could not resolve to a Repository with the name 'acme/private'. (repository)"
+	err := ghFailure([]string{"pr", "view"}, stderr, errTest, nil)
+	if err == nil {
+		t.Fatal("ghFailure() = nil, want the screen's message")
+	}
+	if want := ghMessage(stderr, errTest, nil); err.Error() != want {
+		t.Errorf("ghFailure() = %q, want %q", err, want)
+	}
+	if strings.Contains(err.Error(), "GraphQL") {
+		t.Errorf("ghFailure() = %q, which carries gh's own words onto the screen", err)
+	}
+}
+
+// A cancelled call is the one failure with nothing on stderr to recognise, and
+// it still has to come back as a sentence rather than as "context deadline
+// exceeded".
+func TestGHFailureAnswersATimeout(t *testing.T) {
+	err := ghFailure([]string{"pr", "merge"}, "", errTest, context.DeadlineExceeded)
+	if err == nil {
+		t.Fatal("ghFailure() = nil, want the screen's message")
+	}
+	if strings.Contains(strings.ToLower(err.Error()), "context") {
+		t.Errorf("ghFailure() = %q, which names Go's own error instead of what happened", err)
+	}
+}

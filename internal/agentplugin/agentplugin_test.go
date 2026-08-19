@@ -707,3 +707,36 @@ func TestHasToolsFollowsThePluginVersionElsewhere(t *testing.T) {
 		})
 	}
 }
+
+// Installed is the question the relay asks before reading a session's silence as
+// an answer (relay.reportsState), so each way of answering "no" has to be its
+// own: a provider with no plugin at all, a CLI this machine does not have, and
+// an installed harness whose plugin was never written.
+func TestInstalledAnswersForEachWayThereIsNoPlugin(t *testing.T) {
+	agent := ompHome(t)
+	s := New(stubBins{})
+	s.lookPath = func(string) (string, error) { return "/usr/bin/omp", nil }
+
+	if s.Installed(providers.OMP) {
+		t.Error("Installed(omp) = true with nothing in its extensions directory")
+	}
+
+	writeMarkedModule(t, filepath.Join(agent, ompExtensionsDir, ompFile), "0.1.0")
+	if !s.Installed(providers.OMP) {
+		t.Error("Installed(omp) = false with the plugin's module in place")
+	}
+	// Written older than toolsMinVersion on purpose: reporting state and carrying
+	// lich's operations are two questions, and only the second weighs a version.
+	if s.HasTools(providers.OMP) {
+		t.Error("HasTools(omp) = true for a plugin older than the release that carries the tools")
+	}
+
+	s.lookPath = func(string) (string, error) { return "", errors.New("not found") }
+	if s.Installed(providers.OMP) {
+		t.Error("Installed(omp) = true on a machine with no omp CLI to run it")
+	}
+
+	if s.Installed("shell") {
+		t.Error(`Installed("shell") = true, but a session kind that is no provider has no plugin`)
+	}
+}

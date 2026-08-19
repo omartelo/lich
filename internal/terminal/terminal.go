@@ -159,12 +159,11 @@ type session struct {
 // Store is the persistence the terminal service depends on: the binary to spawn
 // for a provider in a project (empty return spawns the provider's default),
 // whether that spawn drops the provider's permission prompts and whether it runs
-// confined,
-// that project's own directory, the dev-server port reserved for each checkout,
-// where to record the provider session id a PTY reports through its
-// session-start hook, and the running cost
-// accounting behind the footer readout (CostReadout gates it — off, none of the
-// rest is called). The store implements them all.
+// confined, that project's own directory, the dev-server port reserved for each
+// checkout, where to record the provider session id a PTY reports through its
+// session-start hook, and the running cost accounting behind the footer readout
+// (CostReadout gates it — off, none of the rest is called). The store implements
+// them all.
 type Store interface {
 	ProviderBin(providerID, projectID string) string
 	SkipPermissions(providerID, projectID, cwd string) bool
@@ -389,7 +388,7 @@ func (s *Service) SetRestart(fn func() error) {
 
 // sessionEnv is the environment for one PTY: the shared base, the project this
 // session belongs to, the dev-server port its checkout owns, and the loopback
-// coordinates a Claude Code hook needs to report this session's status back to
+// coordinates a provider's hook needs to report this session's status back to
 // lich. All of it is per-session, so this returns a fresh slice rather than
 // aliasing (and appending to) the shared s.env.
 //
@@ -444,8 +443,8 @@ const readBufSize = 32 * 1024
 // shell when kind is "shell", otherwise the provider binary for that kind
 // resolved from the project's settings (falling back to the provider's default
 // on $PATH) — attached to a new PTY sized to cols x rows and rooted at cwd, then
-// streams its output to the frontend. An empty cwd defaults to the user's home directory. Starting a
-// session that is already running is a no-op.
+// streams its output to the frontend. An empty cwd defaults to the user's home
+// directory. Starting a session that is already running is a no-op.
 //
 // A non-empty resume is a provider conversation id to reopen, spelled for the
 // session's kind by resumeArgs, which the frontend passes after the user
@@ -460,10 +459,11 @@ const readBufSize = 32 * 1024
 // the user sees. Only Claude Code has a roster; every other kind ignores it.
 //
 // setup is passed once, by the flow that just created this session's worktree:
-// it runs the project's worktree setup script (Settings › Project) in the PTY
-// before the provider, so a fresh checkout installs its dependencies in view.
-// A respawn or resume never sets it. The script runs in the session's own
-// environment, so it reads the same LICH_WORKTREE_PORT the provider will.
+// it runs the project's worktree setup script (.lich/setup-worktree.sh, see
+// project.SetupScript) in the PTY before the provider, so a fresh checkout
+// installs its dependencies in view. A respawn or resume never sets it. The
+// script runs in the session's own environment, so it reads the same
+// LICH_WORKTREE_PORT the provider will.
 func (s *Service) Start(id, projectID, cwd, kind, resume, name string, setup bool, cols, rows int) error {
 	sess, cwd, err := s.spawnSession(id, projectID, cwd, kind, resume, name, setup, cols, rows)
 	if err != nil || sess == nil {

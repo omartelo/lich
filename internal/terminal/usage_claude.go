@@ -89,8 +89,9 @@ func readTail(path string, max int64) ([]byte, bool) {
 // parseContextUsage pulls context-window occupancy from a transcript tail: the
 // newest main-thread assistant line's token usage. The context side is input +
 // cache-read + cache-creation (output is the reply, not context loaded); percent
-// is that against the line's model window (see windowForModel), capped at 100. false when the tail holds
-// no such line — a fresh conversation, or a tail of only user turns. Sidechain
+// is that against the line's model window (see windowForModel), capped at 100.
+// false when the tail holds no such line — a fresh conversation, or a tail of
+// only user turns. Sidechain
 // lines (a Task sub-agent's own conversation, written into the same transcript)
 // are skipped: their context is the sub-agent's, not the window the user sees. A
 // leading partial line (the tail was cut mid-line) fails to parse and is skipped

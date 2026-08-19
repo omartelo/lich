@@ -41,13 +41,14 @@ const (
 	wsReadLimit = 1 << 20
 	// tokenBytes is the size of the random connect token.
 	tokenBytes = 16
-	// hookBodyLimit bounds a status POST from the Claude Code hook; the payload
-	// is a tiny JSON object, so anything larger is malformed or hostile.
+	// hookBodyLimit bounds a status POST from a provider's hook; the payload is
+	// a tiny JSON object, so anything larger is malformed or hostile.
 	hookBodyLimit = 4 << 10
-	// These are the only session states the hook may report: busy while Claude
-	// is producing output, done when its turn finishes, waiting when Claude is
-	// blocked on the user (permission prompt or idle input, from Notification),
-	// and idle when the session ends (from SessionEnd) — idle clears the card's
+	// These are the only session states a hook may report, in every provider's
+	// spelling (docs/hooks/session-state.md maps each one's own events onto
+	// them): busy while the agent is producing output, done when its turn
+	// finishes, waiting when it is blocked on the user (a permission prompt, or
+	// an idle prompt), and idle when the session ends — idle clears the card's
 	// indicator so a stale spinner/check does not linger past a session or a
 	// /clear.
 	statusBusy    = "busy"
@@ -506,9 +507,9 @@ type titleRequest struct {
 	Title     string `json:"title"`
 }
 
-// sessionTitle receives the ai-title POST from the Claude Code hook and applies
-// it as the session's label via the setTitle callback, which no-ops when the
-// user has renamed the session.
+// sessionTitle receives the title POST from a provider's hook and applies it as
+// the session's label via the setTitle callback, which no-ops when the user has
+// renamed the session.
 func (t *transport) sessionTitle(w http.ResponseWriter, r *http.Request) {
 	servePost(t, w, r, parseSessionTitle, func(req titleRequest) error {
 		if t.setTitle == nil {
@@ -543,7 +544,7 @@ type touchedRequest struct {
 	SessionID string `json:"session_id"`
 }
 
-// sessionTouched receives a POST from the Claude Code hook when a session likely
+// sessionTouched receives a POST from a provider's hook when a session likely
 // changed files on disk (a file-mutating tool ran) and forwards the session id
 // via the touched callback, which nudges an immediate git-status refresh. It is
 // a best-effort latency optimization over the frontend's steady poll, so a

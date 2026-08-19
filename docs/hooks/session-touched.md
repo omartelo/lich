@@ -61,7 +61,7 @@ refresh reads a tree the tool has not touched yet (see the ceilings).
 ## Known ceilings
 
 - **Poll stays the baseline.** This never replaces the ~3s poll (see the git
-  status ceiling in the repo `CLAUDE.md`); it only front-runs it. Changes from
+  status ceiling in `docs/ceilings.md`); it only front-runs it. Changes from
   outside Claude (a shell session, an external editor) are still caught by the
   poll, not this hook.
 - **No debounce.** A burst of edits fires one POST per tool, each an immediate

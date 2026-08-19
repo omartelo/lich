@@ -97,8 +97,9 @@ func (s *Service) DeleteProject(id string) error {
 // AddSession inserts a session, makes it the project's active one and records the
 // project's next label counter — all atomically, mirroring the frontend reducer.
 // Kind selects what the session's PTY runs (a provider id or "shell"); empty
-// defaults to "claude" so older callers keep the original behavior. Path is the session's
-// working directory when it lives in a git worktree; empty means the project's.
+// defaults to "claude", which is the schema's own default and the answer for a
+// caller that reached this over RPC without one. Path is the session's working
+// directory when it lives in a git worktree; empty means the project's.
 // The session takes the position after the project's last one, so it appends to
 // the card list even once the user has dragged the others around.
 // sandbox is whether this session runs confined ("on"/"off", empty to follow the
@@ -174,7 +175,7 @@ func (s *Service) DeleteSession(projectID, sessionID, activeID string) error {
 // hides it from LoadState while keeping its row — and its provider session id —
 // intact for a later resume. The project's active session moves to activeID (the
 // neighbor the frontend picked). The keep-the-worktree close uses this; a plain
-// close still DeleteSessions for good.
+// close still calls DeleteSession, which removes it for good.
 func (s *Service) CloseSession(projectID, sessionID, activeID string) error {
 	return s.tx(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(`UPDATE sessions SET is_open = 0 WHERE id = ?`, sessionID); err != nil {
@@ -187,10 +188,11 @@ func (s *Service) CloseSession(projectID, sessionID, activeID string) error {
 // ReopenWorktreeSession resumes a parked worktree session. It finds the parked
 // (is_open = 0) session for the worktree at path and re-adds it to the workspace
 // under a fresh id (newSessionID), carrying over the old label, kind, provider
-// session id, label_auto flag, model, entrypoint and origin. The fresh id is deliberate: it makes the frontend treat the card
-// as never-spawned, so its resume prompt fires and the provider conversation
-// continues instead of starting cold. Returns nil when nothing is parked at path
-// — the caller then opens a brand-new session.
+// session id, label_auto flag, model, entrypoint and origin. The fresh id is
+// deliberate: it makes the frontend treat the card as never-spawned, so its
+// resume prompt fires and the provider conversation continues instead of
+// starting cold. Returns nil when nothing is parked at path — the caller then
+// opens a brand-new session.
 func (s *Service) ReopenWorktreeSession(projectID, path, newSessionID string) (*Session, error) {
 	var restored *Session
 	err := s.tx(func(tx *sql.Tx) error {

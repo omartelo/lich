@@ -1,7 +1,7 @@
 // Package relay lets one lich session hand a prompt to another and get an
 // answer back, for the providers whose own CLI has no cross-session channel of
-// its own. Claude Code has one; Codex, OpenCode and Crush do not, and this
-// works the same for all four.
+// its own. Claude Code has one; Codex, opencode, oh-my-pi and Crush do not, and
+// this works the same for all five.
 //
 // The delivery is deliberately dumb: lich types the message at the target's
 // prompt and submits it, exactly as the user would. What it never does is read

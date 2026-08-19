@@ -228,8 +228,8 @@ func (s *Service) CreateWorktree(projectPath, projectID, name, base string, base
 		return nil, err
 	}
 
-	// The session spawns claude at wtPath immediately after; make sure the
-	// checkout actually works before handing it over.
+	// The session spawns its provider at wtPath immediately after; make sure
+	// the checkout actually works before handing it over.
 	if _, err := runGit(wtPath, "rev-parse", "--is-inside-work-tree"); err != nil {
 		return nil, errors.New("The worktree was created but git does not read it as a checkout.")
 	}

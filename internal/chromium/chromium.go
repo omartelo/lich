@@ -1,7 +1,6 @@
 // Package chromium launches the app window as a system Chromium in --app
 // mode, pointed at the loopback listener that serves the frontend and the
-// RPC/terminal transports — option 1 of docs/chromium-shell.md. Promoted from
-// the cmd/spike skeleton that validated the approach.
+// RPC/terminal transports — option 1 of docs/chromium-shell.md.
 package chromium
 
 import (

@@ -1,14 +1,14 @@
 // Package providers is the registry of AI coding CLI harnesses lich can run in
-// a session (Claude Code, Codex, opencode, Crush). A provider id doubles as the
-// session kind that spawns it; the terminal resolves the id to a binary, and the
-// settings store keys per-provider overrides on it. Detection is a PATH scan,
-// mirroring internal/chromium's browser detection.
+// a session (Claude Code, Codex, opencode, oh-my-pi, Crush). A provider id
+// doubles as the session kind that spawns it; the terminal resolves the id to a
+// binary, and the settings store keys per-provider overrides on it. Detection is
+// a PATH scan, mirroring internal/chromium's browser detection.
 package providers
 
 import "os/exec"
 
 // Provider ids. Each id is also the session kind (store column + terminal.Start)
-// that runs the provider. Kept in sync with frontend/src/lib/sessions.ts.
+// that runs the provider. Kept in sync with frontend/src/lib/session/sessions.ts.
 const (
 	Claude   = "claude"
 	Codex    = "codex"
@@ -26,9 +26,10 @@ type Provider struct {
 }
 
 // Registry is every provider lich knows about, in display order. Claude Code is
-// first: it is the default, and the plugin's home. It and Codex are the two
-// wired for resume and for the plugin's reports — the rest just spawn their TUI
-// in a PTY.
+// first: it is the default, and the plugin's home. Every one of them resumes a
+// conversation by id (terminal.resumeArgs) and runs the companion plugin
+// (agentplugin.supported); what still differs per provider is spelled at each
+// of those tables, and AcceptsMCPServer below is the one split this file owns.
 var Registry = []Provider{
 	{ID: Claude, Name: "Claude Code", Binaries: []string{"claude"}},
 	{ID: Codex, Name: "Codex", Binaries: []string{"codex"}},
