@@ -88,14 +88,24 @@ const UNLABELED_SESSION = "A session"
 
 // ProjectsProvider is the write-through layer over the SQLite store: it mirrors
 // every mutation to the store and hydrates from it on launch so open projects
-// and their sessions survive restarts. In-project mutations read the latest
-// rendered session state through sessionsRef, which is safe because none of them
-// awaits a state-changing call before reading it.
+// and their sessions survive restarts. In-project mutations read session state
+// through sessionsRef and publish it through commit, which keeps the two in step
+// without waiting for a render.
 export function ProjectsProvider({ children }: { children: ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([])
   const [sessions, setSessions] = useState<SessionState>({})
   const sessionsRef = useRef(sessions)
   sessionsRef.current = sessions
+  // commit publishes new session state and advances the ref in the same breath.
+  // Every mutation reads the ref, and React renders once per tick at the
+  // earliest: two of them inside one tick — a worktree's occupants being closed
+  // together, two backend events delivered back to back — would otherwise both
+  // read the state from before the first, and the second would put back what the
+  // first took away.
+  const commit = useCallback((next: SessionState) => {
+    sessionsRef.current = next
+    setSessions(next)
+  }, [])
   const projectsRef = useRef(projects)
   projectsRef.current = projects
   // The always-present Home tab's project id, resolved at launch — a pinned,
@@ -131,7 +141,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
   const applyLoaded = useCallback((loaded: StoreProject[]) => {
     setProjects(loaded.map(toProject))
-    setSessions(buildSessionState(loaded))
+    commit(buildSessionState(loaded))
   }, [])
 
   // Restore the workspace once on launch, and seed the always-present Home tab:
@@ -174,7 +184,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       }
       const next = relabelSession(sessionsRef.current, projectId, id, label)
       if (next !== sessionsRef.current) {
-        setSessions(next)
+        commit(next)
       }
     })
     return () => off()
@@ -190,7 +200,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       }
       const next = setSessionSandboxed(sessionsRef.current, data.id, data.confined)
       if (next !== sessionsRef.current) {
-        setSessions(next)
+        commit(next)
       }
     })
     return () => off()
@@ -215,7 +225,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       }
       const next = adoptSession(sessionsRef.current, projectId, session, nextSeq)
       if (next !== sessionsRef.current) {
-        setSessions(next)
+        commit(next)
       }
     })
     return () => off()
@@ -236,7 +246,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         closed.activeId,
       )
       if (next !== sessionsRef.current) {
-        setSessions(next)
+        commit(next)
       }
     })
     return () => off()
@@ -313,7 +323,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       }
       const index = projects.findIndex((project) => project.id === id)
       setProjects((prev) => prev.filter((project) => project.id !== id))
-      setSessions((prev) => removeProject(prev, id))
+      commit(removeProject(sessionsRef.current, id))
       void Store.CloseProject(id)
       // Closing a background tab leaves focus untouched; closing the active one
       // falls back to the previous tab (then the next, then Home when none left).
@@ -332,7 +342,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     const next = addSession(sessionsRef.current, projectId, sessionId, resolvedKind, path)
     const project = next[projectId]
     const created = project.sessions[project.sessions.length - 1]
-    setSessions(next)
+    commit(next)
     void Store.AddSession(projectId, sessionId, created.label, resolvedKind, path, project.nextSeq)
     return sessionId
   }, [])
@@ -346,7 +356,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       const next = addSession(sessionsRef.current, projectId, sessionId, kind, wt.path, wt.name)
       const project = next[projectId]
       const created = project.sessions[project.sessions.length - 1]
-      setSessions(next)
+      commit(next)
       void Store.AddSession(
         projectId,
         sessionId,
@@ -383,7 +393,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
           ? { originSessionId: restored.originSessionId, originLabel: restored.originLabel }
           : {}),
       }
-      setSessions(restoreSession(sessionsRef.current, projectId, session))
+      commit(restoreSession(sessionsRef.current, projectId, session))
     },
     [newWorktreeSession],
   )
@@ -403,7 +413,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       if (removed === sessionsRef.current) {
         return Promise.resolve()
       }
-      setSessions(removed)
+      commit(removed)
       return persist(activeSessionId(removed, projectId))
     },
     [],
@@ -428,7 +438,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       if (next === sessionsRef.current) {
         return // the project was closed while the toast was up
       }
-      setSessions(next)
+      commit(next)
       const order = sessionsOf(next, projectId).map((s) => s.id)
       const {
         id,
@@ -518,7 +528,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     if (next === sessionsRef.current) {
       return
     }
-    setSessions(next)
+    commit(next)
     void Store.SetActiveSession(projectId, sessionId)
   }, [])
 
@@ -752,7 +762,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     if (next === sessionsRef.current) {
       return
     }
-    setSessions(next)
+    commit(next)
     void Store.ReorderSessions(projectId, ids)
   }, [])
 
@@ -761,7 +771,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     if (next === sessionsRef.current) {
       return
     }
-    setSessions(next)
+    commit(next)
     void Store.RenameSession(sessionId, label)
   }, [])
 
@@ -776,9 +786,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       // the user has renamed, and that answer is what decides the card here.
       .then(() => (entrypoint ? Store.SetSessionTitle(sessionId, entrypoint) : false))
       .then((renamed) => {
-        setSessions(
-          recordEntrypoint(sessionsRef.current, projectId, sessionId, entrypoint, !!renamed),
-        )
+        commit(recordEntrypoint(sessionsRef.current, projectId, sessionId, entrypoint, !!renamed))
         toast.success(entrypoint ? "Entrypoint set" : "Entrypoint cleared", {
           description: entrypoint
             ? "Runs the next time this terminal starts."
@@ -793,7 +801,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     if (next === sessionsRef.current) {
       return
     }
-    setSessions(next)
+    commit(next)
     void Store.SetSessionPinned(sessionId, pinned)
   }, [])
 

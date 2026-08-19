@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Removing a worktree takes every session in it off the sidebar.** With more
+  than one session open in the same checkout — after merging its pull request,
+  say — only one card went away and the others stayed behind on a directory
+  that no longer existed. Closing such a leftover card asked again whether to
+  keep or remove the worktree, and removing it failed.
+
 - **ssh no longer fails outright inside a confined session.** Every remote git
   command in a sandboxed session died on `Bad owner or permissions on
   /etc/ssh/ssh_config.d/...`: inside the sandbox's user namespace the
