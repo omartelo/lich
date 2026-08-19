@@ -38,6 +38,14 @@ func TestGitMessage(t *testing.T) {
 			"That worktree has uncommitted changes. Remove it from the sidebar to discard them.",
 		},
 		{
+			"a key whose passphrase nothing can be typed into",
+			"ssh_askpass: exec(/usr/lib/ssh/ssh-askpass): No such file or directory\r\n" +
+				"git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository.",
+			errTest,
+			"That remote's ssh key needs a passphrase, and lich has no terminal to ask for it. " +
+				"Load the key with `ssh-add` in a terminal, then try again.",
+		},
+		{
 			"a remote that rejected the key",
 			"git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository.",
 			errTest,

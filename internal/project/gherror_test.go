@@ -78,6 +78,26 @@ func TestGHMessage(t *testing.T) {
 			errTest, nil,
 			"A ruleset on the base branch refused this merge — GitHub named the rules it broke; lich's log has them.",
 		},
+		// `gh pr checkout` shells out to git, so the failure a person meets is
+		// git's with a gh line wrapped round it. It has to read as the cause,
+		// not as "look in the log".
+		{
+			"an ssh key git refused under gh",
+			"ssh_askpass: exec(/usr/lib/ssh/ssh-askpass): No such file or directory\r\n" +
+				"git@github.com: Permission denied (publickey).\n" +
+				"fatal: Could not read from remote repository.\nfailed to run git: exit status 128",
+			errTest, nil,
+			"That remote's ssh key needs a passphrase, and lich has no terminal to ask for it. " +
+				"Load the key with `ssh-add` in a terminal, then try again.",
+		},
+		// gh's own wordings must never reach git's table: git reads "already
+		// exists" as a branch name collision, which this is not.
+		{
+			"a pull request that already exists stays gh's failure",
+			"a pull request for branch \"fix/poll\" into branch \"main\" already exists",
+			errTest, nil,
+			"gh could not complete the request. lich's log has what it reported.",
+		},
 		{
 			"gh missing, reported by exec",
 			"", &exec.Error{Name: "gh", Err: exec.ErrNotFound}, nil,

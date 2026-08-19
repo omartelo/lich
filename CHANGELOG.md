@@ -34,6 +34,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A pull request that will not check out says why.** Opening a session on a
+  pull request runs `gh pr checkout`, which shells out to git — and when git's
+  ssh key was refused, all the screen said was that gh had failed and the log
+  had the rest. The reason now reaches the screen the same way it already did
+  for lich's own git calls, including the case behind most of them: a key whose
+  passphrase nothing can be typed into, because lich runs from a desktop
+  launcher and has no terminal to ask in. Load it with `ssh-add` and the
+  checkout goes through.
+
 - **Removing a worktree takes every session in it off the sidebar.** With more
   than one session open in the same checkout — after merging its pull request,
   say — only one card went away and the others stayed behind on a directory

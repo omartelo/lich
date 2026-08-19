@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 )
 
 // ghFailure turns one failed gh call into the message the screen shows. See
@@ -92,6 +93,17 @@ func ghMessage(stderr string, runErr, ctxErr error) string {
 	}
 	if message, ok := matchFailure(ghFailures, stderr); ok {
 		return message
+	}
+	// gh runs git itself for the checkout flow and hands git's stderr up whole
+	// under its own "failed to run git" line. That failure is git's, so it reads
+	// off git's table — an ssh key the remote refuses is the same cause whether
+	// lich ran git or gh did. Gated on the marker rather than tried on every
+	// stderr: gh has wordings of its own ("a pull request ... already exists")
+	// that git's table would answer for, wrongly.
+	if strings.Contains(strings.ToLower(stderr), "failed to run git") {
+		if message, ok := matchFailure(gitFailures, stderr); ok {
+			return message
+		}
 	}
 	return "gh could not complete the request. lich's log has what it reported."
 }

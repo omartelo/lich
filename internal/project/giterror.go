@@ -24,6 +24,16 @@ var gitFailures = []toolFailure{
 	{"is locked", "git has that worktree locked."},
 	{"is not a working tree", "git no longer knows that worktree — it may already be gone."},
 	{"couldn't find remote ref", "That branch is no longer on the remote."},
+	// ssh reaches for an askpass helper when the key it picked wants a
+	// passphrase and there is no tty to type it into — which is every call lich
+	// makes, GUI-launched and never attached to a terminal. Matched ahead of the
+	// publickey line below because ssh prints both, and only this one names the
+	// thing the person can fix.
+	{
+		"ssh_askpass",
+		"That remote's ssh key needs a passphrase, and lich has no terminal to ask for it. " +
+			"Load the key with `ssh-add` in a terminal, then try again.",
+	},
 	{"could not read from remote repository", "The remote refused the connection — check its ssh key or credentials."},
 	{"authentication failed", "The remote refused the connection — check its ssh key or credentials."},
 	{"permission denied (publickey)", "The remote refused the connection — check its ssh key or credentials."},
