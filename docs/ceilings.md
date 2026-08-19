@@ -119,6 +119,16 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   X11 socket and its cookie instead, the wider of the two — X clients are not isolated from one another —
   and macOS gets neither, its pasteboard being a mach service rather than a socket, so a confined session
   there has no clipboard at all. macOS has no hardware here — its profile is unit-tested and has never run.
+- **A file dropped on a confined session arrives as a copy** (`internal/drop`): the session's home is empty,
+  so lich does not look there for a dropped file at all — anything outside its checkout is copied and the
+  copy's path is what lands at the prompt. The agent may read it and not write back: an edit lands on the
+  copy, the user's own file is untouched, and nothing on screen distinguishes the two paths afterwards. A
+  dropped *folder* from outside the checkout yields nothing, there being no copy to make of a tree. The
+  copies live one directory per session and only that session's directory is mounted, so one confined
+  session cannot read what was dropped into the one beside it; the directory goes when the session's row is
+  deleted (parking a worktree session keeps it, as a resume still wants those paths). A lich that dies
+  without deleting a row leaves copies behind, and the three-day age rule is what clears them — which also
+  means a copy is the one part of a confined session that outlives the sandbox.
 - **A symlink in the home is not mounted into the sandbox** (`internal/sandbox`): every path lich binds is
   taken as it is on disk, and a link is skipped — following one would let a dotfile manager point the
   private home at whatever it likes, and binding one fails the spawn outright when a parent directory is

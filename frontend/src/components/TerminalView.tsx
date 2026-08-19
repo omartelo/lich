@@ -93,6 +93,12 @@ export interface TerminalViewProps {
   roster: readonly PaletteSession[]
   visible: boolean
   /**
+   * Whether this session's PTY runs confined (internal/sandbox). Only the drop
+   * reads it here: a confined session's home is an empty private one, so a file
+   * dragged in from outside its checkout has to arrive as a copy.
+   */
+  sandboxed: boolean
+  /**
    * Close this session's card, through the same flow the sidebar's × runs —
    * raised by the exit banner, which is the only affordance here that ends a
    * session rather than talking to one.
@@ -124,6 +130,7 @@ export function TerminalView({
   resume,
   roster,
   visible,
+  sandboxed,
   onClose,
   stillInWorkspace,
 }: TerminalViewProps) {
@@ -466,7 +473,7 @@ export function TerminalView({
 
   // Files dropped on the terminal land at the prompt as paths (useTerminalDrop).
   const { dropping, onDrop, onDragEnter, onDragOver, onDragLeave } = useTerminalDrop(
-    cwd,
+    { cwd, sessionId, confined: sandboxed },
     writeInput,
     () => liveRef.current?.term.focus(),
   )

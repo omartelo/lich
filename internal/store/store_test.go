@@ -1314,3 +1314,55 @@ func TestDeleteProjectRemovesItsSessions(t *testing.T) {
 		t.Errorf("sessions after delete = %d, want 0 (cascade)", sessions)
 	}
 }
+
+// TestSessionGoneReportsDeletedSessions covers the wiring the dropped-file
+// copies hang off (internal/drop): the ids reported here are the ones whose
+// copies are deleted, and a parked session must not be among them — its row is
+// still there, waiting for a resume that would find its copies gone.
+func TestSessionGoneReportsDeletedSessions(t *testing.T) {
+	svc := newTestStore(t)
+	var gone []string
+	svc.SetSessionGone(func(id string) { gone = append(gone, id) })
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "base", "Session 1", "claude", "", 2, "")
+	_ = svc.AddSession("p1", "parked", "Session 2", "claude", "", 3, "")
+
+	if err := svc.CloseSession("p1", "parked", "base"); err != nil {
+		t.Fatalf("CloseSession: %v", err)
+	}
+	if len(gone) != 0 {
+		t.Fatalf("parking a session reported it gone: %v", gone)
+	}
+
+	if err := svc.DeleteSession("p1", "base", ""); err != nil {
+		t.Fatalf("DeleteSession: %v", err)
+	}
+	if want := []string{"base"}; !slices.Equal(gone, want) {
+		t.Fatalf("reported %v, want %v", gone, want)
+	}
+}
+
+// TestSessionGoneReportsEveryRowOfARemovedWorktree: removing a worktree takes
+// the live session and every parked leftover at that path with it, and each one
+// leaves copies behind that nothing else would ever delete.
+func TestSessionGoneReportsEveryRowOfARemovedWorktree(t *testing.T) {
+	svc := newTestStore(t)
+	var gone []string
+	svc.SetSessionGone(func(id string) { gone = append(gone, id) })
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "base", "Session 1", "claude", "", 2, "")
+	_ = svc.AddSession("p1", "wtA", "foo", "claude", "/wt/foo", 3, "")
+	if err := svc.CloseSession("p1", "wtA", "base"); err != nil {
+		t.Fatalf("CloseSession: %v", err)
+	}
+	_ = svc.AddSession("p1", "wtA2", "foo", "claude", "/wt/foo", 4, "")
+
+	if err := svc.PurgeWorktreeSessions("p1", "/wt/foo"); err != nil {
+		t.Fatalf("PurgeWorktreeSessions: %v", err)
+	}
+
+	slices.Sort(gone)
+	if want := []string{"wtA", "wtA2"}; !slices.Equal(gone, want) {
+		t.Fatalf("reported %v, want %v", gone, want)
+	}
+}

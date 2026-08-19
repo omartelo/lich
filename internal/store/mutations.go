@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/omartelo/lich/internal/providers"
@@ -163,12 +164,16 @@ func (s *Service) addSession(
 // DeleteSession removes a session for good and sets the project's active session
 // to activeID (the neighbor the frontend picked, or "" when none remain).
 func (s *Service) DeleteSession(projectID, sessionID, activeID string) error {
-	return s.tx(func(tx *sql.Tx) error {
+	if err := s.tx(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(`DELETE FROM sessions WHERE id = ?`, sessionID); err != nil {
 			return fmt.Errorf("delete session %q: %w", sessionID, err)
 		}
 		return setActiveSession(tx, projectID, activeID)
-	})
+	}); err != nil {
+		return err
+	}
+	s.sessionIsGone(sessionID)
+	return nil
 }
 
 // CloseSession parks a session instead of deleting it: is_open flips to 0, which
@@ -281,12 +286,44 @@ func (s *Service) PurgeWorktreeSessions(projectID, path string) error {
 	if path == "" {
 		return nil
 	}
+	// Read before the delete, because what hangs off a session outside the
+	// database is keyed by id and the rows are about to be gone.
+	gone := s.sessionIDsAt(projectID, path)
 	if _, err := s.db.Exec(
 		`DELETE FROM sessions WHERE project_id = ? AND path = ?`, projectID, path,
 	); err != nil {
 		return fmt.Errorf("purge worktree sessions for %q: %w", path, err)
 	}
+	s.sessionIsGone(gone...)
 	return nil
+}
+
+// sessionIDsAt lists the sessions of a project living at path — the live one
+// and any parked leftovers alike. Only asked when something is listening for
+// deleted sessions, so a store without that wiring runs the query it always
+// ran. A failed read costs the cleanup, never the delete.
+func (s *Service) sessionIDsAt(projectID, path string) []string {
+	if s.sessionGone == nil {
+		return nil
+	}
+	rows, err := s.db.Query(
+		`SELECT id FROM sessions WHERE project_id = ? AND path = ?`, projectID, path,
+	)
+	if err != nil {
+		slog.Warn("list worktree sessions", "path", path, "err", err)
+		return nil
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			slog.Warn("scan worktree session id", "path", path, "err", err)
+			return ids
+		}
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 // RenameSession updates a session's display label from an explicit user rename.

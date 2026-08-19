@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/omartelo/lich/internal/providers"
@@ -71,7 +72,7 @@ func TestWrapSandboxLeavesAnUnconfinedSpawnAlone(t *testing.T) {
 		{"not confined", "/home/u", false},
 		{"no home to empty", "", true},
 	} {
-		got := wrapSandbox(baseSpec(), providers.Claude, tt.home, tt.confined)
+		got := wrapSandbox(baseSpec(), providers.Claude, tt.home, "", tt.confined)
 		if got.bin != original.bin || !slices.Equal(got.args, original.args) {
 			t.Errorf("%s: spawn rewritten to %q %v", tt.name, got.bin, got.args)
 		}
@@ -83,7 +84,7 @@ func TestWrapSandboxKeepsTheCommandAndItsArguments(t *testing.T) {
 		t.Skip("no sandbox backend on this machine")
 	}
 	original := baseSpec()
-	got := wrapSandbox(baseSpec(), providers.Claude, t.TempDir(), true)
+	got := wrapSandbox(baseSpec(), providers.Claude, t.TempDir(), "", true)
 	if got.bin == original.bin {
 		t.Fatalf("the spawn was not confined: still %q", got.bin)
 	}
@@ -148,5 +149,66 @@ func TestExecutablesAreDirectoriesOnDisk(t *testing.T) {
 		if !slices.Contains(dirs, filepath.Dir(lich)) {
 			t.Errorf("the lich binary's directory is missing from %v", dirs)
 		}
+	}
+}
+
+// TestSessionDropDirCreatesTheDirectory: the bind is built when the PTY spawns
+// and the first file is dropped long after, so the directory has to be there
+// already — a bind of a source that does not exist is dropped from the spec,
+// and the copy would then land where the session cannot read it.
+func TestSessionDropDirCreatesTheDirectory(t *testing.T) {
+	copies := t.TempDir()
+
+	got := sessionDropDir(copies, "s1", true)
+
+	if want := filepath.Join(copies, "s1"); got != want {
+		t.Fatalf("sessionDropDir = %q, want %q", got, want)
+	}
+	if info, err := os.Stat(got); err != nil || !info.IsDir() {
+		t.Fatalf("sessionDropDir did not create %s (%v)", got, err)
+	}
+}
+
+// A session with nowhere to keep copies still spawns: it loses its drops, never
+// its card. An unconfined one wants no directory at all — it opens the copy at
+// the path it was written to, like any other file.
+func TestSessionDropDirWithoutABase(t *testing.T) {
+	for _, tt := range []struct {
+		base, session string
+		confined      bool
+	}{
+		{"", "s1", true},
+		{t.TempDir(), "", true},
+		{t.TempDir(), "s1", false},
+	} {
+		if got := sessionDropDir(tt.base, tt.session, tt.confined); got != "" {
+			t.Errorf("sessionDropDir(%q, %q, %v) = %q, want none", tt.base, tt.session, tt.confined, got)
+		}
+	}
+	base := t.TempDir()
+	if _, err := os.Stat(filepath.Join(base, "s1")); err == nil {
+		t.Error("an unconfined session left a copies directory behind")
+	}
+}
+
+// TestWrapSandboxMountsTheSessionsCopies is the drop's half of the sandbox: a
+// file dragged onto a confined terminal is copied by lich outside it, so the
+// path pasted at the prompt only names something the agent can open if the
+// directory holding it is bound in.
+func TestWrapSandboxMountsTheSessionsCopies(t *testing.T) {
+	if !sandbox.Available() {
+		t.Skip("no sandbox backend on this machine")
+	}
+	copies := sessionDropDir(t.TempDir(), "s1", true)
+
+	got := wrapSandbox(baseSpec(), providers.Claude, t.TempDir(), copies, true)
+
+	// Substring, not an argv element: the two backends spell a mounted path in
+	// their own vocabulary — bubblewrap takes it as its own argument
+	// (`--ro-bind dir dir`), seatbelt writes it into the profile it is handed as
+	// one string (`(allow file-read* (subpath "dir"))`). What the spawn has to
+	// carry is the path, not a shape only one of them uses.
+	if !slices.ContainsFunc(got.args, func(arg string) bool { return strings.Contains(arg, copies) }) {
+		t.Fatalf("the session's copies dir %q is not in the confined spawn: %v", copies, got.args)
 	}
 }

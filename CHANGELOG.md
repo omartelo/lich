@@ -43,6 +43,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   launcher and has no terminal to ask in. Load it with `ssh-add` and the
   checkout goes through.
 
+- **Dropping a file on a confined session's terminal works again.** A file
+  dragged onto a sandboxed terminal pasted the path it has on your machine —
+  and that session's home is an empty private one, so the agent opened nothing
+  and said the file did not exist. lich now attaches a copy instead for anything
+  outside the session's checkout, and mounts it read-only where the agent can
+  read it. The copy is the agent's to read, not to edit: changes land on the
+  copy, not on your file. It is deleted when the session closes, and a dropped
+  *folder* from outside the checkout is still refused — there is nothing to copy
+  a directory into.
+
 - **Removing a worktree takes every session in it off the sidebar.** With more
   than one session open in the same checkout — after merging its pull request,
   say — only one card went away and the others stayed behind on a directory

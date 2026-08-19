@@ -14,6 +14,18 @@
 //     and paste the copy's path. Reading it works; editing it edits the copy —
 //     which is why Resolve is tried first. The copies expire (see Prune).
 //
+// A confined session takes the second way far more often, and has to: its home
+// is an empty private one (internal/sandbox), so a path found under the real
+// home is a path only lich can open. Resolve is told which sessions those are
+// and does not search home for them at all — the copy is what reaches the
+// session, because the sandbox binds the copies directory and nothing else of
+// the home.
+//
+// The copies are kept one directory per session, and that is the unit they are
+// deleted in: a confined session sees its own directory mounted and not the one
+// beside it, and every copy a session was dropped goes when its row does
+// (Purge).
+//
 // A dropped directory only ever takes the first path: the page can walk one,
 // but copying a tree to paste a path to the copy is not what the drop meant.
 package drop
@@ -30,6 +42,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/omartelo/lich/internal/sandbox"
 )
 
 // maxUpload bounds one dropped file. Screenshots and logs are the payload; a
@@ -44,6 +58,11 @@ const maxEntries = 50_000
 // homeDir is os.UserHomeDir, replaced in tests: the search must never reach
 // the machine's real home, on any OS.
 var homeDir = os.UserHomeDir
+
+// sandboxAvailable is sandbox.Available, replaced in tests: whether a machine
+// can confine anything is the host's answer — bubblewrap installed, macOS —
+// and a test about the search must not take it.
+var sandboxAvailable = sandbox.Available
 
 // mtimeSlackMs absorbs the rounding between the browser's millisecond
 // File.lastModified and the filesystem's timestamp.
@@ -84,9 +103,26 @@ type Service struct {
 	dir string
 }
 
-// New keeps uploaded copies under <configDir>/lich/dropped.
+// Dir is where a lich with this config directory keeps the copies. It is the
+// directory the sandbox binds into a confined session, so it is named here
+// rather than spelled out at the two callers (main.go wires it through to
+// internal/terminal).
+func Dir(configDir string) string {
+	return filepath.Join(configDir, "lich", "dropped")
+}
+
+// New keeps uploaded copies under Dir(configDir), and creates that directory
+// now rather than on the first drop. A confined session binds its own copies
+// directory when its PTY spawns (internal/terminal/sandbox.go), and a bind
+// whose source is not there yet is skipped: the first file dropped into a
+// session that opened before the directory existed would land where that
+// session cannot read it.
 func New(configDir string) *Service {
-	return &Service{dir: filepath.Join(configDir, "lich", "dropped")}
+	dir := Dir(configDir)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		slog.Warn("drop: could not create the copies dir", "dir", dir, "err", err)
+	}
+	return &Service{dir: dir}
 }
 
 // Resolve maps each item to its absolute path, or "" when neither the
@@ -95,16 +131,22 @@ func New(configDir string) *Service {
 // The session's directory is searched first, then home — a drop is most often
 // the session's own file, but it is just as often a screenshot or a directory
 // from somewhere else entirely, and a directory has no copy to fall back to.
-func (s *Service) Resolve(root string, items []Item) []string {
+//
+// confined is the verdict recorded for the calling session (internal/sandbox):
+// its home is an empty private one, so a match under the real home is a path
+// the session cannot open, and answering with it hands the prompt a file that
+// is not there. Those sessions search their checkout and nothing else, and
+// everything outside it falls through to the copy — which the sandbox does
+// bind. A machine with no sandbox backend confines nothing, so the flag alone
+// is not enough to stop searching: Windows, which has no backend at all, keeps
+// the unconfined behaviour whatever the row says.
+func (s *Service) Resolve(root string, items []Item, confined bool) []string {
 	paths := make([]string, len(items))
 	pending := make(map[int]bool, len(items))
 	for i := range items {
 		pending[i] = true
 	}
-	home, err := homeDir()
-	if err != nil {
-		slog.Warn("drop: no home directory to search", "err", err)
-	}
+	home := searchableHome(confined)
 	for _, search := range []struct {
 		root string
 		// Hidden directories are the session tree's own (.github, .config of a
@@ -119,6 +161,20 @@ func (s *Service) Resolve(root string, items []Item) []string {
 		find(search.root, search.skipHidden, items, pending, paths)
 	}
 	return paths
+}
+
+// searchableHome is the home directory Resolve falls back to, or "" when the
+// caller is a confined session on a machine that can actually confine one — see
+// Resolve for why that home is worse than no home at all.
+func searchableHome(confined bool) string {
+	if confined && sandboxAvailable() {
+		return ""
+	}
+	home, err := homeDir()
+	if err != nil {
+		slog.Warn("drop: no home directory to search", "err", err)
+	}
+	return home
 }
 
 // find walks root a level at a time, resolving each pending item to the
@@ -225,7 +281,8 @@ func matches(item Item, entry fs.DirEntry) bool {
 }
 
 // Upload stores one dropped file's bytes and answers with the path it landed
-// at. The name rides the query because the body is the file itself.
+// at. The name and the session ride the query because the body is the file
+// itself.
 func (s *Service) Upload(w http.ResponseWriter, r *http.Request) {
 	// CORS like the RPC's (internal/rpc): in dev the page's origin is the Vite
 	// server, not this listener, and the token is the actual auth. The preflight
@@ -242,12 +299,21 @@ func (s *Service) Upload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", http.StatusMethodNotAllowed)
 		return
 	}
-	name := filepath.Base(filepath.FromSlash(r.URL.Query().Get("name")))
-	if name == "" || name == "." || name == string(filepath.Separator) || name == ".." {
+	name := element(r.URL.Query().Get("name"))
+	if name == "" {
 		http.Error(w, "missing name", http.StatusBadRequest)
 		return
 	}
-	path, err := s.Save(name, http.MaxBytesReader(w, r.Body, maxUpload))
+	// No session, no copy: the id is what decides which directory the file
+	// lands in, which is both what a confined session can read and what its
+	// close deletes. A copy dropped outside either would live on with nothing
+	// to end it.
+	session := element(r.URL.Query().Get("session"))
+	if session == "" {
+		http.Error(w, "missing session", http.StatusBadRequest)
+		return
+	}
+	path, err := s.Save(session, name, http.MaxBytesReader(w, r.Body, maxUpload))
 	if err != nil {
 		slog.Warn("drop: upload failed", "name", name, "err", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -259,13 +325,27 @@ func (s *Service) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Save writes one dropped file under the copies directory, without ever
-// overwriting an earlier drop — its path may still be sitting in a prompt.
-func (s *Service) Save(name string, body io.Reader) (string, error) {
-	if err := os.MkdirAll(s.dir, 0o755); err != nil {
+// element is one path element taken from untrusted input — a dropped file's
+// name, a session id off the query — reduced to its last element so it can only
+// ever name something inside the copies directory. Empty when nothing usable is
+// left, which the callers refuse.
+func element(raw string) string {
+	name := filepath.Base(filepath.FromSlash(raw))
+	if name == "." || name == ".." || name == string(filepath.Separator) {
+		return ""
+	}
+	return name
+}
+
+// Save writes one dropped file under the session's own copies directory,
+// without ever overwriting an earlier drop — its path may still be sitting in
+// a prompt. sessionID must already be one path element (element).
+func (s *Service) Save(sessionID, name string, body io.Reader) (string, error) {
+	dir := filepath.Join(s.dir, sessionID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("dropped-files dir: %w", err)
 	}
-	path, err := uniquePath(s.dir, name)
+	path, err := uniquePath(dir, name)
 	if err != nil {
 		return "", err
 	}
@@ -290,15 +370,49 @@ func (s *Service) Save(name string, body io.Reader) (string, error) {
 	return path, nil
 }
 
-// Prune deletes copies older than keepDropped. Called after each new copy —
-// which is the only thing that grows the directory — and once at startup, so
-// the last of them is cleared even by a lich that is never dropped on again.
+// Purge deletes every copy dropped into one session. It is what makes a copy
+// die with the session it was dropped into rather than with the clock: the
+// paths pasted from it only ever meant anything inside that conversation, and
+// the session's own row is gone by the time this runs (store.SetSessionGone).
 //
-// Age is the rule because a copy's whole purpose is the prompt it was pasted
-// into: once that conversation is days behind, the path in it is scrollback.
+// Best effort, like Prune: a failure leaves copies that the age rule still
+// clears.
+func (s *Service) Purge(sessionID string) {
+	name := element(sessionID)
+	if name == "" {
+		return
+	}
+	dir := filepath.Join(s.dir, name)
+	if err := os.RemoveAll(dir); err != nil {
+		slog.Warn("drop: purge failed", "dir", dir, "err", err)
+	}
+}
+
+// Prune deletes copies older than keepDropped. Called after each new copy —
+// which is the only thing that grows the directory — so a lich left running
+// for weeks still clears what earlier drops left behind.
+//
+// Age is the backstop, not the rule: a session that ends takes its copies with
+// it (Purge), and what this catches is the session lich never saw end — a
+// crash, a kill, a machine that went down.
+//
 // A failure here is never the caller's problem — the copy it just wrote is
 // good, and the stale ones get another chance on the next drop.
 func (s *Service) Prune() {
+	s.prune(false)
+}
+
+// PruneStale is Prune plus the session directories left with nothing in them.
+// Startup only, and that is the whole reason it is a second method: a confined
+// session binds its own copies directory when it spawns, and removing that
+// directory under a live mount leaves every later copy of that session
+// invisible inside it — the mount would still point at the deleted one. At
+// startup no session has spawned yet, so there is no mount to strand.
+func (s *Service) PruneStale() {
+	s.prune(true)
+}
+
+func (s *Service) prune(empty bool) {
 	entries, err := os.ReadDir(s.dir)
 	if err != nil {
 		// Nothing dropped yet is the common case, not a fault.
@@ -309,18 +423,49 @@ func (s *Service) Prune() {
 	}
 	deadline := time.Now().Add(-keepDropped)
 	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		info, err := entry.Info()
-		if err != nil || info.ModTime().After(deadline) {
-			continue
-		}
 		path := filepath.Join(s.dir, entry.Name())
-		if err := os.Remove(path); err != nil {
-			slog.Warn("drop: prune failed", "path", path, "err", err)
+		if !entry.IsDir() {
+			pruneExpired(path, entry, deadline)
+			continue
+		}
+		s.pruneSession(path, deadline, empty)
+	}
+}
+
+// pruneSession clears the expired copies of one session, and the directory
+// itself when the caller allows it and nothing is left in it.
+func (s *Service) pruneSession(dir string, deadline time.Time, empty bool) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		slog.Warn("drop: prune could not read a session's copies", "dir", dir, "err", err)
+		return
+	}
+	left := 0
+	for _, entry := range entries {
+		if entry.IsDir() || !pruneExpired(filepath.Join(dir, entry.Name()), entry, deadline) {
+			left++
 		}
 	}
+	if !empty || left > 0 {
+		return
+	}
+	if err := os.Remove(dir); err != nil {
+		slog.Warn("drop: prune failed", "path", dir, "err", err)
+	}
+}
+
+// pruneExpired deletes one copy when it is past the deadline, and reports
+// whether it is gone.
+func pruneExpired(path string, entry fs.DirEntry, deadline time.Time) bool {
+	info, err := entry.Info()
+	if err != nil || info.ModTime().After(deadline) {
+		return false
+	}
+	if err := os.Remove(path); err != nil {
+		slog.Warn("drop: prune failed", "path", path, "err", err)
+		return false
+	}
+	return true
 }
 
 // uniquePath is name, or name-2, name-3… up to maxCopies of them. Past that the

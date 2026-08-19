@@ -167,6 +167,7 @@ export function TerminalHost() {
                 resume={resuming[session.id] ?? ""}
                 roster={roster}
                 visible={visible}
+                sandboxed={session.sandboxed ?? false}
                 onClose={() => worktreeClose.requestClose(session)}
                 stillInWorkspace={() => hasSession(sessionsRef.current, session.id)}
               />

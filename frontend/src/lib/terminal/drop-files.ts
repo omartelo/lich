@@ -7,6 +7,11 @@
 // mtime — under the session's directory, then under home (internal/drop) — and
 // only what it cannot find is uploaded and pasted as a copy.
 //
+// A confined session (internal/sandbox) takes the copy far more often, and has
+// to: its home is an empty private one, so the backend does not look there for
+// it at all, and everything outside its checkout arrives as a copy — which is
+// the one thing lich writes where such a session can still read it.
+//
 // The provider on the other end does the rest — a pasted image path is
 // attached as an image, any other path is read as a path.
 
@@ -56,6 +61,17 @@ export function readDroppedFiles(transfer: DataTransfer): DroppedFile[] {
   return dropped
 }
 
+/**
+ * The session a drop landed on: the tree the backend searches, the id the
+ * copies are kept under (they are deleted with the session), and whether it
+ * runs in the sandbox.
+ */
+export interface DropTarget {
+  cwd: string
+  sessionId: string
+  confined: boolean
+}
+
 export interface DropResult {
   /** Absolute paths, in the order they were dropped. */
   paths: string[]
@@ -71,10 +87,10 @@ export interface DropResult {
 
 /**
  * Paths for a drop: the real one where the session's tree holds the file, a
- * copy's otherwise. `cwd` is the session's directory — the tree searched.
+ * copy's otherwise.
  */
 export async function resolveDroppedFiles(
-  cwd: string,
+  target: DropTarget,
   dropped: readonly DroppedFile[],
 ): Promise<DropResult> {
   const paths: string[] = []
@@ -84,7 +100,7 @@ export async function resolveDroppedFiles(
     return { paths, skipped, copied }
   }
   const items = dropped.map(({ name, size, mtime, dir }) => ({ name, size, mtime, dir }))
-  const found = await DropService.Resolve(cwd, items)
+  const found = await DropService.Resolve(target.cwd, items, target.confined)
   for (const [index, entry] of dropped.entries()) {
     const path = found[index] ?? ""
     if (path !== "") {
@@ -94,7 +110,7 @@ export async function resolveDroppedFiles(
     // Nothing to fall back to: a directory cannot be uploaded, and copying one
     // to paste the copy's path is not the drop the user made.
     if (entry.dir || !entry.blob) {
-      skipped.push(`${entry.name} (folder not found under this session or your home)`)
+      skipped.push(`${entry.name} (${missingFolder(target.confined)})`)
       continue
     }
     if (entry.blob.size > MAX_UPLOAD_BYTES) {
@@ -102,7 +118,7 @@ export async function resolveDroppedFiles(
       continue
     }
     try {
-      paths.push(await uploadDroppedFile(entry.name, entry.blob))
+      paths.push(await uploadDroppedFile(target.sessionId, entry.name, entry.blob))
       copied.push(entry.name)
     } catch {
       skipped.push(entry.name)
@@ -111,11 +127,22 @@ export async function resolveDroppedFiles(
   return { paths, skipped, copied }
 }
 
+// missingFolder is why a dropped folder yielded no path, which is a different
+// sentence for a confined session: its home was never searched, so "not found
+// under your home" would name a search that did not happen.
+function missingFolder(confined: boolean): string {
+  return confined
+    ? "folder outside this sandboxed session's checkout"
+    : "folder not found under this session or your home"
+}
+
 // uploadDroppedFile stores one file's bytes on the backend and answers with the
-// path of the copy. Its own endpoint, not the RPC: the body is the file.
-async function uploadDroppedFile(name: string, blob: Blob): Promise<string> {
+// path of the copy. Its own endpoint, not the RPC: the body is the file. The
+// session id rides along because the copy is kept under it and deleted with it.
+async function uploadDroppedFile(sessionId: string, name: string, blob: Blob): Promise<string> {
   const { base, token } = endpoint()
-  const url = `${base}/drop?token=${token}&name=${encodeURIComponent(name)}`
+  const query = `token=${token}&session=${encodeURIComponent(sessionId)}`
+  const url = `${base}/drop?${query}&name=${encodeURIComponent(name)}`
   const response = await fetch(url, { method: "POST", body: blob })
   if (!response.ok) {
     throw new Error(`drop upload: HTTP ${response.status}`)

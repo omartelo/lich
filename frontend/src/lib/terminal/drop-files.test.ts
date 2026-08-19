@@ -12,10 +12,14 @@ import {
 const resolve = vi.fn()
 vi.mock("@/lib/rpc", () => ({
   DropService: {
-    Resolve: (root: string, items: unknown[]) => resolve(root, items),
+    Resolve: (root: string, items: unknown[], confined: boolean) => resolve(root, items, confined),
   },
   endpoint: () => ({ base: "http://127.0.0.1:47821", token: "t" }),
 }))
+
+// The session a drop landed on. Confined is the interesting half — the backend
+// searches one tree fewer for it, and the copy is what reaches the agent.
+const target = (confined = false) => ({ cwd: "/home/u", sessionId: "s1", confined })
 
 const file = (name: string): DroppedFile => ({
   name,
@@ -95,7 +99,7 @@ describe("resolveDroppedFiles", () => {
   it("reports no copy for a file the tree holds", async () => {
     resolve.mockResolvedValue(["/home/u/a.ts"])
 
-    const result = await resolveDroppedFiles("/home/u", [file("a.ts")])
+    const result = await resolveDroppedFiles(target(), [file("a.ts")])
 
     expect(result).toEqual({ paths: ["/home/u/a.ts"], skipped: [], copied: [] })
     expect(upload).not.toHaveBeenCalled()
@@ -105,7 +109,7 @@ describe("resolveDroppedFiles", () => {
   it("names the entries pasted as a copy", async () => {
     resolve.mockResolvedValue(["/home/u/a.ts", ""])
 
-    const result = await resolveDroppedFiles("/home/u", [file("a.ts"), file("b.png")])
+    const result = await resolveDroppedFiles(target(), [file("a.ts"), file("b.png")])
 
     expect(result).toEqual({
       paths: ["/home/u/a.ts", "/cfg/lich/dropped/b.png"],
@@ -119,7 +123,7 @@ describe("resolveDroppedFiles", () => {
     resolve.mockResolvedValue([""])
     upload.mockResolvedValue({ ok: false, status: 500 })
 
-    const result = await resolveDroppedFiles("/home/u", [file("b.png")])
+    const result = await resolveDroppedFiles(target(), [file("b.png")])
 
     expect(result).toEqual({ paths: [], skipped: ["b.png"], copied: [] })
   })
@@ -129,7 +133,7 @@ describe("resolveDroppedFiles", () => {
     resolve.mockResolvedValue([""])
     const folder: DroppedFile = { name: "docs", size: 0, mtime: 1, dir: true, blob: null }
 
-    const result = await resolveDroppedFiles("/home/u", [folder])
+    const result = await resolveDroppedFiles(target(), [folder])
 
     expect(result.copied).toEqual([])
     expect(result.skipped).toHaveLength(1)
@@ -148,7 +152,7 @@ describe("resolveDroppedFiles", () => {
       blob: { size: 33 * 1024 * 1024 } as Blob,
     }
 
-    const result = await resolveDroppedFiles("/home/u", [huge])
+    const result = await resolveDroppedFiles(target(), [huge])
 
     expect(result.paths).toEqual([])
     expect(result.copied).toEqual([])
@@ -156,8 +160,42 @@ describe("resolveDroppedFiles", () => {
     expect(upload).not.toHaveBeenCalled()
   })
 
+  // The upload is keyed by session: that is the directory a confined session
+  // reads the copy through, and the one its close deletes.
+  it("uploads a copy under the session it was dropped on", async () => {
+    resolve.mockResolvedValue([""])
+
+    await resolveDroppedFiles(target(), [file("b.png")])
+
+    const url = String(upload.mock.calls[0][0])
+    expect(url).toContain("session=s1")
+    expect(url).toContain("name=b.png")
+  })
+
+  // A confined session's home holds nothing it can open, so the backend is told
+  // not to search it — the copy is the only path that reaches the agent.
+  it("tells the backend a confined session searches one tree fewer", async () => {
+    resolve.mockResolvedValue([""])
+
+    const result = await resolveDroppedFiles(target(true), [file("b.png")])
+
+    expect(resolve).toHaveBeenCalledWith("/home/u", expect.anything(), true)
+    expect(result.copied).toEqual(["b.png"])
+  })
+
+  // The reason a folder yielded no path names the search that ran: a confined
+  // session's home was never looked at.
+  it("does not blame a home a confined session never searched", async () => {
+    resolve.mockResolvedValue([""])
+    const folder: DroppedFile = { name: "docs", size: 0, mtime: 1, dir: true, blob: null }
+
+    const result = await resolveDroppedFiles(target(true), [folder])
+
+    expect(result.skipped).toEqual(["docs (folder outside this sandboxed session's checkout)"])
+  })
+
   it("answers an empty drop without touching the backend", async () => {
-    expect(await resolveDroppedFiles("/home/u", [])).toEqual({
+    expect(await resolveDroppedFiles(target(), [])).toEqual({
       paths: [],
       skipped: [],
       copied: [],

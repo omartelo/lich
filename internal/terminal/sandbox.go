@@ -3,6 +3,7 @@ package terminal
 import (
 	"log/slog"
 	"os"
+	"path/filepath"
 
 	"github.com/omartelo/lich/internal/project"
 	"github.com/omartelo/lich/internal/sandbox"
@@ -22,13 +23,41 @@ import (
 // decision stays testable; an empty one returns the spawn untouched, because a
 // sandbox whose private home has no path is one that would confine a session to
 // nothing it can name.
-func wrapSandbox(spec ptySpec, kind, home string, confined bool) ptySpec {
+//
+// dropDir is where this session's dropped-file copies live (sessionDropDir),
+// bound read-only so a file dragged onto a confined terminal is a file the
+// agent can actually open. Empty leaves it out.
+func wrapSandbox(spec ptySpec, kind, home, dropDir string, confined bool) ptySpec {
 	if !confined || home == "" || !sandbox.Available() {
 		return spec
 	}
-	sb := sandbox.Describe(kind, home, spec.dir, project.GitCommonDir(spec.dir), executables(spec.bin))
+	read := append(executables(spec.bin), dropDir)
+	sb := sandbox.Describe(kind, home, spec.dir, project.GitCommonDir(spec.dir), read)
 	spec.bin, spec.args = sandbox.Wrap(sb, spec.bin, spec.args)
 	return spec
+}
+
+// sessionDropDir is the directory holding the copies of the files dropped into
+// one session (internal/drop), created here because a bind mount of a source
+// that does not exist yet is dropped from the spec — and the first drop of the
+// session comes long after the spawn.
+//
+// One session's directory rather than the whole copies tree, so a confined
+// session reads what was dropped into it and not what was dropped into the
+// session beside it. Empty when there is nothing to mount, which costs the
+// session its drops and never its spawn — and for an unconfined session, which
+// reads the copy at its real path like any other file and would otherwise leave
+// an empty directory behind for every spawn.
+func sessionDropDir(dropDir, sessionID string, confined bool) string {
+	if !confined || dropDir == "" || sessionID == "" {
+		return ""
+	}
+	dir := filepath.Join(dropDir, sessionID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		slog.Warn("session drop dir", "dir", dir, "err", err)
+		return ""
+	}
+	return dir
 }
 
 // executables are the directories holding the binaries a confined spawn has to

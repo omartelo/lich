@@ -100,6 +100,32 @@ const busyTimeoutMS = 5000
 // Service owns the SQLite connection and exposes persistence to the frontend.
 type Service struct {
 	db *sql.DB
+	// sessionGone, when set, is told the id of every session whose row is
+	// deleted for good. See SetSessionGone.
+	sessionGone func(sessionID string)
+}
+
+// SetSessionGone registers what to run when a session's row is deleted for
+// good — DeleteSession and PurgeWorktreeSessions, never CloseSession, which
+// parks the row for a later resume and leaves everything hanging off it alone.
+//
+// It is startup wiring, called before anything serves: lich hangs the cleanup
+// of that session's dropped-file copies on it (internal/drop), which is what
+// makes a copy outlive its drop and not its session.
+func (s *Service) SetSessionGone(fn func(sessionID string)) {
+	s.sessionGone = fn
+}
+
+// sessionIsGone reports one deleted session to whatever SetSessionGone wired,
+// and nothing at all when the store runs without it — every test, and a lich
+// whose wiring has not run yet.
+func (s *Service) sessionIsGone(sessionIDs ...string) {
+	if s.sessionGone == nil {
+		return
+	}
+	for _, id := range sessionIDs {
+		s.sessionGone(id)
+	}
 }
 
 // Session is a persisted terminal session (metadata only). Kind selects what

@@ -221,6 +221,20 @@ type Service struct {
 	// size a session spawned with none of its own is started at. See
 	// sizeFor. Guarded by mu.
 	lastCols, lastRows int
+	// dropDir is where copies of dropped files live (internal/drop). Wired at
+	// startup; empty leaves a confined session without the copies dropped into
+	// it, never without a spawn. See SetDropDir.
+	dropDir string
+}
+
+// SetDropDir names the directory holding the copies of dropped files
+// (internal/drop). A confined session binds its own subdirectory of it at spawn
+// — the copy is written by lich, outside the sandbox, so without the bind the
+// path pasted at the prompt names a file the session cannot open.
+//
+// Startup wiring, called before anything spawns.
+func (s *Service) SetDropDir(dir string) {
+	s.dropDir = dir
 }
 
 // readySettle is how long a session's PTY must stay quiet before lich hands it
@@ -532,7 +546,7 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, se
 	// Outermost, so the setup script and the entrypoint are confined with the
 	// session they run in front of.
 	inSandbox := confined(s.store, id, kind, projectID, cwd)
-	spec = wrapSandbox(spec, kind, userHome(), inSandbox)
+	spec = wrapSandbox(spec, kind, userHome(), sessionDropDir(s.dropDir, id, inSandbox), inSandbox)
 	p, err := startPTY(spec)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to start pty for %q: %w", id, err)

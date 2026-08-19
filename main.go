@@ -117,8 +117,15 @@ func main() {
 	dispatcher := rpc.New()
 	drops := drop.New(configDir)
 	// The other prune runs after each new copy; this one is what clears the
-	// last of them for a lich that is never dropped on again.
-	drops.Prune()
+	// last of them for a lich that is never dropped on again — and the only one
+	// that may remove a session's directory outright, no session having spawned
+	// around it yet.
+	drops.PruneStale()
+	// A copy belongs to the session it was dropped into: that session reads it
+	// through a bind mount when it is confined, and deleting the session's row
+	// takes the copies with it.
+	term.SetDropDir(drop.Dir(configDir))
+	db.SetSessionGone(drops.Purge)
 	dispatcher.Register("terminal", term)
 	dispatcher.Register("drop", drops)
 	dispatcher.Register("fonts", fonts.New())
@@ -181,20 +188,27 @@ func main() {
 //     argument array with a 1MB bound.
 //   - relay.Observe is the hooks' session-state stream, which arrives over
 //     /hook: forging a SessionEnd here closes another session's errands.
-//   - relay.SetPlugins, project.SetAccounts and project.SetProjects are startup
-//     wiring. Called with [null] they silently nil what they wired
-//     (encoding/json leaves a func or pointer alone on null), and the write
-//     races the readers already serving — nilling SetProjects also disarms the
-//     guard that keeps two projects off the same directory.
+//   - drop.Purge deletes every copy dropped into a session, by id: the page
+//     closes sessions through the store, which is what reports one gone.
+//   - relay.SetPlugins, project.SetAccounts, project.SetProjects,
+//     store.SetSessionGone and terminal.SetDropDir are startup wiring. Called
+//     with [null] they silently nil what they wired (encoding/json leaves a
+//     func or pointer alone on null), and the write races the readers already
+//     serving — nilling SetProjects also disarms the guard that keeps two
+//     projects off the same directory, and SetDropDir points the sandbox's
+//     read-only bind wherever the caller likes.
 func denyInternal(d *rpc.Handler) {
 	for _, method := range []string{
 		"store.Close",
+		"store.SetSessionGone",
 		"drop.Upload",
 		"drop.Save",
+		"drop.Purge",
 		"relay.Observe",
 		"relay.SetPlugins",
 		"project.SetAccounts",
 		"project.SetProjects",
+		"terminal.SetDropDir",
 	} {
 		d.Deny(method)
 	}
