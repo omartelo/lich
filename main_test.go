@@ -26,6 +26,7 @@ var denied = map[string]reflect.Type{
 	"drop.Upload":          reflect.TypeFor[*drop.Service](),
 	"drop.Save":            reflect.TypeFor[*drop.Service](),
 	"drop.Purge":           reflect.TypeFor[*drop.Service](),
+	"drop.SetPicker":       reflect.TypeFor[*drop.Service](),
 	"relay.Observe":        reflect.TypeFor[*relay.Service](),
 	"relay.SetPlugins":     reflect.TypeFor[*relay.Service](),
 	"project.SetAccounts":  reflect.TypeFor[*project.Service](),
@@ -43,6 +44,7 @@ func (stubService) SetSessionGone() error { return nil }
 func (stubService) Upload() error         { return nil }
 func (stubService) Save() error           { return nil }
 func (stubService) Purge() error          { return nil }
+func (stubService) SetPicker() error      { return nil }
 func (stubService) Observe() error        { return nil }
 func (stubService) SetPlugins() error     { return nil }
 func (stubService) SetAccounts() error    { return nil }

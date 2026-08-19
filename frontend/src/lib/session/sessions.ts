@@ -479,7 +479,9 @@ export function sessionsOf(state: SessionState, projectId: string): Session[] {
 
 // activeTarget resolves what a project screen acts on: the active session's id,
 // the path it lives in — a worktree session resolves to its checkout, everything
-// else to the project root — and which provider it runs. Pure, and the whole of
+// else to the project root — which provider it runs, and whether it is confined
+// (the footer's attach button hands a confined session a copy instead of a path
+// it cannot open). Pure, and the whole of
 // useActiveSession's answer: every screen inside a project — the terminal, its
 // settings, its pull requests — reads this same triple, and so does the chrome
 // beside them. kind is "" when no session is active, which is not a SessionKind:
@@ -488,13 +490,18 @@ export function activeTarget(
   state: SessionState,
   projectId: string | null,
   projectPath: string,
-): { sessionId: string; path: string; kind: SessionKind | "" } {
+): { sessionId: string; path: string; kind: SessionKind | ""; sandboxed: boolean } {
   if (!projectId) {
-    return { sessionId: "", path: projectPath, kind: "" }
+    return { sessionId: "", path: projectPath, kind: "", sandboxed: false }
   }
   const sessionId = activeSessionId(state, projectId)
   const session = sessionsOf(state, projectId).find((s) => s.id === sessionId)
-  return { sessionId, path: session?.path || projectPath, kind: session?.kind ?? "" }
+  return {
+    sessionId,
+    path: session?.path || projectPath,
+    kind: session?.kind ?? "",
+    sandboxed: session?.sandboxed ?? false,
+  }
 }
 
 // A worktree's sessions under one roof. `path` is the checkout root ("" for the

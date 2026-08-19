@@ -28,6 +28,11 @@
 //
 // A dropped directory only ever takes the first path: the page can walk one,
 // but copying a tree to paste a path to the copy is not what the drop meant.
+//
+// The footer's attach button lands here too (Attach): a file chosen from the
+// native picker already has its path, so there is nothing to look up — but a
+// confined session cannot open one outside its checkout either, and the same
+// copy is the answer.
 package drop
 
 import (
@@ -101,6 +106,15 @@ type Item struct {
 
 type Service struct {
 	dir string
+	// pick opens the host's file chooser. See SetPicker.
+	pick func(title string) (string, error)
+}
+
+// SetPicker wires the host's file picker (internal/project), which is what the
+// footer's attach button reaches through Attach. Startup wiring, called before
+// anything serves.
+func (s *Service) SetPicker(pick func(title string) (string, error)) {
+	s.pick = pick
 }
 
 // Dir is where a lich with this config directory keeps the copies. It is the
@@ -323,6 +337,101 @@ func (s *Service) Upload(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(map[string]string{"path": path}); err != nil {
 		slog.Warn("drop: encode response", "path", path, "err", err)
 	}
+}
+
+// attachTitle is the file chooser's own title, which is all the dialog says
+// about why it opened.
+const attachTitle = "Attach File"
+
+// Attachment is what the picker produced: the path to write at the prompt, and
+// whether that path is a copy's — the caller says so, because nothing about the
+// path itself does. Both empty for a cancelled dialog.
+type Attachment struct {
+	Path   string `json:"path"`
+	Copied bool   `json:"copied"`
+}
+
+// Attach opens the file chooser and answers with a path the session can
+// actually open: the file's own where the session reaches it, a copy's inside
+// the session's dropped-files directory otherwise. It is the footer's attach
+// button, and the counterpart of a drop — the same problem arrives through a
+// dialog instead of a drag.
+//
+// The picker runs here rather than in the caller, and that is the security
+// property of this method: every session carries LICH_TOKEN (see
+// internal/terminal), so a confined agent can call any RPC on the loopback
+// listener. A method that copied a *path it was handed* would let that agent
+// name ~/.ssh/id_rsa and read the copy from inside the sandbox — the sandbox
+// undone by its own harness. Here the path can only come from a dialog a human
+// answers on screen.
+//
+// root is the session's checkout, the one tree a confined session sees; a file
+// under it keeps its own path. Anything else is copied, including files under
+// directories the sandbox happens to bind (a toolchain, ~/.config): copying one
+// of those costs a few bytes, and deciding it does not need copying means
+// reproducing the mount list here, where it would go stale in silence.
+func (s *Service) Attach(sessionID, root string, confined bool) (Attachment, error) {
+	if s.pick == nil {
+		return Attachment{}, errors.New("no file picker wired")
+	}
+	path, err := s.pick(attachTitle)
+	if err != nil {
+		return Attachment{}, fmt.Errorf("open dialog failed: %w", err)
+	}
+	// A cancelled dialog is not a failure, and neither is a session that reaches
+	// the file where it is.
+	if path == "" || !confined || !sandboxAvailable() || under(root, path) {
+		return Attachment{Path: path}, nil
+	}
+	copied, err := s.copyIn(sessionID, path)
+	if err != nil {
+		return Attachment{}, err
+	}
+	return Attachment{Path: copied, Copied: true}, nil
+}
+
+// under reports whether path is inside root. Both are cleaned but neither is
+// resolved through symlinks: a link answering "outside" costs a copy, and a
+// wrong "inside" costs the session the file altogether.
+func under(root, path string) bool {
+	if root == "" {
+		return false
+	}
+	rel, err := filepath.Rel(filepath.Clean(root), filepath.Clean(path))
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// copyIn puts one of the user's own files in a session's copies directory, so a
+// confined session can read it. The ceiling is the upload's, for the same
+// reason: past it the copy is a mistake rather than an attachment.
+func (s *Service) copyIn(sessionID, path string) (string, error) {
+	// Without a session there is no directory the sandbox binds, so a copy would
+	// land where the session it was made for cannot read it.
+	session, name := element(sessionID), element(filepath.Base(path))
+	if session == "" || name == "" {
+		return "", fmt.Errorf("cannot attach %q to session %q", path, sessionID)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", fmt.Errorf("read %s: %w", path, err)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("%s is a folder — a sandboxed session takes files, not trees", path)
+	}
+	if info.Size() > maxUpload {
+		return "", fmt.Errorf(
+			"%s is over the %dMB a sandboxed session can be handed", filepath.Base(path), maxUpload>>20,
+		)
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return "", fmt.Errorf("open %s: %w", path, err)
+	}
+	defer file.Close()
+	return s.Save(session, name, file)
 }
 
 // element is one path element taken from untrusted input — a dropped file's

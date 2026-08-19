@@ -11,13 +11,15 @@ import {
   Diff,
   GitPullRequestArrow,
 } from "lucide-react"
-import { ProjectService, Terminal as TerminalService } from "@/lib/rpc"
+import { DropService, Terminal as TerminalService } from "@/lib/rpc"
 import type { DockTab } from "@/components/dock/RightDock"
 import { useActiveSession } from "@/lib/session/use-active-session"
 import { useSessionUsage } from "@/lib/session/use-session-usage"
 import { useCostReadout } from "@/lib/use-cost-readout"
 import { budgetShare, formatCost } from "@/lib/session/session-cost"
-import { displayPath } from "@/lib/paths"
+import { baseName, displayPath } from "@/lib/paths"
+import { isWindows } from "@/lib/platform"
+import { composeDroppedPaths } from "@/lib/terminal/drop-files"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { usePullRequest } from "@/lib/pulls/use-pull-request"
 import { useSettings } from "@/providers/settings"
@@ -84,7 +86,7 @@ interface FooterBarProps {
 // shows its checkout's path, branch and diff.
 export function FooterBar({ dock, onDock }: FooterBarProps) {
   const navigate = useNavigate()
-  const { projectId, sessionId, path, checkout, kind } = useActiveSession()
+  const { projectId, sessionId, path, checkout, kind, sandboxed } = useActiveSession()
   // Context-window occupancy of the active session, read off its transcript at
   // each turn's end (null until the first turn of a supported session lands).
   const usage = useSessionUsage(sessionId)
@@ -96,14 +98,33 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
   const pr = usePullRequest(path, status?.branch ?? "", status?.head ?? "")
   const now = useNow()
 
+  // The picker runs on the backend (DropService.Attach), not through
+  // ProjectService: a confined session cannot open a file outside its checkout,
+  // so the same call that chooses the file also copies it where that session can
+  // read it. `checkout` and not `path`: the sandbox is built around the
+  // session's spawn directory, which a `cd` does not move.
   const attachFile = async () => {
+    if (!sessionId) {
+      return
+    }
     try {
-      const file = await ProjectService.PickFile("Attach File")
-      if (file && sessionId) {
-        void TerminalService.Write(sessionId, `${file} `)
+      const { path: file, copied } = await DropService.Attach(sessionId, checkout, sandboxed)
+      if (!file) {
+        return
       }
-    } catch {
-      toast.error("Could not open the file picker")
+      // Composed the way a drop is: quoted, so a path with a space stays one
+      // argument, and bracketed, so the prompt takes it unsent.
+      void TerminalService.Write(sessionId, composeDroppedPaths([file], isWindows))
+      if (copied) {
+        toast.info(`Attached as a copy: ${baseName(file)}`, {
+          description:
+            "This session is sandboxed, so a file outside its checkout is attached as a copy: edits land on the copy, not on your file, and the copy is deleted when the session closes.",
+        })
+      }
+    } catch (err) {
+      // The backend's own sentence when it has one — it names the ceiling a
+      // file was refused for, which nothing here could reconstruct.
+      toast.error(err instanceof Error ? err.message : "Could not attach the file")
     }
   }
 

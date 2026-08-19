@@ -28,6 +28,8 @@ export function useActiveSession(): {
   checkout: string
   /** Which provider the active session runs, "" when none is active. */
   kind: SessionKind | ""
+  /** Whether the active session's PTY runs confined (internal/sandbox). */
+  sandboxed: boolean
 } {
   const { projects, sessions } = useProjects()
   const match = useMatch({ path: "/projects/:projectId", end: false })
@@ -41,5 +43,6 @@ export function useActiveSession(): {
     path: cwd || target.path,
     checkout: target.path,
     kind: target.kind,
+    sandboxed: target.sandboxed,
   }
 }

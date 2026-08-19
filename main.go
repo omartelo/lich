@@ -126,6 +126,10 @@ func main() {
 	// takes the copies with it.
 	term.SetDropDir(drop.Dir(configDir))
 	db.SetSessionGone(drops.Purge)
+	// The footer's attach button opens the picker through the drop service, so
+	// the file it copies for a confined session is one a human chose in a dialog
+	// (drop.Attach says why that matters).
+	drops.SetPicker(proj.PickFile)
 	dispatcher.Register("terminal", term)
 	dispatcher.Register("drop", drops)
 	dispatcher.Register("fonts", fonts.New())
@@ -190,6 +194,8 @@ func main() {
 //     /hook: forging a SessionEnd here closes another session's errands.
 //   - drop.Purge deletes every copy dropped into a session, by id: the page
 //     closes sessions through the store, which is what reports one gone.
+//   - drop.SetPicker is startup wiring like the ones below, and nilling it
+//     would leave the footer's attach button with no dialog to open.
 //   - relay.SetPlugins, project.SetAccounts, project.SetProjects,
 //     store.SetSessionGone and terminal.SetDropDir are startup wiring. Called
 //     with [null] they silently nil what they wired (encoding/json leaves a
@@ -204,6 +210,7 @@ func denyInternal(d *rpc.Handler) {
 		"drop.Upload",
 		"drop.Save",
 		"drop.Purge",
+		"drop.SetPicker",
 		"relay.Observe",
 		"relay.SetPlugins",
 		"project.SetAccounts",

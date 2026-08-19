@@ -628,6 +628,7 @@ describe("activeTarget", () => {
       sessionId: "s2",
       path: root,
       kind: "claude",
+      sandboxed: false,
     })
   })
 
@@ -642,15 +643,40 @@ describe("activeTarget", () => {
       sessionId: "wt1",
       path: "/repo/.worktrees/swift-rabbit",
       kind: "shell",
+      sandboxed: false,
     })
   })
 
+  // The footer's attach button reads this: a confined session is handed a copy
+  // of anything outside its checkout, and it has to know which sessions those
+  // are before the picker opens.
+  it("reports a confined session as sandboxed", () => {
+    const state = restoreSession(buildState(1), P, {
+      id: "wt1",
+      label: "swift-rabbit",
+      kind: "claude",
+      path: "/repo/.worktrees/swift-rabbit",
+      sandboxed: true,
+    })
+    expect(activeTarget(state, P, root).sandboxed).toBe(true)
+  })
+
   it("keeps the project root when there is no session at all", () => {
-    expect(activeTarget({}, P, root)).toEqual({ sessionId: "", path: root, kind: "" })
+    expect(activeTarget({}, P, root)).toEqual({
+      sessionId: "",
+      path: root,
+      kind: "",
+      sandboxed: false,
+    })
   })
 
   it("is empty off a project route", () => {
-    expect(activeTarget(buildState(2), null, "")).toEqual({ sessionId: "", path: "", kind: "" })
+    expect(activeTarget(buildState(2), null, "")).toEqual({
+      sessionId: "",
+      path: "",
+      kind: "",
+      sandboxed: false,
+    })
   })
 })
 

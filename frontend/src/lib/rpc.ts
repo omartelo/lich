@@ -17,6 +17,7 @@ import type {
   Diagnostics as DiagnosticsData,
   DiffStats,
   DraftReviewComment,
+  Attachment,
   DropItem,
   MergeMethod,
   PatchNotes as PatchNotesData,
@@ -151,6 +152,11 @@ export const DropService = {
    * the file, so it has its own endpoint (see lib/terminal/drop-files.ts). */
   Resolve: (root: string, items: DropItem[], confined: boolean) =>
     call<string[]>("drop.Resolve", [root, items, confined]),
+  /** Open the native file picker and answer with a path the session can open —
+   * the file's own, or a copy's when a confined session cannot reach it. The
+   * picker runs on the backend rather than here: see internal/drop.Attach. */
+  Attach: (sessionId: string, root: string, confined: boolean) =>
+    call<Attachment>("drop.Attach", [sessionId, root, confined]),
 }
 
 export const ProjectService = {

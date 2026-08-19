@@ -739,3 +739,163 @@ func TestPruneStaleRemovesEmptySessionDirs(t *testing.T) {
 		t.Fatalf("session dir with copies left in it was removed: %v", err)
 	}
 }
+
+// pickerAt stands in for the host's file chooser: it answers with path, and
+// records that it was asked.
+func pickerAt(path string, err error) (func(string) (string, error), *int) {
+	calls := 0
+	return func(string) (string, error) {
+		calls++
+		return path, err
+	}, &calls
+}
+
+// TestAttachKeepsAPathTheSessionCanOpen: a file inside the checkout is a file a
+// confined session reaches, and copying it would hand the agent a second
+// version of a file it can already edit in place.
+func TestAttachKeepsAPathTheSessionCanOpen(t *testing.T) {
+	canConfine(t, true)
+	root := t.TempDir()
+	want := filepath.Join(root, "src", "app.ts")
+	writeFile(t, want, 12, time.Now())
+	service := New(t.TempDir())
+	pick, _ := pickerAt(want, nil)
+	service.SetPicker(pick)
+
+	got, err := service.Attach("s1", root, true)
+
+	if err != nil {
+		t.Fatalf("Attach: %v", err)
+	}
+	if got.Path != want || got.Copied {
+		t.Fatalf("Attach = %+v, want the file's own path", got)
+	}
+}
+
+// TestAttachCopiesForAConfinedSession is the whole point: the file is outside
+// the checkout, so its path names nothing inside the sandbox — the session gets
+// a copy it can read, holding the same bytes.
+func TestAttachCopiesForAConfinedSession(t *testing.T) {
+	canConfine(t, true)
+	elsewhere := filepath.Join(t.TempDir(), "spec.pdf")
+	if err := os.WriteFile(elsewhere, []byte("bytes"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	service := New(t.TempDir())
+	pick, _ := pickerAt(elsewhere, nil)
+	service.SetPicker(pick)
+
+	got, err := service.Attach("s1", t.TempDir(), true)
+
+	if err != nil {
+		t.Fatalf("Attach: %v", err)
+	}
+	if want := filepath.Join(service.dir, "s1", "spec.pdf"); got.Path != want || !got.Copied {
+		t.Fatalf("Attach = %+v, want a copy at %s", got, want)
+	}
+	if bytes, err := os.ReadFile(got.Path); err != nil || string(bytes) != "bytes" {
+		t.Fatalf("copy = %q (%v), want %q", bytes, err, "bytes")
+	}
+}
+
+// TestAttachLeavesAnUnconfinedSessionAlone, and with it Windows, which has no
+// backend to confine anything: the path the picker gave is the path the prompt
+// gets, copies and their expiry included in what it does not have.
+func TestAttachLeavesAnUnconfinedSessionAlone(t *testing.T) {
+	elsewhere := filepath.Join(t.TempDir(), "spec.pdf")
+	if err := os.WriteFile(elsewhere, []byte("bytes"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	for _, tt := range []struct {
+		name              string
+		confined, backend bool
+	}{
+		{"session not confined", false, true},
+		{"machine cannot confine", true, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			canConfine(t, tt.backend)
+			service := New(t.TempDir())
+			pick, _ := pickerAt(elsewhere, nil)
+			service.SetPicker(pick)
+
+			got, err := service.Attach("s1", t.TempDir(), tt.confined)
+
+			if err != nil {
+				t.Fatalf("Attach: %v", err)
+			}
+			if got.Path != elsewhere || got.Copied {
+				t.Fatalf("Attach = %+v, want %q uncopied", got, elsewhere)
+			}
+		})
+	}
+}
+
+// A cancelled dialog is the user changing their mind, not a failure to report.
+func TestAttachAnswersACancelledDialog(t *testing.T) {
+	canConfine(t, true)
+	service := New(t.TempDir())
+	pick, _ := pickerAt("", nil)
+	service.SetPicker(pick)
+
+	got, err := service.Attach("s1", t.TempDir(), true)
+
+	if err != nil || got.Path != "" || got.Copied {
+		t.Fatalf("Attach = %+v (%v), want an empty answer", got, err)
+	}
+}
+
+// TestAttachRefusesWhatItCannotCopy covers the two the copy has no answer for,
+// and the session with nowhere to keep one. Each has to fail loudly: a path
+// written at the prompt that the agent cannot open is worse than an error.
+func TestAttachRefusesWhatItCannotCopy(t *testing.T) {
+	canConfine(t, true)
+	dir := t.TempDir()
+	huge := filepath.Join(dir, "core.dump")
+	if err := os.WriteFile(huge, make([]byte, maxUpload+1), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	folder := filepath.Join(dir, "docs")
+	if err := os.Mkdir(folder, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	for _, tt := range []struct{ name, path, session string }{
+		{"over the ceiling", huge, "s1"},
+		{"a folder", folder, "s1"},
+		{"gone from disk", filepath.Join(dir, "nothing.txt"), "s1"},
+		{"no session to keep it under", huge, ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			service := New(t.TempDir())
+			pick, _ := pickerAt(tt.path, nil)
+			service.SetPicker(pick)
+
+			if got, err := service.Attach(tt.session, t.TempDir(), true); err == nil {
+				t.Fatalf("Attach = %+v, want an error", got)
+			}
+		})
+	}
+}
+
+// TestAttachWithoutAPicker: the wiring is startup's, and a service without it
+// has no dialog to open — which must not read as a cancelled one.
+func TestAttachWithoutAPicker(t *testing.T) {
+	if _, err := New(t.TempDir()).Attach("s1", t.TempDir(), true); err == nil {
+		t.Fatal("Attach reported success with no picker wired")
+	}
+}
+
+// TestAttachReportsAFailedDialog keeps the picker's own failure from arriving as
+// a path nobody chose.
+func TestAttachReportsAFailedDialog(t *testing.T) {
+	service := New(t.TempDir())
+	pick, calls := pickerAt("/some/file", errors.New("no display"))
+	service.SetPicker(pick)
+
+	if _, err := service.Attach("s1", t.TempDir(), true); err == nil {
+		t.Fatal("Attach reported success on a dialog that failed")
+	}
+	if *calls != 1 {
+		t.Fatalf("picker called %d times, want 1", *calls)
+	}
+}

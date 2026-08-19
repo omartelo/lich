@@ -106,7 +106,9 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   Linux, a path policy on macOS, and nothing else — no seccomp filter, no Landlock ruleset. The network is
   never cut (the agent needs its API and the plugin's hooks report over loopback), so anything readable
   inside is exfiltrable, and `~/.config` *is* readable: a token stored there, `gh`'s among them, is in
-  reach. The private home is writable and vanishes with the session, so a dotfile an agent writes is gone
+  reach. Every session also carries `LICH_TOKEN`, so a confined agent can call lich's own RPC over
+  loopback: a method that reads a host path it was *handed* would copy anything into reach of the sandbox,
+  which is why the attach flow opens the picker inside the backend (`drop.Attach`) instead of taking a path. The private home is writable and vanishes with the session, so a dotfile an agent writes is gone
   next spawn with nothing saying so. On Ubuntu and Debian the kernel may refuse the user namespace outright
   (an AppArmor policy), which surfaces as bubblewrap's own error in the card and no session. `~/.ssh` is not
   mounted at all: a push over ssh from inside a confined session fails, and lich's own PR flows run outside
@@ -119,9 +121,9 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   X11 socket and its cookie instead, the wider of the two — X clients are not isolated from one another —
   and macOS gets neither, its pasteboard being a mach service rather than a socket, so a confined session
   there has no clipboard at all. macOS has no hardware here — its profile is unit-tested and has never run.
-- **A file dropped on a confined session arrives as a copy** (`internal/drop`): the session's home is empty,
+- **A file handed to a confined session arrives as a copy** (`internal/drop`): the session's home is empty,
   so lich does not look there for a dropped file at all — anything outside its checkout is copied and the
-  copy's path is what lands at the prompt. The agent may read it and not write back: an edit lands on the
+  copy's path is what lands at the prompt, for a drag and for the footer's attach button alike. The agent may read it and not write back: an edit lands on the
   copy, the user's own file is untouched, and nothing on screen distinguishes the two paths afterwards. A
   dropped *folder* from outside the checkout yields nothing, there being no copy to make of a tree. The
   copies live one directory per session and only that session's directory is mounted, so one confined
