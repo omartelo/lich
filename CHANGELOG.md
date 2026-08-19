@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **ssh no longer fails outright inside a confined session.** Every remote git
+  command in a sandboxed session died on `Bad owner or permissions on
+  /etc/ssh/ssh_config.d/...`: inside the sandbox's user namespace the
+  distribution's ssh drop-in configs belong to nobody, and ssh refuses to read
+  them. The sandbox now hands ssh an empty drop-in directory, so `git fetch`
+  works again. Pushing still needs the credentials a confined session
+  deliberately does not have.
+
 - **Codex context usage now follows the session's configured window.** A default
   272k session no longer appears to use the model catalog's optional 872k
   maximum; sessions configured for either size report their own effective

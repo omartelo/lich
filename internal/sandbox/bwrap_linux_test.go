@@ -207,3 +207,38 @@ func TestResolvedLinkMountsOnlyWhatTheBaseDoesNotCover(t *testing.T) {
 		t.Errorf("resolvedLink(missing) = %q, want \"\"", got)
 	}
 }
+
+// A blank root is an empty tmpfs over a directory that came in with the base
+// filesystem, and it has to land after the bind that brought it in. It is what
+// keeps ssh working inside the sandbox: the drop-in configs arrive owned by the
+// overflow uid and ssh refuses to read them, taking `git fetch` and `git push`
+// down with them.
+func TestBwrapArgsBlankRootIsAnEmptyTmpfsOverTheBind(t *testing.T) {
+	roots := append(slices.Clone(fakeRoots), root{blank: true, path: sshDropInDir})
+	args := bwrapArgs(testSpec(), roots)
+
+	blank := pairIndex(args, "--tmpfs", sshDropInDir)
+	if blank < 0 {
+		t.Fatalf("%s is not blanked: %v", sshDropInDir, args)
+	}
+	if etc := pairIndex(args, "--ro-bind", "/etc"); etc > blank {
+		t.Errorf("/etc is bound at %d, after the tmpfs blanking %s at %d", etc, sshDropInDir, blank)
+	}
+	if at := pairIndex(args, "--ro-bind", sshDropInDir); at >= 0 {
+		t.Errorf("%s is also bound read-only at %d, which defeats the tmpfs", sshDropInDir, at)
+	}
+}
+
+// The blank entry is read off the host like every other root: a machine that
+// has the directory gets it emptied, one that does not gets no mount at all
+// (bubblewrap fails a spawn whose mount point it cannot create under a
+// read-only /etc).
+func TestHostRootsBlanksTheSSHDropInsWhenThePlatformHasThem(t *testing.T) {
+	_, err := os.Stat(sshDropInDir)
+	blanked := slices.ContainsFunc(hostRoots(), func(r root) bool {
+		return r.blank && r.path == sshDropInDir
+	})
+	if want := err == nil; blanked != want {
+		t.Errorf("hostRoots blanks %s = %v, want %v", sshDropInDir, blanked, want)
+	}
+}

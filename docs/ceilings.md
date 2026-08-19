@@ -103,7 +103,10 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   next spawn with nothing saying so. On Ubuntu and Debian the kernel may refuse the user namespace outright
   (an AppArmor policy), which surfaces as bubblewrap's own error in the card and no session. `~/.ssh` is not
   mounted at all: a push over ssh from inside a confined session fails, and lich's own PR flows run outside
-  it and are unaffected. macOS has no hardware here — its profile is unit-tested and has never run.
+  it and are unaffected. The distribution's `/etc/ssh/ssh_config.d` drop-ins are replaced by an empty
+  directory, because inside the namespace they belong to nobody and ssh refuses to read a config file it
+  does not own — so a host whose ssh depends on one of them (a corporate `ProxyCommand`, say) does not have
+  it inside the sandbox. macOS has no hardware here — its profile is unit-tested and has never run.
 - **A symlink in the home is not mounted into the sandbox** (`internal/sandbox`): every path lich binds is
   taken as it is on disk, and a link is skipped — following one would let a dotfile manager point the
   private home at whatever it likes, and binding one fails the spawn outright when a parent directory is

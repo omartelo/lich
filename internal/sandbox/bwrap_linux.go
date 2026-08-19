@@ -39,6 +39,19 @@ var systemDirs = []string{"/usr", "/etc", "/opt", "/nix"}
 // not have, and a --symlink where the host has a directory hides half of it.
 var mergedDirs = []string{"/bin", "/sbin", "/lib", "/lib32", "/lib64", "/libx32"}
 
+// sshDropInDir is the distribution's ssh_config include directory, blanked with
+// an empty tmpfs rather than handed over as it is. bubblewrap's user namespace
+// maps the user and nobody else, so every root-owned file under /etc arrives
+// owned by the overflow uid — and ssh refuses to read a config file owned by
+// neither root nor itself: "Bad owner or permissions on
+// /etc/ssh/ssh_config.d/20-systemd-ssh-proxy.conf", which fails every ssh
+// remote, `git fetch` included, before it reaches the network.
+//
+// Ceiling: the drop-ins are dropped, not repaired. They are the distribution's
+// (systemd's VM proxy on this machine); a host whose ssh depends on one of them
+// wants those files copied into a user-owned tmpfs instead.
+const sshDropInDir = "/etc/ssh/ssh_config.d"
+
 // Available reports whether this machine can confine a session. Linux answers
 // for bubblewrap being installed and nothing else — whether the kernel will
 // actually grant the namespace is a question only a spawn can ask, and the
@@ -63,12 +76,15 @@ func Wrap(spec Spec, bin string, args []string) (string, []string) {
 	return path, append(argv, args...)
 }
 
-// root is one entry of the read-only base filesystem: either a bind of a host
-// directory or a symlink reproduced from the host.
+// root is one entry of the read-only base filesystem: a bind of a host
+// directory, a symlink reproduced from the host, or an empty tmpfs blanking a
+// host directory the sandbox may not use as it stands.
 type root struct {
 	// target is the symlink's destination, empty for a bind mount.
 	target string
-	path   string
+	// blank replaces the path with an empty tmpfs instead of binding it.
+	blank bool
+	path  string
 }
 
 // hostRoots reads the base filesystem this machine actually has. Split from
@@ -96,6 +112,9 @@ func hostRoots() []root {
 		}
 		roots = append(roots, root{target: target, path: dir})
 	}
+	if _, err := os.Stat(sshDropInDir); err == nil {
+		roots = append(roots, root{blank: true, path: sshDropInDir})
+	}
 	return roots
 }
 
@@ -108,11 +127,14 @@ func hostRoots() []root {
 func bwrapArgs(spec Spec, roots []root) []string {
 	var args []string
 	for _, r := range roots {
-		if r.target != "" {
+		switch {
+		case r.target != "":
 			args = append(args, "--symlink", r.target, r.path)
-			continue
+		case r.blank:
+			args = append(args, "--tmpfs", r.path)
+		default:
+			args = append(args, "--ro-bind", r.path, r.path)
 		}
-		args = append(args, "--ro-bind", r.path, r.path)
 	}
 	// /etc/resolv.conf is a symlink into /run on a systemd-resolved machine, and
 	// /run is not mounted: without its target the sandbox has no DNS, which
