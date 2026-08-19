@@ -111,12 +111,26 @@ opencode spells the same set in lower case:
 | search        | `Grep` / `Glob`            | — (goes through `Bash`)  | `grep` / `glob`  |
 
 Each row was taken off a real run of the CLIs against a stub listener, not from
-their documentation — except opencode's MCP tools, which are namespaced by their
-server and were not observed here, which is why the row Claude Code and Codex
-both spell `mcp__srv__tool` is absent above. A harness is free to report a name
-outside this table; the card shows whatever arrives, with one exception: it
-reads `mcp__<server>__<tool>` and draws it as `<server> · <tool>`, because the
-prefix costs a card its whole width before the part worth reading starts.
+their documentation. MCP tools are absent from the table above because no two
+harnesses name them alike; they have their own table below. A harness is free to
+report a name outside either table; the card shows whatever arrives, minus the
+MCP machinery it can prove — that prefix costs a card its whole width before the
+part worth reading starts:
+
+| Harness           | MCP tool name            | On the card                |
+|-------------------|--------------------------|----------------------------|
+| Claude Code       | `mcp__lich__open_session`  | `lich · open_session`      |
+| Codex             | `mcp__srv__tool`           | `srv · tool`               |
+| oh-my-pi          | `mcp__lich_list_sessions`  | `lich_list_sessions`       |
+| opencode          | `lichprobe_list_sessions`  | unchanged                  |
+
+Measured against opencode 1.18.18 and omp 17.3.7 by running each CLI against a
+`lich mcp` server and reading the name off the handler the plugin already has —
+`input.tool` and `event.toolName`. Only the doubled underscore can be split:
+omp's single one divides `mcp__lich_list_sessions` into `lich` + `list_sessions`
+or `lich_list` + `sessions` with nothing in the string to say which, so only its
+prefix comes off, and opencode's form carries no marker at all. Crush is absent
+because it reports no tool (see above).
 
 `detail` is whatever identifies the call at a glance — the command line, the
 file path, the pattern. It is free text: a harness that offers nothing usable

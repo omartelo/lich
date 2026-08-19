@@ -36,11 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **A long tool name stays inside its session card.** While an agent ran an MCP
   tool, the card drew the harness's own spelling of it — `mcp__<server>__<tool>`
-  — at full length, and a name that did not fit ran out past the card's right
-  edge into the sidebar. The line now shows the two parts worth reading, the
-  server and the tool, and both it and the detail beside it give way with an
-  ellipsis rather than overflowing. The card keeps its height either way: this
-  never wraps.
+  and three other forms, one per harness — at full length, and a name that did
+  not fit ran out past the card's right edge into the sidebar. The line now
+  drops the machinery in the name and keeps the parts worth reading, and both it
+  and the detail beside it give way with an ellipsis rather than overflowing.
+  The card keeps its height either way: this never wraps.
 
 - **A pull request that will not check out says why.** Opening a session on a
   pull request runs `gh pr checkout`, which shells out to git — and when git's

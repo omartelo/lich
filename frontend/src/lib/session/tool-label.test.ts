@@ -13,6 +13,19 @@ describe("toolLabel", () => {
     expect(toolLabel("mcp__srv__do__the__thing")).toBe("srv · do__the__thing")
   })
 
+  // Measured against omp 17.3.7: a single underscore between the server and the
+  // tool, which nothing in the string can split — "lich" + "list_sessions" and
+  // "lich_list" + "sessions" are equally readable, so only the prefix comes off.
+  it("takes the prefix off omp's single-underscore form and splits no further", () => {
+    expect(toolLabel("mcp__lich_list_sessions")).toBe("lich_list_sessions")
+  })
+
+  // Measured against opencode 1.18.18: no prefix at all, so there is no marker
+  // to key on and the name is shown whole.
+  it("leaves opencode's form alone", () => {
+    expect(toolLabel("lichprobe_list_sessions")).toBe("lichprobe_list_sessions")
+  })
+
   it("shows a name that is not an MCP tool's exactly as it arrived", () => {
     expect(toolLabel("Bash")).toBe("Bash")
     expect(toolLabel("apply_patch")).toBe("apply_patch")
@@ -20,8 +33,8 @@ describe("toolLabel", () => {
   })
 
   // Half a prefix is not an MCP name, and neither half is a server or a tool.
-  it("leaves a malformed mcp name alone", () => {
-    expect(toolLabel("mcp__lich")).toBe("mcp__lich")
-    expect(toolLabel("mcp____tool")).toBe("mcp____tool")
+  it("still strips the prefix off a name it cannot split", () => {
+    expect(toolLabel("mcp__lich")).toBe("lich")
+    expect(toolLabel("mcp____tool")).toBe("__tool")
   })
 })
