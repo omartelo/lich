@@ -1,12 +1,15 @@
 // Package store is lich's persistence layer: a single SQLite database holding
-// open projects, their terminal sessions and backend-read settings (currently
-// the provider binary paths, global or per-project). It never stores chat or
-// terminal content — only the metadata needed to restore the workspace after a
-// restart.
+// open projects, their terminal sessions and the settings scoped globally or to
+// one project — provider binaries and defaults, the permission and sandbox
+// rungs, the gh account. It never stores chat or terminal content — only the
+// metadata needed to restore the workspace after a restart.
 //
-// UI-only preferences (font, theme, zoom) intentionally stay in the frontend's
-// localStorage: they need synchronous access on first paint and the backend
-// never reads them.
+// A UI preference stays in the frontend's localStorage by default: it needs
+// synchronous access on first paint and the backend never reads it. It moves
+// here when losing it costs more than reading it a frame late — the theme
+// selections and the "what's new" mark did, because Chromium recreates a
+// damaged profile from scratch and takes every `lich.*` key with it (the why is
+// at the setting keys in frontend/src/providers/settings.tsx).
 package store
 
 import (

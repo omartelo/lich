@@ -50,6 +50,7 @@ import type { DelegateGroup } from "@/lib/session/delegate-targets"
 import { delegatePrompt, delegateWorktreePrompt } from "@/lib/session/delegate-prompt"
 import { bracketedPaste } from "@/lib/terminal/bracketed-paste"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
+import { useSessionIntent } from "@/lib/use-sidebar-intent"
 import { SessionTargetPicker } from "./SessionTargetPicker"
 import { EntrypointDialog } from "./EntrypointDialog"
 
@@ -184,6 +185,31 @@ export function SessionCard({
       setDelegatePickerOpen(false)
     }
   }, [canDelegate])
+
+  // The shortcuts for this card's own actions. They aim at the active session,
+  // which is this card, and they call the same handlers its context menu items
+  // do — one behaviour, two ways in. Whether an action is offered at all is
+  // decided where the shortcut is raised (App), so a chord the card cannot
+  // honour never reaches here.
+  useSessionIntent(session.id, (intent) => {
+    switch (intent) {
+      case "rename":
+        setEditing(true)
+        break
+      case "close":
+        onClose()
+        break
+      case "pin":
+        onPin(!pinned)
+        break
+      case "terminal":
+        onOpenTerminal(shownPath)
+        break
+      case "delegate":
+        setDelegatePickerOpen(true)
+        break
+    }
+  })
 
   const commit = (value: string) => {
     setEditing(false)

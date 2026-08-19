@@ -11,6 +11,12 @@ import { readPref, writePref } from "@/lib/prefs"
 export type HotkeyId =
   | "commandPalette"
   | "newSession"
+  | "newWorktree"
+  | "renameSession"
+  | "closeSession"
+  | "togglePin"
+  | "openTerminal"
+  | "delegate"
   | "nextSession"
   | "prevSession"
   | "focusTerminal"
@@ -67,6 +73,49 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
     label: "New session",
     group: "sessions",
     combo: { mod: true, shift: true, alt: false, key: "t" },
+  },
+  // B for branch: the dialog's whole subject is which branch the checkout is
+  // cut from. Ctrl+Shift+W would have read better and is Chromium's close
+  // window, which a page cannot take back.
+  {
+    id: "newWorktree",
+    label: "New worktree session",
+    group: "sessions",
+    combo: { mod: true, shift: true, alt: false, key: "b" },
+  },
+  {
+    id: "renameSession",
+    label: "Rename the active session",
+    group: "sessions",
+    combo: { mod: true, shift: true, alt: false, key: "e" },
+  },
+  // The rest of the card's own actions. Only X carries a mnemonic anyone would
+  // guess; the letters that would (P for pin, T for terminal, D for delegate)
+  // are spent, and what was left had to avoid Chromium's own (N, W, Q, I, J, C,
+  // O, M, A, R) and Ctrl+Shift+U, which starts Unicode entry under IBus.
+  {
+    id: "closeSession",
+    label: "Close the active session",
+    group: "sessions",
+    combo: { mod: true, shift: true, alt: false, key: "x" },
+  },
+  {
+    id: "togglePin",
+    label: "Pin or unpin the active session",
+    group: "sessions",
+    combo: { mod: true, shift: true, alt: false, key: "k" },
+  },
+  {
+    id: "openTerminal",
+    label: "Open a terminal in the session's directory",
+    group: "sessions",
+    combo: { mod: true, shift: true, alt: false, key: "l" },
+  },
+  {
+    id: "delegate",
+    label: "Delegate to another session",
+    group: "sessions",
+    combo: { mod: true, shift: true, alt: false, key: "h" },
   },
   // Down/up because the sidebar list is vertical; the project pair below is the
   // same shape turned sideways, because the tab strip is horizontal.

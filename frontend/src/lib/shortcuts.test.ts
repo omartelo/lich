@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { DEFAULT_HOTKEYS, HOTKEY_ACTIONS, HOTKEY_GROUPS } from "./hotkeys"
-import { PASSTHROUGH_TITLE, shortcutGroups } from "./shortcuts"
+import { PASSTHROUGH_TITLE, shortcutGroups, TERMINAL_TITLE } from "./shortcuts"
 
 const groupTitled = (
   groups: { title: string; rows: { label: string; keys: string }[] }[],
@@ -20,9 +20,10 @@ describe("shortcutGroups", () => {
     const groups = shortcutGroups(DEFAULT_HOTKEYS, false, false)
     expect(groups.map((g) => g.title)).toEqual([
       ...HOTKEY_GROUPS.map((g) => g.label),
+      TERMINAL_TITLE,
       PASSTHROUGH_TITLE,
     ])
-    const listed = groups.slice(0, -1).flatMap((g) => g.rows.map((row) => row.label))
+    const listed = groups.slice(0, -2).flatMap((g) => g.rows.map((row) => row.label))
     expect(listed).toEqual(HOTKEY_ACTIONS.map((a) => a.label))
     expect(groupTitled(groups, "Sessions").rows.map((r) => r.label)).toContain("New session")
   })
@@ -38,6 +39,12 @@ describe("shortcutGroups", () => {
       commandPalette: { mod: true, shift: false, alt: true, key: "p" },
     }
     expect(keysFor(shortcutGroups(rebound, false, false), "Command palette")).toBe("Ctrl+Alt+P")
+  })
+
+  it("lists the terminal search, which is bound but not rebindable", () => {
+    expect(
+      keysFor(shortcutGroups(DEFAULT_HOTKEYS, true, false), "Search the session's output"),
+    ).toBe("Ctrl+F")
   })
 
   it("splits the image-paste chord by platform", () => {

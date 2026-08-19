@@ -1,9 +1,15 @@
 import { useEffect, useRef, useState } from "react"
-import { HashRouter, Outlet, Route, Routes } from "react-router-dom"
+import { HashRouter, Outlet, Route, Routes, useMatch } from "react-router-dom"
 import { SettingsProvider, useSettings } from "@/providers/settings"
 import { useHotkey } from "@/lib/use-hotkey"
 import { parseBoolPref, readPref, writePref } from "@/lib/prefs"
-import { ProjectsProvider } from "@/providers/projects"
+import { ProjectsProvider, useProjects } from "@/providers/projects"
+import { activeSessionId, sessionsOf } from "@/lib/session/sessions"
+import {
+  requestSessionIntent,
+  requestWorktreeDialog,
+  type SessionIntent,
+} from "@/lib/use-sidebar-intent"
 import { ProjectTabs } from "@/components/tabs/ProjectTabs"
 import { SessionSidebar } from "@/components/sidebar/SessionSidebar"
 import { SidebarRail } from "@/components/sidebar/SidebarRail"
@@ -33,14 +39,47 @@ const SIDEBAR_KEY = "lich.sidebar.open"
 // top of the terminals.
 function Layout() {
   const { hotkeys } = useSettings()
+  const { sessions } = useProjects()
+  const match = useMatch("/projects/:projectId/*")
+  const projectId = match?.params.projectId ?? ""
   const [dock, setDock] = useState<DockTab | null>(null)
   const [sidebar, setSidebar] = useState(() => parseBoolPref(readPref(SIDEBAR_KEY), true))
-  const toggleSidebar = () => {
-    const open = !sidebar
+  const showSidebar = (open: boolean) => {
     setSidebar(open)
     writePref(SIDEBAR_KEY, open)
   }
+  const toggleSidebar = () => showSidebar(!sidebar)
   useHotkey(hotkeys.toggleSidebar, toggleSidebar)
+  // Both of these act on sidebar chrome — the worktree dialog, a card's rename
+  // field — and the rail carries neither, so a collapsed sidebar is opened
+  // first rather than letting the chord quietly do nothing. The request is a
+  // pending flag for exactly that reason: its consumer mounts a render later
+  // (use-sidebar-intent).
+  useHotkey(hotkeys.newWorktree, () => {
+    if (!projectId) return false
+    showSidebar(true)
+    requestWorktreeDialog(projectId)
+  })
+  // The card actions all aim at the same card — the active session's — so they
+  // share one route to it. A shortcut is declined wherever that card offers no
+  // such action, rather than being swallowed for nothing.
+  const active = sessionsOf(sessions, projectId).find(
+    (session) => session.id === activeSessionId(sessions, projectId),
+  )
+  const cardAction = (intent: SessionIntent) => {
+    if (!active) return false
+    showSidebar(true)
+    requestSessionIntent(active.id, intent)
+  }
+  useHotkey(hotkeys.renameSession, () => cardAction("rename"))
+  // A pinned card shows no × at all — closing is what the pin withholds — so
+  // the shortcut withholds it too.
+  useHotkey(hotkeys.closeSession, () => !active?.pinned && cardAction("close"))
+  useHotkey(hotkeys.togglePin, () => cardAction("pin"))
+  useHotkey(hotkeys.openTerminal, () => cardAction("terminal"))
+  // Delegating writes the request at the session's own prompt, and the thing
+  // reading a terminal's prompt is a shell: it would run the line as a command.
+  useHotkey(hotkeys.delegate, () => active?.kind !== "shell" && cardAction("delegate"))
   const toggleDock = (tab: DockTab) => setDock((cur) => (cur === tab ? null : tab))
   // The shortcut toggles the dock as a whole, so it reopens on the tab it was
   // last showing — the two tabs have their own footer buttons.

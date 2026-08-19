@@ -13,14 +13,14 @@ import {
   type HotkeyAction,
   type HotkeyId,
 } from "@/lib/hotkeys"
-import { PASSTHROUGH_TITLE, passthroughRows } from "@/lib/shortcuts"
+import { PASSTHROUGH_TITLE, passthroughRows, TERMINAL_TITLE, terminalRows } from "@/lib/shortcuts"
 import { Button } from "@/components/ui/button"
 import { ShortcutLine } from "@/components/common/ShortcutLine"
 import { isMac, isWindows } from "@/lib/platform"
 import { cn } from "@/lib/utils"
 
-// A dense list rather than one setting block per action: eleven bindings read as
-// a table of rows, and a block each would be a column of near-empty cards.
+// A dense list rather than one setting block per action: the bindings read as a
+// table of rows, and a block each would be a column of near-empty cards.
 function Group({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <section className="pt-8 first:pt-0">
@@ -111,6 +111,15 @@ export function HotkeysSettings() {
           ))}
         </Group>
       ))}
+      <Group label={TERMINAL_TITLE}>
+        <p className="mb-2 max-w-prose text-xs text-muted-foreground">
+          lich's own, and fixed: this one shadows a browser accelerator, which answers to a chord
+          rather than to whatever it was rebound to.
+        </p>
+        {terminalRows.map((row) => (
+          <ShortcutLine key={row.label} label={row.label} keys={row.keys} />
+        ))}
+      </Group>
       <Group label={PASSTHROUGH_TITLE}>
         <p className="mb-2 max-w-prose text-xs text-muted-foreground">
           lich rewrites these on their way to the agent's terminal, so they are fixed rather than

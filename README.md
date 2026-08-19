@@ -119,9 +119,14 @@ window. Upgrading from the old formula needs `brew uninstall lich` first —
 - **Version control** — a project can name the GitHub account `gh` runs as
   (Settings › Version Control), for a repository only one of your accounts can
   see. It governs what lich reads from GitHub, not what git pushes.
-- **Appearance & hotkeys** — themes, fonts and key combos in Settings; the theme
-  you pick persists in the workspace database, the rest of the UI preferences in
-  `localStorage` under `lich.*` keys (inside lich's Chromium profile at
+- **Hotkeys** — `Ctrl`/`Cmd`+`/` lists every shortcut lich binds, and Settings ›
+  Hotkeys is where you rebind one: press the combo you want and it is stored, or
+  reset the row to lich's default. Two actions may hold the same combo, and the
+  rows that do say so. Rebinds live in the page's `localStorage`, so wiping
+  lich's Chromium profile takes them with it.
+- **Appearance** — themes and fonts in Settings; the theme you pick persists in
+  the workspace database, the rest of the UI preferences in `localStorage` under
+  `lich.*` keys (inside lich's Chromium profile at
   `~/.config/lich/chromium-profile`), and imported themes as JSON under
   `<config-dir>/lich/themes`.
 - **Workspace** — projects and sessions persist in SQLite at

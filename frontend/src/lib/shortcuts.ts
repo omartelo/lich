@@ -14,7 +14,15 @@ export interface ShortcutGroup {
   rows: ShortcutRow[]
 }
 
+export const TERMINAL_TITLE = "Terminal"
 export const PASSTHROUGH_TITLE = "Passed through to the agent"
+
+// lich's own chord, and not a rebindable one: it shadows Chromium's Find in
+// --app mode, and an accelerator answers to a fixed chord (TerminalView). Ctrl
+// on macOS too, for the same reason as the rows below.
+export const terminalRows: ShortcutRow[] = [
+  { label: "Search the session's output", keys: "Ctrl+F" },
+]
 
 // These are spelled out rather than built from a Combo: they are matched on
 // event.ctrlKey (term-keys.ts), so the modifier is Control on macOS too and
@@ -41,5 +49,9 @@ export function shortcutGroups(
       keys: formatCombo(hotkeys[action.id], isMac),
     })),
   }))
-  return [...bound, { title: PASSTHROUGH_TITLE, rows: passthroughRows(isWindows) }]
+  return [
+    ...bound,
+    { title: TERMINAL_TITLE, rows: terminalRows },
+    { title: PASSTHROUGH_TITLE, rows: passthroughRows(isWindows) },
+  ]
 }

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Six more keyboard shortcuts, all aimed at the session sidebar.**
+  `Ctrl+Shift+B` opens the worktree dialog — the New session menu's **Worktree**
+  item, reached without the menu — and the active session's own card actions get
+  the rest: `Ctrl+Shift+E` renames it in place, `Ctrl+Shift+X` closes it,
+  `Ctrl+Shift+K` pins or unpins it, `Ctrl+Shift+L` opens a terminal in its
+  directory, and `Ctrl+Shift+H` opens the delegate picker. A collapsed sidebar
+  opens first, since none of that chrome lives in the rail, and a shortcut the
+  card does not offer — closing a pinned session, delegating from a terminal —
+  is declined rather than silently doing nothing. All are listed in the
+  shortcuts overlay (`Ctrl+/`) and rebindable in Settings › Hotkeys.
+- **The terminal search chord is documented.** `Ctrl+F` has always opened the
+  session's search bar; the shortcuts overlay and Settings › Hotkeys now say so,
+  under a **Terminal** heading beside the chords passed through to the agent.
+
 ### Changed
 
 - **The command palette leads with the sessions worth interrupting.** Its `All`

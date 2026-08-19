@@ -53,6 +53,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   gone relocates it instead, keeping the stored id its sessions and its worktree directory hang off. Only the 25
   most recent closes are offered back (`recentLimit`, `internal/store/store.go`) — the row survives, but past that
   a project is reachable only through the directory picker, and neither the menu nor the palette says so.
+- **A hotkey is taken from the agent, and its rebind lives only in the page** (`frontend/src/lib/use-hotkey.ts`,
+  `hotkeys.ts`): every bound combo is caught in the window capture phase and stopped there, so the chord never
+  reaches the PTY — the defaults spend chords no TUI can bind, but a rebind is checked against nothing, and
+  recording `Ctrl+R` silently costs the shell its history search with nothing on screen connecting the two. The
+  bindings are a `lich.hotkeys` entry in localStorage, which the theme left for the workspace database precisely
+  because a recreated Chromium profile drops it: the combos revert to the defaults, and both the overlay and
+  Settings then show those defaults as if nothing had ever been rebound.
 - **Hidden sessions are serialized and destroyed**: 2MB replay rings on both sides
   (`frontend/src/lib/terminal/replay-buffer.ts` page-side, `internal/terminal/replay.go` backend-side — the latter
   survives a full page reload). Scrollback past the ring is gone, not paged. The snapshot carries only the modes

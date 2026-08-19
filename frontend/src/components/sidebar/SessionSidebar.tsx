@@ -40,6 +40,7 @@ import { WorktreeDialog } from "./WorktreeDialog"
 import { useWorktreeClose } from "./useWorktreeClose"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { usePanelWidth } from "@/lib/use-panel-width"
+import { useWorktreeDialogIntent } from "@/lib/use-sidebar-intent"
 import { SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
 
 // Named here like every other `lich.*` pref rather than spelled at the call
@@ -99,6 +100,11 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
     edge: "right",
   })
   const [worktreeOpen, setWorktreeOpen] = useState(false)
+  // The shortcut's half of the New session menu's Worktree item. Ungated where
+  // the menu item is disabled without a branch: git status may still be loading
+  // on the render this mounts in, and the dialog reports git's own error in
+  // place anyway.
+  useWorktreeDialogIntent(projectId ?? "", () => setWorktreeOpen(true))
   // Resolved ahead of the no-project bail below: hooks cannot sit behind it.
   const list = sessionsOf(sessions, projectId ?? "")
   const worktreeClose = useWorktreeClose(projectId ?? "", path, list)
