@@ -24,6 +24,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that no longer existed. Closing such a leftover card asked again whether to
   keep or remove the worktree, and removing it failed.
 
+- **The clipboard works in a confined session again.** Copying out of an
+  agent's TUI and attaching an image to it are the agent's own work — Claude
+  Code shells out to `wl-copy`, `wl-paste`, `xclip` and `xsel` for both — and a
+  sandboxed session had no display socket left to reach, so every copy and every
+  paste of a screenshot failed with nothing on screen saying why. The sandbox
+  now hands the session the display server's socket: Wayland where the host has
+  it, X11 with its cookie otherwise. A confined session can read the clipboard
+  as well as write it, which is the trade the clipboard is.
+
 - **ssh no longer fails outright inside a confined session.** Every remote git
   command in a sandboxed session died on `Bad owner or permissions on
   /etc/ssh/ssh_config.d/...`: inside the sandbox's user namespace the

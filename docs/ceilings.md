@@ -106,7 +106,12 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   it and are unaffected. The distribution's `/etc/ssh/ssh_config.d` drop-ins are replaced by an empty
   directory, because inside the namespace they belong to nobody and ssh refuses to read a config file it
   does not own — so a host whose ssh depends on one of them (a corporate `ProxyCommand`, say) does not have
-  it inside the sandbox. macOS has no hardware here — its profile is unit-tested and has never run.
+  it inside the sandbox. The display server's socket *is* mounted, because the agent's own copy and its
+  clipboard image paste shell out to `wl-copy` and `xclip` and both fail without it: a confined session can
+  therefore read whatever you copy, a password manager's paste included. A host without Wayland gets the
+  X11 socket and its cookie instead, the wider of the two — X clients are not isolated from one another —
+  and macOS gets neither, its pasteboard being a mach service rather than a socket, so a confined session
+  there has no clipboard at all. macOS has no hardware here — its profile is unit-tested and has never run.
 - **A symlink in the home is not mounted into the sandbox** (`internal/sandbox`): every path lich binds is
   taken as it is on disk, and a link is skipped — following one would let a dotfile manager point the
   private home at whatever it likes, and binding one fails the spawn outright when a parent directory is

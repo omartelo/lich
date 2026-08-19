@@ -178,6 +178,11 @@ var readableToolchain = []string{
 // the build caches writable, the toolchain and configuration readable, the
 // checkout writable, and nothing else in the home there at all.
 //
+// The display server's socket is in there too, which is the one thing mounted
+// back that is not about running the project: without it the agent's own copy
+// and its clipboard image paste fail, because both shell out to a tool that has
+// to reach the compositor (displaySockets).
+//
 // extraRead is what the caller knows and this package does not — where the
 // binaries the spawn actually runs live. The provider's own executable and the
 // lich binary (which the session calls back through, and which serves its MCP
@@ -190,7 +195,8 @@ var readableToolchain = []string{
 func Describe(providerID, home, cwd, gitCommon string, extraRead []string) Spec {
 	spec := Spec{Home: home, Cwd: cwd, GitCommon: gitCommon}
 	spec.Write = existing(append(stateDirs(providerID, home), under(home, writableCaches)...))
-	spec.Read = existing(append(under(home, readableToolchain), extraRead...))
+	read := append(under(home, readableToolchain), displaySockets(home)...)
+	spec.Read = existing(append(read, extraRead...))
 	return spec
 }
 
