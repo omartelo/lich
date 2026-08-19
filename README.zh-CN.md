@@ -36,8 +36,10 @@
   oh-my-pi 和 [Crush](https://github.com/charmbracelet/crush) 都是一等公民。把 lich
   指向各自的二进制文件，这只需一次，之后选一个默认的，或者逐个会话单独指定。
 - **留住一个真正的终端。** 由 PTY 支撑的 shell，每个项目可以开好几个，在 GPU 上渲染
-  —— 滚动缓冲区可以搜索，还能挺过整页刷新。底栏跟随 `cd` 并标明分支 —— 对于 Claude
-  会话，还有模型、已占用的上下文窗口，以及 —— 如果你要求的话 —— 这个会话花了多少钱。
+  —— 滚动缓冲区可以搜索，还能挺过整页刷新。给其中一个设一个入口命令 —— `lazygit`、
+  `k9s`、`pnpm dev` —— 它每次启动都会直接进到那个工具里。底栏跟随 `cd` 并标明分支
+  —— 对于 Claude Code 或 Codex 会话，还有模型、已占用的上下文窗口，以及你的套餐额度
+  还剩多少；Claude Code 会话还能 —— 如果你要求的话 —— 显示它花了多少钱。
 - **让一个会话为另一个干活。** 把任务交给另一张卡片，答案由它自己的智能体写回来，两端
   各跑着什么都不影响：智能体通过启动时交予的工具够到其他会话 —— Claude Code 和 Codex
   走 MCP —— 其余的随插件获得。这整套能力同时也是任何 shell 里的 `lich` 命令，`--json`
@@ -46,6 +48,11 @@
 - **免去配置地分出一个 worktree。** 从任意基础分支开一个，lich 会把你被 gitignore 掉的
   `.env*` 文件播种进去，派给它一个既不与其他检出目录重合、也没被机器上任何进程占用的
   开发服务器端口，并在智能体启动前跑一遍按项目配置的初始化脚本。
+- **让会话在沙箱里运行。** 一个智能体可以开在操作系统的沙箱里：一个只装着该 provider
+  自身状态的空白 home，机器的其余部分只读，只有它被打开时所在的那个检出目录可写。你的
+  ssh 密钥、你的云凭据以及磁盘上其他所有仓库，在里面根本不存在 —— 这正是放手让智能体
+  跳过权限确认的那一头的配重。Linux 用 bubblewrap，macOS 用 `sandbox-exec`；它不是
+  针对恶意代码的边界，[`docs/ceilings.md`](docs/ceilings.md) 写明了它挡不住什么。
 - **在读 diff 的地方审查它。** 一个 CodeMirror 面板在实时文件树旁展示工作区改动。右键
   选中的内容就能针对这些行写评论；整批评论会作为一条 prompt 粘贴进会话，但不发送。
 - **在这里把 Pull Request 送到终点。** 列出仓库开启的 Pull Request，把其中一个检出到
@@ -99,15 +106,25 @@ Homebrew 安装可以绕开 Gatekeeper 的提示；从 Releases 页面下载的�
 - **智能体** —— 在全局设置 › Providers 里为每个 provider 设定二进制文件路径，并选定
   全局默认。项目设置 › Providers 可以为单个项目覆盖这个选择；**Use default** 会移除
   这层覆盖，之后全局默认的变化便会自动流过来。
-  Claude Code 那一节还管着底栏的上下文圆环和费用读数 —— 费用默认关闭，因为只有当你按
+  Claude Code 和 Codex 两节的开头是你的套餐还剩多少，往下是底栏会说些什么的那一档梯子
+  —— 上下文圆环，以及 Claude Code 才有的费用读数；费用那一档默认关闭，因为只有当你按
   token 计费时这个数字才有意义。
+- **沙箱** —— 每个 provider 那一节里，权限梯子旁边还有一条 **Sandbox** 梯子：Off、
+  Ask each time、Worktrees only、Everywhere。它按 provider 生效，项目可以设自己的一
+  档，而 New worktree 对话框里的 **Run confined** 复选框只为那一个会话覆盖这一档 ——
+  连同它此后每一次重新启动。Linux 需要 bubblewrap，macOS 需要 `sandbox-exec`；两者都
+  没有的机器上，以及 Windows 上，这个控件不会出现。
 - **Worktree** —— 项目仓库里的 `.lich/setup-worktree.sh` 会在新 worktree 的终端里
   先于智能体运行；New worktree 对话框会展示这个脚本，若仓库没有则给出检测到的建议。
   `.worktreeinclude` 文件用来调整哪些被 gitignore 的文件会被复制过去。
 - **版本控制** —— 一个项目可以指定 `gh` 以哪个 GitHub 账号运行（设置 › Version
   Control），用于只有你其中一个账号看得见的仓库。它管的是 lich 从 GitHub 读到什么，
   而不是 git 推送时用谁的身份。
-- **外观与快捷键** —— 主题、字体和组合键都在设置里；你选定的主题持久化在工作区数据库里，
+- **快捷键** —— `Ctrl`/`Cmd`+`/` 列出 lich 绑定的每一个快捷键，重新绑定则在设置 ›
+  Hotkeys 里：按下你想要的组合键就会存下来，也可以把某一行重置回 lich 的默认值。两个动
+  作可以持有同一个组合键，撞上的行会自己说明。重绑存在页面的 `localStorage` 里，所以清
+  掉 lich 的 Chromium 配置目录会把它们一并带走。
+- **外观** —— 主题和字体都在设置里；你选定的主题持久化在工作区数据库里，
   其余 UI 偏好以 `lich.*` 为键持久化在 `localStorage`（位于 lich 的 Chromium 配置目录
   `~/.config/lich/chromium-profile`），导入的主题则以 JSON 存在 `<config-dir>/lich/themes` 下。
 - **工作区** —— 项目和会话持久化在 SQLite 里，路径为 `<config-dir>/lich/lich.db`。
