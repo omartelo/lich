@@ -114,7 +114,9 @@ Each row was taken off a real run of the CLIs against a stub listener, not from
 their documentation — except opencode's MCP tools, which are namespaced by their
 server and were not observed here, which is why the row Claude Code and Codex
 both spell `mcp__srv__tool` is absent above. A harness is free to report a name
-outside this table; the card shows whatever arrives.
+outside this table; the card shows whatever arrives, with one exception: it
+reads `mcp__<server>__<tool>` and draws it as `<server> · <tool>`, because the
+prefix costs a card its whole width before the part worth reading starts.
 
 `detail` is whatever identifies the call at a glance — the command line, the
 file path, the pattern. It is free text: a harness that offers nothing usable

@@ -30,6 +30,7 @@ import { useSessionRelay } from "@/lib/session/use-session-relay"
 import { useSessionInbox } from "@/lib/session/use-session-inbox"
 import { useSessionTool } from "@/lib/session/use-session-tool"
 import { toolGlyph } from "@/lib/session/tool-glyph"
+import { toolLabel } from "@/lib/session/tool-label"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { baseReadout } from "@/lib/git/base-status"
 import { usePullRequest } from "@/lib/pulls/use-pull-request"
@@ -366,12 +367,19 @@ export function SessionCard({
               ) : tool ? (
                 <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
                   {ToolGlyph && <ToolGlyph className="size-3 shrink-0" />}
-                  <span className="shrink-0 font-medium text-foreground">{tool.name}</span>
+                  {/* The detail gives its width up first and the name only once
+                      the detail has none left to give — which is what the lopsided
+                      shrink factor buys. Both still shrink, so neither can push the
+                      row past the card the way a name that refused to shrink did.
+                      The separator travels inside the detail so it leaves with it,
+                      instead of dangling after a truncated name. */}
+                  <span className="min-w-0 truncate font-medium text-foreground">
+                    {toolLabel(tool.name)}
+                  </span>
                   {tool.detail && (
-                    <>
-                      <span className="shrink-0 opacity-50">·</span>
-                      <span className="truncate font-mono">{tool.detail}</span>
-                    </>
+                    <span className="min-w-0 shrink-[9999] truncate font-mono">
+                      <span className="opacity-50">·</span> {tool.detail}
+                    </span>
                   )}
                 </span>
               ) : (

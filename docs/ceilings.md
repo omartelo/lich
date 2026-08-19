@@ -90,6 +90,12 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   which is why the install asks its version first. Crush's block and omp's `mcp.json` register lich's MCP server by
   the absolute path of the binary that installed it, and omp's is a JSON document lich rewrites rather than appends
   to: every key survives, the user's formatting does not.
+- **The card's tool line only shortens the MCP spelling two providers use** (`frontend/src/lib/session/tool-label.ts`):
+  `mcp__<server>__<tool>` is what Claude Code and Codex report and all `toolLabel` knows how to read. opencode
+  namespaces MCP tools by their server in a form nobody has observed against a stub listener, and Crush and omp
+  were not observed either, so on those three a name outside the pattern reaches the card whole and spends the
+  card's width on the prefix. Nothing overflows on any of them — the line truncates — but the part worth reading is
+  the part that gets cut. Add the form to the pattern once one is observed, not from documentation.
 - **omp's state directory answers to two variables, and the profile wins** (`internal/agentplugin/omp.go`,
   `internal/terminal/transcript.go`, resolving it independently as the Claude Code pair do): `OMP_PROFILE` moves
   the whole directory and beats an explicit `PI_CODING_AGENT_DIR`. Get it backwards and the install lands where omp
