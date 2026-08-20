@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A provider installed by Homebrew is found again when lich is opened from
+  its icon.** lich already recovers the environment your shell's rc files
+  export, but a bare command name is resolved against the process's own `PATH`,
+  which a launch from Finder or a desktop entry inherits from the session
+  manager — without Homebrew's prefix, or any other directory an rc file adds.
+  Codex installed with `brew install` was reported missing, and a session
+  configured to run it could not start; the same launch from a terminal worked.
+  The recovered `PATH` is now pinned into lich itself, so detection, the spawn
+  and the Chromium search all read it.
+
 ## [0.38.0] - 2026-08-19
 
 ### Added

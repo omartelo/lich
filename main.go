@@ -65,6 +65,9 @@ func main() {
 	// what the user launched lich with (see terminal.childEnv). ResolveShellEnv
 	// recovers the rc-exported vars a GUI launch misses (see its doc).
 	env := terminal.ResolveShellEnv(os.Environ())
+	// The slice above is what children inherit; exec.LookPath reads the process
+	// PATH instead, so the resolved one has to land there too (see PinPath).
+	terminal.PinPath(env)
 
 	configDir, err := os.UserConfigDir()
 	if err != nil {

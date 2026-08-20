@@ -138,3 +138,19 @@ func TestResolveShellEnvBrokenShell(t *testing.T) {
 		t.Fatalf("ResolveShellEnv with broken shell = %v, want %v", got, base)
 	}
 }
+
+func TestPinPath(t *testing.T) {
+	t.Setenv("PATH", "/orig")
+	PinPath([]string{"A=1", "PATH=/shell/bin:/orig", "B=2"})
+	if got := os.Getenv("PATH"); got != "/shell/bin:/orig" {
+		t.Fatalf("PATH = %q, want %q", got, "/shell/bin:/orig")
+	}
+}
+
+func TestPinPathWithoutPATH(t *testing.T) {
+	t.Setenv("PATH", "/orig")
+	PinPath([]string{"A=1"})
+	if got := os.Getenv("PATH"); got != "/orig" {
+		t.Fatalf("PATH = %q, want it untouched", got)
+	}
+}
