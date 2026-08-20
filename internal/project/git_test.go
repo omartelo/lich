@@ -93,13 +93,15 @@ func TestDiscardNewFileStaysSilent(t *testing.T) {
 // TestRunGitStillReportsRealFailures is the counterweight: the quiet runner
 // exists for polls and probes, and must not have swallowed the failures a
 // person is waiting on. A read of a directory that is not a repository still
-// yields the screen's sentence and still reaches the log.
+// yields the screen's sentence and still reaches the log. It reads through
+// DiffText because Tree's contract moved: a non-repository is browsable now, so
+// it is no longer a caller with a failure to report.
 func TestRunGitStillReportsRealFailures(t *testing.T) {
 	logged := captureLog(t)
 
-	_, err := New(nil).Tree(t.TempDir())
+	_, err := New(nil).DiffText(t.TempDir())
 	if err == nil {
-		t.Fatal("Tree outside a repository: want an error, got nil")
+		t.Fatal("DiffText outside a repository: want an error, got nil")
 	}
 	if want := "not a git repository"; !strings.Contains(err.Error(), "not a git repository") {
 		t.Errorf("error %q does not name %q", err, want)

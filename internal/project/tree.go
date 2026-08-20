@@ -3,6 +3,7 @@ package project
 import (
 	"bytes"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -31,14 +32,24 @@ func isBinary(data []byte) bool {
 	return bytes.IndexByte(data[:min(len(data), binarySniffBytes)], 0) >= 0
 }
 
-// Tree lists the work tree's files as repo-relative, slash-separated paths,
-// sorted. It merges tracked files with untracked-but-not-ignored ones
-// (`ls-files --cached --others --exclude-standard`) and drops any tracked file
-// deleted from disk (`--deleted`), so a file created or removed since the
-// session began shows without a commit. .gitignore is honored for free, so no
-// node_modules and no build output leak in. A non-repository path yields an
-// error, matching DiffText's contract.
+// Tree lists a directory's files as root-relative, slash-separated paths,
+// sorted. Inside a repository it merges tracked files with
+// untracked-but-not-ignored ones (`ls-files --cached --others
+// --exclude-standard`) and drops any tracked file deleted from disk
+// (`--deleted`), so a file created or removed since the session began shows
+// without a commit; .gitignore is honored for free, so no node_modules and no
+// build output leak in. Anywhere else — a plain folder, a machine without git —
+// it falls back to walking the directory: browsing a project's files is not a
+// git feature, and only the diff panel beside it is.
 func (s *Service) Tree(path string) ([]string, error) {
+	// Asked before anything is listed, and quietly: a plain directory is not a
+	// failure to report, and routing its refreshes through runGit would file a
+	// warning per poll for a folder that is behaving exactly as it should. A
+	// work tree still goes through git, so a repository that *is* broken keeps
+	// reporting its error instead of being walked as if it were a plain folder.
+	if _, ok := gitQuiet(path, "rev-parse", "--is-inside-work-tree"); !ok {
+		return walkFiles(path, walkLimit)
+	}
 	present, err := lsFiles(path, "--cached", "--others", "--exclude-standard")
 	if err != nil {
 		return nil, err
@@ -58,6 +69,55 @@ func (s *Service) Tree(path string) ([]string, error) {
 		}
 	}
 	// The --cached/--others merge is not globally sorted; the tree wants one order.
+	slices.Sort(files)
+	return files, nil
+}
+
+// walkLimit caps a non-repository walk. Without git there is no .gitignore to
+// obey, so the walk has no way to leave a dependency or build directory out;
+// the cap is what keeps a home directory or a node_modules from arriving as one
+// RPC answer the tree then has to render.
+const walkLimit = 20000
+
+// walkFiles lists a plain directory's regular files, root-relative and
+// slash-separated, stopping at limit files (walkLimit; a parameter so the cap
+// is testable without laying down 20k files). Symlinks are skipped (nothing here resolves one, and a link
+// to a directory is a walk that may not terminate), .git is skipped whole, and
+// an unreadable subdirectory costs its own subtree rather than the answer.
+func walkFiles(root string, limit int) ([]string, error) {
+	var files []string
+	err := filepath.WalkDir(root, func(full string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			if full == root {
+				return err
+			}
+			if entry != nil && !entry.IsDir() {
+				return nil
+			}
+			return fs.SkipDir
+		}
+		if entry.IsDir() {
+			if full != root && entry.Name() == ".git" {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if !entry.Type().IsRegular() {
+			return nil
+		}
+		rel, err := filepath.Rel(root, full)
+		if err != nil {
+			return nil
+		}
+		files = append(files, filepath.ToSlash(rel))
+		if len(files) >= limit {
+			return fs.SkipAll
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list %s: %w", root, err)
+	}
 	slices.Sort(files)
 	return files, nil
 }

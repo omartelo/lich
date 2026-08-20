@@ -2,6 +2,7 @@ package project
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -54,10 +55,50 @@ func TestTreeDropsDeleted(t *testing.T) {
 	}
 }
 
-// TestTreeNotRepo proves a non-repository path is an error, matching DiffText.
-func TestTreeNotRepo(t *testing.T) {
-	if _, err := New(nil).Tree(t.TempDir()); err == nil {
-		t.Error("Tree on non-repo: want error, got nil")
+// TestTreeWalksNonRepo proves a plain directory is still browsable: the files
+// come back root-relative, slash-separated and sorted, nested folders included
+// and .git skipped whole. The contract changed here — a non-repository path used
+// to be an error, matching DiffText; browsing files is not a git feature.
+func TestTreeWalksNonRepo(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "b.txt", "b\n")
+	write(t, dir, "src/main.go", "package main\n")
+	write(t, dir, ".git/config", "[core]\n")
+	files, err := New(nil).Tree(dir)
+	if err != nil {
+		t.Fatalf("Tree: %v", err)
+	}
+	if got, want := strings.Join(files, ","), "b.txt,src/main.go"; got != want {
+		t.Errorf("Tree = %q, want %q", got, want)
+	}
+}
+
+// TestTreeMissingDir proves an absent directory is still an error, so the panel
+// says so instead of drawing an empty tree over a folder that is gone.
+func TestTreeMissingDir(t *testing.T) {
+	if _, err := New(nil).Tree(filepath.Join(t.TempDir(), "nope")); err == nil {
+		t.Error("Tree on missing dir: want error, got nil")
+	}
+}
+
+// TestWalkFilesStopsAtLimit proves the walk is bounded: without .gitignore
+// nothing else keeps a dependency directory out of one RPC answer. walkLimit's
+// own value is pinned as a literal — deriving it would make the test follow the
+// constant instead of pinning it.
+func TestWalkFilesStopsAtLimit(t *testing.T) {
+	if walkLimit != 20000 {
+		t.Errorf("walkLimit = %d, want 20000", walkLimit)
+	}
+	dir := t.TempDir()
+	for i := range 12 {
+		write(t, dir, fmt.Sprintf("f%02d.txt", i), "x")
+	}
+	files, err := walkFiles(dir, 10)
+	if err != nil {
+		t.Fatalf("walkFiles: %v", err)
+	}
+	if len(files) != 10 {
+		t.Errorf("walkFiles = %d files, want 10", len(files))
 	}
 }
 

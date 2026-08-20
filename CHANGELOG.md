@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The Files tab browses a folder that is not a git repository.** The tree was
+  built from `git ls-files`, so a project opened on a plain directory — notes, a
+  scratch folder, a checkout of something that is not git — answered "Not a git
+  repository" and offered nothing to read, though every file beside it was
+  perfectly readable. Outside a repository lich now walks the directory itself:
+  `.git` is skipped, symlinks are left alone, and the listing stops at 20,000
+  files, since there is no `.gitignore` out there to keep a `node_modules` out.
+  Inside a repository nothing changes — git still answers, ignored files stay
+  invisible, and a broken repository still reports its error rather than
+  flooding the tree.
 - **A provider installed by Homebrew is found again when lich is opened from
   its icon.** lich already recovers the environment your shell's rc files
   export, but a bare command name is resolved against the process's own `PATH`,

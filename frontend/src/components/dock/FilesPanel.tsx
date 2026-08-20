@@ -23,7 +23,8 @@ import { errorText } from "@/lib/utils"
 import { useFileEditor } from "./useFileEditor"
 
 // FilesPanel is the Files tab of the right dock: a read-only tree of the active
-// session's tracked files, master-detail with an in-dock preview. It follows the
+// session's files — tracked and untracked in a repository, whatever is on disk
+// in a plain folder — master-detail with an in-dock preview. It follows the
 // active session like the review panel — a worktree session browses its
 // checkout, not the project root — so clicking a file opens it beside the same
 // terminal it belongs to. It never edits; clicks only navigate, inject
@@ -188,13 +189,13 @@ interface TreeBodyProps {
 function TreeBody({ tree, query, active, stats, failed, onOpen, onEditor }: TreeBodyProps) {
   const filtering = query.trim() !== ""
   if (failed) {
-    return <Notice>Not a git repository</Notice>
+    return <Notice>Could not read this folder</Notice>
   }
   if (tree === null) {
     return <Notice>Loading…</Notice>
   }
   if (tree.length === 0) {
-    return <Notice>{filtering ? "No file matches" : "No tracked files"}</Notice>
+    return <Notice>{filtering ? "No file matches" : "No files here"}</Notice>
   }
   return (
     <FileTree

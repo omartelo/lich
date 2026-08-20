@@ -41,6 +41,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   `frontend/src/lib/session/peer-name.ts`) for the relay to resolve against, and the derived string goes stale the
   moment anyone renames — it then addresses a session that no longer answers to it. Nothing reads the real name
   back, so `/list-agents` inside the session is the only place it is true.
+- **The file tree outside a repository is unfiltered and capped**
+  (`internal/project/tree.go`, `walkFiles`): a plain folder has no `.gitignore`
+  for lich to obey, so the Files tab lists dependency and build directories like
+  any other, and stops at `walkLimit` files with nothing on screen saying the
+  listing was cut. It also has no git status to poll, so the tree there refreshes
+  only when the panel is reopened — a file the agent just wrote shows up on the
+  next visit, not while you watch.
 - **git status is polled** — one shared poller per repository path (`frontend/src/lib/git/git-status-store.ts`); the
   lich plugin's `session-touched` hook nudges an immediate refresh.
 - **lich fetches on its own** (`internal/project/basestatus.go`) — the only git write lich makes outside the
