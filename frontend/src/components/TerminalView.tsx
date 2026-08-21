@@ -41,7 +41,7 @@ import { sessionLinkTargets } from "@/lib/terminal/session-links"
 import { useSettings } from "@/providers/settings"
 import { useProjects } from "@/providers/projects"
 import { isMac, isWindows } from "@/lib/platform"
-import { isRecordingTarget } from "@/lib/hotkeys"
+import { claimHotkey, isRecordingTarget } from "@/lib/hotkeys"
 import type { SessionKind } from "@/lib/session/sessions"
 import "@xterm/xterm/css/xterm.css"
 
@@ -506,9 +506,9 @@ export function TerminalView({
       }
       const target = event.target as HTMLElement | null
       if (target?.closest?.('[role="dialog"]')) return
+      if (!claimHotkey(event, true, () => setSearchOpen(true))) return
       event.preventDefault()
       event.stopPropagation()
-      setSearchOpen(true)
     }
     window.addEventListener("keydown", onSearchKey, true)
     cleanups.push(() => window.removeEventListener("keydown", onSearchKey, true))

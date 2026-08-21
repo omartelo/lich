@@ -106,8 +106,9 @@ export function HotkeysSettings() {
     <>
       <p className="mb-6 max-w-prose text-xs text-muted-foreground">
         Global shortcuts are captured by lich before they reach the terminal. Terminal translations
-        are matched inside xterm and write substitute PTY sequences. Disable a binding to restore
-        native browser and terminal behavior; reset restores the platform default.
+        are matched inside xterm and write substitute PTY sequences. Disabling stops that lich
+        action or translation and restores native terminal behavior; dangerous Chromium accelerators
+        stay guarded. Reset restores the platform default.
       </p>
       {HOTKEY_GROUPS.map((group) => (
         <Group key={group.id} label={group.label}>

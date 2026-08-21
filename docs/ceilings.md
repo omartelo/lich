@@ -71,14 +71,15 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   are caught in the window capture phase and stopped there, so the chord never
   reaches the PTY. Terminal translations differ: xterm matches their bindings
   and writes a substitute sequence to the PTY. Settings detects conflicts
-  between lich actions, but cannot detect a TUI binding — recording `Ctrl+R`
-  still costs the shell its history search. Disabling a row stops that lich
-  action or translation; native browser and terminal behavior then decides the
-  chord, and `Ctrl+V` resumes paste instead of becoming a PTY key sequence. The
-  bindings are a `lich.hotkeys` localStorage entry, so recreating the Chromium
-  profile restores every default. Browser-dangerous accelerators stay prevented
-  separately, without stopping propagation, even when their lich action is
-  disabled.
+  between lich actions; on a conflicting keypress, the first successful handler
+  claims it, while a handler that is unavailable leaves it for the next one.
+  Settings cannot detect a TUI binding — recording `Ctrl+R` still costs the
+  shell its history search. Disabling a row stops that lich action or
+  translation; native terminal behavior then decides the chord, and `Ctrl+V`
+  resumes paste instead of becoming a PTY key sequence. The bindings are a
+  `lich.hotkeys` localStorage entry, so recreating the Chromium profile restores
+  every default. Browser-dangerous accelerators stay prevented separately,
+  without stopping propagation, even when their lich action is disabled.
 - **Hidden sessions are serialized and destroyed**: 2MB replay rings on both sides
   (`frontend/src/lib/terminal/replay-buffer.ts` page-side, `internal/terminal/replay.go` backend-side — the latter
   survives a full page reload). Scrollback past the ring is gone, not paged. The snapshot carries only the modes

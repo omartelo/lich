@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
 import type { ReactNode } from "react"
 import {
+  claimHotkey,
   DEFAULT_HOTKEYS,
   isRecordingTarget,
   loadHotkeys,
@@ -493,13 +494,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       if (isRecordingTarget(event)) return
       const intent = zoomIntent(event, hotkeys, isMac)
       if (!intent) return
+      const claimed = claimHotkey(event, true, () => {
+        if (intent === "reset") {
+          setZoom(DEFAULT_ZOOM)
+          return
+        }
+        zoomBy(intent === "in" ? ZOOM_STEP : -ZOOM_STEP)
+      })
+      if (!claimed) return
       event.preventDefault()
       event.stopPropagation()
-      if (intent === "reset") {
-        setZoom(DEFAULT_ZOOM)
-        return
-      }
-      zoomBy(intent === "in" ? ZOOM_STEP : -ZOOM_STEP)
     }
     const onWheel = (event: WheelEvent) => {
       if (!event.ctrlKey) return

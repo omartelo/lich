@@ -1,4 +1,10 @@
-import { matchesCombo, type HotkeyBinding, type Hotkeys, type KeyState } from "@/lib/hotkeys"
+import {
+  matchesCombo,
+  matchesRepeatingCombo,
+  type HotkeyBinding,
+  type Hotkeys,
+  type KeyState,
+} from "@/lib/hotkeys"
 import { isMac, isWindows } from "@/lib/platform"
 
 const ERASE_PREVIOUS_WORD_SEQUENCE = "\x17"
@@ -15,14 +21,13 @@ export function chordSequence(
   mac = isMac,
   windows = isWindows,
 ): string | null {
-  const options = { mac, allowRepeat: true }
-  if (matchesCombo(event, hotkeys.eraseTerminalWord, options)) {
+  if (matchesRepeatingCombo(event, hotkeys.eraseTerminalWord, mac)) {
     return ERASE_PREVIOUS_WORD_SEQUENCE
   }
-  if (matchesCombo(event, hotkeys.attachClipboardImage, options)) {
+  if (matchesRepeatingCombo(event, hotkeys.attachClipboardImage, mac)) {
     return windows ? WINDOWS_ATTACH_CLIPBOARD_IMAGE_SEQUENCE : ATTACH_CLIPBOARD_IMAGE_SEQUENCE
   }
-  if (matchesCombo(event, hotkeys.insertTerminalNewline, options)) {
+  if (matchesRepeatingCombo(event, hotkeys.insertTerminalNewline, mac)) {
     return INSERT_NEWLINE_SEQUENCE
   }
   return null
@@ -41,5 +46,5 @@ export function shouldOpenTerminalSearch(
   target: EventTarget | null,
   mac = isMac,
 ): boolean {
-  return !isEditableOutsideTerminal(target) && matchesCombo(event, binding, { mac })
+  return !isEditableOutsideTerminal(target) && matchesCombo(event, binding, mac)
 }

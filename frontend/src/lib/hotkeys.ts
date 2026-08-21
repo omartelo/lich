@@ -245,11 +245,6 @@ export type KeyState = Pick<
   "ctrlKey" | "metaKey" | "shiftKey" | "altKey" | "key" | "repeat"
 >
 
-interface MatchOptions {
-  mac?: boolean
-  allowRepeat?: boolean
-}
-
 const MODIFIER_KEYS: Record<string, true> = {
   Control: true,
   Meta: true,
@@ -258,6 +253,9 @@ const MODIFIER_KEYS: Record<string, true> = {
   AltGraph: true,
 }
 const STORAGE_KEY = "lich.hotkeys"
+// stopPropagation does not suppress sibling listeners on window; the event
+// itself records the first successful lich action without retaining it.
+const claimedHotkeyEvents = new WeakSet<object>()
 
 function normalizeKey(key: string): string {
   if (key === "=") return "+"
@@ -268,10 +266,11 @@ function normalizedShift(key: string, shift: boolean): boolean {
   return normalizeKey(key) === "+" ? false : shift
 }
 
-export function matchesCombo(
+function matchesComboWithRepeat(
   event: KeyState,
   binding: HotkeyBinding,
-  { mac = isMac, allowRepeat = false }: MatchOptions = {},
+  mac: boolean,
+  allowRepeat: boolean,
 ): boolean {
   if (!binding || (event.repeat && !allowRepeat)) return false
   const ctrl = binding.ctrl || (binding.mod && !mac)
@@ -283,6 +282,29 @@ export function matchesCombo(
     event.altKey === binding.alt &&
     normalizeKey(event.key) === binding.key
   )
+}
+
+export function matchesCombo(event: KeyState, binding: HotkeyBinding, mac = isMac): boolean {
+  return matchesComboWithRepeat(event, binding, mac, false)
+}
+
+export function matchesRepeatingCombo(
+  event: KeyState,
+  binding: HotkeyBinding,
+  mac = isMac,
+): boolean {
+  return matchesComboWithRepeat(event, binding, mac, true)
+}
+
+export function claimHotkey<Result>(
+  event: object,
+  matched: boolean,
+  handler: () => Result,
+): boolean {
+  if (!matched || claimedHotkeyEvents.has(event)) return false
+  if (handler() === false) return false
+  claimedHotkeyEvents.add(event)
+  return true
 }
 
 export function comboFromEvent(
