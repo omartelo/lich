@@ -398,7 +398,8 @@ func (s *Service) Send(fromID, target, project, prompt string, waitSeconds int) 
 		return Result{}, fmt.Errorf("nothing to send: the prompt is empty")
 	}
 	if len(prompt) > promptLimit {
-		return Result{}, fmt.Errorf("prompt is %d bytes, over the %d limit", len(prompt), promptLimit)
+		return Result{}, fmt.Errorf("prompt is %d bytes, over the %d limit: "+
+			"name the paths to read instead of pasting their contents", len(prompt), promptLimit)
 	}
 
 	dest, err := s.resolve(fromID, target, project)

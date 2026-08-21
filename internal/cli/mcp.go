@@ -329,7 +329,10 @@ var mcpTools = []mcpTool{
 		Schema: schema(map[string]any{
 			"session": property("string",
 				"Label of the target session, exactly as list_sessions returns it. Not a peer-roster name."),
-			"prompt":  property("string", "What to ask that session's agent to do."),
+			"prompt": property("string",
+				"What to ask that session's agent to do. Capped at 8 KB: it is typed at a "+
+					"terminal prompt, so name the paths, branches and commits to read rather "+
+					"than pasting a diff or a file — the target has the repository."),
 			"project": property("string", "Project name, needed only when two live sessions share a label."),
 			"timeout_seconds": property("number",
 				"Seconds to hold the line for a quick answer, at most 90 — longer is capped, "+
@@ -405,7 +408,8 @@ var mcpTools = []mcpTool{
 					"given one."),
 			"prompt": property("string",
 				"Task to hand the new session as soon as its agent is up. Omit to open it idle "+
-					"and send later."),
+					"and send later. Capped at 8 KB, like send_to_session: name what to read, "+
+					"do not paste it."),
 		}),
 		Run: func(c *client, args mcpArgs) (string, error) {
 			var opened spawn.Session
