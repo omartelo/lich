@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { defaultHotkeys, type KeyState } from "../hotkeys"
-import { chordSequence, isSearchOpenChord } from "./term-keys"
+import { chordSequence, shouldOpenTerminalSearch } from "./term-keys"
 
 const key = (over: Partial<KeyState>): KeyState => ({
   ctrlKey: false,
@@ -22,6 +22,13 @@ describe("chordSequence", () => {
     expect(chordSequence(key({ shiftKey: true, key: "Enter" }), hotkeys, false, false)).toBe(
       "\x1b\r",
     )
+  })
+
+  it("continues translating repeated PTY keydowns", () => {
+    const hotkeys = defaultHotkeys(false)
+    expect(
+      chordSequence(key({ ctrlKey: true, key: "Backspace", repeat: true }), hotkeys, false, false),
+    ).toBe("\x17")
   })
 
   it("uses literal Ctrl rather than Cmd for terminal defaults on macOS", () => {
@@ -53,15 +60,54 @@ describe("chordSequence", () => {
   })
 })
 
-describe("isSearchOpenChord", () => {
+describe("shouldOpenTerminalSearch", () => {
+  const target = (tagName: string, { editable = false, inTerminal = false } = {}): EventTarget =>
+    ({
+      tagName,
+      isContentEditable: editable,
+      closest: (selector: string) => (selector === ".xterm" && inTerminal ? {} : null),
+    }) as unknown as EventTarget
+
   it("matches, rebinds, and disables terminal search", () => {
     const defaults = defaultHotkeys(false)
     expect(
-      isSearchOpenChord(key({ ctrlKey: true, key: "f" }), defaults.terminalSearch, false),
+      shouldOpenTerminalSearch(
+        key({ ctrlKey: true, key: "f" }),
+        defaults.terminalSearch,
+        null,
+        false,
+      ),
     ).toBe(true)
     const rebound = { mod: false, ctrl: false, shift: false, alt: true, key: "f" }
-    expect(isSearchOpenChord(key({ altKey: true, key: "f" }), rebound, false)).toBe(true)
-    expect(isSearchOpenChord(key({ ctrlKey: true, key: "f" }), rebound, false)).toBe(false)
-    expect(isSearchOpenChord(key({ ctrlKey: true, key: "f" }), null, false)).toBe(false)
+    expect(shouldOpenTerminalSearch(key({ altKey: true, key: "f" }), rebound, null, false)).toBe(
+      true,
+    )
+    expect(shouldOpenTerminalSearch(key({ ctrlKey: true, key: "f" }), rebound, null, false)).toBe(
+      false,
+    )
+    expect(shouldOpenTerminalSearch(key({ ctrlKey: true, key: "f" }), null, null, false)).toBe(
+      false,
+    )
+  })
+
+  it("does not claim editable targets outside the terminal", () => {
+    const binding = defaultHotkeys(false).terminalSearch
+    const press = key({ ctrlKey: true, key: "f" })
+    expect(shouldOpenTerminalSearch(press, binding, target("INPUT"), false)).toBe(false)
+    expect(shouldOpenTerminalSearch(press, binding, target("TEXTAREA"), false)).toBe(false)
+    expect(shouldOpenTerminalSearch(press, binding, target("DIV", { editable: true }), false)).toBe(
+      false,
+    )
+  })
+
+  it("keeps Ctrl+F active in xterm's editable textarea", () => {
+    expect(
+      shouldOpenTerminalSearch(
+        key({ ctrlKey: true, key: "f" }),
+        defaultHotkeys(false).terminalSearch,
+        target("TEXTAREA", { inTerminal: true }),
+        false,
+      ),
+    ).toBe(true)
   })
 })

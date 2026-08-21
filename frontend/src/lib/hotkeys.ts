@@ -204,7 +204,6 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
     label: "Search the session's output",
     group: "terminal",
     combo: combo(false, false, false, "f", true),
-    allowUnmodified: true,
   },
   {
     id: "attachClipboardImage",
@@ -246,6 +245,11 @@ export type KeyState = Pick<
   "ctrlKey" | "metaKey" | "shiftKey" | "altKey" | "key" | "repeat"
 >
 
+interface MatchOptions {
+  mac?: boolean
+  allowRepeat?: boolean
+}
+
 const MODIFIER_KEYS: Record<string, true> = {
   Control: true,
   Meta: true,
@@ -264,8 +268,12 @@ function normalizedShift(key: string, shift: boolean): boolean {
   return normalizeKey(key) === "+" ? false : shift
 }
 
-export function matchesCombo(event: KeyState, binding: HotkeyBinding, mac = isMac): boolean {
-  if (!binding || event.repeat) return false
+export function matchesCombo(
+  event: KeyState,
+  binding: HotkeyBinding,
+  { mac = isMac, allowRepeat = false }: MatchOptions = {},
+): boolean {
+  if (!binding || (event.repeat && !allowRepeat)) return false
   const ctrl = binding.ctrl || (binding.mod && !mac)
   const meta = binding.mod && mac
   return (
@@ -395,10 +403,20 @@ export function mergeHotkeys(overrides: unknown): Hotkeys {
   if (!overrides || typeof overrides !== "object") return result
   for (const id of Object.keys(result) as HotkeyId[]) {
     const value = (overrides as Record<string, unknown>)[id]
-    // Zoom bindings were removed because their old shape could not represent
-    // Ctrl+Plus correctly. Do not silently revive those retired overrides.
+    // Releases through v0.12 stored zoom overrides in the legacy shape before
+    // zoom bindings were retired. Reintroduced actions must not revive them.
     if (isRetiredZoomOverride(id, value)) continue
     const parsed = parsedCombo(value)
+    if (
+      id === "terminalSearch" &&
+      parsed &&
+      !parsed.mod &&
+      !parsed.ctrl &&
+      !parsed.shift &&
+      !parsed.alt
+    ) {
+      continue
+    }
     if (parsed !== undefined) result[id] = parsed
   }
   return result

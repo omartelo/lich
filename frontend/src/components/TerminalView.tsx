@@ -10,7 +10,7 @@ import { System, Terminal as Service } from "@/lib/rpc"
 import { errorText } from "@/lib/utils"
 import { onAppEvent } from "@/lib/app-events"
 import { ensureTransport, onSessionData, sendInput } from "@/lib/terminal/term-transport"
-import { chordSequence, isSearchOpenChord } from "@/lib/terminal/term-keys"
+import { chordSequence, shouldOpenTerminalSearch } from "@/lib/terminal/term-keys"
 import { makeReplayBuffer } from "@/lib/terminal/replay-buffer"
 import { takePaste } from "@/lib/terminal/paste-queue"
 import { takeSetup } from "@/lib/terminal/setup-queue"
@@ -500,7 +500,7 @@ export function TerminalView({
       if (
         !visibleRef.current ||
         isRecordingTarget(event) ||
-        !isSearchOpenChord(event, hotkeysRef.current.terminalSearch, isMac)
+        !shouldOpenTerminalSearch(event, hotkeysRef.current.terminalSearch, event.target, isMac)
       ) {
         return
       }

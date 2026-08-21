@@ -23,6 +23,13 @@ describe("zoomIntent", () => {
     expect(zoomIntent(press({ ctrlKey: true, key: "0" }), hotkeys, false)).toBe("reset")
   })
 
+  it("repeats zoom steps but keeps reset discrete", () => {
+    const hotkeys = defaultHotkeys(false)
+    expect(zoomIntent(press({ ctrlKey: true, key: "+", repeat: true }), hotkeys, false)).toBe("in")
+    expect(zoomIntent(press({ ctrlKey: true, key: "-", repeat: true }), hotkeys, false)).toBe("out")
+    expect(zoomIntent(press({ ctrlKey: true, key: "0", repeat: true }), hotkeys, false)).toBeNull()
+  })
+
   it("uses Cmd rather than Ctrl for primary defaults on macOS", () => {
     const hotkeys = defaultHotkeys(false)
     expect(zoomIntent(press({ metaKey: true, key: "-" }), hotkeys, true)).toBe("out")

@@ -42,27 +42,29 @@ function bound(id: HotkeyId): Combo {
 describe("matchesCombo", () => {
   it("resolves the primary modifier to Ctrl off macOS and Cmd on macOS", () => {
     const binding = bound("newSession")
-    expect(matchesCombo(key({ ctrlKey: true, shiftKey: true, key: "T" }), binding, false)).toBe(
-      true,
-    )
-    expect(matchesCombo(key({ metaKey: true, shiftKey: true, key: "T" }), binding, true)).toBe(true)
-    expect(matchesCombo(key({ ctrlKey: true, shiftKey: true, key: "T" }), binding, true)).toBe(
-      false,
-    )
+    expect(
+      matchesCombo(key({ ctrlKey: true, shiftKey: true, key: "T" }), binding, { mac: false }),
+    ).toBe(true)
+    expect(
+      matchesCombo(key({ metaKey: true, shiftKey: true, key: "T" }), binding, { mac: true }),
+    ).toBe(true)
+    expect(
+      matchesCombo(key({ ctrlKey: true, shiftKey: true, key: "T" }), binding, { mac: true }),
+    ).toBe(false)
   })
 
   it("keeps literal Control distinct from Cmd on macOS", () => {
     const binding = bound("terminalSearch")
-    expect(matchesCombo(key({ ctrlKey: true, key: "f" }), binding, true)).toBe(true)
-    expect(matchesCombo(key({ metaKey: true, key: "f" }), binding, true)).toBe(false)
+    expect(matchesCombo(key({ ctrlKey: true, key: "f" }), binding, { mac: true })).toBe(true)
+    expect(matchesCombo(key({ metaKey: true, key: "f" }), binding, { mac: true })).toBe(false)
   })
 
   it("treats the shifted Equal key and + as the same zoom-in chord", () => {
     const binding = bound("zoomIn")
-    expect(matchesCombo(key({ ctrlKey: true, shiftKey: true, key: "+" }), binding, false)).toBe(
-      true,
-    )
-    expect(matchesCombo(key({ ctrlKey: true, key: "=" }), binding, false)).toBe(true)
+    expect(
+      matchesCombo(key({ ctrlKey: true, shiftKey: true, key: "+" }), binding, { mac: false }),
+    ).toBe(true)
+    expect(matchesCombo(key({ ctrlKey: true, key: "=" }), binding, { mac: false })).toBe(true)
   })
 
   it("ignores repeat and unassigned bindings", () => {
@@ -73,6 +75,12 @@ describe("matchesCombo", () => {
       ),
     ).toBe(false)
     expect(matchesCombo(key({ ctrlKey: true, key: "f" }), null)).toBe(false)
+  })
+
+  it("allows repeat only when the caller opts in", () => {
+    const event = key({ ctrlKey: true, shiftKey: true, key: "t", repeat: true })
+    expect(matchesCombo(event, bound("newSession"))).toBe(false)
+    expect(matchesCombo(event, bound("newSession"), { allowRepeat: true })).toBe(true)
   })
 })
 
@@ -165,6 +173,13 @@ describe("mergeHotkeys", () => {
     })
     expect(merged.zoomIn).toEqual(DEFAULT_HOTKEYS.zoomIn)
     expect(merged.zoomOut).toEqual(DEFAULT_HOTKEYS.zoomOut)
+  })
+
+  it("rejects a persisted terminal search binding without modifiers", () => {
+    const merged = mergeHotkeys({
+      terminalSearch: { mod: false, ctrl: false, shift: false, alt: false, key: "f" },
+    })
+    expect(merged.terminalSearch).toEqual(DEFAULT_HOTKEYS.terminalSearch)
   })
 
   it("preserves explicit unassigned bindings", () => {
