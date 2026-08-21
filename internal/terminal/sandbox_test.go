@@ -108,8 +108,8 @@ func TestWrapSandboxKeepsTheCommandAndItsArguments(t *testing.T) {
 
 // lastIndex is the position of the final element equal to value, or -1.
 func lastIndex(args []string, value string) int {
-	for i := len(args) - 1; i >= 0; i-- {
-		if args[i] == value {
+	for i, arg := range slices.Backward(args) {
+		if arg == value {
 			return i
 		}
 	}

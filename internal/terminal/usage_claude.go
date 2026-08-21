@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"slices"
 	"strings"
 )
 
@@ -98,8 +99,8 @@ func readTail(path string, max int64) ([]byte, bool) {
 // like any malformed line.
 func parseContextUsage(tail []byte) (contextUsage, bool) {
 	lines := bytes.Split(tail, []byte("\n"))
-	for i := len(lines) - 1; i >= 0; i-- {
-		line := bytes.TrimSpace(lines[i])
+	for _, line := range slices.Backward(lines) {
+		line := bytes.TrimSpace(line)
 		if len(line) == 0 {
 			continue
 		}

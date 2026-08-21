@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -200,8 +201,8 @@ func clone(ctx context.Context, url, dir string) error {
 // naming the failure ("repository not found", "could not read Username").
 func gitError(out []byte, err error) string {
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	for i := len(lines) - 1; i >= 0; i-- {
-		line := strings.TrimSpace(lines[i])
+	for _, line := range slices.Backward(lines) {
+		line := strings.TrimSpace(line)
 		if line != "" {
 			return line
 		}

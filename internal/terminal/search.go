@@ -92,7 +92,7 @@ func (s *Service) SearchTranscripts(ids []string, query string) []TranscriptMatc
 func searchTranscript(tail []byte, q string) (TranscriptMatch, bool) {
 	needle := []byte(q)
 	var match TranscriptMatch
-	for _, line := range bytes.Split(tail, []byte("\n")) {
+	for line := range bytes.SplitSeq(tail, []byte("\n")) {
 		if !bytes.Contains(bytes.ToLower(line), needle) {
 			continue
 		}
@@ -172,10 +172,7 @@ func snippetAround(text, q string) (string, bool) {
 	if len(runes) <= snippetWidth {
 		return flat, true
 	}
-	start := at - snippetWidth/3
-	if start < 0 {
-		start = 0
-	}
+	start := max(at-snippetWidth/3, 0)
 	end := start + snippetWidth
 	if end > len(runes) {
 		end = len(runes)

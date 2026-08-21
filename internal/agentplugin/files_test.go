@@ -841,7 +841,7 @@ func TestTheMCPRegistrationIsInsideLichsBlock(t *testing.T) {
 
 // lineWith returns the block's first line containing needle.
 func lineWith(block, needle string) (string, bool) {
-	for _, line := range strings.Split(block, "\n") {
+	for line := range strings.SplitSeq(block, "\n") {
 		if strings.Contains(line, needle) {
 			return strings.TrimSpace(line), true
 		}

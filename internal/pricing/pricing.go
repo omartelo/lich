@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -221,9 +222,7 @@ func (t *Table) releaseRefresh() {
 func (t *Table) merge(rates map[string]Rate) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	for model, rate := range rates {
-		t.rates[model] = rate
-	}
+	maps.Copy(t.rates, rates)
 }
 
 // fetch downloads the remote table and reduces it to lich's shape — every entry

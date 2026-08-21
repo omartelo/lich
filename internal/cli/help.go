@@ -115,7 +115,7 @@ func buildUsage() string {
 	b.WriteString(helpHeader)
 	for _, cmd := range commands {
 		b.WriteString("  " + cmd.spelling() + "\n")
-		for _, line := range strings.Split(cmd.about, "\n") {
+		for line := range strings.SplitSeq(cmd.about, "\n") {
 			b.WriteString("      " + line + "\n")
 		}
 		b.WriteString("\n")

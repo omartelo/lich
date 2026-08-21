@@ -2,6 +2,7 @@ package relay
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -182,9 +183,9 @@ func (f *fakeEvents) snapshot() []RelayEvent {
 // would be showing.
 func (f *fakeEvents) markOf(id string) (RelayEvent, bool) {
 	events := f.snapshot()
-	for i := len(events) - 1; i >= 0; i-- {
-		if events[i].ID == id {
-			return events[i], true
+	for _, event := range slices.Backward(events) {
+		if event.ID == id {
+			return event, true
 		}
 	}
 	return RelayEvent{}, false
@@ -365,11 +366,9 @@ func TestSendDeliversAndReplyAnswers(t *testing.T) {
 		err error
 		wg  sync.WaitGroup
 	)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		got, err = svc.Send("s1", "docs", "", "run the tests", 30)
-	}()
+	})
 
 	ticketID := waitForTicket(svc)
 	if err := svc.Reply(ticketID, "3 failures in foo_test"); err != nil {

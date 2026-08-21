@@ -28,7 +28,7 @@ func (s *Service) List() ([]string, error) {
 // output.
 func parseFamilies(out string) []string {
 	seen := make(map[string]struct{})
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		// A line may hold comma-separated localized aliases; the first is the
 		// canonical family name.
 		name := strings.TrimSpace(strings.SplitN(line, ",", 2)[0])
@@ -47,7 +47,7 @@ func parseFamilies(out string) []string {
 func parseRegistryFamilies(names []string) []string {
 	seen := make(map[string]struct{})
 	for _, name := range names {
-		for _, part := range strings.Split(stripFontFormat(name), "&") {
+		for part := range strings.SplitSeq(stripFontFormat(name), "&") {
 			family := trimFontFaces(strings.TrimSpace(part))
 			if family == "" {
 				continue
