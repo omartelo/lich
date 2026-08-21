@@ -23,6 +23,14 @@ Chromium, Edge or Brave are looked up as `.app` bundles under `/Applications`
 Edge or Brave are found via their conventional install paths (Edge ships with
 Windows) and the folder picker is native.
 
+**git and the GitHub CLI** — every version control surface shells out to
+`git`, and lich does not bundle it: without `git` on your `PATH`, branches,
+diffs and worktrees stay empty, though sessions still run. Pull requests,
+checks and PR checkouts go through [`gh`](https://cli.github.com) as well,
+which is optional — install it only if you use them. lich resolves both when it
+launches, so one installed while lich is open is picked up on the next start,
+and `lich doctor` reports which it found.
+
 **Agent versions** — lich names each Claude Code session with `--name` at spawn,
 a flag added in Claude Code 2.1.76. An older build exits with
 `error: unknown option '--name'` before the session exists, which reads as lich

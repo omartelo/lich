@@ -24,6 +24,7 @@ import { Toaster } from "@/components/ui/sonner"
 import { AgentPluginGate } from "@/components/AgentPluginGate"
 import { AppUpdateGate } from "@/components/AppUpdateGate"
 import { PatchNotesGate } from "@/components/PatchNotesGate"
+import { GitMissingGate } from "@/components/GitMissingGate"
 import { ProviderSetupGate } from "@/components/ProviderSetupGate"
 import { UncleanExitGate } from "@/components/UncleanExitGate"
 import { CommandPalette } from "@/components/CommandPalette"
@@ -176,6 +177,10 @@ function App() {
       {/* A toast, so it shares no surface with the gates around it: the launch
           after a crash can be the launch that also has a release to announce. */}
       <UncleanExitGate />
+      {/* Ahead of the provider gate so that on a machine missing both, choosing
+          a harness is still the dialog on top: a session with no agent is a
+          worse first launch than one with no branch. */}
+      <GitMissingGate />
       {/* Last, so that on the one launch where it can coincide with another gate
           it is the dialog on top: choosing a provider comes before reading about
           a release. */}

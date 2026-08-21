@@ -5,6 +5,9 @@ import { commitIdentityRow } from "@/lib/commit-identity"
 import { accountLabel, accountSelectItems, upgradeAccount } from "@/lib/gh-account"
 import { GH_ACCOUNT_KEY } from "@/lib/project-settings"
 import { errorText } from "@/lib/utils"
+import { failed } from "@/lib/binary-layers"
+import { useBinaryCheck } from "@/lib/use-binary-check"
+import { GIT } from "@/lib/vcs-tools"
 import { invalidatePullRequests } from "@/lib/pulls/pull-request-lookup"
 import { useProjects } from "@/providers/projects"
 import {
@@ -30,9 +33,12 @@ const ACTIVE_ACCOUNT_LABEL = "gh's active account"
 export function VersionControlSettings({ projectId }: { projectId?: string }) {
   const { projects } = useProjects()
   const project = projects.find((p) => p.id === projectId)
-  const [accounts, setAccounts] = useState<string[]>([])
+  // Null until gh answers: an empty list is "gh is signed in to nothing", which
+  // is a thing to say — and saying it before the first read would be a lie.
+  const [accounts, setAccounts] = useState<string[] | null>(null)
   const [account, setAccount] = useState("")
   const [identity, setIdentity] = useState<CommitIdentity | null>(null)
+  const noGit = failed(useBinaryCheck(GIT.bin))
   const [error, setError] = useState("")
 
   // Read once per project: git's config changes outside lich, but so rarely
@@ -76,7 +82,7 @@ export function VersionControlSettings({ projectId }: { projectId?: string }) {
     if (!projectId) {
       return
     }
-    const upgraded = upgradeAccount(account, accounts)
+    const upgraded = upgradeAccount(account, accounts ?? [])
     if (upgraded) {
       setAccount(upgraded)
       void Store.SetSetting(GH_ACCOUNT_KEY, projectId, upgraded)
@@ -93,10 +99,12 @@ export function VersionControlSettings({ projectId }: { projectId?: string }) {
 
   // The configured account survives a gh that no longer lists it, so a stale
   // value is visible (and changeable) instead of silently reading as default.
-  const options = Array.from(new Set([...accounts, ...(account ? [account] : [])]))
+  const options = Array.from(new Set([...(accounts ?? []), ...(account ? [account] : [])]))
   // The account governs what lich asks gh; this says who the commits are
-  // authored as. Both facts, no comparison — see commitIdentityRow.
-  const row = identity && commitIdentityRow(identity)
+  // authored as. Both facts, no comparison — see commitIdentityRow. Withheld
+  // without git: the empty answer git could not give reads as "this checkout
+  // has no identity", which is a claim about the checkout nobody measured.
+  const row = !noGit && identity && commitIdentityRow(identity)
 
   return (
     <SettingBlock
@@ -127,9 +135,15 @@ export function VersionControlSettings({ projectId }: { projectId?: string }) {
           </SelectGroup>
         </SelectContent>
       </Select>
+      {/* gh's own failure already names its cause and its fix — not signed in,
+          not installed, a host that would not answer — so the sentence that used
+          to be appended here told half of them to run the wrong command. */}
       {error && (
-        <p className="mt-2 text-xs text-destructive">
-          Could not list GitHub accounts: {error}. Run `gh auth login` to authenticate.
+        <p className="mt-2 text-xs text-destructive">Could not list GitHub accounts: {error}</p>
+      )}
+      {!error && accounts?.length === 0 && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          gh is signed in to no account. Run `gh auth login` in a terminal.
         </p>
       )}
       {row && (

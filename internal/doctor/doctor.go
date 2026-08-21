@@ -14,6 +14,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -69,6 +70,7 @@ type Doctor struct {
 	browser  func() (string, error)
 	detect   func() []providers.Detected
 	store    func() (io.Closer, error)
+	lookPath func(string) (string, error)
 }
 
 // New returns a Doctor for this machine. configDir is the OS config dir, and
@@ -82,6 +84,7 @@ func New(configDir string, getenv func(string) string) *Doctor {
 		browser:   Browser,
 		detect:    Providers,
 		store:     func() (io.Closer, error) { return store.New() },
+		lookPath:  exec.LookPath,
 	}
 }
 
@@ -102,6 +105,8 @@ func (d *Doctor) Run() []Check {
 		{"store", func() (Status, string) { return d.checkStore(info, running) }},
 		{"browser", d.checkBrowser},
 		{"providers", d.checkProviders},
+		{"git", func() (Status, string) { return d.checkTool("git", gitWithout) }},
+		{"gh", func() (Status, string) { return d.checkTool("gh", ghWithout) }},
 	}
 
 	checks := make([]Check, 0, len(steps))
@@ -204,6 +209,25 @@ func (d *Doctor) checkProviders() (Status, string) {
 	}
 	return OK, fmt.Sprintf("%d of %d on PATH: %s",
 		len(installed), len(found), strings.Join(installed, ", "))
+}
+
+// What a machine loses with each version control tool missing. The same two
+// sentences answer on screen (frontend/src/lib/vcs-tools.ts) — a diagnosis that
+// disagrees with the app about what is broken is worse than no diagnosis.
+const (
+	gitWithout = "branches, diffs and worktrees stay empty"
+	ghWithout  = "pull requests, checks and PR checkouts are unavailable"
+)
+
+// checkTool resolves one of the command-line tools lich shells out to. Never a
+// Fail: lich opens and every session spawns without either of them — what goes
+// missing is a surface, and `without` is the one that goes.
+func (d *Doctor) checkTool(name, without string) (Status, string) {
+	path, err := d.lookPath(name)
+	if err != nil {
+		return Warn, fmt.Sprintf("not on PATH — %s", without)
+	}
+	return OK, path
 }
 
 // Failed reports whether any check would stop a launch, which is what the exit

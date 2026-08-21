@@ -48,6 +48,12 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   listing was cut. It also has no git status to poll, so the tree there refreshes
   only when the panel is reopened — a file the agent just wrote shows up on the
   next visit, not while you watch.
+- **A missing tool is answered from the launch's `PATH`** (`frontend/src/lib/vcs-tools.ts`): the git and gh
+  checks resolve through the `PATH` lich pinned at startup (`terminal.PinPath`), so installing either one
+  while lich is open leaves every surface still calling it missing until a restart. Each of them says so; a
+  live re-resolve would mean re-running the login shell under the running process. The check is
+  `exec.LookPath` — it proves the binary exists and runs, never that it works, so a git that fails on the
+  repository itself keeps failing the old silent way.
 - **git status is polled** — one shared poller per repository path (`frontend/src/lib/git/git-status-store.ts`); the
   lich plugin's `session-touched` hook nudges an immediate refresh.
 - **lich fetches on its own** (`internal/project/basestatus.go`) — the only git write lich makes outside the

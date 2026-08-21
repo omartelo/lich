@@ -24,15 +24,21 @@ contents:
   - src: "./build/linux/lich.desktop"
     dst: "/usr/share/applications/lich.desktop"
 
+# gh is deliberately absent: it is optional (pull requests only) and packaged
+# under a different name on each distribution, so a recommends here would name
+# the wrong package as often as the right one. INSTALL.md and the app both
+# point at cli.github.com instead.
 recommends:
   - chromium
   - zenity
+  - git
 
 overrides:
   deb:
     recommends:
       - chromium | chromium-browser | google-chrome-stable
       - zenity
+      - git
 
 scripts:
   postinstall: "./build/linux/nfpm/scripts/postinstall.sh"

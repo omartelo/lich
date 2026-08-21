@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **lich says when git or the GitHub CLI is missing, instead of going quiet.**
+  Every branch, diff and worktree on screen is read through `git`, and pull
+  requests, checks and PR checkouts through `gh` — but a machine without either
+  was told nothing: the readers swallow their failures by design, so the sidebar
+  simply showed no branch and the Pull Requests screen no pull requests, with
+  nothing anywhere saying why. A launch without `git` now opens with a dialog
+  that says what stays empty and offers the download page; the Pull Requests
+  screen without `gh` says the same in place of the list. Settings › Version
+  Control opens on both tools, each with the path it resolved to — which
+  answers the question a machine with two `git` installs actually has — or an
+  install button. All three warn that the `PATH` is read at launch, so a tool
+  installed with lich open needs a restart. `lich doctor` reports both as well,
+  as warnings: lich starts and every session spawns without them.
+
 ### Fixed
 
 - **The Files tab browses a folder that is not a git repository.** The tree was
@@ -19,6 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Inside a repository nothing changes — git still answers, ignored files stay
   invisible, and a broken repository still reports its error rather than
   flooding the tree.
+- **The Version Control screen no longer answers a missing `gh` with `gh auth
+  login`.** Every failure to list your GitHub accounts had that sentence
+  appended to it, including the one where `gh` is not installed at all — which
+  sent you to authenticate a command that does not exist. The advice gh's own
+  failure carries is now the only advice shown, and a `gh` that is installed but
+  signed in to nothing says so before it becomes an error.
 - **A provider installed by Homebrew is found again when lich is opened from
   its icon.** lich already recovers the environment your shell's rc files
   export, but a bare command name is resolved against the process's own `PATH`,

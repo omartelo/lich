@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -30,6 +31,7 @@ func healthy(t *testing.T) *Doctor {
 		}
 	}
 	d.store = func() (io.Closer, error) { return io.NopCloser(nil), nil }
+	d.lookPath = func(name string) (string, error) { return "/usr/bin/" + name, nil }
 	return d
 }
 
@@ -48,7 +50,7 @@ func TestAHealthyMachineWalksTheWholeBoot(t *testing.T) {
 	for _, c := range checks {
 		names = append(names, c.Name)
 	}
-	want := []string{"home", "log", "listener", "store", "browser", "providers"}
+	want := []string{"home", "log", "listener", "store", "browser", "providers", "git", "gh"}
 	if strings.Join(names, ",") != strings.Join(want, ",") {
 		t.Errorf("checks ran as %v, want the boot order %v", names, want)
 	}
@@ -59,6 +61,51 @@ func TestAHealthyMachineWalksTheWholeBoot(t *testing.T) {
 	}
 	if Failed(checks) {
 		t.Error("a healthy machine reports a launch-stopping failure")
+	}
+}
+
+func TestAMissingVersionControlToolWarnsWithoutStoppingTheLaunch(t *testing.T) {
+	for _, tc := range []struct{ name, without string }{
+		{"git", "worktrees"},
+		{"gh", "pull requests"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := healthy(t)
+			d.lookPath = func(name string) (string, error) {
+				if name == tc.name {
+					return "", exec.ErrNotFound
+				}
+				return "/usr/bin/" + name, nil
+			}
+
+			checks := d.Run()
+			got := statuses(checks)[tc.name]
+
+			if got.Status != Warn {
+				t.Errorf("%s = %s (%s), want warn — lich opens without it", tc.name, got.Status, got.Detail)
+			}
+			if !strings.Contains(got.Detail, tc.without) {
+				t.Errorf("detail does not say what stops working: %q", got.Detail)
+			}
+			if Failed(checks) {
+				t.Errorf("a missing %s is reported as launch-stopping", tc.name)
+			}
+		})
+	}
+}
+
+func TestAnInstalledToolReportsThePathItResolvedTo(t *testing.T) {
+	d := healthy(t)
+	d.lookPath = func(string) (string, error) { return "/opt/homebrew/bin/git", nil }
+
+	got := statuses(d.Run())["git"]
+
+	if got.Status != OK {
+		t.Errorf("git = %s (%s), want ok", got.Status, got.Detail)
+	}
+	// Which git, not whether: two of them on PATH is the whole reason to look.
+	if got.Detail != "/opt/homebrew/bin/git" {
+		t.Errorf("detail = %q, want the resolved path", got.Detail)
 	}
 }
 

@@ -8,6 +8,7 @@ import { ProvidersSettings } from "./ProvidersSettings"
 import { ProjectProvidersSettings } from "./ProjectProvidersSettings"
 import { ProviderBinSettings } from "./ProviderBinSettings"
 import { VersionControlSettings } from "./VersionControlSettings"
+import { VcsToolsSetting } from "./VcsToolsSetting"
 import { UpdatesSettings } from "./UpdatesSettings"
 import { HelpSettings } from "./HelpSettings"
 import { SearchInput } from "@/components/common/SearchInput"
@@ -59,7 +60,15 @@ const BASE_SECTIONS: Section[] = [
     id: "version-control",
     label: "Version Control",
     group: "project",
-    render: (id) => <VersionControlSettings projectId={id} />,
+    // The tools are the machine's, not the project's, so they render above the
+    // project block and outlive its "open a project first" state — a machine
+    // with no git has to be able to read that with nothing open.
+    render: (id) => (
+      <>
+        <VcsToolsSetting />
+        <VersionControlSettings projectId={id} />
+      </>
+    ),
   },
 ]
 
