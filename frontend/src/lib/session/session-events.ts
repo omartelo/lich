@@ -20,8 +20,11 @@ export type SessionEventSource = (handler: (data: unknown) => void) => () => voi
 // id can only reach a subscriber that exists when it is emitted.
 export const STATUS_EVENT = "session-status"
 
-// Global event the backend emits when it auto-applies a session's ai-title as
-// its label (see terminal.titleEventName). Payload: { id, label }.
+// Global event the backend emits when a session's label changed outside the
+// window: an auto-applied ai-title (see terminal.titleEventName), or a rename
+// from the command line or an agent's tools (spawn.RenamedEventName, which is
+// this same name — the window's answer to both is to relabel that card).
+// Payload: { id, label }.
 export const TITLE_EVENT = "session-title"
 
 // Global event the backend emits when a session likely changed files on disk

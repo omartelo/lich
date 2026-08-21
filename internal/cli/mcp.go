@@ -455,6 +455,31 @@ var mcpTools = []mcpTool{
 		},
 	},
 	{
+		Name: "rename_session",
+		Description: "Rename a lich session: the name on its card, which is also the name it is " +
+			"addressed by. Omit the session to rename your own — the way a card comes to say " +
+			"what the work in it is, rather than the number it was born with. A name another " +
+			"session in that project already holds is refused, because two sessions under one " +
+			"name is the one thing send_to_session cannot resolve. The name becomes the user's: " +
+			"the provider's own auto-title never overwrites it again.",
+		Schema: schema(map[string]any{
+			"label": property("string", "The new name for the card."),
+			"session": property("string",
+				"Session to rename, by the label on its card or the name it answers to. "+
+					"Omit to rename the session you are running in."),
+			"project": property("string",
+				"Project to narrow to, when the same label exists in more than one."),
+		}, "label"),
+		Run: func(c *client, args mcpArgs) (string, error) {
+			var renamed spawn.Renamed
+			call := []any{c.sessionID(), args.text("session"), args.text("project"), args.text("label")}
+			if err := c.call("spawn.Rename", call, shortCall, &renamed); err != nil {
+				return "", err
+			}
+			return renamedText(renamed), nil
+		},
+	},
+	{
 		Name: "list_worktrees",
 		Description: "The git worktrees of a project: what each is called, whether it has " +
 			"uncommitted work, and which sessions are open in it. Use it before opening a " +

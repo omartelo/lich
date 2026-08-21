@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Sessions can be renamed from the command line and from an agent's own
+  tools.** Renaming a card was a thing only the window could do; `lich rename
+  "the login bug"` now renames the session the command runs in, `lich rename
+  auth-fix "the login bug"` renames another one, and the `rename_session` tool is
+  the same for an agent — which is what lets a worker's card say what the work in
+  it is rather than the number it was born with. The name becomes the user's
+  either way: the provider's auto-title never overwrites it again. A name another
+  session in that project already holds is refused, because two sessions under
+  one label is the one thing `lich send` cannot resolve.
+
 ### Changed
 
 - **Building lich from source now needs Go 1.27.0.** The pin stays exact so that

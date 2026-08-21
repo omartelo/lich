@@ -221,6 +221,7 @@ func TestMCPListsEveryTool(t *testing.T) {
 		"list_sessions":    {},
 		"open_session":     {},
 		"close_session":    {"session"},
+		"rename_session":   {"label"},
 		"list_worktrees":   {},
 		"send_to_session":  {"session", "prompt"},
 		"wait_for_answer":  {},
@@ -685,6 +686,52 @@ func TestMCPCloseSessionPassesTheWorktreeAnswer(t *testing.T) {
 	}
 	call := f.only(t)
 	want := []any{"s1", "auth-fix", "", "remove", true}
+	if len(call.args) != len(want) {
+		t.Fatalf("args = %v, want %v", call.args, want)
+	}
+	for i := range want {
+		if call.args[i] != want[i] {
+			t.Errorf("argument %d = %v, want %v", i, call.args[i], want[i])
+		}
+	}
+}
+
+func TestMCPRenameSessionPassesTheTargetAndTheName(t *testing.T) {
+	f := newFakeLich(t, `{"id":"9f8e","project":"lich","label":"the login bug","previous":"auth-fix"}`)
+
+	replies := speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
+		{"name":"rename_session","arguments":{"session":"auth-fix","label":"the login bug"}}}`)
+
+	text, failed := textOf(t, replies[0])
+	if failed {
+		t.Fatalf("tool reported a failure: %s", text)
+	}
+	if !strings.Contains(text, `"auth-fix" to "the login bug"`) {
+		t.Errorf("text = %q, want both ends of the change", text)
+	}
+	call := f.only(t)
+	want := []any{"s1", "auth-fix", "", "the login bug"}
+	if len(call.args) != len(want) {
+		t.Fatalf("args = %v, want %v", call.args, want)
+	}
+	for i := range want {
+		if call.args[i] != want[i] {
+			t.Errorf("argument %d = %v, want %v", i, call.args[i], want[i])
+		}
+	}
+}
+
+// Omitting the session is how an agent renames its own card, and the empty
+// target is what the app reads as "the caller's own" — so it must be sent, not
+// dropped into the label's slot.
+func TestMCPRenameSessionWithoutATargetRenamesItsOwn(t *testing.T) {
+	f := newFakeLich(t, `{"id":"s1","project":"lich","label":"planner","previous":"Session 1"}`)
+
+	speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
+		{"name":"rename_session","arguments":{"label":"planner"}}}`)
+
+	call := f.only(t)
+	want := []any{"s1", "", "", "planner"}
 	if len(call.args) != len(want) {
 		t.Fatalf("args = %v, want %v", call.args, want)
 	}

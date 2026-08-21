@@ -60,9 +60,14 @@ func (s *Service) Close(fromID, target, projectName, worktree string, force bool
 	if err != nil {
 		return Closed{}, fmt.Errorf("read the workspace: %w", err)
 	}
-	found, err := findSession(projects, fromID, target, projectName)
+	found, err := findSession(projects, target, projectName)
 	if err != nil {
 		return Closed{}, err
+	}
+	if found.session.ID == fromID {
+		return Closed{}, fmt.Errorf(
+			"%q is this session — closing it would take down the agent asking for it", target,
+		)
 	}
 
 	closed := Closed{
@@ -173,7 +178,10 @@ type located struct {
 //
 // Unlike the relay it looks past the live ones: a card whose terminal was never
 // opened is still a session, and closing it is the one thing you can do with it.
-func findSession(projects []store.Project, fromID, target, projectName string) (located, error) {
+//
+// Whether the caller's own session is a legal answer is the caller's rule, not
+// this one's: a close refuses it, a rename is the main thing it is asked for.
+func findSession(projects []store.Project, target, projectName string) (located, error) {
 	target = strings.TrimSpace(target)
 	if target == "" {
 		return located{}, fmt.Errorf("no session given to close")
@@ -204,12 +212,6 @@ func findSession(projects []store.Project, fromID, target, projectName string) (
 
 	switch len(matches) {
 	case 1:
-		if matches[0].session.ID == fromID {
-			return located{}, fmt.Errorf(
-				"%q is this session — closing it would take down the agent asking for it",
-				target,
-			)
-		}
 		return matches[0], nil
 	case 0:
 		where := ""

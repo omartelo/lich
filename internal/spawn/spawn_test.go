@@ -35,6 +35,10 @@ type fakeSessions struct {
 	deleted []closedRow
 	parked  []closedRow
 	purged  []string
+	// renamed records the label each rename wrote, keyed by session id, and
+	// renameErr is the write refusing.
+	renamed   map[string]string
+	renameErr error
 }
 
 // closedRow is one session the store was asked to take out of the workspace.
@@ -51,6 +55,17 @@ func (f *fakeSessions) DeleteSession(projectID, sessionID, activeID string) erro
 
 func (f *fakeSessions) CloseSession(projectID, sessionID, activeID string) error {
 	f.parked = append(f.parked, closedRow{projectID, sessionID, activeID})
+	return nil
+}
+
+func (f *fakeSessions) RenameSession(sessionID, label string) error {
+	if f.renameErr != nil {
+		return f.renameErr
+	}
+	if f.renamed == nil {
+		f.renamed = map[string]string{}
+	}
+	f.renamed[sessionID] = label
 	return nil
 }
 

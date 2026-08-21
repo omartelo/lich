@@ -65,6 +65,13 @@ var commands = []command{
 			"say whether the checkout stays; removing a dirty one needs --force.",
 	},
 	{
+		name: "rename",
+		args: "[--project <name>] [--json] [<session>] <label>",
+		about: "Rename a session's card. With <session> it renames that one, with only a\n" +
+			"name it renames the session the command runs in. The name becomes the\n" +
+			"user's: the provider's auto-title never overwrites it again.",
+	},
+	{
 		name: "worktrees",
 		args: "[--project <name>] [--json]",
 		about: "List a project's git worktrees: what is uncommitted in each and which\n" +

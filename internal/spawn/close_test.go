@@ -84,6 +84,19 @@ func TestCloseRefusesToDecideAWorktreesFateOnItsOwn(t *testing.T) {
 	}
 }
 
+// Closing the session the request came from would take down the agent asking
+// for it, halfway through the call.
+func TestCloseRefusesTheSessionItWasAskedFrom(t *testing.T) {
+	svc, sessions, _, term, _ := closer(t)
+
+	if _, err := svc.Close("s2", "shared-a", "", "", false); err == nil {
+		t.Fatal("closed the session the caller is running in")
+	}
+	if len(sessions.deleted) != 0 || len(term.closed) != 0 {
+		t.Error("wrote something for a close that was refused")
+	}
+}
+
 func TestCloseKeepingAWorktreeParksTheSession(t *testing.T) {
 	svc, sessions, worktrees, _, _ := closer(t)
 

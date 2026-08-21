@@ -431,6 +431,11 @@ func TestWrongArgumentCountsFailWithUsage(t *testing.T) {
 		{"sessions", "docs"},
 		{"open", "feature-x"},
 		{"worktrees", "lich"},
+		// rename reads one argument or two, so three is a name with a space in
+		// it that was never quoted — and the last word would silently become
+		// the whole name.
+		{"rename"},
+		{"rename", "docs", "the login", "bug"},
 	}
 	for _, args := range tests {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {

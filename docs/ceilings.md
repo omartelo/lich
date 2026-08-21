@@ -103,6 +103,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   which is why the install asks its version first. Crush's block and omp's `mcp.json` register lich's MCP server by
   the absolute path of the binary that installed it, and omp's is a JSON document lich rewrites rather than appends
   to: every key survives, the user's formatting does not.
+- **A new MCP tool reaches opencode a release later than everyone else** (`internal/cli/mcp.go`, `mcpTools`; the
+  registration table in `docs/cli.md`): every other harness is handed lich's own server, so a tool added here is in
+  that session's list on the next spawn. opencode cannot register an MCP server from a plugin, so its plugin
+  defines each tool itself in the companion repo (`omartelo/lich-plugin`, `opencode/lich.js`) — which means a tool
+  arrives there only once that repo cuts a release and the user reinstalls the plugin, and until they do it is
+  missing from that session's list while it is in every other. `lich rename` works there like anywhere else; it is
+  discovery that lags, which is the whole reason the tools exist.
 - **Only two of the four harnesses that report a tool spell an MCP one splittably** (`frontend/src/lib/session/tool-label.ts`,
   table in `docs/hooks/session-state.md`): Claude Code and Codex send `mcp__<server>__<tool>`, which the card draws
   as `<server> · <tool>`. omp's `mcp__<server>_<tool>` has one underscore doing two jobs — `mcp__lich_list_sessions`
