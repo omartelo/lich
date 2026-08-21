@@ -5,11 +5,12 @@ import {
   isRecordingTarget,
   loadHotkeys,
   saveHotkeys,
-  type Combo,
+  type HotkeyBinding,
   type HotkeyId,
   type Hotkeys,
 } from "@/lib/hotkeys"
 import { zoomIntent } from "@/lib/terminal/zoom-keys"
+import { isMac } from "@/lib/platform"
 import {
   parseBoolPref,
   parseNumberPref,
@@ -171,9 +172,9 @@ interface SettingsValue {
   setTerminalTheme: (theme: TerminalTheme) => void
   /** Terminal theme resolved to a concrete scheme (match already mapped). */
   resolvedTerminalTheme: ResolvedTheme
-  /** Configurable global keyboard shortcuts, keyed by action. */
+  /** Configurable keyboard shortcuts and terminal translations, keyed by action. */
   hotkeys: Hotkeys
-  setHotkey: (id: HotkeyId, combo: Combo) => void
+  setHotkey: (id: HotkeyId, combo: HotkeyBinding) => void
   resetHotkey: (id: HotkeyId) => void
   /** Whether the footer shows the active session's context-window usage. */
   showContextUsage: boolean
@@ -401,7 +402,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     [theme, terminalTheme, persistTheme, persistTerminalTheme],
   )
 
-  const setHotkey = useCallback((id: HotkeyId, combo: Combo) => {
+  const setHotkey = useCallback((id: HotkeyId, combo: HotkeyBinding) => {
     setHotkeys((prev) => {
       const next = { ...prev, [id]: combo }
       saveHotkeys(next)
@@ -483,18 +484,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     writePref(ZOOM_STORAGE_KEY, zoom)
   }, [zoom])
 
-  // Zoom via keyboard chords or Ctrl/Cmd + mouse wheel. Both listen on the
-  // capture phase so they win even inside a terminal, which otherwise swallows
-  // modifier chords and wheel events; propagation is stopped so the PTY never
-  // sees them. Both also preventDefault, which is what keeps Chromium's own
-  // zoom accelerator from running on top of this one — miss that on any single
-  // chord and the app and the browser each apply a zoom (see zoom-keys.ts).
-  // The wheel listener is non-passive to allow preventDefault, and bails on
-  // non-Ctrl scrolls so normal scrolling still works.
+  // Keyboard zoom is configurable; Ctrl/Cmd+wheel remains a gesture rather
+  // than a key binding. The browser accelerator guard independently prevents
+  // Chromium zoom, so a disabled or rebound old chord reaches the TUI without
+  // changing either lich's zoom or Chromium's.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (isRecordingTarget(event)) return
-      const intent = zoomIntent(event)
+      const intent = zoomIntent(event, hotkeys, isMac)
       if (!intent) return
       event.preventDefault()
       event.stopPropagation()
@@ -516,7 +513,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("keydown", onKey, true)
       window.removeEventListener("wheel", onWheel, true)
     }
-  }, [zoomBy, setZoom])
+  }, [hotkeys, zoomBy, setZoom])
 
   const resolvedTerminalTheme = resolveTerminalTheme(terminalTheme, resolvedTheme, themes)
 

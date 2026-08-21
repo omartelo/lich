@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Every keyboard action lich owns is now configurable.** Settings › Hotkeys
+  includes terminal search, zoom in/out/reset and the terminal translations for
+  clipboard image attach, newline insertion and previous-word erase beside the
+  existing app actions. Any row can be rebound, reset or left unassigned;
+  conflicts ignore empty rows, and live terminals pick up changes without
+  respawning their PTYs. An unassigned shortcut no longer invokes lich, while
+  Chromium's dangerous close, navigation, zoom and Find accelerators remain
+  blocked independently without stopping the chord from propagating to a TUI.
 - **Building lich from source now needs Go 1.27.0.** The pin stays exact so that
   every release binary carries the current toolchain's own security fixes, and
   the module is what CI reads its Go version from. `GOTOOLCHAIN=auto` — the

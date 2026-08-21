@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react"
-import { isRecordingTarget, matchesCombo, type Combo } from "@/lib/hotkeys"
+import { isRecordingTarget, matchesCombo, type HotkeyBinding } from "@/lib/hotkeys"
 
 // One place for what every global shortcut has to get right: the listener sits
 // in the window capture phase so the chord is seen before the terminal that has
@@ -11,7 +11,7 @@ import { isRecordingTarget, matchesCombo, type Combo } from "@/lib/hotkeys"
 // The handler may decline by returning false, for the shortcuts whose action is
 // unavailable right now (no project open): the chord then behaves as if lich had
 // never bound it and falls through to whatever is underneath.
-export function useHotkey(combo: Combo, handler: () => void | false): void {
+export function useHotkey(combo: HotkeyBinding, handler: () => void | false): void {
   // The handler is read through a ref so a caller may pass an inline closure
   // without re-subscribing the listener on every render.
   const latest = useRef(handler)

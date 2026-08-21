@@ -1,6 +1,6 @@
 import { useState } from "react"
-import { RotateCcw, TriangleAlert } from "lucide-react"
-import { useSettings } from "@/providers/settings"
+import { Ban, RotateCcw, TriangleAlert } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import {
   comboFromEvent,
   DEFAULT_HOTKEYS,
@@ -13,14 +13,10 @@ import {
   type HotkeyAction,
   type HotkeyId,
 } from "@/lib/hotkeys"
-import { PASSTHROUGH_TITLE, passthroughRows, TERMINAL_TITLE, terminalRows } from "@/lib/shortcuts"
-import { Button } from "@/components/ui/button"
-import { ShortcutLine } from "@/components/common/ShortcutLine"
-import { isMac, isWindows } from "@/lib/platform"
+import { isMac } from "@/lib/platform"
 import { cn } from "@/lib/utils"
+import { useSettings } from "@/providers/settings"
 
-// A dense list rather than one setting block per action: the bindings read as a
-// table of rows, and a block each would be a column of near-empty cards.
 function Group({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <section className="pt-8 first:pt-0">
@@ -32,14 +28,11 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-// HotkeyRow shows the current combo as a capture button: click to record, press
-// the new combo to save, Escape to cancel. Key events are swallowed while
-// recording so they do not also trigger the very shortcut being rebound.
 function HotkeyRow({ action, conflicts }: { action: HotkeyAction; conflicts?: HotkeyId[] }) {
   const { hotkeys, setHotkey, resetHotkey } = useSettings()
   const [recording, setRecording] = useState(false)
-  const combo = hotkeys[action.id]
-  const isDefault = sameCombo(combo, DEFAULT_HOTKEYS[action.id])
+  const binding = hotkeys[action.id]
+  const isDefault = sameCombo(binding, DEFAULT_HOTKEYS[action.id])
 
   const onKeyDown = (event: React.KeyboardEvent) => {
     if (!recording) return
@@ -49,20 +42,17 @@ function HotkeyRow({ action, conflicts }: { action: HotkeyAction; conflicts?: Ho
       setRecording(false)
       return
     }
-    const next = comboFromEvent(event.nativeEvent)
-    if (next) {
-      setHotkey(action.id, next)
-      setRecording(false)
-    }
+    const next = comboFromEvent(event.nativeEvent, isMac, action.allowUnmodified)
+    if (!next) return
+    setHotkey(action.id, next)
+    setRecording(false)
   }
 
   return (
-    <div className="flex items-center gap-4 rounded-md px-2 py-1.5 hover:bg-accent/50">
+    <div className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent/50">
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-sm text-foreground">{action.label}</span>
         {conflicts && (
-          // Amber because it is a state, not a failure: the binding was stored,
-          // and whichever listener runs first is the one that will answer to it.
           <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-amber-500">
             <TriangleAlert className="size-3 shrink-0" />
             Also bound to {conflicts.map(hotkeyLabel).join(", ")}
@@ -81,10 +71,20 @@ function HotkeyRow({ action, conflicts }: { action: HotkeyAction; conflicts?: Ho
             ? "border-ring text-muted-foreground"
             : "border-border text-foreground hover:bg-accent",
           conflicts && !recording && "border-amber-500/60",
+          !binding && !recording && "text-muted-foreground",
         )}
       >
-        {recording ? "Press keys…" : formatCombo(combo, isMac)}
+        {recording ? "Press keys…" : formatCombo(binding, isMac)}
       </button>
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={`Disable ${action.label} shortcut`}
+        disabled={!binding}
+        onClick={() => setHotkey(action.id, null)}
+      >
+        <Ban />
+      </Button>
       <Button
         variant="ghost"
         size="icon"
@@ -100,10 +100,15 @@ function HotkeyRow({ action, conflicts }: { action: HotkeyAction; conflicts?: Ho
 
 export function HotkeysSettings() {
   const { hotkeys } = useSettings()
-  const conflicts = hotkeyConflicts(hotkeys)
+  const conflicts = hotkeyConflicts(hotkeys, isMac)
 
   return (
     <>
+      <p className="mb-6 max-w-prose text-xs text-muted-foreground">
+        Bound shortcuts belong to lich and do not reach the terminal. Disable a binding to stop lich
+        claiming it; the browser and terminal then apply their native behavior. Reset restores the
+        platform default.
+      </p>
       {HOTKEY_GROUPS.map((group) => (
         <Group key={group.id} label={group.label}>
           {HOTKEY_ACTIONS.filter((action) => action.group === group.id).map((action) => (
@@ -111,24 +116,6 @@ export function HotkeysSettings() {
           ))}
         </Group>
       ))}
-      <Group label={TERMINAL_TITLE}>
-        <p className="mb-2 max-w-prose text-xs text-muted-foreground">
-          lich's own, and fixed: this one shadows a browser accelerator, which answers to a chord
-          rather than to whatever it was rebound to.
-        </p>
-        {terminalRows.map((row) => (
-          <ShortcutLine key={row.label} label={row.label} keys={row.keys} />
-        ))}
-      </Group>
-      <Group label={PASSTHROUGH_TITLE}>
-        <p className="mb-2 max-w-prose text-xs text-muted-foreground">
-          lich rewrites these on their way to the agent's terminal, so they are fixed rather than
-          rebindable.
-        </p>
-        {passthroughRows(isWindows).map((row) => (
-          <ShortcutLine key={row.label} label={row.label} keys={row.keys} />
-        ))}
-      </Group>
     </>
   )
 }

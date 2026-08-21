@@ -40,7 +40,8 @@ import { createSessionLinkProvider } from "@/lib/terminal/session-link-provider"
 import { sessionLinkTargets } from "@/lib/terminal/session-links"
 import { useSettings } from "@/providers/settings"
 import { useProjects } from "@/providers/projects"
-import { isWindows } from "@/lib/platform"
+import { isMac, isWindows } from "@/lib/platform"
+import { isRecordingTarget } from "@/lib/hotkeys"
 import type { SessionKind } from "@/lib/session/sessions"
 import "@xterm/xterm/css/xterm.css"
 
@@ -134,7 +135,7 @@ export function TerminalView({
   onClose,
   stillInWorkspace,
 }: TerminalViewProps) {
-  const { font, terminalFontSize, resolvedTerminalTheme } = useSettings()
+  const { font, terminalFontSize, resolvedTerminalTheme, hotkeys } = useSettings()
   const terminalColors = resolvedTerminalTheme.terminal
   const { activateSession } = useProjects()
   const navigate = useNavigate()
@@ -159,11 +160,13 @@ export function TerminalView({
   const fontRef = useRef(font)
   const fontSizeRef = useRef(terminalFontSize)
   const themeRef = useRef(terminalColors)
+  const hotkeysRef = useRef(hotkeys)
   visibleRef.current = visible
   stillInWorkspaceRef.current = stillInWorkspace
   fontRef.current = font
   fontSizeRef.current = terminalFontSize
   themeRef.current = terminalColors
+  hotkeysRef.current = hotkeys
 
   // Every other open session's label, for the link provider below — read
   // through a ref because xterm calls provideLinks straight from its own
@@ -360,7 +363,7 @@ export function TerminalView({
       }
       // Platform-dependent because Claude Code's clipboard-image-paste chord is
       // Ctrl+V on Linux/macOS but Alt+V on Windows (term-keys.ts).
-      const seq = chordSequence(event, isWindows)
+      const seq = chordSequence(event, hotkeysRef.current, isMac, isWindows)
       if (seq === null) {
         return true
       }
@@ -490,18 +493,19 @@ export function TerminalView({
     let disposed = false
     const cleanups: Array<() => void> = []
 
-    // Ctrl+F must be caught in the window capture phase to beat Chromium's Find
-    // accelerator in --app mode (the same pattern the zoom hotkeys use in
-    // settings.tsx); xterm's own key handler runs too late. Only the visible
-    // session's terminal claims it — one is visible at a time.
+    // The capture-phase listener beats Chromium's Find accelerator. The
+    // separate browser guard always prevents Chromium Find, but only a live
+    // binding stops propagation and opens lich's search.
     const onSearchKey = (event: KeyboardEvent) => {
-      if (!visibleRef.current || !isSearchOpenChord(event)) {
+      if (
+        !visibleRef.current ||
+        isRecordingTarget(event) ||
+        !isSearchOpenChord(event, hotkeysRef.current.terminalSearch, isMac)
+      ) {
         return
       }
       const target = event.target as HTMLElement | null
-      if (target?.closest?.('[role="dialog"]')) {
-        return
-      }
+      if (target?.closest?.('[role="dialog"]')) return
       event.preventDefault()
       event.stopPropagation()
       setSearchOpen(true)
