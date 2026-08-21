@@ -5,14 +5,26 @@ import type { BinaryCheck } from "./api-types"
 // store.ProviderBin (Go), which is what the spawn actually calls.
 export type BinaryScope = "project" | "global" | "path"
 
-// winningScope is the layer a session would spawn from — the first one with a
-// path. Values are compared trimmed, because a field holding only spaces is a
-// field nobody filled in.
-export function winningScope(projectBin: string, globalBin: string): BinaryScope {
-  if (projectBin.trim()) {
+// A configurable layer as the screen holds it: the path written into it, and
+// whether its switch is on. The two are separate so a path can be parked rather
+// than deleted — putting it back is a switch, not retyping it.
+export type BinaryLayer = { bin: string; off: boolean }
+
+// winningScope is the layer a session would spawn from — the first switched-on
+// one with a path. Values are compared trimmed, because a field holding only
+// spaces is a field nobody filled in.
+export function winningScope(project: BinaryLayer, global: BinaryLayer): BinaryScope {
+  if (resolves(project)) {
     return "project"
   }
-  return globalBin.trim() ? "global" : "path"
+  return resolves(global) ? "global" : "path"
+}
+
+// resolves reports a layer a session could spawn from. A parked layer never is,
+// whatever it holds — which is what keeps a broken path switched off from
+// failing a check nobody is being asked to fix.
+export function resolves(layer: BinaryLayer): boolean {
+  return !layer.off && layer.bin.trim() !== ""
 }
 
 // checkLabel is the verdict beside a path, in the width a row has. Empty when

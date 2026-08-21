@@ -2,17 +2,40 @@ import { useEffect, useState, type ReactNode } from "react"
 import { Check, ChevronDown, FolderOpen, TriangleAlert, X } from "lucide-react"
 import { toast } from "sonner"
 import type { BinaryCheck } from "@/lib/api-types"
-import { checkDetail, checkLabel, failed, winningScope } from "@/lib/binary-layers"
+import { checkDetail, checkLabel, failed, resolves, winningScope } from "@/lib/binary-layers"
 import { ProjectService, Store } from "@/lib/rpc"
 import { useBinaryCheck } from "@/lib/use-binary-check"
-import { binKey } from "@/lib/providers-store"
+import { binKey, binOffKey } from "@/lib/providers-store"
 import { useProjects } from "@/providers/projects"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
 import { SettingBlock } from "./SettingBlock"
 
 const GLOBAL_SCOPE = ""
+
+// useStoredSetting is one settings value in one scope: read once, written
+// through on every change. An undefined scope is a layer this pane does not have
+// — the hub has no project — and reads as empty without touching the store.
+function useStoredSetting(key: string, scope: string | undefined) {
+  const [value, setValue] = useState("")
+
+  useEffect(() => {
+    if (scope === undefined) {
+      return
+    }
+    void Store.GetSetting(key, scope).then(setValue)
+  }, [key, scope])
+
+  const persist = (next: string) => {
+    setValue(next)
+    if (scope !== undefined) {
+      void Store.SetSetting(key, scope, next.trim())
+    }
+  }
+  return [value, persist] as const
+}
 
 // ProviderBinary is the "which executable runs" block. Closed it is a fact — the
 // binary a session here would spawn, and whether it is there — because almost
@@ -20,6 +43,12 @@ const GLOBAL_SCOPE = ""
 // the resolution as it is: the project's override, the global one and $PATH, in
 // the order the spawn reads them, with the winning layer marked. The precedence
 // stops being a sentence to trust and becomes the thing on screen.
+//
+// Each configurable layer carries a switch, because a path and whether it counts
+// are two facts: parking an override used to mean deleting it and typing it back
+// later. A parked layer resolves as if it were unset and is checked as if it
+// were absent — which is what lets a broken custom binary be silenced rather
+// than fixed.
 //
 // A layer that resolves to nothing runnable opens the block itself: an error
 // hidden behind a disclosure is an error nobody fixes.
@@ -35,34 +64,17 @@ export function ProviderBinary({
   const { projects } = useProjects()
   const project = projects.find((p) => p.id === projectId)
   const key = binKey(providerId)
-  const [globalBin, setGlobalBin] = useState("")
-  const [projectBin, setProjectBin] = useState("")
+  const offKey = binOffKey(providerId)
+  const [globalBin, setGlobalBin] = useStoredSetting(key, GLOBAL_SCOPE)
+  const [projectBin, setProjectBin] = useStoredSetting(key, projectId)
+  const [globalOff, setGlobalOff] = useStoredSetting(offKey, GLOBAL_SCOPE)
+  const [projectOff, setProjectOff] = useStoredSetting(offKey, projectId)
   const [open, setOpen] = useState(false)
 
-  useEffect(() => {
-    void Store.GetSetting(key, GLOBAL_SCOPE).then(setGlobalBin)
-  }, [key])
-
-  useEffect(() => {
-    if (!projectId) {
-      return
-    }
-    void Store.GetSetting(key, projectId).then(setProjectBin)
-  }, [key, projectId])
-
-  const persistGlobal = (value: string) => {
-    setGlobalBin(value)
-    void Store.SetSetting(key, GLOBAL_SCOPE, value.trim())
-  }
-
-  const persistProject = (value: string) => {
-    setProjectBin(value)
-    if (projectId) {
-      void Store.SetSetting(key, projectId, value.trim())
-    }
-  }
-
-  const scope = winningScope(project ? projectBin : "", globalBin)
+  const scope = winningScope(
+    { bin: project ? projectBin : "", off: projectOff === "true" },
+    { bin: globalBin, off: globalOff === "true" },
+  )
   const configured = scope === "project" ? projectBin.trim() : globalBin.trim()
   // Both layers go through the same check, so the bottom row answers with the
   // resolution the spawn would make rather than a second opinion about $PATH.
@@ -87,13 +99,17 @@ export function ProviderBinary({
       scope: "project" as const,
       label: `${project.name} only`,
       value: projectBin,
-      persist: persistProject,
+      persist: setProjectBin,
+      off: projectOff === "true",
+      setOff: setProjectOff,
     },
     {
       scope: "global" as const,
       label: "All projects",
       value: globalBin,
-      persist: persistGlobal,
+      persist: setGlobalBin,
+      off: globalOff === "true",
+      setOff: setGlobalOff,
     },
   ].filter((layer) => layer !== undefined)
 
@@ -111,7 +127,7 @@ export function ProviderBinary({
           <div className="mb-3 flex items-center justify-between gap-4">
             <span className="flex items-center gap-1.5 text-xs text-foreground">
               <ChevronDown className="size-3.5" aria-hidden="true" />
-              Where it comes from — the first layer with a path wins
+              Where it comes from — the first layer switched on wins
             </span>
             {!broken && (
               <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
@@ -127,6 +143,15 @@ export function ProviderBinary({
                 wins={scope === layer.scope}
                 check={scope === layer.scope ? check : null}
                 value={layer.value}
+                control={
+                  <Switch
+                    size="sm"
+                    checked={resolves({ bin: layer.value, off: layer.off })}
+                    disabled={!layer.value.trim()}
+                    onCheckedChange={(on) => layer.setOff(on ? "false" : "true")}
+                    aria-label={`Use the ${providerName} binary set for ${layer.label}`}
+                  />
+                }
               >
                 <Input
                   value={layer.value}
@@ -134,7 +159,10 @@ export function ProviderBinary({
                   placeholder={providerId}
                   spellCheck={false}
                   aria-label={`${providerName} binary for ${layer.label}`}
-                  className="h-8 min-w-0 flex-1 font-mono text-xs"
+                  className={cn(
+                    "h-8 min-w-0 flex-1 font-mono text-xs",
+                    layer.off && "text-muted-foreground",
+                  )}
                 />
                 <Button
                   variant="ghost"
@@ -163,6 +191,7 @@ export function ProviderBinary({
             </span>
             <span className="whitespace-nowrap text-muted-foreground">
               · {sourceLabel(scope, project?.name)}
+              {parkedLabel(scope, projectOff === "true", globalOff === "true", project?.name)}
             </span>
           </span>
           <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
@@ -174,7 +203,10 @@ export function ProviderBinary({
       {broken && (
         <p className="mt-3 flex max-w-prose items-start gap-2 text-xs text-destructive">
           <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-          {checkDetail(check)}
+          <span>
+            <span className="font-medium">{checkLabel(check, configured || providerId)}</span> —{" "}
+            {checkDetail(check)}
+          </span>
         </p>
       )}
     </SettingBlock>
@@ -190,21 +222,40 @@ function sourceLabel(scope: string, projectName: string | undefined): string {
   return scope === "global" ? "set for all projects" : "from $PATH"
 }
 
-// Layer is one row of the resolution stack: the marker, the scope it configures,
-// its control, and — on the winning row alone — what that path resolves to. The
-// losing rows say they are overridden instead, which is the question a second
-// path on screen raises.
+// parkedLabel names an override that is set but switched off — the one fact the
+// closed state would otherwise hide, since the switch saying it is not on
+// screen. Only layers the winner did not come from can be parked.
+function parkedLabel(
+  scope: string,
+  projectOff: boolean,
+  globalOff: boolean,
+  projectName: string | undefined,
+): string {
+  if (projectOff && scope !== "project") {
+    return ` · ${projectName ?? "project"} override off`
+  }
+  return globalOff && scope === "path" ? " · global override off" : ""
+}
+
+// Layer is one row of the resolution stack: the scope it configures, its
+// control, its switch, and — on the winning row alone — a glyph for what that
+// path resolves to. The verdict is a glyph and not a phrase because the phrase
+// arrives mid-typing: reserving its width leaves a hole on every other row, and
+// not reserving it shoves the field aside the moment a check comes back. The
+// words go under the block instead, where nothing has to move for them.
 function Layer({
   label,
   wins,
   check,
   value,
+  control,
   children,
 }: {
   label: string
   wins: boolean
   check: BinaryCheck | null
   value: string
+  control?: ReactNode
   children: ReactNode
 }) {
   return (
@@ -223,18 +274,12 @@ function Layer({
         {label}
       </span>
       {children}
-      {wins ? (
-        <span className="flex items-center gap-1 whitespace-nowrap text-xs">
-          <Verdict check={check} bin={value} />
-          <span className={cn(failed(check) ? "text-destructive" : "text-muted-foreground")}>
-            {checkLabel(check, value)}
-          </span>
-        </span>
-      ) : (
-        <span className="whitespace-nowrap text-xs text-muted-foreground opacity-70">
-          overridden
-        </span>
-      )}
+      <span className="flex size-3.5 shrink-0 items-center justify-center">
+        {wins && <Verdict check={check} bin={value} />}
+      </span>
+      {/* $PATH cannot be switched off, and holds the column so the switches
+          above it stay in line. */}
+      {control ?? <span className="w-6 shrink-0" aria-hidden="true" />}
     </div>
   )
 }

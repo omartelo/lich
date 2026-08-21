@@ -1,22 +1,41 @@
 import { describe, expect, it } from "vitest"
 import type { BinaryCheck } from "./api-types"
-import { checkDetail, checkLabel, failed, winningScope } from "./binary-layers"
+import { checkDetail, checkLabel, failed, resolves, winningScope } from "./binary-layers"
 
 const check = (status: BinaryCheck["status"], path = ""): BinaryCheck => ({ path, status })
 
+const layer = (bin: string, off = false) => ({ bin, off })
+
 describe("winningScope", () => {
   it("prefers the project override, then the global one", () => {
-    expect(winningScope("/opt/next/claude", "/opt/claude")).toBe("project")
-    expect(winningScope("", "/opt/claude")).toBe("global")
-    expect(winningScope("", "")).toBe("path")
+    expect(winningScope(layer("/opt/next/claude"), layer("/opt/claude"))).toBe("project")
+    expect(winningScope(layer(""), layer("/opt/claude"))).toBe("global")
+    expect(winningScope(layer(""), layer(""))).toBe("path")
   })
 
   // A field holding spaces is a field nobody filled in — and the Go side trims
   // before storing, so a value that reached the store this way is whitespace
   // from an older build.
   it("treats a whitespace-only value as unset", () => {
-    expect(winningScope("   ", "")).toBe("path")
-    expect(winningScope(" \t ", "/opt/claude")).toBe("global")
+    expect(winningScope(layer("   "), layer(""))).toBe("path")
+    expect(winningScope(layer(" \t "), layer("/opt/claude"))).toBe("global")
+  })
+
+  // The switch is the whole feature: the path stays written and stops counting,
+  // so falling back a layer costs a click rather than the path.
+  it("skips a parked layer while it keeps its path", () => {
+    expect(winningScope(layer("/opt/next/claude", true), layer("/opt/claude"))).toBe("global")
+    expect(winningScope(layer("/opt/next/claude", true), layer("/opt/claude", true))).toBe("path")
+    expect(winningScope(layer("", true), layer("/opt/claude"))).toBe("global")
+  })
+})
+
+describe("resolves", () => {
+  it("is true only for a switched-on layer holding a path", () => {
+    expect(resolves(layer("/opt/claude"))).toBe(true)
+    expect(resolves(layer("/opt/claude", true))).toBe(false)
+    expect(resolves(layer(""))).toBe(false)
+    expect(resolves(layer("  ", false))).toBe(false)
   })
 })
 

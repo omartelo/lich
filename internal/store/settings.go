@@ -63,22 +63,41 @@ func binKey(providerID string) string {
 	return "provider." + providerID + ".bin"
 }
 
+// binOffKey is the settings key that parks a binary layer: the path stays
+// written, but the layer is skipped when resolving. Scoped exactly like the path
+// it parks, and on only for the literal "true" — an absent key is a layer nobody
+// switched off, which is every layer configured before this key existed.
+func binOffKey(providerID string) string {
+	return binKey(providerID) + ".off"
+}
+
 // ProviderBin resolves a provider's binary path for a project: the project
 // override wins, then the global value, then "" (letting the terminal fall back
-// to the provider's default). It is the single call the terminal service makes
-// when spawning a session's PTY.
+// to the provider's default). A parked layer is skipped as if it were unset. It
+// is the single call the terminal service makes when spawning a session's PTY.
 func (s *Service) ProviderBin(providerID, projectID string) string {
-	key := binKey(providerID)
-	if projectID != globalScope {
+	key, offKey := binKey(providerID), binOffKey(providerID)
+	if projectID != globalScope && !s.binParked(offKey, projectID) {
 		if bin, err := s.GetSetting(key, projectID); err == nil && bin != "" {
 			return bin
 		}
+	}
+	if s.binParked(offKey, globalScope) {
+		return ""
 	}
 	bin, err := s.GetSetting(key, globalScope)
 	if err != nil {
 		return ""
 	}
 	return bin
+}
+
+// binParked reports a layer switched off in one scope. An unreadable value is
+// not one: a layer the user configured keeps resolving rather than silently
+// falling through to a different binary.
+func (s *Service) binParked(offKey, projectID string) bool {
+	value, err := s.GetSetting(offKey, projectID)
+	return err == nil && value == "true"
 }
 
 // skipPermissionsKey is the settings key that spawns a provider with its

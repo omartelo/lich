@@ -22,6 +22,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   install button. All three warn that the `PATH` is read at launch, so a tool
   installed with lich open needs a restart. `lich doctor` reports both as well,
   as warnings: lich starts and every session spawns without them.
+- **A custom binary can be switched off without being deleted.** Settings ›
+  Providers › Binary gives each layer — the project's own override and the
+  global one — a switch beside its path. Off, the layer resolves as if it were
+  unset and falls through to the layer below, while the path stays written: going
+  back to the default and back again is two clicks rather than deleting a path
+  and typing it in from memory. A switched-off layer is also no longer checked,
+  so a custom binary that has gone missing stops holding the block open and
+  colouring it red. Nothing was migrated: a layer with no switch stored is on,
+  which is every override configured before this release.
 
 ### Fixed
 

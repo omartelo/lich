@@ -127,6 +127,48 @@ func TestProviderBinResolution(t *testing.T) {
 	}
 }
 
+// TestProviderBinParkedLayer pins what a switched-off layer does: it resolves as
+// if it were unset, while the path it holds stays in the store — which is the
+// whole point of the switch, since deleting the path was the old way to do this.
+func TestProviderBinParkedLayer(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.SetSetting("provider.codex.bin", globalScope, "global-codex")
+	_ = svc.SetSetting("provider.codex.bin", "p1", "p1-codex")
+
+	_ = svc.SetSetting("provider.codex.bin.off", "p1", "true")
+	if got := svc.ProviderBin("codex", "p1"); got != "global-codex" {
+		t.Errorf("parked project layer = %q, want global-codex", got)
+	}
+	if got, _ := svc.GetSetting("provider.codex.bin", "p1"); got != "p1-codex" {
+		t.Errorf("parked path = %q, want it kept as p1-codex", got)
+	}
+
+	// Parking the global layer too leaves the provider's own default.
+	_ = svc.SetSetting("provider.codex.bin.off", globalScope, "true")
+	if got := svc.ProviderBin("codex", "p1"); got != "" {
+		t.Errorf("both layers parked = %q, want \"\"", got)
+	}
+	// A project scope parked while global runs still reads the global value.
+	_ = svc.SetSetting("provider.codex.bin.off", globalScope, "false")
+	if got := svc.ProviderBin("codex", "p2"); got != "global-codex" {
+		t.Errorf("unparked global = %q, want global-codex", got)
+	}
+
+	// Anything but the literal "true" is a layer nobody switched off — the key
+	// is absent for every override configured before it existed.
+	_ = svc.SetSetting("provider.codex.bin.off", "p1", "1")
+	if got := svc.ProviderBin("codex", "p1"); got != "p1-codex" {
+		t.Errorf("non-\"true\" off value = %q, want p1-codex", got)
+	}
+
+	// Claude parks through the legacy key's own suffix.
+	_ = svc.SetSetting(claudeBinKey, globalScope, "global-claude")
+	_ = svc.SetSetting(claudeBinKey+".off", globalScope, "true")
+	if got := svc.ProviderBin("claude", "p1"); got != "" {
+		t.Errorf("parked claude = %q, want \"\"", got)
+	}
+}
+
 // TestSkipPermissionsIsScopedByCheckout pins the two scopes apart: the flag a
 // session in the project's own directory reads is not the one a session in a
 // worktree reads, so turning it on for throwaway checkouts leaves the main

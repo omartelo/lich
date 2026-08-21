@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 import type { DetectedProvider } from "./api-types"
 import {
   binKey,
+  binOffKey,
   createProvidersStore,
   enabledKey,
   enabledProviders,
@@ -30,6 +31,13 @@ describe("provider setting keys", () => {
     expect(binKey("claude")).toBe("claude.bin")
     expect(binKey("codex")).toBe("provider.codex.bin")
     expect(binKey("opencode")).toBe("provider.opencode.bin")
+  })
+
+  // The switch that parks a layer hangs off the path's own key, legacy one
+  // included — the Go spawn reads these exact strings.
+  it("suffixes the parked flag onto the path key", () => {
+    expect(binOffKey("claude")).toBe("claude.bin.off")
+    expect(binOffKey("codex")).toBe("provider.codex.bin.off")
   })
 
   // The two scopes are separate rows in the settings table, and the Go spawn

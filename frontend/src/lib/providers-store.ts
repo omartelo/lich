@@ -31,6 +31,13 @@ export function binKey(id: string): string {
   return id === "claude" ? "claude.bin" : `provider.${id}.bin`
 }
 
+// binOffKey parks a binary layer without erasing it: the path stays in the
+// store, the layer stops resolving. Mirrors store.binOffKey in Go, scoped
+// exactly like the path it parks.
+export function binOffKey(id: string): string {
+  return `${binKey(id)}.off`
+}
+
 // skipPermissionsKey holds the flag that spawns a provider without its
 // permission prompts, in one of two scopes (mirrors store.skipPermissionsKey in
 // Go, which is what the spawn reads). Two keys because a worktree is a throwaway
