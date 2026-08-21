@@ -20,7 +20,7 @@ Bugs and ideas are welcome, and so are patches. This file is the short version;
 
 ## Getting it running
 
-Prerequisites: **Go 1.26.6+**, **Node + pnpm**, and **[Task](https://taskfile.dev)**.
+Prerequisites: **Go 1.27.0+**, **Node + pnpm**, and **[Task](https://taskfile.dev)**.
 No C toolchain and no system dev libraries — the backend is pure Go
 (`CGO_ENABLED=0`). At runtime you need a Chromium-family browser on `PATH`,
 plus `zenity` on Linux for the folder picker.

@@ -23,7 +23,7 @@ lives in the code, `docs/` and `CHANGELOG.md` — never restate any of it here.
 
 ## Rules of the codebase
 
-- Go 1.26, pure Go: `CGO_ENABLED=0` and a fully static binary are a constraint, not a default.
+- Go 1.27, pure Go: `CGO_ENABLED=0` and a fully static binary are a constraint, not a default.
 - OS-specific code is selected by build tags behind small seams, never by runtime checks — the PTY is the model
   (`internal/terminal`).
 - Service shapes are hand-owned in `frontend/src/lib/api-types.ts`: touch a Go struct's JSON tags and that mirror

@@ -15,7 +15,7 @@
   </p>
   <p>
     <a href="https://github.com/omartelo/lich/releases"><img alt="Release" src="https://img.shields.io/github/v/release/omartelo/lich?color=4285F4&label=release" /></a>
-    <img alt="Go" src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white" />
+    <img alt="Go" src="https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white" />
     <img alt="Shell" src="https://img.shields.io/badge/shell-Chromium%20--app-4285F4?logo=googlechrome&logoColor=white" />
     <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-333" />
     <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-blue" /></a>
@@ -143,10 +143,10 @@ Releases 发一次版本查询。更新在 Windows/macOS 上就地应用，在 A
 
 ## 从源码构建
 
-纯 Go 后端（Go 1.26，`CGO_ENABLED=0`），通过带 token 鉴权的本地回环监听器（HTTP RPC +
+纯 Go 后端（Go 1.27，`CGO_ENABLED=0`），通过带 token 鉴权的本地回环监听器（HTTP RPC +
 WebSocket）伺服内嵌的 React 18 / TypeScript / Vite 前端。终端是 xterm.js 配 WebGL
 插件；代码和 diff 界面是 CodeMirror 6。Chromium 外壳有一份决策记录：
-[`docs/chromium-shell.md`](docs/chromium-shell.md)。前置条件是 **Go 1.26.6+**、
+[`docs/chromium-shell.md`](docs/chromium-shell.md)。前置条件是 **Go 1.27.0+**、
 **Node + pnpm** 和 **[Task](https://taskfile.dev)** —— 不需要 C 工具链，也不需要
 系统开发库。
 

@@ -15,7 +15,7 @@
   <p><a href="https://omartelo.github.io/lich/"><strong>omartelo.github.io/lich</strong></a></p>
   <p>
     <a href="https://github.com/omartelo/lich/releases"><img alt="Release" src="https://img.shields.io/github/v/release/omartelo/lich?color=4285F4&label=release" /></a>
-    <img alt="Go" src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white" />
+    <img alt="Go" src="https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white" />
     <img alt="Shell" src="https://img.shields.io/badge/shell-Chromium%20--app-4285F4?logo=googlechrome&logoColor=white" />
     <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-333" />
     <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-blue" /></a>
@@ -165,12 +165,12 @@ your gh login, never a session token — before you attach it to a bug report, a
 
 ## Build from source
 
-Pure-Go backend (Go 1.26, `CGO_ENABLED=0`) serving an embedded React 18 /
+Pure-Go backend (Go 1.27, `CGO_ENABLED=0`) serving an embedded React 18 /
 TypeScript / Vite frontend over a token-authenticated loopback listener (HTTP RPC
 + WebSockets). Terminals are xterm.js with the WebGL addon; the code and diff
 surfaces are CodeMirror 6. The Chromium shell is a decision record:
 [`docs/chromium-shell.md`](docs/chromium-shell.md). Prerequisites are **Go
-1.26.6+**, **Node + pnpm** and **[Task](https://taskfile.dev)** — no C toolchain,
+1.27.0+**, **Node + pnpm** and **[Task](https://taskfile.dev)** — no C toolchain,
 no system dev libraries.
 
 ```bash

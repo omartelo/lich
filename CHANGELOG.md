@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Building lich from source now needs Go 1.27.0.** The pin stays exact so that
+  every release binary carries the current toolchain's own security fixes, and
+  the module is what CI reads its Go version from. `GOTOOLCHAIN=auto` — the
+  default — fetches 1.27.0 on its own; a build pinned to `local` on anything
+  older will refuse the module.
+
 ## [0.39.0] - 2026-08-21
 
 ### Added
