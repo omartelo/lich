@@ -58,12 +58,12 @@ func ResolveShellEnv(base []string) []string {
 // is line-based, so a value spanning a newline loses its tail; switch the dump
 // to `env -0` and split on NUL if that ever bites.
 func parseShellEnvDump(sentinel, out string) []string {
-	idx := strings.LastIndex(out, sentinel)
-	if idx < 0 {
+	_, dump, ok := strings.CutLast(out, sentinel)
+	if !ok {
 		return nil
 	}
 	var kv []string
-	for line := range strings.SplitSeq(out[idx+len(sentinel):], "\n") {
+	for line := range strings.SplitSeq(dump, "\n") {
 		line = strings.TrimSuffix(line, "\r")
 		if key, _, ok := strings.Cut(line, "="); ok && validEnvKey(key) {
 			kv = append(kv, line)
