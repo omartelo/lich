@@ -32,10 +32,21 @@ describe("isBrowserChord", () => {
   })
 
   it("leaves reload, editing chords and bare keys alone", () => {
-    for (const key of ["r", "a", "c", "v", "x", "z", "f", "k"]) {
+    for (const key of ["r", "a", "c", "v", "x", "z", "k"]) {
       expect(isBrowserChord(chord({ ctrlKey: true, key }))).toBe(false)
     }
     expect(isBrowserChord(chord({ key: "t" }))).toBe(false)
+  })
+
+  it("prevents browser find, zoom, navigation, and close accelerators", () => {
+    for (const key of ["f", "+", "=", "-", "0", "[", "]", "q"]) {
+      expect(isBrowserChord(chord({ ctrlKey: true, key }))).toBe(true)
+      expect(isBrowserChord(chord({ metaKey: true, key }))).toBe(true)
+    }
+    expect(isBrowserChord(chord({ ctrlKey: true, shiftKey: true, key: "+" }))).toBe(true)
+    expect(isBrowserChord(chord({ altKey: true, key: "ArrowLeft" }))).toBe(true)
+    expect(isBrowserChord(chord({ altKey: true, key: "ArrowRight" }))).toBe(true)
+    expect(isBrowserChord(chord({ altKey: true, key: "F4" }))).toBe(true)
   })
 
   it("ignores AltGr, which arrives as Ctrl+Alt and types real characters", () => {
@@ -94,6 +105,23 @@ describe("installBrowserDefaults", () => {
     expect(
       fire("keydown", { ctrlKey: true, shiftKey: false, altKey: false, key: "r" }),
     ).not.toHaveBeenCalled()
+  })
+
+  it("prevents the browser default without stopping propagation to the TUI", () => {
+    const { listeners } = install()
+    const preventDefault = vi.fn()
+    const stopPropagation = vi.fn()
+    listeners.get("keydown")?.handler({
+      ctrlKey: true,
+      metaKey: false,
+      shiftKey: false,
+      altKey: false,
+      key: "f",
+      preventDefault,
+      stopPropagation,
+    })
+    expect(preventDefault).toHaveBeenCalled()
+    expect(stopPropagation).not.toHaveBeenCalled()
   })
 
   // The terminal keeps Chromium's menu — that is where its Copy and Paste live.

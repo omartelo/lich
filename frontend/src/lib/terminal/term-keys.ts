@@ -1,60 +1,50 @@
-// Key chords xterm.js encodes differently from what our TUIs expect. The
-// sequences go straight to the PTY through attachCustomKeyEventHandler,
-// bypassing xterm's own encoder:
-//
-// - Ctrl+Backspace: xterm sends BS (\x08), a single-char erase. Send ETB
-//   (\x17, readline's unix-word-rubout) so line editors erase the word.
-// - Ctrl+V: in Chromium the default action pastes text into the terminal,
-//   hiding the keypress from TUIs that read the clipboard themselves on ^V
-//   (Claude Code image attach). Send SYN (\x16) like a real terminal — but on
-//   Windows Claude Code binds image-paste to Alt+V (ESC+v), not ^V, so emit
-//   that there instead. Text paste stays on Ctrl+Shift+V (untouched — native
-//   paste).
-// - Shift+Enter: xterm sends plain \r, indistinguishable from Enter. ESC+CR
-//   is what TUIs (Claude Code) accept as "insert newline" without
-//   kitty-protocol negotiation.
-//
-// Everything else (Shift+Tab → CSI Z, Alt chords, SGR wheel reports)
-// xterm.js encodes correctly on its own — only the three above need help.
+import {
+  matchesCombo,
+  matchesRepeatingCombo,
+  type HotkeyBinding,
+  type Hotkeys,
+  type KeyState,
+} from "@/lib/hotkeys"
+import { isMac, isWindows } from "@/lib/platform"
 
-// The subset of KeyboardEvent the matcher needs — lets tests pass plain
-// objects.
-export type TermKeyState = Pick<
-  KeyboardEvent,
-  "ctrlKey" | "metaKey" | "shiftKey" | "altKey" | "key"
-> & { code?: string }
+const ERASE_PREVIOUS_WORD_SEQUENCE = "\x17"
+const ATTACH_CLIPBOARD_IMAGE_SEQUENCE = "\x16"
+const WINDOWS_ATTACH_CLIPBOARD_IMAGE_SEQUENCE = "\x1bv"
+const INSERT_NEWLINE_SEQUENCE = "\x1b\r"
 
-// isSearchOpenChord reports Ctrl+F with no other modifier — the in-terminal
-// search trigger. It lives here beside chordSequence so all terminal key-chord
-// decisions stay in one tested place, but unlike those it is not a PTY sequence:
-// the caller opens the search box instead of writing to the shell (shadowing the
-// shell's forward-char, the same trade VS Code's terminal makes).
-export function isSearchOpenChord(event: TermKeyState): boolean {
-  return (
-    event.ctrlKey &&
-    !event.metaKey &&
-    !event.altKey &&
-    !event.shiftKey &&
-    event.key.toLowerCase() === "f"
-  )
-}
-
-export function chordSequence(event: TermKeyState, isWindows = false): string | null {
-  const ctrlOnly = event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey
-  if (ctrlOnly && event.key === "Backspace") {
-    return "\x17"
+// xterm loses the TUI intent behind Ctrl+Backspace, Ctrl+V and Shift+Enter, so
+// these bindings write substitute sequences directly. Claude Code expects
+// Alt+V (ESC v) for image attach on Windows instead of Ctrl+V's SYN.
+export function chordSequence(
+  event: KeyState,
+  hotkeys: Hotkeys,
+  mac = isMac,
+  windows = isWindows,
+): string | null {
+  if (matchesRepeatingCombo(event, hotkeys.eraseTerminalWord, mac)) {
+    return ERASE_PREVIOUS_WORD_SEQUENCE
   }
-  if (ctrlOnly && (event.code === "KeyV" || event.key.toLowerCase() === "v")) {
-    return isWindows ? "\x1bv" : "\x16"
+  if (matchesRepeatingCombo(event, hotkeys.attachClipboardImage, mac)) {
+    return windows ? WINDOWS_ATTACH_CLIPBOARD_IMAGE_SEQUENCE : ATTACH_CLIPBOARD_IMAGE_SEQUENCE
   }
-  if (
-    event.key === "Enter" &&
-    event.shiftKey &&
-    !event.altKey &&
-    !event.ctrlKey &&
-    !event.metaKey
-  ) {
-    return "\x1b\r"
+  if (matchesRepeatingCombo(event, hotkeys.insertTerminalNewline, mac)) {
+    return INSERT_NEWLINE_SEQUENCE
   }
   return null
+}
+
+function isEditableOutsideTerminal(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null
+  if (!element || element.closest?.(".xterm")) return false
+  const tag = element.tagName?.toLowerCase()
+  return tag === "input" || tag === "textarea" || element.isContentEditable
+}
+
+export function shouldOpenTerminalSearch(
+  event: KeyState,
+  binding: HotkeyBinding,
+  target: EventTarget | null,
+  mac = isMac,
+): boolean {
+  return !isEditableOutsideTerminal(target) && matchesCombo(event, binding, mac)
 }
