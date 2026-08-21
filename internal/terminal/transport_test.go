@@ -319,6 +319,16 @@ func TestGoroutineDumpAnswersWithTheStacks(t *testing.T) {
 		!strings.Contains(string(body), "TestGoroutineDumpAnswersWithTheStacks") {
 		t.Errorf("dump carries no stacks: %q", string(body))
 	}
+	// The leak profile follows under its heading. A healthy process leaks
+	// nothing, so this pins that the section is written at all — the count it
+	// reports is the finding, and an empty one is the answer here.
+	_, leaks, found := strings.CutLast(string(body), leakHeading)
+	if !found {
+		t.Fatalf("dump carries no leak section: %q", string(body))
+	}
+	if !strings.HasPrefix(leaks, "goroutineleak profile: total ") {
+		t.Errorf("leak section = %q, want a goroutineleak profile", leaks)
+	}
 }
 
 func TestGoroutineDumpRejectsBadToken(t *testing.T) {

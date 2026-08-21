@@ -269,13 +269,19 @@ func (t *transport) ping(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// goroutines dumps every goroutine's stack, blocked ones included. It answers
-// the failure a log cannot describe: the window stops updating while the
-// process is still alive, so nothing panicked, nothing exited, and nothing was
-// ever written. `lich rage` fetches this into the bug report; an instance that
-// holds its port and will not answer here is itself the finding. Token-gated
-// like every other endpoint, and deliberately not net/http/pprof: this is one
-// dump of one thing, not a profiling surface.
+// leakHeading separates the leak profile from the stacks above it in the dump,
+// so a reader scrolling the bundle finds the short answer without knowing the
+// endpoint writes two things.
+const leakHeading = "\n\n===== leaked goroutines =====\n\n"
+
+// goroutines dumps every goroutine's stack, blocked ones included, then the
+// leak profile over the same process. It answers the failure a log cannot
+// describe: the window stops updating while the process is still alive, so
+// nothing panicked, nothing exited, and nothing was ever written. `lich rage`
+// fetches this into the bug report; an instance that holds its port and will
+// not answer here is itself the finding. Token-gated like every other endpoint,
+// and deliberately not net/http/pprof: this is one dump of one question, not a
+// profiling surface.
 func (t *transport) goroutines(w http.ResponseWriter, r *http.Request) {
 	if !t.authorized(r) {
 		http.Error(w, "invalid token", http.StatusUnauthorized)
@@ -286,6 +292,23 @@ func (t *transport) goroutines(w http.ResponseWriter, r *http.Request) {
 	// hang and a crash are read side by side.
 	if err := pprof.Lookup("goroutine").WriteTo(w, 2); err != nil {
 		slog.Warn("goroutine dump", "err", err)
+	}
+	writeLeaks(w)
+}
+
+// writeLeaks appends the goroutineleak profile: the goroutines blocked on a
+// channel, mutex or WaitGroup that nothing runnable can still reach, which is
+// exactly the shape of a lich that went quiet. It is the narrow answer the full
+// dump above buries, and it costs a leak-detecting GC to collect — acceptable
+// on a debug endpoint reached by hand, not on a poll. debug level 1 is the
+// readable count-and-stack form; level 2 would fall back to every goroutine
+// again, which is the dump we just wrote.
+func writeLeaks(w io.Writer) {
+	if _, err := io.WriteString(w, leakHeading); err != nil {
+		return
+	}
+	if err := pprof.Lookup("goroutineleak").WriteTo(w, 1); err != nil {
+		slog.Warn("goroutine leak profile", "err", err)
 	}
 }
 

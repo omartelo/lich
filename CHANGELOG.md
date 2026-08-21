@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the per-line decode that prices a session went from ~90µs to ~27µs on a
   full assistant turn, allocating 2 objects where it used to allocate 13. A
   project whose sessions carry long transcripts feels it on every refresh.
+- **A `lich rage` bundle now names the goroutines that leaked.** `goroutines.txt`
+  carried every stack in the process, leaving whoever read it to work out which
+  of a few hundred was the one still waiting on something nobody will ever send.
+  The dump now ends with a second section holding only the goroutines blocked on
+  a channel, mutex or WaitGroup that no runnable goroutine can still reach —
+  which is the shape of a window that stopped updating while the process stayed
+  alive. An empty section is the answer too: the hang is somewhere else.
 
 ### Removed
 
