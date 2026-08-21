@@ -206,7 +206,7 @@ function TreeBody({ tree, query, active, stats, failed, onOpen, onEditor }: Tree
       expandAll={filtering}
       stats={stats}
       onEditor={onEditor}
-      className="h-full overflow-y-auto"
+      className="h-full"
       onSelect={onOpen}
     />
   )

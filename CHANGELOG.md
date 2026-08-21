@@ -47,6 +47,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot start. Nothing in lich itself needs 13 — the floor is the compiler's,
   and it moves with the next Go bump.
 
+### Fixed
+
+- **A deep file tree is readable again.** A pull request whose paths run
+  `src/main/java/br/com/acme/...` spent the panel's whole width on indentation,
+  and every file name arrived as an ellipsis with no way to reach the rest of
+  it. Directories with nothing in them but the next directory now collapse into
+  one row, the tree scrolls sideways when a name still overruns, and the Files
+  changed tree drags wider by its right edge like every other side panel — the
+  width is remembered. The dock's file browser gets the same three.
+
 ## [0.39.0] - 2026-08-21
 
 ### Added
