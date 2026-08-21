@@ -26,7 +26,7 @@ export const GH: VcsTool = {
   bin: "gh",
   label: "GitHub CLI (gh)",
   url: "https://cli.github.com",
-  without: "Pull requests, checks and PR checkouts need it.",
+  without: "Pull requests, checks and PR checkouts are unavailable without it.",
 }
 
 // lich resolves the login shell's $PATH once, at launch, and pins it into its

@@ -73,6 +73,19 @@ func TestTreeWalksNonRepo(t *testing.T) {
 	}
 }
 
+// TestTreeReportsBrokenRepo proves the gate only routes a path away from git
+// when git itself disowns it: a repository whose index is corrupt still passes
+// rev-parse, so its ls-files failure is the answer. Walking it instead would
+// draw a plausible tree over a repository nobody can list.
+func TestTreeReportsBrokenRepo(t *testing.T) {
+	repo, _ := initRepo(t)
+	write(t, repo, ".git/index", "not an index")
+	files, err := New(nil).Tree(repo)
+	if err == nil {
+		t.Fatalf("Tree on a corrupt index = %v, want an error", files)
+	}
+}
+
 // TestTreeMissingDir proves an absent directory is still an error, so the panel
 // says so instead of drawing an empty tree over a folder that is gone.
 func TestTreeMissingDir(t *testing.T) {
