@@ -16,7 +16,11 @@ func gitFailure(args []string, stderr string, runErr error) error {
 var gitFailures = []toolFailure{
 	{"not a git repository", "This folder is not a git repository."},
 	{"already exists", "A branch or worktree with that name already exists."},
+	// Two wordings for one refusal: git said "is already checked out at" until
+	// 2.36 and "is already used by worktree at" since. Both are live — the
+	// distribution git decides which one a user sees.
 	{"is already checked out", "That branch is already checked out in another worktree."},
+	{"is already used by worktree", "That branch is already checked out in another worktree."},
 	{
 		"contains modified or untracked files",
 		"That worktree has uncommitted changes. Remove it from the sidebar to discard them.",

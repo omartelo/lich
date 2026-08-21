@@ -34,6 +34,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A worktree opens on a branch that already exists, instead of refusing it.**
+  Every worktree lich made was handed to git as `worktree add -b`, which creates
+  the branch — so naming a branch that was already there failed with "A branch or
+  worktree with that name already exists", and the only way through was to delete
+  the branch first. That is exactly what a prepared branch cannot afford: cut
+  from a freshly fetched remote, pushed, linked to a GitHub issue. An existing
+  branch is now checked out as it stands, on the New worktree dialog, on
+  `lich open --worktree` and on the `open_session` tool alike — naming a branch
+  is naming the work on it, which is already how a branch holding a worktree is
+  read. The base goes unused in that case: it says where a branch starts, and
+  that one already started. A branch checked out somewhere else is still refused,
+  and now says so on modern git too, which reworded that refusal and had been
+  falling through to "git could not complete the operation".
 - **The Files tab browses a folder that is not a git repository.** The tree was
   built from `git ls-files`, so a project opened on a plain directory — notes, a
   scratch folder, a checkout of something that is not git — answered "Not a git

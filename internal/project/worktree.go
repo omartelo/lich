@@ -200,8 +200,9 @@ func reserveWorktreePath(projectPath, projectID, name string) (string, error) {
 
 // CreateWorktree creates a git worktree named name (random when empty) under
 // the app data dir, branching off base. A remote base is fetched first and the
-// new branch tracks it. The worktree is verified usable before returning, so a
-// success here means a session can be opened at Path right away.
+// new branch tracks it. A branch that already exists is checked out as it
+// stands, and base is ignored. The worktree is verified usable before
+// returning, so a success here means a session can be opened at Path right away.
 func (s *Service) CreateWorktree(projectPath, projectID, name, base string, baseIsRemote bool) (*Worktree, error) {
 	if name == "" {
 		name = randomWorktreeName(func(n string) bool { return branchExists(projectPath, n) })
@@ -211,19 +212,31 @@ func (s *Service) CreateWorktree(projectPath, projectID, name, base string, base
 		return nil, err
 	}
 
+	// A branch that already exists is checked out as it stands, never recreated:
+	// naming a branch is naming the work on it, the same reading
+	// spawn.resolveCheckout gives a branch that already has a checkout. git's
+	// -b refuses a name it already knows, so the only way to open a session on a
+	// branch prepared in advance used to be deleting it first. base drops out
+	// with it — it decides where a branch starts, and this one already started.
 	args := []string{"worktree", "add"}
-	if baseIsRemote {
-		remote, branch, ok := strings.Cut(base, "/")
-		if !ok {
-			return nil, fmt.Errorf("%q is not a remote branch lich can track.", base)
+	source := base
+	if branchExists(projectPath, name) {
+		source = name
+	} else {
+		if baseIsRemote {
+			remote, branch, ok := strings.Cut(base, "/")
+			if !ok {
+				return nil, fmt.Errorf("%q is not a remote branch lich can track.", base)
+			}
+			if _, err := runGit(projectPath, "fetch", "--", remote, branch); err != nil {
+				return nil, err
+			}
+			args = append(args, "--track")
 		}
-		if _, err := runGit(projectPath, "fetch", "--", remote, branch); err != nil {
-			return nil, err
-		}
-		args = append(args, "--track")
+		args = append(args, "-b", name)
 	}
-	// "--": base is unvalidated, and "-"-prefixed it would parse as a flag.
-	args = append(args, "-b", name, "--", wtPath, base)
+	// "--": source is unvalidated, and "-"-prefixed it would parse as a flag.
+	args = append(args, "--", wtPath, source)
 	if _, err := runGit(projectPath, args...); err != nil {
 		return nil, err
 	}

@@ -26,8 +26,14 @@ func TestGitMessage(t *testing.T) {
 			"A branch or worktree with that name already exists.",
 		},
 		{
-			"a branch checked out elsewhere",
+			"a branch checked out elsewhere, git before 2.36",
 			"fatal: 'fix/poll' is already checked out at '/data/worktrees/p/fix'",
+			errTest,
+			"That branch is already checked out in another worktree.",
+		},
+		{
+			"a branch checked out elsewhere, git since 2.36",
+			"fatal: 'fix/poll' is already used by worktree at '/data/worktrees/p/fix'",
 			errTest,
 			"That branch is already checked out in another worktree.",
 		},

@@ -161,12 +161,19 @@ func TestCreateWorktree(t *testing.T) {
 	}
 }
 
-// TestCreateWorktreeErrors proves invalid names, duplicate branches and
-// pre-existing paths all fail with a message instead of half-creating state.
+// TestCreateWorktreeErrors proves invalid names, branches held by another
+// checkout and pre-existing paths all fail with a message instead of
+// half-creating state.
+//
+// A branch that merely exists is no longer among them: it used to be, back when
+// every creation went through `worktree add -b`. That expectation moved to
+// TestCreateWorktreeExistingBranch — the contract changed, the test followed it.
 func TestCreateWorktreeErrors(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	repo, git := initRepo(t)
-	git("branch", "taken")
+	// Held by a checkout of its own, which is the state git still refuses: one
+	// branch cannot be checked out twice.
+	git("worktree", "add", "-b", "taken", filepath.Join(t.TempDir(), "taken"))
 
 	svc := New(nil)
 	// The messages are what the dialog shows, so they name the branch rather
@@ -178,7 +185,7 @@ func TestCreateWorktreeErrors(t *testing.T) {
 	}{
 		{"invalid name", "has space", `"has space" is not a name git accepts`},
 		{"dotdot name", "a..b", `"a..b" is not a name git accepts`},
-		{"duplicate branch", "taken", "already exists"},
+		{"branch checked out elsewhere", "taken", "already checked out"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -198,6 +205,63 @@ func TestCreateWorktreeErrors(t *testing.T) {
 	_, err := svc.CreateWorktree(repo, "pid", "occupied", "main", false)
 	if err == nil || !strings.Contains(err.Error(), "already exists") {
 		t.Errorf("CreateWorktree(existing path) error = %v, want 'already exists'", err)
+	}
+}
+
+// TestCreateWorktreeExistingBranch replicates issue #334: a branch cut before
+// the session — off an updated remote, linked to a GitHub issue — is checked
+// out as it stands rather than recreated, and the base is ignored because the
+// branch already started somewhere.
+//
+// lich handed git `worktree add -b` for every creation, and git refuses a name
+// it already knows, so the only way to open a session on a prepared branch was
+// to delete it first — exactly what the reporter could not do, with the issue
+// branch already pushed.
+func TestCreateWorktreeExistingBranch(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	repo, git := initRepo(t)
+	addLocalOrigin(t, git)
+
+	// The branch carries a commit no base has, so "reused" is provable rather
+	// than a name that happens to match: rewinding main leaves the commit
+	// reachable only from the branch.
+	const branch = "issue-4-ownership"
+	git("commit", "--allow-empty", "-m", "prepared work")
+	git("branch", branch)
+	prepared := strings.TrimSpace(git("rev-parse", branch))
+	git("reset", "--hard", "HEAD~1")
+
+	// The reporter's call, verbatim: the prepared branch as the name, the remote
+	// it was cut from as the base.
+	svc := New(nil)
+	wt, err := svc.CreateWorktree(repo, "pid", branch, "origin/main", true)
+	if err != nil {
+		t.Fatalf("CreateWorktree(existing branch): %v", err)
+	}
+	if wt.Name != branch {
+		t.Errorf("Name = %q, want %q", wt.Name, branch)
+	}
+
+	head, err := runGit(wt.Path, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("rev-parse HEAD: %v", err)
+	}
+	if got := strings.TrimSpace(head); got != prepared {
+		t.Errorf("worktree HEAD = %s, want the prepared branch tip %s — the base was not ignored", got, prepared)
+	}
+	on, err := runGit(wt.Path, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		t.Fatalf("rev-parse --abbrev-ref HEAD: %v", err)
+	}
+	if got := strings.TrimSpace(on); got != branch {
+		t.Errorf("worktree is on %q, want %q", got, branch)
+	}
+
+	// git has to own it too, or nothing can remove it later.
+	if !slices.ContainsFunc(parseCheckouts(git("worktree", "list", "--porcelain")), func(c Worktree) bool {
+		return c.Name == branch
+	}) {
+		t.Errorf("the branch is not registered as a worktree: %s", git("worktree", "list"))
 	}
 }
 

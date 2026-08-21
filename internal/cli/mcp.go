@@ -392,10 +392,12 @@ var mcpTools = []mcpTool{
 				"What the session runs: claude, codex, opencode, omp, crush, or shell. "+
 					"Defaults to the same agent you are."),
 			"worktree": property("string",
-				"Branch name for a new git worktree to root the session in. Omit to open the "+
-					"session in the project's own directory, beside yours."),
+				"Branch name for a git worktree to root the session in. A branch that already "+
+					"exists is checked out as it stands; one that does not is created. Omit to "+
+					"open the session in the project's own directory, beside yours."),
 			"base": property("string",
-				"Branch the new worktree starts from. Defaults to the project's current branch."),
+				"Branch a new worktree starts from. Defaults to the project's current branch, "+
+					"and is ignored when the worktree branch already exists."),
 			"model": property("string",
 				"Model the new session's provider runs, spelled exactly as that provider's own "+
 					"--model flag takes it — the name or alias, never a lich name for it. Omit "+

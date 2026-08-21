@@ -244,16 +244,24 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
   `opencode`, `omp`, `crush`) or `shell`. The default is the caller's own
   provider, so an agent opening a worker gets another of itself; a caller that
   is not a session at all gets Claude Code.
-- `--worktree` is the **branch name** of a new git worktree, created off
-  `--base` (the project's current branch by default) under the app data dir. The
-  session is rooted there and labelled after it, and the project's worktree
-  setup script (Settings › Project) runs in its terminal before the provider,
-  exactly as when the window creates one. Without it the session opens in the
-  project's own directory, beside the caller's.
+- `--worktree` is the **branch name** of a git worktree, created off `--base`
+  (the project's current branch by default) under the app data dir. The session
+  is rooted there and labelled after it, and the project's worktree setup script
+  (Settings › Project) runs in its terminal before the provider, exactly as when
+  the window creates one. Without it the session opens in the project's own
+  directory, beside the caller's.
+  **A branch that already exists is checked out as it stands**, never recreated:
+  naming a branch is naming the work on it, and a caller that cannot see the
+  repository has no way to tell the two apart. That covers a branch prepared
+  before the session — cut from an updated remote, linked to an issue — and a
+  worktree closed but kept, which is resumed rather than made again. Only a
+  branch already checked out somewhere else is refused, by git itself.
 - `--base` is checked against the repository's branches — local, remote
   (`origin/…`, fetched and tracked), or one another worktree already holds. A
   base that is not a branch is refused rather than resolved: git would happily
   branch off a typo that names a revision, leaving a checkout nobody asked for.
+  It is **ignored when `--worktree` names a branch that already exists**: a base
+  says where a branch starts, and that one already started.
 - `--model` is the model the session's provider starts on. The value is whatever
   that provider's own `--model` takes — an alias, a full name, a
   `provider/model` pair — and lich passes it through unchecked: the accepted
