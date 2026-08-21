@@ -1,10 +1,18 @@
-import { useEffect, useState, type ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 import { Check, ChevronDown, FolderOpen, TriangleAlert, X } from "lucide-react"
 import { toast } from "sonner"
 import type { BinaryCheck } from "@/lib/api-types"
-import { checkDetail, checkLabel, failed, resolves, winningScope } from "@/lib/binary-layers"
+import {
+  checkDetail,
+  checkLabel,
+  failed,
+  parkedLabel,
+  resolves,
+  winningScope,
+} from "@/lib/binary-layers"
 import { ProjectService, Store } from "@/lib/rpc"
 import { useBinaryCheck } from "@/lib/use-binary-check"
+import { useRemoteResource } from "@/lib/use-remote-resource"
 import { binKey, binOffKey } from "@/lib/providers-store"
 import { useProjects } from "@/providers/projects"
 import { cn } from "@/lib/utils"
@@ -18,23 +26,37 @@ const GLOBAL_SCOPE = ""
 // useStoredSetting is one settings value in one scope: read once, written
 // through on every change. An undefined scope is a layer this pane does not have
 // — the hub has no project — and reads as empty without touching the store.
+//
+// Settings renders every provider's section at the same position, so React keeps
+// one instance and the key changes underneath it. The read therefore has to be
+// the sequence-guarded one: two lookups in flight can answer out of order, and a
+// stale answer here is not a stale readout but the previous provider's path
+// written into this provider's key by the next keystroke. The scope is part of
+// the request for the same reason.
 function useStoredSetting(key: string, scope: string | undefined) {
-  const [value, setValue] = useState("")
-
-  useEffect(() => {
-    if (scope === undefined) {
-      return
-    }
-    void Store.GetSetting(key, scope).then(setValue)
-  }, [key, scope])
+  const request = scope === undefined ? "" : `${key}\n${scope}`
+  const { data } = useRemoteResource(request, () => Store.GetSetting(key, scope ?? ""), {
+    empty: "",
+    resetOn: request,
+  })
+  // What was typed, tagged with the request it was typed against, so it is
+  // dropped by the same change that blanks the value it was overriding.
+  const [draft, setDraft] = useState<{ request: string; value: string } | null>(null)
 
   const persist = (next: string) => {
-    setValue(next)
+    setDraft({ request, value: next })
     if (scope !== undefined) {
       void Store.SetSetting(key, scope, next.trim())
     }
   }
-  return [value, persist] as const
+  return [draft?.request === request ? draft.value : data, persist] as const
+}
+
+// The store holds strings, so one place knows that "true" is the only value that
+// means on — and the switches read as the booleans they are everywhere else.
+function useStoredFlag(key: string, scope: string | undefined) {
+  const [value, persist] = useStoredSetting(key, scope)
+  return [value === "true", (on: boolean) => persist(on ? "true" : "false")] as const
 }
 
 // ProviderBinary is the "which executable runs" block. Closed it is a fact — the
@@ -67,18 +89,23 @@ export function ProviderBinary({
   const offKey = binOffKey(providerId)
   const [globalBin, setGlobalBin] = useStoredSetting(key, GLOBAL_SCOPE)
   const [projectBin, setProjectBin] = useStoredSetting(key, projectId)
-  const [globalOff, setGlobalOff] = useStoredSetting(offKey, GLOBAL_SCOPE)
-  const [projectOff, setProjectOff] = useStoredSetting(offKey, projectId)
+  const [globalOff, setGlobalOff] = useStoredFlag(offKey, GLOBAL_SCOPE)
+  const [projectOff, setProjectOff] = useStoredFlag(offKey, projectId)
   const [open, setOpen] = useState(false)
 
-  const scope = winningScope(
-    { bin: project ? projectBin : "", off: projectOff === "true" },
-    { bin: globalBin, off: globalOff === "true" },
-  )
-  const configured = scope === "project" ? projectBin.trim() : globalBin.trim()
+  // The project layer is empty until its project is on hand: the pane can be
+  // pointed at a project id whose record has not arrived yet.
+  const projectLayer = { bin: project ? projectBin : "", off: projectOff }
+  const globalLayer = { bin: globalBin, off: globalOff }
+  const scope = winningScope(projectLayer, globalLayer)
+  // Nothing is configured when $PATH wins, whatever a parked layer still holds —
+  // otherwise the closed row would caption the $PATH binary with a path that is
+  // switched off.
+  const configured =
+    scope === "project" ? projectBin.trim() : scope === "global" ? globalBin.trim() : ""
   // Both layers go through the same check, so the bottom row answers with the
   // resolution the spawn would make rather than a second opinion about $PATH.
-  const typed = useBinaryCheck(scope === "path" ? "" : configured)
+  const typed = useBinaryCheck(configured)
   const onPath = useBinaryCheck(providerId)
   const check = scope === "path" ? onPath : typed
   const broken = failed(check)
@@ -100,7 +127,7 @@ export function ProviderBinary({
       label: `${project.name} only`,
       value: projectBin,
       persist: setProjectBin,
-      off: projectOff === "true",
+      off: projectOff,
       setOff: setProjectOff,
     },
     {
@@ -108,7 +135,7 @@ export function ProviderBinary({
       label: "All projects",
       value: globalBin,
       persist: setGlobalBin,
-      off: globalOff === "true",
+      off: globalOff,
       setOff: setGlobalOff,
     },
   ].filter((layer) => layer !== undefined)
@@ -148,7 +175,7 @@ export function ProviderBinary({
                     size="sm"
                     checked={resolves({ bin: layer.value, off: layer.off })}
                     disabled={!layer.value.trim()}
-                    onCheckedChange={(on) => layer.setOff(on ? "false" : "true")}
+                    onCheckedChange={(on) => layer.setOff(!on)}
                     aria-label={`Use the ${providerName} binary set for ${layer.label}`}
                   />
                 }
@@ -191,7 +218,7 @@ export function ProviderBinary({
             </span>
             <span className="whitespace-nowrap text-muted-foreground">
               · {sourceLabel(scope, project?.name)}
-              {parkedLabel(scope, projectOff === "true", globalOff === "true", project?.name)}
+              {parkedLabel(scope, projectLayer, globalLayer, project?.name)}
             </span>
           </span>
           <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
@@ -220,21 +247,6 @@ function sourceLabel(scope: string, projectName: string | undefined): string {
     return projectName ? `set for ${projectName}` : "set for this project"
   }
   return scope === "global" ? "set for all projects" : "from $PATH"
-}
-
-// parkedLabel names an override that is set but switched off — the one fact the
-// closed state would otherwise hide, since the switch saying it is not on
-// screen. Only layers the winner did not come from can be parked.
-function parkedLabel(
-  scope: string,
-  projectOff: boolean,
-  globalOff: boolean,
-  projectName: string | undefined,
-): string {
-  if (projectOff && scope !== "project") {
-    return ` · ${projectName ?? "project"} override off`
-  }
-  return globalOff && scope === "path" ? " · global override off" : ""
 }
 
 // Layer is one row of the resolution stack: the scope it configures, its

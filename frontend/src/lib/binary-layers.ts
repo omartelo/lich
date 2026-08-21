@@ -27,6 +27,35 @@ export function resolves(layer: BinaryLayer): boolean {
   return !layer.off && layer.bin.trim() !== ""
 }
 
+// parked is the mirror of `resolves`: a layer holding a path with its switch
+// off, so it would spawn if it were switched back on. A layer that is off and
+// empty is not parked — there is nothing there to put back.
+function parked(layer: BinaryLayer): boolean {
+  return layer.off && layer.bin.trim() !== ""
+}
+
+// parkedLabel names the overrides that are set but switched off — the fact the
+// closed state would otherwise hide, since the switches themselves are not on
+// screen. A layer is named only when switching it back on would change what
+// spawns: an override the winner already shadows is not news, so a parked global
+// under a winning project override stays quiet while both parked under $PATH are
+// both named.
+export function parkedLabel(
+  scope: BinaryScope,
+  project: BinaryLayer,
+  global: BinaryLayer,
+  projectName: string | undefined,
+): string {
+  const names: string[] = []
+  if (scope !== "project" && parked(project)) {
+    names.push(`${projectName ?? "project"} override off`)
+  }
+  if (scope === "path" && parked(global)) {
+    names.push("global override off")
+  }
+  return names.map((name) => ` · ${name}`).join("")
+}
+
 // checkLabel is the verdict beside a path, in the width a row has. Empty when
 // there is nothing to say — an unset layer is not a failure.
 //
@@ -59,7 +88,7 @@ export function checkDetail(check: BinaryCheck | null): string {
       return "A relative path is resolved against each session's own working directory, so it names a different binary per session. Use a full path."
     case "not-found":
     case "not-executable":
-      return "Sessions will not start until this is fixed or cleared. Clearing it falls back to the layer below."
+      return "Sessions will not start until this is fixed. An override can also be switched off or cleared, falling back to the layer below."
     default:
       return ""
   }

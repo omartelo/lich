@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest"
 import type { BinaryCheck } from "./api-types"
-import { checkDetail, checkLabel, failed, resolves, winningScope } from "./binary-layers"
+import {
+  checkDetail,
+  checkLabel,
+  failed,
+  parkedLabel,
+  resolves,
+  winningScope,
+} from "./binary-layers"
 
 const check = (status: BinaryCheck["status"], path = ""): BinaryCheck => ({ path, status })
 
@@ -36,6 +43,59 @@ describe("resolves", () => {
     expect(resolves(layer("/opt/claude", true))).toBe(false)
     expect(resolves(layer(""))).toBe(false)
     expect(resolves(layer("  ", false))).toBe(false)
+  })
+})
+
+describe("parkedLabel", () => {
+  const off = (bin: string) => layer(bin, true)
+  const unset = layer("")
+
+  it("says nothing when nothing is parked", () => {
+    expect(parkedLabel("path", unset, unset, "myproject")).toBe("")
+    expect(parkedLabel("project", layer("/opt/next/claude"), unset, "myproject")).toBe("")
+  })
+
+  // The repro this guard exists for: switching the override off writes the flag,
+  // then clearing the field writes an empty path over it. The flag outlives the
+  // path, and the closed state used to keep announcing an override nobody set.
+  it("does not claim an override for a flag with no path behind it", () => {
+    expect(parkedLabel("path", off(""), off(""), "myproject")).toBe("")
+    expect(parkedLabel("path", off("   "), off(" \t "), "myproject")).toBe("")
+  })
+
+  it("names a parked override the winner did not shadow", () => {
+    expect(parkedLabel("path", off("/opt/next/claude"), unset, "myproject")).toBe(
+      " · myproject override off",
+    )
+    expect(parkedLabel("global", off("/opt/next/claude"), layer("/opt/claude"), "myproject")).toBe(
+      " · myproject override off",
+    )
+    expect(parkedLabel("path", unset, off("/opt/claude"), "myproject")).toBe(
+      " · global override off",
+    )
+  })
+
+  // Both parked is why $PATH won, and either switch flipped back on would change
+  // what spawns — so the closed line owns up to both rather than the nearer one.
+  it("names both when both are parked", () => {
+    expect(parkedLabel("path", off("/opt/next/claude"), off("/opt/claude"), "myproject")).toBe(
+      " · myproject override off · global override off",
+    )
+  })
+
+  // A parked layer under a winning override is not news: its switch changes
+  // nothing while the layer above it resolves.
+  it("stays quiet about a layer the winner shadows", () => {
+    expect(parkedLabel("project", layer("/opt/next/claude"), off("/opt/claude"), "myproject")).toBe(
+      "",
+    )
+  })
+
+  // The pane can hold a project override before the project itself has loaded.
+  it("falls back to a generic name when the project has none yet", () => {
+    expect(parkedLabel("path", off("/opt/next/claude"), unset, undefined)).toBe(
+      " · project override off",
+    )
   })
 })
 
