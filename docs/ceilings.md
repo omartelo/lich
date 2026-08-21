@@ -173,3 +173,9 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   provider, and `shell` is not one — the sandbox exists to confine an agent working unattended, not the
   user's own prompt. A terminal opened in a project whose provider is on `Everywhere` still runs on the
   machine, and nothing says so.
+- **The macOS floor is the toolchain's, not lich's** (`build/darwin/Info.plist.tpl`,
+  `build/darwin/homebrew/lich.rb.tpl`): nothing in lich needs macOS 13, but Go 1.27 dropped every
+  release before Ventura, so a binary built from this module cannot run on Big Sur or Monterey. The
+  cask's `depends_on` and the bundle's `LSMinimumSystemVersion` say 13.0 because the compiler does —
+  both move with the next Go bump, and a machine below the floor is refused by Homebrew rather than
+  by a crash.

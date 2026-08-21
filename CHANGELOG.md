@@ -14,6 +14,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the module is what CI reads its Go version from. `GOTOOLCHAIN=auto` — the
   default — fetches 1.27.0 on its own; a build pinned to `local` on anything
   older will refuse the module.
+- **The cost readout scans a transcript about three times faster.** Nothing in
+  lich changed: Go 1.27 rebuilt `encoding/json` on top of its v2 implementation,
+  and the per-line decode that prices a session went from ~90µs to ~27µs on a
+  full assistant turn, allocating 2 objects where it used to allocate 13. A
+  project whose sessions carry long transcripts feels it on every refresh.
+
+### Removed
+
+- **macOS builds no longer run on Big Sur or Monterey.** Go 1.27 dropped every
+  macOS before 13 Ventura, so the cask now declares that floor and Homebrew
+  refuses the install on an older machine rather than handing it a binary that
+  cannot start. Nothing in lich itself needs 13 — the floor is the compiler's,
+  and it moves with the next Go bump.
 
 ## [0.39.0] - 2026-08-21
 

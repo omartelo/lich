@@ -16,7 +16,7 @@ cask "lich" do
   desc "Personal harness for AI-assisted development"
   homepage "https://github.com/omartelo/lich"
 
-  depends_on macos: ">= :big_sur"
+  depends_on macos: ">= :ventura"
 
   app "Lich.app"
   binary "#{appdir}/Lich.app/Contents/MacOS/lich"
