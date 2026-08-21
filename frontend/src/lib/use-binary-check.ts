@@ -7,11 +7,16 @@ import { Providers } from "./rpc"
 // round trip per character to report a file nobody has finished naming yet.
 const SETTLE_MS = 400
 
+// The settle for a `bin` that is a constant: there is no next keystroke to wait
+// for, and every millisecond of it is one the caller spends not knowing whether
+// the tool it is about to shell out to exists.
+export const NO_SETTLE = 0
+
 // useBinaryCheck resolves a configured binary through the backend, re-checking
 // whenever the value settles. Null while the first answer for a value is in
 // flight — the callers draw nothing rather than flashing a failure between
 // keystrokes.
-export function useBinaryCheck(bin: string): BinaryCheck | null {
+export function useBinaryCheck(bin: string, settleMs: number = SETTLE_MS): BinaryCheck | null {
   const [check, setCheck] = useState<BinaryCheck | null>(null)
 
   useEffect(() => {
@@ -27,12 +32,12 @@ export function useBinaryCheck(bin: string): BinaryCheck | null {
         // A failed call is not a failed path: leaving the verdict absent says
         // "unknown", which is the truth when nothing answered.
         .catch(() => {})
-    }, SETTLE_MS)
+    }, settleMs)
     return () => {
       live = false
       clearTimeout(timer)
     }
-  }, [bin])
+  }, [bin, settleMs])
 
   return check
 }

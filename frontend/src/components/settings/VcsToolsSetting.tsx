@@ -3,7 +3,7 @@ import { ExternalLink, GitBranch, GitPullRequestArrow, Wrench } from "lucide-rea
 import type { BinaryCheck } from "@/lib/api-types"
 import { failed } from "@/lib/binary-layers"
 import { System } from "@/lib/rpc"
-import { useBinaryCheck } from "@/lib/use-binary-check"
+import { NO_SETTLE, useBinaryCheck } from "@/lib/use-binary-check"
 import { GH, GIT, RESTART_HINT, type VcsTool } from "@/lib/vcs-tools"
 import { Button } from "@/components/ui/button"
 import { SettingBlock } from "./SettingBlock"
@@ -17,8 +17,8 @@ import { SettingBlock } from "./SettingBlock"
 // rarely the real question: lich pins the login shell's $PATH at launch, so
 // *which* git it found is what a machine with two of them needs to see.
 export function VcsToolsSetting() {
-  const git = useBinaryCheck(GIT.bin)
-  const gh = useBinaryCheck(GH.bin)
+  const git = useBinaryCheck(GIT.bin, NO_SETTLE)
+  const gh = useBinaryCheck(GH.bin, NO_SETTLE)
   return (
     <SettingBlock
       icon={<Wrench className="size-4" />}

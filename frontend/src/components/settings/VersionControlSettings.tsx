@@ -6,7 +6,7 @@ import { accountLabel, accountSelectItems, upgradeAccount } from "@/lib/gh-accou
 import { GH_ACCOUNT_KEY } from "@/lib/project-settings"
 import { errorText } from "@/lib/utils"
 import { failed } from "@/lib/binary-layers"
-import { useBinaryCheck } from "@/lib/use-binary-check"
+import { NO_SETTLE, useBinaryCheck } from "@/lib/use-binary-check"
 import { GIT } from "@/lib/vcs-tools"
 import { invalidatePullRequests } from "@/lib/pulls/pull-request-lookup"
 import { useProjects } from "@/providers/projects"
@@ -38,7 +38,7 @@ export function VersionControlSettings({ projectId }: { projectId?: string }) {
   const [accounts, setAccounts] = useState<string[] | null>(null)
   const [account, setAccount] = useState("")
   const [identity, setIdentity] = useState<CommitIdentity | null>(null)
-  const noGit = failed(useBinaryCheck(GIT.bin))
+  const noGit = failed(useBinaryCheck(GIT.bin, NO_SETTLE))
   const [error, setError] = useState("")
 
   // Read once per project: git's config changes outside lich, but so rarely

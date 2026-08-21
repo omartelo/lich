@@ -2,7 +2,7 @@ import { useState } from "react"
 import { ExternalLink } from "lucide-react"
 import { failed } from "@/lib/binary-layers"
 import { System } from "@/lib/rpc"
-import { useBinaryCheck } from "@/lib/use-binary-check"
+import { NO_SETTLE, useBinaryCheck } from "@/lib/use-binary-check"
 import { GIT, RESTART_HINT } from "@/lib/vcs-tools"
 import { Button } from "@/components/ui/button"
 import {
@@ -28,7 +28,7 @@ import {
 // the condition is not a preference to be honoured — it is a machine that
 // cannot do half of what lich offers, and it stops asking the moment git exists.
 export function GitMissingGate() {
-  const check = useBinaryCheck(GIT.bin)
+  const check = useBinaryCheck(GIT.bin, NO_SETTLE)
   const [dismissed, setDismissed] = useState(false)
 
   if (!failed(check) || dismissed) {

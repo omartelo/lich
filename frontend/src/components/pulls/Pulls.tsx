@@ -8,7 +8,7 @@ import { baseName } from "@/lib/paths"
 import { Notice } from "@/components/common/Notice"
 import { ToolMissing } from "@/components/common/ToolMissing"
 import { failed } from "@/lib/binary-layers"
-import { useBinaryCheck } from "@/lib/use-binary-check"
+import { NO_SETTLE, useBinaryCheck } from "@/lib/use-binary-check"
 import { GH } from "@/lib/vcs-tools"
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
 import { sessionsOf } from "@/lib/session/sessions"
@@ -65,7 +65,14 @@ export function Pulls({ list = false }: PullsProps) {
   const projectPath = projects.find((p) => p.id === projectId)?.path ?? ""
   // Every read this screen makes is a gh call, so a machine without gh gets the
   // one screen that can say so instead of three lookups failing in a row.
-  const noGH = failed(useBinaryCheck(GH.bin))
+  const gh = useBinaryCheck(GH.bin, NO_SETTLE)
+  const noGH = failed(gh)
+  // A check still in flight is neither verdict, and treating it as "gh is fine"
+  // is what let the lookups run ahead of it: they fail first and paint their own
+  // error until the screen that explains it takes over. Nothing is looked up
+  // until gh has answered — one local check, so a machine that has gh loses a
+  // frame rather than sitting on a skeleton.
+  const hasGH = gh !== null && !noGH
   const { sessionId, path, checkout } = useActiveSession()
   const status = useGitStatus(path)
   const branch = status?.branch ?? ""
@@ -75,7 +82,7 @@ export function Pulls({ list = false }: PullsProps) {
   // addresses one directly, which only the list can produce.
   const selected = Number(number) || 0
   const { detail, loading, error, refresh } = usePullRequestDetail(
-    noGH ? "" : path,
+    hasGH ? path : "",
     branch,
     head,
     selected,
@@ -90,7 +97,7 @@ export function Pulls({ list = false }: PullsProps) {
   const parsedQuery = useMemo(() => parsePullsQuery(query), [query])
   // An empty path is the hook's own "nothing to look up", so the single pull
   // request screen never spends a gh call on a list it does not show.
-  const pulls = usePullRequests(list && !noGH ? projectPath || path : "", parsedQuery.state)
+  const pulls = usePullRequests(list && hasGH ? projectPath || path : "", parsedQuery.state)
   const { checkouts, refresh: refreshCheckouts } = useCheckouts(projectPath)
   // Where the pull request's own branch already lives, if anywhere. Every
   // "work on this PR" decision hangs off it: whether to create a checkout,
@@ -229,7 +236,12 @@ export function Pulls({ list = false }: PullsProps) {
   }
 
   let body: ReactNode
-  if (noGH) {
+  if (gh === null) {
+    // Held rather than drawn: every branch below needs gh to have answered, and
+    // the one that would win by default is an error about a lookup that only
+    // failed because it ran too early.
+    body = null
+  } else if (noGH) {
     body = <ToolMissing tool={GH} icon={GitPullRequestArrow} />
   } else if (!path) {
     body = <CentredNotice>No repository</CentredNotice>
@@ -258,7 +270,7 @@ export function Pulls({ list = false }: PullsProps) {
 
   return (
     <div className="absolute inset-0 z-10 flex bg-background">
-      {list && !noGH && (
+      {list && hasGH && (
         <PullsList
           list={pulls.list}
           loading={pulls.loading}
