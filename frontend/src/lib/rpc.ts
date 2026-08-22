@@ -412,6 +412,13 @@ export const System = {
    * Returns "" when it launched a GUI editor detached, or a shell command line
    * to run in a terminal session when the editor is a terminal editor. */
   OpenInEditor: (dir: string, rel: string) => call<string>("system.OpenInEditor", [dir, rel]),
+  /** Open a session's checkout — the folder itself — in $VISUAL/$EDITOR. Same
+   * two answers as OpenInEditor: "" for a detached GUI launch, or a shell
+   * command line to run in a terminal session. */
+  OpenFolderInEditor: (dir: string) => call<string>("system.OpenFolderInEditor", [dir]),
+  /** Show a session's checkout in the platform's file manager. Rejects a path
+   * that is no longer a folder, so a card outliving its worktree says so. */
+  OpenFolder: (dir: string) => call<null>("system.OpenFolder", [dir]),
   /** Version, platform and log path — the page cannot derive any of the three. */
   Diagnostics: () => call<DiagnosticsData>("system.Diagnostics", []),
   /** Open the log's folder in the platform's file manager, for attaching it. */

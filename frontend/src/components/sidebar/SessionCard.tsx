@@ -6,6 +6,8 @@ import {
   ArrowRight,
   CircleQuestionMark,
   CornerDownLeft,
+  FolderCode,
+  FolderOpen,
   GitBranch,
   GitPullRequestArrow,
   Inbox,
@@ -19,7 +21,8 @@ import {
   X,
 } from "lucide-react"
 import { useSortable } from "@dnd-kit/sortable"
-import { cn } from "@/lib/utils"
+import { toast } from "sonner"
+import { cn, errorText } from "@/lib/utils"
 import { dragStyle } from "@/lib/use-sortable-list"
 import { displayPath } from "@/lib/paths"
 import type { Session } from "@/lib/session/sessions"
@@ -46,7 +49,8 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
-import { Terminal as TerminalService } from "@/lib/rpc"
+import { System, Terminal as TerminalService } from "@/lib/rpc"
+import { queuePaste } from "@/lib/terminal/paste-queue"
 import type { DelegateGroup } from "@/lib/session/delegate-targets"
 import { delegatePrompt, delegateWorktreePrompt } from "@/lib/session/delegate-prompt"
 import { bracketedPaste } from "@/lib/terminal/bracketed-paste"
@@ -68,10 +72,11 @@ interface SessionCardProps {
   // Pin the card to the head of the list, or unpin it. A pinned card offers no
   // close affordance at all — unpinning is the way back to closing it.
   onPin: (pinned: boolean) => void
-  // Open a shell session rooted at this card's shown directory. Wired only for
-  // agent sessions, so the user can drop into a terminal in the worktree the
-  // agent is working in without cd-ing there by hand.
-  onOpenTerminal: (cwd: string) => void
+  // Open a shell session rooted at this card's shown directory, and answer with
+  // its id. The menu item is wired for agent sessions alone — the user dropping
+  // into a terminal in the worktree the agent works in, without cd-ing there by
+  // hand — but the id is what lets a terminal editor be launched in it.
+  onOpenTerminal: (cwd: string) => string
   // Record the command this terminal opens into, "" to clear it back to a plain
   // shell. Offered on shell sessions alone: on a provider card the entrypoint is
   // the provider, and the store refuses one there anyway.
@@ -161,6 +166,28 @@ export function SessionCard({
   const delegateWorktree = () => {
     void TerminalService.Write(session.id, bracketedPaste(delegateWorktreePrompt(session.kind)))
     requestTerminalFocus(session.id)
+  }
+
+  // Open this card's checkout, the folder itself. The backend either launched a
+  // GUI editor detached (empty reply) or handed back the command line for a
+  // terminal editor: run that in a shell session at the checkout, the way the
+  // files panel does for a single file.
+  const openFolderInEditor = () => {
+    void System.OpenFolderInEditor(shownPath)
+      .then((command) => {
+        if (command) {
+          queuePaste(onOpenTerminal(shownPath), `${command}\n`)
+        }
+      })
+      .catch((error) => toast.error(`Could not open the checkout: ${errorText(error)}`))
+  }
+
+  // A worktree removed outside lich leaves its card behind, so both openers
+  // report a checkout that is gone rather than launching at nothing.
+  const openFolder = () => {
+    void System.OpenFolder(shownPath).catch((error) =>
+      toast.error(`Could not open the folder: ${errorText(error)}`),
+    )
   }
 
   // Every provider can delegate, and no live target is required: the picker's
@@ -511,6 +538,14 @@ export function SessionCard({
               Open Terminal
             </ContextMenuItem>
           )}
+          <ContextMenuItem onClick={openFolderInEditor}>
+            <FolderCode />
+            Open in editor
+          </ContextMenuItem>
+          <ContextMenuItem onClick={openFolder}>
+            <FolderOpen />
+            Open folder
+          </ContextMenuItem>
           <ContextMenuItem onClick={onPulls}>
             <GitPullRequestArrow />
             Pull request

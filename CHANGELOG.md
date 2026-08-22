@@ -49,6 +49,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with nothing, and the keypress falls through to the session underneath. The
   shortcuts sheet reads it as unassigned rather than naming a default it no
   longer answers to, and reset still puts that default back.
+- **A card can open its own checkout.** Right-click a session and *Open in
+  editor* opens its folder in `$VISUAL`/`$EDITOR` — a terminal editor lands in a
+  new shell session at the checkout, the same as opening a single file from the
+  files panel — while *Open folder* shows it in the system file manager. Getting
+  to a worktree from outside lich meant reading the path off the card and typing
+  it somewhere else, and a worktree path is exactly the kind nobody types twice.
+  A card whose checkout was removed behind lich's back says so instead of
+  launching at nothing.
 
 ### Changed
 

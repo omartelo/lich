@@ -19,3 +19,10 @@ func (s *Service) openURL(rawURL string) error {
 func (s *Service) quoteForShell(full string) (string, bool) {
 	return shquote.Quote(full), true
 }
+
+// openFolder shows a directory in the desktop's file manager. Same resolver as
+// openDefault: xdg-open already answers a directory with the file manager
+// rather than an editor.
+func (s *Service) openFolder(dir string) error {
+	return s.run("xdg-open", dir)
+}

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -102,7 +103,7 @@ func (s *Service) RevealLog() error {
 	if s.logPath == "" {
 		return fmt.Errorf("no log file: lich is logging to stderr only")
 	}
-	return s.openDefault(filepath.Dir(s.logPath))
+	return s.openFolder(filepath.Dir(s.logPath))
 }
 
 // notifyTitle is the app name carried by every notification lich raises. macOS
@@ -170,7 +171,46 @@ func (s *Service) OpenInEditor(dir, rel string) (string, error) {
 	if err := relpath.Validate(rel); err != nil {
 		return "", err
 	}
-	full := filepath.Join(dir, rel)
+	return s.openInEditor(filepath.Join(dir, rel), s.openDefault)
+}
+
+// OpenFolderInEditor opens a session's checkout — the directory itself, not a
+// file under it — exactly the way OpenInEditor opens one of its files, terminal
+// editors included.
+func (s *Service) OpenFolderInEditor(dir string) (string, error) {
+	if err := requireDir(dir); err != nil {
+		return "", err
+	}
+	return s.openInEditor(dir, s.openFolder)
+}
+
+// OpenFolder shows a checkout in the platform's file manager. It never consults
+// $VISUAL/$EDITOR: this is the way out of lich to the OS's own view of the
+// folder, which is the one thing opening it in an editor does not give.
+func (s *Service) OpenFolder(dir string) error {
+	if err := requireDir(dir); err != nil {
+		return err
+	}
+	return s.openFolder(dir)
+}
+
+// requireDir refuses a path that is not a directory any more, naming it. lich
+// watches no checkout: a worktree removed from a terminal, or a project folder
+// moved, still has its card, and a launcher handed the dead path either does
+// nothing or fails somewhere nobody is looking.
+func requireDir(dir string) error {
+	info, err := os.Stat(dir)
+	if err != nil || !info.IsDir() {
+		return fmt.Errorf("this folder is gone: %s", dir)
+	}
+	return nil
+}
+
+// openInEditor resolves the editor for one absolute target — a file or a
+// directory — and either launches it or hands back the command line to run.
+// fallback opens the target without an editor, and differs by what it is: a
+// file goes to its default handler, a folder to the file manager.
+func (s *Service) openInEditor(full string, fallback func(string) error) (string, error) {
 	editor := s.getenv("VISUAL")
 	if editor == "" {
 		editor = s.getenv("EDITOR")
@@ -184,23 +224,23 @@ func (s *Service) OpenInEditor(dir, rel string) (string, error) {
 		// worse than not using the editor.
 		quoted, ok := s.quoteForShell(full)
 		if !ok {
-			return "", s.openDefault(full)
+			return "", fallback(full)
 		}
 		return editor + " " + quoted, nil
 	}
 	if editor != "" {
-		return "", s.runEditor(editor, full)
+		return "", s.runEditor(editor, full, fallback)
 	}
-	return "", s.openDefault(full)
+	return "", fallback(full)
 }
 
 // runEditor launches a GUI $EDITOR value that may carry flags ("code --wait"),
-// appending the file as the final argument. An all-whitespace value degrades to
-// the default opener rather than launching an empty command.
-func (s *Service) runEditor(editor, full string) error {
+// appending the target as the final argument. An all-whitespace value degrades
+// to the fallback opener rather than launching an empty command.
+func (s *Service) runEditor(editor, full string, fallback func(string) error) error {
 	fields := strings.Fields(editor)
 	if len(fields) == 0 {
-		return s.openDefault(full)
+		return fallback(full)
 	}
 	args := append(fields[1:], full)
 	return s.run(fields[0], args...)

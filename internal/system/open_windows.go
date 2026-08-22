@@ -22,3 +22,10 @@ func (s *Service) quoteForShell(full string) (string, bool) {
 func (s *Service) openURL(rawURL string) error {
 	return s.run("rundll32", "url.dll,FileProtocolHandler", rawURL)
 }
+
+// openFolder shows a directory in File Explorer. Same launcher as openDefault,
+// and for the same reason: explorer takes the path as a plain argument, with no
+// shell in between to read & | < > out of it.
+func (s *Service) openFolder(dir string) error {
+	return s.run("explorer", dir)
+}
