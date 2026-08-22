@@ -49,6 +49,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Closing a session hangs up on the agent instead of killing it outright.** A
+  card's close sent the process `SIGKILL`, which leaves an agent no chance to run
+  its own exit path. Claude Code reads that as a crash: a session killed within
+  ten seconds of its first frame counts as a fullscreen renderer that failed to
+  start, and two of those turn fullscreen off for every session on the machine —
+  the `tui` setting still says `fullscreen`, every session comes up on the classic
+  renderer anyway, and only `/tui fullscreen` clears it. A close now sends
+  `SIGTERM` and kills only a child that outstays a one-second grace, so exit
+  hooks, transcripts and renderer state are written the way they are in any
+  terminal. Windows keeps the abrupt close — a ConPTY has no signal to send.
 - **A deep file tree is readable again.** A pull request whose paths run
   `src/main/java/br/com/acme/...` spent the panel's whole width on indentation,
   and every file name arrived as an ellipsis with no way to reach the rest of

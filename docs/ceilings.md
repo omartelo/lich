@@ -28,6 +28,10 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **A dropped file has no path, so lich guesses it** (`internal/drop`): a file under neither the session directory
   nor home is *copied*, so an agent told to edit it edits the copy — and that copy is deleted 3 days on, so a path
   pasted into a prompt eventually stops resolving.
+- **A session close is a hang-up on Unix and a kill on Windows** (`internal/terminal/pty_unix.go`,
+  `pty_windows.go`): closing a card signals the agent and gives it `closeGrace` to leave, so its exit path runs —
+  hooks, transcripts, whatever it writes on the way out. A ConPTY has no signal to deliver, so the same close on
+  Windows is still abrupt: an agent that saves state on exit loses it there, and nothing on screen says so.
 - **A terminal entrypoint reaches shell sessions on Linux and macOS alone** (`internal/terminal/entrypoint.go`):
   the menu item is absent on a provider card, and on Windows the setting saves and the terminal opens on a bare
   shell anyway — the wrap is skipped there for `wrapSetup`'s reason, and nothing on screen says so. It also runs
