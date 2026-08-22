@@ -81,15 +81,17 @@ func (s *Service) Diagnostics() Diagnostics {
 	}
 }
 
-// SandboxAvailable reports whether this machine can run a session confined
-// (internal/sandbox). It answers here rather than beside the provider list
-// because it is a fact about the machine — bubblewrap installed, or macOS —
+// SandboxBackend names what confines a session on this machine — "bubblewrap",
+// "sandbox-exec" — or "" when nothing can (internal/sandbox). It answers here
+// rather than beside the provider list because it is a fact about the machine,
 // and the same answer for every provider on it.
 //
-// The frontend hides the sandbox control when this is false rather than
-// offering one that saves a setting nothing can act on.
-func (s *Service) SandboxAvailable() bool {
-	return sandbox.Available()
+// The name rather than a yes: the two backends have different holes, and the
+// Sandbox pane says which one is in play so a report about a confined session
+// starts a round ahead. "" is what the pane draws its "cannot confine" state
+// from, and what the new-session dialog reads as "do not offer the choice".
+func (s *Service) SandboxBackend() string {
+	return sandbox.Backend()
 }
 
 // RevealLog opens the log's directory with the platform's file manager, not the

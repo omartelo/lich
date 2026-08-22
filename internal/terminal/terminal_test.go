@@ -42,6 +42,9 @@ type stubBins struct {
 	entrypoint      string
 	sandbox         string
 	sandboxOn       bool
+	sshAgent        bool
+	ghToken         bool
+	ghAccount       string
 	skipPerms       bool
 	costOn          bool
 	ledgers         map[string]stubLedger
@@ -92,6 +95,9 @@ func (s stubBins) SessionEntrypoint(_ string) string    { return s.entrypoint }
 func (s stubBins) SessionSandbox(_ string) string       { return s.sandbox }
 func (s stubBins) SetSessionSandbox(_, _ string) error  { return nil }
 func (s stubBins) SandboxDefault(_, _, _ string) bool   { return s.sandboxOn }
+func (s stubBins) SandboxSSHAgent(_ string) bool        { return s.sshAgent }
+func (s stubBins) SandboxGHToken(_ string) bool         { return s.ghToken }
+func (s stubBins) GHAccountForPath(_ string) string     { return s.ghAccount }
 func (s stubBins) SetProviderSession(_, _ string) error { return nil }
 
 func (s stubBins) WorktreePorts() map[string]int {
@@ -1390,5 +1396,18 @@ func TestReadyIsFalseForASessionThatIsNotRunning(t *testing.T) {
 
 	if svc.Ready("ghost") {
 		t.Error("a session with no PTY was reported ready for work")
+	}
+}
+
+// An unconfined session already runs with the user's whole environment. Asking
+// gh for a token there would spend a subprocess to hand over something the
+// session never lacked.
+func TestSandboxCredentialsAreOnlyForConfinedSessions(t *testing.T) {
+	svc := New(stubBins{sshAgent: true, ghToken: true, ghAccount: "github.com/someone"}, nil, events.New())
+	if got := svc.sandboxCredentials("p1", "/repo", false); got != (sandboxCreds{}) {
+		t.Errorf("an unconfined session was handed %+v, want nothing", got)
+	}
+	if got := svc.sandboxCredentials("p1", "/repo", true); !got.sshAgent {
+		t.Error("a confined session was refused the agent its project turned on")
 	}
 }

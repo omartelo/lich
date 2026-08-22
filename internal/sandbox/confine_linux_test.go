@@ -33,7 +33,7 @@ func confinedHome(t *testing.T) (home, cwd string) {
 // output. The shell is /bin/sh, which the read-only base filesystem provides.
 func runConfined(t *testing.T, home, cwd, script string) string {
 	t.Helper()
-	spec := Describe(providers.Claude, home, cwd, "", nil)
+	spec := Describe(providers.Claude, home, cwd, "", nil, false)
 	bin, args := Wrap(spec, "/bin/sh", []string{"-c", script})
 	out, err := exec.Command(bin, args...).CombinedOutput()
 	if err != nil {
@@ -149,7 +149,7 @@ func TestAnAgentInstalledAsASymlinkRuns(t *testing.T) {
 	// to be on it — the same way the user's own installer puts it there.
 	t.Setenv("PATH", filepath.Join(home, ".local", "bin")+":"+os.Getenv("PATH"))
 
-	spec := Describe(providers.Claude, home, cwd, "", BinaryDirs("agent"))
+	spec := Describe(providers.Claude, home, cwd, "", BinaryDirs("agent"), false)
 	bin, args := Wrap(spec, link, nil)
 	out, err := exec.Command(bin, args...).CombinedOutput()
 	if err != nil {

@@ -27,14 +27,65 @@ import (
 // dropDir is where this session's dropped-file copies live (sessionDropDir),
 // bound read-only so a file dragged onto a confined terminal is a file the
 // agent can actually open. Empty leaves it out.
-func wrapSandbox(spec ptySpec, kind, home, dropDir string, confined bool) ptySpec {
+func wrapSandbox(spec ptySpec, kind, home, dropDir string, confined bool, creds sandboxCreds) ptySpec {
 	if !confined || home == "" || !sandbox.Available() {
 		return spec
 	}
 	read := append(executables(spec.bin), dropDir)
-	sb := sandbox.Describe(kind, home, spec.dir, project.GitCommonDir(spec.dir), read)
+	sb := sandbox.Describe(kind, home, spec.dir, project.GitCommonDir(spec.dir), read, creds.sshAgent)
 	spec.bin, spec.args = sandbox.Wrap(sb, spec.bin, spec.args)
+	// The token goes in the child's environment rather than through bubblewrap's
+	// --setenv, which would write it into an argument list any process on the
+	// machine can read out of /proc.
+	if creds.ghToken != "" {
+		spec.env = append(spec.env, "GH_TOKEN="+creds.ghToken)
+	}
 	return spec
+}
+
+// sandboxCreds is what a confined session is handed to act on the network as the
+// user: the ssh agent a push authenticates through, and the GitHub token gh
+// works through. The zero value is the sandbox as it first shipped — a session
+// that commits locally and hands the push back to whoever is watching.
+//
+// They are two answers rather than one because they open different doors. The
+// agent signs with every identity loaded into it, for any host; the token is one
+// account's, carrying the scopes that account was granted. Wanting gh to work is
+// not wanting to hand over your ssh keys.
+type sandboxCreds struct {
+	// sshAgent binds the host's ssh-agent socket into the session.
+	sshAgent bool
+	// ghToken is the GitHub token to put in the session's environment, or "" for
+	// none — which is also what a token lookup that failed leaves behind.
+	ghToken string
+}
+
+// sandboxCredentials reads what this session's project allows a confined spawn to
+// carry in. An unconfined session gets nothing: it already runs with the user's
+// whole environment, and asking gh for a token it does not need would put one in
+// an environment that never lacked it.
+//
+// The grants carry no provider — they describe what is inside the sandbox, not
+// who runs in it (internal/store/settings.go) — which is why the provider is not
+// a parameter here even though the rung above it is keyed by one.
+//
+// The account is the project's own gh account (the store's "vcs.account"), so a
+// confined session answers as the account the rest of lich answers as for this
+// repository rather than as whichever one gh has active.
+//
+// Ceiling: one `gh auth token` subprocess in front of every confined spawn that
+// asks for it, capped by the project package's own timeout. gh's tokens are
+// short-lived and gh owns their refresh, so caching one here would mean owning
+// the invalidation too — the same trade internal/project already priced.
+func (s *Service) sandboxCredentials(projectID, cwd string, confined bool) sandboxCreds {
+	if !confined {
+		return sandboxCreds{}
+	}
+	creds := sandboxCreds{sshAgent: s.store.SandboxSSHAgent(projectID)}
+	if s.store.SandboxGHToken(projectID) {
+		creds.ghToken = project.GHToken(s.store.GHAccountForPath(cwd))
+	}
+	return creds
 }
 
 // sessionDropDir is the directory holding the copies of the files dropped into

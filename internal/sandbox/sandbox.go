@@ -192,12 +192,80 @@ var readableToolchain = []string{
 // Paths that do not exist are dropped: a bind mount of a missing source fails
 // the whole spawn, and every entry here is optional by nature — a machine
 // without Rust has no ~/.cargo, and that is not an error.
-func Describe(providerID, home, cwd, gitCommon string, extraRead []string) Spec {
+func Describe(providerID, home, cwd, gitCommon string, extraRead []string, sshAgent bool) Spec {
 	spec := Spec{Home: home, Cwd: cwd, GitCommon: gitCommon}
 	spec.Write = existing(append(stateDirs(providerID, home), under(home, writableCaches)...))
 	read := append(under(home, readableToolchain), displaySockets(home)...)
+	if sshAgent {
+		read = append(read, AgentSocket(), knownHosts(home))
+	}
 	spec.Read = existing(append(read, extraRead...))
 	return spec
+}
+
+// Backend names what confines a session on this machine, or "" when nothing can.
+// It is Available's answer with the name attached: a confined session behaves
+// differently on each backend, and the name is the first thing a report about
+// one needs.
+func Backend() string {
+	if !Available() {
+		return ""
+	}
+	return backendName
+}
+
+// AgentSocket is the ssh agent's socket, read from the environment lich itself
+// was launched in, or "" when there is no agent to hand over. Mounting it is
+// what makes `git push` work in a confined session: the private home takes
+// ~/.ssh with it, and the agent is the way to authenticate without ever putting
+// a private key inside the sandbox — the agent signs, and the key never moves.
+//
+// The cost is the honest one, and it is why this is behind a setting rather
+// than always on: an agent holds every identity loaded into it, and a session
+// handed the socket can sign with all of them, for any host it can reach, for
+// as long as it runs. OpenSSH can pin a key to one destination (`ssh-add -h`),
+// but only at the moment the key is added on the host — lich is given a socket
+// that is already populated and can only pass it on whole.
+//
+// Exported because the window shows what is in the agent beside the setting
+// that hands it over (internal/system): a choice made without that list is a
+// choice about "my GitHub key" that actually covers every key.
+func AgentSocket() string {
+	path := os.Getenv("SSH_AUTH_SOCK")
+	if !filepath.IsAbs(path) || !isSocket(path) {
+		return ""
+	}
+	return path
+}
+
+// knownHosts is the user's ssh host-key file, mounted read-only alongside the
+// agent socket because without it the agent is useless: the private home takes
+// ~/.ssh with it, so ssh has no record of github.com's host key, cannot verify
+// it, and — with no tty and no askpass — cannot ask. It fails with "Host key
+// verification failed" before the key it was just handed is ever offered.
+//
+// The file rather than the directory it sits in, which is the whole point:
+// ~/.ssh holds the private keys this sandbox exists to keep away from an
+// unattended agent, and known_hosts holds none of them. Its contents are public
+// host keys; what a confined session learns from it is the list of machines the
+// user connects to, not a credential.
+//
+// Read-only, so ssh may verify a host and may not record a new one. A host the
+// user has never connected to outside the sandbox therefore still fails inside
+// it — blind trust-on-first-use is not something to grant a session running
+// unattended, and the fix is to connect to it once on the machine.
+//
+// The system-wide file (/etc/ssh/ssh_known_hosts) needs nothing here: /etc is
+// already mounted read-only.
+func knownHosts(home string) string {
+	return filepath.Join(home, ".ssh", "known_hosts")
+}
+
+// isSocket reports whether path is a unix socket on disk, without following a
+// link to get there — the answer decides what gets mounted into the sandbox.
+func isSocket(path string) bool {
+	info, err := os.Lstat(path)
+	return err == nil && info.Mode()&os.ModeSocket != 0
 }
 
 // symlinkHops caps the chain BinaryDirs walks, so a link that points at itself

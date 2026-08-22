@@ -177,6 +177,9 @@ type Store interface {
 	SessionSandbox(sessionID string) string
 	SetSessionSandbox(sessionID, sandbox string) error
 	SandboxDefault(providerID, projectID, cwd string) bool
+	SandboxSSHAgent(projectID string) bool
+	SandboxGHToken(projectID string) bool
+	GHAccountForPath(path string) string
 	SetSessionTitle(sessionID, title string) (bool, error)
 	CostReadout() bool
 	CostLedger(sessionID, transcriptID string) (int64, string, float64, error)
@@ -546,7 +549,8 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, se
 	// Outermost, so the setup script and the entrypoint are confined with the
 	// session they run in front of.
 	inSandbox := confined(s.store, id, kind, projectID, cwd)
-	spec = wrapSandbox(spec, kind, userHome(), sessionDropDir(s.dropDir, id, inSandbox), inSandbox)
+	creds := s.sandboxCredentials(projectID, cwd, inSandbox)
+	spec = wrapSandbox(spec, kind, userHome(), sessionDropDir(s.dropDir, id, inSandbox), inSandbox, creds)
 	p, err := startPTY(spec)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to start pty for %q: %w", id, err)

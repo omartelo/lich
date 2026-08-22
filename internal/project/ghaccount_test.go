@@ -184,3 +184,38 @@ func TestTokenArgs(t *testing.T) {
 		})
 	}
 }
+
+// The token a confined session is handed is one account's, and which account is
+// the project's own choice — the same one the rest of lich asks gh as. A
+// session that answered as whichever account gh has active would push and
+// comment as the wrong person.
+func TestGHTokenNamesTheAccount(t *testing.T) {
+	gh := &fakeGH{out: []byte("gho_project_account\n")}
+	if got := ghToken(gh.run, "github.com/marcelo-filho_snk"); got != "gho_project_account" {
+		t.Errorf("ghToken = %q, want the account's token", got)
+	}
+	if want := "auth token --hostname github.com --user marcelo-filho_snk"; strings.Join(gh.args, " ") != want {
+		t.Errorf("ran %q, want %q", strings.Join(gh.args, " "), want)
+	}
+
+	// No account configured is gh's own active one, which is what lich did
+	// before projects could pick.
+	gh = &fakeGH{out: []byte("gho_active\n")}
+	if got := ghToken(gh.run, ""); got != "gho_active" {
+		t.Errorf("ghToken with no account = %q, want the active account's token", got)
+	}
+	if want := "auth token"; strings.Join(gh.args, " ") != want {
+		t.Errorf("ran %q, want %q", strings.Join(gh.args, " "), want)
+	}
+}
+
+// gh missing, gh logged out, an account it does not know: all three answer the
+// same way, because the caller does the same thing with all three — open the
+// session without a token rather than fail it over a credential it may never
+// use.
+func TestGHTokenSwallowsEveryFailure(t *testing.T) {
+	gh := &fakeGH{err: errTest}
+	if got := ghToken(gh.run, "github.com/nobody"); got != "" {
+		t.Errorf("ghToken on failure = %q, want \"\"", got)
+	}
+}

@@ -133,7 +133,7 @@ func TestDescribeRefusesSymlinkedDotfiles(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	spec := Describe("claude", home, filepath.Join(home, "repo"), "", nil)
+	spec := Describe("claude", home, filepath.Join(home, "repo"), "", nil, false)
 	if slices.Contains(spec.Read, link) {
 		t.Errorf("a symlinked dotfile was mounted: %v", spec.Read)
 	}

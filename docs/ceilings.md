@@ -126,14 +126,14 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **The sandbox confines a working agent, not hostile code** (`internal/sandbox`): namespaces and mounts on
   Linux, a path policy on macOS, and nothing else — no seccomp filter, no Landlock ruleset. The network is
   never cut (the agent needs its API and the plugin's hooks report over loopback), so anything readable
-  inside is exfiltrable, and `~/.config` *is* readable: a token stored there, `gh`'s among them, is in
-  reach. Every session also carries `LICH_TOKEN`, so a confined agent can call lich's own RPC over
+  inside is exfiltrable, and `~/.config` *is* readable: a token stored there is in reach. `gh`'s is not
+  one of them — it lives in the system keyring, which is why reaching it takes the flag below. Every session also carries `LICH_TOKEN`, so a confined agent can call lich's own RPC over
   loopback: a method that reads a host path it was *handed* would copy anything into reach of the sandbox,
   which is why the attach flow opens the picker inside the backend (`drop.Attach`) instead of taking a path. The private home is writable and vanishes with the session, so a dotfile an agent writes is gone
   next spawn with nothing saying so. On Ubuntu and Debian the kernel may refuse the user namespace outright
   (an AppArmor policy), which surfaces as bubblewrap's own error in the card and no session. `~/.ssh` is not
-  mounted at all: a push over ssh from inside a confined session fails, and lich's own PR flows run outside
-  it and are unaffected. The distribution's `/etc/ssh/ssh_config.d` drop-ins are replaced by an empty
+  mounted at all: a push over ssh from inside a confined session fails unless the project hands over the ssh
+  agent (below), and lich's own PR flows run outside the sandbox and are unaffected either way. The distribution's `/etc/ssh/ssh_config.d` drop-ins are replaced by an empty
   directory, because inside the namespace they belong to nobody and ssh refuses to read a config file it
   does not own — so a host whose ssh depends on one of them (a corporate `ProxyCommand`, say) does not have
   it inside the sandbox. The display server's socket *is* mounted, because the agent's own copy and its
@@ -142,6 +142,31 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   X11 socket and its cookie instead, the wider of the two — X clients are not isolated from one another —
   and macOS gets neither, its pasteboard being a mach service rather than a socket, so a confined session
   there has no clipboard at all. macOS has no hardware here — its profile is unit-tested and has never run.
+- **The two sandbox grants hand over more than what they are read as** (`internal/store/settings.go`,
+  `internal/sandbox`, `internal/terminal/sandbox.go`): a confined session reaches the network as the user only
+  where the project turned one of them on, and each is all-or-nothing. The ssh agent is handed over as a socket,
+  so nothing private enters the sandbox — but the session signs with **every** identity loaded in that agent,
+  against any host it can reach, for as long as it runs. OpenSSH can pin a key to one destination, and only when
+  the key is added on the host (`ssh-add -h`); lich is given a socket that is already populated and can only
+  pass it on whole. The socket does not travel alone: `~/.ssh/known_hosts` is mounted read-only beside it,
+  because without it ssh cannot verify github.com, has no tty to ask on, and fails with "Host key
+  verification failed" before the key is ever offered — the grant would hand over the credential and not the
+  push. That file is public host keys, never a secret; what a confined session learns from it is the list of
+  machines the user connects to. Read-only, so a host the user has never connected to *outside* the sandbox
+  still fails inside it and cannot be learned there — blind trust-on-first-use is not a thing to grant an
+  unattended agent. And a `known_hosts` symlinked out of a dotfiles repository is dropped like every other
+  link in the home (below), which takes the whole grant down with it and says nothing. That is why Settings lists what is in the agent — and the list is read when the pane opens,
+  so a key added afterwards is handed over by a switch that never named it. The GitHub token is one account's,
+  the project's own (`vcs.account`), and it rides in the session's environment: the agent can read it back out
+  of its own environment and spend it on anything that account's scopes allow, this repository or not. Neither
+  grant is keyed by provider — a grant describes what is inside the sandbox, not who runs in it — so turning
+  one on turns it on for every provider confined in that project. It is
+  resolved once per spawn, so a token gh rotates mid-session goes stale with nothing saying so, and a `gh auth
+  token` that fails leaves the session with no token rather than failing the spawn. Both are off by default,
+  and both are Linux in practice: the macOS profile denies reads *inside* the home while a launchd agent socket
+  and gh's keyring live outside it, so a confined macOS session never lost either and the switches change
+  nothing there — they are inert rather than hidden, and there is no macOS hardware here to prove it further.
+  Windows has no sandbox backend, so neither switch exists.
 - **A file handed to a confined session arrives as a copy** (`internal/drop`): the session's home is empty,
   so lich does not look there for a dropped file at all — anything outside its checkout is copied and the
   copy's path is what lands at the prompt, for a drag and for the footer's attach button alike. The agent may read it and not write back: an edit lands on the

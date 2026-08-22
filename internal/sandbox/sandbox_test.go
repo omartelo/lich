@@ -131,7 +131,7 @@ func TestDescribeDropsMissingPathsAndDuplicates(t *testing.T) {
 	spec := Describe(providers.Claude, home, cwd, "", []string{
 		filepath.Join(home, ".config"),
 		filepath.Join(home, "nonexistent"),
-	})
+	}, false)
 
 	if !slices.Contains(spec.Write, filepath.Join(home, ".claude")) {
 		t.Errorf("provider state missing from Write: %v", spec.Write)
@@ -176,4 +176,18 @@ func count(haystack []string, needle string) int {
 		}
 	}
 	return n
+}
+
+// Backend is Available's answer with a name on it, and the two can never
+// disagree: a machine that can confine has something to call it, and one that
+// cannot must answer "" — which is what the window draws its "cannot confine"
+// state from.
+func TestBackendAgreesWithAvailable(t *testing.T) {
+	name := Backend()
+	if Available() && name == "" {
+		t.Error("a machine that can confine has no backend name")
+	}
+	if !Available() && name != "" {
+		t.Errorf("a machine that cannot confine named %q", name)
+	}
 }

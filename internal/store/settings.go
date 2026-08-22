@@ -164,22 +164,64 @@ func sandboxKey(providerID string) string {
 // project's own value, then the global one, then SandboxOff. An unreadable or
 // unrecognised value is SandboxOff for the reason the constants give.
 func (s *Service) SandboxLevel(providerID, projectID string) string {
-	level := ""
-	if projectID != globalScope {
-		if value, err := s.GetSetting(sandboxKey(providerID), projectID); err == nil {
-			level = value
-		}
-	}
-	if level == "" {
-		if value, err := s.GetSetting(sandboxKey(providerID), globalScope); err == nil {
-			level = value
-		}
-	}
-	switch level {
+	switch level := s.projectSetting(sandboxKey(providerID), projectID); level {
 	case SandboxAsk, SandboxWorktrees, SandboxEverywhere:
 		return level
 	}
 	return SandboxOff
+}
+
+// projectSetting reads one setting the way every sandbox control is scoped: the
+// project's own value when it has one, the global value otherwise, and "" when
+// neither answers. An unreadable value is indistinguishable from an absent one,
+// which is what each caller here wants — every one of them treats the unknown
+// state as the restrictive answer.
+func (s *Service) projectSetting(key, projectID string) string {
+	if projectID != globalScope {
+		if value, err := s.GetSetting(key, projectID); err == nil && value != "" {
+			return value
+		}
+	}
+	value, err := s.GetSetting(key, globalScope)
+	if err != nil {
+		return ""
+	}
+	return value
+}
+
+// The sandbox grant keys each hand a confined session one of the two credentials
+// its private home took away, and they are two keys rather than one because they
+// open different doors. The agent signs with every identity loaded into it, for
+// any host it can reach; the token is one GitHub account's, limited to the scopes
+// that account was granted. Someone who wants gh to work does not necessarily
+// want to hand over their ssh keys, and the reverse is just as true.
+//
+// Unlike sandboxKey they carry no provider. A grant describes what exists inside
+// the sandbox, not which agent is running in it — and keying them by provider
+// would multiply every future grant by the provider list for a distinction
+// nobody makes. Which sessions are confined is the rung's question; what a
+// confined session may carry in is this one.
+//
+// Scoped like sandboxKey all the same — a project value wins over the global one
+// — because the repository is what the answer is about. On only for the literal
+// "true": each puts a credential in front of an agent running unattended, so
+// anything else has to mean no.
+const (
+	sshAgentKey = "sandbox.ssh-agent"
+	ghTokenKey  = "sandbox.gh-token"
+)
+
+// SandboxSSHAgent reports whether a confined session in this project is given the
+// user's ssh agent, which is what makes `git push` work inside one.
+func (s *Service) SandboxSSHAgent(projectID string) bool {
+	return s.projectSetting(sshAgentKey, projectID) == "true"
+}
+
+// SandboxGHToken reports whether a confined session in this project is given a
+// GitHub token in its environment, which is what makes gh work inside one: the
+// token lives in the system keyring, and a private home cannot reach it.
+func (s *Service) SandboxGHToken(projectID string) bool {
+	return s.projectSetting(ghTokenKey, projectID) == "true"
 }
 
 // SandboxDefault reports whether a session of this provider, starting in cwd,

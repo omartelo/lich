@@ -15,3 +15,6 @@ func Available() bool { return false }
 func Wrap(_ Spec, bin string, args []string) (string, []string) {
 	return bin, args
 }
+
+// backendName is unused here: Backend answers "" before it is read.
+const backendName = ""

@@ -203,3 +203,6 @@ func resolvedLink(path string) string {
 	}
 	return target
 }
+
+// backendName is what the window calls this backend.
+const backendName = "bubblewrap"

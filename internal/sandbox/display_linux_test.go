@@ -159,7 +159,7 @@ func TestDescribeMountsTheDisplaySocket(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", runtime)
 	t.Setenv("WAYLAND_DISPLAY", "wayland-1")
 
-	spec := Describe("claude", t.TempDir(), t.TempDir(), "", nil)
+	spec := Describe("claude", t.TempDir(), t.TempDir(), "", nil, false)
 	if !slices.Contains(spec.Read, socket) {
 		t.Errorf("the display socket %q is not in the spec's readable paths %v", socket, spec.Read)
 	}

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A confined session can push and use `gh` again, if you let it.** The sandbox
+  gives a session an empty home, which takes the ssh agent and gh's keyring with
+  it: `git push` has nothing to sign with and `gh` opens on a login prompt. Two
+  switches hand each one back, separately and off by default — the ssh agent, so
+  a push authenticates without any key entering the sandbox, and a GitHub token,
+  so `gh` works as the account the project already answers as. They are separate
+  because they open different doors: wanting `gh` to work is not wanting to hand
+  over your ssh keys. The agent switch lists the identities loaded in your agent
+  right beside it, because a session holding that socket can sign with every one
+  of them, against any host — not only the key you had in mind.
+- **Settings has a Sandbox pane.** Everything about confining sessions now lives
+  in one place: whether this machine can confine at all and what it uses to do
+  it, the rung for each provider you have enabled, and the two grants above. The
+  rung used to be repeated inside every provider's own section, so a machine with
+  several enabled drew the same ladder several times — and on a machine with no
+  bubblewrap the control simply vanished, leaving the question unanswered instead
+  of answered.
+
 ### Changed
 
 - **Building lich from source now needs Go 1.27.0.** The pin stays exact so that

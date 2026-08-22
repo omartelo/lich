@@ -90,6 +90,19 @@ export function sandboxKey(id: string): string {
   return `provider.${id}.sandbox`
 }
 
+// The sandbox grant keys, each handing a confined session one credential its
+// private home took away: the ssh agent a push authenticates through, and the
+// GitHub token gh works through (mirror store.sshAgentKey and store.ghTokenKey
+// in Go, which are what the spawn reads).
+//
+// Two keys rather than one because they open different doors — the agent signs
+// with every identity loaded into it, for any host; the token is one account's,
+// with that account's scopes. Neither carries a provider: a grant describes what
+// exists inside the sandbox, not which agent runs in it. Scoped like sandboxKey,
+// stored as "true" or nothing at all.
+export const SSH_AGENT_KEY = "sandbox.ssh-agent"
+export const GH_TOKEN_KEY = "sandbox.gh-token"
+
 // Which sessions of a provider run confined, as one ladder ordered by how much
 // of the machine a session can reach. "ask" sits second because a session
 // nobody answered for runs unconfined, exactly like "off" — it moves who

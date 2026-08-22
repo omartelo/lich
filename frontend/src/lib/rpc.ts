@@ -422,9 +422,17 @@ export const System = {
   /** Raise a desktop notification: a headline and an optional second line.
    * The caller decides it is warranted — the backend only delivers. */
   Notify: (summary: string, detail: string) => call<null>("system.Notify", [summary, detail]),
-  /** Whether this machine can run a session confined (bubblewrap on Linux,
-   * sandbox-exec on macOS). A fact about the machine, not about a provider. */
-  SandboxAvailable: () => call<boolean>("system.SandboxAvailable", []),
+  /** What confines a session on this machine — "bubblewrap", "sandbox-exec" —
+   * or "" when nothing can. A fact about the machine, not about a provider.
+   * The name rather than a yes: the two backends have different holes, and the
+   * Sandbox pane says which one is in play. */
+  SandboxBackend: () => call<string>("system.SandboxBackend", []),
+  /** The identities loaded in the user's ssh agent, one readable line each.
+   * Shown beside the setting that hands the agent to a confined session: that
+   * setting reads as "let it push with my GitHub key" and actually covers every
+   * key in the list. Empty for no agent, no ssh-add, or an agent holding
+   * nothing — all three mean the same thing to whoever is deciding. */
+  SSHAgentKeys: () => call<string[]>("system.SSHAgentKeys", []),
 }
 
 export const Providers = {
