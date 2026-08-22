@@ -231,6 +231,14 @@ export function statusTool(data: unknown): SessionTool | null {
   return { name: tool, detail: typeof detail === "string" ? detail : "" }
 }
 
+// statusReason reads what a report says the session is blocked on, or "" when it
+// says nothing. Only a "waiting" carries one — the backend drops it on every
+// other state — so a caller does not have to check the state before asking.
+export function statusReason(data: unknown): string {
+  const { reason } = (data ?? {}) as { reason?: unknown }
+  return typeof reason === "string" ? reason : ""
+}
+
 // A session opened outside the window, as the workspace needs it: the card to
 // draw and the project's label counter after that card took its number.
 export interface OpenedSession {

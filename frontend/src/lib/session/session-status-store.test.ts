@@ -360,6 +360,83 @@ describe("since", () => {
   })
 })
 
+describe("reason", () => {
+  const waiting = (id: string, reason: string) => ({ id, state: "waiting", reason })
+
+  it("keeps what a waiting report is blocked on", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(waiting("s1", "Claude needs your permission to use Bash"))
+    expect(store.reason("s1")).toBe("Claude needs your permission to use Bash")
+  })
+
+  it("has nothing for a session that reported none", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    expect(store.reason("ghost")).toBe("")
+    emit(report("s1", "waiting"))
+    expect(store.reason("s1")).toBe("")
+  })
+
+  // A reason riding a state that is not a question describes nothing the card
+  // draws, and holding it would outlive the block it came with.
+  it("ignores one carried by any other state", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit({ id: "s1", state: "busy", reason: "permission to use Bash" })
+    expect(store.reason("s1")).toBe("")
+  })
+
+  it("clears when the session stops waiting", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(waiting("s1", "edit"))
+    emit(report("s1", "busy"))
+    expect(store.reason("s1")).toBe("")
+  })
+
+  // The one repeat that is news: the state is unchanged, so the store would
+  // normally bail, but a second prompt in the same turn asks something else.
+  it("moves on a repeat waiting that asks something else", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    const notify = vi.fn()
+    store.subscribe("s1", notify)
+    emit(waiting("s1", "permission to use Bash"))
+    emit(waiting("s1", "permission to use Write"))
+    expect(store.reason("s1")).toBe("permission to use Write")
+    expect(notify).toHaveBeenCalledTimes(2)
+  })
+
+  it("re-renders nobody for a repeat that asks the same thing", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    const notify = vi.fn()
+    store.subscribe("s1", notify)
+    emit(waiting("s1", "permission to use Bash"))
+    emit(waiting("s1", "permission to use Bash"))
+    expect(notify).toHaveBeenCalledTimes(1)
+  })
+
+  // The clock belongs to the block, not to the question: a second prompt in one
+  // turn is the same wait going on, and restarting it would hide how long the
+  // session has been stuck.
+  it("does not restart the clock when only the question changes", () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const { source, emit } = fakeSource()
+      const store = createSessionStatusStore(source)
+      emit(waiting("s1", "permission to use Bash"))
+      vi.setSystemTime(30_000)
+      emit(waiting("s1", "permission to use Write"))
+      expect(store.since("s1")).toBe(1_000)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
 describe("pendingAll / subscribeAll", () => {
   it("starts empty", () => {
     const { source } = fakeSource()

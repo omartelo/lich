@@ -1,5 +1,6 @@
 import {
   isStatusEvent,
+  statusReason,
   toSessionStatus,
   type SessionEventSource,
   type SessionStatus,
@@ -22,6 +23,12 @@ function samePending(a: readonly PendingStatus[], b: readonly PendingStatus[]): 
 
 interface Entry {
   status: SessionStatus | null
+  // What the session is blocked on, in the provider's own words, and "" for
+  // every state that is not a question. It rides here rather than in a store of
+  // its own because "waiting" is the only thing that clears it: the reason and
+  // the state it belongs to leave together, and holding them apart would be two
+  // entries that must never disagree.
+  reason: string
   // When the current status started, as wall-clock ms — what the card's elapsed
   // readout counts from. Stamped on the transition alone: the hook reports the
   // same state repeatedly while a turn runs, and a session has been waiting
@@ -62,7 +69,7 @@ export function createSessionStatusStore(source: SessionEventSource) {
   const entryOf = (id: string): Entry => {
     let entry = entries.get(id)
     if (!entry) {
-      entry = { status: null, since: 0, seen: false, listeners: new Set() }
+      entry = { status: null, reason: "", since: 0, seen: false, listeners: new Set() }
       entries.set(id, entry)
     }
     return entry
@@ -113,13 +120,21 @@ export function createSessionStatusStore(source: SessionEventSource) {
     }
     const entry = entryOf(data.id)
     const next = toSessionStatus(data.state)
+    const reason = next === "waiting" ? statusReason(data) : ""
     // The snapshot is a string union, so identity is free: bail on a repeat
-    // state and subscribers skip the re-render entirely.
-    if (entry.status === next) {
+    // state and subscribers skip the re-render entirely. The reason is weighed
+    // with it because a second permission prompt inside one turn repeats the
+    // state and changes the question — the one repeat that is news.
+    if (entry.status === next && entry.reason === reason) {
       return
     }
+    // Stamped on the state's own transition alone: a session has been waiting
+    // since it started waiting, not since the question it is waiting on changed.
+    if (entry.status !== next) {
+      entry.since = Date.now()
+    }
     entry.status = next
-    entry.since = Date.now()
+    entry.reason = reason
     // A fresh report is by definition unseen, whether or not the last one was.
     entry.seen = false
     notify(entry)
@@ -188,6 +203,11 @@ export function createSessionStatusStore(source: SessionEventSource) {
     return entry?.status === "done" && !entry.seen
   }
 
+  // reason answers what a waiting session is blocked on, "" when nothing was
+  // reported — a provider whose event carries no words for it, or any state that
+  // is not a question (docs/hooks/session-state.md).
+  const reason = (id: string): string => entries.get(id)?.reason ?? ""
+
   // since answers when the current status started, or null when there is no
   // status to time — including for an entry a subscriber opened before the
   // first report landed.
@@ -213,6 +233,7 @@ export function createSessionStatusStore(source: SessionEventSource) {
     subscribe,
     get,
     unread,
+    reason,
     since,
     markSeen,
     pendingOf,

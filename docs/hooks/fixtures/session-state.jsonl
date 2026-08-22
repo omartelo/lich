@@ -8,6 +8,10 @@
 {"name":"tool and detail are trimmed","body":{"session_id":"s1","state":"busy","tool":"  shell  ","detail":"  go test ./...  "},"accept":{"session_id":"s1","state":"busy","tool":"shell","detail":"go test ./..."}}
 {"name":"a detail with no tool names nothing","body":{"session_id":"s1","state":"busy","detail":"pnpm test"},"accept":{"session_id":"s1","state":"busy","tool":"","detail":""}}
 {"name":"whitespace is not a tool","body":{"session_id":"s1","state":"busy","tool":"   ","detail":"pnpm test"},"accept":{"session_id":"s1","state":"busy","tool":"","detail":""}}
+{"name":"waiting says what it is blocked on","body":{"session_id":"s1","state":"waiting","reason":"Claude needs your permission to use Bash"},"accept":{"session_id":"s1","state":"waiting","reason":"Claude needs your permission to use Bash"}}
+{"name":"a reason is trimmed","body":{"session_id":"s1","state":"waiting","reason":"  edit  "},"accept":{"session_id":"s1","state":"waiting","reason":"edit"}}
+{"name":"whitespace is not a reason","body":{"session_id":"s1","state":"waiting","reason":"   "},"accept":{"session_id":"s1","state":"waiting","reason":""}}
+{"name":"a reason outside waiting names nothing","body":{"session_id":"s1","state":"busy","reason":"Claude needs your permission to use Bash"},"accept":{"session_id":"s1","state":"busy","reason":""}}
 {"name":"missing session_id","body":{"state":"busy"},"reject":"session_id is required"}
 {"name":"empty session_id","body":{"session_id":"","state":"busy"},"reject":"session_id is required"}
 {"name":"unknown state","body":{"session_id":"s1","state":"cooking"},"reject":"state must be one of busy, done, waiting, idle"}

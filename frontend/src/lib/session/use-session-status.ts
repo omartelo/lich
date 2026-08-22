@@ -30,6 +30,18 @@ export function useSessionUnread(sessionId: string): boolean {
   return useSyncExternalStore(subscribe, () => store.unread(sessionId))
 }
 
+// useSessionWaitingReason reads what a blocked session is waiting for, in the
+// provider's own words, or "" when the report said nothing — the card falls back
+// to its generic line then. Kept out of useSessionStatus so a card that only
+// draws the indicator does not re-render when the words change.
+export function useSessionWaitingReason(sessionId: string): string {
+  const subscribe = useCallback(
+    (onChange: () => void) => store.subscribe(sessionId, onChange),
+    [sessionId],
+  )
+  return useSyncExternalStore(subscribe, () => store.reason(sessionId))
+}
+
 // useSessionStatusAge returns how long the session has been in its current
 // status, short and relative ("40s", "12m", "3h"), or "" for a status with no
 // clock worth reading.

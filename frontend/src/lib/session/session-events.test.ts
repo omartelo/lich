@@ -10,6 +10,7 @@ import {
   isTitleEvent,
   isUsageEvent,
   shouldToastAttention,
+  statusReason,
   toClosedSession,
   toOpenedSession,
   toSessionStatus,
@@ -81,6 +82,27 @@ describe("toSessionStatus", () => {
     expect(toSessionStatus(null)).toBeNull()
     expect(toSessionStatus(42)).toBeNull()
     expect(toSessionStatus({ state: "busy" })).toBeNull()
+  })
+})
+
+describe("statusReason", () => {
+  it("reads what a report says the session is blocked on", () => {
+    expect(statusReason({ id: "s1", state: "waiting", reason: "permission to use Bash" })).toBe(
+      "permission to use Bash",
+    )
+  })
+
+  // A report from a provider whose event carries nothing usable, or from a
+  // backend older than the field: the card falls back to its generic line.
+  it("answers empty when the report names none", () => {
+    expect(statusReason({ id: "s1", state: "waiting" })).toBe("")
+    expect(statusReason({ id: "s1", state: "waiting", reason: "" })).toBe("")
+  })
+
+  it("answers empty for a payload that is not an object or not a string", () => {
+    expect(statusReason(undefined)).toBe("")
+    expect(statusReason(null)).toBe("")
+    expect(statusReason({ reason: 42 })).toBe("")
   })
 })
 

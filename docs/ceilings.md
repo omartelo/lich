@@ -148,6 +148,16 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   anywhere (the line truncates), but on those two the card spends its width on a server name nobody asked for.
   Splitting them needs the list of registered server names, which the card does not have. Crush is not on this
   list at all: it reports no tool.
+- **Only Claude Code says what a session is waiting for; the others say less or nothing**
+  (`frontend/src/components/sidebar/SessionCard.tsx`, table in `docs/hooks/session-state.md`): its
+  `Notification` carries a `message` written for a human, so the card reads "Claude needs your permission to
+  use Bash". Codex's `PermissionRequest` and opencode's `.asked` events carry only the thing being asked
+  about — `tool_name`, `permission`, `action` — so those cards read a bare `Bash` or `edit`, which says which
+  card to open and not what it will ask. **oh-my-pi and Crush send no reason at all** and keep the generic
+  "Waiting on you": neither reports `waiting` in the first place (omp declares an approval event no run was
+  ever seen emitting; Crush reports no state), so there is nothing to hang a reason on. The trap is reading a
+  bare card as "nothing to say" — on those two it means the harness never spoke, not that the block is
+  trivial.
 - **omp's state directory answers to two variables, and the profile wins** (`internal/agentplugin/omp.go`,
   `internal/terminal/transcript.go`, resolving it independently as the Claude Code pair do): `OMP_PROFILE` moves
   the whole directory and beats an explicit `PI_CODING_AGENT_DIR`. Get it backwards and the install lands where omp

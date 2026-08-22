@@ -53,6 +53,7 @@ import {
   isStatusEvent,
   isTitleEvent,
   shouldToastAttention,
+  statusReason,
   toClosedSession,
   toOpenedSession,
   toSessionStatus,
@@ -650,6 +651,10 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       }
       const label = project.sessions.find((s) => s.id === id)?.label ?? UNLABELED_SESSION
       const projectName = projectsRef.current.find((p) => p.id === projectId)?.name
+      // Read off the raw event like the status above, and for the same reason:
+      // the store collapses a repeat "waiting", and a second prompt in one turn
+      // is a second question to show.
+      const reason = statusReason(data)
 
       // The desktop channel answers to window focus and to its own per-status
       // preference, both decided by decideStatusNotice; the toast below keeps
@@ -677,6 +682,12 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       toast(
         <div className="flex min-w-0 flex-col">
           <span>{label} needs your input</span>
+          {/* What it is blocked on, when the provider's event had words for it
+              (docs/hooks/session-state.md). The toast is read from across the
+              screen and its whole job is to say which card is worth the trip. */}
+          {reason && (
+            <span className="mt-0.5 truncate text-xs text-muted-foreground">{reason}</span>
+          )}
           {projectName && (
             <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
               <Folder className="size-3 shrink-0" />

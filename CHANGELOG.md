@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A waiting card now says what it is waiting for.** A session blocked on you
+  wore the same amber bell and the same "Waiting on you" whether it wanted
+  permission to delete a directory or an answer about which file to touch — the
+  only way to tell was to open it. The card and the toast now carry the question
+  itself, in the words the agent used. Claude Code sessions say it in a sentence;
+  Codex and opencode name the tool or permission being asked about, which is
+  coarser and still enough to pick the card; oh-my-pi and Crush report no block at
+  all, so their cards keep the line they had.
 - **Sessions can be renamed from the command line and from an agent's own
   tools.** Renaming a card was a thing only the window could do; `lich rename
   "the login bug"` now renames the session the command runs in, `lich rename

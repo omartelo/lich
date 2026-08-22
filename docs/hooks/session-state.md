@@ -3,8 +3,8 @@
 Reports a session's processing state to lich so its card shows a spinner while
 the agent is working, a check when the turn ends, and a bell when it is blocked
 on the user — plus a toast that routes to the waiting card. A `busy` report may
-also name the tool the agent is about to run, which the card shows under the
-session's label.
+also name the tool the agent is about to run, and a `waiting` what it is blocked
+on; the card shows either one under the session's label.
 
 See [README.md](README.md) for the shared transport (`LICH_PORT` / `LICH_TOKEN`
 / `LICH_SESSION_ID`) and the client rules every hook follows.
@@ -16,7 +16,8 @@ POST http://127.0.0.1:${LICH_PORT}/hook?token=${LICH_TOKEN}
 Content-Type: application/json
 
 {"session_id": "<LICH_SESSION_ID>", "state": "<busy|done|waiting|idle>",
- "tool": "<tool name>", "detail": "<what it acts on>"}
+ "tool": "<tool name>", "detail": "<what it acts on>",
+ "reason": "<what the agent is blocked on>"}
 ```
 
 States: `busy`, `done`, `waiting`, `idle`. lich rejects anything else — the
@@ -27,6 +28,12 @@ below). Both are trimmed and capped at 120 characters — they decorate a state
 that has to land either way, so an over-long value is truncated, never a reason
 to reject the report. A `detail` with no `tool` to qualify names nothing and is
 dropped.
+
+`reason` is the same kind of field for the other half of the contract: optional,
+trimmed, capped at 120, and belonging to the `waiting` report alone — it says
+what the agent is blocked on, and no other state is a question. A `reason` on
+any other state is dropped, and one that is absent, empty or over-long is never
+a reason to refuse the report: the bell has to land either way.
 
 Responses: `204` ok · `401` invalid token · `400` invalid body.
 
@@ -40,7 +47,7 @@ Both sides test against the payloads in
 | `UserPromptSubmit` | `UserPromptSubmit`  | `session.status` (`busy`) | `input`        | —          | `busy`    |
 | `PreToolUse`       | `PreToolUse`        | `tool.execute.before`    | `tool_call`    | —          | `busy` + `tool` |
 | `PostToolUse`      | `PostToolUse`       | `tool.execute.after`     | `turn_start`   | —          | `busy`    |
-| `Notification`     | `PermissionRequest` | any `*.asked`            | —              | —          | `waiting` |
+| `Notification`     | `PermissionRequest` | any `*.asked`            | —              | —          | `waiting` + `reason` |
 | `Stop`             | `Stop`              | `session.status` (`idle`) | `session_stop` | —          | `done`    |
 | `SessionEnd`       | —                   | —                        | —              | —          | `idle`    |
 
@@ -149,16 +156,55 @@ never on `idle` alone, which Codex has no event for.
 harnesses a hook exiting `2` there **blocks the tool call**. Until now the worst
 a broken script could do was lose a status report.
 
+## What a turn is waiting for
+
+A `waiting` may carry `reason`: one short line naming what the agent is blocked
+on, shown on the card in place of its "Waiting on you" and under the session's
+name in the toast. Free text, passed through as sent — the same rule the tool
+pair follows, and for the same reason: the word on the card should be the word
+in the terminal beside it.
+
+The card is where the user decides which of five sessions to open, and a bare
+bell makes every one of them look alike: a permission prompt for a destructive
+command and a question about which file to touch are the same badge until one is
+opened. What each harness can say about it differs, because none of these events
+was written to be read this way:
+
+| Harness     | Waiting event          | What the event carries                            | Reason to send            |
+|-------------|------------------------|---------------------------------------------------|---------------------------|
+| Claude Code | `Notification`         | `message`, `title`, `notification_type`            | `message` — its own sentence, already written for a human |
+| Codex       | `PermissionRequest`    | `tool_name`, `tool_input`, and no message of its own | `tool_name`, qualified from `tool_input` the way `detail` already is |
+| opencode    | `permission.asked`     | `permission`, `patterns`, `metadata`               | `permission`              |
+| opencode    | `permission.v2.asked`  | `action`, `resources`                              | `action`                  |
+| opencode    | `question(.v2).asked`  | `questions[]` of `question` / `header` / `options` | `questions[0].header` — the ≤30-char label the question already carries for narrow surfaces |
+| oh-my-pi    | —                      | —                                                  | — (reports no `waiting` at all) |
+| Crush       | —                      | —                                                  | — (reports no state at all) |
+
+Read off what each harness ships rather than off its documentation: Claude Code
+2.1.240's own hook-input builder, the `permission-request.command.input` schema
+embedded in Codex 0.147.0, and opencode 1.18.x's `/doc` — which is also where the
+four `.asked` types the client matches on are enumerated (`permission.asked`,
+`permission.v2.asked`, `question.asked`, `question.v2.asked`).
+
+Only Claude Code hands over a sentence. Codex and opencode name the thing being
+asked about and nothing else, so their cards read `Bash` or `edit` where a Claude
+card reads "Claude needs your permission to use Bash" — coarser, and still the
+difference between opening the right card and opening three. A harness with
+nothing to say sends no `reason`, and its card keeps the bare "Waiting on you": a
+missing reason never costs a bell.
+
 ## lich server side
 
 - **Env injection** — `internal/terminal/terminal.go`, `Service.sessionEnv`:
   adds the three `LICH_*` vars to each PTY's environment.
 - **Endpoint** — `internal/terminal/transport.go`, `transport.hook`: validates
   the token and body (`parseHookRequest`) on the same loopback listener as
-  terminal I/O, then forwards the whole report.
+  terminal I/O, then forwards the whole report. The free text is trimmed and
+  capped there, and each field is dropped on the states it does not belong to:
+  `detail` with no `tool`, `reason` on anything but `waiting`.
 - **UI push** — `internal/terminal/terminal.go`: emits the global app event
-  `session-status` (`{id, state, tool, detail}`). Global rather than per-session
-  because its consumers outlive any one card.
+  `session-status` (`{id, state, tool, detail, reason}`). Global rather than
+  per-session because its consumers outlive any one card.
 - **What `waiting` meant** — `internal/terminal/hookstate.go`, `turnLog`: the one
   report lich does not pass through as sent. A permission decision only ever
   happens inside a turn, so the report before it settles which `Notification`
@@ -199,19 +245,25 @@ a broken script could do was lose a status report.
   switching projects unmounts them, and a status reported meanwhile would be lost.
   `session-tool-store.ts` reads the same event for the tool pair, keeping its own
   keyed entry so a repeat `busy` — which the status store collapses into no
-  change at all — still moves the tool line. The status store also keeps whether
-  each session's state has been **read**: `markSeen` is called for the one
-  session whose terminal is on screen, while the window has focus, and a fresh
-  report clears the mark again. Only `done` reads it — the live states say what
-  they say whether or not anybody is watching.
+  change at all — still moves the tool line. The `waiting` reason is held by the
+  status store itself, beside the state it belongs to: it is the only field whose
+  own state is the thing that clears it, and a second prompt in one turn moves the
+  line because the store weighs the reason alongside the state. The status store
+  also keeps whether each session's state has been **read**: `markSeen` is called
+  for the one session whose terminal is on screen, while the window has focus, and
+  a fresh report clears the mark again. Only `done` reads it — the live states say
+  what they say whether or not anybody is watching.
 - **Render** — `frontend/src/components/sidebar/SessionCard.tsx`: reads the stores
-  (`useSessionStatus`, `useSessionTool`) and shows a spinner (`busy`), check
-  (`done`) or bell (`waiting`); any other value, including `idle` and
-  `interrupted`, clears the indicator. A `done` is drawn at two weights
+  (`useSessionStatus`, `useSessionTool`, `useSessionWaitingReason`) and shows a
+  spinner (`busy`), check (`done`) or bell (`waiting`); any other value, including
+  `idle` and `interrupted`, clears the indicator. A `done` is drawn at two weights
   (`SessionStatusIcon`, `useSessionUnread`): solid while the finished turn is
   still unread, faded once the user has watched that card. It is the same mark
   the tab badge and the notification queue read, so one session cannot be news
-  in one place and read in another. The tool line sits under the session's label and exists only while
+  in one place and read in another. A reported reason takes the waiting line's
+  whole width — the amber glyph beside it is what still says "waiting on you", so
+  spending the line on that phrase again would cost the card the only words on it
+  the user does not already know. The tool line sits under the session's label and exists only while
   one is reported, so a card outside a turn is exactly the card it was before.
 - **Tab badge** — `frontend/src/components/tabs/ProjectTab.tsx`: reduces a
   project's sessions to one indicator (`useProjectStatus`, ranking `waiting` over
@@ -221,8 +273,8 @@ a broken script could do was lose a status report.
   `busy` and `waiting` badge for as long as they hold, being live states rather
   than notifications.
 - **Toast + route** — `frontend/src/providers/projects.tsx`: raises an actionable toast
-  that navigates to the session's card when a report says `waiting`, skipped for
-  the session already focused. It reads the raw event rather than the store: the
+  that navigates to the session's card when a report says `waiting`, carrying the
+  reason under the session's name, skipped for the session already focused. It reads the raw event rather than the store: the
   store collapses a repeat state into no notification, which would swallow a
   toast.
 - **Desktop notification** — same handler, `system.Notify`
@@ -310,6 +362,18 @@ a broken script could do was lose a status report.
   notification; macOS needs lich shipped as a signed `.app` bundle with
   `UNUserNotificationCenter`; Windows needs a registered AppUserModelID with a
   COM activation handler.
+- **Only Claude Code says what it is waiting for in words.** Codex's
+  `PermissionRequest` and opencode's `.asked` events carry the thing being asked
+  about (`tool_name`, `permission`, `action`) and no sentence, so those cards read
+  a bare `Bash` or `edit` where a Claude card reads why. oh-my-pi and Crush send
+  no `reason` at all, because neither reports `waiting` in the first place (see
+  the two bullets above), so their cards keep today's "Waiting on you".
+- **A reason is only as fresh as the report that carried it.** It lives beside the
+  state in the page's status store, so it clears when the state leaves `waiting`
+  and is gone after a reload like the state itself — a session already blocked
+  when the page loads shows nothing until its next report. Two prompts in one turn
+  do move the line: the store weighs the reason alongside the state, so a repeat
+  `waiting` with different words is a change rather than a no-op.
 - **The tool line names the call, not its progress.** It appears when the tool
   starts and holds that name for however long the tool runs — a 3-minute build
   and a 30ms read look identical. Nothing reports a tool finishing on its own:

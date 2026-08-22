@@ -38,10 +38,11 @@ const (
 	// carrying the status it exited with (see exitEvent).
 	exitEventPrefix = "terminal:exit:"
 	// statusEventName carries a session's processing state ({id, state, tool,
-	// detail} — "busy"/"done"/"waiting"/"idle", plus the tool a pre-tool report
-	// names), reported by the lich hooks running inside the PTY (see
-	// transport.hook and docs/hooks/session-state.md). "interrupted" is the one
-	// value lich raises itself, for a turn the user stopped at the PTY. The frontend keeps it in
+	// detail, reason} — "busy"/"done"/"waiting"/"idle", plus the tool a pre-tool
+	// report names and what a waiting one is blocked on), reported by the lich
+	// hooks running inside the PTY (see transport.hook and
+	// docs/hooks/session-state.md). "interrupted" is the one value lich raises
+	// itself, for a turn the user stopped at the PTY. The frontend keeps it in
 	// stores keyed by id (session-status-store.ts, session-tool-store.ts) rather
 	// than in the card, which is only mounted while its project is active.
 	statusEventName = "session-status"
@@ -67,13 +68,15 @@ const (
 
 // statusEvent is the payload of statusEventName: the session whose processing
 // state changed, the new state, and — on a pre-tool report alone — the tool it
-// is about to run and what that tool acts on. Both are the provider's own
-// words, never translated here (docs/hooks/session-state.md tables them).
+// is about to run and what that tool acts on, or — on a waiting one alone — what
+// it is blocked on. All three are the provider's own words, never translated
+// here (docs/hooks/session-state.md tables them).
 type statusEvent struct {
 	ID     string `json:"id"`
 	State  string `json:"state"`
 	Tool   string `json:"tool,omitempty"`
 	Detail string `json:"detail,omitempty"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // titleEvent is the payload of titleEventName: the session whose label changed
@@ -319,6 +322,7 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 					State:  req.State,
 					Tool:   req.Tool,
 					Detail: req.Detail,
+					Reason: req.Reason,
 				})
 			}
 			// The relay reads the stream raw: it keeps its own turn accounting,

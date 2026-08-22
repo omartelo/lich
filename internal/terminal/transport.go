@@ -397,15 +397,18 @@ func servePost[T any](
 // hookRequest is a status POST body. Tool and Detail are the optional pair a
 // pre-tool report carries — the provider's own name for the tool it is about to
 // run, and its own words for what that tool acts on. Both are absent from every
-// other report.
+// other report. Reason is the same kind of field for the other end of the
+// contract: what a `waiting` report is blocked on, absent from every state that
+// is not a question.
 type hookRequest struct {
 	SessionID string `json:"session_id"`
 	State     string `json:"state"`
 	Tool      string `json:"tool"`
 	Detail    string `json:"detail"`
+	Reason    string `json:"reason"`
 }
 
-// hookTextLimit bounds the tool name and detail a report may carry, in runes.
+// hookTextLimit bounds the free text a report may carry, in runes.
 // Over-long values are truncated rather than rejected: they are decoration on a
 // state that has to land either way, and losing the spinner because a command
 // line grew is the worse failure.
@@ -423,7 +426,8 @@ func (t *transport) hook(w http.ResponseWriter, r *http.Request) {
 }
 
 // parseHookRequest validates a status POST body: a session id, one of the known
-// states, and the optional tool pair. It never trusts the payload — an unknown
+// states, the optional tool pair and the optional waiting reason. It never
+// trusts the payload — an unknown
 // state is rejected so a stray or hostile POST can't drive the UI into an
 // undefined status, and the free text is trimmed and capped (see hookTextLimit).
 func parseHookRequest(body []byte) (hookRequest, error) {
@@ -444,6 +448,13 @@ func parseHookRequest(body []byte) (hookRequest, error) {
 	// than shown on its own.
 	if req.Tool == "" {
 		req.Detail = ""
+	}
+	req.Reason = clampRunes(strings.TrimSpace(req.Reason), hookTextLimit)
+	// Only a `waiting` is a question, so only a `waiting` has something to be
+	// waiting for. A reason riding any other state names nothing the card could
+	// draw, and holding it would outlive the block it described.
+	if req.State != statusWaiting {
+		req.Reason = ""
 	}
 	return req, nil
 }

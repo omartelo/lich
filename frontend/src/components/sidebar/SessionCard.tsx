@@ -30,6 +30,7 @@ import {
   useSessionStatus,
   useSessionStatusAge,
   useSessionUnread,
+  useSessionWaitingReason,
 } from "@/lib/session/use-session-status"
 import { useSessionCwd } from "@/lib/session/use-session-cwd"
 import { useSessionAgent } from "@/lib/session/use-session-agent"
@@ -129,6 +130,10 @@ export function SessionCard({
   // the bells all look alike and the one blocked longest is the one to answer
   // first. "" for the states that have no clock (see useSessionStatusAge).
   const age = useSessionStatusAge(session.id)
+  // What the session is blocked on, when its provider's event had words for it:
+  // the line the user reads to decide whether this is the card to open. "" from
+  // a provider that reports the block and nothing about it.
+  const waitingReason = useSessionWaitingReason(session.id)
   // The provider CLI live inside the PTY right now — a hand-run `claude` or
   // `codex` in a shell session puts that provider's mark on the card while it
   // runs; null falls back to the session's own kind.
@@ -390,7 +395,16 @@ export function SessionCard({
               ) : status === "waiting" ? (
                 <span className="flex w-full min-w-0 items-center gap-1 text-xs">
                   <CircleQuestionMark className="size-3 shrink-0 text-amber-500" />
-                  <span className="truncate font-medium text-amber-500">Waiting on you</span>
+                  {/* The question takes the whole line when there is one: the
+                      amber glyph and the ring around the icon already say the
+                      session is waiting, so spending the width on saying it
+                      again would cost the card the only words on it the user
+                      cannot already see. Not every provider has them (see
+                      docs/hooks/session-state.md), and the generic line is what
+                      those fall back to. */}
+                  <span className="truncate font-medium text-amber-500">
+                    {waitingReason || "Waiting on you"}
+                  </span>
                 </span>
               ) : status !== "busy" && inbox > 0 ? (
                 <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
