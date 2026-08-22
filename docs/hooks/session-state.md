@@ -80,9 +80,14 @@ tracks the request, not the event), the column fills in from the existing script
 
 `Notification` fires when Claude needs a permission decision **or** when the
 session has simply been sitting at its prompt with nothing to do. Only the first
-of those blocks a human, and the client cannot tell them apart — the event
-carries the same shape either way — so it reports `waiting` for both and **lich
-decides which one arrived** (see `turnLog` below). Codex has no `Notification`:
+of those blocks a human, and lich reads the difference off the report before it
+rather than off the event, so the client reports `waiting` for both and **lich
+decides which one arrived** (see `turnLog` below). Claude Code does now label the
+two — `notification_type` is one of 14 values, `permission_prompt` and
+`idle_prompt` among them (2.1.240) — but that is one harness of five: Codex's
+`PermissionRequest` and opencode's `.asked` events carry no such label, and a
+plugin older than the field sends nothing. The rule has to hold for all of them,
+so the label is not what decides. Codex has no `Notification`:
 the permission half arrives as `PermissionRequest`, where a hook exiting `2`
 would *deny* the request — which is why the contract's client rules (silent,
 always exit 0) are load-bearing there and not merely polite.
