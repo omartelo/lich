@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { DEFAULT_HOTKEYS, HOTKEY_ACTIONS, HOTKEY_GROUPS } from "./hotkeys"
+import { DEFAULT_HOTKEYS, HOTKEY_ACTIONS, HOTKEY_GROUPS, UNASSIGNED } from "./hotkeys"
 import { PASSTHROUGH_TITLE, shortcutGroups, TERMINAL_TITLE } from "./shortcuts"
 
 const groupTitled = (
@@ -39,6 +39,13 @@ describe("shortcutGroups", () => {
       commandPalette: { mod: true, shift: false, alt: true, key: "p" },
     }
     expect(keysFor(shortcutGroups(rebound, false, false), "Command palette")).toBe("Ctrl+Alt+P")
+  })
+
+  // The sheet answers "what fires this right now"; listing the default an
+  // action no longer holds would name a chord that does nothing.
+  it("reads an unassigned action as unassigned rather than as its default", () => {
+    const cleared = { ...DEFAULT_HOTKEYS, commandPalette: UNASSIGNED }
+    expect(keysFor(shortcutGroups(cleared, false, false), "Command palette")).toBe("Unassigned")
   })
 
   it("lists the terminal search, which is bound but not rebindable", () => {

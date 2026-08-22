@@ -10,6 +10,8 @@ import {
   mergeHotkeys,
   sameCombo,
   saveHotkeys,
+  UNASSIGNED,
+  UNASSIGNED_LABEL,
   type Combo,
   type KeyState,
 } from "./hotkeys"
@@ -66,6 +68,14 @@ describe("matchesCombo", () => {
   it("rejects a different key", () => {
     expect(matchesCombo(key({ ctrlKey: true, shiftKey: true, key: "N" }), newSession)).toBe(false)
   })
+
+  // The point of an unassigned action: nothing fires it, so the chord the user
+  // freed reaches the PTY the way it would if lich had never bound it.
+  it("never matches an unassigned combo", () => {
+    expect(matchesCombo(key({ ctrlKey: true, shiftKey: true, key: "T" }), UNASSIGNED)).toBe(false)
+    expect(matchesCombo(key({}), UNASSIGNED)).toBe(false)
+    expect(matchesCombo(key({ ctrlKey: true, key: "" }), UNASSIGNED)).toBe(false)
+  })
 })
 
 describe("comboFromEvent", () => {
@@ -107,6 +117,14 @@ describe("formatCombo", () => {
   it("uses symbols with no separator on macOS", () => {
     expect(formatCombo(combo, true)).toBe("⌘⇧T")
   })
+
+  it("names an unassigned combo instead of printing modifiers alone", () => {
+    expect(formatCombo(UNASSIGNED, false)).toBe(UNASSIGNED_LABEL)
+    expect(formatCombo(UNASSIGNED, true)).toBe(UNASSIGNED_LABEL)
+    expect(formatCombo({ mod: true, shift: true, alt: false, key: "" }, false)).toBe(
+      UNASSIGNED_LABEL,
+    )
+  })
 })
 
 describe("mergeHotkeys", () => {
@@ -140,6 +158,18 @@ describe("mergeHotkeys", () => {
     )
   })
 
+  it("keeps an unassigned action unassigned", () => {
+    expect(mergeHotkeys({ newSession: UNASSIGNED }).newSession).toEqual(UNASSIGNED)
+  })
+
+  it("folds modifiers with no key into the one unassigned shape", () => {
+    // What a hand-edited store can hold: nothing to press, but flags set. Two
+    // shapes for one nothing would read as a conflict and as a live binding.
+    expect(
+      mergeHotkeys({ newSession: { mod: true, shift: true, alt: true, key: "" } }).newSession,
+    ).toEqual(UNASSIGNED)
+  })
+
   it("drops malformed entries and non-objects", () => {
     expect(mergeHotkeys({ newSession: { mod: 1, key: "" } })).toEqual(DEFAULT_HOTKEYS)
     expect(mergeHotkeys(null)).toEqual(DEFAULT_HOTKEYS)
@@ -171,6 +201,17 @@ describe("hotkeyConflicts", () => {
     expect(conflicts.nextSession).toEqual(["newSession", "prevSession"])
   })
 
+  // Nothing is not a chord two actions can both hold: an unassigned action is
+  // bound to no key, so it collides with nothing, including another one.
+  it("never reports an unassigned action as a conflict", () => {
+    const conflicts = hotkeyConflicts({
+      ...DEFAULT_HOTKEYS,
+      newSession: UNASSIGNED,
+      nextSession: UNASSIGNED,
+    })
+    expect(conflicts).toEqual({})
+  })
+
   it("treats combos differing only in a modifier as distinct", () => {
     const conflicts = hotkeyConflicts({
       ...DEFAULT_HOTKEYS,
@@ -184,6 +225,12 @@ describe("sameCombo", () => {
   it("compares every field", () => {
     expect(sameCombo(DEFAULT_HOTKEYS.newSession, DEFAULT_HOTKEYS.newSession)).toBe(true)
     expect(sameCombo(DEFAULT_HOTKEYS.newSession, DEFAULT_HOTKEYS.commandPalette)).toBe(false)
+  })
+
+  // What the settings row reads to decide whether Reset and Unassign are live.
+  it("separates unassigned from a real binding", () => {
+    expect(sameCombo(UNASSIGNED, UNASSIGNED)).toBe(true)
+    expect(sameCombo(UNASSIGNED, DEFAULT_HOTKEYS.newSession)).toBe(false)
   })
 })
 
@@ -201,6 +248,19 @@ describe("loadHotkeys", () => {
     saveHotkeys({ ...DEFAULT_HOTKEYS, newSession: mine })
 
     expect(loadHotkeys().newSession).toEqual(mine)
+  })
+
+  it("round-trips an unassigned action, and takes its default back on reset", () => {
+    saveHotkeys({ ...DEFAULT_HOTKEYS, newSession: UNASSIGNED })
+    const cleared = loadHotkeys()
+    expect(cleared.newSession).toEqual(UNASSIGNED)
+    expect(matchesCombo(key({ ctrlKey: true, shiftKey: true, key: "T" }), cleared.newSession)).toBe(
+      false,
+    )
+
+    // What resetHotkey writes back (settings.tsx): the default for that id.
+    saveHotkeys({ ...cleared, newSession: DEFAULT_HOTKEYS.newSession })
+    expect(loadHotkeys()).toEqual(DEFAULT_HOTKEYS)
   })
 
   // A pref must never be able to break a launch: the value is a string somebody

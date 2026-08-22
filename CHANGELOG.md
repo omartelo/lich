@@ -24,9 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now the number was written down in exactly one place — the message typed at the
   prompt — so a session whose context was compacted past it left nobody, agent or
   person, able to close the errand.
-
-### Added
-
 - **A confined session can push and use `gh` again, if you let it.** The sandbox
   gives a session an empty home, which takes the ssh agent and gh's keyring with
   it: `git push` has nothing to sign with and `gh` opens on a login prompt. Two
@@ -44,6 +41,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   several enabled drew the same ladder several times — and on a machine with no
   bubblewrap the control simply vanished, leaving the question unanswered instead
   of answered.
+- **A keyboard shortcut can now be left unassigned.** Settings › Hotkeys gained a
+  clear button beside each binding's reset, because every chord the window claims
+  is a chord the agent's TUI in the terminal never sees, and rebinding lich's
+  action onto some key you will never press was the closest thing to giving one
+  back. Cleared, the action holds no chord at all: it fires on nothing, collides
+  with nothing, and the keypress falls through to the session underneath. The
+  shortcuts sheet reads it as unassigned rather than naming a default it no
+  longer answers to, and reset still puts that default back.
 
 ### Changed
 
