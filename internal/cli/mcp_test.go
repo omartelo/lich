@@ -224,7 +224,7 @@ func TestMCPListsEveryTool(t *testing.T) {
 		"list_worktrees":   {},
 		"send_to_session":  {"session", "prompt"},
 		"wait_for_answer":  {},
-		"reply_to_session": {"ticket", "answer"},
+		"reply_to_session": {"answer"},
 	}
 	// The read-only ones, which a client may auto-allow. wait_for_answer is
 	// not among them: collecting drains the inbox.
@@ -406,7 +406,7 @@ func TestMCPReplyToSession(t *testing.T) {
 		t.Fatalf("tool reported a failure: %s", text)
 	}
 	call := f.only(t)
-	if call.method != "relay.Reply" || call.args[0] != "a1b2c3d4" || call.args[1] != "done" {
+	if call.method != "relay.Reply" || call.args[1] != "a1b2c3d4" || call.args[2] != "done" {
 		t.Errorf("call = %+v", call)
 	}
 }

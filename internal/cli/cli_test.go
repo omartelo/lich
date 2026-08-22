@@ -408,8 +408,28 @@ func TestReplySendsTheAnswerHome(t *testing.T) {
 	if call.method != "relay.Reply" {
 		t.Errorf("method = %q", call.method)
 	}
-	if call.args[0] != "a1b2c3d4" || call.args[1] != "3 failures in foo_test" {
+	if call.args[1] != "a1b2c3d4" || call.args[2] != "3 failures in foo_test" {
 		t.Errorf("args = %v", call.args)
+	}
+	if !strings.Contains(stdout, "Answer sent.") {
+		t.Errorf("stdout = %q", stdout)
+	}
+}
+
+// One argument is the answer alone: the ticket is exactly what an agent whose
+// context was compacted past the message no longer has, and the session it runs
+// in names the errand for it.
+func TestReplyWithoutATicketSendsTheSessionsOwnErrandHome(t *testing.T) {
+	f := newFakeLich(t, `null`)
+
+	code, stdout, stderr := run(t, f, "reply", "3 failures in foo_test")
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+
+	call := f.only(t)
+	if call.args[1] != "" || call.args[2] != "3 failures in foo_test" {
+		t.Errorf("args = %v, want an empty ticket and the answer", call.args)
 	}
 	if !strings.Contains(stdout, "Answer sent.") {
 		t.Errorf("stdout = %q", stdout)
@@ -423,7 +443,8 @@ func TestWrongArgumentCountsFailWithUsage(t *testing.T) {
 		{"send", "docs"},
 		{"send", "docs", "a prompt", "extra"},
 		{"wait", "a1b2c3d4", "extra"},
-		{"reply", "a1b2c3d4"},
+		{"reply"},
+		{"reply", "a1b2c3d4", "an answer", "extra"},
 		// A positional argument these take no notice of is a caller who believes
 		// it asked for something else: `lich open feature-x` reads as a worktree
 		// on that branch, and silently opening a session beside the caller's own

@@ -7,7 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A session's card now shows the ticket it is answering.** Hover a card with an
+  open request and the tooltip names the other end and the ticket number, and on
+  the side that owes the answer it spells the command that sends it home. Until
+  now the number was written down in exactly one place — the message typed at the
+  prompt — so a session whose context was compacted past it left nobody, agent or
+  person, able to close the errand.
+
 ### Changed
+
+- **`lich reply` no longer needs the ticket.** Called with the answer alone —
+  `lich reply "<your answer>"`, or `reply_to_session` with no ticket — it answers
+  the request open against the calling session, so an agent that has lost the
+  message naming the number can still get its answer home. With several requests
+  open the oldest delivered is the one closed, and naming the ticket is still the
+  way to pick a specific errand.
 
 - **Building lich from source now needs Go 1.27.0.** The pin stays exact so that
   every release binary carries the current toolchain's own security fixes, and

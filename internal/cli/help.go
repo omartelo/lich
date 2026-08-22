@@ -43,9 +43,11 @@ var commands = []command{
 	},
 	{
 		name: "reply",
-		args: "<ticket> <answer>",
+		args: "[<ticket>] <answer>",
 		about: "Send <answer> back to whoever is waiting on <ticket>. This is what a\n" +
-			"relayed message asks you to run when you are done.",
+			"relayed message asks you to run when you are done. Without a ticket it\n" +
+			"answers the request open against this session, for when the message\n" +
+			"carrying the number is no longer in reach.",
 	},
 	{
 		name: "open",
