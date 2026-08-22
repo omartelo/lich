@@ -1,6 +1,15 @@
-import { GitBranch, GitPullRequestArrow, Play, Shield, TriangleAlert } from "lucide-react"
+import {
+  ArrowLeft,
+  ArrowRight,
+  GitBranch,
+  GitPullRequestArrow,
+  Play,
+  Shield,
+  TriangleAlert,
+} from "lucide-react"
 import type { Session } from "@/lib/session/sessions"
 import { useSessionCwd } from "@/lib/session/use-session-cwd"
+import { useSessionRelay } from "@/lib/session/use-session-relay"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { baseReadout } from "@/lib/git/base-status"
 import { usePullRequest } from "@/lib/pulls/use-pull-request"
@@ -29,6 +38,7 @@ interface SessionTooltipProps {
 // the second reader costs a subscription, not a second poll.
 export function SessionTooltip({ session, path }: SessionTooltipProps) {
   const liveCwd = useSessionCwd(session.id)
+  const relay = useSessionRelay(session.id)
   const shownPath = liveCwd || session.path || path
   const git = useGitStatus(shownPath)
   const pr = usePullRequest(shownPath, git?.branch ?? "", git?.head ?? "")
@@ -38,6 +48,38 @@ export function SessionTooltip({ session, path }: SessionTooltipProps) {
       <div className="flex flex-col gap-1.5">
         <span className="font-medium">{session.label}</span>
         <span className="break-all font-mono text-muted-foreground">{shownPath}</span>
+        {/* The open request, and the ticket it runs on. The card already draws
+            the arrow and the peer; the number is the part that exists nowhere
+            else a person can read it — it is typed once, into the target's
+            prompt, and an agent whose context was compacted past that message
+            has no way back to it. The reply line is drawn only on the side that
+            owes the answer, because it is what you hand back to a session that
+            lost the instruction; the side that is waiting has nothing to run. */}
+        {relay && (
+          <span className="flex flex-col gap-0.5">
+            <span className="flex items-center gap-1.5 text-muted-foreground">
+              {relay.direction === "out" ? (
+                <ArrowRight className="size-3 shrink-0" />
+              ) : (
+                <ArrowLeft className="size-3 shrink-0" />
+              )}
+              <span>
+                {relay.direction === "out" ? "Waiting on " : "Answering "}
+                {relay.peer ? (
+                  <span className="font-medium text-foreground">{relay.peer}</span>
+                ) : (
+                  <span className="italic">the command line</span>
+                )}
+              </span>
+            </span>
+            {relay.ticket && <span className="font-mono tabular-nums">ticket {relay.ticket}</span>}
+            {relay.ticket && relay.direction === "in" && (
+              <span className="break-all font-mono text-muted-foreground">
+                {`lich reply ${relay.ticket} "…"`}
+              </span>
+            )}
+          </span>
+        )}
         {/* The command this terminal opens into. The card's label already says
             it while the label is still automatic — this is the only place it is
             named once the user has renamed the card. */}

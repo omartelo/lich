@@ -221,12 +221,22 @@ the command the nudge at a sender's prompt names, and it needs a session of
 its own — run from a plain shell it is an error, because there is no inbox to
 drain.
 
-### `lich reply <ticket> <answer>`
+### `lich reply [<ticket>] <answer>`
 
 Hands `<answer>` to the session waiting on `<ticket>`; prints `Answer sent.`
 This is what a relayed message asks the receiving agent to run. An answer is
 capped at 64 KiB. Replying twice to one ticket is an error — the first answer
 already went home.
+
+Called with the answer alone it hands it to the request open against the
+calling session: the oldest message actually delivered there and still
+unanswered. The ticket is written down in one place only — the message typed at
+the target's prompt — so an agent whose context was compacted past that message
+would otherwise be holding an answer with no route home. With several requests
+open the oldest delivery is closed first, the order every provider hands queued
+tasks to its agent in; a task still queued for a prompt that has not received it
+is never picked. Outside a session, or with nothing open, it is an error rather
+than a guess, and the ticket is still the way to name a specific errand.
 
 ### `lich open [--project <name>] [--kind <provider>] [--worktree <branch>] [--base <branch>] [--model <model>] [--prompt <task>]`
 
@@ -405,7 +415,7 @@ at lich.
 | `list_sessions` | The live sessions that can be given work, as JSON — each with the state it last reported, `waiting` among them. |
 | `send_to_session` | `session`, `prompt`, optional `project` and `timeout_seconds`. |
 | `wait_for_answer` | optional `ticket` and `timeout_seconds` — with a ticket, `lich wait <ticket>`; without one, the collect: everything ready at once. |
-| `reply_to_session` | `ticket`, `answer` — what a relayed message asks for. |
+| `reply_to_session` | `answer`, optional `ticket` — what a relayed message asks for; without a ticket, the request open against the calling session. |
 | `open_session` | optional `project`, `kind`, `worktree`, `base`, `model` — `lich open` — plus optional `prompt` — `lich open --prompt`, the same hand-off in the same call. |
 | `close_session` | `session`, optional `project`, `worktree` (`keep`/`remove`), `force`. |
 | `rename_session` | `label`, optional `session` (omitted renames the caller's own) and `project` — `lich rename`. |
@@ -621,8 +631,12 @@ receiving agent only because this text describes it.
   answer comes back on. Tickets live in memory: one exists for as long as its
   errand does, and a lich that restarted has no PTY left to answer into.
 - **UI push** — the relay emits the global app event `session-relay`
-  (`{id, peer, direction}`) for **both** ends when a message lands in a PTY, and
-  again with an empty direction for both when the errand closes. It is raised
+  (`{id, peer, direction, ticket}`) for **both** ends when a message lands in a
+  PTY, and again with an empty direction and ticket for both when the errand
+  closes. The ticket rides along because the window is the only other place it
+  can be read: the number is otherwise in the message typed at the target's
+  prompt and nowhere else, so a card's tooltip is what a person falls back to
+  when an agent no longer has it. It is raised
   after the write, never before: a mark that outlived a delivery which never
   happened would be a card claiming something untrue. A caller with no session
   of its own gets no mark — there is no card to put one on — and the target's

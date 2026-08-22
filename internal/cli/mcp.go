@@ -513,11 +513,14 @@ var mcpTools = []mcpTool{
 			"It is the only route back — a peer message does not reach them, because they are " +
 			"waiting on the ticket and reading nothing else.",
 		Schema: schema(map[string]any{
-			"ticket": property("string", "The ticket from the message you were given."),
+			"ticket": property("string", "The ticket from the message you were given. "+
+				"Leave it out only if that message is no longer in your context — then the "+
+				"request open against this session is answered."),
 			"answer": property("string", "Your answer, in full — nothing else is sent back."),
-		}, "ticket", "answer"),
+		}, "answer"),
 		Run: func(c *client, args mcpArgs) (string, error) {
-			if err := c.call("relay.Reply", []any{args.text("ticket"), args.text("answer")}, shortCall, nil); err != nil {
+			call := []any{c.sessionID(), args.text("ticket"), args.text("answer")}
+			if err := c.call("relay.Reply", call, shortCall, nil); err != nil {
 				return "", err
 			}
 			return "Answer sent.", nil

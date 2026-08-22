@@ -100,6 +100,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   `draftIdle` for nothing. The stale-draft release is what keeps that a delay instead of a wedged relay. Two gaps
   stay open: input arriving in the ~150ms between the paste and its Enter (`defaultSubmitDelay`) still rides along,
   and a provider that takes keystrokes through anything other than this PTY is invisible here.
+- **An answer that names no ticket is matched by delivery order** (`internal/relay/relay.go`,
+  `errandOfLocked`): `lich reply "<answer>"` and `reply_to_session` without a ticket close the oldest message
+  delivered to that session and still open, because nothing in an answer itself says which request it belongs to.
+  A session working two relayed tasks at once that answers the second one first sends it home as the answer to the
+  first, and both senders read a confident wrong report — nothing anywhere reports the mismatch. Naming the ticket
+  is still the only exact route, which is why every relayed message spells it and why the card's tooltip shows it.
+
 - **Installing the plugin writes into three harnesses' own directories** (`internal/agentplugin`): Claude Code and
   Codex are driven through their plugin CLI, but opencode, oh-my-pi and Crush have none, so lich writes the
   released files itself. None of them records what is installed, so the version lives in a marker line lich wrote —

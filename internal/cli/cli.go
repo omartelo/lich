@@ -304,10 +304,17 @@ func (c *client) reply(args []string) error {
 	if err := c.parse(flags, args); err != nil {
 		return err
 	}
-	if flags.NArg() != 2 {
+	if flags.NArg() < 1 || flags.NArg() > 2 {
 		return usageError("reply")
 	}
-	if err := c.call("relay.Reply", []any{flags.Arg(0), flags.Arg(1)}, shortCall, nil); err != nil {
+	// One argument is the answer alone: the ticket is the thing an agent whose
+	// context was compacted no longer has, and the session it is running in
+	// names the errand well enough for the usual case of one open request.
+	ticket, answer := "", flags.Arg(0)
+	if flags.NArg() == 2 {
+		ticket, answer = flags.Arg(0), flags.Arg(1)
+	}
+	if err := c.call("relay.Reply", []any{c.sessionID(), ticket, answer}, shortCall, nil); err != nil {
 		return err
 	}
 	fmt.Fprintln(c.stdout, "Answer sent.")
