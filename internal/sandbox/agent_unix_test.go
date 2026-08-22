@@ -14,11 +14,25 @@ import (
 
 // listenUnix puts a real socket on disk and returns its path: what the ssh
 // agent leaves behind, and the only thing AgentSocket is willing to mount.
-func listenUnix(t *testing.T, path string) string {
+//
+// The directory is its own, deliberately not the caller's t.TempDir(): a unix
+// address is capped at 104 bytes on macOS and 108 on Linux (sun_path), and
+// TempDir spends most of that before the file name — /var/folders/<32 chars>/T/
+// plus the test's own name is already over the line on macOS, where the bind
+// fails with a bare "invalid argument". Nothing reads the socket's directory:
+// AgentSocket takes the path from SSH_AUTH_SOCK, so the socket has no reason to
+// sit beside the home a test builds.
+func listenUnix(t *testing.T) string {
 	t.Helper()
+	dir, err := os.MkdirTemp("", "l")
+	if err != nil {
+		t.Fatalf("temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	path := filepath.Join(dir, "a.sock")
 	listener, err := net.Listen("unix", path)
 	if err != nil {
-		t.Fatalf("listen on %s: %v", path, err)
+		t.Fatalf("listen on %s (%d bytes): %v", path, len(path), err)
 	}
 	t.Cleanup(func() { _ = listener.Close() })
 	return path
@@ -48,7 +62,7 @@ func TestAgentSocketRefusesWhatIsNotASocket(t *testing.T) {
 		}
 	}
 
-	socket := listenUnix(t, filepath.Join(dir, "agent.sock"))
+	socket := listenUnix(t)
 	t.Setenv("SSH_AUTH_SOCK", socket)
 	if got := AgentSocket(); got != socket {
 		t.Errorf("AgentSocket = %q, want %q", got, socket)
@@ -63,7 +77,7 @@ func TestDescribeMountsTheAgentOnlyWhenAsked(t *testing.T) {
 	if err := os.MkdirAll(cwd, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	socket := listenUnix(t, filepath.Join(home, "agent.sock"))
+	socket := listenUnix(t)
 	t.Setenv("SSH_AUTH_SOCK", socket)
 	if err := os.MkdirAll(filepath.Join(home, ".ssh"), 0o700); err != nil {
 		t.Fatalf("mkdir .ssh: %v", err)
@@ -131,7 +145,7 @@ func TestDescribeNeverMountsAPrivateKey(t *testing.T) {
 	if err := os.WriteFile(key, []byte("private\n"), 0o600); err != nil {
 		t.Fatalf("write key: %v", err)
 	}
-	t.Setenv("SSH_AUTH_SOCK", listenUnix(t, filepath.Join(home, "agent.sock")))
+	t.Setenv("SSH_AUTH_SOCK", listenUnix(t))
 
 	spec := Describe(providers.Claude, home, cwd, "", nil, true)
 	for _, path := range append(append([]string{}, spec.Read...), spec.Write...) {
