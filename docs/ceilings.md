@@ -28,6 +28,10 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **A dropped file has no path, so lich guesses it** (`internal/drop`): a file under neither the session directory
   nor home is *copied*, so an agent told to edit it edits the copy — and that copy is deleted 3 days on, so a path
   pasted into a prompt eventually stops resolving.
+- **A session close is a hang-up on Unix and a kill on Windows** (`internal/terminal/pty_unix.go`,
+  `pty_windows.go`): closing a card signals the agent and gives it `closeGrace` to leave, so its exit path runs —
+  hooks, transcripts, whatever it writes on the way out. A ConPTY has no signal to deliver, so the same close on
+  Windows is still abrupt: an agent that saves state on exit loses it there, and nothing on screen says so.
 - **A terminal entrypoint reaches shell sessions on Linux and macOS alone** (`internal/terminal/entrypoint.go`):
   the menu item is absent on a provider card, and on Windows the setting saves and the terminal opens on a bare
   shell anyway — the wrap is skipped there for `wrapSetup`'s reason, and nothing on screen says so. It also runs
@@ -96,6 +100,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   `draftIdle` for nothing. The stale-draft release is what keeps that a delay instead of a wedged relay. Two gaps
   stay open: input arriving in the ~150ms between the paste and its Enter (`defaultSubmitDelay`) still rides along,
   and a provider that takes keystrokes through anything other than this PTY is invisible here.
+- **An answer that names no ticket is matched by delivery order** (`internal/relay/relay.go`,
+  `errandOfLocked`): `lich reply "<answer>"` and `reply_to_session` without a ticket close the oldest message
+  delivered to that session and still open, because nothing in an answer itself says which request it belongs to.
+  A session working two relayed tasks at once that answers the second one first sends it home as the answer to the
+  first, and both senders read a confident wrong report — nothing anywhere reports the mismatch. Naming the ticket
+  is still the only exact route, which is why every relayed message spells it and why the card's tooltip shows it.
+
 - **Installing the plugin writes into three harnesses' own directories** (`internal/agentplugin`): Claude Code and
   Codex are driven through their plugin CLI, but opencode, oh-my-pi and Crush have none, so lich writes the
   released files itself. None of them records what is installed, so the version lives in a marker line lich wrote —
@@ -103,6 +114,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   which is why the install asks its version first. Crush's block and omp's `mcp.json` register lich's MCP server by
   the absolute path of the binary that installed it, and omp's is a JSON document lich rewrites rather than appends
   to: every key survives, the user's formatting does not.
+- **A new MCP tool reaches opencode a release later than everyone else** (`internal/cli/mcp.go`, `mcpTools`; the
+  registration table in `docs/cli.md`): every other harness is handed lich's own server, so a tool added here is in
+  that session's list on the next spawn. opencode cannot register an MCP server from a plugin, so its plugin
+  defines each tool itself in the companion repo (`omartelo/lich-plugin`, `opencode/lich.js`) — which means a tool
+  arrives there only once that repo cuts a release and the user reinstalls the plugin, and until they do it is
+  missing from that session's list while it is in every other. `lich rename` works there like anywhere else; it is
+  discovery that lags, which is the whole reason the tools exist.
 - **Only two of the four harnesses that report a tool spell an MCP one splittably** (`frontend/src/lib/session/tool-label.ts`,
   table in `docs/hooks/session-state.md`): Claude Code and Codex send `mcp__<server>__<tool>`, which the card draws
   as `<server> · <tool>`. omp's `mcp__<server>_<tool>` has one underscore doing two jobs — `mcp__lich_list_sessions`

@@ -112,6 +112,8 @@ func dispatch(args []string, c *client) int {
 		return c.run(c.open, args[1:])
 	case "close":
 		return c.run(c.close, args[1:])
+	case "rename":
+		return c.run(c.rename, args[1:])
 	case "worktrees":
 		return c.run(c.worktrees, args[1:])
 	case "mcp":
@@ -302,10 +304,17 @@ func (c *client) reply(args []string) error {
 	if err := c.parse(flags, args); err != nil {
 		return err
 	}
-	if flags.NArg() != 2 {
+	if flags.NArg() < 1 || flags.NArg() > 2 {
 		return usageError("reply")
 	}
-	if err := c.call("relay.Reply", []any{flags.Arg(0), flags.Arg(1)}, shortCall, nil); err != nil {
+	// One argument is the answer alone: the ticket is the thing an agent whose
+	// context was compacted no longer has, and the session it is running in
+	// names the errand well enough for the usual case of one open request.
+	ticket, answer := "", flags.Arg(0)
+	if flags.NArg() == 2 {
+		ticket, answer = flags.Arg(0), flags.Arg(1)
+	}
+	if err := c.call("relay.Reply", []any{c.sessionID(), ticket, answer}, shortCall, nil); err != nil {
 		return err
 	}
 	fmt.Fprintln(c.stdout, "Answer sent.")
@@ -557,6 +566,45 @@ func closedText(closed spawn.Closed) string {
 	default:
 		return fmt.Sprintf("Closed %q.\n", closed.Label)
 	}
+}
+
+// rename takes one argument or two: the new name alone renames the session the
+// command is running in, which is the common one an agent has (it knows what it
+// is doing, not what its card is called); a target before it renames that one.
+func (c *client) rename(args []string) error {
+	flags := newFlagSet("rename")
+	project := flags.String("project", "", "narrow the target to one project when the label is ambiguous")
+	asJSON := flags.Bool("json", false, "print the result as JSON")
+	if err := c.parse(flags, args); err != nil {
+		return err
+	}
+	var target, label string
+	switch flags.NArg() {
+	case 1:
+		label = flags.Arg(0)
+	case 2:
+		target, label = flags.Arg(0), flags.Arg(1)
+	default:
+		return usageError("rename")
+	}
+
+	var renamed spawn.Renamed
+	call := []any{c.sessionID(), target, *project, label}
+	if err := c.call("spawn.Rename", call, shortCall, &renamed); err != nil {
+		return err
+	}
+	if *asJSON {
+		return c.emit(renamed)
+	}
+	fmt.Fprint(c.stdout, renamedText(renamed))
+	return nil
+}
+
+// renamedText names both ends of the change: the name that is gone is the half
+// the caller cannot look up afterwards, and the half whoever was addressing that
+// session by it needs to hear.
+func renamedText(renamed spawn.Renamed) string {
+	return fmt.Sprintf("Renamed %q to %q.\n", renamed.Previous, renamed.Label)
 }
 
 func (c *client) worktrees(args []string) error {

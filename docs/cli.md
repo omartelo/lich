@@ -221,12 +221,22 @@ the command the nudge at a sender's prompt names, and it needs a session of
 its own — run from a plain shell it is an error, because there is no inbox to
 drain.
 
-### `lich reply <ticket> <answer>`
+### `lich reply [<ticket>] <answer>`
 
 Hands `<answer>` to the session waiting on `<ticket>`; prints `Answer sent.`
 This is what a relayed message asks the receiving agent to run. An answer is
 capped at 64 KiB. Replying twice to one ticket is an error — the first answer
 already went home.
+
+Called with the answer alone it hands it to the request open against the
+calling session: the oldest message actually delivered there and still
+unanswered. The ticket is written down in one place only — the message typed at
+the target's prompt — so an agent whose context was compacted past that message
+would otherwise be holding an answer with no route home. With several requests
+open the oldest delivery is closed first, the order every provider hands queued
+tasks to its agent in; a task still queued for a prompt that has not received it
+is never picked. Outside a session, or with nothing open, it is an error rather
+than a guess, and the ticket is still the way to name a specific errand.
 
 ### `lich open [--project <name>] [--kind <provider>] [--worktree <branch>] [--base <branch>] [--model <model>] [--prompt <task>]`
 
@@ -351,6 +361,29 @@ conversation back up.
 - Unlike `sessions`, this reaches a card whose terminal was never opened: it is
   still a session, and closing it is the one thing you can do with it.
 
+### `lich rename [--project <name>] [--json] [<session>] <label>`
+
+Renames a session — the name on its card, which is also the name it is addressed
+by. The window's rename, from outside the window.
+
+```
+$ lich rename auth-fix "the login bug"
+Renamed "auth-fix" to "the login bug".
+```
+
+- **One argument is the new name for the session the command runs in**; two are
+  the target and the new name. The one-argument form is what an agent has to
+  work with: `sessions` shows it every session but its own, so it knows what it
+  is doing long before it knows what its card is called.
+- **The name becomes the user's.** As in the window, renaming clears the row's
+  `label_auto`, so the provider's own auto-title never overwrites it again.
+- **A name another session in that project already holds is refused.** Two
+  sessions under one label is the one thing `send` cannot resolve. The window
+  has no such rule — the user is pointing at the card they mean, and can see
+  the other one.
+- The provider's own idea of the session's name is untouched: nothing here runs
+  `/rename` inside the terminal, exactly as the window's rename does not.
+
 ### `lich worktrees [--project <name>] [--json]`
 
 Lists a project's git worktrees — what each is called, whether it holds
@@ -382,9 +415,10 @@ at lich.
 | `list_sessions` | The live sessions that can be given work, as JSON — each with the state it last reported, `waiting` among them. |
 | `send_to_session` | `session`, `prompt`, optional `project` and `timeout_seconds`. |
 | `wait_for_answer` | optional `ticket` and `timeout_seconds` — with a ticket, `lich wait <ticket>`; without one, the collect: everything ready at once. |
-| `reply_to_session` | `ticket`, `answer` — what a relayed message asks for. |
+| `reply_to_session` | `answer`, optional `ticket` — what a relayed message asks for; without a ticket, the request open against the calling session. |
 | `open_session` | optional `project`, `kind`, `worktree`, `base`, `model` — `lich open` — plus optional `prompt` — `lich open --prompt`, the same hand-off in the same call. |
 | `close_session` | `session`, optional `project`, `worktree` (`keep`/`remove`), `force`. |
+| `rename_session` | `label`, optional `session` (omitted renames the caller's own) and `project` — `lich rename`. |
 | `list_worktrees` | optional `project` — the checkouts, as JSON. |
 
 A tool that fails answers with `isError` and the reason as text, not a JSON-RPC
@@ -482,7 +516,7 @@ own command line (`providers.AcceptsMCPServer`):
 | Claude Code | `--mcp-config` with a JSON string, no file on disk | at spawn |
 | Codex | `-c mcp_servers.lich.command=…` and `…args=["mcp"]` | at spawn |
 | Crush | an `mcp add` line in the block the plugin install writes into `crushrc` | with the plugin |
-| opencode | its plugin defines the same seven as tools of its own — a plugin there cannot register an MCP server | with the plugin |
+| opencode | its plugin defines the same eight as tools of its own — a plugin there cannot register an MCP server | with the plugin |
 | oh-my-pi | a `lich` entry merged into `mcp.json` beside the extension the plugin install writes | with the plugin |
 
 Only the first two can be told on their own command line, which is what makes
@@ -597,8 +631,12 @@ receiving agent only because this text describes it.
   answer comes back on. Tickets live in memory: one exists for as long as its
   errand does, and a lich that restarted has no PTY left to answer into.
 - **UI push** — the relay emits the global app event `session-relay`
-  (`{id, peer, direction}`) for **both** ends when a message lands in a PTY, and
-  again with an empty direction for both when the errand closes. It is raised
+  (`{id, peer, direction, ticket}`) for **both** ends when a message lands in a
+  PTY, and again with an empty direction and ticket for both when the errand
+  closes. The ticket rides along because the window is the only other place it
+  can be read: the number is otherwise in the message typed at the target's
+  prompt and nowhere else, so a card's tooltip is what a person falls back to
+  when an agent no longer has it. It is raised
   after the write, never before: a mark that outlived a delivery which never
   happened would be a card claiming something untrue. A caller with no session
   of its own gets no mark — there is no card to put one on — and the target's
@@ -682,7 +720,7 @@ whoever asked.
   every tool it has. This does not widen lich's trust boundary (`LICH_TOKEN` is
   already in every PTY, and any process in one can already write to any
   session), but it is the first feature that uses it, and there is no switch.
-- **The tools cost context in every session, used or not.** Seven tool
+- **The tools cost context in every session, used or not.** Eight tool
   definitions are in the prompt of every Claude Code and Codex session lich
   spawns, whether or not that session ever talks to another one. The command
   line costs nothing until it is called; the tools are what buy discovery, and

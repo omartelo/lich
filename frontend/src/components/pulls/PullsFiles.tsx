@@ -1,6 +1,7 @@
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import { useMemo, useRef, useState, useSyncExternalStore } from "react"
 import { IconAction } from "@/components/common/IconAction"
+import { ResizeHandle } from "@/components/common/ResizeHandle"
 import { Notice } from "@/components/common/Notice"
 import { CommentBatch } from "@/components/diff/CommentBatch"
 import { CollapseAllAction, useDiffBulk } from "@/components/diff/diff-bulk"
@@ -31,11 +32,20 @@ import {
 import { usePullRequestDiff } from "@/lib/pulls/use-pull-request-diff"
 import { addReviewComment } from "@/lib/review-comments"
 import { usePanelVisible } from "@/lib/use-panel-visible"
+import { usePanelWidth } from "@/lib/use-panel-width"
 
 // The file tree is a navigator, not the review itself: hiding it hands the
 // whole width to the diff. Remembered in localStorage like every other UI pref,
 // so the choice survives leaving the screen.
 const TREE_HIDDEN_KEY = "lich.pulls.tree.hidden"
+
+// A monorepo's paths are long enough that no fixed width fits them, so the tree
+// drags like every other side panel — narrow when the diff matters more, wide
+// when the navigating does.
+const WIDTH_KEY = "lich.pulls.tree.width"
+const MIN_REM = 12
+const MAX_REM = 40
+const DEFAULT_REM = 15
 
 // Ragged widths, so the placeholders read as file names and code rather than a
 // stack of identical bars.
@@ -45,11 +55,14 @@ const CODE_ROWS = ["w-3/5", "w-4/5", "w-2/5", "w-11/12", "w-1/2", "w-3/4", "w-1/
 // The diff is a gh round-trip, so this tab is empty for about a second. A bare
 // "Loading…" line reads as a broken tab on a screen that wide; the skeleton
 // stands in for the shape that arrives — tree, toolbar, then file cards.
-function FilesSkeleton({ tree }: { tree: boolean }) {
+function FilesSkeleton({ tree, width }: { tree: boolean; width: number }) {
   return (
     <div className="flex h-full" aria-busy>
       {tree && (
-        <div className="flex w-60 shrink-0 flex-col gap-3 border-r border-border p-3">
+        <div
+          className="flex shrink-0 flex-col gap-3 border-r border-border p-3"
+          style={{ width: `${width}rem` }}
+        >
           <SkeletonLines widths={TREE_ROWS} />
         </div>
       )}
@@ -122,6 +135,13 @@ export function PullsFiles({
   // all at once — same directive the Review dock hands its panel.
   const [bulk, toggleAll] = useDiffBulk()
   const [treeOpen, toggleTree] = usePanelVisible(TREE_HIDDEN_KEY)
+  const { width, handleProps } = usePanelWidth({
+    storageKey: WIDTH_KEY,
+    minRem: MIN_REM,
+    maxRem: MAX_REM,
+    defaultRem: DEFAULT_REM,
+    edge: "right",
+  })
   const viewed = useSyncExternalStore(subscribeViewed, () => viewedFiles(pullRequest))
   // A tick is against the file's content, so a new commit unticks exactly the
   // files it rewrote. Recomputed only when the diff itself changes.
@@ -165,7 +185,7 @@ export function PullsFiles({
     return <Notice className="px-4 py-6 text-sm">Couldn’t load the diff: {error}</Notice>
   }
   if (files === null) {
-    return <FilesSkeleton tree={treeOpen} />
+    return <FilesSkeleton tree={treeOpen} width={width} />
   }
   if (files.length === 0) {
     return <Notice className="px-4 py-6 text-sm">No file changes</Notice>
@@ -185,8 +205,9 @@ export function PullsFiles({
   return (
     <div className="flex h-full">
       {treeOpen && (
-        <div className="w-60 shrink-0 overflow-y-auto border-r border-border">
-          <FileTree tree={tree} active={active} defaultOpen onSelect={jumpTo} />
+        <div className="relative shrink-0 border-r border-border" style={{ width: `${width}rem` }}>
+          <FileTree tree={tree} active={active} defaultOpen className="h-full" onSelect={jumpTo} />
+          <ResizeHandle edge="right" label="Resize the file tree" handleProps={handleProps} />
         </div>
       )}
       <div className="flex flex-1 flex-col overflow-hidden">

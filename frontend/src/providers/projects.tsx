@@ -168,8 +168,8 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     })()
   }, [applyLoaded])
 
-  // The backend auto-applies the Claude ai-title as a session's label (only
-  // while the user has not renamed it) and emits this event with the change.
+  // A label changed outside the window: the auto-applied Claude ai-title (only
+  // while the user has not renamed it), or `lich rename` and its MCP tool.
   // Mirror it into local state so the card updates live; the store already
   // persisted it, so this never writes back.
   useEffect(() => {

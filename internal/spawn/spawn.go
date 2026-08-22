@@ -74,6 +74,7 @@ type Sessions interface {
 		projectID, sessionID, label, kind, path string, nextSeq int, originID, originLabel string,
 	) error
 	SetSessionModel(sessionID, model string) error
+	RenameSession(sessionID, label string) error
 	DeleteSession(projectID, sessionID, activeID string) error
 	CloseSession(projectID, sessionID, activeID string) error
 	PurgeWorktreeSessions(projectID, path string) error
@@ -294,7 +295,7 @@ type checkout struct {
 // unnamed here and takes the project's counter instead.
 func (s *Service) resolveCheckout(target store.Project, worktree, base string) (checkout, error) {
 	label := worktree
-	if labelTaken(target, worktree) {
+	if labelTaken(target, worktree, "") {
 		label = ""
 	}
 	if path, ok := s.checkoutAt(target, worktree); ok {
@@ -436,9 +437,14 @@ func originOf(projects []store.Project, fromID string) (string, string) {
 	return "", ""
 }
 
-// labelTaken reports whether a project already holds a session under a label.
-func labelTaken(p store.Project, label string) bool {
+// labelTaken reports whether a project already holds a session under a label,
+// ignoring the session exceptID names — the one a rename is about to give that
+// label, which is not competition with itself.
+func labelTaken(p store.Project, label, exceptID string) bool {
 	for _, sess := range p.Sessions {
+		if sess.ID == exceptID {
+			continue
+		}
 		if strings.EqualFold(sess.Label, label) {
 			return true
 		}

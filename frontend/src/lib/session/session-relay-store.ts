@@ -14,7 +14,7 @@ function sameRelay(a: SessionRelay | null, b: SessionRelay | null): boolean {
   if (a === null || b === null) {
     return a === b
   }
-  return a.peer === b.peer && a.direction === b.direction
+  return a.peer === b.peer && a.direction === b.direction && a.ticket === b.ticket
 }
 
 // createSessionRelayStore keeps the request each session has open with another,

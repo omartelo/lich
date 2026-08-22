@@ -38,7 +38,24 @@ export function buildTree(paths: string[]): TreeNode[] {
     })
   }
   sortTree(root)
-  return root
+  return collapseChains(root)
+}
+
+// A changed-files tree is mostly corridor: src/main/java/br/com/acme holds
+// nothing but the next directory, and a row per segment spends the panel's
+// width on indentation until every file name is an ellipsis. A chain of
+// directories with no branch in it collapses into one row — what GitHub's file
+// tree and VS Code's compact folders show. The merged node keeps the deepest
+// path as its id, so expand state stays unique per row.
+function collapseChains(nodes: TreeNode[]): TreeNode[] {
+  return nodes.map((node) => {
+    let merged = node
+    while (merged.children.length === 1 && merged.children[0].type === "dir") {
+      const only = merged.children[0]
+      merged = { ...only, name: `${merged.name}/${only.name}` }
+    }
+    return { ...merged, children: collapseChains(merged.children) }
+  })
 }
 
 function sortTree(nodes: TreeNode[]): void {

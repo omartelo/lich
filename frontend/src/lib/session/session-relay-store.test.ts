@@ -50,11 +50,11 @@ describe("createSessionRelayStore", () => {
   it("marks both ends of one request independently", () => {
     const { relay, store } = build()
 
-    relay.emit({ id: "s1", peer: "docs", direction: "out" })
-    relay.emit({ id: "s2", peer: "auth", direction: "in" })
+    relay.emit({ id: "s1", peer: "docs", direction: "out", ticket: "fd94999a" })
+    relay.emit({ id: "s2", peer: "auth", direction: "in", ticket: "a1b2c3d4" })
 
-    expect(store.get("s1")).toEqual({ peer: "docs", direction: "out" })
-    expect(store.get("s2")).toEqual({ peer: "auth", direction: "in" })
+    expect(store.get("s1")).toEqual({ peer: "docs", direction: "out", ticket: "fd94999a" })
+    expect(store.get("s2")).toEqual({ peer: "auth", direction: "in", ticket: "a1b2c3d4" })
   })
 
   it("clears on the empty direction the backend sends when the errand closes", () => {
@@ -69,9 +69,9 @@ describe("createSessionRelayStore", () => {
   it("keeps a request with no peer label — the other end is the command line", () => {
     const { relay, store } = build()
 
-    relay.emit({ id: "s2", peer: "", direction: "in" })
+    relay.emit({ id: "s2", peer: "", direction: "in", ticket: "fd94999a" })
 
-    expect(store.get("s2")).toEqual({ peer: "", direction: "in" })
+    expect(store.get("s2")).toEqual({ peer: "", direction: "in", ticket: "fd94999a" })
   })
 
   it("shows nothing for a direction this build cannot draw", () => {
@@ -104,12 +104,34 @@ describe("createSessionRelayStore", () => {
   it("survives every other state: a busy session is still owed an answer", () => {
     const { relay, status, store } = build()
 
-    relay.emit({ id: "s2", peer: "auth", direction: "in" })
+    relay.emit({ id: "s2", peer: "auth", direction: "in", ticket: "fd94999a" })
     for (const state of ["busy", "done", "waiting"]) {
       status.emit({ id: "s2", state })
     }
 
-    expect(store.get("s2")).toEqual({ peer: "auth", direction: "in" })
+    expect(store.get("s2")).toEqual({ peer: "auth", direction: "in", ticket: "fd94999a" })
+  })
+
+  it("keeps a request from a backend that sends no ticket", () => {
+    const { relay, store } = build()
+
+    relay.emit({ id: "s2", peer: "auth", direction: "in" })
+
+    expect(store.get("s2")).toEqual({ peer: "auth", direction: "in", ticket: "" })
+  })
+
+  it("notifies when only the ticket changed — it is the errand, not a detail", () => {
+    const { relay, store } = build()
+    let notifications = 0
+    store.subscribe("s2", () => {
+      notifications += 1
+    })
+
+    relay.emit({ id: "s2", peer: "auth", direction: "in", ticket: "fd94999a" })
+    relay.emit({ id: "s2", peer: "auth", direction: "in", ticket: "a1b2c3d4" })
+
+    expect(notifications).toBe(2)
+    expect(store.get("s2")).toEqual({ peer: "auth", direction: "in", ticket: "a1b2c3d4" })
   })
 
   it("does not notify subscribers when a repeat report changes nothing", () => {
@@ -119,8 +141,8 @@ describe("createSessionRelayStore", () => {
       notifications += 1
     })
 
-    relay.emit({ id: "s1", peer: "docs", direction: "out" })
-    relay.emit({ id: "s1", peer: "docs", direction: "out" })
+    relay.emit({ id: "s1", peer: "docs", direction: "out", ticket: "fd94999a" })
+    relay.emit({ id: "s1", peer: "docs", direction: "out", ticket: "fd94999a" })
 
     expect(notifications).toBe(1)
   })

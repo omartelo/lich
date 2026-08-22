@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Sessions can be renamed from the command line and from an agent's own
+  tools.** Renaming a card was a thing only the window could do; `lich rename
+  "the login bug"` now renames the session the command runs in, `lich rename
+  auth-fix "the login bug"` renames another one, and the `rename_session` tool is
+  the same for an agent — which is what lets a worker's card say what the work in
+  it is rather than the number it was born with. The name becomes the user's
+  either way: the provider's auto-title never overwrites it again. A name another
+  session in that project already holds is refused, because two sessions under
+  one label is the one thing `lich send` cannot resolve.
+- **A session's card now shows the ticket it is answering.** Hover a card with an
+  open request and the tooltip names the other end and the ticket number, and on
+  the side that owes the answer it spells the command that sends it home. Until
+  now the number was written down in exactly one place — the message typed at the
+  prompt — so a session whose context was compacted past it left nobody, agent or
+  person, able to close the errand.
+
+### Added
+
 - **A confined session can push and use `gh` again, if you let it.** The sandbox
   gives a session an empty home, which takes the ssh agent and gh's keyring with
   it: `git push` has nothing to sign with and `gh` opens on a login prompt. Two
@@ -29,6 +47,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`lich reply` no longer needs the ticket.** Called with the answer alone —
+  `lich reply "<your answer>"`, or `reply_to_session` with no ticket — it answers
+  the request open against the calling session, so an agent that has lost the
+  message naming the number can still get its answer home. With several requests
+  open the oldest delivered is the one closed, and naming the ticket is still the
+  way to pick a specific errand.
 - **Building lich from source now needs Go 1.27.0.** The pin stays exact so that
   every release binary carries the current toolchain's own security fixes, and
   the module is what CI reads its Go version from. `GOTOOLCHAIN=auto` — the
@@ -54,6 +78,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refuses the install on an older machine rather than handing it a binary that
   cannot start. Nothing in lich itself needs 13 — the floor is the compiler's,
   and it moves with the next Go bump.
+
+### Fixed
+
+- **Closing a session hangs up on the agent instead of killing it outright.** A
+  card's close sent the process `SIGKILL`, which leaves an agent no chance to run
+  its own exit path. Claude Code reads that as a crash: a session killed within
+  ten seconds of its first frame counts as a fullscreen renderer that failed to
+  start, and two of those turn fullscreen off for every session on the machine —
+  the `tui` setting still says `fullscreen`, every session comes up on the classic
+  renderer anyway, and only `/tui fullscreen` clears it. A close now sends
+  `SIGTERM` and kills only a child that outstays a one-second grace, so exit
+  hooks, transcripts and renderer state are written the way they are in any
+  terminal. Windows keeps the abrupt close — a ConPTY has no signal to send.
+- **A deep file tree is readable again.** A pull request whose paths run
+  `src/main/java/br/com/acme/...` spent the panel's whole width on indentation,
+  and every file name arrived as an ellipsis with no way to reach the rest of
+  it. Directories with nothing in them but the next directory now collapse into
+  one row, the tree scrolls sideways when a name still overruns, and the Files
+  changed tree drags wider by its right edge like every other side panel — the
+  width is remembered. The dock's file browser gets the same three.
 
 ## [0.39.0] - 2026-08-21
 
