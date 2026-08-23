@@ -36,6 +36,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   either way: the provider's auto-title never overwrites it again. A name another
   session in that project already holds is refused, because two sessions under
   one label is the one thing `lich send` cannot resolve.
+- **The session sidebar filters.** With a dozen cards open across three
+  checkouts, finding the two you are actually shepherding was a scan. A
+  magnifier beside New Session opens a field that narrows the list as you type,
+  matching a card's name or the checkout it runs in — so typing a worktree name
+  keeps that whole block. Unlike the command palette, which jumps once and
+  closes, this one is held while you work: the surviving cards stay live, with
+  their status rings, their close buttons and everything else. A group with
+  nothing left drops out entirely, the session you are looking at stays visible
+  whether it matches or not, and the filter is never narrowing the list out of
+  sight — it clears when you close it, when you collapse the sidebar and when
+  you switch project, and it is never restored on a restart.
 - **A session's card now shows the ticket it is answering.** Hover a card with an
   open request and the tooltip names the other end and the ticket number, and on
   the side that owes the answer it spells the command that sends it home. Until

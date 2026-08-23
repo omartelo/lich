@@ -34,6 +34,10 @@ interface SessionGroupProps {
   // header doubles as the group's drag handle, so a lone group is also the case
   // where reordering groups has nothing to reorder.
   showHeader: boolean
+  // Whether this block and its cards can be dragged at all. False while the
+  // sidebar holds a filter: the ids a filtered group renders are not the ids
+  // reorderSubset needs to splice an order back into the stored list.
+  sortable: boolean
   // Commits a new order for this group's sessions; a drag can only ever produce
   // one, since each group owns an isolated DndContext. Not derivable here: the
   // sidebar splices it back into the flat list its siblings share.
@@ -75,6 +79,7 @@ export function SessionGroup({
   projectPath,
   activeId,
   showHeader,
+  sortable,
   onReorder,
   onClose,
   pullsActive,
@@ -96,7 +101,7 @@ export function SessionGroup({
   const ids = sessions.map((session) => session.id)
   const { sensors, onDragEnd } = useSortableList(ids, onReorder)
   const name = pinned ? "Pinned" : checkoutLabel(path, projectPath, projectId)
-  const group = useSortable({ id: sortId, disabled: !showHeader || pinned })
+  const group = useSortable({ id: sortId, disabled: !sortable || !showHeader || pinned })
   // The PR card keys off the group's real checkout — the project root for the
   // root group (empty path), else the worktree — so a root project on a feature
   // branch parks its card too, not only worktrees.
@@ -173,6 +178,7 @@ export function SessionGroup({
                     onPin={(pinned) => pinSession(projectId, session.id, pinned)}
                     onOpenTerminal={(cwd) => newSession(projectId, "shell", cwd)}
                     onPulls={onPulls}
+                    sortable={sortable}
                     delegateGroups={delegateGroups}
                   />
                 ))}

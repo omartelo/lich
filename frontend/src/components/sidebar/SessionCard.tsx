@@ -88,6 +88,9 @@ interface SessionCardProps {
   onSetEntrypoint: (entrypoint: string) => void
   // Open the Pulls screen for this session's worktree, parking its PR card.
   onPulls: () => void
+  // Whether the card can be dragged. False while the sidebar holds a filter,
+  // where a drop would compute an order the store rejects wholesale.
+  sortable: boolean
   // Sessions this one can hand work to, grouped by project. Only the card
   // whose terminal is on screen offers them — the request is written at that
   // terminal's prompt, so any other card would be writing somewhere the user
@@ -108,6 +111,7 @@ export function SessionCard({
   onOpenTerminal,
   onSetEntrypoint,
   onPulls,
+  sortable,
   delegateGroups,
 }: SessionCardProps) {
   const pinned = !!session.pinned
@@ -166,7 +170,7 @@ export function SessionCard({
   // before the input could be clicked into or its text selected.
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: session.id,
-    disabled: editing,
+    disabled: editing || !sortable,
   })
 
   // Write the request at this session's own prompt and hand the cursor back.
