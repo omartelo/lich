@@ -97,8 +97,12 @@ func decodeFrame(buf []byte) (string, []byte, error) {
 // transport is the local WebSocket endpoint. One client (the webview) is
 // expected; a new connection replaces the previous one.
 type transport struct {
-	mu          sync.Mutex
-	conn        *websocket.Conn
+	mu   sync.Mutex
+	conn *websocket.Conn
+	// out is the live connection's writer (writequeue.go). It is swapped with
+	// conn and under the same lock: the two are one client, and send finding a
+	// connection without its writer would have nowhere to put a frame.
+	out         *writeQueue
 	port        int
 	token       string
 	mux         *http.ServeMux
@@ -112,6 +116,11 @@ type transport struct {
 	// Guarded by mu: set via setRestart after the server goroutine is already
 	// running, and read by the request goroutine handling /restart.
 	restart func() error
+	// fallback is where output goes when the socket cannot carry it — the
+	// /events bridge. Guarded by mu and wired by setFallback, for the same
+	// reason restart is: the service owns the bridge and the transport is built
+	// before it.
+	fallback func(id string, data []byte)
 }
 
 // newTransport starts the listener on a random loopback port. input receives
@@ -265,6 +274,28 @@ func (t *transport) setRestart(fn func() error) {
 	t.mu.Lock()
 	t.restart = fn
 	t.mu.Unlock()
+}
+
+// setFallback records where a frame goes when the socket refuses it. Wired after
+// construction like setRestart, and read by each connection's writer when it
+// takes over the delivery the socket stopped doing.
+func (t *transport) setFallback(fn func(id string, data []byte)) {
+	t.mu.Lock()
+	t.fallback = fn
+	t.mu.Unlock()
+}
+
+// emitFallback hands one frame to the bridge. The lookup happens per frame
+// rather than once per connection: the listener answers before the service that
+// owns the bridge has wired it, so a writer that read the callback when its
+// client connected could hold on to nothing for the life of that connection.
+func (t *transport) emitFallback(id string, data []byte) {
+	t.mu.Lock()
+	fn := t.fallback
+	t.mu.Unlock()
+	if fn != nil {
+		fn(id, data)
+	}
 }
 
 // ping is the liveness probe a second lich launch uses to tell "a live lich
@@ -628,9 +659,10 @@ func (t *transport) handle(w http.ResponseWriter, r *http.Request) {
 	}
 	conn.SetReadLimit(wsReadLimit)
 
+	out := newWriteQueue()
 	t.mu.Lock()
-	previous := t.conn
-	t.conn = conn
+	previous, previousOut := t.conn, t.out
+	t.conn, t.out = conn, out
 	t.mu.Unlock()
 	if previous != nil {
 		// Not a graceful close: that waits for the replaced client's close
@@ -638,6 +670,12 @@ func (t *transport) handle(w http.ResponseWriter, r *http.Request) {
 		// Nothing reads the status anyway — the page reconnects on any close.
 		_ = previous.CloseNow()
 	}
+	if previousOut != nil {
+		// After the close above, so the retired writer's next write fails at
+		// once rather than sitting out the send timeout on a dead socket.
+		previousOut.close()
+	}
+	go out.run(conn, func() { t.forget(conn) }, t.emitFallback)
 	go t.readLoop(conn)
 }
 
@@ -661,38 +699,63 @@ func (t *transport) readLoop(conn *websocket.Conn) {
 	}
 }
 
-// drop forgets conn if it is still the active client.
-func (t *transport) drop(conn *websocket.Conn) {
+// forget clears conn as the transport's client and retires the writer that owned
+// its socket, so the frames still queued take the fallback instead of vanishing
+// with the connection. A no-op once some other connection has taken over.
+func (t *transport) forget(conn *websocket.Conn) {
 	t.mu.Lock()
-	if t.conn == conn {
-		t.conn = nil
+	out := t.out
+	if t.conn != conn {
+		out = nil
+	} else {
+		t.conn, t.out = nil, nil
 	}
 	t.mu.Unlock()
+	if out != nil {
+		out.close()
+	}
+}
+
+// drop forgets conn if it is still the active client.
+func (t *transport) drop(conn *websocket.Conn) {
+	t.forget(conn)
 	_ = conn.Close(websocket.StatusNormalClosure, "")
 }
 
-// send delivers one session's output frame to the connected client. It
-// returns false — and drops the client on write failure — when the caller
-// should fall back to the event bridge. One mutex serializes writes for every
-// session; per-session queues only if a local loopback write ever measurably
-// stalls.
+// send hands one session's output frame to the connected client's writer. It
+// returns false when the caller should fall back to the event bridge itself:
+// there is no client, or the frame cannot be addressed to one. A frame the
+// writer accepts and the socket then refuses is not the caller's problem — the
+// writer takes it to the same bridge, in order (see writequeue.go).
+//
+// It never waits on the socket. The write is the slow part, it is bounded only
+// by wsWriteTimeout, and every session's outbox goroutine comes through here;
+// holding a lock across it would recouple the sessions the outbox queues exist
+// to keep apart.
 func (t *transport) send(id string, data []byte) bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.conn == nil {
-		return false
-	}
 	frame, err := encodeFrame(id, data)
 	if err != nil {
 		return false
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), wsWriteTimeout)
-	defer cancel()
-	if err := t.conn.Write(ctx, websocket.MessageBinary, frame); err != nil {
-		t.conn = nil
+	t.mu.Lock()
+	out := t.out
+	t.mu.Unlock()
+	if out == nil {
 		return false
 	}
-	return true
+	return out.push(frame)
+}
+
+// flush waits for the queued output of every session to reach the socket. A
+// session calls it before its exit event so the banner cannot overtake the last
+// bytes the session wrote.
+func (t *transport) flush() {
+	t.mu.Lock()
+	out := t.out
+	t.mu.Unlock()
+	if out != nil {
+		out.flush()
+	}
 }
 
 // TransportInfo tells the frontend where the terminal I/O WebSocket lives. A

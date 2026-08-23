@@ -107,6 +107,14 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   hand in `frontend/src/lib/terminal/term-modes.ts` — today the mouse encoding and cursor visibility. Cursor
   *shape* (DECSCUSR) is not among them: a TUI that chose a bar or underline cursor gets lich's block back after a
   card switch.
+- **One socket carries every session's output** (`internal/terminal/writequeue.go`): the per-session outbox
+  decouples the *producers*, never the wire. A window that stops reading stalls the connection's single writer,
+  so after `wsWriteTimeout` (5s) every session's output switches to the `/events` bridge at once. That is a
+  second socket, and the page reads the two independently: a frame that fell back can land ahead of one still
+  sitting in the stalled connection's buffer, so output is never dropped but its order across that switch is not
+  guaranteed. Until then the queue holds `writeQueueDepth` frames for the whole app, and two things still wait on
+  it across sessions: a push that finds it full, and the flush a session runs before its exit banner so the banner
+  cannot overtake its own last bytes.
 - **Single instance via the pinned port**: the bind is the lock (`internal/singleton`); a duplicate launch focuses
   the running window (best-effort, untested against a real window) and exits 0.
 - **lich appends to the agent's system prompt, for two providers only**

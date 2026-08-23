@@ -366,7 +366,19 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 		},
 	)
 	s.ws, s.wsErr = ws, err
+	if ws != nil {
+		// The transport is built before the service that owns the bridge, so the
+		// path output takes when the socket cannot carry it is wired here.
+		ws.setFallback(s.emitData)
+	}
 	return s
+}
+
+// emitData puts one session's output on the /events bridge — where terminal
+// output goes whenever the /ws transport cannot carry it, whether because no
+// client is connected or because the socket refused the frame.
+func (s *Service) emitData(id string, data []byte) {
+	s.hub.Emit(dataEventPrefix+id, base64.StdEncoding.EncodeToString(data))
 }
 
 // Mount exposes an extra handler (the RPC dispatcher, the events push socket)
@@ -599,8 +611,7 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, se
 		if s.ws != nil && s.ws.send(id, data) {
 			return
 		}
-		encoded := base64.StdEncoding.EncodeToString(data)
-		s.hub.Emit(dataEventPrefix+id, encoded)
+		s.emitData(id, data)
 	}, outboxDepth)
 	out := newCoalescer(box.push, visibleFlushInterval, hiddenFlushInterval)
 	sess := &session{
@@ -648,9 +659,14 @@ func (s *Service) stream(id string, sess *session) {
 	_ = p.Close()
 	// Flush any batched output and wait for it to be delivered before the exit
 	// event, so the frontend always sees the final bytes ahead of the exit
-	// banner.
+	// banner. Delivery now ends at the transport's writer rather than at the
+	// socket, so the wait runs one step further: the outbox for this session's
+	// own frames, then the connection's queue for the wire.
 	sess.out.Close()
 	sess.outbox.close()
+	if s.ws != nil {
+		s.ws.flush()
+	}
 
 	s.mu.Lock()
 	reaped := false

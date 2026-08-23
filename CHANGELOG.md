@@ -146,6 +146,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **One session's output can no longer freeze every other session's.** Each session
+  already had its own queue, so a card producing faster than the window could draw
+  it backed up alone. One socket carries them all, though, and a session's turn to
+  write held a lock the others queued on — so whenever a write to the window
+  stalled, every card in the workspace stopped updating with it, for up to five
+  seconds at a time, however quiet those sessions were. The socket now belongs to a
+  writer of its own: a session hands over its output and goes back to work, and a
+  stalled window costs the connection rather than the workspace. Nothing is
+  dropped — output the socket refuses still crosses on the event bridge, in order.
 - **The plan gauge now reads the account the session in front of you actually
   spends.** A project pointed at a binary of your own — a wrapper exporting
   another `CLAUDE_CONFIG_DIR`, or an OAuth token for a second account — still had
