@@ -79,6 +79,10 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   repository itself keeps failing the old silent way.
 - **git status is polled** — one shared poller per repository path (`frontend/src/lib/git/git-status-store.ts`); the
   lich plugin's `session-touched` hook nudges an immediate refresh.
+- **The status badge has a single source** (`internal/project/status.go`): the branch, the HEAD commit and the
+  dirty count all come out of one `git status --porcelain=v2 --branch` parse. A git release that changes those
+  records breaks all three together rather than one at a time, and there is no second call left to disagree with
+  the first — `Branch` still asks `symbolic-ref`, but nothing on the polled path calls it.
 - **lich fetches on its own** (`internal/project/basestatus.go`) — the only git write lich makes outside the
   worktree flows: it moves remote refs in the user's own repository, unannounced, for as long as a card is on
   screen.

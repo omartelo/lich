@@ -8,40 +8,28 @@ import (
 	"strings"
 )
 
-// emptyTreeHash is git's well-known empty tree object, the diff base for a
-// repository whose HEAD does not exist yet (no commits).
-const emptyTreeHash = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
-
 // DiffText returns the full unified diff of uncommitted changes (staged +
 // unstaged + untracked) against HEAD. A repository without commits diffs
 // against git's empty tree. Untracked files are rendered as new-file hunks so
 // the review panel shows them alongside tracked changes.
 func (s *Service) DiffText(path string) (string, error) {
-	_, base := diffBase(path)
-	tracked, err := runGit(path, "diff", base)
+	status := readWorkTree(path)
+	tracked, err := runGit(path, "diff", status.base)
 	if err != nil {
 		return "", err
 	}
 
 	var out strings.Builder
 	out.WriteString(tracked)
-	for _, rel := range untrackedFiles(path) {
+	for _, rel := range status.untracked {
 		out.WriteString(untrackedDiff(path, rel))
 	}
 	return out.String(), nil
 }
 
-// untrackedFiles lists paths unknown to git, relative to the work tree root.
-// A failure yields an empty list — both callers (the polled Diff counts and the
-// review panel's full text) are worth returning without it.
-func untrackedFiles(path string) []string {
-	out, _ := gitQuiet(path, "ls-files", "--others", "--exclude-standard", "-z")
-	return splitNUL(out)
-}
-
 // untrackedDiff renders an untracked file as a new-file unified diff via
 // git diff --no-index, which exits 1 when the files differ — success here.
-// Any other failure (file vanished between ls-files and now) yields "".
+// Any other failure (file vanished since the status read) yields "".
 func untrackedDiff(dir, rel string) string {
 	if info, err := os.Stat(filepath.Join(dir, rel)); err != nil || !info.Mode().IsRegular() || info.Size() > maxTextFileBytes {
 		return ""

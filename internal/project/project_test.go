@@ -307,6 +307,22 @@ func TestDiff(t *testing.T) {
 	}
 }
 
+// TestDiffCarriesTheBranch pins the field the status badge now reads its branch
+// from. It rides Diff rather than a call of its own — that is the subprocess
+// the collapse saves — so the detached case has to hold here too, not only in
+// Branch.
+func TestDiffCarriesTheBranch(t *testing.T) {
+	repo, git := initRepo(t)
+
+	if got := New(nil).Diff(repo); got.Branch != "main" {
+		t.Errorf("Diff(repo).Branch = %q, want main", got.Branch)
+	}
+	git("checkout", "--detach", "HEAD")
+	if got := New(nil).Diff(repo); got.Branch != "" {
+		t.Errorf("Diff(detached).Branch = %q, want empty", got.Branch)
+	}
+}
+
 // TestDiffNoCommits covers a freshly `git init`'d repo with no HEAD: numstat
 // against HEAD fails, and the untracked additions must still be counted rather
 // than the whole stat collapsing to +0 -0.

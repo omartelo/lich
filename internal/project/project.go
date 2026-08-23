@@ -234,50 +234,38 @@ func (s *Service) PickSaveFile(title, defaultName string) (string, error) {
 	return path, nil
 }
 
-// DiffStats summarizes the uncommitted changes of a work tree. Head is the
-// commit those changes sit on — the frontend watches it to notice a commit the
-// way it watches Files/Added/Deleted to notice an edit.
+// DiffStats is what one status read says about a work tree: its uncommitted
+// changes, and the two things they sit on. Head is the commit — the frontend
+// watches it to notice a commit the way it watches Files/Added/Deleted to
+// notice an edit — and Branch is the branch, carried here because git answers
+// both in the same call the counts come out of.
 type DiffStats struct {
 	Files   int    `json:"files"`
 	Added   int    `json:"added"`
 	Deleted int    `json:"deleted"`
 	Head    string `json:"head"`
+	Branch  string `json:"branch"`
 }
 
 // Diff returns the dirty-file count (modified + untracked), the added/deleted
-// line totals against HEAD, and the HEAD commit itself. A non-repository path
-// yields the zero value, matching Branch's contract.
+// line totals against HEAD, the HEAD commit itself and the branch it is on. A
+// non-repository path yields the zero value, matching Branch's contract.
+//
+// Two git children, not four: one status read answers the branch, the head and
+// everything dirty (status.go), and only the line totals still need a diff of
+// their own.
 func (s *Service) Diff(path string) DiffStats {
-	var stats DiffStats
-	// --untracked-files=all, because the default collapses a new directory into
-	// one "?? dir/" line: an agent writing 25 files into fresh packages would
-	// count as one changed file.
-	if out, ok := gitQuiet(path, "status", "--porcelain", "--untracked-files=all"); ok {
-		stats.Files = len(splitLines(out))
-	}
-	head, base := diffBase(path)
-	stats.Head = head
-	if out, ok := gitQuiet(path, "diff", "--numstat", base); ok {
+	status := readWorkTree(path)
+	stats := DiffStats{Files: status.files, Head: status.head, Branch: status.branch}
+	if out, ok := gitQuiet(path, "diff", "--numstat", status.base); ok {
 		stats.Added, stats.Deleted = numstatTotals(out)
 	}
 	// Untracked files are invisible to `git diff`; count their lines as
 	// additions, the way Warp and forge diff views present a fresh file.
-	for _, rel := range untrackedFiles(path) {
+	for _, rel := range status.untracked {
 		stats.Added += countFileLines(filepath.Join(path, rel))
 	}
 	return stats
-}
-
-// diffBase resolves what uncommitted changes are diffed against: HEAD and its
-// commit, or git's empty tree with no commit at all when the repository has no
-// HEAD yet. A repository without commits is an ordinary state here, not a
-// failure — hence the quiet probe.
-func diffBase(path string) (head, base string) {
-	out, ok := gitQuiet(path, "rev-parse", "--verify", "HEAD")
-	if !ok {
-		return "", emptyTreeHash
-	}
-	return strings.TrimSpace(out), "HEAD"
 }
 
 // numstatTotals sums the added and deleted line counts of `git diff --numstat`.

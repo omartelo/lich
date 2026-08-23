@@ -15,13 +15,17 @@ export interface Project {
  * only, hence the same shape as an opened one. */
 export type RecentProject = Project
 
-/** internal/project.DiffStats — uncommitted-changes summary of a work tree. */
+/** internal/project.DiffStats — uncommitted-changes summary of a work tree,
+ * plus the branch and commit they sit on: git answers all three in the one
+ * status call the counts come out of. */
 export interface DiffStats {
   files: number
   added: number
   deleted: number
   /** The HEAD commit the counts sit on; "" in a repository without commits. */
   head: string
+  /** The checked-out branch; "" for a detached HEAD, as ProjectService.Branch. */
+  branch: string
 }
 
 /** internal/project.BaseStatus — where a checkout stands against the branch it

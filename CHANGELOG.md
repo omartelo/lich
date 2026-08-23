@@ -97,6 +97,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A card's git readout costs half of what it did.** Every second, each checkout
+  on screen spawned six `git` children to answer one status badge — and on a
+  normal repository most of that was process startup rather than work. One
+  `git status --porcelain=v2` reports the branch, the HEAD commit and every dirty
+  file in a single call, so a tick is three children now: measured here on git
+  2.55, a small worktree fell from 21.2 ms to 13.4 ms per read (20.1 ms to 12.6 ms
+  of CPU), and a 50,000-file checkout with 200 dirty files from 101.8 ms to
+  66.4 ms (202.7 ms to 168.2 ms of CPU). Nothing about the badge changes.
 - **`lich reply` no longer needs the ticket.** Called with the answer alone —
   `lich reply "<your answer>"`, or `reply_to_session` with no ticket — it answers
   the request open against the calling session, so an agent that has lost the

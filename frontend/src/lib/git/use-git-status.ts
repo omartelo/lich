@@ -10,14 +10,15 @@ export type { GitStatus }
 // session-touched hook still nudges an immediate read on top of this.
 const GIT_POLL: PollCadence = { fastMs: 1_000, slowMs: 3_000, idleTicks: 5 }
 
+// Two calls, not three: Diff carries the branch, because the one git status it
+// runs already reports it alongside the head and the dirty entries.
 async function fetchGitStatus(path: string): Promise<GitStatus | null> {
   try {
-    const [branch, diff, base] = await Promise.all([
-      ProjectService.Branch(path),
+    const [diff, base] = await Promise.all([
       ProjectService.Diff(path),
       ProjectService.BaseStatus(path),
     ])
-    return { branch, ...diff, base }
+    return { ...diff, base }
   } catch {
     return null
   }
