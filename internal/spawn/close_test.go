@@ -51,8 +51,13 @@ func TestCloseTakesDownASessionWithNothingAtStake(t *testing.T) {
 	if closed.Kept || closed.Removed {
 		t.Errorf("closed = %+v, want the checkout untouched — another session is in it", closed)
 	}
-	if len(sessions.deleted) != 1 || sessions.deleted[0].sessionID != "s2" {
-		t.Errorf("deleted = %+v", sessions.deleted)
+	// Parked, not deleted: the close destroys nothing, so the row stays for the
+	// history and for a resume to pick the conversation back up.
+	if len(sessions.parked) != 1 || sessions.parked[0].sessionID != "s2" {
+		t.Errorf("parked = %+v, want the session kept for a resume", sessions.parked)
+	}
+	if len(sessions.deleted) != 0 {
+		t.Errorf("deleted = %+v, want nothing destroyed by a plain close", sessions.deleted)
 	}
 	if len(worktrees.removed) != 0 {
 		t.Errorf("removed a checkout another session is working in: %+v", worktrees.removed)
@@ -245,7 +250,7 @@ func TestCloseHandsTheProjectToTheNeighbour(t *testing.T) {
 	if _, err := svc.Close("s1", "shared-a", "", "", false); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
-	if got := sessions.deleted[0].activeID; got != "s3" {
+	if got := sessions.parked[0].activeID; got != "s3" {
 		t.Errorf("active session = %q, want the card that filled the closed slot", got)
 	}
 	closed, ok := events.events[0].data.(ClosedEvent)
@@ -266,7 +271,7 @@ func TestCloseAnInactiveSessionLeavesTheFocusAlone(t *testing.T) {
 	if _, err := svc.Close("s3", "shared-a", "", "", false); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
-	if got := sessions.deleted[0].activeID; got != "s1" {
+	if got := sessions.parked[0].activeID; got != "s1" {
 		t.Errorf("active session = %q, want the active card untouched", got)
 	}
 	closed, ok := events.events[0].data.(ClosedEvent)
@@ -278,9 +283,9 @@ func TestCloseAnInactiveSessionLeavesTheFocusAlone(t *testing.T) {
 	}
 }
 
-// The row is deleted before the PTY is asked to go, so a terminal that refuses
+// The row is written before the PTY is asked to go, so a terminal that refuses
 // to close leaves nothing to undo — and a card that stayed would point at a
-// session no other part of lich still knows about.
+// session the workspace no longer lists.
 func TestCloseTakesTheCardDownEvenWhenThePTYRefuses(t *testing.T) {
 	svc, sessions, _, term, events := closer(t)
 	term.closeErr = errors.New("process already gone")
@@ -288,8 +293,8 @@ func TestCloseTakesTheCardDownEvenWhenThePTYRefuses(t *testing.T) {
 	if _, err := svc.Close("s1", "shared-a", "", "", false); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
-	if len(sessions.deleted) != 1 {
-		t.Fatalf("deleted = %+v, want the row gone", sessions.deleted)
+	if len(sessions.parked) != 1 {
+		t.Fatalf("parked = %+v, want the row taken out of the workspace", sessions.parked)
 	}
 	if len(events.events) != 1 || events.events[0].name != ClosedEventName {
 		t.Errorf("events = %+v, want the card taken down anyway", events.events)
@@ -332,15 +337,15 @@ func TestCloseRefusesANameThatFitsTwoSessions(t *testing.T) {
 	if !strings.Contains(err.Error(), "narrow it with the project") {
 		t.Errorf("error = %q, want it to say how to pick one", err)
 	}
-	if len(sessions.deleted) != 0 {
-		t.Error("deleted a session picked by a name that named two")
+	if len(sessions.parked) != 0 {
+		t.Error("closed a session picked by a name that named two")
 	}
 	// Naming the project settles it.
 	if _, err := svc.Close("s9", "worker", "revu", "", false); err != nil {
 		t.Fatalf("Close with the project named: %v", err)
 	}
-	if len(sessions.deleted) != 1 || sessions.deleted[0].sessionID != "s2" {
-		t.Errorf("deleted = %+v, want the session in the named project", sessions.deleted)
+	if len(sessions.parked) != 1 || sessions.parked[0].sessionID != "s2" {
+		t.Errorf("parked = %+v, want the session in the named project", sessions.parked)
 	}
 }
 
@@ -385,7 +390,7 @@ func TestCloseTheLastSessionOfAProjectLeavesNoneActive(t *testing.T) {
 	if _, err := svc.Close("", "Session 1", "", "", false); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
-	if got := sessions.deleted[0].activeID; got != "" {
+	if got := sessions.parked[0].activeID; got != "" {
 		t.Errorf("active session = %q, want none left", got)
 	}
 }

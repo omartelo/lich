@@ -29,8 +29,13 @@ type Closed struct {
 	// Worktree is the checkout the session lived in, empty for a session in the
 	// project's own directory.
 	Worktree string `json:"worktree"`
-	// Kept is whether the checkout was left on disk (and the session parked for
-	// a later resume) rather than removed. Meaningless without a Worktree.
+	// Kept is the answer given to the worktree question: the checkout was left on
+	// disk rather than removed. Meaningless unless the close had that question to
+	// answer — a session sharing its checkout, or living in the project's own
+	// directory, reports false while leaving everything where it was.
+	//
+	// Nothing here reports the park, because every close but a removal parks and
+	// a field that is true on all of them tells a caller nothing.
 	Kept bool `json:"kept"`
 	// Removed is whether the checkout was deleted.
 	Removed bool `json:"removed"`
@@ -105,7 +110,12 @@ func (s *Service) Close(fromID, target, projectName, worktree string, force bool
 		return closed, nil
 	}
 
-	if err := s.sessions.DeleteSession(found.project.ID, found.session.ID, active); err != nil {
+	// Parked, not deleted: nothing about this close is a decision to destroy the
+	// session. The row carries the conversation, the cost ledgers and the name
+	// the user gave it, and it is what puts the session in the history a resume
+	// reads back — the same close the window performs (projects.tsx,
+	// closeSession). Only a checkout's removal takes a row with it.
+	if err := s.sessions.CloseSession(found.project.ID, found.session.ID, active); err != nil {
 		return Closed{}, err
 	}
 	s.finish(found, active)
@@ -150,10 +160,11 @@ func (s *Service) removeCheckout(found located, active string, force bool) error
 // session nobody can reach.
 func (s *Service) finish(found located, active string) {
 	if err := s.term.Close(found.session.ID); err != nil {
-		// The row is already gone, so there is nothing to undo and nothing the
-		// caller could do about it. The window's own close ignores this too — but
-		// the card still has to come down, or a failed PTY close leaves one on
-		// screen for a session that no longer exists anywhere else.
+		// The row is already written — parked, or deleted with its checkout — so
+		// there is nothing to undo and nothing the caller could do about it. The
+		// window's own close ignores this too, but the card still has to come
+		// down, or a failed PTY close leaves one on screen for a session the
+		// workspace no longer lists.
 		slog.Warn("spawn: close the session's terminal", "session", found.session.ID, "err", err)
 	}
 	if s.events != nil {

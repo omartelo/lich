@@ -356,7 +356,9 @@ conversation back up.
   the second question the window asks. What it discards is in no commit and on no
   remote.
 - A session sharing its checkout with another, or living in the project's own
-  directory, has nothing at stake and closes on the spot.
+  directory, has nothing at stake and closes on the spot — parked like every
+  other close, so the palette's History tab still finds it and a resume still
+  picks its conversation back up.
 - **A session cannot close itself.** The answer would have nowhere to go.
 - Unlike `sessions`, this reaches a card whose terminal was never opened: it is
   still a session, and closing it is the one thing you can do with it.
