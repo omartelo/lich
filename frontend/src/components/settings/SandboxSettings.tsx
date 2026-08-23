@@ -10,12 +10,20 @@ import {
   type SandboxLevel,
 } from "@/lib/providers-store"
 import { GH_ACCOUNT_KEY } from "@/lib/project-settings"
+import { isMac, isWindows } from "@/lib/platform"
+import { cannotConfineCopy } from "@/lib/sandbox-copy"
 import { splitAccount } from "@/lib/gh-account"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Switch } from "@/components/ui/switch"
 import { SettingBlock } from "./SettingBlock"
 
 const GLOBAL_SCOPE = ""
+
+// Why this machine cannot confine, decided once. sandbox.Backend() answers ""
+// for three different reasons — no bubblewrap, no working sandbox-exec, no
+// backend at all on Windows — and by the time the pane reads it, the platform is
+// the only thing left that tells them apart.
+const cannotConfine = cannotConfineCopy(isWindows ? "windows" : isMac ? "mac" : "linux")
 
 // The rungs, ordered by how much of the machine a session can reach. Labels
 // alone: they carry their own meaning, and the ladder is now read as a whole —
@@ -104,9 +112,7 @@ export function SandboxSettings({ projectId }: { projectId?: string }) {
     return (
       <section className="py-5">
         <StatusStrip backend="" />
-        <p className="mt-2 max-w-prose text-xs text-muted-foreground">
-          Install bubblewrap and reopen lich. Until then every session runs on the machine.
-        </p>
+        <p className="mt-2 max-w-prose text-xs text-muted-foreground">{cannotConfine.advice}</p>
       </section>
     )
   }
@@ -213,7 +219,7 @@ function StatusStrip({ backend }: { backend: string }) {
       <span className="font-medium text-foreground">
         This machine {backend ? "can" : "cannot"} confine sessions
       </span>
-      <span className="text-muted-foreground">— {backend || "bubblewrap is not installed"}</span>
+      <span className="text-muted-foreground">— {backend || cannotConfine.reason}</span>
     </div>
   )
 }
