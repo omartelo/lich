@@ -42,6 +42,12 @@ func writeCreds(t *testing.T, claude, codex string) {
 	}
 	t.Setenv("CLAUDE_CONFIG_DIR", claudeDir)
 	t.Setenv("CODEX_HOME", codexDir)
+	// A developer machine that exports one of these bills an API key, and every
+	// reading below would correctly come back unknown. Clear them so the suite
+	// answers to the credentials written here and not to whoever runs it.
+	for _, name := range []string{"ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"} {
+		t.Setenv(name, "")
+	}
 }
 
 // serve answers every request with status and body, and counts the calls.

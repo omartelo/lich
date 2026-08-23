@@ -278,7 +278,47 @@ func TestPlansWithoutASessionReadsLichOwnEnvironment(t *testing.T) {
 		return Account{}
 	})
 
-	if got := s.Plans("")[0]; got.Status != StatusOK || *calls != 1 {
+	// The plan name is the pin: whatever withholds a reading from an account
+	// lich does not bill must not reach the machine that has nothing to hide.
+	if got := s.Plans("")[0]; got.Status != "ok" || got.Plan != "Max 5x" || *calls != 1 {
 		t.Errorf("plan = %+v after %d calls, want the default login read", got, *calls)
+	}
+}
+
+func TestAnApiKeyInLichOwnEnvironmentWithholdsTheReading(t *testing.T) {
+	for _, name := range []string{"ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"} {
+		t.Run(name, func(t *testing.T) {
+			writeCreds(t, claudeCredsJSON, "")
+			t.Setenv(name, "sk-ant-whatever")
+			url, calls := serve(t, http.StatusOK, claudeLimitsBody)
+
+			got := newService(url, "", time.Now()).Plans("")[0]
+
+			if got.Status != "unknown" {
+				t.Errorf("status = %q, want %q", got.Status, "unknown")
+			}
+			if got.Plan != "" {
+				t.Errorf("plan = %q, want none: the login on disk is not what this machine bills", got.Plan)
+			}
+			if *calls != 0 {
+				t.Errorf("calls = %d, want none: there is no subscription being spent", *calls)
+			}
+		})
+	}
+}
+
+func TestASessionWithNoEnvironmentOfItsOwnSharesTheMachineReading(t *testing.T) {
+	writeCreds(t, claudeCredsJSON, "")
+	url, calls := serve(t, http.StatusOK, claudeLimitsBody)
+	s := newService(url, "", time.Now())
+	// macOS and Windows read no session environment at all, so every session
+	// there arrives shaped like this one — and spends what Settings reads.
+	s.SetSessions(func(string) Account { return Account{Read: true} })
+
+	s.Plans("")
+	s.Plans("session-1")
+
+	if *calls != 1 {
+		t.Errorf("calls = %d, want 1: both readings are the same account", *calls)
 	}
 }

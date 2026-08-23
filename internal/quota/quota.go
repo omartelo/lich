@@ -74,17 +74,22 @@ const (
 	StatusUnknown = "unknown"
 )
 
-// accountVars are the environment variables that decide which account a session
-// spends: Claude's own token and config dir, Codex's config dir, and the three
-// that point Claude somewhere other than the user's subscription.
-var accountVars = []string{
-	claudeTokenVar,
-	claudeDirVar,
-	codexHomeVar,
+// redirectVars point Claude at something other than the user's subscription:
+// another API host, or a key billed per token and metered by no plan.
+var redirectVars = []string{
 	"ANTHROPIC_BASE_URL",
 	"ANTHROPIC_API_KEY",
 	"ANTHROPIC_AUTH_TOKEN",
 }
+
+// accountVars are the environment variables that decide which account a session
+// spends: Claude's own token and config dir, Codex's config dir, and the three
+// that redirect Claude away from the subscription.
+var accountVars = append([]string{
+	claudeTokenVar,
+	claudeDirVar,
+	codexHomeVar,
+}, redirectVars...)
 
 // Window is one metered window of a plan: how much of it is spent, how long it
 // runs, and when it starts over.
@@ -125,14 +130,32 @@ type Account struct {
 // hidden reports an account lich cannot identify.
 func (a Account) hidden() bool { return a.Custom && !a.Read }
 
-// elsewhere reports a session pointed at something other than the user's own
-// subscription: another API host, or an API key, which is billed per token and
-// metered by no plan. Reading lich's own login for one of those would draw a
-// gauge for an account that session never touches.
+// lookup resolves one account-deciding variable: the session's own process
+// wins, else lich's own environment. Every helper that decides which account a
+// reading belongs to has to resolve through this one, because a helper reading
+// only Env is blind on the two paths that matter most — the machine-wide
+// reading Settings asks for carries no session environment, and on macOS and
+// Windows no session's environment is readable at all (internal/terminal's
+// envReadable). Let two of them disagree and the gauge comes back wrong rather
+// than absent: harnessFile finds lich's own credentials file while elsewhere
+// cannot see the API key saying that login is never billed.
+func (a Account) lookup(name string) string {
+	if v := a.Env[name]; v != "" {
+		return v
+	}
+	return os.Getenv(name)
+}
+
+// elsewhere reports an account pointed at something other than the user's own
+// subscription. Reading lich's own login for one of those would draw a gauge
+// for an account nobody is spending.
 func (a Account) elsewhere() bool {
-	return a.Env["ANTHROPIC_BASE_URL"] != "" ||
-		a.Env["ANTHROPIC_API_KEY"] != "" ||
-		a.Env["ANTHROPIC_AUTH_TOKEN"] != ""
+	for _, name := range redirectVars {
+		if a.lookup(name) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // Sessions answers what a session's process says about the account it spends.
@@ -212,6 +235,13 @@ func (s *Service) Plans(sessionID string) []Plan {
 // same login share one reading — and a session on another login gets its own
 // instead of being served someone else's numbers. Every account lich cannot
 // identify shares the one key whose reading needs no request at all.
+//
+// It keys on the session's own values alone, not on lookup: the fallback half
+// of lookup is lich's own environment, one constant for every account in the
+// process, so folding it in would lengthen every key without telling one more
+// pair of accounts apart. The account naming none of these — the machine-wide
+// reading, and every session on a platform whose environment lich cannot read
+// — keys empty, which is what puts it and Settings on one reading.
 func cacheKey(a Account) string {
 	if a.hidden() {
 		return "?"
@@ -257,11 +287,8 @@ func unknown(p Plan) Plan {
 // session's own environment wins over lich's — a wrapper binary exporting
 // another config dir is the whole reason this is not a plain os.Getenv. Mirrors
 // terminal.harnessDir, which resolves the same two directories for transcripts.
-func harnessFile(env map[string]string, homeVar, sub string, name ...string) (string, bool) {
-	base := env[homeVar]
-	if base == "" {
-		base = os.Getenv(homeVar)
-	}
+func harnessFile(a Account, homeVar, sub string, name ...string) (string, bool) {
+	base := a.lookup(homeVar)
 	if base == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {

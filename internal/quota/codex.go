@@ -47,7 +47,7 @@ func (s *Service) codexPlan(a Account) Plan {
 	if a.hidden() {
 		return unknown(p)
 	}
-	path, ok := harnessFile(a.Env, codexHomeVar, ".codex", "auth.json")
+	path, ok := harnessFile(a, codexHomeVar, ".codex", "auth.json")
 	if !ok {
 		return failed(p)
 	}

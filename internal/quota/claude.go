@@ -112,7 +112,7 @@ func (s *Service) claudePlan(a Account) Plan {
 	if token := a.Env[claudeTokenVar]; token != "" {
 		return s.claudeProbe(p, token)
 	}
-	path, ok := harnessFile(a.Env, claudeDirVar, ".claude", ".credentials.json")
+	path, ok := harnessFile(a, claudeDirVar, ".claude", ".credentials.json")
 	if !ok {
 		return failed(p)
 	}

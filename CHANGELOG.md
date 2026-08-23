@@ -175,10 +175,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one. A session whose login is a long-lived token (`claude setup-token`) is
   measured through a one-token request, since the usage route refuses a token
   that can only infer; a session pointed at another API host or running on an API
-  key shows no gauge, having no plan to report. On macOS and Windows, where the
-  environment of another process is out of reach, a session running a configured
-  binary shows nothing rather than the wrong account's numbers. Codex sessions
-  follow the same rule through `CODEX_HOME`.
+  key shows no gauge, having no plan to report — and that now counts a machine
+  whose *own* environment carries one, which used to be read as a subscription
+  and drawn as a full gauge for a plan nothing on that machine was spending. On
+  macOS and Windows, where the environment of another process is out of reach, a
+  session running a configured binary shows nothing rather than the wrong
+  account's numbers. Codex sessions follow the same rule through `CODEX_HOME`.
 - **A keystroke no longer waits on a batching window that has nothing to batch.**
   A session's output is collected into short windows so a burst — a full-screen
   redraw, a build log — reaches the window as a couple of frames instead of
