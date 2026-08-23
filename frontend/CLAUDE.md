@@ -22,6 +22,7 @@ src/
 │   ├── common/    shared across features (Notice, EmptyScreen, CloseButton, …)
 │   ├── ui/        shadcn primitives — CLI output, see below
 │   └── <feature>/ diff · dock · pulls · settings · sidebar · tabs
+├── test/          test utilities only — never imported by the app
 └── lib/           no React elements; a `.tsx` in here is misfiled
     ├── session/   sessions, their events, the four per-session stores + hooks
     ├── terminal/  xterm/PTY plumbing: term-*, replay, paste and setup queues
@@ -86,11 +87,27 @@ cross-project queue, and neither fits without widening the primitive for a singl
 
 ## Testing
 
-- vitest runs in the **node environment — there is no jsdom**. The gate covers pure logic (stores, parsers,
-  reducers, `lib/*`); it does **not** render components. A base-ui/DOM render crash passes the suite green.
+- vitest defaults to the **node environment**. The gate covers pure logic (stores, parsers, reducers,
+  `lib/*`); it does **not** render components, so a base-ui/DOM render crash passes the suite green.
 - So: verify any render-path change by hand in `task dev`, and check base-ui contracts (below). Assert the
   empty/default/error branch of a component's data, not just the happy path.
 - Coverage bar is 80% on the logic that *is* testable. Don't chase coverage by rendering in node.
+
+### Render budgets
+
+`src/components/render-budget.test.tsx` is the one suite that renders: it opts into jsdom with a
+`// @vitest-environment jsdom` docblock and pins **how much of the tree repaints for one action** — a status
+event, a usage report, a project switch. Every session's card and every session's terminal stay mounted at
+once, so one background session waking the whole window is a real regression, and one nobody feels for months.
+
+- The harness is `src/test/render-budget.ts`: React's own DevTools hook, the `PerformedWork` flag, and a
+  count per component. It is ~120 lines and stays that way — a test utility, not a profiler.
+- **Assert the whole map with `toEqual`, and exact counts.** `toBeLessThanOrEqual(1)` also passes when a
+  renamed component measures nothing at all, and half of each budget is the names that must be *absent*.
+- Keep anything jsdom cannot measure honestly out of it: it reports every element at zero height, so
+  virtualized lists and the canvas-backed terminal are stubbed rather than budgeted.
+- Numbers moving is not a failure to paper over. Read the diff: fewer is a win to keep, more is the
+  regression this suite exists to catch.
 
 ## Adapting a shadcn component to lich
 

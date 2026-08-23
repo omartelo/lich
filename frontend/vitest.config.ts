@@ -3,7 +3,9 @@ import { defineConfig } from "vitest/config"
 
 // Standalone from vite.config.ts: the tested logic is pure, so a plain node
 // environment is enough — no need to drag the app's Vite plugins into the
-// test runner.
+// test runner. The render budgets are the exception and ask for jsdom in their
+// own docblock, which is why the default stays node: one suite of four files
+// paying for a DOM should not slow the ninety that do not need one.
 export default defineConfig({
   resolve: {
     alias: {
@@ -12,7 +14,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     coverage: {
       provider: "v8",
       reporter: ["text-summary", "json-summary"],
@@ -32,13 +34,17 @@ export default defineConfig({
       exclude: [
         "src/**/*.test.ts",
         "src/**/*.d.ts",
+        // Test utilities. Measuring the harness that measures the app says
+        // nothing about the app.
+        "src/test/**",
         // Components: the DOM/xterm boundary invariant #1 exempts. Pulled in
         // transitively by the tests that import their pure helpers.
         "src/**/*.tsx",
-        // React hooks. Rendering one needs a renderer, and there is no jsdom
-        // here by design — the store behind each hook is what carries the
-        // tests. `useDiffEditor`/`useFileEditor` are hooks too, misfiled under
-        // components because they own a CodeMirror view.
+        // React hooks. The store behind each hook is what carries the tests;
+        // the render budgets run a few of them for real but measure repaints,
+        // not branches, so counting the hooks as covered would be a number
+        // nobody earned. `useDiffEditor`/`useFileEditor` are hooks too, misfiled
+        // under components because they own a CodeMirror view.
         "src/**/use-*.ts",
         "src/components/**/use*.ts",
         // OS/framework boundaries: fetch, EventSource, WebSocket, CodeMirror
