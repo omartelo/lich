@@ -251,14 +251,21 @@ type DiffStats struct {
 // line totals against HEAD, the HEAD commit itself and the branch it is on. A
 // non-repository path yields the zero value, matching Branch's contract.
 //
-// Two git children, not four: one status read answers the branch, the head and
-// everything dirty (status.go), and only the line totals still need a diff of
-// their own.
+// One git child on a clean checkout, two on a dirty one: the status read
+// answers the branch, the head and everything dirty (status.go), and the line
+// totals are asked for only when there is something to total.
 func (s *Service) Diff(path string) DiffStats {
 	status := readWorkTree(path)
 	stats := DiffStats{Files: status.files, Head: status.head, Branch: status.branch}
-	if out, ok := gitQuiet(path, "diff", "--numstat", status.base); ok {
-		stats.Added, stats.Deleted = numstatTotals(out)
+	// A tree the status read found nothing dirty in has nothing to total, so the
+	// second child would spend a process to be told so — on a call the frontend
+	// runs per second per checkout on screen, most of which nobody is editing.
+	// The implication runs one way only: untracked files are dirty and produce
+	// no numstat lines, so this over-asks rather than under-counts.
+	if status.files > 0 {
+		if out, ok := gitQuiet(path, "diff", "--numstat", status.base); ok {
+			stats.Added, stats.Deleted = numstatTotals(out)
+		}
 	}
 	// Untracked files are invisible to `git diff`; count their lines as
 	// additions, the way Warp and forge diff views present a fresh file.

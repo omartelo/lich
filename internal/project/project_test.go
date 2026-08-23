@@ -346,6 +346,65 @@ func TestDiffNoCommits(t *testing.T) {
 	}
 }
 
+// TestDiffSpendsNoNumstatOnACleanTree pins the call budget itself, not only the
+// numbers: a checkout with nothing dirty must answer from the status read
+// alone. The counts are asserted alongside, because a skipped call that also
+// dropped a number would be a regression wearing the optimisation's clothes.
+//
+// The children are counted through git's own GIT_TRACE, so nothing in the
+// package has to grow a seam to be observed. The dirty cases assert the *same*
+// trace line is present — without them a git that stopped writing the trace, or
+// a path it refused, would turn the clean assertion into one that can no longer
+// fail.
+func TestDiffSpendsNoNumstatOnACleanTree(t *testing.T) {
+	repo, git := initRepo(t)
+	trace := filepath.Join(t.TempDir(), "git-trace.log")
+	t.Setenv("GIT_TRACE", trace)
+
+	numstats := func() int {
+		t.Helper()
+		// Absent until the first git child runs, which is the zero the clean
+		// case expects to read.
+		out, err := os.ReadFile(trace)
+		if err != nil && !os.IsNotExist(err) {
+			t.Fatalf("read %s: %v", trace, err)
+		}
+		return strings.Count(string(out), "diff --numstat")
+	}
+
+	svc := New(nil)
+	if got := svc.Diff(repo); got.Added != 0 || got.Deleted != 0 {
+		t.Errorf("Diff(clean) = %+v, want no lines", got)
+	}
+	if spent := numstats(); spent != 0 {
+		t.Errorf("Diff(clean) spent %d numstat calls, want 0", spent)
+	}
+
+	if err := os.WriteFile(filepath.Join(repo, "a.txt"), []byte("one\ntwo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := svc.Diff(repo); got.Files != 1 || got.Added != 1 || got.Deleted != 0 {
+		t.Errorf("Diff(edited) = %+v, want {Files:1 Added:1 Deleted:0}", got)
+	}
+	if spent := numstats(); spent != 1 {
+		t.Errorf("Diff(edited) spent %d numstat calls, want 1", spent)
+	}
+
+	// Untracked-only is the case the skip must not swallow: the tree is dirty,
+	// so the call is spent, and git legitimately answers with no lines — the
+	// additions come from reading the file instead.
+	git("checkout", "--", "a.txt")
+	if err := os.WriteFile(filepath.Join(repo, "new.txt"), []byte("x\ny\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := svc.Diff(repo); got.Files != 1 || got.Added != 2 || got.Deleted != 0 {
+		t.Errorf("Diff(untracked only) = %+v, want {Files:1 Added:2 Deleted:0}", got)
+	}
+	if spent := numstats(); spent != 2 {
+		t.Errorf("Diff(untracked only) spent %d numstat calls in total, want 2", spent)
+	}
+}
+
 // sparseTextFile writes a text prefix and stretches the file to size with a
 // hole, so a file past the read cap costs neither disk nor a 10MiB write. The
 // prefix has to cover the whole binary sniff window: a shorter one leaves NULs
