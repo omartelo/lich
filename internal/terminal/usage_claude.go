@@ -97,18 +97,30 @@ func readTail(path string, max int64) ([]byte, bool) {
 // are skipped: their context is the sub-agent's, not the window the user sees. A
 // leading partial line (the tail was cut mid-line) fails to parse and is skipped
 // like any malformed line.
+//
+// A compaction writes no assistant line, only a compact_boundary carrying the
+// post-compaction count. Meeting one first means it is newer than the last
+// assistant line, whose count is now stale, so the tokens come from the boundary
+// — while the scan keeps going for the model, which the boundary does not
+// record and only an assistant line can name. Both triggers, "manual" and
+// "auto", write the same shape.
 func parseContextUsage(tail []byte) (contextUsage, bool) {
 	lines := bytes.Split(tail, []byte("\n"))
+	compacted := -1
 	for _, line := range slices.Backward(lines) {
 		line := bytes.TrimSpace(line)
 		if len(line) == 0 {
 			continue
 		}
 		var entry struct {
-			Type        string `json:"type"`
-			IsSidechain bool   `json:"isSidechain"`
-			Effort      string `json:"effort"`
-			Message     struct {
+			Type            string `json:"type"`
+			Subtype         string `json:"subtype"`
+			IsSidechain     bool   `json:"isSidechain"`
+			Effort          string `json:"effort"`
+			CompactMetadata *struct {
+				PostTokens int `json:"postTokens"`
+			} `json:"compactMetadata"`
+			Message struct {
 				Model string `json:"model"`
 				Usage *struct {
 					Input       int `json:"input_tokens"`
@@ -120,20 +132,38 @@ func parseContextUsage(tail []byte) (contextUsage, bool) {
 		if err := json.Unmarshal(line, &entry); err != nil {
 			continue
 		}
+		if compacted < 0 && entry.Type == "system" && entry.Subtype == "compact_boundary" &&
+			!entry.IsSidechain && entry.CompactMetadata != nil {
+			compacted = entry.CompactMetadata.PostTokens
+			continue
+		}
 		if entry.Type != "assistant" || entry.IsSidechain || entry.Message.Usage == nil {
 			continue
 		}
 		u := entry.Message.Usage
 		tokens := u.Input + u.CacheRead + u.CacheCreate
-		window := windowForModel(entry.Message.Model, tokens)
-		percent := min(tokens*100/window, 100)
-		return contextUsage{
-			tokens:  tokens,
-			percent: percent,
-			window:  window,
-			model:   entry.Message.Model,
-			effort:  entry.Effort,
-		}, true
+		if compacted >= 0 {
+			tokens = compacted
+		}
+		return usageFor(tokens, entry.Message.Model, entry.Effort), true
+	}
+	if compacted >= 0 {
+		// A compaction with no assistant line left in the tail to name the
+		// model: the default window is the same guess windowForModel makes for
+		// a model it has never heard of.
+		return usageFor(compacted, "", ""), true
 	}
 	return contextUsage{}, false
+}
+
+// usageFor resolves the window and percent a token count reads as on a model.
+func usageFor(tokens int, model, effort string) contextUsage {
+	window := windowForModel(model, tokens)
+	return contextUsage{
+		tokens:  tokens,
+		percent: min(tokens*100/window, 100),
+		window:  window,
+		model:   model,
+		effort:  effort,
+	}
 }

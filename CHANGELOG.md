@@ -146,6 +146,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A Claude Code session's context readout now follows a `/compact`.** The
+  percentage came from the newest assistant message in the transcript, and a
+  compaction writes none — so a card that had just been emptied from 236k to 13k
+  went on reporting 24% full until the next reply landed, which is exactly the
+  moment the number is read. The compaction boundary is now what the readout
+  takes its count from when it is the newer of the two, for an automatic
+  compaction as much as a manual one; the model, which that line does not record,
+  still comes from the last message that named one. The cost readout is unchanged
+  — it sums assistant messages and never saw the boundary.
+
 - **One session's output can no longer freeze every other session's.** Each session
   already had its own queue, so a card producing faster than the window could draw
   it backed up alone. One socket carries them all, though, and a session's turn to

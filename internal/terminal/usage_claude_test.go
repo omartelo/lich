@@ -23,6 +23,16 @@ func assistantLine(model string, input, cacheRead, cacheCreate int) string {
 		`,"output_tokens":1975}}}`
 }
 
+// boundaryLine builds the system line a /compact writes: no assistant message,
+// only the post-compaction count. trigger is "manual" or "auto" — both shapes
+// are identical in a real transcript.
+func boundaryLine(trigger string, preTokens, postTokens int) string {
+	return `{"type":"system","subtype":"compact_boundary","isSidechain":false,` +
+		`"compactMetadata":{"trigger":"` + trigger +
+		`","preTokens":` + strconv.Itoa(preTokens) +
+		`,"postTokens":` + strconv.Itoa(postTokens) + `}}`
+}
+
 func TestParseContextUsage(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -93,6 +103,59 @@ func TestParseContextUsage(t *testing.T) {
 			wantOK:      true,
 			wantTokens:  5002,
 			wantPercent: 2,
+		},
+		{
+			// A /compact writes no assistant line, so the newest count on the
+			// thread is the boundary's, not the stale line before it.
+			name: "a manual compaction reads the post-compaction count",
+			tail: assistantLine(modelOpus, 2, 236_082, 0) + "\n" +
+				boundaryLine("manual", 236_084, 12_642) + "\n" +
+				`{"type":"user","isCompactSummary":true,"message":{"content":"summary"}}` + "\n",
+			wantOK:      true,
+			wantTokens:  12_642,
+			wantPercent: 1, // 12642 * 100 / 1_000_000
+		},
+		{
+			name: "an auto compaction reads the same way",
+			tail: assistantLine(modelOpus, 2, 937_040, 0) + "\n" +
+				boundaryLine("auto", 937_042, 25_402) + "\n",
+			wantOK:      true,
+			wantTokens:  25_402,
+			wantPercent: 2,
+		},
+		{
+			name: "the window still comes from the model of the line before the boundary",
+			tail: assistantLine(modelHaiku, 2, 180_000, 0) + "\n" +
+				boundaryLine("manual", 180_002, 40_000) + "\n",
+			wantOK:      true,
+			wantTokens:  40_000,
+			wantPercent: 20, // 40000 * 100 / 200_000, the Haiku window
+		},
+		{
+			name: "an assistant line after the boundary wins over it",
+			tail: boundaryLine("manual", 236_084, 12_642) + "\n" +
+				assistantLine(modelOpus, 2, 30_000, 0) + "\n",
+			wantOK:      true,
+			wantTokens:  30_002,
+			wantPercent: 3,
+		},
+		{
+			name:        "a boundary alone in the tail reads against the default window",
+			tail:        boundaryLine("manual", 236_084, 12_642) + "\n",
+			wantOK:      true,
+			wantTokens:  12_642,
+			wantPercent: 1,
+		},
+		{
+			// Same rule as an assistant line: a sub-agent's compaction is not
+			// the window the user sees.
+			name: "skips a sidechain boundary for the main thread",
+			tail: assistantLine(modelOpus, 2, 40_000, 0) + "\n" +
+				`{"type":"system","subtype":"compact_boundary","isSidechain":true,` +
+				`"compactMetadata":{"trigger":"manual","preTokens":9,"postTokens":1}}` + "\n",
+			wantOK:      true,
+			wantTokens:  40_002,
+			wantPercent: 4,
 		},
 		{
 			name:   "no assistant line yields not-ok",
