@@ -18,7 +18,9 @@ lives in the code, `docs/` and `CHANGELOG.md` — never restate any of it here.
   live in the companion repo `omartelo/lich-plugin`, so an endpoint or payload change breaks a repo this one
   cannot see — move the contract first, then both sides.
 - **Every task**: `task --list`. `task dev` gets its own DB, port and Chromium profile; it never touches an
-  installed lich's workspace.
+  installed lich's workspace. That isolation is one `pkill` wide: a pattern like `chromium-profile` matches the
+  running lich's own window, and killing it exits that backend and every session under it. Kill a rig's browser
+  by the PID it was launched with.
 - **User-facing feature history**: `CHANGELOG.md`.
 
 ## Rules of the codebase
