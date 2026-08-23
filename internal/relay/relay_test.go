@@ -2448,3 +2448,52 @@ func TestSpawnBriefingNamesTheRouteThisSpawnGave(t *testing.T) {
 		}
 	}
 }
+
+// Stopping a turn is not answering the errand it was running. lich raises
+// "interrupted" for a turn the user ended at the PTY (internal/terminal,
+// Service.noteInterrupt), and the errand has to survive it: the target is still
+// the one holding the request, and reporting it unanswered here would tell the
+// sender the work is over while the target sits at a prompt able to carry on.
+func TestAnInterruptedTurnDoesNotEndTheErrand(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := newRelay(workspace(), term, nil)
+
+	got, err := svc.Send("s1", "docs", "", "run the tests", 1)
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if got.Status != StatusPending {
+		t.Fatalf("status = %q, want the sender to have taken a ticket", got.Status)
+	}
+
+	svc.Observe("s2", "busy")
+	svc.Observe("s2", "interrupted")
+
+	if awaitWritten(term, "s1", "[lich]") {
+		t.Fatalf("the sender was told its errand was over by an interrupt: %q", term.written("s1"))
+	}
+
+	// The turn that does end it is the target's next one.
+	svc.Observe("s2", "busy")
+	svc.Observe("s2", "done")
+	if !awaitWritten(term, "s1", "[lich]") {
+		t.Fatalf("the errand outlived the turn that ended it: %q", term.written("s1"))
+	}
+}
+
+// An interrupted session is at its prompt with nothing running, which is
+// exactly when a delivery held back for a busy target may go in.
+func TestAnInterruptedTargetIsNotBusy(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := newRelay(workspace(), term, nil)
+
+	svc.Observe("s2", "busy")
+	svc.Observe("s2", "interrupted")
+
+	svc.mu.Lock()
+	state := svc.state["s2"]
+	svc.mu.Unlock()
+	if state == stateBusy {
+		t.Fatal("a session whose turn was interrupted still read as working")
+	}
+}

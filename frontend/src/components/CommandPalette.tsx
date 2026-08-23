@@ -4,7 +4,11 @@ import { Folder, FolderX, MessageSquareText } from "lucide-react"
 import { useProjects } from "@/providers/projects"
 import { useSettings } from "@/providers/settings"
 import { useHotkey } from "@/lib/use-hotkey"
-import { runningSessions, useSessionStatus } from "@/lib/session/use-session-status"
+import {
+  runningSessions,
+  useSessionStatus,
+  useSessionUnread,
+} from "@/lib/session/use-session-status"
 import { SessionStatusIcon } from "@/components/sidebar/SessionStatusIcon"
 import {
   filterPalette,
@@ -342,9 +346,10 @@ function SessionRow({
   onRun: () => void
 }) {
   const status = useSessionStatus(session.sessionId)
+  const unread = useSessionUnread(session.sessionId)
   return (
     <PickerRow selected={selected} onSelect={onSelect} onRun={onRun}>
-      <SessionStatusIcon kind={session.kind} status={status} />
+      <SessionStatusIcon kind={session.kind} status={status} unread={unread} />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-sm">{session.label}</span>
         <span className="truncate font-mono text-xs text-muted-foreground">

@@ -17,6 +17,19 @@ export function useSessionStatus(sessionId: string): SessionStatus | null {
   return useKeyedStore(store, sessionId)
 }
 
+// useSessionUnread is whether this session's finished turn is still waiting to
+// be read — the news the ring exists to carry. False for every other status,
+// and false again the moment the card is focused (see markSessionSeen). It
+// subscribes to the same per-session entry the status does, which is what
+// markSeen notifies on a "done".
+export function useSessionUnread(sessionId: string): boolean {
+  const subscribe = useCallback(
+    (onChange: () => void) => store.subscribe(sessionId, onChange),
+    [sessionId],
+  )
+  return useSyncExternalStore(subscribe, () => store.unread(sessionId))
+}
+
 // useSessionStatusAge returns how long the session has been in its current
 // status, short and relative ("40s", "12m", "3h"), or "" for a status with no
 // clock worth reading.
@@ -46,9 +59,10 @@ export function useSessionStatusAge(sessionId: string): string {
   return started === null ? "" : formatAge(now - started)
 }
 
-// markSessionSeen records that a session's status has been on screen, so a
-// finished turn stops badging its project's tab. Called from the provider,
-// outside React's render.
+// markSessionSeen records that a session's status has been read — its card is
+// the one on screen and the window is being looked at — so a finished turn
+// stops badging its project's tab, drops out of the notification queue, and
+// lets its ring fade. Called from the provider, outside React's render.
 export function markSessionSeen(sessionId: string): void {
   store.markSeen(sessionId)
 }

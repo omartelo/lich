@@ -63,7 +63,8 @@ The only chromatic color in the app. It encodes state, never decorates, and is n
 | language badge hues | file language | diff file header only (`lang-badge.ts`) |
 
 A busy/done/waiting ring wraps the provider glyph (`SessionStatusIcon`); the same three states badge an
-inactive project tab (`ProjectTab`).
+inactive project tab (`ProjectTab`). The done ring carries one opacity step of its own: solid while the
+finished turn is still unread, `emerald-500/30` once the user has watched that card.
 
 ### Typography
 

@@ -110,6 +110,15 @@ describe("createSessionToolStore", () => {
     expect(listener).toHaveBeenCalledTimes(1)
   })
 
+  // Leaving "busy" is what clears the line, whatever ended the turn — the tool
+  // the user stopped is no more still running than one that finished.
+  it("clears the tool when the turn is interrupted", () => {
+    const { store, status } = harness()
+    status({ id: "s1", state: "busy", tool: "Bash", detail: "pnpm test" })
+    status({ id: "s1", state: "interrupted" })
+    expect(store.get("s1")).toBeNull()
+  })
+
   it("notifies when only the detail moves", () => {
     const { store, status } = harness()
     const listener = vi.fn()

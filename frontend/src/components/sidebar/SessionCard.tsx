@@ -26,7 +26,11 @@ import { cn, errorText } from "@/lib/utils"
 import { dragStyle } from "@/lib/use-sortable-list"
 import { displayPath } from "@/lib/paths"
 import type { Session } from "@/lib/session/sessions"
-import { useSessionStatus, useSessionStatusAge } from "@/lib/session/use-session-status"
+import {
+  useSessionStatus,
+  useSessionStatusAge,
+  useSessionUnread,
+} from "@/lib/session/use-session-status"
 import { useSessionCwd } from "@/lib/session/use-session-cwd"
 import { useSessionAgent } from "@/lib/session/use-session-agent"
 import { useSessionRelay } from "@/lib/session/use-session-relay"
@@ -117,6 +121,10 @@ export function SessionCard({
   // null before the first report, and whenever the hook reports a state with
   // no indicator (see toSessionStatus) — then the icon shows ringless.
   const status = useSessionStatus(session.id)
+  // Whether that state is news: a turn that finished while the user was
+  // elsewhere, still unread. It fades out of the ring the moment this card is
+  // the one being looked at.
+  const unread = useSessionUnread(session.id)
   // How long that state has lasted, beside the ring: with five agents running,
   // the bells all look alike and the one blocked longest is the one to answer
   // first. "" for the states that have no clock (see useSessionStatusAge).
@@ -326,7 +334,7 @@ export function SessionCard({
                     pinned ? "pr-6" : "pr-11",
                   )}
                 >
-                  <SessionStatusIcon kind={agent ?? session.kind} status={status} />
+                  <SessionStatusIcon kind={agent ?? session.kind} status={status} unread={unread} />
                   {age && (
                     <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                       {age}

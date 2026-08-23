@@ -137,8 +137,8 @@ describe("pendingOf", () => {
     expect(store.pendingOf(["mine"])).toBe("busy")
   })
 
-  // Leaving a project marks its sessions seen, so the turn that finished while
-  // the user was in there does not badge the tab they just left.
+  // Leaving a card marks it seen, so the turn that finished while it was on
+  // screen does not badge the tab the user just walked away from.
   it("drops a done once seen, and keeps live states regardless", () => {
     const { source, emit } = fakeSource()
     const store = createSessionStatusStore(source)
@@ -194,6 +194,52 @@ describe("pendingOf", () => {
     const { source } = fakeSource()
     const store = createSessionStatusStore(source)
     expect(() => store.markSeen("ghost")).not.toThrow()
+  })
+})
+
+// The question the card's ring asks: is this finished turn news, or something
+// already read? Nothing else on the card could answer it — "done" looks the
+// same an hour later as it does the second it lands.
+describe("unread", () => {
+  it("is a finished turn nobody has looked at", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", "done"))
+    expect(store.unread("s1")).toBe(true)
+    store.markSeen("s1")
+    expect(store.unread("s1")).toBe(false)
+  })
+
+  it("comes back for the next turn that finishes", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", "done"))
+    store.markSeen("s1")
+    emit(report("s1", "busy"))
+    emit(report("s1", "done"))
+    expect(store.unread("s1")).toBe(true)
+  })
+
+  it("is never claimed by a live state or by a session nobody reported", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", "busy"))
+    emit(report("s2", "waiting"))
+    expect(store.unread("s1")).toBe(false)
+    expect(store.unread("s2")).toBe(false)
+    expect(store.unread("ghost")).toBe(false)
+  })
+
+  // Stopping a turn is not finishing one: there is nothing to come back and
+  // read, so the ring goes out rather than turning solid.
+  it("is not claimed by an interrupted turn", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", "busy"))
+    emit(report("s1", "interrupted"))
+    expect(store.get("s1")).toBeNull()
+    expect(store.unread("s1")).toBe(false)
+    expect(store.pendingOf(["s1"])).toBeNull()
   })
 })
 

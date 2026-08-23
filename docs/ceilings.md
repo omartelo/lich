@@ -28,6 +28,25 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **A dropped file has no path, so lich guesses it** (`internal/drop`): a file under neither the session directory
   nor home is *copied*, so an agent told to edit it edits the copy — and that copy is deleted 3 days on, so a path
   pasted into a prompt eventually stops resolving.
+- **An interrupted turn is read off the keystrokes, not from the provider** (`internal/terminal/draft.go`,
+  `hookstate.go`, `Service.noteInterrupt`): Claude Code, Codex and oh-my-pi all skip the hook that ends a turn
+  when the user stops one, so lich publishes `interrupted` itself when a lone Ctrl+C or Escape reaches a session
+  it knows is mid-turn. It is a guess made from bytes, and it has three edges. A provider session running a tool
+  that owns the terminal — an editor opened through a shell command — takes Escape as the interrupt and clears
+  the ring while the turn is still running; the next report from the provider puts it back. opencode does report
+  its own abort, and reports it as the turn *finishing* (`session.status idle`), so an interrupted opencode card
+  wears the same solid ring a completed turn does — nothing in the event says which happened, and the provider's
+  own word outranks the keystroke. Crush reports no state at all, so it has no turn to end and the fallback never
+  fires there. And an errand the relay delivered survives an interrupt on purpose: stopping a turn is not
+  answering the request, so the sender keeps waiting for the target's next turn rather than being told the work
+  is over.
+- **A finished turn is unread until its own card is watched** (`frontend/src/lib/session/session-status-store.ts`,
+  `frontend/src/providers/projects.tsx`): the solid emerald ring means "back from the agent, not read yet", and it
+  fades only for the session whose terminal is on screen **while the window has focus**. Two things follow. A card
+  left focused in a background window keeps its ring solid until the window is touched again, which is the point
+  — but it also means a browser that reports focus oddly never fades one. And the mark lives in the page like the
+  rest of the session state, so a reload starts every session unread again: a turn read twenty minutes ago comes
+  back looking like news, and nothing on screen says the page forgot.
 - **A session close is a hang-up on Unix and a kill on Windows** (`internal/terminal/pty_unix.go`,
   `pty_windows.go`): closing a card signals the agent and gives it `closeGrace` to leave, so its exit path runs —
   hooks, transcripts, whatever it writes on the way out. A ConPTY has no signal to deliver, so the same close on

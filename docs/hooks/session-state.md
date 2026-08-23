@@ -19,7 +19,8 @@ Content-Type: application/json
  "tool": "<tool name>", "detail": "<what it acts on>"}
 ```
 
-States: `busy`, `done`, `waiting`, `idle`. lich rejects anything else.
+States: `busy`, `done`, `waiting`, `idle`. lich rejects anything else — the
+`interrupted` state it publishes to its own window included (see below).
 
 `tool` and `detail` are optional and belong to the pre-tool report alone (see
 below). Both are trimmed and capped at 120 characters — they decorate a state
@@ -168,6 +169,22 @@ a broken script could do was lose a status report.
   finished turn, an inbox count, nothing), which is what an unchanged session
   should show. `waiting` itself is not recorded: it interrupts a turn rather than
   replacing it, so two permission prompts in one turn are two blocks.
+- **The interrupt lich reads itself** — `internal/terminal/draft.go` and
+  `Service.noteInterrupt`: no harness event says "the user stopped this turn"
+  (see the ceiling above), so lich takes it from the keystrokes going into the
+  PTY, which is the one place every provider is alike. A lone `Ctrl+C` or
+  `Escape` — never a byte inside an escape sequence, never one carried in by a
+  bracketed paste — ends a turn `turnLog` already has open, and lich emits
+  `session-status` with the state **`interrupted`**. That state is outbound
+  only: the hook endpoint rejects it like any other unknown word, because it
+  says something only lich is in a position to know. It is deliberately not
+  `done` — stopping a turn is not finishing one, so an interrupted card must
+  not wear the check a completed turn earns. Consumers that know only the four
+  contract states read it as "no state" and clear the indicator, which is the
+  right reading for a session sitting at its prompt with nothing to show. And
+  it is a fallback, never a source of truth: it only ever ends a turn lich
+  heard start, so a `Ctrl+C` clearing a line at an idle prompt says nothing, and
+  the provider's next report overwrites whatever it concluded.
 - **The peer roster** — `internal/relay`, `Observe` and `roster.go`: reads the
   same stream raw, for two questions of its own. Which turn an errand belongs to
   is one (`s.state`, where a mid-turn `waiting` has to keep reading as `busy`).
@@ -182,17 +199,27 @@ a broken script could do was lose a status report.
   switching projects unmounts them, and a status reported meanwhile would be lost.
   `session-tool-store.ts` reads the same event for the tool pair, keeping its own
   keyed entry so a repeat `busy` — which the status store collapses into no
-  change at all — still moves the tool line.
+  change at all — still moves the tool line. The status store also keeps whether
+  each session's state has been **read**: `markSeen` is called for the one
+  session whose terminal is on screen, while the window has focus, and a fresh
+  report clears the mark again. Only `done` reads it — the live states say what
+  they say whether or not anybody is watching.
 - **Render** — `frontend/src/components/sidebar/SessionCard.tsx`: reads the stores
   (`useSessionStatus`, `useSessionTool`) and shows a spinner (`busy`), check
-  (`done`) or bell (`waiting`); any other value, including `idle`, clears the
-  indicator. The tool line sits under the session's label and exists only while
+  (`done`) or bell (`waiting`); any other value, including `idle` and
+  `interrupted`, clears the indicator. A `done` is drawn at two weights
+  (`SessionStatusIcon`, `useSessionUnread`): solid while the finished turn is
+  still unread, faded once the user has watched that card. It is the same mark
+  the tab badge and the notification queue read, so one session cannot be news
+  in one place and read in another. The tool line sits under the session's label and exists only while
   one is reported, so a card outside a turn is exactly the card it was before.
 - **Tab badge** — `frontend/src/components/tabs/ProjectTab.tsx`: reduces a
   project's sessions to one indicator (`useProjectStatus`, ranking `waiting` over
   `busy` over `done`), shown only while the project is not the active one. A
-  `done` stops badging once the project has been on screen; `busy` and `waiting`
-  badge for as long as they hold, being live states rather than notifications.
+  `done` stops badging once *that session's* card has been watched, so a project
+  left with three finished agents in it still badges for the two nobody opened;
+  `busy` and `waiting` badge for as long as they hold, being live states rather
+  than notifications.
 - **Toast + route** — `frontend/src/providers/projects.tsx`: raises an actionable toast
   that navigates to the session's card when a report says `waiting`, skipped for
   the session already focused. It reads the raw event rather than the store: the
@@ -210,8 +237,16 @@ a broken script could do was lose a status report.
 
 ## Known ceilings
 
-- `UserPromptSubmit` → busy, `Stop` → done. An interrupt (Esc) that skips `Stop`
-  can leave a spinner until the next turn resets it.
+- **An interrupted turn is lich's own reading, not a report.** Three harnesses
+  raise nothing when the user stops a turn — measured by driving each CLI at a
+  real PTY against a stub listener and pressing the key mid-turn: Claude Code
+  and Codex both go quiet after their last `busy` (Codex's rollout keeps the
+  `task_started` with no completion beside it), and omp cancels the running
+  tool and reports `busy` again without ever raising `session_stop`. opencode is
+  the exception: an abort raises `session.status idle` within the same second,
+  so its card closes the turn on its own — as a *finished* one, which is the
+  only word its event has. lich therefore reads the interrupt off the PTY
+  instead (below), and the state it publishes is not `done`.
 - Status is retained in the page, not in Go: a reload starts the store empty, so
   a session Claude is already working on shows no indicator until its next
   report. The PTY is backend-owned and survives the reload, so it does keep

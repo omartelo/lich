@@ -55,6 +55,17 @@ const (
 	statusDone    = "done"
 	statusWaiting = "waiting"
 	statusIdle    = "idle"
+
+	// statusInterrupted is lich's own: the only state it ever publishes that no
+	// provider reports and no hook may send — parseHookRequest rejects it like
+	// any other unknown word. It says a turn ended because the user stopped it
+	// at the PTY, which is neither a finished turn nor a session that has left,
+	// and lich has to say it itself because three of the five providers raise
+	// nothing at all when a turn is interrupted (see Service.noteInterrupt and
+	// docs/hooks/session-state.md). Consumers that only know the four above read
+	// it as "no state", which clears the card's indicator — the right reading:
+	// an interrupted session is sitting at its prompt with nothing to show.
+	statusInterrupted = "interrupted"
 )
 
 // encodeFrame prefixes payload with the session id. The id must fit one byte

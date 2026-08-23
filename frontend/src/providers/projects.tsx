@@ -700,23 +700,42 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     return () => off()
   }, [navigate, activateSession])
 
-  // Opening a project puts its cards on screen, so its sessions' statuses count
-  // as seen — and the cleanup marks them again on the way out, with the project
-  // being left. Without that second pass, a turn that finished while you sat in
-  // the project would badge the tab you just walked away from. A turn still
-  // running keeps its tab badged either way: only "done" reads this.
+  // The one session whose terminal is on screen, which is the only one the user
+  // can be said to have read. Everything that answers "what came back while I
+  // was away" hangs off it: the card's own ring, its project's tab badge and
+  // the notification queue all ask the same question of the same mark.
+  //
+  // Three moments count as reading it: arriving at the card, a report landing
+  // while it is on screen, and coming back to a window that was in the
+  // background. The window's focus is what separates the last two from a card
+  // left open in an app nobody is looking at — the same fact the desktop
+  // notification answers to, and one only the page holds. The cleanup marks the
+  // card being left, so a turn that finished while it was on screen does not
+  // badge the tab on the way out.
+  const focusedSessionId = activeProjectId ? activeSessionId(sessions, activeProjectId) : ""
   useEffect(() => {
-    if (!activeProjectId) {
+    if (!focusedSessionId) {
       return
     }
-    const markSeen = () => {
-      for (const session of sessionsOf(sessionsRef.current, activeProjectId)) {
-        markSessionSeen(session.id)
+    const markSeen = () => markSessionSeen(focusedSessionId)
+    const markSeenIfWatched = () => {
+      if (document.hasFocus()) {
+        markSeen()
       }
     }
-    markSeen()
-    return markSeen
-  }, [activeProjectId])
+    markSeenIfWatched()
+    const off = onAppEvent(STATUS_EVENT, (data) => {
+      if (isIdEvent(data) && data.id === focusedSessionId) {
+        markSeenIfWatched()
+      }
+    })
+    window.addEventListener("focus", markSeen)
+    return () => {
+      off()
+      window.removeEventListener("focus", markSeen)
+      markSeen()
+    }
+  }, [focusedSessionId])
 
   // A session that likely changed files on disk nudges an immediate git-status
   // refresh for the path its card watches (its worktree, else the project's),

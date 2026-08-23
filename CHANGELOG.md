@@ -83,6 +83,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a channel, mutex or WaitGroup that no runnable goroutine can still reach —
   which is the shape of a window that stopped updating while the process stayed
   alive. An empty section is the answer too: the hang is somewhere else.
+- **A finished turn now says whether you have read it.** A session that came back
+  while you were away wears the same solid green ring as one you dealt with
+  twenty minutes ago, which is the one question that ring exists to answer. It
+  now fades once you have actually watched that session's card — and only that
+  card, so a sidebar of finished agents shows at a glance which results nobody
+  has collected. The project tab badge and the notifications list read the same
+  mark, so a session cannot be news in one place and read in another.
 
 ### Removed
 
@@ -94,6 +101,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A turn you interrupt no longer spins forever.** Pressing Esc or Ctrl+C to stop
+  an agent mid-turn left its card spinning until some later turn happened to
+  finish — Claude Code, Codex and oh-my-pi all say nothing at all when a turn is
+  stopped, so the last thing lich ever heard was "working". lich now reads the
+  interrupt from the keystroke itself: a lone Esc or Ctrl+C at a session that is
+  mid-turn ends that turn and the card goes quiet. It never reads as a *finished*
+  turn — stopping is not finishing, so no check, no notification, no tab badge —
+  and it never fires for a key pressed at an idle prompt, arriving inside a paste,
+  or belonging to an arrow key or a mouse report. Whatever the agent reports next
+  still wins.
 - **Closing a session hangs up on the agent instead of killing it outright.** A
   card's close sent the process `SIGKILL`, which leaves an agent no chance to run
   its own exit path. Claude Code reads that as a crash: a session killed within

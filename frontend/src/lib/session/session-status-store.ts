@@ -27,11 +27,15 @@ interface Entry {
   // same state repeatedly while a turn runs, and a session has been waiting
   // since it started waiting, not since the last report said so again.
   since: number
-  // Whether the user has had a chance to see the current status, which only
-  // "done" cares about: it is the one state that persists with nothing running,
-  // so a finished turn would badge its project tab forever. "busy" and
-  // "waiting" are live — a tab left mid-run should keep saying so, and a
-  // permission prompt left unanswered is still blocking.
+  // Whether the user has read the current status, which only "done" cares
+  // about: it is the one state that persists with nothing running, so a
+  // finished turn would badge its project tab forever and its ring would say
+  // "back from the agent" long after it was read. "busy" and "waiting" are
+  // live — a tab left mid-run should keep saying so, and a permission prompt
+  // left unanswered is still blocking. Reading is per session and not per
+  // project: the card whose terminal is on screen is the one that was looked
+  // at, and the sessions beside it in the sidebar are exactly the ones whose
+  // results nobody has collected yet (see the provider's markSessionSeen).
   seen: boolean
   listeners: Set<() => void>
 }
@@ -122,9 +126,9 @@ export function createSessionStatusStore(source: SessionEventSource) {
     refreshPending()
   })
 
-  // markSeen records that a session's status has been on screen — its project
-  // was opened, or was open when the status arrived. Only a "done" changes
-  // appearance from it (see Entry.seen), so only that notifies.
+  // markSeen records that a session's status has been read — its card was
+  // focused, or was on screen and being watched when the status arrived. Only a
+  // "done" changes appearance from it (see Entry.seen), so only that notifies.
   const markSeen = (id: string): void => {
     const entry = entries.get(id)
     if (!entry || entry.seen) {
@@ -138,7 +142,7 @@ export function createSessionStatusStore(source: SessionEventSource) {
   }
 
   // pendingOf reduces a project's sessions to the one status its tab should
-  // badge, or null when there is nothing to say. A seen "done" says nothing.
+  // badge, or null when there is nothing to say. A read "done" says nothing.
   const pendingOf = (ids: readonly string[]): SessionStatus | null => {
     const live = new Set<SessionStatus>()
     for (const id of ids) {
@@ -175,6 +179,15 @@ export function createSessionStatusStore(source: SessionEventSource) {
 
   const get = (id: string): SessionStatus | null => entries.get(id)?.status ?? null
 
+  // unread is the one question the card's ring asks beyond the status itself:
+  // a turn that finished and has not been looked at since. Only "done" can be
+  // unread — the live states say what they say whether or not anyone is
+  // watching — so everything else answers false.
+  const unread = (id: string): boolean => {
+    const entry = entries.get(id)
+    return entry?.status === "done" && !entry.seen
+  }
+
   // since answers when the current status started, or null when there is no
   // status to time — including for an entry a subscriber opened before the
   // first report landed.
@@ -196,5 +209,15 @@ export function createSessionStatusStore(source: SessionEventSource) {
   // changes, so it is safe to hand straight to useSyncExternalStore.
   const pendingAll = (): PendingStatus[] => pending
 
-  return { subscribe, get, since, markSeen, pendingOf, runningOf, subscribeAll, pendingAll }
+  return {
+    subscribe,
+    get,
+    unread,
+    since,
+    markSeen,
+    pendingOf,
+    runningOf,
+    subscribeAll,
+    pendingAll,
+  }
 }

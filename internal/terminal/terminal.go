@@ -40,7 +40,8 @@ const (
 	// statusEventName carries a session's processing state ({id, state, tool,
 	// detail} — "busy"/"done"/"waiting"/"idle", plus the tool a pre-tool report
 	// names), reported by the lich hooks running inside the PTY (see
-	// transport.hook and docs/hooks/session-state.md). The frontend keeps it in
+	// transport.hook and docs/hooks/session-state.md). "interrupted" is the one
+	// value lich raises itself, for a turn the user stopped at the PTY. The frontend keeps it in
 	// stores keyed by id (session-status-store.ts, session-tool-store.ts) rather
 	// than in the card, which is only mounted while its project is active.
 	statusEventName = "session-status"
@@ -147,10 +148,13 @@ type session struct {
 	// draftAt is when the user last typed something at this prompt without
 	// sending it, and zero when there is nothing of theirs on the line.
 	// escPending is the beginning of an escape sequence a PTY write split, held
-	// until the rest of it arrives. Both guarded by the service's mu. See
-	// draft.go.
+	// until the rest of it arrives. pasting is whether the bytes arriving now
+	// are inside a bracketed paste, which is what keeps a pasted Ctrl+C or
+	// Escape from reading as the user interrupting the turn. All three guarded
+	// by the service's mu. See draft.go.
 	draftAt    time.Time
 	escPending []byte
+	pasting    bool
 	// confined records whether this PTY was spawned inside the sandbox, so Start
 	// can report it once the spawn is out of the lock.
 	confined bool
@@ -298,7 +302,9 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 	}
 	ws, err := newTransport(
 		func(id string, data []byte) {
-			s.noteInput(id, data)
+			if s.noteInput(id, data) {
+				s.noteInterrupt(id)
+			}
 			if err := s.writeBytes(id, data); err != nil {
 				slog.Warn("terminal: input write failed", "session", id, "err", err)
 			}
@@ -374,6 +380,33 @@ func (s *Service) MountPublic(pattern string, handler http.Handler) {
 		return
 	}
 	s.ws.mountPublic(pattern, handler)
+}
+
+// noteInterrupt publishes the end of a turn the user stopped at the PTY: a lone
+// Ctrl+C or Escape while lich has a turn open for that session (see noteInput
+// and turnLog.interrupt). It is the fallback for the three providers that raise
+// no event of their own when a turn is interrupted — Claude Code, Codex and
+// oh-my-pi all skip the hook that would end it, so without this the card spins
+// until some later turn finishes. It publishes "interrupted" rather than "done"
+// because stopping a turn is not finishing one, and it never opens a turn, so
+// nothing is invented for a session lich never heard start. Whatever the
+// provider reports next overwrites it: an event from inside the session always
+// outranks a guess made from its keystrokes.
+func (s *Service) noteInterrupt(id string) {
+	if !s.turns.interrupt(id) {
+		return
+	}
+	s.hub.Emit(statusEventName, statusEvent{ID: id, State: statusInterrupted})
+	// The relay keeps its own turn accounting off the same stream, and a turn
+	// that ended has to read as ended there too — a queued delivery waits on the
+	// target's prompt being free.
+	if watch := s.stateWatcher(); watch != nil {
+		watch(id, statusInterrupted)
+	}
+	// An interrupted turn spent tokens like any other, and it may be the last
+	// one for a while: refresh the context readout off the transcript, off the
+	// caller's thread the way the hook path does.
+	go s.emitUsage(id)
 }
 
 // SetSessionState wires fn to every session-state report the hooks deliver.
