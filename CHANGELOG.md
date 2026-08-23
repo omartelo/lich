@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A session's card hands out the command that reaches it.** Naming a session
+  is what makes `lich send` usable from another terminal, but the name lived on a
+  card in the window and the line had to be retyped from memory, quoting
+  included. Copy send command puts the whole invocation on the clipboard, with
+  the label quoted for the shell — so a card called `the $PATH bug` pastes as one
+  argument rather than as three words and an empty variable. The project is named
+  in the line only when another session holds the same label, which is the one
+  case `lich send` cannot resolve without it.
 - **A waiting card now says what it is waiting for.** A session blocked on you
   wore the same amber bell and the same "Waiting on you" whether it wanted
   permission to delete a directory or an answer about which file to touch — the

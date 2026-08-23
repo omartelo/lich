@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   ArrowRight,
   CircleQuestionMark,
+  Copy,
   CornerDownLeft,
   FolderCode,
   FolderOpen,
@@ -58,9 +59,11 @@ import { System, Terminal as TerminalService } from "@/lib/rpc"
 import { queuePaste } from "@/lib/terminal/paste-queue"
 import type { DelegateGroup } from "@/lib/session/delegate-targets"
 import { delegatePrompt, delegateWorktreePrompt } from "@/lib/session/delegate-prompt"
+import { sendCommand } from "@/lib/session/send-command"
 import { bracketedPaste } from "@/lib/terminal/bracketed-paste"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
 import { useSessionIntent } from "@/lib/use-sidebar-intent"
+import { useProjects } from "@/providers/projects"
 import { SessionTargetPicker } from "./SessionTargetPicker"
 import { EntrypointDialog } from "./EntrypointDialog"
 
@@ -110,6 +113,10 @@ export function SessionCard({
   onPulls,
   delegateGroups,
 }: SessionCardProps) {
+  // Read here rather than threaded down as a prop: the `lich send` line names
+  // the project only when another session shares this card's label, and that is
+  // a question about every open project — not about the one this card sits in.
+  const { projects, sessions } = useProjects()
   const pinned = !!session.pinned
   const pathRef = useRef<HTMLSpanElement>(null)
   const [pathOverflow, setPathOverflow] = useState(false)
@@ -193,6 +200,17 @@ export function SessionCard({
         }
       })
       .catch((error) => toast.error(`Could not open the checkout: ${errorText(error)}`))
+  }
+
+  // The line another terminal — or another agent — hands this session work
+  // with. The label is quoted for a shell on the way out (sendCommand): getting
+  // that right from memory is exactly what goes wrong when the line is retyped.
+  const copySendCommand = () => {
+    const command = sendCommand(projects, sessions, session)
+    void navigator.clipboard.writeText(command).then(
+      () => toast(`Copied: ${command}`),
+      (error) => toast.error(`Could not copy the command: ${errorText(error)}`),
+    )
   }
 
   // A worktree removed outside lich leaves its card behind, so both openers
@@ -540,6 +558,10 @@ export function SessionCard({
               Delegate to session…
             </ContextMenuItem>
           )}
+          <ContextMenuItem onClick={copySendCommand}>
+            <Copy />
+            Copy send command
+          </ContextMenuItem>
           <ContextMenuItem onClick={() => setEditing(true)}>
             <Pencil />
             Rename
