@@ -148,7 +148,15 @@ func main() {
 	uncleanExit := singleton.UncleanExit(configDir, os.Getenv(restart.WaitEnv))
 	dispatcher.Register("system", system.New(env, logPath, version, uncleanExit))
 	dispatcher.Register("providers", providers.New())
-	dispatcher.Register("quota", quota.New())
+	// The quota reading is per session, not per machine: a session spawned from
+	// a binary the user configured can spend another account entirely, and the
+	// terminal is what knows the environment that binary set up.
+	plans := quota.New()
+	plans.SetSessions(func(sessionID string) quota.Account {
+		env, custom, read := term.SessionAccount(sessionID)
+		return quota.Account{Env: env, Custom: custom, Read: read}
+	})
+	dispatcher.Register("quota", plans)
 	// The relay is the only service whose caller is not the window: the `lich`
 	// CLI running inside a session reaches it over the same listener. It watches
 	// the hooks' state reports too, to notice a target that ends a turn without
@@ -199,13 +207,16 @@ func main() {
 //     closes sessions through the store, which is what reports one gone.
 //   - drop.SetPicker is startup wiring like the ones below, and nilling it
 //     would leave the footer's attach button with no dialog to open.
+//   - terminal.SessionAccount hands back the environment of the process a
+//     session runs, credentials and all, so the quota reader can tell which
+//     account that session spends.
 //   - relay.SetPlugins, project.SetAccounts, project.SetProjects,
-//     store.SetSessionGone and terminal.SetDropDir are startup wiring. Called
-//     with [null] they silently nil what they wired (encoding/json leaves a
-//     func or pointer alone on null), and the write races the readers already
-//     serving — nilling SetProjects also disarms the guard that keeps two
-//     projects off the same directory, and SetDropDir points the sandbox's
-//     read-only bind wherever the caller likes.
+//     quota.SetSessions, store.SetSessionGone and terminal.SetDropDir are
+//     startup wiring. Called with [null] they silently nil what they wired
+//     (encoding/json leaves a func or pointer alone on null), and the write
+//     races the readers already serving — nilling SetProjects also disarms the
+//     guard that keeps two projects off the same directory, and SetDropDir
+//     points the sandbox's read-only bind wherever the caller likes.
 func denyInternal(d *rpc.Handler) {
 	for _, method := range []string{
 		"store.Close",
@@ -218,6 +229,8 @@ func denyInternal(d *rpc.Handler) {
 		"relay.SetPlugins",
 		"project.SetAccounts",
 		"project.SetProjects",
+		"quota.SetSessions",
+		"terminal.SessionAccount",
 		"terminal.SetDropDir",
 	} {
 		d.Deny(method)

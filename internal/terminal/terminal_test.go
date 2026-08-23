@@ -88,6 +88,7 @@ func newCostStore(providerSession string) stubBins {
 }
 
 func (s stubBins) ProviderBin(_, _ string) string       { return s.bin }
+func (s stubBins) SessionCustomBin(_ string) bool       { return s.bin != "" }
 func (s stubBins) SkipPermissions(_, _, _ string) bool  { return s.skipPerms }
 func (s stubBins) ProjectPath(_ string) string          { return s.projectPath }
 func (s stubBins) SessionModel(_ string) string         { return s.model }

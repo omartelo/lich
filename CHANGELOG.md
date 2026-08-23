@@ -138,6 +138,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The plan gauge now reads the account the session in front of you actually
+  spends.** A project pointed at a binary of your own — a wrapper exporting
+  another `CLAUDE_CONFIG_DIR`, or an OAuth token for a second account — still had
+  its footer showing what lich's own login had left, which is a number about
+  somebody else's plan and no way to tell. The reading is now taken against the
+  environment the session's own process runs with, so each card reports the
+  subscription it is spending, and two accounts on one machine no longer read as
+  one. A session whose login is a long-lived token (`claude setup-token`) is
+  measured through a one-token request, since the usage route refuses a token
+  that can only infer; a session pointed at another API host or running on an API
+  key shows no gauge, having no plan to report. On macOS and Windows, where the
+  environment of another process is out of reach, a session running a configured
+  binary shows nothing rather than the wrong account's numbers. Codex sessions
+  follow the same rule through `CODEX_HOME`.
 - **Removing a worktree no longer fails when the agent in it has just exited.** A
   session's terminal is released twice — once by the close you asked for, once by
   the reap of the process that ended — and whichever of the two arrived second

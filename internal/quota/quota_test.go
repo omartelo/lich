@@ -63,9 +63,15 @@ func newService(claudeURL, codexURL string, now time.Time) *Service {
 		http:      &http.Client{Timeout: httpTimeout},
 		claudeURL: claudeURL,
 		codexURL:  codexURL,
+		probeURL:  claudeURL,
 		now:       func() time.Time { return now },
+		cache:     make(map[string]reading),
 	}
 }
+
+// lichEnv is the account every reading was taken for before a session could
+// name one of its own: whatever lich's own environment points at.
+func lichEnv() Account { return Account{Read: true} }
 
 const claudeLimitsBody = `{
 	"five_hour": {"utilization": 2.0, "resets_at": "2026-08-17T23:20:00.153182+00:00"},
@@ -81,7 +87,7 @@ const claudeLimitsBody = `{
 func TestClaudePlanReadsLimits(t *testing.T) {
 	writeCreds(t, claudeCredsJSON, "")
 	url, calls := serve(t, http.StatusOK, claudeLimitsBody)
-	got := newService(url, "", time.Now()).claudePlan()
+	got := newService(url, "", time.Now()).claudePlan(lichEnv())
 
 	if got.Status != StatusOK {
 		t.Fatalf("status = %q, want %q", got.Status, StatusOK)
@@ -119,7 +125,7 @@ func TestClaudeRequestCarriesTheHeadersTheEndpointDemands(t *testing.T) {
 	}))
 	defer server.Close()
 
-	newService(server.URL, "", time.Now()).claudePlan()
+	newService(server.URL, "", time.Now()).claudePlan(lichEnv())
 
 	if auth := got.Get("Authorization"); auth != "Bearer tok-claude" {
 		t.Errorf("Authorization = %q, want %q", auth, "Bearer tok-claude")
@@ -139,7 +145,7 @@ func TestClaudeFallsBackToTheOriginalWindowPair(t *testing.T) {
 		"seven_day":{"utilization":7,"resets_at":"2026-08-24T15:00:00Z"},"limits":[]}`
 	url, _ := serve(t, http.StatusOK, body)
 
-	got := newService(url, "", time.Now()).claudePlan()
+	got := newService(url, "", time.Now()).claudePlan(lichEnv())
 
 	want := []Window{
 		{Label: "Session", Seconds: 18000, Percent: 63, ResetsAt: "2026-08-17T23:20:00Z"},
@@ -161,7 +167,7 @@ func TestClaudeSkipsEntriesItCannotDraw(t *testing.T) {
 	]}`
 	url, _ := serve(t, http.StatusOK, body)
 
-	got := newService(url, "", time.Now()).claudePlan()
+	got := newService(url, "", time.Now()).claudePlan(lichEnv())
 
 	if len(got.Windows) != 1 || got.Windows[0].Label != "Session" {
 		t.Fatalf("windows = %+v, want only the session window", got.Windows)
@@ -173,7 +179,7 @@ func TestClaudeDropsAnUnparseableResetTime(t *testing.T) {
 	body := `{"limits":[{"kind":"session","percent":5,"resets_at":"whenever"}]}`
 	url, _ := serve(t, http.StatusOK, body)
 
-	got := newService(url, "", time.Now()).claudePlan()
+	got := newService(url, "", time.Now()).claudePlan(lichEnv())
 
 	if len(got.Windows) != 1 || got.Windows[0].ResetsAt != "" {
 		t.Errorf("windows = %+v, want the window with no reset time", got.Windows)
@@ -196,7 +202,7 @@ func TestSignedOutStates(t *testing.T) {
 			writeCreds(t, tt.creds, "")
 			url, _ := serve(t, tt.status, `{}`)
 
-			got := newService(url, "", time.Now()).claudePlan()
+			got := newService(url, "", time.Now()).claudePlan(lichEnv())
 
 			if got.Status != StatusSignedOut {
 				t.Errorf("status = %q, want %q", got.Status, StatusSignedOut)
@@ -223,7 +229,7 @@ func TestFailedStates(t *testing.T) {
 			writeCreds(t, claudeCredsJSON, "")
 			url, _ := serve(t, tt.status, tt.body)
 
-			got := newService(url, "", time.Now()).claudePlan()
+			got := newService(url, "", time.Now()).claudePlan(lichEnv())
 
 			if got.Status != StatusError {
 				t.Errorf("status = %q, want %q", got.Status, StatusError)
@@ -240,7 +246,7 @@ func TestCodexPlanNamesWindowsByDuration(t *testing.T) {
 		"used_percent":26,"limit_window_seconds":2592000,"reset_at":1789318316}}}`
 	url, _ := serve(t, http.StatusOK, body)
 
-	got := newService("", url, time.Now()).codexPlan()
+	got := newService("", url, time.Now()).codexPlan(lichEnv())
 
 	if got.Status != StatusOK || got.Plan != "Free" {
 		t.Fatalf("plan = %+v, want an ok Free plan", got)
@@ -258,7 +264,7 @@ func TestCodexReadsBothWindows(t *testing.T) {
 		"secondary_window":{"used_percent":88.6,"limit_window_seconds":604800,"reset_at":1789318316}}}`
 	url, _ := serve(t, http.StatusOK, body)
 
-	got := newService("", url, time.Now()).codexPlan()
+	got := newService("", url, time.Now()).codexPlan(lichEnv())
 
 	want := []Window{
 		{Label: "Session", Seconds: 18000, Percent: 12},
@@ -273,7 +279,7 @@ func TestCodexWithoutRateLimitBlockFails(t *testing.T) {
 	writeCreds(t, "", codexCredsJSON)
 	url, _ := serve(t, http.StatusOK, `{"plan_type":"plus"}`)
 
-	if got := newService("", url, time.Now()).codexPlan(); got.Status != StatusError {
+	if got := newService("", url, time.Now()).codexPlan(lichEnv()); got.Status != StatusError {
 		t.Errorf("status = %q, want %q", got.Status, StatusError)
 	}
 }
@@ -347,7 +353,7 @@ func TestPlansServesEveryMeteredProviderFromOneReading(t *testing.T) {
 	now := time.Date(2026, 8, 17, 12, 0, 0, 0, time.UTC)
 	s := newService(claudeURL, codexURL, now)
 
-	plans := s.Plans()
+	plans := s.Plans("")
 	if len(plans) != 2 {
 		t.Fatalf("plans = %+v, want one per metered provider", plans)
 	}
@@ -357,14 +363,14 @@ func TestPlansServesEveryMeteredProviderFromOneReading(t *testing.T) {
 
 	// Inside the TTL the endpoints are not asked again.
 	s.now = func() time.Time { return now.Add(4*time.Minute + 59*time.Second) }
-	s.Plans()
+	s.Plans("")
 	if *claudeCalls != 1 || *codexCalls != 1 {
 		t.Fatalf("calls = %d/%d after a cached read, want 1/1", *claudeCalls, *codexCalls)
 	}
 
 	// Past it they are.
 	s.now = func() time.Time { return now.Add(5*time.Minute + time.Second) }
-	s.Plans()
+	s.Plans("")
 	if *claudeCalls != 2 || *codexCalls != 2 {
 		t.Errorf("calls = %d/%d after the TTL, want 2/2", *claudeCalls, *codexCalls)
 	}
@@ -377,6 +383,9 @@ func TestNewPointsAtTheLiveEndpoints(t *testing.T) {
 	}
 	if s.codexURL != "https://chatgpt.com/backend-api/wham/usage" {
 		t.Errorf("codexURL = %q", s.codexURL)
+	}
+	if s.probeURL != "https://api.anthropic.com/v1/messages" {
+		t.Errorf("probeURL = %q", s.probeURL)
 	}
 	if s.now == nil || s.http == nil {
 		t.Error("New must wire a clock and an HTTP client")

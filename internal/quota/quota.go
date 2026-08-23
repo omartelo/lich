@@ -8,6 +8,15 @@
 // OAuth access token that CLI already wrote to disk; opencode, oh-my-pi and
 // Crush run on the user's own API keys, where there is no plan to report.
 //
+// Which account is read is a question about one session, never about lich. A
+// session can be spawned from a binary the user configured — a wrapper that
+// exports its own CLAUDE_CONFIG_DIR, or an OAuth token of its own — and the
+// account it spends is then not the one lich's own environment names. So the
+// reading is taken against the environment of the process running in that
+// session's PTY (Account, wired to internal/terminal). A session lich cannot
+// read that from, yet knows runs a binary it did not choose, is reported as
+// StatusUnknown: a gauge drawn for the wrong account is worse than no gauge.
+//
 // lich reads those credentials and never writes them. Token rotation belongs to
 // the CLI that owns the login: a refresh whose write-back fails spends the
 // stored refresh token and logs the user out of their agent, which is a far
@@ -17,10 +26,12 @@ package quota
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -55,7 +66,25 @@ const (
 	// provider's own login, so they are one state, not two.
 	StatusSignedOut = "signed-out"
 	StatusError     = "error"
+	// StatusUnknown is "this session does not spend the account lich can read":
+	// it runs a binary the user configured, and lich cannot see the environment
+	// that binary set up (no live process, or a platform that exposes no other
+	// process's environment). The alternative would be the default account's
+	// numbers under a session spending someone else's plan.
+	StatusUnknown = "unknown"
 )
+
+// accountVars are the environment variables that decide which account a session
+// spends: Claude's own token and config dir, Codex's config dir, and the three
+// that point Claude somewhere other than the user's subscription.
+var accountVars = []string{
+	claudeTokenVar,
+	claudeDirVar,
+	codexHomeVar,
+	"ANTHROPIC_BASE_URL",
+	"ANTHROPIC_API_KEY",
+	"ANTHROPIC_AUTH_TOKEN",
+}
 
 // Window is one metered window of a plan: how much of it is spent, how long it
 // runs, and when it starts over.
@@ -81,23 +110,63 @@ type Plan struct {
 	Status   string   `json:"status"`
 }
 
-// Service reads plan quota, caching one reading for every caller.
+// Account is what a lich session's own process says about the account it
+// spends. Env is that process's environment — where a wrapper binary puts a
+// config dir or a token of its own — and Read is false when lich could not read
+// it at all. Custom reports a session spawned from a binary the user
+// configured, which is the only case where an unreadable environment is worth
+// withholding a reading over: every other session spends the login lich reads.
+type Account struct {
+	Env    map[string]string
+	Custom bool
+	Read   bool
+}
+
+// hidden reports an account lich cannot identify.
+func (a Account) hidden() bool { return a.Custom && !a.Read }
+
+// elsewhere reports a session pointed at something other than the user's own
+// subscription: another API host, or an API key, which is billed per token and
+// metered by no plan. Reading lich's own login for one of those would draw a
+// gauge for an account that session never touches.
+func (a Account) elsewhere() bool {
+	return a.Env["ANTHROPIC_BASE_URL"] != "" ||
+		a.Env["ANTHROPIC_API_KEY"] != "" ||
+		a.Env["ANTHROPIC_AUTH_TOKEN"] != ""
+}
+
+// Sessions answers what a session's process says about the account it spends.
+// main wires it to the terminal service; a Service without one reads only
+// lich's own environment, which is the machine-wide question Settings asks.
+type Sessions func(sessionID string) Account
+
+// Service reads plan quota, caching one reading per account.
 type Service struct {
 	http *http.Client
-	// claudeURL and codexURL are the usage endpoints, fields so tests drive the
-	// parsers against a local server.
+	// claudeURL, codexURL and probeURL are the endpoints, fields so tests drive
+	// the parsers against a local server.
 	claudeURL string
 	codexURL  string
+	probeURL  string
 
 	// now is time.Now, a field so a test can age the cache without sleeping.
 	now func() time.Time
 
-	// mu guards the cached reading and is held across the fetch itself, so a
-	// second caller arriving mid-request waits for that answer instead of
-	// firing its own at an endpoint that rate-limits.
-	mu     sync.Mutex
-	cached []Plan
-	at     time.Time
+	// sessions resolves a session id to the account it spends; nil until main
+	// wires it, and never called for the machine-wide reading.
+	sessions Sessions
+
+	// mu guards the cache and is held across the fetch itself, so a second
+	// caller arriving mid-request waits for that answer instead of firing its
+	// own at an endpoint that rate-limits.
+	mu    sync.Mutex
+	cache map[string]reading
+}
+
+// reading is one cached answer, and when it was taken.
+type reading struct {
+	plans []Plan
+	at    time.Time
 }
 
 // New returns a Service pointed at the live endpoints.
@@ -106,22 +175,52 @@ func New() *Service {
 		http:      &http.Client{Timeout: httpTimeout},
 		claudeURL: claudeUsageURL,
 		codexURL:  codexUsageURL,
+		probeURL:  claudeProbeURL,
 		now:       time.Now,
+		cache:     make(map[string]reading),
 	}
 }
 
-// Plans is every provider that meters a subscription, in Registry order. There
-// is always one entry per such provider — a failed reading is a Status, not an
-// omission, so the UI can say which provider it could not read.
-func (s *Service) Plans() []Plan {
+// SetSessions wires the answer to "which account does this session spend".
+// Startup wiring, called once before the service serves.
+func (s *Service) SetSessions(fn Sessions) { s.sessions = fn }
+
+// Plans is every provider that meters a subscription, in Registry order, read
+// for the account sessionID spends. There is always one entry per such provider
+// — a failed reading is a Status, not an omission, so the UI can say which
+// provider it could not read.
+//
+// An empty sessionID reads lich's own environment: the Settings screen asks
+// about the machine, not about a card.
+func (s *Service) Plans(sessionID string) []Plan {
+	account := Account{Read: true}
+	if sessionID != "" && s.sessions != nil {
+		account = s.sessions(sessionID)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.cached != nil && s.now().Sub(s.at) < cacheTTL {
-		return s.cached
+	key := cacheKey(account)
+	if cached, ok := s.cache[key]; ok && s.now().Sub(cached.at) < cacheTTL {
+		return cached.plans
 	}
-	plans := []Plan{s.claudePlan(), s.codexPlan()}
-	s.cached, s.at = plans, s.now()
+	plans := []Plan{s.claudePlan(account), s.codexPlan(account)}
+	s.cache[key] = reading{plans: plans, at: s.now()}
 	return plans
+}
+
+// cacheKey identifies the account a reading belongs to, so two sessions on the
+// same login share one reading — and a session on another login gets its own
+// instead of being served someone else's numbers. Every account lich cannot
+// identify shares the one key whose reading needs no request at all.
+func cacheKey(a Account) string {
+	if a.hidden() {
+		return "?"
+	}
+	values := make([]string, 0, len(accountVars))
+	for _, name := range accountVars {
+		values = append(values, a.Env[name])
+	}
+	return strings.Join(values, "\x00")
 }
 
 // plan is the common shape of a reading, before its windows are known.
@@ -135,8 +234,9 @@ func plan(id string) Plan {
 	return Plan{Provider: id, Name: name, Status: StatusOK}
 }
 
-// signedOut and failed are the two ways a reading ends without windows. Keeping
-// them as constructors keeps every caller's error path one line.
+// signedOut, failed and unknown are the three ways a reading ends without
+// windows. Keeping them as constructors keeps every caller's error path one
+// line.
 func signedOut(p Plan) Plan {
 	p.Status = StatusSignedOut
 	return p
@@ -147,11 +247,21 @@ func failed(p Plan) Plan {
 	return p
 }
 
+func unknown(p Plan) Plan {
+	p.Status = StatusUnknown
+	return p
+}
+
 // harnessFile locates a file a provider CLI keeps in its own state directory:
-// under the directory its environment variable names, else under home. Mirrors
+// under the directory its environment variable names, else under home. The
+// session's own environment wins over lich's — a wrapper binary exporting
+// another config dir is the whole reason this is not a plain os.Getenv. Mirrors
 // terminal.harnessDir, which resolves the same two directories for transcripts.
-func harnessFile(homeVar, sub string, name ...string) (string, bool) {
-	base := os.Getenv(homeVar)
+func harnessFile(env map[string]string, homeVar, sub string, name ...string) (string, bool) {
+	base := env[homeVar]
+	if base == "" {
+		base = os.Getenv(homeVar)
+	}
 	if base == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -162,13 +272,19 @@ func harnessFile(homeVar, sub string, name ...string) (string, bool) {
 	return filepath.Join(append([]string{base}, name...)...), true
 }
 
-// readJSON GETs url with the given headers and decodes the body into out. The
-// bool is "the endpoint rejected our token": a 401 or 403 is a login the user
-// has to redo, which every caller reports differently from a network failure.
-func (s *Service) readJSON(url, token string, headers map[string]string, out any) (authOK bool, err error) {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+// send performs one request with the given bearer token and headers, and hands
+// back the response for the caller to read. The bool is "the endpoint rejected
+// our token": a 401 or 403 is a login the user has to redo, which every caller
+// reports differently from a network failure. The body is closed here on every
+// path that returns no response.
+func (s *Service) send(method, url, token, body string, headers map[string]string) (*http.Response, bool, error) {
+	var payload io.Reader
+	if body != "" {
+		payload = strings.NewReader(body)
+	}
+	req, err := http.NewRequest(method, url, payload)
 	if err != nil {
-		return true, err
+		return nil, true, err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	for k, v := range headers {
@@ -176,15 +292,26 @@ func (s *Service) readJSON(url, token string, headers map[string]string, out any
 	}
 	resp, err := s.http.Do(req)
 	if err != nil {
-		return true, err
+		return nil, true, err
 	}
-	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return false, fmt.Errorf("usage endpoint answered %d", resp.StatusCode)
+		_ = resp.Body.Close()
+		return nil, false, fmt.Errorf("usage endpoint answered %d", resp.StatusCode)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return true, fmt.Errorf("usage endpoint answered %d", resp.StatusCode)
+		_ = resp.Body.Close()
+		return nil, true, fmt.Errorf("usage endpoint answered %d", resp.StatusCode)
 	}
+	return resp, true, nil
+}
+
+// readJSON GETs url with the given headers and decodes the body into out.
+func (s *Service) readJSON(url, token string, headers map[string]string, out any) (authOK bool, err error) {
+	resp, authOK, err := s.send(http.MethodGet, url, token, "", headers)
+	if err != nil {
+		return authOK, err
+	}
+	defer func() { _ = resp.Body.Close() }()
 	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
 		return true, fmt.Errorf("decode usage response: %w", err)
 	}

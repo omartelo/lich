@@ -11,6 +11,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 interface PlanQuotaProps {
   /** Which provider the active session runs; "" when none is active. */
   kind: SessionKind | ""
+  /** Whose plan to read: the active session, which may spend an account of its
+   * own when it runs a binary the user configured. */
+  sessionId: string
 }
 
 // PlanQuota is the footer's plan-usage slot: how much of the active session's
@@ -19,11 +22,13 @@ interface PlanQuotaProps {
 //
 // One window is shown, and it is the fullest one: a weekly cap about to run out
 // must not hide behind a session window that reset an hour ago. Nothing renders
-// at all for a provider that meters no subscription, or while the reading is
+// at all for a provider that meters no subscription, while the reading is
 // signed out or failed — the Settings screen is where a login is fixed, and a
-// status strip is the wrong place to be told to run a command.
-export function PlanQuota({ kind }: PlanQuotaProps) {
-  const plan = usePlanQuotaFor(kind || undefined)
+// status strip is the wrong place to be told to run a command — or for a
+// session whose account lich could not identify, where any number would be
+// somebody else's.
+export function PlanQuota({ kind, sessionId }: PlanQuotaProps) {
+  const plan = usePlanQuotaFor(kind || undefined, sessionId)
   const now = useNow()
   const hottest = plan && plan.status === "ok" ? hottestWindow(plan) : null
   if (!plan || !hottest) {

@@ -170,6 +170,21 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   those logins and never writes them: it does not refresh the token, so an expired one reads as signed out until
   the provider's own CLI rotates it. A reading is cached for five minutes because both endpoints rate-limit hard —
   the number on screen is up to that old, and nothing on it says so.
+- **Which account a session spends is read from its process, and only Linux answers**
+  (`internal/quota`, `internal/terminal/account.go`): the reading follows `/proc/<pid>/environ` of the process in
+  the session's PTY, so a wrapper binary that exports a login of its own is seen only there. macOS could answer
+  the same question through `KERN_PROCARGS2` and does not yet; Windows cannot at all. On both, a session running
+  a user-configured binary reports `unknown` and its gauge disappears from the footer — the alternative was the
+  default account's numbers under a session spending another plan, and silence is the failure that does not lie.
+  A card with no live process is in the same position until its PTY is up.
+- **Measuring a token-only login costs a request against the very plan it measures** (`internal/quota/claude.go`):
+  a long-lived OAuth token (`claude setup-token`) carries `user:inference` alone, so the usage route answers it
+  403 and the account is read the way Claude Code reads it for itself — one `max_tokens: 1` message, for the
+  rate-limit headers on the response. Reading the gauge therefore spends quota (negligibly) and appears in the
+  account's own usage, once per cache window. That request carries Claude Code's system prompt verbatim because
+  the API rejects an OAuth token without it — the same coupling as the user agent, and it fails closed, as a
+  failed reading. Headers carry the two account-wide windows and no plan name, so such a session shows no
+  model-scoped weekly cap and no "Max 5x" badge.
 - **The sandbox confines a working agent, not hostile code** (`internal/sandbox`): namespaces and mounts on
   Linux, a path policy on macOS, and nothing else — no seccomp filter, no Landlock ruleset. The network is
   never cut (the agent needs its API and the plugin's hooks report over loopback), so anything readable

@@ -92,6 +92,21 @@ func (s *Service) ProviderBin(providerID, projectID string) string {
 	return bin
 }
 
+// SessionCustomBin reports whether a session runs a binary the user configured
+// rather than the provider's own — the question the quota reader asks before
+// trusting lich's own login to say what that session spends (internal/quota).
+// A session row that cannot be read is not one: the reading it gates is the one
+// every session got before this existed.
+func (s *Service) SessionCustomBin(sessionID string) bool {
+	var kind, projectID string
+	if err := s.db.QueryRow(
+		`SELECT kind, project_id FROM sessions WHERE id = ?`, sessionID,
+	).Scan(&kind, &projectID); err != nil {
+		return false
+	}
+	return s.ProviderBin(kind, projectID) != ""
+}
+
 // binParked reports a layer switched off in one scope. An unreadable value is
 // not one: a layer the user configured keeps resolving rather than silently
 // falling through to a different binary.

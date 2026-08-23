@@ -11,6 +11,9 @@ const (
 	// codexUserAgent identifies the CLI this token belongs to, as the Anthropic
 	// route's does.
 	codexUserAgent = "codex_cli_rs/0.56.0"
+	// codexHomeVar is the environment variable a session's own process names
+	// its Codex state directory with.
+	codexHomeVar = "CODEX_HOME"
 )
 
 // codexCredentials is the part of ~/.codex/auth.json lich reads. As with
@@ -37,10 +40,14 @@ type codexWindow struct {
 	ResetAt int64 `json:"reset_at"`
 }
 
-// codexPlan reads Codex's quota off the login its CLI wrote.
-func (s *Service) codexPlan() Plan {
+// codexPlan reads Codex's quota off the login its CLI wrote, under the state
+// directory the session's own environment points at.
+func (s *Service) codexPlan(a Account) Plan {
 	p := plan(providers.Codex)
-	path, ok := harnessFile("CODEX_HOME", ".codex", "auth.json")
+	if a.hidden() {
+		return unknown(p)
+	}
+	path, ok := harnessFile(a.Env, codexHomeVar, ".codex", "auth.json")
 	if !ok {
 		return failed(p)
 	}

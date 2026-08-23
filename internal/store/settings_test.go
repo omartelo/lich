@@ -212,3 +212,40 @@ func TestSkipPermissionsIsScopedByCheckout(t *testing.T) {
 		t.Error("value \"1\" skips permissions, want only \"true\" to")
 	}
 }
+
+func TestSessionCustomBin(t *testing.T) {
+	svc := newTestStore(t)
+	if err := svc.AddProject("p1", "one", "/tmp/one"); err != nil {
+		t.Fatalf("add project: %v", err)
+	}
+	if err := svc.AddSession("p1", "s1", "card", providers.Claude, "/tmp/one", 0, ""); err != nil {
+		t.Fatalf("add session: %v", err)
+	}
+
+	// Nothing configured: the session runs the provider's own binary.
+	if svc.SessionCustomBin("s1") {
+		t.Error("unconfigured session reads as custom")
+	}
+	// A session lich has no row for is not custom either — the reading it gates
+	// is the one every session got before this existed.
+	if svc.SessionCustomBin("gone") {
+		t.Error("unknown session reads as custom")
+	}
+
+	// The binary configured for another provider is not this session's.
+	_ = svc.SetSetting(binKey(providers.Codex), globalScope, "/opt/codex")
+	if svc.SessionCustomBin("s1") {
+		t.Error("another provider's binary reads as this session's")
+	}
+
+	_ = svc.SetSetting(claudeBinKey, "p1", "/home/me/claude-work.sh")
+	if !svc.SessionCustomBin("s1") {
+		t.Error("a project override must read as custom")
+	}
+
+	// A parked layer is skipped exactly as ProviderBin skips it.
+	_ = svc.SetSetting(binOffKey(providers.Claude), "p1", "true")
+	if svc.SessionCustomBin("s1") {
+		t.Error("a parked binary must read as the provider's own")
+	}
+}

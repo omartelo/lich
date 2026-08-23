@@ -482,11 +482,13 @@ export interface QuotaWindow {
 }
 
 /** internal/quota.Plan — one provider's quota reading. Windows are empty for
- * every status other than "ok". */
+ * every status other than "ok"; "unknown" is a session lich cannot identify the
+ * account of — it runs a binary the user configured whose environment is out of
+ * reach — where the default account's numbers would be the wrong ones. */
 export interface QuotaPlan {
   provider: string
   name: string
   plan?: string
   windows?: QuotaWindow[]
-  status: "ok" | "signed-out" | "error"
+  status: "ok" | "signed-out" | "error" | "unknown"
 }

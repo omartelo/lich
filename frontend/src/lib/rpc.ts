@@ -466,10 +466,11 @@ export const Providers = {
 }
 
 export const Quota = {
-  /** Plan usage for every provider that meters a subscription. Served from a
-   * five-minute cache, so calling it often is cheap and asks nothing extra of
-   * endpoints that rate-limit. */
-  Plans: () => call<QuotaPlan[]>("quota.Plans", []),
+  /** Plan usage for every provider that meters a subscription, for the account
+   * a session spends — an empty id reads lich's own login, the machine-wide
+   * question. Served from a five-minute cache per account, so calling it often
+   * is cheap and asks nothing extra of endpoints that rate-limit. */
+  Plans: (sessionId: string) => call<QuotaPlan[]>("quota.Plans", [sessionId]),
 }
 
 export const Themes = {

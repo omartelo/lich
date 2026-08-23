@@ -165,6 +165,7 @@ type session struct {
 
 // Store is the persistence the terminal service depends on: the binary to spawn
 // for a provider in a project (empty return spawns the provider's default),
+// whether a given session runs one of those rather than the provider's own,
 // whether that spawn drops the provider's permission prompts and whether it runs
 // confined, that project's own directory, the dev-server port reserved for each
 // checkout, where to record the provider session id a PTY reports through its
@@ -173,6 +174,7 @@ type session struct {
 // them all.
 type Store interface {
 	ProviderBin(providerID, projectID string) string
+	SessionCustomBin(sessionID string) bool
 	SkipPermissions(providerID, projectID, cwd string) bool
 	ProjectPath(projectID string) string
 	WorktreePorts() map[string]int
