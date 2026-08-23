@@ -169,6 +169,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   environment of another process is out of reach, a session running a configured
   binary shows nothing rather than the wrong account's numbers. Codex sessions
   follow the same rule through `CODEX_HOME`.
+- **A keystroke no longer waits on a batching window that has nothing to batch.**
+  A session's output is collected into short windows so a burst — a full-screen
+  redraw, a build log — reaches the window as a couple of frames instead of
+  dozens. That window was charged to every write, the echo of a single keypress
+  on an otherwise silent terminal included, where there is no burst to collapse:
+  the character sat for the full 8 ms before it appeared. The first write after a
+  quiet window now goes out at once, and the window still batches everything the
+  burst piles up behind it — a lone write's echo went from 8034 µs to under 2 µs.
+  A hidden session is deliberately unchanged: it does not paint, so it has no
+  latency to protect and batches as hard as before.
 - **Removing a worktree no longer fails when the agent in it has just exited.** A
   session's terminal is released twice — once by the close you asked for, once by
   the reap of the process that ended — and whichever of the two arrived second

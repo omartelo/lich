@@ -15,29 +15,112 @@ func captureEmit(buf int) (func([]byte), chan []byte) {
 	}, emits
 }
 
-// TestCoalescerVisibleBatchesBurstOnShortTimer pairs a short visible interval
-// with an hour-long hidden one, so a flush also proves the timer picked the
-// visible cadence.
+// TestCoalescerVisibleBatchesBurstOnShortTimer is the trailing half of the
+// contract: everything written inside the window behind the leading write
+// batches into a single emission. It pairs a short visible interval with an
+// hour-long hidden one, so the flush also proves the timer picked the visible
+// cadence.
 func TestCoalescerVisibleBatchesBurstOnShortTimer(t *testing.T) {
-	emit, emits := captureEmit(1)
-	c := newCoalescer(emit, 10*time.Millisecond, time.Hour)
+	emit, emits := captureEmit(3)
+	c := newCoalescer(emit, 20*time.Millisecond, time.Hour)
 
-	c.Write([]byte("hel"))
-	c.Write([]byte("lo"))
+	c.Write([]byte("h"))
+	if got := <-emits; string(got) != "h" {
+		t.Fatalf("leading flush = %q, want %q", got, "h")
+	}
 
-	select {
-	case got := <-emits:
-		t.Fatalf("visible write emitted %q before the flush interval", got)
-	default:
+	for _, chunk := range []string{"e", "l", "lo"} {
+		c.Write([]byte(chunk))
+		select {
+		case got := <-emits:
+			t.Fatalf("burst write emitted %q before the flush interval", got)
+		default:
+		}
 	}
 
 	select {
 	case got := <-emits:
-		if string(got) != "hello" {
-			t.Fatalf("flushed %q, want %q", got, "hello")
+		if string(got) != "ello" {
+			t.Fatalf("flushed %q, want %q", got, "ello")
 		}
 	case <-time.After(time.Second):
 		t.Fatal("visible timer flush never happened")
+	}
+	select {
+	case got := <-emits:
+		t.Fatalf("burst emitted twice, second was %q", got)
+	default:
+	}
+}
+
+// TestCoalescerVisibleLeadingEdgeEmitsIdleWriteAtOnce pins the leading edge: a
+// lone write on an idle visible terminal — a keystroke echo — has no burst to
+// collapse, so it must not pay the window.
+func TestCoalescerVisibleLeadingEdgeEmitsIdleWriteAtOnce(t *testing.T) {
+	emit, emits := captureEmit(1)
+	c := newCoalescer(emit, time.Hour, time.Hour)
+
+	c.Write([]byte("k"))
+
+	select {
+	case got := <-emits:
+		if string(got) != "k" {
+			t.Fatalf("leading flush = %q, want %q", got, "k")
+		}
+	default:
+		t.Fatal("idle write waited for the flush interval instead of emitting at once")
+	}
+}
+
+// TestCoalescerLeadingEdgeWindowBoundary pins both sides of the idle check: a
+// write a whole window after the last emission is leading, one still inside
+// the window is not.
+func TestCoalescerLeadingEdgeWindowBoundary(t *testing.T) {
+	const window = 20 * time.Millisecond
+
+	atEdge, atEdgeEmits := captureEmit(1)
+	edge := newCoalescer(atEdge, window, time.Hour)
+	edge.lastEmit = time.Now().Add(-window)
+
+	edge.Write([]byte("edge"))
+
+	select {
+	case got := <-atEdgeEmits:
+		if string(got) != "edge" {
+			t.Fatalf("edge flush = %q, want %q", got, "edge")
+		}
+	default:
+		t.Fatal("a write exactly one window after the last emission did not take the leading edge")
+	}
+
+	// An hour-long window keeps the inside-the-window side immune to
+	// scheduling jitter: this write is a whole hour short of the edge.
+	inWindow, inWindowEmits := captureEmit(1)
+	inside := newCoalescer(inWindow, time.Hour, time.Hour)
+	inside.lastEmit = time.Now()
+
+	inside.Write([]byte("early"))
+
+	select {
+	case got := <-inWindowEmits:
+		t.Fatalf("a write inside the window took the leading edge and emitted %q", got)
+	default:
+	}
+}
+
+// TestCoalescerHiddenNeverTakesLeadingEdge: a hidden terminal does not paint,
+// so it has no echo latency to protect and batches hard instead.
+func TestCoalescerHiddenNeverTakesLeadingEdge(t *testing.T) {
+	emit, emits := captureEmit(1)
+	c := newCoalescer(emit, time.Hour, time.Hour)
+	c.SetVisible(false)
+
+	c.Write([]byte("bg"))
+
+	select {
+	case got := <-emits:
+		t.Fatalf("hidden write took the leading edge and emitted %q", got)
+	default:
 	}
 }
 
@@ -192,4 +275,24 @@ func TestCoalescerConcurrentWritesAndFlips(t *testing.T) {
 	if got, want := emitted.Len(), writers*writes; got != want {
 		t.Fatalf("emitted %d bytes, want %d", got, want)
 	}
+}
+
+// BenchmarkEchoLatency measures what a keystroke echo pays: the wall time from
+// a lone write on an idle visible coalescer to its emission, at the cadence
+// production runs.
+func BenchmarkEchoLatency(b *testing.B) {
+	emitted := make(chan time.Time, 1)
+	c := newCoalescer(func([]byte) { emitted <- time.Now() }, visibleFlushInterval, hiddenFlushInterval)
+	defer c.Close()
+
+	var total time.Duration
+	samples := 0
+	for b.Loop() {
+		time.Sleep(visibleFlushInterval) // lapse the window: the next write is a fresh echo
+		start := time.Now()
+		c.Write([]byte("x"))
+		total += (<-emitted).Sub(start)
+		samples++
+	}
+	b.ReportMetric(float64(total.Microseconds())/float64(samples), "us/echo")
 }

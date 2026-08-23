@@ -23,9 +23,11 @@ const (
 )
 
 // coalescer batches PTY output before it is emitted to the frontend, on a
-// short cadence while visible and a long one while hidden. emit is called with
-// the mutex held, so emissions are strictly ordered; emit must not retain the
-// slice.
+// short cadence while visible and a long one while hidden. It is leading +
+// trailing while visible: the first write after a silent window goes out at
+// once, and the timer then batches whatever the burst adds behind it. emit is
+// called with the mutex held, so emissions are strictly ordered; emit must not
+// retain the slice.
 type coalescer struct {
 	mu           sync.Mutex
 	emit         func(data []byte)
@@ -35,8 +37,12 @@ type coalescer struct {
 	pending      []byte
 	// timer is armed (one-shot) only while data is pending, so an idle
 	// session costs nothing.
-	timer  *time.Timer
-	closed bool
+	timer *time.Timer
+	// lastEmit dates the previous emission, so a write can tell an idle
+	// terminal (nothing to batch, take the leading edge) from one still
+	// inside a burst's window. Its zero value makes the first write leading.
+	lastEmit time.Time
+	closed   bool
 }
 
 // newCoalescer returns a coalescer that starts visible — sessions spawn lazily
@@ -45,17 +51,22 @@ func newCoalescer(emit func(data []byte), visibleEvery, hiddenEvery time.Duratio
 	return &coalescer{emit: emit, visibleEvery: visibleEvery, hiddenEvery: hiddenEvery, visible: true}
 }
 
-// Write ingests one PTY read. Output buffers until the flush timer fires — at
-// the current visibility's cadence — visibility flips to visible, or the
-// buffer overflows. data may be reused by the caller after Write returns.
+// Write ingests one PTY read. A visible write that lands on an idle terminal
+// is emitted synchronously — there is no burst to collapse, so the window
+// would be latency bought for nothing. Otherwise output buffers until the
+// flush timer fires — at the current visibility's cadence — visibility flips
+// to visible, or the buffer overflows. A hidden terminal never takes the
+// leading edge: it does not paint, so it has no latency to protect. data may
+// be reused by the caller after Write returns.
 func (c *coalescer) Write(data []byte) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.closed || len(data) == 0 {
 		return
 	}
+	leading := c.visible && len(c.pending) == 0 && time.Since(c.lastEmit) >= c.visibleEvery
 	c.pending = append(c.pending, data...)
-	if len(c.pending) >= maxPendingBytes {
+	if leading || len(c.pending) >= maxPendingBytes {
 		c.flushLocked()
 		return
 	}
@@ -107,6 +118,7 @@ func (c *coalescer) flushLocked() {
 	}
 	c.emit(c.pending)
 	c.pending = nil
+	c.lastEmit = time.Now()
 }
 
 // onTimer flushes hidden output when the batch window elapses. A callback that
