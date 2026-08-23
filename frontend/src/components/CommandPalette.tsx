@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Folder, FolderX, MessageSquareText } from "lucide-react"
+import { Folder, FolderX, GitBranch, MessageSquareText, TriangleAlert } from "lucide-react"
 import { useProjects } from "@/providers/projects"
 import { useSettings } from "@/providers/settings"
 import { useHotkey } from "@/lib/use-hotkey"
@@ -12,6 +12,8 @@ import {
 import { SessionStatusIcon } from "@/components/sidebar/SessionStatusIcon"
 import {
   filterPalette,
+  historyAction,
+  historyRows,
   nextTab,
   paletteGroups,
   paletteSessions,
@@ -19,16 +21,21 @@ import {
   PALETTE_TABS,
   rankSessions,
   rowKey,
+  type PaletteHistory,
   type PaletteMessage,
   type PaletteRow,
   type PaletteSession,
   type PaletteTab,
 } from "@/lib/session/command-palette"
 import { useTranscriptSearch } from "@/lib/session/use-transcript-search"
+import { toast } from "sonner"
 import { PickerDialog, PickerEmpty, PickerGroup, PickerRow } from "@/components/common/PickerDialog"
-import type { Project, RecentProject } from "@/lib/api-types"
+import { agoLabel } from "@/lib/ago"
+import { displayPath } from "@/lib/paths"
+import { isSessionKind } from "@/lib/session/sessions"
+import type { ClosedSession, Project, RecentProject } from "@/lib/api-types"
 import { ProjectService, Store } from "@/lib/rpc"
-import { cn } from "@/lib/utils"
+import { cn, errorText } from "@/lib/utils"
 
 // CommandPalette is the app-wide quick switcher: one shortcut (Ctrl/Cmd+K by
 // default, rebindable in Settings) to jump to any session across every project,
@@ -40,7 +47,7 @@ import { cn } from "@/lib/utils"
 // hotkeys) so it beats the shell binding it shadows; while open, focus is
 // trapped in the dialog and keys never reach the terminal.
 export function CommandPalette() {
-  const { projects, sessions, activateSession, openRecent } = useProjects()
+  const { projects, sessions, activateSession, openRecent, resumeClosedSession } = useProjects()
   const { hotkeys } = useSettings()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
@@ -48,6 +55,8 @@ export function CommandPalette() {
   const [tab, setTab] = useState<PaletteTab>("All")
   const [selected, setSelected] = useState(0)
   const [closed, setClosed] = useState<RecentProject[]>([])
+  const [parked, setParked] = useState<ClosedSession[]>([])
+  const [branches, setBranches] = useState<Readonly<Record<string, string>>>({})
   const [running, setRunning] = useState<ReadonlySet<string>>(new Set())
   const [missing, setMissing] = useState<ReadonlySet<string>>(new Set())
 
@@ -58,33 +67,59 @@ export function CommandPalette() {
     setSelected(0)
   })
 
-  // The closed projects live in the store, not in the projects state, so they
-  // are fetched per opening — a project closed or reopened since the last one
-  // moves in or out of this list. Their directories are read with them: one
-  // whose folder moved is relocated rather than reopened, and the row says so.
+  // The closed projects and the parked sessions both live in the store, not in
+  // the workspace state, so they are fetched per opening — anything closed or
+  // reopened since the last one moves in or out of these lists. Their
+  // directories are read with them: a project whose folder moved is relocated
+  // rather than reopened, and a session whose checkout is gone says so.
+  //
+  // The branches are asked for in one batch rather than by subscribing each row
+  // to the git poller a live card uses: that poll is three calls per path per
+  // second, and this list is long and on screen for as long as it takes to type.
   useEffect(() => {
     if (!open) {
       return
     }
     let live = true
-    void Store.RecentProjects().then((rows) => {
-      const recents = rows ?? []
-      if (!live) {
-        return
-      }
-      setClosed(recents)
-      // Asked for after the rows are up: the mark is what a row says about
-      // itself, and a failed check must not cost the palette its entries.
-      void ProjectService.Missing(recents.map((row) => row.path)).then((gone) => {
-        if (live) {
-          setMissing(new Set(gone ?? []))
+    void Promise.all([Store.RecentProjects(), Store.ClosedSessions()]).then(
+      ([recentRows, parkedRows]) => {
+        const recents = recentRows ?? []
+        const history = parkedRows ?? []
+        if (!live) {
+          return
         }
-      })
-    })
+        setClosed(recents)
+        setParked(history)
+        // Asked for after the rows are up: what git and the filesystem say is
+        // what a row says about itself, and a failed check must not cost the
+        // palette its entries.
+        const paths = history.map((row) => row.path).filter(Boolean)
+        void ProjectService.Missing([...recents.map((row) => row.path), ...paths]).then((gone) => {
+          if (live) {
+            setMissing(new Set(gone ?? []))
+          }
+        })
+        void ProjectService.BranchesOf(paths).then((named) => {
+          if (live) {
+            setBranches(named ?? {})
+          }
+        })
+      },
+    )
     return () => {
       live = false
     }
   }, [open])
+
+  // Forgetting drops the row from the list in place rather than closing the
+  // palette: the whole point of the action is that there are usually several of
+  // them, left by worktrees removed outside lich.
+  const forget = (session: PaletteHistory) => {
+    setParked((rows) => rows.filter((row) => row.id !== session.id))
+    void Store.ForgetSession(session.id).catch((error: unknown) => {
+      toast.error(`Could not forget ${session.label}: ${errorText(error)}`)
+    })
+  }
 
   const flat = useMemo(() => paletteSessions(projects, sessions), [projects, sessions])
   // Which sessions hold a turn, sampled once per opening rather than
@@ -99,9 +134,10 @@ export function CommandPalette() {
     }
   }, [open])
   const all = useMemo(() => rankSessions(flat, running), [flat, running])
+  const history = useMemo(() => historyRows(parked, branches, missing), [parked, branches, missing])
   const results = useMemo(
-    () => filterPalette(query, all, projects, closed),
-    [query, all, projects, closed],
+    () => filterPalette(query, all, projects, closed, history),
+    [query, all, projects, closed, history],
   )
   // What was said inside the sessions, not just their names. It arrives after
   // the name-matched groups (it is a disk read behind a debounce), so it is
@@ -154,6 +190,17 @@ export function CommandPalette() {
         close()
         void openRecent(row.project)
         return
+      // A resume navigates on its own, so the palette closes with it. Forgetting
+      // does not: it drops one row and leaves the list up, because a workspace
+      // with one stale row usually has several.
+      case "history":
+        if (historyAction(row.session) === "forget") {
+          forget(row.session)
+          return
+        }
+        close()
+        void resumeClosedSession(row.session)
+        return
     }
   }
 
@@ -170,6 +217,14 @@ export function CommandPalette() {
     setTab("All")
     setSelected(0)
   }
+
+  // What Enter does with the row the cursor is on. Every row but one opens
+  // something; the exception is a history row whose checkout is gone, which can
+  // only be dropped — and the hint bar has to say so before it is pressed.
+  const actionHint = (() => {
+    const row = rows[active]
+    return row?.kind === "history" ? historyAction(row.session) : "open"
+  })()
 
   const onInputKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === "ArrowDown") {
@@ -203,14 +258,28 @@ export function CommandPalette() {
       query={query}
       onQueryChange={setQuery}
       onKeyDown={onInputKeyDown}
-      actionHint="open"
+      actionHint={actionHint}
       filters={<FilterTabs tab={tab} counts={counts} onPick={setTab} />}
     >
       {total === 0 ? (
-        <PickerEmpty>
-          No matches for <span className="font-mono text-foreground/80">{query.trim()}</span>
-          {tab !== "All" && <> in {tab.toLowerCase()}</>}
-        </PickerEmpty>
+        // Two different empties, deliberately not sharing a sentence: one says
+        // the query found nothing, the other says nothing has ever been closed.
+        // The second is the only place the retention rule is stated, which is
+        // where it belongs — the moment somebody wonders what this remembers.
+        tab === "History" && parked.length === 0 ? (
+          <PickerEmpty>
+            <span className="block text-foreground">Nothing closed yet</span>
+            <span className="mx-auto mt-2 block max-w-[44ch] leading-relaxed">
+              Close a session and it waits here — its branch, its agent and its conversation — until
+              its worktree is removed.
+            </span>
+          </PickerEmpty>
+        ) : (
+          <PickerEmpty>
+            No matches for <span className="font-mono text-foreground/80">{query.trim()}</span>
+            {tab !== "All" && <> in {tab.toLowerCase()}</>}
+          </PickerEmpty>
+        )
       ) : (
         sections.map(({ group, offset }) => (
           <PickerGroup
@@ -331,7 +400,77 @@ function ListRow({
           onRun={onRun}
         />
       )
+    case "history":
+      return (
+        <HistoryRow session={row.session} selected={selected} onSelect={onSelect} onRun={onRun} />
+      )
   }
+}
+
+// A closed session names itself the way its card did — the provider mark, the
+// label, the project and the checkout — plus the two facts a card never needed:
+// the branch, because a worktree keeps the name it was created with while the
+// branch moves on, and when it was closed, because that is what turns a list of
+// old work into one somebody can find something in.
+//
+// The provider mark carries no status ring: nothing is running in a closed
+// session, so the ring has nothing to report, and its absence is what tells a
+// history row from a live one at a glance. That is also why the unread flag is
+// a plain false — an unread turn is a turn somebody has not looked at yet, and
+// closing the session is looking at it.
+function HistoryRow({
+  session,
+  selected,
+  onSelect,
+  onRun,
+}: {
+  session: PaletteHistory
+  selected: boolean
+  onSelect: () => void
+  onRun: () => void
+}) {
+  const closedAt = agoLabel(session.closedAt)
+  return (
+    <PickerRow selected={selected} onSelect={onSelect} onRun={onRun}>
+      <SessionStatusIcon
+        kind={isSessionKind(session.kind) ? session.kind : "claude"}
+        status={null}
+        unread={false}
+      />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-sm">{session.label}</span>
+        <span className="flex min-w-0 items-center gap-1.5 font-mono text-xs text-muted-foreground">
+          <span className="shrink-0 text-foreground/70">{session.projectName}</span>
+          <span className="shrink-0 opacity-45">·</span>
+          {/* The checkout being gone replaces the branch rather than sitting
+              beside it: there is no branch to read off a directory that is not
+              there, and it is the same absence that makes the row unresumable. */}
+          {session.gone ? (
+            <span className="flex shrink-0 items-center gap-1 text-amber-500">
+              <TriangleAlert className="size-3 shrink-0" />
+              checkout gone
+            </span>
+          ) : (
+            session.branch && (
+              <span className="flex shrink-0 items-center gap-1">
+                <GitBranch className="size-3 shrink-0" />
+                {session.branch}
+              </span>
+            )
+          )}
+          {(session.gone || session.branch) && <span className="shrink-0 opacity-45">·</span>}
+          <span className={cn("truncate", session.gone && "opacity-60")}>
+            {displayPath(session.path)}
+          </span>
+        </span>
+      </span>
+      {closedAt && (
+        <span className="shrink-0 font-mono text-[0.625rem] tabular-nums text-muted-foreground">
+          {closedAt}
+        </span>
+      )}
+    </PickerRow>
+  )
 }
 
 function SessionRow({

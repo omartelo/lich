@@ -165,6 +165,33 @@ func TestBranch(t *testing.T) {
 	}
 }
 
+// TestBranchesOf proves the batch answers one entry per checkout that names a
+// branch and leaves the rest out entirely — the history rows read "no branch"
+// from a missing key, so a path mapped to "" would draw an empty badge instead
+// of none at all.
+func TestBranchesOf(t *testing.T) {
+	repo := t.TempDir()
+	if out, err := exec.Command("git", "init", "-b", "trunk", repo).CombinedOutput(); err != nil {
+		t.Skipf("git init unavailable: %v (%s)", err, out)
+	}
+	notARepo := t.TempDir()
+	gone := filepath.Join(t.TempDir(), "removed-behind-our-back")
+
+	got := New(nil).BranchesOf([]string{repo, notARepo, gone})
+	if len(got) != 1 || got[repo] != "trunk" {
+		t.Errorf("BranchesOf = %v, want only the real checkout, on trunk", got)
+	}
+}
+
+// TestBranchesOfNothing keeps the empty call cheap and non-nil: the window calls
+// it on every palette opening, including the one where no session has ever been
+// closed.
+func TestBranchesOfNothing(t *testing.T) {
+	if got := New(nil).BranchesOf(nil); got == nil || len(got) != 0 {
+		t.Errorf("BranchesOf(nil) = %v, want an empty map", got)
+	}
+}
+
 // TestParsePullRequest proves the gh output decoder: a real PR yields its number
 // and URL, while malformed JSON, an empty object, and a PR missing its number or
 // URL all collapse to nil so the badge hides instead of showing garbage.

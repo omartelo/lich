@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest"
 import {
   filterPalette,
+  historyAction,
+  historyRows,
   matchesQuery,
   nextTab,
+  type PaletteHistory,
   paletteGroups,
   paletteMessages,
   paletteSessions,
@@ -10,7 +13,7 @@ import {
   rankSessions,
   rowKey,
 } from "./command-palette"
-import type { Project } from "@/lib/api-types"
+import type { ClosedSession, Project } from "@/lib/api-types"
 import type { SessionState } from "./sessions"
 
 const projects: Project[] = [
@@ -210,8 +213,9 @@ describe("paletteTabCount", () => {
 describe("nextTab", () => {
   it("wraps at both ends", () => {
     expect(nextTab("All", 1)).toBe("Sessions")
-    expect(nextTab("Messages", 1)).toBe("All")
-    expect(nextTab("All", -1)).toBe("Messages")
+    expect(nextTab("Messages", 1)).toBe("History")
+    expect(nextTab("History", 1)).toBe("All")
+    expect(nextTab("All", -1)).toBe("History")
   })
 })
 
@@ -261,5 +265,127 @@ describe("paletteMessages", () => {
   it("is empty when the search found nothing or never ran", () => {
     expect(paletteMessages([], all)).toEqual([])
     expect(paletteMessages(null, all)).toEqual([])
+  })
+})
+
+const parked: ClosedSession[] = [
+  {
+    id: "h1",
+    projectId: "p1",
+    projectName: "lich",
+    projectPath: "/home/u/try/skipo",
+    label: "Wire the relay inbox",
+    kind: "claude",
+    path: "/home/u/wt/lich/relay-inbox",
+    closedAt: 1_700_000_200,
+  },
+  {
+    id: "h2",
+    projectId: "p1",
+    projectName: "lich",
+    projectPath: "/home/u/try/skipo",
+    label: "Conpty handle recycling",
+    kind: "claude",
+    path: "/home/u/wt/lich/conpty",
+    closedAt: 1_700_000_100,
+  },
+  {
+    id: "h3",
+    projectId: "p2",
+    projectName: "revu",
+    projectPath: "/home/u/try/revu",
+    label: "vitest --ui",
+    kind: "shell",
+    path: "/home/u/wt/revu/gone",
+    closedAt: 1_700_000_000,
+  },
+]
+
+const parkedBranches = {
+  "/home/u/wt/lich/relay-inbox": "feat/relay-inbox",
+  "/home/u/wt/lich/conpty": "fix/conpty-handle",
+}
+
+describe("historyRows", () => {
+  it("hangs the live branch off each parked row, and marks the checkouts that are gone", () => {
+    const rows = historyRows(parked, parkedBranches, new Set(["/home/u/wt/revu/gone"]))
+    expect(rows.map((r) => [r.id, r.branch, r.gone])).toEqual([
+      ["h1", "feat/relay-inbox", false],
+      ["h2", "fix/conpty-handle", false],
+      ["h3", "", true],
+    ])
+  })
+
+  it("leaves a checkout that is present but nameless unmarked — no branch is not gone", () => {
+    const rows = historyRows(parked.slice(0, 1), {}, new Set())
+    expect(rows[0]?.branch).toBe("")
+    expect(rows[0]?.gone).toBe(false)
+  })
+
+  it("survives a store that answered before git did", () => {
+    expect(historyRows([], {}, new Set())).toEqual([])
+    expect(historyRows(parked, {}, new Set())).toHaveLength(3)
+  })
+})
+
+describe("history search", () => {
+  const rows = historyRows(parked, parkedBranches, new Set())
+
+  it("narrows on the branch, which the path cannot stand in for", () => {
+    const hit = filterPalette("conpty-handle", [], [], [], rows).history
+    expect(hit.map((h) => h.id)).toEqual(["h2"])
+  })
+
+  it("narrows on the label, the project and the path too", () => {
+    expect(filterPalette("relay", [], [], [], rows).history.map((h) => h.id)).toEqual(["h1"])
+    expect(filterPalette("revu", [], [], [], rows).history.map((h) => h.id)).toEqual(["h3"])
+    expect(filterPalette("wt/lich", [], [], [], rows).history.map((h) => h.id)).toEqual([
+      "h1",
+      "h2",
+    ])
+  })
+
+  it("takes every token, so two words narrow further than one", () => {
+    expect(filterPalette("lich relay", [], [], [], rows).history.map((h) => h.id)).toEqual(["h1"])
+    expect(filterPalette("lich nothing", [], [], [], rows).history).toEqual([])
+  })
+
+  it("is empty rather than everything when no history was loaded", () => {
+    expect(filterPalette("relay", [], [], []).history).toEqual([])
+  })
+})
+
+describe("the History tab", () => {
+  const rows = historyRows(parked, parkedBranches, new Set())
+  const results = filterPalette("", [], projects, closed, rows)
+
+  it("lists the parked sessions whole, under their own heading", () => {
+    const groups = paletteGroups("History", results, [])
+    expect(groups).toHaveLength(1)
+    expect(groups[0]?.label).toBe("Closed sessions")
+    expect(groups[0]?.rows.map((r) => rowKey(r))).toEqual(["h1", "h2", "h3"])
+  })
+
+  it("keeps history out of All, which is the mid-work posture", () => {
+    const kinds = paletteGroups("All", results, []).flatMap((g) => g.rows.map((r) => r.kind))
+    expect(kinds).not.toContain("history")
+  })
+
+  it("counts what it holds", () => {
+    expect(paletteTabCount("History", results, [])).toBe(3)
+  })
+
+  it("draws no group at all when nothing has ever been closed", () => {
+    const none = filterPalette("", [], projects, closed, [])
+    expect(paletteGroups("History", none, [])).toEqual([])
+  })
+})
+
+describe("historyAction", () => {
+  const rows = historyRows(parked, parkedBranches, new Set(["/home/u/wt/revu/gone"]))
+
+  it("resumes a row whose checkout is still there and forgets one whose is not", () => {
+    expect(historyAction(rows[0] as PaletteHistory)).toBe("resume")
+    expect(historyAction(rows[2] as PaletteHistory)).toBe("forget")
   })
 })

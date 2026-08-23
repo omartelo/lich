@@ -251,3 +251,33 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   cask's `depends_on` and the bundle's `LSMinimumSystemVersion` say 13.0 because the compiler does —
   both move with the next Go bump, and a machine below the floor is refused by Homebrew rather than
   by a crash.
+- **A closed session's history reaches back a hundred rows, and the search never goes deeper**
+  (`internal/store/store.go`, `frontend/src/lib/session/command-palette.ts`): the History tab is handed the
+  hundred most recently closed sessions when it opens and filters those in the window, the bargain the closed
+  projects list already makes. So a session closed further back than that is in the database, counts against
+  nothing, and cannot be found — typing its name narrows a list it was never in. The fix when it bites is a
+  `LIKE` in the query, not a bigger number; nothing warns that the list was cut, because a cut that is always
+  in force is not news.
+- **The history's branch is read live, so a row whose checkout is gone has none** (`internal/project.BranchesOf`):
+  the branch is not stored — a worktree keeps the name it was created with while an agent moves the branch
+  inside it, so the directory cannot answer and only git can. The batch runs once per opening, which also means
+  a branch that moved while the palette is up is stale until it is reopened. A checkout removed behind lich's
+  back has no branch to read and no session to resume: that row says `checkout gone` and offers to forget
+  itself, which is the only way such a row is ever collected — `PurgeWorktreeSessions` never ran for it,
+  because the removal never went through the app.
+- **Parked rows are never swept, and their dropped-file copies expire on the clock instead of at the close**
+  (`internal/store/mutations.go`, `internal/drop`): every close now parks a row, so the sessions table grows
+  monotonically with the sessions a workspace has ever opened — a few hundred bytes each, which is a megabyte
+  or so a year and deliberately not worth a retention timer. Nothing deletes history on a schedule; a row goes
+  when its worktree is removed through lich, when the user forgets it, or when its project is deleted. The one
+  thing that changed underneath is `internal/drop`: `SetSessionGone` still does not fire on a park, so a plain
+  close no longer takes that session's dropped-file copies with it and they fall to the three-day prune. They
+  are unreachable either way — a resume comes back under a fresh id, so the old copies directory can never be
+  addressed again — but they now sit on disk for up to three days rather than going at the close.
+- **The History tab searches names, never what was said** (`internal/terminal/search.go`): the Messages tab
+  reads a 4 MB tail per session per keystroke, and it is pointed at the sessions the palette can route to —
+  the open ones. History is the long list, so widening the transcript search to it would put a hundred disk
+  reads behind every character typed. The parked row keeps its `provider_session_id`, so the transcript is
+  still there to be searched by whatever does it later; and that search is Claude-only today
+  (`claudeTranscriptPath`) while `canResume` locates all five providers, so widening it would inherit that gap
+  rather than close it.

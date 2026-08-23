@@ -308,6 +308,25 @@ export interface StoredSession {
   originLabel: string
 }
 
+/** internal/store.ClosedSession — one parked session offered for resuming. What
+ * identifies it in a list somebody is browsing: the project rides along because
+ * history spans every project at once, closed ones included. No branch — it
+ * lives in git and the window reads it off the checkout (ProjectService.Branches). */
+export interface ClosedSession {
+  id: string
+  projectId: string
+  projectName: string
+  /** The project's own directory, so resuming a session of a closed project can
+   * reopen that project first — and ask where it went if it has moved. */
+  projectPath: string
+  label: string
+  kind: string
+  path: string
+  /** Unix seconds; 0 for a row parked before lich recorded the close, which
+   * sorts last and is drawn as no date rather than as 1970. */
+  closedAt: number
+}
+
 /** internal/terminal.TranscriptMatch — a session whose conversation mentions a
  * search query, with its newest matching message. */
 export interface TranscriptMatch {

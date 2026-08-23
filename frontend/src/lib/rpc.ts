@@ -11,6 +11,7 @@ import type {
   BaseStatus,
   BinaryCheck,
   BranchRules,
+  ClosedSession,
   Branches,
   CommitIdentity,
   DetectedProvider,
@@ -177,6 +178,10 @@ export const ProjectService = {
   PickSaveFile: (title: string, defaultName: string) =>
     call<string>("project.PickSaveFile", [title, defaultName]),
   Branch: (path: string) => call<string>("project.Branch", [path]),
+  /** Branch for several checkouts at once, keyed by path; a checkout that names
+   * none is left out. For the lists that want each row's branch once as it is
+   * drawn, rather than the per-path poll a live card subscribes to. */
+  BranchesOf: (paths: string[]) => call<Record<string, string>>("project.BranchesOf", [paths]),
   Diff: (path: string) => call<DiffStats>("project.Diff", [path]),
   /** How far the checkout's base branch has moved and what a merge would
    * collide on. null when the repository has no origin to measure against. */
@@ -342,6 +347,16 @@ export const Store = {
   /** Resume a parked worktree session under a fresh id, or null when none. */
   ReopenWorktreeSession: (projectID: string, path: string, newSessionID: string) =>
     call<StoredSession | null>("store.ReopenWorktreeSession", [projectID, path, newSessionID]),
+  /** The parked sessions, last closed first — the history the palette browses.
+   * Capped store-side, so this is also how far back a search can reach. */
+  ClosedSessions: () => call<ClosedSession[] | null>("store.ClosedSessions", []),
+  /** Resume one parked session by its own id, or null when it is no longer
+   * parked — another window resumed it, or its worktree was removed. */
+  ReopenSession: (sessionID: string, newSessionID: string) =>
+    call<StoredSession | null>("store.ReopenSession", [sessionID, newSessionID]),
+  /** Delete one parked session for good. Refused on a session that is open: a
+   * card on screen is closed, never forgotten. */
+  ForgetSession: (sessionID: string) => call<null>("store.ForgetSession", [sessionID]),
   /** Drop every session row for a worktree path when the worktree is removed. */
   PurgeWorktreeSessions: (projectID: string, path: string) =>
     call<null>("store.PurgeWorktreeSessions", [projectID, path]),

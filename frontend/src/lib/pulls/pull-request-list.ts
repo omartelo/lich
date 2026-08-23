@@ -1,4 +1,5 @@
 import type { PullRequestSummary } from "@/lib/api-types"
+import { agoUnit } from "@/lib/ago"
 import { parseEnumPref, readPref, writePref } from "@/lib/prefs"
 
 // The list column's own logic: which rows a quick filter and the search box
@@ -236,24 +237,12 @@ export function sortPullRequests(
 // updatedAgo renders how long ago a pull request last moved, at the coarsest
 // unit that still says something — a row has space for "3h", not for a date and
 // a time. now is injectable so a test does not depend on the clock.
+//
+// The scale itself is shared with the palette's closed sessions (lib/ago.ts):
+// what differs here is only the input, gh's ISO timestamp.
 export function updatedAgo(updatedAt: string, now: number = Date.now()): string {
   const at = Date.parse(updatedAt)
-  if (Number.isNaN(at)) {
-    return ""
-  }
-  const minutes = Math.floor((now - at) / 60_000)
-  if (minutes < 1) {
-    return "now"
-  }
-  if (minutes < 60) {
-    return `${minutes}m`
-  }
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) {
-    return `${hours}h`
-  }
-  const days = Math.floor(hours / 24)
-  return days < 7 ? `${days}d` : `${Math.floor(days / 7)}w`
+  return Number.isNaN(at) ? "" : agoUnit(now - at)
 }
 
 // Which order the column is in is a UI preference, so it lives in the page's

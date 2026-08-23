@@ -196,6 +196,24 @@ func (s *Service) Missing(paths []string) []string {
 	return gone
 }
 
+// BranchesOf answers Branch for several checkouts at once, keyed by path; a path
+// that names no branch — gone, not a repository, a detached HEAD — is left out
+// rather than mapped to "", so a caller reads "no branch" from the absence.
+//
+// The batch exists because the list that asks is a list of parked sessions: it
+// wants each row's branch once, when it is drawn, not the per-path poll a live
+// card subscribes to (frontend/src/lib/git/use-git-status.ts). Three RPCs per
+// row per second is what that poll costs, and a history list is long.
+func (s *Service) BranchesOf(paths []string) map[string]string {
+	branches := map[string]string{}
+	for _, path := range paths {
+		if branch := s.Branch(path); branch != "" {
+			branches[path] = branch
+		}
+	}
+	return branches
+}
+
 // PickFile shows the native file picker and returns the chosen file path, or ""
 // if the user cancels the dialog.
 func (s *Service) PickFile(title string) (string, error) {

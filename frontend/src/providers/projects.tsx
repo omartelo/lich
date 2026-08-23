@@ -3,8 +3,8 @@ import type { ReactNode } from "react"
 import { toast } from "sonner"
 import { Bell, Folder, MessageSquareDashed } from "lucide-react"
 import { useMatch, useNavigate } from "react-router-dom"
-import type { Project, RecentProject } from "@/lib/api-types"
-import type { StoredProject as StoreProject } from "@/lib/api-types"
+import type { ClosedSession, Project, RecentProject } from "@/lib/api-types"
+import type { StoredProject as StoreProject, StoredSession } from "@/lib/api-types"
 import { ProjectService, Store, System } from "@/lib/rpc"
 import { onAppEvent } from "@/lib/app-events"
 import {
@@ -72,6 +72,22 @@ import { ProjectsContext } from "./projects-context"
 export { useProjects } from "./projects-context"
 
 const newSessionId = (): string => crypto.randomUUID()
+
+// cardFromStored turns the row a resume hands back into the card the sidebar
+// draws. Shared by both doors into a resume — the worktree picker and the
+// history list — so a field one carried and the other dropped cannot happen.
+const cardFromStored = (restored: StoredSession): Session => ({
+  id: restored.id,
+  label: restored.label,
+  kind: isSessionKind(restored.kind) ? restored.kind : "claude",
+  path: restored.path,
+  ...(restored.providerSessionId ? { providerSessionId: restored.providerSessionId } : {}),
+  ...(restored.entrypoint ? { entrypoint: restored.entrypoint } : {}),
+  ...(restored.sandbox === "on" ? { sandboxed: true } : {}),
+  ...(restored.originSessionId
+    ? { originSessionId: restored.originSessionId, originLabel: restored.originLabel }
+    : {}),
+})
 
 // The first session of any project is always "Session 1"; the counter then
 // points at 2 for the next one.
@@ -280,21 +296,28 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   // which is what its sessions and its worktree directory hang off. Cancelling
   // leaves the row exactly as it was, to relocate on the next attempt; a
   // directory another project already holds is refused backend-side.
+  //
+  // Answers whether the project is open afterwards, for the caller that has more
+  // to do once it is: resuming a session of a closed project reopens the project
+  // first, and a cancelled relocate has to stop that resume rather than land a
+  // card in a project the window is not holding.
   const openRecent = useCallback(
-    async (recent: RecentProject) => {
+    async (recent: RecentProject): Promise<boolean> => {
       if (await ProjectService.Exists(recent.path)) {
         await adopt(recent)
-        return
+        return true
       }
       try {
         const moved = await ProjectService.Relocate(recent.id)
         if (!moved) {
-          return
+          return false
         }
         await adopt(moved)
         toast.success(`${moved.name} now opens ${displayPath(moved.path)}`)
+        return true
       } catch (error) {
         toast.error(`Relocate failed: ${errorText(error)}`)
+        return false
       }
     },
     [adopt],
@@ -382,21 +405,40 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         newWorktreeSession(projectId, wt)
         return
       }
-      const session: Session = {
-        id: restored.id,
-        label: restored.label,
-        kind: isSessionKind(restored.kind) ? restored.kind : "claude",
-        path: restored.path,
-        ...(restored.providerSessionId ? { providerSessionId: restored.providerSessionId } : {}),
-        ...(restored.entrypoint ? { entrypoint: restored.entrypoint } : {}),
-        ...(restored.sandbox === "on" ? { sandboxed: true } : {}),
-        ...(restored.originSessionId
-          ? { originSessionId: restored.originSessionId, originLabel: restored.originLabel }
-          : {}),
-      }
-      commit(restoreSession(sessionsRef.current, projectId, session))
+      commit(restoreSession(sessionsRef.current, projectId, cardFromStored(restored)))
     },
     [newWorktreeSession],
+  )
+
+  // Resume one session picked out of the history, wherever it was parked. The
+  // project comes back first when its tab is gone — a card cannot land in a
+  // project the window is not holding — and a cancelled relocate stops the
+  // resume rather than reopening the session into nowhere.
+  //
+  // A row the store no longer has is not an error: another window resumed it, or
+  // its worktree was removed since the list was drawn. The toast says which,
+  // because the row disappearing with no explanation reads as a failure.
+  const resumeClosedSession = useCallback(
+    async (closed: ClosedSession) => {
+      if (!sessionsRef.current[closed.projectId]) {
+        const opened = await openRecent({
+          id: closed.projectId,
+          name: closed.projectName,
+          path: closed.projectPath,
+        })
+        if (!opened) {
+          return
+        }
+      }
+      const restored = await Store.ReopenSession(closed.id, newSessionId())
+      if (!restored) {
+        toast(`${closed.label} is no longer available to resume`)
+        return
+      }
+      commit(restoreSession(sessionsRef.current, closed.projectId, cardFromStored(restored)))
+      navigate(`/projects/${closed.projectId}`)
+    },
+    [openRecent, navigate],
   )
 
   // dropSession removes a session's card and persists that removal via `persist`
@@ -420,49 +462,36 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     [],
   )
 
-  // Undo re-creates the row a close deleted, from what the page still holds,
-  // rather than parking it for the toast's lifetime: parking would need a
-  // reopen-by-id the store has no other reason to grow, and every app exit
-  // inside the toast window would strand a hidden parked row that a later
-  // worktree resume could resurrect. Re-creating owns no window — the close is
-  // final the moment it is made, and the undo is a plain new write. What the
-  // row does not carry back: label_auto (a restored card is auto-titleable
-  // again, even if its name was hand-picked) and the cost ledgers of any
-  // transcript it will not run through again.
+  // Undo puts the parked row back rather than re-creating one: every close parks
+  // now, so the reopen-by-id the history list needed is the same door an undo
+  // wants, and re-inserting a second row for a session the store still holds
+  // would leave the first one hidden in the history forever.
   //
-  // The PTY is not held open for the window either — a closed session's terminal
-  // is gone. The restored card comes back unspawned, so the resume prompt is
-  // what brings the conversation with it, exactly as for a parked worktree.
+  // What it therefore keeps that the old re-insert dropped: label_auto, the cost
+  // ledgers, and the position — the resume appends and the reorder below puts the
+  // card back in its slot.
+  //
+  // The PTY is not held open for the toast's lifetime — a closed session's
+  // terminal is gone. The restored card comes back unspawned under a fresh id, so
+  // the resume prompt is what brings the conversation with it, exactly as for a
+  // parked worktree.
   const restoreClosedSession = useCallback(
-    (projectId: string, session: Session, index: number, nextSeq: number) => {
-      const next = restoreSession(sessionsRef.current, projectId, session, index)
+    async (projectId: string, session: Session, index: number) => {
+      const restored = await Store.ReopenSession(session.id, newSessionId())
+      if (!restored) {
+        toast.error(`Could not bring ${session.label} back`)
+        return
+      }
+      const next = restoreSession(sessionsRef.current, projectId, cardFromStored(restored), index)
       if (next === sessionsRef.current) {
         return // the project was closed while the toast was up
       }
       commit(next)
-      const order = sessionsOf(next, projectId).map((s) => s.id)
-      const {
-        id,
-        label,
-        kind,
-        path = "",
-        providerSessionId,
-        originSessionId = "",
-        originLabel = "",
-      } = session
-      void Store.AddSessionFrom(
+      // The resume appends, so the slot the card went back to is a reorder.
+      void Store.ReorderSessions(
         projectId,
-        id,
-        label,
-        kind,
-        path,
-        nextSeq,
-        originSessionId,
-        originLabel,
+        sessionsOf(next, projectId).map((s) => s.id),
       )
-        .then(() => providerSessionId && Store.SetProviderSession(id, providerSessionId))
-        // AddSession appends: the slot the card went back to is a reorder.
-        .then(() => Store.ReorderSessions(projectId, order))
     },
     [],
   )
@@ -475,31 +504,20 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         return
       }
       const session = project.sessions[index]
-      const { nextSeq } = project
-      // The conversation id lives on the row, not on the card — a session started
-      // in this run never mirrors it into the page — so it is read back before
-      // the delete takes it with it: an undo without it restores an empty card.
-      const conversation = session.providerSessionId
-        ? Promise.resolve(session.providerSessionId)
-        : Store.ProviderSession(sessionId).catch(() => "")
-      const deleted = dropSession(projectId, sessionId, (activeID) =>
-        conversation.then(() => Store.DeleteSession(projectId, sessionId, activeID)),
+      // Parked, not deleted: the row is what the history lists and what an undo
+      // resumes, and its conversation id, cost ledgers and chosen name all ride
+      // on it. Removing the checkout is the one close that still deletes
+      // (discardSession), because a row must not outlive its directory.
+      const parked = dropSession(projectId, sessionId, (activeID) =>
+        Store.CloseSession(projectId, sessionId, activeID),
       )
       toast(`Closed ${session.label}`, {
         duration: UNDO_TOAST_MS,
         action: {
           label: "Undo",
-          // Waits on the delete: the store can sit on a lock for seconds, and an
-          // insert that overtook it would be deleted right back out.
-          onClick: () =>
-            void Promise.all([conversation, deleted]).then(([providerSessionId]) =>
-              restoreClosedSession(
-                projectId,
-                { ...session, ...(providerSessionId ? { providerSessionId } : {}) },
-                index,
-                nextSeq,
-              ),
-            ),
+          // Waits on the park: the store can sit on a lock for seconds, and a
+          // resume that overtook it would find the row still open and do nothing.
+          onClick: () => void parked.then(() => restoreClosedSession(projectId, session, index)),
         },
       })
     },
@@ -515,6 +533,8 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     [dropSession],
   )
 
+  // closeSession without the toast: the keep-or-remove dialog already asked, so
+  // there is nothing left to offer an undo for.
   const keepSession = useCallback(
     (projectId: string, sessionId: string) => {
       void dropSession(projectId, sessionId, (activeID) =>
@@ -847,6 +867,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       newSession,
       newWorktreeSession,
       reopenWorktreeSession,
+      resumeClosedSession,
       closeSession,
       discardSession,
       keepSession,
@@ -868,6 +889,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       newSession,
       newWorktreeSession,
       reopenWorktreeSession,
+      resumeClosedSession,
       closeSession,
       discardSession,
       keepSession,

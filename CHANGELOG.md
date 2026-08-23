@@ -17,6 +17,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Codex and opencode name the tool or permission being asked about, which is
   coarser and still enough to pick the card; oh-my-pi and Crush report no block at
   all, so their cards keep the line they had.
+- **Closing a session no longer throws it away, and the palette has a History
+  tab to find it in.** A closed session used to be gone for good unless it lived
+  in a worktree you chose to keep; now every close parks it, and `Ctrl+K` →
+  History lists what you have closed, newest first, across every project — the
+  closed ones included. Each row names the session, the agent that ran it, the
+  project, the branch its checkout is on and when you closed it, and the search
+  narrows on all of those, so "the conpty thing, three weeks ago" is a query and
+  not an archaeology dig. Enter resumes: the card comes back where it was and
+  picks the conversation up rather than starting cold. A row whose checkout was
+  removed behind lich's back says so and offers to forget it instead.
 - **Sessions can be renamed from the command line and from an agent's own
   tools.** Renaming a card was a thing only the window could do; `lich rename
   "the login bug"` now renames the session the command runs in, `lich rename
