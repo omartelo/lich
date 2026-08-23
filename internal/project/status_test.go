@@ -3,6 +3,7 @@ package project
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -232,5 +233,150 @@ func TestReadWorkTreeAgainstRealGit(t *testing.T) {
 	git("checkout", "--detach", "HEAD")
 	if got := readWorkTree(repo); got.branch != "" {
 		t.Errorf("readWorkTree(detached).branch = %q, want empty", got.branch)
+	}
+}
+
+// subRepo seeds the shape the whole subdirectory story is told against: a
+// repository whose project path is "sub", holding two untracked files worth 4
+// lines, plus one untracked file at the root worth 7 lines that must never be
+// seen from inside sub.
+func subRepo(t *testing.T) (repo, sub string) {
+	t.Helper()
+	repo, _ = initRepo(t)
+	sub = filepath.Join(repo, "sub")
+	if err := os.MkdirAll(filepath.Join(sub, "nested"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := map[string][]byte{
+		filepath.Join(sub, "new.txt"):            []byte("x\ny\nz\n"),
+		filepath.Join(sub, "nested", "deep.txt"): []byte("d\n"),
+		filepath.Join(repo, "outside.txt"):       []byte("1\n2\n3\n4\n5\n6\n7\n"),
+	}
+	for name, data := range files {
+		if err := os.WriteFile(name, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return repo, sub
+}
+
+// TestReadWorkTreeFromASubdirectory covers the case every other test in this
+// package misses: a project opened on a subdirectory of a repository, which
+// nothing normalises to the repository root.
+//
+// porcelain v2 spells its untracked paths from the repository root and covers
+// the whole repository, whatever the directory git ran in — `--porcelain`
+// forces that, and status.relativePaths does not lift it. The `ls-files
+// --others` call this read replaced answered relative to the directory and
+// scoped to it, and both callers still join these paths onto the project path,
+// so the readout has to answer the way ls-files did.
+func TestReadWorkTreeFromASubdirectory(t *testing.T) {
+	_, sub := subRepo(t)
+
+	got := readWorkTree(sub)
+	want := []string{"nested/deep.txt", "new.txt"}
+	slices.Sort(got.untracked)
+	if !slices.Equal(got.untracked, want) {
+		t.Errorf("untracked = %q, want %q", got.untracked, want)
+	}
+	// The dirty count is the whole repository's and always was: the porcelain
+	// v1 call this replaced ran without a pathspec too. Only the paths moved.
+	if got.files != 3 {
+		t.Errorf("files = %d, want 3", got.files)
+	}
+}
+
+// TestReadWorkTreeAtTheRepositoryRootIsUntouched is the pin behind the
+// translation: an empty prefix means the path *is* the repository root, the
+// overwhelmingly common case, and every entry must come back byte for byte as
+// git wrote it.
+func TestReadWorkTreeAtTheRepositoryRootIsUntouched(t *testing.T) {
+	repo, _ := subRepo(t)
+
+	got := readWorkTree(repo)
+	want := []string{"outside.txt", "sub/nested/deep.txt", "sub/new.txt"}
+	slices.Sort(got.untracked)
+	if !slices.Equal(got.untracked, want) {
+		t.Errorf("untracked = %q, want %q", got.untracked, want)
+	}
+	if got.files != 3 {
+		t.Errorf("files = %d, want 3", got.files)
+	}
+}
+
+// TestReadWorkTreeSpendsNoPrefixCallOnACleanTree pins the call budget the
+// translation is allowed: the prefix answers where the read ran, so it is worth
+// a git child only when there are untracked paths to move. A clean checkout —
+// what the frontend polls per second per checkout on screen — must still cost
+// the one status call.
+//
+// Counted through git's own GIT_TRACE, the way the numstat budget is, so
+// nothing in the package grows a seam to be observed. The dirty case asserts
+// the same trace line *is* written, without which a git that stopped tracing
+// would turn the clean assertion into one that can no longer fail.
+func TestReadWorkTreeSpendsNoPrefixCallOnACleanTree(t *testing.T) {
+	repo, _ := initRepo(t)
+	trace := filepath.Join(t.TempDir(), "git-trace.log")
+	t.Setenv("GIT_TRACE", trace)
+
+	prefixCalls := func() int {
+		t.Helper()
+		// Absent until the first git child runs, which is the zero the clean
+		// case expects to read.
+		out, err := os.ReadFile(trace)
+		if err != nil && !os.IsNotExist(err) {
+			t.Fatalf("read %s: %v", trace, err)
+		}
+		return strings.Count(string(out), "--show-prefix")
+	}
+
+	readWorkTree(repo)
+	if spent := prefixCalls(); spent != 0 {
+		t.Errorf("readWorkTree(clean) spent %d prefix calls, want 0", spent)
+	}
+
+	if err := os.WriteFile(filepath.Join(repo, "new.txt"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	readWorkTree(repo)
+	if spent := prefixCalls(); spent != 1 {
+		t.Errorf("readWorkTree(untracked) spent %d prefix calls, want 1", spent)
+	}
+}
+
+// TestDiffFromASubdirectory proves the line totals a subdirectory project shows
+// on its card: the untracked lines under it are counted, and the untracked file
+// beside it — outside the directory the caller asked about — is not.
+func TestDiffFromASubdirectory(t *testing.T) {
+	_, sub := subRepo(t)
+
+	got := New(nil).Diff(sub)
+	// 3 lines in sub/new.txt and 1 in sub/nested/deep.txt. Counting the root's
+	// outside.txt as well would read 11.
+	if got.Added != 4 {
+		t.Errorf("Diff(sub).Added = %d, want 4", got.Added)
+	}
+	if got.Deleted != 0 {
+		t.Errorf("Diff(sub).Deleted = %d, want 0", got.Deleted)
+	}
+}
+
+// TestDiffTextFromASubdirectory proves the review panel of a subdirectory
+// project renders its untracked files as new-file hunks, and shows nothing from
+// outside the directory.
+func TestDiffTextFromASubdirectory(t *testing.T) {
+	_, sub := subRepo(t)
+
+	out, err := New(nil).DiffText(sub)
+	if err != nil {
+		t.Fatalf("DiffText: %v", err)
+	}
+	for _, want := range []string{"+++ b/new.txt", "new file mode", "+x", "+y", "+z", "+++ b/nested/deep.txt", "+d"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("diff missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "outside.txt") {
+		t.Errorf("diff names a file outside the project path:\n%s", out)
 	}
 }

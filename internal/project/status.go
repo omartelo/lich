@@ -17,7 +17,7 @@ type workTreeStatus struct {
 	head      string   // "" in a repository with no commits
 	base      string   // what a diff runs against: "HEAD", or the empty tree
 	files     int      // dirty entries: changed, renamed, unmerged, untracked
-	untracked []string // untracked paths, relative to the work tree root
+	untracked []string // untracked paths, relative to the path that was read
 }
 
 // readWorkTree runs the single status call and parses it. A path git will not
@@ -35,7 +35,43 @@ func readWorkTree(path string) workTreeStatus {
 	if !ok {
 		return workTreeStatus{base: emptyTreeHash}
 	}
-	return parseWorkTree(out)
+	status := parseWorkTree(out)
+	// Asked for only when there is something to translate: on a clean tree the
+	// prefix would cost a second git child to be told nothing, on the read the
+	// frontend runs per second per checkout on screen.
+	if len(status.untracked) > 0 {
+		status.untracked = relativeToPath(path, status.untracked)
+	}
+	return status
+}
+
+// relativeToPath translates the untracked paths porcelain v2 reports — always
+// relative to the repository root, and covering the whole repository, which
+// --porcelain forces whatever status.relativePaths says — back to being
+// relative to path, the way the `ls-files --others` call this read replaced
+// reported them. Both callers join them onto path to reach the file.
+//
+// git answers where path sits with `rev-parse --show-prefix`: "sub/" from a
+// subdirectory, "" when path is the repository root itself. Entries outside the
+// prefix are dropped rather than kept: they live outside the directory the
+// caller asked about, and `ls-files --others`, scoped to it, never reported
+// them either.
+func relativeToPath(path string, untracked []string) []string {
+	out, ok := gitQuiet(path, "rev-parse", "--show-prefix")
+	// The overwhelmingly common case: path is the repository root, and every
+	// entry is already relative to it. A git that refused the question leaves
+	// them alone too — the same paths the read handed back before this call.
+	prefix := strings.TrimRight(out, "\r\n")
+	if !ok || prefix == "" {
+		return untracked
+	}
+	scoped := untracked[:0]
+	for _, rel := range untracked {
+		if under, found := strings.CutPrefix(rel, prefix); found {
+			scoped = append(scoped, under)
+		}
+	}
+	return scoped
 }
 
 // parseWorkTree reads porcelain v2's NUL-terminated records. Every record shape
