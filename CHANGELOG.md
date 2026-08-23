@@ -119,6 +119,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Removing a worktree no longer fails when the agent in it has just exited.** A
+  session's terminal is released twice — once by the close you asked for, once by
+  the reap of the process that ended — and whichever of the two arrived second
+  reported the handle as already closed. Closing a card ignored that, but removing
+  a checkout reads it as a failed close and stops before it touches git: the
+  worktree stayed on disk, its row stayed on screen, and the only account of why
+  was an error naming `/dev/ptmx`. The hang-up now happens once, and both callers
+  are told what it did. Windows already closed once, where a second one costs more
+  than a message.
 - **A turn you interrupt no longer spins forever.** Pressing Esc or Ctrl+C to stop
   an agent mid-turn left its card spinning until some later turn happened to
   finish — Claude Code, Codex and oh-my-pi all say nothing at all when a turn is

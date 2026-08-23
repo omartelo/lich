@@ -5,6 +5,7 @@ package terminal
 import (
 	"os"
 	"os/exec"
+	"sync"
 	"syscall"
 	"time"
 
@@ -45,6 +46,11 @@ type unixPTY struct {
 	exited chan struct{}
 	code   int
 	err    error
+
+	// closeOnce keeps the hang-up single-shot; closeErr is what every caller
+	// of Close gets back, including the one that did not perform it.
+	closeOnce sync.Once
+	closeErr  error
 }
 
 func (p *unixPTY) Resize(cols, rows int) error {
@@ -76,15 +82,24 @@ func (p *unixPTY) Wait() (int, error) {
 // it outstays closeGrace. The master is closed last so the departing child's
 // final bytes — the escape sequences that put the terminal back the way it was
 // — still reach the reader.
+//
+// It happens once. os.File.Close is safe to repeat, but the second call reports
+// os.ErrClosed rather than nothing, and the two closes the seam promises race
+// whenever a session's child dies just as the user closes it. Handing that error
+// to the loser is what made removing a worktree fail with "file already closed"
+// and leave the checkout on disk (internal/spawn.removeCheckout).
 func (p *unixPTY) Close() error {
-	if p.cmd.Process != nil && p.cmd.Process.Signal(syscall.SIGTERM) == nil {
-		select {
-		case <-p.exited:
-		case <-time.After(closeGrace):
-			_ = p.cmd.Process.Kill()
+	p.closeOnce.Do(func() {
+		if p.cmd.Process != nil && p.cmd.Process.Signal(syscall.SIGTERM) == nil {
+			select {
+			case <-p.exited:
+			case <-time.After(closeGrace):
+				_ = p.cmd.Process.Kill()
+			}
 		}
-	}
-	return p.File.Close()
+		p.closeErr = p.File.Close()
+	})
+	return p.closeErr
 }
 
 func winsize(cols, rows int) *pty.Winsize {

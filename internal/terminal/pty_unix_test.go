@@ -93,3 +93,22 @@ func TestCloseKillsAChildThatIgnoresTheHangUp(t *testing.T) {
 		t.Fatal("child survived Close")
 	}
 }
+
+// TestUnixPTYCloseIsSingleShot pins the same guard its Windows counterpart
+// pins, for the seam's other reason: os.File.Close reports os.ErrClosed the
+// second time, and both closes are expected — Service.Close releases the PTY
+// while stream reaps the same one the moment its child dies. Handing that error
+// to whichever lost failed the close its caller asked for.
+func TestUnixPTYCloseIsSingleShot(t *testing.T) {
+	p := startTrapped(t, "exit 7")
+
+	if err := p.Close(); err != nil {
+		t.Fatalf("first Close: %v", err)
+	}
+	if err := p.Close(); err != nil {
+		t.Fatalf("second Close: %v, want the first close's nil", err)
+	}
+	if code, _ := p.Wait(); code != 7 {
+		t.Errorf("exit status = %d, want the trap's 7", code)
+	}
+}
