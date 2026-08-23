@@ -16,7 +16,7 @@ import (
 const agentListTimeout = time.Second
 
 // SSHAgentKeys lists the identities loaded in the user's ssh agent, one line
-// each ("me@example.com (ED25519 256)"), newest gh has none first.
+// each ("me@example.com (ED25519 256)"), in the order the agent holds them.
 //
 // It exists for one sentence in the UI. The setting that hands a confined
 // session the ssh agent is read as "let it push with my GitHub key", and what it

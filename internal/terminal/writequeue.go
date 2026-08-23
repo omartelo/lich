@@ -33,6 +33,13 @@ const writeQueueDepth = 64
 // back to when there is no client at all. A push that arrives once the queue is
 // closed waits for that drain before it reports failure, so the caller's own
 // fallback lands behind those frames rather than in front of them.
+//
+// That last guarantee is this queue's alone, and it does not survive the layer
+// above: transport.send answers a caller directly once forget has cleared the
+// writer, without coming through push at all, so a frame handed to the bridge
+// that way can overtake one this queue is still draining to it. Order across
+// the switch to the bridge is therefore not guaranteed — see the ceiling in
+// docs/ceilings.md, which is the honest account of it.
 type writeQueue struct {
 	mu   sync.Mutex
 	wake *sync.Cond

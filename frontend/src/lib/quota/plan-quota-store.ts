@@ -41,6 +41,13 @@ const unchanged = (a: QuotaPlan[], b: QuotaPlan[]): boolean =>
 // taken for — "" is the machine-wide one the settings screen asks for — because
 // a session spawned from a binary the user configured can spend another account
 // entirely, and one card's numbers are not another's to show.
+//
+// An entry outlives its listeners: the poll stops when the last one leaves, the
+// reading it took does not. Switching back to a card therefore draws the numbers
+// it had while the fresh fetch is in flight, which is the same bargain the
+// unchanged-reading check above makes — a gauge that blanks is worse than one a
+// minute old. The cost is one small entry per session ever looked at, for the
+// life of the window, and that is the cheaper half of the trade.
 interface Entry {
   plans: QuotaPlan[]
   listeners: Set<() => void>
