@@ -88,12 +88,15 @@ tasks:
       - cmd: |
           set -e
           (cd frontend && pnpm install --frozen-lockfile && pnpm run build)
+          # Ctrl+C reaches the whole process group and takes Vite with it;
+          # closing the window instead leaves it running (Task's shell has no
+          # kill and its `$!` is not a pid) — vite's strictPort then says so.
           (cd frontend && pnpm run dev) &
-          VITE_PID=$!
-          # Task's embedded shell (mvdan/sh) only knows the EXIT trap; Ctrl+C
-          # reaches the whole process group (Vite included) on its own.
-          trap 'kill $VITE_PID 2>/dev/null || true' EXIT
-          sleep 1.5
+          # node, not `sleep`: Task interprets every command with its own shell
+          # (mvdan/sh) on every OS, where sleep is no builtin — a plain Windows
+          # box has no such binary on PATH and `task dev` dies right here. node
+          # is already required by the pnpm line above.
+          node -e "setTimeout(() => {}, 1500)"
           LICH_DEV=1 LICH_DEV_URL="http://127.0.0.1:{{.VITE_PORT}}" LICH_LISTEN_PORT=47822 go run .
 
   test:
