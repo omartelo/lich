@@ -63,11 +63,11 @@ Non-negotiable rules. A violation means the work is not done.
    nesting deeper than 4 levels; comments only for the *why*; errors handled explicitly, never swallowed; no magic
    values; no secrets in source.
 5. **A session feature is traced across every provider.** `internal/providers.Registry` is the checklist —
-   Claude Code, Codex, Antigravity, opencode, oh-my-pi, Crush. Anything a session touches (spawn flags, hooks,
-   resume, transcripts, plugin install, MCP) is designed against all six, and `docs/adding-a-provider.md` is the
-   map of every file one lands in. Equal behaviour is not always possible — but the gap must be deliberate and
-   written down in the same PR: a `docs/ceilings.md` bullet naming which providers are out and why. A feature
-   that silently works on a single provider is not done.
+   Claude Code, Codex, Antigravity, opencode, oh-my-pi, Crush, Cursor CLI. Anything a session touches (spawn
+   flags, hooks, resume, transcripts, plugin install, MCP) is designed against all seven, and
+   `docs/adding-a-provider.md` is the map of every file one lands in. Equal behaviour is not always possible —
+   but the gap must be deliberate and written down in the same PR: a `docs/ceilings.md` bullet naming which
+   providers are out and why. A feature that silently works on a single provider is not done.
 
 ## Releases
 

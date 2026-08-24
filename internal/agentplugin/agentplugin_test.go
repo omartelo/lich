@@ -284,7 +284,10 @@ func TestStatus(t *testing.T) {
 
 // TestStatusListsEveryHarness proves the report covers the providers that can
 // run the plugin and nothing else: an entry for one that cannot would put an
-// install button on a CLI with nothing to install.
+// install button on a CLI with nothing to install. Cursor CLI is the registry
+// entry that is deliberately absent, and it is asserted by name — the list
+// above it reads as an oversight otherwise, and the day it does gain a plugin
+// this is the test that has to say so.
 func TestStatusListsEveryHarness(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	s := serveBody(t, http.StatusOK, `{"tag_name":"v0.2.0"}`)
@@ -300,6 +303,9 @@ func TestStatusListsEveryHarness(t *testing.T) {
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("Status() covers %v, want %v", got, want)
+	}
+	if slices.Contains(got, providers.Cursor) {
+		t.Errorf("Status() offers a plugin for %q, which lich installs none into", providers.Cursor)
 	}
 }
 

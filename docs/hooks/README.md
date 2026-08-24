@@ -3,15 +3,19 @@
 lich observes and drives provider sessions through **hooks**. Each hook runs
 inside a session (shipped by the companion plugin
 [`omartelo/lich-plugin`](https://github.com/omartelo/lich-plugin), which installs
-on Claude Code, Codex, Antigravity, opencode, oh-my-pi and Crush) and talks to
-lich over a shared local transport. On Claude Code, Codex, Antigravity and Crush
+on Claude Code, Codex, Antigravity, opencode, oh-my-pi and Crush — not yet on
+Cursor CLI, which `../ceilings.md` names) and talks to lich over a shared local
+transport. On Claude Code, Codex, Antigravity and Crush
 it is a small script the harness runs; opencode and oh-my-pi load a JavaScript
 module instead, which is a difference in packaging, not in what a report is.
 
 The contracts are provider-agnostic: lich injects the same variables into every
 PTY it spawns, so what changes per provider is only which of its lifecycle
 events maps onto a report — each contract's mapping table has a column per
-harness.
+harness. Cursor CLI's column is empty in all four: no plugin is installed there,
+so nothing on that side of the transport ever fires. Its own hook names are
+Claude Code's, which is what makes the column fillable rather than permanent —
+`../ceilings.md` carries what it costs while it is not.
 
 This directory is the **canonical, contract-first source** for those hooks:
 

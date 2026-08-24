@@ -42,6 +42,9 @@ func (*Service) ResumeAvailable(kind, providerSessionID, cwd string) bool {
 	case providers.Crush:
 		path, ok := crushSessionDB(cwd)
 		return ok && sessionRowExists(path, crushSessionTable, providerSessionID)
+	case providers.Cursor:
+		_, ok := cursorChatStore(providerSessionID)
+		return ok
 	}
 	return false
 }

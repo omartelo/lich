@@ -59,6 +59,9 @@ describe("provider setting keys", () => {
     expect(skipPermissionFlags.opencode).toBe("--auto")
     expect(skipPermissionFlags.omp).toBe("--auto-approve")
     expect(skipPermissionFlags.crush).toBe("--yolo")
+    // --yolo is Cursor's own alias for it; lich passes the canonical spelling,
+    // which is not the one Crush answers to above.
+    expect(skipPermissionFlags.cursor).toBe("--force")
     expect(skipPermissionFlags.shell).toBeUndefined()
   })
 })

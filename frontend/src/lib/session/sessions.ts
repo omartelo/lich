@@ -17,6 +17,7 @@ export const PROVIDER_KINDS = [
   "opencode",
   "omp",
   "crush",
+  "cursor",
 ] as const
 export type ProviderKind = (typeof PROVIDER_KINDS)[number]
 
@@ -467,6 +468,7 @@ const RESUMABLE_KINDS: readonly SessionKind[] = [
   "omp",
   "opencode",
   "crush",
+  "cursor",
 ]
 
 // resumableSession returns the session whose PTY should ask before it spawns,

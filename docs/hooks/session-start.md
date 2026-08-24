@@ -43,11 +43,11 @@ deprecated alias and the defaulted `provider`.
 
 ## Event → action mapping
 
-| Claude Code hook | Codex hook     | Antigravity hook | opencode event     | oh-my-pi event  | Crush hook    | action                                    |
-|------------------|----------------|------------------|--------------------|-----------------|---------------|-------------------------------------------|
-| `SessionStart`   | `SessionStart` | `PreInvocation`  | `session.created`  | `session_start` | `PreToolUse`  | store `provider_session_id` on the lich   |
-|                  |                |                  |                    |                 |               | session row, and mark the card as running |
-|                  |                |                  |                    |                 |               | `provider` (the `session-agent` app event)|
+| Claude Code hook | Codex hook     | Antigravity hook | opencode event     | oh-my-pi event  | Crush hook    | Cursor CLI hook | action                                    |
+|------------------|----------------|------------------|--------------------|-----------------|---------------|-----------------|-------------------------------------------|
+| `SessionStart`   | `SessionStart` | `PreInvocation`  | `session.created`  | `session_start` | `PreToolUse`  | —               | store `provider_session_id` on the lich   |
+|                  |                |                  |                    |                 |               |                 | session row, and mark the card as running |
+|                  |                |                  |                    |                 |               |                 | `provider` (the `session-agent` app event)|
 
 `SessionStart` fires on startup, resume, `/clear` and compaction. A resume
 reports the resumed session's id and overwrites the stored value — lich always

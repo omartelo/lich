@@ -553,9 +553,9 @@ func TestResolveCommand(t *testing.T) {
 }
 
 // TestResumeArgs proves each provider resumes in its own spelling — a flag of
-// its own for Claude Code, Antigravity and oh-my-pi, a subcommand for Codex, one
-// they happen to share for opencode and Crush — and that a kind with none wired
-// never grows one: a shell must not be handed a stray id.
+// its own for Claude Code, Antigravity, oh-my-pi and Cursor CLI, a subcommand
+// for Codex, one they happen to share for opencode and Crush — and that a kind
+// with none wired never grows one: a shell must not be handed a stray id.
 func TestResumeArgs(t *testing.T) {
 	cases := []struct {
 		name, kind, resume string
@@ -573,6 +573,13 @@ func TestResumeArgs(t *testing.T) {
 		{"opencode resume", "opencode", "ses_0031a382dffe", []string{"--session", "ses_0031a382dffe"}},
 		{"crush fresh", "crush", "", nil},
 		{"crush resume", "crush", "abc-123", []string{"--session", "abc-123"}},
+		{"cursor fresh", "cursor", "", nil},
+		// Cursor spells it exactly as Claude Code does, and is pinned here for
+		// the same reason Antigravity's skip-permissions flag is: a shared
+		// literal is what makes a lookup returning the wrong provider's flag
+		// invisible everywhere else. Its own value is optional — `--resume`
+		// alone opens a picker — so an empty id must never reach argv.
+		{"cursor resume", "cursor", "abc-123", []string{"--resume", "abc-123"}},
 		{"shell never resumes", KindShell, "abc-123", nil},
 		{"shell fresh", KindShell, "", nil},
 	}
@@ -638,6 +645,10 @@ func TestSkipPermissionArgs(t *testing.T) {
 		{"crush on", "crush", true, []string{"--yolo"}},
 		{"oh-my-pi off", "omp", false, nil},
 		{"oh-my-pi on", "omp", true, []string{"--auto-approve"}},
+		// --yolo is Cursor's own alias for --force; lich passes the canonical
+		// spelling, which is not the one Crush answers to above.
+		{"cursor off", "cursor", false, nil},
+		{"cursor on", "cursor", true, []string{"--force"}},
 		{"shell is never wired", KindShell, true, nil},
 	}
 	for _, tc := range cases {
@@ -715,6 +726,8 @@ func TestModelArgs(t *testing.T) {
 		{"oh-my-pi, a fuzzy match", providers.OMP, "opus", []string{"--model", "opus"}},
 		{"antigravity, a full name", providers.Antigravity, "gemini-3.7-flash-high",
 			[]string{"--model", "gemini-3.7-flash-high"}},
+		{"cursor, a parameterized name", providers.Cursor, "claude-opus-4-8[effort=high]",
+			[]string{"--model", "claude-opus-4-8[effort=high]"}},
 		{"crush takes none at spawn", providers.Crush, "opus", nil},
 		{"a shell is not a provider", KindShell, "opus", nil},
 		{"no model named", providers.Claude, "", nil},

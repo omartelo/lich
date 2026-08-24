@@ -1,10 +1,12 @@
 # Adding a provider
 
 A **provider** is an agent CLI lich can run inside a session's PTY. There are
-six (`internal/providers.Registry`), and adding a seventh means landing in about
-a dozen files across two repositories. This is the map — written after
-Antigravity, the last one added, so it names what that change actually touched
-rather than what it should have.
+seven (`internal/providers.Registry`), and adding an eighth means landing in
+about a dozen files across two repositories. This is the map — written after
+Antigravity, so it names what that change actually touched rather than what it
+should have. Cursor CLI came later and stopped short of the plugin: what a
+provider looks like without one is its own row in
+[`ceilings.md`](ceilings.md).
 
 Two rules govern the whole exercise, and both are in
 [`../CLAUDE.md`](../CLAUDE.md):

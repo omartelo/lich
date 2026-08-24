@@ -22,7 +22,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **The session readout understands Claude Code and Codex transcripts only**
   (`internal/terminal/usage_claude.go`, `internal/terminal/usage_codex.go`): oh-my-pi, opencode and Crush record
   token usage but not the model's context-window size, so lich cannot turn those counts into a trustworthy
-  percentage, and Antigravity files its conversation as SQLite rather than as a transcript lich reads at all.
+  percentage, and Antigravity and Cursor CLI file their conversations as SQLite rather than as a transcript lich
+  reads at all.
   Their footer therefore carries no model or context ring. Codex rollouts carry the effective window
   selected for that session — 95% of its default or configured `model_context_window` — but no API-cost
   accounting, so its setting stops at model and context while Claude Code alone offers the cost rung.
@@ -121,9 +122,9 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **lich appends to the agent's system prompt, for two providers only**
   (`internal/terminal/command.go`, `briefingFlags` → `relay.SpawnBriefing`): Claude Code and oh-my-pi are spawned
   with `--append-system-prompt` carrying lich's own briefing, so text the user never wrote is in every session's
-  prompt and in `/proc/<pid>/cmdline`. Codex, Antigravity, opencode and Crush get nothing there — none has a
-  per-spawn append flag, so for those four the point exists only in lich's MCP instructions, and behaviour between
-  providers differs by that much.
+  prompt and in `/proc/<pid>/cmdline`. Codex, Antigravity, opencode, Crush and Cursor CLI get nothing there — none
+  has a per-spawn append flag, so for those five the point exists only in lich's MCP instructions, and behaviour
+  between providers differs by that much.
 - **A prompt in use is recognised from the bytes going in, never from the line itself**
   (`internal/terminal/draft.go`): a relayed message pastes at the prompt and sends an Enter behind it, so lich
   holds the delivery back while the user has unsent input there. What it counts is printable input since the last
@@ -139,6 +140,20 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   first, and both senders read a confident wrong report — nothing anywhere reports the mismatch. Naming the ticket
   is still the only exact route, which is why every relayed message spells it and why the card's tooltip shows it.
 
+- **A Cursor CLI session runs with no plugin at all** (`internal/agentplugin/agentplugin.go`, `supported`): it is
+  the one provider in the registry the companion plugin has never been installed into, and everything the plugin
+  carries is missing there at once. The card reports no state, so it never spins, never rings and never chimes —
+  an empty state, not an idle one. No `SessionStart` report means no `provider_session_id` on the row, so the
+  resume lich wires for it (`--resume <chatId>`, and the chat's own `chats/<id>/store.db` under the config
+  directory) is never *offered*: the plumbing is there and nothing ever reaches it. No auto-title, no
+  touched-files refresh, and none of lich's own tools — `mcp` there only lists, enables and disables what is
+  already in `~/.cursor/mcp.json`, so that session reaches the ones beside it through the `lich` command line
+  alone. What makes the gap worth closing rather than permanent is that the CLI reads Claude Code's own hook
+  spelling: it maps `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Stop`, `SubagentStop`,
+  `SessionEnd` and `PreCompact` onto its own events, and loads a plugin directory carrying
+  `.claude-plugin/plugin.json` (both read out of the shipped bundle, 2026.08.11). `Notification` and
+  `PermissionRequest` map to nothing, so a Cursor session will not report `waiting` even once it does report —
+  which puts it beside Antigravity, oh-my-pi and Crush in the bullet below.
 - **Installing the plugin writes into four harnesses' own directories** (`internal/agentplugin`): Claude Code and
   Codex are driven through their plugin CLI, but opencode, oh-my-pi and Crush have none, so lich writes the
   released files itself. None of them records what is installed, so the version lives in a marker line lich wrote —
@@ -185,7 +200,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   `Notification` carries a `message` written for a human, so the card reads "Claude needs your permission to
   use Bash". Codex's `PermissionRequest` and opencode's `.asked` events carry only the thing being asked
   about — `tool_name`, `permission`, `action` — so those cards read a bare `Bash` or `edit`, which says which
-  card to open and not what it will ask. **Antigravity, oh-my-pi and Crush send no reason at all** and keep the
+  card to open and not what it will ask. **Antigravity, oh-my-pi, Crush and Cursor CLI send no reason at all** and keep the
   generic "Waiting on you": none of the three reports `waiting` in the first place (Antigravity's permission
   prompt raises no lifecycle event that has been measured; omp declares an approval event no run was ever seen
   emitting; Crush reports no state), so there is nothing to hang a reason on. The trap is reading a bare card as

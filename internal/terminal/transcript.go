@@ -95,6 +95,44 @@ func antigravityConversationPath(providerSessionID string) (string, bool) {
 	return path, true
 }
 
+// cursorChatStore is the database Cursor CLI keeps one chat in, under its own
+// config directory. It is not a transcript: the CLI files a chat as SQLite at
+// chats/<chatId>/store.db, which is the one file whose existence answers "can
+// this id still be reopened".
+func cursorChatStore(providerSessionID string) (string, bool) {
+	base, ok := cursorConfigDir()
+	if !ok {
+		return "", false
+	}
+	path := filepath.Join(base, "chats", providerSessionID, "store.db")
+	if _, err := os.Stat(path); err != nil {
+		return "", false
+	}
+	return path, true
+}
+
+// cursorConfigDir resolves Cursor CLI's config directory, or false when there is
+// no home to hang it off. It does not go through harnessDir because Cursor
+// answers to two variables in a shape no other provider uses: $CURSOR_CONFIG_DIR
+// wins outright, else $XDG_CONFIG_HOME with "cursor" under it — and the fallback
+// when neither is set is ~/.cursor, not ~/.config/cursor. Reading it as
+// xdg-basedir the way opencode and Crush are read would point at a directory
+// Cursor never writes on a machine with no XDG_CONFIG_HOME, which is most of
+// them. Measured on 2026.08.11; the same rule lives in internal/sandbox.
+func cursorConfigDir() (string, bool) {
+	if dir := os.Getenv("CURSOR_CONFIG_DIR"); dir != "" {
+		return dir, true
+	}
+	if base := os.Getenv("XDG_CONFIG_HOME"); base != "" {
+		return filepath.Join(base, "cursor"), true
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", false
+	}
+	return filepath.Join(home, ".cursor"), true
+}
+
 // ompTranscriptPath locates an oh-my-pi conversation by its id under omp's agent
 // directory. omp files one JSONL per session, in a directory named after the cwd
 // it ran in — sessions/<encoded-cwd>/<timestamp>_<id>.jsonl.

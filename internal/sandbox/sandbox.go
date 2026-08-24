@@ -65,7 +65,7 @@ type Spec struct {
 //
 // A provider missing from here confines to a home with no credentials in it,
 // which is a session that opens and cannot log in. The registry is the
-// checklist, so all six are listed.
+// checklist, so all seven are listed.
 func stateDirs(providerID, home string) []string {
 	switch providerID {
 	case providers.Claude:
@@ -98,6 +98,10 @@ func stateDirs(providerID, home string) []string {
 			filepath.Join(configHome(home), "crush"),
 			filepath.Join(dataHome(home), "crush"),
 		}
+	case providers.Cursor:
+		// One directory holds the credentials (`cli-config.json`), the hooks and
+		// MCP registrations, and the chats under `chats/<id>/store.db`.
+		return []string{cursorConfigDir(home)}
 	}
 	return nil
 }
@@ -122,6 +126,22 @@ func envDir(name, fallback string) string {
 		return dir
 	}
 	return fallback
+}
+
+// cursorConfigDir resolves Cursor CLI's config directory. It reads the XDG
+// variable but not the XDG fallback: with neither variable set Cursor lands on
+// ~/.cursor, never ~/.config/cursor, so configHome below would confine a Cursor
+// session to a directory its CLI never writes — a session that opens at the
+// login prompt. Measured on 2026.08.11; the same rule lives in
+// internal/terminal/transcript.go, which reads the chats under it.
+func cursorConfigDir(home string) string {
+	if dir := os.Getenv("CURSOR_CONFIG_DIR"); filepath.IsAbs(dir) {
+		return dir
+	}
+	if base := os.Getenv("XDG_CONFIG_HOME"); filepath.IsAbs(base) {
+		return filepath.Join(base, "cursor")
+	}
+	return filepath.Join(home, ".cursor")
 }
 
 // configHome and dataHome are the XDG directories, which every provider here

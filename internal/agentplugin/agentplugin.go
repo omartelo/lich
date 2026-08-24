@@ -1,9 +1,10 @@
 // Package agentplugin manages the lich companion plugin inside the provider
 // CLIs that can run it: whether it is installed, whether a newer release
-// exists, and installing or updating it. All six ship the same plugin from the
-// same repository; what differs per provider — the subcommands, where the
-// installed version is read from, and whether there is a CLI at all — lives in
-// claude.go, codex.go, antigravity.go, opencode.go, omp.go and crush.go.
+// exists, and installing or updating it. Six of the registry's seven ship the
+// same plugin from the same repository; what differs per provider — the
+// subcommands, where the installed version is read from, and whether there is a
+// CLI at all — lives in claude.go, codex.go, antigravity.go, opencode.go,
+// omp.go and crush.go.
 //
 // Two install shapes, decided by the harness rather than by lich:
 //
@@ -63,6 +64,13 @@ const (
 // supported is every provider that can run the plugin, in the order the UI
 // lists them. A provider outside this list has no plugin to offer, so it never
 // reaches a status or an install.
+//
+// Cursor CLI is the registry's seventh and is not here: nothing has been
+// measured against a real run of it, and an install that registers hooks the
+// CLI never fires is a card that reports nothing while claiming it is wired.
+// Its CLI reads Claude Code's own hook spelling and loads a plugin directory
+// carrying `.claude-plugin/plugin.json`, so the gap is closable —
+// docs/ceilings.md carries what that costs today.
 var supported = []string{
 	providers.Claude, providers.Codex, providers.Antigravity,
 	providers.OpenCode, providers.OMP, providers.Crush,

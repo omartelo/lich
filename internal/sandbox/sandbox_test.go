@@ -16,7 +16,7 @@ func clearHarnessEnv(t *testing.T) {
 	t.Helper()
 	for _, name := range []string{
 		"CLAUDE_CONFIG_DIR", "CODEX_HOME", "OMP_PROFILE", "PI_CODING_AGENT_DIR",
-		"XDG_CONFIG_HOME", "XDG_DATA_HOME",
+		"CURSOR_CONFIG_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME",
 	} {
 		t.Setenv(name, "")
 	}
@@ -61,6 +61,10 @@ func TestStateDirsPerProvider(t *testing.T) {
 			filepath.Join(home, ".config", "crush"),
 			filepath.Join(home, ".local", "share", "crush"),
 		}},
+		// Cursor is the one provider here that is not xdg-basedir with no
+		// variable set: ~/.cursor, never ~/.config/cursor. A session confined to
+		// the latter opens at the login prompt.
+		{providers.Cursor, []string{filepath.Join(home, ".cursor")}},
 	}
 	for _, tt := range tests {
 		if got := stateDirs(tt.provider, home); !slices.Equal(got, tt.want) {
@@ -92,6 +96,22 @@ func TestStateDirsFollowsHarnessEnvironment(t *testing.T) {
 	}
 	if got := stateDirs(providers.Crush, home); got[0] != filepath.Join(config, "crush") {
 		t.Errorf("XDG_CONFIG_HOME ignored: got %v", got)
+	}
+	// Cursor reads the XDG variable but not the XDG fallback, so it is asserted
+	// under both: set, it follows; cleared, it goes back to ~/.cursor rather
+	// than to the ~/.config the line above proves Crush lands in.
+	cursor := filepath.Join(root, "cursor")
+	t.Setenv("CURSOR_CONFIG_DIR", cursor)
+	if got := stateDirs(providers.Cursor, home); got[0] != cursor {
+		t.Errorf("CURSOR_CONFIG_DIR ignored: got %v", got)
+	}
+	t.Setenv("CURSOR_CONFIG_DIR", "")
+	if got := stateDirs(providers.Cursor, home); got[0] != filepath.Join(config, "cursor") {
+		t.Errorf("XDG_CONFIG_HOME ignored for cursor: got %v", got)
+	}
+	t.Setenv("XDG_CONFIG_HOME", "")
+	if got := stateDirs(providers.Cursor, home); got[0] != filepath.Join(home, ".cursor") {
+		t.Errorf("cursor fell back to xdg-basedir instead of ~/.cursor: got %v", got)
 	}
 }
 

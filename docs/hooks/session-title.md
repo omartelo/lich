@@ -28,9 +28,9 @@ Both sides test against the payloads in
 
 ## Event → action mapping
 
-| Claude Code hook | Codex hook | Antigravity hook | opencode event    | oh-my-pi event                | Crush hook | action                                           |
-|------------------|------------|------------------|-------------------|-------------------------------|------------|--------------------------------------------------|
-| `Stop`           | `Stop`     | `Stop`           | `session.updated` | `session_stop` + `turn_start` | —          | set the session label to `title` (if still auto) |
+| Claude Code hook | Codex hook | Antigravity hook | opencode event    | oh-my-pi event                | Crush hook | Cursor CLI hook | action                                           |
+|------------------|------------|------------------|-------------------|-------------------------------|------------|-----------------|--------------------------------------------------|
+| `Stop`           | `Stop`     | `Stop`           | `session.updated` | `session_stop` + `turn_start` | —          | —               | set the session label to `title` (if still auto) |
 
 The `ai-title` is an internal Haiku summary of the first prompt, written to the
 transcript **after** the first turn — so it does not exist at `SessionStart`.
