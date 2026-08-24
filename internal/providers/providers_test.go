@@ -59,6 +59,25 @@ func TestDetect(t *testing.T) {
 	}
 }
 
+// TestDetectCarriesTheBinary pins the field the settings screen asks $PATH for.
+// Antigravity is the case that matters: its id is not its command, so a screen
+// falling back to the id verifies a binary nobody ships.
+func TestDetectCarriesTheBinary(t *testing.T) {
+	svc := &Service{lookPath: func(string) (string, error) { return "", exec.ErrNotFound }}
+	got, err := svc.Detect()
+	if err != nil {
+		t.Fatalf("Detect: %v", err)
+	}
+	for _, d := range got {
+		if d.Binary != DefaultBinary(d.ID) || d.Binary == "" {
+			t.Errorf("%s binary = %q, want %q", d.ID, d.Binary, DefaultBinary(d.ID))
+		}
+	}
+	if got[2].ID != Antigravity || got[2].Binary != "agy" {
+		t.Errorf("antigravity = %+v, want binary agy", got[2])
+	}
+}
+
 func TestDetectAllMissing(t *testing.T) {
 	svc := &Service{lookPath: func(string) (string, error) { return "", errors.New("nope") }}
 	got, err := svc.Detect()

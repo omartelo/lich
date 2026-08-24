@@ -464,6 +464,8 @@ export interface Diagnostics {
 export interface DetectedProvider {
   id: string
   name: string
+  /** The executable a session spawns. Not the id: Antigravity's is `agy`. */
+  binary: string
   installed: boolean
   path: string
 }

@@ -79,9 +79,13 @@ func DefaultBinary(id string) string {
 }
 
 // Detected reports a provider and whether one of its binaries was found on PATH.
+// Binary is the executable name a session spawns (DefaultBinary), which the
+// settings screen needs even when nothing was found: a provider id is not its
+// command — Antigravity's is `agy`.
 type Detected struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
+	Binary    string `json:"binary"`
 	Installed bool   `json:"installed"`
 	Path      string `json:"path"`
 }
@@ -102,7 +106,7 @@ func New() *Service {
 func (s *Service) Detect() ([]Detected, error) {
 	out := make([]Detected, 0, len(Registry))
 	for _, p := range Registry {
-		d := Detected{ID: p.ID, Name: p.Name}
+		d := Detected{ID: p.ID, Name: p.Name, Binary: DefaultBinary(p.ID)}
 		for _, name := range p.Binaries {
 			if path, err := s.lookPath(name); err == nil {
 				d.Installed = true

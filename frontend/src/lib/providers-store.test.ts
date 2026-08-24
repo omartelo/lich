@@ -138,6 +138,7 @@ describe("enabledProviders", () => {
   const p = (id: string, enabled: boolean, installed: boolean): ProviderState => ({
     id: id as ProviderState["id"],
     name: id,
+    binary: id,
     installed,
     enabled,
   })
@@ -153,6 +154,7 @@ describe("resolveDefaultProvider", () => {
   const p = (id: string, enabled: boolean): ProviderState => ({
     id: id as ProviderState["id"],
     name: id,
+    binary: id,
     installed: true,
     enabled,
   })
@@ -177,6 +179,7 @@ describe("resolveProjectDefaultProvider", () => {
   const p = (id: string, enabled: boolean): ProviderState => ({
     id: id as ProviderState["id"],
     name: id,
+    binary: id,
     installed: true,
     enabled,
   })
@@ -199,9 +202,16 @@ describe("resolveProjectDefaultProvider", () => {
 
 describe("createProvidersStore", () => {
   const detected: DetectedProvider[] = [
-    { id: "claude", name: "Claude Code", installed: true, path: "/usr/bin/claude" },
-    { id: "codex", name: "Codex", installed: false, path: "" },
-    { id: "mystery", name: "Mystery", installed: true, path: "/x" }, // unknown id
+    {
+      id: "claude",
+      name: "Claude Code",
+      binary: "claude",
+      installed: true,
+      path: "/usr/bin/claude",
+    },
+    // A binary that is not the id, which is what antigravity ships as.
+    { id: "codex", name: "Codex", binary: "cdx", installed: false, path: "" },
+    { id: "mystery", name: "Mystery", binary: "mystery", installed: true, path: "/x" }, // unknown id
   ]
 
   function build(enabledValues: Record<string, string> = {}, defaultValue = "") {
@@ -228,6 +238,9 @@ describe("createProvidersStore", () => {
     expect(got.find((p) => p.id === "claude")?.enabled).toBe(true)
     expect(got.find((p) => p.id === "codex")?.enabled).toBe(false)
     expect(got.find((p) => p.id === "codex")?.installed).toBe(false)
+    // Carried through, because the settings screen asks $PATH for this and not
+    // for the id.
+    expect(got.find((p) => p.id === "codex")?.binary).toBe("cdx")
   })
 
   it("honors a stored enabled flag over the default", async () => {

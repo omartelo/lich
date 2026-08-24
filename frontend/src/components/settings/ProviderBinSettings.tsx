@@ -88,10 +88,12 @@ function useSkipPermissions(providerId: string, worktree: boolean) {
 export function ProviderBinSettings({
   providerId,
   providerName,
+  providerBin,
   projectId,
 }: {
   providerId: string
   providerName: string
+  providerBin: string
   projectId?: string
 }) {
   const { showContextUsage, setShowContextUsage, costBudget, setCostBudget } = useSettings()
@@ -144,7 +146,12 @@ export function ProviderBinSettings({
           provider that meters no subscription. */}
       <PlanUsageSetting providerId={providerId} />
 
-      <ProviderBinary providerId={providerId} providerName={providerName} projectId={projectId} />
+      <ProviderBinary
+        providerId={providerId}
+        providerName={providerName}
+        providerBin={providerBin}
+        projectId={projectId}
+      />
 
       {/* Only providers with a context-window transcript reader carry this
           control; the underlying preference stays global. */}

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Settings › Antigravity no longer reports the binary it runs as missing.**
+  The Binary block asked $PATH for the provider's id, which is the command for
+  every provider but this one — Antigravity ships as `agy` — so a working
+  install opened on `not on $PATH — Sessions will not start until this is
+  fixed`, beside sessions that were starting perfectly well. The block now asks
+  for the executable a session actually spawns.
+
 ## [0.40.0] - 2026-08-23
 
 ### Added

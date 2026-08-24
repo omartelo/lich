@@ -163,6 +163,8 @@ export function readEnabled(id: string, value: string): boolean {
 export interface ProviderState {
   id: ProviderKind
   name: string
+  /** The executable a session spawns — a provider id is not its command. */
+  binary: string
   installed: boolean
   enabled: boolean
 }
@@ -318,6 +320,7 @@ class ProviderStoreImpl implements ProvidersStore {
         .map(async (provider) => ({
           id: provider.id as ProviderKind,
           name: provider.name,
+          binary: provider.binary,
           installed: provider.installed,
           enabled: readEnabled(provider.id, await this.deps.getEnabled(provider.id)),
         })),

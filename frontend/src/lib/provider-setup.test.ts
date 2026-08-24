@@ -5,6 +5,7 @@ import type { ProviderState } from "./providers-store"
 const p = (id: string, installed: boolean): ProviderState => ({
   id: id as ProviderState["id"],
   name: id,
+  binary: id,
   installed,
   enabled: false,
 })
