@@ -104,7 +104,9 @@ two of the four reports and not four.
 [`docs/hooks/fixtures/`](hooks/fixtures/) is every contract as bytes, and the
 plugin's suite asserts against the same lines. A provider id lich has not
 registered is rejected by `/session-start` — so until the line below lands here,
-the plugin cannot carry a fixture for it and its own tests have to name the gap:
+the plugin cannot carry a fixture for it, and its own tests name the gap in a
+`PENDING_UPSTREAM` set that fails once the fixture lands — which is the signal
+to empty it:
 
 ```json
 {"name":"antigravity conversation id","body":{"session_id":"s1","provider_session_id":"…","provider":"antigravity"}, "accept":{…}}

@@ -43,10 +43,23 @@ title=$(tac "$transcript_path" | grep -m1 '"type":"ai-title"' | jq -r '.aiTitle'
 
 A provider that generates no title sends whatever it names its own thread after
 — Codex uses the first user message verbatim, which the plugin reads from the
-rollout and trims to a card-sized label, and Antigravity is read the same way:
-its `Stop` payload carries a `transcriptPath` whose first `USER_INPUT` entry is
-that message. The contract only asks for a non-empty
-string; where it comes from is the client's business.
+rollout and trims to 80 characters, and Antigravity is read the same way: its
+`Stop` payload carries a `transcriptPath` whose first `USER_INPUT` entry is that
+message. The contract only asks for a non-empty string; where it comes from, and
+where it is cut, is the client's business.
+
+**A client that trims does it by codepoint, never by byte.** lich takes the
+string as sent and the card truncates what will not fit, so a title cut through
+the middle of a character is not rejected anywhere — it reaches the card as a
+trailing `U+FFFD`, and only for a title whose 80th character is not ASCII.
+`cut -c` is the way to get there: it counts characters only where the locale
+says UTF-8, and bytes under `LC_ALL=C`. lich passes the environment it was
+launched with straight into the PTY (`internal/terminal/childenv.go` drops
+AppImage internals and nothing else, and the sandbox sets only `HOME`), so a
+session started from a desktop carries that desktop's locale and never sees
+this. One started where the locale is not set does, and the report is the same
+shape either way — which is what makes it a thing to write down rather than to
+catch.
 
 Send it on `Stop`. Re-sending on every `Stop` is fine — lich only applies it
 while the label is still automatic (see below), so a stable title is idempotent.
