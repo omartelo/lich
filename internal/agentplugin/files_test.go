@@ -1065,3 +1065,38 @@ func TestAntigravityInstallWritesNothingWhenTheFetchFails(t *testing.T) {
 		t.Errorf("a failed install left a manifest behind (stat err = %v)", err)
 	}
 }
+
+// A refused `agy mcp add` must not leave an install that claims to be finished.
+// The manifest is what Installed, the update check and HasTools all read, and
+// HasTools promising lich's own tools is what an agent meets as an error at its
+// prompt — so the registration has to succeed before the version is written
+// down.
+func TestAntigravityInstallClaimsNothingWhenTheRegistrationFails(t *testing.T) {
+	dir := antigravityHome(t)
+	s, _ := fileServer(t, antigravityFiles())
+	antigravityCLI(t, s)
+	t.Setenv(fakeCLIFail, "mcp add")
+	s.lichBin = func() string { return "/opt/lich/lich" }
+
+	if err := s.Install(providers.Antigravity); err == nil {
+		t.Fatal("Install: want an error when the registration is refused, got nil")
+	}
+	// The hooks stay: they are written and they work, and the next install
+	// overwrites them. It is the claim that must not survive.
+	if _, err := os.Stat(filepath.Join(dir, antigravityHooksFile)); err != nil {
+		t.Errorf("the registration's own scripts were rolled back: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, antigravityManifest)); !os.IsNotExist(err) {
+		t.Errorf("a refused registration left a manifest behind (stat err = %v)", err)
+	}
+	if got, ok := s.installedVersion(providers.Antigravity); ok {
+		t.Errorf("installedVersion = (%q,true) after the registration failed, want false", got)
+	}
+	if s.Installed(providers.Antigravity) {
+		t.Error("Installed = true after the registration failed")
+	}
+	// HasTools is not asserted here, and the omission is the point: it reads the
+	// same manifest, so the three checks above already decide it — and at this
+	// fixture's version (below toolsMinVersion) it answers false either way,
+	// which would be an assertion that cannot fail.
+}

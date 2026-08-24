@@ -97,10 +97,19 @@ func (s *Service) antigravityInstall() error {
 	if err != nil {
 		return err
 	}
-	if err := writeFile(filepath.Join(dir, antigravityManifest), manifest, 0o644); err != nil {
+	// The registration goes in before the manifest, and the order is the whole
+	// guarantee: the manifest is what every later question reads as "installed,
+	// at this version" — Installed, the update check, and HasTools, which
+	// promises the session lich's own tools on the strength of it. Written
+	// first, a refused `agy mcp add` would leave an install that reported
+	// itself complete while the tools it claims were never registered, and the
+	// agent would meet that as an error at the prompt. Written last, a failure
+	// here leaves a directory with no version in it, which reads as not
+	// installed and is what the next install overwrites.
+	if err := s.antigravityRegisterMCP(); err != nil {
 		return err
 	}
-	return s.antigravityRegisterMCP()
+	return writeFile(filepath.Join(dir, antigravityManifest), manifest, 0o644)
 }
 
 // antigravityManifestFile is the manifest lich writes, carrying the released
