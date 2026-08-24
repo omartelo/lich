@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.40.1] - 2026-08-24
+
 ### Fixed
 
 - **Settings › Antigravity no longer reports the binary it runs as missing.**
@@ -3269,7 +3271,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.40.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.40.1...HEAD
+[0.40.1]: https://github.com/omartelo/lich/compare/v0.40.0...v0.40.1
 [0.40.0]: https://github.com/omartelo/lich/compare/v0.39.0...v0.40.0
 [0.39.0]: https://github.com/omartelo/lich/compare/v0.38.0...v0.39.0
 [0.38.0]: https://github.com/omartelo/lich/compare/v0.37.0...v0.38.0
