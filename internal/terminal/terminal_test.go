@@ -554,8 +554,8 @@ func TestResolveCommand(t *testing.T) {
 
 // TestResumeArgs proves each provider resumes in its own spelling — a flag of
 // its own for Claude Code, Antigravity and oh-my-pi, a subcommand for Codex, one
-// they happen to share for opencode and Crush — and that a kind with none wired never grows one: a shell
-// must not be handed a stray id.
+// they happen to share for opencode and Crush — and that a kind with none wired
+// never grows one: a shell must not be handed a stray id.
 func TestResumeArgs(t *testing.T) {
 	cases := []struct {
 		name, kind, resume string

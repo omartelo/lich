@@ -171,14 +171,15 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   Claude Code card draws `lich · open_session`. The trap is reaching for `tool-label.ts` when that line looks
   wrong: the tool's identity arrives in a different field on this provider, and a plugin older than the release
   that added it sends `call_mcp_tool` with no detail at all.
-- **Only two of the four harnesses that report a tool spell an MCP one splittably** (`frontend/src/lib/session/tool-label.ts`,
+- **Only two of the five harnesses that report a tool spell an MCP one splittably** (`frontend/src/lib/session/tool-label.ts`,
   table in `docs/hooks/session-state.md`): Claude Code and Codex send `mcp__<server>__<tool>`, which the card draws
   as `<server> · <tool>`. omp's `mcp__<server>_<tool>` has one underscore doing two jobs — `mcp__lich_list_sessions`
   splits into `lich` + `list_sessions` or `lich_list` + `sessions` and the string cannot say which — so only its
   prefix comes off, and opencode's `<server>_<tool>` carries no marker at all and is shown whole. Nothing overflows
   anywhere (the line truncates), but on those two the card spends its width on a server name nobody asked for.
-  Splitting them needs the list of registered server names, which the card does not have. Crush is not on this
-  list at all: it reports no tool.
+  Splitting them needs the list of registered server names, which the card does not have. Antigravity is the fifth
+  and nothing here reaches it: its name is not a tool name at all, so the split never applies and the bullet above
+  is where that one is answered. Crush is on no version of this list: it reports no tool.
 - **Only Claude Code says what a session is waiting for; the others say less or nothing**
   (`frontend/src/components/sidebar/SessionCard.tsx`, table in `docs/hooks/session-state.md`): its
   `Notification` carries a `message` written for a human, so the card reads "Claude needs your permission to
