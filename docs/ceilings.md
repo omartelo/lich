@@ -22,7 +22,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **The session readout understands Claude Code and Codex transcripts only**
   (`internal/terminal/usage_claude.go`, `internal/terminal/usage_codex.go`): oh-my-pi, opencode and Crush record
   token usage but not the model's context-window size, so lich cannot turn those counts into a trustworthy
-  percentage. Their footer therefore carries no model or context ring. Codex rollouts carry the effective window
+  percentage, and Antigravity files its conversation as SQLite rather than as a transcript lich reads at all.
+  Their footer therefore carries no model or context ring. Codex rollouts carry the effective window
   selected for that session — 95% of its default or configured `model_context_window` — but no API-cost
   accounting, so its setting stops at model and context while Claude Code alone offers the cost rung.
 - **A dropped file has no path, so lich guesses it** (`internal/drop`): a file under neither the session directory
@@ -120,9 +121,9 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **lich appends to the agent's system prompt, for two providers only**
   (`internal/terminal/command.go`, `briefingFlags` → `relay.SpawnBriefing`): Claude Code and oh-my-pi are spawned
   with `--append-system-prompt` carrying lich's own briefing, so text the user never wrote is in every session's
-  prompt and in `/proc/<pid>/cmdline`. Codex, opencode and Crush get nothing there — none has a per-spawn append
-  flag, so for those three the point exists only in lich's MCP instructions, and behaviour between providers
-  differs by that much.
+  prompt and in `/proc/<pid>/cmdline`. Codex, Antigravity, opencode and Crush get nothing there — none has a
+  per-spawn append flag, so for those four the point exists only in lich's MCP instructions, and behaviour between
+  providers differs by that much.
 - **A prompt in use is recognised from the bytes going in, never from the line itself**
   (`internal/terminal/draft.go`): a relayed message pastes at the prompt and sends an Enter behind it, so lich
   holds the delivery back while the user has unsent input there. What it counts is printable input since the last
@@ -138,13 +139,24 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   first, and both senders read a confident wrong report — nothing anywhere reports the mismatch. Naming the ticket
   is still the only exact route, which is why every relayed message spells it and why the card's tooltip shows it.
 
-- **Installing the plugin writes into three harnesses' own directories** (`internal/agentplugin`): Claude Code and
+- **Installing the plugin writes into four harnesses' own directories** (`internal/agentplugin`): Claude Code and
   Codex are driven through their plugin CLI, but opencode, oh-my-pi and Crush have none, so lich writes the
   released files itself. None of them records what is installed, so the version lives in a marker line lich wrote —
   edit the file by hand and lich reads it as not installed. Crush below 0.88.0 ignores those lines in silence,
   which is why the install asks its version first. Crush's block and omp's `mcp.json` register lich's MCP server by
   the absolute path of the binary that installed it, and omp's is a JSON document lich rewrites rather than appends
   to: every key survives, the user's formatting does not.
+- **Antigravity has a plugin CLI and lich installs around it** (`internal/agentplugin/antigravity.go`): `agy
+  plugin install` takes a directory, and its only remote form clones that repository's default branch — while lich
+  installs a *release*, whose version is what a card reports and what the next update compares against. So lich
+  writes the customization directory itself (`~/.gemini/config/plugins/lich/`), with three consequences. The
+  installed version lives in the manifest lich writes rather than in a marker line, since the directory is lich's
+  outright — and a copy the user installed through `agy plugin install` carries no version, so it reads as not
+  installed. The registration's commands are relative, resolved against the directory holding `hooks.json`
+  (Antigravity runs a hook through `sh -c` from there and sets no plugin-root variable of its own, both measured on
+  1.1.19), so moving that directory by hand breaks every report until the next install. And lich writes the hooks
+  and their scripts only: the plugin's skills come with `agy plugin install`, not with this, which is the same
+  thing already true of opencode, oh-my-pi and Crush.
 - **A new MCP tool reaches opencode a release later than everyone else** (`internal/cli/mcp.go`, `mcpTools`; the
   registration table in `docs/cli.md`): every other harness is handed lich's own server, so a tool added here is in
   that session's list on the next spawn. opencode cannot register an MCP server from a plugin, so its plugin
@@ -152,6 +164,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   arrives there only once that repo cuts a release and the user reinstalls the plugin, and until they do it is
   missing from that session's list while it is in every other. `lich rename` works there like anywhere else; it is
   discovery that lags, which is the whole reason the tools exist.
+- **An Antigravity card names the step, not the MCP tool** (`frontend/src/lib/session/tool-label.ts`): every MCP
+  call there is the one step `call_mcp_tool`, with the server and the tool in `args.ServerName` / `args.ToolName`
+  (measured on 1.1.19). Nothing in that name can be split, so the fix was never here — the plugin reads those two
+  arguments and sends them as the report's `detail`, and the card draws `call_mcp_tool · lich/open_session` where a
+  Claude Code card draws `lich · open_session`. The trap is reaching for `tool-label.ts` when that line looks
+  wrong: the tool's identity arrives in a different field on this provider, and a plugin older than the release
+  that added it sends `call_mcp_tool` with no detail at all.
 - **Only two of the four harnesses that report a tool spell an MCP one splittably** (`frontend/src/lib/session/tool-label.ts`,
   table in `docs/hooks/session-state.md`): Claude Code and Codex send `mcp__<server>__<tool>`, which the card draws
   as `<server> · <tool>`. omp's `mcp__<server>_<tool>` has one underscore doing two jobs — `mcp__lich_list_sessions`
@@ -165,11 +184,11 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   `Notification` carries a `message` written for a human, so the card reads "Claude needs your permission to
   use Bash". Codex's `PermissionRequest` and opencode's `.asked` events carry only the thing being asked
   about — `tool_name`, `permission`, `action` — so those cards read a bare `Bash` or `edit`, which says which
-  card to open and not what it will ask. **oh-my-pi and Crush send no reason at all** and keep the generic
-  "Waiting on you": neither reports `waiting` in the first place (omp declares an approval event no run was
-  ever seen emitting; Crush reports no state), so there is nothing to hang a reason on. The trap is reading a
-  bare card as "nothing to say" — on those two it means the harness never spoke, not that the block is
-  trivial.
+  card to open and not what it will ask. **Antigravity, oh-my-pi and Crush send no reason at all** and keep the
+  generic "Waiting on you": none of the three reports `waiting` in the first place (Antigravity's permission
+  prompt raises no lifecycle event that has been measured; omp declares an approval event no run was ever seen
+  emitting; Crush reports no state), so there is nothing to hang a reason on. The trap is reading a bare card as
+  "nothing to say" — on those three it means the harness never spoke, not that the block is trivial.
 - **omp's state directory answers to two variables, and the profile wins** (`internal/agentplugin/omp.go`,
   `internal/terminal/transcript.go`, resolving it independently as the Claude Code pair do): `OMP_PROFILE` moves
   the whole directory and beats an explicit `PI_CODING_AGENT_DIR`. Get it backwards and the install lands where omp
@@ -306,5 +325,5 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   the open ones. History is the long list, so widening the transcript search to it would put a hundred disk
   reads behind every character typed. The parked row keeps its `provider_session_id`, so the transcript is
   still there to be searched by whatever does it later; and that search is Claude-only today
-  (`claudeTranscriptPath`) while `canResume` locates all five providers, so widening it would inherit that gap
+  (`claudeTranscriptPath`) while `canResume` locates all six providers, so widening it would inherit that gap
   rather than close it.

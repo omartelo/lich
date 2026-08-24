@@ -22,15 +22,16 @@ const defaultBin = providers.Claude
 // KindShell marks a session that runs the user's shell instead of a provider.
 const KindShell = "shell"
 
-// How each provider reopens an existing conversation by id: Claude Code and
-// oh-my-pi take a flag of their own, Codex a subcommand, and opencode and Crush
-// happen to agree on one spelling. Every one of them was read off that CLI's own
-// --help.
+// How each provider reopens an existing conversation by id: Claude Code,
+// Antigravity and oh-my-pi take a flag of their own, Codex a subcommand, and
+// opencode and Crush happen to agree on one spelling. Every one of them was read
+// off that CLI's own --help.
 const (
-	claudeResumeFlag  = "--resume"
-	codexResumeSubcmd = "resume"
-	ompResumeFlag     = "-r"
-	sessionResumeFlag = "--session"
+	claudeResumeFlag      = "--resume"
+	codexResumeSubcmd     = "resume"
+	antigravityResumeFlag = "--conversation"
+	ompResumeFlag         = "-r"
+	sessionResumeFlag     = "--session"
 )
 
 // claudeNameFlag sets the name a session answers to in Claude Code's peer
@@ -48,11 +49,12 @@ const claudeNameFlag = "--name"
 // session exists. A provider missing here gets no flag rather than somebody
 // else's.
 var skipPermissionFlags = map[string]string{
-	providers.Claude:   "--dangerously-skip-permissions",
-	providers.Codex:    "--dangerously-bypass-approvals-and-sandbox",
-	providers.OpenCode: "--auto",
-	providers.OMP:      "--auto-approve",
-	providers.Crush:    "--yolo",
+	providers.Claude:      "--dangerously-skip-permissions",
+	providers.Codex:       "--dangerously-bypass-approvals-and-sandbox",
+	providers.Antigravity: "--dangerously-skip-permissions",
+	providers.OpenCode:    "--auto",
+	providers.OMP:         "--auto-approve",
+	providers.Crush:       "--yolo",
 }
 
 // modelFlags is how each provider is told which model to run, for a session
@@ -65,10 +67,11 @@ var skipPermissionFlags = map[string]string{
 // against 0.88.0). Naming a model there would mean writing the config file the
 // user owns, which is the same line lich already draws for MCP registration.
 var modelFlags = map[string]string{
-	providers.Claude:   "--model",
-	providers.Codex:    "--model",
-	providers.OpenCode: "--model",
-	providers.OMP:      "--model",
+	providers.Claude:      "--model",
+	providers.Codex:       "--model",
+	providers.Antigravity: "--model",
+	providers.OpenCode:    "--model",
+	providers.OMP:         "--model",
 }
 
 // SupportsModel reports whether a provider can be told which model to run when
@@ -101,7 +104,7 @@ func SupportsModel(kind string) bool {
 // takes the literal branch instead, which lands the same text; what must not
 // happen is a briefing short enough to name a real file.
 //
-// The other three are absent because none of them has an append flag. Codex
+// The other four are absent because none of them has an append flag. Codex
 // takes `model_instructions_file`, which *replaces* its base instructions —
 // swapping the whole system prompt of a provider for a file lich wrote is not a
 // thing lich does for one paragraph. opencode's `instructions` and Crush's
@@ -320,6 +323,8 @@ func resumeArgs(kind, resume string) []string {
 		return []string{claudeResumeFlag, resume}
 	case providers.Codex:
 		return []string{codexResumeSubcmd, resume}
+	case providers.Antigravity:
+		return []string{antigravityResumeFlag, resume}
 	case providers.OMP:
 		return []string{ompResumeFlag, resume}
 	case providers.OpenCode, providers.Crush:

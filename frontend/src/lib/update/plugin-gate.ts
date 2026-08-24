@@ -28,10 +28,12 @@ export const CODEX_TRUST_HINT = "run /hooks in a Codex session to trust the plug
 export const CRUSH_SCOPE_HINT =
   "reports its session id and refreshes git status. It has no end-of-turn event, so its cards show no status and keep their own name."
 
-// oh-my-pi reports everything except the one state a user is waiting to see. Said
-// here for the same reason as Crush's: a bell that never rings reads as a broken
-// install rather than as the harness's own gap.
-export const OMP_APPROVAL_HINT =
+// oh-my-pi and Antigravity report everything except the one state a user is
+// waiting to see, and neither raises an approval event any run was measured
+// emitting. Said here for the same reason as Crush's: a bell that never rings
+// reads as a broken install rather than as the harness's own gap. One line for
+// both, because the gap and its consequence are the same.
+export const NO_APPROVAL_EVENT_HINT =
   "reports its status, name and git changes. It has no observed approval event, so a session waiting on your permission shows a spinner rather than a bell."
 
 // PluginAction is what the gate should do: an install prompt listing the

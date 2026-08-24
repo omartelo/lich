@@ -251,7 +251,7 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
   **Outside a session there is no default** and the project must be named — the
   error lists what is open.
 - `--kind` is what the session runs: any provider id (`claude`, `codex`,
-  `opencode`, `omp`, `crush`) or `shell`. The default is the caller's own
+  `antigravity`, `opencode`, `omp`, `crush`) or `shell`. The default is the caller's own
   provider, so an agent opening a worker gets another of itself; a caller that
   is not a session at all gets Claude Code.
 - `--worktree` is the **branch name** of a git worktree, created off `--base`
@@ -477,7 +477,7 @@ lich v0.25.0 — linux/amd64
   ok    listener     <1ms  port 47821 is held by the running lich (pid 4242)
   skip  store        <1ms  held by the running lich (pid 4242)
   ok    browser       2ms  /usr/bin/chromium
-  ok    providers     3ms  4 of 5 on PATH: claude, codex, opencode, crush
+  ok    providers     3ms  4 of 6 on PATH: claude, codex, opencode, crush
         total         6ms
 
 lich starts here — nothing is in the way.
@@ -517,6 +517,7 @@ own command line (`providers.AcceptsMCPServer`):
 |---|---|---|
 | Claude Code | `--mcp-config` with a JSON string, no file on disk | at spawn |
 | Codex | `-c mcp_servers.lich.command=…` and `…args=["mcp"]` | at spawn |
+| Antigravity | an `agy mcp add` the plugin install runs — its own supported interface, so lich never formats that document | with the plugin |
 | Crush | an `mcp add` line in the block the plugin install writes into `crushrc` | with the plugin |
 | opencode | its plugin defines the same eight as tools of its own — a plugin there cannot register an MCP server | with the plugin |
 | oh-my-pi | a `lich` entry merged into `mcp.json` beside the extension the plugin install writes | with the plugin |
@@ -599,7 +600,8 @@ distinction is the point: the receiving agent must not read either as its user
 speaking, and the two are not the same kind of "not your user".
 
 A target that **has** lich's tools is offered one first — Claude Code and Codex
-always, opencode and Crush once the installed plugin is new enough to carry them
+always, Antigravity, opencode, oh-my-pi and Crush once the installed plugin is
+new enough to carry them
 (`agentplugin.HasTools`). A session pointed at a tool it does not have loses the
 turn to an error, where the command works everywhere:
 

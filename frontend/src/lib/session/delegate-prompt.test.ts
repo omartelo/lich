@@ -10,7 +10,7 @@ describe("delegatePrompt", () => {
   })
 
   it("spells the command for every other sender", () => {
-    for (const kind of ["opencode", "crush", "omp", "shell"]) {
+    for (const kind of ["antigravity", "opencode", "crush", "omp", "shell"]) {
       expect(delegatePrompt(kind, "docs")).toBe('lich send "docs" "')
     }
   })
@@ -34,7 +34,7 @@ describe("delegateWorktreePrompt", () => {
   })
 
   it("names the one command for every other sender — nothing else would", () => {
-    for (const kind of ["opencode", "crush", "omp", "shell", "something-new"]) {
+    for (const kind of ["antigravity", "opencode", "crush", "omp", "shell", "something-new"]) {
       const prompt = delegateWorktreePrompt(kind)
       expect(prompt).toContain("lich open --worktree")
       // Opening and handing over is one command now, so sending the agent to a

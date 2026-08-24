@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Antigravity CLI runs as a session, like every other provider.** Google's
+  `agy` joins Claude Code, Codex, opencode, oh-my-pi and Crush in Settings ›
+  Providers: a session of its own, resumed by `--conversation` when a card comes
+  back from a restart, run without permission prompts if you turn that rung on,
+  confined by the sandbox with its `~/.gemini` credentials still reachable, and
+  told which model to run. The companion plugin installs there too — reporting
+  the session id, the spinner, the title and the git-status refresh — and the
+  same install registers lich's own tools, so an Antigravity session can drive
+  the sessions beside it. Two things it does not have, both by its own design:
+  no lich briefing in its system prompt (it takes no append flag at spawn) and
+  no context ring in the footer (it files a conversation as a database rather
+  than as a transcript lich can read).
 - **A session's card hands out the command that reaches it.** Naming a session
   is what makes `lich send` usable from another terminal, but the name lived on a
   card in the window and the line had to be retyped from memory, quoting

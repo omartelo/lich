@@ -65,7 +65,7 @@ type Spec struct {
 //
 // A provider missing from here confines to a home with no credentials in it,
 // which is a session that opens and cannot log in. The registry is the
-// checklist, so all five are listed.
+// checklist, so all six are listed.
 func stateDirs(providerID, home string) []string {
 	switch providerID {
 	case providers.Claude:
@@ -77,6 +77,13 @@ func stateDirs(providerID, home string) []string {
 		}
 	case providers.Codex:
 		return []string{envDir("CODEX_HOME", filepath.Join(home, ".codex"))}
+	case providers.Antigravity:
+		// One directory covers all three things a confined session needs: the
+		// OAuth credentials it authenticates with sit at the root (shared with
+		// Gemini CLI), its customizations under `config/`, and its conversations
+		// under `antigravity-cli/`. No environment variable moves it — 1.1.19
+		// falls back to a hardcoded ".gemini" when it cannot resolve the home.
+		return []string{filepath.Join(home, ".gemini")}
 	case providers.OMP:
 		return []string{ompAgentDir(home)}
 	case providers.OpenCode:

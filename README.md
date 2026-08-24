@@ -30,9 +30,9 @@
 lich lets you:
 
 - **Run the agent you already have.** [Claude Code](https://www.anthropic.com/claude-code),
-  [Codex](https://github.com/openai/codex), [opencode](https://github.com/sst/opencode),
-  oh-my-pi and [Crush](https://github.com/charmbracelet/crush) are all
-  first-class. Point lich at each binary once, then pick the default or choose
+  [Codex](https://github.com/openai/codex), Antigravity,
+  [opencode](https://github.com/sst/opencode), oh-my-pi and
+  [Crush](https://github.com/charmbracelet/crush) are all first-class. Point lich at each binary once, then pick the default or choose
   per session.
 - **Keep a real terminal.** PTY-backed shells, several per project, rendered on
   the GPU — searchable scrollback that survives a full page reload. Give one an
@@ -186,6 +186,10 @@ Package a Linux release locally (needs
 ```bash
 task package   # .deb + .rpm + Arch .pkg.tar.zst in bin/
 ```
+
+Adding another agent CLI to the six lich runs is the one change that lands in a
+dozen files across two repositories:
+[`docs/adding-a-provider.md`](docs/adding-a-provider.md) is the map.
 
 ## Sponsors
 

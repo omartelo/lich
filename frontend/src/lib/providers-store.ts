@@ -54,6 +54,7 @@ export function skipPermissionsKey(id: string, worktree: boolean): string {
 export const skipPermissionFlags: Record<string, string> = {
   claude: "--dangerously-skip-permissions",
   codex: "--dangerously-bypass-approvals-and-sandbox",
+  antigravity: "--dangerously-skip-permissions",
   opencode: "--auto",
   omp: "--auto-approve",
   crush: "--yolo",

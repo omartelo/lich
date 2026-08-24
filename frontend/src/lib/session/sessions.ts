@@ -10,7 +10,14 @@ import { applyOrder } from "@/lib/reorder"
 
 // Provider ids that can back a session, mirrored from internal/providers.Registry
 // (Go) — keep in sync. A session's kind is one of these or the plain shell.
-export const PROVIDER_KINDS = ["claude", "codex", "opencode", "omp", "crush"] as const
+export const PROVIDER_KINDS = [
+  "claude",
+  "codex",
+  "antigravity",
+  "opencode",
+  "omp",
+  "crush",
+] as const
 export type ProviderKind = (typeof PROVIDER_KINDS)[number]
 
 // What a session's PTY runs: a provider's CLI or the user's shell. Values match
@@ -453,7 +460,14 @@ export function removeProject(state: SessionState, projectId: string): SessionSt
 
 // The provider kinds whose CLI can reopen a conversation by id, mirrored from
 // resumeArgs (Go) — keep in sync.
-const RESUMABLE_KINDS: readonly SessionKind[] = ["claude", "codex", "omp", "opencode", "crush"]
+const RESUMABLE_KINDS: readonly SessionKind[] = [
+  "claude",
+  "codex",
+  "antigravity",
+  "omp",
+  "opencode",
+  "crush",
+]
 
 // resumableSession returns the session whose PTY should ask before it spawns,
 // because it carries the provider conversation it ran before the last restart.

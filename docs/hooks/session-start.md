@@ -24,7 +24,8 @@ Content-Type: application/json
   Code and Codex, the hook payload's `session_id` field on stdin. Must be
   non-empty.
 - `provider` — which CLI is reporting, as a provider id from
-  `internal/providers.Registry` (`claude`, `codex`, `opencode`, `omp`, `crush`).
+  `internal/providers.Registry` (`claude`, `codex`, `antigravity`, `opencode`,
+  `omp`, `crush`).
   Optional: absent means `claude`, the only provider that reported before the
   field existed. An id outside the registry is rejected, like an unknown state
   on `/hook` — lich ships its side of a contract first, so a provider it has no
@@ -42,19 +43,24 @@ deprecated alias and the defaulted `provider`.
 
 ## Event → action mapping
 
-| Claude Code hook | Codex hook     | opencode event     | oh-my-pi event  | Crush hook    | action                                    |
-|------------------|----------------|--------------------|-----------------|---------------|-------------------------------------------|
-| `SessionStart`   | `SessionStart` | `session.created`  | `session_start` | `PreToolUse`  | store `provider_session_id` on the lich   |
-|                  |                |                    |                 |               | session row, and mark the card as running |
-|                  |                |                    |                 |               | `provider` (the `session-agent` app event)|
+| Claude Code hook | Codex hook     | Antigravity hook | opencode event     | oh-my-pi event  | Crush hook    | action                                    |
+|------------------|----------------|------------------|--------------------|-----------------|---------------|-------------------------------------------|
+| `SessionStart`   | `SessionStart` | `PreInvocation`  | `session.created`  | `session_start` | `PreToolUse`  | store `provider_session_id` on the lich   |
+|                  |                |                  |                    |                 |               | session row, and mark the card as running |
+|                  |                |                  |                    |                 |               | `provider` (the `session-agent` app event)|
 
 `SessionStart` fires on startup, resume, `/clear` and compaction. A resume
 reports the resumed session's id and overwrites the stored value — lich always
 holds the id of the provider session currently in the card.
 
 The others report the same id from the earliest place each one offers it.
-opencode raises `session.created` when the conversation is created, before the
-first turn, so it lands as early as `SessionStart` does; oh-my-pi's
+**Antigravity has no session event at all**: its lifecycle is `PreInvocation`,
+`PreToolUse`, `PostToolUse`, `PostInvocation` and `Stop`, so the report rides the
+first one — which fires before the model is called on every turn, so it lands as
+early as `SessionStart` does and repeats harmlessly after that. Its payload
+spells the id `conversationId` rather than `session_id`, in camelCase like every
+other field it carries. opencode raises `session.created` when the conversation
+is created, before the first turn, so it lands as early as `SessionStart` does; oh-my-pi's
 `session_start` fires before the first turn too, and the id is read off the
 session manager the event hands the extension — omp puts nothing about the
 session in the environment. **Crush has only
@@ -105,8 +111,8 @@ cares when the id arrived, only which conversation it names.
   it, per the versioning note in the README.
 - **Every provider resumes; the shell does not.** The field and the column are
   provider-agnostic, but each CLI spells resume its own way (`claude --resume
-  <id>`, `codex resume <id>`, `omp -r <id>`, `opencode --session <id>`, `crush
-  --session <id>`), so both `resumeArgs` (`internal/terminal/command.go`) and
+  <id>`, `codex resume <id>`, `agy --conversation <id>`, `omp -r <id>`,
+  `opencode --session <id>`, `crush --session <id>`), so both `resumeArgs` (`internal/terminal/command.go`) and
   `resumableSession` (`frontend/src/lib/session/sessions.ts`) list the kinds that
   have one. A shell session that had a provider CLI run inside it by hand carries
   an id and is still never offered a resume — the shell cannot reopen it.
@@ -117,7 +123,14 @@ cares when the id arrived, only which conversation it names.
   `~/.omp/agent/sessions/*/*_<id>.jsonl` for oh-my-pi (`CLAUDE_CONFIG_DIR`,
   `CODEX_HOME` and `OMP_PROFILE`/`PI_CODING_AGENT_DIR` override the roots; a
   named omp profile wins over the explicit override, which is the order
-  `omp config path` applies). opencode and Crush file no per-session transcript,
+  `omp config path` applies). Antigravity files its conversation as SQLite
+  instead, one database per conversation, so the proof is the file itself:
+  `~/.gemini/antigravity-cli/conversations/<id>.db`. No environment variable
+  moves that root — 1.1.19 falls back to a hardcoded `.gemini` under the home
+  when it cannot resolve one — and the answer matters more there than elsewhere,
+  because `agy` drops a `--conversation` it cannot find with a log line and opens
+  a brand new conversation rather than failing. opencode and Crush file no
+  per-session transcript,
   so the proof is a row in their own SQLite database instead
   (`internal/terminal/sessiondb.go`): `SELECT 1` on the `id` of `session` in
   `$XDG_DATA_HOME/opencode/opencode.db` (`~/.local/share` when the variable is

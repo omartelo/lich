@@ -295,7 +295,8 @@ func TestStatusListsEveryHarness(t *testing.T) {
 		got = append(got, entry.Provider)
 	}
 	want := []string{
-		providers.Claude, providers.Codex, providers.OpenCode, providers.OMP, providers.Crush,
+		providers.Claude, providers.Codex, providers.Antigravity,
+		providers.OpenCode, providers.OMP, providers.Crush,
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("Status() covers %v, want %v", got, want)

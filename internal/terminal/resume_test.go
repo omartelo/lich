@@ -62,6 +62,21 @@ func TestResumeAvailable(t *testing.T) {
 	writeSessionDB(t, filepath.Join(opencodeBase, "opencode", "opencode.db"), "session", opencodeLive)
 	t.Setenv("XDG_DATA_HOME", opencodeBase)
 
+	// Antigravity answers to no environment variable of its own, so the home is
+	// what has to move. Every other provider here is pointed at a directory by an
+	// explicit override, so moving it changes nothing else.
+	agyHome := t.TempDir()
+	t.Setenv("HOME", agyHome)
+	t.Setenv("USERPROFILE", agyHome)
+	agyDir := filepath.Join(agyHome, ".gemini", "antigravity-cli", "conversations")
+	if err := os.MkdirAll(agyDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const agyLive = "7bb32ee5-e8e3-42cd-a13c-849723bc4e57"
+	if err := os.WriteFile(filepath.Join(agyDir, agyLive+".db"), []byte("SQLite"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
 	crushCwd := t.TempDir()
 	const crushLive = "18345afc-f497-4d53-8dfd-f7c4e4d9b313"
 	writeSessionDB(t, filepath.Join(crushCwd, ".crush", "crush.db"), "sessions", crushLive)
@@ -85,6 +100,10 @@ func TestResumeAvailable(t *testing.T) {
 		{"omp transcript on disk", providers.OMP, ompLive, "", true},
 		{"omp transcript deleted", providers.OMP, "019ffb38-0000-0000-0000-000000000000", "", false},
 		{"omp never sees a codex rollout", providers.OMP, codexLive, "", false},
+		{"antigravity conversation on disk", providers.Antigravity, agyLive, "", true},
+		{"antigravity conversation deleted", providers.Antigravity,
+			"00000000-0000-0000-0000-000000000000", "", false},
+		{"antigravity never sees a claude transcript", providers.Antigravity, live, "", false},
 		{"opencode row in its database", providers.OpenCode, opencodeLive, "", true},
 		{"opencode conversation deleted", providers.OpenCode, "ses_gone", "", false},
 		{"opencode never sees a crush row", providers.OpenCode, crushLive, "", false},
@@ -157,6 +176,34 @@ func TestSessionRowExistsSurvivesAnotherToolsSchema(t *testing.T) {
 	writeSessionDB(t, empty, "session", "live-id")
 	if sessionRowExists(empty, "session", "") {
 		t.Error("an empty id answered true; every row would match a LIKE, none may match this")
+	}
+}
+
+// TestAntigravityConversationPath pins where an Antigravity conversation is
+// looked for. The CLI reads its root through no environment variable — 1.1.19
+// falls back to a hardcoded ".gemini" under the home — so the path is built from
+// the home and nothing else, and a resume offered from the wrong one silently
+// opens a brand new conversation instead of failing.
+func TestAntigravityConversationPath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	const id = "7bb32ee5-e8e3-42cd-a13c-849723bc4e57"
+	if _, ok := antigravityConversationPath(id); ok {
+		t.Error("answered true before the conversation existed")
+	}
+
+	dir := filepath.Join(home, ".gemini", "antigravity-cli", "conversations")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(dir, id+".db")
+	if err := os.WriteFile(want, []byte("SQLite"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := antigravityConversationPath(id); !ok || got != want {
+		t.Errorf("antigravityConversationPath(%q) = (%q,%v), want %q", id, got, ok, want)
 	}
 }
 

@@ -28,9 +28,9 @@ Both sides test against the payloads in
 
 ## Event → action mapping
 
-| Claude Code hook | Codex hook | opencode event    | oh-my-pi event                | Crush hook | action                                           |
-|------------------|------------|-------------------|-------------------------------|------------|--------------------------------------------------|
-| `Stop`           | `Stop`     | `session.updated` | `session_stop` + `turn_start` | —          | set the session label to `title` (if still auto) |
+| Claude Code hook | Codex hook | Antigravity hook | opencode event    | oh-my-pi event                | Crush hook | action                                           |
+|------------------|------------|------------------|-------------------|-------------------------------|------------|--------------------------------------------------|
+| `Stop`           | `Stop`     | `Stop`           | `session.updated` | `session_stop` + `turn_start` | —          | set the session label to `title` (if still auto) |
 
 The `ai-title` is an internal Haiku summary of the first prompt, written to the
 transcript **after** the first turn — so it does not exist at `SessionStart`.
@@ -43,7 +43,9 @@ title=$(tac "$transcript_path" | grep -m1 '"type":"ai-title"' | jq -r '.aiTitle'
 
 A provider that generates no title sends whatever it names its own thread after
 — Codex uses the first user message verbatim, which the plugin reads from the
-rollout and trims to a card-sized label. The contract only asks for a non-empty
+rollout and trims to a card-sized label, and Antigravity is read the same way:
+its `Stop` payload carries a `transcriptPath` whose first `USER_INPUT` entry is
+that message. The contract only asks for a non-empty
 string; where it comes from is the client's business.
 
 Send it on `Stop`. Re-sending on every `Stop` is fine — lich only applies it

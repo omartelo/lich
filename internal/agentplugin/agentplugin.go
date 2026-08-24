@@ -1,20 +1,23 @@
 // Package agentplugin manages the lich companion plugin inside the provider
 // CLIs that can run it: whether it is installed, whether a newer release
-// exists, and installing or updating it. All five ship the same plugin from the
+// exists, and installing or updating it. All six ship the same plugin from the
 // same repository; what differs per provider — the subcommands, where the
 // installed version is read from, and whether there is a CLI at all — lives in
-// claude.go, codex.go, opencode.go, omp.go and crush.go.
+// claude.go, codex.go, antigravity.go, opencode.go, omp.go and crush.go.
 //
 // Two install shapes, decided by the harness rather than by lich:
 //
 //   - Claude Code and Codex are driven through their own plugin CLI, the
 //     supported interface, so lich never edits their state files by hand.
-//   - opencode, oh-my-pi and Crush have no plugin CLI, so lich writes the files
-//     the release published: a module into opencode's plugin directory, another
-//     into oh-my-pi's extensions directory, and hook scripts plus a delimited
-//     block of `hook add` lines into Crush's crushrc. Each carries a marker
-//     naming the version, which is the only record of what is installed where
-//     the harness keeps none.
+//   - Antigravity, opencode, oh-my-pi and Crush have lich write the files the
+//     release published: a customization directory under Antigravity's global
+//     `config/plugins/`, a module into opencode's plugin directory, another into
+//     oh-my-pi's extensions directory, and hook scripts plus a delimited block
+//     of `hook add` lines into Crush's crushrc. Each carries the version it
+//     installed — a marker line, or a field in a manifest lich owns outright —
+//     which is the only record of what is installed where the harness keeps
+//     none. Antigravity does have a plugin CLI; antigravity.go says why it is
+//     not the install.
 package agentplugin
 
 import (
@@ -61,7 +64,8 @@ const (
 // lists them. A provider outside this list has no plugin to offer, so it never
 // reaches a status or an install.
 var supported = []string{
-	providers.Claude, providers.Codex, providers.OpenCode, providers.OMP, providers.Crush,
+	providers.Claude, providers.Codex, providers.Antigravity,
+	providers.OpenCode, providers.OMP, providers.Crush,
 }
 
 // BinResolver supplies the binary to shell out to for a provider. The store
@@ -172,14 +176,15 @@ func (s *Service) HasTools(provider string) bool {
 // registersServerAtInstall reports whether a provider's tools come from the MCP
 // server the install writes into its config, rather than from the plugin itself.
 //
-// It is what stops HasTools promising tools the install could not register: both
-// of these write the lich binary's own path, and both leave the registration out
-// when it cannot be resolved (crushrcBlock, ompMCPDocument) — so a session there
-// has the plugin's reports and no tool list, and must be told the command line
-// instead. opencode is absent because its plugin defines the tools itself, with
-// no binary to name.
+// It is what stops HasTools promising tools the install could not register: all
+// three write the lich binary's own path, and all three leave the registration
+// out when it cannot be resolved (crushrcBlock, ompMCPDocument,
+// antigravityRegisterMCP) — so a session there has the plugin's reports and no
+// tool list, and must be told the command line instead. opencode is absent
+// because its plugin defines the tools itself, with no binary to name.
 func registersServerAtInstall(provider string) bool {
-	return provider == providers.Crush || provider == providers.OMP
+	return provider == providers.Crush || provider == providers.OMP ||
+		provider == providers.Antigravity
 }
 
 // Installed reports whether the lich plugin is installed for a provider — that
@@ -221,6 +226,8 @@ func (s *Service) Install(provider string) error {
 		return s.claudeInstall()
 	case providers.Codex:
 		return s.codexInstall()
+	case providers.Antigravity:
+		return s.antigravityInstall()
 	case providers.OpenCode:
 		return s.opencodeInstall()
 	case providers.OMP:
@@ -241,6 +248,8 @@ func (s *Service) Update(provider string) error {
 		return s.claudeUpdate()
 	case providers.Codex:
 		return s.codexUpdate()
+	case providers.Antigravity:
+		return s.antigravityInstall()
 	case providers.OpenCode:
 		return s.opencodeInstall()
 	case providers.OMP:
@@ -259,6 +268,8 @@ func (s *Service) installedVersion(provider string) (string, bool) {
 		return claudeInstalledVersion()
 	case providers.Codex:
 		return s.codexInstalledVersion()
+	case providers.Antigravity:
+		return s.antigravityInstalledVersion()
 	case providers.OpenCode:
 		return s.opencodeInstalledVersion()
 	case providers.OMP:

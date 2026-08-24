@@ -3,10 +3,13 @@
 // spent. It is not what a session cost — that is internal/pricing — and not how
 // full a context window is — that is internal/terminal's usage readout.
 //
-// Two of the five providers meter a subscription at all. Claude Code and Codex
-// each poll an undocumented endpoint from their own CLI, authenticated with the
-// OAuth access token that CLI already wrote to disk; opencode, oh-my-pi and
-// Crush run on the user's own API keys, where there is no plan to report.
+// Two of the six providers are read here. Claude Code and Codex each poll an
+// undocumented endpoint from their own CLI, authenticated with the OAuth access
+// token that CLI already wrote to disk; opencode, oh-my-pi and Crush run on the
+// user's own API keys, where there is no plan to report. Antigravity does meter
+// a subscription — a Google account, whose OAuth credentials sit in
+// ~/.gemini/oauth_creds.json — but no endpoint of its own has been measured, and
+// a gauge built on a guessed one would report a number nobody can check.
 //
 // Which account is read is a question about one session, never about lich. A
 // session can be spawned from a binary the user configured — a wrapper that

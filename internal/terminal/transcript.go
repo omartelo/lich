@@ -73,6 +73,28 @@ func codexTranscriptPath(providerSessionID string) (string, bool) {
 	return globTranscript(base, "sessions", "*", "*", "*", "rollout-*-"+providerSessionID+".jsonl")
 }
 
+// antigravityConversationPath is the database Antigravity keeps one
+// conversation in, under its own directory beneath ~/.gemini — the CLI reads
+// that root through no environment variable of its own (1.1.19 falls back to a
+// hardcoded ".gemini" when it cannot resolve the home), so there is nothing to
+// honour here but the home itself.
+//
+// It is not a transcript: Antigravity files the conversation as SQLite and
+// writes its JSONL under `brain/<id>/`, a path the hook payload hands over
+// rather than one lich reconstructs. This resolves the one file whose existence
+// answers "can this id still be reopened".
+func antigravityConversationPath(providerSessionID string) (string, bool) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", false
+	}
+	path := filepath.Join(home, ".gemini", "antigravity-cli", "conversations", providerSessionID+".db")
+	if _, err := os.Stat(path); err != nil {
+		return "", false
+	}
+	return path, true
+}
+
 // ompTranscriptPath locates an oh-my-pi conversation by its id under omp's agent
 // directory. omp files one JSONL per session, in a directory named after the cwd
 // it ran in — sessions/<encoded-cwd>/<timestamp>_<id>.jsonl.

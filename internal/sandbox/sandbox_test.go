@@ -47,6 +47,11 @@ func TestStateDirsPerProvider(t *testing.T) {
 	}{
 		{providers.Claude, []string{filepath.Join(home, ".claude"), filepath.Join(home, ".claude.json")}},
 		{providers.Codex, []string{filepath.Join(home, ".codex")}},
+		// One directory, and deliberately the whole of it: Antigravity keeps its
+		// OAuth credentials at the root of ~/.gemini, its customizations under
+		// config/ and its conversations under antigravity-cli/, and a confined
+		// session needs all three.
+		{providers.Antigravity, []string{filepath.Join(home, ".gemini")}},
 		{providers.OMP, []string{filepath.Join(home, ".omp", "agent")}},
 		{providers.OpenCode, []string{
 			filepath.Join(home, ".config", "opencode"),

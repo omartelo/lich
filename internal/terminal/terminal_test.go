@@ -552,9 +552,9 @@ func TestResolveCommand(t *testing.T) {
 	}
 }
 
-// TestResumeArgs proves each provider resumes in its own spelling — a flag for
-// Claude Code and oh-my-pi, a subcommand for Codex, one they happen to share for
-// opencode and Crush — and that a kind with none wired never grows one: a shell
+// TestResumeArgs proves each provider resumes in its own spelling — a flag of
+// its own for Claude Code, Antigravity and oh-my-pi, a subcommand for Codex, one
+// they happen to share for opencode and Crush — and that a kind with none wired never grows one: a shell
 // must not be handed a stray id.
 func TestResumeArgs(t *testing.T) {
 	cases := []struct {
@@ -565,6 +565,8 @@ func TestResumeArgs(t *testing.T) {
 		{"claude resume", "claude", "abc-123", []string{"--resume", "abc-123"}},
 		{"codex fresh", "codex", "", nil},
 		{"codex resume", "codex", "abc-123", []string{"resume", "abc-123"}},
+		{"antigravity fresh", "antigravity", "", nil},
+		{"antigravity resume", "antigravity", "abc-123", []string{"--conversation", "abc-123"}},
 		{"omp fresh", "omp", "", nil},
 		{"omp resume", "omp", "abc-123", []string{"-r", "abc-123"}},
 		{"opencode fresh", "opencode", "", nil},
@@ -627,6 +629,11 @@ func TestSkipPermissionArgs(t *testing.T) {
 		{"claude on", "claude", true, []string{"--dangerously-skip-permissions"}},
 		{"codex off", "codex", false, nil},
 		{"codex on", "codex", true, []string{"--dangerously-bypass-approvals-and-sandbox"}},
+		{"antigravity off", "antigravity", false, nil},
+		// Antigravity spells it exactly as Claude Code does. Pinned twice on
+		// purpose: the shared literal is what makes a lookup returning the wrong
+		// provider's flag invisible everywhere else.
+		{"antigravity on", "antigravity", true, []string{"--dangerously-skip-permissions"}},
 		{"opencode on", "opencode", true, []string{"--auto"}},
 		{"crush on", "crush", true, []string{"--yolo"}},
 		{"oh-my-pi off", "omp", false, nil},
@@ -706,6 +713,8 @@ func TestModelArgs(t *testing.T) {
 		{"opencode, a provider/model pair", providers.OpenCode, "openai/gpt-5.2",
 			[]string{"--model", "openai/gpt-5.2"}},
 		{"oh-my-pi, a fuzzy match", providers.OMP, "opus", []string{"--model", "opus"}},
+		{"antigravity, a full name", providers.Antigravity, "gemini-3.7-flash-high",
+			[]string{"--model", "gemini-3.7-flash-high"}},
 		{"crush takes none at spawn", providers.Crush, "opus", nil},
 		{"a shell is not a provider", KindShell, "opus", nil},
 		{"no model named", providers.Claude, "", nil},
@@ -725,7 +734,9 @@ func TestModelArgs(t *testing.T) {
 // a model for a provider lich cannot pass one to hears about it instead of
 // getting a session quietly running the provider's default.
 func TestSupportsModel(t *testing.T) {
-	for _, kind := range []string{providers.Claude, providers.Codex, providers.OpenCode, providers.OMP} {
+	for _, kind := range []string{
+		providers.Claude, providers.Codex, providers.Antigravity, providers.OpenCode, providers.OMP,
+	} {
 		if !SupportsModel(kind) {
 			t.Errorf("SupportsModel(%q) = false, want true", kind)
 		}

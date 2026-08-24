@@ -55,6 +55,7 @@ describe("provider setting keys", () => {
   it("spells the skip-permissions flag per provider, and only where one is wired", () => {
     expect(skipPermissionFlags.claude).toBe("--dangerously-skip-permissions")
     expect(skipPermissionFlags.codex).toBe("--dangerously-bypass-approvals-and-sandbox")
+    expect(skipPermissionFlags.antigravity).toBe("--dangerously-skip-permissions")
     expect(skipPermissionFlags.opencode).toBe("--auto")
     expect(skipPermissionFlags.omp).toBe("--auto-approve")
     expect(skipPermissionFlags.crush).toBe("--yolo")

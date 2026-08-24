@@ -8,7 +8,9 @@ import "github.com/omartelo/lich/internal/providers"
 // The session row keeps its provider session id for good, but a provider prunes
 // its own transcripts, so the id outlives the conversation it points at. Resuming
 // one then dies inside the PTY with the provider's error in place of a session —
-// the shortcut Start's doc names. What the provider left on disk is what answers
+// the shortcut Start's doc names. Antigravity is worse than that and the same
+// question answers it: a `--conversation` it cannot find is dropped with a log
+// line, so the session opens as a brand new conversation rather than failing. What the provider left on disk is what answers
 // the question; this asks it for existence alone.
 //
 // cwd is the session's working directory, needed only by Crush: it keeps one
@@ -26,6 +28,9 @@ func (*Service) ResumeAvailable(kind, providerSessionID, cwd string) bool {
 		return ok
 	case providers.Codex:
 		_, ok := codexTranscriptPath(providerSessionID)
+		return ok
+	case providers.Antigravity:
+		_, ok := antigravityConversationPath(providerSessionID)
 		return ok
 	case providers.OMP:
 		_, ok := ompTranscriptPath(providerSessionID)

@@ -1,5 +1,5 @@
 // Package providers is the registry of AI coding CLI harnesses lich can run in
-// a session (Claude Code, Codex, opencode, oh-my-pi, Crush). A provider id
+// a session (Claude Code, Codex, Antigravity, opencode, oh-my-pi, Crush). A provider id
 // doubles as the session kind that spawns it; the terminal resolves the id to a
 // binary, and the settings store keys per-provider overrides on it. Detection is
 // a PATH scan, mirroring internal/chromium's browser detection.
@@ -10,11 +10,12 @@ import "os/exec"
 // Provider ids. Each id is also the session kind (store column + terminal.Start)
 // that runs the provider. Kept in sync with frontend/src/lib/session/sessions.ts.
 const (
-	Claude   = "claude"
-	Codex    = "codex"
-	OpenCode = "opencode"
-	OMP      = "omp"
-	Crush    = "crush"
+	Claude      = "claude"
+	Codex       = "codex"
+	Antigravity = "antigravity"
+	OpenCode    = "opencode"
+	OMP         = "omp"
+	Crush       = "crush"
 )
 
 // Provider is a known harness: a stable id, a display name, and the executable
@@ -33,6 +34,7 @@ type Provider struct {
 var Registry = []Provider{
 	{ID: Claude, Name: "Claude Code", Binaries: []string{"claude"}},
 	{ID: Codex, Name: "Codex", Binaries: []string{"codex"}},
+	{ID: Antigravity, Name: "Antigravity", Binaries: []string{"agy"}},
 	{ID: OpenCode, Name: "opencode", Binaries: []string{"opencode"}},
 	{ID: OMP, Name: "oh-my-pi", Binaries: []string{"omp"}},
 	{ID: Crush, Name: "Crush", Binaries: []string{"crush"}},
@@ -54,11 +56,13 @@ func Known(id string) bool {
 // without editing config that belongs to the user or to their repository.
 //
 // Claude Code takes `--mcp-config` with a JSON string; Codex takes `-c`
-// overrides for its `mcp_servers` table. opencode, oh-my-pi and Crush have no
-// such flag — Crush's whole flag list is cwd, data-dir, session and debug — so
-// registering for those means writing a config file lich does not own, and lich
-// does not. Their sessions reach the other sessions through the `lich` command
-// line instead (docs/cli.md).
+// overrides for its `mcp_servers` table. Antigravity, opencode, oh-my-pi and
+// Crush have no such flag — Antigravity keeps MCP behind an `agy mcp` subcommand
+// and Crush's whole flag list is cwd, data-dir, session and debug — so
+// registering for those means writing config that outlives the spawn, which is
+// what the plugin install does for the three that can take it. Their sessions
+// reach the other sessions through the `lich` command line instead
+// (docs/cli.md).
 func AcceptsMCPServer(id string) bool {
 	return id == Claude || id == Codex
 }

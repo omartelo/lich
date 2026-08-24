@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -847,4 +848,220 @@ func lineWith(block, needle string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// ------------------------------------------------------------- antigravity --
+
+// antigravityHome redirects the home Antigravity discovers global
+// customizations under, and returns the plugin directory an install will write
+// into. Both variables are set for the reason lichConfigHome sets three:
+// os.UserHomeDir reads HOME on Unix and USERPROFILE on Windows, and a redirect
+// that misses one leaves the install writing into the real user's home while
+// the assertions read the temporary one.
+func antigravityHome(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	t.Setenv("HOME", root)
+	t.Setenv("USERPROFILE", root)
+	dir, err := antigravityPluginDir()
+	if err != nil {
+		t.Fatalf("resolve the plugin directory: %v", err)
+	}
+	if !strings.HasPrefix(dir, root) {
+		t.Fatalf("plugin dir %q is outside the test's temp dir %q", dir, root)
+	}
+	return dir
+}
+
+// antigravityCLI points the Service's shell-out — the MCP registration, and
+// nothing else here — at the test binary's fake CLI, and returns a reader of the
+// calls it received.
+func antigravityCLI(t *testing.T, s *Service) func() []string {
+	t.Helper()
+	log := filepath.Join(t.TempDir(), "calls.log")
+	t.Setenv(fakeCLIGuard, "1")
+	t.Setenv(fakeCLILog, log)
+	s.bins = stubBin(mustExecutable(t))
+	return func() []string {
+		data, err := os.ReadFile(log)
+		if err != nil {
+			return nil
+		}
+		return strings.Split(strings.TrimSpace(string(data)), "\n")
+	}
+}
+
+func mustExecutable(t *testing.T) string {
+	t.Helper()
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test binary: %v", err)
+	}
+	return self
+}
+
+// antigravityFiles is the release as this install reads it: the registration at
+// the repository root and every script it names, with the relative commands
+// Antigravity resolves against the directory holding hooks.json.
+func antigravityFiles() map[string]string {
+	files := map[string]string{
+		tagged(antigravityHooksFile): `{"lich":{"PreInvocation":[{"type":"command",` +
+			`"command":"hooks/report-session-start.sh antigravity; printf '{}'"}]}}`,
+	}
+	for _, script := range antigravityScripts {
+		files[tagged(script)] = "#!/bin/sh\n# " + filepath.Base(script) + "\nexit 0\n"
+	}
+	return files
+}
+
+func TestAntigravityInstallWritesTheCustomization(t *testing.T) {
+	dir := antigravityHome(t)
+	s, _ := fileServer(t, antigravityFiles())
+	antigravityCLI(t, s)
+
+	if err := s.Install(providers.Antigravity); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
+	for _, script := range antigravityScripts {
+		path := filepath.Join(dir, antigravityScriptDir, filepath.Base(script))
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("stat %s: %v", path, err)
+		}
+		// Antigravity runs a hook command through `sh -c`, which needs the bit on
+		// a shebang'd script. Windows carries no POSIX mode, so the assertion is
+		// made where it decides anything.
+		if runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0 {
+			t.Errorf("%s is not executable (mode %v)", path, info.Mode().Perm())
+		}
+	}
+
+	hooks, err := os.ReadFile(filepath.Join(dir, antigravityHooksFile))
+	if err != nil {
+		t.Fatalf("read the registration: %v", err)
+	}
+	body := string(hooks)
+	// The registration is written through untouched, and its commands are
+	// relative — Antigravity runs a hook with the working directory set to the
+	// folder holding this file, which is where the scripts just went. A rewrite
+	// that resolved them would only be another way to get that wrong.
+	if !strings.Contains(body, antigravityScriptDir+"/report-session-start.sh") {
+		t.Errorf("the registration does not name the installed script:\n%s", body)
+	}
+	// The provider argument is what puts Antigravity's icon on the card rather
+	// than Claude Code's, and what decides which CLI is asked to resume it.
+	if !strings.Contains(body, providers.Antigravity) {
+		t.Errorf("the registration does not name the provider:\n%s", body)
+	}
+}
+
+// The manifest is what marks the directory as a plugin at all, and the version
+// in it is this install's only record of what it wrote.
+func TestAntigravityInstalledVersionRoundTrips(t *testing.T) {
+	dir := antigravityHome(t)
+	s, _ := fileServer(t, antigravityFiles())
+	antigravityCLI(t, s)
+
+	if err := s.Install(providers.Antigravity); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	var manifest struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
+	}
+	data, err := os.ReadFile(filepath.Join(dir, antigravityManifest))
+	if err != nil {
+		t.Fatalf("read the manifest: %v", err)
+	}
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		t.Fatalf("the manifest is not JSON: %v\n%s", err, data)
+	}
+	if manifest.Name != pluginName {
+		t.Errorf("manifest names %q, want %q", manifest.Name, pluginName)
+	}
+	got, ok := s.installedVersion(providers.Antigravity)
+	if !ok || got != testVersion {
+		t.Fatalf("installedVersion = (%q,%v), want (%q,true)", got, ok, testVersion)
+	}
+}
+
+// A copy installed through `agy plugin install` carries a manifest with no
+// version. Reporting one for it would claim an install lich never wrote and
+// cannot update.
+func TestAntigravityInstalledVersionIgnoresAnUnversionedManifest(t *testing.T) {
+	dir := antigravityHome(t)
+	s, _ := fileServer(t, nil)
+
+	if _, ok := s.installedVersion(providers.Antigravity); ok {
+		t.Error("reported a version with nothing installed")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, antigravityManifest), []byte(`{"name":"lich"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := s.installedVersion(providers.Antigravity); ok {
+		t.Errorf("installedVersion = (%q,true) for a manifest lich did not write, want false", got)
+	}
+}
+
+// The registration is what gives an Antigravity session the operations for
+// driving the others: it takes no MCP flag at spawn, so this is the only place
+// it can be told.
+func TestAntigravityInstallRegistersLichsMCPServer(t *testing.T) {
+	antigravityHome(t)
+	s, _ := fileServer(t, antigravityFiles())
+	calls := antigravityCLI(t, s)
+	s.lichBin = func() string { return "/opt/lich/lich" }
+
+	if err := s.Install(providers.Antigravity); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	want := "mcp add " + relay.MCPServerName + " /opt/lich/lich " + relay.MCPSubcommand
+	if got := calls(); !slices.Contains(got, want) {
+		t.Errorf("calls = %v, want one of them to be %q", got, want)
+	}
+}
+
+// A lich that cannot name its own binary registers nothing rather than a command
+// that cannot run — the reports are the half the session needs, and they do not
+// depend on it.
+func TestAntigravityInstallWithoutABinaryStillWritesTheHooks(t *testing.T) {
+	dir := antigravityHome(t)
+	s, _ := fileServer(t, antigravityFiles())
+	calls := antigravityCLI(t, s)
+	s.lichBin = func() string { return "" }
+
+	if err := s.Install(providers.Antigravity); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, antigravityHooksFile)); err != nil {
+		t.Errorf("the registration was not written: %v", err)
+	}
+	if got := calls(); len(got) > 0 {
+		t.Errorf("calls = %v, want none: there is no binary to register", got)
+	}
+}
+
+// Every file is fetched before anything is written, so a release missing one
+// leaves no half-installed customization behind — a hooks.json naming a script
+// that is not there is a session reporting nothing on every turn.
+func TestAntigravityInstallWritesNothingWhenTheFetchFails(t *testing.T) {
+	dir := antigravityHome(t)
+	files := antigravityFiles()
+	delete(files, tagged(antigravityScripts[len(antigravityScripts)-1]))
+	s, _ := fileServer(t, files)
+	antigravityCLI(t, s)
+
+	if err := s.Install(providers.Antigravity); err == nil {
+		t.Fatal("Install: want an error when the release is missing a script, got nil")
+	}
+	if _, err := os.Stat(filepath.Join(dir, antigravityHooksFile)); !os.IsNotExist(err) {
+		t.Errorf("a failed install left a registration behind (stat err = %v)", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, antigravityManifest)); !os.IsNotExist(err) {
+		t.Errorf("a failed install left a manifest behind (stat err = %v)", err)
+	}
 }

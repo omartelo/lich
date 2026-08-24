@@ -42,14 +42,14 @@ Both sides test against the payloads in
 
 ## Event → state mapping
 
-| Claude Code hook   | Codex hook          | opencode event           | oh-my-pi event | Crush hook | state     |
-|--------------------|---------------------|--------------------------|----------------|------------|-----------|
-| `UserPromptSubmit` | `UserPromptSubmit`  | `session.status` (`busy`) | `input`        | —          | `busy`    |
-| `PreToolUse`       | `PreToolUse`        | `tool.execute.before`    | `tool_call`    | —          | `busy` + `tool` |
-| `PostToolUse`      | `PostToolUse`       | `tool.execute.after`     | `turn_start`   | —          | `busy`    |
-| `Notification`     | `PermissionRequest` | any `*.asked`            | —              | —          | `waiting` + `reason` |
-| `Stop`             | `Stop`              | `session.status` (`idle`) | `session_stop` | —          | `done`    |
-| `SessionEnd`       | —                   | —                        | —              | —          | `idle`    |
+| Claude Code hook   | Codex hook          | Antigravity hook | opencode event           | oh-my-pi event | Crush hook | state     |
+|--------------------|---------------------|------------------|--------------------------|----------------|------------|-----------|
+| `UserPromptSubmit` | `UserPromptSubmit`  | `PreInvocation`  | `session.status` (`busy`) | `input`        | —          | `busy`    |
+| `PreToolUse`       | `PreToolUse`        | `PreToolUse`     | `tool.execute.before`    | `tool_call`    | —          | `busy` + `tool` |
+| `PostToolUse`      | `PostToolUse`       | —                | `tool.execute.after`     | `turn_start`   | —          | `busy`    |
+| `Notification`     | `PermissionRequest` | —                | any `*.asked`            | —              | —          | `waiting` + `reason` |
+| `Stop`             | `Stop`              | `Stop`           | `session.status` (`idle`) | `session_stop` | —          | `done`    |
+| `SessionEnd`       | —                   | —                | —                        | —              | —          | `idle`    |
 
 opencode is the one harness that reports a state rather than an event: its
 `session.status` carries `busy`, `idle` or `retry` for the session named in the
@@ -70,6 +70,25 @@ not exhaustive to enumerate against: a real run emits types (`server.heartbeat`)
 that the 94 event schemas its own `/doc` publishes do not list. Nothing is
 registered for the answer: replying raises `session.status busy` and dismissing
 raises `session.status idle`, each within ~100ms, so the card re-arms itself.
+
+**Antigravity says `busy` before the model rather than after a tool.** It has no
+prompt event: `PreInvocation` fires before every model call, which is the turn's
+own first step, so it carries both the session id and `busy`. Its `PostToolUse`
+is registered for the touched contract only — `PreInvocation` runs again between
+tool calls, so a `busy` there would say what has just been said. Nothing reports
+`waiting`: Antigravity raises no event when it asks for permission that has been
+measured, and an unmeasured event name is a report that silently never fires, so
+an Antigravity card shows the spinner while the agent waits on you. Nothing
+reports `idle` either — there is no event for the CLI leaving.
+
+**Antigravity reads a verdict off every hook's stdout**, which is why its
+registration appends one to each command rather than letting the shared scripts
+answer. Measured on 1.1.19: an empty stdout leaves the tool call to Antigravity's
+own permission check, `{"decision":"allow"}` does the same — the hook declines to
+block, and a command the user has not permitted is still refused — and `{}`, an
+object carrying no `decision` at all, **denies** it. The trap is that last one: a
+report that starts printing JSON without a verdict stops that session from using
+tools, and nothing says why.
 
 **Crush reports no state at all.** Its only hook event is `PreToolUse`, and a
 `busy` with nothing that can end it would leave a spinner on the card until the
@@ -130,26 +149,37 @@ report a name outside either table; the card shows whatever arrives, minus the
 MCP machinery it can prove — that prefix costs a card its whole width before the
 part worth reading starts:
 
-| Harness           | MCP tool name            | On the card                |
-|-------------------|--------------------------|----------------------------|
-| Claude Code       | `mcp__lich__open_session`  | `lich · open_session`      |
-| Codex             | `mcp__srv__tool`           | `srv · tool`               |
-| oh-my-pi          | `mcp__lich_list_sessions`  | `lich_list_sessions`       |
-| opencode          | `lichprobe_list_sessions`  | unchanged                  |
+| Harness           | MCP tool name             | On the card                       |
+|-------------------|---------------------------|-----------------------------------|
+| Claude Code       | `mcp__lich__open_session` | `lich · open_session`             |
+| Codex             | `mcp__srv__tool`          | `srv · tool`                      |
+| Antigravity       | `call_mcp_tool`           | `call_mcp_tool · lich/open_session` |
+| oh-my-pi          | `mcp__lich_list_sessions` | `lich_list_sessions`              |
+| opencode          | `lichprobe_list_sessions` | unchanged                         |
 
-Measured against opencode 1.18.18 and omp 17.3.7 by running each CLI against a
-`lich mcp` server and reading the name off the handler the plugin already has —
-`input.tool` and `event.toolName`. Only the doubled underscore can be split:
+Measured against opencode 1.18.18, omp 17.3.7 and Antigravity 1.1.19 by running
+each CLI against a `lich mcp` server and reading the name off the handler the
+plugin already has — `input.tool`, `event.toolName`, and `toolCall.name` on the
+hook payload.
+
+**Antigravity is the one harness whose tool name is not the tool.** Every MCP
+call there is the single step `call_mcp_tool`, and which server and which tool
+are two of its arguments (`args.ServerName`, `args.ToolName`) — so the client
+reads them and sends them as `detail`, which is why that row is the only one
+whose card line is made of both fields.
+
+Of the names that *are* the tool, only the doubled underscore can be split:
 omp's single one divides `mcp__lich_list_sessions` into `lich` + `list_sessions`
 or `lich_list` + `sessions` with nothing in the string to say which, so only its
 prefix comes off, and opencode's form carries no marker at all. Crush is absent
 because it reports no tool (see above).
 
 `detail` is whatever identifies the call at a glance — the command line, the
-file path, the pattern. It is free text: a harness that offers nothing usable
-sends only `tool`, and the card shows only the name. The client is what makes
-it readable (both harnesses report absolute paths, which no 240px card can
-show); lich takes what it is given.
+file path, the pattern, and on Antigravity the MCP tool its step name does not
+carry. It is free text: a harness that offers nothing usable sends only `tool`,
+and the card shows only the name. The client is what makes it readable (the
+harnesses report absolute paths, which no 240px card can show); lich takes what
+it is given.
 
 **A report holds the tool until the state leaves `busy`.** `PostToolUse` fires
 between tools with no `tool` field, so treating "no tool" as "clear" would blink
