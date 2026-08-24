@@ -33,6 +33,10 @@ task --list   # everything else
 `task dev` gets its own database, port and Chromium profile, so it never
 touches the workspace of a lich you have installed.
 
+**On Windows**, put `C:\Program Files\Git\usr\bin` on `PATH` first. Task runs
+every command through its own embedded shell, and `task dev` reaches for `sleep`
+and `kill` — Git for Windows ships both, but only that directory has them.
+
 The frontend is **pnpm**, not npm — `npm install` errors out.
 
 ## Before you open a pull request
