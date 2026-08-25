@@ -69,14 +69,18 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   `pty_windows.go`): closing a card signals the agent and gives it `closeGrace` to leave, so its exit path runs —
   hooks, transcripts, whatever it writes on the way out. A ConPTY has no signal to deliver, so the same close on
   Windows is still abrupt: an agent that saves state on exit loses it there, and nothing on screen says so.
-- **A terminal entrypoint reaches shell sessions on Linux and macOS alone** (`internal/terminal/entrypoint.go`):
-  the menu item is absent on a provider card, and on Windows the setting saves and the terminal opens on a bare
-  shell anyway — the wrap is skipped there for `wrapSetup`'s reason, and nothing on screen says so. It also runs
-  through the shell's `-c`, which loads no interactive rc: an alias defined in `.zshrc` is not a command that can
-  be an entrypoint, though `$PATH` is intact (`internal/terminal/shellenv.go`).
-- **The worktree setup script answers to the main checkout, never the new branch** (`internal/project/setup.go`):
-  improve `.lich/setup-worktree.sh` on a feature branch and fresh worktrees keep running the old one until the
-  change reaches the checkout the project points at.
+- **A terminal entrypoint reaches shell sessions only, and reads a different rc on each OS**
+  (`internal/terminal/entrypoint.go`): the menu item is absent on a provider card. On Linux and macOS the command
+  runs through the shell's `-c`, which loads no interactive rc: an alias defined in `.zshrc` is not a command that
+  can be an entrypoint, though `$PATH` is intact (`internal/terminal/shellenv.go`). On Windows it runs through
+  PowerShell's `-EncodedCommand`, which *does* load `$PROFILE` first — so the same alias works there, and an
+  entrypoint one user shares is not necessarily one the next can run.
+- **The worktree setup script answers to the main checkout, never the new branch, and never runs on Windows**
+  (`internal/project/setup.go`, `internal/terminal/setup.go`): improve `.lich/setup-worktree.sh` on a feature
+  branch and fresh worktrees keep running the old one until the change reaches the checkout the project points
+  at. And `.lich/setup-worktree.sh` is one file, versioned and shared by every checkout, holding sh — so a
+  Windows session skips it rather than feeding it to PowerShell, which would run the leading words of every line
+  as commands. A worktree opens there with its setup silently not done.
 - **A session is named at birth, never on resume** (`internal/terminal/command.go`, `nameArgs`): the trap is that
   lich still *derives* that name (`internal/relay/rostername.go`, its page-side half
   `frontend/src/lib/session/peer-name.ts`) for the relay to resolve against, and the derived string goes stale the

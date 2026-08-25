@@ -70,11 +70,15 @@ describe("composeDroppedPaths", () => {
     )
   })
 
-  // cmd.exe has no single quotes: quoting a Windows path with them hands the
-  // prompt a path that does not exist, quotes and all.
-  it("quotes a Windows path with a space the way cmd.exe reads it", () => {
+  // PowerShell is the shell a Windows session runs, and it doubles an embedded
+  // single quote rather than escaping it the POSIX way — a path under
+  // C:\\Users\\O'Brien has to come out as one argument on both hosts.
+  it("quotes a Windows path the way PowerShell reads it", () => {
     expect(composeDroppedPaths(["C:\\Program Files\\a.ts"], true)).toBe(
-      `${PASTE_START}"C:\\Program Files\\a.ts" ${PASTE_END}`,
+      `${PASTE_START}'C:\\Program Files\\a.ts' ${PASTE_END}`,
+    )
+    expect(composeDroppedPaths(["C:\\Users\\O'Brien\\a b.ts"], true)).toBe(
+      `${PASTE_START}'C:\\Users\\O''Brien\\a b.ts' ${PASTE_END}`,
     )
   })
 })
