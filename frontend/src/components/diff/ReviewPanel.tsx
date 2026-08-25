@@ -3,12 +3,15 @@ import { toast } from "sonner"
 import { Notice } from "@/components/common/Notice"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { LastTurn } from "@/lib/api-types"
+import { onAppEvent } from "@/lib/app-events"
 import { discardTargets, parseDiff, type DiffFile } from "@/lib/git/diff"
+import { lastTurnNotice } from "@/lib/git/last-turn"
 import { addReviewComment } from "@/lib/review-comments"
 import { ProjectService, Terminal } from "@/lib/rpc"
 import { useActiveSession } from "@/lib/session/use-active-session"
 import { formatAge, subscribeAge } from "@/lib/session/session-age"
-import { useSessionEverReported, useSessionStatus } from "@/lib/session/use-session-status"
+import { isIdEvent, TURN_EVENT } from "@/lib/session/session-events"
+import { useSessionEverReported } from "@/lib/session/use-session-status"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { useInject } from "@/lib/use-inject"
 import { errorText } from "@/lib/utils"
@@ -52,11 +55,10 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
   // The source switch is earned, not assumed: a provider that never reports its
   // state has no turn to bracket, so it is offered the working tree alone.
   const switchable = useSessionEverReported(sessionId)
-  const sessionStatus = useSessionStatus(sessionId)
   const [source, setSource] = useState<DiffSource>("worktree")
   const [files, setFiles] = useState<DiffFile[] | null>(null)
   const [failed, setFailed] = useState(false)
-  const [turnState, setTurnState] = useState<string | null>(null)
+  const [turnState, setTurnState] = useState<LastTurn["state"] | null>(null)
   const [endedAt, setEndedAt] = useState<number | null>(null)
   const [pendingDiscard, setPendingDiscard] = useState<DiffFile | null>(null)
 
@@ -129,17 +131,22 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
   // they are blind to (see DIFF_POLL_MS).
   //
   // A finished turn has neither problem — it cannot change once it is over — so
-  // that source is not polled at all. The session's own state is what moves it:
-  // every transition is a turn starting or ending, and the panel answers for the
-  // last one that ended.
+  // that source is not polled at all. TURN_EVENT is what moves it, and it has to
+  // be that rather than the session's state: the record is filed on a snapshot
+  // worker well after the `done` that closed the turn, so a read taken on the
+  // state report answers with the turn before this one.
   useEffect(() => {
     void refresh()
     if (source === "turn") {
-      return
+      return onAppEvent(TURN_EVENT, (data) => {
+        if (isIdEvent(data) && data.id === sessionId) {
+          void refresh()
+        }
+      })
     }
     const timer = setInterval(() => void refresh(), DIFF_POLL_MS)
     return () => clearInterval(timer)
-  }, [refresh, source, sessionStatus, status?.files, status?.added, status?.deleted])
+  }, [refresh, source, sessionId, status?.files, status?.added, status?.deleted])
 
   // Reverting a rename touches both paths (new removed, old restored); the
   // panel refreshes immediately instead of waiting for the next poll tick.
@@ -248,9 +255,9 @@ function useAge(from: number | null): string {
 
 interface PanelBodyProps {
   source: DiffSource
-  /** The last turn's own answer ("ok" | "empty" | "unavailable"), null while
-   * showing the working tree or before the first read lands. */
-  turnState: string | null
+  /** The last turn's own answer, null while showing the working tree or before
+   * the first read lands. */
+  turnState: LastTurn["state"] | null
   files: DiffFile[] | null
   failed: boolean
   onInject: (text: string) => void
@@ -271,7 +278,12 @@ function PanelBody({
   bulk,
 }: PanelBodyProps) {
   if (failed) {
-    return <Notice>Not a git repository</Notice>
+    // The two sources fail for different reasons, and the working tree's answer
+    // — read for a path that is not a checkout — says nothing true about a turn
+    // lich could not render.
+    return (
+      <Notice>{source === "turn" ? "Could not read the last turn" : "Not a git repository"}</Notice>
+    )
   }
   if (files === null) {
     return <Notice>Loading…</Notice>
@@ -279,8 +291,10 @@ function PanelBody({
   if (source === "turn") {
     // A turn that changed nothing and a turn nobody recorded are different
     // answers, and each says which one it is. Conflating them would have the
-    // panel report "nothing happened" for a snapshot it simply lost.
-    if (turnState === "empty") {
+    // panel report "nothing happened" for a snapshot it simply lost, which is
+    // why the weighing is pure and tested (lastTurnNotice).
+    const notice = lastTurnNotice(turnState, files.length)
+    if (notice === "empty") {
       return (
         <Notice>
           <span className="block text-foreground">Nothing changed in this window.</span>
@@ -288,7 +302,7 @@ function PanelBody({
         </Notice>
       )
     }
-    if (turnState !== "ok" || files.length === 0) {
+    if (notice === "unrecorded") {
       return (
         <Notice>
           <span className="block text-foreground">No last turn recorded.</span>

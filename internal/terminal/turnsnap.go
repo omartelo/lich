@@ -76,6 +76,10 @@ type turnSnaps struct {
 	// root holds the index files. Empty means "resolve it from the config
 	// directory on first use"; tests set it to a directory of their own.
 	root string
+	// filed is called once a session's last-turn record has changed, which is
+	// the only moment the panel can act on: a turn is filed on the worker, well
+	// after the `done` that closed it. Nil in a test that does not care.
+	filed func(id string)
 }
 
 // track binds a session to the checkout its PTY was spawned at and warms the
@@ -102,7 +106,13 @@ func (t *turnSnaps) track(id, dir string) {
 	// cache in the index file, not the oid.
 	t.submit(func() {
 		if _, err := project.SnapshotTree(dir, index); err != nil {
-			slog.Debug("turnsnap: warm-up failed", "session", id, "err", err)
+			// A checkout git cannot snapshot has no turns to bracket, and the
+			// ordinary reason is a session opened outside a repository at all.
+			// Dropped once here rather than warned about twice per turn for the
+			// rest of the session; the panel then reads "unavailable", which is
+			// the true answer either way.
+			slog.Debug("turnsnap: no snapshots for this checkout", "session", id, "err", err)
+			t.forget(id)
 		}
 	})
 }
@@ -163,6 +173,11 @@ func (t *turnSnaps) closeTurn(id string) {
 		return
 	}
 	state.open = false
+	// Cleared here, not in the job: a job the queue drops never runs, and the
+	// turn before it would otherwise stay on screen wearing this turn's name.
+	// Between here and the snapshot landing the panel reads "unavailable",
+	// which is what "the last turn is not recorded yet" honestly looks like.
+	state.last = nil
 	seq, dir, index := state.seq, state.dir, state.index
 	t.mu.Unlock()
 
@@ -172,16 +187,17 @@ func (t *turnSnaps) closeTurn(id string) {
 			slog.Warn("turnsnap: closing snapshot failed", "session", id, "err", err)
 		}
 		t.mu.Lock()
-		defer t.mu.Unlock()
 		state, ok := t.sessions[id]
-		if !ok || state.seq != seq {
-			return
+		if ok && state.seq == seq && err == nil && state.before != "" {
+			state.last = &turnPair{before: state.before, after: oid, endedAt: time.Now()}
 		}
-		if err != nil || state.before == "" {
-			state.last = nil
-			return
+		filed := t.filed
+		t.mu.Unlock()
+		// Outside the lock, and whatever the outcome: a turn that lost its
+		// snapshot changed the answer too, from "the turn before" to "none".
+		if filed != nil {
+			filed(id)
 		}
-		state.last = &turnPair{before: state.before, after: oid, endedAt: time.Now()}
 	})
 }
 
