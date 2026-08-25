@@ -559,11 +559,14 @@ func TestResolveCommand(t *testing.T) {
 // `claude` from inside a Cursor session. What lich spawned wins; only a shell,
 // where lich genuinely does not know what is running inside, wears the report.
 func TestProviderKindOutranksTheReport(t *testing.T) {
-	svc := &Service{sessions: map[string]*session{
-		"cursor-card": {kind: providers.Cursor},
-		"shell-card":  {kind: KindShell},
-		"odd-card":    {kind: "something-else"},
-	}}
+	svc := &Service{}
+	for id, kind := range map[string]string{
+		"cursor-card": providers.Cursor,
+		"shell-card":  KindShell,
+		"odd-card":    "something-else",
+	} {
+		svc.kinds.Store(id, kind)
+	}
 	cases := []struct {
 		name, id, reported, want string
 	}{
@@ -578,6 +581,43 @@ func TestProviderKindOutranksTheReport(t *testing.T) {
 			t.Errorf("%s: providerKind(%q, %q) = %q, want %q",
 				tc.name, tc.id, tc.reported, got, tc.want)
 		}
+	}
+}
+
+// The invariant the note on Service.turns states: a hook must never queue behind
+// a PTY spawn. spawnSession holds mu across startPTY, so asking mu what a
+// session runs would hold the report — and with it the agent's next step — for
+// however long another session takes to spawn.
+func TestAReportNeverQueuesBehindASpawn(t *testing.T) {
+	svc := &Service{}
+	svc.kinds.Store("s1", providers.Cursor)
+
+	// Stands in for a spawn in flight: the same lock, held by another session.
+	svc.mu.Lock()
+	defer svc.mu.Unlock()
+
+	answered := make(chan string, 1)
+	go func() { answered <- svc.kindOf("s1") }()
+	select {
+	case got := <-answered:
+		if got != providers.Cursor {
+			t.Errorf("kindOf = %q, want %q", got, providers.Cursor)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a state report queued behind a PTY spawn")
+	}
+}
+
+// A kind that outlived its PTY would have providerKind answering for a session
+// that is gone, which is the one case the report is the better answer.
+func TestClosingASessionDropsItsKind(t *testing.T) {
+	svc := &Service{sessions: map[string]*session{}}
+	svc.kinds.Store("s1", providers.Cursor)
+	if err := svc.Close("s1"); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if got := svc.kindOf("s1"); got != "" {
+		t.Errorf("a closed session still runs %q", got)
 	}
 }
 

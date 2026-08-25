@@ -175,10 +175,6 @@ type session struct {
 	// confined records whether this PTY was spawned inside the sandbox, so Start
 	// can report it once the spawn is out of the lock.
 	confined bool
-	// kind is what this PTY was spawned to run: a provider id, or KindShell.
-	// Read by providerKind, which is what stops a session-start report from
-	// repainting a card lich itself chose the provider for.
-	kind string
 }
 
 // Store is the persistence the terminal service depends on: the binary to spawn
@@ -241,6 +237,18 @@ type Service struct {
 	// without answering (internal/relay). Guarded by mu: wired after the
 	// transport is already serving.
 	onState func(id, state string)
+	// kinds is what each live session's PTY was spawned to run — a provider id,
+	// or KindShell — keyed by session id. Read by providerKind, which is what
+	// stops a session-start report from repainting a card lich itself chose the
+	// provider for, and by the state report's own filter.
+	//
+	// Deliberately not under mu, and that is the whole reason it is not simply a
+	// field on session: spawnSession holds mu across the PTY spawn, so a report
+	// that had to ask mu what a session runs would queue behind another
+	// session's spawn — which is exactly what the note on turns below forbids.
+	// Written once per spawn and read on every report, which is what sync.Map
+	// is for.
+	kinds sync.Map
 	// turns is which sessions have a turn open right now, which is what tells a
 	// `waiting` report that a human is blocking from one that only says the
 	// session is sitting at its prompt (see turnLog). It carries its own lock:
@@ -683,9 +691,11 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, se
 		// is quiet too.
 		lastOut:  time.Now(),
 		confined: inSandbox,
-		kind:     kind,
 	}
 	s.sessions[id] = sess
+	// Outside mu's protection by design (see Service.kinds), and stored with the
+	// registration so no report can arrive for a session whose kind is unknown.
+	s.kinds.Store(id, kind)
 	go s.stream(id, sess)
 	return sess, cwd, nil
 }
@@ -702,13 +712,15 @@ func (s *Service) providerKind(id, reported string) string {
 }
 
 // kindOf is what a live session's PTY was spawned to run, or "" once it is gone.
+// It never takes mu: a hook asks this on every report, and mu is held across a
+// PTY spawn (see Service.kinds).
 func (s *Service) kindOf(id string) string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if sess, running := s.sessions[id]; running {
-		return sess.kind
+	kind, ok := s.kinds.Load(id)
+	if !ok {
+		return ""
 	}
-	return ""
+	spawned, _ := kind.(string)
+	return spawned
 }
 
 // closableState reports whether a state reported from inside a session of this
@@ -775,6 +787,12 @@ func (s *Service) stream(id string, sess *session) {
 		delete(s.sessions, id)
 		close(current.done)
 		reaped = true
+	}
+	// Inside the same guard the map delete is: a reap that lost the race to a
+	// respawn under this id must not drop the kind the live session was
+	// registered with.
+	if reaped {
+		s.kinds.Delete(id)
 	}
 	s.mu.Unlock()
 
@@ -975,6 +993,7 @@ func (s *Service) Close(id string) error {
 		close(sess.done)
 	}
 	s.mu.Unlock()
+	s.kinds.Delete(id)
 
 	// Before the bail below, because a card is closed far more often than it is
 	// running: its row is deleted either way, so nothing will ever ask what its
