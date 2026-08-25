@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.41.0] - 2026-08-25
+
 ### Added
 
 - **The Review panel can narrow to the last turn.** A session that reports its
@@ -53,13 +55,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that ships with Windows otherwise. `cmd.exe` is still what runs a provider
   shipped as a `.cmd` or `.bat`, which is a limitation of `CreateProcess` rather
   than a shell anyone is dropped into.
-- **A file dropped on a Windows session, and a terminal editor opened from one,
-  are quoted for the shell that reads them.** Both wrapped a path in double
-  quotes for `cmd.exe`. A path that `cmd` could not express at all — one holding
-  a `"` or a `%VAR%`, or ending in a backslash — was refused outright, and Open
-  in editor silently fell back to the file's default handler instead. PowerShell
-  can express all three, so the refusal is gone with the shell it was written
-  for.
+- **What lich writes for a Windows shell is quoted for PowerShell.** A file
+  dropped on a session and a terminal editor opened from one both wrapped the
+  path in double quotes for `cmd.exe`. A path that `cmd` could not express at
+  all — one holding a `"` or a `%VAR%`, or ending in a backslash — was refused
+  outright, and Open in editor silently fell back to the file's default handler
+  instead. PowerShell can express all three, so the refusal is gone with the
+  shell it was written for. Copy send command follows the same rule: a card
+  named with an apostrophe now pastes back as one argument on Windows as it
+  already did everywhere else.
 
 ## [0.40.1] - 2026-08-24
 
@@ -3325,7 +3329,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.40.1...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.41.0...HEAD
+[0.41.0]: https://github.com/omartelo/lich/compare/v0.40.1...v0.41.0
 [0.40.1]: https://github.com/omartelo/lich/compare/v0.40.0...v0.40.1
 [0.40.0]: https://github.com/omartelo/lich/compare/v0.39.0...v0.40.0
 [0.39.0]: https://github.com/omartelo/lich/compare/v0.38.0...v0.39.0
