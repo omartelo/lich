@@ -30,6 +30,22 @@ export function useSessionUnread(sessionId: string): boolean {
   return useSyncExternalStore(subscribe, () => store.unread(sessionId))
 }
 
+// useSessionEverReported is whether this session's provider reports its state
+// at all — true from its first report onwards, and never false again. It is
+// what a turn-shaped surface asks before drawing itself: a provider that never
+// reports has no turn boundary, so the Review panel's "Last turn" switch is
+// simply absent there rather than present and permanently empty.
+//
+// Dynamic rather than a list of providers: the day one of them starts
+// reporting, its sessions get the control with no code change here.
+export function useSessionEverReported(sessionId: string): boolean {
+  const subscribe = useCallback(
+    (onChange: () => void) => store.subscribe(sessionId, onChange),
+    [sessionId],
+  )
+  return useSyncExternalStore(subscribe, () => store.reported(sessionId))
+}
+
 // useSessionWaitingReason reads what a blocked session is waiting for, in the
 // provider's own words, or "" when the report said nothing — the card falls back
 // to its generic line then. Kept out of useSessionStatus so a card that only

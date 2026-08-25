@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The Review panel can narrow to the last turn.** A session that reports its
+  state gains a switch above the file list: **Working tree** is the panel you
+  already had — everything uncommitted — and **Last turn** shows only what
+  changed on disk while that session's last finished turn ran, with the diff,
+  the comment batch and the file actions all working as before. It is a window
+  of time and not an attribution: a formatter, an editor open beside lich and
+  your own hands all land inside it, which is what the panel says. A turn that
+  changed nothing says so in as many words, and a turn nobody recorded says
+  something different — the two are never shown as each other. Sessions whose
+  provider reports no state at all (Crush today, Cursor CLI until its plugin
+  lands) have no turn to bracket, so the switch is simply absent there.
 - **Cursor CLI runs as a session.** Cursor's `cursor-agent` joins Claude Code,
   Codex, Antigravity, opencode, oh-my-pi and Crush in Settings › Providers: a
   session of its own, resumed after a restart, run without permission prompts if

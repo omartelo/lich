@@ -44,6 +44,14 @@ interface Entry {
   // at, and the sessions beside it in the sidebar are exactly the ones whose
   // results nobody has collected yet (see the provider's markSessionSeen).
   seen: boolean
+  // Whether this session has ever reported a state at all — which is not the
+  // same question as `status !== null`, since `idle` and `interrupted` both map
+  // to no indicator. It is what tells a session whose provider will never report
+  // apart from one that simply has not yet, and the surfaces that offer a
+  // turn-shaped feature (the Review panel's "Last turn") show it only once this
+  // is true. It never goes back to false: a control that appears and disappears
+  // is worse than one that was never there.
+  reported: boolean
   listeners: Set<() => void>
 }
 
@@ -69,7 +77,14 @@ export function createSessionStatusStore(source: SessionEventSource) {
   const entryOf = (id: string): Entry => {
     let entry = entries.get(id)
     if (!entry) {
-      entry = { status: null, reason: "", since: 0, seen: false, listeners: new Set() }
+      entry = {
+        status: null,
+        reason: "",
+        since: 0,
+        seen: false,
+        reported: false,
+        listeners: new Set(),
+      }
       entries.set(id, entry)
     }
     return entry
@@ -121,11 +136,21 @@ export function createSessionStatusStore(source: SessionEventSource) {
     const entry = entryOf(data.id)
     const next = toSessionStatus(data.state)
     const reason = next === "waiting" ? statusReason(data) : ""
+    // Recorded before the bail below, and for every report whatever it maps to:
+    // an `idle` or an `interrupted` is still proof this session's provider
+    // reports at all (see Entry.reported).
+    const first = !entry.reported
+    entry.reported = true
     // The snapshot is a string union, so identity is free: bail on a repeat
     // state and subscribers skip the re-render entirely. The reason is weighed
     // with it because a second permission prompt inside one turn repeats the
     // state and changes the question — the one repeat that is news.
     if (entry.status === next && entry.reason === reason) {
+      // Unless this was the first report: it changed nothing about the status
+      // and everything about whether a turn-shaped control is drawn.
+      if (first) {
+        notify(entry)
+      }
       return
     }
     // Stamped on the state's own transition alone: a session has been waiting
@@ -194,6 +219,10 @@ export function createSessionStatusStore(source: SessionEventSource) {
 
   const get = (id: string): SessionStatus | null => entries.get(id)?.status ?? null
 
+  // reported answers whether this session has ever reported a state — see
+  // Entry.reported for why it is not `get(id) !== null`.
+  const reported = (id: string): boolean => entries.get(id)?.reported ?? false
+
   // unread is the one question the card's ring asks beyond the status itself:
   // a turn that finished and has not been looked at since. Only "done" can be
   // unread — the live states say what they say whether or not anyone is
@@ -232,6 +261,7 @@ export function createSessionStatusStore(source: SessionEventSource) {
   return {
     subscribe,
     get,
+    reported,
     unread,
     reason,
     since,

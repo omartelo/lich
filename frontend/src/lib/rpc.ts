@@ -12,6 +12,7 @@ import type {
   BinaryCheck,
   BranchRules,
   ClosedSession,
+  LastTurn,
   Branches,
   CommitIdentity,
   DetectedProvider,
@@ -142,6 +143,9 @@ export const Terminal = {
   SearchTranscripts: (ids: string[], query: string) =>
     call<TranscriptMatch[] | null>("terminal.SearchTranscripts", [ids, query]),
   Close: (id: string) => call<null>("terminal.Close", [id]),
+  /** What changed on disk while this session's last finished turn ran — a
+   * window of time, not an attribution (see internal/terminal.LastTurnDiff). */
+  LastTurnDiff: (id: string) => call<LastTurn>("terminal.LastTurnDiff", [id]),
 }
 
 export const DropService = {

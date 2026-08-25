@@ -274,6 +274,16 @@ missing reason never costs a bell.
   same rule as `turnLog`: a `waiting` inside a turn is published, because it is
   the state that means "do not send work here", and one outside a turn is not,
   because a session idle at its prompt is the most available it will ever be.
+- **The turn's window** — `internal/terminal/turnsnap.go`: reads the same stream
+  for a third question, what the turn changed on disk. `busy` opens a window and
+  `done` closes it, each taking a `git write-tree` snapshot of the session's
+  checkout; the Review panel diffs the pair. Only the first `busy` of a run opens
+  anything — the repeat every provider sends between tools would otherwise walk
+  the opening snapshot forward through the turn it is meant to precede — and
+  `idle` abandons an open window rather than closing it, there being no closing
+  report coming. lich's own `interrupted` closes one: a stopped turn is a turn
+  that ended, and it changed files like any other. A provider that reports no
+  state has no window here at all, which today is Crush and Cursor CLI.
 - **Store** — `frontend/src/lib/session/session-status-store.ts`: one subscription taken
   at page load keeps the last state of every session, keyed by id. The card
   cannot hold it: the sidebar only renders cards for the active project, so

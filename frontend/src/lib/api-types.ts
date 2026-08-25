@@ -498,3 +498,18 @@ export interface QuotaPlan {
   windows?: QuotaWindow[]
   status: "ok" | "signed-out" | "error" | "unknown"
 }
+
+/** internal/terminal.LastTurn — what changed on disk in the window this
+ * session's last finished turn ran in. `diff` is unified-diff text (parseDiff
+ * reads it) and is present only for "ok"; `endedAt` is unix ms and present only
+ * when there is a window to date.
+ *
+ * The three states are kept apart on purpose: "empty" is a turn that ran and
+ * changed nothing, "unavailable" is no turn on record at all — no turn has
+ * finished here yet, or its snapshot was lost. The panel must never show one as
+ * the other. */
+export interface LastTurn {
+  state: "ok" | "empty" | "unavailable"
+  diff?: string
+  endedAt?: number
+}
