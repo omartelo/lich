@@ -24,6 +24,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   up. A Cursor card shows no spinner and no bell, and keeps the name you gave it:
   the CLI raises no start-of-turn or end-of-turn event, so lich would have had a
   spinner it could never turn off.
+- **A terminal entrypoint works on Windows.** Setting one on a shell card saved
+  the value and then opened a bare prompt anyway, with nothing on screen saying
+  the setting had not been used. The command now runs, and the prompt you land
+  in afterwards is the same shell process rather than a second one — so the
+  card's path line follows a `cd` the way it does everywhere else. On Windows
+  the command also sees your `$PROFILE`, which the Unix `-c` equivalent does not
+  load: an alias you defined there can be an entrypoint.
+
+### Changed
+
+- **A Windows session opens in PowerShell, not `cmd.exe`.** lich read `COMSPEC`
+  the way it reads `$SHELL` on Unix, and that variable is set on every Windows
+  box and always names `cmd.exe` — so the shell a Windows user got was never one
+  they chose, and there was no way to choose another. A shell session now opens
+  in PowerShell 7 (`pwsh.exe`) when it is installed and in the `powershell.exe`
+  that ships with Windows otherwise. `cmd.exe` is still what runs a provider
+  shipped as a `.cmd` or `.bat`, which is a limitation of `CreateProcess` rather
+  than a shell anyone is dropped into.
+- **A file dropped on a Windows session, and a terminal editor opened from one,
+  are quoted for the shell that reads them.** Both wrapped a path in double
+  quotes for `cmd.exe`. A path that `cmd` could not express at all — one holding
+  a `"` or a `%VAR%`, or ending in a backslash — was refused outright, and Open
+  in editor silently fell back to the file's default handler instead. PowerShell
+  can express all three, so the refusal is gone with the shell it was written
+  for.
 
 ## [0.40.1] - 2026-08-24
 

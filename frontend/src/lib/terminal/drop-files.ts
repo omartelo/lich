@@ -170,15 +170,16 @@ export function composeDroppedPaths(paths: readonly string[], isWindows = false)
 // quotePath keeps a path with spaces — or anything else a shell would act on —
 // a single argument, because the prompt underneath may well be a shell. The
 // safe set covers both separators, so an ordinary path of either OS is written
-// bare. Beyond it the quote is the host's: cmd.exe knows only double quotes
-// (and a Windows path cannot contain one), POSIX gets single quotes, where a
-// path holding one closes, escapes it and reopens.
+// bare. Beyond it both hosts single-quote and differ only in the escape: POSIX
+// closes the quoting, escapes the quote and reopens; PowerShell — what a Windows
+// session runs (internal/terminal, windowsShells) — doubles it. Mirrors
+// internal/shquote, the backend half of the same rule.
 function quotePath(path: string, isWindows: boolean): string {
   if (/^[\w@%+=:,./\\-]+$/.test(path)) {
     return path
   }
   if (isWindows) {
-    return `"${path}"`
+    return `'${path.split("'").join("''")}'`
   }
   return `'${path.split("'").join(`'\\''`)}'`
 }

@@ -1,8 +1,10 @@
 package terminal
 
 import (
+	"encoding/base64"
 	"strings"
 	"testing"
+	"unicode/utf16"
 
 	"github.com/omartelo/lich/internal/providers"
 )
@@ -37,7 +39,7 @@ func TestWrapEntrypointLeavesOtherSessionsAlone(t *testing.T) {
 		{"opencode session", providers.OpenCode, "lazygit", "linux"},
 		{"omp session", providers.OMP, "lazygit", "linux"},
 		{"crush session", providers.Crush, "lazygit", "linux"},
-		{"windows", KindShell, "lazygit", "windows"},
+		{"windows provider session", providers.Claude, "lazygit", "windows"},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
@@ -113,4 +115,69 @@ func TestWrapEntrypointComposesWithSetup(t *testing.T) {
 	if !(install < marker && marker < tool) {
 		t.Errorf("stages out of order (install=%d marker=%d tool=%d): %q", install, marker, tool, script)
 	}
+}
+
+// TestWrapEntrypointOnWindowsKeepsOneProcess pins the Windows contract, which is
+// not the POSIX one: PowerShell's own -NoExit drops the user at a prompt after
+// the command, so the shell they land in is the process lich spawned rather than
+// a second one exec'd over it. A regression that composed a chain instead would
+// leave the working-directory poll (cwd.go) watching a parent that never moves.
+func TestWrapEntrypointOnWindowsKeepsOneProcess(t *testing.T) {
+	spec := entrypointSpec()
+	spec.bin = `C:\Program Files\PowerShell\7\pwsh.exe`
+
+	got := wrapEntrypoint(spec, KindShell, "  lazygit  ", "windows")
+
+	if got.bin != spec.bin {
+		t.Errorf("bin = %q, want the session's own shell %q", got.bin, spec.bin)
+	}
+	if len(got.args) != 3 || got.args[0] != "-NoExit" || got.args[1] != "-EncodedCommand" {
+		t.Fatalf("args = %v, want -NoExit -EncodedCommand <script>", got.args)
+	}
+	if command := decodePwshCommand(t, got.args[2]); command != "lazygit" {
+		t.Errorf("encoded command = %q, want the trimmed entrypoint", command)
+	}
+	if got.dir != spec.dir || got.cols != spec.cols || got.rows != spec.rows {
+		t.Errorf("wrap changed dir/size: %+v", got)
+	}
+}
+
+// TestEncodePwshCommandSurvivesQuotesAndUnicode is why the command is encoded at
+// all: a double quote in a value the user typed would not survive the escaping
+// windows.ComposeCommandLine applies for CommandLineToArgvW, which PowerShell
+// does not undo. Non-ASCII proves the UTF-16 half — PowerShell reads the bytes
+// as little-endian UTF-16, so a wrong width or order turns the command to noise.
+func TestEncodePwshCommandSurvivesQuotesAndUnicode(t *testing.T) {
+	for _, script := range []string{
+		`pnpm run "dev server"`,
+		"echo 'it''s'",
+		"cargo run -- --path C:\\Users\\Ana\\prova\u00e7\u00e3o",
+		"",
+	} {
+		encoded := encodePwshCommand(script)
+		if got := decodePwshCommand(t, encoded); got != script {
+			t.Errorf("round trip of %q gave %q", script, got)
+		}
+		if strings.ContainsAny(encoded, ` "'\`) {
+			t.Errorf("encoding of %q left a character a command line acts on: %q", script, encoded)
+		}
+	}
+}
+
+// decodePwshCommand reads an -EncodedCommand argument back, the way PowerShell
+// does: base64 of UTF-16LE.
+func decodePwshCommand(t *testing.T, encoded string) string {
+	t.Helper()
+	raw, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		t.Fatalf("decode %q: %v", encoded, err)
+	}
+	if len(raw)%2 != 0 {
+		t.Fatalf("encoded command is not whole UTF-16 units: %d bytes", len(raw))
+	}
+	units := make([]uint16, len(raw)/2)
+	for i := range units {
+		units[i] = uint16(raw[2*i]) | uint16(raw[2*i+1])<<8
+	}
+	return string(utf16.Decode(units))
 }

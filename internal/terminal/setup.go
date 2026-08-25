@@ -12,9 +12,13 @@ import (
 // move the provider's start directory) and the provider starts even when the
 // script fails: a broken setup must not cost the session, so the failure is
 // echoed and the provider execs anyway. goos is runtime.GOOS, passed in so the
-// decision stays pure and testable off-Windows (wrapArgv's pattern): Windows
-// is skipped — composing a cmd.exe chain around wrapArgv's own cmd.exe
-// handling is not worth it while the port stays experimental.
+// decision stays pure and testable off-Windows (wrapArgv's pattern): Windows is
+// skipped, and not for the shell's sake — a Windows session runs PowerShell now
+// (windowsShells), which wrapEntrypoint composes for. What is skipped is the
+// script: setupScriptPath is `.lich/setup-worktree.sh`, one file, versioned in
+// the repository and shared by everyone who checks it out, and its contents are
+// sh. Running that through PowerShell would not fail cleanly — it would run the
+// leading words of every line as commands.
 //
 // The bool reports whether the wrap happened, and it is the only honest answer
 // to "will this PTY print the end marker". Re-deriving it from the returned

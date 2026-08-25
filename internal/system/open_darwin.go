@@ -15,10 +15,9 @@ func (s *Service) openURL(rawURL string) error {
 	return s.run("open", rawURL)
 }
 
-// quoteForShell quotes a path for the POSIX shell a macOS session runs. Every
-// path can be expressed, so this never refuses.
-func (s *Service) quoteForShell(full string) (string, bool) {
-	return shquote.Quote(full), true
+// quoteForShell quotes a path for the POSIX shell a macOS session runs.
+func (s *Service) quoteForShell(full string) string {
+	return shquote.Quote(full)
 }
 
 // openFolder shows a directory in Finder. Deliberately without the -t of

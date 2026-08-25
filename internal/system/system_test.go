@@ -157,71 +157,16 @@ func TestOpenInEditorTerminalReturnsCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenInEditor: %v", err)
 	}
-	// The quoting belongs to the session's shell: sh everywhere, cmd.exe on
-	// Windows, and the two spell a quoted argument differently.
+	// The quoting belongs to the session's shell — sh on Unix, PowerShell on
+	// Windows — and both spell a quoted argument with single quotes, differing
+	// only in how an embedded one is escaped (see internal/shquote).
 	full := filepath.Join("/repo", "src/main.go")
 	want := "nvim '" + full + "'"
-	if runtime.GOOS == "windows" {
-		want = `nvim "` + full + `"`
-	}
 	if cmd != want {
 		t.Errorf("cmd = %q, want %q", cmd, want)
 	}
 	if launched {
 		t.Error("a terminal editor was launched detached instead of returned")
-	}
-}
-
-// TestQuoteCmdPath proves the cmd.exe rule: the separators a shell would act on
-// are covered by the quotes, and the three characters cmd cannot express are
-// refused outright rather than handed over half-escaped.
-func TestQuoteCmdPath(t *testing.T) {
-	quoted := []string{
-		`C:\repo\a.txt`,
-		`C:\Users\First Last\repo\a.txt`,
-		`C:\repo\a&calc.txt`,
-		`C:\repo\a|b>c.txt`,
-		`C:\repo\a^b(c).txt`,
-	}
-	for _, full := range quoted {
-		got, ok := quoteCmdPath(full)
-		if !ok || got != `"`+full+`"` {
-			t.Errorf("quoteCmdPath(%q) = (%q, %v), want the path in quotes", full, got, ok)
-		}
-	}
-
-	refused := []string{
-		`C:\repo\a"b.txt`,     // no way to put a quote back inside a quoted run
-		`C:\repo\a%PATH%.txt`, // expanded even inside quotes
-		`C:\repo\dir\`,        // would escape the closing quote
-	}
-	for _, full := range refused {
-		if got, ok := quoteCmdPath(full); ok {
-			t.Errorf("quoteCmdPath(%q) = (%q, true), want refused", full, got)
-		}
-	}
-}
-
-// TestOpenInEditorFallsBackWhenTheShellCannotQuote proves an unquotable path
-// opens with the default handler instead of being pasted into a shell. Only
-// cmd.exe refuses anything, so only Windows has the branch to exercise.
-func TestOpenInEditorFallsBackWhenTheShellCannotQuote(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("every path is expressible in a POSIX shell")
-	}
-	var name string
-	var args []string
-	s := &Service{env: []string{"EDITOR=nvim"}, run: captureRun(&name, &args)}
-
-	cmd, err := s.OpenInEditor(`C:\repo`, `a"b.txt`)
-	if err != nil {
-		t.Fatalf("OpenInEditor: %v", err)
-	}
-	if cmd != "" {
-		t.Errorf("cmd = %q, want empty: an unquotable path must not reach a shell", cmd)
-	}
-	if want := filepath.Join(`C:\repo`, `a"b.txt`); len(args) == 0 || args[len(args)-1] != want {
-		t.Errorf("args = %v, want the file %s handed to the default opener", args, want)
 	}
 }
 

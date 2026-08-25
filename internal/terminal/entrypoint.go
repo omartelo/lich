@@ -1,7 +1,10 @@
 package terminal
 
 import (
+	"encoding/base64"
+	"encoding/binary"
 	"strings"
+	"unicode/utf16"
 
 	"github.com/omartelo/lich/internal/shquote"
 )
@@ -28,17 +31,49 @@ import (
 // screen with a shell under it.
 //
 // goos is runtime.GOOS, passed in so the decision stays pure and testable
-// off-Windows — wrapSetup's pattern, and Windows is skipped for wrapSetup's
-// reason: composing a cmd.exe chain is not worth it while the port stays
-// experimental. shell is the resolved user shell, which is also what the command
-// is run by: a value the user typed is their own shell's syntax, not sh's.
+// off-Windows — wrapSetup's pattern. shell is the resolved user shell, which is
+// also what the command is run by: a value the user typed is their own shell's
+// syntax, not sh's. Which is why the two branches share no composition. A POSIX
+// shell reaches the prompt by exec'ing itself over the command, and PowerShell —
+// what a Windows session runs (windowsShells) — has -NoExit for exactly this,
+// which is the better half of the trade: the shell the user lands in is the same
+// process lich spawned, so the pid it polls for the working directory is still
+// the shell's (cwd.go) and no second process hangs off the PTY.
 func wrapEntrypoint(spec ptySpec, kind, entrypoint, goos string) ptySpec {
 	entrypoint = strings.TrimSpace(entrypoint)
-	if kind != KindShell || entrypoint == "" || goos == "windows" {
+	if kind != KindShell || entrypoint == "" {
+		return spec
+	}
+	if goos == "windows" {
+		// No -NoProfile: the profile is the user's own rc, this is their own
+		// shell, and PowerShell loads it before running the command — so an
+		// alias defined in $PROFILE can be an entrypoint, the one thing the
+		// POSIX branch cannot offer.
+		spec.args = []string{"-NoExit", "-EncodedCommand", encodePwshCommand(entrypoint)}
 		return spec
 	}
 	// The newline is load-bearing: a command ending in a comment or an unclosed
 	// `&&` would otherwise swallow the exec that follows it.
 	spec.args = []string{"-c", entrypoint + "\nexec " + shquote.Quote(spec.bin)}
 	return spec
+}
+
+// encodePwshCommand renders a script as the base64 of its UTF-16LE bytes, which
+// is what PowerShell's -EncodedCommand takes.
+//
+// The encoding is here to sidestep quoting, not to hide anything. A Windows
+// command line is one string: the argv lich builds is composed by
+// windows.ComposeCommandLine (pty_windows.go), which escapes an embedded double
+// quote as \" for CommandLineToArgvW — and PowerShell does not read \" as an
+// escape. An entrypoint is text a user typed into a dialog, so a double quote in
+// it (`pnpm run "dev server"`) is ordinary rather than hostile, and it would
+// arrive mangled or split. Base64 has no character either parser acts on, so
+// there is no rule left to get wrong.
+func encodePwshCommand(script string) string {
+	units := utf16.Encode([]rune(script))
+	buf := make([]byte, 2*len(units))
+	for i, unit := range units {
+		binary.LittleEndian.PutUint16(buf[2*i:], unit)
+	}
+	return base64.StdEncoding.EncodeToString(buf)
 }
