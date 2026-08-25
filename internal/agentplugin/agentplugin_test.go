@@ -607,8 +607,8 @@ func TestHasToolsIsAlwaysTrueForTheHarnessesToldAtSpawn(t *testing.T) {
 
 // Which providers depend on a registration lich writes with its own path: the
 // ones whose installs leave that registration out — or refuse outright — when
-// the path cannot be resolved (crushrcBlock, ompMCPDocument,
-// antigravityRegisterMCP, cursorMCPDocument). Pinned as a list rather than
+// the path cannot be resolved (crushrcBlock, mcpDocument,
+// antigravityRegisterMCP). Pinned as a list rather than
 // derived, because a provider added to one side and not the other is exactly the
 // drift that promises tools nobody registered.
 func TestRegistersServerAtInstall(t *testing.T) {

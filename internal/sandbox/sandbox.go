@@ -102,10 +102,11 @@ func stateDirs(providerID, home string) []string {
 		// Two, because Cursor splits its state and reaches the second half
 		// through the home directly rather than through its config dir: the
 		// credentials (`auth.json`, `cli-config.json`) and the chats are under
-		// the config dir, while `~/.cursor` holds the `mcp.json` it reads, its
+		// the config dir (providers.CursorConfigDir, which is not xdg-basedir
+		// and says why), while `~/.cursor` holds the `mcp.json` it reads, its
 		// per-project transcripts and its CLI state. With no XDG_CONFIG_HOME
 		// the two are the same directory, which is the usual case.
-		dirs := []string{cursorConfigDir(home)}
+		dirs := []string{providers.CursorConfigDir(home)}
 		if underHome := filepath.Join(home, ".cursor"); underHome != dirs[0] {
 			dirs = append(dirs, underHome)
 		}
@@ -134,26 +135,6 @@ func envDir(name, fallback string) string {
 		return dir
 	}
 	return fallback
-}
-
-// cursorConfigDir resolves Cursor CLI's config directory. It reads the XDG
-// variable but not the XDG fallback: with neither variable set Cursor lands on
-// ~/.cursor, never ~/.config/cursor, so configHome below would confine a Cursor
-// session to a directory its CLI never writes — a session that opens at the
-// login prompt. Measured on 2026.08.11; the same rule lives in
-// internal/terminal/transcript.go, which reads the chats under it.
-//
-// It answers for the config dir alone. `~/.cursor` is a second directory the
-// CLI resolves off the home with no variable in the way at all, and stateDirs
-// binds both.
-func cursorConfigDir(home string) string {
-	if dir := os.Getenv("CURSOR_CONFIG_DIR"); filepath.IsAbs(dir) {
-		return dir
-	}
-	if base := os.Getenv("XDG_CONFIG_HOME"); filepath.IsAbs(base) {
-		return filepath.Join(base, "cursor")
-	}
-	return filepath.Join(home, ".cursor")
 }
 
 // configHome and dataHome are the XDG directories, which every provider here

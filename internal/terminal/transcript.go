@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/omartelo/lich/internal/providers"
 )
 
 // globTranscript completes a transcript path under base: the parts lich does not
@@ -129,26 +131,16 @@ func cursorWorkspaceKey(cwd string) string {
 	return fmt.Sprintf("%x", md5.Sum([]byte(abs)))
 }
 
-// cursorConfigDir resolves Cursor CLI's config directory, or false when there is
-// no home to hang it off. It does not go through harnessDir because Cursor
-// answers to two variables in a shape no other provider uses: $CURSOR_CONFIG_DIR
-// wins outright, else $XDG_CONFIG_HOME with "cursor" under it — and the fallback
-// when neither is set is ~/.cursor, not ~/.config/cursor. Reading it as
-// xdg-basedir the way opencode and Crush are read would point at a directory
-// Cursor never writes on a machine with no XDG_CONFIG_HOME, which is most of
-// them. Measured on 2026.08.11; the same rule lives in internal/sandbox.
+// cursorConfigDir is providers.CursorConfigDir against this machine's home, or
+// false when there is no home to hang it off. It does not go through harnessDir
+// because Cursor is not xdg-basedir — the resolver says why, and it is shared
+// with internal/sandbox, which binds the same directory into a confined session.
 func cursorConfigDir() (string, bool) {
-	if dir := os.Getenv("CURSOR_CONFIG_DIR"); dir != "" {
-		return dir, true
-	}
-	if base := os.Getenv("XDG_CONFIG_HOME"); base != "" {
-		return filepath.Join(base, "cursor"), true
-	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", false
 	}
-	return filepath.Join(home, ".cursor"), true
+	return providers.CursorConfigDir(home), true
 }
 
 // ompTranscriptPath locates an oh-my-pi conversation by its id under omp's agent
