@@ -1294,3 +1294,32 @@ func TestHasToolsForCursor(t *testing.T) {
 		t.Error("HasTools(cursor) = true, but no server could be registered for it")
 	}
 }
+
+// TestUnderGoBuildCache pins the shape that keeps a `go run` binary out of a
+// harness's config. Writing one produces a registration that works until that
+// run ends and then fails silently forever, which is what a `task dev` install
+// left in a real ~/.cursor/mcp.json. The paths are composed for the running OS:
+// what the cache looks like is a separator question.
+func TestUnderGoBuildCache(t *testing.T) {
+	tmp := os.TempDir()
+	cases := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{"the binary go run builds", filepath.Join(tmp, "go-build1790994521", "b001", "exe", "lich"), true},
+		{"and a deeper cache root", filepath.Join(tmp, "x", "go-build42", "b001", "exe", "lich"), true},
+		{"an installed lich", filepath.Join(string(filepath.Separator), "usr", "bin", "lich"), false},
+		{"one built into the repo", filepath.Join(string(filepath.Separator), "home", "u", "src", "bin", "lich"), false},
+		// `exe` alone is not the cache, and the cache without it is not the
+		// binary: both halves have to be there.
+		{"an exe directory of the user's own", filepath.Join(string(filepath.Separator), "opt", "exe", "lich"), false},
+		{"the cache without the exe directory", filepath.Join(tmp, "go-build42", "b001", "lich"), false},
+		{"nothing at all", "", false},
+	}
+	for _, tc := range cases {
+		if got := underGoBuildCache(tc.path); got != tc.want {
+			t.Errorf("%s: underGoBuildCache(%q) = %v, want %v", tc.name, tc.path, got, tc.want)
+		}
+	}
+}

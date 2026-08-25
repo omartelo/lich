@@ -44,11 +44,11 @@ Both sides test against the payloads in
 
 | Claude Code hook   | Codex hook          | Antigravity hook | opencode event           | oh-my-pi event | Crush hook | Cursor CLI hook    | state     |
 |--------------------|---------------------|------------------|--------------------------|----------------|------------|--------------------|-----------|
-| `UserPromptSubmit` | `UserPromptSubmit`  | `PreInvocation`  | `session.status` (`busy`) | `input`        | —          | `UserPromptSubmit` | `busy`    |
-| `PreToolUse`       | `PreToolUse`        | `PreToolUse`     | `tool.execute.before`    | `tool_call`    | —          | `PreToolUse`       | `busy` + `tool` |
-| `PostToolUse`      | `PostToolUse`       | —                | `tool.execute.after`     | `turn_start`   | —          | `PostToolUse`      | `busy`    |
+| `UserPromptSubmit` | `UserPromptSubmit`  | `PreInvocation`  | `session.status` (`busy`) | `input`        | —          | —                  | `busy`    |
+| `PreToolUse`       | `PreToolUse`        | `PreToolUse`     | `tool.execute.before`    | `tool_call`    | —          | dropped            | `busy` + `tool` |
+| `PostToolUse`      | `PostToolUse`       | —                | `tool.execute.after`     | `turn_start`   | —          | dropped            | `busy`    |
 | `Notification`     | `PermissionRequest` | —                | any `*.asked`            | —              | —          | —                  | `waiting` + `reason` |
-| `Stop`             | `Stop`              | `Stop`           | `session.status` (`idle`) | `session_stop` | —          | `Stop`             | `done`    |
+| `Stop`             | `Stop`              | `Stop`           | `session.status` (`idle`) | `session_stop` | —          | —                  | `done`    |
 | `SessionEnd`       | —                   | —                | —                        | —              | —          | `SessionEnd`       | `idle`    |
 
 opencode is the one harness that reports a state rather than an event: its

@@ -144,20 +144,24 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   `internal/terminal/terminal.go`, `providerKind`): lich installs no plugin into Cursor, and it does not have to —
   the CLI executes every Claude Code hook on the machine, the user's own and each installed plugin's (measured on
   2026.08.11: `hookSource: claude-user` and `claude-plugin`, with `${CLAUDE_PLUGIN_ROOT}` expanded). So on a
-  machine where the lich plugin is installed in Claude Code, a Cursor session already reports its state, its
-  title, the files it touched and its chat id — and on a machine without it, that session reports nothing at all.
-  Nothing on the card says which of the two it is, and Settings › Plugin does not list Cursor, so there is no
-  install to point at either way. Three edges come with it. The plugin's script reports `claude`, because that is
-  the argument Claude Code's own registration passes it; lich drops that name for a card whose provider it chose
-  itself, but a **shell** session running `cursor-agent` by hand has only the report to go on and wears Claude's
-  mark. `Notification` maps to nothing in Cursor, so `waiting` never arrives — which puts it beside Antigravity,
-  oh-my-pi and Crush below. And the reports are all that route carries: Cursor takes no MCP server on its command
-  line and reads none from a Claude Code plugin, so lich's own tools come from an `mcpServers` document its
-  install writes under `~/.cursor` — which is why installing for Cursor refuses while Claude Code has no plugin
-  (tools with no reports is a card that answers and never says it is working), why its version is Claude Code's,
-  and why its row offers no update of its own: the update is the Claude Code row's, one line up the same screen.
-  A Cursor session still gets no briefing — the CLI has no append flag — so what it knows about lich is its tool
-  list.
+  machine where the lich plugin is installed in Claude Code, a Cursor session reports the chat id it is running
+  and the files it touches, with nothing installed there — and on a machine without it, that session reports
+  nothing at all. Nothing on the card says which of the two it is.
+  **What never arrives is the turn.** Of the nine events the plugin registers, Cursor delivers four —
+  `SessionStart`, `PreToolUse`, `PostToolUse`, `SessionEnd` — and no `UserPromptSubmit` or `Stop`, measured
+  against hooks in Cursor's own format and in Claude Code's alike. So a turn that calls no tool never begins and
+  one that does never ends, which is why `terminal.closableState` drops every state but `idle` from a Cursor
+  session rather than pinning a spinner to the card for the rest of it: no spinner, no bell, no auto-title, and
+  no `waiting` either (`Notification` maps to nothing there). That is the Crush row of the table below, arrived
+  at from the other direction — lich does not own the registration here, so it filters what it cannot close.
+  The reports are also all that route carries: Cursor takes no MCP server on its command line and reads none from
+  a Claude Code plugin, so lich's own tools come from an `mcpServers` document its install writes under
+  `~/.cursor` — which is why installing for Cursor refuses while Claude Code has no plugin, why its version is
+  Claude Code's, and why its row offers no update of its own: the update is the Claude Code row's, one line up
+  the same screen. A Cursor session gets no briefing either — the CLI has no append flag — so what it knows about
+  lich is its tool list. One last edge: the plugin's script reports `claude`, the argument Claude Code's own
+  registration passes it, and lich drops that name for a card whose provider it chose itself — but a **shell**
+  session running `cursor-agent` by hand has only the report to go on and wears Claude's mark.
 - **Cursor keeps its state in two directories and its chats per checkout** (`internal/sandbox/sandbox.go`,
   `internal/terminal/transcript.go`): its config dir is `$CURSOR_CONFIG_DIR` ‖ `$XDG_CONFIG_HOME/cursor` ‖
   `~/.cursor` — not xdg-basedir, the fallback is the home directly — and it holds the credentials and the chats.
@@ -166,6 +170,14 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   directories and a sandbox binding only one is a session that cannot see its own MCP servers. The chat itself is
   at `chats/<md5 of the resolved cwd>/<chatId>/store.db`, so a resume asked without the session's own working
   directory answers "conversation gone" — the same shape as Crush.
+- **An install started from `go run` registers nothing** (`internal/agentplugin/crush.go`, `lichBinary`):
+  Crush's, oh-my-pi's and Cursor's registrations name the absolute path of the lich that wrote them, and under
+  `go run` — `task dev` — that path is the binary the toolchain built into its cache and deletes when the run
+  ends. Writing it gives a registration that works for the rest of that session and then fails silently forever,
+  so lich declines the path instead. The cost is that an install run from a dev build registers no tools:
+  Crush and oh-my-pi still get their hooks, Cursor's install refuses outright, and installing from a real build
+  is what fixes it. The path is recognised by shape (`go-build*/b*/exe/*`) because the toolchain exports no
+  marker.
 - **Installing the plugin writes into four harnesses' own directories** (`internal/agentplugin`): Claude Code and
   Codex are driven through their plugin CLI, but opencode, oh-my-pi and Crush have none, so lich writes the
   released files itself. None of them records what is installed, so the version lives in a marker line lich wrote —

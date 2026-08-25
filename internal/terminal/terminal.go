@@ -320,6 +320,11 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 			}
 		},
 		func(req hookRequest) {
+			// Dropped where the harness cannot close it, before the turn log
+			// ever sees it: a state nothing ends outlives what it describes.
+			if !closableState(s.kindOf(req.SessionID), req.State) {
+				return
+			}
 			// The window is told what the report means, not what it said: a
 			// `waiting` outside a turn is a session idle at its prompt, and the
 			// card would draw it as a human being blocked (see turnLog).
@@ -652,13 +657,42 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, se
 // one. A session that is not running — the report raced its own PTY's exit —
 // falls back to the report, which is all that is left to answer from.
 func (s *Service) providerKind(id, reported string) string {
+	if kind := s.kindOf(id); providers.Known(kind) {
+		return kind
+	}
+	return reported
+}
+
+// kindOf is what a live session's PTY was spawned to run, or "" once it is gone.
+func (s *Service) kindOf(id string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	sess, running := s.sessions[id]
-	if !running || !providers.Known(sess.kind) {
-		return reported
+	if sess, running := s.sessions[id]; running {
+		return sess.kind
 	}
-	return sess.kind
+	return ""
+}
+
+// closableState reports whether a state reported from inside a session of this
+// kind is one that harness can also end. A state nothing ends is worse than no
+// state: `busy` with no end-of-turn event behind it pins a spinner to the card
+// for the rest of the session, which is wrong for far longer than it is right —
+// the rule docs/adding-a-provider.md states, and the reason Crush's plugin
+// registers two of the four reports rather than four.
+//
+// Only Cursor CLI is filtered, and only here rather than in what it registers,
+// because lich does not own its registration: Cursor runs the plugin installed
+// in Claude Code, which registers all of them. Of those, Cursor was measured
+// (2026.08.11, hooks in its own format and in Claude Code's alike) to deliver
+// `SessionStart`, `PreToolUse`, `PostToolUse` and `SessionEnd` and nothing else
+// — no `UserPromptSubmit`, so a turn that calls no tool never begins, and no
+// `Stop`, so one that does never ends. `idle` is the one state it can both
+// report and mean, and it survives.
+func closableState(kind, state string) bool {
+	if kind != providers.Cursor {
+		return true
+	}
+	return state == statusIdle
 }
 
 // stream copies PTY output to the frontend until the PTY is closed, then reaps

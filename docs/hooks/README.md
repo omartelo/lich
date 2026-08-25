@@ -15,11 +15,15 @@ harness. **Cursor CLI's column is the one nobody installs**: lich installs no
 plugin there, and the CLI executes every Claude Code hook on the machine — the
 user's own and each installed plugin's — so those columns fire from the Claude
 Code install or not at all, and a machine without that install has a Cursor
-session that reports nothing. `Notification` is the one Cursor maps to nothing,
-which is why its `waiting` row stays empty. The reports arrive naming `claude`,
-the argument Claude Code's own registration passes; lich answers from the kind
-it spawned instead (`terminal.providerKind`). `../ceilings.md` carries what that
-costs.
+session that reports nothing. Of the nine that install registers, Cursor delivers
+`SessionStart`, `PreToolUse`, `PostToolUse` and `SessionEnd` and no others
+(measured 2026.08.11, against hooks in its own format and in Claude Code's
+alike). "dropped" in the state table is lich refusing a report it would have no
+way to end: without `Stop` a `busy` never becomes `done`, so
+`terminal.closableState` keeps everything but `idle` off a Cursor card. Reports
+also arrive naming `claude`, the argument Claude Code's own registration passes;
+lich answers from the kind it spawned instead (`terminal.providerKind`).
+`../ceilings.md` carries what all of that costs.
 
 This directory is the **canonical, contract-first source** for those hooks:
 

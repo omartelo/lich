@@ -155,16 +155,50 @@ func crushrcBlock(version, scriptDir, lichBin string) string {
 	return b.String()
 }
 
-// lichBinary is the lich this install writes into Crush's config. An
-// unresolvable executable leaves the registration out rather than writing a
-// command that cannot run: the hooks are the part Crush needs to be useful, and
-// they do not depend on it.
+// lichBinary is the lich an install writes into a harness's config — Crush's
+// crushrc, omp's mcp.json, Cursor's. An unresolvable executable leaves the
+// registration out rather than writing a command that cannot run: for Crush and
+// omp the hooks are the part that makes them useful and they do not depend on
+// it, and Cursor's install refuses outright, since its registration is all lich
+// writes there.
+//
+// A lich started with `go run` is unresolvable too, and that is the case worth
+// naming: os.Executable answers with the binary the Go toolchain built into its
+// cache, which is deleted when that run ends. Writing it produces a registration
+// that works for the rest of the session and then fails silently forever — the
+// exact shape a `task dev` install left in a real ~/.cursor/mcp.json.
 func lichBinary() string {
 	exe, err := os.Executable()
-	if err != nil {
+	if err != nil || underGoBuildCache(exe) {
 		return ""
 	}
 	return exe
+}
+
+// underGoBuildCache reports whether path is the throwaway binary `go run` built.
+// It is matched on shape — `.../go-build<digits>/b<digits>/exe/<name>` — because
+// there is nothing to ask: the toolchain exports no marker, and the temporary
+// root moves with TMPDIR. The layout has been stable for the whole life of the
+// build cache, and the cost of the match being wrong is a registration lich
+// declines to write and says so.
+func underGoBuildCache(path string) bool {
+	dir, file := filepath.Split(filepath.Clean(path))
+	if file == "" {
+		return false
+	}
+	dir = filepath.Clean(dir)
+	if filepath.Base(dir) != "exe" {
+		return false
+	}
+	for dir = filepath.Dir(dir); dir != "" && dir != string(filepath.Separator); dir = filepath.Dir(dir) {
+		if strings.HasPrefix(filepath.Base(dir), "go-build") {
+			return true
+		}
+		if parent := filepath.Dir(dir); parent == dir {
+			break
+		}
+	}
+	return false
 }
 
 // replaceBlock returns existing with lich's block replaced by block — appended

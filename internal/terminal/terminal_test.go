@@ -1465,3 +1465,35 @@ func TestSandboxCredentialsAreOnlyForConfinedSessions(t *testing.T) {
 		t.Error("a confined session was refused the agent its project turned on")
 	}
 }
+
+// TestClosableState pins which reports survive per provider. Cursor CLI is the
+// only one filtered, because it is the only one whose reports lich does not
+// register: it runs Claude Code's installed plugin, which registers all of them,
+// while the CLI itself delivers only SessionStart, PreToolUse, PostToolUse and
+// SessionEnd. A `busy` from a tool call would therefore never be followed by the
+// `done` that ends it, and the spinner would stay on the card for the rest of
+// the session.
+func TestClosableState(t *testing.T) {
+	cases := []struct {
+		name, kind, state string
+		want              bool
+	}{
+		{"a claude turn begins", providers.Claude, statusBusy, true},
+		{"and ends", providers.Claude, statusDone, true},
+		{"crush reports what it can", providers.Crush, statusBusy, true},
+		// The two Cursor delivers but cannot end.
+		{"a cursor tool call does not begin a turn", providers.Cursor, statusBusy, false},
+		{"nor does anything else", providers.Cursor, statusDone, false},
+		{"cursor raises no approval event either", providers.Cursor, statusWaiting, false},
+		// SessionEnd is the one Cursor both reports and means.
+		{"a cursor session ending is reported", providers.Cursor, statusIdle, true},
+		{"a shell is not filtered", KindShell, statusBusy, true},
+		{"nor is a session already gone", "", statusBusy, true},
+	}
+	for _, tc := range cases {
+		if got := closableState(tc.kind, tc.state); got != tc.want {
+			t.Errorf("%s: closableState(%q, %q) = %v, want %v",
+				tc.name, tc.kind, tc.state, got, tc.want)
+		}
+	}
+}
