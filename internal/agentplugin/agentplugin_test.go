@@ -284,10 +284,7 @@ func TestStatus(t *testing.T) {
 
 // TestStatusListsEveryHarness proves the report covers the providers that can
 // run the plugin and nothing else: an entry for one that cannot would put an
-// install button on a CLI with nothing to install. Cursor CLI is the registry
-// entry that is deliberately absent, and it is asserted by name — the list
-// above it reads as an oversight otherwise, and the day it does gain a plugin
-// this is the test that has to say so.
+// install button on a CLI with nothing to install.
 func TestStatusListsEveryHarness(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	s := serveBody(t, http.StatusOK, `{"tag_name":"v0.2.0"}`)
@@ -299,13 +296,10 @@ func TestStatusListsEveryHarness(t *testing.T) {
 	}
 	want := []string{
 		providers.Claude, providers.Codex, providers.Antigravity,
-		providers.OpenCode, providers.OMP, providers.Crush,
+		providers.OpenCode, providers.OMP, providers.Crush, providers.Cursor,
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("Status() covers %v, want %v", got, want)
-	}
-	if slices.Contains(got, providers.Cursor) {
-		t.Errorf("Status() offers a plugin for %q, which lich installs none into", providers.Cursor)
 	}
 }
 
@@ -611,13 +605,16 @@ func TestHasToolsIsAlwaysTrueForTheHarnessesToldAtSpawn(t *testing.T) {
 	}
 }
 
-// Which providers depend on a registration lich writes with its own path — the
-// two whose installs leave that registration out when the path cannot be
-// resolved (crushrcBlock, ompMCPDocument). Pinned as a list rather than derived,
-// because a provider added to one side and not the other is exactly the drift
-// that promises tools nobody registered.
+// Which providers depend on a registration lich writes with its own path: the
+// ones whose installs leave that registration out — or refuse outright — when
+// the path cannot be resolved (crushrcBlock, ompMCPDocument,
+// antigravityRegisterMCP, cursorMCPDocument). Pinned as a list rather than
+// derived, because a provider added to one side and not the other is exactly the
+// drift that promises tools nobody registered.
 func TestRegistersServerAtInstall(t *testing.T) {
-	for _, provider := range []string{providers.Crush, providers.OMP} {
+	for _, provider := range []string{
+		providers.Crush, providers.OMP, providers.Antigravity, providers.Cursor,
+	} {
 		if !registersServerAtInstall(provider) {
 			t.Errorf("%s writes lich's server at install, but is not treated as doing so", provider)
 		}

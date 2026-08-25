@@ -1100,3 +1100,197 @@ func TestAntigravityInstallClaimsNothingWhenTheRegistrationFails(t *testing.T) {
 	// fixture's version (below toolsMinVersion) it answers false either way,
 	// which would be an assertion that cannot fail.
 }
+
+// cursorHome points both halves of a Cursor install at temporary directories:
+// the home it writes `~/.cursor/mcp.json` under, and the Claude Code state that
+// decides whether there is anything to register tools beside.
+func cursorHome(t *testing.T, claudeState string) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("CLAUDE_CONFIG_DIR", writeClaudeState(t, claudeState))
+	return home
+}
+
+func readCursorServers(t *testing.T, home string) map[string]any {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(home, ".cursor", cursorMCPFile))
+	if err != nil {
+		t.Fatalf("read cursor's MCP document: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("cursor's MCP document is not JSON: %v", err)
+	}
+	servers, _ := doc[cursorMCPServers].(map[string]any)
+	return servers
+}
+
+const claudeStateWithPlugin = `{"plugins":{"lich@lich-plugin":[{"scope":"user","version":"0.9.0"}]}}`
+
+// Cursor takes no MCP server on its command line and gets none from the Claude
+// Code plugin it does run, so this document is the only way a session of its own
+// reaches the sessions beside it.
+func TestCursorInstallRegistersTheServer(t *testing.T) {
+	home := cursorHome(t, claudeStateWithPlugin)
+	s := New(stubBins{})
+	s.lichBin = func() string { return "/usr/bin/lich" }
+
+	if err := s.Install(providers.Cursor); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
+	lich, ok := readCursorServers(t, home)[relay.MCPServerName].(map[string]any)
+	if !ok {
+		t.Fatalf("no %q server registered", relay.MCPServerName)
+	}
+	if lich["command"] != "/usr/bin/lich" {
+		t.Errorf("registered command = %v, want the resolved lich binary", lich["command"])
+	}
+	if args, _ := lich["args"].([]any); len(args) != 1 || args[0] != relay.MCPSubcommand {
+		t.Errorf("registered args = %v, want [%q]", lich["args"], relay.MCPSubcommand)
+	}
+}
+
+// The version reported for Cursor is Claude Code's, because that is the install
+// its reports actually come from — and it is reported only once the tools are
+// registered too, since a session needs both halves.
+func TestCursorInstalledVersionIsClaudeCodes(t *testing.T) {
+	cursorHome(t, claudeStateWithPlugin)
+	s := New(stubBins{})
+	s.lichBin = func() string { return "/usr/bin/lich" }
+
+	if got, ok := s.installedVersion(providers.Cursor); ok {
+		t.Errorf("installedVersion = (%q,%v) before the server was registered, want not installed", got, ok)
+	}
+	if err := s.Install(providers.Cursor); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	if got, ok := s.installedVersion(providers.Cursor); !ok || got != "0.9.0" {
+		t.Errorf("installedVersion = (%q,%v), want (\"0.9.0\",true)", got, ok)
+	}
+}
+
+// Registering the tools while the reports have nowhere to come from is a card
+// that answers with lich's own operations and never says it is working, so the
+// install refuses and names the step that is missing.
+func TestCursorInstallRefusesWithoutTheClaudeCodeInstall(t *testing.T) {
+	home := cursorHome(t, `{"plugins":{}}`)
+	s := New(stubBins{})
+	s.lichBin = func() string { return "/usr/bin/lich" }
+
+	err := s.Install(providers.Cursor)
+	if err == nil {
+		t.Fatal("Install = nil with no plugin in Claude Code, want an error naming it")
+	}
+	if !strings.Contains(err.Error(), "Claude Code") {
+		t.Errorf("error does not name what to install: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".cursor", cursorMCPFile)); !os.IsNotExist(err) {
+		t.Error("a refused install still wrote the MCP document")
+	}
+}
+
+// The document belongs to the user: lich rewrites it, so every server and every
+// key it did not come for survives the round trip.
+func TestCursorInstallKeepsEveryOtherServer(t *testing.T) {
+	home := cursorHome(t, claudeStateWithPlugin)
+	dir := filepath.Join(home, ".cursor")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	existing := `{
+  "mcpServers": {"notes": {"command": "notes-server", "args": ["--stdio"]}},
+  "somethingElse": {"kept": true}
+}`
+	if err := os.WriteFile(filepath.Join(dir, cursorMCPFile), []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := New(stubBins{})
+	s.lichBin = func() string { return "/usr/bin/lich" }
+
+	if err := s.Install(providers.Cursor); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
+	servers := readCursorServers(t, home)
+	if _, ok := servers["notes"]; !ok {
+		t.Errorf("the user's own server is gone: %v", servers)
+	}
+	if _, ok := servers[relay.MCPServerName]; !ok {
+		t.Errorf("lich did not register itself: %v", servers)
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, cursorMCPFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "somethingElse") {
+		t.Errorf("a key lich does not know about was dropped:\n%s", raw)
+	}
+}
+
+// A document lich cannot parse is refused rather than replaced: overwriting it
+// would delete servers lich never got to see.
+func TestCursorInstallRefusesAnUnreadableDocument(t *testing.T) {
+	home := cursorHome(t, claudeStateWithPlugin)
+	dir := filepath.Join(home, ".cursor")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const garbage = "{ not json"
+	path := filepath.Join(dir, cursorMCPFile)
+	if err := os.WriteFile(path, []byte(garbage), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := New(stubBins{})
+	s.lichBin = func() string { return "/usr/bin/lich" }
+
+	if err := s.Install(providers.Cursor); err == nil {
+		t.Fatal("Install = nil over a document lich cannot merge into")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != garbage {
+		t.Errorf("the user's document was rewritten: %q", data)
+	}
+}
+
+// A lich that cannot name its own binary registers nothing rather than a command
+// that cannot run — the session still has the `lich` command line.
+func TestCursorInstallWritesNothingWithoutABinary(t *testing.T) {
+	home := cursorHome(t, claudeStateWithPlugin)
+	s := New(stubBins{})
+	s.lichBin = func() string { return "" }
+
+	if err := s.Install(providers.Cursor); err == nil {
+		t.Fatal("Install = nil with no lich binary to register")
+	}
+	if _, err := os.Stat(filepath.Join(home, ".cursor", cursorMCPFile)); !os.IsNotExist(err) {
+		t.Error("a refused install still wrote the MCP document")
+	}
+}
+
+// Cursor's tools come from the document the install writes, and its version from
+// Claude Code's install — so it can answer with a tool only once both halves are
+// there, and never when lich cannot name the binary to register.
+func TestHasToolsForCursor(t *testing.T) {
+	cursorHome(t, claudeStateWithPlugin)
+	s := New(stubBins{})
+	s.lookPath = func(string) (string, error) { return "/usr/bin/cursor-agent", nil }
+	s.lichBin = func() string { return "/usr/bin/lich" }
+
+	if s.HasTools(providers.Cursor) {
+		t.Error("HasTools(cursor) = true before lich's server was registered")
+	}
+	if err := s.Install(providers.Cursor); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	if !s.HasTools(providers.Cursor) {
+		t.Error("HasTools(cursor) = false with the server registered and the plugin in Claude Code")
+	}
+
+	s.lichBin = func() string { return "" }
+	if s.HasTools(providers.Cursor) {
+		t.Error("HasTools(cursor) = true, but no server could be registered for it")
+	}
+}

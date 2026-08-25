@@ -16,10 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with its credentials, its MCP registrations and its chats still reachable.
   If you have the lich plugin installed in Claude Code, a Cursor card also
   reports its state, its title and the files it touches, with nothing to install:
-  Cursor runs every Claude Code hook on the machine. Without that install it
-  reports nothing. Either way it is not handed lich's own tools — Cursor takes no
-  MCP server on its command line — so it reaches the sessions beside it through
-  the `lich` command line.
+  Cursor runs every Claude Code hook on the machine, so it borrows that install
+  and shows its version. What Settings › Plugin installs for Cursor is the one
+  thing that route does not carry — lich's own tools — so a Cursor session can
+  open, message and close the sessions beside it. It refuses while Claude Code
+  has no plugin, since tools without reports is a card that answers and never
+  says it is working, and it offers no update of its own: that is the Claude Code
+  row's button, one line up.
 
 ## [0.40.1] - 2026-08-24
 

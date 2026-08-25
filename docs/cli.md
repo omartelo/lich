@@ -522,7 +522,7 @@ own command line (`providers.AcceptsMCPServer`):
 | Crush | an `mcp add` line in the block the plugin install writes into `crushrc` | with the plugin |
 | opencode | its plugin defines the same eight as tools of its own — a plugin there cannot register an MCP server | with the plugin |
 | oh-my-pi | a `lich` entry merged into `mcp.json` beside the extension the plugin install writes | with the plugin |
-| Cursor CLI | — its `mcp` subcommand only lists, enables and disables what is already in `~/.cursor/mcp.json`, and the Claude Code plugin it does run carries no MCP server | never |
+| Cursor CLI | a `lich` entry merged into `~/.cursor/mcp.json` by the install — its `mcp` subcommand only lists, enables and disables what is already there | with the plugin |
 
 Only the first two can be told on their own command line, which is what makes
 their registration per-session and secret-free. The rest arrive with the plugin
@@ -604,8 +604,8 @@ speaking, and the two are not the same kind of "not your user".
 A target that **has** lich's tools is offered one first — Claude Code and Codex
 always, Antigravity, opencode, oh-my-pi and Crush once the installed plugin is
 new enough to carry them
-(`agentplugin.HasTools`). A Cursor CLI session never has them, and is always
-given the command. A session pointed at a tool it does not have loses the
+(`agentplugin.HasTools`) — Cursor among them, whose tools come from the document
+its install writes rather than from the plugin it borrows from Claude Code. A session pointed at a tool it does not have loses the
 turn to an error, where the command works everywhere:
 
 ```

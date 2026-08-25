@@ -151,9 +151,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   the argument Claude Code's own registration passes it; lich drops that name for a card whose provider it chose
   itself, but a **shell** session running `cursor-agent` by hand has only the report to go on and wears Claude's
   mark. `Notification` maps to nothing in Cursor, so `waiting` never arrives — which puts it beside Antigravity,
-  oh-my-pi and Crush below. And the same reach is one-way: Cursor takes no MCP server on its command line and
-  reads none from a Claude Code plugin, so that session has neither lich's tools nor a briefing naming the `lich`
-  command line, and starts out not knowing lich is there at all.
+  oh-my-pi and Crush below. And the reports are all that route carries: Cursor takes no MCP server on its command
+  line and reads none from a Claude Code plugin, so lich's own tools come from an `mcpServers` document its
+  install writes under `~/.cursor` — which is why installing for Cursor refuses while Claude Code has no plugin
+  (tools with no reports is a card that answers and never says it is working), why its version is Claude Code's,
+  and why its row offers no update of its own: the update is the Claude Code row's, one line up the same screen.
+  A Cursor session still gets no briefing — the CLI has no append flag — so what it knows about lich is its tool
+  list.
 - **Cursor keeps its state in two directories and its chats per checkout** (`internal/sandbox/sandbox.go`,
   `internal/terminal/transcript.go`): its config dir is `$CURSOR_CONFIG_DIR` ‖ `$XDG_CONFIG_HOME/cursor` ‖
   `~/.cursor` — not xdg-basedir, the fallback is the home directly — and it holds the credentials and the chats.
