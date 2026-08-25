@@ -21,6 +21,7 @@ import (
 	"github.com/omartelo/lich/internal/events"
 	"github.com/omartelo/lich/internal/pricing"
 	"github.com/omartelo/lich/internal/project"
+	"github.com/omartelo/lich/internal/providers"
 )
 
 // Event names. A terminal I/O event carries the session ID as a suffix (e.g.
@@ -161,6 +162,10 @@ type session struct {
 	// confined records whether this PTY was spawned inside the sandbox, so Start
 	// can report it once the spawn is out of the lock.
 	confined bool
+	// kind is what this PTY was spawned to run: a provider id, or KindShell.
+	// Read by providerKind, which is what stops a session-start report from
+	// repainting a card lich itself chose the provider for.
+	kind string
 }
 
 // Store is the persistence the terminal service depends on: the binary to spawn
@@ -345,10 +350,19 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 			if err := store.SetProviderSession(sessionID, providerSessionID); err != nil {
 				return err
 			}
-			// A SessionStart report is proof that provider's CLI is running in
-			// this PTY — whatever the card's kind, its icon can wear that
-			// provider's mark now.
-			hub.Emit(agentEventName, agentEvent{ID: sessionID, Agent: provider})
+			// A SessionStart report is proof that *a* provider's CLI is running
+			// in this PTY, and for a shell session that report is the only thing
+			// that knows which — so its icon wears the reported mark.
+			//
+			// For a session lich spawned as a provider, the kind is the better
+			// answer and it wins. A harness can run another harness's hooks:
+			// Cursor CLI executes every Claude Code hook on the machine, the
+			// user's own and each installed plugin's (measured on 2026.08.11,
+			// `hookSource: claude-plugin`), so the lich plugin's own script
+			// reports `claude` from inside a Cursor session and the card wore
+			// Claude's mark one turn in. What a hook says is a claim; what lich
+			// spawned is a fact.
+			hub.Emit(agentEventName, agentEvent{ID: sessionID, Agent: s.providerKind(sessionID, provider)})
 			return nil
 		},
 		func(id, title string) error {
@@ -626,10 +640,25 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, se
 		// is quiet too.
 		lastOut:  time.Now(),
 		confined: inSandbox,
+		kind:     kind,
 	}
 	s.sessions[id] = sess
 	go s.stream(id, sess)
 	return sess, cwd, nil
+}
+
+// providerKind resolves which provider mark a session-start report puts on a
+// card: the kind lich spawned when that kind is a provider, else the reported
+// one. A session that is not running — the report raced its own PTY's exit —
+// falls back to the report, which is all that is left to answer from.
+func (s *Service) providerKind(id, reported string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sess, running := s.sessions[id]
+	if !running || !providers.Known(sess.kind) {
+		return reported
+	}
+	return sess.kind
 }
 
 // stream copies PTY output to the frontend until the PTY is closed, then reaps

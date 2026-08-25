@@ -129,9 +129,9 @@ hook (`docs/hooks/session-state.md`), and it is the same thing its card shows:
   would sit behind the prompt, unread, for as long as nobody is at that screen.
 - `-` (`""` in `--json`) — **not reported**, which is not the same as idle.
   Only providers whose companion plugin reports state have one at all (Crush
-  reports none, Cursor CLI runs no plugin at all yet, and a session that has not
-  had a turn yet has said nothing either), so an empty state says nothing about
-  whether that session is free.
+  reports none, a Cursor session reports only where the plugin is installed in
+  Claude Code, and a session that has not had a turn yet has said nothing
+  either), so an empty state says nothing about whether that session is free.
 
 ### `lich send [--project <name>] [--timeout <seconds>] <session> <prompt>`
 
@@ -522,7 +522,7 @@ own command line (`providers.AcceptsMCPServer`):
 | Crush | an `mcp add` line in the block the plugin install writes into `crushrc` | with the plugin |
 | opencode | its plugin defines the same eight as tools of its own — a plugin there cannot register an MCP server | with the plugin |
 | oh-my-pi | a `lich` entry merged into `mcp.json` beside the extension the plugin install writes | with the plugin |
-| Cursor CLI | — its `mcp` subcommand only lists, enables and disables what is already in `~/.cursor/mcp.json`, and lich installs no plugin there yet | never |
+| Cursor CLI | — its `mcp` subcommand only lists, enables and disables what is already in `~/.cursor/mcp.json`, and the Claude Code plugin it does run carries no MCP server | never |
 
 Only the first two can be told on their own command line, which is what makes
 their registration per-session and secret-free. The rest arrive with the plugin

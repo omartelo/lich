@@ -140,20 +140,28 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   first, and both senders read a confident wrong report — nothing anywhere reports the mismatch. Naming the ticket
   is still the only exact route, which is why every relayed message spells it and why the card's tooltip shows it.
 
-- **A Cursor CLI session runs with no plugin at all** (`internal/agentplugin/agentplugin.go`, `supported`): it is
-  the one provider in the registry the companion plugin has never been installed into, and everything the plugin
-  carries is missing there at once. The card reports no state, so it never spins, never rings and never chimes —
-  an empty state, not an idle one. No `SessionStart` report means no `provider_session_id` on the row, so the
-  resume lich wires for it (`--resume <chatId>`, and the chat's own `chats/<id>/store.db` under the config
-  directory) is never *offered*: the plumbing is there and nothing ever reaches it. No auto-title, no
-  touched-files refresh, and none of lich's own tools — `mcp` there only lists, enables and disables what is
-  already in `~/.cursor/mcp.json`, so that session reaches the ones beside it through the `lich` command line
-  alone. What makes the gap worth closing rather than permanent is that the CLI reads Claude Code's own hook
-  spelling: it maps `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Stop`, `SubagentStop`,
-  `SessionEnd` and `PreCompact` onto its own events, and loads a plugin directory carrying
-  `.claude-plugin/plugin.json` (both read out of the shipped bundle, 2026.08.11). `Notification` and
-  `PermissionRequest` map to nothing, so a Cursor session will not report `waiting` even once it does report —
-  which puts it beside Antigravity, oh-my-pi and Crush in the bullet below.
+- **A Cursor CLI session reports through Claude Code's plugin, or not at all** (`internal/agentplugin`,
+  `internal/terminal/terminal.go`, `providerKind`): lich installs no plugin into Cursor, and it does not have to —
+  the CLI executes every Claude Code hook on the machine, the user's own and each installed plugin's (measured on
+  2026.08.11: `hookSource: claude-user` and `claude-plugin`, with `${CLAUDE_PLUGIN_ROOT}` expanded). So on a
+  machine where the lich plugin is installed in Claude Code, a Cursor session already reports its state, its
+  title, the files it touched and its chat id — and on a machine without it, that session reports nothing at all.
+  Nothing on the card says which of the two it is, and Settings › Plugin does not list Cursor, so there is no
+  install to point at either way. Three edges come with it. The plugin's script reports `claude`, because that is
+  the argument Claude Code's own registration passes it; lich drops that name for a card whose provider it chose
+  itself, but a **shell** session running `cursor-agent` by hand has only the report to go on and wears Claude's
+  mark. `Notification` maps to nothing in Cursor, so `waiting` never arrives — which puts it beside Antigravity,
+  oh-my-pi and Crush below. And the same reach is one-way: Cursor takes no MCP server on its command line and
+  reads none from a Claude Code plugin, so that session has neither lich's tools nor a briefing naming the `lich`
+  command line, and starts out not knowing lich is there at all.
+- **Cursor keeps its state in two directories and its chats per checkout** (`internal/sandbox/sandbox.go`,
+  `internal/terminal/transcript.go`): its config dir is `$CURSOR_CONFIG_DIR` ‖ `$XDG_CONFIG_HOME/cursor` ‖
+  `~/.cursor` — not xdg-basedir, the fallback is the home directly — and it holds the credentials and the chats.
+  But `~/.cursor` is resolved off the home with no variable in the way at all, and that is where `mcp.json`, the
+  per-project transcripts and the CLI state live. On a machine with `XDG_CONFIG_HOME` set the two are different
+  directories and a sandbox binding only one is a session that cannot see its own MCP servers. The chat itself is
+  at `chats/<md5 of the resolved cwd>/<chatId>/store.db`, so a resume asked without the session's own working
+  directory answers "conversation gone" — the same shape as Crush.
 - **Installing the plugin writes into four harnesses' own directories** (`internal/agentplugin`): Claude Code and
   Codex are driven through their plugin CLI, but opencode, oh-my-pi and Crush have none, so lich writes the
   released files itself. None of them records what is installed, so the version lives in a marker line lich wrote —

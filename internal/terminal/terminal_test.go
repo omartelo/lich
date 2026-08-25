@@ -552,6 +552,35 @@ func TestResolveCommand(t *testing.T) {
 	}
 }
 
+// TestProviderKindOutranksTheReport proves a session-start report cannot repaint
+// a card lich itself chose the provider for. A harness can run another harness's
+// hooks — Cursor CLI executes every Claude Code hook on the machine, the user's
+// own and each installed plugin's — so the lich plugin's own script reports
+// `claude` from inside a Cursor session. What lich spawned wins; only a shell,
+// where lich genuinely does not know what is running inside, wears the report.
+func TestProviderKindOutranksTheReport(t *testing.T) {
+	svc := &Service{sessions: map[string]*session{
+		"cursor-card": {kind: providers.Cursor},
+		"shell-card":  {kind: KindShell},
+		"odd-card":    {kind: "something-else"},
+	}}
+	cases := []struct {
+		name, id, reported, want string
+	}{
+		{"a provider card keeps its own kind", "cursor-card", providers.Claude, providers.Cursor},
+		{"and does so even when the report agrees", "cursor-card", providers.Cursor, providers.Cursor},
+		{"a shell wears what reported", "shell-card", providers.Claude, providers.Claude},
+		{"an unregistered kind is no answer", "odd-card", providers.Claude, providers.Claude},
+		{"a report that raced the PTY's exit", "gone-card", providers.Claude, providers.Claude},
+	}
+	for _, tc := range cases {
+		if got := svc.providerKind(tc.id, tc.reported); got != tc.want {
+			t.Errorf("%s: providerKind(%q, %q) = %q, want %q",
+				tc.name, tc.id, tc.reported, got, tc.want)
+		}
+	}
+}
+
 // TestResumeArgs proves each provider resumes in its own spelling — a flag of
 // its own for Claude Code, Antigravity, oh-my-pi and Cursor CLI, a subcommand
 // for Codex, one they happen to share for opencode and Crush — and that a kind

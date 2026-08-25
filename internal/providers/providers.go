@@ -30,11 +30,12 @@ type Provider struct {
 
 // Registry is every provider lich knows about, in display order. Claude Code is
 // first: it is the default, and the plugin's home. Every one of them resumes a
-// conversation by id (terminal.resumeArgs); all but Cursor CLI also run the
-// companion plugin (agentplugin.supported), which is why a Cursor session
-// reports no state and is never offered a resume — docs/ceilings.md names it.
-// What still differs per provider is spelled at each of those tables, and
-// AcceptsMCPServer below is the one split this file owns.
+// conversation by id (terminal.resumeArgs); all but Cursor CLI also have the
+// companion plugin installed into them (agentplugin.supported) — Cursor runs it
+// anyway, because it executes every Claude Code hook on the machine, which
+// docs/ceilings.md names along with what that costs. What still differs per
+// provider is spelled at each of those tables, and AcceptsMCPServer below is
+// the one split this file owns.
 var Registry = []Provider{
 	{ID: Claude, Name: "Claude Code", Binaries: []string{"claude"}},
 	{ID: Codex, Name: "Codex", Binaries: []string{"codex"}},

@@ -1,6 +1,8 @@
 package terminal
 
 import (
+	"crypto/md5"
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -97,18 +99,34 @@ func antigravityConversationPath(providerSessionID string) (string, bool) {
 
 // cursorChatStore is the database Cursor CLI keeps one chat in, under its own
 // config directory. It is not a transcript: the CLI files a chat as SQLite at
-// chats/<chatId>/store.db, which is the one file whose existence answers "can
-// this id still be reopened".
-func cursorChatStore(providerSessionID string) (string, bool) {
+// chats/<workspace>/<chatId>/store.db, which is the one file whose existence
+// answers "can this id still be reopened".
+//
+// The workspace segment is the md5 of the resolved directory the chat ran in,
+// which is why cwd is needed here the way it is for Crush: Cursor keeps its
+// chats per checkout, so the same id proves nothing about another one. False
+// without a cwd — a directory lich cannot name has no chat directory to ask.
+func cursorChatStore(providerSessionID, cwd string) (string, bool) {
 	base, ok := cursorConfigDir()
-	if !ok {
+	if !ok || cwd == "" {
 		return "", false
 	}
-	path := filepath.Join(base, "chats", providerSessionID, "store.db")
+	path := filepath.Join(base, "chats", cursorWorkspaceKey(cwd), providerSessionID, "store.db")
 	if _, err := os.Stat(path); err != nil {
 		return "", false
 	}
 	return path, true
+}
+
+// cursorWorkspaceKey is how Cursor names a checkout's chat directory: the hex
+// md5 of the absolute, cleaned path. md5 is the CLI's choice and this only has
+// to reproduce it — nothing here is a security decision.
+func cursorWorkspaceKey(cwd string) string {
+	abs, err := filepath.Abs(cwd)
+	if err != nil {
+		abs = filepath.Clean(cwd)
+	}
+	return fmt.Sprintf("%x", md5.Sum([]byte(abs)))
 }
 
 // cursorConfigDir resolves Cursor CLI's config directory, or false when there is

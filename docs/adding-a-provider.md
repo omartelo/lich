@@ -4,9 +4,10 @@ A **provider** is an agent CLI lich can run inside a session's PTY. There are
 seven (`internal/providers.Registry`), and adding an eighth means landing in
 about a dozen files across two repositories. This is the map — written after
 Antigravity, so it names what that change actually touched rather than what it
-should have. Cursor CLI came later and stopped short of the plugin: what a
-provider looks like without one is its own row in
-[`ceilings.md`](ceilings.md).
+should have. Cursor CLI came later and needed no plugin install at all — it runs
+every Claude Code hook on the machine, which is a shape the plugin table below
+does not have; [`ceilings.md`](ceilings.md) carries what that buys and what it
+costs.
 
 Two rules govern the whole exercise, and both are in
 [`../CLAUDE.md`](../CLAUDE.md):

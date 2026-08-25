@@ -65,12 +65,14 @@ const (
 // lists them. A provider outside this list has no plugin to offer, so it never
 // reaches a status or an install.
 //
-// Cursor CLI is the registry's seventh and is not here: nothing has been
-// measured against a real run of it, and an install that registers hooks the
-// CLI never fires is a card that reports nothing while claiming it is wired.
-// Its CLI reads Claude Code's own hook spelling and loads a plugin directory
-// carrying `.claude-plugin/plugin.json`, so the gap is closable —
-// docs/ceilings.md carries what that costs today.
+// Cursor CLI is the registry's seventh and is not here, because there is
+// nothing for lich to install: the CLI executes every Claude Code hook on the
+// machine — the user's own and each installed plugin's — so a machine with the
+// plugin in Claude Code already runs it inside a Cursor session, and a machine
+// without it has nothing an install here could add that Claude Code's own
+// would not. What Cursor does *not* get that way is the MCP registration,
+// which is a file under `~/.cursor` rather than a hook; docs/ceilings.md
+// carries that gap.
 var supported = []string{
 	providers.Claude, providers.Codex, providers.Antigravity,
 	providers.OpenCode, providers.OMP, providers.Crush,

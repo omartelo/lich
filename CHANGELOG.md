@@ -11,14 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Cursor CLI runs as a session.** Cursor's `cursor-agent` joins Claude Code,
   Codex, Antigravity, opencode, oh-my-pi and Crush in Settings › Providers: a
-  session of its own, run without permission prompts if you turn that rung on,
-  told which model to run, and confined by the sandbox with its `~/.cursor`
-  credentials still reachable — including the chats it keeps there, so a
-  confined session sees the same history an unconfined one does. It is the one
-  provider the companion plugin does not install into yet, and that is the whole
-  of what is missing: a Cursor card shows no spinner, gets no auto-title, is
-  never offered a resume after a restart, and reaches the sessions beside it
-  through the `lich` command line rather than through lich's own tools.
+  session of its own, resumed after a restart, run without permission prompts if
+  you turn that rung on, told which model to run, and confined by the sandbox
+  with its credentials, its MCP registrations and its chats still reachable.
+  If you have the lich plugin installed in Claude Code, a Cursor card also
+  reports its state, its title and the files it touches, with nothing to install:
+  Cursor runs every Claude Code hook on the machine. Without that install it
+  reports nothing. Either way it is not handed lich's own tools — Cursor takes no
+  MCP server on its command line — so it reaches the sessions beside it through
+  the `lich` command line.
 
 ## [0.40.1] - 2026-08-24
 

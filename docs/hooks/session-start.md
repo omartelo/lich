@@ -45,7 +45,7 @@ deprecated alias and the defaulted `provider`.
 
 | Claude Code hook | Codex hook     | Antigravity hook | opencode event     | oh-my-pi event  | Crush hook    | Cursor CLI hook | action                                    |
 |------------------|----------------|------------------|--------------------|-----------------|---------------|-----------------|-------------------------------------------|
-| `SessionStart`   | `SessionStart` | `PreInvocation`  | `session.created`  | `session_start` | `PreToolUse`  | —               | store `provider_session_id` on the lich   |
+| `SessionStart`   | `SessionStart` | `PreInvocation`  | `session.created`  | `session_start` | `PreToolUse`  | `SessionStart`  | store `provider_session_id` on the lich   |
 |                  |                |                  |                    |                 |               |                 | session row, and mark the card as running |
 |                  |                |                  |                    |                 |               |                 | `provider` (the `session-agent` app event)|
 

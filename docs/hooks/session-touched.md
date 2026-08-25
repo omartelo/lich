@@ -27,7 +27,7 @@ Both sides test against the payloads in
 
 | Claude Code hook                    | Codex hook                          | Antigravity hook                    | opencode event | oh-my-pi event                      | Crush hook                          | Cursor CLI hook | action                           |
 |-------------------------------------|-------------------------------------|-------------------------------------|----------------|-------------------------------------|-------------------------------------|-----------------|----------------------------------|
-| `PostToolUse` (file-mutating tools) | `PostToolUse` (file-mutating tools) | `PostToolUse` (file-mutating tools) | `file.edited`  | `tool_result` (file-mutating tools) | `PreToolUse` (file-mutating tools)  | —               | refresh the session's git status |
+| `PostToolUse` (file-mutating tools) | `PostToolUse` (file-mutating tools) | `PostToolUse` (file-mutating tools) | `file.edited`  | `tool_result` (file-mutating tools) | `PreToolUse` (file-mutating tools)  | `PostToolUse`   | refresh the session's git status |
 
 Fire it from `PostToolUse` **only for tools that write to disk** — the names are
 the provider's, so match its own: `Edit`, `Write`, `NotebookEdit`, `Bash` on

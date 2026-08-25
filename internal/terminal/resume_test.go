@@ -77,11 +77,13 @@ func TestResumeAvailable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Cursor files one SQLite per chat under its config directory. The override
-	// is what points it at a temporary one; its precedence is pinned separately.
+	// Cursor files one SQLite per chat under its config directory, in a
+	// directory named after the checkout the chat ran in. The override is what
+	// points it at a temporary one; its precedence is pinned separately.
 	cursorBase := t.TempDir()
+	cursorCwd := t.TempDir()
 	const cursorLive = "bec68d79-a208-4e40-8d2f-f8f8964da216"
-	cursorChat := filepath.Join(cursorBase, "chats", cursorLive)
+	cursorChat := filepath.Join(cursorBase, "chats", cursorWorkspaceKey(cursorCwd), cursorLive)
 	if err := os.MkdirAll(cursorChat, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -127,9 +129,15 @@ func TestResumeAvailable(t *testing.T) {
 		// database to ask at all.
 		{"crush row belongs to another checkout", providers.Crush, crushLive, otherCwd, false},
 		{"crush without a working directory", providers.Crush, crushLive, "", false},
-		{"cursor chat on disk", providers.Cursor, cursorLive, "", true},
-		{"cursor chat deleted", providers.Cursor, "00000000-0000-0000-0000-000000000000", "", false},
-		{"cursor never sees a claude transcript", providers.Cursor, live, "", false},
+		{"cursor chat on disk", providers.Cursor, cursorLive, cursorCwd, true},
+		{"cursor chat deleted", providers.Cursor,
+			"00000000-0000-0000-0000-000000000000", cursorCwd, false},
+		{"cursor never sees a claude transcript", providers.Cursor, live, cursorCwd, false},
+		// Cursor keys its chat directory on the checkout, so the same id under
+		// another one is another conversation — and a session whose cwd lich
+		// cannot name has no chat directory to ask at all.
+		{"cursor chat belongs to another checkout", providers.Cursor, cursorLive, otherCwd, false},
+		{"cursor without a working directory", providers.Cursor, cursorLive, "", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -194,6 +202,36 @@ func TestCursorConfigDirPrecedence(t *testing.T) {
 	got, ok = cursorConfigDir()
 	if !ok || got != explicit {
 		t.Errorf("with CURSOR_CONFIG_DIR = %q (%v), want %q", got, ok, explicit)
+	}
+}
+
+// TestCursorWorkspaceKey pins how Cursor names a checkout's chat directory: the
+// hex md5 of the resolved path. The literal is the one Cursor itself wrote for
+// this repository's own checkout, so a change to how lich composes the key fails
+// here rather than by answering "conversation gone" to every Cursor resume.
+func TestCursorWorkspaceKey(t *testing.T) {
+	// The literal pair was read off a real Cursor install, and it only answers
+	// where that string is an absolute path: on Windows it is not one, Abs would
+	// prefix the process's own drive and the hash would be of a different path
+	// than the one Cursor hashed. The resolution rules below hold everywhere and
+	// are asserted against a path this OS calls absolute.
+	if path, want := "/home/meopedevts/try/skipo", "3cef5d71d2f3dff7ed9332ef4c85ecc4"; filepath.IsAbs(path) {
+		if got := cursorWorkspaceKey(path); got != want {
+			t.Errorf("cursorWorkspaceKey(%q) = %q, want %q", path, got, want)
+		}
+	}
+	// The path is resolved before it is hashed, so the same directory spelled
+	// three ways lands in the same chat directory.
+	dir := t.TempDir()
+	want := cursorWorkspaceKey(dir)
+	for _, spelling := range []string{
+		dir + string(filepath.Separator),
+		filepath.Join(dir, "frontend", ".."),
+	} {
+		if got := cursorWorkspaceKey(spelling); got != want {
+			t.Errorf("cursorWorkspaceKey(%q) = %q, want %q — the path was not resolved first",
+				spelling, got, want)
+		}
 	}
 }
 
