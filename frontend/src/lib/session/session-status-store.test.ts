@@ -522,3 +522,57 @@ describe("pendingAll / subscribeAll", () => {
     expect(store.pendingAll()).toEqual([{ id: "s1", status: "waiting" }])
   })
 })
+
+// `reported` is what decides whether a turn-shaped control is drawn at all —
+// the Review panel's "Last turn" switch. It answers a different question from
+// `get`, and a control that appears and disappears is worse than one that was
+// never there, so the flag only ever goes one way.
+describe("has this session ever reported", () => {
+  it("is false until the first report", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    expect(store.reported("s1")).toBe(false)
+    emit(report("s1", "busy"))
+    expect(store.reported("s1")).toBe(true)
+  })
+
+  // The trap `get(id) !== null` falls into: both map to no indicator, and both
+  // are still proof the provider reports.
+  it.each(["idle", "interrupted"])("counts a %s, which maps to no status", (state) => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", state))
+    expect(store.get("s1")).toBeNull()
+    expect(store.reported("s1")).toBe(true)
+  })
+
+  it("stays true once a session goes quiet again", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", "busy"))
+    emit(report("s1", "done"))
+    emit(report("s1", "idle"))
+    expect(store.reported("s1")).toBe(true)
+  })
+
+  it("is per session", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", "busy"))
+    expect(store.reported("s2")).toBe(false)
+  })
+
+  // The first report is normally a state change and notifies anyway. It is the
+  // one that is not — a report repeating a status the store already holds, or
+  // one mapping to no status at all — that would otherwise leave a subscriber
+  // showing no switch for a session that has just proved it can have one.
+  it("notifies subscribers on a first report that changes no status", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    const notify = vi.fn()
+    store.subscribe("s1", notify)
+    emit(report("s1", "idle"))
+    expect(notify).toHaveBeenCalledTimes(1)
+    expect(store.reported("s1")).toBe(true)
+  })
+})

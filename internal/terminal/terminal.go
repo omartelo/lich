@@ -234,6 +234,11 @@ type Service struct {
 	// nothing else about a report needs mu, and a hook must never queue behind a
 	// PTY spawn.
 	turns turnLog
+	// snaps brackets each session's turn with a tree snapshot of its checkout,
+	// which is what the Review panel's "Last turn" mode diffs (see turnSnaps).
+	// It reads the same boundary turns does and carries its own lock for the
+	// same reason.
+	snaps turnSnaps
 	// lastCols/lastRows is the last terminal size the window reported, and the
 	// size a session spawned with none of its own is started at. See
 	// sizeFor. Guarded by mu.
@@ -342,6 +347,11 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 			if watch := s.stateWatcher(); watch != nil {
 				watch(req.SessionID, req.State)
 			}
+			// The same boundary brackets the Review panel's "Last turn": `busy`
+			// opens the window, `done` closes it. Queued, never taken here — a
+			// snapshot on this goroutine would hold the hook's own response, and
+			// with it the agent's next step (see turnSnaps).
+			s.snaps.note(req.SessionID, req.State)
 			// Every non-idle state is a point where a fresh assistant usage line
 			// may have landed — a tool call mid-turn (busy), a prompt (waiting),
 			// or the turn's end (done) — so refresh the context window then, and
@@ -434,6 +444,10 @@ func (s *Service) noteInterrupt(id string) {
 		return
 	}
 	s.hub.Emit(statusEventName, statusEvent{ID: id, State: statusInterrupted})
+	// An interrupted turn is still a turn that ended, and it changed files like
+	// any other. Closing the window here is what keeps the panel from holding
+	// an older turn open until the next one finishes.
+	s.snaps.closeTurn(id)
 	// The relay keeps its own turn accounting off the same stream, and a turn
 	// that ended has to read as ended there too — a queued delivery waits on the
 	// target's prompt being free.
@@ -562,6 +576,10 @@ func (s *Service) Start(id, projectID, cwd, kind, resume, name string, setup boo
 	s.hub.Emit(cwdEventName, cwdEvent{ID: id, Cwd: cwd})
 	s.hub.Emit(agentEventName, agentEvent{ID: id, Agent: ""})
 	s.hub.Emit(sandboxEventName, sandboxEvent{ID: id, Confined: sess.confined})
+	// Bound to the effective cwd rather than the requested one, and outside
+	// s.mu: track queues a warm-up of this checkout's snapshot index, and the
+	// first one on a large repository is measured in seconds.
+	s.snaps.track(id, cwd)
 	go watchCwd(id, sess.pty.Pid(), cwd, sess.done, s.hub)
 	return nil
 }
@@ -941,6 +959,9 @@ func (s *Service) Close(id string) error {
 	if !ok {
 		return nil
 	}
+	// A closed card's row is deleted, so nothing will ever ask what its last
+	// turn changed — and its snapshot index would otherwise outlive it on disk.
+	s.snaps.forget(id)
 	return sess.pty.Close()
 }
 

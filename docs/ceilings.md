@@ -42,6 +42,22 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   fires there. And an errand the relay delivered survives an interrupt on purpose: stopping a turn is not
   answering the request, so the sender keeps waiting for the target's next turn rather than being told the work
   is over.
+- **The Review panel's "Last turn" is a window of wall-clock time, and it lives in memory**
+  (`internal/terminal/turnsnap.go`, `internal/project/turnsnap.go`): the panel brackets a turn with two
+  `git write-tree` snapshots taken against an index of lich's own, so what it shows is everything that
+  touched the checkout between the `busy` and the `done` — a formatter, an editor open beside lich, the
+  user's own hands. Nothing in it can attribute a line, which is why the copy names the window and never
+  the agent. Four traps follow. The pair is held in Go memory alone: a lich restart empties it, so every
+  live session reads "No last turn recorded" until its next turn ends, and that wording is the same one a
+  session whose first turn is still running gets — the panel cannot say which. `add -A` obeys `.gitignore`
+  (deliberately, so this and `DiffText` never disagree about which files exist), so a turn that only
+  touched ignored files reports itself as having changed nothing. Every snapshot in the app runs on one
+  FIFO worker, because git refuses a second `add` against an index another holds — so one session's first
+  snapshot of a large checkout delays the next session's, and a queue past `snapQueueDepth` drops a job,
+  costing that turn its record with only the log saying so. And the boundary is the session-state contract,
+  so **Crush and Cursor CLI have no last turn at all**: neither reports a state (`docs/hooks/session-state.md`),
+  so nothing ever opens or closes a window there and the switch is never drawn — a rule read off the
+  session's own reports, not a list of providers, so it corrects itself the day either one starts reporting.
 - **A finished turn is unread until its own card is watched** (`frontend/src/lib/session/session-status-store.ts`,
   `frontend/src/providers/projects.tsx`): the solid emerald ring means "back from the agent, not read yet", and it
   fades only for the session whose terminal is on screen **while the window has focus**. Two things follow. A card
