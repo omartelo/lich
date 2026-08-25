@@ -23,15 +23,21 @@ const defaultBin = providers.Claude
 const KindShell = "shell"
 
 // How each provider reopens an existing conversation by id: Claude Code,
-// Antigravity and oh-my-pi take a flag of their own, Codex a subcommand, and
-// opencode and Crush happen to agree on one spelling. Every one of them was read
-// off that CLI's own --help.
+// Antigravity, oh-my-pi and Cursor CLI take a flag of their own, Codex a
+// subcommand, and opencode and Crush happen to agree on one spelling. Every one
+// of them was read off that CLI's own --help.
+//
+// Cursor's spells the same word Claude Code's does and is kept apart from it on
+// purpose: its value is optional (`--resume [chatId]`, measured on 2026.08.11),
+// so the two flags are only the same string, not the same flag, and a shared
+// constant would hide the day one of them moves.
 const (
 	claudeResumeFlag      = "--resume"
 	codexResumeSubcmd     = "resume"
 	antigravityResumeFlag = "--conversation"
 	ompResumeFlag         = "-r"
 	sessionResumeFlag     = "--session"
+	cursorResumeFlag      = "--resume"
 )
 
 // claudeNameFlag sets the name a session answers to in Claude Code's peer
@@ -55,6 +61,7 @@ var skipPermissionFlags = map[string]string{
 	providers.OpenCode:    "--auto",
 	providers.OMP:         "--auto-approve",
 	providers.Crush:       "--yolo",
+	providers.Cursor:      "--force",
 }
 
 // modelFlags is how each provider is told which model to run, for a session
@@ -72,6 +79,7 @@ var modelFlags = map[string]string{
 	providers.Antigravity: "--model",
 	providers.OpenCode:    "--model",
 	providers.OMP:         "--model",
+	providers.Cursor:      "--model",
 }
 
 // SupportsModel reports whether a provider can be told which model to run when
@@ -104,7 +112,7 @@ func SupportsModel(kind string) bool {
 // takes the literal branch instead, which lands the same text; what must not
 // happen is a briefing short enough to name a real file.
 //
-// The other four are absent because none of them has an append flag. Codex
+// The other five are absent because none of them has an append flag. Codex
 // takes `model_instructions_file`, which *replaces* its base instructions —
 // swapping the whole system prompt of a provider for a file lich wrote is not a
 // thing lich does for one paragraph. opencode's `instructions` and Crush's
@@ -329,6 +337,8 @@ func resumeArgs(kind, resume string) []string {
 		return []string{ompResumeFlag, resume}
 	case providers.OpenCode, providers.Crush:
 		return []string{sessionResumeFlag, resume}
+	case providers.Cursor:
+		return []string{cursorResumeFlag, resume}
 	}
 	return nil
 }

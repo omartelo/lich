@@ -14,6 +14,7 @@ func TestDefaultBinary(t *testing.T) {
 		OpenCode:    "opencode",
 		OMP:         "omp",
 		Crush:       "crush",
+		Cursor:      "cursor-agent",
 		"nope":      "",
 		"":          "",
 	}

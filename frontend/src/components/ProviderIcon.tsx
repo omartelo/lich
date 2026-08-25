@@ -2,10 +2,10 @@ import type { ComponentType } from "react"
 import { Sparkles, Terminal } from "lucide-react"
 import type { SessionKind } from "@/lib/session/sessions"
 
-// Brand marks for the AI providers. The Claude/Codex/Antigravity/opencode/oh-my-pi
-// SVG paths are vendored from @lobehub/icons (MIT — github.com/lobehub/lobe-icons),
+// Brand marks for the AI providers. The Claude/Codex/Antigravity/opencode/oh-my-pi/
+// Cursor SVG paths are vendored from @lobehub/icons (MIT — github.com/lobehub/lobe-icons),
 // inlined so lich does not depend on that package's ~500-package tree (antd, shiki,
-// …) for five icons. Crush has no lobehub mark yet and borrows a lucide glyph;
+// …) for six icons. Crush has no lobehub mark yet and borrows a lucide glyph;
 // shell shows a terminal. All render monochrome (currentColor), inheriting the
 // surrounding text color on both themes.
 
@@ -25,6 +25,13 @@ const PATHS: Partial<Record<SessionKind, string>> = {
   // the default nonzero rule, because the counter is already wound against the
   // outline.
   omp: "M1 1h16.5v11H12v5.5H6.5V23H1V1zm5.5 5.5V12H12V6.5H6.5zM17.5 12H23v11h-5.5V12z",
+  // The cube, drawn as an outline with the lit face knocked out of it. Upstream
+  // draws it under fill-rule="evenodd", which changes nothing here for the same
+  // reason it changes nothing for oh-my-pi: the two subpaths wind against each
+  // other (signed areas -383 and +111), so the counter is already open under the
+  // default nonzero rule.
+  cursor:
+    "M22.106 5.68L12.5.135a.998.998 0 00-.998 0L1.893 5.68a.84.84 0 00-.419.726v11.186c0 .3.16.577.42.727l9.607 5.547a.999.999 0 00.998 0l9.608-5.547a.84.84 0 00.42-.727V6.407a.84.84 0 00-.42-.726zm-.603 1.176L12.228 22.92c-.063.108-.228.064-.228-.061V12.34a.59.59 0 00-.295-.51l-9.11-5.26c-.107-.062-.063-.228.062-.228h18.55c.264 0 .428.286.296.514z",
 }
 
 function BrandIcon({ d, size }: { d: string; size: number }) {

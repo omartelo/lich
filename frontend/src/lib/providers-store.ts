@@ -58,6 +58,7 @@ export const skipPermissionFlags: Record<string, string> = {
   opencode: "--auto",
   omp: "--auto-approve",
   crush: "--yolo",
+  cursor: "--force",
 }
 
 // How far a provider runs without asking, as one ladder ordered by risk. The

@@ -77,6 +77,21 @@ func TestResumeAvailable(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Cursor files one SQLite per chat under its config directory, in a
+	// directory named after the checkout the chat ran in. The override is what
+	// points it at a temporary one; its precedence is pinned separately.
+	cursorBase := t.TempDir()
+	cursorCwd := t.TempDir()
+	const cursorLive = "bec68d79-a208-4e40-8d2f-f8f8964da216"
+	cursorChat := filepath.Join(cursorBase, "chats", cursorWorkspaceKey(cursorCwd), cursorLive)
+	if err := os.MkdirAll(cursorChat, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cursorChat, "store.db"), []byte("SQLite"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CURSOR_CONFIG_DIR", cursorBase)
+
 	crushCwd := t.TempDir()
 	const crushLive = "18345afc-f497-4d53-8dfd-f7c4e4d9b313"
 	writeSessionDB(t, filepath.Join(crushCwd, ".crush", "crush.db"), "sessions", crushLive)
@@ -114,6 +129,15 @@ func TestResumeAvailable(t *testing.T) {
 		// database to ask at all.
 		{"crush row belongs to another checkout", providers.Crush, crushLive, otherCwd, false},
 		{"crush without a working directory", providers.Crush, crushLive, "", false},
+		{"cursor chat on disk", providers.Cursor, cursorLive, cursorCwd, true},
+		{"cursor chat deleted", providers.Cursor,
+			"00000000-0000-0000-0000-000000000000", cursorCwd, false},
+		{"cursor never sees a claude transcript", providers.Cursor, live, cursorCwd, false},
+		// Cursor keys its chat directory on the checkout, so the same id under
+		// another one is another conversation — and a session whose cwd lich
+		// cannot name has no chat directory to ask at all.
+		{"cursor chat belongs to another checkout", providers.Cursor, cursorLive, otherCwd, false},
+		{"cursor without a working directory", providers.Cursor, cursorLive, "", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -143,6 +167,71 @@ func writeSessionDB(t *testing.T, path, table, id string) {
 	}
 	if _, err := db.Exec("INSERT INTO "+table+" (id, title) VALUES (?, ?)", id, "a conversation"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestCursorConfigDirPrecedence pins the order Cursor CLI resolves its config
+// directory in, and the one step that is not the xdg-basedir convention every
+// other provider here follows: with no variable set it lands on ~/.cursor, never
+// ~/.config/cursor. Reading it as xdg-basedir would point lich at a directory
+// Cursor never writes on a machine with no XDG_CONFIG_HOME, which is most of
+// them — and every resume of a Cursor session would answer "conversation gone".
+func TestCursorConfigDirPrecedence(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	xdg := t.TempDir()
+	explicit := t.TempDir()
+
+	t.Setenv("CURSOR_CONFIG_DIR", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+	got, ok := cursorConfigDir()
+	if !ok || got != filepath.Join(home, ".cursor") {
+		t.Errorf("with nothing set = %q (%v), want %q", got, ok, filepath.Join(home, ".cursor"))
+	}
+
+	t.Setenv("XDG_CONFIG_HOME", xdg)
+	got, ok = cursorConfigDir()
+	if !ok || got != filepath.Join(xdg, "cursor") {
+		t.Errorf("with XDG_CONFIG_HOME = %q (%v), want %q", got, ok, filepath.Join(xdg, "cursor"))
+	}
+
+	// The explicit override wins over XDG, and takes the directory as it stands
+	// rather than hanging "cursor" off it.
+	t.Setenv("CURSOR_CONFIG_DIR", explicit)
+	got, ok = cursorConfigDir()
+	if !ok || got != explicit {
+		t.Errorf("with CURSOR_CONFIG_DIR = %q (%v), want %q", got, ok, explicit)
+	}
+}
+
+// TestCursorWorkspaceKey pins how Cursor names a checkout's chat directory: the
+// hex md5 of the resolved path. The literal is the one Cursor itself wrote for
+// this repository's own checkout, so a change to how lich composes the key fails
+// here rather than by answering "conversation gone" to every Cursor resume.
+func TestCursorWorkspaceKey(t *testing.T) {
+	// The literal pair was read off a real Cursor install, and it only answers
+	// where that string is an absolute path: on Windows it is not one, Abs would
+	// prefix the process's own drive and the hash would be of a different path
+	// than the one Cursor hashed. The resolution rules below hold everywhere and
+	// are asserted against a path this OS calls absolute.
+	if path, want := "/home/meopedevts/try/skipo", "3cef5d71d2f3dff7ed9332ef4c85ecc4"; filepath.IsAbs(path) {
+		if got := cursorWorkspaceKey(path); got != want {
+			t.Errorf("cursorWorkspaceKey(%q) = %q, want %q", path, got, want)
+		}
+	}
+	// The path is resolved before it is hashed, so the same directory spelled
+	// three ways lands in the same chat directory.
+	dir := t.TempDir()
+	want := cursorWorkspaceKey(dir)
+	for _, spelling := range []string{
+		dir + string(filepath.Separator),
+		filepath.Join(dir, "frontend", ".."),
+	} {
+		if got := cursorWorkspaceKey(spelling); got != want {
+			t.Errorf("cursorWorkspaceKey(%q) = %q, want %q — the path was not resolved first",
+				spelling, got, want)
+		}
 	}
 }
 

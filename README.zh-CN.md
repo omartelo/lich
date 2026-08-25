@@ -33,8 +33,9 @@
 
 - **用你已经有的智能体。** [Claude Code](https://www.anthropic.com/claude-code)、
   [Codex](https://github.com/openai/codex)、Antigravity、
-  [opencode](https://github.com/sst/opencode)、oh-my-pi 和
-  [Crush](https://github.com/charmbracelet/crush) 都是一等公民。把 lich
+  [opencode](https://github.com/sst/opencode)、oh-my-pi、
+  [Crush](https://github.com/charmbracelet/crush) 和
+  [Cursor CLI](https://cursor.com/docs/cli) 都是一等公民。把 lich
   指向各自的二进制文件，这只需一次，之后选一个默认的，或者逐个会话单独指定。
 - **留住一个真正的终端。** 由 PTY 支撑的 shell，每个项目可以开好几个，在 GPU 上渲染
   —— 滚动缓冲区可以搜索，还能挺过整页刷新。给其中一个设一个入口命令 —— `lazygit`、

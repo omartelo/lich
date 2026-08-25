@@ -296,7 +296,7 @@ func TestStatusListsEveryHarness(t *testing.T) {
 	}
 	want := []string{
 		providers.Claude, providers.Codex, providers.Antigravity,
-		providers.OpenCode, providers.OMP, providers.Crush,
+		providers.OpenCode, providers.OMP, providers.Crush, providers.Cursor,
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("Status() covers %v, want %v", got, want)
@@ -605,13 +605,16 @@ func TestHasToolsIsAlwaysTrueForTheHarnessesToldAtSpawn(t *testing.T) {
 	}
 }
 
-// Which providers depend on a registration lich writes with its own path — the
-// two whose installs leave that registration out when the path cannot be
-// resolved (crushrcBlock, ompMCPDocument). Pinned as a list rather than derived,
-// because a provider added to one side and not the other is exactly the drift
-// that promises tools nobody registered.
+// Which providers depend on a registration lich writes with its own path: the
+// ones whose installs leave that registration out — or refuse outright — when
+// the path cannot be resolved (crushrcBlock, ompMCPDocument,
+// antigravityRegisterMCP, cursorMCPDocument). Pinned as a list rather than
+// derived, because a provider added to one side and not the other is exactly the
+// drift that promises tools nobody registered.
 func TestRegistersServerAtInstall(t *testing.T) {
-	for _, provider := range []string{providers.Crush, providers.OMP} {
+	for _, provider := range []string{
+		providers.Crush, providers.OMP, providers.Antigravity, providers.Cursor,
+	} {
 		if !registersServerAtInstall(provider) {
 			t.Errorf("%s writes lich's server at install, but is not treated as doing so", provider)
 		}

@@ -552,10 +552,39 @@ func TestResolveCommand(t *testing.T) {
 	}
 }
 
+// TestProviderKindOutranksTheReport proves a session-start report cannot repaint
+// a card lich itself chose the provider for. A harness can run another harness's
+// hooks — Cursor CLI executes every Claude Code hook on the machine, the user's
+// own and each installed plugin's — so the lich plugin's own script reports
+// `claude` from inside a Cursor session. What lich spawned wins; only a shell,
+// where lich genuinely does not know what is running inside, wears the report.
+func TestProviderKindOutranksTheReport(t *testing.T) {
+	svc := &Service{sessions: map[string]*session{
+		"cursor-card": {kind: providers.Cursor},
+		"shell-card":  {kind: KindShell},
+		"odd-card":    {kind: "something-else"},
+	}}
+	cases := []struct {
+		name, id, reported, want string
+	}{
+		{"a provider card keeps its own kind", "cursor-card", providers.Claude, providers.Cursor},
+		{"and does so even when the report agrees", "cursor-card", providers.Cursor, providers.Cursor},
+		{"a shell wears what reported", "shell-card", providers.Claude, providers.Claude},
+		{"an unregistered kind is no answer", "odd-card", providers.Claude, providers.Claude},
+		{"a report that raced the PTY's exit", "gone-card", providers.Claude, providers.Claude},
+	}
+	for _, tc := range cases {
+		if got := svc.providerKind(tc.id, tc.reported); got != tc.want {
+			t.Errorf("%s: providerKind(%q, %q) = %q, want %q",
+				tc.name, tc.id, tc.reported, got, tc.want)
+		}
+	}
+}
+
 // TestResumeArgs proves each provider resumes in its own spelling — a flag of
-// its own for Claude Code, Antigravity and oh-my-pi, a subcommand for Codex, one
-// they happen to share for opencode and Crush — and that a kind with none wired
-// never grows one: a shell must not be handed a stray id.
+// its own for Claude Code, Antigravity, oh-my-pi and Cursor CLI, a subcommand
+// for Codex, one they happen to share for opencode and Crush — and that a kind
+// with none wired never grows one: a shell must not be handed a stray id.
 func TestResumeArgs(t *testing.T) {
 	cases := []struct {
 		name, kind, resume string
@@ -573,6 +602,13 @@ func TestResumeArgs(t *testing.T) {
 		{"opencode resume", "opencode", "ses_0031a382dffe", []string{"--session", "ses_0031a382dffe"}},
 		{"crush fresh", "crush", "", nil},
 		{"crush resume", "crush", "abc-123", []string{"--session", "abc-123"}},
+		{"cursor fresh", "cursor", "", nil},
+		// Cursor spells it exactly as Claude Code does, and is pinned here for
+		// the same reason Antigravity's skip-permissions flag is: a shared
+		// literal is what makes a lookup returning the wrong provider's flag
+		// invisible everywhere else. Its own value is optional — `--resume`
+		// alone opens a picker — so an empty id must never reach argv.
+		{"cursor resume", "cursor", "abc-123", []string{"--resume", "abc-123"}},
 		{"shell never resumes", KindShell, "abc-123", nil},
 		{"shell fresh", KindShell, "", nil},
 	}
@@ -638,6 +674,10 @@ func TestSkipPermissionArgs(t *testing.T) {
 		{"crush on", "crush", true, []string{"--yolo"}},
 		{"oh-my-pi off", "omp", false, nil},
 		{"oh-my-pi on", "omp", true, []string{"--auto-approve"}},
+		// --yolo is Cursor's own alias for --force; lich passes the canonical
+		// spelling, which is not the one Crush answers to above.
+		{"cursor off", "cursor", false, nil},
+		{"cursor on", "cursor", true, []string{"--force"}},
 		{"shell is never wired", KindShell, true, nil},
 	}
 	for _, tc := range cases {
@@ -715,6 +755,8 @@ func TestModelArgs(t *testing.T) {
 		{"oh-my-pi, a fuzzy match", providers.OMP, "opus", []string{"--model", "opus"}},
 		{"antigravity, a full name", providers.Antigravity, "gemini-3.7-flash-high",
 			[]string{"--model", "gemini-3.7-flash-high"}},
+		{"cursor, a parameterized name", providers.Cursor, "claude-opus-4-8[effort=high]",
+			[]string{"--model", "claude-opus-4-8[effort=high]"}},
 		{"crush takes none at spawn", providers.Crush, "opus", nil},
 		{"a shell is not a provider", KindShell, "opus", nil},
 		{"no model named", providers.Claude, "", nil},
@@ -1421,5 +1463,37 @@ func TestSandboxCredentialsAreOnlyForConfinedSessions(t *testing.T) {
 	}
 	if got := svc.sandboxCredentials("p1", "/repo", true); !got.sshAgent {
 		t.Error("a confined session was refused the agent its project turned on")
+	}
+}
+
+// TestClosableState pins which reports survive per provider. Cursor CLI is the
+// only one filtered, because it is the only one whose reports lich does not
+// register: it runs Claude Code's installed plugin, which registers all of them,
+// while the CLI itself delivers only SessionStart, PreToolUse, PostToolUse and
+// SessionEnd. A `busy` from a tool call would therefore never be followed by the
+// `done` that ends it, and the spinner would stay on the card for the rest of
+// the session.
+func TestClosableState(t *testing.T) {
+	cases := []struct {
+		name, kind, state string
+		want              bool
+	}{
+		{"a claude turn begins", providers.Claude, statusBusy, true},
+		{"and ends", providers.Claude, statusDone, true},
+		{"crush reports what it can", providers.Crush, statusBusy, true},
+		// The two Cursor delivers but cannot end.
+		{"a cursor tool call does not begin a turn", providers.Cursor, statusBusy, false},
+		{"nor does anything else", providers.Cursor, statusDone, false},
+		{"cursor raises no approval event either", providers.Cursor, statusWaiting, false},
+		// SessionEnd is the one Cursor both reports and means.
+		{"a cursor session ending is reported", providers.Cursor, statusIdle, true},
+		{"a shell is not filtered", KindShell, statusBusy, true},
+		{"nor is a session already gone", "", statusBusy, true},
+	}
+	for _, tc := range cases {
+		if got := closableState(tc.kind, tc.state); got != tc.want {
+			t.Errorf("%s: closableState(%q, %q) = %v, want %v",
+				tc.name, tc.kind, tc.state, got, tc.want)
+		}
 	}
 }

@@ -32,7 +32,8 @@ lich lets you:
 - **Run the agent you already have.** [Claude Code](https://www.anthropic.com/claude-code),
   [Codex](https://github.com/openai/codex), Antigravity,
   [opencode](https://github.com/sst/opencode), oh-my-pi and
-  [Crush](https://github.com/charmbracelet/crush) are all first-class. Point lich at each binary once, then pick the default or choose
+  [Crush](https://github.com/charmbracelet/crush) and the
+  [Cursor CLI](https://cursor.com/docs/cli) are all first-class. Point lich at each binary once, then pick the default or choose
   per session.
 - **Keep a real terminal.** PTY-backed shells, several per project, rendered on
   the GPU — searchable scrollback that survives a full page reload. Give one an

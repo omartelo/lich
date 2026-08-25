@@ -1,6 +1,8 @@
 package terminal
 
 import (
+	"crypto/md5"
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -93,6 +95,60 @@ func antigravityConversationPath(providerSessionID string) (string, bool) {
 		return "", false
 	}
 	return path, true
+}
+
+// cursorChatStore is the database Cursor CLI keeps one chat in, under its own
+// config directory. It is not a transcript: the CLI files a chat as SQLite at
+// chats/<workspace>/<chatId>/store.db, which is the one file whose existence
+// answers "can this id still be reopened".
+//
+// The workspace segment is the md5 of the resolved directory the chat ran in,
+// which is why cwd is needed here the way it is for Crush: Cursor keeps its
+// chats per checkout, so the same id proves nothing about another one. False
+// without a cwd — a directory lich cannot name has no chat directory to ask.
+func cursorChatStore(providerSessionID, cwd string) (string, bool) {
+	base, ok := cursorConfigDir()
+	if !ok || cwd == "" {
+		return "", false
+	}
+	path := filepath.Join(base, "chats", cursorWorkspaceKey(cwd), providerSessionID, "store.db")
+	if _, err := os.Stat(path); err != nil {
+		return "", false
+	}
+	return path, true
+}
+
+// cursorWorkspaceKey is how Cursor names a checkout's chat directory: the hex
+// md5 of the absolute, cleaned path. md5 is the CLI's choice and this only has
+// to reproduce it — nothing here is a security decision.
+func cursorWorkspaceKey(cwd string) string {
+	abs, err := filepath.Abs(cwd)
+	if err != nil {
+		abs = filepath.Clean(cwd)
+	}
+	return fmt.Sprintf("%x", md5.Sum([]byte(abs)))
+}
+
+// cursorConfigDir resolves Cursor CLI's config directory, or false when there is
+// no home to hang it off. It does not go through harnessDir because Cursor
+// answers to two variables in a shape no other provider uses: $CURSOR_CONFIG_DIR
+// wins outright, else $XDG_CONFIG_HOME with "cursor" under it — and the fallback
+// when neither is set is ~/.cursor, not ~/.config/cursor. Reading it as
+// xdg-basedir the way opencode and Crush are read would point at a directory
+// Cursor never writes on a machine with no XDG_CONFIG_HOME, which is most of
+// them. Measured on 2026.08.11; the same rule lives in internal/sandbox.
+func cursorConfigDir() (string, bool) {
+	if dir := os.Getenv("CURSOR_CONFIG_DIR"); dir != "" {
+		return dir, true
+	}
+	if base := os.Getenv("XDG_CONFIG_HOME"); base != "" {
+		return filepath.Join(base, "cursor"), true
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", false
+	}
+	return filepath.Join(home, ".cursor"), true
 }
 
 // ompTranscriptPath locates an oh-my-pi conversation by its id under omp's agent

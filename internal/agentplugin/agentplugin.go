@@ -1,9 +1,10 @@
 // Package agentplugin manages the lich companion plugin inside the provider
 // CLIs that can run it: whether it is installed, whether a newer release
-// exists, and installing or updating it. All six ship the same plugin from the
-// same repository; what differs per provider — the subcommands, where the
-// installed version is read from, and whether there is a CLI at all — lives in
-// claude.go, codex.go, antigravity.go, opencode.go, omp.go and crush.go.
+// exists, and installing or updating it. Six of the registry's seven ship the
+// same plugin from the same repository; what differs per provider — the
+// subcommands, where the installed version is read from, and whether there is a
+// CLI at all — lives in claude.go, codex.go, antigravity.go, opencode.go,
+// omp.go and crush.go.
 //
 // Two install shapes, decided by the harness rather than by lich:
 //
@@ -63,9 +64,15 @@ const (
 // supported is every provider that can run the plugin, in the order the UI
 // lists them. A provider outside this list has no plugin to offer, so it never
 // reaches a status or an install.
+//
+// Cursor CLI is the registry's seventh and the odd one: lich ships it no hooks,
+// because the CLI already executes every Claude Code hook on the machine. Its
+// install writes the MCP registration that route does not carry and installs
+// the plugin into Claude Code, and its version is the version installed there —
+// cursor.go says why.
 var supported = []string{
 	providers.Claude, providers.Codex, providers.Antigravity,
-	providers.OpenCode, providers.OMP, providers.Crush,
+	providers.OpenCode, providers.OMP, providers.Crush, providers.Cursor,
 }
 
 // BinResolver supplies the binary to shell out to for a provider. The store
@@ -184,7 +191,7 @@ func (s *Service) HasTools(provider string) bool {
 // because its plugin defines the tools itself, with no binary to name.
 func registersServerAtInstall(provider string) bool {
 	return provider == providers.Crush || provider == providers.OMP ||
-		provider == providers.Antigravity
+		provider == providers.Antigravity || provider == providers.Cursor
 }
 
 // Installed reports whether the lich plugin is installed for a provider — that
@@ -206,6 +213,11 @@ func (s *Service) Installed(provider string) bool {
 
 // computeStatus is the pure decision: an update needs the plugin installed, a
 // known latest, and that latest to be strictly newer than what is installed.
+//
+// Cursor never offers one. Its version is Claude Code's — the install its
+// reports come from — so the update is the button on the Claude Code row of the
+// same screen, and a second one here would run an install that rewrites a
+// registration and moves no version at all.
 func computeStatus(id string, available, installed bool, installedVer, latestVer string) Status {
 	return Status{
 		Provider:         id,
@@ -214,7 +226,8 @@ func computeStatus(id string, available, installed bool, installedVer, latestVer
 		Installed:        installed,
 		InstalledVersion: installedVer,
 		LatestVersion:    latestVer,
-		UpdateAvailable:  installed && latestVer != "" && semver.Less(installedVer, latestVer),
+		UpdateAvailable: id != providers.Cursor &&
+			installed && latestVer != "" && semver.Less(installedVer, latestVer),
 	}
 }
 
@@ -234,6 +247,8 @@ func (s *Service) Install(provider string) error {
 		return s.ompInstall()
 	case providers.Crush:
 		return s.crushInstall()
+	case providers.Cursor:
+		return s.cursorInstall()
 	}
 	return fmt.Errorf("no lich plugin for provider %q", provider)
 }
@@ -256,6 +271,8 @@ func (s *Service) Update(provider string) error {
 		return s.ompInstall()
 	case providers.Crush:
 		return s.crushInstall()
+	case providers.Cursor:
+		return s.cursorInstall()
 	}
 	return fmt.Errorf("no lich plugin for provider %q", provider)
 }
@@ -276,6 +293,8 @@ func (s *Service) installedVersion(provider string) (string, bool) {
 		return s.ompInstalledVersion()
 	case providers.Crush:
 		return s.crushInstalledVersion()
+	case providers.Cursor:
+		return s.cursorInstalledVersion()
 	}
 	return "", false
 }

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Cursor CLI runs as a session.** Cursor's `cursor-agent` joins Claude Code,
+  Codex, Antigravity, opencode, oh-my-pi and Crush in Settings › Providers: a
+  session of its own, resumed after a restart, run without permission prompts if
+  you turn that rung on, told which model to run, and confined by the sandbox
+  with its credentials, its MCP registrations and its chats still reachable.
+  If you have the lich plugin installed in Claude Code, a Cursor card also
+  refreshes its git status as it edits, with nothing to install: Cursor runs
+  every Claude Code hook on the machine, so it borrows that install and shows its
+  version. What Settings › Plugin installs for Cursor is the one thing that route
+  does not carry — lich's own tools — so a Cursor session can open, message and
+  close the sessions beside it. It refuses while Claude Code has no plugin, and
+  it offers no update of its own: that is the Claude Code row's button, one line
+  up. A Cursor card shows no spinner and no bell, and keeps the name you gave it:
+  the CLI raises no start-of-turn or end-of-turn event, so lich would have had a
+  spinner it could never turn off.
+
 ## [0.40.1] - 2026-08-24
 
 ### Fixed

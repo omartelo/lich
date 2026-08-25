@@ -22,7 +22,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **The session readout understands Claude Code and Codex transcripts only**
   (`internal/terminal/usage_claude.go`, `internal/terminal/usage_codex.go`): oh-my-pi, opencode and Crush record
   token usage but not the model's context-window size, so lich cannot turn those counts into a trustworthy
-  percentage, and Antigravity files its conversation as SQLite rather than as a transcript lich reads at all.
+  percentage, and Antigravity and Cursor CLI file their conversations as SQLite rather than as a transcript lich
+  reads at all.
   Their footer therefore carries no model or context ring. Codex rollouts carry the effective window
   selected for that session — 95% of its default or configured `model_context_window` — but no API-cost
   accounting, so its setting stops at model and context while Claude Code alone offers the cost rung.
@@ -121,9 +122,9 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **lich appends to the agent's system prompt, for two providers only**
   (`internal/terminal/command.go`, `briefingFlags` → `relay.SpawnBriefing`): Claude Code and oh-my-pi are spawned
   with `--append-system-prompt` carrying lich's own briefing, so text the user never wrote is in every session's
-  prompt and in `/proc/<pid>/cmdline`. Codex, Antigravity, opencode and Crush get nothing there — none has a
-  per-spawn append flag, so for those four the point exists only in lich's MCP instructions, and behaviour between
-  providers differs by that much.
+  prompt and in `/proc/<pid>/cmdline`. Codex, Antigravity, opencode, Crush and Cursor CLI get nothing there — none
+  has a per-spawn append flag, so for those five the point exists only in lich's MCP instructions, and behaviour
+  between providers differs by that much.
 - **A prompt in use is recognised from the bytes going in, never from the line itself**
   (`internal/terminal/draft.go`): a relayed message pastes at the prompt and sends an Enter behind it, so lich
   holds the delivery back while the user has unsent input there. What it counts is printable input since the last
@@ -139,6 +140,46 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   first, and both senders read a confident wrong report — nothing anywhere reports the mismatch. Naming the ticket
   is still the only exact route, which is why every relayed message spells it and why the card's tooltip shows it.
 
+- **A Cursor CLI session reports through Claude Code's plugin, or not at all** (`internal/agentplugin`,
+  `internal/terminal/terminal.go`, `providerKind`): lich installs no plugin into Cursor, and it does not have to —
+  the CLI executes every Claude Code hook on the machine, the user's own and each installed plugin's (measured on
+  2026.08.11: `hookSource: claude-user` and `claude-plugin`, with `${CLAUDE_PLUGIN_ROOT}` expanded). So on a
+  machine where the lich plugin is installed in Claude Code, a Cursor session reports the chat id it is running
+  and the files it touches, with nothing installed there — and on a machine without it, that session reports
+  nothing at all. Nothing on the card says which of the two it is.
+  **What never arrives is the turn.** Of the nine events the plugin registers, Cursor delivers four —
+  `SessionStart`, `PreToolUse`, `PostToolUse`, `SessionEnd` — and no `UserPromptSubmit` or `Stop`, measured
+  against hooks in Cursor's own format and in Claude Code's alike. So a turn that calls no tool never begins and
+  one that does never ends, which is why `terminal.closableState` drops every state but `idle` from a Cursor
+  session rather than pinning a spinner to the card for the rest of it: no spinner, no bell, no auto-title, and
+  no `waiting` either (`Notification` maps to nothing there). That is the Crush row of the table below, arrived
+  at from the other direction — lich does not own the registration here, so it filters what it cannot close.
+  The reports are also all that route carries: Cursor takes no MCP server on its command line and reads none from
+  a Claude Code plugin, so lich's own tools come from an `mcpServers` document its install writes under
+  `~/.cursor` — which is why installing for Cursor refuses while Claude Code has no plugin, why its version is
+  Claude Code's, and why its row offers no update of its own: the update is the Claude Code row's, one line up
+  the same screen. A Cursor session gets no briefing either — the CLI has no append flag — so what it knows about
+  lich is its tool list. One last edge: the plugin's script reports `claude`, the argument Claude Code's own
+  registration passes it, and lich drops that name for a card whose provider it chose itself — but a **shell**
+  session running `cursor-agent` by hand has only the report to go on and wears Claude's mark.
+- **Cursor keeps its state in two directories and its chats per checkout** (`internal/sandbox/sandbox.go`,
+  `internal/terminal/transcript.go`): its config dir is `$CURSOR_CONFIG_DIR` ‖ `$XDG_CONFIG_HOME/cursor` ‖
+  `~/.cursor` — not xdg-basedir, the fallback is the home directly — and it holds the credentials and the chats.
+  But `~/.cursor` is resolved off the home with no variable in the way at all, and that is where `mcp.json`, the
+  per-project transcripts and the CLI state live. On a machine with `XDG_CONFIG_HOME` set the two are different
+  directories and a sandbox binding only one is a session that cannot see its own MCP servers. The chat itself is
+  at `chats/<md5 of the resolved cwd>/<chatId>/store.db`, so a resume asked without the session's own working
+  directory answers "conversation gone" — the same shape as Crush.
+- **An install started from `go run` registers the lich on PATH, not itself** (`internal/agentplugin/crush.go`,
+  `resolveLichBinary`): Crush's, oh-my-pi's and Cursor's registrations name the absolute path of the lich that
+  wrote them, and under `go run` — `task dev` — that path is the binary the toolchain built into its cache and
+  deletes when the run ends, so writing it gives a registration that works for the rest of that session and then
+  fails silently forever. lich writes `lich` from PATH instead, recognising the cache by shape
+  (`go-build*/b*/exe/*`) since the toolchain exports no marker. The trap is that a dev install then points at
+  whatever version is installed on the machine — harmless, because the registration is only the transport and a
+  session reaches the lich its PTY's coordinates name, but not what the file appears to say. With no lich on
+  PATH at all, a dev install registers nothing: Crush and oh-my-pi still get their hooks, and Cursor's install
+  refuses outright.
 - **Installing the plugin writes into four harnesses' own directories** (`internal/agentplugin`): Claude Code and
   Codex are driven through their plugin CLI, but opencode, oh-my-pi and Crush have none, so lich writes the
   released files itself. None of them records what is installed, so the version lives in a marker line lich wrote —
@@ -185,7 +226,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   `Notification` carries a `message` written for a human, so the card reads "Claude needs your permission to
   use Bash". Codex's `PermissionRequest` and opencode's `.asked` events carry only the thing being asked
   about — `tool_name`, `permission`, `action` — so those cards read a bare `Bash` or `edit`, which says which
-  card to open and not what it will ask. **Antigravity, oh-my-pi and Crush send no reason at all** and keep the
+  card to open and not what it will ask. **Antigravity, oh-my-pi, Crush and Cursor CLI send no reason at all** and keep the
   generic "Waiting on you": none of the three reports `waiting` in the first place (Antigravity's permission
   prompt raises no lifecycle event that has been measured; omp declares an approval event no run was ever seen
   emitting; Crush reports no state), so there is nothing to hang a reason on. The trap is reading a bare card as

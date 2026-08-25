@@ -14,8 +14,9 @@ import "github.com/omartelo/lich/internal/providers"
 // What the provider left on disk is what answers the question; this asks it for
 // existence alone.
 //
-// cwd is the session's working directory, needed only by Crush: it keeps one
-// database per checkout rather than one per machine.
+// cwd is the session's working directory, needed by Crush and by Cursor CLI:
+// Crush keeps one database per checkout rather than one per machine, and Cursor
+// keys its chat directory on the checkout the chat ran in.
 //
 // False for a provider with no resume wired (resumeArgs): there is nothing to
 // offer where the CLI cannot reopen a conversation by id.
@@ -42,6 +43,9 @@ func (*Service) ResumeAvailable(kind, providerSessionID, cwd string) bool {
 	case providers.Crush:
 		path, ok := crushSessionDB(cwd)
 		return ok && sessionRowExists(path, crushSessionTable, providerSessionID)
+	case providers.Cursor:
+		_, ok := cursorChatStore(providerSessionID, cwd)
+		return ok
 	}
 	return false
 }
