@@ -7,8 +7,11 @@
 // metacharacter that survives one call site cannot survive the other.
 //
 // The window composes a fourth — the `lich send` line a session's card hands
-// out — and quotes it the same way in frontend/src/lib/session/send-command.ts,
-// the page-side half of this rule, tested against the same cases.
+// out — and carries both rules the same way in
+// frontend/src/lib/session/send-command.ts, the page-side half of this file,
+// tested against the same cases. It picks between them by the platform the
+// window itself runs on: that line is pasted into a terminal on this machine,
+// so the shell that decides is the user's own.
 package shquote
 
 import "strings"

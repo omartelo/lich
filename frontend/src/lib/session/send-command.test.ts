@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { sendCommand, shQuote } from "./send-command"
+import { pwshQuote, sendCommand, shQuote } from "./send-command"
 import type { Session, SessionState } from "./sessions"
 
 const PROJECTS = [
@@ -28,6 +28,19 @@ describe("shQuote", () => {
   })
 })
 
+// The same cases against the other rule, because lich opens its own Windows
+// sessions in PowerShell: single quotes expand nothing there either, and only
+// the escape differs. Mirrors internal/shquote's TestQuotePwsh.
+describe("pwshQuote", () => {
+  it("doubles the quote instead of closing the run", () => {
+    expect(pwshQuote("plain")).toBe("'plain'")
+    expect(pwshQuote("with space")).toBe("'with space'")
+    expect(pwshQuote("it's")).toBe("'it''s'")
+    expect(pwshQuote("")).toBe("''")
+    expect(pwshQuote("$HOME `id` ;rm")).toBe("'$HOME `id` ;rm'")
+  })
+})
+
 describe("sendCommand", () => {
   it("names the session alone while its label is unambiguous", () => {
     expect(sendCommand(PROJECTS, state([]), auth)).toBe(`lich send 'auth' "<prompt>"`)
@@ -49,6 +62,18 @@ describe("sendCommand", () => {
 
   // The label is the user's own text: a card renamed to something with a quote
   // or a metacharacter in it still has to paste as one argument.
+  // On Windows the line is pasted into PowerShell, where the POSIX escape is
+  // four literal characters and the argument ends at the first apostrophe.
+  it("spells the same label for PowerShell", () => {
+    const awkward: Session = { id: "dddd4444", label: `the $PATH 'bug'`, kind: "claude" }
+    expect(sendCommand(PROJECTS, state([awkward]), awkward, true)).toBe(
+      `lich send 'the $PATH ''bug''' "<prompt>"`,
+    )
+    expect(sendCommand(PROJECTS, state([otherAuth]), auth, true)).toBe(
+      `lich send --project 'lich' 'auth' "<prompt>"`,
+    )
+  })
+
   it("quotes a label the shell would otherwise read", () => {
     const awkward: Session = { id: "dddd4444", label: `the $PATH 'bug'`, kind: "claude" }
     expect(sendCommand(PROJECTS, state([awkward]), awkward)).toBe(
