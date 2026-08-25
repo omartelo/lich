@@ -59,6 +59,7 @@ import { System, Terminal as TerminalService } from "@/lib/rpc"
 import { queuePaste } from "@/lib/terminal/paste-queue"
 import type { DelegateGroup } from "@/lib/session/delegate-targets"
 import { delegatePrompt, delegateWorktreePrompt } from "@/lib/session/delegate-prompt"
+import { isWindows } from "@/lib/platform"
 import { sendCommand } from "@/lib/session/send-command"
 import { bracketedPaste } from "@/lib/terminal/bracketed-paste"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
@@ -207,10 +208,11 @@ export function SessionCard({
   }
 
   // The line another terminal — or another agent — hands this session work
-  // with. The label is quoted for a shell on the way out (sendCommand): getting
-  // that right from memory is exactly what goes wrong when the line is retyped.
+  // with. The label is quoted for a shell on the way out (sendCommand), in the
+  // spelling this machine's own shell reads: getting that right from memory is
+  // exactly what goes wrong when the line is retyped.
   const copySendCommand = () => {
-    const command = sendCommand(projects, sessions, session)
+    const command = sendCommand(projects, sessions, session, isWindows)
     void navigator.clipboard.writeText(command).then(
       () => toast(`Copied: ${command}`),
       (error) => toast.error(`Could not copy the command: ${errorText(error)}`),
