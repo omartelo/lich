@@ -170,14 +170,16 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   directories and a sandbox binding only one is a session that cannot see its own MCP servers. The chat itself is
   at `chats/<md5 of the resolved cwd>/<chatId>/store.db`, so a resume asked without the session's own working
   directory answers "conversation gone" — the same shape as Crush.
-- **An install started from `go run` registers nothing** (`internal/agentplugin/crush.go`, `lichBinary`):
-  Crush's, oh-my-pi's and Cursor's registrations name the absolute path of the lich that wrote them, and under
-  `go run` — `task dev` — that path is the binary the toolchain built into its cache and deletes when the run
-  ends. Writing it gives a registration that works for the rest of that session and then fails silently forever,
-  so lich declines the path instead. The cost is that an install run from a dev build registers no tools:
-  Crush and oh-my-pi still get their hooks, Cursor's install refuses outright, and installing from a real build
-  is what fixes it. The path is recognised by shape (`go-build*/b*/exe/*`) because the toolchain exports no
-  marker.
+- **An install started from `go run` registers the lich on PATH, not itself** (`internal/agentplugin/crush.go`,
+  `resolveLichBinary`): Crush's, oh-my-pi's and Cursor's registrations name the absolute path of the lich that
+  wrote them, and under `go run` — `task dev` — that path is the binary the toolchain built into its cache and
+  deletes when the run ends, so writing it gives a registration that works for the rest of that session and then
+  fails silently forever. lich writes `lich` from PATH instead, recognising the cache by shape
+  (`go-build*/b*/exe/*`) since the toolchain exports no marker. The trap is that a dev install then points at
+  whatever version is installed on the machine — harmless, because the registration is only the transport and a
+  session reaches the lich its PTY's coordinates name, but not what the file appears to say. With no lich on
+  PATH at all, a dev install registers nothing: Crush and oh-my-pi still get their hooks, and Cursor's install
+  refuses outright.
 - **Installing the plugin writes into four harnesses' own directories** (`internal/agentplugin`): Claude Code and
   Codex are driven through their plugin CLI, but opencode, oh-my-pi and Crush have none, so lich writes the
   released files itself. None of them records what is installed, so the version lives in a marker line lich wrote —

@@ -3,6 +3,7 @@ package agentplugin
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -162,18 +163,42 @@ func crushrcBlock(version, scriptDir, lichBin string) string {
 // it, and Cursor's install refuses outright, since its registration is all lich
 // writes there.
 //
-// A lich started with `go run` is unresolvable too, and that is the case worth
-// naming: os.Executable answers with the binary the Go toolchain built into its
-// cache, which is deleted when that run ends. Writing it produces a registration
-// that works for the rest of the session and then fails silently forever — the
-// exact shape a `task dev` install left in a real ~/.cursor/mcp.json.
+// A lich started with `go run` cannot register itself, and that is the case
+// worth naming: os.Executable answers with the binary the Go toolchain built
+// into its cache, which is deleted when that run ends. Writing it produces a
+// registration that works for the rest of that session and then fails silently
+// forever — the exact shape a `task dev` install left in a real
+// ~/.cursor/mcp.json.
+//
+// So a dev build registers the installed lich on PATH instead of nothing.
+// Nothing would have been the safe answer for a file, and the wrong one for the
+// person writing it: `task dev` is how this project is worked on, and an install
+// that refuses there is an install nobody can test. It is also not a compromise
+// — the registration is only the transport, and which lich a session reaches is
+// decided by the coordinates in its PTY, never by which binary the command
+// names. Any lich that starts is the right one.
 func lichBinary() string {
 	exe, err := os.Executable()
-	if err != nil || underGoBuildCache(exe) {
+	return resolveLichBinary(exe, err, exec.LookPath)
+}
+
+// resolveLichBinary is the decision behind lichBinary, with both answers it
+// depends on passed in: what this process is, and what PATH holds. Split out so
+// the `go run` branch is reachable from a test — os.Executable cannot be made to
+// answer with a cache path from inside one.
+func resolveLichBinary(exe string, exeErr error, lookPath func(string) (string, error)) string {
+	if exeErr == nil && exe != "" && !underGoBuildCache(exe) {
+		return exe
+	}
+	installed, err := lookPath(lichCommand)
+	if err != nil {
 		return ""
 	}
-	return exe
+	return installed
 }
+
+// lichCommand is lich's own name on PATH, for the fallback above.
+const lichCommand = "lich"
 
 // underGoBuildCache reports whether path is the throwaway binary `go run` built.
 // It is matched on shape — `.../go-build<digits>/b<digits>/exe/<name>` — because

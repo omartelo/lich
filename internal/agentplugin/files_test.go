@@ -1323,3 +1323,34 @@ func TestUnderGoBuildCache(t *testing.T) {
 		}
 	}
 }
+
+// TestLichBinaryFallsBackToPath proves a dev build registers the installed lich
+// rather than nothing. `task dev` runs the app with `go run`, which is where this
+// project is worked on, and an install that refuses there is one nobody can test.
+// The registration is only the transport — a session reaches the lich its PTY's
+// coordinates name — so any lich that starts is the right one to write.
+func TestLichBinaryFallsBackToPath(t *testing.T) {
+	const onPath = "/usr/bin/lich"
+	found := func(string) (string, error) { return onPath, nil }
+	missing := func(string) (string, error) { return "", exec.ErrNotFound }
+	goRun := filepath.Join(os.TempDir(), "go-build1790994521", "b001", "exe", "lich")
+	installed := filepath.Join(string(filepath.Separator), "opt", "lich", "lich")
+
+	cases := []struct {
+		name     string
+		exe      string
+		exeErr   error
+		lookPath func(string) (string, error)
+		want     string
+	}{
+		{"an ordinary build registers itself", installed, nil, missing, installed},
+		{"a go run build registers the lich on PATH", goRun, nil, found, onPath},
+		{"and nothing when there is none", goRun, nil, missing, ""},
+		{"an unresolvable executable falls back too", "", exec.ErrNotFound, found, onPath},
+	}
+	for _, tc := range cases {
+		if got := resolveLichBinary(tc.exe, tc.exeErr, tc.lookPath); got != tc.want {
+			t.Errorf("%s: resolveLichBinary(%q) = %q, want %q", tc.name, tc.exe, got, tc.want)
+		}
+	}
+}
