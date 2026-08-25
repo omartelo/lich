@@ -31,6 +31,12 @@ export const TITLE_EVENT = "session-title"
 // (see terminal.touchedEventName). Payload: { id }.
 export const TOUCHED_EVENT = "session-touched"
 
+// Global event the backend emits once a session's last-turn record has changed
+// (see terminal.turnEventName). Payload: { id }. Not the same moment as the
+// turn's `done`: the record is filed on a snapshot worker, so a panel that
+// refreshed off the status report would read the answer before it exists.
+export const TURN_EVENT = "session-turn"
+
 // Global event the backend emits with a session's live working directory (see
 // terminal.cwdEventName): once with the directory the PTY starts in, then on
 // every change the cwd watcher observes. Payload: { id, cwd }.

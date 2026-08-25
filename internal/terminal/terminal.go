@@ -65,6 +65,12 @@ const (
 	// asked to work it out again. Persisted with the row too (store.Session's
 	// Sandbox), which is what a page reload hydrates from.
 	sandboxEventName = "session-sandbox"
+	// turnEventName carries the id of a session whose last finished turn has
+	// just been filed ({id}) — emitted when the closing snapshot lands, not when
+	// the turn's `done` is reported. The two are not the same moment: the
+	// snapshot runs on a worker, so a panel refreshed off the state report reads
+	// the record before it exists (see turnSnaps).
+	turnEventName = "session-turn"
 )
 
 // statusEvent is the payload of statusEventName: the session whose processing
@@ -123,6 +129,13 @@ type agentEvent struct {
 type sandboxEvent struct {
 	ID       string `json:"id"`
 	Confined bool   `json:"confined"`
+}
+
+// turnEvent is the payload of turnEventName: the session whose last-turn record
+// just changed. It carries no diff — the panel asks for one only while it is on
+// screen, and a turn's diff is far larger than an event ought to be.
+type turnEvent struct {
+	ID string `json:"id"`
 }
 
 // session is a single running PTY-backed shell. done closes when the session
@@ -314,6 +327,13 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 		// TERM into the array main still holds.
 		env:    append(slices.Clip(childEnv(env)), "TERM=xterm-256color"),
 		prices: pricing.New(),
+	}
+	// Wired here rather than emitted from the hook's own goroutine: the record
+	// is filed on the snapshot worker, minutes-of-CPU later on a cold checkout,
+	// and the panel has no other way to learn that the answer it already asked
+	// for has changed.
+	s.snaps.filed = func(id string) {
+		hub.Emit(turnEventName, turnEvent{ID: id})
 	}
 	ws, err := newTransport(
 		func(id string, data []byte) {
@@ -956,12 +976,14 @@ func (s *Service) Close(id string) error {
 	}
 	s.mu.Unlock()
 
+	// Before the bail below, because a card is closed far more often than it is
+	// running: its row is deleted either way, so nothing will ever ask what its
+	// last turn changed — and its snapshot index would otherwise outlive it on
+	// disk for the rest of the machine's life.
+	s.snaps.forget(id)
 	if !ok {
 		return nil
 	}
-	// A closed card's row is deleted, so nothing will ever ask what its last
-	// turn changed — and its snapshot index would otherwise outlive it on disk.
-	s.snaps.forget(id)
 	return sess.pty.Close()
 }
 

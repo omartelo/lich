@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // snapRepo creates a git repository with one commit and a Service wired to keep
@@ -30,7 +31,25 @@ func snapRepo(t *testing.T) (*Service, string) {
 
 	svc := &Service{}
 	svc.snaps.root = t.TempDir()
+	// Registered after both TempDirs, so it runs before either is removed:
+	// track queues a warm-up snapshot nothing waits for, and a `git add -A`
+	// still writing into a directory RemoveAll is walking fails the test with a
+	// cleanup error that has nothing to do with what it asserted.
+	t.Cleanup(func() { drainSnaps(t, svc) })
 	return svc, repo
+}
+
+// drainSnaps blocks until the snapshot worker has run everything queued before
+// it. FIFO is what makes this work: a job submitted last finishes last.
+func drainSnaps(t *testing.T, svc *Service) {
+	t.Helper()
+	drained := make(chan struct{})
+	svc.snaps.submit(func() { close(drained) })
+	select {
+	case <-drained:
+	case <-time.After(30 * time.Second):
+		t.Error("the snapshot worker never drained")
+	}
 }
 
 func run(t *testing.T, dir string, args ...string) {
@@ -324,5 +343,125 @@ func TestADoneWithNoTurnOpenRecordsNothing(t *testing.T) {
 	}
 	if turn.State != turnDiffUnavailable {
 		t.Errorf("a stray done recorded %q", turn.State)
+	}
+}
+
+// A card is closed far more often than it is running: its agent exits, the
+// terminal says so, and the user closes the dead card some time later. The
+// accounting and the index file have to go with it either way.
+func TestCloseForgetsASessionWhosePTYAlreadyExited(t *testing.T) {
+	svc, repo := snapRepo(t)
+	svc.sessions = map[string]*session{}
+	svc.snaps.track("s1", repo)
+
+	openAndWait(t, svc, "s1")
+	writeIn(t, repo, "a.txt", "changed\n")
+	closeAndWait(t, svc, "s1", turnDiffOK)
+
+	index := filepath.Join(svc.snaps.root, "s1.idx")
+	if _, err := os.Stat(index); err != nil {
+		t.Fatalf("the index was never written: %v", err)
+	}
+	// No entry in s.sessions: the PTY was reaped by stream, which is the state
+	// every session that ended on its own leaves behind.
+	if err := svc.Close("s1"); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	if _, err := os.Stat(index); !os.IsNotExist(err) {
+		t.Errorf("the index outlived the card: %v", err)
+	}
+	svc.snaps.mu.Lock()
+	_, held := svc.snaps.sessions["s1"]
+	svc.snaps.mu.Unlock()
+	if held {
+		t.Error("the accounting outlived the card")
+	}
+}
+
+// The panel is told when the record lands, not when the turn ends: the two are
+// different moments, and only the first one has an answer to give.
+func TestFilingATurnNotifiesOnce(t *testing.T) {
+	svc, repo := snapRepo(t)
+	filed := make(chan string, 4)
+	svc.snaps.filed = func(id string) { filed <- id }
+	svc.snaps.track("s1", repo)
+
+	openAndWait(t, svc, "s1")
+	select {
+	case id := <-filed:
+		t.Fatalf("an opening snapshot filed nothing, yet notified for %q", id)
+	default:
+	}
+
+	writeIn(t, repo, "a.txt", "changed\n")
+	svc.snaps.note("s1", statusDone)
+	select {
+	case id := <-filed:
+		if id != "s1" {
+			t.Errorf("notified for %q, want s1", id)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the closing snapshot landed without telling the panel")
+	}
+}
+
+// A close still on the worker must not leave the turn before it on screen
+// wearing this turn's name: until the snapshot lands there is no last turn.
+func TestACloseInFlightNeverShowsTheTurnBefore(t *testing.T) {
+	svc, repo := snapRepo(t)
+	svc.snaps.track("s1", repo)
+
+	openAndWait(t, svc, "s1")
+	writeIn(t, repo, "a.txt", "one turn\n")
+	closeAndWait(t, svc, "s1", turnDiffOK)
+
+	openAndWait(t, svc, "s1")
+	writeIn(t, repo, "a.txt", "another turn\n")
+
+	// Occupies the single worker, so the closing snapshot below is queued and
+	// cannot land — the same window a dropped job leaves open forever.
+	held := make(chan struct{})
+	svc.snaps.submit(func() { <-held })
+	svc.snaps.note("s1", statusDone)
+
+	turn, err := svc.LastTurnDiff("s1")
+	if err != nil {
+		t.Fatalf("LastTurnDiff: %v", err)
+	}
+	if turn.State != turnDiffUnavailable {
+		t.Errorf("a close in flight reads as %q (%q), want %q",
+			turn.State, turn.Diff, turnDiffUnavailable)
+	}
+	close(held)
+	waitFor(t, func() bool {
+		turn, err := svc.LastTurnDiff("s1")
+		return err == nil && turn.State == turnDiffOK
+	}, "the closing snapshot to land")
+}
+
+// A session opened outside a repository has nothing to snapshot. It is dropped
+// on the warm-up rather than warned about twice a turn for the rest of its life.
+func TestACheckoutGitCannotSnapshotIsDropped(t *testing.T) {
+	svc, _ := snapRepo(t)
+	plain := t.TempDir()
+	svc.snaps.track("s1", plain)
+
+	waitFor(t, func() bool {
+		svc.snaps.mu.Lock()
+		defer svc.snaps.mu.Unlock()
+		_, held := svc.snaps.sessions["s1"]
+		return !held
+	}, "the untrackable checkout to be dropped")
+
+	svc.snaps.note("s1", statusBusy)
+	svc.snaps.note("s1", statusDone)
+	turn, err := svc.LastTurnDiff("s1")
+	if err != nil {
+		t.Fatalf("LastTurnDiff: %v", err)
+	}
+	if turn.State != turnDiffUnavailable {
+		t.Errorf("a directory outside a repository reads as %q, want %q",
+			turn.State, turnDiffUnavailable)
 	}
 }

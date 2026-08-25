@@ -54,7 +54,9 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   touched ignored files reports itself as having changed nothing. Every snapshot in the app runs on one
   FIFO worker, because git refuses a second `add` against an index another holds — so one session's first
   snapshot of a large checkout delays the next session's, and a queue past `snapQueueDepth` drops a job,
-  costing that turn its record with only the log saying so. And the boundary is the session-state contract,
+  costing that turn its record with only the log saying so. A checkout whose *first* snapshot fails is
+  dropped outright and never asked again — the ordinary reason is a session opened outside a repository,
+  but a transient failure at spawn reads the same and leaves that card with no last turn until it respawns. And the boundary is the session-state contract,
   so **Crush and Cursor CLI have no last turn at all**: neither reports a state (`docs/hooks/session-state.md`),
   so nothing ever opens or closes a window there and the switch is never drawn — a rule read off the
   session's own reports, not a list of providers, so it corrects itself the day either one starts reporting.
@@ -247,7 +249,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   use Bash". Codex's `PermissionRequest` and opencode's `.asked` events carry only the thing being asked
   about — `tool_name`, `permission`, `action` — so those cards read a bare `Bash` or `edit`, which says which
   card to open and not what it will ask. **Antigravity, oh-my-pi, Crush and Cursor CLI send no reason at all** and keep the
-  generic "Waiting on you": none of the three reports `waiting` in the first place (Antigravity's permission
+  generic "Waiting on you": none of the four reports `waiting` in the first place (Antigravity's permission
   prompt raises no lifecycle event that has been measured; omp declares an approval event no run was ever seen
   emitting; Crush reports no state), so there is nothing to hang a reason on. The trap is reading a bare card as
   "nothing to say" — on those three it means the harness never spoke, not that the block is trivial.
