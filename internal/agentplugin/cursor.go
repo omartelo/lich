@@ -31,10 +31,6 @@ const (
 	// `~/.cursor` — resolved off the home with no variable in the way, unlike
 	// the config directory that holds the credentials and the chats.
 	cursorMCPFile = "mcp.json"
-
-	// cursorMCPServers is the key Cursor reads servers under: the Claude Desktop
-	// shape, which it adopted the way omp did.
-	cursorMCPServers = "mcpServers"
 )
 
 // cursorInstall registers lich's MCP server with Cursor. It refuses while the
@@ -53,17 +49,17 @@ func (s *Service) cursorInstall() error {
 	}
 	// Merged before anything is written, for the reason omp's install gives: the
 	// only way this step fails is a document lich must not replace.
-	registration, err := cursorMCPDocument(s.lichBin())
+	path, err := cursorMCPPath()
+	if err != nil {
+		return err
+	}
+	registration, err := mcpDocument(path, s.lichBin())
 	if err != nil {
 		return err
 	}
 	if registration == nil {
 		return fmt.Errorf("lich cannot resolve its own binary to register with %s",
 			providerName(providers.Cursor))
-	}
-	path, err := cursorMCPPath()
-	if err != nil {
-		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("create %s: %w", filepath.Dir(path), err)
@@ -103,53 +99,6 @@ func cursorRegistered() bool {
 	}
 	_, ok := config.Servers[relay.MCPServerName]
 	return ok
-}
-
-// cursorMCPDocument is Cursor's `mcpServers` document with lich's server
-// registered in it, leaving every other server and every other key as they were.
-// Nil when lich cannot name its own binary: a registration naming a command that
-// cannot run is worse than none, and the session still has the `lich` command
-// line.
-//
-// The path written is this binary's, resolved now — a document cannot expand a
-// variable per session. It is only the transport; which lich a session reaches
-// is decided by the coordinates in its PTY.
-func cursorMCPDocument(lichBin string) ([]byte, error) {
-	if lichBin == "" {
-		return nil, nil
-	}
-	path, err := cursorMCPPath()
-	if err != nil {
-		return nil, err
-	}
-	existing, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("read %s: %w", path, err)
-	}
-	config := map[string]any{}
-	if len(existing) > 0 {
-		// Refused rather than replaced, as omp's is: the file belongs to the
-		// user, and overwriting one lich failed to understand would delete
-		// servers it cannot see.
-		if err := json.Unmarshal(existing, &config); err != nil {
-			return nil, fmt.Errorf("%s is not a JSON object lich can merge into: %w", path, err)
-		}
-	}
-	servers, ok := config[cursorMCPServers].(map[string]any)
-	if !ok {
-		servers = map[string]any{}
-	}
-	servers[relay.MCPServerName] = map[string]any{
-		"command": lichBin,
-		"args":    []string{relay.MCPSubcommand},
-	}
-	config[cursorMCPServers] = servers
-
-	body, err := json.MarshalIndent(config, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("encode %s: %w", path, err)
-	}
-	return append(body, '\n'), nil
 }
 
 // cursorMCPPath is `~/.cursor/mcp.json`. Cursor reads this one off the home

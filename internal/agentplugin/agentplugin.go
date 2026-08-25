@@ -67,9 +67,11 @@ const (
 //
 // Cursor CLI is the registry's seventh and the odd one: lich ships it no hooks,
 // because the CLI already executes every Claude Code hook on the machine. Its
-// install writes the MCP registration that route does not carry and installs
-// the plugin into Claude Code, and its version is the version installed there —
-// cursor.go says why.
+// install writes the MCP registration that route does not carry and nothing
+// else — it refuses while Claude Code has no plugin rather than installing one
+// there, since an install that silently changes another provider is not a thing
+// lich does — and its version is the version installed there. cursor.go says
+// why.
 var supported = []string{
 	providers.Claude, providers.Codex, providers.Antigravity,
 	providers.OpenCode, providers.OMP, providers.Crush, providers.Cursor,
@@ -185,7 +187,7 @@ func (s *Service) HasTools(provider string) bool {
 //
 // It is what stops HasTools promising tools the install could not register: all
 // three write the lich binary's own path, and all three leave the registration
-// out when it cannot be resolved (crushrcBlock, ompMCPDocument,
+// out when it cannot be resolved (crushrcBlock, mcpDocument,
 // antigravityRegisterMCP) — so a session there has the plugin's reports and no
 // tool list, and must be told the command line instead. opencode is absent
 // because its plugin defines the tools itself, with no binary to name.

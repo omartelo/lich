@@ -394,9 +394,9 @@ func readOMPServers(t *testing.T, agent string) map[string]any {
 	if err := json.Unmarshal(data, &config); err != nil {
 		t.Fatalf("the mcp document is not JSON: %v\n%s", err, data)
 	}
-	servers, ok := config[ompMCPServers].(map[string]any)
+	servers, ok := config[mcpServersKey].(map[string]any)
 	if !ok {
-		t.Fatalf("no %s table in:\n%s", ompMCPServers, data)
+		t.Fatalf("no %s table in:\n%s", mcpServersKey, data)
 	}
 	return servers
 }
@@ -1123,7 +1123,7 @@ func readCursorServers(t *testing.T, home string) map[string]any {
 	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("cursor's MCP document is not JSON: %v", err)
 	}
-	servers, _ := doc[cursorMCPServers].(map[string]any)
+	servers, _ := doc[mcpServersKey].(map[string]any)
 	return servers
 }
 
