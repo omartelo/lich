@@ -455,3 +455,20 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   Settings › Version Control and every provider's binary block still blink through "unknown" on the way back
   to the screen. Measured at 1–3 ms per check (`providers.Verify` is a `LookPath`), which is why closing it
   was not worth widening a hook the whole app reads through.
+- **The Files changed tab remembers which file, never where in it**
+  (`frontend/src/lib/pulls/use-active-file.ts`): the changed-files tree's mark comes back with the tab, but
+  the diff pane reopens at the top. Nothing in this codebase restores a scroll offset, and the one that would
+  have to be restored here is not measurable at the time it is needed: `LazyDiffBody` builds each file's
+  editor only as its card nears the viewport (`FileDiff.tsx`), so on the way back every card is a placeholder
+  sized from a line count and the page's real height arrives over the following frames. Re-jumping to the
+  marked file would land on that estimate and drift as the editors mount. The mark already meant "the file
+  last selected" rather than "the file on screen" — a click followed by a hand scroll leaves it behind on a
+  live tab too — so restoring it alone says nothing untrue. That relanding is also why returning to the tab
+  costs the lazy mount again: the editors are destroyed with the tab and rebuilt on the way back, which is
+  the work `LazyDiffBody` exists to spread out rather than avoid.
+- **This screen's per-pull-request state is re-read during render, not at mount alone**
+  (`useActiveFile`): the bullet above about `pulls-prefs.ts` does not extend to it. The Files tab is *not*
+  remounted when the list column moves to another pull request, so a `useState` seed would mark the previous
+  pull request's file on the next one's tree. The re-read is held in state and never in a ref, for the replay
+  reason `use-remote-resource.ts` documents, and `use-active-file.test.tsx` pins it by moving the pull
+  request on a live component — a probe that remounted instead would call the ref version green.

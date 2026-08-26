@@ -1,5 +1,5 @@
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react"
-import { useMemo, useRef, useState, useSyncExternalStore } from "react"
+import { useMemo, useRef, useSyncExternalStore } from "react"
 import { IconAction } from "@/components/common/IconAction"
 import { ResizeHandle } from "@/components/common/ResizeHandle"
 import { Notice } from "@/components/common/Notice"
@@ -29,6 +29,7 @@ import {
   subscribeViewed,
   viewedFiles,
 } from "@/lib/pulls/pull-request-viewed"
+import { useActiveFile } from "@/lib/pulls/use-active-file"
 import { usePullRequestDiff } from "@/lib/pulls/use-pull-request-diff"
 import { addReviewComment } from "@/lib/review-comments"
 import { usePanelVisible } from "@/lib/use-panel-visible"
@@ -129,7 +130,7 @@ export function PullsFiles({
 }: PullsFilesProps) {
   const { files, error } = usePullRequestDiff(path, head, number)
   const rows = useRef<Map<string, HTMLElement>>(new Map())
-  const [active, setActive] = useState<string | null>(null)
+  const [active, selectFile] = useActiveFile(pullRequest)
   const review = useSyncExternalStore(subscribePendingReview, () => pendingReview(pullRequest))
   // Every file mounts its own CodeMirror, so a wide PR earns a way to fold them
   // all at once — same directive the Review dock hands its panel.
@@ -198,7 +199,7 @@ export function PullsFiles({
   ).length
 
   const jumpTo = (target: string) => {
-    setActive(target)
+    selectFile(target)
     rows.current.get(target)?.scrollIntoView({ block: "start", behavior: "smooth" })
   }
 
