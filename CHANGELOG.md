@@ -45,6 +45,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   answer while a fresh one is fetched underneath. Nothing is shown as newer than
   it is: the screen still re-reads on focus, the Refresh button still asks
   again, and a reload starts from nothing.
+- **The sidebar remembers which session groups you folded.** Folding a worktree
+  block used to last only as long as the list it was drawn in: collapsing the
+  sidebar to its rail, or switching to another project and back, unfolded every
+  block again — so somebody working across several worktrees refolded the ones
+  they were not in on every trip. A fold is now remembered per project and per
+  checkout, and the two blocks every project has in common — its root sessions
+  and its pinned ones — no longer share a fold across projects.
 
 ### Fixed
 

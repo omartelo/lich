@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 import { checkoutLabel } from "@/lib/git/checkout-label"
 import type { ProviderState } from "@/lib/providers-store"
 import type { DelegateGroup } from "@/lib/session/delegate-targets"
+import { readGroupCollapsed, writeGroupCollapsed } from "@/lib/session/group-prefs"
 import { type Session, sessionOrigin } from "@/lib/session/sessions"
 import { useProjects } from "@/providers/projects"
 import { SessionCard } from "./SessionCard"
@@ -97,7 +98,10 @@ export function SessionGroup({
     newSession,
   } = useProjects()
   const navigate = useNavigate()
-  const [collapsed, setCollapsed] = useState(false)
+  // Seeded once, which holds because the sidebar keys this component on the
+  // same (project, group) pair the pref is stored under: nothing can reuse this
+  // instance for another block without remounting it.
+  const [collapsed, setCollapsed] = useState(() => readGroupCollapsed(projectId, sortId))
   const ids = sessions.map((session) => session.id)
   const { sensors, onDragEnd } = useSortableList(ids, onReorder)
   const name = pinned ? "Pinned" : checkoutLabel(path, projectPath, projectId)
@@ -107,6 +111,15 @@ export function SessionGroup({
   // branch parks its card too, not only worktrees.
   const checkout = path || projectPath
   const pullsOpen = useSyncExternalStore(subscribePullsCard, () => isPullsOpen(checkout))
+
+  // Written from the handler rather than from the state updater: React may
+  // discard and replay an updater, and a pref written in one is a pref written
+  // for a fold that never happened.
+  const toggle = () => {
+    const next = !collapsed
+    setCollapsed(next)
+    writeGroupCollapsed(projectId, sortId, next)
+  }
 
   const select = (id: string) => {
     activateSession(projectId, id)
@@ -136,7 +149,7 @@ export function SessionGroup({
           // sortable with aria-disabled + aria-roledescription="draggable" —
           // which would announce a working collapse button as a dead handle.
           activatorProps={pinned ? {} : { ...group.attributes, ...group.listeners }}
-          onToggle={() => setCollapsed((current) => !current)}
+          onToggle={toggle}
           onNewSession={(kind) => newSession(projectId, kind, path)}
         />
       )}
