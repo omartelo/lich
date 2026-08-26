@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Opening Settings › Sandbox no longer blanks the whole lich window on a
+  machine with no ssh agent.** That pane lists what your agent holds beside the
+  switch that hands it to a confined session. Asked on a machine with no agent
+  running, lich answered with nothing at all rather than an empty list, and the
+  pane threw reading a length off it — which takes the entire window with it,
+  not just the pane: the sidebar, your open terminals and the screen you were
+  on all vanish, and navigating does not bring them back. Only reloading the
+  window does. It hit any machine that *can* confine a session but has no
+  `SSH_AUTH_SOCK` — a plain Linux desktop without an agent started for the
+  login — and it was reachable from v0.41.0. The list now reads "Nothing
+  loaded.", which is what it always said for an agent holding no keys.
+
 ## [0.41.0] - 2026-08-25
 
 ### Added
