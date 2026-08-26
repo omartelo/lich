@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Settings comes back the way you left it.** Stepping out of Settings — into a
+  session, into another project — used to reset the whole screen: it reopened on
+  Providers with the search box emptied, however deep into a provider's
+  configuration you were, and every pane read the machine again from scratch
+  behind its own blank state. The Sandbox pane in particular drew nothing at all
+  until it had asked whether this machine can confine a session. Now the pane you
+  had open and what you typed to find it are remembered, and the answers each
+  pane is about — your gh accounts and this project's chosen one, the sandbox
+  backend and what your ssh agent holds, the installed fonts, every stored
+  setting behind a switch, path and rung — paint from the last one while a fresh
+  one is fetched underneath. Nothing is shown as newer than it is: every read
+  still runs on every visit, and a reload starts from nothing.
+
 - **The pull request screen comes back the way you left it.** A review
   interrupted — another project, the terminal next door, a branch to check —
   used to cost the whole screen: five gh round-trips behind a skeleton, the

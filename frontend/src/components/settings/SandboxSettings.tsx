@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react"
-import { Store, System } from "@/lib/rpc"
+import { System } from "@/lib/rpc"
 import {
   enabledProviders,
   sandboxKey,
@@ -13,6 +12,8 @@ import { GH_ACCOUNT_KEY } from "@/lib/project-settings"
 import { isMac, isWindows } from "@/lib/platform"
 import { cannotConfineCopy } from "@/lib/sandbox-copy"
 import { splitAccount } from "@/lib/gh-account"
+import { useRemoteResource } from "@/lib/use-remote-resource"
+import { useStoredSetting } from "@/lib/use-stored-setting"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Switch } from "@/components/ui/switch"
 import { SettingBlock } from "./SettingBlock"
@@ -36,49 +37,36 @@ const RUNGS: { level: SandboxLevel; label: string }[] = [
   { level: "everywhere", label: "Everywhere" },
 ]
 
-// useSetting is one stored string in one scope, read once and written through on
-// every change. It reads as `fallback` until the value arrives, which is also
-// what an unreadable value means: the unknown state is drawn as the answer lich
-// has always behaved like, never as one that silently confines a session or
-// hands a credential to an agent.
-function useSetting(key: string, scope: string, fallback: string) {
-  const [value, setValue] = useState(fallback)
-
-  useEffect(() => {
-    void Store.GetSetting(key, scope).then((stored) => setValue(stored || fallback))
-  }, [key, scope, fallback])
-
-  const write = (next: string) => {
-    setValue(next)
-    void Store.SetSetting(key, scope, next)
-  }
-  return [value, write] as const
-}
+// A module-level constant, as every array `empty` has to be: a fresh one per
+// render would notify subscribers on every failed read.
+const NO_KEYS: string[] = []
 
 // useSandboxBackend names what confines a session here, "" for a machine that
-// cannot, and undefined until the answer arrives — so the pane does not flash its
-// "cannot confine" state on every mount.
+// cannot. `loading` rather than a third value in `data`: the pane draws nothing
+// until the answer is in, so it never flashes its "cannot confine" state, and a
+// second visit has the answer already filed and paints on the first frame.
 function useSandboxBackend() {
-  const [backend, setBackend] = useState<string | undefined>(undefined)
-  useEffect(() => {
-    void System.SandboxBackend().then(setBackend)
-  }, [])
-  return backend
+  return useRemoteResource("sandbox-backend", () => System.SandboxBackend(), {
+    empty: "",
+    cache: "settings.sandboxBackend",
+  })
 }
 
 // useAgentKeys lists what is loaded in the user's ssh agent, read when the pane
 // opens. It is the sentence the switch below it cannot say on its own: that
 // switch is read as "let it push with my GitHub key", and it hands over every
 // identity in this list. A key added after this read is handed over by a control
-// that never named it — reopening the pane is the cheap answer to that.
-function useAgentKeys() {
-  const [keys, setKeys] = useState<string[]>([])
-  useEffect(() => {
-    // Folded here rather than trusted: an agent that holds nothing and a machine
-    // with no agent at all both answer null, and this list is read for a length.
-    void System.SSHAgentKeys().then((loaded) => setKeys(loaded ?? []))
-  }, [])
-  return keys
+// that never named it — reopening the pane refetches, which is the cheap answer
+// to that, and the filed list is only what stands on screen while it does.
+function useAgentKeys(): string[] {
+  const { data } = useRemoteResource(
+    "ssh-agent-keys",
+    // Folded rather than trusted: a machine with no agent answers null, not [],
+    // and this list is read for a length.
+    () => System.SSHAgentKeys().then((keys) => keys ?? NO_KEYS),
+    { empty: NO_KEYS, cache: "settings.sshAgentKeys" },
+  )
+  return data
 }
 
 // SandboxSettings is the whole subject in one pane, asked in the order each
@@ -97,16 +85,19 @@ function useAgentKeys() {
 export function SandboxSettings({ projectId }: { projectId?: string }) {
   const scope = projectId ?? GLOBAL_SCOPE
   const providers = useProviders()
-  const backend = useSandboxBackend()
+  const { data: backend, loading, error } = useSandboxBackend()
   const agentKeys = useAgentKeys()
-  const [sshAgent, setSSHAgent] = useSetting(SSH_AGENT_KEY, scope, "")
-  const [ghToken, setGHToken] = useSetting(GH_TOKEN_KEY, scope, "")
+  const [sshAgent, setSSHAgent] = useStoredSetting(SSH_AGENT_KEY, scope)
+  const [ghToken, setGHToken] = useStoredSetting(GH_TOKEN_KEY, scope)
   // The account the token will be, read from the same setting the Pulls screen
   // answers as. Naming it is the point: the switch hands over one account's
   // credentials, and which one is a project's own choice made on another pane.
-  const [account] = useSetting(GH_ACCOUNT_KEY, scope, "")
+  const [account] = useStoredSetting(GH_ACCOUNT_KEY, scope)
 
-  if (backend === undefined) {
+  // Nothing drawn until the machine has answered, and nothing drawn if it could
+  // not: "this machine cannot confine sessions" is a claim, and a lookup that
+  // failed measured nothing to back it.
+  if (loading || error) {
     return null
   }
 
@@ -184,7 +175,7 @@ function Rung({
   providerName: string
   scope: string
 }) {
-  const [stored, setStored] = useSetting(sandboxKey(providerId), scope, "off")
+  const [stored, setStored] = useStoredSetting(sandboxKey(providerId), scope, "off")
 
   return (
     <div className="flex items-center justify-between gap-4 border-t border-border py-2.5 first:border-t-0 first:pt-0">

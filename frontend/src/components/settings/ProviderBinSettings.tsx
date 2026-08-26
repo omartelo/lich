@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react"
-import { Store } from "@/lib/rpc"
+import { useState } from "react"
 import {
   footerReadout,
   footerReadoutPair,
@@ -13,6 +12,7 @@ import {
 import { useSettings } from "@/providers/settings"
 import { setCostReadout } from "@/lib/cost-readout-store"
 import { useCostReadout } from "@/lib/use-cost-readout"
+import { useStoredFlag } from "@/lib/use-stored-setting"
 import { Input } from "@/components/ui/input"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { PlanUsageSetting } from "./PlanUsageSetting"
@@ -62,25 +62,6 @@ const SKIP_LEVELS: { level: SkipLevel; label: string; consequence: string }[] = 
   },
 ]
 
-// useSkipPermissions is the stored "run without permission prompts" flag for one
-// checkout scope: read once, written through on every toggle. It reads off until
-// the value arrives — this is the switch that hands an agent the machine, so the
-// unknown state must never be drawn as the permissive one.
-function useSkipPermissions(providerId: string, worktree: boolean) {
-  const key = skipPermissionsKey(providerId, worktree)
-  const [on, setOn] = useState(false)
-
-  useEffect(() => {
-    void Store.GetSetting(key, GLOBAL_SCOPE).then((value) => setOn(value === "true"))
-  }, [key])
-
-  const toggle = (next: boolean) => {
-    setOn(next)
-    void Store.SetSetting(key, GLOBAL_SCOPE, String(next))
-  }
-  return [on, toggle] as const
-}
-
 // ProviderBinSettings is the config section a provider gets when enabled: what
 // its plan has left, which binary its sessions spawn, and how far it runs
 // without asking. Claude Code and Codex add the footer readout because their
@@ -101,8 +82,14 @@ export function ProviderBinSettings({
   // The field keeps the raw string so a half-typed "1." survives the keystroke;
   // the stored budget is the parsed value, and an emptied field is no budget.
   const [budget, setBudget] = useState(() => (costBudget > 0 ? String(costBudget) : ""))
-  const [skipHere, setSkipHere] = useSkipPermissions(providerId, false)
-  const [skipInWorktrees, setSkipInWorktrees] = useSkipPermissions(providerId, true)
+  // Off until the store answers, and that direction is not a detail: this is
+  // the switch that hands an agent the machine, so the unknown state can never
+  // be drawn as the permissive one.
+  const [skipHere, setSkipHere] = useStoredFlag(skipPermissionsKey(providerId, false), GLOBAL_SCOPE)
+  const [skipInWorktrees, setSkipInWorktrees] = useStoredFlag(
+    skipPermissionsKey(providerId, true),
+    GLOBAL_SCOPE,
+  )
   const skipFlag = skipPermissionFlags[providerId]
   const level = skipLevel(skipHere, skipInWorktrees)
   const consequence = SKIP_LEVELS.find((rung) => rung.level === level)?.consequence ?? ""

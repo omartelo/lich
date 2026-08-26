@@ -10,9 +10,9 @@ import {
   resolves,
   winningScope,
 } from "@/lib/binary-layers"
-import { ProjectService, Store } from "@/lib/rpc"
+import { ProjectService } from "@/lib/rpc"
 import { useBinaryCheck } from "@/lib/use-binary-check"
-import { useRemoteResource } from "@/lib/use-remote-resource"
+import { useStoredFlag, useStoredSetting } from "@/lib/use-stored-setting"
 import { binKey, binOffKey } from "@/lib/providers-store"
 import { useProjects } from "@/providers/projects"
 import { cn } from "@/lib/utils"
@@ -22,42 +22,6 @@ import { Switch } from "@/components/ui/switch"
 import { SettingBlock } from "./SettingBlock"
 
 const GLOBAL_SCOPE = ""
-
-// useStoredSetting is one settings value in one scope: read once, written
-// through on every change. An undefined scope is a layer this pane does not have
-// — the hub has no project — and reads as empty without touching the store.
-//
-// Settings renders every provider's section at the same position, so React keeps
-// one instance and the key changes underneath it. The read therefore has to be
-// the sequence-guarded one: two lookups in flight can answer out of order, and a
-// stale answer here is not a stale readout but the previous provider's path
-// written into this provider's key by the next keystroke. The scope is part of
-// the request for the same reason.
-function useStoredSetting(key: string, scope: string | undefined) {
-  const request = scope === undefined ? "" : `${key}\n${scope}`
-  const { data } = useRemoteResource(request, () => Store.GetSetting(key, scope ?? ""), {
-    empty: "",
-    resetOn: request,
-  })
-  // What was typed, tagged with the request it was typed against, so it is
-  // dropped by the same change that blanks the value it was overriding.
-  const [draft, setDraft] = useState<{ request: string; value: string } | null>(null)
-
-  const persist = (next: string) => {
-    setDraft({ request, value: next })
-    if (scope !== undefined) {
-      void Store.SetSetting(key, scope, next.trim())
-    }
-  }
-  return [draft?.request === request ? draft.value : data, persist] as const
-}
-
-// The store holds strings, so one place knows that "true" is the only value that
-// means on — and the switches read as the booleans they are everywhere else.
-function useStoredFlag(key: string, scope: string | undefined) {
-  const [value, persist] = useStoredSetting(key, scope)
-  return [value === "true", (on: boolean) => persist(on ? "true" : "false")] as const
-}
 
 // ProviderBinary is the "which executable runs" block. Closed it is a fact — the
 // binary a session here would spawn, and whether it is there — because almost
