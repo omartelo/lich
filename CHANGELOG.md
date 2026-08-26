@@ -33,6 +33,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   setting behind a switch, path and rung — paint from the last one while a fresh
   one is fetched underneath. Nothing is shown as newer than it is: every read
   still runs on every visit, and a reload starts from nothing.
+- **The right dock comes back the way you left it.** Flipping between **Code**
+  and **Review** — or closing the dock and reopening it — used to throw the
+  panel away whole. The Code tab lost the filter you had typed, the folders you
+  had opened, the file you were previewing and the row you were on, and re-read
+  the whole tree from git to show you a collapsed root; the Review tab dropped
+  back to **Working tree** every time, so reviewing turn by turn meant picking
+  **Last turn** again all day. Now each checkout keeps its own browse — filter,
+  folds, preview and marked row — and paints from the last answer while a fresh
+  one is fetched underneath, and the source you picked is remembered across
+  sessions. A session whose provider never reports its state still has no turn
+  to bracket, so it is shown the working tree and never a switch it cannot use.
+  A reload still starts from an empty browse.
 
 - **The pull request screen comes back the way you left it.** A review
   interrupted — another project, the terminal next door, a branch to check —

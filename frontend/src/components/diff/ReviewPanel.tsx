@@ -4,6 +4,7 @@ import { Notice } from "@/components/common/Notice"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { LastTurn } from "@/lib/api-types"
 import { onAppEvent } from "@/lib/app-events"
+import { readDiffSource, writeDiffSource, type DiffSource } from "@/lib/dock-prefs"
 import { discardTargets, parseDiff, type DiffFile } from "@/lib/git/diff"
 import { lastTurnNotice } from "@/lib/git/last-turn"
 import { addReviewComment } from "@/lib/review-comments"
@@ -28,11 +29,6 @@ import { FileDiff } from "./FileDiff"
 // counts stood still — not one tick, but indefinitely.
 const DIFF_POLL_MS = 2_000
 
-// Which changes the panel is showing. "worktree" is everything uncommitted, the
-// panel's original and default answer; "turn" narrows it to the window the
-// session's last finished turn ran in (internal/terminal.LastTurnDiff).
-type DiffSource = "worktree" | "turn"
-
 // Said in full on the option itself, because the card cannot: the pair of
 // snapshots brackets wall-clock time, so every hand that touched the checkout
 // while the turn ran is inside it. Nothing here can attribute a line, and the
@@ -55,7 +51,21 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
   // The source switch is earned, not assumed: a provider that never reports its
   // state has no turn to bracket, so it is offered the working tree alone.
   const switchable = useSessionEverReported(sessionId)
-  const [source, setSource] = useState<DiffSource>("worktree")
+  // The source the reviewer picked, read back on every mount because the dock
+  // has no shortage of them: it is a ternary between two component types, so
+  // each flip to the Code tab unmounts this panel whole (dock-prefs).
+  const [wanted, setWanted] = useState<DiffSource>(readDiffSource)
+  // A source the session cannot answer for must never be the one on screen: it
+  // would sit on an empty panel with no control anywhere to leave it by. So the
+  // guard makes what is *shown*, and nothing writes "worktree" back over the
+  // choice — `switchable` starts false after a reload and turns true only when
+  // the session next reports, so a reset would fire first and throw the
+  // remembered choice away before the switch ever appeared.
+  const source: DiffSource = switchable ? wanted : "worktree"
+  const changeSource = (next: DiffSource) => {
+    writeDiffSource(next)
+    setWanted(next)
+  }
   const [files, setFiles] = useState<DiffFile[] | null>(null)
   const [failed, setFailed] = useState(false)
   const [turnState, setTurnState] = useState<LastTurn["state"] | null>(null)
@@ -117,15 +127,6 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
     setEndedAt(null)
   }, [source, path, sessionId])
 
-  // A source the session cannot answer for must not stay selected: a resumed
-  // card, or one whose provider stopped reporting, would sit on an empty panel
-  // with no control on screen to leave it by.
-  useEffect(() => {
-    if (!switchable) {
-      setSource("worktree")
-    }
-  }, [switchable])
-
   // Two signals feeding one read: the status counts move the instant a file is
   // touched, so they invalidate immediately, and the interval covers the edits
   // they are blind to (see DIFF_POLL_MS).
@@ -168,7 +169,7 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
 
   return (
     <div className="flex h-full flex-col">
-      {switchable && <SourceRow source={source} onSource={setSource} endedAt={endedAt} />}
+      {switchable && <SourceRow source={source} onSource={changeSource} endedAt={endedAt} />}
       <div className="flex-1 overflow-y-auto">
         <PanelBody
           source={source}
