@@ -85,6 +85,13 @@ vi.mock("@/lib/rpc", () => {
   }
 })
 
+const preferences = new Map<string, string>()
+vi.stubGlobal("localStorage", {
+  getItem: (key: string) => preferences.get(key) ?? null,
+  setItem: (key: string, value: string) => preferences.set(key, value),
+  removeItem: (key: string) => preferences.delete(key),
+})
+
 // The terminal is canvas and WebGL, which jsdom cannot measure honestly, so it
 // stands in as a component that records its own mounts. That counter answers the
 // question a render budget cannot: a re-render and a remount look alike from
@@ -161,6 +168,7 @@ const usageEvent = (id: string) => ({
 // budget, so the clock is frozen. Only the timers: faking the microtask queue
 // along with them stops React committing at all.
 beforeEach(() => {
+  preferences.clear()
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] })
 })
 afterEach(() => {

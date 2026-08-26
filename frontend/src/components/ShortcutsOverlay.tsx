@@ -3,7 +3,7 @@ import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import { useSettings } from "@/providers/settings"
 import { useHotkey } from "@/lib/use-hotkey"
 import { shortcutGroups } from "@/lib/shortcuts"
-import { isMac, isWindows } from "@/lib/platform"
+import { isMac } from "@/lib/platform"
 import { ShortcutLine } from "@/components/common/ShortcutLine"
 import { Keys } from "@/components/common/Keys"
 
@@ -21,7 +21,7 @@ export function ShortcutsOverlay() {
 
   useHotkey(hotkeys.shortcuts, () => setOpen((v) => !v))
 
-  const groups = useMemo(() => shortcutGroups(hotkeys, isMac, isWindows), [hotkeys])
+  const groups = useMemo(() => shortcutGroups(hotkeys, isMac), [hotkeys])
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={setOpen}>

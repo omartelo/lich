@@ -2,33 +2,28 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import {
   comboFromEvent,
   DEFAULT_HOTKEYS,
+  defaultHotkeys,
   formatCombo,
   hotkeyConflicts,
-  hotkeyLabel,
   loadHotkeys,
   matchesCombo,
+  matchesRepeatingCombo,
   mergeHotkeys,
   sameCombo,
   saveHotkeys,
   UNASSIGNED,
   UNASSIGNED_LABEL,
   type Combo,
+  type HotkeyId,
   type KeyState,
 } from "./hotkeys"
 
-// The suite runs in node, which has no localStorage; the stored half of the
-// hotkeys is the point of the two functions below, so the storage is stubbed and
-// the round-trip through it is what is checked.
 const stored = new Map<string, string>()
 
 vi.stubGlobal("localStorage", {
   getItem: (key: string) => stored.get(key) ?? null,
-  setItem: (key: string, value: string) => {
-    stored.set(key, value)
-  },
-  removeItem: (key: string) => {
-    stored.delete(key)
-  },
+  setItem: (key: string, value: string) => stored.set(key, value),
+  removeItem: (key: string) => stored.delete(key),
 })
 
 const key = (over: Partial<KeyState>): KeyState => ({
@@ -41,32 +36,52 @@ const key = (over: Partial<KeyState>): KeyState => ({
   ...over,
 })
 
+function bound(id: HotkeyId): Combo {
+  const binding = DEFAULT_HOTKEYS[id]
+  if (!binding) throw new Error(`${id} has no default`)
+  return binding
+}
+
 describe("matchesCombo", () => {
-  const newSession = DEFAULT_HOTKEYS.newSession // Ctrl+Shift+T
-
-  it("matches Ctrl or Cmd for the primary modifier", () => {
-    expect(matchesCombo(key({ ctrlKey: true, shiftKey: true, key: "T" }), newSession)).toBe(true)
-    expect(matchesCombo(key({ metaKey: true, shiftKey: true, key: "T" }), newSession)).toBe(true)
+  it("resolves the primary modifier to Ctrl off macOS and Cmd on macOS", () => {
+    const binding = bound("newSession")
+    expect(matchesCombo(key({ ctrlKey: true, shiftKey: true, key: "T" }), binding, false)).toBe(
+      true,
+    )
+    expect(matchesCombo(key({ metaKey: true, shiftKey: true, key: "T" }), binding, true)).toBe(true)
+    expect(matchesCombo(key({ ctrlKey: true, shiftKey: true, key: "T" }), binding, true)).toBe(
+      false,
+    )
   })
 
-  it("folds = into + so a combo recorded as + matches the unshifted key", () => {
-    const plus: Combo = { mod: true, shift: false, alt: false, key: "+" }
-    expect(matchesCombo(key({ ctrlKey: true, key: "=" }), plus)).toBe(true)
+  it("keeps literal Control distinct from Cmd on macOS", () => {
+    const binding = bound("terminalSearch")
+    expect(matchesCombo(key({ ctrlKey: true, key: "f" }), binding, true)).toBe(true)
+    expect(matchesCombo(key({ metaKey: true, key: "f" }), binding, true)).toBe(false)
   })
 
-  it("ignores key auto-repeat so a held chord fires once", () => {
+  it("treats the shifted Equal key and + as the same zoom-in chord", () => {
+    const binding = bound("zoomIn")
+    expect(matchesCombo(key({ ctrlKey: true, shiftKey: true, key: "+" }), binding, false)).toBe(
+      true,
+    )
+    expect(matchesCombo(key({ ctrlKey: true, key: "=" }), binding, false)).toBe(true)
+  })
+
+  it("ignores repeat and unassigned bindings", () => {
     expect(
-      matchesCombo(key({ ctrlKey: true, shiftKey: true, key: "T", repeat: true }), newSession),
+      matchesCombo(
+        key({ ctrlKey: true, shiftKey: true, key: "t", repeat: true }),
+        bound("newSession"),
+      ),
     ).toBe(false)
+    expect(matchesCombo(key({ ctrlKey: true, key: "f" }), null)).toBe(false)
   })
 
-  it("rejects when a modifier differs", () => {
-    expect(matchesCombo(key({ ctrlKey: true, key: "T" }), newSession)).toBe(false) // no shift
-    expect(matchesCombo(key({ shiftKey: true, key: "T" }), newSession)).toBe(false) // no mod
-  })
-
-  it("rejects a different key", () => {
-    expect(matchesCombo(key({ ctrlKey: true, shiftKey: true, key: "N" }), newSession)).toBe(false)
+  it("allows repeat only through the explicit repeating matcher", () => {
+    const event = key({ ctrlKey: true, shiftKey: true, key: "t", repeat: true })
+    expect(matchesCombo(event, bound("newSession"))).toBe(false)
+    expect(matchesRepeatingCombo(event, bound("newSession"))).toBe(true)
   })
 
   // The point of an unassigned action: nothing fires it, so the chord the user
@@ -79,152 +94,173 @@ describe("matchesCombo", () => {
 })
 
 describe("comboFromEvent", () => {
-  it("captures modifiers and normalizes the key", () => {
-    expect(comboFromEvent(key({ ctrlKey: true, shiftKey: true, key: "T" }))).toEqual({
+  it("records platform-primary and literal Control separately", () => {
+    expect(comboFromEvent(key({ ctrlKey: true, key: "k" }), false)).toEqual({
       mod: true,
+      ctrl: false,
+      shift: false,
+      alt: false,
+      key: "k",
+    })
+    expect(comboFromEvent(key({ ctrlKey: true, key: "f" }), true)).toEqual({
+      mod: false,
+      ctrl: true,
+      shift: false,
+      alt: false,
+      key: "f",
+    })
+    expect(comboFromEvent(key({ metaKey: true, key: "k" }), true)?.mod).toBe(true)
+  })
+
+  it("rejects bare keys for global actions and permits them for terminal actions", () => {
+    expect(comboFromEvent(key({ shiftKey: true, key: "Enter" }))).toBeNull()
+    expect(comboFromEvent(key({ shiftKey: true, key: "Enter" }), false, true)).toEqual({
+      mod: false,
+      ctrl: false,
       shift: true,
       alt: false,
-      key: "t",
+      key: "Enter",
     })
   })
 
-  it("returns null for a bare modifier press", () => {
+  it("waits through modifier-only keydowns", () => {
     expect(comboFromEvent(key({ ctrlKey: true, key: "Control" }))).toBeNull()
-  })
-
-  it("returns null without a primary modifier or Alt (avoids firing while typing)", () => {
-    expect(comboFromEvent(key({ key: "t" }))).toBeNull()
-    expect(comboFromEvent(key({ shiftKey: true, key: "T" }))).toBeNull()
-  })
-
-  it("accepts Alt-only combos", () => {
-    expect(comboFromEvent(key({ altKey: true, key: "n" }))).toEqual({
-      mod: false,
-      shift: false,
-      alt: true,
-      key: "n",
-    })
   })
 })
 
 describe("formatCombo", () => {
-  const combo: Combo = { mod: true, shift: true, alt: false, key: "t" }
-
-  it("uses named modifiers joined by + off macOS", () => {
-    expect(formatCombo(combo, false)).toBe("Ctrl+Shift+T")
+  it("formats primary bindings for the platform", () => {
+    expect(formatCombo(bound("newSession"), false)).toBe("Ctrl+Shift+T")
+    expect(formatCombo(bound("newSession"), true)).toBe("⌘⇧T")
   })
 
-  it("uses symbols with no separator on macOS", () => {
-    expect(formatCombo(combo, true)).toBe("⌘⇧T")
+  it("spells literal Control on macOS and names an empty binding", () => {
+    expect(formatCombo(bound("terminalSearch"), true)).toBe("Ctrl+F")
+    expect(formatCombo(null, true)).toBe("Unassigned")
+  })
+})
+
+describe("defaultHotkeys", () => {
+  it("uses the provider's platform-specific clipboard image chord", () => {
+    expect(defaultHotkeys(false).attachClipboardImage).toEqual({
+      mod: false,
+      ctrl: true,
+      shift: false,
+      alt: false,
+      key: "v",
+    })
+    expect(defaultHotkeys(true).attachClipboardImage).toEqual({
+      mod: false,
+      ctrl: false,
+      shift: false,
+      alt: true,
+      key: "v",
+    })
   })
 
-  it("names an unassigned combo instead of printing modifiers alone", () => {
+  it("names an unassigned binding", () => {
     expect(formatCombo(UNASSIGNED, false)).toBe(UNASSIGNED_LABEL)
     expect(formatCombo(UNASSIGNED, true)).toBe(UNASSIGNED_LABEL)
-    expect(formatCombo({ mod: true, shift: true, alt: false, key: "" }, false)).toBe(
-      UNASSIGNED_LABEL,
-    )
   })
 })
 
 describe("mergeHotkeys", () => {
-  it("layers a valid override over the defaults", () => {
-    const override = { newSession: { mod: true, shift: false, alt: true, key: "n" } }
-    expect(mergeHotkeys(override).newSession).toEqual(override.newSession)
-    expect(mergeHotkeys(override).commandPalette).toEqual(DEFAULT_HOTKEYS.commandPalette)
+  it("migrates legacy combos and fills every action added since they were saved", () => {
+    const merged = mergeHotkeys({
+      newSession: { mod: true, shift: false, alt: true, key: "N" },
+    })
+    expect(merged.newSession).toEqual({
+      mod: true,
+      ctrl: false,
+      shift: false,
+      alt: true,
+      key: "n",
+    })
+    expect(merged.zoomIn).toEqual(DEFAULT_HOTKEYS.zoomIn)
+    expect(merged.terminalSearch).toEqual(DEFAULT_HOTKEYS.terminalSearch)
   })
 
-  it("defaults an action absent from stored settings, keeping the rest", () => {
-    // What an install predating a new action has on disk.
-    const stored = { newSession: { mod: true, shift: false, alt: true, key: "n" } }
-    const merged = mergeHotkeys(stored)
-    expect(merged.newSession).toEqual(stored.newSession)
-    expect(merged.shortcuts).toEqual(DEFAULT_HOTKEYS.shortcuts)
+  it("does not revive zoom overrides saved before zoom bindings were retired", () => {
+    const merged = mergeHotkeys({
+      zoomIn: { mod: true, shift: true, alt: false, key: "+" },
+      zoomOut: { mod: true, shift: false, alt: true, key: "-" },
+    })
+    expect(merged.zoomIn).toEqual(DEFAULT_HOTKEYS.zoomIn)
+    expect(merged.zoomOut).toEqual(DEFAULT_HOTKEYS.zoomOut)
   })
 
-  it("normalizes a stored key, so an uppercase one still fires", () => {
-    // Well formed enough to survive validation, but matchesCombo compares
-    // against a normalized event key: kept as "T" the shortcut would be dead.
-    const merged = mergeHotkeys({ newSession: { mod: true, shift: true, alt: false, key: "T" } })
-    expect(merged.newSession.key).toBe("t")
-    expect(matchesCombo(key({ ctrlKey: true, shiftKey: true, key: "T" }), merged.newSession)).toBe(
-      true,
-    )
+  it("rejects a persisted terminal search binding without modifiers", () => {
+    const merged = mergeHotkeys({
+      terminalSearch: { mod: false, ctrl: false, shift: false, alt: false, key: "f" },
+    })
+    expect(merged.terminalSearch).toEqual(DEFAULT_HOTKEYS.terminalSearch)
   })
 
-  it("ignores ids that are no longer actions (the old zoom hotkeys)", () => {
-    expect(mergeHotkeys({ zoomIn: { mod: true, shift: false, alt: false, key: "+" } })).toEqual(
-      DEFAULT_HOTKEYS,
-    )
+  it("preserves explicit unassigned bindings", () => {
+    expect(mergeHotkeys({ terminalSearch: null }).terminalSearch).toBeNull()
   })
 
   it("keeps an unassigned action unassigned", () => {
     expect(mergeHotkeys({ newSession: UNASSIGNED }).newSession).toEqual(UNASSIGNED)
   })
 
-  it("folds modifiers with no key into the one unassigned shape", () => {
-    // What a hand-edited store can hold: nothing to press, but flags set. Two
-    // shapes for one nothing would read as a conflict and as a live binding.
+  it("migrates empty-key bindings to the unassigned state", () => {
     expect(
       mergeHotkeys({ newSession: { mod: true, shift: true, alt: true, key: "" } }).newSession,
     ).toEqual(UNASSIGNED)
   })
 
-  it("drops malformed entries and non-objects", () => {
-    expect(mergeHotkeys({ newSession: { mod: 1, key: "" } })).toEqual(DEFAULT_HOTKEYS)
+  it("drops malformed and unknown entries without disturbing defaults", () => {
+    const merged = mergeHotkeys({ newSession: { mod: 1, key: "" }, retiredAction: null })
+    expect(merged).toEqual(DEFAULT_HOTKEYS)
     expect(mergeHotkeys(null)).toEqual(DEFAULT_HOTKEYS)
     expect(mergeHotkeys("nope")).toEqual(DEFAULT_HOTKEYS)
   })
 })
 
 describe("hotkeyConflicts", () => {
-  it("reports nothing when every action holds its own combo", () => {
-    expect(hotkeyConflicts(DEFAULT_HOTKEYS)).toEqual({})
-  })
-
-  it("names the other action on both sides of a collision", () => {
-    const clashing = { ...DEFAULT_HOTKEYS, newSession: DEFAULT_HOTKEYS.commandPalette }
-    const conflicts = hotkeyConflicts(clashing)
+  it("reports both sides of a collision", () => {
+    const conflicts = hotkeyConflicts({
+      ...DEFAULT_HOTKEYS,
+      newSession: DEFAULT_HOTKEYS.commandPalette,
+    })
     expect(conflicts.newSession).toEqual(["commandPalette"])
     expect(conflicts.commandPalette).toEqual(["newSession"])
-    expect(conflicts.nextSession).toBeUndefined()
   })
 
-  it("names both others when three actions share a combo", () => {
-    const combo: Combo = { mod: true, shift: true, alt: false, key: "j" }
-    const conflicts = hotkeyConflicts({
+  it("detects primary and literal Ctrl as the same chord off macOS only", () => {
+    const hotkeys = {
       ...DEFAULT_HOTKEYS,
-      newSession: combo,
-      nextSession: combo,
-      prevSession: combo,
-    })
-    expect(conflicts.nextSession).toEqual(["newSession", "prevSession"])
+      newSession: { mod: false, ctrl: true, shift: false, alt: false, key: "k" },
+    }
+    expect(hotkeyConflicts(hotkeys, false).newSession).toEqual(["commandPalette"])
+    expect(hotkeyConflicts(hotkeys, true)).toEqual({})
   })
 
-  // Nothing is not a chord two actions can both hold: an unassigned action is
-  // bound to no key, so it collides with nothing, including another one.
-  it("never reports an unassigned action as a conflict", () => {
-    const conflicts = hotkeyConflicts({
-      ...DEFAULT_HOTKEYS,
-      newSession: UNASSIGNED,
-      nextSession: UNASSIGNED,
-    })
-    expect(conflicts).toEqual({})
+  it("ignores unassigned actions", () => {
+    expect(
+      hotkeyConflicts({
+        ...DEFAULT_HOTKEYS,
+        newSession: UNASSIGNED,
+        commandPalette: UNASSIGNED,
+      }),
+    ).toEqual({})
   })
 
   it("treats combos differing only in a modifier as distinct", () => {
     const conflicts = hotkeyConflicts({
       ...DEFAULT_HOTKEYS,
-      newSession: { ...DEFAULT_HOTKEYS.commandPalette, alt: true },
+      newSession: { ...bound("commandPalette"), alt: true },
     })
     expect(conflicts).toEqual({})
   })
 })
 
 describe("sameCombo", () => {
-  it("compares every field", () => {
-    expect(sameCombo(DEFAULT_HOTKEYS.newSession, DEFAULT_HOTKEYS.newSession)).toBe(true)
-    expect(sameCombo(DEFAULT_HOTKEYS.newSession, DEFAULT_HOTKEYS.commandPalette)).toBe(false)
+  it("compares bindings including the unassigned state", () => {
+    expect(sameCombo(null, null)).toBe(true)
+    expect(sameCombo(null, bound("newSession"))).toBe(false)
+    expect(sameCombo(bound("newSession"), bound("newSession"))).toBe(true)
   })
 
   // What the settings row reads to decide whether Reset and Unassign are live.
@@ -235,8 +271,11 @@ describe("sameCombo", () => {
 })
 
 describe("loadHotkeys", () => {
-  beforeEach(() => {
-    stored.clear()
+  beforeEach(() => stored.clear())
+
+  it("round-trips assigned and unassigned bindings", () => {
+    saveHotkeys({ ...DEFAULT_HOTKEYS, terminalSearch: null })
+    expect(loadHotkeys().terminalSearch).toBeNull()
   })
 
   it("answers the defaults with nothing stored", () => {
@@ -244,64 +283,24 @@ describe("loadHotkeys", () => {
   })
 
   it("round-trips what saveHotkeys wrote", () => {
-    const mine: Combo = { mod: true, shift: true, alt: false, key: "j" }
+    const mine: Combo = { mod: true, ctrl: false, shift: true, alt: false, key: "j" }
     saveHotkeys({ ...DEFAULT_HOTKEYS, newSession: mine })
-
     expect(loadHotkeys().newSession).toEqual(mine)
   })
 
-  it("round-trips an unassigned action, and takes its default back on reset", () => {
+  it("restores an unassigned action when its default is saved", () => {
     saveHotkeys({ ...DEFAULT_HOTKEYS, newSession: UNASSIGNED })
     const cleared = loadHotkeys()
     expect(cleared.newSession).toEqual(UNASSIGNED)
     expect(matchesCombo(key({ ctrlKey: true, shiftKey: true, key: "T" }), cleared.newSession)).toBe(
       false,
     )
-
-    // What resetHotkey writes back (settings.tsx): the default for that id.
     saveHotkeys({ ...cleared, newSession: DEFAULT_HOTKEYS.newSession })
     expect(loadHotkeys()).toEqual(DEFAULT_HOTKEYS)
   })
 
-  // A pref must never be able to break a launch: the value is a string somebody
-  // can hand-edit, and half of one is what an interrupted write leaves.
-  it("falls back to the defaults for a value that is not JSON", () => {
+  it("falls back to defaults for corrupt JSON", () => {
     stored.set("lich.hotkeys", '{"newSession":')
-
     expect(loadHotkeys()).toEqual(DEFAULT_HOTKEYS)
-  })
-
-  it("falls back for JSON that is not an object at all", () => {
-    stored.set("lich.hotkeys", '"ctrl+shift+t"')
-
-    expect(loadHotkeys()).toEqual(DEFAULT_HOTKEYS)
-  })
-
-  // Stored under a key the build no longer has, beside one it does: the known
-  // override stands and the stranger is dropped.
-  it("keeps a valid override and ignores what is not an action", () => {
-    stored.set(
-      "lich.hotkeys",
-      JSON.stringify({
-        newSession: { mod: true, shift: true, alt: false, key: "J" },
-        zoomIn: { mod: true, shift: false, alt: false, key: "+" },
-      }),
-    )
-
-    const loaded = loadHotkeys()
-    expect(loaded.newSession.key).toBe("j")
-    expect(loaded).not.toHaveProperty("zoomIn")
-  })
-})
-
-describe("hotkeyLabel", () => {
-  it("names an action", () => {
-    expect(hotkeyLabel("commandPalette")).toBe("Command palette")
-  })
-
-  // Nothing in the app can ask for an id that is not an action, but the label is
-  // what a settings row renders — an empty one would be a blank line.
-  it("falls back to the id for an action this build does not have", () => {
-    expect(hotkeyLabel("zoomIn" as never)).toBe("zoomIn")
   })
 })
