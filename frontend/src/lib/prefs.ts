@@ -1,8 +1,8 @@
 // UI preferences live in the page's localStorage (see the root CLAUDE.md:
-// the workspace is SQLite, the prefs are not). What each stored string means
-// is the parsing half, kept pure so the suite owns it; reading and writing the
-// key itself is the boundary half, and stays a two-line wrapper — the same
-// split parsePullsSort/readPullsSort already uses.
+// the workspace is SQLite, the prefs are not). What each stored string means is
+// the parsing half, kept pure so the suite owns it — the parseXPref helpers
+// below; reading and writing the key itself is the boundary half, and stays a
+// two-line wrapper (pulls/pulls-prefs.ts is the worked example).
 //
 // Every reader answers with the fallback for a key that is absent, or that
 // holds something this build no longer understands. A pref is a convenience:

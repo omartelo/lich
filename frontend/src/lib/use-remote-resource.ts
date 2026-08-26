@@ -124,30 +124,11 @@ export function useRemoteResource<T>(
       })
   }, [key, cache])
 
-  // Moving the data during render, not in an effect: whatever belongs to the
-  // abandoned request must never reach the screen, and an effect would paint it
-  // one frame first.
-  //
-  // What has already been accounted for is held in state, never in a ref. React
-  // may discard a render that updates state during it and replay it, and a ref
-  // written by the discarded pass makes the replay skip the very update it was
-  // guarding — the filed answer is seeded and then silently lost, which is how
-  // this screen came back blank instead of painted.
-  const [seenCache, setSeenCache] = useState(cache)
-  const [seenReset, setSeenReset] = useState(resetOn)
-  if (cache !== seenCache || resetOn !== seenReset) {
-    const resetting = resetOn !== seenReset
-    setSeenCache(cache)
-    setSeenReset(resetOn)
-    if (held !== undefined) {
-      // The filed answer is this request's own, so it is captioned correctly
-      // even where resetOn was about to blank the screen. Nothing is being
-      // waited for either: the refetch the effect is about to run replaces what
-      // is already there.
-      setData(held)
+  const moved = useMovedAnswer(key, cache, resetOn, held, empty)
+  if (moved) {
+    setData(moved.data)
+    if (moved.inHand) {
       setLoading(false)
-    } else if (resetting) {
-      setData(empty)
     }
   }
 
@@ -165,4 +146,44 @@ export function useRemoteResource<T>(
   }, [refresh, refetchOnFocus])
 
   return { data, loading, error, refresh }
+}
+
+// What the screen should move to now that the request has changed, or null to
+// leave it where it is. Done during render, not in an effect: whatever belongs
+// to the abandoned request must never reach the screen, and an effect would
+// paint it one frame first.
+//
+// Its own function because the rule it follows is easy to break by accident:
+// what has already been accounted for is held in state, never in a ref. React
+// may discard a render that updates state during it and replay it, and a ref
+// written by the discarded pass makes the replay skip the very update it was
+// guarding — the filed answer is seeded and then silently lost, which is how
+// this screen came back blank instead of painted.
+//
+// `idle` rides the marker beside the cache key because a request can fall away
+// and come back without that key moving — a caller whose `key` empties on a
+// value its `cache` does not spell would otherwise never be handed its answer.
+function useMovedAnswer<T>(
+  key: string,
+  cache: string | undefined,
+  resetOn: string | undefined,
+  held: T | undefined,
+  empty: T,
+): { data: T; inHand: boolean } | null {
+  const idle = key === ""
+  const [seen, setSeen] = useState({ cache, resetOn, idle })
+  if (seen.cache === cache && seen.resetOn === resetOn && seen.idle === idle) {
+    return null
+  }
+  const resetting = seen.resetOn !== resetOn
+  setSeen({ cache, resetOn, idle })
+  if (held !== undefined) {
+    // The filed answer is this request's own, so it is captioned correctly even
+    // where resetOn was about to blank the screen. Nothing is being waited for
+    // either: the refetch the effect is about to run replaces what is there.
+    return { data: held, inHand: true }
+  }
+  // Blanking is resetOn's alone. A plain move to another request keeps what it
+  // has, so a screen refreshes in place instead of flashing back to a skeleton.
+  return resetting ? { data: empty, inHand: false } : null
 }

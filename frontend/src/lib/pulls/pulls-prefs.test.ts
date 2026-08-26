@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import {
-  forgetLastPull,
-  parsePullsSort,
   readLastPull,
   readPullsFilter,
   readPullsQuery,
@@ -31,16 +29,6 @@ vi.stubGlobal("localStorage", {
 
 beforeEach(() => {
   stored.clear()
-})
-
-describe("parsePullsSort", () => {
-  it("keeps a stored sort this build knows", () => {
-    expect(parsePullsSort("failing")).toBe("failing")
-  })
-
-  it.each([null, "", "by-vibes"])("falls back to recently updated for %j", (raw) => {
-    expect(parsePullsSort(raw)).toBe("updated")
-  })
 })
 
 describe("the stored sort", () => {
@@ -170,11 +158,13 @@ describe("the remembered pull request", () => {
     expect(readLastPull("proj-2")).toBe(12)
   })
 
-  it("forgets a selection that no longer resolves", () => {
+  // Nothing forgets a selection: a lookup that fails is transient far more often
+  // than it is a pull request that is gone, and the two look the same from here.
+  it("survives a selection being written again", () => {
     writeLastPull("proj-1", 388)
-    forgetLastPull("proj-1")
+    writeLastPull("proj-1", 12)
 
-    expect(readLastPull("proj-1")).toBe(0)
+    expect(readLastPull("proj-1")).toBe(12)
   })
 
   // 0 is the screen's own "no pull request selected", so storing it would be

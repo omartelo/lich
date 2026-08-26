@@ -19,7 +19,6 @@ import { useCheckouts } from "@/lib/git/use-checkouts"
 import { invalidatePullRequests } from "@/lib/pulls/pull-request-lookup"
 import { parsePullsQuery } from "@/lib/pulls/pull-request-list"
 import {
-  forgetLastPull,
   readLastPull,
   readPullsQuery,
   writeLastPull,
@@ -110,6 +109,10 @@ export function Pulls({ list = false }: PullsProps) {
   // is otherwise a query typed twice.
   const [query, setQuery] = useState(() => readPullsQuery(projectId ?? ""))
   const parsedQuery = useMemo(() => parsePullsQuery(query), [query])
+  // Stored on every keystroke rather than on some settle: a box half-typed when
+  // the user walks off is still what they were about to search for, and one
+  // short localStorage write per character is cheaper than the timer that would
+  // avoid it.
   const changeQuery = (next: string) => {
     writePullsQuery(projectId ?? "", next)
     setQuery(next)
@@ -134,16 +137,6 @@ export function Pulls({ list = false }: PullsProps) {
       writeLastPull(projectId, selected)
     }
   }, [list, projectId, selected])
-
-  // A remembered pull request that no longer resolves — deleted, or belonging to
-  // a repository this project no longer points at — would greet every return
-  // with the same error. Forget it once; the next visit lands on the checkout's
-  // own pull request instead.
-  useEffect(() => {
-    if (error && !number && remembered > 0 && projectId) {
-      forgetLastPull(projectId)
-    }
-  }, [error, number, remembered, projectId])
 
   // This screen and the badges around it read the same pull request through two
   // separate lookups, so a change with HEAD standing still — a merge, a PR

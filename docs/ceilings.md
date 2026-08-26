@@ -401,11 +401,14 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   on the one frame the cache exists for. The cap is 32 answers with no byte budget, so a review that walks
   through more pull requests than that pays a skeleton on the way back to the first.
 - **Seeding that filed answer runs during render, so its bookkeeping may never live in a ref**
-  (`frontend/src/lib/use-remote-resource.ts`): React can discard a render that updates state during it and
-  replay it, and a ref written by the discarded pass makes the replay skip the very update it guarded. The
-  symptom is silent and looks nothing like the cause — the answer is seeded, the screen paints, and the next
-  frame is blank again with no setter anywhere having run. The suite does not reproduce it: the jsdom probe
-  passes against the ref version, and it took a real browser to see.
+  (`useMovedAnswer`, `frontend/src/lib/use-remote-resource.ts`): React can discard a render that updates state
+  during it and replay it, and a ref written by the discarded pass makes the replay skip the very update it
+  guarded. The symptom is silent and looks nothing like the cause — the answer is seeded, the screen paints,
+  and the next frame is blank again with no setter anywhere having run. `use-remote-resource.test.tsx` pins it,
+  but only under two conditions that are easy to drop: the probe must change the request on a *live* component
+  (a remount initialises the marker and never exercises the replay), and it must record frames from a layout
+  effect rather than from the render body (the body sees passes that were never committed, which reads a
+  correct hook as an oscillation). A probe missing either one calls the ref version green.
 - **The pull request screen's remembered state is read once, at mount** (`frontend/src/lib/pulls/pulls-prefs.ts`):
   the filter box, the quick filter and the selected pull request are keyed per project but seeded from
   `useState`, which holds because every route into the screen carries its own project and leaving one unmounts

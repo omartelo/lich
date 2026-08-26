@@ -9,7 +9,7 @@
 // The harness has to be imported before anything that reaches react-dom, which
 // is why it is first here (see @/test/render-budget).
 import { mountBudget } from "@/test/render-budget"
-import { StrictMode, createElement } from "react"
+import { StrictMode, createElement, useLayoutEffect, useState } from "react"
 import { beforeEach, describe, expect, it } from "vitest"
 import { clearRemoteCache } from "@/lib/remote-cache"
 import { useRemoteResource } from "@/lib/use-remote-resource"
@@ -23,9 +23,14 @@ interface Frame {
   error: string | null
 }
 
-// Every frame the hook produced, so a mount can be read as a sequence rather
-// than as a final value: what the user saw on the way to the answer is the
-// whole question here.
+// Every frame the hook *committed*, so a mount can be read as a sequence rather
+// than as a final value: what the user saw on the way to the answer is the whole
+// question here.
+//
+// Recorded from a layout effect, never from the render body. A render that
+// updates state during it runs again from its base state, and StrictMode runs
+// every pass twice — so the body sees values that were never painted, and an
+// assertion written against them reads a correct hook as an oscillation.
 //
 // Mounted inside StrictMode, as the app runs (main.tsx). That is not
 // decoration — React discards and replays a render that updates state during
@@ -34,7 +39,9 @@ interface Frame {
 function probe(frames: Frame[], load: () => Promise<string>, cache?: string, key = KEY) {
   function Probe() {
     const { data, loading, error } = useRemoteResource(key, load, { empty: "", cache })
-    frames.push({ data, loading, error })
+    useLayoutEffect(() => {
+      frames.push({ data, loading, error })
+    })
     return null
   }
   return createElement(StrictMode, null, createElement(Probe))
@@ -102,6 +109,70 @@ describe("a remembered lookup", () => {
 
     expect(states(frames)).toEqual([ANSWERED])
     await second.unmount()
+  })
+
+  // resetOn only ever fires on a *live* component — the state it guards changes
+  // under the user, it does not arrive with a fresh mount — so these drive it
+  // from inside, through a probe that owns the value and hands back the setter.
+  function resettable(frames: Frame[], cached: boolean) {
+    let move: (next: string) => void = () => {}
+    function Probe() {
+      const [reset, setReset] = useState("open")
+      move = setReset
+      const r = useRemoteResource(`k ${reset}`, () => Promise.resolve(reset), {
+        empty: "",
+        resetOn: reset,
+        cache: cached ? `probe ${reset}` : undefined,
+      })
+      useLayoutEffect(() => {
+        frames.push({ data: r.data, loading: r.loading, error: r.error })
+      })
+      return null
+    }
+    return {
+      element: createElement(StrictMode, null, createElement(Probe)),
+      move: (next: string) => move(next),
+    }
+  }
+
+  // A readout that captions itself from the request — the pull request column
+  // labels its rows with the state it asked for — must drop the old rows before
+  // the new ones arrive, or they sit under the wrong label for a whole call.
+  it("blanks on a reset it has no filed answer for", async () => {
+    const frames: Frame[] = []
+    const { element, move } = resettable(frames, false)
+
+    const mounted = await mountBudget(element)
+    await mounted.act(() => {})
+    frames.length = 0
+    await mounted.act(() => move("merged"))
+
+    // Blank first, in the same render as the change, and only then the call —
+    // "open" never appears under the "merged" label.
+    expect(states(frames)).toEqual([
+      '"" loading=false error=null',
+      '"" loading=true error=null',
+      '"merged" loading=false error=null',
+    ])
+    await mounted.unmount()
+  })
+
+  // The exception, and the reason the two rules are written in one place: an
+  // answer already on file for the *new* request is captioned correctly, so it
+  // is shown rather than blanked.
+  it("paints the filed answer through a reset instead of blanking", async () => {
+    const frames: Frame[] = []
+    const { element, move } = resettable(frames, true)
+
+    const mounted = await mountBudget(element)
+    await mounted.act(() => {})
+    // Both states asked for once, so both have an answer on file.
+    await mounted.act(() => move("merged"))
+    frames.length = 0
+    await mounted.act(() => move("open"))
+
+    expect(states(frames)).toEqual(['"open" loading=false error=null'])
+    await mounted.unmount()
   })
 
   it("starts blank and loading when the caller keeps no answers", async () => {

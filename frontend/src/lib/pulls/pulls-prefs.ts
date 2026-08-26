@@ -1,4 +1,4 @@
-import { parseEnumPref, readPref, removePref, writePref } from "@/lib/prefs"
+import { parseEnumPref, readPref, writePref } from "@/lib/prefs"
 import { PULLS_FILTERS, PULLS_SORTS, type PullsFilter, type PullsSort } from "./pull-request-list"
 
 // Everything the pull request screen remembers about how it was left. A review
@@ -25,13 +25,8 @@ const LAST_PULL_PREFIX = "lich.pulls.last."
 export const PULLS_TABS = ["overview", "commits", "files", "conversation", "checks"] as const
 export type PullsTab = (typeof PULLS_TABS)[number]
 
-/** Reads a stored sort, falling back for anything this build does not know. */
-export function parsePullsSort(raw: string | null): PullsSort {
-  return parseEnumPref(raw, PULLS_SORTS, "updated")
-}
-
 export function readPullsSort(): PullsSort {
-  return parsePullsSort(readPref(SORT_KEY))
+  return parseEnumPref(readPref(SORT_KEY), PULLS_SORTS, "updated")
 }
 
 export function writePullsSort(sort: PullsSort): void {
@@ -77,27 +72,21 @@ function scoped(prefix: string, projectId: string): string | null {
 // Which pull request the list column had selected. Every way back into the
 // screen navigates to the bare list route, so without this a return lands on
 // the checkout's own pull request rather than the one being read.
-function lastPullKey(projectId: string): string {
-  return `${LAST_PULL_PREFIX}${projectId}`
-}
-
-/** The remembered pull request, or 0 for a project with none — which is also
- * what a stored value this build cannot read as a positive number means. */
+//
+// Nothing forgets it on a failed lookup. A pull request that no longer resolves
+// is rare, and lich already says so in as many words ("GitHub has no pull
+// request with that number") with the list beside it to pick from — while every
+// *transient* failure looks the same from here, so forgetting on one would let
+// an offline launch quietly erase the selection of every project it touched.
 export function readLastPull(projectId: string): number {
+  // 0 for a project with none — which is also what a stored value this build
+  // cannot read as a positive number means.
   const number = Number(scoped(LAST_PULL_PREFIX, projectId))
   return Number.isInteger(number) && number > 0 ? number : 0
 }
 
 export function writeLastPull(projectId: string, number: number): void {
   if (projectId && number > 0) {
-    writePref(lastPullKey(projectId), number)
-  }
-}
-
-/** Forget the selection — for a remembered number that no longer resolves, so
- * one dead pull request cannot greet every return with the same error. */
-export function forgetLastPull(projectId: string): void {
-  if (projectId) {
-    removePref(lastPullKey(projectId))
+    writePref(`${LAST_PULL_PREFIX}${projectId}`, number)
   }
 }
