@@ -20,6 +20,7 @@ const TAB_KEY = "lich.pulls.tab"
 const FILTER_PREFIX = "lich.pulls.filter."
 const QUERY_PREFIX = "lich.pulls.query."
 const LAST_PULL_PREFIX = "lich.pulls.last."
+const ACTIVE_FILE_PREFIX = "lich.pulls.file."
 
 /** The tabs of one pull request, in the order the header shows them. */
 export const PULLS_TABS = ["overview", "commits", "files", "conversation", "checks"] as const
@@ -62,11 +63,12 @@ export function writePullsQuery(projectId: string, query: string): void {
   }
 }
 
-// Every project-scoped read goes through here, so a screen with no project open
-// yet — the id comes straight from the route — reads the default rather than
-// whatever sits under a key ending in nothing.
-function scoped(prefix: string, projectId: string): string | null {
-  return projectId ? readPref(`${prefix}${projectId}`) : null
+// Every scoped read goes through here, so a screen whose id is not resolved
+// yet — a project comes straight from the route, a pull request from a lookup
+// still in flight — reads the default rather than whatever sits under a key
+// ending in nothing.
+function scoped(prefix: string, id: string): string | null {
+  return id ? readPref(`${prefix}${id}`) : null
 }
 
 // Which pull request the list column had selected. Every way back into the
@@ -88,5 +90,23 @@ export function readLastPull(projectId: string): number {
 export function writeLastPull(projectId: string, number: number): void {
   if (projectId && number > 0) {
     writePref(`${LAST_PULL_PREFIX}${projectId}`, number)
+  }
+}
+
+// Which file of a pull request's diff the changed-files tree has marked: the
+// one the reviewer jumped to. Keyed by the pull request rather than the project
+// — it addresses that pull request's content, and the same reviewer is reading
+// a different file in each of them.
+//
+// Free text, like the filter box: a path is whatever the diff called it, so
+// anything stored is readable. A path the diff no longer carries marks no row,
+// which is what a file dropped by a force-push should look like.
+export function readActiveFile(pullRequest: string): string {
+  return scoped(ACTIVE_FILE_PREFIX, pullRequest) ?? ""
+}
+
+export function writeActiveFile(pullRequest: string, path: string): void {
+  if (pullRequest && path) {
+    writePref(`${ACTIVE_FILE_PREFIX}${pullRequest}`, path)
   }
 }

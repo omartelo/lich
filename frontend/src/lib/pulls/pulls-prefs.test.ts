@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import {
+  readActiveFile,
   readLastPull,
   readPullsFilter,
   readPullsQuery,
   readPullsSort,
   readPullsTab,
+  writeActiveFile,
   writeLastPull,
   writePullsFilter,
   writePullsQuery,
@@ -190,5 +192,46 @@ describe("the remembered pull request", () => {
 
     expect(stored.size).toBe(0)
     expect(readLastPull("")).toBe(0)
+  })
+})
+
+describe("the marked changed file", () => {
+  const A = "https://github.com/o/r/pull/1"
+  const B = "https://github.com/o/r/pull/2"
+
+  it("marks nothing with nothing stored", () => {
+    expect(readActiveFile(A)).toBe("")
+  })
+
+  it("round-trips a path", () => {
+    writeActiveFile(A, "internal/terminal/pty_linux.go")
+
+    expect(readActiveFile(A)).toBe("internal/terminal/pty_linux.go")
+  })
+
+  // Keyed by the pull request and not by the project: the same reviewer is a
+  // different number of files into each of them.
+  it("keeps two pull requests apart", () => {
+    writeActiveFile(A, "internal/terminal/pty_linux.go")
+    writeActiveFile(B, "frontend/src/main.tsx")
+
+    expect(readActiveFile(A)).toBe("internal/terminal/pty_linux.go")
+    expect(readActiveFile(B)).toBe("frontend/src/main.tsx")
+  })
+
+  it("reads and writes nothing without a pull request", () => {
+    writeActiveFile("", "frontend/src/main.tsx")
+
+    expect(stored.size).toBe(0)
+    expect(readActiveFile("")).toBe("")
+  })
+
+  // "" is the screen's own "no file marked", so storing it would be storing
+  // nothing — and would drop a mark the tree never asked to clear.
+  it("keeps the last mark when handed no path", () => {
+    writeActiveFile(A, "internal/terminal/pty_linux.go")
+    writeActiveFile(A, "")
+
+    expect(readActiveFile(A)).toBe("internal/terminal/pty_linux.go")
   })
 })

@@ -64,6 +64,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   they were not in on every trip. A fold is now remembered per project and per
   checkout, and the two blocks every project has in common — its root sessions
   and its pinned ones — no longer share a fold across projects.
+- **The Files changed tab keeps the file you jumped to.** Every other tab of a
+  pull request replaces that one outright, so a walk to Conversation and back
+  used to clear the changed-files tree's mark and leave a long review with
+  nothing saying which file it had reached. The mark is now remembered per pull
+  request, and comes back with the tab. Where the diff was scrolled to is not
+  remembered — the tab reopens at the top, as it always has.
 
 ### Fixed
 
