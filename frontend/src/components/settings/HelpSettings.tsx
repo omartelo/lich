@@ -1,22 +1,20 @@
-import { useEffect, useState } from "react"
 import { Bug, Info, ScrollText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SettingBlock } from "./SettingBlock"
 import { System } from "@/lib/rpc"
 import { REPO_URL, bugReportUrl } from "@/lib/support-url"
 import { runWithToast } from "@/lib/toast-async"
+import { useRemoteResource } from "@/lib/use-remote-resource"
 import type { Diagnostics } from "@/lib/api-types"
 
 // The section a bug report starts from: the two things a reporter otherwise has
 // to be walked through — where the log file lives, and what to put in the issue.
 export function HelpSettings() {
-  const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null)
-
-  useEffect(() => {
-    void System.Diagnostics()
-      .then(setDiagnostics)
-      .catch(() => {})
-  }, [])
+  const { data: diagnostics } = useRemoteResource<Diagnostics | null>(
+    "diagnostics",
+    () => System.Diagnostics(),
+    { empty: null, cache: "settings.diagnostics" },
+  )
 
   return (
     <>

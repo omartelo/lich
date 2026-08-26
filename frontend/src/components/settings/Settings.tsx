@@ -14,6 +14,12 @@ import { UpdatesSettings } from "./UpdatesSettings"
 import { HelpSettings } from "./HelpSettings"
 import { SearchInput } from "@/components/common/SearchInput"
 import { enabledProviders, useProviders } from "@/lib/providers-store"
+import {
+  readSettingsQuery,
+  readSettingsSection,
+  writeSettingsQuery,
+  writeSettingsSection,
+} from "@/lib/settings-prefs"
 import { cn } from "@/lib/utils"
 
 // A settings category: a nav entry plus the pane it renders. Global and project
@@ -96,8 +102,21 @@ const FOOTER_SECTIONS: Section[] = [
 export function Settings() {
   const { projectId } = useParams()
   const providers = useProviders()
-  const [active, setActive] = useState("providers")
-  const [query, setQuery] = useState("")
+  // Seeded from the store and written through, so leaving the screen — a
+  // session next door, another project — brings back the pane that was open
+  // rather than the default one (settings-prefs).
+  const [active, setActive] = useState(readSettingsSection)
+  const [query, setQuery] = useState(readSettingsQuery)
+
+  const openSection = (id: string) => {
+    setActive(id)
+    writeSettingsSection(id)
+  }
+
+  const search = (next: string) => {
+    setQuery(next)
+    writeSettingsQuery(next)
+  }
 
   const providerSections: Section[] = enabledProviders(providers).map((provider) => ({
     id: `provider-${provider.id}`,
@@ -133,7 +152,7 @@ export function Settings() {
       key={section.id}
       type="button"
       aria-label={section.accessibleLabel}
-      onClick={() => setActive(section.id)}
+      onClick={() => openSection(section.id)}
       className={cn(
         "rounded-md px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
         current.id === section.id && "bg-accent text-accent-foreground",
@@ -149,7 +168,7 @@ export function Settings() {
         <div className="p-3">
           <SearchInput
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => search(event.target.value)}
             placeholder="Search"
             aria-label="Search settings"
           />

@@ -422,3 +422,30 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   `useState`, which holds because every route into the screen carries its own project and leaving one unmounts
   it. A future route that reuses `Pulls` across two projects would keep the first one's box and its selection,
   and nothing in the component would say so.
+- **The settings screen remembers nothing per project, on purpose** (`frontend/src/lib/settings-prefs.ts`):
+  the pane that was open and the search box are stored under one key each, so opening Settings in project B
+  lands on the pane project A was reading. That is the rule pulls-prefs states, landing on the other side —
+  the nav is the same list of panes in every project, so neither is about a repository — and it is a decision
+  rather than an oversight: the *values* those panes read and write are project-scoped already, in the
+  workspace database under the project's own id. The trap is for whoever adds a pane that is genuinely about
+  one repository's content. Its remembered state belongs on the per-project side, which means a new key with
+  the project id in it, not another global one beside these two.
+- **A remembered section id is never validated, and a dead one is simply waited out** (`Settings.tsx`):
+  section ids include `provider-<id>` for every enabled provider, so the set is not knowable at build time and
+  the pref is stored raw rather than parsed against a list. `Settings` resolves an id it cannot place to its
+  first section, which is what makes a provider disabled for an afternoon come back to its own pane rather
+  than being forgotten — but it also means a pane removed from the app for good leaves a pref that resolves
+  silently, forever, and nothing rewrites it. Deleting a section means the users who were on it open on
+  Appearance with no explanation.
+- **`agentplugin.Status` is the one settings read that is not remembered** (`UpdatesSettings.tsx`): it costs
+  ~180 ms and its rows blank on every visit to Updates, while every other read on the screen paints from the
+  last answer. It is not an oversight — `PluginSetting` awaits that read for its *outcome*, telling "Checked."
+  from "Check failed — are you online?", and `useRemoteResource`'s `refresh` is fire-and-forget with the
+  failure folded into state, so there is nothing to await. Caching it means rewiring both of that pane's flows
+  around a resource's `loading` and `error`, and that is the price, not a line of config.
+- **`useBinaryCheck` is deliberately not a `useRemoteResource` caller** (`frontend/src/lib/use-binary-check.ts`):
+  it answers `null` until a verdict is in and debounces its input, because the value it checks arrives one
+  keystroke at a time — and `useRemoteResource` has no debounce seam to hang that on. So the path verdicts on
+  Settings › Version Control and every provider's binary block still blink through "unknown" on the way back
+  to the screen. Measured at 1–3 ms per check (`providers.Verify` is a `LookPath`), which is why closing it
+  was not worth widening a hook the whole app reads through.
