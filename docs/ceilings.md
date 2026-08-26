@@ -423,6 +423,25 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   which is mirrored to localStorage. Persisting these is the same argument that one already won, and the reason
   it has not been taken is the other half: a filed review clears itself on submit, while an abandoned reply on
   a thread nobody returns to would sit in storage forever with no one to collect it.
+- **The dock's remembered browse is module memory, keyed by a path and never swept**
+  (`frontend/src/lib/file-browse.ts`): every checkout the Code tab has ever browsed keeps its filter,
+  folds, preview and marked row until the page reloads — a few strings per checkout, deliberately not
+  worth a sweep, and deliberately not persisted: these are positions in a tree that is re-read on each
+  mount, and outliving a reload would mean pointing at files that have since moved. The key is the
+  checkout path with no project or session in it, so two projects sharing a path share a browse, which
+  is the same thing as saying they share a checkout. The tree and each previewed file now also file
+  their answers in `remote-cache`, whose 32-entry cap they share with the pull request screen: a browse
+  that opens more files than that evicts the oldest answers, and the panel pays a "Loading…" on the way
+  back to them.
+- **The Review tab's remembered source is a wish, not what is on screen** (`ReviewPanel`,
+  `frontend/src/lib/dock-prefs.ts`): the pref is global and holds what the user picked, while what the
+  panel shows is that choice put through `useSessionEverReported` — a session whose provider never
+  reports has no turn to bracket, so it is shown the working tree and offered no switch. Nothing writes
+  the guard's answer back, and that is the whole design: `switchable` is false after every reload until
+  the session next reports, so a panel that reset the pref instead of overriding it would erase the
+  choice before the switch had a chance to appear. The visible cost is that "Last turn" cannot be
+  restored on a session that has been quiet since the reload — it comes back the moment that session
+  reports again.
 - **The pull request screen's remembered state is read once, at mount** (`frontend/src/lib/pulls/pulls-prefs.ts`):
   the filter box, the quick filter and the selected pull request are keyed per project but seeded from
   `useState`, which holds because every route into the screen carries its own project and leaving one unmounts
