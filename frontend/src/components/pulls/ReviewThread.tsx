@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useDraft } from "@/lib/pulls/use-draft"
 import {
   CheckCheck,
   ChevronDown,
@@ -58,8 +59,13 @@ export function ReviewThread({
   defaultOpen,
   className,
 }: ReviewThreadProps) {
-  const [replying, setReplying] = useState(false)
-  const [draft, setDraft] = useState("")
+  // One value, not a flag beside a string: a reply box that is open but empty is
+  // still open, which is exactly what null-versus-"" already means everywhere a
+  // draft is filed. Owned outside the tree because three separate things destroy
+  // this component — the tab strip, folding the file, and a diff refetch
+  // rebuilding the CodeMirror widget this lives in (draft-store).
+  const [draft, setDraft] = useDraft("reply", thread.id)
+  const replying = draft !== null
   const [busy, setBusy] = useState(false)
   // Any thread folds, because any of them can be one you have already read and
   // want out of the way of the code. Where they differ is only where they
@@ -76,9 +82,8 @@ export function ReviewThread({
     }
     setBusy(true)
     try {
-      await actions.reply(last.id, draft)
-      setDraft("")
-      setReplying(false)
+      await actions.reply(last.id, draft ?? "")
+      setDraft(null)
     } catch (err: unknown) {
       toast.error(`Reply failed: ${errorText(err)}`)
     } finally {
@@ -172,13 +177,10 @@ export function ReviewThread({
       {open &&
         (replying ? (
           <CommentBox
-            value={draft}
+            value={draft ?? ""}
             onChange={setDraft}
             onSubmit={() => void send()}
-            onCancel={() => {
-              setDraft("")
-              setReplying(false)
-            }}
+            onCancel={() => setDraft(null)}
             submitLabel="Reply"
             busy={busy}
             placeholder="Reply to this thread"
@@ -187,7 +189,7 @@ export function ReviewThread({
         ) : (
           <button
             type="button"
-            onClick={() => setReplying(true)}
+            onClick={() => setDraft("")}
             disabled={!last}
             className="flex items-center gap-1.5 self-start rounded-md px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
           >

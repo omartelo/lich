@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **What you were typing on a pull request stays typed.** A description being
+  rewritten, a comment being composed and a reply to a review thread all used to
+  be destroyed by a click on another tab — go and check a line in Files changed,
+  come back, and the box was empty with nothing said about it. The same went for
+  folding the file a thread was on, and for a new commit landing while you wrote:
+  the diff redraws, and the reply went with it. All three now survive every one
+  of those, and leaving the screen entirely. They are still held in the page, so
+  a reload starts fresh — what is gone is losing them to a tab you clicked on
+  purpose.
+
 ### Changed
 
 - **Settings comes back the way you left it.** Stepping out of Settings — into a

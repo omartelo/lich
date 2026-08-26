@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useDraft } from "@/lib/pulls/use-draft"
 import { toast } from "sonner"
 import {
   Check,
@@ -40,8 +41,9 @@ interface PullsOverviewProps {
 // the reader out to github.com.
 export function PullsOverview({ path, detail, onRefresh }: PullsOverviewProps) {
   // null is "not editing"; an empty string is a description being cleared, which
-  // is a legitimate edit and must not read as the same thing.
-  const [draft, setDraft] = useState<string | null>(null)
+  // is a legitimate edit and must not read as the same thing. Owned outside the
+  // tree, because the tab above this one unmounts it (draft-store).
+  const [draft, setDraft] = useDraft("body", detail.url)
   const [saving, setSaving] = useState(false)
 
   const save = async () => {
