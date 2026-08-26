@@ -441,6 +441,7 @@ export function PullRequestView({
             {tab === "commits" && <PullsCommits commits={detail.commits} />}
             {tab === "conversation" && (
               <PullsConversation
+                pullRequest={detail.url}
                 conversation={conversation}
                 loading={conversationLoading}
                 actions={actions}

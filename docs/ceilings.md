@@ -417,6 +417,12 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   directory that is gone. The window is one round-trip (it re-reads on mount, on focus, and after this screen
   creates a checkout itself) and git refuses the wrong move anyway, which is why it is filed rather than left
   cold — but it is the one to think twice about before the next `cache` is added to something a button reads.
+- **Unsent prose on the pull request screen lives in memory, and nothing collects it**
+  (`frontend/src/lib/pulls/draft-store.ts`): a description, a comment and every thread reply survive each
+  unmount the screen can produce, and none of them survives a reload — unlike the pending review beside them,
+  which is mirrored to localStorage. Persisting these is the same argument that one already won, and the reason
+  it has not been taken is the other half: a filed review clears itself on submit, while an abandoned reply on
+  a thread nobody returns to would sit in storage forever with no one to collect it.
 - **The pull request screen's remembered state is read once, at mount** (`frontend/src/lib/pulls/pulls-prefs.ts`):
   the filter box, the quick filter and the selected pull request are keyed per project but seeded from
   `useState`, which holds because every route into the screen carries its own project and leaving one unmounts
