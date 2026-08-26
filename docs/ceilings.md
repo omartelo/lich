@@ -409,6 +409,14 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   (a remount initialises the marker and never exercises the replay), and it must record frames from a layout
   effect rather than from the render body (the body sees passes that were never committed, which reads a
   correct hook as an oscillation). A probe missing either one calls the ref version green.
+- **One filed answer drives an action rather than a readout** (`frontend/src/lib/git/use-checkouts.ts`): every
+  other `cache` on this screen decides what is *shown*, and a value one round-trip old is only ever a stale
+  label. This one decides what a button *does* — `Pulls.tsx` asks it whether the pull request's head branch is
+  already checked out, and the answer picks between reusing a session and creating a worktree. A checkout
+  removed from a terminal while the user was on another screen therefore offers "Go to session" for a
+  directory that is gone. The window is one round-trip (it re-reads on mount, on focus, and after this screen
+  creates a checkout itself) and git refuses the wrong move anyway, which is why it is filed rather than left
+  cold — but it is the one to think twice about before the next `cache` is added to something a button reads.
 - **The pull request screen's remembered state is read once, at mount** (`frontend/src/lib/pulls/pulls-prefs.ts`):
   the filter box, the quick filter and the selected pull request are keyed per project but seeded from
   `useState`, which holds because every route into the screen carries its own project and leaving one unmounts
