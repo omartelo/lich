@@ -23,12 +23,17 @@ import {
   filterPullRequests,
   sortPullRequests,
   updatedAgo,
-  writePullsSort,
   type CheckVerdict,
   type PullsFilter,
   type PullsQuery,
   type PullsSort,
 } from "@/lib/pulls/pull-request-list"
+import {
+  readPullsFilter,
+  readPullsSort,
+  writePullsFilter,
+  writePullsSort,
+} from "@/lib/pulls/pulls-prefs"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -72,8 +77,9 @@ interface PullsListProps {
   /** The pull request the detail pane is showing; 0 before one is chosen. */
   selected: number
   onSelect: (number: number) => void
-  sort: PullsSort
-  onSortChange: (sort: PullsSort) => void
+  /** Whose pull requests these are — the quick filter narrows one repository's
+   * list, so it is remembered against that repository and not across all. */
+  projectId: string
   /** The raw filter box, owned by the screen: its `is:` state decides which
    * pull requests gh is asked for, which is a fetch, not a filter. */
   query: string
@@ -91,15 +97,18 @@ export function PullsList({
   error,
   selected,
   onSelect,
-  sort,
-  onSortChange,
+  projectId,
   query,
   onQueryChange,
   parsed,
   checkedOutBranches,
 }: PullsListProps) {
   const [open, toggle] = usePanelVisible(LIST_HIDDEN_KEY)
-  const [filter, setFilter] = useState<PullsFilter>("all")
+  // Both are how this user reads a list of pull requests rather than facts about
+  // one, so they are remembered across leaving the screen — a review resumed
+  // after a detour must not start by re-narrowing the column.
+  const [filter, setFilter] = useState<PullsFilter>(() => readPullsFilter(projectId))
+  const [sort, setSort] = useState<PullsSort>(readPullsSort)
   const counts = useMemo(() => filterCounts(list, parsed), [list, parsed])
   const rows = useMemo(
     () => sortPullRequests(filterPullRequests(list, filter, parsed), sort),
@@ -108,7 +117,12 @@ export function PullsList({
 
   const chooseSort = (next: PullsSort) => {
     writePullsSort(next)
-    onSortChange(next)
+    setSort(next)
+  }
+
+  const chooseFilter = (next: PullsFilter) => {
+    writePullsFilter(projectId, next)
+    setFilter(next)
   }
 
   // Collapsed, the column keeps a rail: the toggle has to survive its own
@@ -158,7 +172,7 @@ export function PullsList({
                 type="button"
                 role="radio"
                 aria-checked={active}
-                onClick={() => setFilter(value)}
+                onClick={() => chooseFilter(value)}
                 className={cn(
                   "flex flex-1 items-center justify-center gap-1 rounded-[0.3125rem] px-1 py-1 text-xs transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   active

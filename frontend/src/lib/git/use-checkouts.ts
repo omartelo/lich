@@ -23,7 +23,7 @@ export function useCheckouts(projectPath: string): {
   const { data, refresh } = useRemoteResource(
     projectPath,
     () => ProjectService.ListCheckouts(projectPath).then((list) => list ?? NO_CHECKOUTS),
-    { empty: NO_CHECKOUTS, refetchOnFocus: true },
+    { empty: NO_CHECKOUTS, refetchOnFocus: true, cache: `git.checkouts ${projectPath}` },
   )
   return { checkouts: data, refresh }
 }

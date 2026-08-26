@@ -391,3 +391,23 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   still there to be searched by whatever does it later; and that search is Claude-only today
   (`claudeTranscriptPath`) while `canResume` locates all six providers, so widening it would inherit that gap
   rather than close it.
+- **A filed backend answer outlives the screen that asked, under a key its caller writes by hand**
+  (`frontend/src/lib/remote-cache.ts`): a `useRemoteResource` caller that passes `cache` has its answers kept
+  in module memory until the page reloads, under exactly the string it composed. Two callers that compose the
+  same string serve each other's answers, and a string that leaves out something identifying paints one
+  repository's answer onto another's screen — instantly, and then corrected one round-trip later, which reads
+  as a flicker rather than as a bug. It is deliberately not `key`: `key` carries what *dates* an answer (the
+  checkout's HEAD), which a fresh mount does not have until its git poll lands, so a cache keyed by it misses
+  on the one frame the cache exists for. The cap is 32 answers with no byte budget, so a review that walks
+  through more pull requests than that pays a skeleton on the way back to the first.
+- **Seeding that filed answer runs during render, so its bookkeeping may never live in a ref**
+  (`frontend/src/lib/use-remote-resource.ts`): React can discard a render that updates state during it and
+  replay it, and a ref written by the discarded pass makes the replay skip the very update it guarded. The
+  symptom is silent and looks nothing like the cause — the answer is seeded, the screen paints, and the next
+  frame is blank again with no setter anywhere having run. The suite does not reproduce it: the jsdom probe
+  passes against the ref version, and it took a real browser to see.
+- **The pull request screen's remembered state is read once, at mount** (`frontend/src/lib/pulls/pulls-prefs.ts`):
+  the filter box, the quick filter and the selected pull request are keyed per project but seeded from
+  `useState`, which holds because every route into the screen carries its own project and leaving one unmounts
+  it. A future route that reuses `Pulls` across two projects would keep the first one's box and its selection,
+  and nothing in the component would say so.

@@ -23,7 +23,9 @@ export function usePullRequestDiff(
   const { data, error } = useRemoteResource(
     path && `${path} ${number} ${head}`,
     () => ProjectService.PullRequestDiff(path, number).then(parseDiff),
-    { empty: NO_FILES },
+    // head is not in the cache key: `gh pr diff` is asked for a number and
+    // answers with GitHub's head, so the local HEAD only dates the answer.
+    { empty: NO_FILES, cache: `pulls.diff ${path} ${number}` },
   )
   return { files: data, error }
 }

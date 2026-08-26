@@ -1,6 +1,5 @@
 import type { PullRequestSummary } from "@/lib/api-types"
 import { agoUnit } from "@/lib/ago"
-import { parseEnumPref, readPref, writePref } from "@/lib/prefs"
 
 // The list column's own logic: which rows a quick filter and the search box
 // leave standing, and in what order. Kept out of the component because this is
@@ -243,21 +242,4 @@ export function sortPullRequests(
 export function updatedAgo(updatedAt: string, now: number = Date.now()): string {
   const at = Date.parse(updatedAt)
   return Number.isNaN(at) ? "" : agoUnit(now - at)
-}
-
-// Which order the column is in is a UI preference, so it lives in the page's
-// localStorage beside the panel widths — not in the workspace database.
-const SORT_KEY = "lich.pulls.sort"
-
-/** Reads a stored sort, falling back for anything this build does not know. */
-export function parsePullsSort(raw: string | null): PullsSort {
-  return parseEnumPref(raw, PULLS_SORTS, "updated")
-}
-
-export function readPullsSort(): PullsSort {
-  return parsePullsSort(readPref(SORT_KEY))
-}
-
-export function writePullsSort(sort: PullsSort): void {
-  writePref(SORT_KEY, sort)
 }
