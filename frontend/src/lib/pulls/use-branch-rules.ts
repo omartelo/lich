@@ -19,7 +19,7 @@ export function useBranchRules(path: string, branch: string): BranchRules | null
   const { data } = useRemoteResource(
     path && branch ? `${path} ${branch}` : "",
     () => ProjectService.BranchRules(path, branch),
-    { empty: NO_RULES },
+    { empty: NO_RULES, cache: `pulls.rules ${path} ${branch}` },
   )
   return data
 }

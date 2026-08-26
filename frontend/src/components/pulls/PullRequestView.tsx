@@ -31,6 +31,7 @@ import {
   mergeBlockedReason,
   mergeRuleNote,
 } from "@/lib/pulls/merge-gate"
+import { readPullsTab, writePullsTab, type PullsTab } from "@/lib/pulls/pulls-prefs"
 import { useBranchRules } from "@/lib/pulls/use-branch-rules"
 import { cn, errorText } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -61,8 +62,6 @@ export interface SessionAction {
   busy: boolean
   run: () => void
 }
-
-type Tab = "overview" | "commits" | "files" | "conversation" | "checks"
 
 const MERGE_LABELS: Record<MergeMethod, string> = {
   squash: "Squash and merge",
@@ -121,7 +120,14 @@ export function PullRequestView({
   const [submitting, setSubmitting] = useState(false)
   const [verdict, setVerdict] = useState<ReviewEvent | null>(null)
   const [edit, setEdit] = useState<MergeEdit | null>(null)
-  const [tab, setTab] = useState<Tab>("overview")
+  // Which tab is a habit, not a fact about this pull request: a reviewer who
+  // lives in Files changed should land there on the next one too, and on the
+  // same one after a detour into another project.
+  const [tab, setTab] = useState<PullsTab>(readPullsTab)
+  const showTab = (next: PullsTab) => {
+    writePullsTab(next)
+    setTab(next)
+  }
   // Read here rather than threaded down from the screen: it is keyed by the
   // base branch, which only exists once the detail has resolved — and this is
   // the one place that is guaranteed.
@@ -373,7 +379,7 @@ export function PullRequestView({
           {detail.checks.total > 0 ? (
             <button
               type="button"
-              onClick={() => setTab("checks")}
+              onClick={() => showTab("checks")}
               className="rounded-sm transition-opacity hover:opacity-80"
             >
               <ChecksStat checks={detail.checks} />
@@ -390,27 +396,27 @@ export function PullRequestView({
         </div>
 
         <div role="tablist" className="mt-4 flex gap-1">
-          <TabButton active={tab === "overview"} onClick={() => setTab("overview")}>
+          <TabButton active={tab === "overview"} onClick={() => showTab("overview")}>
             Overview
           </TabButton>
-          <TabButton active={tab === "commits"} onClick={() => setTab("commits")}>
+          <TabButton active={tab === "commits"} onClick={() => showTab("commits")}>
             Commits
             {commitCount > 0 && (
               <span className="tabular-nums text-muted-foreground">{commitCount}</span>
             )}
           </TabButton>
-          <TabButton active={tab === "files"} onClick={() => setTab("files")}>
+          <TabButton active={tab === "files"} onClick={() => showTab("files")}>
             Files changed
             {detail.changedFiles > 0 && (
               <span className="tabular-nums text-muted-foreground">{detail.changedFiles}</span>
             )}
           </TabButton>
-          <TabButton active={tab === "conversation"} onClick={() => setTab("conversation")}>
+          <TabButton active={tab === "conversation"} onClick={() => showTab("conversation")}>
             Conversation
             {talk > 0 && <span className="tabular-nums text-muted-foreground">{talk}</span>}
           </TabButton>
           {detail.checks.total > 0 && (
-            <TabButton active={tab === "checks"} onClick={() => setTab("checks")}>
+            <TabButton active={tab === "checks"} onClick={() => showTab("checks")}>
               Checks
               <span className="tabular-nums text-muted-foreground">{detail.checks.total}</span>
             </TabButton>

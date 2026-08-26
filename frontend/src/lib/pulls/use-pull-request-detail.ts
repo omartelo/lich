@@ -38,7 +38,17 @@ export function usePullRequestDetail(
   const { data, loading, error, refresh } = useRemoteResource(
     path && `${path} ${number} ${branch} ${head}`,
     () => ProjectService.PullRequestDetail(path, number),
-    { empty: NO_DETAIL, refetchOnFocus: true },
+    {
+      empty: NO_DETAIL,
+      refetchOnFocus: true,
+      // Two different requests, and the cache key says which: a number
+      // addresses one pull request outright, and a zero asks for whichever the
+      // branch has open. Neither is dated by head — it makes the answer stale,
+      // it does not say what was asked for, and a cache key carrying it could
+      // not be read until a fresh mount's git poll had answered, which is the
+      // one frame this exists for.
+      cache: number > 0 ? `pulls.detail ${path} #${number}` : `pulls.detail ${path} @${branch}`,
+    },
   )
 
   // Depends on the count, not the detail object: while it stays at 3 the

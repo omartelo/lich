@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The pull request screen comes back the way you left it.** A review
+  interrupted — another project, the terminal next door, a branch to check —
+  used to cost the whole screen: five gh round-trips behind a skeleton, the
+  filter box emptied, the quick filter and the tab reset, and the pull request
+  you were reading swapped for whatever the checkout's own branch had open.
+  Now the filter text, the quick filter and the tab you were on are remembered,
+  each project reopens on the pull request it was showing, and the list, the
+  detail, the conversation, the diff and the checkouts paint from the last
+  answer while a fresh one is fetched underneath. Nothing is shown as newer than
+  it is: the screen still re-reads on focus, the Refresh button still asks
+  again, and a reload starts from nothing.
+
 ### Fixed
 
 - **Opening Settings › Sandbox no longer blanks the whole lich window on a

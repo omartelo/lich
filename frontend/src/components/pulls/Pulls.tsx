@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { GitPullRequestArrow } from "lucide-react"
 import { toast } from "sonner"
@@ -17,7 +17,13 @@ import { queueSetup } from "@/lib/terminal/setup-queue"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { useCheckouts } from "@/lib/git/use-checkouts"
 import { invalidatePullRequests } from "@/lib/pulls/pull-request-lookup"
-import { parsePullsQuery, readPullsSort, type PullsSort } from "@/lib/pulls/pull-request-list"
+import { parsePullsQuery } from "@/lib/pulls/pull-request-list"
+import {
+  readLastPull,
+  readPullsQuery,
+  writeLastPull,
+  writePullsQuery,
+} from "@/lib/pulls/pulls-prefs"
 import { usePullRequestConversation } from "@/lib/pulls/use-pull-request-conversation"
 import { usePullRequestDetail } from "@/lib/pulls/use-pull-request-detail"
 import { usePullRequests } from "@/lib/pulls/use-pull-requests"
@@ -80,7 +86,13 @@ export function Pulls({ list = false }: PullsProps) {
   // No number in the route means the PR of whatever branch this checkout is on
   // — the whole screen without the list, and the default row with it. A number
   // addresses one directly, which only the list can produce.
-  const selected = Number(number) || 0
+  //
+  // Every way back into the list route is the bare one, so a return would drop
+  // the pull request being read for the checkout's own. The remembered number
+  // stands in for the one the URL is missing — read once per project, never
+  // from the write below, so the selection cannot chase itself.
+  const remembered = useMemo(() => (list ? readLastPull(projectId ?? "") : 0), [list, projectId])
+  const selected = Number(number) || remembered
   const { detail, loading, error, refresh } = usePullRequestDetail(
     hasGH ? path : "",
     branch,
@@ -93,8 +105,18 @@ export function Pulls({ list = false }: PullsProps) {
   const conversation = usePullRequestConversation(path, detail?.number ?? 0, head)
   // The filter box lives here, not in the column: its `is:` state decides which
   // pull requests gh is asked for, and that is a fetch rather than a filter.
-  const [query, setQuery] = useState("")
+  // Remembered like the sort beside it: a review interrupted by another project
+  // is otherwise a query typed twice.
+  const [query, setQuery] = useState(() => readPullsQuery(projectId ?? ""))
   const parsedQuery = useMemo(() => parsePullsQuery(query), [query])
+  // Stored on every keystroke rather than on some settle: a box half-typed when
+  // the user walks off is still what they were about to search for, and one
+  // short localStorage write per character is cheaper than the timer that would
+  // avoid it.
+  const changeQuery = (next: string) => {
+    writePullsQuery(projectId ?? "", next)
+    setQuery(next)
+  }
   // An empty path is the hook's own "nothing to look up", so the single pull
   // request screen never spends a gh call on a list it does not show.
   const pulls = usePullRequests(list && hasGH ? projectPath || path : "", parsedQuery.state)
@@ -106,8 +128,15 @@ export function Pulls({ list = false }: PullsProps) {
   // checkout of a branch just as hard when the project itself holds it.
   const checkedOut = checkouts.find((c) => c.name === detail?.headRefName)
   const inject = useInject(sessionId)
-  const [sort, setSort] = useState<PullsSort>(readPullsSort)
   const [opening, setOpening] = useState(false)
+
+  // Written from the selection rather than from the click, so a pull request
+  // reached by URL is remembered too.
+  useEffect(() => {
+    if (list && projectId && selected > 0) {
+      writeLastPull(projectId, selected)
+    }
+  }, [list, projectId, selected])
 
   // This screen and the badges around it read the same pull request through two
   // separate lookups, so a change with HEAD standing still — a merge, a PR
@@ -277,10 +306,9 @@ export function Pulls({ list = false }: PullsProps) {
           error={pulls.error}
           selected={selected || (detail?.number ?? 0)}
           onSelect={(picked) => navigate(`/projects/${projectId}/pulls/all/${picked}`)}
-          sort={sort}
-          onSortChange={setSort}
+          projectId={projectId ?? ""}
           query={query}
-          onQueryChange={setQuery}
+          onQueryChange={changeQuery}
           parsed={parsedQuery}
           checkedOutBranches={new Set(checkouts.map((c) => c.name))}
         />

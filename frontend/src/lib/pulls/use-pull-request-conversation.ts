@@ -31,7 +31,7 @@ export function usePullRequestConversation(
   const { data, loading, error, refresh } = useRemoteResource(
     path && number > 0 ? `${path} ${number} ${head}` : "",
     () => ProjectService.PullRequestConversation(path, number),
-    { empty: NO_CONVERSATION, refetchOnFocus: true },
+    { empty: NO_CONVERSATION, refetchOnFocus: true, cache: `pulls.conversation ${path} ${number}` },
   )
   return { conversation: data, loading, error, refresh }
 }
