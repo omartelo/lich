@@ -74,7 +74,9 @@ function useSandboxBackend() {
 function useAgentKeys() {
   const [keys, setKeys] = useState<string[]>([])
   useEffect(() => {
-    void System.SSHAgentKeys().then(setKeys)
+    // Folded here rather than trusted: an agent that holds nothing and a machine
+    // with no agent at all both answer null, and this list is read for a length.
+    void System.SSHAgentKeys().then((loaded) => setKeys(loaded ?? []))
   }, [])
   return keys
 }

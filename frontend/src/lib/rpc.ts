@@ -457,8 +457,11 @@ export const System = {
    * Shown beside the setting that hands the agent to a confined session: that
    * setting reads as "let it push with my GitHub key" and actually covers every
    * key in the list. Empty for no agent, no ssh-add, or an agent holding
-   * nothing — all three mean the same thing to whoever is deciding. */
-  SSHAgentKeys: () => call<string[]>("system.SSHAgentKeys", []),
+   * nothing — all three mean the same thing to whoever is deciding, and all
+   * three answer null rather than []: Go marshals a nil slice that way, so the
+   * type says so and the caller folds it into a list before reading a length
+   * off it. */
+  SSHAgentKeys: () => call<string[] | null>("system.SSHAgentKeys", []),
 }
 
 export const Providers = {
