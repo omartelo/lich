@@ -342,7 +342,12 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
               const groupActive = group.sessions.some((s) => s.id === realActiveId)
               return (
                 <SessionGroup
-                  key={group.key}
+                  // The project is in the React key, not only in the props: two
+                  // projects both have a root block and a pinned one under the
+                  // same key, so without it React reuses one project's group
+                  // component for the other's — carrying its fold across with it,
+                  // and never re-reading the fold the switched-to project stored.
+                  key={`${projectId}:${group.key}`}
                   sortId={group.key}
                   pinned={group.pinned}
                   projectId={projectId}
