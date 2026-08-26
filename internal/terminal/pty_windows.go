@@ -54,9 +54,10 @@ func commandLine(bin string, args []string) (string, error) {
 // loopback listener's socket, the log file, another session's pipes — and the
 // app stops answering with nothing panicking and nothing logged. Every
 // user-driven close reaches that second call: Service.Close closes the PTY and
-// the read loop, freed by the same close, reaps it again (see stream). The
-// Unix seam is *os.File, whose repeat Close is the harmless no-op stream's
-// comment describes; this one has to be made into it.
+// the read loop, freed by the same close, reaps it again (see stream). The Unix
+// seam guards its own repeat Close for a milder reason — os.File.Close only
+// reports os.ErrClosed the second time; here the second call hands Windows
+// handles it has already reissued.
 type windowsPTY struct {
 	*conpty.ConPty
 	waitCtx    context.Context

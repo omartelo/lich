@@ -5,9 +5,19 @@ package terminal
 import (
 	"os"
 	"os/exec"
+	"sync"
+	"syscall"
+	"time"
 
 	"github.com/creack/pty"
 )
+
+// closeGrace is how long a hang-up waits for the signalled child to leave on
+// its own before killing it. An agent killed outright never runs its own exit
+// path: Claude Code, for one, treats a session that dies within ten seconds of
+// its first frame as a fullscreen renderer that failed to start, and two of
+// those turn its fullscreen renderer off for every session on the machine.
+const closeGrace = time.Second
 
 // startPTY starts spec's child attached to a fresh PTY sized cols x rows.
 func startPTY(spec ptySpec) (ptyHandle, error) {
@@ -18,15 +28,29 @@ func startPTY(spec ptySpec) (ptyHandle, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &unixPTY{File: ptmx, cmd: cmd}, nil
+	p := &unixPTY{File: ptmx, cmd: cmd, exited: make(chan struct{})}
+	go p.reap()
+	return p, nil
 }
 
 // unixPTY pairs the PTY master file creack/pty returns (which carries
-// Read/Write) with the child it drives: Wait reaps it after the master hits
-// EOF, and Close also kills it so hanging up ends the session.
+// Read/Write) with the child it drives: a goroutine reaps that child the
+// moment it exits, so Close can tell a child that left from one that has to be
+// made to.
 type unixPTY struct {
 	*os.File
 	cmd *exec.Cmd
+
+	// exited is closed once the child is reaped; code and err are written
+	// before that close and read only after it.
+	exited chan struct{}
+	code   int
+	err    error
+
+	// closeOnce keeps the hang-up single-shot; closeErr is what every caller
+	// of Close gets back, including the one that did not perform it.
+	closeOnce sync.Once
+	closeErr  error
 }
 
 func (p *unixPTY) Resize(cols, rows int) error {
@@ -35,24 +59,47 @@ func (p *unixPTY) Resize(cols, rows int) error {
 
 func (p *unixPTY) Pid() int { return p.cmd.Process.Pid }
 
-// Wait reaps the child and reports its exit status. ProcessState carries it
+// reap waits for the child and records its exit status. ProcessState carries it
 // even when Wait errors, because a non-zero exit is itself an *exec.ExitError;
 // os.ProcessState.ExitCode already answers noExitStatus for a child killed by a
 // signal.
-func (p *unixPTY) Wait() (int, error) {
-	err := p.cmd.Wait()
-	if p.cmd.ProcessState == nil {
-		return noExitStatus, err
+func (p *unixPTY) reap() {
+	p.err = p.cmd.Wait()
+	p.code = noExitStatus
+	if p.cmd.ProcessState != nil {
+		p.code = p.cmd.ProcessState.ExitCode()
 	}
-	return p.cmd.ProcessState.ExitCode(), err
+	close(p.exited)
 }
 
+// Wait reports the child's exit status once it has been reaped.
+func (p *unixPTY) Wait() (int, error) {
+	<-p.exited
+	return p.code, p.err
+}
+
+// Close hangs up: the child is asked to leave with SIGTERM and killed only if
+// it outstays closeGrace. The master is closed last so the departing child's
+// final bytes — the escape sequences that put the terminal back the way it was
+// — still reach the reader.
+//
+// It happens once. os.File.Close is safe to repeat, but the second call reports
+// os.ErrClosed rather than nothing, and the two closes the seam promises race
+// whenever a session's child dies just as the user closes it. Handing that error
+// to the loser is what made removing a worktree fail with "file already closed"
+// and leave the checkout on disk (internal/spawn.removeCheckout).
 func (p *unixPTY) Close() error {
-	err := p.File.Close()
-	if p.cmd.Process != nil {
-		_ = p.cmd.Process.Kill()
-	}
-	return err
+	p.closeOnce.Do(func() {
+		if p.cmd.Process != nil && p.cmd.Process.Signal(syscall.SIGTERM) == nil {
+			select {
+			case <-p.exited:
+			case <-time.After(closeGrace):
+				_ = p.cmd.Process.Kill()
+			}
+		}
+		p.closeErr = p.File.Close()
+	})
+	return p.closeErr
 }
 
 func winsize(cols, rows int) *pty.Winsize {

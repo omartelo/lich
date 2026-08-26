@@ -43,9 +43,11 @@ var commands = []command{
 	},
 	{
 		name: "reply",
-		args: "<ticket> <answer>",
+		args: "[<ticket>] <answer>",
 		about: "Send <answer> back to whoever is waiting on <ticket>. This is what a\n" +
-			"relayed message asks you to run when you are done.",
+			"relayed message asks you to run when you are done. Without a ticket it\n" +
+			"answers the request open against this session, for when the message\n" +
+			"carrying the number is no longer in reach.",
 	},
 	{
 		name: "open",
@@ -63,6 +65,13 @@ var commands = []command{
 		args: "[--project <name>] [--worktree keep|remove] [--force] [--json] <session>",
 		about: "Close a session. Closing the last one in a worktree needs --worktree to\n" +
 			"say whether the checkout stays; removing a dirty one needs --force.",
+	},
+	{
+		name: "rename",
+		args: "[--project <name>] [--json] [<session>] <label>",
+		about: "Rename a session's card. With <session> it renames that one, with only a\n" +
+			"name it renames the session the command runs in. The name becomes the\n" +
+			"user's: the provider's auto-title never overwrites it again.",
 	},
 	{
 		name: "worktrees",

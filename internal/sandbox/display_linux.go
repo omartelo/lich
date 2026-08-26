@@ -92,10 +92,3 @@ func x11Sockets(dir, home string) []string {
 	}
 	return []string{socket, cookie}
 }
-
-// isSocket reports whether path is a unix socket on disk, without following a
-// link to get there — the answer decides what gets mounted into the sandbox.
-func isSocket(path string) bool {
-	info, err := os.Lstat(path)
-	return err == nil && info.Mode()&os.ModeSocket != 0
-}

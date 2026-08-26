@@ -9,8 +9,38 @@ function names(nodes: TreeNode[]): string[] {
 
 describe("buildTree", () => {
   it("nests paths by their slash segments", () => {
-    const tree = buildTree(["internal/rpc/rpc.go"])
-    expect(names(tree)).toEqual(["dir:internal", "dir:internal/rpc", "file:internal/rpc/rpc.go"])
+    const tree = buildTree(["internal/rpc/rpc.go", "internal/x.go"])
+    expect(names(tree)).toEqual([
+      "dir:internal",
+      "dir:internal/rpc",
+      "file:internal/rpc/rpc.go",
+      "file:internal/x.go",
+    ])
+  })
+
+  it("collapses a chain of single-child directories into one row", () => {
+    const tree = buildTree(["src/main/java/br/One.java", "src/main/java/br/Two.java"])
+    expect(names(tree)).toEqual([
+      "dir:src/main/java/br",
+      "file:src/main/java/br/One.java",
+      "file:src/main/java/br/Two.java",
+    ])
+    expect(tree[0]?.name).toBe("src/main/java/br")
+  })
+
+  it("stops collapsing where the tree branches", () => {
+    const tree = buildTree(["a/b/c/one.go", "a/b/d/two.go"])
+    expect(names(tree)).toEqual([
+      "dir:a/b",
+      "dir:a/b/c",
+      "file:a/b/c/one.go",
+      "dir:a/b/d",
+      "file:a/b/d/two.go",
+    ])
+  })
+
+  it("keeps a directory holding a single file as its own row", () => {
+    expect(names(buildTree(["a/one.go"]))).toEqual(["dir:a", "file:a/one.go"])
   })
 
   it("merges siblings under a shared directory", () => {

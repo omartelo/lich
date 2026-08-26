@@ -77,10 +77,13 @@ function useStoredFlag(key: string, scope: string | undefined) {
 export function ProviderBinary({
   providerId,
   providerName,
+  providerBin,
   projectId,
 }: {
   providerId: string
   providerName: string
+  /** The executable $PATH is asked for — a provider's id is not its command. */
+  providerBin: string
   projectId?: string
 }) {
   const { projects } = useProjects()
@@ -106,7 +109,7 @@ export function ProviderBinary({
   // Both layers go through the same check, so the bottom row answers with the
   // resolution the spawn would make rather than a second opinion about $PATH.
   const typed = useBinaryCheck(configured)
-  const onPath = useBinaryCheck(providerId)
+  const onPath = useBinaryCheck(providerBin)
   const check = scope === "path" ? onPath : typed
   const broken = failed(check)
 
@@ -183,7 +186,7 @@ export function ProviderBinary({
                 <Input
                   value={layer.value}
                   onChange={(event) => layer.persist(event.target.value)}
-                  placeholder={providerId}
+                  placeholder={providerBin}
                   spellCheck={false}
                   aria-label={`${providerName} binary for ${layer.label}`}
                   className={cn(
@@ -202,9 +205,9 @@ export function ProviderBinary({
                 </Button>
               </Layer>
             ))}
-            <Layer label="$PATH" wins={scope === "path"} check={onPath} value={providerId}>
+            <Layer label="$PATH" wins={scope === "path"} check={onPath} value={providerBin}>
               <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
-                {onPath?.path || providerId}
+                {onPath?.path || providerBin}
               </span>
             </Layer>
           </div>
@@ -212,9 +215,9 @@ export function ProviderBinary({
       ) : (
         <div className="flex items-center justify-between gap-4">
           <span className="flex min-w-0 items-center gap-2 text-xs">
-            <Verdict check={check} bin={configured || providerId} />
+            <Verdict check={check} bin={configured || providerBin} />
             <span className="truncate font-mono text-foreground">
-              {check?.path || configured || providerId}
+              {check?.path || configured || providerBin}
             </span>
             <span className="whitespace-nowrap text-muted-foreground">
               · {sourceLabel(scope, project?.name)}
@@ -231,7 +234,7 @@ export function ProviderBinary({
         <p className="mt-3 flex max-w-prose items-start gap-2 text-xs text-destructive">
           <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
           <span>
-            <span className="font-medium">{checkLabel(check, configured || providerId)}</span> —{" "}
+            <span className="font-medium">{checkLabel(check, configured || providerBin)}</span> —{" "}
             {checkDetail(check)}
           </span>
         </p>

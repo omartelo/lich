@@ -14,9 +14,10 @@ const loginCommand: Record<string, string> = {
 }
 
 // PlanUsageSetting shows what is left of one provider's subscription, inside
-// that provider's own settings section. Absent for a provider that meters
-// nothing — opencode, oh-my-pi and Crush run on the user's own API keys, where
-// there is no plan to report — and until the first reading lands.
+// that provider's own settings section. Absent for a provider lich reads no
+// plan from — opencode, oh-my-pi and Crush run on the user's own API keys, and
+// Antigravity's quota sits behind a Google account endpoint lich does not read —
+// and until the first reading lands.
 export function PlanUsageSetting({ providerId }: { providerId: string }) {
   const plan = usePlanQuotaFor(providerId)
   const now = useNow()

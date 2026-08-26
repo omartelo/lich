@@ -5,6 +5,7 @@ import { AppearanceSettings } from "./AppearanceSettings"
 import { NotificationsSettings } from "./NotificationsSettings"
 import { HotkeysSettings } from "./HotkeysSettings"
 import { ProvidersSettings } from "./ProvidersSettings"
+import { SandboxSettings } from "./SandboxSettings"
 import { ProjectProvidersSettings } from "./ProjectProvidersSettings"
 import { ProviderBinSettings } from "./ProviderBinSettings"
 import { VersionControlSettings } from "./VersionControlSettings"
@@ -48,6 +49,15 @@ const BASE_SECTIONS: Section[] = [
     accessibleLabel: "Global Providers",
     group: "global",
     render: () => <ProvidersSettings />,
+  },
+  {
+    // Global rather than project: most of what it says is about the machine —
+    // whether there is a backend at all, what is in your ssh agent — and the
+    // values are project-scoped the same way the provider sections' are.
+    id: "sandbox",
+    label: "Sandbox",
+    group: "global",
+    render: (id) => <SandboxSettings projectId={id} />,
   },
   {
     id: "project-providers",
@@ -94,7 +104,12 @@ export function Settings() {
     label: provider.name,
     group: "provider",
     render: (id) => (
-      <ProviderBinSettings providerId={provider.id} providerName={provider.name} projectId={id} />
+      <ProviderBinSettings
+        providerId={provider.id}
+        providerName={provider.name}
+        providerBin={provider.binary}
+        projectId={id}
+      />
     ),
   }))
   const sections = [...BASE_SECTIONS, ...providerSections, ...FOOTER_SECTIONS]

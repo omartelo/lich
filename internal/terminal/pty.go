@@ -28,6 +28,9 @@ const noExitStatus = -1
 // input, Resize changes the window size, Pid identifies the child (0 when
 // unknown), Wait reaps the exited child and reports its exit status
 // (noExitStatus when there is none), and Close hangs up and terminates it.
+// Close is called twice on every session that ends — once by Service.Close and
+// once by the stream goroutine reaping the child — so each implementation has
+// to make the second call a no-op that reports no failure.
 // Each OS provides startPTY(spec) plus an implementation of this interface
 // (build tags select the file, the Go idiom for OS-specific code) —
 // terminal.go never touches a platform PTY API directly.

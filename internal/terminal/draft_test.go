@@ -131,3 +131,50 @@ func TestAnEscapeThatNeverEndsDoesNotSwallowTyping(t *testing.T) {
 		t.Error("typing after an unterminated escape was discarded")
 	}
 }
+
+// Reading the interrupt off the keystrokes is the fallback for the providers
+// that report nothing when a turn is stopped. What counts is a key the user
+// pressed: a lone Ctrl+C or Escape, never a byte carried in by a paste and
+// never one inside an escape sequence.
+func TestInterruptIsReadFromALoneKey(t *testing.T) {
+	tests := []struct {
+		name   string
+		writes []string
+		want   bool
+	}{
+		{"ctrl+c", []string{"\x03"}, true},
+		{"escape", []string{"\x1b"}, true},
+		{"escape after a half-typed line", []string{"never mind", "\x1b"}, true},
+		{"plain typing", []string{"hello"}, false},
+		{"enter", []string{"\r"}, false},
+		{"an arrow key", []string{"\x1b[A"}, false},
+		{"a function key", []string{"\x1bOP"}, false},
+		{"alt and a letter", []string{"\x1bv"}, false},
+		{"a mouse report", []string{"\x1b[<35;42;7M"}, false},
+		{"a mouse report split across two writes", []string{"\x1b[<35;10", ";5M"}, false},
+		{"ctrl+c inside a pasted block", []string{"\x1b[200~kill \x03 the job\x1b[201~"}, false},
+		{"escape inside a pasted block", []string{"\x1b[200~press \x1b to stop\x1b[201~"}, false},
+		{"a paste split so a write ends on its escape", []string{"\x1b[200~press \x1b", "[A to stop\x1b[201~"}, false},
+		{"ctrl+c typed after the paste ended", []string{"\x1b[200~pasted\x1b[201~", "\x03"}, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, _ := settled(t)
+			got := false
+			for _, w := range tc.writes {
+				got = svc.noteInput("s1", []byte(w)) || got
+			}
+			if got != tc.want {
+				t.Fatalf("noteInput(%q) read an interrupt = %v, want %v", tc.writes, got, tc.want)
+			}
+		})
+	}
+}
+
+// A session lich is not running has no turn to end and no prompt to hold.
+func TestInterruptForAnUnknownSessionIsANoOp(t *testing.T) {
+	svc, _ := settled(t)
+	if svc.noteInput("nobody", []byte{ctrlC}) {
+		t.Fatal("a keystroke for a session lich does not run read as an interrupt")
+	}
+}

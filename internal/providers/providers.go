@@ -1,8 +1,9 @@
 // Package providers is the registry of AI coding CLI harnesses lich can run in
-// a session (Claude Code, Codex, opencode, oh-my-pi, Crush). A provider id
-// doubles as the session kind that spawns it; the terminal resolves the id to a
-// binary, and the settings store keys per-provider overrides on it. Detection is
-// a PATH scan, mirroring internal/chromium's browser detection.
+// a session (Claude Code, Codex, Antigravity, opencode, oh-my-pi, Crush, Cursor
+// CLI). A provider id doubles as the session kind that spawns it; the terminal
+// resolves the id to a binary, and the settings store keys per-provider
+// overrides on it. Detection is a PATH scan, mirroring internal/chromium's
+// browser detection.
 package providers
 
 import "os/exec"
@@ -10,11 +11,13 @@ import "os/exec"
 // Provider ids. Each id is also the session kind (store column + terminal.Start)
 // that runs the provider. Kept in sync with frontend/src/lib/session/sessions.ts.
 const (
-	Claude   = "claude"
-	Codex    = "codex"
-	OpenCode = "opencode"
-	OMP      = "omp"
-	Crush    = "crush"
+	Claude      = "claude"
+	Codex       = "codex"
+	Antigravity = "antigravity"
+	OpenCode    = "opencode"
+	OMP         = "omp"
+	Crush       = "crush"
+	Cursor      = "cursor"
 )
 
 // Provider is a known harness: a stable id, a display name, and the executable
@@ -27,15 +30,20 @@ type Provider struct {
 
 // Registry is every provider lich knows about, in display order. Claude Code is
 // first: it is the default, and the plugin's home. Every one of them resumes a
-// conversation by id (terminal.resumeArgs) and runs the companion plugin
-// (agentplugin.supported); what still differs per provider is spelled at each
-// of those tables, and AcceptsMCPServer below is the one split this file owns.
+// conversation by id (terminal.resumeArgs); all but Cursor CLI also have the
+// companion plugin installed into them (agentplugin.supported) — Cursor runs it
+// anyway, because it executes every Claude Code hook on the machine, which
+// docs/ceilings.md names along with what that costs. What still differs per
+// provider is spelled at each of those tables, and AcceptsMCPServer below is
+// the one split this file owns.
 var Registry = []Provider{
 	{ID: Claude, Name: "Claude Code", Binaries: []string{"claude"}},
 	{ID: Codex, Name: "Codex", Binaries: []string{"codex"}},
+	{ID: Antigravity, Name: "Antigravity", Binaries: []string{"agy"}},
 	{ID: OpenCode, Name: "opencode", Binaries: []string{"opencode"}},
 	{ID: OMP, Name: "oh-my-pi", Binaries: []string{"omp"}},
 	{ID: Crush, Name: "Crush", Binaries: []string{"crush"}},
+	{ID: Cursor, Name: "Cursor CLI", Binaries: []string{"cursor-agent"}},
 }
 
 // Known reports whether id names a registered provider. It guards a provider id
@@ -54,11 +62,14 @@ func Known(id string) bool {
 // without editing config that belongs to the user or to their repository.
 //
 // Claude Code takes `--mcp-config` with a JSON string; Codex takes `-c`
-// overrides for its `mcp_servers` table. opencode, oh-my-pi and Crush have no
-// such flag — Crush's whole flag list is cwd, data-dir, session and debug — so
-// registering for those means writing a config file lich does not own, and lich
-// does not. Their sessions reach the other sessions through the `lich` command
-// line instead (docs/cli.md).
+// overrides for its `mcp_servers` table. Antigravity, opencode, oh-my-pi, Crush
+// and Cursor CLI have no such flag — Antigravity keeps MCP behind an `agy mcp`
+// subcommand, Crush's whole flag list is cwd, data-dir, session and debug, and
+// Cursor's `mcp` subcommand only lists, enables and disables what is already in
+// `~/.cursor/mcp.json` (measured on 2026.08.11) — so registering for those means
+// writing config that outlives the spawn, which is what the plugin install does
+// for the three that can take it. Their sessions reach the other sessions
+// through the `lich` command line instead (docs/cli.md).
 func AcceptsMCPServer(id string) bool {
 	return id == Claude || id == Codex
 }
@@ -75,9 +86,13 @@ func DefaultBinary(id string) string {
 }
 
 // Detected reports a provider and whether one of its binaries was found on PATH.
+// Binary is the executable name a session spawns (DefaultBinary), which the
+// settings screen needs even when nothing was found: a provider id is not its
+// command — Antigravity's is `agy`.
 type Detected struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
+	Binary    string `json:"binary"`
 	Installed bool   `json:"installed"`
 	Path      string `json:"path"`
 }
@@ -98,7 +113,7 @@ func New() *Service {
 func (s *Service) Detect() ([]Detected, error) {
 	out := make([]Detected, 0, len(Registry))
 	for _, p := range Registry {
-		d := Detected{ID: p.ID, Name: p.Name}
+		d := Detected{ID: p.ID, Name: p.Name, Binary: DefaultBinary(p.ID)}
 		for _, name := range p.Binaries {
 			if path, err := s.lookPath(name); err == nil {
 				d.Installed = true

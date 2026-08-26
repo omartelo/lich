@@ -46,7 +46,7 @@ export function useSandboxChoice(
     }
     let stale = false
     const load = async () => {
-      const canConfine = await System.SandboxAvailable()
+      const canConfine = (await System.SandboxBackend()) !== ""
       // The project's rung wins over the global one, which is the scope
       // store.SandboxLevel reads in the same order.
       const [scoped, global] = await Promise.all([

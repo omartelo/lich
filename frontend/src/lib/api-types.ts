@@ -15,13 +15,17 @@ export interface Project {
  * only, hence the same shape as an opened one. */
 export type RecentProject = Project
 
-/** internal/project.DiffStats — uncommitted-changes summary of a work tree. */
+/** internal/project.DiffStats — uncommitted-changes summary of a work tree,
+ * plus the branch and commit they sit on: git answers all three in the one
+ * status call the counts come out of. */
 export interface DiffStats {
   files: number
   added: number
   deleted: number
   /** The HEAD commit the counts sit on; "" in a repository without commits. */
   head: string
+  /** The checked-out branch; "" for a detached HEAD, as ProjectService.Branch. */
+  branch: string
 }
 
 /** internal/project.BaseStatus — where a checkout stands against the branch it
@@ -308,6 +312,25 @@ export interface StoredSession {
   originLabel: string
 }
 
+/** internal/store.ClosedSession — one parked session offered for resuming. What
+ * identifies it in a list somebody is browsing: the project rides along because
+ * history spans every project at once, closed ones included. No branch — it
+ * lives in git and the window reads it off the checkout (ProjectService.Branches). */
+export interface ClosedSession {
+  id: string
+  projectId: string
+  projectName: string
+  /** The project's own directory, so resuming a session of a closed project can
+   * reopen that project first — and ask where it went if it has moved. */
+  projectPath: string
+  label: string
+  kind: string
+  path: string
+  /** Unix seconds; 0 for a row parked before lich recorded the close, which
+   * sorts last and is drawn as no date rather than as 1970. */
+  closedAt: number
+}
+
 /** internal/terminal.TranscriptMatch — a session whose conversation mentions a
  * search query, with its newest matching message. */
 export interface TranscriptMatch {
@@ -441,6 +464,8 @@ export interface Diagnostics {
 export interface DetectedProvider {
   id: string
   name: string
+  /** The executable a session spawns. Not the id: Antigravity's is `agy`. */
+  binary: string
   installed: boolean
   path: string
 }
@@ -463,11 +488,28 @@ export interface QuotaWindow {
 }
 
 /** internal/quota.Plan — one provider's quota reading. Windows are empty for
- * every status other than "ok". */
+ * every status other than "ok"; "unknown" is a session lich cannot identify the
+ * account of — it runs a binary the user configured whose environment is out of
+ * reach — where the default account's numbers would be the wrong ones. */
 export interface QuotaPlan {
   provider: string
   name: string
   plan?: string
   windows?: QuotaWindow[]
-  status: "ok" | "signed-out" | "error"
+  status: "ok" | "signed-out" | "error" | "unknown"
+}
+
+/** internal/terminal.LastTurn — what changed on disk in the window this
+ * session's last finished turn ran in. `diff` is unified-diff text (parseDiff
+ * reads it) and is present only for "ok"; `endedAt` is unix ms and present only
+ * when there is a window to date.
+ *
+ * The three states are kept apart on purpose: "empty" is a turn that ran and
+ * changed nothing, "unavailable" is no turn on record at all — no turn has
+ * finished here yet, or its snapshot was lost. The panel must never show one as
+ * the other. */
+export interface LastTurn {
+  state: "ok" | "empty" | "unavailable"
+  diff?: string
+  endedAt?: number
 }

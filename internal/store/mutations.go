@@ -6,9 +6,14 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/omartelo/lich/internal/providers"
 )
+
+// now is time.Now, replaced in tests: a close stamps the row with it, and a
+// test about the order that stamp produces cannot wait out a real second.
+var now = time.Now
 
 // nextSessionPosition is the position a newly inserted session takes: after the
 // project's last one, so a new card appends to the list even once the user has
@@ -179,26 +184,87 @@ func (s *Service) DeleteSession(projectID, sessionID, activeID string) error {
 // CloseSession parks a session instead of deleting it: is_open flips to 0, which
 // hides it from LoadState while keeping its row — and its provider session id —
 // intact for a later resume. The project's active session moves to activeID (the
-// neighbor the frontend picked). The keep-the-worktree close uses this; a plain
-// close still calls DeleteSession, which removes it for good.
+// neighbor the frontend picked).
+//
+// Every close lands here. DeleteSession is what the checkout's own removal uses,
+// where the row must not outlive the directory it points at.
+//
+// closed_at is stamped in the same statement rather than after it: it is what
+// orders the history the parked row exists to appear in, and a row parked
+// without one sorts as if it had been closed before everything else.
 func (s *Service) CloseSession(projectID, sessionID, activeID string) error {
 	return s.tx(func(tx *sql.Tx) error {
-		if _, err := tx.Exec(`UPDATE sessions SET is_open = 0 WHERE id = ?`, sessionID); err != nil {
+		if _, err := tx.Exec(
+			`UPDATE sessions SET is_open = 0, closed_at = ? WHERE id = ?`,
+			now().Unix(), sessionID,
+		); err != nil {
 			return fmt.Errorf("close session %q: %w", sessionID, err)
 		}
 		return setActiveSession(tx, projectID, activeID)
 	})
 }
 
-// ReopenWorktreeSession resumes a parked worktree session. It finds the parked
-// (is_open = 0) session for the worktree at path and re-adds it to the workspace
-// under a fresh id (newSessionID), carrying over the old label, kind, provider
-// session id, label_auto flag, model, entrypoint and origin. The fresh id is
+// ForgetSession deletes one parked session for good. It is the way out for the
+// row whose checkout was removed behind lich's back: nothing can resume it, and
+// PurgeWorktreeSessions never ran for it because the removal never went through
+// the app.
+//
+// is_open = 0 is the whole guard: a session on screen is closed, never
+// forgotten, so an id belonging to a live card matches nothing here. A row that
+// was already gone is not an error, and only a delete that actually removed one
+// reports the session gone.
+func (s *Service) ForgetSession(sessionID string) error {
+	res, err := s.db.Exec(`DELETE FROM sessions WHERE id = ? AND is_open = 0`, sessionID)
+	if err != nil {
+		return fmt.Errorf("forget session %q: %w", sessionID, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("forget session %q rows: %w", sessionID, err)
+	}
+	if n > 0 {
+		s.sessionIsGone(sessionID)
+	}
+	return nil
+}
+
+// ReopenWorktreeSession resumes the session parked for the worktree at path,
+// the last one closed there. Returns nil when nothing is parked at path — the
+// caller then opens a brand-new session.
+//
+// The empty path is refused, and that guard is load-bearing for the same reason
+// PurgeWorktreeSessions carries one: a project's own sessions are stored with no
+// path, so an unguarded lookup would answer the worktree picker with a parked
+// session that never lived in a worktree at all.
+func (s *Service) ReopenWorktreeSession(projectID, path, newSessionID string) (*Session, error) {
+	if path == "" {
+		return nil, nil
+	}
+	return s.reopen(newSessionID,
+		`WHERE project_id = ? AND path = ? AND is_open = 0 ORDER BY rowid DESC LIMIT 1`,
+		projectID, path)
+}
+
+// ReopenSession resumes one parked session by its own id — the history list's
+// door, where the row was picked rather than looked up. Returns nil when no
+// parked session has that id, which is what a row already resumed in another
+// window looks like.
+//
+// Deliberately not scoped to a project: the row names its own, and that is the
+// only answer that stays right for a session parked in a project the caller is
+// not looking at — which is most of the history.
+func (s *Service) ReopenSession(sessionID, newSessionID string) (*Session, error) {
+	return s.reopen(newSessionID, `WHERE id = ? AND is_open = 0`, sessionID)
+}
+
+// reopen is the resume behind both doors: it finds one parked session with the
+// given WHERE clause and re-adds it to the workspace under a fresh id
+// (newSessionID), carrying over the old label, kind, path, provider session id,
+// label_auto flag, model, entrypoint, sandbox and origin. The fresh id is
 // deliberate: it makes the frontend treat the card as never-spawned, so its
 // resume prompt fires and the provider conversation continues instead of
-// starting cold. Returns nil when nothing is parked at path — the caller then
-// opens a brand-new session.
-func (s *Service) ReopenWorktreeSession(projectID, path, newSessionID string) (*Session, error) {
+// starting cold.
+func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, error) {
 	var restored *Session
 	err := s.tx(func(tx *sql.Tx) error {
 		var old Session
@@ -212,24 +278,25 @@ func (s *Service) ReopenWorktreeSession(projectID, path, newSessionID string) (*
 		// the provider back on its default model and the terminal back on a bare
 		// shell — silently, on the one path where the card keeps its identity but
 		// not its id.
+		//
+		// project_id is read rather than passed: reopening by id knows only the
+		// session, and the row is what says where it belongs.
 		var labelAuto int
-		var model, entrypoint, sandbox string
+		var projectID, model, entrypoint, sandbox string
 		row := tx.QueryRow(
-			`SELECT id, label, kind, provider_session_id, label_auto, model, entrypoint, sandbox,
-			        origin_session_id, origin_label
-			   FROM sessions
-			  WHERE project_id = ? AND path = ? AND is_open = 0
-			  ORDER BY rowid DESC LIMIT 1`,
-			projectID, path,
+			`SELECT id, project_id, label, kind, path, provider_session_id, label_auto,
+			        model, entrypoint, sandbox, origin_session_id, origin_label
+			   FROM sessions `+where,
+			args...,
 		)
 		if err := row.Scan(
-			&old.ID, &old.Label, &old.Kind, &old.ProviderSessionID, &labelAuto, &model, &entrypoint,
-			&sandbox, &old.OriginSessionID, &old.OriginLabel,
+			&old.ID, &projectID, &old.Label, &old.Kind, &old.Path, &old.ProviderSessionID,
+			&labelAuto, &model, &entrypoint, &sandbox, &old.OriginSessionID, &old.OriginLabel,
 		); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return nil // nothing parked here; caller creates a new session
+				return nil // nothing parked; caller creates a new session
 			}
-			return fmt.Errorf("find parked session for %q: %w", path, err)
+			return fmt.Errorf("find parked session: %w", err)
 		}
 		// The cost ledgers are read out before the row goes, because deleting it
 		// cascades them away — and a resumed session that forgot what it spent
@@ -241,12 +308,15 @@ func (s *Service) ReopenWorktreeSession(projectID, path, newSessionID string) (*
 		if _, err := tx.Exec(`DELETE FROM sessions WHERE id = ?`, old.ID); err != nil {
 			return fmt.Errorf("drop parked session %q: %w", old.ID, err)
 		}
+		// closed_at is left to its default: the reinserted row is open again, and
+		// a resume that carried the old stamp over would date the next close
+		// before it happened.
 		if _, err := tx.Exec(
 			`INSERT INTO sessions
 			   (id, project_id, label, kind, path, provider_session_id, label_auto,
 			    model, entrypoint, sandbox, origin_session_id, origin_label, position)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
-			newSessionID, projectID, old.Label, old.Kind, path, old.ProviderSessionID, labelAuto,
+			newSessionID, projectID, old.Label, old.Kind, old.Path, old.ProviderSessionID, labelAuto,
 			model, entrypoint, sandbox, old.OriginSessionID, old.OriginLabel, projectID,
 		); err != nil {
 			return fmt.Errorf("reinsert session %q: %w", newSessionID, err)
@@ -261,7 +331,7 @@ func (s *Service) ReopenWorktreeSession(projectID, path, newSessionID string) (*
 			ID:                newSessionID,
 			Label:             old.Label,
 			Kind:              old.Kind,
-			Path:              path,
+			Path:              old.Path,
 			ProviderSessionID: old.ProviderSessionID,
 			Entrypoint:        entrypoint,
 			Sandbox:           sandbox,

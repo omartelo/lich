@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import type { KeyboardEvent } from "react"
 import { GitBranchPlus } from "lucide-react"
-import { useSessionStatus } from "@/lib/session/use-session-status"
+import { useSessionStatus, useSessionUnread } from "@/lib/session/use-session-status"
 import { filterTargetRows, flattenTargetGroups, groupTargetRows } from "@/lib/session/target-picker"
 import type { DelegateGroup, DelegateTarget } from "@/lib/session/delegate-targets"
 import { PickerDialog, PickerEmpty, PickerGroup, PickerRow } from "@/components/common/PickerDialog"
@@ -146,9 +146,10 @@ function TargetRowView({
   onPick: () => void
 }) {
   const status = useSessionStatus(target.id)
+  const unread = useSessionUnread(target.id)
   return (
     <PickerRow selected={selected} onSelect={onSelect} onRun={onPick}>
-      <SessionStatusIcon kind={target.kind} status={status} />
+      <SessionStatusIcon kind={target.kind} status={status} unread={unread} />
       <span className="truncate text-sm">{target.label}</span>
     </PickerRow>
   )

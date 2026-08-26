@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -81,15 +82,17 @@ func (s *Service) Diagnostics() Diagnostics {
 	}
 }
 
-// SandboxAvailable reports whether this machine can run a session confined
-// (internal/sandbox). It answers here rather than beside the provider list
-// because it is a fact about the machine — bubblewrap installed, or macOS —
+// SandboxBackend names what confines a session on this machine — "bubblewrap",
+// "sandbox-exec" — or "" when nothing can (internal/sandbox). It answers here
+// rather than beside the provider list because it is a fact about the machine,
 // and the same answer for every provider on it.
 //
-// The frontend hides the sandbox control when this is false rather than
-// offering one that saves a setting nothing can act on.
-func (s *Service) SandboxAvailable() bool {
-	return sandbox.Available()
+// The name rather than a yes: the two backends have different holes, and the
+// Sandbox pane says which one is in play so a report about a confined session
+// starts a round ahead. "" is what the pane draws its "cannot confine" state
+// from, and what the new-session dialog reads as "do not offer the choice".
+func (s *Service) SandboxBackend() string {
+	return sandbox.Backend()
 }
 
 // RevealLog opens the log's directory with the platform's file manager, not the
@@ -100,7 +103,7 @@ func (s *Service) RevealLog() error {
 	if s.logPath == "" {
 		return fmt.Errorf("no log file: lich is logging to stderr only")
 	}
-	return s.openDefault(filepath.Dir(s.logPath))
+	return s.openFolder(filepath.Dir(s.logPath))
 }
 
 // notifyTitle is the app name carried by every notification lich raises. macOS
@@ -168,7 +171,46 @@ func (s *Service) OpenInEditor(dir, rel string) (string, error) {
 	if err := relpath.Validate(rel); err != nil {
 		return "", err
 	}
-	full := filepath.Join(dir, rel)
+	return s.openInEditor(filepath.Join(dir, rel), s.openDefault)
+}
+
+// OpenFolderInEditor opens a session's checkout — the directory itself, not a
+// file under it — exactly the way OpenInEditor opens one of its files, terminal
+// editors included.
+func (s *Service) OpenFolderInEditor(dir string) (string, error) {
+	if err := requireDir(dir); err != nil {
+		return "", err
+	}
+	return s.openInEditor(dir, s.openFolder)
+}
+
+// OpenFolder shows a checkout in the platform's file manager. It never consults
+// $VISUAL/$EDITOR: this is the way out of lich to the OS's own view of the
+// folder, which is the one thing opening it in an editor does not give.
+func (s *Service) OpenFolder(dir string) error {
+	if err := requireDir(dir); err != nil {
+		return err
+	}
+	return s.openFolder(dir)
+}
+
+// requireDir refuses a path that is not a directory any more, naming it. lich
+// watches no checkout: a worktree removed from a terminal, or a project folder
+// moved, still has its card, and a launcher handed the dead path either does
+// nothing or fails somewhere nobody is looking.
+func requireDir(dir string) error {
+	info, err := os.Stat(dir)
+	if err != nil || !info.IsDir() {
+		return fmt.Errorf("this folder is gone: %s", dir)
+	}
+	return nil
+}
+
+// openInEditor resolves the editor for one absolute target — a file or a
+// directory — and either launches it or hands back the command line to run.
+// fallback opens the target without an editor, and differs by what it is: a
+// file goes to its default handler, a folder to the file manager.
+func (s *Service) openInEditor(full string, fallback func(string) error) (string, error) {
 	editor := s.getenv("VISUAL")
 	if editor == "" {
 		editor = s.getenv("EDITOR")
@@ -177,28 +219,22 @@ func (s *Service) OpenInEditor(dir, rel string) (string, error) {
 		// The command runs in the session's shell, so the file path — the
 		// caller-influenced part — must survive spaces and metacharacters. The
 		// quoting rule is the shell's, and the session's shell is per-OS (see
-		// the open_* files). A path that shell cannot express at all opens with
-		// the default handler instead: a line that would run something else is
-		// worse than not using the editor.
-		quoted, ok := s.quoteForShell(full)
-		if !ok {
-			return "", s.openDefault(full)
-		}
-		return editor + " " + quoted, nil
+		// the open_* files).
+		return editor + " " + s.quoteForShell(full), nil
 	}
 	if editor != "" {
-		return "", s.runEditor(editor, full)
+		return "", s.runEditor(editor, full, fallback)
 	}
-	return "", s.openDefault(full)
+	return "", fallback(full)
 }
 
 // runEditor launches a GUI $EDITOR value that may carry flags ("code --wait"),
-// appending the file as the final argument. An all-whitespace value degrades to
-// the default opener rather than launching an empty command.
-func (s *Service) runEditor(editor, full string) error {
+// appending the target as the final argument. An all-whitespace value degrades
+// to the fallback opener rather than launching an empty command.
+func (s *Service) runEditor(editor, full string, fallback func(string) error) error {
 	fields := strings.Fields(editor)
 	if len(fields) == 0 {
-		return s.openDefault(full)
+		return fallback(full)
 	}
 	args := append(fields[1:], full)
 	return s.run(fields[0], args...)
@@ -222,26 +258,6 @@ func isTerminalEditor(editor string) bool {
 		return false
 	}
 	return terminalEditors[filepath.Base(fields[0])]
-}
-
-// quoteCmdPath renders full as one argument of a cmd.exe command line, and
-// reports false when cmd cannot express it at all. Double quotes cover the
-// command separators (& | < >), the grouping parentheses, ^ and spaces — but
-// cmd has no escape for three cases, so they are refused rather than mangled:
-//
-//   - a literal " ends the quoted run and nothing puts one back;
-//   - % is expanded inside quotes too, so a defined variable's name between
-//     percents silently becomes a different path;
-//   - a trailing backslash escapes the closing quote for the target's own argv
-//     parser. filepath.Join cleans that away before we get here, so this is the
-//     belt to the caller's braces.
-//
-// Kept out of the build-tagged file so the rule is tested on any OS.
-func quoteCmdPath(full string) (string, bool) {
-	if strings.ContainsAny(full, `"%`) || strings.HasSuffix(full, `\`) {
-		return "", false
-	}
-	return `"` + full + `"`, true
 }
 
 // getenv reads a key from the resolved shell env, "" when absent.

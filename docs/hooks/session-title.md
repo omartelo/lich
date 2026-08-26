@@ -28,9 +28,9 @@ Both sides test against the payloads in
 
 ## Event → action mapping
 
-| Claude Code hook | Codex hook | opencode event    | oh-my-pi event                | Crush hook | action                                           |
-|------------------|------------|-------------------|-------------------------------|------------|--------------------------------------------------|
-| `Stop`           | `Stop`     | `session.updated` | `session_stop` + `turn_start` | —          | set the session label to `title` (if still auto) |
+| Claude Code hook | Codex hook | Antigravity hook | opencode event    | oh-my-pi event                | Crush hook | Cursor CLI hook | action                                           |
+|------------------|------------|------------------|-------------------|-------------------------------|------------|-----------------|--------------------------------------------------|
+| `Stop`           | `Stop`     | `Stop`           | `session.updated` | `session_stop` + `turn_start` | —          | —               | set the session label to `title` (if still auto) |
 
 The `ai-title` is an internal Haiku summary of the first prompt, written to the
 transcript **after** the first turn — so it does not exist at `SessionStart`.
@@ -43,8 +43,33 @@ title=$(tac "$transcript_path" | grep -m1 '"type":"ai-title"' | jq -r '.aiTitle'
 
 A provider that generates no title sends whatever it names its own thread after
 — Codex uses the first user message verbatim, which the plugin reads from the
-rollout and trims to a card-sized label. The contract only asks for a non-empty
-string; where it comes from is the client's business.
+rollout and trims to 80 characters, and Antigravity is read the same way: its
+`Stop` payload carries a `transcriptPath` whose first `USER_INPUT` entry is that
+message. The contract only asks for a non-empty string; where it comes from, and
+where it is cut, is the client's business.
+
+**A client that trims does it by codepoint, never by byte.** lich takes the
+string as sent and the card truncates what will not fit, so a title cut through
+the middle of a character is not rejected anywhere — it reaches the card as a
+trailing `U+FFFD`, and only when a multibyte character straddles byte 80. Which
+character that is depends on every multibyte one before it, so the 80th
+character being ASCII does not make a title safe: `é` + 77 ASCII + `é` splits on
+its second `é` while the 80th character is a plain `b`. `cut -c` is the way to
+get there, and how badly depends on whose `cut` it is: GNU coreutils counts
+characters where the locale says UTF-8 and bytes under `LC_ALL=C`, while
+BusyBox counts bytes either way — measured on coreutils 9.11 and BusyBox 1.38.0
+against the string above. So the locale is an escape hatch on a glibc box and
+none at all on Alpine, and a client that reaches for `cut -c` cannot know which
+it will run under. Cut in something that counts codepoints — `jq`'s `$s[0:80]`
+is already in reach of any hook that builds its body with `jq` — rather than
+reasoning about the environment.
+
+That environment is otherwise passed straight through: lich hands the PTY what
+it was launched with (`internal/terminal/childenv.go` drops AppImage internals
+and nothing else, and the sandbox sets only `HOME`), so a session started from
+a desktop carries that desktop's locale and one started without one carries
+none. The report is the same shape either way — which is what makes it a thing
+to write down rather than to catch.
 
 Send it on `Stop`. Re-sending on every `Stop` is fine — lich only applies it
 while the label is still automatic (see below), so a stable title is idempotent.

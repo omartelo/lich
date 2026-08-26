@@ -68,7 +68,14 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- setting. Three states rather than a boolean because the row has to be able
     -- to say "nobody decided this one" — a session opened before the user picked
     -- a rung, or by a caller with nowhere to ask.
-    sandbox             TEXT NOT NULL DEFAULT ''
+    sandbox             TEXT NOT NULL DEFAULT '',
+    -- When this session was parked, in unix seconds; 0 while it is open, and on
+    -- a row parked before the column existed. rowid cannot stand in for it: it
+    -- dates the insert, not the close, and a resume reinserts the row under a
+    -- fresh id — so the history the palette lists would reorder itself every
+    -- time a session came back. Seconds, not a counter like projects.closed_seq:
+    -- that list only had to order, and this one has to say when.
+    closed_at           INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
 
@@ -106,8 +113,9 @@ type Service struct {
 }
 
 // SetSessionGone registers what to run when a session's row is deleted for
-// good — DeleteSession and PurgeWorktreeSessions, never CloseSession, which
-// parks the row for a later resume and leaves everything hanging off it alone.
+// good — DeleteSession, PurgeWorktreeSessions and ForgetSession, never
+// CloseSession, which parks the row for a later resume and leaves everything
+// hanging off it alone.
 //
 // It is startup wiring, called before anything serves: lich hangs the cleanup
 // of that session's dropped-file copies on it (internal/drop), which is what
@@ -227,6 +235,7 @@ func open(path string) (*Service, error) {
 		`ALTER TABLE sessions ADD COLUMN origin_session_id TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE sessions ADD COLUMN origin_label TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE sessions ADD COLUMN sandbox TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE sessions ADD COLUMN closed_at INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE projects ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE projects ADD COLUMN closed_seq INTEGER NOT NULL DEFAULT 0`,
 	}
@@ -380,6 +389,80 @@ func (s *Service) RecentProjects() ([]Recent, error) {
 		return nil, fmt.Errorf("iterate recent projects: %w", err)
 	}
 	return recents, nil
+}
+
+// ClosedSession is one parked session offered for resuming — what identifies it
+// in a list somebody is browsing rather than one they are already looking at.
+// The project rides along because history spans every project at once, closed
+// ones included, and the project name is what tells two sessions of the same
+// name apart.
+//
+// No branch: it lives in git, and a worktree's directory stops agreeing with it
+// the moment an agent branches inside the checkout, which is the ordinary way
+// to work in one (frontend/src/lib/git/checkout-label.ts). The window reads it
+// off the checkout instead, and a row whose checkout is gone has none to show —
+// which is the same row that cannot be resumed anyway.
+type ClosedSession struct {
+	ID          string `json:"id"`
+	ProjectID   string `json:"projectId"`
+	ProjectName string `json:"projectName"`
+	// The project's own directory, so resuming a session of a closed project can
+	// reopen that project first without a second lookup — and can ask where it
+	// went when the directory has moved.
+	ProjectPath string `json:"projectPath"`
+	Label       string `json:"label"`
+	Kind        string `json:"kind"`
+	Path        string `json:"path"`
+	// Unix seconds, 0 for a row parked before closed_at existed — which sorts
+	// last and is drawn as no date rather than as 1970.
+	ClosedAt int64 `json:"closedAt"`
+}
+
+// closedSessionLimit caps the history handed to the window. The palette filters
+// what it was given rather than asking again per keystroke (the same bargain
+// RecentProjects makes), so this number is how far back a search can reach:
+// deep enough to cover the sessions a workspace churns through in months, and
+// still a bound — the alternative is reading every session ever closed to draw
+// a list nobody scrolls to the end of.
+const closedSessionLimit = 100
+
+// ClosedSessions returns the parked sessions (is_open = 0), the last one closed
+// first, up to closedSessionLimit of them. Sessions of closed projects answer
+// too: a project hidden from the tab strip still owns the work done in it, and
+// resuming one of its sessions is what reopens it.
+//
+// rowid is the tiebreak, not the order, for RecentProjects' reason twice over:
+// it dates the insert, and a resumed session is reinserted — so rows parked
+// before closed_at existed all carry 0 and fall back to it together.
+func (s *Service) ClosedSessions() ([]ClosedSession, error) {
+	rows, err := s.db.Query(
+		`SELECT s.id, s.project_id, p.name, p.path, s.label, s.kind, s.path, s.closed_at
+		   FROM sessions s JOIN projects p ON p.id = s.project_id
+		  WHERE s.is_open = 0
+		  ORDER BY s.closed_at DESC, s.rowid DESC
+		  LIMIT ?`,
+		closedSessionLimit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query closed sessions: %w", err)
+	}
+	defer rows.Close()
+
+	closed := []ClosedSession{}
+	for rows.Next() {
+		var c ClosedSession
+		if err := rows.Scan(
+			&c.ID, &c.ProjectID, &c.ProjectName, &c.ProjectPath,
+			&c.Label, &c.Kind, &c.Path, &c.ClosedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan closed session: %w", err)
+		}
+		closed = append(closed, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate closed sessions: %w", err)
+	}
+	return closed, nil
 }
 
 // ProjectPath returns the directory of the project with this id, or "" when

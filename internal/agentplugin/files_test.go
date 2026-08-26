@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -393,9 +394,9 @@ func readOMPServers(t *testing.T, agent string) map[string]any {
 	if err := json.Unmarshal(data, &config); err != nil {
 		t.Fatalf("the mcp document is not JSON: %v\n%s", err, data)
 	}
-	servers, ok := config[ompMCPServers].(map[string]any)
+	servers, ok := config[mcpServersKey].(map[string]any)
 	if !ok {
-		t.Fatalf("no %s table in:\n%s", ompMCPServers, data)
+		t.Fatalf("no %s table in:\n%s", mcpServersKey, data)
 	}
 	return servers
 }
@@ -847,4 +848,509 @@ func lineWith(block, needle string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// ------------------------------------------------------------- antigravity --
+
+// antigravityHome redirects the home Antigravity discovers global
+// customizations under, and returns the plugin directory an install will write
+// into. Both variables are set for the reason lichConfigHome sets three:
+// os.UserHomeDir reads HOME on Unix and USERPROFILE on Windows, and a redirect
+// that misses one leaves the install writing into the real user's home while
+// the assertions read the temporary one.
+func antigravityHome(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	t.Setenv("HOME", root)
+	t.Setenv("USERPROFILE", root)
+	dir, err := antigravityPluginDir()
+	if err != nil {
+		t.Fatalf("resolve the plugin directory: %v", err)
+	}
+	if !strings.HasPrefix(dir, root) {
+		t.Fatalf("plugin dir %q is outside the test's temp dir %q", dir, root)
+	}
+	return dir
+}
+
+// antigravityCLI points the Service's shell-out — the MCP registration, and
+// nothing else here — at the test binary's fake CLI, and returns a reader of the
+// calls it received.
+func antigravityCLI(t *testing.T, s *Service) func() []string {
+	t.Helper()
+	log := filepath.Join(t.TempDir(), "calls.log")
+	t.Setenv(fakeCLIGuard, "1")
+	t.Setenv(fakeCLILog, log)
+	s.bins = stubBin(mustExecutable(t))
+	return func() []string {
+		data, err := os.ReadFile(log)
+		if err != nil {
+			return nil
+		}
+		return strings.Split(strings.TrimSpace(string(data)), "\n")
+	}
+}
+
+func mustExecutable(t *testing.T) string {
+	t.Helper()
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test binary: %v", err)
+	}
+	return self
+}
+
+// antigravityFiles is the release as this install reads it: the registration at
+// the repository root and every script it names, with the relative commands
+// Antigravity resolves against the directory holding hooks.json.
+func antigravityFiles() map[string]string {
+	files := map[string]string{
+		tagged(antigravityHooksFile): `{"lich":{"PreInvocation":[{"type":"command",` +
+			`"command":"hooks/report-session-start.sh antigravity; printf '{}'"}]}}`,
+	}
+	for _, script := range antigravityScripts {
+		files[tagged(script)] = "#!/bin/sh\n# " + filepath.Base(script) + "\nexit 0\n"
+	}
+	return files
+}
+
+func TestAntigravityInstallWritesTheCustomization(t *testing.T) {
+	dir := antigravityHome(t)
+	s, _ := fileServer(t, antigravityFiles())
+	antigravityCLI(t, s)
+
+	if err := s.Install(providers.Antigravity); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
+	for _, script := range antigravityScripts {
+		path := filepath.Join(dir, antigravityScriptDir, filepath.Base(script))
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("stat %s: %v", path, err)
+		}
+		// Antigravity runs a hook command through `sh -c`, which needs the bit on
+		// a shebang'd script. Windows carries no POSIX mode, so the assertion is
+		// made where it decides anything.
+		if runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0 {
+			t.Errorf("%s is not executable (mode %v)", path, info.Mode().Perm())
+		}
+	}
+
+	hooks, err := os.ReadFile(filepath.Join(dir, antigravityHooksFile))
+	if err != nil {
+		t.Fatalf("read the registration: %v", err)
+	}
+	body := string(hooks)
+	// The registration is written through untouched, and its commands are
+	// relative — Antigravity runs a hook with the working directory set to the
+	// folder holding this file, which is where the scripts just went. A rewrite
+	// that resolved them would only be another way to get that wrong.
+	if !strings.Contains(body, antigravityScriptDir+"/report-session-start.sh") {
+		t.Errorf("the registration does not name the installed script:\n%s", body)
+	}
+	// The provider argument is what puts Antigravity's icon on the card rather
+	// than Claude Code's, and what decides which CLI is asked to resume it.
+	if !strings.Contains(body, providers.Antigravity) {
+		t.Errorf("the registration does not name the provider:\n%s", body)
+	}
+}
+
+// The manifest is what marks the directory as a plugin at all, and the version
+// in it is this install's only record of what it wrote.
+func TestAntigravityInstalledVersionRoundTrips(t *testing.T) {
+	dir := antigravityHome(t)
+	s, _ := fileServer(t, antigravityFiles())
+	antigravityCLI(t, s)
+
+	if err := s.Install(providers.Antigravity); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	var manifest struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
+	}
+	data, err := os.ReadFile(filepath.Join(dir, antigravityManifest))
+	if err != nil {
+		t.Fatalf("read the manifest: %v", err)
+	}
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		t.Fatalf("the manifest is not JSON: %v\n%s", err, data)
+	}
+	if manifest.Name != pluginName {
+		t.Errorf("manifest names %q, want %q", manifest.Name, pluginName)
+	}
+	got, ok := s.installedVersion(providers.Antigravity)
+	if !ok || got != testVersion {
+		t.Fatalf("installedVersion = (%q,%v), want (%q,true)", got, ok, testVersion)
+	}
+}
+
+// A copy installed through `agy plugin install` carries a manifest with no
+// version. Reporting one for it would claim an install lich never wrote and
+// cannot update.
+func TestAntigravityInstalledVersionIgnoresAnUnversionedManifest(t *testing.T) {
+	dir := antigravityHome(t)
+	s, _ := fileServer(t, nil)
+
+	if _, ok := s.installedVersion(providers.Antigravity); ok {
+		t.Error("reported a version with nothing installed")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, antigravityManifest), []byte(`{"name":"lich"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := s.installedVersion(providers.Antigravity); ok {
+		t.Errorf("installedVersion = (%q,true) for a manifest lich did not write, want false", got)
+	}
+}
+
+// The registration is what gives an Antigravity session the operations for
+// driving the others: it takes no MCP flag at spawn, so this is the only place
+// it can be told.
+func TestAntigravityInstallRegistersLichsMCPServer(t *testing.T) {
+	antigravityHome(t)
+	s, _ := fileServer(t, antigravityFiles())
+	calls := antigravityCLI(t, s)
+	s.lichBin = func() string { return "/opt/lich/lich" }
+
+	if err := s.Install(providers.Antigravity); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	want := "mcp add " + relay.MCPServerName + " /opt/lich/lich " + relay.MCPSubcommand
+	if got := calls(); !slices.Contains(got, want) {
+		t.Errorf("calls = %v, want one of them to be %q", got, want)
+	}
+}
+
+// A lich that cannot name its own binary registers nothing rather than a command
+// that cannot run — the reports are the half the session needs, and they do not
+// depend on it.
+func TestAntigravityInstallWithoutABinaryStillWritesTheHooks(t *testing.T) {
+	dir := antigravityHome(t)
+	s, _ := fileServer(t, antigravityFiles())
+	calls := antigravityCLI(t, s)
+	s.lichBin = func() string { return "" }
+
+	if err := s.Install(providers.Antigravity); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, antigravityHooksFile)); err != nil {
+		t.Errorf("the registration was not written: %v", err)
+	}
+	if got := calls(); len(got) > 0 {
+		t.Errorf("calls = %v, want none: there is no binary to register", got)
+	}
+}
+
+// Every file is fetched before anything is written, so a release missing one
+// leaves no half-installed customization behind — a hooks.json naming a script
+// that is not there is a session reporting nothing on every turn.
+func TestAntigravityInstallWritesNothingWhenTheFetchFails(t *testing.T) {
+	dir := antigravityHome(t)
+	files := antigravityFiles()
+	delete(files, tagged(antigravityScripts[len(antigravityScripts)-1]))
+	s, _ := fileServer(t, files)
+	antigravityCLI(t, s)
+
+	if err := s.Install(providers.Antigravity); err == nil {
+		t.Fatal("Install: want an error when the release is missing a script, got nil")
+	}
+	if _, err := os.Stat(filepath.Join(dir, antigravityHooksFile)); !os.IsNotExist(err) {
+		t.Errorf("a failed install left a registration behind (stat err = %v)", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, antigravityManifest)); !os.IsNotExist(err) {
+		t.Errorf("a failed install left a manifest behind (stat err = %v)", err)
+	}
+}
+
+// A refused `agy mcp add` must not leave an install that claims to be finished.
+// The manifest is what Installed, the update check and HasTools all read, and
+// HasTools promising lich's own tools is what an agent meets as an error at its
+// prompt — so the registration has to succeed before the version is written
+// down.
+func TestAntigravityInstallClaimsNothingWhenTheRegistrationFails(t *testing.T) {
+	dir := antigravityHome(t)
+	s, _ := fileServer(t, antigravityFiles())
+	antigravityCLI(t, s)
+	t.Setenv(fakeCLIFail, "mcp add")
+	s.lichBin = func() string { return "/opt/lich/lich" }
+
+	if err := s.Install(providers.Antigravity); err == nil {
+		t.Fatal("Install: want an error when the registration is refused, got nil")
+	}
+	// The hooks stay: they are written and they work, and the next install
+	// overwrites them. It is the claim that must not survive.
+	if _, err := os.Stat(filepath.Join(dir, antigravityHooksFile)); err != nil {
+		t.Errorf("the registration's own scripts were rolled back: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, antigravityManifest)); !os.IsNotExist(err) {
+		t.Errorf("a refused registration left a manifest behind (stat err = %v)", err)
+	}
+	if got, ok := s.installedVersion(providers.Antigravity); ok {
+		t.Errorf("installedVersion = (%q,true) after the registration failed, want false", got)
+	}
+	if s.Installed(providers.Antigravity) {
+		t.Error("Installed = true after the registration failed")
+	}
+	// HasTools is not asserted here, and the omission is the point: it reads the
+	// same manifest, so the three checks above already decide it — and at this
+	// fixture's version (below toolsMinVersion) it answers false either way,
+	// which would be an assertion that cannot fail.
+}
+
+// cursorHome points both halves of a Cursor install at temporary directories:
+// the home it writes `~/.cursor/mcp.json` under, and the Claude Code state that
+// decides whether there is anything to register tools beside.
+func cursorHome(t *testing.T, claudeState string) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("CLAUDE_CONFIG_DIR", writeClaudeState(t, claudeState))
+	return home
+}
+
+func readCursorServers(t *testing.T, home string) map[string]any {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(home, ".cursor", cursorMCPFile))
+	if err != nil {
+		t.Fatalf("read cursor's MCP document: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("cursor's MCP document is not JSON: %v", err)
+	}
+	servers, _ := doc[mcpServersKey].(map[string]any)
+	return servers
+}
+
+const claudeStateWithPlugin = `{"plugins":{"lich@lich-plugin":[{"scope":"user","version":"0.9.0"}]}}`
+
+// Cursor takes no MCP server on its command line and gets none from the Claude
+// Code plugin it does run, so this document is the only way a session of its own
+// reaches the sessions beside it.
+func TestCursorInstallRegistersTheServer(t *testing.T) {
+	home := cursorHome(t, claudeStateWithPlugin)
+	s := New(stubBins{})
+	s.lichBin = func() string { return "/usr/bin/lich" }
+
+	if err := s.Install(providers.Cursor); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
+	lich, ok := readCursorServers(t, home)[relay.MCPServerName].(map[string]any)
+	if !ok {
+		t.Fatalf("no %q server registered", relay.MCPServerName)
+	}
+	if lich["command"] != "/usr/bin/lich" {
+		t.Errorf("registered command = %v, want the resolved lich binary", lich["command"])
+	}
+	if args, _ := lich["args"].([]any); len(args) != 1 || args[0] != relay.MCPSubcommand {
+		t.Errorf("registered args = %v, want [%q]", lich["args"], relay.MCPSubcommand)
+	}
+}
+
+// The version reported for Cursor is Claude Code's, because that is the install
+// its reports actually come from — and it is reported only once the tools are
+// registered too, since a session needs both halves.
+func TestCursorInstalledVersionIsClaudeCodes(t *testing.T) {
+	cursorHome(t, claudeStateWithPlugin)
+	s := New(stubBins{})
+	s.lichBin = func() string { return "/usr/bin/lich" }
+
+	if got, ok := s.installedVersion(providers.Cursor); ok {
+		t.Errorf("installedVersion = (%q,%v) before the server was registered, want not installed", got, ok)
+	}
+	if err := s.Install(providers.Cursor); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	if got, ok := s.installedVersion(providers.Cursor); !ok || got != "0.9.0" {
+		t.Errorf("installedVersion = (%q,%v), want (\"0.9.0\",true)", got, ok)
+	}
+}
+
+// Registering the tools while the reports have nowhere to come from is a card
+// that answers with lich's own operations and never says it is working, so the
+// install refuses and names the step that is missing.
+func TestCursorInstallRefusesWithoutTheClaudeCodeInstall(t *testing.T) {
+	home := cursorHome(t, `{"plugins":{}}`)
+	s := New(stubBins{})
+	s.lichBin = func() string { return "/usr/bin/lich" }
+
+	err := s.Install(providers.Cursor)
+	if err == nil {
+		t.Fatal("Install = nil with no plugin in Claude Code, want an error naming it")
+	}
+	if !strings.Contains(err.Error(), "Claude Code") {
+		t.Errorf("error does not name what to install: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".cursor", cursorMCPFile)); !os.IsNotExist(err) {
+		t.Error("a refused install still wrote the MCP document")
+	}
+}
+
+// The document belongs to the user: lich rewrites it, so every server and every
+// key it did not come for survives the round trip.
+func TestCursorInstallKeepsEveryOtherServer(t *testing.T) {
+	home := cursorHome(t, claudeStateWithPlugin)
+	dir := filepath.Join(home, ".cursor")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	existing := `{
+  "mcpServers": {"notes": {"command": "notes-server", "args": ["--stdio"]}},
+  "somethingElse": {"kept": true}
+}`
+	if err := os.WriteFile(filepath.Join(dir, cursorMCPFile), []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := New(stubBins{})
+	s.lichBin = func() string { return "/usr/bin/lich" }
+
+	if err := s.Install(providers.Cursor); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
+	servers := readCursorServers(t, home)
+	if _, ok := servers["notes"]; !ok {
+		t.Errorf("the user's own server is gone: %v", servers)
+	}
+	if _, ok := servers[relay.MCPServerName]; !ok {
+		t.Errorf("lich did not register itself: %v", servers)
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, cursorMCPFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "somethingElse") {
+		t.Errorf("a key lich does not know about was dropped:\n%s", raw)
+	}
+}
+
+// A document lich cannot parse is refused rather than replaced: overwriting it
+// would delete servers lich never got to see.
+func TestCursorInstallRefusesAnUnreadableDocument(t *testing.T) {
+	home := cursorHome(t, claudeStateWithPlugin)
+	dir := filepath.Join(home, ".cursor")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const garbage = "{ not json"
+	path := filepath.Join(dir, cursorMCPFile)
+	if err := os.WriteFile(path, []byte(garbage), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := New(stubBins{})
+	s.lichBin = func() string { return "/usr/bin/lich" }
+
+	if err := s.Install(providers.Cursor); err == nil {
+		t.Fatal("Install = nil over a document lich cannot merge into")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != garbage {
+		t.Errorf("the user's document was rewritten: %q", data)
+	}
+}
+
+// A lich that cannot name its own binary registers nothing rather than a command
+// that cannot run — the session still has the `lich` command line.
+func TestCursorInstallWritesNothingWithoutABinary(t *testing.T) {
+	home := cursorHome(t, claudeStateWithPlugin)
+	s := New(stubBins{})
+	s.lichBin = func() string { return "" }
+
+	if err := s.Install(providers.Cursor); err == nil {
+		t.Fatal("Install = nil with no lich binary to register")
+	}
+	if _, err := os.Stat(filepath.Join(home, ".cursor", cursorMCPFile)); !os.IsNotExist(err) {
+		t.Error("a refused install still wrote the MCP document")
+	}
+}
+
+// Cursor's tools come from the document the install writes, and its version from
+// Claude Code's install — so it can answer with a tool only once both halves are
+// there, and never when lich cannot name the binary to register.
+func TestHasToolsForCursor(t *testing.T) {
+	cursorHome(t, claudeStateWithPlugin)
+	s := New(stubBins{})
+	s.lookPath = func(string) (string, error) { return "/usr/bin/cursor-agent", nil }
+	s.lichBin = func() string { return "/usr/bin/lich" }
+
+	if s.HasTools(providers.Cursor) {
+		t.Error("HasTools(cursor) = true before lich's server was registered")
+	}
+	if err := s.Install(providers.Cursor); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	if !s.HasTools(providers.Cursor) {
+		t.Error("HasTools(cursor) = false with the server registered and the plugin in Claude Code")
+	}
+
+	s.lichBin = func() string { return "" }
+	if s.HasTools(providers.Cursor) {
+		t.Error("HasTools(cursor) = true, but no server could be registered for it")
+	}
+}
+
+// TestUnderGoBuildCache pins the shape that keeps a `go run` binary out of a
+// harness's config. Writing one produces a registration that works until that
+// run ends and then fails silently forever, which is what a `task dev` install
+// left in a real ~/.cursor/mcp.json. The paths are composed for the running OS:
+// what the cache looks like is a separator question.
+func TestUnderGoBuildCache(t *testing.T) {
+	tmp := os.TempDir()
+	cases := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{"the binary go run builds", filepath.Join(tmp, "go-build1790994521", "b001", "exe", "lich"), true},
+		{"and a deeper cache root", filepath.Join(tmp, "x", "go-build42", "b001", "exe", "lich"), true},
+		{"an installed lich", filepath.Join(string(filepath.Separator), "usr", "bin", "lich"), false},
+		{"one built into the repo", filepath.Join(string(filepath.Separator), "home", "u", "src", "bin", "lich"), false},
+		// `exe` alone is not the cache, and the cache without it is not the
+		// binary: both halves have to be there.
+		{"an exe directory of the user's own", filepath.Join(string(filepath.Separator), "opt", "exe", "lich"), false},
+		{"the cache without the exe directory", filepath.Join(tmp, "go-build42", "b001", "lich"), false},
+		{"nothing at all", "", false},
+	}
+	for _, tc := range cases {
+		if got := underGoBuildCache(tc.path); got != tc.want {
+			t.Errorf("%s: underGoBuildCache(%q) = %v, want %v", tc.name, tc.path, got, tc.want)
+		}
+	}
+}
+
+// TestLichBinaryFallsBackToPath proves a dev build registers the installed lich
+// rather than nothing. `task dev` runs the app with `go run`, which is where this
+// project is worked on, and an install that refuses there is one nobody can test.
+// The registration is only the transport — a session reaches the lich its PTY's
+// coordinates name — so any lich that starts is the right one to write.
+func TestLichBinaryFallsBackToPath(t *testing.T) {
+	const onPath = "/usr/bin/lich"
+	found := func(string) (string, error) { return onPath, nil }
+	missing := func(string) (string, error) { return "", exec.ErrNotFound }
+	goRun := filepath.Join(os.TempDir(), "go-build1790994521", "b001", "exe", "lich")
+	installed := filepath.Join(string(filepath.Separator), "opt", "lich", "lich")
+
+	cases := []struct {
+		name     string
+		exe      string
+		exeErr   error
+		lookPath func(string) (string, error)
+		want     string
+	}{
+		{"an ordinary build registers itself", installed, nil, missing, installed},
+		{"a go run build registers the lich on PATH", goRun, nil, found, onPath},
+		{"and nothing when there is none", goRun, nil, missing, ""},
+		{"an unresolvable executable falls back too", "", exec.ErrNotFound, found, onPath},
+	}
+	for _, tc := range cases {
+		if got := resolveLichBinary(tc.exe, tc.exeErr, tc.lookPath); got != tc.want {
+			t.Errorf("%s: resolveLichBinary(%q) = %q, want %q", tc.name, tc.exe, got, tc.want)
+		}
+	}
 }

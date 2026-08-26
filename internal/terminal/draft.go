@@ -1,6 +1,9 @@
 package terminal
 
-import "time"
+import (
+	"bytes"
+	"time"
+)
 
 // What the user has typed at a prompt and not sent yet, and why lich has to
 // know: a relayed message is pasted straight into that prompt and an Enter is
@@ -33,39 +36,81 @@ const (
 	maxEscape = 32
 )
 
+// The brackets a terminal wraps pasted text in (DECSET 2004). What arrives
+// between them was pasted rather than typed, which is the one place a 0x03 or a
+// lone 0x1b in the stream is text instead of the user reaching for the
+// interrupt (see noteInput).
+var (
+	pasteStart = []byte("\x1b[200~")
+	pasteEnd   = []byte("\x1b[201~")
+)
+
 // noteInput records whether the user is composing something at this session's
 // prompt right now, so a relayed message is not pasted into the middle of it
-// (see Ready). Unknown sessions are a no-op.
-func (s *Service) noteInput(id string, data []byte) {
+// (see Ready), and answers whether this write was the user interrupting the
+// turn: a lone Ctrl+C or Escape, typed rather than pasted and never a byte
+// inside an escape sequence. Unknown sessions are a no-op.
+//
+// Reading the interrupt off the PTY is a fallback, not a source of truth — it
+// only ever ends a turn lich already knows is open, and the next report from
+// the provider overwrites whatever it concluded (see Service.noteInterrupt).
+func (s *Service) noteInput(id string, data []byte) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sess, ok := s.sessions[id]
 	if !ok {
-		return
+		return false
 	}
 	if len(sess.escPending) > 0 {
 		data = append(sess.escPending, data...)
 		sess.escPending = nil
 	}
+	interrupted := false
 	for i := 0; i < len(data); i++ {
 		switch b := data[i]; {
 		case b == esc:
 			n, done := escapeSpan(data[i:])
 			if !done {
-				// The rest of it is in the next write. Held rather than counted:
-				// its parameters are digits, and digits read as typing.
-				if n <= maxEscape {
-					sess.escPending = append([]byte(nil), data[i:]...)
-				}
-				return
+				return interrupted || sess.splitEscape(data[i:], n)
 			}
+			sess.noteBracket(data[i : i+n])
 			i += n - 1
 		case b == '\r' || b == '\n' || b == ctrlC:
 			// Sent, or thrown away. Either way the line is the user's no longer.
 			sess.draftAt = time.Time{}
+			interrupted = interrupted || (b == ctrlC && !sess.pasting)
 		case b >= 0x20:
 			sess.draftAt = time.Now()
 		}
+	}
+	return interrupted
+}
+
+// splitEscape decides what an escape that did not end inside this write was,
+// and reports whether it was the Escape key. A lone ESC at the end of a write
+// is that key — nothing follows it to be the rest of a sequence. Anything
+// longer is a sequence the write split, held for the bytes still to come rather
+// than counted: its parameters are digits, and digits read as typing. Called
+// under the service's mu.
+func (sess *session) splitEscape(rest []byte, n int) bool {
+	if n > 1 {
+		if n <= maxEscape {
+			sess.escPending = append([]byte(nil), rest...)
+		}
+		return false
+	}
+	return !sess.pasting
+}
+
+// noteBracket records the bracketed-paste state a DECSET 2004 marker sets, so
+// the bytes between the two brackets are read as pasted rather than typed.
+// Called under the service's mu.
+func (sess *session) noteBracket(span []byte) {
+	switch {
+	case bytes.Equal(span, pasteStart):
+		sess.pasting = true
+	case bytes.Equal(span, pasteEnd):
+		sess.pasting = false
 	}
 }
 

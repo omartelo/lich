@@ -137,8 +137,8 @@ describe("pendingOf", () => {
     expect(store.pendingOf(["mine"])).toBe("busy")
   })
 
-  // Leaving a project marks its sessions seen, so the turn that finished while
-  // the user was in there does not badge the tab they just left.
+  // Leaving a card marks it seen, so the turn that finished while it was on
+  // screen does not badge the tab the user just walked away from.
   it("drops a done once seen, and keeps live states regardless", () => {
     const { source, emit } = fakeSource()
     const store = createSessionStatusStore(source)
@@ -194,6 +194,52 @@ describe("pendingOf", () => {
     const { source } = fakeSource()
     const store = createSessionStatusStore(source)
     expect(() => store.markSeen("ghost")).not.toThrow()
+  })
+})
+
+// The question the card's ring asks: is this finished turn news, or something
+// already read? Nothing else on the card could answer it — "done" looks the
+// same an hour later as it does the second it lands.
+describe("unread", () => {
+  it("is a finished turn nobody has looked at", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", "done"))
+    expect(store.unread("s1")).toBe(true)
+    store.markSeen("s1")
+    expect(store.unread("s1")).toBe(false)
+  })
+
+  it("comes back for the next turn that finishes", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", "done"))
+    store.markSeen("s1")
+    emit(report("s1", "busy"))
+    emit(report("s1", "done"))
+    expect(store.unread("s1")).toBe(true)
+  })
+
+  it("is never claimed by a live state or by a session nobody reported", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", "busy"))
+    emit(report("s2", "waiting"))
+    expect(store.unread("s1")).toBe(false)
+    expect(store.unread("s2")).toBe(false)
+    expect(store.unread("ghost")).toBe(false)
+  })
+
+  // Stopping a turn is not finishing one: there is nothing to come back and
+  // read, so the ring goes out rather than turning solid.
+  it("is not claimed by an interrupted turn", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", "busy"))
+    emit(report("s1", "interrupted"))
+    expect(store.get("s1")).toBeNull()
+    expect(store.unread("s1")).toBe(false)
+    expect(store.pendingOf(["s1"])).toBeNull()
   })
 })
 
@@ -314,6 +360,83 @@ describe("since", () => {
   })
 })
 
+describe("reason", () => {
+  const waiting = (id: string, reason: string) => ({ id, state: "waiting", reason })
+
+  it("keeps what a waiting report is blocked on", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(waiting("s1", "Claude needs your permission to use Bash"))
+    expect(store.reason("s1")).toBe("Claude needs your permission to use Bash")
+  })
+
+  it("has nothing for a session that reported none", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    expect(store.reason("ghost")).toBe("")
+    emit(report("s1", "waiting"))
+    expect(store.reason("s1")).toBe("")
+  })
+
+  // A reason riding a state that is not a question describes nothing the card
+  // draws, and holding it would outlive the block it came with.
+  it("ignores one carried by any other state", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit({ id: "s1", state: "busy", reason: "permission to use Bash" })
+    expect(store.reason("s1")).toBe("")
+  })
+
+  it("clears when the session stops waiting", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(waiting("s1", "edit"))
+    emit(report("s1", "busy"))
+    expect(store.reason("s1")).toBe("")
+  })
+
+  // The one repeat that is news: the state is unchanged, so the store would
+  // normally bail, but a second prompt in the same turn asks something else.
+  it("moves on a repeat waiting that asks something else", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    const notify = vi.fn()
+    store.subscribe("s1", notify)
+    emit(waiting("s1", "permission to use Bash"))
+    emit(waiting("s1", "permission to use Write"))
+    expect(store.reason("s1")).toBe("permission to use Write")
+    expect(notify).toHaveBeenCalledTimes(2)
+  })
+
+  it("re-renders nobody for a repeat that asks the same thing", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    const notify = vi.fn()
+    store.subscribe("s1", notify)
+    emit(waiting("s1", "permission to use Bash"))
+    emit(waiting("s1", "permission to use Bash"))
+    expect(notify).toHaveBeenCalledTimes(1)
+  })
+
+  // The clock belongs to the block, not to the question: a second prompt in one
+  // turn is the same wait going on, and restarting it would hide how long the
+  // session has been stuck.
+  it("does not restart the clock when only the question changes", () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const { source, emit } = fakeSource()
+      const store = createSessionStatusStore(source)
+      emit(waiting("s1", "permission to use Bash"))
+      vi.setSystemTime(30_000)
+      emit(waiting("s1", "permission to use Write"))
+      expect(store.since("s1")).toBe(1_000)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
 describe("pendingAll / subscribeAll", () => {
   it("starts empty", () => {
     const { source } = fakeSource()
@@ -397,5 +520,59 @@ describe("pendingAll / subscribeAll", () => {
     store.markSeen("s1")
     expect(notify).not.toHaveBeenCalled()
     expect(store.pendingAll()).toEqual([{ id: "s1", status: "waiting" }])
+  })
+})
+
+// `reported` is what decides whether a turn-shaped control is drawn at all —
+// the Review panel's "Last turn" switch. It answers a different question from
+// `get`, and a control that appears and disappears is worse than one that was
+// never there, so the flag only ever goes one way.
+describe("has this session ever reported", () => {
+  it("is false until the first report", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    expect(store.reported("s1")).toBe(false)
+    emit(report("s1", "busy"))
+    expect(store.reported("s1")).toBe(true)
+  })
+
+  // The trap `get(id) !== null` falls into: both map to no indicator, and both
+  // are still proof the provider reports.
+  it.each(["idle", "interrupted"])("counts a %s, which maps to no status", (state) => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", state))
+    expect(store.get("s1")).toBeNull()
+    expect(store.reported("s1")).toBe(true)
+  })
+
+  it("stays true once a session goes quiet again", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", "busy"))
+    emit(report("s1", "done"))
+    emit(report("s1", "idle"))
+    expect(store.reported("s1")).toBe(true)
+  })
+
+  it("is per session", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", "busy"))
+    expect(store.reported("s2")).toBe(false)
+  })
+
+  // The first report is normally a state change and notifies anyway. It is the
+  // one that is not — a report repeating a status the store already holds, or
+  // one mapping to no status at all — that would otherwise leave a subscriber
+  // showing no switch for a session that has just proved it can have one.
+  it("notifies subscribers on a first report that changes no status", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    const notify = vi.fn()
+    store.subscribe("s1", notify)
+    emit(report("s1", "idle"))
+    expect(notify).toHaveBeenCalledTimes(1)
+    expect(store.reported("s1")).toBe(true)
   })
 })

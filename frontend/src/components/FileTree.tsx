@@ -82,21 +82,26 @@ export function FileTree({
     })
 
   return (
-    <div role="tree" className={cn("py-1 font-mono text-xs", className)}>
-      {tree.map((node) => (
-        <TreeRow
-          key={node.path}
-          node={node}
-          depth={0}
-          active={active}
-          stats={stats}
-          isOpen={isOpen}
-          onToggle={toggle}
-          onSubtree={setSubtree}
-          onEditor={onEditor}
-          onSelect={onSelect}
-        />
-      ))}
+    // Names run past the panel's width on a deep tree; the rows size to their
+    // content and the tree scrolls sideways, because an ellipsis with no way to
+    // reach the rest of the name hides which file the row is.
+    <div className={cn("overflow-auto", className)}>
+      <div role="tree" className="w-max min-w-full py-1 font-mono text-xs">
+        {tree.map((node) => (
+          <TreeRow
+            key={node.path}
+            node={node}
+            depth={0}
+            active={active}
+            stats={stats}
+            isOpen={isOpen}
+            onToggle={toggle}
+            onSubtree={setSubtree}
+            onEditor={onEditor}
+            onSelect={onSelect}
+          />
+        ))}
+      </div>
     </div>
   )
 }
@@ -134,7 +139,7 @@ function TreeRow({
       <>
         <span className="size-3.5 shrink-0" aria-hidden />
         <FileIcon path={node.path} />
-        <span className="min-w-0 truncate">{node.name}</span>
+        <span className="whitespace-nowrap">{node.name}</span>
         {stat && (
           <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-2 tabular-nums">
             <DiffStat added={stat.added} deleted={stat.deleted} />
@@ -199,7 +204,7 @@ function TreeRow({
         >
           <Chevron className="size-3.5 shrink-0 text-muted-foreground" />
           <FolderIcon className="size-3.5 shrink-0 text-muted-foreground" />
-          <span className="truncate">{node.name}</span>
+          <span className="whitespace-nowrap">{node.name}</span>
         </ContextMenuTrigger>
         <ContextMenuContent>
           <ContextMenuItem onClick={() => onSubtree(node, true)}>Expand all</ContextMenuItem>

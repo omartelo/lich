@@ -22,20 +22,67 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **The session readout understands Claude Code and Codex transcripts only**
   (`internal/terminal/usage_claude.go`, `internal/terminal/usage_codex.go`): oh-my-pi, opencode and Crush record
   token usage but not the model's context-window size, so lich cannot turn those counts into a trustworthy
-  percentage. Their footer therefore carries no model or context ring. Codex rollouts carry the effective window
+  percentage, and Antigravity and Cursor CLI file their conversations as SQLite rather than as a transcript lich
+  reads at all.
+  Their footer therefore carries no model or context ring. Codex rollouts carry the effective window
   selected for that session — 95% of its default or configured `model_context_window` — but no API-cost
   accounting, so its setting stops at model and context while Claude Code alone offers the cost rung.
 - **A dropped file has no path, so lich guesses it** (`internal/drop`): a file under neither the session directory
   nor home is *copied*, so an agent told to edit it edits the copy — and that copy is deleted 3 days on, so a path
   pasted into a prompt eventually stops resolving.
-- **A terminal entrypoint reaches shell sessions on Linux and macOS alone** (`internal/terminal/entrypoint.go`):
-  the menu item is absent on a provider card, and on Windows the setting saves and the terminal opens on a bare
-  shell anyway — the wrap is skipped there for `wrapSetup`'s reason, and nothing on screen says so. It also runs
-  through the shell's `-c`, which loads no interactive rc: an alias defined in `.zshrc` is not a command that can
-  be an entrypoint, though `$PATH` is intact (`internal/terminal/shellenv.go`).
-- **The worktree setup script answers to the main checkout, never the new branch** (`internal/project/setup.go`):
-  improve `.lich/setup-worktree.sh` on a feature branch and fresh worktrees keep running the old one until the
-  change reaches the checkout the project points at.
+- **An interrupted turn is read off the keystrokes, not from the provider** (`internal/terminal/draft.go`,
+  `hookstate.go`, `Service.noteInterrupt`): Claude Code, Codex and oh-my-pi all skip the hook that ends a turn
+  when the user stops one, so lich publishes `interrupted` itself when a lone Ctrl+C or Escape reaches a session
+  it knows is mid-turn. It is a guess made from bytes, and it has three edges. A provider session running a tool
+  that owns the terminal — an editor opened through a shell command — takes Escape as the interrupt and clears
+  the ring while the turn is still running; the next report from the provider puts it back. opencode does report
+  its own abort, and reports it as the turn *finishing* (`session.status idle`), so an interrupted opencode card
+  wears the same solid ring a completed turn does — nothing in the event says which happened, and the provider's
+  own word outranks the keystroke. Crush reports no state at all, so it has no turn to end and the fallback never
+  fires there. And an errand the relay delivered survives an interrupt on purpose: stopping a turn is not
+  answering the request, so the sender keeps waiting for the target's next turn rather than being told the work
+  is over.
+- **The Review panel's "Last turn" is a window of wall-clock time, and it lives in memory**
+  (`internal/terminal/turnsnap.go`, `internal/project/turnsnap.go`): the panel brackets a turn with two
+  `git write-tree` snapshots taken against an index of lich's own, so what it shows is everything that
+  touched the checkout between the `busy` and the `done` — a formatter, an editor open beside lich, the
+  user's own hands. Nothing in it can attribute a line, which is why the copy names the window and never
+  the agent. Four traps follow. The pair is held in Go memory alone: a lich restart empties it, so every
+  live session reads "No last turn recorded" until its next turn ends, and that wording is the same one a
+  session whose first turn is still running gets — the panel cannot say which. `add -A` obeys `.gitignore`
+  (deliberately, so this and `DiffText` never disagree about which files exist), so a turn that only
+  touched ignored files reports itself as having changed nothing. Every snapshot in the app runs on one
+  FIFO worker, because git refuses a second `add` against an index another holds — so one session's first
+  snapshot of a large checkout delays the next session's, and a queue past `snapQueueDepth` drops a job,
+  costing that turn its record with only the log saying so. A checkout whose *first* snapshot fails is
+  dropped outright and never asked again — the ordinary reason is a session opened outside a repository,
+  but a transient failure at spawn reads the same and leaves that card with no last turn until it respawns. And the boundary is the session-state contract,
+  so **Crush and Cursor CLI have no last turn at all**: neither reports a state (`docs/hooks/session-state.md`),
+  so nothing ever opens or closes a window there and the switch is never drawn — a rule read off the
+  session's own reports, not a list of providers, so it corrects itself the day either one starts reporting.
+- **A finished turn is unread until its own card is watched** (`frontend/src/lib/session/session-status-store.ts`,
+  `frontend/src/providers/projects.tsx`): the solid emerald ring means "back from the agent, not read yet", and it
+  fades only for the session whose terminal is on screen **while the window has focus**. Two things follow. A card
+  left focused in a background window keeps its ring solid until the window is touched again, which is the point
+  — but it also means a browser that reports focus oddly never fades one. And the mark lives in the page like the
+  rest of the session state, so a reload starts every session unread again: a turn read twenty minutes ago comes
+  back looking like news, and nothing on screen says the page forgot.
+- **A session close is a hang-up on Unix and a kill on Windows** (`internal/terminal/pty_unix.go`,
+  `pty_windows.go`): closing a card signals the agent and gives it `closeGrace` to leave, so its exit path runs —
+  hooks, transcripts, whatever it writes on the way out. A ConPTY has no signal to deliver, so the same close on
+  Windows is still abrupt: an agent that saves state on exit loses it there, and nothing on screen says so.
+- **A terminal entrypoint reaches shell sessions only, and reads a different rc on each OS**
+  (`internal/terminal/entrypoint.go`): the menu item is absent on a provider card. On Linux and macOS the command
+  runs through the shell's `-c`, which loads no interactive rc: an alias defined in `.zshrc` is not a command that
+  can be an entrypoint, though `$PATH` is intact (`internal/terminal/shellenv.go`). On Windows it runs through
+  PowerShell's `-EncodedCommand`, which *does* load `$PROFILE` first — so the same alias works there, and an
+  entrypoint one user shares is not necessarily one the next can run.
+- **The worktree setup script answers to the main checkout, never the new branch, and never runs on Windows**
+  (`internal/project/setup.go`, `internal/terminal/setup.go`): improve `.lich/setup-worktree.sh` on a feature
+  branch and fresh worktrees keep running the old one until the change reaches the checkout the project points
+  at. And `.lich/setup-worktree.sh` is one file, versioned and shared by every checkout, holding sh — so a
+  Windows session skips it rather than feeding it to PowerShell, which would run the leading words of every line
+  as commands. A worktree opens there with its setup silently not done.
 - **A session is named at birth, never on resume** (`internal/terminal/command.go`, `nameArgs`): the trap is that
   lich still *derives* that name (`internal/relay/rostername.go`, its page-side half
   `frontend/src/lib/session/peer-name.ts`) for the relay to resolve against, and the derived string goes stale the
@@ -56,6 +103,10 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   repository itself keeps failing the old silent way.
 - **git status is polled** — one shared poller per repository path (`frontend/src/lib/git/git-status-store.ts`); the
   lich plugin's `session-touched` hook nudges an immediate refresh.
+- **The status badge has a single source** (`internal/project/status.go`): the branch, the HEAD commit and the
+  dirty count all come out of one `git status --porcelain=v2 --branch` parse. A git release that changes those
+  records breaks all three together rather than one at a time, and there is no second call left to disagree with
+  the first — `Branch` still asks `symbolic-ref`, but nothing on the polled path calls it.
 - **lich fetches on its own** (`internal/project/basestatus.go`) — the only git write lich makes outside the
   worktree flows: it moves remote refs in the user's own repository, unannounced, for as long as a card is on
   screen.
@@ -87,14 +138,22 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   hand in `frontend/src/lib/terminal/term-modes.ts` — today the mouse encoding and cursor visibility. Cursor
   *shape* (DECSCUSR) is not among them: a TUI that chose a bar or underline cursor gets lich's block back after a
   card switch.
+- **One socket carries every session's output** (`internal/terminal/writequeue.go`): the per-session outbox
+  decouples the *producers*, never the wire. A window that stops reading stalls the connection's single writer,
+  so after `wsWriteTimeout` (5s) every session's output switches to the `/events` bridge at once. That is a
+  second socket, and the page reads the two independently: a frame that fell back can land ahead of one still
+  sitting in the stalled connection's buffer, so output is never dropped but its order across that switch is not
+  guaranteed. Until then the queue holds `writeQueueDepth` frames for the whole app, and two things still wait on
+  it across sessions: a push that finds it full, and the flush a session runs before its exit banner so the banner
+  cannot overtake its own last bytes.
 - **Single instance via the pinned port**: the bind is the lock (`internal/singleton`); a duplicate launch focuses
   the running window (best-effort, untested against a real window) and exits 0.
 - **lich appends to the agent's system prompt, for two providers only**
   (`internal/terminal/command.go`, `briefingFlags` → `relay.SpawnBriefing`): Claude Code and oh-my-pi are spawned
   with `--append-system-prompt` carrying lich's own briefing, so text the user never wrote is in every session's
-  prompt and in `/proc/<pid>/cmdline`. Codex, opencode and Crush get nothing there — none has a per-spawn append
-  flag, so for those three the point exists only in lich's MCP instructions, and behaviour between providers
-  differs by that much.
+  prompt and in `/proc/<pid>/cmdline`. Codex, Antigravity, opencode, Crush and Cursor CLI get nothing there — none
+  has a per-spawn append flag, so for those five the point exists only in lich's MCP instructions, and behaviour
+  between providers differs by that much.
 - **A prompt in use is recognised from the bytes going in, never from the line itself**
   (`internal/terminal/draft.go`): a relayed message pastes at the prompt and sends an Enter behind it, so lich
   holds the delivery back while the user has unsent input there. What it counts is printable input since the last
@@ -103,21 +162,104 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   `draftIdle` for nothing. The stale-draft release is what keeps that a delay instead of a wedged relay. Two gaps
   stay open: input arriving in the ~150ms between the paste and its Enter (`defaultSubmitDelay`) still rides along,
   and a provider that takes keystrokes through anything other than this PTY is invisible here.
-- **Installing the plugin writes into three harnesses' own directories** (`internal/agentplugin`): Claude Code and
+- **An answer that names no ticket is matched by delivery order** (`internal/relay/relay.go`,
+  `errandOfLocked`): `lich reply "<answer>"` and `reply_to_session` without a ticket close the oldest message
+  delivered to that session and still open, because nothing in an answer itself says which request it belongs to.
+  A session working two relayed tasks at once that answers the second one first sends it home as the answer to the
+  first, and both senders read a confident wrong report — nothing anywhere reports the mismatch. Naming the ticket
+  is still the only exact route, which is why every relayed message spells it and why the card's tooltip shows it.
+
+- **A Cursor CLI session reports through Claude Code's plugin, or not at all** (`internal/agentplugin`,
+  `internal/terminal/terminal.go`, `providerKind`): lich installs no plugin into Cursor, and it does not have to —
+  the CLI executes every Claude Code hook on the machine, the user's own and each installed plugin's (measured on
+  2026.08.11: `hookSource: claude-user` and `claude-plugin`, with `${CLAUDE_PLUGIN_ROOT}` expanded). So on a
+  machine where the lich plugin is installed in Claude Code, a Cursor session reports the chat id it is running
+  and the files it touches, with nothing installed there — and on a machine without it, that session reports
+  nothing at all. Nothing on the card says which of the two it is.
+  **What never arrives is the turn.** Of the nine events the plugin registers, Cursor delivers four —
+  `SessionStart`, `PreToolUse`, `PostToolUse`, `SessionEnd` — and no `UserPromptSubmit` or `Stop`, measured
+  against hooks in Cursor's own format and in Claude Code's alike. So a turn that calls no tool never begins and
+  one that does never ends, which is why `terminal.closableState` drops every state but `idle` from a Cursor
+  session rather than pinning a spinner to the card for the rest of it: no spinner, no bell, no auto-title, and
+  no `waiting` either (`Notification` maps to nothing there). That is the Crush row of the table below, arrived
+  at from the other direction — lich does not own the registration here, so it filters what it cannot close.
+  The reports are also all that route carries: Cursor takes no MCP server on its command line and reads none from
+  a Claude Code plugin, so lich's own tools come from an `mcpServers` document its install writes under
+  `~/.cursor` — which is why installing for Cursor refuses while Claude Code has no plugin, why its version is
+  Claude Code's, and why its row offers no update of its own: the update is the Claude Code row's, one line up
+  the same screen. A Cursor session gets no briefing either — the CLI has no append flag — so what it knows about
+  lich is its tool list. One last edge: the plugin's script reports `claude`, the argument Claude Code's own
+  registration passes it, and lich drops that name for a card whose provider it chose itself — but a **shell**
+  session running `cursor-agent` by hand has only the report to go on and wears Claude's mark.
+- **Cursor keeps its state in two directories and its chats per checkout** (`internal/sandbox/sandbox.go`,
+  `internal/terminal/transcript.go`): its config dir is `$CURSOR_CONFIG_DIR` ‖ `$XDG_CONFIG_HOME/cursor` ‖
+  `~/.cursor` — not xdg-basedir, the fallback is the home directly — and it holds the credentials and the chats.
+  But `~/.cursor` is resolved off the home with no variable in the way at all, and that is where `mcp.json`, the
+  per-project transcripts and the CLI state live. On a machine with `XDG_CONFIG_HOME` set the two are different
+  directories and a sandbox binding only one is a session that cannot see its own MCP servers. The chat itself is
+  at `chats/<md5 of the resolved cwd>/<chatId>/store.db`, so a resume asked without the session's own working
+  directory answers "conversation gone" — the same shape as Crush.
+- **An install started from `go run` registers the lich on PATH, not itself** (`internal/agentplugin/crush.go`,
+  `resolveLichBinary`): Crush's, oh-my-pi's and Cursor's registrations name the absolute path of the lich that
+  wrote them, and under `go run` — `task dev` — that path is the binary the toolchain built into its cache and
+  deletes when the run ends, so writing it gives a registration that works for the rest of that session and then
+  fails silently forever. lich writes `lich` from PATH instead, recognising the cache by shape
+  (`go-build*/b*/exe/*`) since the toolchain exports no marker. The trap is that a dev install then points at
+  whatever version is installed on the machine — harmless, because the registration is only the transport and a
+  session reaches the lich its PTY's coordinates name, but not what the file appears to say. With no lich on
+  PATH at all, a dev install registers nothing: Crush and oh-my-pi still get their hooks, and Cursor's install
+  refuses outright.
+- **Installing the plugin writes into four harnesses' own directories** (`internal/agentplugin`): Claude Code and
   Codex are driven through their plugin CLI, but opencode, oh-my-pi and Crush have none, so lich writes the
   released files itself. None of them records what is installed, so the version lives in a marker line lich wrote —
   edit the file by hand and lich reads it as not installed. Crush below 0.88.0 ignores those lines in silence,
   which is why the install asks its version first. Crush's block and omp's `mcp.json` register lich's MCP server by
   the absolute path of the binary that installed it, and omp's is a JSON document lich rewrites rather than appends
   to: every key survives, the user's formatting does not.
-- **Only two of the four harnesses that report a tool spell an MCP one splittably** (`frontend/src/lib/session/tool-label.ts`,
+- **Antigravity has a plugin CLI and lich installs around it** (`internal/agentplugin/antigravity.go`): `agy
+  plugin install` takes a directory, and its only remote form clones that repository's default branch — while lich
+  installs a *release*, whose version is what a card reports and what the next update compares against. So lich
+  writes the customization directory itself (`~/.gemini/config/plugins/lich/`), with three consequences. The
+  installed version lives in the manifest lich writes rather than in a marker line, since the directory is lich's
+  outright — and a copy the user installed through `agy plugin install` carries no version, so it reads as not
+  installed. The registration's commands are relative, resolved against the directory holding `hooks.json`
+  (Antigravity runs a hook through `sh -c` from there and sets no plugin-root variable of its own, both measured on
+  1.1.19), so moving that directory by hand breaks every report until the next install. And lich writes the hooks
+  and their scripts only: the plugin's skills come with `agy plugin install`, not with this, which is the same
+  thing already true of opencode, oh-my-pi and Crush.
+- **A new MCP tool reaches opencode a release later than everyone else** (`internal/cli/mcp.go`, `mcpTools`; the
+  registration table in `docs/cli.md`): every other harness is handed lich's own server, so a tool added here is in
+  that session's list on the next spawn. opencode cannot register an MCP server from a plugin, so its plugin
+  defines each tool itself in the companion repo (`omartelo/lich-plugin`, `opencode/lich.js`) — which means a tool
+  arrives there only once that repo cuts a release and the user reinstalls the plugin, and until they do it is
+  missing from that session's list while it is in every other. `lich rename` works there like anywhere else; it is
+  discovery that lags, which is the whole reason the tools exist.
+- **An Antigravity card names the step, not the MCP tool** (`frontend/src/lib/session/tool-label.ts`): every MCP
+  call there is the one step `call_mcp_tool`, with the server and the tool in `args.ServerName` / `args.ToolName`
+  (measured on 1.1.19). Nothing in that name can be split, so the fix was never here — the plugin reads those two
+  arguments and sends them as the report's `detail`, and the card draws `call_mcp_tool · lich/open_session` where a
+  Claude Code card draws `lich · open_session`. The trap is reaching for `tool-label.ts` when that line looks
+  wrong: the tool's identity arrives in a different field on this provider, and a plugin older than the release
+  that added it sends `call_mcp_tool` with no detail at all.
+- **Only two of the five harnesses that report a tool spell an MCP one splittably** (`frontend/src/lib/session/tool-label.ts`,
   table in `docs/hooks/session-state.md`): Claude Code and Codex send `mcp__<server>__<tool>`, which the card draws
   as `<server> · <tool>`. omp's `mcp__<server>_<tool>` has one underscore doing two jobs — `mcp__lich_list_sessions`
   splits into `lich` + `list_sessions` or `lich_list` + `sessions` and the string cannot say which — so only its
   prefix comes off, and opencode's `<server>_<tool>` carries no marker at all and is shown whole. Nothing overflows
   anywhere (the line truncates), but on those two the card spends its width on a server name nobody asked for.
-  Splitting them needs the list of registered server names, which the card does not have. Crush is not on this
-  list at all: it reports no tool.
+  Splitting them needs the list of registered server names, which the card does not have. Antigravity is the fifth
+  and nothing here reaches it: its name is not a tool name at all, so the split never applies and the bullet above
+  is where that one is answered. Crush is on no version of this list: it reports no tool.
+- **Only Claude Code says what a session is waiting for; the others say less or nothing**
+  (`frontend/src/components/sidebar/SessionCard.tsx`, table in `docs/hooks/session-state.md`): its
+  `Notification` carries a `message` written for a human, so the card reads "Claude needs your permission to
+  use Bash". Codex's `PermissionRequest` and opencode's `.asked` events carry only the thing being asked
+  about — `tool_name`, `permission`, `action` — so those cards read a bare `Bash` or `edit`, which says which
+  card to open and not what it will ask. **Antigravity, oh-my-pi, Crush and Cursor CLI send no reason at all** and keep the
+  generic "Waiting on you": none of the four reports `waiting` in the first place (Antigravity's permission
+  prompt raises no lifecycle event that has been measured; omp declares an approval event no run was ever seen
+  emitting; Crush reports no state), so there is nothing to hang a reason on. The trap is reading a bare card as
+  "nothing to say" — on those three it means the harness never spoke, not that the block is trivial.
 - **omp's state directory answers to two variables, and the profile wins** (`internal/agentplugin/omp.go`,
   `internal/terminal/transcript.go`, resolving it independently as the Claude Code pair do): `OMP_PROFILE` moves
   the whole directory and beats an explicit `PI_CODING_AGENT_DIR`. Get it backwards and the install lands where omp
@@ -130,17 +272,32 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   those logins and never writes them: it does not refresh the token, so an expired one reads as signed out until
   the provider's own CLI rotates it. A reading is cached for five minutes because both endpoints rate-limit hard —
   the number on screen is up to that old, and nothing on it says so.
+- **Which account a session spends is read from its process, and only Linux answers**
+  (`internal/quota`, `internal/terminal/account.go`): the reading follows `/proc/<pid>/environ` of the process in
+  the session's PTY, so a wrapper binary that exports a login of its own is seen only there. macOS could answer
+  the same question through `KERN_PROCARGS2` and does not yet; Windows cannot at all. On both, a session running
+  a user-configured binary reports `unknown` and its gauge disappears from the footer — the alternative was the
+  default account's numbers under a session spending another plan, and silence is the failure that does not lie.
+  A card with no live process is in the same position until its PTY is up.
+- **Measuring a token-only login costs a request against the very plan it measures** (`internal/quota/claude.go`):
+  a long-lived OAuth token (`claude setup-token`) carries `user:inference` alone, so the usage route answers it
+  403 and the account is read the way Claude Code reads it for itself — one `max_tokens: 1` message, for the
+  rate-limit headers on the response. Reading the gauge therefore spends quota (negligibly) and appears in the
+  account's own usage, once per cache window. That request carries Claude Code's system prompt verbatim because
+  the API rejects an OAuth token without it — the same coupling as the user agent, and it fails closed, as a
+  failed reading. Headers carry the two account-wide windows and no plan name, so such a session shows no
+  model-scoped weekly cap and no "Max 5x" badge.
 - **The sandbox confines a working agent, not hostile code** (`internal/sandbox`): namespaces and mounts on
   Linux, a path policy on macOS, and nothing else — no seccomp filter, no Landlock ruleset. The network is
   never cut (the agent needs its API and the plugin's hooks report over loopback), so anything readable
-  inside is exfiltrable, and `~/.config` *is* readable: a token stored there, `gh`'s among them, is in
-  reach. Every session also carries `LICH_TOKEN`, so a confined agent can call lich's own RPC over
+  inside is exfiltrable, and `~/.config` *is* readable: a token stored there is in reach. `gh`'s is not
+  one of them — it lives in the system keyring, which is why reaching it takes the flag below. Every session also carries `LICH_TOKEN`, so a confined agent can call lich's own RPC over
   loopback: a method that reads a host path it was *handed* would copy anything into reach of the sandbox,
   which is why the attach flow opens the picker inside the backend (`drop.Attach`) instead of taking a path. The private home is writable and vanishes with the session, so a dotfile an agent writes is gone
   next spawn with nothing saying so. On Ubuntu and Debian the kernel may refuse the user namespace outright
   (an AppArmor policy), which surfaces as bubblewrap's own error in the card and no session. `~/.ssh` is not
-  mounted at all: a push over ssh from inside a confined session fails, and lich's own PR flows run outside
-  it and are unaffected. The distribution's `/etc/ssh/ssh_config.d` drop-ins are replaced by an empty
+  mounted at all: a push over ssh from inside a confined session fails unless the project hands over the ssh
+  agent (below), and lich's own PR flows run outside the sandbox and are unaffected either way. The distribution's `/etc/ssh/ssh_config.d` drop-ins are replaced by an empty
   directory, because inside the namespace they belong to nobody and ssh refuses to read a config file it
   does not own — so a host whose ssh depends on one of them (a corporate `ProxyCommand`, say) does not have
   it inside the sandbox. The display server's socket *is* mounted, because the agent's own copy and its
@@ -149,6 +306,31 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   X11 socket and its cookie instead, the wider of the two — X clients are not isolated from one another —
   and macOS gets neither, its pasteboard being a mach service rather than a socket, so a confined session
   there has no clipboard at all. macOS has no hardware here — its profile is unit-tested and has never run.
+- **The two sandbox grants hand over more than what they are read as** (`internal/store/settings.go`,
+  `internal/sandbox`, `internal/terminal/sandbox.go`): a confined session reaches the network as the user only
+  where the project turned one of them on, and each is all-or-nothing. The ssh agent is handed over as a socket,
+  so nothing private enters the sandbox — but the session signs with **every** identity loaded in that agent,
+  against any host it can reach, for as long as it runs. OpenSSH can pin a key to one destination, and only when
+  the key is added on the host (`ssh-add -h`); lich is given a socket that is already populated and can only
+  pass it on whole. The socket does not travel alone: `~/.ssh/known_hosts` is mounted read-only beside it,
+  because without it ssh cannot verify github.com, has no tty to ask on, and fails with "Host key
+  verification failed" before the key is ever offered — the grant would hand over the credential and not the
+  push. That file is public host keys, never a secret; what a confined session learns from it is the list of
+  machines the user connects to. Read-only, so a host the user has never connected to *outside* the sandbox
+  still fails inside it and cannot be learned there — blind trust-on-first-use is not a thing to grant an
+  unattended agent. And a `known_hosts` symlinked out of a dotfiles repository is dropped like every other
+  link in the home (below), which takes the whole grant down with it and says nothing. That is why Settings lists what is in the agent — and the list is read when the pane opens,
+  so a key added afterwards is handed over by a switch that never named it. The GitHub token is one account's,
+  the project's own (`vcs.account`), and it rides in the session's environment: the agent can read it back out
+  of its own environment and spend it on anything that account's scopes allow, this repository or not. Neither
+  grant is keyed by provider — a grant describes what is inside the sandbox, not who runs in it — so turning
+  one on turns it on for every provider confined in that project. It is
+  resolved once per spawn, so a token gh rotates mid-session goes stale with nothing saying so, and a `gh auth
+  token` that fails leaves the session with no token rather than failing the spawn. Both are off by default,
+  and both are Linux in practice: the macOS profile denies reads *inside* the home while a launchd agent socket
+  and gh's keyring live outside it, so a confined macOS session never lost either and the switches change
+  nothing there — they are inert rather than hidden, and there is no macOS hardware here to prove it further.
+  Windows has no sandbox backend, so neither switch exists.
 - **A file handed to a confined session arrives as a copy** (`internal/drop`): the session's home is empty,
   so lich does not look there for a dropped file at all — anything outside its checkout is copied and the
   copy's path is what lands at the prompt, for a drag and for the footer's attach button alike. The agent may read it and not write back: an edit lands on the
@@ -186,3 +368,33 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   cask's `depends_on` and the bundle's `LSMinimumSystemVersion` say 13.0 because the compiler does —
   both move with the next Go bump, and a machine below the floor is refused by Homebrew rather than
   by a crash.
+- **A closed session's history reaches back a hundred rows, and the search never goes deeper**
+  (`internal/store/store.go`, `frontend/src/lib/session/command-palette.ts`): the History tab is handed the
+  hundred most recently closed sessions when it opens and filters those in the window, the bargain the closed
+  projects list already makes. So a session closed further back than that is in the database, counts against
+  nothing, and cannot be found — typing its name narrows a list it was never in. The fix when it bites is a
+  `LIKE` in the query, not a bigger number; nothing warns that the list was cut, because a cut that is always
+  in force is not news.
+- **The history's branch is read live, so a row whose checkout is gone has none** (`internal/project.BranchesOf`):
+  the branch is not stored — a worktree keeps the name it was created with while an agent moves the branch
+  inside it, so the directory cannot answer and only git can. The batch runs once per opening, which also means
+  a branch that moved while the palette is up is stale until it is reopened. A checkout removed behind lich's
+  back has no branch to read and no session to resume: that row says `checkout gone` and offers to forget
+  itself, which is the only way such a row is ever collected — `PurgeWorktreeSessions` never ran for it,
+  because the removal never went through the app.
+- **Parked rows are never swept, and their dropped-file copies expire on the clock instead of at the close**
+  (`internal/store/mutations.go`, `internal/drop`): every close now parks a row, so the sessions table grows
+  monotonically with the sessions a workspace has ever opened — a few hundred bytes each, which is a megabyte
+  or so a year and deliberately not worth a retention timer. Nothing deletes history on a schedule; a row goes
+  when its worktree is removed through lich, when the user forgets it, or when its project is deleted. The one
+  thing that changed underneath is `internal/drop`: `SetSessionGone` still does not fire on a park, so a plain
+  close no longer takes that session's dropped-file copies with it and they fall to the three-day prune. They
+  are unreachable either way — a resume comes back under a fresh id, so the old copies directory can never be
+  addressed again — but they now sit on disk for up to three days rather than going at the close.
+- **The History tab searches names, never what was said** (`internal/terminal/search.go`): the Messages tab
+  reads a 4 MB tail per session per keystroke, and it is pointed at the sessions the palette can route to —
+  the open ones. History is the long list, so widening the transcript search to it would put a hundred disk
+  reads behind every character typed. The parked row keeps its `provider_session_id`, so the transcript is
+  still there to be searched by whatever does it later; and that search is Claude-only today
+  (`claudeTranscriptPath`) while `canResume` locates all six providers, so widening it would inherit that gap
+  rather than close it.

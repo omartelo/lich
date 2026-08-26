@@ -164,3 +164,43 @@ func TestSessionSandboxOfAMissingRowIsNotAnError(t *testing.T) {
 		t.Errorf("SessionSandbox of a missing row = %q, want \"\"", got)
 	}
 }
+
+// The credential flags are the doors the sandbox opens back up, so anything
+// that is not the literal "true" has to leave them shut — an absent value, a
+// stale one, a value some other feature wrote.
+func TestSandboxCredentialsAreOnlyTheLiteralTrue(t *testing.T) {
+	svc := sandboxProject(t, "/work/alpha")
+	for _, value := range []string{"", "yes", "1", "TRUE", "on"} {
+		_ = svc.SetSetting(sshAgentKey, globalScope, value)
+		_ = svc.SetSetting(ghTokenKey, globalScope, value)
+		if svc.SandboxSSHAgent("p1") {
+			t.Errorf("ssh agent handed over for %q, want off", value)
+		}
+		if svc.SandboxGHToken("p1") {
+			t.Errorf("gh token handed over for %q, want off", value)
+		}
+	}
+	_ = svc.SetSetting(sshAgentKey, globalScope, "true")
+	if !svc.SandboxSSHAgent("p1") {
+		t.Error("ssh agent off for \"true\", want on")
+	}
+	// The two are separate doors: turning the agent on must not turn gh on.
+	if svc.SandboxGHToken("p1") {
+		t.Error("the ssh agent flag turned the gh token on, want them independent")
+	}
+}
+
+// Scoped like the rung above them: one repository may hand credentials over
+// while the rest of the machine's projects do not.
+func TestSandboxCredentialsPreferTheProjectOverTheGlobal(t *testing.T) {
+	svc := sandboxProject(t, "/work/alpha")
+	key := ghTokenKey
+	_ = svc.SetSetting(key, globalScope, "true")
+	if !svc.SandboxGHToken("p1") {
+		t.Error("the global flag does not reach the project, want it inherited")
+	}
+	_ = svc.SetSetting(key, "p1", "false")
+	if svc.SandboxGHToken("p1") {
+		t.Error("the project's own \"false\" lost to the global \"true\"")
+	}
+}

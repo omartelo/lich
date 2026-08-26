@@ -11,6 +11,8 @@ import {
   mergeHotkeys,
   sameCombo,
   saveHotkeys,
+  UNASSIGNED,
+  UNASSIGNED_LABEL,
   type Combo,
   type HotkeyId,
   type KeyState,
@@ -81,6 +83,14 @@ describe("matchesCombo", () => {
     expect(matchesCombo(event, bound("newSession"))).toBe(false)
     expect(matchesRepeatingCombo(event, bound("newSession"))).toBe(true)
   })
+
+  // The point of an unassigned action: nothing fires it, so the chord the user
+  // freed reaches the PTY the way it would if lich had never bound it.
+  it("never matches an unassigned combo", () => {
+    expect(matchesCombo(key({ ctrlKey: true, shiftKey: true, key: "T" }), UNASSIGNED)).toBe(false)
+    expect(matchesCombo(key({}), UNASSIGNED)).toBe(false)
+    expect(matchesCombo(key({ ctrlKey: true, key: "" }), UNASSIGNED)).toBe(false)
+  })
 })
 
 describe("comboFromEvent", () => {
@@ -147,6 +157,11 @@ describe("defaultHotkeys", () => {
       key: "v",
     })
   })
+
+  it("names an unassigned binding", () => {
+    expect(formatCombo(UNASSIGNED, false)).toBe(UNASSIGNED_LABEL)
+    expect(formatCombo(UNASSIGNED, true)).toBe(UNASSIGNED_LABEL)
+  })
 })
 
 describe("mergeHotkeys", () => {
@@ -185,9 +200,21 @@ describe("mergeHotkeys", () => {
     expect(mergeHotkeys({ terminalSearch: null }).terminalSearch).toBeNull()
   })
 
+  it("keeps an unassigned action unassigned", () => {
+    expect(mergeHotkeys({ newSession: UNASSIGNED }).newSession).toEqual(UNASSIGNED)
+  })
+
+  it("migrates empty-key bindings to the unassigned state", () => {
+    expect(
+      mergeHotkeys({ newSession: { mod: true, shift: true, alt: true, key: "" } }).newSession,
+    ).toEqual(UNASSIGNED)
+  })
+
   it("drops malformed and unknown entries without disturbing defaults", () => {
     const merged = mergeHotkeys({ newSession: { mod: 1, key: "" }, retiredAction: null })
     expect(merged).toEqual(DEFAULT_HOTKEYS)
+    expect(mergeHotkeys(null)).toEqual(DEFAULT_HOTKEYS)
+    expect(mergeHotkeys("nope")).toEqual(DEFAULT_HOTKEYS)
   })
 })
 
@@ -214,10 +241,18 @@ describe("hotkeyConflicts", () => {
     expect(
       hotkeyConflicts({
         ...DEFAULT_HOTKEYS,
-        newSession: null,
-        commandPalette: null,
+        newSession: UNASSIGNED,
+        commandPalette: UNASSIGNED,
       }),
     ).toEqual({})
+  })
+
+  it("treats combos differing only in a modifier as distinct", () => {
+    const conflicts = hotkeyConflicts({
+      ...DEFAULT_HOTKEYS,
+      newSession: { ...bound("commandPalette"), alt: true },
+    })
+    expect(conflicts).toEqual({})
   })
 })
 
@@ -227,6 +262,12 @@ describe("sameCombo", () => {
     expect(sameCombo(null, bound("newSession"))).toBe(false)
     expect(sameCombo(bound("newSession"), bound("newSession"))).toBe(true)
   })
+
+  // What the settings row reads to decide whether Reset and Unassign are live.
+  it("separates unassigned from a real binding", () => {
+    expect(sameCombo(UNASSIGNED, UNASSIGNED)).toBe(true)
+    expect(sameCombo(UNASSIGNED, DEFAULT_HOTKEYS.newSession)).toBe(false)
+  })
 })
 
 describe("loadHotkeys", () => {
@@ -235,6 +276,27 @@ describe("loadHotkeys", () => {
   it("round-trips assigned and unassigned bindings", () => {
     saveHotkeys({ ...DEFAULT_HOTKEYS, terminalSearch: null })
     expect(loadHotkeys().terminalSearch).toBeNull()
+  })
+
+  it("answers the defaults with nothing stored", () => {
+    expect(loadHotkeys()).toEqual(DEFAULT_HOTKEYS)
+  })
+
+  it("round-trips what saveHotkeys wrote", () => {
+    const mine: Combo = { mod: true, ctrl: false, shift: true, alt: false, key: "j" }
+    saveHotkeys({ ...DEFAULT_HOTKEYS, newSession: mine })
+    expect(loadHotkeys().newSession).toEqual(mine)
+  })
+
+  it("restores an unassigned action when its default is saved", () => {
+    saveHotkeys({ ...DEFAULT_HOTKEYS, newSession: UNASSIGNED })
+    const cleared = loadHotkeys()
+    expect(cleared.newSession).toEqual(UNASSIGNED)
+    expect(matchesCombo(key({ ctrlKey: true, shiftKey: true, key: "T" }), cleared.newSession)).toBe(
+      false,
+    )
+    saveHotkeys({ ...cleared, newSession: DEFAULT_HOTKEYS.newSession })
+    expect(loadHotkeys()).toEqual(DEFAULT_HOTKEYS)
   })
 
   it("falls back to defaults for corrupt JSON", () => {

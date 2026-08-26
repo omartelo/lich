@@ -72,7 +72,7 @@ func TestWrapSandboxLeavesAnUnconfinedSpawnAlone(t *testing.T) {
 		{"not confined", "/home/u", false},
 		{"no home to empty", "", true},
 	} {
-		got := wrapSandbox(baseSpec(), providers.Claude, tt.home, "", tt.confined)
+		got := wrapSandbox(baseSpec(), providers.Claude, tt.home, "", tt.confined, sandboxCreds{})
 		if got.bin != original.bin || !slices.Equal(got.args, original.args) {
 			t.Errorf("%s: spawn rewritten to %q %v", tt.name, got.bin, got.args)
 		}
@@ -84,7 +84,7 @@ func TestWrapSandboxKeepsTheCommandAndItsArguments(t *testing.T) {
 		t.Skip("no sandbox backend on this machine")
 	}
 	original := baseSpec()
-	got := wrapSandbox(baseSpec(), providers.Claude, t.TempDir(), "", true)
+	got := wrapSandbox(baseSpec(), providers.Claude, t.TempDir(), "", true, sandboxCreds{})
 	if got.bin == original.bin {
 		t.Fatalf("the spawn was not confined: still %q", got.bin)
 	}
@@ -201,7 +201,7 @@ func TestWrapSandboxMountsTheSessionsCopies(t *testing.T) {
 	}
 	copies := sessionDropDir(t.TempDir(), "s1", true)
 
-	got := wrapSandbox(baseSpec(), providers.Claude, t.TempDir(), copies, true)
+	got := wrapSandbox(baseSpec(), providers.Claude, t.TempDir(), copies, true, sandboxCreds{})
 
 	// Substring, not an argv element: the two backends spell a mounted path in
 	// their own vocabulary — bubblewrap takes it as its own argument
@@ -210,5 +210,35 @@ func TestWrapSandboxMountsTheSessionsCopies(t *testing.T) {
 	// carry is the path, not a shape only one of them uses.
 	if !slices.ContainsFunc(got.args, func(arg string) bool { return strings.Contains(arg, copies) }) {
 		t.Fatalf("the session's copies dir %q is not in the confined spawn: %v", copies, got.args)
+	}
+}
+
+// The token is a credential, and an argument list is public: /proc/<pid>/cmdline
+// is readable by every process on the machine, so a token passed through
+// bubblewrap's --setenv would be handed to more than the session it is for.
+func TestWrapSandboxKeepsTheTokenOutOfTheArguments(t *testing.T) {
+	if _, err := exec.LookPath("bwrap"); err != nil {
+		t.Skip("bubblewrap is not installed")
+	}
+	const token = "gho_secret_probe_value"
+	got := wrapSandbox(baseSpec(), providers.Claude, t.TempDir(), "", true, sandboxCreds{ghToken: token})
+
+	if !slices.Contains(got.env, "GH_TOKEN="+token) {
+		t.Errorf("GH_TOKEN missing from the child environment: %v", got.env)
+	}
+	if slices.ContainsFunc(got.args, func(a string) bool { return strings.Contains(a, token) }) {
+		t.Error("the token reached the argument list, where any process can read it")
+	}
+}
+
+// No flag, no credential: the sandbox as it shipped puts nothing in the
+// environment, so a session that was never granted a token cannot find one.
+func TestWrapSandboxAddsNoTokenWithoutOne(t *testing.T) {
+	if _, err := exec.LookPath("bwrap"); err != nil {
+		t.Skip("bubblewrap is not installed")
+	}
+	got := wrapSandbox(baseSpec(), providers.Claude, t.TempDir(), "", true, sandboxCreds{})
+	if slices.ContainsFunc(got.env, func(kv string) bool { return strings.HasPrefix(kv, "GH_TOKEN=") }) {
+		t.Errorf("GH_TOKEN set without the flag: %v", got.env)
 	}
 }

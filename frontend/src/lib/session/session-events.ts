@@ -20,13 +20,22 @@ export type SessionEventSource = (handler: (data: unknown) => void) => () => voi
 // id can only reach a subscriber that exists when it is emitted.
 export const STATUS_EVENT = "session-status"
 
-// Global event the backend emits when it auto-applies a session's ai-title as
-// its label (see terminal.titleEventName). Payload: { id, label }.
+// Global event the backend emits when a session's label changed outside the
+// window: an auto-applied ai-title (see terminal.titleEventName), or a rename
+// from the command line or an agent's tools (spawn.RenamedEventName, which is
+// this same name — the window's answer to both is to relabel that card).
+// Payload: { id, label }.
 export const TITLE_EVENT = "session-title"
 
 // Global event the backend emits when a session likely changed files on disk
 // (see terminal.touchedEventName). Payload: { id }.
 export const TOUCHED_EVENT = "session-touched"
+
+// Global event the backend emits once a session's last-turn record has changed
+// (see terminal.turnEventName). Payload: { id }. Not the same moment as the
+// turn's `done`: the record is filed on a snapshot worker, so a panel that
+// refreshed off the status report would read the answer before it exists.
+export const TURN_EVENT = "session-turn"
 
 // Global event the backend emits with a session's live working directory (see
 // terminal.cwdEventName): once with the directory the PTY starts in, then on
@@ -56,10 +65,10 @@ export const SANDBOX_EVENT = "session-sandbox"
 export const USAGE_EVENT = "session-usage"
 
 // Global event the backend emits while one session has a request open with
-// another (see relay.RelayEventName). Payload: { id, peer, direction } — the
-// session whose card changes, the label at the other end, and which way the
-// request runs. An empty direction clears it: the request is over, answered or
-// expired.
+// another (see relay.RelayEventName). Payload: { id, peer, direction, ticket } —
+// the session whose card changes, the label at the other end, which way the
+// request runs, and the ticket the two ends share. An empty direction clears it:
+// the request is over, answered or expired.
 export const RELAY_EVENT = "session-relay"
 
 // Global event the backend emits when a session was opened outside the window —
@@ -107,6 +116,12 @@ export type RelayDirection = (typeof RELAY_DIRECTIONS)[number]
 export interface SessionRelay {
   peer: string
   direction: RelayDirection
+  // The ticket the request runs on. Written down nowhere else a person can
+  // read: the number lives in the message typed at the target's prompt, and an
+  // agent whose context no longer reaches that message has no way back to it.
+  // Empty from a backend older than the field, which the tooltip draws nothing
+  // for rather than an empty line.
+  ticket: string
 }
 
 // toSessionRelay narrows a relay payload to an open request, or null when there
@@ -114,14 +129,22 @@ export interface SessionRelay {
 // backend that this build cannot draw. Both mean "show nothing", which is
 // safer than stranding a mark no event will ever take down.
 export function toSessionRelay(data: unknown): SessionRelay | null {
-  const { peer, direction } = (data ?? {}) as { peer?: unknown; direction?: unknown }
+  const { peer, direction, ticket } = (data ?? {}) as {
+    peer?: unknown
+    direction?: unknown
+    ticket?: unknown
+  }
   if (typeof direction !== "string") {
     return null
   }
   if (!(RELAY_DIRECTIONS as readonly string[]).includes(direction)) {
     return null
   }
-  return { peer: typeof peer === "string" ? peer : "", direction: direction as RelayDirection }
+  return {
+    peer: typeof peer === "string" ? peer : "",
+    direction: direction as RelayDirection,
+    ticket: typeof ticket === "string" ? ticket : "",
+  }
 }
 
 // A session's context-window occupancy as the footer shows it, and what the
@@ -212,6 +235,14 @@ export function statusTool(data: unknown): SessionTool | null {
     return null
   }
   return { name: tool, detail: typeof detail === "string" ? detail : "" }
+}
+
+// statusReason reads what a report says the session is blocked on, or "" when it
+// says nothing. Only a "waiting" carries one — the backend drops it on every
+// other state — so a caller does not have to check the state before asking.
+export function statusReason(data: unknown): string {
+  const { reason } = (data ?? {}) as { reason?: unknown }
+  return typeof reason === "string" ? reason : ""
 }
 
 // A session opened outside the window, as the workspace needs it: the card to

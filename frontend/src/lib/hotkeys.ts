@@ -49,6 +49,9 @@ export interface Combo {
 
 export type HotkeyBinding = Combo | null
 
+export const UNASSIGNED: HotkeyBinding = null
+export const UNASSIGNED_LABEL = "Unassigned"
+
 export interface HotkeyAction {
   id: HotkeyId
   label: string
@@ -379,7 +382,7 @@ function formatKey(key: string): string {
 }
 
 export function formatCombo(binding: HotkeyBinding, mac: boolean): string {
-  if (!binding) return "Unassigned"
+  if (!binding) return UNASSIGNED_LABEL
   const primarySymbols = mac && binding.mod
   const parts: string[] = []
   if (binding.mod) parts.push(mac ? "⌘" : "Ctrl")
@@ -400,11 +403,11 @@ function parsedCombo(value: unknown): Combo | null | undefined {
     (!legacy && typeof stored.ctrl !== "boolean") ||
     typeof stored.shift !== "boolean" ||
     typeof stored.alt !== "boolean" ||
-    typeof stored.key !== "string" ||
-    stored.key.length === 0
+    typeof stored.key !== "string"
   ) {
     return undefined
   }
+  if (stored.key.length === 0) return null
   const key = normalizeKey(stored.key)
   return {
     mod: stored.mod,

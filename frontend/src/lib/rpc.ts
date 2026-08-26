@@ -11,6 +11,8 @@ import type {
   BaseStatus,
   BinaryCheck,
   BranchRules,
+  ClosedSession,
+  LastTurn,
   Branches,
   CommitIdentity,
   DetectedProvider,
@@ -141,6 +143,9 @@ export const Terminal = {
   SearchTranscripts: (ids: string[], query: string) =>
     call<TranscriptMatch[] | null>("terminal.SearchTranscripts", [ids, query]),
   Close: (id: string) => call<null>("terminal.Close", [id]),
+  /** What changed on disk while this session's last finished turn ran — a
+   * window of time, not an attribution (see internal/terminal.LastTurnDiff). */
+  LastTurnDiff: (id: string) => call<LastTurn>("terminal.LastTurnDiff", [id]),
 }
 
 export const DropService = {
@@ -177,6 +182,10 @@ export const ProjectService = {
   PickSaveFile: (title: string, defaultName: string) =>
     call<string>("project.PickSaveFile", [title, defaultName]),
   Branch: (path: string) => call<string>("project.Branch", [path]),
+  /** Branch for several checkouts at once, keyed by path; a checkout that names
+   * none is left out. For the lists that want each row's branch once as it is
+   * drawn, rather than the per-path poll a live card subscribes to. */
+  BranchesOf: (paths: string[]) => call<Record<string, string>>("project.BranchesOf", [paths]),
   Diff: (path: string) => call<DiffStats>("project.Diff", [path]),
   /** How far the checkout's base branch has moved and what a merge would
    * collide on. null when the repository has no origin to measure against. */
@@ -342,6 +351,16 @@ export const Store = {
   /** Resume a parked worktree session under a fresh id, or null when none. */
   ReopenWorktreeSession: (projectID: string, path: string, newSessionID: string) =>
     call<StoredSession | null>("store.ReopenWorktreeSession", [projectID, path, newSessionID]),
+  /** The parked sessions, last closed first — the history the palette browses.
+   * Capped store-side, so this is also how far back a search can reach. */
+  ClosedSessions: () => call<ClosedSession[] | null>("store.ClosedSessions", []),
+  /** Resume one parked session by its own id, or null when it is no longer
+   * parked — another window resumed it, or its worktree was removed. */
+  ReopenSession: (sessionID: string, newSessionID: string) =>
+    call<StoredSession | null>("store.ReopenSession", [sessionID, newSessionID]),
+  /** Delete one parked session for good. Refused on a session that is open: a
+   * card on screen is closed, never forgotten. */
+  ForgetSession: (sessionID: string) => call<null>("store.ForgetSession", [sessionID]),
   /** Drop every session row for a worktree path when the worktree is removed. */
   PurgeWorktreeSessions: (projectID: string, path: string) =>
     call<null>("store.PurgeWorktreeSessions", [projectID, path]),
@@ -412,6 +431,13 @@ export const System = {
    * Returns "" when it launched a GUI editor detached, or a shell command line
    * to run in a terminal session when the editor is a terminal editor. */
   OpenInEditor: (dir: string, rel: string) => call<string>("system.OpenInEditor", [dir, rel]),
+  /** Open a session's checkout — the folder itself — in $VISUAL/$EDITOR. Same
+   * two answers as OpenInEditor: "" for a detached GUI launch, or a shell
+   * command line to run in a terminal session. */
+  OpenFolderInEditor: (dir: string) => call<string>("system.OpenFolderInEditor", [dir]),
+  /** Show a session's checkout in the platform's file manager. Rejects a path
+   * that is no longer a folder, so a card outliving its worktree says so. */
+  OpenFolder: (dir: string) => call<null>("system.OpenFolder", [dir]),
   /** Version, platform and log path — the page cannot derive any of the three. */
   Diagnostics: () => call<DiagnosticsData>("system.Diagnostics", []),
   /** Open the log's folder in the platform's file manager, for attaching it. */
@@ -422,9 +448,17 @@ export const System = {
   /** Raise a desktop notification: a headline and an optional second line.
    * The caller decides it is warranted — the backend only delivers. */
   Notify: (summary: string, detail: string) => call<null>("system.Notify", [summary, detail]),
-  /** Whether this machine can run a session confined (bubblewrap on Linux,
-   * sandbox-exec on macOS). A fact about the machine, not about a provider. */
-  SandboxAvailable: () => call<boolean>("system.SandboxAvailable", []),
+  /** What confines a session on this machine — "bubblewrap", "sandbox-exec" —
+   * or "" when nothing can. A fact about the machine, not about a provider.
+   * The name rather than a yes: the two backends have different holes, and the
+   * Sandbox pane says which one is in play. */
+  SandboxBackend: () => call<string>("system.SandboxBackend", []),
+  /** The identities loaded in the user's ssh agent, one readable line each.
+   * Shown beside the setting that hands the agent to a confined session: that
+   * setting reads as "let it push with my GitHub key" and actually covers every
+   * key in the list. Empty for no agent, no ssh-add, or an agent holding
+   * nothing — all three mean the same thing to whoever is deciding. */
+  SSHAgentKeys: () => call<string[]>("system.SSHAgentKeys", []),
 }
 
 export const Providers = {
@@ -436,10 +470,11 @@ export const Providers = {
 }
 
 export const Quota = {
-  /** Plan usage for every provider that meters a subscription. Served from a
-   * five-minute cache, so calling it often is cheap and asks nothing extra of
-   * endpoints that rate-limit. */
-  Plans: () => call<QuotaPlan[]>("quota.Plans", []),
+  /** Plan usage for every provider that meters a subscription, for the account
+   * a session spends — an empty id reads lich's own login, the machine-wide
+   * question. Served from a five-minute cache per account, so calling it often
+   * is cheap and asks nothing extra of endpoints that rate-limit. */
+  Plans: (sessionId: string) => call<QuotaPlan[]>("quota.Plans", [sessionId]),
 }
 
 export const Themes = {

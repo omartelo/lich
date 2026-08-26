@@ -58,3 +58,18 @@ func (l *turnLog) forget(id string) {
 	defer l.mu.Unlock()
 	delete(l.open, id)
 }
+
+// interrupt closes an open turn the user ended themselves at the PTY, and
+// reports whether there was one. Nothing is opened here: an interrupt is only
+// ever the end of a turn lich already heard start, so a Ctrl+C clearing the
+// line at an idle prompt — the common use of that key — says nothing and
+// changes nothing.
+func (l *turnLog) interrupt(id string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.open[id] {
+		return false
+	}
+	delete(l.open, id)
+	return true
+}

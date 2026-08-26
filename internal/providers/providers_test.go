@@ -8,13 +8,15 @@ import (
 
 func TestDefaultBinary(t *testing.T) {
 	cases := map[string]string{
-		Claude:   "claude",
-		Codex:    "codex",
-		OpenCode: "opencode",
-		OMP:      "omp",
-		Crush:    "crush",
-		"nope":   "",
-		"":       "",
+		Claude:      "claude",
+		Codex:       "codex",
+		Antigravity: "agy",
+		OpenCode:    "opencode",
+		OMP:         "omp",
+		Crush:       "crush",
+		Cursor:      "cursor-agent",
+		"nope":      "",
+		"":          "",
 	}
 	for id, want := range cases {
 		if got := DefaultBinary(id); got != want {
@@ -53,8 +55,27 @@ func TestDetect(t *testing.T) {
 	if got[1].ID != Codex || got[1].Installed {
 		t.Errorf("codex = %+v, want not installed", got[1])
 	}
-	if got[4].ID != Crush || !got[4].Installed || got[4].Path != "/opt/bin/crush" {
-		t.Errorf("crush = %+v, want installed at /opt/bin/crush", got[4])
+	if got[5].ID != Crush || !got[5].Installed || got[5].Path != "/opt/bin/crush" {
+		t.Errorf("crush = %+v, want installed at /opt/bin/crush", got[5])
+	}
+}
+
+// TestDetectCarriesTheBinary pins the field the settings screen asks $PATH for.
+// Antigravity is the case that matters: its id is not its command, so a screen
+// falling back to the id verifies a binary nobody ships.
+func TestDetectCarriesTheBinary(t *testing.T) {
+	svc := &Service{lookPath: func(string) (string, error) { return "", exec.ErrNotFound }}
+	got, err := svc.Detect()
+	if err != nil {
+		t.Fatalf("Detect: %v", err)
+	}
+	for _, d := range got {
+		if d.Binary != DefaultBinary(d.ID) || d.Binary == "" {
+			t.Errorf("%s binary = %q, want %q", d.ID, d.Binary, DefaultBinary(d.ID))
+		}
+	}
+	if got[2].ID != Antigravity || got[2].Binary != "agy" {
+		t.Errorf("antigravity = %+v, want binary agy", got[2])
 	}
 }
 

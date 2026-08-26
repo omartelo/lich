@@ -1,6 +1,7 @@
 package system
 
 import (
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -156,71 +157,16 @@ func TestOpenInEditorTerminalReturnsCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenInEditor: %v", err)
 	}
-	// The quoting belongs to the session's shell: sh everywhere, cmd.exe on
-	// Windows, and the two spell a quoted argument differently.
+	// The quoting belongs to the session's shell — sh on Unix, PowerShell on
+	// Windows — and both spell a quoted argument with single quotes, differing
+	// only in how an embedded one is escaped (see internal/shquote).
 	full := filepath.Join("/repo", "src/main.go")
 	want := "nvim '" + full + "'"
-	if runtime.GOOS == "windows" {
-		want = `nvim "` + full + `"`
-	}
 	if cmd != want {
 		t.Errorf("cmd = %q, want %q", cmd, want)
 	}
 	if launched {
 		t.Error("a terminal editor was launched detached instead of returned")
-	}
-}
-
-// TestQuoteCmdPath proves the cmd.exe rule: the separators a shell would act on
-// are covered by the quotes, and the three characters cmd cannot express are
-// refused outright rather than handed over half-escaped.
-func TestQuoteCmdPath(t *testing.T) {
-	quoted := []string{
-		`C:\repo\a.txt`,
-		`C:\Users\First Last\repo\a.txt`,
-		`C:\repo\a&calc.txt`,
-		`C:\repo\a|b>c.txt`,
-		`C:\repo\a^b(c).txt`,
-	}
-	for _, full := range quoted {
-		got, ok := quoteCmdPath(full)
-		if !ok || got != `"`+full+`"` {
-			t.Errorf("quoteCmdPath(%q) = (%q, %v), want the path in quotes", full, got, ok)
-		}
-	}
-
-	refused := []string{
-		`C:\repo\a"b.txt`,     // no way to put a quote back inside a quoted run
-		`C:\repo\a%PATH%.txt`, // expanded even inside quotes
-		`C:\repo\dir\`,        // would escape the closing quote
-	}
-	for _, full := range refused {
-		if got, ok := quoteCmdPath(full); ok {
-			t.Errorf("quoteCmdPath(%q) = (%q, true), want refused", full, got)
-		}
-	}
-}
-
-// TestOpenInEditorFallsBackWhenTheShellCannotQuote proves an unquotable path
-// opens with the default handler instead of being pasted into a shell. Only
-// cmd.exe refuses anything, so only Windows has the branch to exercise.
-func TestOpenInEditorFallsBackWhenTheShellCannotQuote(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("every path is expressible in a POSIX shell")
-	}
-	var name string
-	var args []string
-	s := &Service{env: []string{"EDITOR=nvim"}, run: captureRun(&name, &args)}
-
-	cmd, err := s.OpenInEditor(`C:\repo`, `a"b.txt`)
-	if err != nil {
-		t.Fatalf("OpenInEditor: %v", err)
-	}
-	if cmd != "" {
-		t.Errorf("cmd = %q, want empty: an unquotable path must not reach a shell", cmd)
-	}
-	if want := filepath.Join(`C:\repo`, `a"b.txt`); len(args) == 0 || args[len(args)-1] != want {
-		t.Errorf("args = %v, want the file %s handed to the default opener", args, want)
 	}
 }
 
@@ -385,5 +331,108 @@ func TestNotifyRejectsEmpty(t *testing.T) {
 	}
 	if raised {
 		t.Error("an empty notification reached the desktop")
+	}
+}
+
+// TestOpenFolderLaunchesTheFileManager proves the checkout itself reaches the
+// opener as a plain argument, with no shell in between.
+func TestOpenFolderLaunchesTheFileManager(t *testing.T) {
+	var name string
+	var args []string
+	dir := t.TempDir()
+	s := &Service{run: captureRun(&name, &args)}
+
+	if err := s.OpenFolder(dir); err != nil {
+		t.Fatalf("OpenFolder: %v", err)
+	}
+	if name == "cmd" || name == "sh" || name == "bash" {
+		t.Errorf("launcher is %q: the path must not route through a shell", name)
+	}
+	if len(args) == 0 || args[len(args)-1] != dir {
+		t.Errorf("args = %v, want the directory %q as the last argument", args, dir)
+	}
+}
+
+// TestOpenFolderRefusesAPathThatIsGone proves a card whose worktree was removed
+// outside lich says so rather than launching a file manager at nothing. A file
+// counts as gone too: it is not the checkout the card is offering.
+func TestOpenFolderRefusesAPathThatIsGone(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "a.txt")
+	if err := os.WriteFile(file, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{filepath.Join(dir, "gone"), file, ""} {
+		launched := false
+		s := &Service{run: func(string, ...string) error {
+			launched = true
+			return nil
+		}}
+		if err := s.OpenFolder(path); err == nil {
+			t.Errorf("want %q refused", path)
+		}
+		if launched {
+			t.Errorf("%q was opened anyway", path)
+		}
+		if _, err := s.OpenFolderInEditor(path); err == nil || launched {
+			t.Errorf("want %q refused by the editor path too", path)
+		}
+	}
+}
+
+// TestOpenFolderInEditorOpensTheCheckout proves the folder goes to $EDITOR the
+// same way a file does — and that a terminal editor still hands back a command
+// line instead of being launched with no controlling terminal.
+func TestOpenFolderInEditorOpensTheCheckout(t *testing.T) {
+	var name string
+	var args []string
+	dir := t.TempDir()
+	s := &Service{env: []string{"EDITOR=code --wait"}, run: captureRun(&name, &args)}
+
+	cmd, err := s.OpenFolderInEditor(dir)
+	if err != nil {
+		t.Fatalf("OpenFolderInEditor: %v", err)
+	}
+	if cmd != "" {
+		t.Errorf("cmd = %q, want a detached GUI launch", cmd)
+	}
+	if name != "code" || len(args) != 2 || args[0] != "--wait" || args[1] != dir {
+		t.Errorf("launched %q %v, want code --wait %q", name, args, dir)
+	}
+
+	terminal := &Service{env: []string{"EDITOR=nvim"}, run: func(string, ...string) error {
+		t.Error("a terminal editor must not be launched detached")
+		return nil
+	}}
+	cmd, err = terminal.OpenFolderInEditor(dir)
+	if err != nil {
+		t.Fatalf("OpenFolderInEditor: %v", err)
+	}
+	if !strings.HasPrefix(cmd, "nvim ") || !strings.Contains(cmd, dir) {
+		t.Errorf("cmd = %q, want nvim on %q", cmd, dir)
+	}
+}
+
+// TestOpenFolderInEditorWithoutAnEditorShowsTheFolder proves the no-$EDITOR
+// fallback is the file manager, not the default *file* handler: on macOS that
+// one forces the text editor, which has nothing to open a folder with.
+func TestOpenFolderInEditorWithoutAnEditorShowsTheFolder(t *testing.T) {
+	var name string
+	var args []string
+	dir := t.TempDir()
+	s := &Service{run: captureRun(&name, &args)}
+
+	cmd, err := s.OpenFolderInEditor(dir)
+	if err != nil {
+		t.Fatalf("OpenFolderInEditor: %v", err)
+	}
+	if cmd != "" {
+		t.Errorf("cmd = %q, want nothing to run in a terminal", cmd)
+	}
+	if runtime.GOOS == "darwin" && len(args) > 1 {
+		t.Errorf("args = %v, want the folder alone — -t is the text-editor flag", args)
+	}
+	if len(args) == 0 || args[len(args)-1] != dir {
+		t.Errorf("launched %q %v, want the folder %q", name, args, dir)
 	}
 }

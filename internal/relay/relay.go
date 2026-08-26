@@ -145,13 +145,20 @@ type StalledEvent struct {
 }
 
 // RelayEvent is the payload of RelayEventName: the session whose mark changed,
-// the label at the other end, and which way the request runs. Peer is empty
-// when the other end is not a session at all — the CLI run from a script or a
-// shell — which the card words its own way.
+// the label at the other end, which way the request runs, and the ticket the
+// two ends share. Peer is empty when the other end is not a session at all —
+// the CLI run from a script or a shell — which the card words its own way.
+//
+// The ticket rides along because it is otherwise written down in exactly one
+// place: the message typed at the target's prompt. An agent whose context was
+// compacted past that message has no way back to it, and neither had the person
+// watching — the window knew a request was open and could not say which one.
+// Empty when the mark is being cleared, along with the direction.
 type RelayEvent struct {
 	ID        string `json:"id"`
 	Peer      string `json:"peer"`
 	Direction string `json:"direction"`
+	Ticket    string `json:"ticket"`
 }
 
 // Sessions is the persistence the relay reads: every open session, so a label
@@ -398,7 +405,8 @@ func (s *Service) Send(fromID, target, project, prompt string, waitSeconds int) 
 		return Result{}, fmt.Errorf("nothing to send: the prompt is empty")
 	}
 	if len(prompt) > promptLimit {
-		return Result{}, fmt.Errorf("prompt is %d bytes, over the %d limit", len(prompt), promptLimit)
+		return Result{}, fmt.Errorf("prompt is %d bytes, over the %d limit: "+
+			"name the paths to read instead of pasting their contents", len(prompt), promptLimit)
 	}
 
 	dest, err := s.resolve(fromID, target, project)
@@ -478,8 +486,8 @@ func (s *Service) handOff(id string, t *ticket, kind, message string) error {
 	}
 	// Announced only once the message is actually in the PTY: a mark raised
 	// before the write would survive a delivery that never happened.
-	s.announce(t.targetID, t.sender, DirectionIn)
-	s.announce(t.fromID, t.target, DirectionOut)
+	s.announce(t.targetID, t.sender, DirectionIn, id)
+	s.announce(t.fromID, t.target, DirectionOut, id)
 	// A target that was already working is not checked: it will read this at the
 	// end of the turn it is in, whenever that is, and its provider is busy the
 	// whole time — there is nothing here to tell apart.
@@ -718,7 +726,14 @@ func (s *Service) Wait(ticketID string, waitSeconds int) (Result, error) {
 
 // Reply hands an answer back to whoever is waiting on ticketID. It is what the
 // message composed by Send asks the receiving agent to run.
-func (s *Service) Reply(ticketID, answer string) error {
+//
+// An empty ticketID answers the errand open against replierID instead, the way
+// an empty ticket collects everything waiting for a sender (see Collect). The
+// ticket is written down in one place only — the message typed at the target's
+// prompt — so an agent whose context no longer reaches that message would
+// otherwise be holding an answer with no route home, and the sender blocked on
+// a ticket nobody can name.
+func (s *Service) Reply(replierID, ticketID, answer string) error {
 	answer = sanitize(answer)
 	if len(answer) > answerLimit {
 		// The cut is in bytes and can land inside a rune; the tail is typed into
@@ -727,6 +742,14 @@ func (s *Service) Reply(ticketID, answer string) error {
 	}
 
 	s.mu.Lock()
+	if ticketID == "" {
+		id, err := s.errandOfLocked(replierID)
+		if err != nil {
+			s.mu.Unlock()
+			return err
+		}
+		ticketID = id
+	}
 	t, ok := s.tickets[ticketID]
 	if !ok {
 		s.mu.Unlock()
@@ -753,6 +776,38 @@ func (s *Service) Reply(ticketID, answer string) error {
 		s.stash(ticketID, t, StatusAnswered, answer)
 	}
 	return nil
+}
+
+// errandOfLocked is the errand an answer that named no ticket belongs to: the
+// oldest message actually delivered to this session that is still open. Called
+// under s.mu.
+//
+// Oldest-delivered is the same rule turnErrand closes a turn by, and for the
+// same reason: every provider queues typed input, so a session handed several
+// tasks works through them in the order they arrived. It is a guess all the
+// same — an agent that answers its second task first pays it back on the third
+// — which is why the ticket is still named everywhere it is known, and why the
+// window now shows it. A queued task nobody has read yet is never picked: it is
+// not at that prompt, so no answer at that prompt can be about it.
+func (s *Service) errandOfLocked(replierID string) (string, error) {
+	if replierID == "" {
+		return "", fmt.Errorf(
+			"answering without a ticket needs a session of your own — name it instead: lich reply <ticket> \"<answer>\"")
+	}
+	var oldestID string
+	var oldest *ticket
+	for id, t := range s.tickets {
+		if t.targetID != replierID || t.delivered.IsZero() {
+			continue
+		}
+		if oldest == nil || t.delivered.Before(oldest.delivered) {
+			oldestID, oldest = id, t
+		}
+	}
+	if oldest == nil {
+		return "", fmt.Errorf("no open request to answer — nobody is waiting on this session")
+	}
+	return oldestID, nil
 }
 
 // await blocks on one ticket until it is answered or the wait runs out. It only
@@ -1005,17 +1060,19 @@ func (s *Service) turnErrand(sessionID string) (string, *ticket) {
 // announce raises or clears one session's mark. Called outside s.mu on every
 // path: Emit blocks on a stalled /events client, and holding the relay's lock
 // across it would stall every other errand behind one unread window.
-func (s *Service) announce(sessionID, peer, direction string) {
+func (s *Service) announce(sessionID, peer, direction, ticketID string) {
 	if s.events == nil || sessionID == "" {
 		return
 	}
-	s.events.Emit(RelayEventName, RelayEvent{ID: sessionID, Peer: peer, Direction: direction})
+	s.events.Emit(RelayEventName, RelayEvent{
+		ID: sessionID, Peer: peer, Direction: direction, Ticket: ticketID,
+	})
 }
 
 // clear takes down both ends' marks for a ticket that is over.
 func (s *Service) clear(t *ticket) {
-	s.announce(t.targetID, "", "")
-	s.announce(t.fromID, "", "")
+	s.announce(t.targetID, "", "", "")
+	s.announce(t.fromID, "", "", "")
 }
 
 func (s *Service) clearAll(tickets []*ticket) {

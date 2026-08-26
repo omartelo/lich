@@ -165,6 +165,33 @@ func TestBranch(t *testing.T) {
 	}
 }
 
+// TestBranchesOf proves the batch answers one entry per checkout that names a
+// branch and leaves the rest out entirely — the history rows read "no branch"
+// from a missing key, so a path mapped to "" would draw an empty badge instead
+// of none at all.
+func TestBranchesOf(t *testing.T) {
+	repo := t.TempDir()
+	if out, err := exec.Command("git", "init", "-b", "trunk", repo).CombinedOutput(); err != nil {
+		t.Skipf("git init unavailable: %v (%s)", err, out)
+	}
+	notARepo := t.TempDir()
+	gone := filepath.Join(t.TempDir(), "removed-behind-our-back")
+
+	got := New(nil).BranchesOf([]string{repo, notARepo, gone})
+	if len(got) != 1 || got[repo] != "trunk" {
+		t.Errorf("BranchesOf = %v, want only the real checkout, on trunk", got)
+	}
+}
+
+// TestBranchesOfNothing keeps the empty call cheap and non-nil: the window calls
+// it on every palette opening, including the one where no session has ever been
+// closed.
+func TestBranchesOfNothing(t *testing.T) {
+	if got := New(nil).BranchesOf(nil); got == nil || len(got) != 0 {
+		t.Errorf("BranchesOf(nil) = %v, want an empty map", got)
+	}
+}
+
 // TestParsePullRequest proves the gh output decoder: a real PR yields its number
 // and URL, while malformed JSON, an empty object, and a PR missing its number or
 // URL all collapse to nil so the badge hides instead of showing garbage.
@@ -280,6 +307,22 @@ func TestDiff(t *testing.T) {
 	}
 }
 
+// TestDiffCarriesTheBranch pins the field the status badge now reads its branch
+// from. It rides Diff rather than a call of its own — that is the subprocess
+// the collapse saves — so the detached case has to hold here too, not only in
+// Branch.
+func TestDiffCarriesTheBranch(t *testing.T) {
+	repo, git := initRepo(t)
+
+	if got := New(nil).Diff(repo); got.Branch != "main" {
+		t.Errorf("Diff(repo).Branch = %q, want main", got.Branch)
+	}
+	git("checkout", "--detach", "HEAD")
+	if got := New(nil).Diff(repo); got.Branch != "" {
+		t.Errorf("Diff(detached).Branch = %q, want empty", got.Branch)
+	}
+}
+
 // TestDiffNoCommits covers a freshly `git init`'d repo with no HEAD: numstat
 // against HEAD fails, and the untracked additions must still be counted rather
 // than the whole stat collapsing to +0 -0.
@@ -300,6 +343,65 @@ func TestDiffNoCommits(t *testing.T) {
 	// tree hash the numstat falls back to.
 	if got.Head != "" {
 		t.Errorf("Diff(no-commit repo).Head = %q, want empty", got.Head)
+	}
+}
+
+// TestDiffSpendsNoNumstatOnACleanTree pins the call budget itself, not only the
+// numbers: a checkout with nothing dirty must answer from the status read
+// alone. The counts are asserted alongside, because a skipped call that also
+// dropped a number would be a regression wearing the optimisation's clothes.
+//
+// The children are counted through git's own GIT_TRACE, so nothing in the
+// package has to grow a seam to be observed. The dirty cases assert the *same*
+// trace line is present — without them a git that stopped writing the trace, or
+// a path it refused, would turn the clean assertion into one that can no longer
+// fail.
+func TestDiffSpendsNoNumstatOnACleanTree(t *testing.T) {
+	repo, git := initRepo(t)
+	trace := filepath.Join(t.TempDir(), "git-trace.log")
+	t.Setenv("GIT_TRACE", trace)
+
+	numstats := func() int {
+		t.Helper()
+		// Absent until the first git child runs, which is the zero the clean
+		// case expects to read.
+		out, err := os.ReadFile(trace)
+		if err != nil && !os.IsNotExist(err) {
+			t.Fatalf("read %s: %v", trace, err)
+		}
+		return strings.Count(string(out), "diff --numstat")
+	}
+
+	svc := New(nil)
+	if got := svc.Diff(repo); got.Added != 0 || got.Deleted != 0 {
+		t.Errorf("Diff(clean) = %+v, want no lines", got)
+	}
+	if spent := numstats(); spent != 0 {
+		t.Errorf("Diff(clean) spent %d numstat calls, want 0", spent)
+	}
+
+	if err := os.WriteFile(filepath.Join(repo, "a.txt"), []byte("one\ntwo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := svc.Diff(repo); got.Files != 1 || got.Added != 1 || got.Deleted != 0 {
+		t.Errorf("Diff(edited) = %+v, want {Files:1 Added:1 Deleted:0}", got)
+	}
+	if spent := numstats(); spent != 1 {
+		t.Errorf("Diff(edited) spent %d numstat calls, want 1", spent)
+	}
+
+	// Untracked-only is the case the skip must not swallow: the tree is dirty,
+	// so the call is spent, and git legitimately answers with no lines — the
+	// additions come from reading the file instead.
+	git("checkout", "--", "a.txt")
+	if err := os.WriteFile(filepath.Join(repo, "new.txt"), []byte("x\ny\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := svc.Diff(repo); got.Files != 1 || got.Added != 2 || got.Deleted != 0 {
+		t.Errorf("Diff(untracked only) = %+v, want {Files:1 Added:2 Deleted:0}", got)
+	}
+	if spent := numstats(); spent != 2 {
+		t.Errorf("Diff(untracked only) spent %d numstat calls in total, want 2", spent)
 	}
 }
 

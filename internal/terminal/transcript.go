@@ -1,8 +1,12 @@
 package terminal
 
 import (
+	"crypto/md5"
+	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/omartelo/lich/internal/providers"
 )
 
 // globTranscript completes a transcript path under base: the parts lich does not
@@ -71,6 +75,72 @@ func codexTranscriptPath(providerSessionID string) (string, bool) {
 		return "", false
 	}
 	return globTranscript(base, "sessions", "*", "*", "*", "rollout-*-"+providerSessionID+".jsonl")
+}
+
+// antigravityConversationPath is the database Antigravity keeps one
+// conversation in, under its own directory beneath ~/.gemini — the CLI reads
+// that root through no environment variable of its own (1.1.19 falls back to a
+// hardcoded ".gemini" when it cannot resolve the home), so there is nothing to
+// honour here but the home itself.
+//
+// It is not a transcript: Antigravity files the conversation as SQLite and
+// writes its JSONL under `brain/<id>/`, a path the hook payload hands over
+// rather than one lich reconstructs. This resolves the one file whose existence
+// answers "can this id still be reopened".
+func antigravityConversationPath(providerSessionID string) (string, bool) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", false
+	}
+	path := filepath.Join(home, ".gemini", "antigravity-cli", "conversations", providerSessionID+".db")
+	if _, err := os.Stat(path); err != nil {
+		return "", false
+	}
+	return path, true
+}
+
+// cursorChatStore is the database Cursor CLI keeps one chat in, under its own
+// config directory. It is not a transcript: the CLI files a chat as SQLite at
+// chats/<workspace>/<chatId>/store.db, which is the one file whose existence
+// answers "can this id still be reopened".
+//
+// The workspace segment is the md5 of the resolved directory the chat ran in,
+// which is why cwd is needed here the way it is for Crush: Cursor keeps its
+// chats per checkout, so the same id proves nothing about another one. False
+// without a cwd — a directory lich cannot name has no chat directory to ask.
+func cursorChatStore(providerSessionID, cwd string) (string, bool) {
+	base, ok := cursorConfigDir()
+	if !ok || cwd == "" {
+		return "", false
+	}
+	path := filepath.Join(base, "chats", cursorWorkspaceKey(cwd), providerSessionID, "store.db")
+	if _, err := os.Stat(path); err != nil {
+		return "", false
+	}
+	return path, true
+}
+
+// cursorWorkspaceKey is how Cursor names a checkout's chat directory: the hex
+// md5 of the absolute, cleaned path. md5 is the CLI's choice and this only has
+// to reproduce it — nothing here is a security decision.
+func cursorWorkspaceKey(cwd string) string {
+	abs, err := filepath.Abs(cwd)
+	if err != nil {
+		abs = filepath.Clean(cwd)
+	}
+	return fmt.Sprintf("%x", md5.Sum([]byte(abs)))
+}
+
+// cursorConfigDir is providers.CursorConfigDir against this machine's home, or
+// false when there is no home to hang it off. It does not go through harnessDir
+// because Cursor is not xdg-basedir — the resolver says why, and it is shared
+// with internal/sandbox, which binds the same directory into a confined session.
+func cursorConfigDir() (string, bool) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", false
+	}
+	return providers.CursorConfigDir(home), true
 }
 
 // ompTranscriptPath locates an oh-my-pi conversation by its id under omp's agent

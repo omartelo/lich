@@ -7,7 +7,8 @@ import { AgentPlugin } from "@/lib/rpc"
 import {
   CODEX_TRUST_HINT,
   CRUSH_SCOPE_HINT,
-  OMP_APPROVAL_HINT,
+  CURSOR_SHARED_PLUGIN_HINT,
+  NO_APPROVAL_EVENT_HINT,
   RESTART_HINT,
 } from "@/lib/update/plugin-gate"
 import { runWithToast } from "@/lib/toast-async"
@@ -52,6 +53,8 @@ export function PluginSetting({ statuses, onRefresh }: PluginSettingProps) {
   const showTrustHint = statuses?.some((s) => s.provider === "codex" && s.installed)
   const showCrushHint = statuses?.some((s) => s.provider === "crush" && s.installed)
   const showOMPHint = statuses?.some((s) => s.provider === "omp" && s.installed)
+  const showAntigravityHint = statuses?.some((s) => s.provider === "antigravity" && s.installed)
+  const showCursorHint = statuses?.some((s) => s.provider === "cursor" && s.installed)
 
   return (
     <SettingBlock
@@ -115,7 +118,13 @@ export function PluginSetting({ statuses, onRefresh }: PluginSettingProps) {
           <p className="text-xs text-muted-foreground">Crush: {CRUSH_SCOPE_HINT}</p>
         )}
         {showOMPHint && (
-          <p className="text-xs text-muted-foreground">oh-my-pi: {OMP_APPROVAL_HINT}</p>
+          <p className="text-xs text-muted-foreground">oh-my-pi: {NO_APPROVAL_EVENT_HINT}</p>
+        )}
+        {showAntigravityHint && (
+          <p className="text-xs text-muted-foreground">Antigravity: {NO_APPROVAL_EVENT_HINT}</p>
+        )}
+        {showCursorHint && (
+          <p className="text-xs text-muted-foreground">Cursor CLI: {CURSOR_SHARED_PLUGIN_HINT}</p>
         )}
         <div className="flex items-center gap-3 pt-1">
           <Button size="sm" variant="outline" onClick={() => void check()} disabled={busy}>

@@ -21,6 +21,7 @@ import (
 	"github.com/omartelo/lich/internal/events"
 	"github.com/omartelo/lich/internal/pricing"
 	"github.com/omartelo/lich/internal/project"
+	"github.com/omartelo/lich/internal/providers"
 )
 
 // Event names. A terminal I/O event carries the session ID as a suffix (e.g.
@@ -38,9 +39,11 @@ const (
 	// carrying the status it exited with (see exitEvent).
 	exitEventPrefix = "terminal:exit:"
 	// statusEventName carries a session's processing state ({id, state, tool,
-	// detail} — "busy"/"done"/"waiting"/"idle", plus the tool a pre-tool report
-	// names), reported by the lich hooks running inside the PTY (see
-	// transport.hook and docs/hooks/session-state.md). The frontend keeps it in
+	// detail, reason} — "busy"/"done"/"waiting"/"idle", plus the tool a pre-tool
+	// report names and what a waiting one is blocked on), reported by the lich
+	// hooks running inside the PTY (see transport.hook and
+	// docs/hooks/session-state.md). "interrupted" is the one value lich raises
+	// itself, for a turn the user stopped at the PTY. The frontend keeps it in
 	// stores keyed by id (session-status-store.ts, session-tool-store.ts) rather
 	// than in the card, which is only mounted while its project is active.
 	statusEventName = "session-status"
@@ -62,17 +65,25 @@ const (
 	// asked to work it out again. Persisted with the row too (store.Session's
 	// Sandbox), which is what a page reload hydrates from.
 	sandboxEventName = "session-sandbox"
+	// turnEventName carries the id of a session whose last finished turn has
+	// just been filed ({id}) — emitted when the closing snapshot lands, not when
+	// the turn's `done` is reported. The two are not the same moment: the
+	// snapshot runs on a worker, so a panel refreshed off the state report reads
+	// the record before it exists (see turnSnaps).
+	turnEventName = "session-turn"
 )
 
 // statusEvent is the payload of statusEventName: the session whose processing
 // state changed, the new state, and — on a pre-tool report alone — the tool it
-// is about to run and what that tool acts on. Both are the provider's own
-// words, never translated here (docs/hooks/session-state.md tables them).
+// is about to run and what that tool acts on, or — on a waiting one alone — what
+// it is blocked on. All three are the provider's own words, never translated
+// here (docs/hooks/session-state.md tables them).
 type statusEvent struct {
 	ID     string `json:"id"`
 	State  string `json:"state"`
 	Tool   string `json:"tool,omitempty"`
 	Detail string `json:"detail,omitempty"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // titleEvent is the payload of titleEventName: the session whose label changed
@@ -120,6 +131,13 @@ type sandboxEvent struct {
 	Confined bool   `json:"confined"`
 }
 
+// turnEvent is the payload of turnEventName: the session whose last-turn record
+// just changed. It carries no diff — the panel asks for one only while it is on
+// screen, and a turn's diff is far larger than an event ought to be.
+type turnEvent struct {
+	ID string `json:"id"`
+}
+
 // session is a single running PTY-backed shell. done closes when the session
 // is reaped (by stream or Close — whichever removes it from the map), stopping
 // its cwd watcher. replay holds a capped tail of the PTY's output so a
@@ -147,10 +165,13 @@ type session struct {
 	// draftAt is when the user last typed something at this prompt without
 	// sending it, and zero when there is nothing of theirs on the line.
 	// escPending is the beginning of an escape sequence a PTY write split, held
-	// until the rest of it arrives. Both guarded by the service's mu. See
-	// draft.go.
+	// until the rest of it arrives. pasting is whether the bytes arriving now
+	// are inside a bracketed paste, which is what keeps a pasted Ctrl+C or
+	// Escape from reading as the user interrupting the turn. All three guarded
+	// by the service's mu. See draft.go.
 	draftAt    time.Time
 	escPending []byte
+	pasting    bool
 	// confined records whether this PTY was spawned inside the sandbox, so Start
 	// can report it once the spawn is out of the lock.
 	confined bool
@@ -158,6 +179,7 @@ type session struct {
 
 // Store is the persistence the terminal service depends on: the binary to spawn
 // for a provider in a project (empty return spawns the provider's default),
+// whether a given session runs one of those rather than the provider's own,
 // whether that spawn drops the provider's permission prompts and whether it runs
 // confined, that project's own directory, the dev-server port reserved for each
 // checkout, where to record the provider session id a PTY reports through its
@@ -166,6 +188,7 @@ type session struct {
 // them all.
 type Store interface {
 	ProviderBin(providerID, projectID string) string
+	SessionCustomBin(sessionID string) bool
 	SkipPermissions(providerID, projectID, cwd string) bool
 	ProjectPath(projectID string) string
 	WorktreePorts() map[string]int
@@ -177,6 +200,9 @@ type Store interface {
 	SessionSandbox(sessionID string) string
 	SetSessionSandbox(sessionID, sandbox string) error
 	SandboxDefault(providerID, projectID, cwd string) bool
+	SandboxSSHAgent(projectID string) bool
+	SandboxGHToken(projectID string) bool
+	GHAccountForPath(path string) string
 	SetSessionTitle(sessionID, title string) (bool, error)
 	CostReadout() bool
 	CostLedger(sessionID, transcriptID string) (int64, string, float64, error)
@@ -211,12 +237,29 @@ type Service struct {
 	// without answering (internal/relay). Guarded by mu: wired after the
 	// transport is already serving.
 	onState func(id, state string)
+	// kinds is what each live session's PTY was spawned to run — a provider id,
+	// or KindShell — keyed by session id. Read by providerKind, which is what
+	// stops a session-start report from repainting a card lich itself chose the
+	// provider for, and by the state report's own filter.
+	//
+	// Deliberately not under mu, and that is the whole reason it is not simply a
+	// field on session: spawnSession holds mu across the PTY spawn, so a report
+	// that had to ask mu what a session runs would queue behind another
+	// session's spawn — which is exactly what the note on turns below forbids.
+	// Written once per spawn and read on every report, which is what sync.Map
+	// is for.
+	kinds sync.Map
 	// turns is which sessions have a turn open right now, which is what tells a
 	// `waiting` report that a human is blocking from one that only says the
 	// session is sitting at its prompt (see turnLog). It carries its own lock:
 	// nothing else about a report needs mu, and a hook must never queue behind a
 	// PTY spawn.
 	turns turnLog
+	// snaps brackets each session's turn with a tree snapshot of its checkout,
+	// which is what the Review panel's "Last turn" mode diffs (see turnSnaps).
+	// It reads the same boundary turns does and carries its own lock for the
+	// same reason.
+	snaps turnSnaps
 	// lastCols/lastRows is the last terminal size the window reported, and the
 	// size a session spawned with none of its own is started at. See
 	// sizeFor. Guarded by mu.
@@ -293,14 +336,28 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 		env:    append(slices.Clip(childEnv(env)), "TERM=xterm-256color"),
 		prices: pricing.New(),
 	}
+	// Wired here rather than emitted from the hook's own goroutine: the record
+	// is filed on the snapshot worker, minutes-of-CPU later on a cold checkout,
+	// and the panel has no other way to learn that the answer it already asked
+	// for has changed.
+	s.snaps.filed = func(id string) {
+		hub.Emit(turnEventName, turnEvent{ID: id})
+	}
 	ws, err := newTransport(
 		func(id string, data []byte) {
-			s.noteInput(id, data)
+			if s.noteInput(id, data) {
+				s.noteInterrupt(id)
+			}
 			if err := s.writeBytes(id, data); err != nil {
 				slog.Warn("terminal: input write failed", "session", id, "err", err)
 			}
 		},
 		func(req hookRequest) {
+			// Dropped where the harness cannot close it, before the turn log
+			// ever sees it: a state nothing ends outlives what it describes.
+			if !closableState(s.kindOf(req.SessionID), req.State) {
+				return
+			}
 			// The window is told what the report means, not what it said: a
 			// `waiting` outside a turn is a session idle at its prompt, and the
 			// card would draw it as a human being blocked (see turnLog).
@@ -310,6 +367,7 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 					State:  req.State,
 					Tool:   req.Tool,
 					Detail: req.Detail,
+					Reason: req.Reason,
 				})
 			}
 			// The relay reads the stream raw: it keeps its own turn accounting,
@@ -317,6 +375,11 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 			if watch := s.stateWatcher(); watch != nil {
 				watch(req.SessionID, req.State)
 			}
+			// The same boundary brackets the Review panel's "Last turn": `busy`
+			// opens the window, `done` closes it. Queued, never taken here — a
+			// snapshot on this goroutine would hold the hook's own response, and
+			// with it the agent's next step (see turnSnaps).
+			s.snaps.note(req.SessionID, req.State)
 			// Every non-idle state is a point where a fresh assistant usage line
 			// may have landed — a tool call mid-turn (busy), a prompt (waiting),
 			// or the turn's end (done) — so refresh the context window then, and
@@ -330,10 +393,19 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 			if err := store.SetProviderSession(sessionID, providerSessionID); err != nil {
 				return err
 			}
-			// A SessionStart report is proof that provider's CLI is running in
-			// this PTY — whatever the card's kind, its icon can wear that
-			// provider's mark now.
-			hub.Emit(agentEventName, agentEvent{ID: sessionID, Agent: provider})
+			// A SessionStart report is proof that *a* provider's CLI is running
+			// in this PTY, and for a shell session that report is the only thing
+			// that knows which — so its icon wears the reported mark.
+			//
+			// For a session lich spawned as a provider, the kind is the better
+			// answer and it wins. A harness can run another harness's hooks:
+			// Cursor CLI executes every Claude Code hook on the machine, the
+			// user's own and each installed plugin's (measured on 2026.08.11,
+			// `hookSource: claude-plugin`), so the lich plugin's own script
+			// reports `claude` from inside a Cursor session and the card wore
+			// Claude's mark one turn in. What a hook says is a claim; what lich
+			// spawned is a fact.
+			hub.Emit(agentEventName, agentEvent{ID: sessionID, Agent: s.providerKind(sessionID, provider)})
 			return nil
 		},
 		func(id, title string) error {
@@ -351,7 +423,19 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 		},
 	)
 	s.ws, s.wsErr = ws, err
+	if ws != nil {
+		// The transport is built before the service that owns the bridge, so the
+		// path output takes when the socket cannot carry it is wired here.
+		ws.setFallback(s.emitData)
+	}
 	return s
+}
+
+// emitData puts one session's output on the /events bridge — where terminal
+// output goes whenever the /ws transport cannot carry it, whether because no
+// client is connected or because the socket refused the frame.
+func (s *Service) emitData(id string, data []byte) {
+	s.hub.Emit(dataEventPrefix+id, base64.StdEncoding.EncodeToString(data))
 }
 
 // Mount exposes an extra handler (the RPC dispatcher, the events push socket)
@@ -371,6 +455,37 @@ func (s *Service) MountPublic(pattern string, handler http.Handler) {
 		return
 	}
 	s.ws.mountPublic(pattern, handler)
+}
+
+// noteInterrupt publishes the end of a turn the user stopped at the PTY: a lone
+// Ctrl+C or Escape while lich has a turn open for that session (see noteInput
+// and turnLog.interrupt). It is the fallback for the three providers that raise
+// no event of their own when a turn is interrupted — Claude Code, Codex and
+// oh-my-pi all skip the hook that would end it, so without this the card spins
+// until some later turn finishes. It publishes "interrupted" rather than "done"
+// because stopping a turn is not finishing one, and it never opens a turn, so
+// nothing is invented for a session lich never heard start. Whatever the
+// provider reports next overwrites it: an event from inside the session always
+// outranks a guess made from its keystrokes.
+func (s *Service) noteInterrupt(id string) {
+	if !s.turns.interrupt(id) {
+		return
+	}
+	s.hub.Emit(statusEventName, statusEvent{ID: id, State: statusInterrupted})
+	// An interrupted turn is still a turn that ended, and it changed files like
+	// any other. Closing the window here is what keeps the panel from holding
+	// an older turn open until the next one finishes.
+	s.snaps.closeTurn(id)
+	// The relay keeps its own turn accounting off the same stream, and a turn
+	// that ended has to read as ended there too — a queued delivery waits on the
+	// target's prompt being free.
+	if watch := s.stateWatcher(); watch != nil {
+		watch(id, statusInterrupted)
+	}
+	// An interrupted turn spent tokens like any other, and it may be the last
+	// one for a while: refresh the context readout off the transcript, off the
+	// caller's thread the way the hook path does.
+	go s.emitUsage(id)
 }
 
 // SetSessionState wires fn to every session-state report the hooks deliver.
@@ -489,6 +604,10 @@ func (s *Service) Start(id, projectID, cwd, kind, resume, name string, setup boo
 	s.hub.Emit(cwdEventName, cwdEvent{ID: id, Cwd: cwd})
 	s.hub.Emit(agentEventName, agentEvent{ID: id, Agent: ""})
 	s.hub.Emit(sandboxEventName, sandboxEvent{ID: id, Confined: sess.confined})
+	// Bound to the effective cwd rather than the requested one, and outside
+	// s.mu: track queues a warm-up of this checkout's snapshot index, and the
+	// first one on a large repository is measured in seconds.
+	s.snaps.track(id, cwd)
 	go watchCwd(id, sess.pty.Pid(), cwd, sess.done, s.hub)
 	return nil
 }
@@ -546,7 +665,8 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, se
 	// Outermost, so the setup script and the entrypoint are confined with the
 	// session they run in front of.
 	inSandbox := confined(s.store, id, kind, projectID, cwd)
-	spec = wrapSandbox(spec, kind, userHome(), sessionDropDir(s.dropDir, id, inSandbox), inSandbox)
+	creds := s.sandboxCredentials(projectID, cwd, inSandbox)
+	spec = wrapSandbox(spec, kind, userHome(), sessionDropDir(s.dropDir, id, inSandbox), inSandbox, creds)
 	p, err := startPTY(spec)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to start pty for %q: %w", id, err)
@@ -556,8 +676,7 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, se
 		if s.ws != nil && s.ws.send(id, data) {
 			return
 		}
-		encoded := base64.StdEncoding.EncodeToString(data)
-		s.hub.Emit(dataEventPrefix+id, encoded)
+		s.emitData(id, data)
 	}, outboxDepth)
 	out := newCoalescer(box.push, visibleFlushInterval, hiddenFlushInterval)
 	sess := &session{
@@ -574,8 +693,56 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, se
 		confined: inSandbox,
 	}
 	s.sessions[id] = sess
+	// Outside mu's protection by design (see Service.kinds), and stored with the
+	// registration so no report can arrive for a session whose kind is unknown.
+	s.kinds.Store(id, kind)
 	go s.stream(id, sess)
 	return sess, cwd, nil
+}
+
+// providerKind resolves which provider mark a session-start report puts on a
+// card: the kind lich spawned when that kind is a provider, else the reported
+// one. A session that is not running — the report raced its own PTY's exit —
+// falls back to the report, which is all that is left to answer from.
+func (s *Service) providerKind(id, reported string) string {
+	if kind := s.kindOf(id); providers.Known(kind) {
+		return kind
+	}
+	return reported
+}
+
+// kindOf is what a live session's PTY was spawned to run, or "" once it is gone.
+// It never takes mu: a hook asks this on every report, and mu is held across a
+// PTY spawn (see Service.kinds).
+func (s *Service) kindOf(id string) string {
+	kind, ok := s.kinds.Load(id)
+	if !ok {
+		return ""
+	}
+	spawned, _ := kind.(string)
+	return spawned
+}
+
+// closableState reports whether a state reported from inside a session of this
+// kind is one that harness can also end. A state nothing ends is worse than no
+// state: `busy` with no end-of-turn event behind it pins a spinner to the card
+// for the rest of the session, which is wrong for far longer than it is right —
+// the rule docs/adding-a-provider.md states, and the reason Crush's plugin
+// registers two of the four reports rather than four.
+//
+// Only Cursor CLI is filtered, and only here rather than in what it registers,
+// because lich does not own its registration: Cursor runs the plugin installed
+// in Claude Code, which registers all of them. Of those, Cursor was measured
+// (2026.08.11, hooks in its own format and in Claude Code's alike) to deliver
+// `SessionStart`, `PreToolUse`, `PostToolUse` and `SessionEnd` and nothing else
+// — no `UserPromptSubmit`, so a turn that calls no tool never begins, and no
+// `Stop`, so one that does never ends. `idle` is the one state it can both
+// report and mean, and it survives.
+func closableState(kind, state string) bool {
+	if kind != providers.Cursor {
+		return true
+	}
+	return state == statusIdle
 }
 
 // stream copies PTY output to the frontend until the PTY is closed, then reaps
@@ -605,9 +772,14 @@ func (s *Service) stream(id string, sess *session) {
 	_ = p.Close()
 	// Flush any batched output and wait for it to be delivered before the exit
 	// event, so the frontend always sees the final bytes ahead of the exit
-	// banner.
+	// banner. Delivery now ends at the transport's writer rather than at the
+	// socket, so the wait runs one step further: the outbox for this session's
+	// own frames, then the connection's queue for the wire.
 	sess.out.Close()
 	sess.outbox.close()
+	if s.ws != nil {
+		s.ws.flush()
+	}
 
 	s.mu.Lock()
 	reaped := false
@@ -615,6 +787,12 @@ func (s *Service) stream(id string, sess *session) {
 		delete(s.sessions, id)
 		close(current.done)
 		reaped = true
+	}
+	// Inside the same guard the map delete is: a reap that lost the race to a
+	// respawn under this id must not drop the kind the live session was
+	// registered with.
+	if reaped {
+		s.kinds.Delete(id)
 	}
 	s.mu.Unlock()
 
@@ -815,7 +993,13 @@ func (s *Service) Close(id string) error {
 		close(sess.done)
 	}
 	s.mu.Unlock()
+	s.kinds.Delete(id)
 
+	// Before the bail below, because a card is closed far more often than it is
+	// running: its row is deleted either way, so nothing will ever ask what its
+	// last turn changed — and its snapshot index would otherwise outlive it on
+	// disk for the rest of the machine's life.
+	s.snaps.forget(id)
 	if !ok {
 		return nil
 	}

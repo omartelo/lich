@@ -31,7 +31,9 @@ task --list   # everything else
 ```
 
 `task dev` gets its own database, port and Chromium profile, so it never
-touches the workspace of a lich you have installed.
+touches the workspace of a lich you have installed. Stop it with Ctrl+C — that
+takes the Vite server with it; closing the window leaves Vite running, and the
+next `task dev` refuses to start on the port it still holds.
 
 The frontend is **pnpm**, not npm — `npm install` errors out.
 

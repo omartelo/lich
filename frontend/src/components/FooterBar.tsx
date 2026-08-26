@@ -249,7 +249,7 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
 
       <span className="ml-auto flex items-center gap-4">
         {showContextUsage && <SessionModel sessionId={sessionId} kind={kind} />}
-        <PlanQuota kind={kind} />
+        <PlanQuota kind={kind} sessionId={sessionId} />
         {costReadout}
         {contextReadout}
         {(contextReadout || costReadout) && (status?.branch || path) && (

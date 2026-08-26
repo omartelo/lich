@@ -70,4 +70,15 @@ describe("createSessionInboxStore", () => {
 
     expect(store.get("s1")).toBe(0)
   })
+
+  // Stopping a turn is not the session leaving: the results are still there and
+  // the session is still the one able to collect them.
+  it("keeps the count when a turn is interrupted", () => {
+    const { inbox, status, store } = build()
+
+    inbox.emit({ id: "s1", count: 3 })
+    status.emit({ id: "s1", state: "interrupted" })
+
+    expect(store.get("s1")).toBe(3)
+  })
 })

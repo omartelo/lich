@@ -54,9 +54,11 @@ export function skipPermissionsKey(id: string, worktree: boolean): string {
 export const skipPermissionFlags: Record<string, string> = {
   claude: "--dangerously-skip-permissions",
   codex: "--dangerously-bypass-approvals-and-sandbox",
+  antigravity: "--dangerously-skip-permissions",
   opencode: "--auto",
   omp: "--auto-approve",
   crush: "--yolo",
+  cursor: "--force",
 }
 
 // How far a provider runs without asking, as one ladder ordered by risk. The
@@ -89,6 +91,19 @@ export function skipLevelPair(level: SkipLevel): { here: boolean; worktrees: boo
 export function sandboxKey(id: string): string {
   return `provider.${id}.sandbox`
 }
+
+// The sandbox grant keys, each handing a confined session one credential its
+// private home took away: the ssh agent a push authenticates through, and the
+// GitHub token gh works through (mirror store.sshAgentKey and store.ghTokenKey
+// in Go, which are what the spawn reads).
+//
+// Two keys rather than one because they open different doors — the agent signs
+// with every identity loaded into it, for any host; the token is one account's,
+// with that account's scopes. Neither carries a provider: a grant describes what
+// exists inside the sandbox, not which agent runs in it. Scoped like sandboxKey,
+// stored as "true" or nothing at all.
+export const SSH_AGENT_KEY = "sandbox.ssh-agent"
+export const GH_TOKEN_KEY = "sandbox.gh-token"
 
 // Which sessions of a provider run confined, as one ladder ordered by how much
 // of the machine a session can reach. "ask" sits second because a session
@@ -149,6 +164,8 @@ export function readEnabled(id: string, value: string): boolean {
 export interface ProviderState {
   id: ProviderKind
   name: string
+  /** The executable a session spawns — a provider id is not its command. */
+  binary: string
   installed: boolean
   enabled: boolean
 }
@@ -304,6 +321,7 @@ class ProviderStoreImpl implements ProvidersStore {
         .map(async (provider) => ({
           id: provider.id as ProviderKind,
           name: provider.name,
+          binary: provider.binary,
           installed: provider.installed,
           enabled: readEnabled(provider.id, await this.deps.getEnabled(provider.id)),
         })),

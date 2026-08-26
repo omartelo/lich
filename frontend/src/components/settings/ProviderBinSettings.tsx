@@ -1,16 +1,13 @@
 import { useEffect, useState } from "react"
-import { Store, System } from "@/lib/rpc"
+import { Store } from "@/lib/rpc"
 import {
   footerReadout,
   footerReadoutPair,
   skipLevel,
   skipLevelPair,
-  sandboxKey,
-  sandboxLevel,
   skipPermissionFlags,
   skipPermissionsKey,
   type FooterReadout,
-  type SandboxLevel,
   type SkipLevel,
 } from "@/lib/providers-store"
 import { useSettings } from "@/providers/settings"
@@ -46,33 +43,6 @@ const FOOTER_READOUTS: { level: FooterReadout; label: string; consequence: strin
   },
 ]
 
-// The same shape again for which sessions run confined, ordered by how much of
-// the machine a session can reach. "Ask each time" sits second because a session
-// nobody answered for runs unconfined, exactly like "Off".
-const SANDBOX_LEVELS: { level: SandboxLevel; label: string; consequence: string }[] = [
-  {
-    level: "off",
-    label: "Off",
-    consequence: "Sessions run straight on the machine, reaching everything you can reach.",
-  },
-  {
-    level: "ask",
-    label: "Ask each time",
-    consequence:
-      "Every new session asks before it opens. Nothing is remembered — a session opened any other way, by a delegation or an MCP tool, is not confined.",
-  },
-  {
-    level: "worktrees",
-    label: "Worktrees only",
-    consequence: "Sessions in the project directory run on the machine.",
-  },
-  {
-    level: "everywhere",
-    label: "Everywhere",
-    consequence: "Including the tree you work in. Every session opens confined.",
-  },
-]
-
 // The same shape for how far the provider runs without asking, ordered by risk.
 const SKIP_LEVELS: { level: SkipLevel; label: string; consequence: string }[] = [
   {
@@ -91,37 +61,6 @@ const SKIP_LEVELS: { level: SkipLevel; label: string; consequence: string }[] = 
     consequence: "Including the tree you work in. Nothing will ask.",
   },
 ]
-
-// useSandboxLevel is the stored sandbox rung for one provider in one scope, read
-// once and written through on every change. It reads "off" until the value
-// arrives, which is also what an unreadable value means: the unknown state is
-// drawn as the one lich has always behaved like, never as one that silently
-// starts confining sessions.
-function useSandboxLevel(providerId: string, projectId: string) {
-  const key = sandboxKey(providerId)
-  const [level, setLevel] = useState<SandboxLevel>("off")
-
-  useEffect(() => {
-    void Store.GetSetting(key, projectId).then((value) => setLevel(sandboxLevel(value)))
-  }, [key, projectId])
-
-  const choose = (next: SandboxLevel) => {
-    setLevel(next)
-    void Store.SetSetting(key, projectId, next)
-  }
-  return [level, choose] as const
-}
-
-// useSandboxAvailable answers whether this machine can confine anything at all —
-// bubblewrap on Linux, sandbox-exec on macOS. Undefined until it arrives, so the
-// control is absent rather than briefly drawn as unavailable on every mount.
-function useSandboxAvailable() {
-  const [available, setAvailable] = useState<boolean | undefined>(undefined)
-  useEffect(() => {
-    void System.SandboxAvailable().then(setAvailable)
-  }, [])
-  return available
-}
 
 // useSkipPermissions is the stored "run without permission prompts" flag for one
 // checkout scope: read once, written through on every toggle. It reads off until
@@ -149,10 +88,12 @@ function useSkipPermissions(providerId: string, worktree: boolean) {
 export function ProviderBinSettings({
   providerId,
   providerName,
+  providerBin,
   projectId,
 }: {
   providerId: string
   providerName: string
+  providerBin: string
   projectId?: string
 }) {
   const { showContextUsage, setShowContextUsage, costBudget, setCostBudget } = useSettings()
@@ -162,12 +103,6 @@ export function ProviderBinSettings({
   const [budget, setBudget] = useState(() => (costBudget > 0 ? String(costBudget) : ""))
   const [skipHere, setSkipHere] = useSkipPermissions(providerId, false)
   const [skipInWorktrees, setSkipInWorktrees] = useSkipPermissions(providerId, true)
-  // The sandbox is scoped to whichever pane this is: the project's own rung when
-  // opened from a project, the global one from the hub.
-  const [sandbox, setSandbox] = useSandboxLevel(providerId, projectId ?? GLOBAL_SCOPE)
-  const sandboxAvailable = useSandboxAvailable()
-  const sandboxConsequence =
-    SANDBOX_LEVELS.find((rung) => rung.level === sandbox)?.consequence ?? ""
   const skipFlag = skipPermissionFlags[providerId]
   const level = skipLevel(skipHere, skipInWorktrees)
   const consequence = SKIP_LEVELS.find((rung) => rung.level === level)?.consequence ?? ""
@@ -211,7 +146,12 @@ export function ProviderBinSettings({
           provider that meters no subscription. */}
       <PlanUsageSetting providerId={providerId} />
 
-      <ProviderBinary providerId={providerId} providerName={providerName} projectId={projectId} />
+      <ProviderBinary
+        providerId={providerId}
+        providerName={providerName}
+        providerBin={providerBin}
+        projectId={projectId}
+      />
 
       {/* Only providers with a context-window transcript reader carry this
           control; the underlying preference stays global. */}
@@ -257,32 +197,6 @@ export function ProviderBinSettings({
             </SettingBlock>
           )}
         </>
-      )}
-
-      {/* Directly above the permission ladder: the two answer the same worry
-          from opposite ends, and are read together. Absent on a machine with no
-          backend for it — a control that saves a setting nothing can act on is
-          worse than no control. */}
-      {sandboxAvailable && (
-        <SettingBlock
-          title="Sandbox"
-          description={`Run ${providerName} confined: an empty home holding only its own state, the machine read-only, and writes only inside the checkout. The network stays on — the agent still reaches its API, and lich still hears its hooks.`}
-        >
-          <ToggleGroup
-            value={[sandbox]}
-            onValueChange={(next) => next[0] && setSandbox(next[0] as SandboxLevel)}
-            spacing={1}
-            aria-label={`Which ${providerName} sessions run confined`}
-            className="border border-border p-[3px]"
-          >
-            {SANDBOX_LEVELS.map((rung) => (
-              <ToggleGroupItem key={rung.level} value={rung.level} size="sm">
-                {rung.label}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-          <p className="mt-2 max-w-prose text-xs text-muted-foreground">{sandboxConsequence}</p>
-        </SettingBlock>
       )}
 
       {/* Never unless the user says otherwise. A worktree is its own rung

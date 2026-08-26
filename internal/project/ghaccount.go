@@ -82,6 +82,34 @@ func tokenArgs(account string) []string {
 	return append(args, "--user", login)
 }
 
+// GHToken returns the API token gh holds for one account ("<host>/<login>"), or
+// for gh's active account when account is empty. It is what a confined session
+// is handed in GH_TOKEN, and it is the whole reason gh can work inside one: gh
+// keeps its tokens in the system keyring, which a private home has no path to,
+// so a sandboxed gh without this is a login prompt.
+//
+// Every failure answers "" — gh not installed, gh not authenticated, an account
+// gh does not know — because the caller does the same thing with all three:
+// spawn the session without a token and let gh say so itself, rather than fail
+// a whole session over a credential it may never use.
+func GHToken(account string) string {
+	return ghToken(runGH, account)
+}
+
+// ghToken is GHToken against an injectable runner, so the token path is
+// exercised without a gh on the machine.
+func ghToken(run ghRunner, account string) string {
+	args := []string{"auth", "token"}
+	if account != "" {
+		args = tokenArgs(account)
+	}
+	out, err := run(ghAccountTimeout, "", "", args...)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
 // splitAccount reads "<host>/<login>", tolerating the host-less form written
 // before accounts carried one.
 func splitAccount(account string) (host, login string) {

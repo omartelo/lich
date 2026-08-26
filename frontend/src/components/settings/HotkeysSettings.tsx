@@ -10,6 +10,7 @@ import {
   HOTKEY_ACTIONS,
   HOTKEY_GROUPS,
   sameCombo,
+  UNASSIGNED,
   type HotkeyAction,
   type HotkeyId,
 } from "@/lib/hotkeys"
@@ -67,11 +68,9 @@ function HotkeyRow({ action, conflicts }: { action: HotkeyAction; conflicts?: Ho
         onBlur={() => setRecording(false)}
         className={cn(
           "min-w-36 shrink-0 rounded-md border px-3 py-1 text-left text-sm tabular-nums outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
-          recording
-            ? "border-ring text-muted-foreground"
-            : "border-border text-foreground hover:bg-accent",
+          recording ? "border-ring text-muted-foreground" : "border-border hover:bg-accent",
+          !recording && (binding ? "text-foreground" : "text-muted-foreground"),
           conflicts && !recording && "border-amber-500/60",
-          !binding && !recording && "text-muted-foreground",
         )}
       >
         {recording ? "Press keys…" : formatCombo(binding, isMac)}
@@ -79,9 +78,10 @@ function HotkeyRow({ action, conflicts }: { action: HotkeyAction; conflicts?: Ho
       <Button
         variant="ghost"
         size="icon"
-        aria-label={`Disable ${action.label} shortcut`}
+        aria-label={`Unassign ${action.label} shortcut`}
+        title="Leave this action unbound"
         disabled={!binding}
-        onClick={() => setHotkey(action.id, null)}
+        onClick={() => setHotkey(action.id, UNASSIGNED)}
       >
         <Ban />
       </Button>
@@ -89,6 +89,7 @@ function HotkeyRow({ action, conflicts }: { action: HotkeyAction; conflicts?: Ho
         variant="ghost"
         size="icon"
         aria-label={`Reset ${action.label} shortcut`}
+        title="Restore the default shortcut"
         disabled={isDefault}
         onClick={() => resetHotkey(action.id)}
       >

@@ -25,17 +25,28 @@ Both sides test against the payloads in
 
 ## Event → action mapping
 
-| Claude Code hook                        | Codex hook                          | opencode event | oh-my-pi event                       | Crush hook                          | action                           |
-|-----------------------------------------|-------------------------------------|----------------|--------------------------------------|-------------------------------------|----------------------------------|
-| `PostToolUse` (file-mutating tools)     | `PostToolUse` (file-mutating tools) | `file.edited`  | `tool_result` (file-mutating tools)  | `PreToolUse` (file-mutating tools)  | refresh the session's git status |
+| Claude Code hook                    | Codex hook                          | Antigravity hook                    | opencode event | oh-my-pi event                      | Crush hook                          | Cursor CLI hook | action                           |
+|-------------------------------------|-------------------------------------|-------------------------------------|----------------|-------------------------------------|-------------------------------------|-----------------|----------------------------------|
+| `PostToolUse` (file-mutating tools) | `PostToolUse` (file-mutating tools) | `PostToolUse` (file-mutating tools) | `file.edited`  | `tool_result` (file-mutating tools) | `PreToolUse` (file-mutating tools)  | `PostToolUse`   | refresh the session's git status |
 
 Fire it from `PostToolUse` **only for tools that write to disk** — the names are
 the provider's, so match its own: `Edit`, `Write`, `NotebookEdit`, `Bash` on
-Claude Code, `apply_patch` (plus `Bash`) on Codex, and the same set lower-cased
-(`edit`, `write`, `multiedit`, `bash`) on Crush. Do **not** fire on read-only
+Claude Code, `apply_patch` (plus `Bash`) on Codex, `write_to_file`,
+`replace_file_content` and `run_command` on Antigravity, and the same set
+lower-cased (`edit`, `write`, `multiedit`, `bash`) on Crush. Do **not** fire on read-only
 tools (`Read`, `Grep`, `Glob`, Crush's `view`): a git-status refresh per read
 would cost more than the poll it is meant to beat. The tool name is on the
 hook's stdin payload if a single script filters instead of per-tool matchers.
+
+**Antigravity's tool names are not derivable from its own documentation.** That
+documentation says a name is the step type lower-cased with `CORTEX_STEP_TYPE_`
+removed, and the binary's step enum names `MCP_TOOL` where a real payload
+carries `call_mcp_tool` — so the rule is not literal, and a matcher written from
+the enum matches nothing, silently. The names above were read off `toolCall.name`
+on a real 1.1.19 run: `write_to_file`, `replace_file_content`, `run_command`,
+`view_file`, `list_dir`, `call_mcp_tool`. Their arguments are PascalCase
+(`TargetFile`, `CodeContent`, `CommandLine`, `AbsolutePath`, `DirectoryPath`),
+which is the other half a filtering script reads.
 
 opencode needs no matcher: `file.edited` fires only when a file actually
 changed, which is the signal the other harnesses approximate by filtering tool

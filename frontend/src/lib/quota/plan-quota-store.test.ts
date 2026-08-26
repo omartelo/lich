@@ -20,13 +20,13 @@ describe("createPlanQuotaStore", () => {
     const fetch = vi.fn(async () => reading(2))
     const store = createPlanQuotaStore(fetch)
 
-    expect(store.getSnapshot()).toEqual([])
-    const a = store.subscribe(() => {})
-    const b = store.subscribe(() => {})
+    expect(store.getSnapshot("")).toEqual([])
+    const a = store.subscribe("", () => {})
+    const b = store.subscribe("", () => {})
     await vi.advanceTimersByTimeAsync(0)
 
     expect(fetch).toHaveBeenCalledTimes(1)
-    expect(store.getSnapshot()).toEqual(reading(2))
+    expect(store.getSnapshot("")).toEqual(reading(2))
     a()
     b()
   })
@@ -34,13 +34,13 @@ describe("createPlanQuotaStore", () => {
   it("keeps the same array while the numbers do not change", async () => {
     const store = createPlanQuotaStore(async () => reading(2), 1000)
     const notify = vi.fn()
-    const stop = store.subscribe(notify)
+    const stop = store.subscribe("", notify)
     await vi.advanceTimersByTimeAsync(0)
-    const first = store.getSnapshot()
+    const first = store.getSnapshot("")
 
     await vi.advanceTimersByTimeAsync(1000)
 
-    expect(store.getSnapshot()).toBe(first)
+    expect(store.getSnapshot("")).toBe(first)
     expect(notify).toHaveBeenCalledTimes(1)
     stop()
   })
@@ -49,13 +49,13 @@ describe("createPlanQuotaStore", () => {
     let percent = 2
     const store = createPlanQuotaStore(async () => reading(percent), 1000)
     const notify = vi.fn()
-    const stop = store.subscribe(notify)
+    const stop = store.subscribe("", notify)
     await vi.advanceTimersByTimeAsync(0)
 
     percent = 91
     await vi.advanceTimersByTimeAsync(1000)
 
-    expect(store.getSnapshot()[0].windows?.[0].percent).toBe(91)
+    expect(store.getSnapshot("")[0].windows?.[0].percent).toBe(91)
     expect(notify).toHaveBeenCalledTimes(2)
     stop()
   })
@@ -68,26 +68,26 @@ describe("createPlanQuotaStore", () => {
       }
       return reading(2)
     }, 1000)
-    const stop = store.subscribe(() => {})
+    const stop = store.subscribe("", () => {})
     await vi.advanceTimersByTimeAsync(0)
 
     fail = true
     await vi.advanceTimersByTimeAsync(1000)
 
-    expect(store.getSnapshot()).toEqual(reading(2))
+    expect(store.getSnapshot("")).toEqual(reading(2))
     stop()
   })
 
   it("keeps the last reading when a read returns nothing", async () => {
     let empty = false
     const store = createPlanQuotaStore(async () => (empty ? null : reading(2)), 1000)
-    const stop = store.subscribe(() => {})
+    const stop = store.subscribe("", () => {})
     await vi.advanceTimersByTimeAsync(0)
 
     empty = true
     await vi.advanceTimersByTimeAsync(1000)
 
-    expect(store.getSnapshot()).toEqual(reading(2))
+    expect(store.getSnapshot("")).toEqual(reading(2))
     stop()
   })
 
@@ -95,12 +95,43 @@ describe("createPlanQuotaStore", () => {
     const fetch = vi.fn(async () => reading(2))
     const store = createPlanQuotaStore(fetch, 1000)
 
-    const stop = store.subscribe(() => {})
+    const stop = store.subscribe("", () => {})
     await vi.advanceTimersByTimeAsync(0)
     stop()
     await vi.advanceTimersByTimeAsync(5000)
 
     expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it("reads each session's account on its own, and keeps the readings apart", async () => {
+    const fetch = vi.fn(async (sessionId: string) => reading(sessionId === "a" ? 4 : 91))
+    const store = createPlanQuotaStore(fetch)
+
+    const a = store.subscribe("a", () => {})
+    const b = store.subscribe("b", () => {})
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(fetch.mock.calls.map(([id]) => id)).toEqual(["a", "b"])
+    expect(store.getSnapshot("a")[0].windows?.[0].percent).toBe(4)
+    expect(store.getSnapshot("b")[0].windows?.[0].percent).toBe(91)
+    a()
+    b()
+  })
+
+  it("keeps polling one session after another stops watching", async () => {
+    const fetch = vi.fn(async () => reading(2))
+    const store = createPlanQuotaStore(fetch, 1000)
+
+    const a = store.subscribe("a", () => {})
+    const b = store.subscribe("b", () => {})
+    await vi.advanceTimersByTimeAsync(0)
+    a()
+    await vi.advanceTimersByTimeAsync(1000)
+
+    // Two first readings, then only the session still on screen.
+    expect(fetch).toHaveBeenCalledTimes(3)
+    expect(fetch).toHaveBeenLastCalledWith("b")
+    b()
   })
 
   it("notices a plan whose status changed but whose windows did not", async () => {
@@ -110,13 +141,13 @@ describe("createPlanQuotaStore", () => {
       1000,
     )
     const notify = vi.fn()
-    const stop = store.subscribe(notify)
+    const stop = store.subscribe("", notify)
     await vi.advanceTimersByTimeAsync(0)
 
     status = "signed-out"
     await vi.advanceTimersByTimeAsync(1000)
 
-    expect(store.getSnapshot()[0].status).toBe("signed-out")
+    expect(store.getSnapshot("")[0].status).toBe("signed-out")
     stop()
   })
 })

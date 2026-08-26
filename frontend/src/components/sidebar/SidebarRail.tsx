@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils"
 import { useProjects } from "@/providers/projects"
 import { activeSessionId, sessionsOf, sidebarGroups, type Session } from "@/lib/session/sessions"
 import { useSessionAgent } from "@/lib/session/use-session-agent"
-import { useSessionStatus } from "@/lib/session/use-session-status"
+import { useSessionStatus, useSessionUnread } from "@/lib/session/use-session-status"
 import { SessionStatusIcon } from "./SessionStatusIcon"
 import { SessionTooltip } from "./SessionTooltip"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -26,6 +26,7 @@ interface RailSessionProps {
 // go, so it is the card's own tooltip, not a shortened one.
 function RailSession({ session, projectPath, active, onSelect }: RailSessionProps) {
   const status = useSessionStatus(session.id)
+  const unread = useSessionUnread(session.id)
   const agent = useSessionAgent(session.id)
   return (
     <Tooltip>
@@ -42,7 +43,7 @@ function RailSession({ session, projectPath, active, onSelect }: RailSessionProp
           />
         }
       >
-        <SessionStatusIcon kind={agent ?? session.kind} status={status} />
+        <SessionStatusIcon kind={agent ?? session.kind} status={status} unread={unread} />
       </TooltipTrigger>
       <SessionTooltip session={session} path={projectPath} />
     </Tooltip>

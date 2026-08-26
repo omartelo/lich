@@ -1,5 +1,7 @@
 package system
 
+import "github.com/omartelo/lich/internal/shquote"
+
 // openDefault hands the file to its shell association when no $VISUAL/$EDITOR
 // is set. explorer takes the path as a plain argument, which is the point: the
 // `cmd /c start` this replaced handed it to a shell that reads & | < > as
@@ -10,9 +12,13 @@ func (s *Service) openDefault(full string) error {
 	return s.run("explorer", full)
 }
 
-// quoteForShell quotes a path for cmd.exe, the shell a Windows session runs.
-func (s *Service) quoteForShell(full string) (string, bool) {
-	return quoteCmdPath(full)
+// quoteForShell quotes a path for PowerShell, the shell a Windows session runs
+// (internal/terminal, windowsShells). Every path can be expressed, so this never
+// refuses — cmd.exe, which lich no longer opens a session in, could not express
+// a path holding a double quote or a %VAR% and had to hand those to the default
+// handler instead.
+func (s *Service) quoteForShell(full string) string {
+	return shquote.QuotePwsh(full)
 }
 
 // openURL hands an external URL to the default browser. Deliberately not the
@@ -21,4 +27,11 @@ func (s *Service) quoteForShell(full string) (string, bool) {
 // what follows it. rundll32 is launched directly, with no shell in between.
 func (s *Service) openURL(rawURL string) error {
 	return s.run("rundll32", "url.dll,FileProtocolHandler", rawURL)
+}
+
+// openFolder shows a directory in File Explorer. Same launcher as openDefault,
+// and for the same reason: explorer takes the path as a plain argument, with no
+// shell in between to read & | < > out of it.
+func (s *Service) openFolder(dir string) error {
+	return s.run("explorer", dir)
 }

@@ -2,7 +2,7 @@
 // flat, filterable list the palette lists and routes to. Kept pure (no React,
 // no stores) so the flatten and filter are testable without a render.
 
-import type { Project, TranscriptMatch } from "@/lib/api-types"
+import type { ClosedSession, Project, TranscriptMatch } from "@/lib/api-types"
 import type { SessionKind, SessionState } from "./sessions"
 
 // PaletteSession is one session flattened with the project it belongs to — what
@@ -56,12 +56,41 @@ export function matchesQuery(haystack: string, query: string): boolean {
   return q.split(/\s+/).every((token) => hay.includes(token))
 }
 
+// PaletteHistory is one parked session as the History tab lists it: the store's
+// row plus the branch its checkout is on, which lives in git and not in the row
+// (internal/store.ClosedSession). Both are "" for a checkout that is gone —
+// which is also the row that cannot be resumed, so one absence explains both.
+export interface PaletteHistory extends ClosedSession {
+  branch: string
+  /** The checkout is no longer on disk: this row forgets rather than resumes. */
+  gone: boolean
+}
+
+// historyRows joins the parked rows to what git says about their checkouts. A
+// path with no branch and a path in `missing` are different failures — not a
+// repository, versus not there at all — but the row only acts on the second,
+// so only that one marks it.
+export function historyRows(
+  closed: readonly ClosedSession[],
+  branches: Readonly<Record<string, string>>,
+  missing: ReadonlySet<string>,
+): PaletteHistory[] {
+  return closed.map((session) => ({
+    ...session,
+    branch: branches[session.path] ?? "",
+    gone: missing.has(session.path),
+  }))
+}
+
 export interface PaletteResults {
   sessions: PaletteSession[]
   projects: Project[]
   // The closed projects, which the reopen menu shows five of: past that the
   // palette is the only way back to one.
   closed: Project[]
+  // The parked sessions — what the History tab lists, and the only group whose
+  // rows are not in the workspace at all.
+  history: PaletteHistory[]
 }
 
 export function filterPalette(
@@ -69,6 +98,7 @@ export function filterPalette(
   allSessions: readonly PaletteSession[],
   projects: readonly Project[],
   closed: readonly Project[] = [],
+  history: readonly PaletteHistory[] = [],
 ): PaletteResults {
   return {
     sessions: allSessions.filter((s) =>
@@ -76,6 +106,13 @@ export function filterPalette(
     ),
     projects: projects.filter((p) => matchesQuery(`${p.name} ${p.path}`, query)),
     closed: closed.filter((p) => matchesQuery(`${p.name} ${p.path}`, query)),
+    // The branch is in the haystack because it is what a user remembers a piece
+    // of work by, and it is the one part of the row the path cannot stand in
+    // for: a worktree keeps the name it was created with while the branch moves
+    // on (lib/git/checkout-label.ts).
+    history: history.filter((h) =>
+      matchesQuery(`${h.label} ${h.projectName} ${h.branch} ${h.path}`, query),
+    ),
   }
 }
 
@@ -112,10 +149,15 @@ export function paletteMessages(
 }
 
 // PALETTE_TABS is the filter row, in the order Tab walks it. A query can hit
-// four kinds of thing at once, which is a page of rows nobody reads: All shows
+// five kinds of thing at once, which is a page of rows nobody reads: All shows
 // the first few of the three worth interrupting for, and a tab lists one kind
-// whole — including the closed projects, which only their tab carries.
-export const PALETTE_TABS = ["All", "Sessions", "Projects", "Messages"] as const
+// whole — including the closed projects and the closed sessions, which only
+// their own tabs carry.
+//
+// History is last because it is the one posture the palette is not opened in:
+// the other four are asked mid-work, and this one is asked when the work is
+// already over and somebody is looking for what they did.
+export const PALETTE_TABS = ["All", "Sessions", "Projects", "Messages", "History"] as const
 
 export type PaletteTab = (typeof PALETTE_TABS)[number]
 
@@ -152,6 +194,7 @@ export type PaletteRow =
   | { kind: "project"; project: Project }
   | { kind: "closed"; project: Project }
   | { kind: "message"; message: PaletteMessage }
+  | { kind: "history"; session: PaletteHistory }
 
 export interface PaletteGroup {
   label: string
@@ -164,11 +207,24 @@ export interface PaletteGroup {
 // rowKey identifies a row inside the list it is rendered in. A session and a
 // message about it share an id, and they never share a group.
 export function rowKey(row: PaletteRow): string {
-  return row.kind === "session"
-    ? row.session.sessionId
-    : row.kind === "message"
-      ? row.message.sessionId
-      : row.project.id
+  switch (row.kind) {
+    case "session":
+      return row.session.sessionId
+    case "message":
+      return row.message.sessionId
+    case "history":
+      return row.session.id
+    default:
+      return row.project.id
+  }
+}
+
+// historyAction is what Enter does with one history row, and what its hint bar
+// says. A checkout that is gone has nothing to resume into — the row is a
+// leftover PurgeWorktreeSessions never collected, because the removal never went
+// through lich — so the only honest action left is to drop it.
+export function historyAction(row: PaletteHistory): "resume" | "forget" {
+  return row.gone ? "forget" : "resume"
 }
 
 // cap of 0 means no cap — the tab that names one kind lists all of it.
@@ -185,6 +241,7 @@ export function paletteGroups(
   const open = results.projects.map((project): PaletteRow => ({ kind: "project", project }))
   const closed = results.closed.map((project): PaletteRow => ({ kind: "closed", project }))
   const said = messages.map((message): PaletteRow => ({ kind: "message", message }))
+  const history = results.history.map((session): PaletteRow => ({ kind: "history", session }))
 
   const groups = ((): PaletteGroup[] => {
     switch (tab) {
@@ -194,10 +251,12 @@ export function paletteGroups(
         return [group("Open", open, 0), group("Closed", closed, 0)]
       case "Messages":
         return [group("Messages", said, 0)]
-      // No closed projects here: reopening one is not what the palette is
-      // reached for mid-work, and the rows it costs are rows the sessions and
-      // the open projects are cut to make room for. The Projects tab lists
-      // them whole, which is where somebody looking for one already goes.
+      case "History":
+        return [group("Closed sessions", history, 0)]
+      // No closed projects or closed sessions here: bringing one back is not
+      // what the palette is reached for mid-work, and the rows it costs are
+      // rows the sessions and the open projects are cut to make room for. Their
+      // own tabs list them whole, which is where somebody looking already goes.
       default:
         return [
           group("Sessions", sessions, ALL_TAB_ROWS),
@@ -223,6 +282,8 @@ export function paletteTabCount(
       return results.projects.length + results.closed.length
     case "Messages":
       return messages.length
+    case "History":
+      return results.history.length
     default:
       return null
   }

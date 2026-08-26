@@ -18,7 +18,9 @@ lives in the code, `docs/` and `CHANGELOG.md` — never restate any of it here.
   live in the companion repo `omartelo/lich-plugin`, so an endpoint or payload change breaks a repo this one
   cannot see — move the contract first, then both sides.
 - **Every task**: `task --list`. `task dev` gets its own DB, port and Chromium profile; it never touches an
-  installed lich's workspace.
+  installed lich's workspace. That isolation is one `pkill` wide: a pattern like `chromium-profile` matches the
+  running lich's own window, and killing it exits that backend and every session under it. Kill a rig's browser
+  by the PID it was launched with.
 - **User-facing feature history**: `CHANGELOG.md`.
 
 ## Rules of the codebase
@@ -61,10 +63,11 @@ Non-negotiable rules. A violation means the work is not done.
    nesting deeper than 4 levels; comments only for the *why*; errors handled explicitly, never swallowed; no magic
    values; no secrets in source.
 5. **A session feature is traced across every provider.** `internal/providers.Registry` is the checklist —
-   Claude Code, Codex, opencode, oh-my-pi, Crush. Anything a session touches (spawn flags, hooks, resume,
-   transcripts, plugin install, MCP) is designed against all five, not just the provider at hand. Equal behaviour
-   is not always possible — but the gap must be deliberate and written down in the same PR: a `docs/ceilings.md`
-   bullet naming which providers are out and why. A feature that silently works on a single provider is not done.
+   Claude Code, Codex, Antigravity, opencode, oh-my-pi, Crush, Cursor CLI. Anything a session touches (spawn
+   flags, hooks, resume, transcripts, plugin install, MCP) is designed against all seven, and
+   `docs/adding-a-provider.md` is the map of every file one lands in. Equal behaviour is not always possible —
+   but the gap must be deliberate and written down in the same PR: a `docs/ceilings.md` bullet naming which
+   providers are out and why. A feature that silently works on a single provider is not done.
 
 ## Releases
 

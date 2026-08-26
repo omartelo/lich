@@ -88,3 +88,6 @@ func subpath(path string) string {
 	escaped := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(path)
 	return `(subpath "` + escaped + `")`
 }
+
+// backendName is what the window calls this backend.
+const backendName = "sandbox-exec"

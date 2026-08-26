@@ -1,5 +1,6 @@
 import {
   isStatusEvent,
+  statusReason,
   toSessionStatus,
   type SessionEventSource,
   type SessionStatus,
@@ -22,17 +23,35 @@ function samePending(a: readonly PendingStatus[], b: readonly PendingStatus[]): 
 
 interface Entry {
   status: SessionStatus | null
+  // What the session is blocked on, in the provider's own words, and "" for
+  // every state that is not a question. It rides here rather than in a store of
+  // its own because "waiting" is the only thing that clears it: the reason and
+  // the state it belongs to leave together, and holding them apart would be two
+  // entries that must never disagree.
+  reason: string
   // When the current status started, as wall-clock ms — what the card's elapsed
   // readout counts from. Stamped on the transition alone: the hook reports the
   // same state repeatedly while a turn runs, and a session has been waiting
   // since it started waiting, not since the last report said so again.
   since: number
-  // Whether the user has had a chance to see the current status, which only
-  // "done" cares about: it is the one state that persists with nothing running,
-  // so a finished turn would badge its project tab forever. "busy" and
-  // "waiting" are live — a tab left mid-run should keep saying so, and a
-  // permission prompt left unanswered is still blocking.
+  // Whether the user has read the current status, which only "done" cares
+  // about: it is the one state that persists with nothing running, so a
+  // finished turn would badge its project tab forever and its ring would say
+  // "back from the agent" long after it was read. "busy" and "waiting" are
+  // live — a tab left mid-run should keep saying so, and a permission prompt
+  // left unanswered is still blocking. Reading is per session and not per
+  // project: the card whose terminal is on screen is the one that was looked
+  // at, and the sessions beside it in the sidebar are exactly the ones whose
+  // results nobody has collected yet (see the provider's markSessionSeen).
   seen: boolean
+  // Whether this session has ever reported a state at all — which is not the
+  // same question as `status !== null`, since `idle` and `interrupted` both map
+  // to no indicator. It is what tells a session whose provider will never report
+  // apart from one that simply has not yet, and the surfaces that offer a
+  // turn-shaped feature (the Review panel's "Last turn") show it only once this
+  // is true. It never goes back to false: a control that appears and disappears
+  // is worse than one that was never there.
+  reported: boolean
   listeners: Set<() => void>
 }
 
@@ -58,7 +77,14 @@ export function createSessionStatusStore(source: SessionEventSource) {
   const entryOf = (id: string): Entry => {
     let entry = entries.get(id)
     if (!entry) {
-      entry = { status: null, since: 0, seen: false, listeners: new Set() }
+      entry = {
+        status: null,
+        reason: "",
+        since: 0,
+        seen: false,
+        reported: false,
+        listeners: new Set(),
+      }
       entries.set(id, entry)
     }
     return entry
@@ -109,22 +135,40 @@ export function createSessionStatusStore(source: SessionEventSource) {
     }
     const entry = entryOf(data.id)
     const next = toSessionStatus(data.state)
+    const reason = next === "waiting" ? statusReason(data) : ""
+    // Recorded before the bail below, and for every report whatever it maps to:
+    // an `idle` or an `interrupted` is still proof this session's provider
+    // reports at all (see Entry.reported).
+    const first = !entry.reported
+    entry.reported = true
     // The snapshot is a string union, so identity is free: bail on a repeat
-    // state and subscribers skip the re-render entirely.
-    if (entry.status === next) {
+    // state and subscribers skip the re-render entirely. The reason is weighed
+    // with it because a second permission prompt inside one turn repeats the
+    // state and changes the question — the one repeat that is news.
+    if (entry.status === next && entry.reason === reason) {
+      // Unless this was the first report: it changed nothing about the status
+      // and everything about whether a turn-shaped control is drawn.
+      if (first) {
+        notify(entry)
+      }
       return
     }
+    // Stamped on the state's own transition alone: a session has been waiting
+    // since it started waiting, not since the question it is waiting on changed.
+    if (entry.status !== next) {
+      entry.since = Date.now()
+    }
     entry.status = next
-    entry.since = Date.now()
+    entry.reason = reason
     // A fresh report is by definition unseen, whether or not the last one was.
     entry.seen = false
     notify(entry)
     refreshPending()
   })
 
-  // markSeen records that a session's status has been on screen — its project
-  // was opened, or was open when the status arrived. Only a "done" changes
-  // appearance from it (see Entry.seen), so only that notifies.
+  // markSeen records that a session's status has been read — its card was
+  // focused, or was on screen and being watched when the status arrived. Only a
+  // "done" changes appearance from it (see Entry.seen), so only that notifies.
   const markSeen = (id: string): void => {
     const entry = entries.get(id)
     if (!entry || entry.seen) {
@@ -138,7 +182,7 @@ export function createSessionStatusStore(source: SessionEventSource) {
   }
 
   // pendingOf reduces a project's sessions to the one status its tab should
-  // badge, or null when there is nothing to say. A seen "done" says nothing.
+  // badge, or null when there is nothing to say. A read "done" says nothing.
   const pendingOf = (ids: readonly string[]): SessionStatus | null => {
     const live = new Set<SessionStatus>()
     for (const id of ids) {
@@ -175,6 +219,24 @@ export function createSessionStatusStore(source: SessionEventSource) {
 
   const get = (id: string): SessionStatus | null => entries.get(id)?.status ?? null
 
+  // reported answers whether this session has ever reported a state — see
+  // Entry.reported for why it is not `get(id) !== null`.
+  const reported = (id: string): boolean => entries.get(id)?.reported ?? false
+
+  // unread is the one question the card's ring asks beyond the status itself:
+  // a turn that finished and has not been looked at since. Only "done" can be
+  // unread — the live states say what they say whether or not anyone is
+  // watching — so everything else answers false.
+  const unread = (id: string): boolean => {
+    const entry = entries.get(id)
+    return entry?.status === "done" && !entry.seen
+  }
+
+  // reason answers what a waiting session is blocked on, "" when nothing was
+  // reported — a provider whose event carries no words for it, or any state that
+  // is not a question (docs/hooks/session-state.md).
+  const reason = (id: string): string => entries.get(id)?.reason ?? ""
+
   // since answers when the current status started, or null when there is no
   // status to time — including for an entry a subscriber opened before the
   // first report landed.
@@ -196,5 +258,17 @@ export function createSessionStatusStore(source: SessionEventSource) {
   // changes, so it is safe to hand straight to useSyncExternalStore.
   const pendingAll = (): PendingStatus[] => pending
 
-  return { subscribe, get, since, markSeen, pendingOf, runningOf, subscribeAll, pendingAll }
+  return {
+    subscribe,
+    get,
+    reported,
+    unread,
+    reason,
+    since,
+    markSeen,
+    pendingOf,
+    runningOf,
+    subscribeAll,
+    pendingAll,
+  }
 }

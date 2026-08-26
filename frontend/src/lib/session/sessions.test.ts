@@ -47,7 +47,16 @@ function buildState(n: number): SessionState {
 
 describe("isSessionKind", () => {
   it("accepts every provider kind and the shell", () => {
-    for (const kind of ["claude", "codex", "opencode", "omp", "crush", "shell"]) {
+    for (const kind of [
+      "claude",
+      "codex",
+      "antigravity",
+      "opencode",
+      "omp",
+      "crush",
+      "cursor",
+      "shell",
+    ]) {
       expect(isSessionKind(kind)).toBe(true)
     }
   })
@@ -526,6 +535,14 @@ describe("resumableSession", () => {
     expect(resumableSession(state, P, "s1")).toMatchObject({
       id: "s1",
       providerSessionId: "019fe876-0fb5",
+    })
+  })
+
+  it("returns an antigravity session carrying a provider session id", () => {
+    const state = withClaudeSession(buildState(2), "s1", "7bb32ee5-e8e3", "antigravity")
+    expect(resumableSession(state, P, "s1")).toMatchObject({
+      id: "s1",
+      providerSessionId: "7bb32ee5-e8e3",
     })
   })
 

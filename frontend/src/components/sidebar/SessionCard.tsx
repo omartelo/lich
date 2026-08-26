@@ -5,7 +5,10 @@ import {
   ArrowLeft,
   ArrowRight,
   CircleQuestionMark,
+  Copy,
   CornerDownLeft,
+  FolderCode,
+  FolderOpen,
   GitBranch,
   GitPullRequestArrow,
   Inbox,
@@ -19,11 +22,17 @@ import {
   X,
 } from "lucide-react"
 import { useSortable } from "@dnd-kit/sortable"
-import { cn } from "@/lib/utils"
+import { toast } from "sonner"
+import { cn, errorText } from "@/lib/utils"
 import { dragStyle } from "@/lib/use-sortable-list"
 import { displayPath } from "@/lib/paths"
 import type { Session } from "@/lib/session/sessions"
-import { useSessionStatus, useSessionStatusAge } from "@/lib/session/use-session-status"
+import {
+  useSessionStatus,
+  useSessionStatusAge,
+  useSessionUnread,
+  useSessionWaitingReason,
+} from "@/lib/session/use-session-status"
 import { useSessionCwd } from "@/lib/session/use-session-cwd"
 import { useSessionAgent } from "@/lib/session/use-session-agent"
 import { useSessionRelay } from "@/lib/session/use-session-relay"
@@ -46,12 +55,16 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
-import { Terminal as TerminalService } from "@/lib/rpc"
+import { System, Terminal as TerminalService } from "@/lib/rpc"
+import { queuePaste } from "@/lib/terminal/paste-queue"
 import type { DelegateGroup } from "@/lib/session/delegate-targets"
 import { delegatePrompt, delegateWorktreePrompt } from "@/lib/session/delegate-prompt"
+import { isWindows } from "@/lib/platform"
+import { sendCommand } from "@/lib/session/send-command"
 import { bracketedPaste } from "@/lib/terminal/bracketed-paste"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
 import { useSessionIntent } from "@/lib/use-sidebar-intent"
+import { useProjects } from "@/providers/projects"
 import { SessionTargetPicker } from "./SessionTargetPicker"
 import { EntrypointDialog } from "./EntrypointDialog"
 
@@ -68,16 +81,20 @@ interface SessionCardProps {
   // Pin the card to the head of the list, or unpin it. A pinned card offers no
   // close affordance at all — unpinning is the way back to closing it.
   onPin: (pinned: boolean) => void
-  // Open a shell session rooted at this card's shown directory. Wired only for
-  // agent sessions, so the user can drop into a terminal in the worktree the
-  // agent is working in without cd-ing there by hand.
-  onOpenTerminal: (cwd: string) => void
+  // Open a shell session rooted at this card's shown directory, and answer with
+  // its id. The menu item is wired for agent sessions alone — the user dropping
+  // into a terminal in the worktree the agent works in, without cd-ing there by
+  // hand — but the id is what lets a terminal editor be launched in it.
+  onOpenTerminal: (cwd: string) => string
   // Record the command this terminal opens into, "" to clear it back to a plain
   // shell. Offered on shell sessions alone: on a provider card the entrypoint is
   // the provider, and the store refuses one there anyway.
   onSetEntrypoint: (entrypoint: string) => void
   // Open the Pulls screen for this session's worktree, parking its PR card.
   onPulls: () => void
+  // Whether the card can be dragged. False while the sidebar holds a filter,
+  // where a drop would compute an order the store rejects wholesale.
+  sortable: boolean
   // Sessions this one can hand work to, grouped by project. Only the card
   // whose terminal is on screen offers them — the request is written at that
   // terminal's prompt, so any other card would be writing somewhere the user
@@ -98,8 +115,13 @@ export function SessionCard({
   onOpenTerminal,
   onSetEntrypoint,
   onPulls,
+  sortable,
   delegateGroups,
 }: SessionCardProps) {
+  // Read here rather than threaded down as a prop: the `lich send` line names
+  // the project only when another session shares this card's label, and that is
+  // a question about every open project — not about the one this card sits in.
+  const { projects, sessions } = useProjects()
   const pinned = !!session.pinned
   const pathRef = useRef<HTMLSpanElement>(null)
   const [pathOverflow, setPathOverflow] = useState(false)
@@ -112,10 +134,18 @@ export function SessionCard({
   // null before the first report, and whenever the hook reports a state with
   // no indicator (see toSessionStatus) — then the icon shows ringless.
   const status = useSessionStatus(session.id)
+  // Whether that state is news: a turn that finished while the user was
+  // elsewhere, still unread. It fades out of the ring the moment this card is
+  // the one being looked at.
+  const unread = useSessionUnread(session.id)
   // How long that state has lasted, beside the ring: with five agents running,
   // the bells all look alike and the one blocked longest is the one to answer
   // first. "" for the states that have no clock (see useSessionStatusAge).
   const age = useSessionStatusAge(session.id)
+  // What the session is blocked on, when its provider's event had words for it:
+  // the line the user reads to decide whether this is the card to open. "" from
+  // a provider that reports the block and nothing about it.
+  const waitingReason = useSessionWaitingReason(session.id)
   // The provider CLI live inside the PTY right now — a hand-run `claude` or
   // `codex` in a shell session puts that provider's mark on the card while it
   // runs; null falls back to the session's own kind.
@@ -148,7 +178,7 @@ export function SessionCard({
   // before the input could be clicked into or its text selected.
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: session.id,
-    disabled: editing,
+    disabled: editing || !sortable,
   })
 
   // Write the request at this session's own prompt and hand the cursor back.
@@ -161,6 +191,40 @@ export function SessionCard({
   const delegateWorktree = () => {
     void TerminalService.Write(session.id, bracketedPaste(delegateWorktreePrompt(session.kind)))
     requestTerminalFocus(session.id)
+  }
+
+  // Open this card's checkout, the folder itself. The backend either launched a
+  // GUI editor detached (empty reply) or handed back the command line for a
+  // terminal editor: run that in a shell session at the checkout, the way the
+  // files panel does for a single file.
+  const openFolderInEditor = () => {
+    void System.OpenFolderInEditor(shownPath)
+      .then((command) => {
+        if (command) {
+          queuePaste(onOpenTerminal(shownPath), `${command}\n`)
+        }
+      })
+      .catch((error) => toast.error(`Could not open the checkout: ${errorText(error)}`))
+  }
+
+  // The line another terminal — or another agent — hands this session work
+  // with. The label is quoted for a shell on the way out (sendCommand), in the
+  // spelling this machine's own shell reads: getting that right from memory is
+  // exactly what goes wrong when the line is retyped.
+  const copySendCommand = () => {
+    const command = sendCommand(projects, sessions, session, isWindows)
+    void navigator.clipboard.writeText(command).then(
+      () => toast(`Copied: ${command}`),
+      (error) => toast.error(`Could not copy the command: ${errorText(error)}`),
+    )
+  }
+
+  // A worktree removed outside lich leaves its card behind, so both openers
+  // report a checkout that is gone rather than launching at nothing.
+  const openFolder = () => {
+    void System.OpenFolder(shownPath).catch((error) =>
+      toast.error(`Could not open the folder: ${errorText(error)}`),
+    )
   }
 
   // Every provider can delegate, and no live target is required: the picker's
@@ -299,7 +363,7 @@ export function SessionCard({
                     pinned ? "pr-6" : "pr-11",
                   )}
                 >
-                  <SessionStatusIcon kind={agent ?? session.kind} status={status} />
+                  <SessionStatusIcon kind={agent ?? session.kind} status={status} unread={unread} />
                   {age && (
                     <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                       {age}
@@ -355,7 +419,16 @@ export function SessionCard({
               ) : status === "waiting" ? (
                 <span className="flex w-full min-w-0 items-center gap-1 text-xs">
                   <CircleQuestionMark className="size-3 shrink-0 text-amber-500" />
-                  <span className="truncate font-medium text-amber-500">Waiting on you</span>
+                  {/* The question takes the whole line when there is one: the
+                      amber glyph and the ring around the icon already say the
+                      session is waiting, so spending the width on saying it
+                      again would cost the card the only words on it the user
+                      cannot already see. Not every provider has them (see
+                      docs/hooks/session-state.md), and the generic line is what
+                      those fall back to. */}
+                  <span className="truncate font-medium text-amber-500">
+                    {waitingReason || "Waiting on you"}
+                  </span>
                 </span>
               ) : status !== "busy" && inbox > 0 ? (
                 <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
@@ -491,6 +564,10 @@ export function SessionCard({
               Delegate to session…
             </ContextMenuItem>
           )}
+          <ContextMenuItem onClick={copySendCommand}>
+            <Copy />
+            Copy send command
+          </ContextMenuItem>
           <ContextMenuItem onClick={() => setEditing(true)}>
             <Pencil />
             Rename
@@ -511,6 +588,14 @@ export function SessionCard({
               Open Terminal
             </ContextMenuItem>
           )}
+          <ContextMenuItem onClick={openFolderInEditor}>
+            <FolderCode />
+            Open in editor
+          </ContextMenuItem>
+          <ContextMenuItem onClick={openFolder}>
+            <FolderOpen />
+            Open folder
+          </ContextMenuItem>
           <ContextMenuItem onClick={onPulls}>
             <GitPullRequestArrow />
             Pull request

@@ -1,6 +1,9 @@
 package quota
 
 import (
+	"io"
+	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +18,36 @@ const (
 	// token. Sent as anything else it rate-limits within a few requests; the
 	// patch version is not checked, so a recent one stays good.
 	claudeUserAgent = "claude-code/2.1.183"
+	// claudeAPIVersion is the dated API contract the probe request is written
+	// against; the usage route above needs none.
+	claudeAPIVersion = "2023-06-01"
+)
+
+// The environment variables a session's own process names its Claude login
+// with: a long-lived OAuth token, which wins over everything on disk, and the
+// config directory holding the credentials file when there is no token.
+const (
+	claudeTokenVar = "CLAUDE_CODE_OAUTH_TOKEN"
+	claudeDirVar   = "CLAUDE_CONFIG_DIR"
+)
+
+// The quota probe: what lich sends when a session's login is a long-lived
+// OAuth token rather than a credentials file. Such a token carries the
+// `user:inference` scope alone — the usage route above answers it 403, since
+// that one wants `user:profile` — so the account is measured the way Claude
+// Code measures it for itself: send the smallest possible message and read the
+// rate-limit headers off the response.
+const (
+	claudeProbeURL = "https://api.anthropic.com/v1/messages"
+	// claudeProbeBody is one token of output on the cheapest model. The system
+	// prompt is not decoration: the API rejects an OAuth token that arrives
+	// without Claude Code's own, which is the same coupling as the user agent
+	// above.
+	claudeProbeBody = `{"model":"claude-haiku-4-5-20251001","max_tokens":1,` +
+		`"messages":[{"role":"user","content":"quota"}],` +
+		`"system":[{"type":"text","text":"You are Claude Code, Anthropic's official CLI for Claude."}]}`
+	// claudeClaimPrefix is what every unified rate-limit header starts with.
+	claudeClaimPrefix = "anthropic-ratelimit-unified-"
 )
 
 // claudeCredentials is the part of ~/.claude/.credentials.json lich reads. The
@@ -68,10 +101,18 @@ type claudeLimit struct {
 	} `json:"scope"`
 }
 
-// claudePlan reads Claude Code's quota off the login its CLI wrote.
-func (s *Service) claudePlan() Plan {
+// claudePlan reads Claude Code's quota for the account a session spends: the
+// token its own environment names, else the login its CLI wrote under the
+// config directory that environment points at.
+func (s *Service) claudePlan(a Account) Plan {
 	p := plan(providers.Claude)
-	path, ok := harnessFile("CLAUDE_CONFIG_DIR", ".claude", ".credentials.json")
+	if a.hidden() || a.elsewhere() {
+		return unknown(p)
+	}
+	if token := a.Env[claudeTokenVar]; token != "" {
+		return s.claudeProbe(p, token)
+	}
+	path, ok := harnessFile(a, claudeDirVar, ".claude", ".credentials.json")
 	if !ok {
 		return failed(p)
 	}
@@ -97,6 +138,62 @@ func (s *Service) claudePlan() Plan {
 		return failed(p)
 	}
 	return p
+}
+
+// claudeProbe measures a token that can only infer: it sends the probe request
+// and reads the windows off the response headers. The plan name stays empty —
+// the headers carry the spend, never the subscription it is spent against.
+func (s *Service) claudeProbe(p Plan, token string) Plan {
+	resp, authOK, err := s.send(http.MethodPost, s.probeURL, token, claudeProbeBody, map[string]string{
+		"anthropic-beta":    claudeBetaHeader,
+		"anthropic-version": claudeAPIVersion,
+		"content-type":      "application/json",
+		"User-Agent":        claudeUserAgent,
+	})
+	if !authOK {
+		return signedOut(p)
+	}
+	if err != nil {
+		return failed(p)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	// The answer is in the headers; draining the body is what lets the
+	// connection be reused for the next reading.
+	_, _ = io.Copy(io.Discard, resp.Body)
+	p.Windows = probeWindows(resp.Header)
+	if len(p.Windows) == 0 {
+		return failed(p)
+	}
+	return p
+}
+
+// probeWindows reads the unified rate-limit headers every message response
+// carries: the share of each window this account has spent (0–1), and the Unix
+// second it turns over. A claim the response does not report is skipped, which
+// is how an account metered on one window alone reads right.
+func probeWindows(h http.Header) []Window {
+	out := make([]Window, 0, 2)
+	for _, claim := range []struct {
+		abbrev  string
+		label   string
+		seconds int
+	}{
+		{"5h", "Session", sessionWindow},
+		{"7d", "Weekly", weeklyWindow},
+	} {
+		used, err := strconv.ParseFloat(h.Get(claudeClaimPrefix+claim.abbrev+"-utilization"), 64)
+		if err != nil {
+			continue
+		}
+		reset, _ := strconv.ParseInt(h.Get(claudeClaimPrefix+claim.abbrev+"-reset"), 10, 64)
+		out = append(out, Window{
+			Label:    claim.label,
+			Seconds:  claim.seconds,
+			Percent:  percent(used * 100),
+			ResetsAt: unixTimestamp(reset),
+		})
+	}
+	return out
 }
 
 // windows projects the response onto the neutral shape, preferring the limits

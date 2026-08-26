@@ -144,6 +144,8 @@ type spawnStore struct {
 	mu    sync.Mutex
 	rows  int
 	model string
+	// renamed is the session id and label the last rename wrote.
+	renamed [2]string
 }
 
 func (*spawnStore) LoadState() ([]store.Project, error) {
@@ -171,6 +173,13 @@ func (s *spawnStore) DeleteSession(_, _, _ string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.rows--
+	return nil
+}
+
+func (s *spawnStore) RenameSession(sessionID, label string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.renamed = [2]string{sessionID, label}
 	return nil
 }
 
@@ -299,6 +308,41 @@ func TestCloseOverTheRealDispatcher(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "/wt/auth-fix") {
 		t.Errorf("stdout = %q, want the checkout that went with the session", stdout.String())
+	}
+}
+
+// TestRenameOverTheRealDispatcher proves the four arguments `lich rename` posts
+// land on spawn.Rename in the order it declares them. Target and label are two
+// strings side by side, and swapped the command renames the wrong session to the
+// name of the right one.
+func TestRenameOverTheRealDispatcher(t *testing.T) {
+	env, rows, _ := wiredSpawn(t, &spawnGit{})
+
+	var stdout, stderr bytes.Buffer
+	args := []string{"rename", "--project", "lich", "auth-fix", "the login bug"}
+	if code := Run(args, "test", env, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
+	}
+	if rows.renamed != [2]string{"s2", "the login bug"} {
+		t.Errorf("renamed = %v, want the target session under the new name", rows.renamed)
+	}
+	if !strings.Contains(stdout.String(), `"auth-fix" to "the login bug"`) {
+		t.Errorf("stdout = %q, want both ends of the change", stdout.String())
+	}
+}
+
+// TestRenameWithoutATargetRenamesTheCallersOwnSession proves the one-argument
+// form reads the label rather than a session: LICH_SESSION_ID is the target, and
+// a client that posted the name in the target's slot would resolve no session.
+func TestRenameWithoutATargetRenamesTheCallersOwnSession(t *testing.T) {
+	env, rows, _ := wiredSpawn(t, &spawnGit{})
+
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"rename", "planner"}, "test", env, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
+	}
+	if rows.renamed != [2]string{"s1", "planner"} {
+		t.Errorf("renamed = %v, want the calling session under the new name", rows.renamed)
 	}
 }
 

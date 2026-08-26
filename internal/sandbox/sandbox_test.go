@@ -16,7 +16,7 @@ func clearHarnessEnv(t *testing.T) {
 	t.Helper()
 	for _, name := range []string{
 		"CLAUDE_CONFIG_DIR", "CODEX_HOME", "OMP_PROFILE", "PI_CODING_AGENT_DIR",
-		"XDG_CONFIG_HOME", "XDG_DATA_HOME",
+		"CURSOR_CONFIG_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME",
 	} {
 		t.Setenv(name, "")
 	}
@@ -47,6 +47,11 @@ func TestStateDirsPerProvider(t *testing.T) {
 	}{
 		{providers.Claude, []string{filepath.Join(home, ".claude"), filepath.Join(home, ".claude.json")}},
 		{providers.Codex, []string{filepath.Join(home, ".codex")}},
+		// One directory, and deliberately the whole of it: Antigravity keeps its
+		// OAuth credentials at the root of ~/.gemini, its customizations under
+		// config/ and its conversations under antigravity-cli/, and a confined
+		// session needs all three.
+		{providers.Antigravity, []string{filepath.Join(home, ".gemini")}},
 		{providers.OMP, []string{filepath.Join(home, ".omp", "agent")}},
 		{providers.OpenCode, []string{
 			filepath.Join(home, ".config", "opencode"),
@@ -56,6 +61,12 @@ func TestStateDirsPerProvider(t *testing.T) {
 			filepath.Join(home, ".config", "crush"),
 			filepath.Join(home, ".local", "share", "crush"),
 		}},
+		// Cursor is the one provider here that is not xdg-basedir with no
+		// variable set: ~/.cursor, never ~/.config/cursor. A session confined to
+		// the latter opens at the login prompt. With no XDG_CONFIG_HOME its
+		// config dir and the directory it reads off the home are the same one,
+		// so there is a single entry — the split is asserted below.
+		{providers.Cursor, []string{filepath.Join(home, ".cursor")}},
 	}
 	for _, tt := range tests {
 		if got := stateDirs(tt.provider, home); !slices.Equal(got, tt.want) {
@@ -87,6 +98,27 @@ func TestStateDirsFollowsHarnessEnvironment(t *testing.T) {
 	}
 	if got := stateDirs(providers.Crush, home); got[0] != filepath.Join(config, "crush") {
 		t.Errorf("XDG_CONFIG_HOME ignored: got %v", got)
+	}
+	// Cursor reads the XDG variable but not the XDG fallback, so it is asserted
+	// under both: set, it follows; cleared, it goes back to ~/.cursor rather
+	// than to the ~/.config the line above proves Crush lands in.
+	cursor := filepath.Join(root, "cursor")
+	t.Setenv("CURSOR_CONFIG_DIR", cursor)
+	if got := stateDirs(providers.Cursor, home); got[0] != cursor {
+		t.Errorf("CURSOR_CONFIG_DIR ignored: got %v", got)
+	}
+	// Moved off the home, Cursor needs both: the config dir it was moved to and
+	// the ~/.cursor it goes on reading `mcp.json`, its transcripts and its CLI
+	// state out of. Binding only the first is a confined session that cannot see
+	// the MCP servers an unconfined one does.
+	t.Setenv("CURSOR_CONFIG_DIR", "")
+	want := []string{filepath.Join(config, "cursor"), filepath.Join(home, ".cursor")}
+	if got := stateDirs(providers.Cursor, home); !slices.Equal(got, want) {
+		t.Errorf("stateDirs(cursor) under XDG_CONFIG_HOME = %v, want %v", got, want)
+	}
+	t.Setenv("XDG_CONFIG_HOME", "")
+	if got := stateDirs(providers.Cursor, home); !slices.Equal(got, []string{filepath.Join(home, ".cursor")}) {
+		t.Errorf("cursor fell back to xdg-basedir instead of ~/.cursor: got %v", got)
 	}
 }
 
@@ -131,7 +163,7 @@ func TestDescribeDropsMissingPathsAndDuplicates(t *testing.T) {
 	spec := Describe(providers.Claude, home, cwd, "", []string{
 		filepath.Join(home, ".config"),
 		filepath.Join(home, "nonexistent"),
-	})
+	}, false)
 
 	if !slices.Contains(spec.Write, filepath.Join(home, ".claude")) {
 		t.Errorf("provider state missing from Write: %v", spec.Write)
@@ -176,4 +208,18 @@ func count(haystack []string, needle string) int {
 		}
 	}
 	return n
+}
+
+// Backend is Available's answer with a name on it, and the two can never
+// disagree: a machine that can confine has something to call it, and one that
+// cannot must answer "" — which is what the window draws its "cannot confine"
+// state from.
+func TestBackendAgreesWithAvailable(t *testing.T) {
+	name := Backend()
+	if Available() && name == "" {
+		t.Error("a machine that can confine has no backend name")
+	}
+	if !Available() && name != "" {
+		t.Errorf("a machine that cannot confine named %q", name)
+	}
 }
