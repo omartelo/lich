@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"os"
 	"runtime"
@@ -983,6 +984,30 @@ func (s *Service) Ready(id string) bool {
 	}
 	return false
 }
+
+// QuietFor reports how long a session's PTY has produced nothing, which is the
+// only way from outside to tell that the program on the other end has finished
+// taking in what was typed at it. A session that has never written a byte — and
+// one nobody knows — is as quiet as a session gets.
+//
+// Ready answers a coarser version of the same question once, and latches; this
+// one is asked again in the middle of a delivery, where the quiet that matters
+// is the one happening right now (internal/relay, awaitSettled).
+func (s *Service) QuietFor(id string) time.Duration {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sess, ok := s.sessions[id]
+	if !ok || sess.lastOut.IsZero() {
+		return quietForever
+	}
+	return time.Since(sess.lastOut)
+}
+
+// quietForever is the answer for a session with no output to time from. Large
+// enough that every caller reads it as "settled", and a duration rather than a
+// second return value because there is nothing here a caller would do
+// differently.
+const quietForever = time.Duration(math.MaxInt64)
 
 // Close terminates a session's shell, if any.
 func (s *Service) Close(id string) error {

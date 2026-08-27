@@ -145,19 +145,21 @@ func paste(text string) string {
 // submit is the Enter that sends what paste put at the prompt.
 const submit = "\r"
 
-// defaultSubmitDelay is how long the relay waits between the paste and the
-// Enter that sends it.
+// defaultSubmitDelay is how long a target's PTY has to stay quiet before the
+// relay presses the Enter that sends what it pasted (see awaitSettled).
 //
 // Everything else lich pastes into a prompt is left for the user to send, so
 // this is the only place that presses Enter itself — and a carriage return
-// riding in the same write as the paste is swallowed. Claude Code collapses a
-// multi-line paste into a "[Pasted text #2 +7 lines]" placeholder, and the
-// Enter arriving inside that same burst goes into building the placeholder
-// rather than sending it: the message sat unsent at the target's prompt, seen
-// only when someone opened that session by hand. Nothing here can read the
-// target's screen to know when it has settled, so the delay is the instrument,
-// and it is generous on purpose — a tenth of a second nobody notices against a
-// message that otherwise never arrives.
+// arriving while the TUI is still taking the paste in is swallowed. Claude Code
+// collapses a multi-line paste into a "[Pasted text #2 +7 lines]" placeholder
+// and the Enter goes into building the placeholder rather than sending it;
+// Codex, on a terminal that gave it no paste event, spends 120ms deciding
+// whether an Enter belongs inside the burst. Both were the same bug on screen:
+// the message sitting unsent at the target's prompt, seen only when someone
+// opened that session by hand.
+//
+// It has to outlast the longest of those windows, and it is what a settled
+// terminal is measured against, so it is the whole instrument in both roles.
 const defaultSubmitDelay = 150 * time.Millisecond
 
 // sanitize strips the control characters that would either break out of the

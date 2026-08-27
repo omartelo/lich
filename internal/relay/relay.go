@@ -64,6 +64,12 @@ const (
 	// setup script runs for tens of seconds at least, so this only has to be
 	// quick against a human's patience, not against the machine.
 	readyPoll = 250 * time.Millisecond
+	// defaultSettleLimit caps how long a delivery waits for the target to finish
+	// taking a paste in before it presses Enter anyway (see awaitSettled). It
+	// only has to outlast a drain — the whole message is already in the PTY —
+	// and it sits well inside the receipt window, so a target that never goes
+	// quiet still gets its Enter in time to report reading it.
+	defaultSettleLimit = 5 * time.Second
 )
 
 // How lich's own MCP server (internal/cli) is registered and what it calls its
@@ -182,6 +188,10 @@ type Terminal interface {
 	Live(id string) bool
 	Ready(id string) bool
 	Write(id, data string) error
+	// QuietFor is how long that session's PTY has produced nothing, which is
+	// how a delivery knows the target has finished taking the paste in before
+	// it presses Enter behind it (see awaitSettled).
+	QuietFor(id string) time.Duration
 }
 
 // Peer is one session a caller may address: the label it is addressed by, the
@@ -324,6 +334,9 @@ type Service struct {
 	// nudgeDelay is the debounce before a nudge is typed (defaultNudgeDelay).
 	// A field for the same reason.
 	nudgeDelay time.Duration
+	// settleLimit caps the wait for a target to finish taking a paste in
+	// (defaultSettleLimit). A field for the same reason.
+	settleLimit time.Duration
 	// plugins answers what a provider's sessions can do, which depends on state
 	// this package has none of: whether the companion plugin is installed there,
 	// and whether it is new enough to carry lich's own operations. Nil — the
@@ -364,6 +377,7 @@ func New(sessions Sessions, term Terminal, events Events) *Service {
 		receiptWindow: defaultReceiptWindow,
 		deliveryLimit: defaultDeliveryLimit,
 		nudgeDelay:    defaultNudgeDelay,
+		settleLimit:   defaultSettleLimit,
 	}
 }
 
@@ -558,8 +572,39 @@ func (s *Service) deliver(sessionID, message string) error {
 	if err := s.term.Write(sessionID, paste(message)); err != nil {
 		return err
 	}
-	time.Sleep(s.submitDelay)
+	s.awaitSettled(sessionID)
 	return s.term.Write(sessionID, submit)
+}
+
+// awaitSettled holds the Enter back until the target has finished taking the
+// paste in — until its PTY has been quiet for submitDelay, not until
+// submitDelay has passed since lich wrote.
+//
+// The two are the same thing only where the paste arrives as one event. They
+// are not on Windows: ConPTY hands a child key events rather than the bytes
+// written to it, and a bracketed paste is not a key, so the markers are dropped
+// and the message reaches the TUI as a stream of typed characters. Every
+// provider TUI has a heuristic for that — Codex suppresses Enter for 120ms
+// after the last character of a burst, so it lands as a newline inside the
+// paste instead of sending it — and the stream is still arriving when a write
+// on this side has long returned. The message sat unsent at the target's
+// prompt, which is where users found it.
+//
+// The quiet is the drain: a TUI redraws as it takes the characters in, so its
+// silence is the first moment nothing more is coming. Waiting for it costs
+// nothing where the paste was one event — the terminal was already quiet — and
+// costs exactly the drain where it was not.
+//
+// Bounded because a TUI that repaints on a timer of its own would never go
+// quiet, and an Enter that is late is better than one that never comes.
+func (s *Service) awaitSettled(sessionID string) {
+	deadline := s.now().Add(s.settleLimit)
+	for {
+		time.Sleep(s.submitDelay)
+		if s.term.QuietFor(sessionID) >= s.submitDelay || !s.now().Before(deadline) {
+			return
+		}
+	}
 }
 
 // awaitFree blocks while a session's prompt belongs to somebody else — the
