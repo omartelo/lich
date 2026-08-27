@@ -12,9 +12,21 @@ const ATTACH_CLIPBOARD_IMAGE_SEQUENCE = "\x16"
 const WINDOWS_ATTACH_CLIPBOARD_IMAGE_SEQUENCE = "\x1bv"
 const INSERT_NEWLINE_SEQUENCE = "\x1b\r"
 
-// xterm loses the TUI intent behind Ctrl+Backspace, Ctrl+V and Shift+Enter, so
-// these bindings write substitute sequences directly. Claude Code expects
-// Alt+V (ESC v) for image attach on Windows instead of Ctrl+V's SYN.
+// xterm.js loses the TUI intent behind three configurable bindings, so matched
+// presses write substitute sequences directly through
+// attachCustomKeyEventHandler:
+//
+// - Ctrl+Backspace: xterm sends BS (\x08), a single-character erase. ETB
+//   (\x17, readline's unix-word-rubout) asks line editors to erase the word.
+// - Ctrl+V: Chromium otherwise pastes text and hides the press from TUIs that
+//   read the clipboard themselves for image attach. Linux/macOS receive SYN
+//   (\x16), like a real terminal. The physical/default binding remains Ctrl+V
+//   on Windows too, but Claude Code there expects ESC v, so lich translates the
+//   same press to that sequence. Ctrl+Shift+V remains native text paste.
+// - Shift+Enter: xterm sends plain CR, indistinguishable from Enter. ESC+CR is
+//   what TUIs accept as insert-newline without kitty-protocol negotiation.
+//
+// xterm correctly encodes everything else, including Alt chords.
 export function chordSequence(
   event: KeyState,
   hotkeys: Hotkeys,

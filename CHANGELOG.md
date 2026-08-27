@@ -9,17 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Every keyboard action lich owns is now configurable.** Settings › Hotkeys
-  includes terminal search, zoom in/out/reset and the terminal translations for
-  clipboard image attach, newline insertion and previous-word erase beside the
-  existing app actions. Any row can be rebound, reset or left unassigned;
-  conflicts ignore empty rows and each keypress runs at most the first available
-  lich action. Repeated keydowns keep stepping zoom and PTY translations, and
-  live terminals pick up changes without respawning. On Windows, clipboard image
-  attach now uses physical `Alt+V` instead of the previous physical `Ctrl+V`;
-  lich sends the same `ESC v` sequence Claude Code expects. Chromium's dangerous
-  close, navigation, zoom and Find accelerators remain blocked independently
-  without stopping the chord from propagating to a TUI.
+- **App shortcuts, terminal search and PTY translations are now configurable.**
+  Settings › Hotkeys can rebind, reset or leave each of those actions
+  unassigned; conflicts ignore empty rows, and at most one lich action handles
+  a press. Repeated keydowns keep PTY translations active, and live terminals
+  pick up changes without respawning. Clipboard image attach remains physical
+  `Ctrl+V` on every platform; on Windows, lich translates that press internally
+  to the `ESC v` sequence Claude Code expects. Find and the fixed physical zoom
+  chords remain protected independently, including numpad zoom and layouts with
+  dedicated plus/minus keys, without stopping propagation to a TUI.
 
 ## [0.41.0] - 2026-08-25
 

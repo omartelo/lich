@@ -12,45 +12,60 @@ const chord = (over: Partial<KeyboardEvent>) =>
   }) as KeyboardEvent
 
 describe("isBrowserChord", () => {
-  it("swallows the tab, window, file and page commands under either modifier", () => {
-    for (const key of ["t", "w", "n", "p", "s", "o", "u", "d", "h", "j"]) {
-      expect(isBrowserChord(chord({ ctrlKey: true, key }))).toBe(true)
-      expect(isBrowserChord(chord({ metaKey: true, key }))).toBe(true)
+  it("swallows tab, window, file and page commands under either modifier", () => {
+    for (const key of ["t", "w", "n", "p", "s", "o", "u", "d", "h", "j", "q", "l"]) {
+      expect(isBrowserChord(chord({ ctrlKey: true, key }), false)).toBe(true)
+      expect(isBrowserChord(chord({ metaKey: true, key }), true)).toBe(true)
     }
   })
 
-  it("swallows the shifted commands, including the browsing-data wipe", () => {
+  it("swallows shifted commands, including the browsing-data wipe", () => {
     for (const key of ["T", "W", "N", "M", "P", "O", "Q", "Delete"]) {
-      expect(isBrowserChord(chord({ ctrlKey: true, shiftKey: true, key }))).toBe(true)
+      expect(isBrowserChord(chord({ ctrlKey: true, shiftKey: true, key }), false)).toBe(true)
     }
   })
 
-  it("leaves the devtools chords alone — Shift changes what the key means", () => {
-    for (const key of ["i", "j", "c"]) {
-      expect(isBrowserChord(chord({ ctrlKey: true, shiftKey: true, key }))).toBe(false)
-    }
-  })
-
-  it("leaves reload, editing chords and bare keys alone", () => {
+  it("leaves reload, DevTools, editing chords and bare keys alone", () => {
     for (const key of ["r", "a", "c", "v", "x", "z", "k"]) {
-      expect(isBrowserChord(chord({ ctrlKey: true, key }))).toBe(false)
+      expect(isBrowserChord(chord({ ctrlKey: true, key }), false)).toBe(false)
     }
-    expect(isBrowserChord(chord({ key: "t" }))).toBe(false)
+    for (const key of ["i", "j", "c"]) {
+      expect(isBrowserChord(chord({ ctrlKey: true, shiftKey: true, key }), false)).toBe(false)
+    }
+    expect(isBrowserChord(chord({ key: "t" }), false)).toBe(false)
   })
 
-  it("prevents browser find, zoom, navigation, and close accelerators", () => {
-    for (const key of ["f", "+", "=", "-", "0", "[", "]", "q"]) {
-      expect(isBrowserChord(chord({ ctrlKey: true, key }))).toBe(true)
-      expect(isBrowserChord(chord({ metaKey: true, key }))).toBe(true)
+  it("protects Find and zoom on macOS and other platforms", () => {
+    for (const key of ["f", "+", "=", "-", "0"]) {
+      expect(isBrowserChord(chord({ ctrlKey: true, key }), false)).toBe(true)
+      expect(isBrowserChord(chord({ metaKey: true, key }), true)).toBe(true)
     }
-    expect(isBrowserChord(chord({ ctrlKey: true, shiftKey: true, key: "+" }))).toBe(true)
-    expect(isBrowserChord(chord({ altKey: true, key: "ArrowLeft" }))).toBe(true)
-    expect(isBrowserChord(chord({ altKey: true, key: "ArrowRight" }))).toBe(true)
-    expect(isBrowserChord(chord({ altKey: true, key: "F4" }))).toBe(true)
+    expect(isBrowserChord(chord({ ctrlKey: true, shiftKey: true, key: "+" }), false)).toBe(true)
   })
 
-  it("ignores AltGr, which arrives as Ctrl+Alt and types real characters", () => {
-    expect(isBrowserChord(chord({ ctrlKey: true, altKey: true, key: "w" }))).toBe(false)
+  it("protects bracket navigation only on macOS with bare Meta", () => {
+    for (const key of ["[", "]"]) {
+      expect(isBrowserChord(chord({ metaKey: true, key }), true)).toBe(true)
+      expect(isBrowserChord(chord({ metaKey: true, key }), false)).toBe(false)
+      expect(isBrowserChord(chord({ ctrlKey: true, key }), true)).toBe(false)
+      expect(isBrowserChord(chord({ metaKey: true, shiftKey: true, key }), true)).toBe(false)
+    }
+  })
+
+  it("protects Alt+arrows only outside macOS", () => {
+    for (const key of ["ArrowLeft", "ArrowRight"]) {
+      expect(isBrowserChord(chord({ altKey: true, key }), false)).toBe(true)
+      expect(isBrowserChord(chord({ altKey: true, key }), true)).toBe(false)
+    }
+  })
+
+  it("leaves Alt+F4 free on every platform", () => {
+    expect(isBrowserChord(chord({ altKey: true, key: "F4" }), false)).toBe(false)
+    expect(isBrowserChord(chord({ altKey: true, key: "F4" }), true)).toBe(false)
+  })
+
+  it("ignores AltGr, which arrives as Ctrl+Alt and types characters", () => {
+    expect(isBrowserChord(chord({ ctrlKey: true, altKey: true, key: "w" }), false)).toBe(false)
   })
 })
 

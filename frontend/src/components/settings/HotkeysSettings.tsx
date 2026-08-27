@@ -43,7 +43,7 @@ function HotkeyRow({ action, conflicts }: { action: HotkeyAction; conflicts?: Ho
       setRecording(false)
       return
     }
-    const next = comboFromEvent(event.nativeEvent, isMac, action.allowUnmodified)
+    const next = comboFromEvent(event.nativeEvent, isMac)
     if (!next) return
     setHotkey(action.id, next)
     setRecording(false)

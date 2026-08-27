@@ -60,12 +60,15 @@ describe("matchesCombo", () => {
     expect(matchesCombo(key({ metaKey: true, key: "f" }), binding, true)).toBe(false)
   })
 
-  it("treats the shifted Equal key and + as the same zoom-in chord", () => {
-    const binding = bound("zoomIn")
-    expect(matchesCombo(key({ ctrlKey: true, shiftKey: true, key: "+" }), binding, false)).toBe(
-      true,
+  it("rejects bindings when a modifier or key differs", () => {
+    const binding = bound("newSession")
+    expect(matchesCombo(key({ ctrlKey: true, key: "t" }), binding, false)).toBe(false)
+    expect(
+      matchesCombo(key({ ctrlKey: true, shiftKey: true, altKey: true, key: "t" }), binding, false),
+    ).toBe(false)
+    expect(matchesCombo(key({ ctrlKey: true, shiftKey: true, key: "x" }), binding, false)).toBe(
+      false,
     )
-    expect(matchesCombo(key({ ctrlKey: true, key: "=" }), binding, false)).toBe(true)
   })
 
   it("ignores repeat and unassigned bindings", () => {
@@ -112,9 +115,10 @@ describe("comboFromEvent", () => {
     expect(comboFromEvent(key({ metaKey: true, key: "k" }), true)?.mod).toBe(true)
   })
 
-  it("rejects bare keys for global actions and permits them for terminal actions", () => {
-    expect(comboFromEvent(key({ shiftKey: true, key: "Enter" }))).toBeNull()
-    expect(comboFromEvent(key({ shiftKey: true, key: "Enter" }), false, true)).toEqual({
+  it("rejects bare keys and accepts Shift as a modifier", () => {
+    expect(comboFromEvent(key({ key: "a" }), false)).toBeNull()
+    expect(comboFromEvent(key({ key: "Enter" }), false)).toBeNull()
+    expect(comboFromEvent(key({ shiftKey: true, key: "Enter" }), false)).toEqual({
       mod: false,
       ctrl: false,
       shift: true,
@@ -125,6 +129,7 @@ describe("comboFromEvent", () => {
 
   it("waits through modifier-only keydowns", () => {
     expect(comboFromEvent(key({ ctrlKey: true, key: "Control" }))).toBeNull()
+    expect(comboFromEvent(key({ ctrlKey: true, metaKey: true, key: "k" }), true)).toBeNull()
   })
 })
 
@@ -141,21 +146,15 @@ describe("formatCombo", () => {
 })
 
 describe("defaultHotkeys", () => {
-  it("uses the provider's platform-specific clipboard image chord", () => {
-    expect(defaultHotkeys(false).attachClipboardImage).toEqual({
+  it("uses one literal Ctrl+V clipboard-image binding on every platform", () => {
+    expect(defaultHotkeys().attachClipboardImage).toEqual({
       mod: false,
       ctrl: true,
       shift: false,
       alt: false,
       key: "v",
     })
-    expect(defaultHotkeys(true).attachClipboardImage).toEqual({
-      mod: false,
-      ctrl: false,
-      shift: false,
-      alt: true,
-      key: "v",
-    })
+    expect(DEFAULT_HOTKEYS.attachClipboardImage).toEqual(defaultHotkeys().attachClipboardImage)
   })
 
   it("names an unassigned binding", () => {
@@ -176,31 +175,41 @@ describe("mergeHotkeys", () => {
       alt: true,
       key: "n",
     })
-    expect(merged.zoomIn).toEqual(DEFAULT_HOTKEYS.zoomIn)
     expect(merged.terminalSearch).toEqual(DEFAULT_HOTKEYS.terminalSearch)
   })
 
-  it("does not revive zoom overrides saved before zoom bindings were retired", () => {
-    const merged = mergeHotkeys({
-      zoomIn: { mod: true, shift: true, alt: false, key: "+" },
-      zoomOut: { mod: true, shift: false, alt: true, key: "-" },
-    })
-    expect(merged.zoomIn).toEqual(DEFAULT_HOTKEYS.zoomIn)
-    expect(merged.zoomOut).toEqual(DEFAULT_HOTKEYS.zoomOut)
+  it("ignores retired zoom keys as unknown overrides", () => {
+    expect(
+      mergeHotkeys({
+        zoomIn: { mod: true, ctrl: false, shift: false, alt: false, key: "+" },
+        zoomOut: null,
+        zoomReset: { mod: true, ctrl: false, shift: false, alt: false, key: "0" },
+      }),
+    ).toEqual(DEFAULT_HOTKEYS)
   })
 
-  it("rejects a persisted terminal search binding without modifiers", () => {
+  it("rejects persisted bare bindings for global and terminal actions", () => {
     const merged = mergeHotkeys({
+      newSession: { mod: false, ctrl: false, shift: false, alt: false, key: "n" },
       terminalSearch: { mod: false, ctrl: false, shift: false, alt: false, key: "f" },
     })
+    expect(merged.newSession).toEqual(DEFAULT_HOTKEYS.newSession)
     expect(merged.terminalSearch).toEqual(DEFAULT_HOTKEYS.terminalSearch)
+  })
+
+  it("preserves a persisted Shift-only binding", () => {
+    const binding: Combo = {
+      mod: false,
+      ctrl: false,
+      shift: true,
+      alt: false,
+      key: "Enter",
+    }
+    expect(mergeHotkeys({ insertTerminalNewline: binding }).insertTerminalNewline).toEqual(binding)
   })
 
   it("preserves explicit unassigned bindings", () => {
     expect(mergeHotkeys({ terminalSearch: null }).terminalSearch).toBeNull()
-  })
-
-  it("keeps an unassigned action unassigned", () => {
     expect(mergeHotkeys({ newSession: UNASSIGNED }).newSession).toEqual(UNASSIGNED)
   })
 

@@ -1,20 +1,16 @@
 import { describe, expect, it, vi } from "vitest"
-import {
-  claimHotkey,
-  DEFAULT_HOTKEYS,
-  defaultHotkeys,
-  matchesCombo,
-  type KeyState,
-} from "./hotkeys"
+import { claimHotkey, DEFAULT_HOTKEYS, matchesCombo, type Combo, type KeyState } from "./hotkeys"
 import { zoomIntent } from "./terminal/zoom-keys"
 
-const press = (): KeyState => ({
+const press = (over: Partial<KeyState & { code: string }> = {}): KeyState & { code: string } => ({
   ctrlKey: true,
   metaKey: false,
   shiftKey: false,
   altKey: false,
   key: "k",
+  code: "KeyK",
   repeat: false,
+  ...over,
 })
 
 describe("claimHotkey", () => {
@@ -30,21 +26,28 @@ describe("claimHotkey", () => {
     expect(second).not.toHaveBeenCalled()
   })
 
-  it("runs exactly one action when a global binding conflicts with zoom", () => {
-    const event = press()
+  it("lets a global rebind claim a physical zoom chord first", () => {
+    const event = press({ key: "-", code: "Minus" })
     const globalAction = vi.fn()
     const zoomAction = vi.fn()
-    const hotkeys = {
-      ...defaultHotkeys(false),
-      zoomIn: DEFAULT_HOTKEYS.commandPalette,
-    }
+    const binding: Combo = { mod: true, ctrl: false, shift: false, alt: false, key: "-" }
 
-    expect(
-      claimHotkey(event, matchesCombo(event, DEFAULT_HOTKEYS.commandPalette, false), globalAction),
-    ).toBe(true)
-    expect(claimHotkey(event, zoomIntent(event, hotkeys, false) !== null, zoomAction)).toBe(false)
+    expect(claimHotkey(event, matchesCombo(event, binding, false), globalAction)).toBe(true)
+    expect(claimHotkey(event, zoomIntent(event) !== null, zoomAction)).toBe(false)
     expect(globalAction).toHaveBeenCalledOnce()
     expect(zoomAction).not.toHaveBeenCalled()
+  })
+
+  it("lets physical zoom claim a conflicting global rebind first", () => {
+    const event = press({ key: "-", code: "Minus" })
+    const globalAction = vi.fn()
+    const zoomAction = vi.fn()
+    const binding: Combo = { mod: true, ctrl: false, shift: false, alt: false, key: "-" }
+
+    expect(claimHotkey(event, zoomIntent(event) !== null, zoomAction)).toBe(true)
+    expect(claimHotkey(event, matchesCombo(event, binding, false), globalAction)).toBe(false)
+    expect(zoomAction).toHaveBeenCalledOnce()
+    expect(globalAction).not.toHaveBeenCalled()
   })
 
   it("lets the next claimant run after a handler declines", () => {

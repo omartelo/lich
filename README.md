@@ -138,15 +138,16 @@ window. Upgrading from the old formula needs `brew uninstall lich` first —
 - **Version control** — a project can name the GitHub account `gh` runs as
   (Settings › Version Control), for a repository only one of your accounts can
   see. It governs what lich reads from GitHub, not what git pushes.
-- **Hotkeys** — `Ctrl`/`Cmd`+`/` lists every shortcut and terminal key
-  translation lich owns. Settings › Hotkeys can rebind, disable or reset each
-  row, including terminal search, zoom and the sequences sent for image attach,
-  newline and word erase. Disabling a row stops its lich action or translation
-  and restores native terminal behavior; browser-dangerous chords stay guarded
-  without being stopped on their way to the TUI. Conflicting bindings are shown,
-  and each keypress is claimed by at most the first available lich action.
-  Bindings live in the page's `localStorage`, so wiping lich's Chromium profile
-  resets them.
+- **Hotkeys** — `Ctrl`/`Cmd`+`/` lists every configurable app action, terminal
+  search chord and PTY translation. Settings › Hotkeys can rebind, disable or
+  reset those rows, including image attach, newline and word erase. Disabling a
+  row restores native terminal behavior. Conflicts are shown, and at most one
+  lich action handles a press. Zoom stays fixed outside Settings: `Ctrl`/`Cmd`
+  with the physical Equal, Minus or 0 key, including their numpad equivalents
+  and a character fallback for layouts with dedicated plus/minus keys.
+  Browser-dangerous chords remain guarded without being stopped on their way to
+  the TUI. Bindings live in the page's `localStorage`, so wiping lich's Chromium
+  profile resets them.
 - **Appearance** — themes and fonts in Settings; the theme you pick persists in
   the workspace database, the rest of the UI preferences in `localStorage` under
   `lich.*` keys (inside lich's Chromium profile at

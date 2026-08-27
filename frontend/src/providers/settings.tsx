@@ -11,7 +11,6 @@ import {
   type Hotkeys,
 } from "@/lib/hotkeys"
 import { zoomIntent } from "@/lib/terminal/zoom-keys"
-import { isMac } from "@/lib/platform"
 import {
   parseBoolPref,
   parseNumberPref,
@@ -485,14 +484,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     writePref(ZOOM_STORAGE_KEY, zoom)
   }, [zoom])
 
-  // Keyboard zoom is configurable; Ctrl/Cmd+wheel remains a gesture rather
-  // than a key binding. The browser accelerator guard independently prevents
-  // Chromium zoom, so a disabled or rebound old chord reaches the TUI without
-  // changing either lich's zoom or Chromium's.
+  // Keyboard zoom shadows Chromium's physical accelerators. Ctrl/Cmd+wheel
+  // remains a gesture rather than a key binding.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (isRecordingTarget(event)) return
-      const intent = zoomIntent(event, hotkeys, isMac)
+      const intent = zoomIntent(event)
       if (!intent) return
       const claimed = claimHotkey(event, true, () => {
         if (intent === "reset") {
@@ -517,7 +514,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("keydown", onKey, true)
       window.removeEventListener("wheel", onWheel, true)
     }
-  }, [hotkeys, zoomBy, setZoom])
+  }, [zoomBy, setZoom])
 
   const resolvedTerminalTheme = resolveTerminalTheme(terminalTheme, resolvedTheme, themes)
 

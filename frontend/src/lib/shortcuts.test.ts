@@ -15,12 +15,14 @@ describe("shortcutGroups", () => {
     )
   })
 
-  it("shows current bindings for app, zoom, search, and terminal translations", () => {
+  it("shows app, search, and terminal translation bindings without zoom", () => {
     const groups = shortcutGroups(DEFAULT_HOTKEYS, false)
     expect(keysFor(groups, "Command palette")).toBe("Ctrl+K")
-    expect(keysFor(groups, "Zoom in")).toBe("Ctrl++")
     expect(keysFor(groups, "Search the session's output")).toBe("Ctrl+F")
+    expect(keysFor(groups, "Attach an image from the clipboard")).toBe("Ctrl+V")
     expect(keysFor(groups, "Insert a newline without sending")).toBe("Shift+Enter")
+    expect(keysFor(groups, "Erase the previous word")).toBe("Ctrl+Backspace")
+    expect(keysFor(groups, "Zoom in")).toBeUndefined()
   })
 
   it("shows rebindings and disabled actions instead of fixed rows", () => {
@@ -28,12 +30,12 @@ describe("shortcutGroups", () => {
       {
         ...DEFAULT_HOTKEYS,
         terminalSearch: null,
-        zoomIn: { mod: true, ctrl: false, shift: true, alt: true, key: "z" },
+        insertTerminalNewline: { mod: false, ctrl: false, shift: false, alt: true, key: "n" },
       },
       false,
     )
     expect(keysFor(groups, "Search the session's output")).toBe("Unassigned")
-    expect(keysFor(groups, "Zoom in")).toBe("Ctrl+Shift+Alt+Z")
+    expect(keysFor(groups, "Insert a newline without sending")).toBe("Alt+N")
   })
 
   it("formats platform-primary and literal Control distinctly on macOS", () => {

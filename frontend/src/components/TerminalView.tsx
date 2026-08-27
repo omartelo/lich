@@ -361,8 +361,7 @@ export function TerminalView({
         closeSearch()
         return false
       }
-      // Platform-dependent because Claude Code's clipboard-image-paste chord is
-      // Ctrl+V on Linux/macOS but Alt+V on Windows (term-keys.ts).
+      // The binding is uniform; term-keys.ts selects the platform PTY sequence.
       const seq = chordSequence(event, hotkeysRef.current, isMac, isWindows)
       if (seq === null) {
         return true

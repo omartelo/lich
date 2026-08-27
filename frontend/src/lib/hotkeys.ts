@@ -1,5 +1,12 @@
-import { isMac, isWindows } from "@/lib/platform"
+import { isMac } from "@/lib/platform"
 import { readPref, writePref } from "@/lib/prefs"
+
+// Global keyboard shortcuts are user-configurable and persisted with the rest
+// of Settings. `mod` is Ctrl on Windows/Linux and Cmd on macOS; `ctrl` is
+// literal Control on every platform.
+//
+// Zoom is deliberately absent: Chromium binds those accelerators to physical
+// keys, so zoom-keys.ts matches event.code instead of a character combo.
 
 export type HotkeyId =
   | "commandPalette"
@@ -20,9 +27,6 @@ export type HotkeyId =
   | "settings"
   | "pulls"
   | "shortcuts"
-  | "zoomIn"
-  | "zoomOut"
-  | "zoomReset"
   | "terminalSearch"
   | "attachClipboardImage"
   | "insertTerminalNewline"
@@ -57,7 +61,6 @@ export interface HotkeyAction {
   label: string
   group: HotkeyGroup
   combo: Combo
-  allowUnmodified?: boolean
 }
 
 const combo = (mod: boolean, shift: boolean, alt: boolean, key: string, ctrl = false): Combo => ({
@@ -68,13 +71,24 @@ const combo = (mod: boolean, shift: boolean, alt: boolean, key: string, ctrl = f
   key,
 })
 
-const imageCombo = (windows: boolean): Combo =>
-  windows ? combo(false, false, true, "v") : combo(false, false, false, "v", true)
-
-// Defaults avoid Ctrl+letter where a shifted chord is available: every bound
-// global combo is captured before xterm and therefore belongs to lich, not the
-// TUI. Terminal translations are deliberate exceptions because their action is
-// the sequence lich writes to the PTY.
+// Every global default here is a key taken away from the TUI underneath: the
+// chord is caught in the window capture phase and never reaches the PTY. What
+// each one costs was measured by pressing it into `cat -v` in a live session:
+//
+// - Ctrl+letter is a control code the shell and Claude Code already bind
+//   (Ctrl+R search, Ctrl+U kill, Ctrl+W erase word) — never take one.
+// - Ctrl+Shift+letter reaches the PTY as nothing at all: xterm's control-code
+//   mapping requires Shift to be up, so no TUI can bind it and the chord is free.
+//   It is the family to reach for, minus the letters Chromium keeps for itself.
+// - Ctrl+Shift+arrow arrives as a real sequence (CSI 1;6A…D), so it does cost
+//   the TUI something. It is spent only where the direction is the meaning.
+// - Ctrl+Alt+arrow is the desktop's workspace switch on Linux and would never
+//   arrive; Ctrl+Tab and Ctrl+PageUp/Down are Chromium's own tab accelerators.
+//
+// Terminal translations are deliberate exceptions: their action is the
+// substitute sequence lich writes to the PTY.
+//
+// HOTKEY_ACTIONS drives the defaults, Settings and the shortcuts overlay.
 export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
   {
     id: "newSession",
@@ -82,6 +96,8 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
     group: "sessions",
     combo: combo(true, true, false, "t"),
   },
+  // B for branch: the dialog's subject is which branch the checkout is cut
+  // from. Ctrl+Shift+W would read better but is Chromium's close-window chord.
   {
     id: "newWorktree",
     label: "New worktree session",
@@ -94,6 +110,8 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
     group: "sessions",
     combo: combo(true, true, false, "e"),
   },
+  // The remaining card actions avoid both spent mnemonics and Chromium's own
+  // N, W, Q, I, J, C, O, M, A and R, plus IBus's Ctrl+Shift+U.
   {
     id: "closeSession",
     label: "Close the active session",
@@ -118,6 +136,8 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
     group: "sessions",
     combo: combo(true, true, false, "h"),
   },
+  // Down/up follows the vertical session list. The project pair below turns the
+  // same shape sideways to follow the horizontal project strip.
   {
     id: "nextSession",
     label: "Next session",
@@ -130,6 +150,8 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
     group: "sessions",
     combo: combo(true, true, false, "ArrowUp"),
   },
+  // Ctrl+Shift+Enter reaches the PTY as a plain CR, indistinguishable from
+  // Enter, so downstream applications cannot bind it separately.
   {
     id: "focusTerminal",
     label: "Focus the session terminal",
@@ -161,29 +183,13 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
     combo: combo(true, true, false, "d"),
   },
   {
-    id: "zoomIn",
-    label: "Zoom in",
-    group: "view",
-    combo: combo(true, false, false, "+"),
-  },
-  {
-    id: "zoomOut",
-    label: "Zoom out",
-    group: "view",
-    combo: combo(true, false, false, "-"),
-  },
-  {
-    id: "zoomReset",
-    label: "Reset zoom",
-    group: "view",
-    combo: combo(true, false, false, "0"),
-  },
-  {
     id: "commandPalette",
     label: "Command palette",
     group: "app",
     combo: combo(true, false, false, "k"),
   },
+  // Ctrl+, is both the conventional preferences chord and one for which the
+  // terminal encodes no control code.
   {
     id: "settings",
     label: "Settings",
@@ -212,33 +218,26 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
     id: "attachClipboardImage",
     label: "Attach an image from the clipboard",
     group: "terminal",
-    combo: imageCombo(isWindows),
-    allowUnmodified: true,
+    combo: combo(false, false, false, "v", true),
   },
   {
     id: "insertTerminalNewline",
     label: "Insert a newline without sending",
     group: "terminal",
     combo: combo(false, true, false, "Enter"),
-    allowUnmodified: true,
   },
   {
     id: "eraseTerminalWord",
     label: "Erase the previous word",
     group: "terminal",
     combo: combo(false, false, false, "Backspace", true),
-    allowUnmodified: true,
   },
 ]
 
 export type Hotkeys = Record<HotkeyId, HotkeyBinding>
 
-export function defaultHotkeys(windows = isWindows): Hotkeys {
-  const defaults = Object.fromEntries(
-    HOTKEY_ACTIONS.map((action) => [action.id, action.combo]),
-  ) as Hotkeys
-  defaults.attachClipboardImage = imageCombo(windows)
-  return defaults
+export function defaultHotkeys(): Hotkeys {
+  return Object.fromEntries(HOTKEY_ACTIONS.map((action) => [action.id, action.combo])) as Hotkeys
 }
 
 export const DEFAULT_HOTKEYS: Hotkeys = defaultHotkeys()
@@ -310,15 +309,11 @@ export function claimHotkey<Result>(
   return true
 }
 
-export function comboFromEvent(
-  event: KeyState,
-  mac = isMac,
-  allowUnmodified = false,
-): Combo | null {
+export function comboFromEvent(event: KeyState, mac = isMac): Combo | null {
   if (MODIFIER_KEYS[event.key] || (event.ctrlKey && event.metaKey)) return null
   const mod = mac ? event.metaKey : event.ctrlKey
   const ctrl = mac && event.ctrlKey
-  if (!mod && !ctrl && !event.altKey && !allowUnmodified) return null
+  if (!mod && !ctrl && !event.shiftKey && !event.altKey) return null
   return {
     mod,
     ctrl,
@@ -418,28 +413,12 @@ function parsedCombo(value: unknown): Combo | null | undefined {
   }
 }
 
-function isRetiredZoomOverride(id: HotkeyId, value: unknown): boolean {
-  const zoom = id === "zoomIn" || id === "zoomOut" || id === "zoomReset"
-  return zoom && !!value && typeof value === "object" && !("ctrl" in value)
-}
-
 export function mergeHotkeys(overrides: unknown): Hotkeys {
   const result = defaultHotkeys()
   if (!overrides || typeof overrides !== "object") return result
   for (const id of Object.keys(result) as HotkeyId[]) {
-    const value = (overrides as Record<string, unknown>)[id]
-    // Releases through v0.12 stored zoom overrides in the legacy shape before
-    // zoom bindings were retired. Reintroduced actions must not revive them.
-    if (isRetiredZoomOverride(id, value)) continue
-    const parsed = parsedCombo(value)
-    if (
-      id === "terminalSearch" &&
-      parsed &&
-      !parsed.mod &&
-      !parsed.ctrl &&
-      !parsed.shift &&
-      !parsed.alt
-    ) {
+    const parsed = parsedCombo((overrides as Record<string, unknown>)[id])
+    if (parsed && !parsed.mod && !parsed.ctrl && !parsed.shift && !parsed.alt) {
       continue
     }
     if (parsed !== undefined) result[id] = parsed
