@@ -43,6 +43,8 @@ func (*wiredTerminal) Live(string) bool { return true }
 
 func (*wiredTerminal) Ready(string) bool { return true }
 
+func (*wiredTerminal) QuietFor(string) time.Duration { return time.Hour }
+
 func (w *wiredTerminal) Write(_, data string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()

@@ -61,6 +61,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A task sent to another session on Windows is sent, not left sitting at its
+  prompt.** Handing work to a Codex or Claude Code session on Windows pasted the
+  message and then failed to press Enter behind it: the request sat unsent on the
+  target's screen, and the sender waited out a ticket nobody had been asked
+  anything. Windows terminals hand a program key presses rather than the bytes
+  written to them, so the message arrives there as a burst of typing rather than
+  as a paste, and every agent's prompt has a rule for that — an Enter arriving
+  inside the burst is a new line in the message, not "send it". lich now waits for
+  the target to finish taking the message in before it presses Enter, however long
+  that takes, instead of counting a fixed moment from its own side.
 - **What you were typing on a pull request stays typed.** A description being
   rewritten, a comment being composed and a reply to a review thread all used to
   be destroyed by a click on another tab — go and check a line in Files changed,

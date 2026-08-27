@@ -30,7 +30,11 @@ type fakeTerminal struct {
 	settingUp map[string]bool
 	// typing is whether the person at that session has a half-written line at its
 	// prompt, which the terminal service reports through the same Ready.
-	typing   map[string]bool
+	typing map[string]bool
+	// noisy is how many more QuietFor calls a session answers as still drawing,
+	// and drained counts the ones it spent.
+	noisy    map[string]int
+	drained  map[string]int
 	writes   map[string][]string
 	writeErr error
 	refused  int
@@ -43,6 +47,7 @@ func newFakeTerminal(live ...string) *fakeTerminal {
 	t := &fakeTerminal{
 		live: map[string]bool{}, writes: map[string][]string{},
 		settingUp: map[string]bool{}, typing: map[string]bool{},
+		noisy: map[string]int{}, drained: map[string]int{},
 	}
 	for _, id := range live {
 		t.live[id] = true
@@ -79,6 +84,36 @@ func (f *fakeTerminal) setUp(id string, running bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.settingUp[id] = running
+}
+
+// QuietFor reports the terminal as settled unless a test says otherwise: the
+// fake has no TUI drawing into it, so there is nothing here to wait out.
+// noise makes one session busy for the next n answers, which is how a delivery
+// that has to wait for the drain is written.
+func (f *fakeTerminal) QuietFor(id string) time.Duration {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.noisy[id] > 0 {
+		f.noisy[id]--
+		f.drained[id]++
+		return 0
+	}
+	return time.Hour
+}
+
+// noise makes a session answer QuietFor as still drawing for the next n calls,
+// standing in for a TUI taking a paste in character by character.
+func (f *fakeTerminal) noise(id string, n int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.noisy[id] = n
+}
+
+// drains counts how many times a delivery found the session still drawing.
+func (f *fakeTerminal) drains(id string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.drained[id]
 }
 
 func (f *fakeTerminal) Write(id, data string) error {
@@ -354,6 +389,52 @@ func TestPeersReportsAStoreFailure(t *testing.T) {
 
 	if _, err := svc.Peers("s1"); err == nil {
 		t.Fatal("want an error when the workspace cannot be read")
+	}
+}
+
+// TestTheEnterWaitsForTheTargetToFinishTakingThePasteIn pins the delivery to
+// the target's own quiet rather than to a wall-clock guess on this side. A
+// terminal that hands the TUI a paste one character at a time — every Windows
+// ConPTY, where the bracketed paste markers never survive — is still drawing
+// when a write here has returned, and an Enter pressed into that burst is read
+// as a newline inside the paste instead of as "send it".
+func TestTheEnterWaitsForTheTargetToFinishTakingThePasteIn(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := newRelay(workspace(), term, nil)
+	svc.submitDelay = time.Millisecond
+	term.noise("s2", 3)
+
+	go svc.Send("s1", "docs", "", "run the tests", 1)
+
+	if !awaitWritten(term, "s2", submit) {
+		t.Fatal("the Enter never arrived")
+	}
+	if got := term.drains("s2"); got != 3 {
+		t.Errorf("waited out %d draws, want 3 — the Enter did not wait for the target to settle", got)
+	}
+	writes := term.written("s2")
+	if !strings.HasSuffix(writes, submit) {
+		t.Errorf("last write = %q, want the Enter behind the paste", writes)
+	}
+}
+
+// TestASilentTargetIsSentItsEnterAnyway pins the other half: a TUI that
+// repaints on a timer of its own would never go quiet, and an errand that hangs
+// on that is worse than one whose Enter is late.
+func TestASilentTargetIsSentItsEnterAnyway(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := newRelay(workspace(), term, nil)
+	svc.submitDelay = time.Millisecond
+	svc.settleLimit = 20 * time.Millisecond
+	term.noise("s2", 1_000_000)
+
+	start := time.Now()
+	svc.awaitSettled("s2")
+	if elapsed := time.Since(start); elapsed >= time.Second {
+		t.Fatalf("waited %s on a terminal that never settles, want it capped at %s", elapsed, svc.settleLimit)
+	}
+	if term.drains("s2") == 0 {
+		t.Error("gave up without waiting at all")
 	}
 }
 

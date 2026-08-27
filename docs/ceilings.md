@@ -153,8 +153,16 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   Enter, escape sequences skipped — it cannot see the line, so an edit that leaves it empty by another route
   (Ctrl+W, a click into the middle of it) reads as a draft that is still there, and a delivery waits out
   `draftIdle` for nothing. The stale-draft release is what keeps that a delay instead of a wedged relay. Two gaps
-  stay open: input arriving in the ~150ms between the paste and its Enter (`defaultSubmitDelay`) still rides along,
-  and a provider that takes keystrokes through anything other than this PTY is invisible here.
+  stay open: input arriving between the paste and its Enter still rides along — a window that is `defaultSubmitDelay`
+  at best and lasts until the target's PTY goes quiet at worst (`internal/relay`, `awaitSettled`) — and a provider
+  that takes keystrokes through anything other than this PTY is invisible here.
+- **A relayed Enter is timed against silence, not against the target** (`internal/relay`, `awaitSettled`): lich
+  presses Enter once the target's PTY has been quiet for `defaultSubmitDelay`, because nothing here can read a TUI's
+  screen to know it has taken the paste in. On Windows that quiet is the whole instrument — ConPTY hands a child key
+  events rather than bytes, the bracketed paste markers do not survive, and every provider TUI then guesses at where
+  a paste ends from timing alone. A target that repaints on a timer of its own never goes quiet and gets its Enter
+  at `defaultSettleLimit` regardless, which is the case this cannot tell from a paste still arriving.
+
 - **An answer that names no ticket is matched by delivery order** (`internal/relay/relay.go`,
   `errandOfLocked`): `lich reply "<answer>"` and `reply_to_session` without a ticket close the oldest message
   delivered to that session and still open, because nothing in an answer itself says which request it belongs to.
