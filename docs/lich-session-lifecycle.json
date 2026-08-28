@@ -1,0 +1,176 @@
+{
+  "schema_version": 1,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "lich \u00b7 Session Lifecycle",
+    "locale": "en",
+    "output": "lich-session-lifecycle.html",
+    "quality_profile": "showcase",
+    "viewBox": [
+      980,
+      566
+    ]
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "Session on screen"
+    },
+    {
+      "id": "gone",
+      "label": "Deleted for good"
+    }
+  ],
+  "states": [
+    {
+      "id": "open",
+      "type": "start",
+      "label": "Open",
+      "sublabel": "RPC creates the session",
+      "lane": "main",
+      "col": 0,
+      "step": "01",
+      "tag": "entry"
+    },
+    {
+      "id": "checkout",
+      "type": "active",
+      "label": "Checkout",
+      "sublabel": "worktree off base + setup",
+      "lane": "main",
+      "col": 1,
+      "step": "02",
+      "tag": "optional"
+    },
+    {
+      "id": "running",
+      "type": "active",
+      "label": "Running",
+      "sublabel": "provider CLI in a PTY",
+      "lane": "main",
+      "col": 2,
+      "step": "03",
+      "tag": "live"
+    },
+    {
+      "id": "closing",
+      "type": "decision",
+      "label": "Close",
+      "sublabel": "worktree: keep or remove?",
+      "lane": "main",
+      "col": 3,
+      "step": "04"
+    },
+    {
+      "id": "parked",
+      "type": "waiting",
+      "label": "Parked",
+      "sublabel": "is_open = 0 \u00b7 history kept",
+      "lane": "main",
+      "col": 4,
+      "step": "05",
+      "tag": "resumable"
+    },
+    {
+      "id": "removed",
+      "type": "failure",
+      "label": "Removed",
+      "sublabel": "checkout + rows purged",
+      "lane": "gone",
+      "col": 1,
+      "tag": "terminal"
+    },
+    {
+      "id": "forgotten",
+      "type": "failure",
+      "label": "Forgotten",
+      "sublabel": "parked row deleted",
+      "lane": "gone",
+      "col": 2,
+      "tag": "terminal"
+    }
+  ],
+  "transitions": [
+    {
+      "id": "open-checkout",
+      "from": "open",
+      "to": "checkout",
+      "label": "worktree asked",
+      "labelDy": -25
+    },
+    {
+      "id": "checkout-running",
+      "from": "checkout",
+      "to": "running",
+      "label": "spawn"
+    },
+    {
+      "id": "running-closing",
+      "from": "running",
+      "to": "closing",
+      "label": "close",
+      "labelDy": 55
+    },
+    {
+      "id": "closing-parked",
+      "from": "closing",
+      "to": "parked",
+      "label": "keep / plain close",
+      "variant": "emphasis",
+      "labelDy": 55
+    },
+    {
+      "id": "parked-running",
+      "from": "parked",
+      "to": "running",
+      "label": "resume \u00b7 new id, resume prompt",
+      "variant": "emphasis",
+      "route": "top-channel"
+    },
+    {
+      "id": "closing-removed",
+      "from": "closing",
+      "to": "removed",
+      "label": "remove",
+      "variant": "security",
+      "route": "drop"
+    },
+    {
+      "id": "parked-forgotten",
+      "from": "parked",
+      "to": "forgotten",
+      "label": "forget",
+      "variant": "security",
+      "route": "drop"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Park, don't delete",
+      "items": [
+        "Every close except a worktree removal parks the row: is_open flips to 0, transcript and costs stay",
+        "Resume by session id (history list) or by worktree path \u2014 the last session closed there",
+        "A resume mints a new session id; a user rename survives the park/resume cycle"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Worktree fate",
+      "items": [
+        "Closing a worktree session asks: keep leaves the checkout on disk, remove deletes it",
+        "Remove without --force refuses a dirty checkout \u2014 git's own refusal is surfaced",
+        "Removing a worktree purges every session at that path, live and parked alike"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Gone for good",
+      "items": [
+        "Forget only deletes parked rows \u2014 is_open = 0 is the guard: a session on screen is closed, never deleted",
+        "It is the way out for a row whose checkout was removed behind lich's back",
+        "Deleting a row for good triggers the session-gone cleanup (transcripts, drop dir)"
+      ]
+    }
+  ]
+}

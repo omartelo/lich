@@ -1,0 +1,313 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "lich \u00b7 Agent Harness",
+    "locale": "en",
+    "output": "lich-architecture.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "spa",
+      "type": "frontend",
+      "label": "React SPA",
+      "sublabel": "embedded frontend/dist",
+      "pos": [
+        80,
+        300
+      ],
+      "size": [
+        140,
+        64
+      ],
+      "tag": "xterm.js"
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "RPC API",
+      "sublabel": "internal/rpc",
+      "pos": [
+        320,
+        300
+      ],
+      "size": [
+        140,
+        64
+      ],
+      "tag": "token auth"
+    },
+    {
+      "id": "hub",
+      "type": "messagebus",
+      "label": "Event Hub",
+      "sublabel": "internal/events",
+      "pos": [
+        780,
+        140
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "spawn",
+      "type": "backend",
+      "label": "Session Manager",
+      "sublabel": "internal/spawn + providers",
+      "pos": [
+        550,
+        300
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "7 providers"
+    },
+    {
+      "id": "pty",
+      "type": "backend",
+      "label": "PTY Layer",
+      "sublabel": "internal/terminal",
+      "pos": [
+        780,
+        300
+      ],
+      "size": [
+        140,
+        64
+      ],
+      "tag": "build tags"
+    },
+    {
+      "id": "store",
+      "type": "database",
+      "label": "SQLite Store",
+      "sublabel": "internal/store \u00b7 pure Go",
+      "pos": [
+        320,
+        460
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "sandbox",
+      "type": "security",
+      "label": "Sandbox",
+      "sublabel": "internal/sandbox",
+      "pos": [
+        550,
+        460
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "bwrap / seatbelt"
+    },
+    {
+      "id": "git",
+      "type": "backend",
+      "label": "Git & Worktrees",
+      "sublabel": "internal/project",
+      "pos": [
+        780,
+        460
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "agents",
+      "type": "external",
+      "label": "Agent CLIs",
+      "sublabel": "claude, codex, crush\u2026",
+      "pos": [
+        1020,
+        300
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "hooks",
+      "type": "security",
+      "label": "Hooks & MCP",
+      "sublabel": "HTTP callbacks \u2192 RPC API",
+      "pos": [
+        1020,
+        140
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "lich-plugin"
+    },
+    {
+      "id": "github",
+      "type": "external",
+      "label": "GitHub",
+      "sublabel": "gh CLI \u00b7 releases API",
+      "pos": [
+        1020,
+        460
+      ],
+      "size": [
+        150,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Chromium \u00b7 --app window",
+      "wraps": [
+        "spa"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "lich \u00b7 single static Go binary",
+      "wraps": [
+        "hub",
+        "api",
+        "spawn",
+        "pty",
+        "store",
+        "sandbox",
+        "git"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "Agent session \u00b7 untrusted subprocess per PTY",
+      "wraps": [
+        "agents",
+        "hooks"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "ui-api",
+      "from": "spa",
+      "to": "api",
+      "label": "JSON-RPC (token)",
+      "variant": "emphasis"
+    },
+    {
+      "id": "hub-spa",
+      "from": "hub",
+      "to": "spa",
+      "label": "WebSocket push",
+      "variant": "emphasis",
+      "fromSide": "left",
+      "toSide": "top",
+      "via": [
+        [
+          150,
+          172
+        ]
+      ]
+    },
+    {
+      "id": "api-spawn",
+      "from": "api",
+      "to": "spawn",
+      "label": "open session",
+      "variant": "emphasis"
+    },
+    {
+      "id": "spawn-pty",
+      "from": "spawn",
+      "to": "pty",
+      "label": "spawn CLI",
+      "variant": "emphasis",
+      "labelDy": -34
+    },
+    {
+      "id": "pty-agents",
+      "from": "pty",
+      "to": "agents",
+      "label": "stdin / stdout",
+      "variant": "emphasis"
+    },
+    {
+      "id": "pty-hub",
+      "from": "pty",
+      "to": "hub",
+      "label": "terminal stream",
+      "variant": "emphasis"
+    },
+    {
+      "id": "api-store",
+      "from": "api",
+      "to": "store",
+      "label": "persist",
+      "labelDy": 24
+    },
+    {
+      "id": "spawn-sandbox",
+      "from": "spawn",
+      "to": "sandbox",
+      "label": "wrap argv (opt-in)",
+      "variant": "dashed",
+      "labelDy": 24
+    },
+    {
+      "id": "git-github",
+      "from": "git",
+      "to": "github",
+      "label": "gh \u00b7 push / PR",
+      "variant": "dashed"
+    },
+    {
+      "id": "agents-hooks",
+      "from": "agents",
+      "to": "hooks",
+      "label": "session events",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Runtime shape",
+      "items": [
+        "Single static Go binary (CGO_ENABLED=0) serves the embedded SPA over localhost",
+        "UI is a system Chromium window in --app mode \u2014 no Electron",
+        "API types hand-mirrored in frontend/src/lib/api-types.ts \u2014 no codegen"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Sessions",
+      "items": [
+        "Seven provider CLIs behind one registry \u2014 Claude Code, Codex, Antigravity, opencode, oh-my-pi, Crush, Cursor",
+        "Per-OS PTY picked by build tags; opt-in bwrap/seatbelt sandbox",
+        "A delegated session can get its own git worktree (internal/project)"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Trust boundaries",
+      "items": [
+        "Every /rpc call carries the session token; hook scripts call back over HTTP with it",
+        "Hook scripts ship from the companion repo omartelo/lich-plugin \u2014 contract-first",
+        "Agent CLIs are untrusted subprocesses; lich talks to them only through the PTY"
+      ]
+    }
+  ]
+}
