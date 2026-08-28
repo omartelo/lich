@@ -3,6 +3,7 @@ import type { DetectedProvider } from "./api-types"
 import {
   binKey,
   binOffKey,
+  climbsToRiskier,
   createProvidersStore,
   enabledKey,
   enabledProviders,
@@ -18,6 +19,8 @@ import {
   skipLevelPair,
   skipPermissionFlags,
   skipPermissionsKey,
+  SANDBOX_RISK_ORDER,
+  SKIP_RISK_ORDER,
   type ProviderState,
   type SandboxLevel,
 } from "./providers-store"
@@ -92,6 +95,43 @@ describe("the skip-permissions ladder", () => {
     for (const level of ["never", "worktrees", "everywhere"] as const) {
       const pair = skipLevelPair(level)
       expect(skipLevel(pair.here, pair.worktrees)).toBe(level)
+    }
+  })
+})
+
+describe("the confirmation gate on a standing safety setting", () => {
+  it("asks on the way up the skip ladder", () => {
+    expect(climbsToRiskier(SKIP_RISK_ORDER, "never", "worktrees")).toBe(true)
+    expect(climbsToRiskier(SKIP_RISK_ORDER, "never", "everywhere")).toBe(true)
+    expect(climbsToRiskier(SKIP_RISK_ORDER, "worktrees", "everywhere")).toBe(true)
+  })
+
+  // The whole point of the gate: taking the automation away is never the harder
+  // direction, so every step down writes straight through.
+  it("never asks on the way down the skip ladder", () => {
+    expect(climbsToRiskier(SKIP_RISK_ORDER, "everywhere", "worktrees")).toBe(false)
+    expect(climbsToRiskier(SKIP_RISK_ORDER, "everywhere", "never")).toBe(false)
+    expect(climbsToRiskier(SKIP_RISK_ORDER, "worktrees", "never")).toBe(false)
+  })
+
+  // Less confinement is more exposure, so the sandbox ladder is read backwards
+  // from the order it is drawn in: "off" is its riskiest rung, not its first.
+  it("reads the sandbox ladder safest first", () => {
+    expect([...SANDBOX_RISK_ORDER]).toEqual(["everywhere", "worktrees", "ask", "off"])
+    expect(climbsToRiskier(SANDBOX_RISK_ORDER, "everywhere", "off")).toBe(true)
+    expect(climbsToRiskier(SANDBOX_RISK_ORDER, "worktrees", "ask")).toBe(true)
+    expect(climbsToRiskier(SANDBOX_RISK_ORDER, "off", "everywhere")).toBe(false)
+    expect(climbsToRiskier(SANDBOX_RISK_ORDER, "ask", "worktrees")).toBe(false)
+  })
+
+  // Pressing the rung already chosen is not a move, and a dialog about a write
+  // that changes nothing is the cost the gate exists to avoid paying twice.
+  it("does not ask for the rung already chosen", () => {
+    for (const level of SKIP_RISK_ORDER) {
+      expect(climbsToRiskier(SKIP_RISK_ORDER, level, level)).toBe(false)
+    }
+    for (const level of SANDBOX_RISK_ORDER) {
+      expect(climbsToRiskier(SANDBOX_RISK_ORDER, level, level)).toBe(false)
     }
   })
 })

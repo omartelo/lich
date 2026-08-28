@@ -1,10 +1,13 @@
+import { useState } from "react"
 import { System } from "@/lib/rpc"
 import {
+  climbsToRiskier,
   enabledProviders,
   sandboxKey,
   sandboxLevel,
   useProviders,
   GH_TOKEN_KEY,
+  SANDBOX_RISK_ORDER,
   SSH_AGENT_KEY,
   type SandboxLevel,
 } from "@/lib/providers-store"
@@ -15,7 +18,9 @@ import { splitAccount } from "@/lib/gh-account"
 import { useRemoteResource } from "@/lib/use-remote-resource"
 import { useStoredSetting } from "@/lib/use-stored-setting"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
+import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { SettingBlock } from "./SettingBlock"
 
 const GLOBAL_SCOPE = ""
@@ -36,6 +41,16 @@ const RUNGS: { level: SandboxLevel; label: string }[] = [
   { level: "worktrees", label: "Worktrees" },
   { level: "everywhere", label: "Everywhere" },
 ]
+
+// What each rung leaves running on the machine, said only when it is being
+// climbed to. "Everywhere" has no line because it is the safest rung: it is
+// never the answer to "are you sure", so a caption for it would be copy nobody
+// ever reads.
+const EXPOSES: Partial<Record<SandboxLevel, string>> = {
+  off: "Every session runs on the machine.",
+  ask: "Nothing is confined unless you tick the box in the New worktree dialog.",
+  worktrees: "Sessions in the project directory run on the machine.",
+}
 
 // A module-level constant, as every array `empty` has to be: a fresh one per
 // render would notify subscribers on every failed read.
@@ -176,13 +191,28 @@ function Rung({
   scope: string
 }) {
   const [stored, setStored] = useStoredSetting(sandboxKey(providerId), scope, "off")
+  // The rung a click asked for and the write is waiting on. Null while nothing
+  // is pending, which is every click that does not loosen the confinement.
+  const [pending, setPending] = useState<SandboxLevel | null>(null)
+  const level = sandboxLevel(stored)
+
+  // Loosening confinement is confirmed once; tightening it is written straight
+  // through, because putting a session back inside the sandbox must never be
+  // the harder direction.
+  const choose = (next: SandboxLevel) => {
+    if (climbsToRiskier(SANDBOX_RISK_ORDER, level, next)) {
+      setPending(next)
+      return
+    }
+    setStored(next)
+  }
 
   return (
     <div className="flex items-center justify-between gap-4 border-t border-border py-2.5 first:border-t-0 first:pt-0">
       <span className="text-sm font-medium text-foreground">{providerName}</span>
       <ToggleGroup
-        value={[sandboxLevel(stored)]}
-        onValueChange={(next) => next[0] && setStored(next[0])}
+        value={[level]}
+        onValueChange={(next) => next[0] && choose(next[0] as SandboxLevel)}
         spacing={1}
         aria-label={`Which ${providerName} sessions run confined`}
         className="shrink-0 border border-border p-[3px]"
@@ -193,6 +223,25 @@ function Rung({
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
+
+      <ConfirmDialog
+        open={pending !== null}
+        onCancel={() => setPending(null)}
+        title={`Confine fewer ${providerName} sessions`}
+        description={`${RUNGS.find((rung) => rung.level === pending)?.label} — ${pending ? EXPOSES[pending] : ""}`}
+      >
+        <Button
+          variant="destructive"
+          onClick={() => {
+            if (pending) {
+              setStored(pending)
+            }
+            setPending(null)
+          }}
+        >
+          Leave unconfined
+        </Button>
+      </ConfirmDialog>
     </div>
   )
 }

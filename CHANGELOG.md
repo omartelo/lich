@@ -22,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Loosening a safety setting asks once; tightening one never does.** Both
+  standing safety ladders in Settings — how far a provider runs without asking,
+  and which of its sessions run confined — were written the moment you clicked a
+  rung, in either direction. Climbing to a riskier rung now confirms first, and
+  says what that rung actually leaves running on your machine. Coming back down
+  is written straight through, as is clicking the rung you are already on:
+  turning an automation off must never be the harder direction.
 - **A project tab comes back to the screen you left it on.** Stepping over to
   another project and back always dropped you onto the first project's
   terminals, whatever you had been reading there: its Settings, the pull request
