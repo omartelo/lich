@@ -84,6 +84,23 @@ export function skipLevelPair(level: SkipLevel): { here: boolean; worktrees: boo
   return { here: level === "everywhere", worktrees: level !== "never" }
 }
 
+// The skip ladder read as exposure, safest first — which is the order it is
+// already declared in. Both standing safety settings are gated against their own
+// order by climbsToRiskier below.
+export const SKIP_RISK_ORDER: readonly SkipLevel[] = ["never", "worktrees", "everywhere"]
+
+// climbsToRiskier answers whether a click moves toward more exposure, the only
+// direction a standing safety setting asks about: turning an automation off must
+// never be the harder direction. Re-clicking the chosen rung is not a move and
+// answers false, so nothing is confirmed that changes nothing.
+export function climbsToRiskier<T extends string>(
+  order: readonly T[],
+  current: T,
+  next: T,
+): boolean {
+  return order.indexOf(next) > order.indexOf(current)
+}
+
 // sandboxKey holds which sessions of a provider run confined (mirrors
 // store.sandboxKey in Go, which is what the spawn reads). Scoped like binKey —
 // a project value wins over the global one — because the checkout full of
@@ -120,6 +137,12 @@ const SANDBOX_LEVELS: readonly SandboxLevel[] = ["off", "ask", "worktrees", "eve
 export function sandboxLevel(value: string): SandboxLevel {
   return SANDBOX_LEVELS.find((level) => level === value) ?? "off"
 }
+
+// SANDBOX_LEVELS read the other way round: exposure is the inverse of
+// confinement, so the safest rung is "everywhere" and the riskiest is "off".
+// Derived rather than written out twice — a rung added to the ladder is a rung
+// the gate already knows the risk of.
+export const SANDBOX_RISK_ORDER: readonly SandboxLevel[] = [...SANDBOX_LEVELS].reverse()
 
 // sandboxDefaultFor is what the new-session dialog arrives showing: the rung
 // applied to the checkout the session will start in. It is the frontend's copy

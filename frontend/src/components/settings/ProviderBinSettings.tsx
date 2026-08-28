@@ -1,11 +1,13 @@
 import { useState } from "react"
 import {
+  climbsToRiskier,
   footerReadout,
   footerReadoutPair,
   skipLevel,
   skipLevelPair,
   skipPermissionFlags,
   skipPermissionsKey,
+  SKIP_RISK_ORDER,
   type FooterReadout,
   type SkipLevel,
 } from "@/lib/providers-store"
@@ -13,8 +15,10 @@ import { useSettings } from "@/providers/settings"
 import { setCostReadout } from "@/lib/cost-readout-store"
 import { useCostReadout } from "@/lib/use-cost-readout"
 import { useStoredFlag } from "@/lib/use-stored-setting"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { PlanUsageSetting } from "./PlanUsageSetting"
 import { ProviderBinary } from "./ProviderBinary"
 import { SettingBlock } from "./SettingBlock"
@@ -90,9 +94,13 @@ export function ProviderBinSettings({
     skipPermissionsKey(providerId, true),
     GLOBAL_SCOPE,
   )
+  // The rung a click asked for and the write is waiting on. Null while nothing
+  // is pending, which is every click that does not climb.
+  const [pendingLevel, setPendingLevel] = useState<SkipLevel | null>(null)
   const skipFlag = skipPermissionFlags[providerId]
   const level = skipLevel(skipHere, skipInWorktrees)
   const consequence = SKIP_LEVELS.find((rung) => rung.level === level)?.consequence ?? ""
+  const pendingRung = SKIP_LEVELS.find((rung) => rung.level === pendingLevel)
   const readout = footerReadout(showContextUsage, showCost)
   const availableReadouts =
     providerId === "codex"
@@ -119,6 +127,17 @@ export function ProviderBinSettings({
     const pair = skipLevelPair(next)
     setSkipHere(pair.here)
     setSkipInWorktrees(pair.worktrees)
+  }
+
+  // Climbing hands the agent more of the machine and is confirmed once; coming
+  // back down is written straight through, because taking the automation away
+  // must never be the harder direction.
+  const chooseLevel = (next: SkipLevel) => {
+    if (climbsToRiskier(SKIP_RISK_ORDER, level, next)) {
+      setPendingLevel(next)
+      return
+    }
+    setLevel(next)
   }
 
   const persistBudget = (value: string) => {
@@ -200,7 +219,7 @@ export function ProviderBinSettings({
             value={[level]}
             // An empty array is the pressed rung being pressed again. There is
             // no fourth answer to fall back to, so it stays where it was.
-            onValueChange={(next) => next[0] && setLevel(next[0] as SkipLevel)}
+            onValueChange={(next) => next[0] && chooseLevel(next[0] as SkipLevel)}
             spacing={1}
             aria-label={`How far ${providerName} runs without asking`}
             className="border border-border p-[3px]"
@@ -212,6 +231,25 @@ export function ProviderBinSettings({
             ))}
           </ToggleGroup>
           <p className="mt-2 text-xs text-muted-foreground">{consequence}</p>
+
+          <ConfirmDialog
+            open={pendingRung !== undefined}
+            onCancel={() => setPendingLevel(null)}
+            title={`Skip permission prompts: ${pendingRung?.label.toLowerCase()}`}
+            description={`${providerName} will edit files, run commands and install things unconfirmed, spawned with ${skipFlag}. ${pendingRung?.consequence}`}
+          >
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (pendingRung) {
+                  setLevel(pendingRung.level)
+                }
+                setPendingLevel(null)
+              }}
+            >
+              Skip prompts
+            </Button>
+          </ConfirmDialog>
         </SettingBlock>
       )}
     </>
