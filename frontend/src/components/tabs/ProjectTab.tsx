@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom"
+import { Link } from "react-router-dom"
 import { Bell, Check, LoaderCircle } from "lucide-react"
 import { useSortable } from "@dnd-kit/sortable"
 import { CloseButton } from "@/components/common/CloseButton"
@@ -10,11 +10,15 @@ import type { Project } from "@/lib/api-types"
 interface ProjectTabProps {
   project: Project
   sessionIds: readonly string[]
+  // Where the tab leads: the screen this project was last showing, which is not
+  // always its terminals (project-route).
+  to: string
+  active: boolean
   onClose: () => void
 }
 
 // The tab is its own drag grip for reordering the strip — no separate handle.
-export function ProjectTab({ project, sessionIds, onClose }: ProjectTabProps) {
+export function ProjectTab({ project, sessionIds, to, active, onClose }: ProjectTabProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: project.id,
   })
@@ -22,6 +26,7 @@ export function ProjectTab({ project, sessionIds, onClose }: ProjectTabProps) {
   // active tab never badges: its cards are already on screen saying the same
   // thing, in more detail and per session.
   const status = useProjectStatus(sessionIds)
+  const badge = active ? null : status
 
   return (
     <div
@@ -31,37 +36,28 @@ export function ProjectTab({ project, sessionIds, onClose }: ProjectTabProps) {
       {...attributes}
       {...listeners}
     >
-      <NavLink
-        to={`/projects/${project.id}`}
+      <Link
+        to={to}
         title={project.path}
-        className={({ isActive }) =>
-          cn(
-            "group flex h-8 max-w-52 items-center gap-2 rounded-md px-3 text-sm text-muted-foreground transition-colors hover:text-foreground",
-            isActive && "bg-accent font-medium text-accent-foreground",
-          )
-        }
+        className={cn(
+          "group flex h-8 max-w-52 items-center gap-2 rounded-md px-3 text-sm text-muted-foreground transition-colors hover:text-foreground",
+          active && "bg-accent font-medium text-accent-foreground",
+        )}
       >
-        {({ isActive }) => {
-          const badge = isActive ? null : status
-          return (
-            <>
-              {badge === "busy" && <LoaderCircle className="size-3 shrink-0 animate-spin" />}
-              {badge === "done" && <Check className="size-3 shrink-0 text-emerald-500" />}
-              {badge === "waiting" && <Bell className="size-3 shrink-0 text-amber-500" />}
-              <span className="truncate">{project.name}</span>
-              {/* preventDefault, not stopPropagation: the parent is a NavLink,
-                  and the click must not navigate to the tab being closed. */}
-              <CloseButton
-                label={`Close ${project.name}`}
-                onClick={(event) => {
-                  event.preventDefault()
-                  onClose()
-                }}
-              />
-            </>
-          )
-        }}
-      </NavLink>
+        {badge === "busy" && <LoaderCircle className="size-3 shrink-0 animate-spin" />}
+        {badge === "done" && <Check className="size-3 shrink-0 text-emerald-500" />}
+        {badge === "waiting" && <Bell className="size-3 shrink-0 text-amber-500" />}
+        <span className="truncate">{project.name}</span>
+        {/* preventDefault, not stopPropagation: the parent is a link, and the
+            click must not navigate to the tab being closed. */}
+        <CloseButton
+          label={`Close ${project.name}`}
+          onClick={(event) => {
+            event.preventDefault()
+            onClose()
+          }}
+        />
+      </Link>
     </div>
   )
 }
