@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **A project tab comes back to the screen you left it on.** Stepping over to
+  another project and back always dropped you onto the first project's
+  terminals, whatever you had been reading there: its Settings, the pull request
+  you had open, the list of them. Each tab now returns to the screen its project
+  was last showing, and to its terminals only when that is where you were.
+
 ## [0.42.0] - 2026-08-27
 
 ### Changed
