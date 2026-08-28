@@ -9,6 +9,7 @@ import {
   MessageSquare,
   RefreshCw,
   SquareTerminal,
+  Wrench,
   X,
 } from "lucide-react"
 import { ProjectService, System } from "@/lib/rpc"
@@ -32,6 +33,7 @@ import {
   mergeRuleNote,
 } from "@/lib/pulls/merge-gate"
 import { readPullsTab, writePullsTab, type PullsTab } from "@/lib/pulls/pulls-prefs"
+import { pullRequestHandoff } from "@/lib/pulls/pr-handoff"
 import { useBranchRules } from "@/lib/pulls/use-branch-rules"
 import { cn, errorText } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -141,6 +143,18 @@ export function PullRequestView({
   const editableMethods = methods.filter((method) => method !== "rebase")
   const ruleNote = mergeRuleNote(detail, rules)
   const bypass = canAdminOverride(detail, rules)
+  const handoff = pullRequestHandoff(detail)
+
+  // The problem in the way, written at the agent's prompt and nothing more:
+  // lich pastes it and stops there — no run, no watch, no second attempt when
+  // the checks come back red again. The comments are the user's own text and
+  // survive a failed send (CommentBatch); this is derived from the pull request
+  // and can simply be asked for again, so a session-less click only says so.
+  const handOff = () => {
+    if (handoff && !onInject(handoff.prompt)) {
+      toast.error("Open a session to send this to")
+    }
+  }
 
   const merge = async (method: MergeMethod, subject = "", body = "", admin = false) => {
     setMerging(true)
@@ -239,6 +253,25 @@ export function PullRequestView({
                 {session.busy ? "Opening…" : session.label}
               </Button>
             </span>
+            {/* Whatever is wrong with this pull request, handed to the session
+                that would fix it — a conflict first, red CI after it. Nothing
+                is drawn when nothing is wrong: that state is the Merge button's
+                to own. Blocked for the same reason opening a session is, and
+                with the same sentence: a fork that refuses maintainer edits has
+                nowhere to put the work. */}
+            {handoff && (
+              <span title={session.blocked ?? undefined}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={session.blocked !== null}
+                  onClick={handOff}
+                >
+                  <Wrench />
+                  {handoff.label}
+                </Button>
+              </span>
+            )}
             {/* With nothing written, reviewing is the one-click approval it has
                 always been. The moment a comment is waiting, the same control
                 becomes the way to send the review it belongs to — and says how

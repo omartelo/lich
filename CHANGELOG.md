@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The pull request screen hands its current problem to the session.** Red CI
+  meant reading the Checks tab, opening each failed job in the browser and
+  typing the names back into the terminal yourself; a branch that would not
+  merge meant saying so by hand. The header now carries one button for whatever
+  is actually in the way — **Resolve conflicts** while the branch conflicts with
+  its base, **Fix CI errors** while checks are red — and writes it at the
+  agent's prompt, naming each failed check and where to read its run (the first
+  eight, and how many were left out). It is written, never sent: the Enter is
+  yours, and lich neither re-runs the checks nor asks a second time. Nothing is
+  drawn when nothing is wrong — that state is the Merge button's.
+
 ### Changed
 
 - **A project tab comes back to the screen you left it on.** Stepping over to
