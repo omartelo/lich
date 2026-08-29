@@ -138,6 +138,27 @@ func TestReadFileRejectsEscape(t *testing.T) {
 	}
 }
 
+// TestReadFileRejectsALinkOutOfTheCheckout pins ReadFile on relpath.Resolve
+// rather than the lexical Validate. Every other escape test here is refused
+// before the filesystem is reached; this one is a legal work-tree path whose
+// escape exists only on disk, so it is the one that fails if this caller is
+// ever moved back to the cheaper guard. The link is the shape a repository can
+// genuinely ship — git records it as its target text, and a preview that
+// followed it would print a file the diff beside it never mentions.
+func TestReadFileRejectsALinkOutOfTheCheckout(t *testing.T) {
+	repo, _ := initRepo(t)
+	outside := filepath.Join(t.TempDir(), "secret.txt")
+	if err := os.WriteFile(outside, []byte("not the repository's\n"), 0o600); err != nil {
+		t.Fatalf("write outside: %v", err)
+	}
+	if err := os.Symlink(outside, filepath.Join(repo, "escape.txt")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if got, err := New(nil).ReadFile(repo, "escape.txt"); err == nil {
+		t.Errorf("ReadFile(escape.txt) = %q, want an error", got)
+	}
+}
+
 // TestReadFileRejectsBinary proves a NUL-bearing file is refused rather than
 // streamed into the text preview.
 func TestReadFileRejectsBinary(t *testing.T) {
