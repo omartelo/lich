@@ -8,6 +8,7 @@ const p = (id: string, installed: boolean): ProviderState => ({
   binary: id,
   installed,
   enabled: false,
+  docs: `https://example.test/${id}`,
 })
 
 describe("decideProviderSetup", () => {

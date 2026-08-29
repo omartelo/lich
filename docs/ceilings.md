@@ -130,6 +130,20 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   live re-resolve would mean re-running the login shell under the running process. The check is
   `exec.LookPath` — it proves the binary exists and runs, never that it works, so a git that fails on the
   repository itself keeps failing the old silent way.
+- **Check again re-scans the boot `PATH`, never the login shell** (`internal/providers.Detect`,
+  `frontend/src/lib/providers-store.ts`, `refresh`): the provider surfaces re-probe on demand, so an agent
+  installed into a directory that `PATH` already carried appears without a relaunch — and one installed into a
+  directory that `PATH` did not carry never appears at all, however many times the button is pressed. The scan
+  itself is not what would break: re-resolving `PATH` means re-running `$SHELL -lic env` (`ResolveShellEnv`), and
+  a login shell that hangs on a prompt would hang the button rather than the boot. That machine's way in is a
+  relaunch, or a binary path in Settings › Providers — and nothing at the button says so.
+- **A machine with no agent on PATH opens terminals, and a custom binary path looks like one**
+  (`frontend/src/lib/providers-store.ts`, `resolveImplicitSessionKind`): with nothing installed, every implicit
+  new session — the empty screen's button, the hotkey, a new worktree — spawns a shell, because the provider
+  fallback still resolves to Claude and that card would die on `claude: command not found`. Detection only ever
+  scans `PATH`, so a user whose only agent is reached through a `provider.<id>.bin` override reads as that same
+  bare machine and gets a terminal they did not want. Their agent is still one click away in the New Session
+  menu, which is filtered by the enabled flag and not by install state.
 - **git status is polled** — one shared poller per repository path (`frontend/src/lib/git/git-status-store.ts`); the
   lich plugin's `session-touched` hook nudges an immediate refresh.
 - **The status badge has a single source** (`internal/project/status.go`): the branch, the HEAD commit and the

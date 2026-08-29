@@ -3,6 +3,7 @@ package providers
 import (
 	"errors"
 	"os/exec"
+	"strings"
 	"testing"
 )
 
@@ -104,6 +105,33 @@ func TestKnown(t *testing.T) {
 	for _, id := range []string{"", "shell", "gemini", "Claude"} {
 		if Known(id) {
 			t.Errorf("Known(%q) = true, want false", id)
+		}
+	}
+}
+
+// TestEveryProviderDocumentsItsInstall pins the field the "not found on PATH"
+// rows link to. A blank one there is a row that names a missing agent and offers
+// nothing, which is the dead end the field exists to close — so provider number
+// eight fails here until it brings its page.
+func TestEveryProviderDocumentsItsInstall(t *testing.T) {
+	for _, p := range Registry {
+		if !strings.HasPrefix(p.Docs, "https://") {
+			t.Errorf("%s docs = %q, want an https install page", p.ID, p.Docs)
+		}
+	}
+}
+
+// TestDetectCarriesTheDocs: the link travels on the detection result, installed
+// or not — the row with somewhere to send the user is the one that found nothing.
+func TestDetectCarriesTheDocs(t *testing.T) {
+	svc := &Service{lookPath: func(string) (string, error) { return "", exec.ErrNotFound }}
+	got, err := svc.Detect()
+	if err != nil {
+		t.Fatalf("Detect: %v", err)
+	}
+	for i, d := range got {
+		if d.Docs != Registry[i].Docs || d.Docs == "" {
+			t.Errorf("%s docs = %q, want %q", d.ID, d.Docs, Registry[i].Docs)
 		}
 	}
 }

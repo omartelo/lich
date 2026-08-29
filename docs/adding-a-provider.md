@@ -30,6 +30,7 @@ hits it.
 | Question | How it was answered for Antigravity |
 |---|---|
 | What is the binary called? | `agy` — the name on `PATH`, not the product's |
+| Which page documents installing that CLI? | The install instructions, not the product's front door — and `curl -sI` it before it lands |
 | How does it resume a conversation by id? | `--conversation <id>` (`--help`) |
 | How does it skip permission prompts? | `--dangerously-skip-permissions` (`--help`) |
 | How is it told which model to run? | `--model <name>` (`--help`) |
@@ -53,7 +54,7 @@ tool.
 
 | File | What it holds | What a new provider adds |
 |---|---|---|
-| `internal/providers/providers.go` | the registry | an id constant, a `Registry` entry (id, display name, binary names), and a line in `AcceptsMCPServer` if it takes an MCP server on its command line |
+| `internal/providers/providers.go` | the registry | an id constant, a `Registry` entry (id, display name, binary names, install-docs URL), and a line in `AcceptsMCPServer` if it takes an MCP server on its command line |
 | `internal/terminal/command.go` | what a spawn runs | entries in `skipPermissionFlags`, `modelFlags`, `briefingFlags` and `resumeArgs` — each one optional, and absent means "no flag rather than somebody else's" |
 | `internal/terminal/resume.go` | whether a resume can be offered | a `ResumeAvailable` case answering from what that provider left on disk |
 | `internal/terminal/transcript.go`, `sessiondb.go` | where that state lives | the path resolver the case above calls |
@@ -74,6 +75,16 @@ everything on the id (`provider.<id>.bin`, `.enabled`, `.sandbox`,
 | `frontend/src/components/ProviderIcon.tsx` | a brand path, or a lucide fallback |
 | `frontend/src/lib/session/delegate-prompt.ts` | `TOOL_KINDS` only if it is handed lich's tools at spawn |
 | `frontend/src/lib/session/tool-label.ts` | a rule only if it spells MCP tool names in a shape not already handled |
+| `frontend/src/lib/api-types.ts` | nothing, unless the change moves a JSON tag — the `DetectedProvider` mirror is hand-owned and moves in the same commit |
+
+`Registry.Docs` is the one field with a check outside the compiler: it is what the
+"Not found on PATH" row and the no-agents dialog link to, so a blank or dead one
+turns the screen a user without that agent meets back into the dead end the field
+exists to close. Verify it against the live web before landing it —
+`curl -sI -o /dev/null -w '%{http_code} %{redirect_url}\n' <url>` — follow every
+redirect to the final address, and record the date you checked in the commit body.
+`TestEveryProviderDocumentsItsInstall` fails on an empty one; nothing but that
+curl catches a page that has moved.
 
 The two `skipPermissionFlags` tables — Go and TypeScript — are the one place a
 provider is spelled twice on purpose. Both are pinned in tests as literals
