@@ -174,24 +174,24 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
     group: "view",
     combo: { mod: true, shift: true, alt: false, key: "d" },
   },
-  // O for "open beside", G for "go across". Both are letters on purpose: the
-  // family note above is measured for Ctrl+Shift+*letter*, and the chord this
-  // pair wants to spell — Ctrl+Shift+\, the editors' split — is not a letter, so
-  // whether xterm's mapping lets it through is a question nobody here has put to
-  // a `cat -v`. Two free letters that are certainly silent beat one that reads
-  // better and might arrive. J is the one to keep off: Chromium answers it with
-  // DevTools, which the --app window does open.
+  // G for the grid the stage lays out, F for the focus moving along it. Letters
+  // on purpose: the family note above is measured for Ctrl+Shift+*letter*, and
+  // the chord this pair wants to spell — Ctrl+Shift+\, the editors' split — is
+  // not one, so whether xterm's mapping lets it through is a question nobody
+  // here has put to a `cat -v`. G and F are what the list above leaves: O reads
+  // better for "open beside" and is Chromium's own, and Ctrl+F without Shift is
+  // the terminal's find, which is a different chord and stays the terminal's.
   {
     id: "splitBeside",
-    label: "Show a second session beside this one",
+    label: "Show another session beside this one",
     group: "view",
-    combo: { mod: true, shift: true, alt: false, key: "o" },
+    combo: { mod: true, shift: true, alt: false, key: "g" },
   },
   {
     id: "otherPane",
-    label: "Focus the other pane",
+    label: "Focus the next pane",
     group: "view",
-    combo: { mod: true, shift: true, alt: false, key: "g" },
+    combo: { mod: true, shift: true, alt: false, key: "f" },
   },
   {
     id: "commandPalette",

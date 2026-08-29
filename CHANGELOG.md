@@ -9,16 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Two sessions on screen at once.** Watching an agent used to mean watching
+- **A wall of sessions on one screen.** Watching an agent used to mean watching
   nothing else: the cards say what every session is *doing*, and only one of them
-  ever showed what it was *saying*. A card's menu now offers **Open beside**,
-  which puts that session in a second pane next to the one you are on —
-  <kbd>Ctrl/Cmd+Shift+O</kbd> splits with the next card and closes the split
-  again, <kbd>Ctrl/Cmd+Shift+G</kbd> moves the cursor across, and clicking a pane
-  focuses it. Drag the seam to divide the space, and both panes come back the way
-  you left them. A pane is a view of a card, never a session of its own: its ×
-  stops showing that session and closes nothing, and closing the session itself
-  hands the whole width back to the survivor.
+  ever showed what it was *saying*. A card's menu now offers **Show beside**,
+  which adds that session to the stage — <kbd>Ctrl/Cmd+Shift+G</kbd> adds the
+  next card, <kbd>Ctrl/Cmd+Shift+F</kbd> moves the cursor along, and clicking a
+  pane focuses it. lich lays the panes out itself, from how many there are and
+  how much room the window has: eight of them on a 34" ultrawide land four
+  across and two down, the same eight on a laptop come out two across, and lich
+  declines the one that would leave them all too small to read. Drag a pane by
+  its name to swap it with another, drag the seams to divide the space, and the
+  whole arrangement comes back the way you left it. A pane is a view of a card,
+  never a session of its own: its × stops showing that session and closes
+  nothing, and closing the session itself hands its room back to the rest.
 
 - **The pull request screen hands its current problem to the session.** Red CI
   meant reading the Checks tab, opening each failed job in the browser and

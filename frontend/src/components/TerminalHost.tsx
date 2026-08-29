@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import type { PointerEvent as ReactPointerEvent } from "react"
 import { useMatch } from "react-router-dom"
 import { toast } from "sonner"
 import { TerminalView } from "./TerminalView"
@@ -13,9 +12,11 @@ import { useProjects } from "@/providers/projects"
 import { activeSessionId, hasSession, resumableSession, sessionsOf } from "@/lib/session/sessions"
 import { paletteSessions } from "@/lib/session/command-palette"
 import { spawnDecision, type SpawnProbe } from "@/lib/session/spawn-gate"
-import { dragRatio, other, type Side } from "@/lib/session/panes"
-import { closeBeside, setPaneRatio, usePaneRatio } from "@/lib/session/panes-store"
+import { PaneSeams } from "./PaneSeams"
+import { cellAt, grid, offsetOf, rowLength, rowTracks, tracks } from "@/lib/session/panes"
+import { useStoredCols, useStoredRows, writeCols, writeRows } from "@/lib/session/panes-store"
 import { usePanes } from "@/lib/session/use-panes"
+import { useStageSize } from "@/lib/session/use-stage-size"
 import { cn } from "@/lib/utils"
 import type { Session } from "@/lib/session/sessions"
 
@@ -24,23 +25,6 @@ import type { Session } from "@/lib/session/sessions"
 const probe: SpawnProbe = {
   workdirMissing: TerminalService.WorkdirMissing,
   resumeAvailable: TerminalService.ResumeAvailable,
-}
-
-// Where a layer sits on the stage. Percentages rather than a flex row because
-// every session is an absolutely positioned layer stacked in the same area —
-// splitting moves two of them into their halves and leaves the rest alone.
-type Lane = "full" | Side
-
-// The ratio is the seam's distance from the left edge, so the left lane owns it
-// and the right lane starts there — whichever session is drawing in each.
-function laneStyle(lane: Lane, ratio: number): { left: string; width?: string; right?: string } {
-  if (lane === "left") {
-    return { left: "0", width: `${ratio * 100}%` }
-  }
-  if (lane === "right") {
-    return { left: `${ratio * 100}%`, right: "0" }
-  }
-  return { left: "0", right: "0" }
 }
 
 // TerminalHost keeps one persistent terminal per session, across every open
@@ -64,58 +48,40 @@ export function TerminalHost() {
   const match = useMatch("/projects/:projectId")
   const activeProjectId = match?.params.projectId ?? null
 
-  const visibleSessionId = activeProjectId ? activeSessionId(sessions, activeProjectId) : ""
+  // The stage: an ordered list of sessions, the grid computed from how many
+  // there are and how wide the window is, and the cursor in one of the cells.
+  // The focused cell always draws the project's active session, so the footer,
+  // the dock, the sidebar highlight and every card shortcut go on reading
+  // activeId and none of them needed a line.
+  const stage = usePanes(activeProjectId ?? "")
+  const [stageRef, size] = useStageSize()
+  // Until the stage has been measured there is no grid to lay out — the first
+  // paint of a window that opens onto a split would otherwise stack the panes
+  // for one frame and then jump. Unmeasured draws the focused session alone,
+  // which is what the stage looked like before any of this.
+  const measured = size.width > 0
+  const split = measured && stage.split
+  const layout = grid(measured ? stage.cells.length : 1, size.width)
 
-  // The second pane. Focus is not a third piece of state: the focused pane *is*
-  // the project's active session, so the footer, the dock, the sidebar highlight
-  // and every card shortcut keep reading activeId and needed no change here.
-  const {
-    beside: besideSessionId,
-    besideSide,
-    split,
-    focusOther,
-    promoteOther,
-  } = usePanes(activeProjectId ?? "")
-  const ratio = usePaneRatio()
+  // Track sizes come from the store, except while a seam is being dragged: the
+  // panes have to move with the pointer, and only the release is written down.
+  const [liveCols, setLiveCols] = useState<number[] | null>(null)
+  const [liveRows, setLiveRows] = useState<number[] | null>(null)
+  const storedCols = useStoredCols()
+  const storedRows = useStoredRows()
+  const cols = liveCols ?? tracks(storedCols, layout.cols)
+  const rows = liveRows ?? tracks(storedRows, layout.rows)
 
-  // The seam's ratio is held in state while dragging and written on release —
-  // the panel-resize precedent (use-panel-width.ts), which keeps a drag from
-  // putting a hundred writes through localStorage.
-  const [dragging, setDragging] = useState<number | null>(null)
-  const seamRef = useRef<{ startX: number; startRatio: number; width: number } | null>(null)
-  const paneRatio = dragging ?? ratio
+  // The pane a dragged one is hovering over, for the drop hint. The drag itself
+  // is a pointer gesture on the label rather than HTML5 drag-and-drop, which the
+  // window already spends on files dropped into a terminal.
+  const [dragFrom, setDragFrom] = useState<number | null>(null)
+  const [dragOver, setDragOver] = useState<number | null>(null)
 
-  const onSeamDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    seamRef.current = {
-      startX: event.clientX,
-      startRatio: ratio,
-      width: event.currentTarget.parentElement?.clientWidth ?? 0,
-    }
-    event.currentTarget.setPointerCapture(event.pointerId)
-  }
-
-  const seamAt = (clientX: number): number | null => {
-    const drag = seamRef.current
-    return drag ? dragRatio(drag.startRatio, drag.startX, clientX, drag.width) : null
-  }
-
-  const onSeamMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const next = seamAt(event.clientX)
-    if (next !== null) {
-      setDragging(next)
-    }
-  }
-
-  const onSeamUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const next = seamAt(event.clientX)
-    if (next === null) {
-      return
-    }
-    seamRef.current = null
-    event.currentTarget.releasePointerCapture(event.pointerId)
-    setDragging(null)
-    setPaneRatio(next)
+  const paneUnder = (x: number, y: number): number | null => {
+    const el = document.elementFromPoint(x, y)?.closest("[data-pane]")
+    const index = Number(el?.getAttribute("data-pane"))
+    return Number.isInteger(index) ? index : null
   }
 
   // The close an exited session's banner raises, on its own instance of the
@@ -149,11 +115,11 @@ export function TerminalHost() {
   const projectsRef = useRef(projects)
   projectsRef.current = projects
 
-  // Which session the gate below is working on. Both panes spawn lazily and the
+  // Which session the gate below is working on. Every pane spawns lazily and the
   // gate is written for one session at a time — its resume prompt is a single
-  // dialog — so they are taken in order: the second pane's turn comes once the
-  // first has landed in `spawned` and this recomputes.
-  const pending = [visibleSessionId, besideSessionId].find((id) => id && !spawned.has(id)) ?? ""
+  // dialog — so the stage is taken in order: the next cell's turn comes once the
+  // one before it has landed in `spawned` and this recomputes.
+  const pending = stage.cells.find((id) => id && !spawned.has(id)) ?? ""
 
   useEffect(() => {
     if (!activeProjectId || !pending) {
@@ -226,7 +192,7 @@ export function TerminalHost() {
   }
 
   return (
-    <>
+    <div ref={stageRef} className="absolute inset-0">
       {projects.flatMap((project) => {
         const projectActiveId = activeSessionId(sessions, project.id)
         return sessionsOf(sessions, project.id).map((session) => {
@@ -234,39 +200,78 @@ export function TerminalHost() {
             return null
           }
           const onStage = project.id === activeProjectId
-          const focused = onStage && session.id === projectActiveId
-          const beside = onStage && session.id === besideSessionId
-          const visible = focused || beside
+          const index = onStage ? stage.cells.indexOf(session.id) : -1
+          const focused = index >= 0 && session.id === projectActiveId
+          const visible = focused || (measured && index >= 0)
           // A hidden layer keeps the whole stage: its terminal is destroyed
           // while hidden and refitted on the way back, so the size it holds
-          // meanwhile is the one it would have unsplit — and nothing measures it.
-          const lane: Lane = !split || !visible ? "full" : beside ? besideSide : other(besideSide)
+          // meanwhile is not a size anything measures.
+          const place = cellAt(Math.max(index, 0), layout)
+          const row = rowTracks(cols, rowLength(place.row, stage.cells.length, layout))
+          const box = visible
+            ? {
+                left: `${offsetOf(row, place.col) * 100}%`,
+                width: `${(row[place.col] ?? 1) * 100}%`,
+                top: `${offsetOf(rows, place.row) * 100}%`,
+                height: `${(rows[place.row] ?? 1) * 100}%`,
+              }
+            : { left: "0", right: "0", top: "0", bottom: "0" }
           return (
             <div
               key={session.id}
+              data-pane={visible ? index : undefined}
               className={cn(
-                "absolute inset-y-0 flex flex-col",
-                lane === "right" && "border-l border-border",
+                "absolute flex flex-col",
+                // Seams between panes are the one place DESIGN.md allows a
+                // border: a hairline on every cell that has a neighbour behind
+                // it, so the grid reads as divided rather than as boxes.
+                visible && place.col > 0 && "border-l border-border",
+                visible && place.row > 0 && "border-t border-border",
               )}
-              style={{ ...laneStyle(lane, paneRatio), visibility: visible ? "visible" : "hidden" }}
+              style={{ ...box, visibility: visible ? "visible" : "hidden" }}
               aria-hidden={!visible}
               // Capture, so a click lands on the pane before xterm takes it for
               // a selection: clicking a terminal is how you focus its pane.
-              onPointerDownCapture={beside ? focusOther : undefined}
+              onPointerDownCapture={visible && !focused ? () => stage.focusCell(index) : undefined}
             >
               {split && visible && (
                 <div
                   className={cn(
-                    "group flex shrink-0 items-center gap-1.5 px-2.5 pb-1 pt-1.5 text-xs",
+                    "group flex shrink-0 cursor-grab items-center gap-1.5 px-2.5 pb-1 pt-1.5 text-xs",
                     focused ? "text-foreground" : "text-muted-foreground",
+                    dragFrom === index && "cursor-grabbing opacity-60",
+                    dragOver === index && dragFrom !== null && dragFrom !== index && "bg-accent/60",
                   )}
+                  // The label is the grip: a pointer gesture on the terminal
+                  // itself is a text selection, and one on the pane is how the
+                  // cursor moves into it.
+                  onPointerDown={(event) => {
+                    event.currentTarget.setPointerCapture(event.pointerId)
+                    setDragFrom(index)
+                  }}
+                  onPointerMove={(event) => {
+                    if (dragFrom === index) {
+                      setDragOver(paneUnder(event.clientX, event.clientY))
+                    }
+                  }}
+                  onPointerUp={(event) => {
+                    event.currentTarget.releasePointerCapture(event.pointerId)
+                    const target = paneUnder(event.clientX, event.clientY)
+                    setDragFrom(null)
+                    setDragOver(null)
+                    if (target === null || target === index) {
+                      stage.focusCell(index)
+                      return
+                    }
+                    stage.swap(index, target)
+                  }}
                 >
                   <ProviderIcon kind={session.kind} size={12} />
                   <span className="min-w-0 truncate font-medium">{session.label}</span>
                   <CloseButton
                     label={`Stop showing ${session.label}`}
                     className="ml-auto"
-                    onClick={() => (focused ? promoteOther() : closeBeside(activeProjectId ?? ""))}
+                    onClick={() => stage.drop(index)}
                   />
                 </div>
               )}
@@ -289,16 +294,41 @@ export function TerminalHost() {
           )
         })
       })}
+      {/* Column seams are drawn per row so they stop at the row they divide,
+          and a short last row — which spreads its cells over the whole width —
+          has none: the boundary it would offer is not one of the columns the
+          stored track sizes describe. */}
+      {split &&
+        rows.map((_, row) =>
+          rowLength(row, stage.cells.length, layout) === layout.cols ? (
+            <PaneSeams
+              // A row is its place in the grid, and the seams under it divide
+              // that row and nothing else.
+              // biome-ignore lint/suspicious/noArrayIndexKey: the index is the identity here
+              key={`row-${row}`}
+              tracks={cols}
+              axis="cols"
+              extent={size.width}
+              from={offsetOf(rows, row)}
+              span={rows[row]}
+              onChange={setLiveCols}
+              onCommit={(next) => {
+                setLiveCols(null)
+                writeCols(next)
+              }}
+            />
+          ) : null,
+        )}
       {split && (
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize the panes"
-          className="absolute inset-y-0 z-10 w-1.5 -translate-x-1/2 cursor-col-resize touch-none transition-colors hover:bg-accent"
-          style={{ left: `${paneRatio * 100}%` }}
-          onPointerDown={onSeamDown}
-          onPointerMove={onSeamMove}
-          onPointerUp={onSeamUp}
+        <PaneSeams
+          tracks={rows}
+          axis="rows"
+          extent={size.height}
+          onChange={setLiveRows}
+          onCommit={(next) => {
+            setLiveRows(null)
+            writeRows(next)
+          }}
         />
       )}
       <ResumeSessionDialog
@@ -307,6 +337,6 @@ export function TerminalHost() {
         onResume={() => asking && answerResume(asking, asking.providerSessionId ?? "")}
       />
       <WorktreeCloseDialogs close={worktreeClose} />
-    </>
+    </div>
   )
 }

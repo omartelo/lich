@@ -92,16 +92,16 @@ function Layout() {
     }
   }, [dock])
   useHotkey(hotkeys.toggleDock, () => setDock((cur) => (cur ? null : lastTab.current)))
-  // A project of one session has nothing to put beside it, and switching panes
-  // with no second pane is not a thing to do: both decline rather than being
-  // swallowed for nothing, the rule every card shortcut above follows.
+  // Nothing left to show, no room left to show it in, or no second pane to move
+  // the cursor to: each declines rather than being swallowed for nothing, the
+  // rule every card shortcut above follows.
   const panes = usePanes(projectId)
   useHotkey(hotkeys.splitBeside, () => {
-    if (!panes.toggle()) {
+    if (!panes.add()) {
       return false
     }
   })
-  useHotkey(hotkeys.otherPane, () => panes.split && panes.focusOther())
+  useHotkey(hotkeys.otherPane, () => panes.split && panes.focusStep(1))
   return (
     <div className="flex h-screen w-screen flex-col bg-background">
       <ProjectTabs />

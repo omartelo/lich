@@ -76,12 +76,12 @@ interface SessionCardProps {
   // session nobody delegated, which is most of them (sessionOrigin).
   origin: string
   active: boolean
-  // Whether this card is the one showing in the second pane. Never true at the
-  // same time as `active`: one card cannot hold both panes (panes.ts).
-  beside: boolean
-  // Put this card in the second pane, or take it back out when it is already
-  // there. Never offered on the active card — that one is the first pane.
-  onBeside: () => void
+  // Whether this card is drawing in one of the stage's panes. The active card is
+  // always in one when the stage is split, so this and `active` do overlap — the
+  // mark below is what the two of them together decide.
+  onStage: boolean
+  // Put this card on the stage, or take it off when it is already there.
+  onStageToggle: () => void
   onSelect: () => void
   onClose: () => void
   onRename: (label: string) => void
@@ -115,8 +115,8 @@ export function SessionCard({
   path,
   origin,
   active,
-  beside,
-  onBeside,
+  onStage,
+  onStageToggle,
   onSelect,
   onClose,
   onRename,
@@ -346,7 +346,7 @@ export function SessionCard({
                       active && "bg-accent text-accent-foreground",
                       // Showing, but not the pane the keyboard is in: one step
                       // down the same fill, never a second kind of mark.
-                      beside && "bg-accent/55",
+                      onStage && !active && "bg-accent/55",
                     )}
                   />
                 }
@@ -581,9 +581,9 @@ export function SessionCard({
             Copy send command
           </ContextMenuItem>
           {!active && (
-            <ContextMenuItem onClick={onBeside}>
+            <ContextMenuItem onClick={onStageToggle}>
               <Columns2 />
-              {beside ? "Close beside" : "Open beside"}
+              {onStage ? "Stop showing" : "Show beside"}
             </ContextMenuItem>
           )}
           <ContextMenuItem onClick={() => setEditing(true)}>

@@ -9,7 +9,6 @@ import { closeSettings, isSettingsOpen, subscribeSettingsCard } from "@/lib/sett
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
 import { delegateTargets } from "@/lib/session/delegate-targets"
 import { usePanes } from "@/lib/session/use-panes"
-import { closeBeside, openBeside } from "@/lib/session/panes-store"
 import {
   closePullsList,
   isPullsListOpen,
@@ -129,17 +128,16 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   const worktreeClose = useWorktreeClose(projectId ?? "", path, list)
   const realActiveId = activeSessionId(sessions, projectId ?? "")
   const panes = usePanes(projectId ?? "")
-  // The menu entry is a toggle on one card: the one already beside takes itself
-  // out, any other takes the pane over from whoever held it.
-  const toggleBeside = (sessionId: string) => {
-    if (!projectId) {
+  // The menu entry is a toggle on one card: a session already on the stage takes
+  // itself off it, any other joins it. Adding is refused — quietly, the way the
+  // shortcut is — when one more pane would leave them all too small to read.
+  const toggleStage = (sessionId: string) => {
+    const at = panes.cells.indexOf(sessionId)
+    if (at >= 0) {
+      panes.drop(at)
       return
     }
-    if (sessionId === panes.beside) {
-      closeBeside(projectId)
-      return
-    }
-    openBeside(projectId, { id: sessionId, side: "right" })
+    panes.add(sessionId)
   }
   // The query narrows the flat list before the groups are built from it, so
   // grouping, the pinned block and the stored order all keep working on the
@@ -202,7 +200,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   const activeId = onSettings || onPullsRoute ? "" : realActiveId
   // Same rule as activeId: with a full-screen route over the terminals there are
   // no panes on show, so no card wears the mark of one.
-  const besideId = onSettings || onPullsRoute ? "" : panes.beside
+  const stageIds = onSettings || onPullsRoute ? [] : panes.cells
 
   // A drag reorders one block only; hand its new order to that block's own
   // sessions inside the flat list and persist the whole thing. reorderSessions
@@ -373,9 +371,9 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
                   sessions={group.sessions}
                   projectPath={path}
                   activeId={activeId}
-                  besideId={besideId}
-                  onBeside={(sessionId) => toggleBeside(sessionId)}
-                  onFocusBeside={panes.focusOther}
+                  stageIds={stageIds}
+                  onStageToggle={toggleStage}
+                  onFocusCell={(sessionId) => panes.focusCell(panes.cells.indexOf(sessionId))}
                   // The divider only earns its place once a worktree — or a pin
                   // — splits the list; a lone group keeps the old flat,
                   // header-less look. A filter is the exception: which checkout

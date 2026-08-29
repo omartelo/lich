@@ -43,16 +43,23 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   there is no agent in it whose work could be missed. The trap is reading the number as
   comparable across cards — the same hour of work is a smaller figure on Crush than on Claude
   Code, and nothing on screen says which rung a card is on.
-- **A split stage puts two sessions on the visible cadence** (`internal/terminal/coalescer.go`,
+- **A split stage puts every pane on the visible cadence** (`internal/terminal/coalescer.go`,
   `frontend/src/components/TerminalHost.tsx`): the coalescer batches a *visible* session's output every
-  8ms and a hidden one's every 250ms, and until panes existed exactly one session per window was ever
-  visible — `Service.SetVisible` had one true at a time. A split makes two, deliberately: the second pane
-  is never demoted, because watching it is the entire point of opening it. So the window's hot path — the
-  event bridge, its base64 and the WASM parse behind it — carries twice the frames it was measured with,
-  and anything reasoning about that cadence from the constants alone will read the wrong number. The
-  budget suite pins that splitting mounts one new terminal and remounts none
-  (`frontend/src/components/render-budget.test.tsx`); it cannot measure the cadence, because jsdom has no
-  canvas to paint.
+  8ms and a hidden one's every 250ms, and until the stage could divide, exactly one session per window
+  was ever visible — `Service.SetVisible` had one true at a time. A wall of eight makes eight,
+  deliberately: a pane nobody demoted is the entire point of opening it. So the window's hot path — the
+  event bridge, its base64 and the WASM parse behind it — carries as many streams as there are panes,
+  and anything reasoning about that cadence from the constants alone will read a number that was true
+  for one terminal. The budget suite pins that adding a pane mounts one terminal and remounts none
+  (`frontend/src/components/render-budget.test.tsx`); it cannot measure the cadence, because jsdom has
+  no canvas to paint.
+- **The grid follows the window, so the layout you dragged is not always the one you get back**
+  (`frontend/src/lib/session/panes.ts`, `tracks`): how many panes sit across is computed from the
+  stage's measured width, so collapsing the sidebar, opening the dock or moving the window to another
+  monitor can reshape the wall under you. Track sizes are stored for the grid they were dragged on and
+  fall back to equal shares whenever the shape no longer matches — which reads as a resize being
+  silently forgotten, and is the alternative to restoring a four-column layout onto three columns. The
+  cells themselves and their order always survive; only the sizes do not.
 - **A dropped file has no path, so lich guesses it** (`internal/drop`): a file under neither the session directory
   nor home is *copied*, so an agent told to edit it edits the copy — and that copy is deleted 3 days on, so a path
   pasted into a prompt eventually stops resolving.

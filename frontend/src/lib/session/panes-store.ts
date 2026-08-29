@@ -1,19 +1,19 @@
 import { useSyncExternalStore } from "react"
-import { parseNumberPref, readPref, removePref, writePref } from "@/lib/prefs"
-import { type Beside, clampRatio, formatBeside, paneKey, RATIO_DEFAULT, RATIO_KEY } from "./panes"
+import { readPref, removePref, writePref } from "@/lib/prefs"
+import { COLS_KEY, focusKey, ROWS_KEY, stageKey } from "./panes"
 
-// Where the split lives between mounts. localStorage is the store itself, not a
-// cache in front of one: both values are a string and a number, reads are a map
-// lookup, and a second copy in module state would be one more thing that can
-// disagree with the pref it was written from.
+// Where the stage lives between mounts. localStorage is the store itself, not a
+// cache in front of one: the values are a list of ids, an index and two vectors
+// of fractions, reads are a map lookup, and a second copy in module state would
+// be one more thing that can disagree with the pref it was written from.
 //
 // UI preference, so the page's localStorage rather than the workspace database
-// (root CLAUDE.md) — the split is a property of this window, the way the
+// (root CLAUDE.md) — the stage is a property of this window, the way the
 // sidebar's width and the dock's tab are.
 //
-// One listener set rather than one per project: the subscribers are the
-// terminal host, the sidebar and the layout's shortcuts, and a fan-out keyed by
-// project would be machinery for three of them.
+// One listener set rather than one per project: the subscribers are the terminal
+// host, the sidebar and the layout's shortcuts, and a fan-out keyed by project
+// would be machinery for three of them.
 const listeners = new Set<() => void>()
 
 function notify(): void {
@@ -29,37 +29,96 @@ function subscribe(listener: () => void): () => void {
   }
 }
 
-/** The stored beside id, unreconciled — pass it through resolveBeside with the
- * project's live sessions before showing anything. */
-export function useStoredBeside(projectId: string): string {
-  return useSyncExternalStore(subscribe, () =>
-    projectId ? (readPref(paneKey(projectId)) ?? "") : "",
-  )
-}
-
-export function usePaneRatio(): number {
-  return useSyncExternalStore(subscribe, () =>
-    parseNumberPref(readPref(RATIO_KEY), RATIO_DEFAULT, clampRatio),
-  )
-}
-
-export function openBeside(projectId: string, beside: Beside): void {
-  if (!projectId || !beside.id) {
-    return
+// Snapshots must be stable across calls or useSyncExternalStore re-renders
+// forever, and every read here parses a string into a fresh array. So each key's
+// last parse is kept beside the raw string it came from and handed back until
+// that string changes — the cache is for React's identity check, never for the
+// value, which still comes from the pref on every read.
+function parsed<T>(parse: (raw: string | null) => T): (key: string) => T {
+  const seen = new Map<string, { raw: string | null; value: T }>()
+  return (key: string) => {
+    const raw = readPref(key)
+    const last = seen.get(key)
+    if (last && last.raw === raw) {
+      return last.value
+    }
+    const value = parse(raw)
+    seen.set(key, { raw, value })
+    return value
   }
-  writePref(paneKey(projectId), formatBeside(beside))
-  notify()
 }
 
-export function closeBeside(projectId: string): void {
+const readList = parsed<string[]>((raw) => (raw ? raw.split(",").filter((id) => id !== "") : []))
+
+const readNumbers = parsed<number[]>((raw) =>
+  raw ? raw.split(",").map(Number).filter(Number.isFinite) : [],
+)
+
+const readIndex = (key: string): number => {
+  const value = Number(readPref(key))
+  return Number.isInteger(value) && value >= 0 ? value : 0
+}
+
+/** The stored cells, unreconciled — put them through resolveStage with the
+ * project's live sessions before drawing anything. */
+export function useStoredStage(projectId: string): string[] {
+  return useSyncExternalStore(subscribe, () => (projectId ? readList(stageKey(projectId)) : EMPTY))
+}
+
+// One frozen array for every project with nothing stored, so the snapshot of an
+// empty stage is identity-stable too.
+const EMPTY: string[] = []
+
+export function useStoredFocus(projectId: string): number {
+  return useSyncExternalStore(subscribe, () => (projectId ? readIndex(focusKey(projectId)) : 0))
+}
+
+export function useStoredCols(): number[] {
+  return useSyncExternalStore(subscribe, () => readNumbers(COLS_KEY))
+}
+
+export function useStoredRows(): number[] {
+  return useSyncExternalStore(subscribe, () => readNumbers(ROWS_KEY))
+}
+
+// The stage's measured size, kept here rather than passed around: the element
+// is measured in the terminal host and the guard that needs it — would one more
+// pane still be readable — is asked from the layout's shortcuts, two subtrees
+// away. Not reactive, and deliberately: nothing renders from it, one caller asks
+// it a yes-or-no question at the moment a key is pressed.
+let stage = { width: 0, height: 0 }
+
+export function setStageSize(width: number, height: number): void {
+  stage = { width, height }
+}
+
+export function stageSize(): { width: number; height: number } {
+  return stage
+}
+
+export function writeStage(projectId: string, cells: readonly string[], focus: number): void {
   if (!projectId) {
     return
   }
-  removePref(paneKey(projectId))
+  if (cells.length <= 1) {
+    // One pane is the unsplit stage: leaving a single id stored would keep a
+    // project pinned to the session that happened to be focused when the last
+    // pane was closed, rather than following the active one again.
+    removePref(stageKey(projectId))
+    removePref(focusKey(projectId))
+  } else {
+    writePref(stageKey(projectId), cells.join(","))
+    writePref(focusKey(projectId), Math.max(0, focus))
+  }
   notify()
 }
 
-export function setPaneRatio(ratio: number): void {
-  writePref(RATIO_KEY, clampRatio(ratio))
+export function writeCols(cols: readonly number[]): void {
+  writePref(COLS_KEY, cols.join(","))
+  notify()
+}
+
+export function writeRows(rows: readonly number[]): void {
+  writePref(ROWS_KEY, rows.join(","))
   notify()
 }

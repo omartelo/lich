@@ -1,71 +1,100 @@
 import { useProjects } from "@/providers/projects"
 import { activeSessionId, sessionsOf } from "./sessions"
-import { besideCandidate, other, resolveBeside, type Side } from "./panes"
-import { closeBeside, openBeside, useStoredBeside } from "./panes-store"
+import { fits, nextCandidate, resolveStage, swapCells } from "./panes"
+import { stageSize, useStoredFocus, useStoredStage, writeStage } from "./panes-store"
 
 export interface Panes {
-  /** The session in the second pane, "" when the stage is not split. */
-  beside: string
-  /** Which half that session draws on; the focused one takes the other. */
-  besideSide: Side
+  /** Session ids in layout order, always holding the focused one. */
+  cells: string[]
+  /** Index of the cell drawing the active session. */
+  focus: number
   split: boolean
-  /** Swap which pane holds the keyboard. */
-  focusOther: () => void
-  /** Drop the focused pane and keep the one beside it. */
-  promoteOther: () => void
-  /** Split with the next card, or close the split when there is one. False when
-   * the project has nothing to put beside — the shortcut then declines rather
-   * than splitting a pane against itself. */
-  toggle: () => boolean
+  /** Move the cursor to a cell. */
+  focusCell: (index: number) => void
+  /** Move the cursor one cell along, wrapping. */
+  focusStep: (step: number) => void
+  /** Show one more session — a named one, or the next card not already up.
+   * False when there is none left to show, or when one more would leave them
+   * all too small to read. */
+  add: (sessionId?: string) => boolean
+  /** Stop showing the session in this cell. Never closes it. */
+  drop: (index: number) => void
+  /** Swap two cells, which is what a pane dropped on another one does. */
+  swap: (from: number, to: number) => void
 }
 
-// The one definition of what the panes do, shared by the stage that draws them
-// and the layout that binds their shortcuts. Both halves would otherwise carry
-// their own copy of the swap, which is the pair of writes most likely to drift:
-// focusing the other pane is *two* stores agreeing — the project's active
-// session and the beside id trade places — and a second implementation that
-// wrote only one of them would leave a card showing in both panes.
+// The one definition of what the stage does, shared by the terminals that draw
+// it and the layout that binds its shortcuts. Every move here is the same two
+// writes — the cells and which one holds the cursor — and a second copy of that
+// pair somewhere else is the thing most likely to drift.
 export function usePanes(projectId: string): Panes {
   const { sessions, activateSession } = useProjects()
   const list = sessionsOf(sessions, projectId)
   const activeId = activeSessionId(sessions, projectId)
-  const beside = resolveBeside(useStoredBeside(projectId), list, activeId)
+  const { cells, focus } = resolveStage(
+    useStoredStage(projectId),
+    useStoredFocus(projectId),
+    list,
+    activeId,
+  )
+
+  // Focus is two writes that are one move: which cell holds the cursor, and the
+  // session that cell draws becoming the project's active one. Both, always —
+  // writing the index alone would leave the cursor on a cell that then repaints
+  // with somebody else's session in it.
+  const focusCell = (index: number) => {
+    const id = cells[index]
+    if (!projectId || !id || index === focus) {
+      return
+    }
+    writeStage(projectId, cells, index)
+    activateSession(projectId, id)
+  }
 
   return {
-    beside: beside.id,
-    besideSide: beside.side,
-    split: beside.id !== "",
-    // The two writes are one move: the session that was focused becomes the
-    // beside one *on the side it was already drawing on*, so the terminals hold
-    // still and only the cursor crosses over.
-    focusOther() {
-      if (!projectId || !beside.id) {
+    cells,
+    focus,
+    split: cells.length > 1,
+    focusCell,
+    focusStep(step) {
+      if (cells.length < 2) {
         return
       }
-      openBeside(projectId, { id: activeId, side: other(beside.side) })
-      activateSession(projectId, beside.id)
+      focusCell((focus + step + cells.length) % cells.length)
     },
-    promoteOther() {
-      if (!projectId || !beside.id) {
-        return
-      }
-      activateSession(projectId, beside.id)
-      closeBeside(projectId)
-    },
-    toggle() {
-      if (!projectId) {
+    add(sessionId) {
+      const id = sessionId ?? nextCandidate(list, cells)
+      const { width, height } = stageSize()
+      if (!projectId || !id || cells.includes(id)) {
         return false
       }
-      if (beside.id) {
-        closeBeside(projectId)
-        return true
-      }
-      const next = besideCandidate(list, activeId)
-      if (!next) {
+      if (!fits(cells.length + 1, width, height)) {
         return false
       }
-      openBeside(projectId, { id: next, side: "right" })
+      writeStage(projectId, [...cells, id], focus)
       return true
+    },
+    drop(index) {
+      if (!projectId || index < 0 || index >= cells.length) {
+        return
+      }
+      const rest = cells.filter((_, at) => at !== index)
+      // Dropping the focused pane hands the cursor to its neighbour rather than
+      // leaving the window on a session it no longer draws.
+      const next = Math.min(focus, rest.length - 1)
+      writeStage(projectId, rest, next)
+      if (index === focus && rest[next]) {
+        activateSession(projectId, rest[next])
+      }
+    },
+    swap(from, to) {
+      if (!projectId || from === to) {
+        return
+      }
+      const next = swapCells(cells, from, to)
+      // The cursor follows the pane it was in, not the place that pane sat.
+      const moved = focus === from ? to : focus === to ? from : focus
+      writeStage(projectId, next, moved)
     },
   }
 }

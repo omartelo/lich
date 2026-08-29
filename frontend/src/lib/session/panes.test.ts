@@ -1,117 +1,196 @@
 import { describe, expect, it } from "vitest"
 import {
-  besideCandidate,
-  clampRatio,
-  dragRatio,
-  formatBeside,
-  NO_BESIDE,
-  parseBeside,
-  RATIO_MAX,
-  RATIO_MIN,
-  resolveBeside,
+  cellAt,
+  dragTrack,
+  fits,
+  grid,
+  MIN_PANE_WIDTH,
+  MIN_TRACK,
+  nextCandidate,
+  offsetOf,
+  resolveStage,
+  rowLength,
+  rowTracks,
+  swapCells,
+  tracks,
 } from "./panes"
 import type { Session } from "./sessions"
 
 const session = (id: string): Session => ({ id, label: id, kind: "claude" })
-const sessions = [session("a"), session("b"), session("c")]
+const sessions = [session("a"), session("b"), session("c"), session("d")]
 
-describe("clampRatio", () => {
-  it("passes a ratio inside the bounds through", () => {
-    expect(clampRatio(0.5)).toBe(0.5)
+// The two stages the layout is actually argued about: a laptop window with the
+// sidebar and the dock taking their share, and a 34" ultrawide.
+const LAPTOP = 900
+const ULTRAWIDE = 3100
+
+describe("grid", () => {
+  it("keeps one pane whole", () => {
+    expect(grid(1, LAPTOP)).toEqual({ cols: 1, rows: 1 })
   })
 
-  // The literals are pinned rather than derived from the constants: this is the
-  // boundary the readable-width argument bought, and a test that reads the
+  it("puts eight panes four across on an ultrawide and two across on a laptop", () => {
+    expect(grid(8, ULTRAWIDE)).toEqual({ cols: 4, rows: 2 })
+    expect(grid(8, LAPTOP)).toEqual({ cols: 2, rows: 4 })
+  })
+
+  it("splits two side by side on a laptop and stacks them on a narrow window", () => {
+    expect(grid(2, LAPTOP)).toEqual({ cols: 2, rows: 1 })
+    expect(grid(2, 700)).toEqual({ cols: 1, rows: 2 })
+  })
+
+  // The literal is pinned rather than derived from the constant: this width is
+  // the readability argument the whole layout rests on, and a test that read the
   // constant would follow it wherever it moved instead of noticing.
-  it("clamps either pane to a quarter of the stage", () => {
-    expect(clampRatio(0.1)).toBe(0.25)
-    expect(clampRatio(0.9)).toBe(0.75)
-    expect(RATIO_MIN).toBe(0.25)
-    expect(RATIO_MAX).toBe(0.75)
+  it("takes another row exactly when a pane would fall under the readable width", () => {
+    expect(MIN_PANE_WIDTH).toBe(420)
+    expect(grid(2, 840)).toEqual({ cols: 2, rows: 1 })
+    expect(grid(2, 839)).toEqual({ cols: 1, rows: 2 })
+  })
+
+  it("stacks when nothing fits side by side at all", () => {
+    expect(grid(3, 300)).toEqual({ cols: 1, rows: 3 })
   })
 })
 
-describe("parseBeside", () => {
-  it("reads a bare id as the right-hand pane", () => {
-    expect(parseBeside("b")).toEqual({ id: "b", side: "right" })
+describe("fits", () => {
+  it("allows another pane while they all stay readable", () => {
+    expect(fits(8, ULTRAWIDE, 800)).toBe(true)
   })
 
-  it("reads the stored side", () => {
-    expect(parseBeside("b@left")).toEqual({ id: "b", side: "left" })
-  })
-
-  // A pref must never be able to break a launch, so anything unrecognised reads
-  // as the default rather than as a third side.
-  it("answers the default for nothing and for a value it does not know", () => {
-    expect(parseBeside(null)).toEqual(NO_BESIDE)
-    expect(parseBeside("")).toEqual(NO_BESIDE)
-    expect(parseBeside("b@sideways")).toEqual({ id: "b", side: "right" })
-  })
-
-  it("round-trips through the stored form", () => {
-    for (const beside of [
-      { id: "b", side: "right" },
-      { id: "b", side: "left" },
-    ] as const) {
-      expect(parseBeside(formatBeside(beside))).toEqual(beside)
-    }
+  it("refuses one that would leave them too short", () => {
+    expect(fits(8, LAPTOP, 600)).toBe(false)
   })
 })
 
-describe("resolveBeside", () => {
-  it("keeps a stored id that is still a card, on the side it was left", () => {
-    expect(resolveBeside("b", sessions, "a")).toEqual({ id: "b", side: "right" })
-    expect(resolveBeside("b@left", sessions, "a")).toEqual({ id: "b", side: "left" })
+describe("resolveStage", () => {
+  it("answers the active session alone when nothing is stored", () => {
+    expect(resolveStage([], 0, sessions, "a")).toEqual({ cells: ["a"], focus: 0 })
   })
 
-  it("answers nothing when nothing is stored", () => {
-    expect(resolveBeside("", sessions, "a")).toEqual(NO_BESIDE)
+  it("keeps the stored order and finds the focused cell in it", () => {
+    expect(resolveStage(["a", "b", "c"], 0, sessions, "b")).toEqual({
+      cells: ["a", "b", "c"],
+      focus: 1,
+    })
   })
 
   // The four ways a session leaves the workspace — a close, a park, a worktree
-  // removal, an undone create — all end here, which is why the id is derived on
-  // read instead of maintained by each of them.
-  it("drops an id that is no longer in the project", () => {
-    expect(resolveBeside("gone", sessions, "a")).toEqual(NO_BESIDE)
+  // removal, an undone create — all end here, which is why the cells are derived
+  // on read instead of maintained by each of them.
+  it("drops cells whose session is gone, and duplicates", () => {
+    expect(resolveStage(["a", "gone", "b", "b"], 0, sessions, "a")).toEqual({
+      cells: ["a", "b"],
+      focus: 0,
+    })
   })
 
-  it("drops an id that has become the active one", () => {
-    expect(resolveBeside("a", sessions, "a")).toEqual(NO_BESIDE)
-    expect(resolveBeside("a@left", sessions, "a")).toEqual(NO_BESIDE)
-  })
-})
-
-describe("besideCandidate", () => {
-  it("takes the next card in the project's own order", () => {
-    expect(besideCandidate(sessions, "a")).toBe("b")
+  // This is what lets the palette, a session link and an MCP call all land in
+  // the pane the user was looking at without knowing the stage exists.
+  it("puts a session activated from elsewhere into the focused cell", () => {
+    expect(resolveStage(["a", "b", "c"], 2, sessions, "d")).toEqual({
+      cells: ["a", "b", "d"],
+      focus: 2,
+    })
   })
 
-  it("wraps past the last card", () => {
-    expect(besideCandidate(sessions, "c")).toBe("a")
-  })
-
-  it("declines when there is nothing to put beside", () => {
-    expect(besideCandidate([session("a")], "a")).toBe("")
-    expect(besideCandidate([], "")).toBe("")
-  })
-
-  it("starts at the first card when the active one is not in the list", () => {
-    expect(besideCandidate(sessions, "gone")).toBe("a")
+  it("clamps a stored focus that no longer names a cell", () => {
+    expect(resolveStage(["a", "b"], 9, sessions, "d")).toEqual({ cells: ["a", "d"], focus: 1 })
   })
 })
 
-describe("dragRatio", () => {
-  it("moves the seam with the pointer", () => {
-    expect(dragRatio(0.5, 100, 200, 1000)).toBeCloseTo(0.6)
-    expect(dragRatio(0.5, 200, 100, 1000)).toBeCloseTo(0.4)
+describe("cellAt / rowLength", () => {
+  it("fills rows left to right in list order", () => {
+    const layout = { cols: 4, rows: 2 }
+    expect(cellAt(0, layout)).toEqual({ col: 0, row: 0 })
+    expect(cellAt(4, layout)).toEqual({ col: 0, row: 1 })
+    expect(cellAt(7, layout)).toEqual({ col: 3, row: 1 })
   })
 
-  it("clamps a drag that would collapse a pane", () => {
-    expect(dragRatio(0.5, 0, 900, 1000)).toBe(RATIO_MAX)
-    expect(dragRatio(0.5, 900, 0, 1000)).toBe(RATIO_MIN)
+  it("reports a short last row", () => {
+    const layout = { cols: 4, rows: 2 }
+    expect(rowLength(0, 7, layout)).toBe(4)
+    expect(rowLength(1, 7, layout)).toBe(3)
+  })
+})
+
+describe("tracks", () => {
+  it("spreads equally when nothing usable is stored", () => {
+    expect(tracks([], 4)).toEqual([0.25, 0.25, 0.25, 0.25])
   })
 
-  it("holds the ratio when the container has no width to divide by", () => {
-    expect(dragRatio(0.5, 0, 400, 0)).toBe(0.5)
+  it("keeps a stored layout that still describes this many tracks", () => {
+    expect(tracks([0.6, 0.4], 2)).toEqual([0.6, 0.4])
+  })
+
+  // The grid reshapes whenever a pane is added or the window resizes, and a
+  // layout dragged for four columns says nothing about three.
+  it("falls back to equal when the stored layout is for another grid", () => {
+    expect(tracks([0.6, 0.4], 3)).toEqual([1 / 3, 1 / 3, 1 / 3])
+  })
+
+  it("refuses a stored layout that does not add up, or that hides a pane", () => {
+    expect(tracks([0.9, 0.9], 2)).toEqual([0.5, 0.5])
+    expect(tracks([0.99, 0.01], 2)).toEqual([0.5, 0.5])
+  })
+})
+
+describe("rowTracks", () => {
+  it("spreads a short row over the whole width", () => {
+    expect(rowTracks([0.4, 0.3, 0.3], 3)).toEqual([0.4, 0.3, 0.3])
+    const short = rowTracks([0.5, 0.25, 0.25], 2)
+    expect(short[0]).toBeCloseTo(2 / 3)
+    expect(short.reduce((sum, value) => sum + value, 0)).toBeCloseTo(1)
+  })
+})
+
+describe("offsetOf", () => {
+  it("measures a track's leading edge", () => {
+    expect(offsetOf([0.5, 0.25, 0.25], 0)).toBe(0)
+    expect(offsetOf([0.5, 0.25, 0.25], 2)).toBeCloseTo(0.75)
+  })
+})
+
+describe("dragTrack", () => {
+  it("takes from one track and gives to its neighbour", () => {
+    const next = dragTrack([0.5, 0.5], 0, 0.1)
+    expect(next[0]).toBeCloseTo(0.6)
+    expect(next[1]).toBeCloseTo(0.4)
+  })
+
+  it("never collapses a pane, so the session in it stays reachable", () => {
+    expect(dragTrack([0.5, 0.5], 0, -1)).toEqual([MIN_TRACK, 1 - MIN_TRACK])
+    expect(dragTrack([0.5, 0.5], 0, 1)).toEqual([1 - MIN_TRACK, MIN_TRACK])
+  })
+
+  it("leaves every other track alone", () => {
+    const next = dragTrack([0.25, 0.25, 0.5], 0, 0.05)
+    expect(next[2]).toBe(0.5)
+  })
+
+  it("ignores a boundary that is not between two tracks", () => {
+    expect(dragTrack([0.5, 0.5], 1, 0.1)).toEqual([0.5, 0.5])
+    expect(dragTrack([1], 0, 0.1)).toEqual([1])
+  })
+})
+
+describe("nextCandidate", () => {
+  it("takes the first card not already up", () => {
+    expect(nextCandidate(sessions, ["a", "c"])).toBe("b")
+  })
+
+  it("answers nothing when the whole project is on the stage", () => {
+    expect(nextCandidate(sessions, ["a", "b", "c", "d"])).toBe("")
+  })
+})
+
+describe("swapCells", () => {
+  it("trades two places", () => {
+    expect(swapCells(["a", "b", "c"], 0, 2)).toEqual(["c", "b", "a"])
+  })
+
+  it("leaves the list alone for a drop that goes nowhere", () => {
+    expect(swapCells(["a", "b"], 1, 1)).toEqual(["a", "b"])
+    expect(swapCells(["a", "b"], 0, 5)).toEqual(["a", "b"])
   })
 })

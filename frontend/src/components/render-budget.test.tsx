@@ -99,6 +99,24 @@ vi.mock("@/components/TerminalView", () => ({
   },
 }))
 
+// jsdom reports every element at zero, and the terminal stage lays its panes out
+// from its own measured width — unmeasured, it draws the focused session alone.
+// So the observer answers with a window big enough for the grid to be a grid;
+// which layout that produces is panes.test.ts's business, not this file's.
+const STAGE = { width: 1200, height: 800 }
+class FakeResizeObserver {
+  constructor(private readonly callback: ResizeObserverCallback) {}
+  observe() {
+    this.callback(
+      [{ contentRect: STAGE } as unknown as ResizeObserverEntry],
+      this as unknown as ResizeObserver,
+    )
+  }
+  unobserve() {}
+  disconnect() {}
+}
+vi.stubGlobal("ResizeObserver", FakeResizeObserver)
+
 // HashRouter follows history, not the hash property, so a test moves the route
 // the way the browser's back button does.
 const navigate = (to: string) => {
@@ -332,10 +350,10 @@ test("switching project re-renders the mounted terminals but never remounts one"
   await budget.unmount()
 })
 
-test("splitting mounts the second pane's terminal and never remounts the first", async () => {
+test("adding a pane mounts its terminal and never remounts the ones already up", async () => {
   window.location.hash = "#/projects/p1"
   const { TerminalHost } = await import("./TerminalHost")
-  const { openBeside } = await import("@/lib/session/panes-store")
+  const { writeStage } = await import("@/lib/session/panes-store")
   const budget = await mountBudget(
     createElement(
       HashRouter,
@@ -352,15 +370,18 @@ test("splitting mounts the second pane's terminal and never remounts the first",
   // with the tests above, and what this pins is what *this* action did to it.
   const before = { ...terminalMounts.counts }
 
-  await budget.act(() => openBeside("p1", { id: "s2", side: "right" }))
+  await budget.act(() => writeStage("p1", ["s1", "s2"], 0))
 
   // The second pane's terminal is born once, and the first pane's is not thrown
   // away and rebuilt around it — a split that re-keyed its layers would kill the
   // very PTY it was opened to watch, and a remount is indistinguishable from a
   // re-render without this counter.
   expect(terminalMounts.counts).toEqual({ ...before, s2: (before.s2 ?? 0) + 1 })
-  // And the stage really divided. The node-environment gate cannot render, so
-  // this file is where a split's own chrome gets to prove it draws at all.
-  expect(document.querySelector('[aria-label="Resize the panes"]')).not.toBeNull()
+  // And the stage really divided: two cells drawn side by side on a 1200px
+  // stage, with a column seam between them. The node-environment gate cannot
+  // render, so this file is where the stage's own chrome gets to prove it draws
+  // at all.
+  expect(document.querySelectorAll("[data-pane]")).toHaveLength(2)
+  expect(document.querySelector('[aria-label="Resize the columns"]')).not.toBeNull()
   await budget.unmount()
 })
