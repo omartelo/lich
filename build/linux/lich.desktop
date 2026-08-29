@@ -1,6 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=lich
+GenericName=Terminal-first coding agent harness
 Exec=lich
 Icon=lich
 Categories=Development;
