@@ -70,6 +70,10 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
   const [failed, setFailed] = useState(false)
   const [turnState, setTurnState] = useState<LastTurn["state"] | null>(null)
   const [endedAt, setEndedAt] = useState<number | null>(null)
+  // The revision the shown diff's new side stands at, which is what the
+  // expander reads unchanged lines from: "" is the working tree, and a turn
+  // carries the snapshot tree it ended on.
+  const [ref, setRef] = useState("")
   const [pendingDiscard, setPendingDiscard] = useState<DiffFile | null>(null)
 
   // The text behind what is on screen, and the id of the newest read — a reply
@@ -100,6 +104,7 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
       setFailed(false)
       setTurnState(turn.state)
       setEndedAt(turn.endedAt ?? null)
+      setRef(source === "turn" ? (turn.after ?? "") : "")
       const text = turn.diff ?? ""
       if (text === lastText.current) {
         return
@@ -113,6 +118,7 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
       lastText.current = null
       setFiles([])
       setFailed(true)
+      setRef("")
     }
   }, [path, sessionId, source])
 
@@ -125,6 +131,7 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
     setFiles(null)
     setTurnState(null)
     setEndedAt(null)
+    setRef("")
   }, [source, path, sessionId])
 
   // Two signals feeding one read: the status counts move the instant a file is
@@ -148,6 +155,15 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
     const timer = setInterval(() => void refresh(), DIFF_POLL_MS)
     return () => clearInterval(timer)
   }, [refresh, source, sessionId, status?.files, status?.added, status?.deleted])
+
+  // A turn's diff is against a snapshot, so it is expandable only once that
+  // snapshot's oid has arrived — reading the working tree instead would show
+  // lines the diff was never computed against, and say nothing about it.
+  const expandable = source === "worktree" || ref !== ""
+  const expand = useCallback(
+    (rel: string, from: number, to: number) => ProjectService.FileLines(path, rel, ref, from, to),
+    [path, ref],
+  )
 
   // Reverting a rename touches both paths (new removed, old restored); the
   // panel refreshes immediately instead of waiting for the next poll tick.
@@ -182,6 +198,7 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
           // working tree's own view. Offered on a finished turn it would read as
           // an undo for that turn, which is not what it does.
           onDiscard={source === "worktree" ? setPendingDiscard : undefined}
+          onExpand={expandable ? expand : undefined}
           bulk={bulk}
         />
       </div>
@@ -265,6 +282,8 @@ interface PanelBodyProps {
   onSessionComment: (path: string, lines: string, text: string) => void
   /** Absent when discarding does not belong to this source. */
   onDiscard?: (file: DiffFile) => void
+  /** Read a file's unchanged lines at the revision this source shows. */
+  onExpand?: (path: string, from: number, to: number) => Promise<string[] | null>
   bulk: DiffBulk
 }
 
@@ -276,6 +295,7 @@ function PanelBody({
   onInject,
   onSessionComment,
   onDiscard,
+  onExpand,
   bulk,
 }: PanelBodyProps) {
   if (failed) {
@@ -323,6 +343,7 @@ function PanelBody({
           onInject={onInject}
           onSessionComment={onSessionComment}
           onDiscard={onDiscard && (() => onDiscard(file))}
+          onExpand={onExpand}
           bulk={bulk}
         />
       ))}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   buildFileDoc,
+  contextLines,
   discardTargets,
   docLineAt,
   formatLineRef,
@@ -262,5 +263,87 @@ describe("docLineAt", () => {
     expect(docLineAt(meta, "LEFT", 500)).toBeNull()
     // A thread GitHub could not re-anchor arrives with line 0.
     expect(docLineAt(meta, "RIGHT", 0)).toBeNull()
+  })
+})
+
+// A file whose changes start well past the top: the reader sees neither what is
+// above the first hunk nor what runs between the two.
+const gappedDiff = `diff --git a/src/app.ts b/src/app.ts
+index 1111111..2222222 100644
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -6,3 +6,3 @@ function head() {
+   const a = 1
+-  const b = 2
++  const b = 3
+   return a
+@@ -20,2 +20,3 @@ function tail() {
+   const z = 9
++  const w = 10`
+
+describe("diff gaps", () => {
+  it("reports the head gap and the gap between hunks", () => {
+    const doc = buildFileDoc(parseDiff(gappedDiff)[0])
+    expect(doc.gaps).toEqual([
+      { key: 1, docLine: 1, from: 1, to: 5, oldFrom: 1 },
+      { key: 9, docLine: 6, from: 9, to: 19, oldFrom: 9 },
+    ])
+    // Each gap keeps its separator line, and every separator is a gap's.
+    expect(doc.text.split("\n")[0]).toBe("")
+    expect(doc.lineMeta[5].kind).toBe("meta")
+  })
+
+  it("leaves no gap where the diff already starts at line 1", () => {
+    const doc = buildFileDoc(parseDiff(modifiedTwoHunks)[0])
+    // The head is on screen; only the run between the two hunks is missing.
+    expect(doc.gaps).toEqual([{ key: 5, docLine: 6, from: 5, to: 10, oldFrom: 4 }])
+  })
+
+  it("numbers no gap on a deleted file, which has no new side to read", () => {
+    expect(buildFileDoc(parseDiff(deletedFileDiff)[0]).gaps).toEqual([])
+    expect(buildFileDoc(parseDiff(newFileDiff)[0]).gaps).toEqual([])
+  })
+
+  it("lays an expansion into the doc as context lines and closes its gap", () => {
+    const file = parseDiff(gappedDiff)[0]
+    const head = buildFileDoc(file).gaps[0]
+    const expansions = new Map([[head.key, contextLines(["a", "b", "c", "d", "e"], 1, 1)]])
+    const doc = buildFileDoc(file, expansions)
+
+    const docLines = doc.text.split("\n")
+    expect(docLines.slice(0, 5)).toEqual(["a", "b", "c", "d", "e"])
+    expect(docLines).toHaveLength(doc.lineMeta.length)
+    expect(doc.lineMeta[0]).toMatchObject({ kind: "context", oldLine: 1, newLine: 1 })
+    expect(doc.lineMeta[4]).toMatchObject({ kind: "context", oldLine: 5, newLine: 5 })
+    // Filled in whole, the head gap is gone — and so is the rule that stood for
+    // it, because the text either side of it is now continuous.
+    expect(doc.lineMeta[5]).toMatchObject({ kind: "context", newLine: 6 })
+    expect(doc.gaps.map((gap) => gap.key)).toEqual([9])
+    // The hunks are untouched: expanding never crops the diff to a range.
+    expect(doc.lineMeta.filter((line) => line.kind === "add")).toHaveLength(2)
+  })
+
+  it("keeps a partly filled gap open, counting from where it stopped", () => {
+    const file = parseDiff(gappedDiff)[0]
+    const expansions = new Map([[1, contextLines(["a", "b"], 1, 1)]])
+    const doc = buildFileDoc(file, expansions)
+    expect(doc.gaps[0]).toEqual({ key: 1, docLine: 3, from: 3, to: 5, oldFrom: 3 })
+    expect(doc.lineMeta[2].kind).toBe("meta")
+  })
+
+  it("maps an expanded line back to the file line it renders", () => {
+    const file = parseDiff(gappedDiff)[0]
+    const doc = buildFileDoc(file, new Map([[1, contextLines(["a", "b", "c", "d", "e"], 1, 1)]]))
+    expect(docLineAt(doc.lineMeta, "RIGHT", 3)).toBe(3)
+    expect(newLineRange(doc.lineMeta, 1, 3)).toEqual({ start: 1, end: 3 })
+  })
+})
+
+describe("contextLines", () => {
+  it("numbers both sides in step from the gap's start", () => {
+    expect(contextLines(["x", "y"], 11, 7)).toEqual([
+      { kind: "context", text: "x", oldLine: 7, newLine: 11 },
+      { kind: "context", text: "y", oldLine: 8, newLine: 12 },
+    ])
   })
 })

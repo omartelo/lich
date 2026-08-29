@@ -1,20 +1,25 @@
 import { ChevronDown, ChevronRight, MessageSquare, Paperclip, Undo2 } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
+import { toast } from "sonner"
 import { IconAction } from "@/components/common/IconAction"
 import { DiffStat } from "@/components/DiffStat"
 import { Checkbox } from "@/components/ui/checkbox"
+import { gapExpanders } from "@/lib/codemirror"
 import { threadSlots, type SlotElements, type ThreadSlot } from "@/lib/codemirror-threads"
 import {
   buildFileDoc,
+  contextLines,
   formatLineRef,
   newLineRange,
   type DiffFile,
+  type DiffGap,
+  type Expansions,
   type FileDoc,
 } from "@/lib/git/diff"
 import { languageAbbr, splitPath } from "@/lib/git/lang-badge"
 import { COMPOSER_KEY, isAnchored, reviewSlots } from "@/lib/pulls/review-slots"
-import { cn } from "@/lib/utils"
+import { cn, errorText } from "@/lib/utils"
 import type { DiffBulk } from "./diff-bulk"
 import { InjectMenu } from "./InjectMenu"
 import { useDiffEditor } from "./useDiffEditor"
@@ -32,6 +37,9 @@ const LINE_HEIGHT_PX = 17
 // How far outside the viewport a file's editor is built, so scrolling meets a
 // rendered diff rather than a gap.
 const MOUNT_MARGIN = "600px 0px"
+
+// One shared empty map, so a file nobody expanded holds no state of its own.
+const NO_EXPANSIONS: Expansions = new Map()
 
 interface FileDiffProps {
   file: DiffFile
@@ -54,6 +62,10 @@ interface FileDiffProps {
    * waiting to be sent, and what a new comment does. Absent for the working
    * diff, which has no pull request behind it. */
   review?: DiffReview
+  /** Read the file's unchanged lines around the hunks, from..to inclusive and
+   * numbered against the new side. Absent = no expanders, for a panel whose
+   * diff has no revision to read them from. */
+  onExpand?: (path: string, from: number, to: number) => Promise<string[] | null>
 }
 
 // The card must not clip overflow — a clipping ancestor would break the
@@ -67,9 +79,21 @@ export function FileDiff({
   viewed,
   onViewed,
   review,
+  onExpand,
 }: FileDiffProps) {
-  const doc = useMemo(() => buildFileDoc(file), [file])
-  const openByDefault = !file.binary && doc.lineMeta.length <= LARGE_FILE_LINES
+  // What the reader has pulled into this file's gaps. Held here, above the
+  // editor, because the document is built from it: an expanded gap is context
+  // lines in the doc, never a second document cropped to a range.
+  const [expansions, setExpansions] = useState<Expansions>(NO_EXPANSIONS)
+  // The diff as git printed it, and the diff as it is being read. They are the
+  // same object until something is expanded, so a file nobody expanded pays
+  // nothing, and the identity check below stays on the printed one.
+  const printed = useMemo(() => buildFileDoc(file), [file])
+  const doc = useMemo(
+    () => (expansions.size === 0 ? printed : buildFileDoc(file, expansions)),
+    [file, printed, expansions],
+  )
+  const openByDefault = !file.binary && printed.lineMeta.length <= LARGE_FILE_LINES
   const [expanded, setExpanded] = useState(openByDefault)
   // The card outlives its content: the panel keys files by path, so a refetch
   // that rewrites this file reuses this component. Without the re-sync, a file
@@ -80,13 +104,16 @@ export function FileDiff({
   // Keyed on the text and not on the doc object: every refetch builds a fresh
   // one, so a reference check would reopen every hand-folded file on each
   // window focus. Only the content actually changing counts as a new file.
-  const lastText = useRef(doc.text)
+  const lastText = useRef(printed.text)
   useEffect(() => {
-    if (lastText.current !== doc.text) {
-      lastText.current = doc.text
+    if (lastText.current !== printed.text) {
+      lastText.current = printed.text
       setExpanded(openByDefault)
+      // The gaps moved with the content, and what was pulled into the old ones
+      // is numbered against a file that no longer exists.
+      setExpansions(NO_EXPANSIONS)
     }
-  }, [doc.text, openByDefault])
+  }, [printed.text, openByDefault])
   // The nonce guard skips the initial mount so each file keeps its own
   // large-file default until the user actually triggers a bulk action.
   const lastNonce = useRef(bulk?.nonce)
@@ -96,6 +123,41 @@ export function FileDiff({
       setExpanded(bulk.open)
     }
   }, [bulk])
+  // The prop is read through a ref so the handler can be stable: it rides the
+  // editor's identity through gapExpanders, and a new one per render would
+  // rebuild every expanded file's view on every render of the panel.
+  const latestExpand = useRef(onExpand)
+  useEffect(() => {
+    latestExpand.current = onExpand
+  })
+  const expandGap = useCallback(
+    async (gap: DiffGap): Promise<void> => {
+      const read = latestExpand.current
+      if (!read) {
+        return
+      }
+      try {
+        const texts = await read(file.newPath, gap.from, gap.to)
+        if (!texts || texts.length === 0) {
+          return
+        }
+        setExpansions((held) => {
+          const next = new Map(held)
+          // Appended, never replaced: a gap wider than the backend's cap comes
+          // in several answers, each starting where the last one stopped.
+          next.set(gap.key, [
+            ...(held.get(gap.key) ?? []),
+            ...contextLines(texts, gap.from, gap.oldFrom),
+          ])
+          return next
+        })
+      } catch (error) {
+        toast.error(`Couldn't read ${file.newPath}`, { description: errorText(error) })
+      }
+    },
+    [file.newPath],
+  )
+
   const Chevron = expanded ? ChevronDown : ChevronRight
   const badge = languageAbbr(file.newPath)
   const { dir, base } = splitPath(file.newPath)
@@ -186,6 +248,7 @@ export function FileDiff({
             onInject={onInject}
             onSessionComment={onSessionComment}
             review={review}
+            onExpandGap={onExpand && expandGap}
           />
         ))}
     </section>
@@ -198,6 +261,8 @@ interface DiffBodyProps {
   onInject: (text: string) => void
   onSessionComment?: (path: string, lines: string, text: string) => void
   review?: DiffReview
+  /** Pull one gap's lines in. Absent = the diff draws no expanders. */
+  onExpandGap?: (gap: DiffGap) => void
 }
 
 // A panel holds one CodeMirror view per expanded file, and a wide diff (a PR
@@ -205,7 +270,14 @@ interface DiffBodyProps {
 // page. LazyDiffBody defers each one until its card comes near the viewport;
 // once built, the editor stays, so scrolling back keeps its selection and
 // highlighting. Collapsing the file still destroys it.
-function LazyDiffBody({ doc, path, onInject, onSessionComment, review }: DiffBodyProps) {
+function LazyDiffBody({
+  doc,
+  path,
+  onInject,
+  onSessionComment,
+  review,
+  onExpandGap,
+}: DiffBodyProps) {
   const placeholder = useRef<HTMLDivElement>(null)
   const [mounted, setMounted] = useState(false)
 
@@ -238,6 +310,7 @@ function LazyDiffBody({ doc, path, onInject, onSessionComment, review }: DiffBod
         onInject={onInject}
         onSessionComment={onSessionComment}
         review={review}
+        onExpandGap={onExpandGap}
       />
     )
   }
@@ -254,7 +327,7 @@ const NO_SLOTS: SlotElements = new Map()
 // A diff's document is not the file: the selection lands on doc lines, which
 // newLineRange maps back to the line numbers an inject writes, a session comment
 // anchors to, and GitHub files a review comment against.
-function DiffBody({ doc, path, onInject, onSessionComment, review }: DiffBodyProps) {
+function DiffBody({ doc, path, onInject, onSessionComment, review, onExpandGap }: DiffBodyProps) {
   // One slot extension per view. It is memoised because it *is* part of the
   // view's identity: a new one would rebuild the editor on every render.
   const [elements, setElements] = useState<SlotElements>(NO_SLOTS)
@@ -262,11 +335,16 @@ function DiffBody({ doc, path, onInject, onSessionComment, review }: DiffBodyPro
   // The gaps exist wherever a comment can be written, which on the dock's
   // working diff is the session's alone.
   const gapped = Boolean(review || onSessionComment)
-  const { containerRef, getSelectedDocLines, view } = useDiffEditor(
-    doc,
-    path,
-    gapped ? slots.extension : undefined,
-  )
+  // Both layers ride the view's identity, so they are memoised together and the
+  // editor is rebuilt only when the document behind it actually moved.
+  const extra = useMemo(() => {
+    const layers = gapped ? [slots.extension] : []
+    if (onExpandGap) {
+      layers.push(gapExpanders(doc.lineMeta, doc.gaps, onExpandGap))
+    }
+    return layers.length > 0 ? layers : undefined
+  }, [gapped, slots, doc, onExpandGap])
+  const { containerRef, getSelectedDocLines, view } = useDiffEditor(doc, path, extra)
   // Both halves of the resolved selection: the file lines a comment is filed
   // against, and the doc line a composer hangs under. They differ — a selection
   // ending on a deleted line has a doc line but no new-file one.

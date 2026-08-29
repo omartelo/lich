@@ -42,6 +42,19 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   fires there. And an errand the relay delivered survives an interrupt on purpose: stopping a turn is not
   answering the request, so the sender keeps waiting for the target's next turn rather than being told the work
   is over.
+- **A diff's context expander reads GitHub, one round-trip per gap** (`internal/project/filelines.go`):
+  `FileLines` tries the local object first and asks the contents API when the clone does not have it, which
+  on the Pulls screen is the normal case — the branch under review is usually not one this clone ever
+  fetched. The call site is a promise from an RPC, so nothing there says a click costs a network round-trip
+  and a rate-limit unit against the project's gh token. Anything that multiplies the clicks multiplies
+  that: prefetching a file's gaps on mount, incremental ±20 stepping, or an "expand everything" control
+  would each turn one reader's file into dozens of calls. The per-request line cap is the only bound, and
+  a gap wider than it is several calls already. Two things follow from the same shape. The expander needs
+  the revision the diff's new side stands at, so a source that cannot name one has no expander at all
+  rather than a wrong one — a last-turn record from before `LastTurn.After` existed, or a pull request
+  whose detail carries no commits. And there is no expanding *past the last hunk*: a unified diff carries
+  no file length, so nothing here knows whether anything follows it, and an affordance drawn there would
+  be a no-op on every file whose change reaches the end.
 - **The Review panel's "Last turn" is a window of wall-clock time, and it lives in memory**
   (`internal/terminal/turnsnap.go`, `internal/project/turnsnap.go`): the panel brackets a turn with two
   `git write-tree` snapshots taken against an index of lich's own, so what it shows is everything that

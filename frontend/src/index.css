@@ -185,6 +185,29 @@
   );
 }
 
+/* A separator carrying an expander drops the rule: the button says what the
+   line is, and a rule behind its text reads as a strikethrough. */
+.cm-diff-sep.cm-diff-gap {
+  background-image: none;
+}
+
+/* The expander itself — the unchanged lines git left out, one click away. Prose
+   in a code viewer, so it takes the app's font like a review thread does. */
+.cm-diff-expand {
+  border-radius: 0.25rem;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  line-height: 1.2;
+  padding: 0 0.375rem;
+}
+
+.cm-diff-expand:hover {
+  background-color: var(--accent);
+  color: var(--accent-foreground);
+}
+
 /* Syntax highlighting palette for @lezer/highlight's classHighlighter.
    Muted hues legible on both themes; dark overrides lift the lightness. */
 .tok-keyword { color: oklch(0.45 0.17 305); }

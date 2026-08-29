@@ -178,30 +178,102 @@ export function parseDiff(text: string): DiffFile[] {
 export interface FileDoc {
   text: string
   lineMeta: DiffLine[]
+  /** The unchanged runs git never printed, in document order — what the panel
+   * offers to pull in. Empty when every gap is either closed or unnumberable. */
+  gaps: DiffGap[]
 }
+
+/** One run of unchanged lines missing from the diff: the space between two
+ * hunks, or the head of the file above the first one. The tail is not among
+ * them — a diff carries no file length, so nothing here knows whether there is
+ * anything past the last hunk. */
+export interface DiffGap {
+  /** The new-file line this gap opened at, before anything was pulled in. It
+   * is the gap's identity: the doc is rebuilt around every expansion, and this
+   * is what still names the same gap afterwards. */
+  key: number
+  /** 1-based document line the separator sits on — where the affordance goes. */
+  docLine: number
+  /** New-file lines still missing, inclusive. */
+  from: number
+  to: number
+  /** The old-file line pairing with `from`. Unchanged text advances both sides
+   * in step, and a line pulled in has to be numbered on both. */
+  oldFrom: number
+}
+
+/** What has been pulled into each gap so far, keyed by DiffGap.key and always
+ * counting from the gap's own start. */
+export type Expansions = ReadonlyMap<number, DiffLine[]>
 
 const hunkSeparator: DiffLine = { kind: "meta", text: "", oldLine: null, newLine: null }
 
-export function buildFileDoc(file: DiffFile): FileDoc {
+// gapBefore measures the unchanged run between two hunk headers — or above the
+// first one, with `previous` null. It answers null when there is nothing to
+// pull in, and also when the two sides disagree about the run's length: a gap
+// is unchanged text, so old and new must advance by the same amount, and a
+// header pair saying otherwise is one this cannot number.
+function gapBefore(previous: DiffHunk | null, hunk: DiffHunk): DiffGap | null {
+  const from = previous ? previous.newStart + previous.newCount : 1
+  const oldFrom = previous ? previous.oldStart + previous.oldCount : 1
+  const to = hunk.newStart - 1
+  if (to < from || hunk.oldStart - oldFrom !== hunk.newStart - from) {
+    return null
+  }
+  return { key: from, docLine: 0, from, to, oldFrom }
+}
+
+// contextLines numbers text pulled out of the file into the diff's own line
+// shape: unchanged lines, present on both sides, starting at newFrom/oldFrom.
+export function contextLines(texts: string[], newFrom: number, oldFrom: number): DiffLine[] {
+  return texts.map((text, index) => ({
+    kind: "context" as const,
+    text,
+    oldLine: oldFrom + index,
+    newLine: newFrom + index,
+  }))
+}
+
+// buildFileDoc assembles the document, laying whatever has been pulled into a
+// gap where the diff left a hole. A gap that is still open keeps its separator
+// line and is reported in `gaps`; one that has been filled in whole has no
+// separator left, because the text either side of it is now continuous.
+export function buildFileDoc(file: DiffFile, expansions?: Expansions): FileDoc {
   const lines: string[] = []
   const lineMeta: DiffLine[] = []
+  const gaps: DiffGap[] = []
+  const push = (line: DiffLine): void => {
+    lines.push(line.text)
+    lineMeta.push(line)
+  }
   for (const [index, hunk] of file.hunks.entries()) {
-    if (index > 0) {
-      lines.push("")
-      lineMeta.push(hunkSeparator)
+    const gap = gapBefore(index === 0 ? null : file.hunks[index - 1], hunk)
+    const pulled = gap ? (expansions?.get(gap.key) ?? []) : []
+    for (const line of pulled) {
+      push(line)
+    }
+    const open = gap && {
+      ...gap,
+      from: gap.from + pulled.length,
+      oldFrom: gap.oldFrom + pulled.length,
+    }
+    // Adjacent hunks (no numberable gap) keep the separator they always had.
+    if (open ? open.from <= open.to : index > 0) {
+      push(hunkSeparator)
+      if (open) {
+        gaps.push({ ...open, docLine: lineMeta.length })
+      }
     }
     for (const line of hunk.lines) {
       if (line.kind === "meta") {
         continue
       }
-      const text = line.text.slice(1)
-      lines.push(text)
       // lineMeta's text must equal the doc's, so decoration position math
       // (pos += text.length + 1) stays in step.
-      lineMeta.push({ ...line, text })
+      push({ ...line, text: line.text.slice(1) })
     }
   }
-  return { text: lines.join("\n"), lineMeta }
+  return { text: lines.join("\n"), lineMeta, gaps }
 }
 
 // discardTargets lists the repo-relative paths a "discard changes" on this

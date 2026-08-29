@@ -32,6 +32,11 @@ type LastTurn struct {
 	State   string `json:"state"`
 	Diff    string `json:"diff,omitempty"`
 	EndedAt int64  `json:"endedAt,omitempty"`
+	// After is the snapshot tree the diff's new side stands at, and it travels
+	// so the panel can expand the unchanged lines around a hunk against the
+	// same revision it is reading (project.FileLines). Set only with a diff:
+	// the other two states have no side to read.
+	After string `json:"after,omitempty"`
 }
 
 // turnPair is one closed turn: the trees on either side of the window it ran in,
@@ -305,5 +310,5 @@ func (s *Service) LastTurnDiff(id string) (LastTurn, error) {
 	if err != nil {
 		return LastTurn{}, err
 	}
-	return LastTurn{State: turnDiffOK, Diff: text, EndedAt: ended}, nil
+	return LastTurn{State: turnDiffOK, Diff: text, EndedAt: ended, After: pair.after}, nil
 }
