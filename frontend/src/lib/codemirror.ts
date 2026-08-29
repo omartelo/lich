@@ -8,13 +8,15 @@ import { languages } from "@codemirror/language-data"
 import { classHighlighter } from "@lezer/highlight"
 import {
   Decoration,
+  type DecorationSet,
   EditorView,
   GutterMarker,
+  WidgetType,
   gutterLineClass,
   lineNumberWidgetMarker,
   lineNumbers,
 } from "@codemirror/view"
-import { gutterNumber, type DiffLine } from "@/lib/git/diff"
+import { gutterNumber, type DiffGap, type DiffLine } from "@/lib/git/diff"
 
 // diffTheme styles the editor with the app's CSS variables, so the `.dark`
 // class on <html> restyles every view without any JS synchronization.
@@ -193,4 +195,76 @@ export function diffGutter(lineMeta: DiffLine[]): Extension {
     }),
     blockWidgetGutter(),
   ]
+}
+
+// ExpandWidget is the affordance sitting on a hunk separator: the lines git
+// never printed, one click away. It rides the separator's own empty line rather
+// than a block widget of its own, so the row it draws is the row that was
+// already there and the gutter needs to know nothing new about it.
+class ExpandWidget extends WidgetType {
+  constructor(
+    readonly gap: DiffGap,
+    readonly onExpand: (gap: DiffGap) => void,
+  ) {
+    super()
+  }
+
+  // What the button says is the whole of its identity: the same gap, still the
+  // same size, is the same button.
+  eq(other: ExpandWidget): boolean {
+    return other.gap.from === this.gap.from && other.gap.to === this.gap.to
+  }
+
+  toDOM(): HTMLElement {
+    const count = this.gap.to - this.gap.from + 1
+    const button = document.createElement("button")
+    button.type = "button"
+    button.className = "cm-diff-expand"
+    button.textContent = `Expand ${count} unchanged line${count === 1 ? "" : "s"}`
+    button.title = `Show lines ${this.gap.from}–${this.gap.to}`
+    button.addEventListener("click", () => this.onExpand(this.gap))
+    return button
+  }
+}
+
+const expandableSeparator = Decoration.line({ class: "cm-diff-gap" })
+
+// buildGapDecorations walks lineMeta the way buildLineDecorations does, turning
+// each open gap's document line into the character offset a decoration is
+// addressed by. A RangeSet has to be built in document order, and gaps arrive
+// in it: they are collected as the document is assembled.
+//
+// Exported for the suite. The two decorations landing on one position are the
+// part a RangeSetBuilder throws over if they are ever added the wrong way
+// round, and a throw here takes the whole window with it.
+export function buildGapDecorations(
+  lineMeta: DiffLine[],
+  gaps: DiffGap[],
+  onExpand: (gap: DiffGap) => void,
+): DecorationSet {
+  const byDocLine = new Map(gaps.map((gap) => [gap.docLine, gap]))
+  const builder = new RangeSetBuilder<Decoration>()
+  let pos = 0
+  for (const [index, meta] of lineMeta.entries()) {
+    const gap = byDocLine.get(index + 1)
+    if (gap) {
+      // The line class first, as the builder wants its ranges: it drops the
+      // separator's rule, which would otherwise run through the button.
+      builder.add(pos, pos, expandableSeparator)
+      builder.add(pos, pos, Decoration.widget({ widget: new ExpandWidget(gap, onExpand), side: 1 }))
+    }
+    pos += meta.text.length + 1 // +1 for the newline
+  }
+  return builder.finish()
+}
+
+// gapExpanders draws one expander per open gap. Nothing is fetched here and
+// nothing is fetched on mount: a gap is read only when its own button is
+// pressed, which is what keeps a wide diff's cost the cost of its hunks.
+export function gapExpanders(
+  lineMeta: DiffLine[],
+  gaps: DiffGap[],
+  onExpand: (gap: DiffGap) => void,
+): Extension {
+  return EditorView.decorations.of(buildGapDecorations(lineMeta, gaps, onExpand))
 }

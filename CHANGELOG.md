@@ -19,6 +19,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   eight, and how many were left out). It is written, never sent: the Enter is
   yours, and lich neither re-runs the checks nor asks a second time. Nothing is
   drawn when nothing is wrong — that state is the Merge button's.
+- **Read the lines a diff left out, without leaving the diff.** git prints three
+  lines of context either side of a change, so judging one usually meant opening
+  the file somewhere else. Every gap between two hunks — and the run above the
+  first one — now carries a row saying how many lines are hidden there, and one
+  click pulls them in where they belong, numbered and highlighted like the rest.
+  Nothing is fetched until you ask for it, one gap at a time, and the diff itself
+  is never cropped: the hunks stay whole, so nothing can be hidden by what you
+  chose to open. It works on the review dock's working tree and last turn, and on
+  a pull request's Files changed — including a pull request whose branch this
+  clone has never fetched.
 
 ### Changed
 

@@ -462,6 +462,9 @@ export function PullRequestView({
           <PullsFiles
             path={path}
             number={detail.number}
+            // The last commit is the head: gh lists them oldest first, and the
+            // detail already carries them, so the expander costs no extra call.
+            headOid={detail.commits?.[detail.commits.length - 1]?.oid ?? ""}
             head={head}
             pullRequest={detail.url}
             onInject={onInject}

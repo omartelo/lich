@@ -1,5 +1,5 @@
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react"
-import { useMemo, useRef, useSyncExternalStore } from "react"
+import { useCallback, useMemo, useRef, useSyncExternalStore } from "react"
 import { IconAction } from "@/components/common/IconAction"
 import { ResizeHandle } from "@/components/common/ResizeHandle"
 import { Notice } from "@/components/common/Notice"
@@ -32,6 +32,7 @@ import {
 import { useActiveFile } from "@/lib/pulls/use-active-file"
 import { usePullRequestDiff } from "@/lib/pulls/use-pull-request-diff"
 import { addReviewComment } from "@/lib/review-comments"
+import { ProjectService } from "@/lib/rpc"
 import { usePanelVisible } from "@/lib/use-panel-visible"
 import { usePanelWidth } from "@/lib/use-panel-width"
 
@@ -100,6 +101,10 @@ interface PullsFilesProps {
   path: string
   /** Which pull request's diff to fetch. */
   number: number
+  /** The commit the diff's new side stands at — the PR's head, which the
+   * expander reads unchanged lines from. "" while the detail has no commit to
+   * name, and then the diff shows what git printed and nothing more. */
+  headOid: string
   /** The checkout's HEAD; a new commit refetches the diff. */
   head: string
   /** Identity of the pull request being reviewed (its URL) — what the Viewed
@@ -122,6 +127,7 @@ interface PullsFilesProps {
 export function PullsFiles({
   path,
   number,
+  headOid,
   head,
   pullRequest,
   onInject,
@@ -129,6 +135,14 @@ export function PullsFiles({
   actions,
 }: PullsFilesProps) {
   const { files, error } = usePullRequestDiff(path, head, number)
+  // Read against the PR's head and never against the checkout: the branch under
+  // review is usually not the one on disk, and often not in this clone at all
+  // (project.FileLines then asks GitHub for it).
+  const expand = useCallback(
+    (rel: string, from: number, to: number) =>
+      ProjectService.FileLines(path, rel, headOid, from, to),
+    [path, headOid],
+  )
   const rows = useRef<Map<string, HTMLElement>>(new Map())
   const [active, selectFile] = useActiveFile(pullRequest)
   const review = useSyncExternalStore(subscribePendingReview, () => pendingReview(pullRequest))
@@ -262,6 +276,7 @@ export function PullsFiles({
                     setViewed(pullRequest, file.newPath, fingerprints.get(file.newPath) ?? "", next)
                   }
                   review={reviews.get(file.newPath)}
+                  onExpand={headOid ? expand : undefined}
                 />
               </div>
             ))}

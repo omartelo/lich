@@ -194,6 +194,13 @@ export const ProjectService = {
   /** Tracked files, repo-relative and slash-separated, sorted (git ls-files). */
   Tree: (path: string) => call<string[] | null>("project.Tree", [path]),
   ReadFile: (path: string, rel: string) => call<string>("project.ReadFile", [path, rel]),
+  /** Lines from..to (1-based, inclusive) of one file for the diff's context
+   * expander. ref is the revision the diff's new side stands at: "" for the
+   * working tree, otherwise a git oid — a local object when the checkout has
+   * it, GitHub's copy when it does not (a pull request's head). The backend
+   * caps one answer, so a caller wanting more asks again from where it ended. */
+  FileLines: (path: string, rel: string, ref: string, from: number, to: number) =>
+    call<string[] | null>("project.FileLines", [path, rel, ref, from, to]),
   DiscardFile: (path: string, rel: string) => call<null>("project.DiscardFile", [path, rel]),
   ListBranches: (path: string) => call<Branches>("project.ListBranches", [path]),
   /** The setup script a new worktree of this project will run, or the

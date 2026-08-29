@@ -512,4 +512,8 @@ export interface LastTurn {
   state: "ok" | "empty" | "unavailable"
   diff?: string
   endedAt?: number
+  /** The snapshot tree the diff's new side stands at — the revision the panel
+   * expands unchanged lines against (ProjectService.FileLines). Present only
+   * with a diff. */
+  after?: string
 }
