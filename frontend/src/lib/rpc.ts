@@ -137,6 +137,11 @@ export const Terminal = {
   SetVisible: (id: string, visible: boolean) => call<null>("terminal.SetVisible", [id, visible]),
   // Base64 tail of a session's output, to reseed scrollback after a reload.
   Replay: (id: string) => call<string>("terminal.Replay", [id]),
+  /** How long a session has been worked on, in whole seconds — typed at,
+   * reporting, or producing output for an open turn, minus every silence longer
+   * than the idle gap. 0 for a session nothing has been counted for yet, and up
+   * to one flush behind what has been measured (internal/terminal.handsOn). */
+  HandsOn: (id: string) => call<number>("terminal.HandsOn", [id]),
   /** Which of these sessions have talked about the query, and what they said.
    * Empty for a query under three characters, and for a session whose current
    * conversation the backend cannot read. */

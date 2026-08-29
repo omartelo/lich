@@ -27,6 +27,22 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   Their footer therefore carries no model or context ring. Codex rollouts carry the effective window
   selected for that session — 95% of its default or configured `model_context_window` — but no API-cost
   accounting, so its setting stops at model and context while Claude Code alone offers the cost rung.
+- **Hands-on time is read off three signals, and one of them is not universal**
+  (`internal/terminal/handson.go`, `noteOutput`, `closableState`): the figure beside the cost
+  counts the gap between consecutive signs of life in a session — a session-state report, a
+  keystroke at its PTY, or its own output while a turn is open — and drops any gap longer than
+  `handsOnIdleGap`. The output signal is the one that carries an unattended turn, and it is
+  gated on the provider having reported `busy`, because a `tail -f`, a dev server or a TUI
+  repainting would otherwise bill hours nobody worked. **Crush reports no state at all**
+  (`docs/hooks/session-state.md`), so nothing ever opens a turn there and a Crush session
+  accrues from the user's keystrokes alone: an hour it spent working while the user watched
+  reads as the few seconds they typed in. **Cursor CLI is the near miss** — it delivers
+  `PreToolUse` and `PostToolUse`, and those beat even though `closableState` refuses to publish
+  them, so a Cursor turn is counted through its tool calls; what it still cannot count is a turn
+  that calls no tool at all. A plain shell session is keystrokes-only by design and not a gap:
+  there is no agent in it whose work could be missed. The trap is reading the number as
+  comparable across cards — the same hour of work is a smaller figure on Crush than on Claude
+  Code, and nothing on screen says which rung a card is on.
 - **A dropped file has no path, so lich guesses it** (`internal/drop`): a file under neither the session directory
   nor home is *copied*, so an agent told to edit it edits the copy — and that copy is deleted 3 days on, so a path
   pasted into a prompt eventually stops resolving.

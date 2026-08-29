@@ -209,6 +209,8 @@ type Store interface {
 	CostLedger(sessionID, transcriptID string) (int64, string, float64, error)
 	SaveCostLedger(sessionID, transcriptID string, offset int64, lastMessage string, cost float64) error
 	SessionCost(sessionID string) (float64, error)
+	AddHandsOn(sessionID string, seconds int64) error
+	HandsOn(sessionID string) (int64, error)
 }
 
 // Service manages PTY-backed shell sessions keyed by session ID.
@@ -256,6 +258,11 @@ type Service struct {
 	// nothing else about a report needs mu, and a hook must never queue behind a
 	// PTY spawn.
 	turns turnLog
+	// hands is how long each session has been worked on, measured off the same
+	// three signals the card is already drawing — a state report, a keystroke,
+	// output while the agent is busy (see handsOn). It carries its own lock for
+	// the reason turns does: a hook must never queue behind a PTY spawn.
+	hands handsOn
 	// snaps brackets each session's turn with a tree snapshot of its checkout,
 	// which is what the Review panel's "Last turn" mode diffs (see turnSnaps).
 	// It reads the same boundary turns does and carries its own lock for the
@@ -346,6 +353,11 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 	}
 	ws, err := newTransport(
 		func(id string, data []byte) {
+			// Only this callback, never writeBytes: what arrives here is the
+			// window's own input frames, which is a person at the keyboard. A
+			// relayed message another session pasted through Write is that
+			// session's work, not this one's.
+			s.beatHandsOn(id, 0)
 			if s.noteInput(id, data) {
 				s.noteInterrupt(id)
 			}
@@ -354,6 +366,13 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 			}
 		},
 		func(req hookRequest) {
+			// Ahead of every filter below, because this one is not about what
+			// the card can draw. A report lich refuses to publish still proves
+			// the session was being worked: Cursor CLI's tool reports are
+			// dropped a line down for want of anything that could end the
+			// spinner they would start, and they are the only proof a Cursor
+			// turn is running at all (see closableState).
+			s.beatHandsOn(req.SessionID, 0)
 			// Dropped where the harness cannot close it, before the turn log
 			// ever sees it: a state nothing ends outlives what it describes.
 			if !closableState(s.kindOf(req.SessionID), req.State) {
@@ -757,7 +776,7 @@ func (s *Service) stream(id string, sess *session) {
 	for {
 		n, err := p.Read(buf)
 		if n > 0 {
-			s.noteOutput(sess, buf[:n])
+			s.noteOutput(id, sess, buf[:n])
 			sess.replay.append(buf[:n])
 			sess.out.Write(buf[:n])
 		}
@@ -888,11 +907,12 @@ func (s *Service) Resize(id string, cols, rows int) error {
 	return p.Resize(cols, rows)
 }
 
-// noteOutput reads one chunk of a session's output for the two things lich has
-// to know about it from outside: whether the worktree setup script is still the
-// program on the other end of this PTY (see setupDone), and whether that
-// program has ever stopped drawing (see Ready).
-func (s *Service) noteOutput(sess *session, chunk []byte) {
+// noteOutput reads one chunk of a session's output for the three things lich
+// has to know about it from outside: whether the worktree setup script is still
+// the program on the other end of this PTY (see setupDone), whether that
+// program has ever stopped drawing (see Ready), and whether the agent is
+// working right now (see handsOn).
+func (s *Service) noteOutput(id string, sess *session, chunk []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	// The quiet is recorded as it passes, never sampled when somebody finally
@@ -918,6 +938,15 @@ func (s *Service) noteOutput(sess *session, chunk []byte) {
 		// which is the write that lands on screen as literal paste markers.
 		sess.ready = false
 		sess.lastOut = time.Time{}
+	}
+	// Output is the one beat source that has to be qualified, because a
+	// terminal draws for reasons that are nobody's work: a `tail -f`, a dev
+	// server logging requests, a TUI repainting its own spinner. An open turn
+	// is what separates the agent working from a program talking to itself —
+	// so nothing here counts unless the session's own last report said `busy`,
+	// and even then only once every handsOnOutputBeat.
+	if s.turns.busy(id) {
+		s.beatHandsOn(id, handsOnOutputBeat)
 	}
 }
 
@@ -1025,10 +1054,45 @@ func (s *Service) Close(id string) error {
 	// last turn changed — and its snapshot index would otherwise outlive it on
 	// disk for the rest of the machine's life.
 	s.snaps.forget(id)
+	// Synchronously, and before the row that the window is about to delete goes:
+	// a write that loses that race is dropped silently (store.AddHandsOn), and
+	// this is the last chance a closed card gets to keep what it was worked.
+	s.FlushHandsOn()
+	s.hands.forget(id)
 	if !ok {
 		return nil
 	}
 	return sess.pty.Close()
+}
+
+// HandsOn is how long session id has been worked on, in whole seconds: the time
+// it was reporting, being typed at or producing output for an open turn, minus
+// every silence longer than handsOnIdleGap (see handsOn). Zero for a session
+// nothing has been counted for yet, and up to handsOnFlush behind what has
+// actually been measured — the readout is in minutes, so the debounce never
+// shows.
+func (s *Service) HandsOn(id string) (int64, error) {
+	return s.store.HandsOn(id)
+}
+
+// FlushHandsOn writes what every session has been worked since the last write.
+// Called off the debounce, when a card closes and once on the way out, so a
+// session's hours outlive the process that counted them.
+func (s *Service) FlushHandsOn() {
+	for id, seconds := range s.hands.drain() {
+		if err := s.store.AddHandsOn(id, seconds); err != nil {
+			slog.Warn("terminal: save hands-on time", "session", id, "err", err)
+		}
+	}
+}
+
+// beatHandsOn records activity in session id, and writes the arrears off the
+// caller's goroutine once the debounce is up — a hook must never wait on
+// SQLite, and neither must the PTY reader.
+func (s *Service) beatHandsOn(id string, minGap time.Duration) {
+	if s.hands.beat(id, minGap) {
+		go s.FlushHandsOn()
+	}
 }
 
 // Live reports whether a session has a process running right now. It is the

@@ -29,6 +29,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   chose to open. It works on the review dock's working tree and last turn, and on
   a pull request's Files changed — including a pull request whose branch this
   clone has never fetched.
+- **The footer says how long you have been at a session.** Beside the cost, each
+  session now carries the time it has actually been worked on — `$4.20 · 1h12m`,
+  or just `1h12m` where the cost readout is off. It is not how long the card has
+  been open: the count only moves while something is happening in the session —
+  you typing at it, the agent reporting in, or the agent's own output while a
+  turn is running — and any gap longer than fifteen minutes counts as time away
+  and adds nothing at all, so a session left open overnight reports the hour you
+  worked rather than the fourteen it sat there. The total is kept with the
+  session, so it survives a restart of lich and a parked worktree's resume, and
+  every provider that reports a state counts a turn you were not watching. Crush
+  reports none, so its sessions count what you typed and no more.
 
 ### Changed
 

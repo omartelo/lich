@@ -10,6 +10,7 @@ import {
   Paperclip,
   Diff,
   GitPullRequestArrow,
+  Timer,
 } from "lucide-react"
 import { DropService, Terminal as TerminalService } from "@/lib/rpc"
 import type { DockTab } from "@/components/dock/RightDock"
@@ -17,6 +18,8 @@ import { useActiveSession } from "@/lib/session/use-active-session"
 import { useSessionUsage } from "@/lib/session/use-session-usage"
 import { useCostReadout } from "@/lib/use-cost-readout"
 import { budgetShare, formatCost } from "@/lib/session/session-cost"
+import { formatHandsOn, spellHandsOn } from "@/lib/session/hands-on"
+import { useRemoteResource } from "@/lib/use-remote-resource"
 import { baseName, displayPath } from "@/lib/paths"
 import { isWindows } from "@/lib/platform"
 import { composeDroppedPaths } from "@/lib/terminal/drop-files"
@@ -97,6 +100,16 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
   const status = useGitStatus(path)
   const pr = usePullRequest(path, status?.branch ?? "", status?.head ?? "")
   const now = useNow()
+  // How long the active session has been worked on. Re-read off the footer's
+  // own clock rather than pushed: the figure is minutes, `now` already ticks on
+  // the minute, and keying the lookup by it is the whole refresh loop — no
+  // event, no store, and a reload paints the number on its first render instead
+  // of waiting out a flush.
+  const handsOn = useRemoteResource(
+    sessionId ? `${sessionId}:${now.getTime()}` : "",
+    () => TerminalService.HandsOn(sessionId),
+    { empty: 0 },
+  )
 
   // The picker runs on the backend (DropService.Attach), not through
   // ProjectService: a confined session cannot open a file outside its checkout,
@@ -162,6 +175,36 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
         </TooltipContent>
       </Tooltip>
     ) : null
+
+  // How long this session has been worked on, in the same group as the cost so
+  // the two read as one fact about the session. Unlike the cost it has no
+  // ceiling to be near, so it never takes the amber/red ramp: colouring it
+  // would be an opinion about how long is too long, and lich does not have one.
+  //
+  // The glyph is not decoration. The cost figure is opt-in and Claude-only
+  // while this is measured for every session, so the number usually stands
+  // alone — and a bare "1h12m" in this strip reads as a quota window, which is
+  // drawn two segments to the left.
+  const handsOnReadout = formatHandsOn(handsOn.data) ? (
+    <Tooltip>
+      <TooltipTrigger render={<span className="flex items-center gap-1.5 tabular-nums" />}>
+        <Timer className="size-3.5 shrink-0" aria-hidden="true" />
+        {formatHandsOn(handsOn.data)}
+      </TooltipTrigger>
+      <TooltipContent side="top" className="border border-border bg-card text-foreground">
+        <div className="flex max-w-64 flex-col gap-1">
+          <span className="font-medium">Hands-on time</span>
+          <span className="font-mono text-xs text-muted-foreground">
+            {spellHandsOn(handsOn.data)}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            How long this session has been worked on — typed at, reporting, or running a turn. A gap
+            longer than 15 minutes counts as time away.
+          </span>
+        </div>
+      </TooltipContent>
+    </Tooltip>
+  ) : null
 
   // The context-window readout — the ring plus percent, with a detailed
   // tooltip. Null when the user turned it off (Settings › Providers).
@@ -250,9 +293,15 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
       <span className="ml-auto flex items-center gap-4">
         {showContextUsage && <SessionModel sessionId={sessionId} kind={kind} />}
         <PlanQuota kind={kind} sessionId={sessionId} />
-        {costReadout}
+        {(costReadout || handsOnReadout) && (
+          <span className="flex items-center gap-1.5">
+            {costReadout}
+            {costReadout && handsOnReadout && <span className="opacity-50">·</span>}
+            {handsOnReadout}
+          </span>
+        )}
         {contextReadout}
-        {(contextReadout || costReadout) && (status?.branch || path) && (
+        {(contextReadout || costReadout || handsOnReadout) && (status?.branch || path) && (
           <Separator orientation="vertical" className="h-4" />
         )}
         {status?.branch && (

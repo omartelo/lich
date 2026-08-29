@@ -49,6 +49,10 @@ type stubBins struct {
 	costOn          bool
 	ledgers         map[string]stubLedger
 	ports           map[string]int
+	// Whole seconds per session, the shape store.AddHandsOn accumulates into.
+	// Nil until a test cares: the flush only ever writes for a session the
+	// accumulator actually counted something for.
+	handsOn map[string]int64
 	// One field per cost method, because the three failures are three different
 	// stories: a ledger that cannot be read, one that cannot be written, and a
 	// total that cannot be summed. A single error field would let a test claim
@@ -152,6 +156,15 @@ func (s stubBins) SessionCost(sessionID string) (float64, error) {
 	}
 	return total, nil
 }
+
+func (s stubBins) AddHandsOn(sessionID string, seconds int64) error {
+	if s.handsOn != nil {
+		s.handsOn[sessionID] += seconds
+	}
+	return nil
+}
+
+func (s stubBins) HandsOn(sessionID string) (int64, error) { return s.handsOn[sessionID], nil }
 
 // TestChildEnvStripsAppImageVars proves the AppImage runtime variables that break
 // mise/asdf shims are dropped while the real user environment is passed through.
@@ -1363,7 +1376,7 @@ func TestReadyWaitsForTheSetupScript(t *testing.T) {
 	svc.mu.Lock()
 	sess := svc.sessions["s1"]
 	svc.mu.Unlock()
-	svc.noteOutput(sess, []byte("Progress: resolved 551"+setupDone))
+	svc.noteOutput("s1", sess, []byte("Progress: resolved 551"+setupDone))
 
 	// The marker is the exec, not the prompt: the provider draws its opening
 	// screen from here, and a message written into that is the one that landed
@@ -1384,7 +1397,7 @@ func TestReadyWaitsForTheProviderToStopDrawing(t *testing.T) {
 	svc := New(stubBins{}, nil, events.New())
 	sess := &session{}
 
-	svc.noteOutput(sess, []byte("Claude Code v2.1.227"))
+	svc.noteOutput("s1", sess, []byte("Claude Code v2.1.227"))
 	svc.mu.Lock()
 	svc.sessions["s1"] = sess
 	svc.mu.Unlock()
@@ -1411,7 +1424,7 @@ func TestReadyStaysTrueThroughABusyTurn(t *testing.T) {
 	if !svc.Ready("s1") {
 		t.Fatal("a settled session was not ready")
 	}
-	svc.noteOutput(sess, []byte("...thinking..."))
+	svc.noteOutput("s1", sess, []byte("...thinking..."))
 	if !svc.Ready("s1") {
 		t.Error("a session that started working again stopped accepting work")
 	}
@@ -1430,9 +1443,9 @@ func TestTheWaitForTheProviderToStartIsNotItsQuiet(t *testing.T) {
 	svc.sessions["s1"] = sess
 	svc.mu.Unlock()
 
-	svc.noteOutput(sess, []byte("Progress: resolved 551"+setupDone))
+	svc.noteOutput("s1", sess, []byte("Progress: resolved 551"+setupDone))
 	time.Sleep(readySettle + 100*time.Millisecond)
-	svc.noteOutput(sess, []byte("Claude Code v2.1.227"))
+	svc.noteOutput("s1", sess, []byte("Claude Code v2.1.227"))
 	if svc.Ready("s1") {
 		t.Error("the wait for the provider to start was credited as the provider going quiet")
 	}
@@ -1457,12 +1470,12 @@ func TestReadyRemembersAQuietThatAlreadyPassed(t *testing.T) {
 	svc.sessions["s1"] = sess
 	svc.mu.Unlock()
 
-	svc.noteOutput(sess, []byte("Claude Code v2.1.227"))
+	svc.noteOutput("s1", sess, []byte("Claude Code v2.1.227"))
 	time.Sleep(readySettle + 100*time.Millisecond)
 	// The turn starts. From here the PTY never goes quiet again, and this is the
 	// first time anyone asks whether the session can be given work.
-	svc.noteOutput(sess, []byte("...thinking..."))
-	svc.noteOutput(sess, []byte("...thinking..."))
+	svc.noteOutput("s1", sess, []byte("...thinking..."))
+	svc.noteOutput("s1", sess, []byte("...thinking..."))
 
 	if !svc.Ready("s1") {
 		t.Error("a session that sat at its prompt for a whole turn was refused work")
