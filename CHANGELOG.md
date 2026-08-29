@@ -45,6 +45,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   you had open, the list of them. Each tab now returns to the screen its project
   was last showing, and to its terminals only when that is where you were.
 
+### Fixed
+
+- **A file preview stays inside the checkout it was opened from.** A repository
+  may ship a symlink pointing out of its own tree, and clicking one in the file
+  list quietly previewed whatever it landed on — a file from somewhere else on
+  the machine, shown as though it were the project's, and described by the diff
+  beside it as something else entirely, since git records such an entry as its
+  target text rather than the target's contents. The preview now says the path
+  leaves the checkout instead of following it. Links that stay inside the tree
+  read exactly as before.
+
 ## [0.42.0] - 2026-08-27
 
 ### Changed

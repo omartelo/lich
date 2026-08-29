@@ -133,15 +133,17 @@ func lsFiles(path string, args ...string) ([]string, error) {
 }
 
 // ReadFile returns the text content of one repo-relative file for the read-only
-// preview. rel is validated against traversal (internal/relpath, shared with
-// DiscardFile and the editor launch) before it is joined onto the work-tree
-// root. Binaries, irregular files, and files above maxReadFileSize are refused —
+// preview. rel goes through relpath.Resolve rather than the lexical Validate
+// its neighbours use, because this is the surface that reads bytes: a checkout
+// can ship a symlink out of the tree, and a preview that followed one would
+// print a file the diff beside it describes as the link's target text.
+// Binaries, irregular files, and files above maxReadFileSize are refused —
 // the preview is for source, not blobs.
 func (s *Service) ReadFile(path, rel string) (string, error) {
-	if err := relpath.Validate(rel); err != nil {
+	full, err := relpath.Resolve(path, rel)
+	if err != nil {
 		return "", err
 	}
-	full := filepath.Join(path, rel)
 	info, err := os.Stat(full)
 	if err != nil {
 		return "", fmt.Errorf("stat %s: %w", rel, err)
