@@ -13,6 +13,7 @@ import {
   GitPullRequestArrow,
   Inbox,
   Pencil,
+  Columns2,
   Pin,
   PinOff,
   Play,
@@ -75,6 +76,12 @@ interface SessionCardProps {
   // session nobody delegated, which is most of them (sessionOrigin).
   origin: string
   active: boolean
+  // Whether this card is the one showing in the second pane. Never true at the
+  // same time as `active`: one card cannot hold both panes (panes.ts).
+  beside: boolean
+  // Put this card in the second pane, or take it back out when it is already
+  // there. Never offered on the active card — that one is the first pane.
+  onBeside: () => void
   onSelect: () => void
   onClose: () => void
   onRename: (label: string) => void
@@ -108,6 +115,8 @@ export function SessionCard({
   path,
   origin,
   active,
+  beside,
+  onBeside,
   onSelect,
   onClose,
   onRename,
@@ -335,6 +344,9 @@ export function SessionCard({
                     className={cn(
                       "group relative flex w-full flex-col items-start gap-0.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-accent/60",
                       active && "bg-accent text-accent-foreground",
+                      // Showing, but not the pane the keyboard is in: one step
+                      // down the same fill, never a second kind of mark.
+                      beside && "bg-accent/55",
                     )}
                   />
                 }
@@ -568,6 +580,12 @@ export function SessionCard({
             <Copy />
             Copy send command
           </ContextMenuItem>
+          {!active && (
+            <ContextMenuItem onClick={onBeside}>
+              <Columns2 />
+              {beside ? "Close beside" : "Open beside"}
+            </ContextMenuItem>
+          )}
           <ContextMenuItem onClick={() => setEditing(true)}>
             <Pencil />
             Rename

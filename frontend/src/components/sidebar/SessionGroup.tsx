@@ -30,6 +30,11 @@ interface SessionGroupProps {
   sessions: Session[]
   projectPath: string
   activeId: string
+  // The card in the second pane, "" when the stage is not split.
+  besideId: string
+  onBeside: (sessionId: string) => void
+  // Move the cursor into the second pane, for a click on the card already there.
+  onFocusBeside: () => void
   // A divider label is drawn only when the sidebar holds more than one group; a
   // lone project with no worktrees keeps its old flat, header-less list. The
   // header doubles as the group's drag handle, so a lone group is also the case
@@ -79,6 +84,9 @@ export function SessionGroup({
   sessions,
   projectPath,
   activeId,
+  besideId,
+  onBeside,
+  onFocusBeside,
   showHeader,
   sortable,
   onReorder,
@@ -122,6 +130,15 @@ export function SessionGroup({
   }
 
   const select = (id: string) => {
+    // A card already drawing in the second pane is selected by focusing that
+    // pane, not by activating it: activating alone would make it the focused
+    // session with itself still stored as the beside one, which resolves to no
+    // split at all — the card the user clicked would swallow the stage.
+    if (id === besideId) {
+      onFocusBeside()
+      navigate(`/projects/${projectId}`)
+      return
+    }
     activateSession(projectId, id)
     // From the settings screen this returns to the terminal; on the project
     // route it is a no-op.
@@ -182,6 +199,8 @@ export function SessionGroup({
                     // state knows about.
                     origin={sessionOrigin(workspace, session)}
                     active={session.id === activeId}
+                    beside={session.id === besideId}
+                    onBeside={() => onBeside(session.id)}
                     onSelect={() => select(session.id)}
                     onClose={() => onClose(session)}
                     onRename={(label) => renameSession(projectId, session.id, label)}

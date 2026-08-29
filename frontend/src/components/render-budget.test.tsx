@@ -165,6 +165,9 @@ beforeEach(() => {
 })
 afterEach(() => {
   vi.useRealTimers()
+  // The split is a pref, so a test that opens one would otherwise hand the next
+  // one a stage already divided.
+  localStorage.clear()
 })
 
 async function mountSidebar() {
@@ -326,5 +329,38 @@ test("switching project re-renders the mounted terminals but never remounts one"
   // The point of the whole test: two round trips, one mount each. A terminal
   // that remounted would have thrown away its PTY and its scrollback.
   expect(terminalMounts.counts).toEqual({ s1: 1, s4: 1 })
+  await budget.unmount()
+})
+
+test("splitting mounts the second pane's terminal and never remounts the first", async () => {
+  window.location.hash = "#/projects/p1"
+  const { TerminalHost } = await import("./TerminalHost")
+  const { openBeside } = await import("@/lib/session/panes-store")
+  const budget = await mountBudget(
+    createElement(
+      HashRouter,
+      null,
+      createElement(
+        ProjectsContext.Provider,
+        { value: workspace },
+        createElement(TerminalHost, null),
+      ),
+    ),
+  )
+  budget.take()
+  // A delta rather than the whole map: the mounts counter is module state shared
+  // with the tests above, and what this pins is what *this* action did to it.
+  const before = { ...terminalMounts.counts }
+
+  await budget.act(() => openBeside("p1", { id: "s2", side: "right" }))
+
+  // The second pane's terminal is born once, and the first pane's is not thrown
+  // away and rebuilt around it — a split that re-keyed its layers would kill the
+  // very PTY it was opened to watch, and a remount is indistinguishable from a
+  // re-render without this counter.
+  expect(terminalMounts.counts).toEqual({ ...before, s2: (before.s2 ?? 0) + 1 })
+  // And the stage really divided. The node-environment gate cannot render, so
+  // this file is where a split's own chrome gets to prove it draws at all.
+  expect(document.querySelector('[aria-label="Resize the panes"]')).not.toBeNull()
   await budget.unmount()
 })

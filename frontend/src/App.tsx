@@ -5,6 +5,7 @@ import { useHotkey } from "@/lib/use-hotkey"
 import { parseBoolPref, readPref, writePref } from "@/lib/prefs"
 import { ProjectsProvider, useProjects } from "@/providers/projects"
 import { activeSessionId, sessionsOf } from "@/lib/session/sessions"
+import { usePanes } from "@/lib/session/use-panes"
 import {
   requestSessionIntent,
   requestWorktreeDialog,
@@ -91,6 +92,16 @@ function Layout() {
     }
   }, [dock])
   useHotkey(hotkeys.toggleDock, () => setDock((cur) => (cur ? null : lastTab.current)))
+  // A project of one session has nothing to put beside it, and switching panes
+  // with no second pane is not a thing to do: both decline rather than being
+  // swallowed for nothing, the rule every card shortcut above follows.
+  const panes = usePanes(projectId)
+  useHotkey(hotkeys.splitBeside, () => {
+    if (!panes.toggle()) {
+      return false
+    }
+  })
+  useHotkey(hotkeys.otherPane, () => panes.split && panes.focusOther())
   return (
     <div className="flex h-screen w-screen flex-col bg-background">
       <ProjectTabs />

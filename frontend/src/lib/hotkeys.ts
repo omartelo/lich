@@ -24,6 +24,8 @@ export type HotkeyId =
   | "prevProject"
   | "toggleSidebar"
   | "toggleDock"
+  | "splitBeside"
+  | "otherPane"
   | "settings"
   | "pulls"
   | "shortcuts"
@@ -171,6 +173,25 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
     label: "Toggle the right dock",
     group: "view",
     combo: { mod: true, shift: true, alt: false, key: "d" },
+  },
+  // O for "open beside", G for "go across". Both are letters on purpose: the
+  // family note above is measured for Ctrl+Shift+*letter*, and the chord this
+  // pair wants to spell — Ctrl+Shift+\, the editors' split — is not a letter, so
+  // whether xterm's mapping lets it through is a question nobody here has put to
+  // a `cat -v`. Two free letters that are certainly silent beat one that reads
+  // better and might arrive. J is the one to keep off: Chromium answers it with
+  // DevTools, which the --app window does open.
+  {
+    id: "splitBeside",
+    label: "Show a second session beside this one",
+    group: "view",
+    combo: { mod: true, shift: true, alt: false, key: "o" },
+  },
+  {
+    id: "otherPane",
+    label: "Focus the other pane",
+    group: "view",
+    combo: { mod: true, shift: true, alt: false, key: "g" },
   },
   {
     id: "commandPalette",

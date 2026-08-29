@@ -93,6 +93,13 @@ export interface TerminalViewProps {
   roster: readonly PaletteSession[]
   visible: boolean
   /**
+   * Whether this is the pane the keyboard belongs to. Split from `visible` by
+   * panes: two sessions paint at once, and exactly one of them owns the cursor,
+   * the Ctrl+F chord and everything else a keypress can reach. Without a split
+   * the two are the same boolean — one session is visible and it is focused.
+   */
+  focused: boolean
+  /**
    * Whether this session's PTY runs confined (internal/sandbox). Only the drop
    * reads it here: a confined session's home is an empty private one, so a file
    * dragged in from outside its checkout has to arrive as a copy.
@@ -130,6 +137,7 @@ export function TerminalView({
   resume,
   roster,
   visible,
+  focused,
   sandboxed,
   onClose,
   stillInWorkspace,
@@ -155,11 +163,13 @@ export function TerminalView({
   const carriedModesRef = useRef("")
   const replayRef = useRef(makeReplayBuffer())
   const visibleRef = useRef(visible)
+  const focusedRef = useRef(focused)
   const stillInWorkspaceRef = useRef(stillInWorkspace)
   const fontRef = useRef(font)
   const fontSizeRef = useRef(terminalFontSize)
   const themeRef = useRef(terminalColors)
   visibleRef.current = visible
+  focusedRef.current = focused
   stillInWorkspaceRef.current = stillInWorkspace
   fontRef.current = font
   fontSizeRef.current = terminalFontSize
@@ -492,10 +502,12 @@ export function TerminalView({
 
     // Ctrl+F must be caught in the window capture phase to beat Chromium's Find
     // accelerator in --app mode (the same pattern the zoom hotkeys use in
-    // settings.tsx); xterm's own key handler runs too late. Only the visible
-    // session's terminal claims it — one is visible at a time.
+    // settings.tsx); xterm's own key handler runs too late. Only the *focused*
+    // session's terminal claims it: a split paints two at once, and a chord this
+    // window swallows has to be answered by exactly one of them or the find box
+    // opens on a terminal nobody is typing into.
     const onSearchKey = (event: KeyboardEvent) => {
-      if (!visibleRef.current || !isSearchOpenChord(event)) {
+      if (!focusedRef.current || !isSearchOpenChord(event)) {
         return
       }
       const target = event.target as HTMLElement | null
@@ -627,7 +639,9 @@ export function TerminalView({
         void Service.Write(sessionId, paste)
       }
       if (visibleRef.current) {
-        live.term.focus()
+        if (focusedRef.current) {
+          live.term.focus()
+        }
       } else {
         // Navigated away while the font load was in flight: enter the hidden
         // state (serialize + destroy) and demote the backend session.
@@ -686,8 +700,21 @@ export function TerminalView({
       fitTerminal(live.term, containerRef.current)
     }
     void Service.Resize(sessionId, live.term.cols, live.term.rows)
-    live.term.focus()
+    if (focusedRef.current) {
+      live.term.focus()
+    }
   }, [visible, sessionId])
+
+  // Focus on its own, because it now moves without visibility: switching panes
+  // leaves both terminals painting and only changes which one has the cursor.
+  // Guarded on visible so the pass that runs while a session is hidden — every
+  // other project's, on every focus change — cannot pull the cursor into a
+  // terminal nobody can see.
+  useEffect(() => {
+    if (focused && visible) {
+      liveRef.current?.term.focus()
+    }
+  }, [focused, visible])
 
   // The sidebar writes a delegate request at this session's prompt and then
   // asks for the cursor back, so the user carries on typing where they already
