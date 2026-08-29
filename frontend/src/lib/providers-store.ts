@@ -1,7 +1,8 @@
 // Shared provider state: which providers are installed on the machine and which
 // the user enabled. Both the New Session menu and the Settings screen read it,
 // so a toggle in one place is reflected in the other without a refetch. Detection
-// runs once (providers.Detect); enabled flags are global settings ("1"/"0").
+// runs on first use and again on demand (providers.Detect, refresh); enabled
+// flags are global settings ("1"/"0").
 //
 // The store is a dependency-injected factory (its RPC calls are passed in) so it
 // is testable without React or the network, mirroring git-status-store. A module
@@ -9,7 +10,7 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react"
 import type { DetectedProvider } from "./api-types"
 import { Providers, Store } from "./rpc"
-import { PROVIDER_KINDS, type ProviderKind } from "@/lib/session/sessions"
+import { PROVIDER_KINDS, type ProviderKind, type SessionKind } from "@/lib/session/sessions"
 
 const GLOBAL_SCOPE = ""
 
@@ -191,6 +192,9 @@ export interface ProviderState {
   binary: string
   installed: boolean
   enabled: boolean
+  /** The page documenting how to install this CLI — offered on the rows that
+   * found nothing, which are the only rows that need it. */
+  docs: string
 }
 
 // enabledProviders are the ones offered in New Session. Not filtered by install
@@ -224,8 +228,40 @@ export function resolveProjectDefaultProvider(
   return chosen?.id ?? resolveDefaultProvider(list, globalDefaultId)
 }
 
+// noProviderInstalled reports the one machine state in which spawning the
+// resolved default is guaranteed to fail: detection has answered and found no
+// binary at all. An empty list is detection not having answered yet — never
+// this, exactly as in decideProviderSetup.
+export function noProviderInstalled(list: ProviderState[]): boolean {
+  return list.length > 0 && !list.some((provider) => provider.installed)
+}
+
+// resolveImplicitSessionKind is what a session nobody picked a kind for spawns:
+// the empty screen's button, the new-session hotkey, a new worktree. It is
+// resolveProjectDefaultProvider with one gate in front, because on a machine
+// with no agent installed every fallback below still lands on Claude — readEnabled
+// leaves Claude enabled by default, so the card opens on `claude: command not
+// found`. A shell spawns with zero providers, and it is where the install command
+// from the provider's docs link gets pasted.
+export function resolveImplicitSessionKind(
+  list: ProviderState[],
+  globalDefaultId: string,
+  projectDefaultId: string,
+): SessionKind {
+  if (noProviderInstalled(list)) {
+    return "shell"
+  }
+  return resolveProjectDefaultProvider(list, globalDefaultId, projectDefaultId)
+}
+
 function isProviderKind(id: string): id is ProviderKind {
   return (PROVIDER_KINDS as readonly string[]).includes(id)
+}
+
+// A provider the backend knows and this build does not is dropped rather than
+// carried as a kind nothing can spawn.
+function isDetectedKind(provider: DetectedProvider): boolean {
+  return isProviderKind(provider.id)
 }
 
 export interface ProvidersDeps {
@@ -245,6 +281,7 @@ export interface HydratedProjectDefault {
 export interface ProvidersStore {
   load: () => Promise<void>
   ensureLoaded: () => void
+  refresh: () => Promise<void>
   setEnabled: (id: ProviderKind, enabled: boolean) => void
   setDefault: (id: ProviderKind) => void
   hydrateProjectDefaults: (projects: readonly HydratedProjectDefault[]) => void
@@ -254,6 +291,7 @@ export interface ProvidersStore {
   getDefaultSnapshot: () => string
   getProjectDefaultSnapshot: (projectId: string) => string
   getProjectProviderKind: (projectId: string) => ProviderKind
+  getProjectSessionKind: (projectId: string) => SessionKind
 }
 
 class ProviderStoreImpl implements ProvidersStore {
@@ -288,6 +326,24 @@ class ProviderStoreImpl implements ProvidersStore {
   // ensureLoaded runs load once; a failed attempt resets so a later mount retries.
   ensureLoaded = (): void => {
     void this.load().catch(() => undefined)
+  }
+
+  // refresh re-probes PATH and nothing else: the enabled flags and the default
+  // stay as they are in memory, so a toggle the user just made cannot be undone
+  // by a settings read racing its own write. What it cannot see is a provider
+  // installed outside the PATH lich resolved at boot (docs/ceilings.md).
+  refresh = async (): Promise<void> => {
+    const detected = (await this.deps.detect()) ?? []
+    const enabled = new Map(this.providers.map((provider) => [provider.id, provider.enabled]))
+    this.providers = detected.filter(isDetectedKind).map((provider) => ({
+      id: provider.id as ProviderKind,
+      name: provider.name,
+      binary: provider.binary,
+      installed: provider.installed,
+      docs: provider.docs,
+      enabled: enabled.get(provider.id as ProviderKind) ?? readEnabled(provider.id, ""),
+    }))
+    this.emit()
   }
 
   setEnabled = (id: ProviderKind, enabled: boolean): void => {
@@ -332,6 +388,12 @@ class ProviderStoreImpl implements ProvidersStore {
       this.defaultId,
       this.getProjectDefaultSnapshot(projectId),
     )
+  getProjectSessionKind = (projectId: string): SessionKind =>
+    resolveImplicitSessionKind(
+      this.providers,
+      this.defaultId,
+      this.getProjectDefaultSnapshot(projectId),
+    )
 
   private async performLoad(): Promise<void> {
     const [detected, storedDefault] = await Promise.all([
@@ -339,15 +401,14 @@ class ProviderStoreImpl implements ProvidersStore {
       this.deps.getDefault(),
     ])
     this.providers = await Promise.all(
-      detected
-        .filter((provider) => isProviderKind(provider.id))
-        .map(async (provider) => ({
-          id: provider.id as ProviderKind,
-          name: provider.name,
-          binary: provider.binary,
-          installed: provider.installed,
-          enabled: readEnabled(provider.id, await this.deps.getEnabled(provider.id)),
-        })),
+      detected.filter(isDetectedKind).map(async (provider) => ({
+        id: provider.id as ProviderKind,
+        name: provider.name,
+        binary: provider.binary,
+        installed: provider.installed,
+        docs: provider.docs,
+        enabled: readEnabled(provider.id, await this.deps.getEnabled(provider.id)),
+      })),
     )
     this.defaultId = storedDefault
     this.state = "ready"
@@ -392,6 +453,13 @@ export function loadProviders(): Promise<void> {
   return store.load()
 }
 
+// refreshProviders re-probes PATH for the surfaces that offer it: the first-run
+// dialog and Settings › Providers. It lives here rather than in either caller so
+// both get the same answer without either owning the scan.
+export function refreshProviders(): Promise<void> {
+  return store.refresh()
+}
+
 // hydrateProjectProviderDefaults accepts the overrides delivered with workspace
 // state. It is synchronous so restoring projects never waits on provider
 // detection or performs one settings request per project.
@@ -408,6 +476,14 @@ export function setProjectProviderDefault(projectId: string, id: ProviderKind | 
 // disabled override delegates to the same global fallback rules.
 export function projectDefaultProviderKind(projectId: string): ProviderKind {
   return store.getProjectProviderKind(projectId)
+}
+
+// projectNewSessionKind is what an implicit new session spawns in this project.
+// Every implicit entry point routes through it — the empty screen, the hotkey, a
+// new worktree — so a machine with no agent installed opens a shell everywhere
+// rather than in whichever caller remembered to check.
+export function projectNewSessionKind(projectId: string): SessionKind {
+  return store.getProjectSessionKind(projectId)
 }
 
 // useProviders returns the known providers with their install + enabled state,
@@ -435,6 +511,14 @@ export function useDefaultProvider(): ProviderKind {
   const defaultId = useSyncExternalStore(store.subscribe, store.getDefaultSnapshot)
   useEffect(store.ensureLoaded, [])
   return resolveDefaultProvider(providers, defaultId)
+}
+
+// useNoProviderInstalled reports the machine with no agent on PATH, which is
+// what a surface offering an implicit session shows a terminal for.
+export function useNoProviderInstalled(): boolean {
+  const providers = useSyncExternalStore(store.subscribe, store.getSnapshot)
+  useEffect(store.ensureLoaded, [])
+  return noProviderInstalled(providers)
 }
 
 // useStoredProjectDefaultProvider returns the unresolved project value. Empty

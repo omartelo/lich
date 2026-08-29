@@ -10,7 +10,9 @@ import {
   footerReadout,
   footerReadoutPair,
   readEnabled,
+  noProviderInstalled,
   resolveDefaultProvider,
+  resolveImplicitSessionKind,
   resolveProjectDefaultProvider,
   sandboxDefaultFor,
   sandboxKey,
@@ -184,6 +186,7 @@ describe("enabledProviders", () => {
     binary: id,
     installed,
     enabled,
+    docs: `https://example.test/${id}`,
   })
 
   it("keeps enabled providers regardless of install state", () => {
@@ -200,6 +203,7 @@ describe("resolveDefaultProvider", () => {
     binary: id,
     installed: true,
     enabled,
+    docs: `https://example.test/${id}`,
   })
 
   it("uses the stored default when it names an enabled provider", () => {
@@ -225,6 +229,7 @@ describe("resolveProjectDefaultProvider", () => {
     binary: id,
     installed: true,
     enabled,
+    docs: `https://example.test/${id}`,
   })
 
   it("prefers an enabled project override to the global default", () => {
@@ -243,6 +248,51 @@ describe("resolveProjectDefaultProvider", () => {
   })
 })
 
+// The zero-agent machine: every fallback below still lands on Claude, so the
+// gate in front of them is what stops an implicit session opening on
+// `claude: command not found`.
+describe("noProviderInstalled / resolveImplicitSessionKind", () => {
+  const p = (id: string, installed: boolean, enabled: boolean): ProviderState => ({
+    id: id as ProviderState["id"],
+    name: id,
+    binary: id,
+    installed,
+    enabled,
+    docs: `https://example.test/${id}`,
+  })
+
+  it("reads an empty list as detection not having answered, never as a bare machine", () => {
+    expect(noProviderInstalled([])).toBe(false)
+    expect(resolveImplicitSessionKind([], "", "")).toBe("claude")
+  })
+
+  it("spots the machine with nothing on PATH", () => {
+    expect(noProviderInstalled([p("claude", false, true), p("codex", false, false)])).toBe(true)
+    expect(noProviderInstalled([p("claude", false, true), p("codex", true, false)])).toBe(false)
+  })
+
+  // Claude is enabled by default (readEnabled) even with no binary anywhere, so
+  // this is the exact list a first run on a bare machine produces.
+  it("spawns a shell when no provider is installed, whatever the stored default says", () => {
+    const bare = [p("claude", false, true), p("codex", false, false)]
+    expect(resolveImplicitSessionKind(bare, "", "")).toBe("shell")
+    expect(resolveImplicitSessionKind(bare, "claude", "codex")).toBe("shell")
+  })
+
+  it("defers to the project resolution the moment one provider is installed", () => {
+    const list = [p("claude", true, true), p("codex", true, true)]
+    expect(resolveImplicitSessionKind(list, "claude", "codex")).toBe("codex")
+    expect(resolveImplicitSessionKind(list, "codex", "")).toBe("codex")
+  })
+
+  // A custom binary path leaves installed=false on every row, so this machine
+  // gets a terminal it did not need. Deliberate, and in docs/ceilings.md.
+  it("still resolves the enabled provider once anything else is on PATH", () => {
+    const list = [p("claude", false, true), p("crush", true, false)]
+    expect(resolveImplicitSessionKind(list, "claude", "")).toBe("claude")
+  })
+})
+
 describe("createProvidersStore", () => {
   const detected: DetectedProvider[] = [
     {
@@ -251,10 +301,19 @@ describe("createProvidersStore", () => {
       binary: "claude",
       installed: true,
       path: "/usr/bin/claude",
+      docs: "https://code.claude.com/docs/en/setup",
     },
     // A binary that is not the id, which is what antigravity ships as.
-    { id: "codex", name: "Codex", binary: "cdx", installed: false, path: "" },
-    { id: "mystery", name: "Mystery", binary: "mystery", installed: true, path: "/x" }, // unknown id
+    {
+      id: "codex",
+      name: "Codex",
+      binary: "cdx",
+      installed: false,
+      path: "",
+      docs: "https://d/codex",
+    },
+    // unknown id
+    { id: "mystery", name: "Mystery", binary: "mystery", installed: true, path: "/x", docs: "" },
   ]
 
   function build(enabledValues: Record<string, string> = {}, defaultValue = "") {
@@ -323,6 +382,91 @@ describe("createProvidersStore", () => {
     store.ensureLoaded()
     await vi.waitFor(() => expect(store.getSnapshot().length).toBe(2))
     expect(detect).toHaveBeenCalledTimes(1)
+  })
+
+  it("carries each provider's install page onto the snapshot", async () => {
+    const { store } = build()
+    await store.load()
+    expect(store.getSnapshot().find((p) => p.id === "claude")?.docs).toBe(
+      "https://code.claude.com/docs/en/setup",
+    )
+  })
+
+  // The whole point of the button: a provider installed while lich is open shows
+  // up without a relaunch.
+  it("refresh re-probes PATH and notifies", async () => {
+    let probe: DetectedProvider[] = [
+      {
+        id: "claude",
+        name: "Claude Code",
+        binary: "claude",
+        installed: false,
+        path: "",
+        docs: "d",
+      },
+    ]
+    const store = createProvidersStore({
+      detect: async () => probe,
+      getEnabled: async () => "",
+      persistEnabled: vi.fn(),
+      getDefault: async () => "",
+      persistDefault: vi.fn(),
+      persistProjectDefault: vi.fn(),
+    })
+    await store.load()
+    expect(store.getSnapshot()[0].installed).toBe(false)
+
+    const seen = vi.fn()
+    store.subscribe(seen)
+    probe = [
+      {
+        id: "claude",
+        name: "Claude Code",
+        binary: "claude",
+        installed: true,
+        path: "/usr/bin/claude",
+        docs: "d",
+      },
+    ]
+    await store.refresh()
+    expect(store.getSnapshot()[0].installed).toBe(true)
+    expect(seen).toHaveBeenCalledTimes(1)
+  })
+
+  // A toggle persists through a fire-and-forget write, so re-reading the settings
+  // on every refresh would let a slow write flip the switch back under the user.
+  it("refresh keeps the enabled flags and the default it already has", async () => {
+    const getEnabled = vi.fn(async () => "")
+    const store = createProvidersStore({
+      detect: async () => detected,
+      getEnabled,
+      persistEnabled: vi.fn(),
+      getDefault: async () => "codex",
+      persistDefault: vi.fn(),
+      persistProjectDefault: vi.fn(),
+    })
+    await store.load()
+    store.setEnabled("codex", true)
+    const reads = getEnabled.mock.calls.length
+
+    await store.refresh()
+    expect(store.getSnapshot().find((p) => p.id === "codex")?.enabled).toBe(true)
+    expect(store.getDefaultSnapshot()).toBe("codex")
+    expect(getEnabled).toHaveBeenCalledTimes(reads)
+  })
+
+  it("refresh drops a provider id this build does not know", async () => {
+    const { store } = build()
+    await store.refresh()
+    expect(store.getSnapshot().map((p) => p.id)).toEqual(["claude", "codex"])
+  })
+
+  it("getProjectSessionKind falls to the shell only while nothing is installed", async () => {
+    const { store } = build({ claude: "1" })
+    await store.load()
+    // codex is the only not-installed row; claude is on PATH, so a project with
+    // no override gets the provider.
+    expect(store.getProjectSessionKind("proj")).toBe("claude")
   })
 
   it("loads the stored default provider", async () => {

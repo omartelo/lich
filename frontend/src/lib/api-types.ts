@@ -468,6 +468,9 @@ export interface DetectedProvider {
   binary: string
   installed: boolean
   path: string
+  /** The page documenting how to install this CLI. Carried on every entry: the
+   * row with somewhere to send the user is the one that found nothing. */
+  docs: string
 }
 
 /** internal/providers.Check — what a configured binary resolves to. `path` is

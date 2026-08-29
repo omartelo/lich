@@ -39,6 +39,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   says what that rung actually leaves running on your machine. Coming back down
   is written straight through, as is clicking the rung you are already on:
   turning an automation off must never be the harder direction.
+- **Installing a coding agent no longer means restarting lich.** lich looked for
+  the agents on your machine once, at launch, so installing one while lich was
+  open changed nothing until you closed everything and started again — and the
+  first-run screen for a machine with none said as much. **Settings › Providers**
+  and that screen now both carry **Check again**, which re-runs the search on the
+  spot. One limit stays: the search covers the directories your shell's `PATH`
+  had when lich started, so an agent installed somewhere new to it still needs a
+  relaunch, or its path typed into Settings › Providers.
+- **An agent lich cannot find now links to its own install page.** Every "Not
+  found on PATH" row in Settings › Providers, and every name on the no-agents
+  screen, opens the page that documents installing that CLI.
+- **A machine with no agent installed opens a terminal instead of a dead card.**
+  **New session** used to fall back to Claude Code whatever was installed, so on a
+  machine with no agent it opened a card that died on
+  `claude: command not found`. It now opens a shell — where the install command
+  from those links can be pasted — and says so before you press it.
 - **A project tab comes back to the screen you left it on.** Stepping over to
   another project and back always dropped you onto the first project's
   terminals, whatever you had been reading there: its Settings, the pull request

@@ -35,7 +35,7 @@ import { errorText } from "@/lib/utils"
 import {
   hydrateProjectProviderDefaults,
   loadProviders,
-  projectDefaultProviderKind,
+  projectNewSessionKind,
 } from "@/lib/providers-store"
 import { resolveNewSessionKind } from "@/lib/session/new-session-kind"
 import {
@@ -362,7 +362,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
   const newSession = useCallback((projectId: string, kind?: SessionKind, path = "") => {
     const sessionId = newSessionId()
-    const resolvedKind = resolveNewSessionKind(kind, projectDefaultProviderKind(projectId))
+    const resolvedKind = resolveNewSessionKind(kind, projectNewSessionKind(projectId))
     const next = addSession(sessionsRef.current, projectId, sessionId, resolvedKind, path)
     const project = next[projectId]
     const created = project.sessions[project.sessions.length - 1]
@@ -376,7 +376,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const newWorktreeSession = useCallback(
     (projectId: string, wt: { name: string; path: string }, sandbox = "") => {
       const sessionId = newSessionId()
-      const kind = projectDefaultProviderKind(projectId)
+      const kind = projectNewSessionKind(projectId)
       const next = addSession(sessionsRef.current, projectId, sessionId, kind, wt.path, wt.name)
       const project = next[projectId]
       const created = project.sessions[project.sessions.length - 1]
