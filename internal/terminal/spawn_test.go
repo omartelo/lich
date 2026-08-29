@@ -66,7 +66,7 @@ func TestTheSetupMarkerSurvivesASplitRead(t *testing.T) {
 	svc.mu.Unlock()
 
 	head, tail := setupDone[:8], setupDone[8:]
-	svc.noteOutput(sess, []byte("added 551 packages"+head))
+	svc.noteOutput("s1", sess, []byte("added 551 packages"+head))
 	svc.mu.Lock()
 	stillSettingUp := sess.settingUp
 	svc.mu.Unlock()
@@ -74,7 +74,7 @@ func TestTheSetupMarkerSurvivesASplitRead(t *testing.T) {
 		t.Fatal("half a marker ended the setup")
 	}
 
-	svc.noteOutput(sess, []byte(tail+"\x1b[?25l"))
+	svc.noteOutput("s1", sess, []byte(tail+"\x1b[?25l"))
 
 	svc.mu.Lock()
 	defer svc.mu.Unlock()
@@ -91,7 +91,7 @@ func TestAPartialMarkerNeverEndsTheSetup(t *testing.T) {
 	sess := &session{settingUp: true}
 
 	for range 3 {
-		svc.noteOutput(sess, []byte(setupDone[:len(setupDone)-1]))
+		svc.noteOutput("s1", sess, []byte(setupDone[:len(setupDone)-1]))
 	}
 
 	svc.mu.Lock()

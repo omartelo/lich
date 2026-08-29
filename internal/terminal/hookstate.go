@@ -51,6 +51,15 @@ func (l *turnLog) report(id, state string) bool {
 	return true
 }
 
+// busy reports whether a turn is open in this session right now — the provider's
+// own word for "the agent is working", which is what qualifies its output as
+// work rather than as a program repainting (see Service.noteOutput).
+func (l *turnLog) busy(id string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.open[id]
+}
+
 // forget drops a session's turn, so a PTY respawned under the same id is read
 // against its own reports rather than against those of the provider that left.
 func (l *turnLog) forget(id string) {

@@ -108,6 +108,10 @@ func main() {
 	// listener yet (the window is still starting) and the event is dropped.
 	hub := events.New()
 	term := terminal.New(db, env, hub)
+	// After db's own defer, so it runs before the database closes: what every
+	// session was worked in this run is still in memory until something writes
+	// it (internal/terminal.handsOn).
+	defer term.FlushHandsOn()
 	proj := project.New(project.ZenityPicker{})
 	// gh has one active account per host; a project can name a different one.
 	proj.SetAccounts(db.GHAccountForPath)

@@ -99,6 +99,15 @@ CREATE TABLE IF NOT EXISTS session_costs (
     cost_usd        REAL NOT NULL DEFAULT 0,
     PRIMARY KEY (session_id, transcript_id)
 );
+
+CREATE TABLE IF NOT EXISTS session_hands_on (
+    session_id TEXT NOT NULL PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+    -- Whole seconds this session has been worked on, summed across every run of
+    -- lich it has survived. Seconds rather than a finer unit because the readout
+    -- is minutes: the accumulator keeps the sub-second remainder in memory and
+    -- only ever hands whole seconds down (internal/terminal.handsOn).
+    seconds    INTEGER NOT NULL DEFAULT 0
+);
 `
 
 // busyTimeoutMS is how long a write waits on SQLite's lock before failing.

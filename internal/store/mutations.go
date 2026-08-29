@@ -305,6 +305,14 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		if err != nil {
 			return err
 		}
+		// Hands-on time rides along for the same reason, one row over: the work
+		// this session was worked through is the user's, and a resume that
+		// dropped it would restart the clock on a session they have been at all
+		// day.
+		handsOn, err := handsOnOf(tx, old.ID)
+		if err != nil {
+			return err
+		}
 		if _, err := tx.Exec(`DELETE FROM sessions WHERE id = ?`, old.ID); err != nil {
 			return fmt.Errorf("drop parked session %q: %w", old.ID, err)
 		}
@@ -322,6 +330,9 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 			return fmt.Errorf("reinsert session %q: %w", newSessionID, err)
 		}
 		if err := restoreCostLedgers(tx, newSessionID, ledgers); err != nil {
+			return err
+		}
+		if err := restoreHandsOn(tx, newSessionID, handsOn); err != nil {
 			return err
 		}
 		if err := setActiveSession(tx, projectID, newSessionID); err != nil {
