@@ -102,14 +102,25 @@ func TestResolveRefusesALinkOutOfTheTree(t *testing.T) {
 // TestResolveFollowsALinkInsideTheTree proves the refusal is about leaving, not
 // about links: a checkout that ships one (this repository's own AGENTS.md is a
 // link to CLAUDE.md) still reads.
+//
+// It asserts the bytes at the returned path rather than the path's spelling,
+// because the spelling is exactly what Resolve is entitled to change: what it
+// promises is the REAL path, and every runner spells that differently from the
+// root it was handed — macOS resolves /var to /private/var, and Windows expands
+// the 8.3 short name (RUNNER~1) to runneradmin. Pinning the string asserted
+// something the contract never promised, and passed only on Linux.
 func TestResolveFollowsALinkInsideTheTree(t *testing.T) {
 	root, _ := linkTree(t)
 	got, err := Resolve(root, "inside.txt")
 	if err != nil {
 		t.Fatalf("Resolve(inside.txt): %v", err)
 	}
-	if want := filepath.Join(root, "real.txt"); got != want {
-		t.Errorf("Resolve(inside.txt) = %q, want %q", got, want)
+	content, err := os.ReadFile(got)
+	if err != nil {
+		t.Fatalf("read the resolved path %q: %v", got, err)
+	}
+	if want := "the repository's\n"; string(content) != want {
+		t.Errorf("Resolve(inside.txt) landed on %q holding %q, want %q", got, content, want)
 	}
 }
 
