@@ -25,8 +25,11 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   percentage, and Antigravity and Cursor CLI file their conversations as SQLite rather than as a transcript lich
   reads at all.
   Their footer therefore carries no model or context ring. Codex rollouts carry the effective window
-  selected for that session — 95% of its default or configured `model_context_window` — but no API-cost
-  accounting, so its setting stops at model and context while Claude Code alone offers the cost rung.
+  selected for that session — 95% of its default or configured `model_context_window` — and, since
+  `total_token_usage` is a running total lich prices from its last line, the cost rung too. But
+  `internal/pricing/prices.json` is baked with Claude models only, so a Codex model prices only after the
+  remote LiteLLM refresh (`internal/pricing/pricing.go`) — an offline machine never shows a Codex cost, and
+  a model LiteLLM has not priced either never will.
 - **Hands-on time is read off three signals, and one of them is not universal**
   (`internal/terminal/handson.go`, `noteOutput`, `closableState`): the figure beside the cost
   counts the gap between consecutive signs of life in a session — a session-state report, a
