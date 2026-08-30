@@ -98,6 +98,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   machine with no agent it opened a card that died on
   `claude: command not found`. It now opens a shell — where the install command
   from those links can be pasted — and says so before you press it.
+- **The new worktree can be named in plain words.** The name field only ever
+  took a branch name: anything with a space in it was refused as invalid, so
+  naming the work meant inventing the hyphens yourself, and leaving the field
+  blank handed the branch a name like `calm-glacier` — which is fine until it
+  is the name on a pull request, and renaming a branch after the PR is open
+  closes the PR. Type what the work is instead — `fix the auth redirect` — and
+  the branch becomes `fix-the-auth-redirect`, shown under the field before
+  anything is created. A name git already accepts is still used exactly as
+  typed, and a blank field still auto-generates one.
 - **A project tab comes back to the screen you left it on.** Stepping over to
   another project and back always dropped you onto the first project's
   terminals, whatever you had been reading there: its Settings, the pull request
