@@ -1,12 +1,7 @@
 import { useState } from "react"
 import type { ComponentPropsWithoutRef, KeyboardEvent } from "react"
-import { ChevronRight, Pencil, Plus, Ungroup } from "lucide-react"
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu"
+import { ChevronRight, MoreHorizontal, Pencil, Plus, Ungroup } from "lucide-react"
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -116,9 +111,14 @@ export function SessionGroupHeader({
     }
   }
 
-  if (editing) {
-    return (
-      <div className="flex items-center gap-1 px-1 pb-0.5 pt-1.5">
+  return (
+    <div className="flex items-center gap-1 px-1 pb-0.5 pt-1.5">
+      {/* Only the title swaps for the field. Replacing the whole header would
+          unmount the menu the rename was chosen from, and the menu restores
+          focus to a trigger that is no longer there — which lands on the fresh
+          input as a blur, commits the name unchanged, and reads as a rename that
+          does nothing. */}
+      {editing ? (
         <input
           // biome-ignore lint/a11y/noAutofocus: the field replaces the title only once renaming starts.
           autoFocus
@@ -127,22 +127,18 @@ export function SessionGroupHeader({
           onFocus={(event) => event.currentTarget.select()}
           onKeyDown={onEditKeyDown}
           onBlur={(event) => commit(event.currentTarget.value)}
-          className="w-full rounded-sm bg-transparent px-1 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider text-foreground outline-none ring-1 ring-accent-foreground/30"
+          className="min-w-0 flex-1 rounded-sm bg-transparent px-1 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider text-foreground outline-none ring-1 ring-accent-foreground/30"
         />
-      </div>
-    )
-  }
-
-  const header = (
-    <div className="flex items-center gap-1 px-1 pb-0.5 pt-1.5">
-      <SessionGroupTitleButton
-        name={name}
-        fixed={fixed}
-        collapsed={collapsed}
-        activatorRef={activatorRef}
-        activatorProps={activatorProps}
-        onClick={() => !isDragging && onToggle()}
-      />
+      ) : (
+        <SessionGroupTitleButton
+          name={name}
+          fixed={fixed}
+          collapsed={collapsed}
+          activatorRef={activatorRef}
+          activatorProps={activatorProps}
+          onClick={() => !isDragging && onToggle()}
+        />
+      )}
       {launch && (
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -161,31 +157,35 @@ export function SessionGroupHeader({
           </DropdownMenuContent>
         </DropdownMenu>
       )}
+      {/* A wall is the only block with anything to say about itself, and it says
+          it through a button rather than a right-click: the block beside it
+          carries a visible + for its own action, so a menu reachable only by
+          right-click is one nobody finds. */}
+      {(onRename || onDissolve) && (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label={`Options for ${name}`}
+            title={`Options for ${name}`}
+            render={<Button variant="ghost" size="icon-xs" />}
+          >
+            <MoreHorizontal />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {onRename && (
+              <DropdownMenuItem onClick={() => setEditing(true)}>
+                <Pencil />
+                Rename group
+              </DropdownMenuItem>
+            )}
+            {onDissolve && (
+              <DropdownMenuItem onClick={onDissolve}>
+                <Ungroup />
+                Ungroup
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </div>
-  )
-
-  // A wall is the only block with anything to say about itself. The others get
-  // no menu rather than an empty one.
-  if (!onRename && !onDissolve) {
-    return header
-  }
-  return (
-    <ContextMenu>
-      <ContextMenuTrigger render={<div />}>{header}</ContextMenuTrigger>
-      <ContextMenuContent>
-        {onRename && (
-          <ContextMenuItem onClick={() => setEditing(true)}>
-            <Pencil />
-            Rename group
-          </ContextMenuItem>
-        )}
-        {onDissolve && (
-          <ContextMenuItem onClick={onDissolve}>
-            <Ungroup />
-            Ungroup
-          </ContextMenuItem>
-        )}
-      </ContextMenuContent>
-    </ContextMenu>
   )
 }
