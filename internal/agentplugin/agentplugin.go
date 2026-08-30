@@ -58,6 +58,10 @@ const (
 	// prompt behind a CLI that never answers.
 	cmdTimeout  = 130 * time.Second
 	readTimeout = 10 * time.Second
+	// waitDelay is how long past the CLI's own exit Wait may still block on
+	// anything the CLI left running on its output pipe. Without it the timeouts
+	// above bound the CLI and not the call — see internal/project's waitDelay.
+	waitDelay   = 2 * time.Second
 	httpTimeout = 5 * time.Second
 )
 
@@ -350,6 +354,7 @@ func (s *Service) exec(provider string, timeout time.Duration, args ...string) (
 	defer cancel()
 	cmd := exec.CommandContext(ctx, s.bin(provider), args...)
 	winexec.Hide(cmd)
+	cmd.WaitDelay = waitDelay
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

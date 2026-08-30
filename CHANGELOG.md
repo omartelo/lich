@@ -164,6 +164,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   picked up never gained the version manager's Node or the CLIs installed under
   it. Providers under a version manager now show up in Settings › Providers on
   the first check.
+- **A git or gh call can no longer wait forever on a question nobody sees.**
+  Started from a terminal, lich hands that terminal to every git and gh it runs,
+  so a call that stops to ask for a username asks there — behind the window,
+  with nobody reading it — and the screen waiting on that read never gets an
+  answer. Neither is allowed to ask now: the call fails and says so. A
+  credential helper or an askpass program still answers as before, which is how
+  a machine set up for this answers with nobody typing.
+- **A call that runs out of time comes back.** The deadline on every call lich
+  makes to the network — eight seconds to read a pull request, ninety to check
+  one out — bounded the command and not the call: anything git or gh left
+  running behind it held the output pipe open, and lich went on waiting for as
+  long as that process lived, deadline or none. The deadline now ends the call
+  itself.
 
 ## [0.42.0] - 2026-08-27
 

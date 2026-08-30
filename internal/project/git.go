@@ -3,27 +3,66 @@ package project
 import (
 	"bytes"
 	"context"
+	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/omartelo/lich/internal/winexec"
 )
 
-// command builds an exec.Cmd for a child console tool (git, gh) with its
-// console window suppressed on Windows — lich's GUI-subsystem binary would
-// otherwise pop one per spawn (winexec.Hide). Used across this package instead
-// of exec.Command so no call site can forget it.
+// waitDelay caps how long a call keeps this process after the child itself is
+// gone. A pipe reaches EOF only when its last writer closes it, so a grandchild
+// that inherited the child's stdout keeps Wait blocked long after the child and
+// its deadline are gone: the context kills the child it named and the call waits
+// on regardless — a budget of 200ms measured at ten seconds, reporting success.
+// WaitDelay ends that wait: the pipes are closed and Wait reports
+// exec.ErrWaitDelay.
+//
+// Nothing here is known to do it. The three that come to mind — an ssh
+// ControlMaster left alive by a fetch, git's credential cache daemon, the
+// gc --auto git detaches — were each measured still running after their call
+// returned at once, because openssh and git both hand back stdio before they
+// detach. This holds the budget against one that does not.
+//
+// Two seconds is generous because the clock only starts once the child is dead,
+// where draining what is left in a pipe takes microseconds.
+const waitDelay = 2 * time.Second
+
+// noPromptEnv is what keeps a child from stopping on a question nobody will
+// answer. Started from a terminal, lich inherits it and hands it to every child
+// here, so a git that stops to ask for a username asks *there* — behind the
+// window, where the answer never comes: measured, git waits at that prompt until
+// it is killed, and fails on its own in a second and a half with this set. The
+// calls that take no context have no budget to end the wait for them.
+//
+// The terminal prompt alone: a credential helper and an askpass program still
+// answer, and those are how a machine set up for this answers with nobody at the
+// keyboard.
+var noPromptEnv = []string{"GIT_TERMINAL_PROMPT=0", "GH_PROMPT_DISABLED=1"}
+
+// command builds an exec.Cmd for a child console tool (git, gh). Used across
+// this package instead of exec.Command so no call site can forget what prepare
+// applies.
 func command(name string, args ...string) *exec.Cmd {
-	cmd := exec.Command(name, args...)
-	winexec.Hide(cmd)
-	return cmd
+	return prepare(exec.Command(name, args...))
 }
 
 // commandContext is command for a call that must be killed if it outlives ctx —
 // anything reaching the network, where "slow" has no upper bound.
 func commandContext(ctx context.Context, name string, args ...string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, name, args...)
+	return prepare(exec.CommandContext(ctx, name, args...))
+}
+
+// prepare applies what every child of this package gets: no console window on
+// Windows, which lich's GUI-subsystem binary would otherwise pop one of per
+// spawn (winexec.Hide); no wait on a grandchild (waitDelay); no prompt
+// (noPromptEnv). A call site with a variable of its own appends to cmd.Env —
+// assigning over it drops these.
+func prepare(cmd *exec.Cmd) *exec.Cmd {
 	winexec.Hide(cmd)
+	cmd.WaitDelay = waitDelay
+	cmd.Env = append(os.Environ(), noPromptEnv...)
 	return cmd
 }
 

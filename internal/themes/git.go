@@ -18,7 +18,11 @@ import (
 )
 
 const (
-	cloneTimeout     = 90 * time.Second
+	cloneTimeout = 90 * time.Second
+	// cloneWait is how long past git's own exit the clone may still block on
+	// anything git left running on its output pipe. Without it cloneTimeout
+	// bounds git and not the call — see internal/project's waitDelay.
+	cloneWait        = 2 * time.Second
 	remoteMaxLength  = 512
 	maxThemesPerPack = 32
 )
@@ -187,6 +191,7 @@ func clone(ctx context.Context, url, dir string) error {
 		"SSH_ASKPASS=",
 		"GCM_INTERACTIVE=never",
 	)
+	cmd.WaitDelay = cloneWait
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		if ctx.Err() != nil {
