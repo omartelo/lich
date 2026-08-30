@@ -265,8 +265,12 @@ func TestCreateWorktreeExistingBranch(t *testing.T) {
 	}
 }
 
-// TestCreateWorktreeRemoteBase proves a remote base is fetched and the new
-// branch tracks it.
+// TestCreateWorktreeRemoteBase proves a remote base is fetched, the new branch
+// starts at that remote ref, and it is left with no upstream — the base is
+// where the work starts, not what it merges with. Tracking the base would make
+// a plain `git pull` in the session's terminal merge the base into the work,
+// and `git status` read the work as "ahead of origin/feature"; which upstream
+// the branch gets belongs to its first push.
 func TestCreateWorktreeRemoteBase(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	repo, git := initRepo(t)
@@ -277,12 +281,86 @@ func TestCreateWorktreeRemoteBase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateWorktree(remote base): %v", err)
 	}
-	upstream, err := runGit(wt.Path, "rev-parse", "--abbrev-ref", "@{u}")
-	if err != nil {
-		t.Fatalf("rev-parse @{u}: %v", err)
+	if out, ok := gitQuiet(wt.Path, "rev-parse", "--abbrev-ref", "@{u}"); ok {
+		t.Errorf("upstream = %q, want none", strings.TrimSpace(out))
 	}
-	if got := strings.TrimSpace(upstream); got != "origin/feature" {
-		t.Errorf("upstream = %q, want origin/feature", got)
+	head, err := runGit(wt.Path, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("rev-parse HEAD: %v", err)
+	}
+	base, err := runGit(repo, "rev-parse", "refs/remotes/origin/feature")
+	if err != nil {
+		t.Fatalf("rev-parse origin/feature: %v", err)
+	}
+	if strings.TrimSpace(head) != strings.TrimSpace(base) {
+		t.Errorf("worktree HEAD = %s, want origin/feature at %s", strings.TrimSpace(head), strings.TrimSpace(base))
+	}
+}
+
+// TestCreateWorktreeRemoteBaseAmbiguousName proves the base is resolved as a
+// full refname. A repository may hold a local branch literally called
+// "origin/feature", and the shorthand then names two refs at once: git refuses
+// the whole worktree add with "ambiguous object name", which reaches the screen
+// as lich's generic "could not complete the operation" and leaves the person
+// with a base they picked from lich's own list and no way to use it.
+func TestCreateWorktreeRemoteBaseAmbiguousName(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	repo, git := initRepo(t)
+	addLocalOrigin(t, git)
+	// A second commit gives the decoy a different tip from the remote branch's,
+	// so resolving to the wrong one shows up as a different HEAD.
+	if err := os.WriteFile(filepath.Join(repo, "a.txt"), []byte("two\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git("commit", "-am", "second")
+	git("branch", "origin/feature", "HEAD")
+
+	svc := New(nil)
+	wt, err := svc.CreateWorktree(repo, "pid", "from-remote", "origin/feature", true)
+	if err != nil {
+		t.Fatalf("CreateWorktree(remote base): %v", err)
+	}
+	head, err := runGit(wt.Path, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("rev-parse HEAD: %v", err)
+	}
+	want, err := runGit(repo, "rev-parse", "refs/remotes/origin/feature")
+	if err != nil {
+		t.Fatalf("rev-parse refs/remotes/origin/feature: %v", err)
+	}
+	if strings.TrimSpace(head) != strings.TrimSpace(want) {
+		t.Errorf("worktree HEAD = %s, want the remote ref at %s (the local decoy branch won)",
+			strings.TrimSpace(head), strings.TrimSpace(want))
+	}
+}
+
+// TestCreateWorktreeRemoteBaseNotFetched proves the guard is the ref, not git's
+// exit status. With the remote's refspec narrowed to one branch — what a
+// --single-branch clone or `remote add -t` leaves behind — `git fetch origin --
+// feature` writes the branch to FETCH_HEAD and exits 0 without ever creating
+// refs/remotes/origin/feature. The refusal has to name that ref: leaving it to
+// `worktree add` gets the person a derived "invalid reference" that says
+// nothing about the narrowed refspec that caused it.
+func TestCreateWorktreeRemoteBaseNotFetched(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	repo, git := initRepo(t)
+	origin, originGit := initRepo(t)
+	originGit("branch", "feature")
+	// -t main is the narrowed refspec: origin/feature is reachable to fetch and
+	// never written to refs/remotes.
+	git("remote", "add", "-t", "main", "origin", origin)
+	git("fetch", "origin")
+
+	svc := New(nil)
+	_, err := svc.CreateWorktree(repo, "pid", "from-remote", "origin/feature", true)
+	if err == nil {
+		t.Fatal("CreateWorktree(unfetchable remote base) = nil error, want a refusal")
+	}
+	if !strings.Contains(err.Error(), "refs/remotes/origin/feature") {
+		t.Errorf("error = %q, want it to name refs/remotes/origin/feature", err)
+	}
+	if strings.Contains(err.Error(), "invalid reference") {
+		t.Errorf("error = %q, want lich's own refusal, not worktree add's derived one", err)
 	}
 }
 

@@ -122,6 +122,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A worktree on a remote base no longer hangs, misreports, or takes your
+  upstream.** Three faults in the one step that fetches the base before the
+  checkout. The fetch is the only part of creating a worktree that touches the
+  network, and it ran with no time limit and no way to refuse a prompt: a remote
+  that wanted a password or an ssh key passphrase left the dialog waiting for an
+  answer nobody could give it, for as long as lich stayed open. It now gives up
+  after a minute and says so, and never waits on a prompt in the first place.
+  The new branch was also made to track the base, so a plain `git pull` in the
+  session's terminal merged the base branch into the work and `git status` read
+  the work as "ahead of origin/main" — the branch is now left with no upstream,
+  which is the first push's to set. And a repository that only tracks some of
+  its remote's branches — anything cloned with `--single-branch`, or a remote
+  added with `-t` — lets that fetch report success while writing no branch ref
+  at all; the checkout then failed with "git could not complete the operation",
+  which named nothing you could act on. lich now checks the ref itself and says
+  which one the repository does not keep. A base is also resolved by its full
+  ref now, so a repository that happens to carry a local branch named
+  `origin/main` no longer makes every remote base ambiguous and unusable.
 - **A worktree you made yourself is never deleted by lich.** git lists every
   worktree of a repository, so one you created by hand shows up in lich's picker
   and hosts a session like any other — and closing that session used to offer to
