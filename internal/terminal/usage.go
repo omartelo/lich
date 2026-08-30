@@ -86,10 +86,13 @@ func contextUsageFor(providerSessionID string) (contextUsage, bool) {
 // table knows — see scanTranscriptCost for why an unpriced line stops the count
 // instead of being skipped.
 //
-// A conversation is more than one file: what its sub-agents spent is billed to
-// the same account and written to transcripts of their own, so each is counted
-// into the same session. One of them falling short withholds the whole number,
-// for the same reason a single unpriced line does.
+// Routed by provider the way contextUsageFor is: a Claude transcript is more
+// than one file — what its sub-agents spent is billed to the same account and
+// written to transcripts of their own, so each is counted into the same
+// session, and one of them falling short withholds the whole number, for the
+// same reason a single unpriced line does. A Codex rollout has no sub-agent
+// files and reports its own running total, so countCodexTranscript prices it
+// whole rather than walking a ledger.
 //
 // The accounting is persisted per transcript, so it survives both a `/clear`
 // (a new conversation under the same session, counted into its own row) and a
@@ -98,17 +101,21 @@ func (s *Service) sessionCost(id, providerSessionID string) (float64, bool) {
 	if s.prices == nil || !s.store.CostReadout() {
 		return 0, false
 	}
-	path, ok := claudeTranscriptPath(providerSessionID)
-	if !ok {
-		return 0, false
-	}
-	if !s.countTranscript(id, providerSessionID, path) {
-		return 0, false
-	}
-	for _, sub := range claudeSubagentPaths(providerSessionID) {
-		if !s.countTranscript(id, providerSessionID+"/"+filepath.Base(sub), sub) {
+	if path, ok := claudeTranscriptPath(providerSessionID); ok {
+		if !s.countTranscript(id, providerSessionID, path) {
 			return 0, false
 		}
+		for _, sub := range claudeSubagentPaths(providerSessionID) {
+			if !s.countTranscript(id, providerSessionID+"/"+filepath.Base(sub), sub) {
+				return 0, false
+			}
+		}
+	} else if path, ok := codexTranscriptPath(providerSessionID); ok {
+		if !s.countCodexTranscript(id, providerSessionID, path) {
+			return 0, false
+		}
+	} else {
+		return 0, false
 	}
 	total, err := s.store.SessionCost(id)
 	if err != nil {
@@ -116,6 +123,22 @@ func (s *Service) sessionCost(id, providerSessionID string) (float64, bool) {
 		return 0, false
 	}
 	return total, true
+}
+
+// countCodexTranscript folds one Codex rollout's cost into the session's
+// ledger. Unlike countTranscript's per-turn deltas, total_token_usage is
+// already the conversation's running total, so there is no offset to resume
+// from: each call prices the rollout whole and overwrites the stored row.
+func (s *Service) countCodexTranscript(id, transcriptID, path string) bool {
+	cost, ok := codexTranscriptCost(path, s.prices)
+	if !ok {
+		return false
+	}
+	if err := s.store.SaveCostLedger(id, transcriptID, 0, "", cost); err != nil {
+		slog.Warn("terminal: save cost ledger", "session", id, "err", err)
+		return false
+	}
+	return true
 }
 
 // countTranscript folds one transcript into the session's ledger, resuming from

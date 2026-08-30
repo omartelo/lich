@@ -40,6 +40,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   session, so it survives a restart of lich and a parked worktree's resume, and
   every provider that reports a state counts a turn you were not watching. Crush
   reports none, so its sessions count what you typed and no more.
+- **Codex sessions get the same cost readout Claude Code has.** The footer's
+  "And cost" rung, and the spend-ceiling colour beside it, were Claude Code
+  only — Codex's Settings pane didn't even offer the option. A Codex rollout
+  reports its running token total on every turn, and lich now prices that the
+  same way it prices a Claude transcript: the number stays absent, never
+  guessed, until the model it ran is one lich's price table knows.
 
 ### Changed
 

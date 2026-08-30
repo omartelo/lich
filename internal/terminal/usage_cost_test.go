@@ -456,3 +456,144 @@ func nearly(got, want float64) bool {
 	diff := got - want
 	return diff < 1e-9 && diff > -1e-9
 }
+
+// codexTestRate prices the one model the Codex cost tests use, with a
+// distinct rate per counter so a total billed at the wrong one is visible.
+var codexTestRate = fixedRates{
+	"gpt-5.1-codex": {Input: 0.001, Output: 0.01, CacheRead: 0.0005, CacheWrite: 0.002},
+}
+
+// codexTokenLineJSON renders the token_count record a Codex rollout writes:
+// the cumulative total the whole conversation stands at so far, not a delta.
+// last_token_usage and model_context_window ride along beside it in a real
+// rollout, so sessionUsage's context-window read (which needs those two) is
+// satisfied by the same line the cost tests use.
+func codexTokenLineJSON(input, cached, cacheWrite, output int) string {
+	total := input + output
+	return `{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{` +
+		`"input_tokens":` + itoa(input) +
+		`,"cached_input_tokens":` + itoa(cached) +
+		`,"cache_write_input_tokens":` + itoa(cacheWrite) +
+		`,"output_tokens":` + itoa(output) +
+		`,"reasoning_output_tokens":0,"total_tokens":` + itoa(total) + `}` +
+		`,"last_token_usage":{"total_tokens":` + itoa(total) + `}` +
+		`,"model_context_window":258400}}}`
+}
+
+func codexTurnContextJSON(model string) string {
+	return `{"type":"turn_context","payload":{"model":"` + model + `"}}`
+}
+
+// TestCodexTranscriptCostPricesTheRunningTotal is the shape a Codex rollout
+// reports: turn_context (the model) precedes the token_count line that closes
+// the turn, and cached_input_tokens is a subset of input_tokens, so only the
+// uncached share prices at the input rate — summing both would double-count.
+func TestCodexTranscriptCostPricesTheRunningTotal(t *testing.T) {
+	path := writeFile(t,
+		codexTurnContextJSON("gpt-5.1-codex")+"\n"+codexTokenLineJSON(1000, 400, 0, 10)+"\n")
+
+	cost, ok := codexTranscriptCost(path, codexTestRate)
+
+	if !ok {
+		t.Fatal("codexTranscriptCost: want ok")
+	}
+	want := 600*0.001 + 400*0.0005 + 10*0.01
+	if !nearly(cost, want) {
+		t.Errorf("cost = %v, want %v", cost, want)
+	}
+}
+
+// TestCodexTranscriptCostIsCumulativeNotSummed pins the difference from a
+// Claude transcript: a rollout's second token_count line is the conversation's
+// whole new total, not a delta to add to the first, so only the last one read
+// backward from the end may count.
+func TestCodexTranscriptCostIsCumulativeNotSummed(t *testing.T) {
+	path := writeFile(t,
+		codexTurnContextJSON("gpt-5.1-codex")+"\n"+
+			codexTokenLineJSON(500, 0, 0, 5)+"\n"+
+			codexTurnContextJSON("gpt-5.1-codex")+"\n"+
+			codexTokenLineJSON(1000, 400, 0, 10)+"\n")
+
+	cost, ok := codexTranscriptCost(path, codexTestRate)
+
+	if !ok {
+		t.Fatal("codexTranscriptCost: want ok")
+	}
+	want := 600*0.001 + 400*0.0005 + 10*0.01
+	if !nearly(cost, want) {
+		t.Errorf("cost = %v, want %v — only the last (cumulative) line counts", cost, want)
+	}
+}
+
+// TestCodexTranscriptCostWithholdsForAnUnpricedModel carries the money rule
+// over from the Claude scan: a model nothing can price yields no number,
+// never a guess.
+func TestCodexTranscriptCostWithholdsForAnUnpricedModel(t *testing.T) {
+	path := writeFile(t,
+		codexTurnContextJSON("model-from-the-future")+"\n"+codexTokenLineJSON(1000, 0, 0, 10)+"\n")
+
+	if _, ok := codexTranscriptCost(path, codexTestRate); ok {
+		t.Error("codexTranscriptCost: want a miss for an unpriced model")
+	}
+}
+
+func TestCodexTranscriptCostMissesWithoutATokenLine(t *testing.T) {
+	path := writeFile(t, codexTurnContextJSON("gpt-5.1-codex")+"\n")
+
+	if _, ok := codexTranscriptCost(path, codexTestRate); ok {
+		t.Error("codexTranscriptCost: want a miss with no token_count line")
+	}
+}
+
+// TestSessionCostRidesOnTheUsageEventForCodex is the end-to-end wiring for the
+// provider sessionCost routes to when a Claude transcript is not the one that
+// matches — a Codex rollout, priced from its own cumulative total.
+func TestSessionCostRidesOnTheUsageEventForCodex(t *testing.T) {
+	writeCodexTranscript(t, "uuid-codex-cost",
+		codexTurnContextJSON("gpt-5.1-codex")+"\n"+codexTokenLineJSON(1000, 400, 0, 10)+"\n")
+	svc := New(newCostStore("uuid-codex-cost"), nil, events.New())
+	svc.prices = codexTestRate
+
+	got, ok := svc.sessionUsage("s1")
+
+	if !ok {
+		t.Fatal("sessionUsage: want ok")
+	}
+	if got.CostUSD == nil {
+		t.Fatal("CostUSD is absent, want the session's cost")
+	}
+	want := 600*0.001 + 400*0.0005 + 10*0.01
+	if !nearly(*got.CostUSD, want) {
+		t.Errorf("CostUSD = %v, want %v", *got.CostUSD, want)
+	}
+}
+
+// TestCodexCostAccumulatesAcrossConversations is the Codex side of the
+// `/clear` case: a Codex rollout is replaced by a new one under the same
+// session, and the session keeps what the previous rollout cost.
+func TestCodexCostAccumulatesAcrossConversations(t *testing.T) {
+	store := newCostStore("uuid-codex-first")
+	writeCodexTranscript(t, "uuid-codex-first",
+		codexTurnContextJSON("gpt-5.1-codex")+"\n"+codexTokenLineJSON(100, 0, 0, 0)+"\n")
+	svc := New(store, nil, events.New())
+	svc.prices = codexTestRate
+	if _, ok := svc.sessionUsage("s1"); !ok {
+		t.Fatal("sessionUsage: want ok on the first conversation")
+	}
+
+	writeCodexTranscript(t, "uuid-codex-second",
+		codexTurnContextJSON("gpt-5.1-codex")+"\n"+codexTokenLineJSON(300, 0, 0, 0)+"\n")
+	store.providerSession = "uuid-codex-second"
+	svc = New(store, nil, events.New())
+	svc.prices = codexTestRate
+
+	got, ok := svc.sessionUsage("s1")
+
+	if !ok {
+		t.Fatal("sessionUsage: want ok after the second rollout")
+	}
+	want := 100*0.001 + 300*0.001
+	if got.CostUSD == nil || !nearly(*got.CostUSD, want) {
+		t.Errorf("CostUSD = %v, want %v — the first rollout's cost still counts", got.CostUSD, want)
+	}
+}
