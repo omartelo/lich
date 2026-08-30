@@ -26,9 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it, drag it above the others, rename it or take it apart from its header, and
   drag a card inside it to rearrange the panes. Opening a session that is on no
   wall shows it on its own and sets every wall aside, whole, until you go back to
-  one of their sessions. A pane is a view of a card, never a session of its own:
-  its × stops showing that session and closes nothing, and closing the session
-  itself hands its room back to the rest.
+  one of their sessions. A session can be on one wall at a time, so putting one
+  on a second asks first, naming the group it would leave and whether that group
+  ends with it. A pane is a view of a card, never a session of its own: its ×
+  stops showing that session and closes nothing, and closing the session itself
+  hands its room back to the rest.
 
 - **The pull request screen hands its current problem to the session.** Red CI
   meant reading the Checks tab, opening each failed job in the browser and

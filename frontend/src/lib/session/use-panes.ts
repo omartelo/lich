@@ -5,6 +5,7 @@ import {
   defaultName,
   dissolveGroup,
   groupOf,
+  movingFrom,
   nextCandidate,
   type PaneGroup,
   removeFromGroups,
@@ -30,9 +31,12 @@ export interface Panes {
   focusStep: (step: number) => void
   /** Show one more session — a named one, or the next card on no wall. Adds to
    * the wall the active session is on, or starts a new one around it. False when
-   * there is nothing left to show, or when one more would leave them all too
-   * small to read. */
-  add: (sessionId?: string) => boolean
+   * there is nothing left to show, when one more would leave them all too small
+   * to read, or when that session is on another wall and `move` was not asked
+   * for. That last refusal is the guard: taking a session off somebody else's
+   * arrangement is a decision for the user, so a caller has to have asked them
+   * first — one that forgets gets a no-op rather than a silent move. */
+  add: (sessionId?: string, opts?: { move?: boolean }) => boolean
   /** Take a session off its wall. Never closes it. */
   remove: (sessionId: string) => void
   /** Take the session in this cell of the wall on screen off it. */
@@ -106,10 +110,13 @@ export function usePanes(projectId: string): Panes {
         activateSession(projectId, id)
       }
     },
-    add(sessionId) {
+    add(sessionId, opts) {
       const id = sessionId ?? nextCandidate(list, groups)
       const { width, height } = stageSize()
       if (!projectId || !id || id === activeId || !activeId) {
+        return false
+      }
+      if (movingFrom(groups, current, id) && !opts?.move) {
         return false
       }
       if (!fits(cells.length + 1, width, height)) {

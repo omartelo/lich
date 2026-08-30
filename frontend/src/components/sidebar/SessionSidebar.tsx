@@ -8,7 +8,8 @@ import { ProjectService } from "@/lib/rpc"
 import { closeSettings, isSettingsOpen, subscribeSettingsCard } from "@/lib/settings-card-store"
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
 import { delegateTargets } from "@/lib/session/delegate-targets"
-import { reorderGroups } from "@/lib/session/panes"
+import { movingFrom, type PaneGroup, reorderGroups } from "@/lib/session/panes"
+import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { usePanes } from "@/lib/session/use-panes"
 import {
   closePullsList,
@@ -132,8 +133,19 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   // The menu entry is a toggle on one card: a session already on the stage takes
   // itself off it, any other joins it. Adding is refused — quietly, the way the
   // shortcut is — when one more pane would leave them all too small to read.
+  // Adding a session that is already on another wall takes it off that one —
+  // somebody else's arrangement, changed by a click aimed at this one. So the
+  // decision goes to the user rather than being made under them; `add` refuses
+  // the move until they have answered.
+  const [moving, setMoving] = useState<{ session: Session; from: PaneGroup } | null>(null)
   const toggleStage = (sessionId: string) => {
-    if (panes.groups.some((group) => group.cells.includes(sessionId))) {
+    const from = movingFrom(panes.groups, panes.current, sessionId)
+    const session = list.find((s) => s.id === sessionId)
+    if (from && session) {
+      setMoving({ session, from })
+      return
+    }
+    if (panes.current?.cells.includes(sessionId)) {
       panes.remove(sessionId)
       return
     }
@@ -459,6 +471,35 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
         onResume={resumeWorktree}
       />
       <WorktreeCloseDialogs close={worktreeClose} />
+      <ConfirmDialog
+        open={!!moving}
+        onCancel={() => setMoving(null)}
+        title={`Move ${moving?.session.label ?? ""} to this split?`}
+        description={
+          moving?.from.cells.length === 1 ? (
+            <>
+              It is the only session in <strong>{moving.from.name}</strong>, so that group ends when
+              it leaves. No session is closed either way.
+            </>
+          ) : (
+            <>
+              It is showing in <strong>{moving?.from.name}</strong>, and a session can only be on
+              one split at a time — it leaves that one. No session is closed either way.
+            </>
+          )
+        }
+      >
+        <Button
+          onClick={() => {
+            if (moving) {
+              panes.add(moving.session.id, { move: true })
+            }
+            setMoving(null)
+          }}
+        >
+          Move it
+        </Button>
+      </ConfirmDialog>
 
       <ResizeHandle edge="right" label="Resize sidebar" handleProps={handleProps} />
     </aside>

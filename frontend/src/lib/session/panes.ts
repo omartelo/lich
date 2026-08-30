@@ -125,6 +125,24 @@ export function groupOf(groups: readonly PaneGroup[], sessionId: string): PaneGr
   return groups.find((group) => group.cells.includes(sessionId)) ?? null
 }
 
+// movingFrom answers the one question adding a session has to ask first: is it
+// already on somebody else's wall? Taking it off that one is a change to an
+// arrangement the click was not aimed at, so it is the user's decision and not
+// lich's — the group it would leave is returned so they can be told which, and
+// whether losing this member ends it.
+//
+// One definition, because both halves need the same answer: the sidebar asks it
+// to raise the prompt, and `add` asks it to refuse until that prompt has been
+// answered. A caller that forgets to ask gets a no-op rather than a silent move.
+export function movingFrom(
+  groups: readonly PaneGroup[],
+  current: PaneGroup | null,
+  sessionId: string,
+): PaneGroup | null {
+  const held = groupOf(groups, sessionId)
+  return held && held !== current ? held : null
+}
+
 /** Every session on any wall — what the add shortcut must not offer again. */
 export function grouped(groups: readonly PaneGroup[]): Set<string> {
   return new Set(groups.flatMap((group) => group.cells))

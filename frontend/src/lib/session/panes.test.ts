@@ -5,6 +5,7 @@ import {
   dissolveGroup,
   formatGroups,
   groupOf,
+  movingFrom,
   nextCandidate,
   type PaneGroup,
   parseGroups,
@@ -74,6 +75,27 @@ describe("groupOf", () => {
     const groups = [group("g1", ["a", "b"]), group("g2", ["c"])]
     expect(groupOf(groups, "b")?.id).toBe("g1")
     expect(groupOf(groups, "d")).toBeNull()
+  })
+})
+
+describe("movingFrom", () => {
+  const groups = [group("g1", ["a", "b"]), group("g2", ["c"])]
+
+  it("names the wall a session would be taken off", () => {
+    expect(movingFrom(groups, groups[1], "a")?.id).toBe("g1")
+  })
+
+  // Nothing to ask about: the session is on no wall, or already on this one.
+  it("answers null when nothing else loses a member", () => {
+    expect(movingFrom(groups, groups[0], "a")).toBeNull()
+    expect(movingFrom(groups, groups[0], "d")).toBeNull()
+    expect(movingFrom(groups, null, "d")).toBeNull()
+  })
+
+  // Starting a wall around a session that is on another one is still a move,
+  // even though there is no current wall to move it into yet.
+  it("still names it when the user is on no wall at all", () => {
+    expect(movingFrom(groups, null, "c")?.id).toBe("g2")
   })
 })
 
