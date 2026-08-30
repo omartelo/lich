@@ -488,6 +488,12 @@ export interface QuotaWindow {
   seconds: number
   percent: number
   resetsAt?: string
+  /** The provider's own verdict on which window is binding, when it reports
+   * one at all — absent (false) means it didn't say. */
+  active?: boolean
+  /** Present only when the provider says this window is locked regardless of
+   * its percentage; the reason travels to the tooltip verbatim. */
+  lockedReason?: string
 }
 
 /** internal/quota.Plan — one provider's quota reading. Windows are empty for

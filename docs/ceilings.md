@@ -316,6 +316,21 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   those logins and never writes them: it does not refresh the token, so an expired one reads as signed out until
   the provider's own CLI rotates it. A reading is cached for five minutes because both endpoints rate-limit hard —
   the number on screen is up to that old, and nothing on it says so.
+- **Two more fields of Claude's usage payload are read no further than measuring them**
+  (`internal/quota/claude.go`, `limits[].severity` and the top-level `extra_usage`/`spend` blocks): every
+  `severity` observed on a live account reads `"normal"`, so its scale — what a non-normal value looks like,
+  whether it maps to a colour — is unknown, and swapping the local usage-based colour ramp (`usageColor`) for
+  it would be a guess dressed as a reading of the source. `extra_usage` and `spend` are the credits that cover
+  spend past a full window; both exist in the payload but come back entirely null/disabled on every account
+  measured, so their filled shape — what a partially-spent credit balance actually contains — cannot be built
+  against here. A gauge built on an unobserved shape is the same failure `is_active`/`locked_reason` fixed
+  around, repeated. The payload's top level is otherwise a graveyard of null codenames — `nimbus_quill`,
+  `tangelo`, `iguana_necktie`, `omelette_promotional`, `cinder_cove`, `amber_ladder`, `juniper_tide`,
+  `seven_day_omelette`, `seven_day_cowork` — every one of them unpopulated on every account measured, which is
+  the standing evidence that reading `limits[]` and silently skipping a kind lich has no name for is the right
+  default, not a gap to close. Codex's `wham` usage route carries no equivalent to any of this — no per-window
+  active flag, no lock reason, no credit block — so this ceiling is Claude-only by the shape of the payload,
+  not a choice.
 - **Which account a session spends is read from its process, and only Linux answers**
   (`internal/quota`, `internal/terminal/account.go`): the reading follows `/proc/<pid>/environ` of the process in
   the session's PTY, so a wrapper binary that exports a login of its own is seen only there. macOS could answer

@@ -2,6 +2,7 @@ import type { QuotaWindow } from "@/lib/api-types"
 import { formatWindow, timeLeft } from "@/lib/quota/quota-format"
 import { cn } from "@/lib/utils"
 import { usageColor } from "./ContextRing"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 // Every column is fixed but the bar's. Sized to its own text, the readout gave a
 // window with no reset time the width the rows beside it spent on "6d 18h", and
@@ -39,6 +40,11 @@ export function QuotaGauge({ window: quota, now, stacked }: QuotaGaugeProps) {
       />
     </span>
   )
+  const reading = quota.lockedReason ? (
+    <LockedReading reason={quota.lockedReason} />
+  ) : (
+    `${quota.percent}%`
+  )
 
   if (stacked) {
     return (
@@ -46,7 +52,8 @@ export function QuotaGauge({ window: quota, now, stacked }: QuotaGaugeProps) {
         <div className="flex items-baseline justify-between gap-3">
           <span className="text-muted-foreground">{label}</span>
           <span className="tabular-nums">
-            {quota.percent}%{left && ` · ${left}`}
+            {reading}
+            {left && ` · ${left}`}
           </span>
         </div>
         {bar}
@@ -57,8 +64,26 @@ export function QuotaGauge({ window: quota, now, stacked }: QuotaGaugeProps) {
     <div className={cn(gaugeGrid, "text-xs", usageColor(quota.percent))}>
       <span className="truncate text-muted-foreground">{label}</span>
       {bar}
-      <span className="text-right tabular-nums">{quota.percent}%</span>
+      <span className="text-right tabular-nums">{reading}</span>
       <span className="text-right tabular-nums text-muted-foreground">{left}</span>
     </div>
+  )
+}
+
+// LockedReading replaces the bare percentage when the provider says a window
+// is locked regardless of how full it reads — the percentage alone would look
+// like headroom that spending cannot actually reach. The reason travels to a
+// tooltip rather than inline, since the provider's wording is not written for
+// the width a gauge row has.
+function LockedReading({ reason }: { reason: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className="cursor-help underline decoration-dotted" />}>
+        Locked
+      </TooltipTrigger>
+      <TooltipContent side="top" className="border border-border bg-card text-foreground">
+        {reason}
+      </TooltipContent>
+    </Tooltip>
   )
 }

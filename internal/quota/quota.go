@@ -101,11 +101,16 @@ var accountVars = append([]string{
 // the display name of the model a scoped window belongs to. Seconds is its
 // length, so the frontend can print the window it is looking at; 0 when the
 // provider does not report one. ResetsAt is RFC 3339, empty when unreported.
+// Active is the provider's own verdict on which window is the binding one, when
+// it reports one at all. LockedReason is non-empty only when the provider says
+// this window cannot be spent past regardless of its percentage.
 type Window struct {
-	Label    string `json:"label"`
-	Seconds  int    `json:"seconds"`
-	Percent  int    `json:"percent"`
-	ResetsAt string `json:"resetsAt,omitempty"`
+	Label        string `json:"label"`
+	Seconds      int    `json:"seconds"`
+	Percent      int    `json:"percent"`
+	ResetsAt     string `json:"resetsAt,omitempty"`
+	Active       bool   `json:"active,omitempty"`
+	LockedReason string `json:"lockedReason,omitempty"`
 }
 
 // Plan is one provider's quota reading. Provider is a providers.Registry id, so

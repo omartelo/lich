@@ -180,6 +180,37 @@ func TestClaudeSkipsEntriesItCannotDraw(t *testing.T) {
 	}
 }
 
+func TestClaudeReadsIsActiveAndLockedReason(t *testing.T) {
+	writeCreds(t, claudeCredsJSON, "")
+	body := `{
+		"five_hour": {"utilization": 12, "resets_at": "2026-08-30T20:29:59Z", "locked_reason": "past_limit"},
+		"seven_day": {"utilization": 32, "resets_at": "2026-08-31T15:00:00Z", "locked_reason": null},
+		"limits": [
+			{"kind":"session","percent":12,"resets_at":"2026-08-30T20:29:59Z","is_active":false},
+			{"kind":"weekly_all","percent":32,"resets_at":"2026-08-31T15:00:00Z","is_active":true},
+			{"kind":"weekly_scoped","percent":7,"resets_at":"2026-08-31T14:59:59Z","is_active":false,
+			 "scope":{"model":{"display_name":"Fable"}}}
+		]
+	}`
+	url, _ := serve(t, http.StatusOK, body)
+
+	got := newService(url, "", time.Now()).claudePlan(lichEnv())
+
+	want := []Window{
+		{Label: "Session", Seconds: sessionWindow, Percent: 12, ResetsAt: "2026-08-30T20:29:59Z", LockedReason: "past_limit"},
+		{Label: "Weekly", Seconds: weeklyWindow, Percent: 32, ResetsAt: "2026-08-31T15:00:00Z", Active: true},
+		{Label: "Fable", Seconds: weeklyWindow, Percent: 7, ResetsAt: "2026-08-31T14:59:59Z"},
+	}
+	if len(got.Windows) != len(want) {
+		t.Fatalf("windows = %+v, want %+v", got.Windows, want)
+	}
+	for i, w := range want {
+		if got.Windows[i] != w {
+			t.Errorf("window %d = %+v, want %+v", i, got.Windows[i], w)
+		}
+	}
+}
+
 func TestClaudeDropsAnUnparseableResetTime(t *testing.T) {
 	writeCreds(t, claudeCredsJSON, "")
 	body := `{"limits":[{"kind":"session","percent":5,"resets_at":"whenever"}]}`

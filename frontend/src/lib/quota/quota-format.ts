@@ -3,13 +3,21 @@ import type { QuotaPlan, QuotaWindow } from "@/lib/api-types"
 const HOUR_S = 60 * 60
 const DAY_S = 24 * HOUR_S
 
-// hottestWindow is the window a plan is closest to spending — the one a single
-// readout has to show, because a weekly cap about to run out must not hide
-// behind a session window that just reset. Ties keep the first, which is the
-// order the provider reported. Null for a plan with no windows.
+// hottestWindow is the window a single readout has to show. The provider's own
+// `is_active` verdict wins when it names one — that is the window actually
+// binding the account, not a local guess — falling back to the window closest
+// to spent (so a weekly cap about to run out does not hide behind a session
+// window that just reset) when nothing is marked active, which is every
+// payload shape that carries no such verdict at all. Ties in the fallback keep
+// the first, the order the provider reported. Null for a plan with no windows.
 export function hottestWindow(plan: QuotaPlan): QuotaWindow | null {
+  const windows = plan.windows ?? []
+  const active = windows.find((window) => window.active)
+  if (active) {
+    return active
+  }
   let hottest: QuotaWindow | null = null
-  for (const window of plan.windows ?? []) {
+  for (const window of windows) {
     if (!hottest || window.percent > hottest.percent) {
       hottest = window
     }
