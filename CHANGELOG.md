@@ -113,6 +113,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A worktree you made yourself is never deleted by lich.** git lists every
+  worktree of a repository, so one you created by hand shows up in lich's picker
+  and hosts a session like any other — and closing that session used to offer to
+  remove the checkout, which deleted your directory, and with "force" the
+  uncommitted work in it. lich now only ever removes the worktrees it created
+  itself: closing the last session in one of your own parks the session for a
+  later resume and leaves the checkout exactly where it is, and the close dialog
+  says so instead of offering an answer that would take it away.
 - **A file preview stays inside the checkout it was opened from.** A repository
   may ship a symlink pointing out of its own tree, and clicking one in the file
   list quietly previewed whatever it landed on — a file from somewhere else on

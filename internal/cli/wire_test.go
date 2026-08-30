@@ -217,6 +217,8 @@ func (g *spawnGit) RemoveWorktree(_, path string, force bool) error {
 
 func (g *spawnGit) WorktreeDirty(string) (bool, error) { return g.dirty, nil }
 
+func (*spawnGit) WorktreeAdopted(string) bool { return false }
+
 type spawnTerminal struct {
 	mu     sync.Mutex
 	kind   string

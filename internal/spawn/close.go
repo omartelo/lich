@@ -130,6 +130,17 @@ func (s *Service) Close(fromID, target, projectName, worktree string, force bool
 // the checkout does — one left behind would offer a resume into a directory that
 // no longer exists.
 func (s *Service) removeCheckout(found located, active string, force bool) error {
+	// Asked before anything is taken apart, not after: the removal itself is
+	// refused for an adopted checkout (project.RemoveWorktree), but by then the
+	// terminal is closed and the rows are gone, and the session would be lost to
+	// keep a directory that was never at risk.
+	if s.worktrees.WorktreeAdopted(found.session.Path) {
+		return fmt.Errorf(
+			"the worktree %s was not created by lich, so closing this session cannot delete it: "+
+				"say %q instead, which parks the session and leaves the checkout where it is",
+			found.session.Path, KeepWorktree,
+		)
+	}
 	// A check that cannot answer costs the message, never the work: `git worktree
 	// remove` without --force refuses a dirty checkout on its own
 	// (project.RemoveWorktree), so an unreadable status ends in git's own refusal

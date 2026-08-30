@@ -308,6 +308,7 @@ export const ProjectService = {
   RemoveWorktree: (projectPath: string, wtPath: string, force: boolean) =>
     call<null>("project.RemoveWorktree", [projectPath, wtPath, force]),
   WorktreeDirty: (wtPath: string) => call<boolean>("project.WorktreeDirty", [wtPath]),
+  WorktreeAdopted: (wtPath: string) => call<boolean>("project.WorktreeAdopted", [wtPath]),
 }
 
 export const Store = {

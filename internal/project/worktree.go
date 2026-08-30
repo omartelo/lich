@@ -319,11 +319,45 @@ func (s *Service) CreateWorktreeFromPR(projectPath, projectID string, number int
 	return &Worktree{Name: head.RefName, Path: canonicalPath(wtPath)}, nil
 }
 
+// WorktreeAdopted reports whether the checkout at wtPath is one lich adopted
+// rather than created: `git worktree list` hands back every worktree of a
+// repository, so one the user made by hand appears in the picker and hosts a
+// session like any other, and nothing but its path tells the two apart.
+// Everything lich creates lives under the worktrees root reserveWorktreePath
+// builds its paths in; anything outside it is the user's own directory, which
+// lich may forget but never delete.
+//
+// Both sides go through canonicalPath, and an unresolvable root reads as
+// adopted: the answer gates a deletion, so the unknown case has to be the one
+// that keeps the checkout.
+func (s *Service) WorktreeAdopted(wtPath string) bool {
+	root, err := worktreesRoot()
+	if err != nil {
+		return true
+	}
+	// Rel, not a string prefix: "<root>-old" starts with the root spelled out
+	// and is no more lich's than any other directory next to it.
+	rel, err := filepath.Rel(canonicalPath(root), canonicalPath(wtPath))
+	if err != nil {
+		return true
+	}
+	return rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
 // RemoveWorktree removes a worktree checkout. Without force git refuses to
 // delete a dirty worktree, which is the safety net the close-session flow
 // relies on; force discards uncommitted changes after the user has confirmed.
 // The branch is never deleted either way.
+//
+// An adopted checkout is refused outright, force or not: the directory is the
+// user's, made outside lich and only listed by it, and --force would take
+// uncommitted work with it. Callers ask WorktreeAdopted before they take a
+// session apart, so this is the invariant behind them rather than the message
+// anyone reads — but it is the one that holds when a caller forgets.
 func (s *Service) RemoveWorktree(projectPath, wtPath string, force bool) error {
+	if s.WorktreeAdopted(wtPath) {
+		return fmt.Errorf("The worktree at %s was not created by lich, so lich will not delete it.", wtPath)
+	}
 	args := []string{"worktree", "remove"}
 	if force {
 		args = append(args, "--force")

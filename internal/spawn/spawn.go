@@ -88,6 +88,7 @@ type Worktrees interface {
 	CreateWorktree(projectPath, projectID, name, base string, baseIsRemote bool) (*project.Worktree, error)
 	RemoveWorktree(projectPath, wtPath string, force bool) error
 	WorktreeDirty(wtPath string) (bool, error)
+	WorktreeAdopted(wtPath string) bool
 }
 
 // Terminal is the PTY side: the same spawn the window asks for when a card is

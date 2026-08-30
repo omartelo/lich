@@ -148,6 +148,29 @@ func TestCloseRemovingAWorktreeTakesTheCheckoutWithIt(t *testing.T) {
 	}
 }
 
+// A checkout the user made by hand is theirs: lich lists it and runs sessions in
+// it, but the close that would delete it is refused before the session is taken
+// apart — the removal itself is refused too (project.RemoveWorktree), and by
+// then the row would already be gone in exchange for nothing.
+func TestCloseRefusesToRemoveAnAdoptedCheckout(t *testing.T) {
+	svc, sessions, worktrees, term, _ := closer(t)
+	worktrees.adopted = map[string]bool{"/wt/alone": true}
+
+	_, err := svc.Close("s1", "alone", "", RemoveWorktree, false)
+	if err == nil {
+		t.Fatal("removed a checkout lich never created")
+	}
+	if !strings.Contains(err.Error(), KeepWorktree) {
+		t.Errorf("error = %q, want it to name the answer that works", err)
+	}
+	if len(worktrees.removed) != 0 {
+		t.Errorf("removed = %+v, want the user's directory untouched", worktrees.removed)
+	}
+	if len(sessions.deleted) != 0 || len(sessions.purged) != 0 || len(term.closed) != 0 {
+		t.Error("took the session apart for a removal that was refused")
+	}
+}
+
 // What an uncommitted change loses is in no commit and on no remote, so it is
 // the one thing here that needs saying twice.
 func TestCloseRefusesToRemoveADirtyCheckout(t *testing.T) {
