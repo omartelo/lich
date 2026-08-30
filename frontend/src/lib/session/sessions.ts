@@ -7,6 +7,7 @@
 // input — which keeps the reducer logic testable without React or a PTY.
 
 import { applyOrder } from "@/lib/reorder"
+import type { PaneGroup } from "./panes"
 
 // Provider ids that can back a session, mirrored from internal/providers.Registry
 // (Go) — keep in sync. A session's kind is one of these or the plain shell.
@@ -328,39 +329,72 @@ export function setSessionEntrypoint(
 // collide with no worktree — those paths are absolute.
 export const PINNED_GROUP_KEY = "__pinned__"
 
-// One block of the sidebar: the pinned sessions, or one worktree's.
+// One block of the sidebar: a split group, the pinned sessions, or one
+// worktree's.
 export interface SidebarGroup {
   key: string
   // True for the pinned block. It is not a checkout — no path of its own, no
-  // pull request, and it never moves: it is always drawn first.
+  // pull request — and it never moves among the others.
   pinned: boolean
-  // The checkout root ("" for the project's own directory), empty for pinned.
+  // The split group this block draws, or null. Its sessions come from any
+  // checkout, so it is keyed by the group's own id and can collide with no
+  // worktree path. A project has as many of these as the user has made, drawn
+  // above everything else in the order they arranged.
+  stage: PaneGroup | null
+  // The checkout root ("" for the project's own directory), empty for the
+  // gathered blocks.
   path: string
   sessions: Session[]
 }
 
 // sidebarGroups splits a project's sessions into the blocks the sidebar draws:
-// the pinned ones first, in one block of their own, then one block per worktree
-// in first-appearance order. Each block keeps the stored (drag) order inside.
+// the split groups first in the order the user arranged them, then the pinned
+// ones, then one block per worktree in first-appearance order. Each block keeps
+// the stored (drag) order inside — except a split's, which keeps the order of
+// the panes it draws.
 //
-// Pinning never rewrites the stored list — it only lifts a card into this first
-// block — which is what lets an unpinned session drop back among its old
-// neighbours instead of being stranded on top. The store hands that same order
-// back, so a reload draws what the pin did live.
-export function sidebarGroups(sessions: Session[]): SidebarGroup[] {
-  const groups: SidebarGroup[] = groupByWorktree(sessions.filter((s) => !s.pinned)).map(
-    (group) => ({
+// Neither a split nor a pin rewrites the stored session list; both only lift a
+// card into a block above, which is what lets a session dropped from either land
+// back among its old neighbours instead of being stranded. The store hands that
+// same order back, so a reload draws what the live change did.
+//
+// A session both pinned and on a wall is drawn in the wall's block: the pin
+// promises the top of the list rather than one particular header, and the card
+// keeps its own mark either way. A group whose sessions are all gone draws
+// nothing — resolveGroups has already dropped it from what is stored.
+export function sidebarGroups(
+  sessions: Session[],
+  stage: readonly PaneGroup[] = [],
+): SidebarGroup[] {
+  const byId = new Map(sessions.map((session) => [session.id, session]))
+  const blocks: SidebarGroup[] = []
+  const claimed = new Set<string>()
+  for (const group of stage) {
+    const members = group.cells.flatMap((id) => byId.get(id) ?? [])
+    if (members.length === 0) {
+      continue
+    }
+    for (const member of members) {
+      claimed.add(member.id)
+    }
+    blocks.push({ key: group.id, pinned: false, stage: group, path: "", sessions: members })
+  }
+
+  const rest = sessions.filter((session) => !claimed.has(session.id))
+  const pinned = rest.filter((s) => s.pinned)
+  if (pinned.length > 0) {
+    blocks.push({ key: PINNED_GROUP_KEY, pinned: true, stage: null, path: "", sessions: pinned })
+  }
+  for (const group of groupByWorktree(rest.filter((s) => !s.pinned))) {
+    blocks.push({
       key: groupKey(group.path),
       pinned: false,
+      stage: null,
       path: group.path,
       sessions: group.sessions,
-    }),
-  )
-  const pinned = sessions.filter((s) => s.pinned)
-  if (pinned.length === 0) {
-    return groups
+    })
   }
-  return [{ key: PINNED_GROUP_KEY, pinned: true, path: "", sessions: pinned }, ...groups]
+  return blocks
 }
 
 // reorderSubset returns the full id order that hands `ids` to the sessions the
@@ -389,15 +423,18 @@ export function reorderSubset(
 // The order is the grouped one, not the stored flat list: a session opened in
 // the project root after a worktree one sits between its own group's cards in
 // the state and under them on screen, so walking the flat list would jump a
-// divider and come back. Pinned cards are walked where they are drawn — in the
-// block at the top, not in the worktree they belong to.
+// divider and come back. Pinned cards, and the split's, are walked where they
+// are drawn — in the block at the top, not in the worktree they belong to.
 export function neighborSessionId(
   state: SessionState,
   projectId: string,
   sessionId: string,
   step: 1 | -1,
+  stage: readonly PaneGroup[] = [],
 ): string {
-  const sessions = sidebarGroups(sessionsOf(state, projectId)).flatMap((group) => group.sessions)
+  const sessions = sidebarGroups(sessionsOf(state, projectId), stage).flatMap(
+    (group) => group.sessions,
+  )
   if (sessions.length < 2) {
     return ""
   }
@@ -600,6 +637,22 @@ export function sessionOrigin(state: SessionState, session: Session): string {
   const projectId = projectOfSession(state, session.originSessionId)
   const parent = state[projectId]?.sessions.find((s) => s.id === session.originSessionId)
   return parent?.label ?? session.originLabel ?? ""
+}
+
+// delegatesOf returns the sessions this one handed work to, in the project's own
+// order. Direct delegates only: `originSessionId` records who asked, and walking
+// the chain further would gather grandchildren the user never watched being
+// spawned — "its delegates" is the ones it made, not everything downstream of
+// them.
+//
+// Scoped to one project, unlike sessionOrigin: a wall draws sessions of the
+// project it belongs to, so a delegate in another project is not something the
+// stage could show even if the delegation crossed over.
+export function delegatesOf(state: SessionState, projectId: string, sessionId: string): Session[] {
+  if (!sessionId) {
+    return []
+  }
+  return sessionsOf(state, projectId).filter((session) => session.originSessionId === sessionId)
 }
 
 export function activeSessionId(state: SessionState, projectId: string): string {

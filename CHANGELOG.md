@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Walls of sessions, as many as you keep.** Watching an agent used to mean
+  watching nothing else: the cards say what every session is *doing*, and only
+  one of them ever showed what it was *saying*. A card's menu now offers **Show
+  beside**, which puts that session on a wall next to the one you are in —
+  <kbd>Ctrl/Cmd+Shift+G</kbd> adds the next free card,
+  <kbd>Ctrl/Cmd+Shift+F</kbd> moves the cursor along, and clicking a pane
+  focuses it. lich lays the panes out itself, from how many there are and how
+  much room the window has: eight on a 34" ultrawide land four across and two
+  down, the same eight on a laptop come out two across, and lich declines the one
+  that would leave them all too small to read.
+  A wall is a group you made and named, and a project holds as many as you like —
+  an orchestrator with the three worktrees it spawned is one, the next
+  investigation with its own is another. That first one takes a single click:
+  a session that handed work to others offers **Show beside its 3 delegates**,
+  which builds the wall around it, named after it. A delegate you had already put
+  on another split stays where it is, and lich says how many did. Each gets a block of its own at the top
+  of the sidebar, so you read its membership instead of rediscovering it: fold
+  it, drag it above the others, rename it or take it apart from its header, and
+  drag a card inside it to rearrange the panes. Opening a session that is on no
+  wall shows it on its own and sets every wall aside, whole, until you go back to
+  one of their sessions. A session can be on one wall at a time, so putting one
+  on a second asks first, naming the group it would leave and whether that group
+  ends with it. A pane is a view of a card, never a session of its own: its ×
+  stops showing that session and closes nothing, and closing the session itself
+  hands its room back to the rest.
+
 - **The pull request screen hands its current problem to the session.** Red CI
   meant reading the Checks tab, opening each failed job in the browser and
   typing the names back into the terminal yourself; a branch that would not

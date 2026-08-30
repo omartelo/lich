@@ -27,6 +27,7 @@ import {
   setSessionEntrypoint,
   setSessionPinned,
   setSessionSandboxed,
+  delegatesOf,
   sidebarGroups,
   type Session,
   type SessionKind,
@@ -326,9 +327,41 @@ describe("reorderSessions", () => {
   })
 })
 
+describe("delegatesOf", () => {
+  const withOrigin = (state: SessionState, id: string, origin: string): SessionState => ({
+    ...state,
+    [P]: {
+      ...state[P],
+      sessions: state[P].sessions.map((s) => (s.id === id ? { ...s, originSessionId: origin } : s)),
+    },
+  })
+
+  it("answers the sessions this one handed work to, in the project's order", () => {
+    let state = buildState(4)
+    state = withOrigin(state, "s3", "s1")
+    state = withOrigin(state, "s2", "s1")
+    expect(delegatesOf(state, P, "s1").map((s) => s.id)).toEqual(["s2", "s3"])
+  })
+
+  // Direct delegates only: a grandchild is downstream of one the user watched
+  // being spawned, not one this session made.
+  it("does not walk past the sessions it made itself", () => {
+    let state = buildState(3)
+    state = withOrigin(state, "s2", "s1")
+    state = withOrigin(state, "s3", "s2")
+    expect(delegatesOf(state, P, "s1").map((s) => s.id)).toEqual(["s2"])
+  })
+
+  it("answers nothing for a session nobody was delegated from", () => {
+    expect(delegatesOf(buildState(2), P, "s1")).toEqual([])
+    expect(delegatesOf(buildState(2), P, "")).toEqual([])
+  })
+})
+
 describe("sidebarGroups", () => {
   const ids = (groups: ReturnType<typeof sidebarGroups>) =>
     groups.map((group) => [group.key, group.sessions.map((s) => s.id)])
+  const wall = (id: string, cells: string[]) => ({ id, name: id, cells, cols: [], rows: [] })
 
   it("draws one block per worktree when nothing is pinned", () => {
     let state = addSession({}, P, "s1")
@@ -359,6 +392,48 @@ describe("sidebarGroups", () => {
       [PINNED_GROUP_KEY, ["a1"]],
       [ROOT_GROUP_KEY, ["s1"]],
       ["/wt/b", ["b1"]],
+    ])
+  })
+
+  // The blocks answer the question a wall could not: which sessions are in it.
+  // They are built from the groups, not from what is on screen, so they stand
+  // whether or not any of those walls is the thing being drawn.
+  it("lifts each wall into a block above everything, in the order it was arranged", () => {
+    let state = addSession({}, P, "s1")
+    state = addSession(state, P, "a1", "claude", "/wt/a")
+    state = addSession(state, P, "b1", "claude", "/wt/b")
+    expect(ids(sidebarGroups(sessionsOf(state, P), [wall("g1", ["b1", "s1"])]))).toEqual([
+      ["g1", ["b1", "s1"]],
+      ["/wt/a", ["a1"]],
+    ])
+  })
+
+  // Several walls per project is the whole point: an orchestrator and the
+  // worktrees it spawned are one, the next investigation and its own another.
+  it("draws every wall, each as its own block", () => {
+    const state = buildState(4)
+    expect(
+      ids(sidebarGroups(sessionsOf(state, P), [wall("g1", ["s1", "s2"]), wall("g2", ["s3"])])),
+    ).toEqual([
+      ["g1", ["s1", "s2"]],
+      ["g2", ["s3"]],
+      [ROOT_GROUP_KEY, ["s4"]],
+    ])
+  })
+
+  it("draws the walls above the pinned block and takes their cards out of it", () => {
+    let state = setSessionPinned(buildState(3), P, "s1", true)
+    state = setSessionPinned(state, P, "s2", true)
+    expect(ids(sidebarGroups(sessionsOf(state, P), [wall("g1", ["s2", "s3"])]))).toEqual([
+      ["g1", ["s2", "s3"]],
+      [PINNED_GROUP_KEY, ["s1"]],
+    ])
+  })
+
+  it("draws no block for a wall with nothing live left in it", () => {
+    const state = buildState(2)
+    expect(ids(sidebarGroups(sessionsOf(state, P), [wall("g1", ["gone"])]))).toEqual([
+      [ROOT_GROUP_KEY, ["s1", "s2"]],
     ])
   })
 

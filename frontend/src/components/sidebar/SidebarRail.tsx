@@ -3,6 +3,7 @@ import { PanelLeft, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useProjects } from "@/providers/projects"
 import { activeSessionId, sessionsOf, sidebarGroups, type Session } from "@/lib/session/sessions"
+import { storedGroups } from "@/lib/session/panes-store"
 import { useSessionAgent } from "@/lib/session/use-session-agent"
 import { useSessionStatus, useSessionUnread } from "@/lib/session/use-session-status"
 import { SessionStatusIcon } from "./SessionStatusIcon"
@@ -73,7 +74,9 @@ export function SidebarRail({ onExpand }: SidebarRailProps) {
   }
 
   const path = projects.find((p) => p.id === projectId)?.path ?? ""
-  const groups = sidebarGroups(sessionsOf(sessions, projectId))
+  // Same order as the expanded sidebar, split's block and all: the rail is
+  // that list with the words taken out.
+  const groups = sidebarGroups(sessionsOf(sessions, projectId), storedGroups(projectId))
   // Unlike the open sidebar, a full-screen route (Settings, Pulls) does not put
   // the highlight out: those screens have no card of their own here to carry
   // it, so dropping it would leave the rail with nothing lit at all.

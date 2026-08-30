@@ -8,7 +8,8 @@ import { checkoutLabel } from "@/lib/git/checkout-label"
 import type { ProviderState } from "@/lib/providers-store"
 import type { DelegateGroup } from "@/lib/session/delegate-targets"
 import { readGroupCollapsed, writeGroupCollapsed } from "@/lib/session/group-prefs"
-import { type Session, sessionOrigin } from "@/lib/session/sessions"
+import type { PaneGroup } from "@/lib/session/panes"
+import { delegatesOf, type Session, sessionOrigin } from "@/lib/session/sessions"
 import { useProjects } from "@/providers/projects"
 import { SessionCard } from "./SessionCard"
 import { PullRequestCard } from "./PullRequestCard"
@@ -24,12 +25,26 @@ interface SessionGroupProps {
   // the pin rather than a worktree, no pull request of its own, and never
   // dragged — it is always the first block.
   pinned: boolean
+  // The wall this block draws, or null for a checkout's block and the pinned
+  // one. A drag inside it reorders the panes rather than the stored session
+  // list, which is the sidebar's half of arranging that wall.
+  stage: PaneGroup | null
+  // Rename the wall, and take it apart. Both are the header's, because both are
+  // about the group rather than any session in it.
+  onRenameGroup: (name: string) => void
+  onDissolveGroup: () => void
   // "" for the project's own root or the pinned block, else the worktree
   // checkout path.
   path: string
   sessions: Session[]
   projectPath: string
   activeId: string
+  // Every session currently drawing on the stage, in layout order; one entry —
+  // or none — means it is not split.
+  stageIds: string[]
+  onStageToggle: (sessionId: string) => void
+  // Gather a session and the ones it delegated to into a wall of their own.
+  onGroupDelegates: (sessionId: string, delegateIds: string[]) => void
   // A divider label is drawn only when the sidebar holds more than one group; a
   // lone project with no worktrees keeps its old flat, header-less list. The
   // header doubles as the group's drag handle, so a lone group is also the case
@@ -75,10 +90,16 @@ export function SessionGroup({
   projectId,
   sortId,
   pinned,
+  stage,
+  onRenameGroup,
+  onDissolveGroup,
   path,
   sessions,
   projectPath,
   activeId,
+  stageIds,
+  onStageToggle,
+  onGroupDelegates,
   showHeader,
   sortable,
   onReorder,
@@ -104,8 +125,11 @@ export function SessionGroup({
   const [collapsed, setCollapsed] = useState(() => readGroupCollapsed(projectId, sortId))
   const ids = sessions.map((session) => session.id)
   const { sensors, onDragEnd } = useSortableList(ids, onReorder)
-  const name = pinned ? "Pinned" : checkoutLabel(path, projectPath, projectId)
-  const group = useSortable({ id: sortId, disabled: !sortable || !showHeader || pinned })
+  // Neither of the gathered blocks is a checkout, so neither is dragged among
+  // the others and neither has a worktree's name to wear.
+  const fixed = pinned
+  const name = stage ? stage.name : pinned ? "Pinned" : checkoutLabel(path, projectPath, projectId)
+  const group = useSortable({ id: sortId, disabled: !sortable || !showHeader || fixed })
   // The PR card keys off the group's real checkout — the project root for the
   // root group (empty path), else the worktree — so a root project on a feature
   // branch parks its card too, not only worktrees.
@@ -122,6 +146,12 @@ export function SessionGroup({
   }
 
   const select = (id: string) => {
+    // One path for every card, on the stage or off it: activating a session is
+    // the whole of what selecting one means. A card in a pane moves the cursor
+    // there because the focused cell is read from the active session, and a card
+    // outside the wall parks it and takes the screen — neither needs a branch
+    // here, and the version of this that had one was the bug where opening any
+    // session shoved it into the grid.
     activateSession(projectId, id)
     // From the settings screen this returns to the terminal; on the project
     // route it is a no-op.
@@ -140,15 +170,20 @@ export function SessionGroup({
       {showHeader && (
         <SessionGroupHeader
           name={name}
-          pinned={pinned}
+          fixed={fixed}
+          // A wall has nowhere to open a new session — it is not a checkout —
+          // but it does reorder among the other walls, so it keeps its handle.
+          launch={!fixed && !stage}
+          onRename={stage ? onRenameGroup : undefined}
+          onDissolve={stage ? onDissolveGroup : undefined}
           collapsed={collapsed}
           isDragging={group.isDragging}
           providers={providers}
           activatorRef={group.setActivatorNodeRef}
-          // The pinned block is never dragged, and dnd-kit answers a disabled
+          // A fixed block is never dragged, and dnd-kit answers a disabled
           // sortable with aria-disabled + aria-roledescription="draggable" —
           // which would announce a working collapse button as a dead handle.
-          activatorProps={pinned ? {} : { ...group.attributes, ...group.listeners }}
+          activatorProps={fixed ? {} : { ...group.attributes, ...group.listeners }}
           onToggle={toggle}
           onNewSession={(kind) => newSession(projectId, kind, path)}
         />
@@ -182,6 +217,18 @@ export function SessionGroup({
                     // state knows about.
                     origin={sessionOrigin(workspace, session)}
                     active={session.id === activeId}
+                    // Membership is the block itself; what the card still has to
+                    // answer is whether that member is on screen this moment.
+                    onStage={!!stage}
+                    showing={stageIds.includes(session.id)}
+                    onStageToggle={() => onStageToggle(session.id)}
+                    delegateCount={delegatesOf(workspace, projectId, session.id).length}
+                    onGroupDelegates={() =>
+                      onGroupDelegates(
+                        session.id,
+                        delegatesOf(workspace, projectId, session.id).map((s) => s.id),
+                      )
+                    }
                     onSelect={() => select(session.id)}
                     onClose={() => onClose(session)}
                     onRename={(label) => renameSession(projectId, session.id, label)}

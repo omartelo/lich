@@ -13,6 +13,7 @@ import {
   GitPullRequestArrow,
   Inbox,
   Pencil,
+  Columns2,
   Pin,
   PinOff,
   Play,
@@ -75,6 +76,19 @@ interface SessionCardProps {
   // session nobody delegated, which is most of them (sessionOrigin).
   origin: string
   active: boolean
+  // Whether this session is on the stage at all. It is what the menu entry
+  // answers to, and it is true for a member of a wall that is parked — the block
+  // this card is drawn in is the mark, so nothing is repeated on the card.
+  onStage: boolean
+  // Whether it is drawing in a pane *right now*. Never true for a member of a
+  // parked wall, which is exactly the difference the block cannot show.
+  showing: boolean
+  // Put this card on the stage, or take it off when it is already there.
+  onStageToggle: () => void
+  // How many sessions this one delegated work to, and the action that gathers
+  // them into a wall around it. Zero is the usual case and offers nothing.
+  delegateCount: number
+  onGroupDelegates: () => void
   onSelect: () => void
   onClose: () => void
   onRename: (label: string) => void
@@ -108,6 +122,11 @@ export function SessionCard({
   path,
   origin,
   active,
+  onStage,
+  showing,
+  onStageToggle,
+  delegateCount,
+  onGroupDelegates,
   onSelect,
   onClose,
   onRename,
@@ -335,6 +354,9 @@ export function SessionCard({
                     className={cn(
                       "group relative flex w-full flex-col items-start gap-0.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-accent/60",
                       active && "bg-accent text-accent-foreground",
+                      // On screen, but not the pane the keyboard is in: one step
+                      // down the same fill, never a second kind of mark.
+                      showing && !active && "bg-accent/55",
                     )}
                   />
                 }
@@ -568,6 +590,20 @@ export function SessionCard({
             <Copy />
             Copy send command
           </ContextMenuItem>
+          {delegateCount > 0 && (
+            <ContextMenuItem onClick={onGroupDelegates}>
+              <Columns2 />
+              {delegateCount === 1
+                ? "Show beside its 1 delegate"
+                : `Show beside its ${delegateCount} delegates`}
+            </ContextMenuItem>
+          )}
+          {!active && (
+            <ContextMenuItem onClick={onStageToggle}>
+              <Columns2 />
+              {onStage ? "Stop showing" : "Show beside"}
+            </ContextMenuItem>
+          )}
           <ContextMenuItem onClick={() => setEditing(true)}>
             <Pencil />
             Rename
