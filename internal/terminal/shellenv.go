@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 )
@@ -24,7 +23,8 @@ const shellEnvSentinel = "__LICH_SHELL_ENV__"
 // hides this because the shell we spawn sources those rc files itself; a provider
 // spawned directly (claude/codex/...) does not, so its ${VAR} expansions in
 // .mcp.json come up empty. We run the user's shell the way a terminal emulator
-// does and merge its environment over base.
+// does — attached to a pty, see runShellDump — and merge its environment over
+// base.
 //
 // SHELL unset (normal Windows: cmd.exe has no rc) or any failure returns base
 // unchanged — the resolution is best-effort, never load-bearing.
@@ -39,13 +39,10 @@ func ResolveShellEnv(base []string) []string {
 
 	// -l -i so both login profiles (bash/zsh) and interactive rc (fish's
 	// config.fish is interactive-only) run; `env` is external, so the command is
-	// identical across shells. Nil Stdin feeds EOF instead of a tty, so the
-	// interactive shell never blocks on a read.
-	cmd := exec.CommandContext(ctx, shell, "-l", "-i", "-c", "echo "+shellEnvSentinel+"; env")
-	cmd.Env = base
-	out, err := cmd.Output() // stderr, carrying rc warnings, is discarded
+	// identical across shells.
+	out, err := runShellDump(ctx, shell, "echo "+shellEnvSentinel+"; env", base)
 
-	extra := parseShellEnvDump(shellEnvSentinel, string(out))
+	extra := parseShellEnvDump(shellEnvSentinel, out)
 	if extra == nil {
 		slog.Warn("terminal: shell env resolution yielded nothing, using launch env", "shell", shell, "err", err)
 		return base
