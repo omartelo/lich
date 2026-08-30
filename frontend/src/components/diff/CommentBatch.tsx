@@ -1,10 +1,12 @@
 import { Send, X } from "lucide-react"
-import { useSyncExternalStore } from "react"
+import { useState, useSyncExternalStore } from "react"
 import { toast } from "sonner"
 import { IconAction } from "@/components/common/IconAction"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { splitPath } from "@/lib/git/lang-badge"
 import {
+  addReviewNote,
   clearReviewComments,
   composeReviewComments,
   removeReviewComment,
@@ -25,9 +27,19 @@ interface CommentBatchProps {
 // prompt. Nothing at all until the first comment is written.
 export function CommentBatch({ target, onInject }: CommentBatchProps) {
   const comments = useSyncExternalStore(subscribeReviewComments, () => reviewComments(target))
+  const [note, setNote] = useState("")
 
   if (comments.length === 0) {
     return null
+  }
+
+  // A note about the change as a whole, for the remark that belongs with the
+  // comments rather than after them. It rides the strip, so it is offered only
+  // once there is a batch to join: alone it would be a prompt written the long
+  // way round.
+  const addNote = () => {
+    addReviewNote(target, note)
+    setNote("")
   }
 
   // Comments are the one thing here the user typed, so they survive a failed
@@ -48,9 +60,11 @@ export function CommentBatch({ target, onInject }: CommentBatchProps) {
             key={comment.id}
             className="flex items-center gap-2 rounded-md px-1.5 py-1 text-xs hover:bg-accent/50"
           >
-            <span className="shrink-0 font-mono text-muted-foreground" title={comment.path}>
-              {splitPath(comment.path).base}:{comment.lines}
-            </span>
+            {comment.path !== "" && (
+              <span className="shrink-0 font-mono text-muted-foreground" title={comment.path}>
+                {splitPath(comment.path).base}:{comment.lines}
+              </span>
+            )}
             <span className="truncate" title={comment.text}>
               {comment.text}
             </span>
@@ -65,6 +79,21 @@ export function CommentBatch({ target, onInject }: CommentBatchProps) {
           </li>
         ))}
       </ul>
+      <div className="px-2 pt-1">
+        <Input
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault()
+              addNote()
+            }
+          }}
+          placeholder="A note about the whole change…"
+          aria-label="A note about the whole change"
+          className="h-7 text-xs"
+        />
+      </div>
       <div className="flex items-center gap-2 px-2 pt-1 pb-2">
         <span className="text-xs text-muted-foreground tabular-nums">
           {comments.length} {comments.length === 1 ? "comment" : "comments"}

@@ -24,8 +24,9 @@ import { bracketedPaste } from "./terminal/bracketed-paste"
 export interface ReviewComment {
   /** Identity for the list and for removal; carries no meaning of its own. */
   id: string
+  /** The file the note was written on; empty for a note about the change as a whole. */
   path: string
-  /** The selection's new-file lines, git-style: "19" or "12-30". */
+  /** The selection's new-file lines, git-style: "19" or "12-30"; empty with an empty path. */
   lines: string
   text: string
 }
@@ -57,6 +58,16 @@ export function addReviewComment(target: string, path: string, lines: string, te
   const comment: ReviewComment = { id: String(nextId++), path, lines, text: trimmed }
   byTarget.set(target, [...reviewComments(target), comment])
   notify()
+}
+
+/**
+ * A remark about the change as a whole rather than a place in it: no file, no
+ * lines. It joins the same batch so it reaches the session in the same prompt —
+ * which is the whole of what it buys, since a remark with nothing else pending
+ * is a sentence the session's own prompt already takes.
+ */
+export function addReviewNote(target: string, text: string): void {
+  addReviewComment(target, "", "", text)
 }
 
 export function removeReviewComment(target: string, id: string): void {
@@ -91,7 +102,11 @@ export function subscribeReviewComments(listener: () => void): () => void {
  * rest were still being typed.
  */
 export function composeReviewComments(list: readonly ReviewComment[]): string {
-  const items = list.map((c) => `- ${c.path}:${c.lines} — ${continuation(c.text)}`)
+  const items = list.map((c) =>
+    c.path === ""
+      ? `- ${continuation(c.text)}`
+      : `- ${c.path}:${c.lines} — ${continuation(c.text)}`,
+  )
   return bracketedPaste(`Review comments:\n\n${items.join("\n")}`)
 }
 

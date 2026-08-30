@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A review note that belongs to no line.** Comments collected while reading a
+  review anchor to the lines they were written on, and some of what you want to
+  say does not: that the four notes are one bug, that the approach is wrong
+  before any of the lines are. The batch's strip now takes a note about the
+  whole change, which travels in the same prompt as the rest, in the order you
+  wrote it. Offered once there is a batch to join — a remark with nothing else
+  pending is a sentence the session's own prompt already takes.
+
 - **Walls of sessions, as many as you keep.** Watching an agent used to mean
   watching nothing else: the cards say what every session is *doing*, and only
   one of them ever showed what it was *saying*. A card's menu now offers **Show

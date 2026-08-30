@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 import {
   addReviewComment,
+  addReviewNote,
   clearReviewComments,
   composeReviewComments,
   removeReviewComment,
@@ -70,6 +71,23 @@ describe("review-comments", () => {
         "- src/a.ts:12-30 — leaks the listener\n" +
         "- src/b.tsx:44 — rename to X\x1b[201~",
     )
+  })
+
+  it("composes a note about the whole change with no anchor, in the order written", () => {
+    const t = target("note")
+    addReviewComment(t, "src/a.ts", "12", "leaks the listener")
+    addReviewNote(t, "these are all the same bug")
+    expect(composeReviewComments(reviewComments(t))).toBe(
+      "\x1b[200~Review comments:\n\n" +
+        "- src/a.ts:12 — leaks the listener\n" +
+        "- these are all the same bug\x1b[201~",
+    )
+  })
+
+  it("drops a blank note like a blank comment", () => {
+    const t = target("blank-note")
+    addReviewNote(t, "  \n ")
+    expect(reviewComments(t)).toEqual([])
   })
 
   it("keeps a multi-line comment as one list item", () => {
