@@ -325,6 +325,64 @@ func TestRemoveWorktree(t *testing.T) {
 	}
 }
 
+// TestWorktreeAdopted pins where lich's own worktrees live. The root is spelled
+// out here instead of read back from worktreesRoot, so moving that layout has to
+// be a deliberate edit on both sides rather than a test that follows along.
+func TestWorktreeAdopted(t *testing.T) {
+	data := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", data)
+	svc := New(nil)
+
+	cases := []struct {
+		name    string
+		path    string
+		adopted bool
+	}{
+		{"one lich created", filepath.Join(data, "lich", "worktrees", "proj", "feature"), false},
+		{"the root itself", filepath.Join(data, "lich", "worktrees"), false},
+		{"a directory the user made", filepath.Join(data, "elsewhere", "feature"), true},
+		{"a sibling the root only prefixes", filepath.Join(data, "lich", "worktrees-old", "feature"), true},
+		{"one directory above the root", filepath.Join(data, "lich"), true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := svc.WorktreeAdopted(c.path); got != c.adopted {
+				t.Errorf("WorktreeAdopted(%q) = %v, want %v", c.path, got, c.adopted)
+			}
+		})
+	}
+}
+
+// TestRemoveWorktreeRefusesAnAdoptedCheckout proves a worktree the user made by
+// hand is never handed to `git worktree remove` — not even with force, which is
+// the call that would take uncommitted work with it. git lists it like any
+// other, so nothing but its path outside the data dir tells lich to keep away.
+func TestRemoveWorktreeRefusesAnAdoptedCheckout(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	repo, git := initRepo(t)
+	adopted := filepath.Join(t.TempDir(), "by-hand")
+	git("worktree", "add", "-b", "by-hand", adopted, "main")
+
+	svc := New(nil)
+	for _, force := range []bool{false, true} {
+		if err := svc.RemoveWorktree(repo, adopted, force); err == nil {
+			t.Fatalf("RemoveWorktree(force=%v) = nil, want a refusal", force)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(adopted, "a.txt")); err != nil {
+		t.Errorf("the user's checkout is gone: %v", err)
+	}
+	// Still registered: no `git worktree remove` ran, so the picker keeps
+	// offering it — adoption costs the removal, never the session.
+	branches, err := svc.ListBranches(repo)
+	if err != nil {
+		t.Fatalf("ListBranches: %v", err)
+	}
+	if !slices.ContainsFunc(branches.Worktrees, func(w Worktree) bool { return w.Name == "by-hand" }) {
+		t.Errorf("worktrees = %+v, want the adopted checkout still listed", branches.Worktrees)
+	}
+}
+
 // TestWorktreeDirty proves a fresh worktree reads clean, both modified and
 // untracked files read dirty, and a non-repo path errors.
 func TestWorktreeDirty(t *testing.T) {

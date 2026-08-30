@@ -163,6 +163,13 @@ export function Pulls({ list = false }: PullsProps) {
       toast.error("Worktree has a pinned session — unpin it first.")
       return
     }
+    // A checkout the user made by hand is theirs: lich lists it and works in it,
+    // but it is not lich's to delete. Refused here rather than at the call,
+    // which is past the point where the sessions have already been discarded.
+    if (await ProjectService.WorktreeAdopted(wtPath).catch(() => true)) {
+      toast.error("lich did not create this worktree — remove the checkout yourself.")
+      return
+    }
     if (await ProjectService.WorktreeDirty(wtPath).catch(() => false)) {
       toast.error("Worktree has uncommitted changes — remove it from the sidebar.")
       return

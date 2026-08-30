@@ -481,6 +481,14 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   back has no branch to read and no session to resume: that row says `checkout gone` and offers to forget
   itself, which is the only way such a row is ever collected — `PurgeWorktreeSessions` never ran for it,
   because the removal never went through the app.
+- **A worktree lich did not create can never be removed through lich** (`internal/project.WorktreeAdopted`):
+  `git worktree list` hands back every checkout of a repository, so one the user made by hand appears in the
+  picker and hosts a session like any other — and nothing but its path tells the two apart. Everything lich
+  creates lives under the worktrees root (`reserveWorktreePath`); a canonical path outside it is adopted, and
+  `RemoveWorktree` refuses it whether or not force was asked for. What that costs is the cleanup: a hand-made
+  checkout is parked, never collected, and removing it is a `git worktree remove` the user runs themselves.
+  The test is the path and only the path — a worktree lich created and the user then moved out of the data dir
+  reads as adopted, and one made by hand inside it reads as lich's own.
 - **Parked rows are never swept, and their dropped-file copies expire on the clock instead of at the close**
   (`internal/store/mutations.go`, `internal/drop`): every close now parks a row, so the sessions table grows
   monotonically with the sessions a workspace has ever opened — a few hundred bytes each, which is a megabyte

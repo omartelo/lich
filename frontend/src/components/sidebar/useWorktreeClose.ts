@@ -16,6 +16,12 @@ export interface WorktreeClose {
   closeAnyway: () => void
   /** The session whose keep-or-remove dialog is open, or null. */
   pendingClose: Session | null
+  /**
+   * Whether that checkout is one lich adopted rather than created, in which case
+   * it is the user's directory and removal is not on offer. True until the
+   * backend says otherwise, so the destructive answer never appears on a guess.
+   */
+  pendingAdopted: boolean
   /** The dirty worktree waiting on a --force confirmation, or null. */
   pendingForce: Session | null
   /** Dismiss whichever dialog is open, changing nothing. */
@@ -43,6 +49,7 @@ export function useWorktreeClose(
   const { closeSession, discardSession, keepSession } = useProjects()
   const [pendingRunning, setPendingRunning] = useState<Session | null>(null)
   const [pendingClose, setPendingClose] = useState<Session | null>(null)
+  const [pendingAdopted, setPendingAdopted] = useState(true)
   const [pendingForce, setPendingForce] = useState<Session | null>(null)
 
   // Close first so the PTY running inside the worktree dies before git tries
@@ -73,7 +80,15 @@ export function useWorktreeClose(
         setPendingRunning(session)
         return
       case "ask-worktree":
+        // Asked as the dialog opens rather than at the click on Remove: an
+        // adopted checkout has no removal to offer, and a button that only ever
+        // ends in a refusal is worse than the one that is not there. A failed
+        // check reads as adopted — the safe half of the answer.
+        setPendingAdopted(true)
         setPendingClose(session)
+        void ProjectService.WorktreeAdopted(session.path ?? "")
+          .catch(() => true)
+          .then(setPendingAdopted)
         return
       case "close":
         closeSession(projectId, session.id)
@@ -83,6 +98,7 @@ export function useWorktreeClose(
   return {
     pendingRunning,
     pendingClose,
+    pendingAdopted,
     pendingForce,
 
     requestClose(session) {

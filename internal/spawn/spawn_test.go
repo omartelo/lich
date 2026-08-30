@@ -130,6 +130,8 @@ type fakeWorktrees struct {
 	dirty     map[string]bool
 	removed   []removedWorktree
 	removeErr error
+	// adopted names the checkouts the fixture says lich did not create.
+	adopted map[string]bool
 }
 
 type removedWorktree struct {
@@ -144,6 +146,8 @@ func (f *fakeWorktrees) ListCheckouts(string) ([]project.Worktree, error) {
 func (f *fakeWorktrees) WorktreeDirty(path string) (bool, error) {
 	return f.dirty[path], nil
 }
+
+func (f *fakeWorktrees) WorktreeAdopted(path string) bool { return f.adopted[path] }
 
 func (f *fakeWorktrees) RemoveWorktree(_, path string, force bool) error {
 	f.removed = append(f.removed, removedWorktree{path, force})
