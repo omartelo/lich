@@ -121,6 +121,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   target text rather than the target's contents. The preview now says the path
   leaves the checkout instead of following it. Links that stay inside the tree
   read exactly as before.
+- **An agent installed under a version manager (nvm, fnm, …) is found again.**
+  lich reads your shell's rc file to learn the PATH it needs, but ran it with
+  its input piped rather than attached to a terminal — so an rc file that only
+  runs its body when it detects an interactive terminal (the common guard
+  around a version manager's setup) skipped straight past it, and the PATH lich
+  picked up never gained the version manager's Node or the CLIs installed under
+  it. Providers under a version manager now show up in Settings › Providers on
+  the first check.
 
 ## [0.42.0] - 2026-08-27
 

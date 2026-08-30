@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -120,6 +121,33 @@ func TestResolveShellEnv(t *testing.T) {
 	}
 	if !slices.Contains(got, "PATH=/shell/bin") || slices.Contains(got, "PATH=/orig") {
 		t.Errorf("shell PATH did not override launch PATH: %v", got)
+	}
+}
+
+// TestResolveShellEnvTTYGuardedRC pins the pty fix: rc files commonly guard
+// their body on `[ -t 0 ]`/`tty -s` (nvm and fnm both ship this), and a shell
+// spawned with pipe stdio never satisfies that guard — the export it gates
+// never runs, and neither does the PATH mutation a version manager adds.
+// Measured on this repo's dev machine before the fix:
+// `zsh -lic '[ -t 0 ] && echo yes || echo no' </dev/null` prints "no".
+func TestResolveShellEnvTTYGuardedRC(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("real zsh rig is not runnable on Windows")
+	}
+	zsh, err := exec.LookPath("zsh")
+	if err != nil {
+		t.Skip("zsh not installed")
+	}
+	home := t.TempDir()
+	rc := "[ -t 0 ] || return\nexport LICH_TTY_PROBE=yes\n"
+	if err := os.WriteFile(filepath.Join(home, ".zshrc"), []byte(rc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SHELL", zsh)
+
+	got := ResolveShellEnv([]string{"HOME=" + home})
+	if !slices.Contains(got, "LICH_TTY_PROBE=yes") {
+		t.Fatalf("tty-guarded rc export missing: %v", got)
 	}
 }
 
