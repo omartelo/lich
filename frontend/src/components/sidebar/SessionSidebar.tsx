@@ -4,6 +4,7 @@ import { useMatch, useNavigate } from "react-router-dom"
 import { DndContext, closestCenter } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { GitPullRequestArrow, PanelLeftClose, Plus, Search } from "lucide-react"
+import { toast } from "sonner"
 import { ProjectService } from "@/lib/rpc"
 import { closeSettings, isSettingsOpen, subscribeSettingsCard } from "@/lib/settings-card-store"
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
@@ -138,6 +139,21 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   // decision goes to the user rather than being made under them; `add` refuses
   // the move until they have answered.
   const [moving, setMoving] = useState<{ session: Session; from: PaneGroup } | null>(null)
+  // Gathering an orchestrator and its workers is the one action that builds a
+  // whole wall at once. A delegate already on another wall stays there — it is
+  // the user's arrangement and taking it is the destructive reading — so the
+  // toast names how many were left rather than letting them go missing quietly.
+  const groupDelegates = (sessionId: string, delegateIds: string[]) => {
+    const skipped = panes.groupWith(sessionId, delegateIds)
+    if (skipped > 0) {
+      toast(
+        skipped === 1
+          ? "1 delegate stayed on the split it was already in"
+          : `${skipped} delegates stayed on the splits they were already in`,
+      )
+    }
+  }
+
   const toggleStage = (sessionId: string) => {
     const from = movingFrom(panes.groups, panes.current, sessionId)
     const session = list.find((s) => s.id === sessionId)
@@ -284,6 +300,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
         activeId={activeId}
         stageIds={stageIds}
         onStageToggle={toggleStage}
+        onGroupDelegates={groupDelegates}
         // The divider only earns its place once a worktree — or a pin
         // — splits the list; a lone group keeps the old flat,
         // header-less look. A filter is the exception: which checkout

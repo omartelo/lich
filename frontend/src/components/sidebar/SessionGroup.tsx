@@ -9,7 +9,7 @@ import type { ProviderState } from "@/lib/providers-store"
 import type { DelegateGroup } from "@/lib/session/delegate-targets"
 import { readGroupCollapsed, writeGroupCollapsed } from "@/lib/session/group-prefs"
 import type { PaneGroup } from "@/lib/session/panes"
-import { type Session, sessionOrigin } from "@/lib/session/sessions"
+import { delegatesOf, type Session, sessionOrigin } from "@/lib/session/sessions"
 import { useProjects } from "@/providers/projects"
 import { SessionCard } from "./SessionCard"
 import { PullRequestCard } from "./PullRequestCard"
@@ -43,6 +43,8 @@ interface SessionGroupProps {
   // or none — means it is not split.
   stageIds: string[]
   onStageToggle: (sessionId: string) => void
+  // Gather a session and the ones it delegated to into a wall of their own.
+  onGroupDelegates: (sessionId: string, delegateIds: string[]) => void
   // A divider label is drawn only when the sidebar holds more than one group; a
   // lone project with no worktrees keeps its old flat, header-less list. The
   // header doubles as the group's drag handle, so a lone group is also the case
@@ -97,6 +99,7 @@ export function SessionGroup({
   activeId,
   stageIds,
   onStageToggle,
+  onGroupDelegates,
   showHeader,
   sortable,
   onReorder,
@@ -219,6 +222,13 @@ export function SessionGroup({
                     onStage={!!stage}
                     showing={stageIds.includes(session.id)}
                     onStageToggle={() => onStageToggle(session.id)}
+                    delegateCount={delegatesOf(workspace, projectId, session.id).length}
+                    onGroupDelegates={() =>
+                      onGroupDelegates(
+                        session.id,
+                        delegatesOf(workspace, projectId, session.id).map((s) => s.id),
+                      )
+                    }
                     onSelect={() => select(session.id)}
                     onClose={() => onClose(session)}
                     onRename={(label) => renameSession(projectId, session.id, label)}

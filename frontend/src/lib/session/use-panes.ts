@@ -46,6 +46,11 @@ export interface Panes {
   /** Set a wall's whole pane order — what dragging its cards in the sidebar
    * does, from the other end of the same arrangement. */
   reorderCells: (groupId: string, ids: string[]) => void
+  /** Build a wall out of a session and the ones it delegated to. Answers how
+   * many of them were left where they were, which is what the caller says out
+   * loud — a delegate the user had already put on another wall is theirs, and
+   * taking it is the destructive reading of "group these". */
+  groupWith: (sessionId: string, delegateIds: readonly string[]) => number
   rename: (groupId: string, name: string) => void
   dissolve: (groupId: string) => void
   /** Persist a wall's dragged column or row shares. */
@@ -151,6 +156,25 @@ export function usePanes(projectId: string): Panes {
     },
     reorderCells(groupId, ids) {
       commit(updateGroup(groups, groupId, { cells: ids }))
+    },
+    groupWith(sessionId, delegateIds) {
+      const free = delegateIds.filter((id) => !groupOf(groups, id))
+      if (!projectId || free.length === 0) {
+        return delegateIds.length
+      }
+      const born: PaneGroup = {
+        id: newGroupId(),
+        name: defaultName(list, sessionId),
+        cells: [sessionId, ...free],
+        cols: [],
+        rows: [],
+      }
+      // The session this was asked of leaves whatever wall it was on: it is the
+      // subject of the action, not a bystander moved by it.
+      commit([...removeFromGroups(groups, sessionId), born])
+      // And the window goes there, or the wall is built out of sight.
+      activateSession(projectId, sessionId)
+      return delegateIds.length - free.length
     },
     rename(groupId, name) {
       const trimmed = name.trim()

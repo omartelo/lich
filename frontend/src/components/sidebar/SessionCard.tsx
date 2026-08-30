@@ -85,6 +85,10 @@ interface SessionCardProps {
   showing: boolean
   // Put this card on the stage, or take it off when it is already there.
   onStageToggle: () => void
+  // How many sessions this one delegated work to, and the action that gathers
+  // them into a wall around it. Zero is the usual case and offers nothing.
+  delegateCount: number
+  onGroupDelegates: () => void
   onSelect: () => void
   onClose: () => void
   onRename: (label: string) => void
@@ -121,6 +125,8 @@ export function SessionCard({
   onStage,
   showing,
   onStageToggle,
+  delegateCount,
+  onGroupDelegates,
   onSelect,
   onClose,
   onRename,
@@ -584,6 +590,14 @@ export function SessionCard({
             <Copy />
             Copy send command
           </ContextMenuItem>
+          {delegateCount > 0 && (
+            <ContextMenuItem onClick={onGroupDelegates}>
+              <Columns2 />
+              {delegateCount === 1
+                ? "Show beside its 1 delegate"
+                : `Show beside its ${delegateCount} delegates`}
+            </ContextMenuItem>
+          )}
           {!active && (
             <ContextMenuItem onClick={onStageToggle}>
               <Columns2 />

@@ -27,6 +27,7 @@ import {
   setSessionEntrypoint,
   setSessionPinned,
   setSessionSandboxed,
+  delegatesOf,
   sidebarGroups,
   type Session,
   type SessionKind,
@@ -323,6 +324,37 @@ describe("reorderSessions", () => {
     const state = buildState(3)
     reorderSessions(state, P, ["s3", "s2", "s1"])
     expect(sessionsOf(state, P).map((s) => s.id)).toEqual(["s1", "s2", "s3"])
+  })
+})
+
+describe("delegatesOf", () => {
+  const withOrigin = (state: SessionState, id: string, origin: string): SessionState => ({
+    ...state,
+    [P]: {
+      ...state[P],
+      sessions: state[P].sessions.map((s) => (s.id === id ? { ...s, originSessionId: origin } : s)),
+    },
+  })
+
+  it("answers the sessions this one handed work to, in the project's order", () => {
+    let state = buildState(4)
+    state = withOrigin(state, "s3", "s1")
+    state = withOrigin(state, "s2", "s1")
+    expect(delegatesOf(state, P, "s1").map((s) => s.id)).toEqual(["s2", "s3"])
+  })
+
+  // Direct delegates only: a grandchild is downstream of one the user watched
+  // being spawned, not one this session made.
+  it("does not walk past the sessions it made itself", () => {
+    let state = buildState(3)
+    state = withOrigin(state, "s2", "s1")
+    state = withOrigin(state, "s3", "s2")
+    expect(delegatesOf(state, P, "s1").map((s) => s.id)).toEqual(["s2"])
+  })
+
+  it("answers nothing for a session nobody was delegated from", () => {
+    expect(delegatesOf(buildState(2), P, "s1")).toEqual([])
+    expect(delegatesOf(buildState(2), P, "")).toEqual([])
   })
 })
 

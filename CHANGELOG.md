@@ -21,7 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that would leave them all too small to read.
   A wall is a group you made and named, and a project holds as many as you like —
   an orchestrator with the three worktrees it spawned is one, the next
-  investigation with its own is another. Each gets a block of its own at the top
+  investigation with its own is another. That first one takes a single click:
+  a session that handed work to others offers **Show beside its 3 delegates**,
+  which builds the wall around it, named after it. A delegate you had already put
+  on another split stays where it is, and lich says how many did. Each gets a block of its own at the top
   of the sidebar, so you read its membership instead of rediscovering it: fold
   it, drag it above the others, rename it or take it apart from its header, and
   drag a card inside it to rearrange the panes. Opening a session that is on no

@@ -639,6 +639,22 @@ export function sessionOrigin(state: SessionState, session: Session): string {
   return parent?.label ?? session.originLabel ?? ""
 }
 
+// delegatesOf returns the sessions this one handed work to, in the project's own
+// order. Direct delegates only: `originSessionId` records who asked, and walking
+// the chain further would gather grandchildren the user never watched being
+// spawned — "its delegates" is the ones it made, not everything downstream of
+// them.
+//
+// Scoped to one project, unlike sessionOrigin: a wall draws sessions of the
+// project it belongs to, so a delegate in another project is not something the
+// stage could show even if the delegation crossed over.
+export function delegatesOf(state: SessionState, projectId: string, sessionId: string): Session[] {
+  if (!sessionId) {
+    return []
+  }
+  return sessionsOf(state, projectId).filter((session) => session.originSessionId === sessionId)
+}
+
 export function activeSessionId(state: SessionState, projectId: string): string {
   return state[projectId]?.activeId ?? ""
 }
