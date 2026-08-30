@@ -53,6 +53,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   for one terminal. The budget suite pins that adding a pane mounts one terminal and remounts none
   (`frontend/src/components/render-budget.test.tsx`); it cannot measure the cadence, because jsdom has
   no canvas to paint.
+- **A parked wall is invisible until you go back to it** (`frontend/src/lib/session/panes.ts`,
+  `resolveStage`): the stage is a group the user assembled, so activating a session that is not in it
+  shows that session alone and leaves the arrangement stored rather than torn down. Nothing on screen
+  says a wall is waiting — that is deliberate, a badge for it would be chrome for a state the next
+  click resolves — but it means **Show beside** from outside the wall starts a new one *over* the old,
+  and the arrangement that was parked is gone with no warning. One stage per project, and the last
+  thing written is the one that comes back.
 - **The grid follows the window, so the layout you dragged is not always the one you get back**
   (`frontend/src/lib/session/panes.ts`, `tracks`): how many panes sit across is computed from the
   stage's measured width, so collapsing the sidebar, opening the dock or moving the window to another

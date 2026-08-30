@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react"
 import { readPref, removePref, writePref } from "@/lib/prefs"
-import { COLS_KEY, focusKey, ROWS_KEY, stageKey } from "./panes"
+import { COLS_KEY, ROWS_KEY, stageKey } from "./panes"
 
 // Where the stage lives between mounts. localStorage is the store itself, not a
 // cache in front of one: the values are a list of ids, an index and two vectors
@@ -54,11 +54,6 @@ const readNumbers = parsed<number[]>((raw) =>
   raw ? raw.split(",").map(Number).filter(Number.isFinite) : [],
 )
 
-const readIndex = (key: string): number => {
-  const value = Number(readPref(key))
-  return Number.isInteger(value) && value >= 0 ? value : 0
-}
-
 /** The stored cells, unreconciled — put them through resolveStage with the
  * project's live sessions before drawing anything. */
 export function useStoredStage(projectId: string): string[] {
@@ -68,10 +63,6 @@ export function useStoredStage(projectId: string): string[] {
 // One frozen array for every project with nothing stored, so the snapshot of an
 // empty stage is identity-stable too.
 const EMPTY: string[] = []
-
-export function useStoredFocus(projectId: string): number {
-  return useSyncExternalStore(subscribe, () => (projectId ? readIndex(focusKey(projectId)) : 0))
-}
 
 export function useStoredCols(): number[] {
   return useSyncExternalStore(subscribe, () => readNumbers(COLS_KEY))
@@ -96,19 +87,16 @@ export function stageSize(): { width: number; height: number } {
   return stage
 }
 
-export function writeStage(projectId: string, cells: readonly string[], focus: number): void {
+export function writeStage(projectId: string, cells: readonly string[]): void {
   if (!projectId) {
     return
   }
   if (cells.length <= 1) {
-    // One pane is the unsplit stage: leaving a single id stored would keep a
-    // project pinned to the session that happened to be focused when the last
-    // pane was closed, rather than following the active one again.
+    // One pane is no wall at all: leaving a single id stored would keep bringing
+    // that arrangement back for a session that is simply the active one.
     removePref(stageKey(projectId))
-    removePref(focusKey(projectId))
   } else {
     writePref(stageKey(projectId), cells.join(","))
-    writePref(focusKey(projectId), Math.max(0, focus))
   }
   notify()
 }

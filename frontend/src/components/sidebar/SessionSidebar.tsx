@@ -373,7 +373,6 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
                   activeId={activeId}
                   stageIds={stageIds}
                   onStageToggle={toggleStage}
-                  onFocusCell={(sessionId) => panes.focusCell(panes.cells.indexOf(sessionId))}
                   // The divider only earns its place once a worktree — or a pin
                   // — splits the list; a lone group keeps the old flat,
                   // header-less look. A filter is the exception: which checkout

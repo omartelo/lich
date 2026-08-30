@@ -34,8 +34,6 @@ interface SessionGroupProps {
   // or none — means it is not split.
   stageIds: string[]
   onStageToggle: (sessionId: string) => void
-  // Move the cursor into a pane, for a click on the card already drawing in one.
-  onFocusCell: (sessionId: string) => void
   // A divider label is drawn only when the sidebar holds more than one group; a
   // lone project with no worktrees keeps its old flat, header-less list. The
   // header doubles as the group's drag handle, so a lone group is also the case
@@ -87,7 +85,6 @@ export function SessionGroup({
   activeId,
   stageIds,
   onStageToggle,
-  onFocusCell,
   showHeader,
   sortable,
   onReorder,
@@ -131,16 +128,12 @@ export function SessionGroup({
   }
 
   const select = (id: string) => {
-    // A card already drawing on the stage is selected by moving the cursor into
-    // its pane. Activating it alone would work — the focused cell follows
-    // activeId — but it would also drag that session into whichever cell held
-    // the cursor, leaving the wall rearranged by a click that only meant "look
-    // at this one".
-    if (stageIds.length > 1 && stageIds.includes(id)) {
-      onFocusCell(id)
-      navigate(`/projects/${projectId}`)
-      return
-    }
+    // One path for every card, on the stage or off it: activating a session is
+    // the whole of what selecting one means. A card in a pane moves the cursor
+    // there because the focused cell is read from the active session, and a card
+    // outside the wall parks it and takes the screen — neither needs a branch
+    // here, and the version of this that had one was the bug where opening any
+    // session shoved it into the grid.
     activateSession(projectId, id)
     // From the settings screen this returns to the terminal; on the project
     // route it is a no-op.

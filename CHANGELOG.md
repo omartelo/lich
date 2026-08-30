@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   whole arrangement comes back the way you left it. A pane is a view of a card,
   never a session of its own: its × stops showing that session and closes
   nothing, and closing the session itself hands its room back to the rest.
+  The wall is yours and only **Show beside** adds to it — opening any other
+  session shows that one on its own and sets the wall aside, whole, until you go
+  back to any session in it.
 
 - **The pull request screen hands its current problem to the session.** Red CI
   meant reading the Checks tab, opening each failed job in the browser and

@@ -10,15 +10,22 @@
 // a card.
 //
 // The stage is an ordered list *including* the focused session, and the grid is
-// computed from how many cells there are and how wide the stage is. Two things
-// fall out of that, and both are the reason it is a list rather than a tree:
+// computed from how many cells there are and how wide the stage is. A cell's
+// place is its index, so moving the cursor between panes reorders nothing and no
+// terminal ever slides out from under it.
 //
-//   - a cell's place is its index, so moving the cursor between panes reorders
-//     nothing and no terminal ever slides out from under it;
-//   - the focused cell always draws activeId, so a session activated from
-//     anywhere — the sidebar, the palette, a link in another session's output,
-//     an MCP call — lands in the cell the user was looking at, and none of those
-//     paths has to know the stage exists.
+// What the list is, though, is a *group the user assembled*, and only the add
+// affordance puts a session in it. Activating something else — a card outside
+// the wall, a new session, a link in another session's output, an MCP call —
+// shows that session on its own and parks the wall where it is. It comes back
+// whole the moment any of its members is activated again. The alternative, and
+// what this first did, is to drop the newcomer into whichever cell held the
+// cursor: that turns every click in the sidebar into an edit of an arrangement
+// the user built on purpose.
+//
+// Which is also why nothing here remembers a focused index. The cursor is
+// activeId and its cell is wherever that id sits in the list, so the focus is
+// read rather than stored, and a stale one cannot outlive the cell it named.
 //
 // This file is the pure half: the reconciliation, the grid and the drag
 // arithmetic. The stored side is panes-store.ts.
@@ -36,7 +43,6 @@ export const MIN_PANE_HEIGHT = 160
 export const MIN_TRACK = 0.12
 
 export const stageKey = (projectId: string): string => `lich.panes.${projectId}`
-export const focusKey = (projectId: string): string => `lich.panes.${projectId}.focus`
 /** Track sizes are a habit rather than a property of one checkout, the way the
  * dock's source is (dock-prefs.ts), so they are not keyed by project. */
 export const COLS_KEY = "lich.panes.cols"
@@ -86,8 +92,8 @@ export function fits(count: number, width: number, height: number): boolean {
   return height / rows >= MIN_PANE_HEIGHT
 }
 
-// resolveStage reconciles the stored cells against the project as it is now, and
-// is the one guard the whole feature needs.
+// resolveStage answers what is on screen right now, and is the one guard the
+// whole feature needs.
 //
 // The cells are derived on every read rather than maintained on every mutation:
 // a session leaves the workspace through a close, a park, a worktree removal and
@@ -96,14 +102,13 @@ export function fits(count: number, width: number, height: number): boolean {
 // read time is right for every one of those paths, including the ones added
 // after this.
 //
-// Then the focused cell is made to agree with activeId — by moving the focus
-// when that session is already on the stage, and by replacing the focused cell's
-// occupant when it is not. That second case is what lets a card selected
-// anywhere in the app land in the pane the user was looking at, with the rest of
-// the wall untouched.
+// The active session decides whether the wall is up at all. Inside it, the wall
+// draws and that session's cell is the focused one. Outside it — a card the user
+// picked, a session just created, somewhere an MCP call sent them — the wall is
+// not torn down, it is simply not what is on screen; the stored cells are left
+// untouched, so activating any member brings the whole arrangement back.
 export function resolveStage(
   stored: readonly string[],
-  storedFocus: number,
   sessions: readonly Session[],
   activeId: string,
 ): Stage {
@@ -117,17 +122,8 @@ export function resolveStage(
   if (!activeId) {
     return { cells, focus: 0 }
   }
-  if (cells.length === 0) {
-    return { cells: [activeId], focus: 0 }
-  }
   const at = cells.indexOf(activeId)
-  if (at >= 0) {
-    return { cells, focus: at }
-  }
-  const focus = Math.min(Math.max(storedFocus, 0), cells.length - 1)
-  const replaced = [...cells]
-  replaced[focus] = activeId
-  return { cells: replaced, focus }
+  return at >= 0 ? { cells, focus: at } : { cells: [activeId], focus: 0 }
 }
 
 /** Where a cell sits in the grid. Rows fill left to right, in list order. */

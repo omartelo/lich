@@ -370,7 +370,7 @@ test("adding a pane mounts its terminal and never remounts the ones already up",
   // with the tests above, and what this pins is what *this* action did to it.
   const before = { ...terminalMounts.counts }
 
-  await budget.act(() => writeStage("p1", ["s1", "s2"], 0))
+  await budget.act(() => writeStage("p1", ["s1", "s2"]))
 
   // The second pane's terminal is born once, and the first pane's is not thrown
   // away and rebuilt around it — a split that re-keyed its layers would kill the

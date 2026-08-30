@@ -1,7 +1,7 @@
 import { useProjects } from "@/providers/projects"
 import { activeSessionId, sessionsOf } from "./sessions"
 import { fits, nextCandidate, resolveStage, swapCells } from "./panes"
-import { stageSize, useStoredFocus, useStoredStage, writeStage } from "./panes-store"
+import { stageSize, useStoredStage, writeStage } from "./panes-store"
 
 export interface Panes {
   /** Session ids in layout order, always holding the focused one. */
@@ -31,23 +31,16 @@ export function usePanes(projectId: string): Panes {
   const { sessions, activateSession } = useProjects()
   const list = sessionsOf(sessions, projectId)
   const activeId = activeSessionId(sessions, projectId)
-  const { cells, focus } = resolveStage(
-    useStoredStage(projectId),
-    useStoredFocus(projectId),
-    list,
-    activeId,
-  )
+  const { cells, focus } = resolveStage(useStoredStage(projectId), list, activeId)
 
-  // Focus is two writes that are one move: which cell holds the cursor, and the
-  // session that cell draws becoming the project's active one. Both, always —
-  // writing the index alone would leave the cursor on a cell that then repaints
-  // with somebody else's session in it.
+  // Moving the cursor is one write, and it is not to the stage: the focused cell
+  // is wherever the active session sits in the list, so activating that session
+  // is the whole move.
   const focusCell = (index: number) => {
     const id = cells[index]
     if (!projectId || !id || index === focus) {
       return
     }
-    writeStage(projectId, cells, index)
     activateSession(projectId, id)
   }
 
@@ -71,7 +64,7 @@ export function usePanes(projectId: string): Panes {
       if (!fits(cells.length + 1, width, height)) {
         return false
       }
-      writeStage(projectId, [...cells, id], focus)
+      writeStage(projectId, [...cells, id])
       return true
     },
     drop(index) {
@@ -82,7 +75,7 @@ export function usePanes(projectId: string): Panes {
       // Dropping the focused pane hands the cursor to its neighbour rather than
       // leaving the window on a session it no longer draws.
       const next = Math.min(focus, rest.length - 1)
-      writeStage(projectId, rest, next)
+      writeStage(projectId, rest)
       if (index === focus && rest[next]) {
         activateSession(projectId, rest[next])
       }
@@ -91,10 +84,10 @@ export function usePanes(projectId: string): Panes {
       if (!projectId || from === to) {
         return
       }
-      const next = swapCells(cells, from, to)
-      // The cursor follows the pane it was in, not the place that pane sat.
-      const moved = focus === from ? to : focus === to ? from : focus
-      writeStage(projectId, next, moved)
+      // The cursor follows the pane it was in rather than the place it sat,
+      // which needs no move of its own: the focused cell is read from where the
+      // active session lands in the new order.
+      writeStage(projectId, swapCells(cells, from, to))
     },
   }
 }

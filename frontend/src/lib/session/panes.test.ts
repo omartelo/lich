@@ -65,11 +65,11 @@ describe("fits", () => {
 
 describe("resolveStage", () => {
   it("answers the active session alone when nothing is stored", () => {
-    expect(resolveStage([], 0, sessions, "a")).toEqual({ cells: ["a"], focus: 0 })
+    expect(resolveStage([], sessions, "a")).toEqual({ cells: ["a"], focus: 0 })
   })
 
   it("keeps the stored order and finds the focused cell in it", () => {
-    expect(resolveStage(["a", "b", "c"], 0, sessions, "b")).toEqual({
+    expect(resolveStage(["a", "b", "c"], sessions, "b")).toEqual({
       cells: ["a", "b", "c"],
       focus: 1,
     })
@@ -79,23 +79,25 @@ describe("resolveStage", () => {
   // removal, an undone create — all end here, which is why the cells are derived
   // on read instead of maintained by each of them.
   it("drops cells whose session is gone, and duplicates", () => {
-    expect(resolveStage(["a", "gone", "b", "b"], 0, sessions, "a")).toEqual({
+    expect(resolveStage(["a", "gone", "b", "b"], sessions, "a")).toEqual({
       cells: ["a", "b"],
       focus: 0,
     })
   })
 
-  // This is what lets the palette, a session link and an MCP call all land in
-  // the pane the user was looking at without knowing the stage exists.
-  it("puts a session activated from elsewhere into the focused cell", () => {
-    expect(resolveStage(["a", "b", "c"], 2, sessions, "d")).toEqual({
-      cells: ["a", "b", "d"],
-      focus: 2,
-    })
+  // The wall is a group the user assembled, so nothing but the add affordance
+  // may put a session in it: activating one from outside shows that session
+  // alone rather than editing an arrangement built on purpose.
+  it("shows a session from outside the wall on its own", () => {
+    expect(resolveStage(["a", "b", "c"], sessions, "d")).toEqual({ cells: ["d"], focus: 0 })
   })
 
-  it("clamps a stored focus that no longer names a cell", () => {
-    expect(resolveStage(["a", "b"], 9, sessions, "d")).toEqual({ cells: ["a", "d"], focus: 1 })
+  // And parks rather than tears down — the stored cells are untouched, which is
+  // what lets the arrangement come back whole.
+  it("brings the whole wall back when a member is activated again", () => {
+    const stored = ["a", "b", "c"]
+    expect(resolveStage(stored, sessions, "d").cells).toEqual(["d"])
+    expect(resolveStage(stored, sessions, "c")).toEqual({ cells: stored, focus: 2 })
   })
 })
 
