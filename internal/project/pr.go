@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -49,7 +48,7 @@ func runGH(timeout time.Duration, dir, token string, args ...string) ([]byte, er
 	cmd := commandContext(ctx, "gh", args...)
 	cmd.Dir = dir
 	if token != "" {
-		cmd.Env = append(os.Environ(), "GH_TOKEN="+token)
+		cmd.Env = append(cmd.Env, "GH_TOKEN="+token)
 	}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

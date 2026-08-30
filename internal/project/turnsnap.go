@@ -62,7 +62,7 @@ func TreeDiff(dir, before, after string) (string, error) {
 // that fails costs the panel a whole turn, and the reason has to reach the log.
 func snapGit(dir, index string, args ...string) (string, error) {
 	cmd := command("git", append([]string{"-C", dir}, args...)...)
-	cmd.Env = append(os.Environ(), "GIT_INDEX_FILE="+index)
+	cmd.Env = append(cmd.Env, "GIT_INDEX_FILE="+index)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
