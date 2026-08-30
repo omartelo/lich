@@ -9,6 +9,7 @@ import { closeSettings, isSettingsOpen, subscribeSettingsCard } from "@/lib/sett
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
 import { delegateTargets } from "@/lib/session/delegate-targets"
 import { usePanes } from "@/lib/session/use-panes"
+import { writeStage } from "@/lib/session/panes-store"
 import {
   closePullsList,
   isPullsListOpen,
@@ -132,9 +133,8 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   // itself off it, any other joins it. Adding is refused — quietly, the way the
   // shortcut is — when one more pane would leave them all too small to read.
   const toggleStage = (sessionId: string) => {
-    const at = panes.cells.indexOf(sessionId)
-    if (at >= 0) {
-      panes.drop(at)
+    if (panes.members.includes(sessionId)) {
+      panes.remove(sessionId)
       return
     }
     panes.add(sessionId)
@@ -144,7 +144,9 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   // survivors without knowing a filter exists.
   const filtering = query.trim() !== ""
   const { sessions: visible, matched } = filterSessions(list, query, path, realActiveId)
-  const groups = sidebarGroups(visible)
+  // The split's own block is built from the members, not from what is on screen:
+  // a parked wall is exactly the case the user could not see before.
+  const groups = sidebarGroups(visible, panes.members)
   // The pinned block is out of the drag list entirely: it is always first, and
   // the worktree blocks reorder among themselves. Dragging one moves its whole
   // block of ids inside the flat list the groups are read back from — there is
@@ -207,6 +209,13 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   // bails on any id-set mismatch, so a close that raced the drop drops the
   // stale order.
   const commitGroupOrder = (group: SidebarGroup, ids: string[]) => {
+    // The split's block is the panes, so a drag in it arranges the wall rather
+    // than the stored session list — which is what the drag inside the stage
+    // itself does, from the other end.
+    if (group.stage) {
+      writeStage(projectId, ids)
+      return
+    }
     const member = (session: Session) =>
       group.pinned ? !!session.pinned : !session.pinned && (session.path ?? "") === group.path
     reorderSessions(projectId, reorderSubset(list, ids, member))
@@ -366,6 +375,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
                   key={`${projectId}:${group.key}`}
                   sortId={group.key}
                   pinned={group.pinned}
+                  stage={group.stage}
                   projectId={projectId}
                   path={group.path}
                   sessions={group.sessions}

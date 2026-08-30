@@ -54,6 +54,13 @@ const readNumbers = parsed<number[]>((raw) =>
   raw ? raw.split(",").map(Number).filter(Number.isFinite) : [],
 )
 
+/** The stored cells outside React, for the two readers that are not components:
+ * the collapsed rail and the neighbour walk, both of which have to order cards
+ * the way the sidebar draws them. */
+export function storedStage(projectId: string): string[] {
+  return projectId ? readList(stageKey(projectId)) : EMPTY
+}
+
 /** The stored cells, unreconciled — put them through resolveStage with the
  * project's live sessions before drawing anything. */
 export function useStoredStage(projectId: string): string[] {

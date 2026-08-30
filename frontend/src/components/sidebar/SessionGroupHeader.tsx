@@ -13,7 +13,10 @@ import { SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
 
 interface SessionGroupHeaderProps {
   name: string
-  pinned: boolean
+  // A block that is not a checkout — the pinned sessions, or the split. It has
+  // nowhere to open a new session and never moves, so it offers neither the
+  // launch menu nor a drag handle.
+  fixed: boolean
   collapsed: boolean
   isDragging: boolean
   providers: ProviderState[]
@@ -25,7 +28,7 @@ interface SessionGroupHeaderProps {
 
 interface SessionGroupTitleButtonProps {
   name: string
-  pinned: boolean
+  fixed: boolean
   collapsed: boolean
   activatorRef: (element: HTMLElement | null) => void
   activatorProps: ComponentPropsWithoutRef<"button">
@@ -34,7 +37,7 @@ interface SessionGroupTitleButtonProps {
 
 function SessionGroupTitleButton({
   name,
-  pinned,
+  fixed,
   collapsed,
   activatorRef,
   activatorProps,
@@ -50,7 +53,7 @@ function SessionGroupTitleButton({
       onClick={onClick}
       className={cn(
         "group/collapse -ml-1 flex min-w-0 flex-1 items-center gap-1.5 rounded-sm px-1 py-0.5 text-left transition-colors hover:bg-accent/50",
-        pinned ? "cursor-pointer" : "cursor-grab",
+        fixed ? "cursor-pointer" : "cursor-grab",
       )}
     >
       <ChevronRight
@@ -69,7 +72,7 @@ function SessionGroupTitleButton({
 
 export function SessionGroupHeader({
   name,
-  pinned,
+  fixed,
   collapsed,
   isDragging,
   providers,
@@ -82,13 +85,13 @@ export function SessionGroupHeader({
     <div className="flex items-center gap-1 px-1 pb-0.5 pt-1.5">
       <SessionGroupTitleButton
         name={name}
-        pinned={pinned}
+        fixed={fixed}
         collapsed={collapsed}
         activatorRef={activatorRef}
         activatorProps={activatorProps}
         onClick={() => !isDragging && onToggle()}
       />
-      {!pinned && (
+      {!fixed && (
         <DropdownMenu>
           <DropdownMenuTrigger
             aria-label={`New session in ${name}`}

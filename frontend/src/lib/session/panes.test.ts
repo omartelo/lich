@@ -65,13 +65,14 @@ describe("fits", () => {
 
 describe("resolveStage", () => {
   it("answers the active session alone when nothing is stored", () => {
-    expect(resolveStage([], sessions, "a")).toEqual({ cells: ["a"], focus: 0 })
+    expect(resolveStage([], sessions, "a")).toEqual({ cells: ["a"], focus: 0, members: [] })
   })
 
   it("keeps the stored order and finds the focused cell in it", () => {
     expect(resolveStage(["a", "b", "c"], sessions, "b")).toEqual({
       cells: ["a", "b", "c"],
       focus: 1,
+      members: ["a", "b", "c"],
     })
   })
 
@@ -82,14 +83,21 @@ describe("resolveStage", () => {
     expect(resolveStage(["a", "gone", "b", "b"], sessions, "a")).toEqual({
       cells: ["a", "b"],
       focus: 0,
+      members: ["a", "b"],
     })
   })
 
   // The wall is a group the user assembled, so nothing but the add affordance
   // may put a session in it: activating one from outside shows that session
   // alone rather than editing an arrangement built on purpose.
-  it("shows a session from outside the wall on its own", () => {
-    expect(resolveStage(["a", "b", "c"], sessions, "d")).toEqual({ cells: ["d"], focus: 0 })
+  // The members survive it, which is what the sidebar's own block is built from:
+  // a wall you cannot see the membership of is one you rediscover by clicking.
+  it("shows a session from outside the wall on its own, and keeps the members", () => {
+    expect(resolveStage(["a", "b", "c"], sessions, "d")).toEqual({
+      cells: ["d"],
+      focus: 0,
+      members: ["a", "b", "c"],
+    })
   })
 
   // And parks rather than tears down — the stored cells are untouched, which is
@@ -97,7 +105,11 @@ describe("resolveStage", () => {
   it("brings the whole wall back when a member is activated again", () => {
     const stored = ["a", "b", "c"]
     expect(resolveStage(stored, sessions, "d").cells).toEqual(["d"])
-    expect(resolveStage(stored, sessions, "c")).toEqual({ cells: stored, focus: 2 })
+    expect(resolveStage(stored, sessions, "c")).toEqual({
+      cells: stored,
+      focus: 2,
+      members: stored,
+    })
   })
 })
 

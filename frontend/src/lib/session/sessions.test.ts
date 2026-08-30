@@ -28,6 +28,7 @@ import {
   setSessionPinned,
   setSessionSandboxed,
   sidebarGroups,
+  STAGE_GROUP_KEY,
   type Session,
   type SessionKind,
   type SessionState,
@@ -359,6 +360,39 @@ describe("sidebarGroups", () => {
       [PINNED_GROUP_KEY, ["a1"]],
       [ROOT_GROUP_KEY, ["s1"]],
       ["/wt/b", ["b1"]],
+    ])
+  })
+
+  // The split's block answers the question the wall could not: which sessions
+  // are in it. It is built from the members, not from what is on screen, so it
+  // stands whether or not the wall is the thing being drawn.
+  it("lifts the split's sessions into a block above everything, in pane order", () => {
+    let state = addSession({}, P, "s1")
+    state = addSession(state, P, "a1", "claude", "/wt/a")
+    state = addSession(state, P, "b1", "claude", "/wt/b")
+    expect(ids(sidebarGroups(sessionsOf(state, P), ["b1", "s1"]))).toEqual([
+      [STAGE_GROUP_KEY, ["b1", "s1"]],
+      ["/wt/a", ["a1"]],
+    ])
+  })
+
+  it("draws the split above the pinned block and takes its cards out of it", () => {
+    let state = setSessionPinned(buildState(3), P, "s1", true)
+    state = setSessionPinned(state, P, "s2", true)
+    expect(ids(sidebarGroups(sessionsOf(state, P), ["s2", "s3"]))).toEqual([
+      [STAGE_GROUP_KEY, ["s2", "s3"]],
+      [PINNED_GROUP_KEY, ["s1"]],
+    ])
+  })
+
+  // One pane is no split, and a member whose session is gone is not one either.
+  it("draws no split block for fewer than two live members", () => {
+    const state = buildState(2)
+    expect(ids(sidebarGroups(sessionsOf(state, P), ["s1"]))).toEqual([
+      [ROOT_GROUP_KEY, ["s1", "s2"]],
+    ])
+    expect(ids(sidebarGroups(sessionsOf(state, P), ["s1", "gone"]))).toEqual([
+      [ROOT_GROUP_KEY, ["s1", "s2"]],
     ])
   })
 

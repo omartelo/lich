@@ -76,10 +76,13 @@ interface SessionCardProps {
   // session nobody delegated, which is most of them (sessionOrigin).
   origin: string
   active: boolean
-  // Whether this card is drawing in one of the stage's panes. The active card is
-  // always in one when the stage is split, so this and `active` do overlap — the
-  // mark below is what the two of them together decide.
+  // Whether this session is on the stage at all. It is what the menu entry
+  // answers to, and it is true for a member of a wall that is parked — the block
+  // this card is drawn in is the mark, so nothing is repeated on the card.
   onStage: boolean
+  // Whether it is drawing in a pane *right now*. Never true for a member of a
+  // parked wall, which is exactly the difference the block cannot show.
+  showing: boolean
   // Put this card on the stage, or take it off when it is already there.
   onStageToggle: () => void
   onSelect: () => void
@@ -116,6 +119,7 @@ export function SessionCard({
   origin,
   active,
   onStage,
+  showing,
   onStageToggle,
   onSelect,
   onClose,
@@ -344,9 +348,9 @@ export function SessionCard({
                     className={cn(
                       "group relative flex w-full flex-col items-start gap-0.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-accent/60",
                       active && "bg-accent text-accent-foreground",
-                      // Showing, but not the pane the keyboard is in: one step
+                      // On screen, but not the pane the keyboard is in: one step
                       // down the same fill, never a second kind of mark.
-                      onStage && !active && "bg-accent/55",
+                      showing && !active && "bg-accent/55",
                     )}
                   />
                 }

@@ -58,6 +58,11 @@ export interface Stage {
   cells: string[]
   /** Index of the cell drawing the active session. */
   focus: number
+  /** The stored group, reconciled — every session the user put on the stage,
+   * whether or not it is what the window is showing. The sidebar marks these:
+   * a group nobody can see the membership of is one the user has to click
+   * around to rediscover, which is how it read before this existed. */
+  members: string[]
 }
 
 // grid picks the layout for a number of panes on a stage of this width: the
@@ -120,10 +125,12 @@ export function resolveStage(
     }
   }
   if (!activeId) {
-    return { cells, focus: 0 }
+    return { cells, focus: 0, members: cells }
   }
   const at = cells.indexOf(activeId)
-  return at >= 0 ? { cells, focus: at } : { cells: [activeId], focus: 0 }
+  return at >= 0
+    ? { cells, focus: at, members: cells }
+    : { cells: [activeId], focus: 0, members: cells }
 }
 
 /** Where a cell sits in the grid. Rows fill left to right, in list order. */

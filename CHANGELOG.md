@@ -24,7 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nothing, and closing the session itself hands its room back to the rest.
   The wall is yours and only **Show beside** adds to it — opening any other
   session shows that one on its own and sets the wall aside, whole, until you go
-  back to any session in it.
+  back to any session in it. The sidebar gathers its sessions into a **Split**
+  block of their own at the top, the way pinned ones already are, so which
+  sessions are in the wall is something you read rather than rediscover by
+  clicking: the block folds like any other, and dragging a card inside it
+  rearranges the panes.
 
 - **The pull request screen hands its current problem to the session.** Red CI
   meant reading the Checks tab, opening each failed job in the browser and

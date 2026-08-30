@@ -24,6 +24,10 @@ interface SessionGroupProps {
   // the pin rather than a worktree, no pull request of its own, and never
   // dragged — it is always the first block.
   pinned: boolean
+  // The split's block, gathered the same way and drawn above the pinned one. A
+  // drag inside it reorders the panes rather than the stored session list, which
+  // is the sidebar's half of arranging the wall.
+  stage: boolean
   // "" for the project's own root or the pinned block, else the worktree
   // checkout path.
   path: string
@@ -79,6 +83,7 @@ export function SessionGroup({
   projectId,
   sortId,
   pinned,
+  stage,
   path,
   sessions,
   projectPath,
@@ -110,8 +115,11 @@ export function SessionGroup({
   const [collapsed, setCollapsed] = useState(() => readGroupCollapsed(projectId, sortId))
   const ids = sessions.map((session) => session.id)
   const { sensors, onDragEnd } = useSortableList(ids, onReorder)
-  const name = pinned ? "Pinned" : checkoutLabel(path, projectPath, projectId)
-  const group = useSortable({ id: sortId, disabled: !sortable || !showHeader || pinned })
+  // Neither of the gathered blocks is a checkout, so neither is dragged among
+  // the others and neither has a worktree's name to wear.
+  const fixed = pinned || stage
+  const name = stage ? "Split" : pinned ? "Pinned" : checkoutLabel(path, projectPath, projectId)
+  const group = useSortable({ id: sortId, disabled: !sortable || !showHeader || fixed })
   // The PR card keys off the group's real checkout — the project root for the
   // root group (empty path), else the worktree — so a root project on a feature
   // branch parks its card too, not only worktrees.
@@ -152,15 +160,15 @@ export function SessionGroup({
       {showHeader && (
         <SessionGroupHeader
           name={name}
-          pinned={pinned}
+          fixed={fixed}
           collapsed={collapsed}
           isDragging={group.isDragging}
           providers={providers}
           activatorRef={group.setActivatorNodeRef}
-          // The pinned block is never dragged, and dnd-kit answers a disabled
+          // A fixed block is never dragged, and dnd-kit answers a disabled
           // sortable with aria-disabled + aria-roledescription="draggable" —
           // which would announce a working collapse button as a dead handle.
-          activatorProps={pinned ? {} : { ...group.attributes, ...group.listeners }}
+          activatorProps={fixed ? {} : { ...group.attributes, ...group.listeners }}
           onToggle={toggle}
           onNewSession={(kind) => newSession(projectId, kind, path)}
         />
@@ -194,7 +202,10 @@ export function SessionGroup({
                     // state knows about.
                     origin={sessionOrigin(workspace, session)}
                     active={session.id === activeId}
-                    onStage={stageIds.length > 1 && stageIds.includes(session.id)}
+                    // Membership is the block itself; what the card still has to
+                    // answer is whether that member is on screen this moment.
+                    onStage={stage}
+                    showing={stageIds.includes(session.id)}
                     onStageToggle={() => onStageToggle(session.id)}
                     onSelect={() => select(session.id)}
                     onClose={() => onClose(session)}

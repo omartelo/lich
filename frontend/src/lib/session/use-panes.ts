@@ -4,6 +4,9 @@ import { fits, nextCandidate, resolveStage, swapCells } from "./panes"
 import { stageSize, useStoredStage, writeStage } from "./panes-store"
 
 export interface Panes {
+  /** Every session on the stage, whether or not the wall is what is on screen —
+   * what the sidebar marks. */
+  members: string[]
   /** Session ids in layout order, always holding the focused one. */
   cells: string[]
   /** Index of the cell drawing the active session. */
@@ -19,6 +22,9 @@ export interface Panes {
   add: (sessionId?: string) => boolean
   /** Stop showing the session in this cell. Never closes it. */
   drop: (index: number) => void
+  /** Take a session off the stage by id — the card's own way off, which has to
+   * work while the wall is parked and there are no cells to index. */
+  remove: (sessionId: string) => void
   /** Swap two cells, which is what a pane dropped on another one does. */
   swap: (from: number, to: number) => void
 }
@@ -31,7 +37,7 @@ export function usePanes(projectId: string): Panes {
   const { sessions, activateSession } = useProjects()
   const list = sessionsOf(sessions, projectId)
   const activeId = activeSessionId(sessions, projectId)
-  const { cells, focus } = resolveStage(useStoredStage(projectId), list, activeId)
+  const { cells, focus, members } = resolveStage(useStoredStage(projectId), list, activeId)
 
   // Moving the cursor is one write, and it is not to the stage: the focused cell
   // is wherever the active session sits in the list, so activating that session
@@ -44,7 +50,24 @@ export function usePanes(projectId: string): Panes {
     activateSession(projectId, id)
   }
 
+  const remove = (sessionId: string) => {
+    if (!projectId || !members.includes(sessionId)) {
+      return
+    }
+    const next = members.filter((id) => id !== sessionId)
+    writeStage(projectId, next)
+    // Taking away the pane that held the cursor hands it to what is still up,
+    // rather than leaving the window on a session it no longer draws. Only when
+    // that pane *was* the cursor: removing a parked member changes nothing about
+    // what is on screen.
+    if (sessionId === activeId && next.length > 0) {
+      const at = members.indexOf(sessionId)
+      activateSession(projectId, next[Math.min(at, next.length - 1)])
+    }
+  }
+
   return {
+    members,
     cells,
     focus,
     split: cells.length > 1,
@@ -68,18 +91,9 @@ export function usePanes(projectId: string): Panes {
       return true
     },
     drop(index) {
-      if (!projectId || index < 0 || index >= cells.length) {
-        return
-      }
-      const rest = cells.filter((_, at) => at !== index)
-      // Dropping the focused pane hands the cursor to its neighbour rather than
-      // leaving the window on a session it no longer draws.
-      const next = Math.min(focus, rest.length - 1)
-      writeStage(projectId, rest)
-      if (index === focus && rest[next]) {
-        activateSession(projectId, rest[next])
-      }
+      remove(cells[index] ?? "")
     },
+    remove,
     swap(from, to) {
       if (!projectId || from === to) {
         return
