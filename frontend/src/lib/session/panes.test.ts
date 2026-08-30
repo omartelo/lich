@@ -1,200 +1,149 @@
 import { describe, expect, it } from "vitest"
 import {
-  cellAt,
-  dragTrack,
-  fits,
-  grid,
-  MIN_PANE_WIDTH,
-  MIN_TRACK,
+  addToGroup,
+  defaultName,
+  dissolveGroup,
+  formatGroups,
+  groupOf,
   nextCandidate,
-  offsetOf,
-  resolveStage,
-  rowLength,
-  rowTracks,
+  type PaneGroup,
+  parseGroups,
+  removeFromGroups,
+  reorderGroups,
+  resolveGroups,
   swapCells,
-  tracks,
+  updateGroup,
 } from "./panes"
 import type { Session } from "./sessions"
 
-const session = (id: string): Session => ({ id, label: id, kind: "claude" })
+const session = (id: string): Session => ({ id, label: id.toUpperCase(), kind: "claude" })
 const sessions = [session("a"), session("b"), session("c"), session("d")]
 
-// The two stages the layout is actually argued about: a laptop window with the
-// sidebar and the dock taking their share, and a 34" ultrawide.
-const LAPTOP = 900
-const ULTRAWIDE = 3100
+const group = (id: string, cells: string[], name = id): PaneGroup => ({
+  id,
+  name,
+  cells,
+  cols: [],
+  rows: [],
+})
 
-describe("grid", () => {
-  it("keeps one pane whole", () => {
-    expect(grid(1, LAPTOP)).toEqual({ cols: 1, rows: 1 })
+describe("parseGroups", () => {
+  it("reads what formatGroups wrote", () => {
+    const groups = [group("g1", ["a", "b"], "orchestrator"), group("g2", ["c"])]
+    expect(parseGroups(formatGroups(groups))).toEqual(groups)
   })
 
-  it("puts eight panes four across on an ultrawide and two across on a laptop", () => {
-    expect(grid(8, ULTRAWIDE)).toEqual({ cols: 4, rows: 2 })
-    expect(grid(8, LAPTOP)).toEqual({ cols: 2, rows: 4 })
+  // A pref must never be able to break a launch, so anything unreadable costs
+  // the user their arrangement and nothing else.
+  it("answers no groups for anything it cannot read", () => {
+    expect(parseGroups(null)).toEqual([])
+    expect(parseGroups("")).toEqual([])
+    expect(parseGroups("{oh no")).toEqual([])
+    expect(parseGroups('{"id":"g1"}')).toEqual([])
   })
 
-  it("splits two side by side on a laptop and stacks them on a narrow window", () => {
-    expect(grid(2, LAPTOP)).toEqual({ cols: 2, rows: 1 })
-    expect(grid(2, 700)).toEqual({ cols: 1, rows: 2 })
-  })
-
-  // The literal is pinned rather than derived from the constant: this width is
-  // the readability argument the whole layout rests on, and a test that read the
-  // constant would follow it wherever it moved instead of noticing.
-  it("takes another row exactly when a pane would fall under the readable width", () => {
-    expect(MIN_PANE_WIDTH).toBe(420)
-    expect(grid(2, 840)).toEqual({ cols: 2, rows: 1 })
-    expect(grid(2, 839)).toEqual({ cols: 1, rows: 2 })
-  })
-
-  it("stacks when nothing fits side by side at all", () => {
-    expect(grid(3, 300)).toEqual({ cols: 1, rows: 3 })
+  it("drops entries that are not groups and keeps the ones that are", () => {
+    expect(parseGroups('[{"nope":1},{"id":"g1","cells":["a"]}]')).toEqual([
+      { id: "g1", name: "", cells: ["a"], cols: [], rows: [] },
+    ])
   })
 })
 
-describe("fits", () => {
-  it("allows another pane while they all stay readable", () => {
-    expect(fits(8, ULTRAWIDE, 800)).toBe(true)
+describe("resolveGroups", () => {
+  it("drops cells whose session is gone", () => {
+    expect(resolveGroups([group("g1", ["a", "gone", "b"])], sessions)[0].cells).toEqual(["a", "b"])
   })
 
-  it("refuses one that would leave them too short", () => {
-    expect(fits(8, LAPTOP, 600)).toBe(false)
-  })
-})
-
-describe("resolveStage", () => {
-  it("answers the active session alone when nothing is stored", () => {
-    expect(resolveStage([], sessions, "a")).toEqual({ cells: ["a"], focus: 0, members: [] })
+  // A group of one is still something the user named and can add to; a group of
+  // none has nothing left for the name to be about.
+  it("keeps a group of one and drops a group of none", () => {
+    const groups = resolveGroups([group("g1", ["a"]), group("g2", ["gone"])], sessions)
+    expect(groups.map((g) => g.id)).toEqual(["g1"])
   })
 
-  it("keeps the stored order and finds the focused cell in it", () => {
-    expect(resolveStage(["a", "b", "c"], sessions, "b")).toEqual({
-      cells: ["a", "b", "c"],
-      focus: 1,
-      members: ["a", "b", "c"],
-    })
-  })
-
-  // The four ways a session leaves the workspace — a close, a park, a worktree
-  // removal, an undone create — all end here, which is why the cells are derived
-  // on read instead of maintained by each of them.
-  it("drops cells whose session is gone, and duplicates", () => {
-    expect(resolveStage(["a", "gone", "b", "b"], sessions, "a")).toEqual({
-      cells: ["a", "b"],
-      focus: 0,
-      members: ["a", "b"],
-    })
-  })
-
-  // The wall is a group the user assembled, so nothing but the add affordance
-  // may put a session in it: activating one from outside shows that session
-  // alone rather than editing an arrangement built on purpose.
-  // The members survive it, which is what the sidebar's own block is built from:
-  // a wall you cannot see the membership of is one you rediscover by clicking.
-  it("shows a session from outside the wall on its own, and keeps the members", () => {
-    expect(resolveStage(["a", "b", "c"], sessions, "d")).toEqual({
-      cells: ["d"],
-      focus: 0,
-      members: ["a", "b", "c"],
-    })
-  })
-
-  // And parks rather than tears down — the stored cells are untouched, which is
-  // what lets the arrangement come back whole.
-  it("brings the whole wall back when a member is activated again", () => {
-    const stored = ["a", "b", "c"]
-    expect(resolveStage(stored, sessions, "d").cells).toEqual(["d"])
-    expect(resolveStage(stored, sessions, "c")).toEqual({
-      cells: stored,
-      focus: 2,
-      members: stored,
-    })
+  // The one-group rule is enforced on read too, so a stored value that somehow
+  // holds a session twice cannot put it on two walls.
+  it("gives a session to the first group that claims it", () => {
+    const groups = resolveGroups([group("g1", ["a", "b"]), group("g2", ["b", "c"])], sessions)
+    expect(groups.map((g) => g.cells)).toEqual([["a", "b"], ["c"]])
   })
 })
 
-describe("cellAt / rowLength", () => {
-  it("fills rows left to right in list order", () => {
-    const layout = { cols: 4, rows: 2 }
-    expect(cellAt(0, layout)).toEqual({ col: 0, row: 0 })
-    expect(cellAt(4, layout)).toEqual({ col: 0, row: 1 })
-    expect(cellAt(7, layout)).toEqual({ col: 3, row: 1 })
-  })
-
-  it("reports a short last row", () => {
-    const layout = { cols: 4, rows: 2 }
-    expect(rowLength(0, 7, layout)).toBe(4)
-    expect(rowLength(1, 7, layout)).toBe(3)
+describe("groupOf", () => {
+  it("finds the wall a session is on, and answers null for one on none", () => {
+    const groups = [group("g1", ["a", "b"]), group("g2", ["c"])]
+    expect(groupOf(groups, "b")?.id).toBe("g1")
+    expect(groupOf(groups, "d")).toBeNull()
   })
 })
 
-describe("tracks", () => {
-  it("spreads equally when nothing usable is stored", () => {
-    expect(tracks([], 4)).toEqual([0.25, 0.25, 0.25, 0.25])
+describe("addToGroup", () => {
+  it("appends to the named group", () => {
+    expect(addToGroup([group("g1", ["a"])], "g1", "b")[0].cells).toEqual(["a", "b"])
   })
 
-  it("keeps a stored layout that still describes this many tracks", () => {
-    expect(tracks([0.6, 0.4], 2)).toEqual([0.6, 0.4])
+  // At most one group per session, so adding is also a move.
+  it("takes the session off whatever wall had it", () => {
+    const groups = addToGroup([group("g1", ["a", "b"]), group("g2", ["c"])], "g2", "b")
+    expect(groups.map((g) => g.cells)).toEqual([["a"], ["c", "b"]])
   })
 
-  // The grid reshapes whenever a pane is added or the window resizes, and a
-  // layout dragged for four columns says nothing about three.
-  it("falls back to equal when the stored layout is for another grid", () => {
-    expect(tracks([0.6, 0.4], 3)).toEqual([1 / 3, 1 / 3, 1 / 3])
-  })
-
-  it("refuses a stored layout that does not add up, or that hides a pane", () => {
-    expect(tracks([0.9, 0.9], 2)).toEqual([0.5, 0.5])
-    expect(tracks([0.99, 0.01], 2)).toEqual([0.5, 0.5])
+  it("drops a group the move emptied", () => {
+    const groups = addToGroup([group("g1", ["b"]), group("g2", ["c"])], "g2", "b")
+    expect(groups.map((g) => g.id)).toEqual(["g2"])
   })
 })
 
-describe("rowTracks", () => {
-  it("spreads a short row over the whole width", () => {
-    expect(rowTracks([0.4, 0.3, 0.3], 3)).toEqual([0.4, 0.3, 0.3])
-    const short = rowTracks([0.5, 0.25, 0.25], 2)
-    expect(short[0]).toBeCloseTo(2 / 3)
-    expect(short.reduce((sum, value) => sum + value, 0)).toBeCloseTo(1)
+describe("removeFromGroups", () => {
+  it("keeps the group at one member", () => {
+    expect(removeFromGroups([group("g1", ["a", "b"])], "b")[0].cells).toEqual(["a"])
+  })
+
+  it("ends the group when its last member leaves", () => {
+    expect(removeFromGroups([group("g1", ["a"])], "a")).toEqual([])
   })
 })
 
-describe("offsetOf", () => {
-  it("measures a track's leading edge", () => {
-    expect(offsetOf([0.5, 0.25, 0.25], 0)).toBe(0)
-    expect(offsetOf([0.5, 0.25, 0.25], 2)).toBeCloseTo(0.75)
+describe("updateGroup / dissolveGroup", () => {
+  it("changes only the group named", () => {
+    const groups = updateGroup([group("g1", ["a"]), group("g2", ["b"])], "g2", { name: "renamed" })
+    expect(groups.map((g) => g.name)).toEqual(["g1", "renamed"])
+  })
+
+  it("takes a wall apart without touching the others", () => {
+    expect(dissolveGroup([group("g1", ["a"]), group("g2", ["b"])], "g1").map((g) => g.id)).toEqual([
+      "g2",
+    ])
   })
 })
 
-describe("dragTrack", () => {
-  it("takes from one track and gives to its neighbour", () => {
-    const next = dragTrack([0.5, 0.5], 0, 0.1)
-    expect(next[0]).toBeCloseTo(0.6)
-    expect(next[1]).toBeCloseTo(0.4)
+describe("reorderGroups", () => {
+  it("puts the walls in the order the drag named", () => {
+    const groups = [group("g1", ["a"]), group("g2", ["b"]), group("g3", ["c"])]
+    expect(reorderGroups(groups, ["g3", "g1", "g2"]).map((g) => g.id)).toEqual(["g3", "g1", "g2"])
   })
 
-  it("never collapses a pane, so the session in it stays reachable", () => {
-    expect(dragTrack([0.5, 0.5], 0, -1)).toEqual([MIN_TRACK, 1 - MIN_TRACK])
-    expect(dragTrack([0.5, 0.5], 0, 1)).toEqual([1 - MIN_TRACK, MIN_TRACK])
+  // An id set that raced a dissolve must not cost the user a group.
+  it("keeps a wall the drag did not name", () => {
+    const groups = [group("g1", ["a"]), group("g2", ["b"])]
+    expect(reorderGroups(groups, ["g2"]).map((g) => g.id)).toEqual(["g2", "g1"])
   })
+})
 
-  it("leaves every other track alone", () => {
-    const next = dragTrack([0.25, 0.25, 0.5], 0, 0.05)
-    expect(next[2]).toBe(0.5)
-  })
-
-  it("ignores a boundary that is not between two tracks", () => {
-    expect(dragTrack([0.5, 0.5], 1, 0.1)).toEqual([0.5, 0.5])
-    expect(dragTrack([1], 0, 0.1)).toEqual([1])
+describe("defaultName", () => {
+  it("names a wall after the session it grew from", () => {
+    expect(defaultName(sessions, "b")).toBe("B")
+    expect(defaultName(sessions, "gone")).toBe("Split")
   })
 })
 
 describe("nextCandidate", () => {
-  it("takes the first card not already up", () => {
-    expect(nextCandidate(sessions, ["a", "c"])).toBe("b")
+  it("takes the first card on no wall at all", () => {
+    expect(nextCandidate(sessions, [group("g1", ["a", "b"])])).toBe("c")
   })
 
-  it("answers nothing when the whole project is on the stage", () => {
-    expect(nextCandidate(sessions, ["a", "b", "c", "d"])).toBe("")
+  it("answers nothing when every session is already on one", () => {
+    expect(nextCandidate(sessions, [group("g1", ["a", "b", "c", "d"])])).toBe("")
   })
 })
 

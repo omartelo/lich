@@ -1,5 +1,12 @@
-import type { ComponentPropsWithoutRef } from "react"
-import { ChevronRight, Plus } from "lucide-react"
+import { useState } from "react"
+import type { ComponentPropsWithoutRef, KeyboardEvent } from "react"
+import { ChevronRight, Pencil, Plus, Ungroup } from "lucide-react"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -13,10 +20,16 @@ import { SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
 
 interface SessionGroupHeaderProps {
   name: string
-  // A block that is not a checkout — the pinned sessions, or the split. It has
-  // nowhere to open a new session and never moves, so it offers neither the
-  // launch menu nor a drag handle.
+  // A block that never moves among the others: the pinned sessions. It has no
+  // drag handle, so its title is a plain button.
   fixed: boolean
+  // Whether the block can open a new session in itself — true for a checkout,
+  // false for the gathered blocks, which have no directory to open one in.
+  launch: boolean
+  // Present on a wall's header only: renaming happens in place, and dissolving
+  // takes the wall apart without touching a session in it.
+  onRename?: (name: string) => void
+  onDissolve?: () => void
   collapsed: boolean
   isDragging: boolean
   providers: ProviderState[]
@@ -73,6 +86,9 @@ function SessionGroupTitleButton({
 export function SessionGroupHeader({
   name,
   fixed,
+  launch,
+  onRename,
+  onDissolve,
   collapsed,
   isDragging,
   providers,
@@ -81,7 +97,43 @@ export function SessionGroupHeader({
   onToggle,
   onNewSession,
 }: SessionGroupHeaderProps) {
-  return (
+  const [editing, setEditing] = useState(false)
+
+  const commit = (value: string) => {
+    setEditing(false)
+    const trimmed = value.trim()
+    if (trimmed && trimmed !== name) {
+      onRename?.(trimmed)
+    }
+  }
+
+  const onEditKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      commit(event.currentTarget.value)
+    }
+    if (event.key === "Escape") {
+      setEditing(false)
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1 px-1 pb-0.5 pt-1.5">
+        <input
+          // biome-ignore lint/a11y/noAutofocus: the field replaces the title only once renaming starts.
+          autoFocus
+          defaultValue={name}
+          aria-label="Group name"
+          onFocus={(event) => event.currentTarget.select()}
+          onKeyDown={onEditKeyDown}
+          onBlur={(event) => commit(event.currentTarget.value)}
+          className="w-full rounded-sm bg-transparent px-1 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider text-foreground outline-none ring-1 ring-accent-foreground/30"
+        />
+      </div>
+    )
+  }
+
+  const header = (
     <div className="flex items-center gap-1 px-1 pb-0.5 pt-1.5">
       <SessionGroupTitleButton
         name={name}
@@ -91,7 +143,7 @@ export function SessionGroupHeader({
         activatorProps={activatorProps}
         onClick={() => !isDragging && onToggle()}
       />
-      {!fixed && (
+      {launch && (
         <DropdownMenu>
           <DropdownMenuTrigger
             aria-label={`New session in ${name}`}
@@ -110,5 +162,30 @@ export function SessionGroupHeader({
         </DropdownMenu>
       )}
     </div>
+  )
+
+  // A wall is the only block with anything to say about itself. The others get
+  // no menu rather than an empty one.
+  if (!onRename && !onDissolve) {
+    return header
+  }
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger render={<div />}>{header}</ContextMenuTrigger>
+      <ContextMenuContent>
+        {onRename && (
+          <ContextMenuItem onClick={() => setEditing(true)}>
+            <Pencil />
+            Rename group
+          </ContextMenuItem>
+        )}
+        {onDissolve && (
+          <ContextMenuItem onClick={onDissolve}>
+            <Ungroup />
+            Ungroup
+          </ContextMenuItem>
+        )}
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }

@@ -1,6 +1,6 @@
 import { useRef } from "react"
 import type { PointerEvent as ReactPointerEvent } from "react"
-import { dragTrack, offsetOf } from "@/lib/session/panes"
+import { dragTrack, offsetOf } from "@/lib/session/pane-grid"
 
 interface PaneSeamsProps {
   /** Share of the axis each track takes; a seam sits between adjacent pairs. */

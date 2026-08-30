@@ -8,6 +8,7 @@ import { checkoutLabel } from "@/lib/git/checkout-label"
 import type { ProviderState } from "@/lib/providers-store"
 import type { DelegateGroup } from "@/lib/session/delegate-targets"
 import { readGroupCollapsed, writeGroupCollapsed } from "@/lib/session/group-prefs"
+import type { PaneGroup } from "@/lib/session/panes"
 import { type Session, sessionOrigin } from "@/lib/session/sessions"
 import { useProjects } from "@/providers/projects"
 import { SessionCard } from "./SessionCard"
@@ -24,10 +25,14 @@ interface SessionGroupProps {
   // the pin rather than a worktree, no pull request of its own, and never
   // dragged — it is always the first block.
   pinned: boolean
-  // The split's block, gathered the same way and drawn above the pinned one. A
-  // drag inside it reorders the panes rather than the stored session list, which
-  // is the sidebar's half of arranging the wall.
-  stage: boolean
+  // The wall this block draws, or null for a checkout's block and the pinned
+  // one. A drag inside it reorders the panes rather than the stored session
+  // list, which is the sidebar's half of arranging that wall.
+  stage: PaneGroup | null
+  // Rename the wall, and take it apart. Both are the header's, because both are
+  // about the group rather than any session in it.
+  onRenameGroup: (name: string) => void
+  onDissolveGroup: () => void
   // "" for the project's own root or the pinned block, else the worktree
   // checkout path.
   path: string
@@ -84,6 +89,8 @@ export function SessionGroup({
   sortId,
   pinned,
   stage,
+  onRenameGroup,
+  onDissolveGroup,
   path,
   sessions,
   projectPath,
@@ -117,8 +124,8 @@ export function SessionGroup({
   const { sensors, onDragEnd } = useSortableList(ids, onReorder)
   // Neither of the gathered blocks is a checkout, so neither is dragged among
   // the others and neither has a worktree's name to wear.
-  const fixed = pinned || stage
-  const name = stage ? "Split" : pinned ? "Pinned" : checkoutLabel(path, projectPath, projectId)
+  const fixed = pinned
+  const name = stage ? stage.name : pinned ? "Pinned" : checkoutLabel(path, projectPath, projectId)
   const group = useSortable({ id: sortId, disabled: !sortable || !showHeader || fixed })
   // The PR card keys off the group's real checkout — the project root for the
   // root group (empty path), else the worktree — so a root project on a feature
@@ -161,6 +168,11 @@ export function SessionGroup({
         <SessionGroupHeader
           name={name}
           fixed={fixed}
+          // A wall has nowhere to open a new session — it is not a checkout —
+          // but it does reorder among the other walls, so it keeps its handle.
+          launch={!fixed && !stage}
+          onRename={stage ? onRenameGroup : undefined}
+          onDissolve={stage ? onDissolveGroup : undefined}
           collapsed={collapsed}
           isDragging={group.isDragging}
           providers={providers}
@@ -204,7 +216,7 @@ export function SessionGroup({
                     active={session.id === activeId}
                     // Membership is the block itself; what the card still has to
                     // answer is whether that member is on screen this moment.
-                    onStage={stage}
+                    onStage={!!stage}
                     showing={stageIds.includes(session.id)}
                     onStageToggle={() => onStageToggle(session.id)}
                     onSelect={() => select(session.id)}

@@ -7,6 +7,7 @@
 // input — which keeps the reducer logic testable without React or a PTY.
 
 import { applyOrder } from "@/lib/reorder"
+import type { PaneGroup } from "./panes"
 
 // Provider ids that can back a session, mirrored from internal/providers.Registry
 // (Go) — keep in sync. A session's kind is one of these or the plain shell.
@@ -328,77 +329,72 @@ export function setSessionEntrypoint(
 // collide with no worktree — those paths are absolute.
 export const PINNED_GROUP_KEY = "__pinned__"
 
-// The split's block, on the same footing and for the same reason: the sessions
-// on the stage come from any checkout, so no worktree path can collide with it.
-export const STAGE_GROUP_KEY = "__stage__"
-
-// One block of the sidebar: the split, the pinned sessions, or one worktree's.
+// One block of the sidebar: a split group, the pinned sessions, or one
+// worktree's.
 export interface SidebarGroup {
   key: string
   // True for the pinned block. It is not a checkout — no path of its own, no
-  // pull request, and it never moves: it is always drawn first.
+  // pull request — and it never moves among the others.
   pinned: boolean
-  // True for the split's block: the sessions the user put on the stage, drawn
-  // together at the top whether or not the wall is what the window is showing.
-  // Which is the whole point of it — membership was otherwise a thing you found
-  // out by clicking a card and watching four panes appear.
-  stage: boolean
-  // The checkout root ("" for the project's own directory), empty for pinned.
+  // The split group this block draws, or null. Its sessions come from any
+  // checkout, so it is keyed by the group's own id and can collide with no
+  // worktree path. A project has as many of these as the user has made, drawn
+  // above everything else in the order they arranged.
+  stage: PaneGroup | null
+  // The checkout root ("" for the project's own directory), empty for the
+  // gathered blocks.
   path: string
   sessions: Session[]
 }
 
 // sidebarGroups splits a project's sessions into the blocks the sidebar draws:
-// the split's block first, then the pinned ones, then one block per worktree in
-// first-appearance order. Each block keeps the stored (drag) order inside —
-// except the split's, which keeps the order of the panes it draws.
+// the split groups first in the order the user arranged them, then the pinned
+// ones, then one block per worktree in first-appearance order. Each block keeps
+// the stored (drag) order inside — except a split's, which keeps the order of
+// the panes it draws.
 //
-// Neither the split nor a pin rewrites the stored list; both only lift a card
-// into a block at the top, which is what lets a session dropped from either
-// land back among its old neighbours instead of being stranded. The store hands
-// that same order back, so a reload draws what the live change did.
+// Neither a split nor a pin rewrites the stored session list; both only lift a
+// card into a block above, which is what lets a session dropped from either land
+// back among its old neighbours instead of being stranded. The store hands that
+// same order back, so a reload draws what the live change did.
 //
-// A session both pinned and on the stage is drawn in the split's block: the pin
-// promises the top of the list rather than one particular block, and it keeps
-// its own mark on the card either way.
-export function sidebarGroups(sessions: Session[], stage: readonly string[] = []): SidebarGroup[] {
-  const staged = stage
-    .map((id) => sessions.find((session) => session.id === id))
-    .filter((session): session is Session => !!session)
-  // One pane is no split, so it earns no block — and its session must stay in
-  // the worktree block it came from rather than being lifted out of the sidebar
-  // into a block nothing draws.
-  const drawStage = staged.length > 1
-  const onStage = new Set(drawStage ? staged.map((session) => session.id) : [])
-  const rest = sessions.filter((session) => !onStage.has(session.id))
+// A session both pinned and on a wall is drawn in the wall's block: the pin
+// promises the top of the list rather than one particular header, and the card
+// keeps its own mark either way. A group whose sessions are all gone draws
+// nothing — resolveGroups has already dropped it from what is stored.
+export function sidebarGroups(
+  sessions: Session[],
+  stage: readonly PaneGroup[] = [],
+): SidebarGroup[] {
+  const byId = new Map(sessions.map((session) => [session.id, session]))
+  const blocks: SidebarGroup[] = []
+  const claimed = new Set<string>()
+  for (const group of stage) {
+    const members = group.cells.flatMap((id) => byId.get(id) ?? [])
+    if (members.length === 0) {
+      continue
+    }
+    for (const member of members) {
+      claimed.add(member.id)
+    }
+    blocks.push({ key: group.id, pinned: false, stage: group, path: "", sessions: members })
+  }
 
-  const groups: SidebarGroup[] = groupByWorktree(rest.filter((s) => !s.pinned)).map((group) => ({
-    key: groupKey(group.path),
-    pinned: false,
-    stage: false,
-    path: group.path,
-    sessions: group.sessions,
-  }))
+  const rest = sessions.filter((session) => !claimed.has(session.id))
   const pinned = rest.filter((s) => s.pinned)
   if (pinned.length > 0) {
-    groups.unshift({
-      key: PINNED_GROUP_KEY,
-      pinned: true,
-      stage: false,
-      path: "",
-      sessions: pinned,
-    })
+    blocks.push({ key: PINNED_GROUP_KEY, pinned: true, stage: null, path: "", sessions: pinned })
   }
-  if (drawStage) {
-    groups.unshift({
-      key: STAGE_GROUP_KEY,
+  for (const group of groupByWorktree(rest.filter((s) => !s.pinned))) {
+    blocks.push({
+      key: groupKey(group.path),
       pinned: false,
-      stage: true,
-      path: "",
-      sessions: staged,
+      stage: null,
+      path: group.path,
+      sessions: group.sessions,
     })
   }
-  return groups
+  return blocks
 }
 
 // reorderSubset returns the full id order that hands `ids` to the sessions the
@@ -434,7 +430,7 @@ export function neighborSessionId(
   projectId: string,
   sessionId: string,
   step: 1 | -1,
-  stage: readonly string[] = [],
+  stage: readonly PaneGroup[] = [],
 ): string {
   const sessions = sidebarGroups(sessionsOf(state, projectId), stage).flatMap(
     (group) => group.sessions,

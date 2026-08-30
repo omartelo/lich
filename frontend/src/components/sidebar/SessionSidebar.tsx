@@ -8,8 +8,8 @@ import { ProjectService } from "@/lib/rpc"
 import { closeSettings, isSettingsOpen, subscribeSettingsCard } from "@/lib/settings-card-store"
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
 import { delegateTargets } from "@/lib/session/delegate-targets"
+import { reorderGroups } from "@/lib/session/panes"
 import { usePanes } from "@/lib/session/use-panes"
-import { writeStage } from "@/lib/session/panes-store"
 import {
   closePullsList,
   isPullsListOpen,
@@ -133,7 +133,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   // itself off it, any other joins it. Adding is refused — quietly, the way the
   // shortcut is — when one more pane would leave them all too small to read.
   const toggleStage = (sessionId: string) => {
-    if (panes.members.includes(sessionId)) {
+    if (panes.groups.some((group) => group.cells.includes(sessionId))) {
       panes.remove(sessionId)
       return
     }
@@ -146,18 +146,26 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   const { sessions: visible, matched } = filterSessions(list, query, path, realActiveId)
   // The split's own block is built from the members, not from what is on screen:
   // a parked wall is exactly the case the user could not see before.
-  const groups = sidebarGroups(visible, panes.members)
+  const groups = sidebarGroups(visible, panes.groups)
   // The pinned block is out of the drag list entirely: it is always first, and
   // the worktree blocks reorder among themselves. Dragging one moves its whole
   // block of ids inside the flat list the groups are read back from — there is
   // no separate group order to store — leaving the pinned sessions where they
   // sit in it, so unpinning still drops a card among its old neighbours.
-  const dragKeys = groups.filter((group) => !group.pinned).map((group) => group.key)
+  const dragKeys = groups.filter((group) => !group.pinned && !group.stage).map((group) => group.key)
   const { sensors, onDragEnd } = useSortableList(dragKeys, (keys) =>
     reorderSessions(
       projectId ?? "",
       reorderSubset(list, orderGroups(groups, keys), (session) => !session.pinned),
     ),
+  )
+  // The walls reorder in a list of their own. They have to: a worktree block's
+  // place is derived from where its sessions sit in the stored flat list, and a
+  // wall's is the order of the groups themselves — one drag list holding both
+  // would have to write two unrelated things depending on what was picked up.
+  const stageKeys = panes.groups.map((group) => group.id)
+  const { sensors: stageSensors, onDragEnd: onStageDragEnd } = useSortableList(stageKeys, (keys) =>
+    panes.reorder(reorderGroups(panes.groups, keys)),
   )
   // Resolved once here, not per group: the list spans every open project, so
   // it is the same for every card in the sidebar. Memoised because the picker
@@ -209,11 +217,11 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   // bails on any id-set mismatch, so a close that raced the drop drops the
   // stale order.
   const commitGroupOrder = (group: SidebarGroup, ids: string[]) => {
-    // The split's block is the panes, so a drag in it arranges the wall rather
-    // than the stored session list — which is what the drag inside the stage
-    // itself does, from the other end.
+    // A split block is a wall, so a drag in it arranges that wall rather than
+    // the stored session list — the same arrangement the drag inside the stage
+    // itself makes, from the other end.
     if (group.stage) {
-      writeStage(projectId, ids)
+      panes.reorderCells(group.stage.id, ids)
       return
     }
     const member = (session: Session) =>
@@ -239,6 +247,64 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   const resumeWorktree = (wt: { name: string; path: string }) => {
     void reopenWorktreeSession(projectId, wt)
     setWorktreeOpen(false)
+  }
+
+  // One block, rendered the same whichever drag list it belongs to.
+  const renderGroup = (group: SidebarGroup) => {
+    const groupActive = group.sessions.some((s) => s.id === realActiveId)
+    return (
+      <SessionGroup
+        // The project is in the React key, not only in the props: two
+        // projects both have a root block and a pinned one under the
+        // same key, so without it React reuses one project's group
+        // component for the other's — carrying its fold across with it,
+        // and never re-reading the fold the switched-to project stored.
+        key={`${projectId}:${group.key}`}
+        sortId={group.key}
+        pinned={group.pinned}
+        stage={group.stage}
+        onRenameGroup={(name) => group.stage && panes.rename(group.stage.id, name)}
+        onDissolveGroup={() => group.stage && panes.dissolve(group.stage.id)}
+        projectId={projectId}
+        path={group.path}
+        sessions={group.sessions}
+        projectPath={path}
+        activeId={activeId}
+        stageIds={stageIds}
+        onStageToggle={toggleStage}
+        // The divider only earns its place once a worktree — or a pin
+        // — splits the list; a lone group keeps the old flat,
+        // header-less look. A filter is the exception: which checkout
+        // a surviving card sits in is the thing the query was typed to
+        // find out, so the title stays even for a lone group.
+        showHeader={groups.length > 1 || filtering}
+        // A drop computed from a filtered view hands reorderSubset an
+        // id set that does not name the group's members, and
+        // reorderSessions rejects the whole order — so the gesture
+        // would be a silent no-op. Take it away instead of leaving a
+        // dead one on screen.
+        sortable={!filtering}
+        onReorder={(ids) => commitGroupOrder(group, ids)}
+        onClose={worktreeClose.requestClose}
+        pullsActive={onPullsRoute && groupActive}
+        onPulls={() => {
+          openPulls(group.path || path)
+          const target = groupActive ? realActiveId : group.sessions[0]?.id
+          if (target) {
+            activateSession(projectId, target)
+          }
+          navigate(`/projects/${projectId}/pulls`)
+        }}
+        onClosePulls={() => {
+          closePulls(group.path || path)
+          if (onPullsRoute && groupActive) {
+            navigate(`/projects/${projectId}`)
+          }
+        }}
+        delegateGroups={delegateGroups}
+        providers={enabled}
+      />
+    )
   }
 
   return (
@@ -356,6 +422,20 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
             No sessions match “{query.trim()}”. The active session stays.
           </Notice>
         )}
+        {/* The walls first, in their own drag list, then everything else in
+            the one whose order lives in the stored session list. */}
+        {stageKeys.length > 0 && (
+          <DndContext
+            sensors={stageSensors}
+            collisionDetection={closestCenter}
+            modifiers={[verticalAxis, withinList]}
+            onDragEnd={onStageDragEnd}
+          >
+            <SortableContext items={stageKeys} strategy={verticalListSortingStrategy}>
+              {groups.filter((group) => group.stage).map(renderGroup)}
+            </SortableContext>
+          </DndContext>
+        )}
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -363,60 +443,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
           onDragEnd={onDragEnd}
         >
           <SortableContext items={dragKeys} strategy={verticalListSortingStrategy}>
-            {groups.map((group) => {
-              const groupActive = group.sessions.some((s) => s.id === realActiveId)
-              return (
-                <SessionGroup
-                  // The project is in the React key, not only in the props: two
-                  // projects both have a root block and a pinned one under the
-                  // same key, so without it React reuses one project's group
-                  // component for the other's — carrying its fold across with it,
-                  // and never re-reading the fold the switched-to project stored.
-                  key={`${projectId}:${group.key}`}
-                  sortId={group.key}
-                  pinned={group.pinned}
-                  stage={group.stage}
-                  projectId={projectId}
-                  path={group.path}
-                  sessions={group.sessions}
-                  projectPath={path}
-                  activeId={activeId}
-                  stageIds={stageIds}
-                  onStageToggle={toggleStage}
-                  // The divider only earns its place once a worktree — or a pin
-                  // — splits the list; a lone group keeps the old flat,
-                  // header-less look. A filter is the exception: which checkout
-                  // a surviving card sits in is the thing the query was typed to
-                  // find out, so the title stays even for a lone group.
-                  showHeader={groups.length > 1 || filtering}
-                  // A drop computed from a filtered view hands reorderSubset an
-                  // id set that does not name the group's members, and
-                  // reorderSessions rejects the whole order — so the gesture
-                  // would be a silent no-op. Take it away instead of leaving a
-                  // dead one on screen.
-                  sortable={!filtering}
-                  onReorder={(ids) => commitGroupOrder(group, ids)}
-                  onClose={worktreeClose.requestClose}
-                  pullsActive={onPullsRoute && groupActive}
-                  onPulls={() => {
-                    openPulls(group.path || path)
-                    const target = groupActive ? realActiveId : group.sessions[0]?.id
-                    if (target) {
-                      activateSession(projectId, target)
-                    }
-                    navigate(`/projects/${projectId}/pulls`)
-                  }}
-                  onClosePulls={() => {
-                    closePulls(group.path || path)
-                    if (onPullsRoute && groupActive) {
-                      navigate(`/projects/${projectId}`)
-                    }
-                  }}
-                  delegateGroups={delegateGroups}
-                  providers={enabled}
-                />
-              )
-            })}
+            {groups.filter((group) => !group.stage).map(renderGroup)}
           </SortableContext>
         </DndContext>
       </div>

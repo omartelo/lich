@@ -7,7 +7,7 @@ import type { ClosedSession, Project, RecentProject } from "@/lib/api-types"
 import type { StoredProject as StoreProject, StoredSession } from "@/lib/api-types"
 import { ProjectService, Store, System } from "@/lib/rpc"
 import { onAppEvent } from "@/lib/app-events"
-import { storedStage } from "@/lib/session/panes-store"
+import { storedGroups } from "@/lib/session/panes-store"
 import {
   activeSessionId,
   addSession,
@@ -577,7 +577,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       step,
       // The walk follows what the sidebar draws, and the split's block is drawn
       // first: without it the step would jump a divider and come back.
-      storedStage(activeProjectId),
+      storedGroups(activeProjectId),
     )
     if (target) {
       activateSession(activeProjectId, target)

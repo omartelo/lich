@@ -13,8 +13,7 @@ import { activeSessionId, hasSession, resumableSession, sessionsOf } from "@/lib
 import { paletteSessions } from "@/lib/session/command-palette"
 import { spawnDecision, type SpawnProbe } from "@/lib/session/spawn-gate"
 import { PaneSeams } from "./PaneSeams"
-import { cellAt, grid, offsetOf, rowLength, rowTracks, tracks } from "@/lib/session/panes"
-import { useStoredCols, useStoredRows, writeCols, writeRows } from "@/lib/session/panes-store"
+import { cellAt, grid, offsetOf, rowLength, rowTracks, tracks } from "@/lib/session/pane-grid"
 import { usePanes } from "@/lib/session/use-panes"
 import { useStageSize } from "@/lib/session/use-stage-size"
 import { cn } from "@/lib/utils"
@@ -67,10 +66,10 @@ export function TerminalHost() {
   // panes have to move with the pointer, and only the release is written down.
   const [liveCols, setLiveCols] = useState<number[] | null>(null)
   const [liveRows, setLiveRows] = useState<number[] | null>(null)
-  const storedCols = useStoredCols()
-  const storedRows = useStoredRows()
-  const cols = liveCols ?? tracks(storedCols, layout.cols)
-  const rows = liveRows ?? tracks(storedRows, layout.rows)
+  // The shares belong to the wall being drawn, not to the window: arranging one
+  // group 60/40 must not carry into the next one the user opens.
+  const cols = liveCols ?? tracks(stage.current?.cols ?? [], layout.cols)
+  const rows = liveRows ?? tracks(stage.current?.rows ?? [], layout.rows)
 
   // The pane a dragged one is hovering over, for the drop hint. The drag itself
   // is a pointer gesture on the label rather than HTML5 drag-and-drop, which the
@@ -314,7 +313,9 @@ export function TerminalHost() {
               onChange={setLiveCols}
               onCommit={(next) => {
                 setLiveCols(null)
-                writeCols(next)
+                if (stage.current) {
+                  stage.setTracks(stage.current.id, { cols: next })
+                }
               }}
             />
           ) : null,
@@ -327,7 +328,9 @@ export function TerminalHost() {
           onChange={setLiveRows}
           onCommit={(next) => {
             setLiveRows(null)
-            writeRows(next)
+            if (stage.current) {
+              stage.setTracks(stage.current.id, { rows: next })
+            }
           }}
         />
       )}

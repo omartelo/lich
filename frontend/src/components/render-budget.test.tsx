@@ -353,7 +353,7 @@ test("switching project re-renders the mounted terminals but never remounts one"
 test("adding a pane mounts its terminal and never remounts the ones already up", async () => {
   window.location.hash = "#/projects/p1"
   const { TerminalHost } = await import("./TerminalHost")
-  const { writeStage } = await import("@/lib/session/panes-store")
+  const { writeGroups } = await import("@/lib/session/panes-store")
   const budget = await mountBudget(
     createElement(
       HashRouter,
@@ -370,7 +370,9 @@ test("adding a pane mounts its terminal and never remounts the ones already up",
   // with the tests above, and what this pins is what *this* action did to it.
   const before = { ...terminalMounts.counts }
 
-  await budget.act(() => writeStage("p1", ["s1", "s2"]))
+  await budget.act(() =>
+    writeGroups("p1", [{ id: "g1", name: "wall", cells: ["s1", "s2"], cols: [], rows: [] }]),
+  )
 
   // The second pane's terminal is born once, and the first pane's is not thrown
   // away and rebuilt around it — a split that re-keyed its layers would kill the

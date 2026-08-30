@@ -53,12 +53,12 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   for one terminal. The budget suite pins that adding a pane mounts one terminal and remounts none
   (`frontend/src/components/render-budget.test.tsx`); it cannot measure the cadence, because jsdom has
   no canvas to paint.
-- **One split per project, and starting another replaces it** (`frontend/src/lib/session/use-panes.ts`,
-  `add`): the stage is a group the user assembled, so activating a session outside it shows that
-  session alone and leaves the arrangement stored rather than torn down — the sidebar's Split block is
-  what says the wall is still there. But **Show beside** from a session outside the wall starts a new
-  one over the old, and the block is the only warning: the members that were in it stop being drawn
-  under that header the moment the new one is written, and nothing asks first.
+- **A session is on at most one wall, so adding it to another moves it silently**
+  (`frontend/src/lib/session/panes.ts`, `addToGroup`): the rule is what keeps "which wall is on
+  screen" from ever being ambiguous — the one holding the active session — but it means **Show
+  beside** on a card that already belongs to another group takes it out of that group with no
+  warning, and the group it left ends outright if it was its last member. The sidebar's blocks are
+  the only thing that shows it happened, after the fact.
 - **The grid follows the window, so the layout you dragged is not always the one you get back**
   (`frontend/src/lib/session/panes.ts`, `tracks`): how many panes sit across is computed from the
   stage's measured width, so collapsing the sidebar, opening the dock or moving the window to another
