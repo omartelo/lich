@@ -28,25 +28,48 @@ Both sides test against the payloads in
 
 ## Event → action mapping
 
-| Claude Code hook | Codex hook | Antigravity hook | opencode event    | oh-my-pi event                | Crush hook | Cursor CLI hook | action                                           |
-|------------------|------------|------------------|-------------------|-------------------------------|------------|-----------------|--------------------------------------------------|
-| `Stop`           | `Stop`     | `Stop`           | `session.updated` | `session_stop` + `turn_start` | —          | —               | set the session label to `title` (if still auto) |
+| Claude Code hook          | Codex hook                | Antigravity hook          | opencode event    | oh-my-pi event                | Crush hook | Cursor CLI hook | action                                           |
+|---------------------------|---------------------------|---------------------------|-------------------|-------------------------------|------------|-----------------|--------------------------------------------------|
+| `PostToolUse` + `Stop`    | `PostToolUse` + `Stop`    | `PreInvocation` + `Stop`  | `session.updated` | `session_stop` + `turn_start` | —          | —               | set the session label to `title` (if still auto) |
 
-The `ai-title` is an internal Haiku summary of the first prompt, written to the
-transcript **after** the first turn — so it does not exist at `SessionStart`.
-The `Stop` hook is the earliest reliable point: read the transcript path Claude
-Code passes on stdin and take the last `ai-title` line:
+The `ai-title` is an internal Haiku summary of the first prompt. It does not
+exist at `SessionStart`, but it lands long before the turn it belongs to ends:
+Claude Code fires the title call **in parallel with the turn's own first model
+call**, and the title reaches the transcript about three seconds after the
+prompt. Read the transcript path the harness passes on stdin and take the last
+`ai-title` line:
 
 ```sh
-title=$(tac "$transcript_path" | grep -m1 '"type":"ai-title"' | jq -r '.aiTitle')
+title=$(grep '"type":"ai-title"' "$transcript_path" | tail -n1 | jq -r '.aiTitle')
 ```
+
+**Which is why the turn's end is the wrong place to read it, and the only place
+lich used to.** A first turn that runs for ten minutes showed `Session 3` for
+all ten, with its real name sitting on disk since second three, and a turn the
+user interrupted never got a name at all. So the report is sent from the first
+event of the turn that can carry it — `PostToolUse`, or `PreInvocation` where a
+harness has no post-tool event of its own — and again at `Stop`, which stays the
+backstop for a turn that ran no tools and the one path that still sees a later
+retitle.
+
+**The in-turn report latches; the `Stop` one does not.** A title is found by
+scanning a transcript that grows all turn — 324 ms on a 168 MB one, measured on
+a warm cache — and a turn with fifty tool calls would pay that fifty times to
+learn what it knew after the first. So a client that reports in-turn records
+that it found a title for this session and stops looking, which makes the new
+path one scan per session. `Stop` keeps scanning: it is what a retitle arrives
+on, and lich's own guard below is what makes re-sending free.
 
 A provider that generates no title sends whatever it names its own thread after
 — Codex uses the first user message verbatim, which the plugin reads from the
-rollout and trims to 80 characters, and Antigravity is read the same way: its
-`Stop` payload carries a `transcriptPath` whose first `USER_INPUT` entry is that
+rollout and trims to 80 characters, and Antigravity is read the same way, from
+the `transcriptPath` its payloads carry: the first `USER_INPUT` entry is that
 message. The contract only asks for a non-empty string; where it comes from, and
 where it is cut, is the client's business.
+
+Those two are also why the in-turn report is worth registering on a harness that
+generates nothing: their title is the user's own first message, which exists
+before the turn does. Only Claude has to wait the three seconds.
 
 **A client that trims does it by codepoint, never by byte.** lich takes the
 string as sent and the card truncates what will not fit, so a title cut through
@@ -71,8 +94,10 @@ a desktop carries that desktop's locale and one started without one carries
 none. The report is the same shape either way — which is what makes it a thing
 to write down rather than to catch.
 
-Send it on `Stop`. Re-sending on every `Stop` is fine — lich only applies it
-while the label is still automatic (see below), so a stable title is idempotent.
+Send it from the turn's first event that can carry it, and again on `Stop`.
+Re-sending is fine — lich only applies it while the label is still automatic
+(see below), so a stable title is idempotent, and the guard is what lets a
+client report early without having to know whether it already did.
 
 opencode is the one harness that hands the title over instead of being read out
 of a transcript: every `session.updated` carries the whole session, title
@@ -83,6 +108,17 @@ and sends only what changed. It arrives more than once
 per turn, which the idempotence above already covers. **Crush has no title to
 report** — its only event is `PreToolUse`, whose payload is about the tool — so a
 Crush card keeps the name lich gave it.
+
+**Cursor now runs this path for the first time, and still reports nothing.** lich
+installs no plugin there; the CLI executes the Claude Code registration, and of
+the events that registration names it delivers `PostToolUse` but not `Stop`
+(`README.md`) — so a Cursor session never reached this report at all while it
+was sent at the turn's end, and reaches it now. It gets no further than a guard:
+either the payload names no readable transcript, or the transcript it names
+carries none of the three shapes read above. Nothing is sent, nothing latches,
+and the card keeps the name lich gave it — the same outcome as before, through a
+code path that now runs, which is worth knowing when a Cursor card is the one
+being debugged.
 
 ## lich server side
 
@@ -107,6 +143,12 @@ Crush card keeps the name lich gave it.
   "aiTitle":...}` in the transcript jsonl) can change between Claude Code
   versions. The hook must swallow extraction failures and no-op — session state
   and the rest of lich keep working if it breaks.
+- **A very short first prompt is never titled at all.** Claude Code does not
+  fire its title call for a first prompt under 10 characters, so no `ai-title`
+  is ever written and no amount of reading finds one — a card whose whole prompt
+  was `1+1 is?` keeps the name lich gave it, correctly, since the prompt would
+  fit on the card anyway. Absence there is the CLI's behaviour, not a broken
+  hook, and it is the first thing to rule out before debugging one.
 - **Reacts to the first prompt, not later pivots reliably.** Claude Code may or
   may not refresh the `ai-title` mid-session; lich applies whatever the hook
   last sent while the label is still auto.
