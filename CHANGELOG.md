@@ -71,6 +71,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terminals, whatever you had been reading there: its Settings, the pull request
   you had open, the list of them. Each tab now returns to the screen its project
   was last showing, and to its terminals only when that is where you were.
+- **Claude's plan gauge reads the window your account is actually locked to,
+  and says so when spending is blocked.** The footer used to guess which window
+  to show by picking whichever one read fullest; it now defers to the account's
+  own verdict on which window is binding, falling back to the fullest only when
+  the account carries no such verdict. A window your plan has locked past its
+  reset used to read as a bare, misleadingly spendable percentage — it now says
+  **Locked**, with the reason in a tooltip.
 
 ### Fixed
 

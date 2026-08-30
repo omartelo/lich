@@ -86,14 +86,16 @@ type claudeUsage struct {
 }
 
 type claudeWindow struct {
-	Utilization float64 `json:"utilization"`
-	ResetsAt    string  `json:"resets_at"`
+	Utilization  float64 `json:"utilization"`
+	ResetsAt     string  `json:"resets_at"`
+	LockedReason string  `json:"locked_reason"`
 }
 
 type claudeLimit struct {
 	Kind     string   `json:"kind"`
 	Percent  *float64 `json:"percent"`
 	ResetsAt string   `json:"resets_at"`
+	IsActive bool     `json:"is_active"`
 	Scope    *struct {
 		Model *struct {
 			DisplayName string `json:"display_name"`
@@ -212,10 +214,12 @@ func (u claudeUsage) windows() []Window {
 			continue
 		}
 		out = append(out, Window{
-			Label:    label,
-			Seconds:  seconds,
-			Percent:  percent(*limit.Percent),
-			ResetsAt: timestamp(limit.ResetsAt),
+			Label:        label,
+			Seconds:      seconds,
+			Percent:      percent(*limit.Percent),
+			ResetsAt:     timestamp(limit.ResetsAt),
+			Active:       limit.IsActive,
+			LockedReason: u.lockedReason(limit.Kind),
 		})
 	}
 	if len(out) > 0 {
@@ -233,13 +237,32 @@ func (u claudeUsage) windows() []Window {
 			continue
 		}
 		out = append(out, Window{
-			Label:    w.label,
-			Seconds:  w.seconds,
-			Percent:  percent(w.window.Utilization),
-			ResetsAt: timestamp(w.window.ResetsAt),
+			Label:        w.label,
+			Seconds:      w.seconds,
+			Percent:      percent(w.window.Utilization),
+			ResetsAt:     timestamp(w.window.ResetsAt),
+			LockedReason: w.window.LockedReason,
 		})
 	}
 	return out
+}
+
+// lockedReason answers the top-level pair for a limits[] entry's kind:
+// locked_reason lives only on five_hour/seven_day, never on limits[] itself —
+// session mirrors five_hour and weekly_all mirrors seven_day. A model-scoped
+// weekly cap has no pair of its own and never reports a lock.
+func (u claudeUsage) lockedReason(kind string) string {
+	switch kind {
+	case "session":
+		if u.FiveHour != nil {
+			return u.FiveHour.LockedReason
+		}
+	case "weekly_all":
+		if u.SevenDay != nil {
+			return u.SevenDay.LockedReason
+		}
+	}
+	return ""
 }
 
 // window names one limit entry and gives its length. An empty label is an entry

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest"
 import type { QuotaPlan } from "@/lib/api-types"
 import { formatWindow, hottestWindow, shortWindow, timeLeft } from "./quota-format"
 
-const plan = (...windows: Array<{ label: string; percent: number }>): QuotaPlan => ({
+const plan = (
+  ...windows: Array<{ label: string; percent: number; active?: boolean }>
+): QuotaPlan => ({
   provider: "claude",
   name: "Claude Code",
   status: "ok",
@@ -22,6 +24,20 @@ describe("hottestWindow", () => {
       plan({ label: "Session", percent: 50 }, { label: "Weekly", percent: 50 }),
     )
     expect(got?.label).toBe("Session")
+  })
+
+  it("prefers the window the provider marks active over the fullest one", () => {
+    const got = hottestWindow(
+      plan({ label: "Session", percent: 4, active: true }, { label: "Weekly", percent: 84 }),
+    )
+    expect(got?.label).toBe("Session")
+  })
+
+  it("falls back to the fullest window when none is marked active", () => {
+    const got = hottestWindow(
+      plan({ label: "Session", percent: 4 }, { label: "Weekly", percent: 84 }),
+    )
+    expect(got?.label).toBe("Weekly")
   })
 
   it("is null for a plan with no windows", () => {
