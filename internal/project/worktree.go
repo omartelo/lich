@@ -1,6 +1,7 @@
 package project
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Worktree is a git worktree checkout: the branch it holds and its path.
@@ -198,10 +200,58 @@ func reserveWorktreePath(projectPath, projectID, name string) (string, error) {
 	return wtPath, nil
 }
 
+// baseFetchBudget caps the fetch that precedes a worktree on a remote base.
+// It is the one part of creating a worktree that reaches the network, and the
+// dialog waits on it: unbudgeted, a remote that wants a passphrase leaves the
+// create call hanging for the app's life.
+const baseFetchBudget = 60 * time.Second
+
+// fetchBase updates refs/remotes/<remote>/<branch> and reports whether the ref
+// is there afterwards, which is the question `worktree add` is about to ask.
+//
+// git's exit status does not answer it: under a narrowed refspec — a
+// --single-branch clone, `remote add -t`, a hand-edited remote.<name>.fetch —
+// `git fetch origin -- other` writes the branch to FETCH_HEAD, says "* branch
+// other -> FETCH_HEAD", and exits 0 without creating the remote-tracking ref.
+// Only the ref itself settles it, and it is checked again after a failed fetch
+// in case a concurrent one landed the ref this call needed.
+func fetchBase(projectPath, remote, branch string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), baseFetchBudget)
+	defer cancel()
+
+	args := []string{"-C", projectPath, "fetch", "--", remote, branch}
+	cmd := commandContext(ctx, "git", args...)
+	// Without these a remote that wants a credential or a key passphrase stops
+	// on a prompt with no terminal to answer it — or worse, a GUI askpass dialog
+	// behind the app window — and burns the whole budget waiting for a person.
+	cmd.Env = append(os.Environ(),
+		"GIT_TERMINAL_PROMPT=0",
+		"GIT_ASKPASS=",
+		"SSH_ASKPASS=",
+		"GCM_INTERACTIVE=never",
+	)
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	fetchErr := cmd.Run()
+
+	ref := "refs/remotes/" + remote + "/" + branch
+	if _, ok := gitQuiet(projectPath, "rev-parse", "--verify", "--quiet", ref); ok {
+		return nil
+	}
+	if fetchErr != nil {
+		logToolFailure("git", args, stderr.String(), fetchErr)
+		if ctx.Err() != nil {
+			return fmt.Errorf("Fetching %s took longer than %s and was given up on.", ref, baseFetchBudget)
+		}
+		return errors.New(gitMessage(stderr.String(), fetchErr))
+	}
+	return fmt.Errorf("git fetched %s but this repository does not keep %s — its remote only tracks some branches.", branch, ref)
+}
+
 // CreateWorktree creates a git worktree named name (random when empty) under
-// the app data dir, branching off base. A remote base is fetched first and the
-// new branch tracks it. A branch that already exists is checked out as it
-// stands, and base is ignored. The worktree is verified usable before
+// the app data dir, branching off base. A remote base is fetched first, and the
+// new branch is left with no upstream. A branch that already exists is checked
+// out as it stands, and base is ignored. The worktree is verified usable before
 // returning, so a success here means a session can be opened at Path right away.
 func (s *Service) CreateWorktree(projectPath, projectID, name, base string, baseIsRemote bool) (*Worktree, error) {
 	if name == "" {
@@ -228,10 +278,21 @@ func (s *Service) CreateWorktree(projectPath, projectID, name, base string, base
 			if !ok {
 				return nil, fmt.Errorf("%q is not a remote branch lich can track.", base)
 			}
-			if _, err := runGit(projectPath, "fetch", "--", remote, branch); err != nil {
+			if err := fetchBase(projectPath, remote, branch); err != nil {
 				return nil, err
 			}
-			args = append(args, "--track")
+			// The full refname, never the "origin/main" shorthand: a repository
+			// that also holds a *local* branch literally named "origin/main" has
+			// two refs answering to that shorthand, and git refuses the pair
+			// outright ("ambiguous object name") — a refusal the person reading
+			// it cannot connect to a branch name they may not know exists.
+			source = "refs/remotes/" + base
+			// --no-track, because autoSetupMerge would otherwise make the base
+			// this branch's upstream: a `git pull` in the session's terminal
+			// would merge the base into the work, and `git status` would report
+			// the work as "ahead of origin/main". Which upstream a branch gets
+			// is the first push's question, and the user's to answer.
+			args = append(args, "--no-track")
 		}
 		args = append(args, "-b", name)
 	}
