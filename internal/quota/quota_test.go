@@ -147,14 +147,14 @@ func TestClaudeRequestCarriesTheHeadersTheEndpointDemands(t *testing.T) {
 
 func TestClaudeFallsBackToTheOriginalWindowPair(t *testing.T) {
 	writeCreds(t, claudeCredsJSON, "")
-	body := `{"five_hour":{"utilization":63,"resets_at":"2026-08-17T23:20:00Z"},
+	body := `{"five_hour":{"utilization":63,"resets_at":"2026-08-17T23:20:00Z","locked_reason":"past_limit"},
 		"seven_day":{"utilization":7,"resets_at":"2026-08-24T15:00:00Z"},"limits":[]}`
 	url, _ := serve(t, http.StatusOK, body)
 
 	got := newService(url, "", time.Now()).claudePlan(lichEnv())
 
 	want := []Window{
-		{Label: "Session", Seconds: 18000, Percent: 63, ResetsAt: "2026-08-17T23:20:00Z"},
+		{Label: "Session", Seconds: 18000, Percent: 63, ResetsAt: "2026-08-17T23:20:00Z", LockedReason: "past_limit"},
 		{Label: "Weekly", Seconds: 604800, Percent: 7, ResetsAt: "2026-08-24T15:00:00Z"},
 	}
 	if len(got.Windows) != 2 || got.Windows[0] != want[0] || got.Windows[1] != want[1] {

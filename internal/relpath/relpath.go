@@ -26,8 +26,7 @@ import (
 // cleans to, so a missing argument stops here rather than at the git call.
 func Validate(rel string) error {
 	clean := filepath.Clean(rel)
-	if clean == "." || isRooted(clean) || clean == ".." ||
-		strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+	if clean == "." || isRooted(clean) || Escapes(clean) {
 		return fmt.Errorf("invalid repository path %q", rel)
 	}
 	return nil
@@ -59,10 +58,16 @@ func Resolve(root, rel string) (string, error) {
 		return "", fmt.Errorf("resolve %s: %w", rel, err)
 	}
 	inside, err := filepath.Rel(realRoot, full)
-	if err != nil || inside == ".." || strings.HasPrefix(inside, ".."+string(filepath.Separator)) {
+	if err != nil || Escapes(inside) {
 		return "", fmt.Errorf("%q leaves the checkout", rel)
 	}
 	return full, nil
+}
+
+// Escapes reports whether a relative path names the parent or anything below
+// it. Callers use filepath.Rel first when they begin with absolute paths.
+func Escapes(rel string) bool {
+	return rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // isRooted reports whether a cleaned path starts at a root. IsAbs alone is not

@@ -10,6 +10,7 @@ import (
 // between them, only beats and the gaps between consecutive ones.
 const (
 	// handsOnIdleGap is the longest silence that still counts as working time.
+	// Keep the matching tooltip in frontend/src/components/FooterBar.tsx in sync.
 	// A gap under it is time the user spent reading, thinking or waiting on the
 	// agent, which is time on this session; a gap over it is lunch, another
 	// window or another day, and it contributes nothing at all — which is what
@@ -140,6 +141,16 @@ func (h *handsOn) drain() map[string]int64 {
 		out[id] = seconds
 	}
 	return out
+}
+
+// restore puts a failed write back into the arrears. A beat may have landed
+// since drain, so it adds under the same lock rather than replacing the entry.
+func (h *handsOn) restore(id string, seconds int64) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	entry := h.entries[id]
+	entry.pending += time.Duration(seconds) * time.Second
+	h.entries[id] = entry
 }
 
 // forget drops what is remembered about a session, so the gap across a card's

@@ -2,6 +2,7 @@ package project
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -142,7 +143,11 @@ func lsFiles(path string, args ...string) ([]string, error) {
 func (s *Service) ReadFile(path, rel string) (string, error) {
 	full, err := relpath.Resolve(path, rel)
 	if err != nil {
-		return "", err
+		var pathErr *os.PathError
+		if !errors.As(err, &pathErr) {
+			return "", err
+		}
+		return "", fmt.Errorf("stat %s: %w", rel, pathErr.Err)
 	}
 	info, err := os.Stat(full)
 	if err != nil {

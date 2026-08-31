@@ -8,11 +8,24 @@
 package terminal
 
 import (
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/omartelo/lich/internal/events"
 )
+
+type failingHandsOnStore struct {
+	stubBins
+	err error
+}
+
+func (s *failingHandsOnStore) AddHandsOn(sessionID string, seconds int64) error {
+	if s.err != nil {
+		return s.err
+	}
+	return s.stubBins.AddHandsOn(sessionID, seconds)
+}
 
 // newQuietService is a Service on a hand-wound clock with the debounced write
 // disarmed. A beat that crosses the flush window spawns a writer goroutine of
@@ -115,6 +128,26 @@ func TestFlushWritesThroughToTheStore(t *testing.T) {
 	}
 	if total != 120 {
 		t.Errorf("two minutes over two flushes read back as %ds, want 120", total)
+	}
+}
+
+func TestFlushRestoresTimeAfterAStoreFailure(t *testing.T) {
+	clock := newFakeClock()
+	store := &failingHandsOnStore{
+		stubBins: stubBins{handsOn: map[string]int64{}},
+		err:      errors.New("busy"),
+	}
+	svc := newQuietService(store, clock)
+	svc.beatHandsOn("s1", 0)
+	clock.advance(time.Minute)
+	svc.beatHandsOn("s1", 0)
+
+	svc.FlushHandsOn()
+	store.err = nil
+	svc.FlushHandsOn()
+
+	if got := store.handsOn["s1"]; got != 60 {
+		t.Errorf("retry wrote %ds, want the failed 60s restored", got)
 	}
 }
 

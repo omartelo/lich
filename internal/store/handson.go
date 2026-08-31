@@ -35,24 +35,18 @@ func (s *Service) AddHandsOn(sessionID string, seconds int64) error {
 // nothing has been counted for yet answers 0, which is the right starting point,
 // so a missing row is not an error.
 func (s *Service) HandsOn(sessionID string) (int64, error) {
-	var seconds int64
-	err := s.db.QueryRow(
-		`SELECT seconds FROM session_hands_on WHERE session_id = ?`, sessionID,
-	).Scan(&seconds)
-	if errors.Is(err, sql.ErrNoRows) {
-		return 0, nil
-	}
-	if err != nil {
-		return 0, fmt.Errorf("read hands-on time for %q: %w", sessionID, err)
-	}
-	return seconds, nil
+	return handsOnOf(s.db, sessionID)
 }
 
-// handsOnOf reads a session's total inside a transaction, for the delete and
-// reinsert a parked session's resume performs (see reopen).
-func handsOnOf(tx *sql.Tx, sessionID string) (int64, error) {
+type rowQuerier interface {
+	QueryRow(query string, args ...any) *sql.Row
+}
+
+// handsOnOf reads a session's total, including inside the transaction that
+// re-keys a parked session on resume.
+func handsOnOf(db rowQuerier, sessionID string) (int64, error) {
 	var seconds int64
-	err := tx.QueryRow(
+	err := db.QueryRow(
 		`SELECT seconds FROM session_hands_on WHERE session_id = ?`, sessionID,
 	).Scan(&seconds)
 	if errors.Is(err, sql.ErrNoRows) {

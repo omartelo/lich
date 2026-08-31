@@ -145,6 +145,34 @@ func TestFileLinesLocalObject(t *testing.T) {
 	}
 }
 
+func TestFileLinesLocalObjectRejectsADirectory(t *testing.T) {
+	repo, git := initRepo(t)
+	write(t, repo, "src/a.txt", "one\n")
+	git("add", "src/a.txt")
+	git("commit", "-m", "tree")
+	tree := strings.TrimSpace(git("rev-parse", "HEAD^{tree}"))
+	gh := &fakeGH{out: []byte("should not be asked\n")}
+
+	if _, err := withGH(gh).FileLines(repo, "src", tree, 1, 2); err == nil {
+		t.Fatal("directory at object: want error, got nil")
+	}
+	if gh.calls != 0 {
+		t.Errorf("gh called %d times for a local tree, want 0", gh.calls)
+	}
+}
+
+func TestFileLinesLocalObjectRejectsBinary(t *testing.T) {
+	repo, git := initRepo(t)
+	write(t, repo, "blob.bin", "text\x00more")
+	git("add", "blob.bin")
+	git("commit", "-m", "binary")
+	tree := strings.TrimSpace(git("rev-parse", "HEAD^{tree}"))
+
+	if _, err := New(nil).FileLines(repo, "blob.bin", tree, 1, 2); err == nil {
+		t.Fatal("binary object: want error, got nil")
+	}
+}
+
 // An oid the clone does not have is a pull request's head: GitHub answers for
 // it, through the contents API rather than through git.
 func TestFileLinesMissingObjectAsksGitHub(t *testing.T) {
@@ -165,6 +193,15 @@ func TestFileLinesMissingObjectAsksGitHub(t *testing.T) {
 	}
 	if gh.dir != repo {
 		t.Errorf("gh dir = %q, want %q", gh.dir, repo)
+	}
+}
+
+func TestFileLinesGitHubRejectsOversize(t *testing.T) {
+	repo, _ := initRepo(t)
+	gh := &fakeGH{out: []byte(strings.Repeat("x", maxReadFileSize+1))}
+
+	if _, err := withGH(gh).FileLines(repo, "a.txt", strings.Repeat("d", 40), 1, 2); err == nil {
+		t.Fatal("oversize GitHub payload: want error, got nil")
 	}
 }
 

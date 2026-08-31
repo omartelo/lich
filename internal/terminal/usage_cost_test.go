@@ -490,14 +490,14 @@ func codexTurnContextJSON(model string) string {
 // uncached share prices at the input rate — summing both would double-count.
 func TestCodexTranscriptCostPricesTheRunningTotal(t *testing.T) {
 	path := writeFile(t,
-		codexTurnContextJSON("gpt-5.1-codex")+"\n"+codexTokenLineJSON(1000, 400, 0, 10)+"\n")
+		codexTurnContextJSON("gpt-5.1-codex")+"\n"+codexTokenLineJSON(1000, 400, 25, 10)+"\n")
 
 	cost, ok := codexTranscriptCost(path, codexTestRate)
 
 	if !ok {
 		t.Fatal("codexTranscriptCost: want ok")
 	}
-	want := 600*0.001 + 400*0.0005 + 10*0.01
+	want := 600*0.001 + 400*0.0005 + 25*0.002 + 10*0.01
 	if !nearly(cost, want) {
 		t.Errorf("cost = %v, want %v", cost, want)
 	}

@@ -214,6 +214,8 @@ func TestReadFileMissing(t *testing.T) {
 	repo, _ := initRepo(t)
 	if _, err := New(nil).ReadFile(repo, "nope.txt"); err == nil {
 		t.Error("ReadFile(missing): want error, got nil")
+	} else if got := err.Error(); strings.Contains(got, repo) || !strings.HasPrefix(got, "stat nope.txt:") {
+		t.Errorf("ReadFile(missing) error = %q, want only the relative path", got)
 	}
 }
 

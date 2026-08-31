@@ -57,7 +57,15 @@ func (s *Service) fileAt(path, rel, ref string) (string, error) {
 	}
 	// gitQuiet and not runGit: an object this clone does not have is the
 	// expected answer for a pull request's head, not a failure to report.
-	if out, ok := gitQuiet(path, "show", ref+":"+rel); ok {
+	object := ref + ":" + rel
+	if kind, ok := gitQuiet(path, "cat-file", "-t", object); ok {
+		if strings.TrimSpace(kind) != "blob" {
+			return "", fmt.Errorf("%s is not a regular file", rel)
+		}
+		out, ok := gitQuiet(path, "cat-file", "blob", object)
+		if !ok {
+			return "", fmt.Errorf("read %s at %s", rel, ref)
+		}
 		return checkedText(rel, out)
 	}
 	out, err := s.gh(prReadTimeout, path, "api", "-H", ghRawAccept, contentsPath(rel, ref))

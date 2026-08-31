@@ -1081,6 +1081,7 @@ func (s *Service) HandsOn(id string) (int64, error) {
 func (s *Service) FlushHandsOn() {
 	for id, seconds := range s.hands.drain() {
 		if err := s.store.AddHandsOn(id, seconds); err != nil {
+			s.hands.restore(id, seconds)
 			slog.Warn("terminal: save hands-on time", "session", id, "err", err)
 		}
 	}

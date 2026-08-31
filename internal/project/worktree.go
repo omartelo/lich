@@ -11,6 +11,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/omartelo/lich/internal/gitutil"
+	"github.com/omartelo/lich/internal/relpath"
 )
 
 // Worktree is a git worktree checkout: the branch it holds and its path.
@@ -224,12 +227,7 @@ func fetchBase(projectPath, remote, branch string) error {
 	// Without these a remote that wants a credential or a key passphrase stops
 	// on a prompt with no terminal to answer it — or worse, a GUI askpass dialog
 	// behind the app window — and burns the whole budget waiting for a person.
-	cmd.Env = append(os.Environ(),
-		"GIT_TERMINAL_PROMPT=0",
-		"GIT_ASKPASS=",
-		"SSH_ASKPASS=",
-		"GCM_INTERACTIVE=never",
-	)
+	cmd.Env = gitutil.NoPrompt(cmd.Env)
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	fetchErr := cmd.Run()
@@ -402,7 +400,7 @@ func (s *Service) WorktreeAdopted(wtPath string) bool {
 	if err != nil {
 		return true
 	}
-	return rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	return relpath.Escapes(rel)
 }
 
 // RemoveWorktree removes a worktree checkout. Without force git refuses to
