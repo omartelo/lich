@@ -159,13 +159,16 @@ export function usePanes(projectId: string): Panes {
     },
     groupWith(sessionId, delegateIds) {
       const free = delegateIds.filter((id) => !groupOf(groups, id))
-      if (!projectId || free.length === 0) {
+      const { width, height } = stageSize()
+      const firstOverflow = free.findIndex((_, index) => !fits(index + 2, width, height))
+      const shown = firstOverflow < 0 ? free : free.slice(0, firstOverflow)
+      if (!projectId || shown.length === 0) {
         return delegateIds.length
       }
       const born: PaneGroup = {
         id: newGroupId(),
         name: defaultName(list, sessionId),
-        cells: [sessionId, ...free],
+        cells: [sessionId, ...shown],
         cols: [],
         rows: [],
       }
@@ -174,7 +177,7 @@ export function usePanes(projectId: string): Panes {
       commit([...removeFromGroups(groups, sessionId), born])
       // And the window goes there, or the wall is built out of sight.
       activateSession(projectId, sessionId)
-      return delegateIds.length - free.length
+      return delegateIds.length - shown.length
     },
     rename(groupId, name) {
       const trimmed = name.trim()

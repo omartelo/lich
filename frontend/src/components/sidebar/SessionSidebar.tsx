@@ -9,9 +9,10 @@ import { ProjectService } from "@/lib/rpc"
 import { closeSettings, isSettingsOpen, subscribeSettingsCard } from "@/lib/settings-card-store"
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
 import { delegateTargets } from "@/lib/session/delegate-targets"
-import { movingFrom, type PaneGroup, reorderGroups } from "@/lib/session/panes"
+import { reorderGroups } from "@/lib/session/panes"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { usePanes } from "@/lib/session/use-panes"
+import { useStageToggle } from "@/lib/session/use-stage-toggle"
 import {
   closePullsList,
   isPullsListOpen,
@@ -138,7 +139,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   // somebody else's arrangement, changed by a click aimed at this one. So the
   // decision goes to the user rather than being made under them; `add` refuses
   // the move until they have answered.
-  const [moving, setMoving] = useState<{ session: Session; from: PaneGroup } | null>(null)
+  const { moving, toggleStage, cancelMove, confirmMove } = useStageToggle(panes, list)
   // Gathering an orchestrator and its workers is the one action that builds a
   // whole wall at once. A delegate already on another wall stays there — it is
   // the user's arrangement and taking it is the destructive reading — so the
@@ -148,25 +149,12 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
     if (skipped > 0) {
       toast(
         skipped === 1
-          ? "1 delegate stayed on the split it was already in"
-          : `${skipped} delegates stayed on the splits they were already in`,
+          ? "1 delegate could not be added to the split"
+          : `${skipped} delegates could not be added to the split`,
       )
     }
   }
 
-  const toggleStage = (sessionId: string) => {
-    const from = movingFrom(panes.groups, panes.current, sessionId)
-    const session = list.find((s) => s.id === sessionId)
-    if (from && session) {
-      setMoving({ session, from })
-      return
-    }
-    if (panes.current?.cells.includes(sessionId)) {
-      panes.remove(sessionId)
-      return
-    }
-    panes.add(sessionId)
-  }
   // The query narrows the flat list before the groups are built from it, so
   // grouping, the pinned block and the stored order all keep working on the
   // survivors without knowing a filter exists.
@@ -490,7 +478,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
       <WorktreeCloseDialogs close={worktreeClose} />
       <ConfirmDialog
         open={!!moving}
-        onCancel={() => setMoving(null)}
+        onCancel={cancelMove}
         title={`Move ${moving?.session.label ?? ""} to this split?`}
         description={
           moving?.from.cells.length === 1 ? (
@@ -506,16 +494,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
           )
         }
       >
-        <Button
-          onClick={() => {
-            if (moving) {
-              panes.add(moving.session.id, { move: true })
-            }
-            setMoving(null)
-          }}
-        >
-          Move it
-        </Button>
+        <Button onClick={confirmMove}>Move it</Button>
       </ConfirmDialog>
 
       <ResizeHandle edge="right" label="Resize sidebar" handleProps={handleProps} />

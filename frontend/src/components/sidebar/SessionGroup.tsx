@@ -207,41 +207,44 @@ export function SessionGroup({
           >
             <SortableContext items={ids} strategy={verticalListSortingStrategy}>
               <div className="flex flex-col gap-1.5">
-                {sessions.map((session) => (
-                  <SessionCard
-                    key={session.id}
-                    session={session}
-                    path={projectPath}
-                    // Resolved here rather than in the card: the parent can be a
-                    // session in another project, which only the workspace-wide
-                    // state knows about.
-                    origin={sessionOrigin(workspace, session)}
-                    active={session.id === activeId}
-                    // Membership is the block itself; what the card still has to
-                    // answer is whether that member is on screen this moment.
-                    onStage={!!stage}
-                    showing={stageIds.includes(session.id)}
-                    onStageToggle={() => onStageToggle(session.id)}
-                    delegateCount={delegatesOf(workspace, projectId, session.id).length}
-                    onGroupDelegates={() =>
-                      onGroupDelegates(
-                        session.id,
-                        delegatesOf(workspace, projectId, session.id).map((s) => s.id),
-                      )
-                    }
-                    onSelect={() => select(session.id)}
-                    onClose={() => onClose(session)}
-                    onRename={(label) => renameSession(projectId, session.id, label)}
-                    onSetEntrypoint={(entrypoint) =>
-                      setEntrypoint(projectId, session.id, entrypoint)
-                    }
-                    onPin={(pinned) => pinSession(projectId, session.id, pinned)}
-                    onOpenTerminal={(cwd) => newSession(projectId, "shell", cwd)}
-                    onPulls={onPulls}
-                    sortable={sortable}
-                    delegateGroups={delegateGroups}
-                  />
-                ))}
+                {sessions.map((session) => {
+                  const delegates = delegatesOf(workspace, projectId, session.id)
+                  return (
+                    <SessionCard
+                      key={session.id}
+                      session={session}
+                      path={projectPath}
+                      // Resolved here rather than in the card: the parent can be a
+                      // session in another project, which only the workspace-wide
+                      // state knows about.
+                      origin={sessionOrigin(workspace, session)}
+                      active={session.id === activeId}
+                      // Membership is the block itself; what the card still has to
+                      // answer is whether that member is on screen this moment.
+                      onStage={!!stage}
+                      showing={stageIds.includes(session.id)}
+                      onStageToggle={() => onStageToggle(session.id)}
+                      delegateCount={delegates.length}
+                      onGroupDelegates={() =>
+                        onGroupDelegates(
+                          session.id,
+                          delegates.map((delegate) => delegate.id),
+                        )
+                      }
+                      onSelect={() => select(session.id)}
+                      onClose={() => onClose(session)}
+                      onRename={(label) => renameSession(projectId, session.id, label)}
+                      onSetEntrypoint={(entrypoint) =>
+                        setEntrypoint(projectId, session.id, entrypoint)
+                      }
+                      onPin={(pinned) => pinSession(projectId, session.id, pinned)}
+                      onOpenTerminal={(cwd) => newSession(projectId, "shell", cwd)}
+                      onPulls={onPulls}
+                      sortable={sortable}
+                      delegateGroups={delegateGroups}
+                    />
+                  )
+                })}
               </div>
             </SortableContext>
           </DndContext>

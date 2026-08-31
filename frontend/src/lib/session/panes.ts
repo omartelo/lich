@@ -144,7 +144,7 @@ export function movingFrom(
 }
 
 /** Every session on any wall — what the add shortcut must not offer again. */
-export function grouped(groups: readonly PaneGroup[]): Set<string> {
+function grouped(groups: readonly PaneGroup[]): Set<string> {
   return new Set(groups.flatMap((group) => group.cells))
 }
 

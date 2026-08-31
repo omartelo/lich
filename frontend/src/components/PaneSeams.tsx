@@ -97,6 +97,9 @@ export function PaneSeams({
                 onCommit(next)
               }
             }}
+            onPointerCancel={() => {
+              drag.current = null
+            }}
           />
         )
       })}

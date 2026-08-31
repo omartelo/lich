@@ -101,12 +101,15 @@ export function subscribeReviewComments(listener: () => void): () => void {
  * send — one per line, so the agent would answer the first comment while the
  * rest were still being typed.
  */
-export function composeReviewComments(list: readonly ReviewComment[]): string {
+export function composeReviewComments(list: readonly ReviewComment[], note = ""): string {
   const items = list.map((c) =>
     c.path === ""
       ? `- ${continuation(c.text)}`
       : `- ${c.path}:${c.lines} — ${continuation(c.text)}`,
   )
+  if (note.trim() !== "") {
+    items.push(`- ${continuation(note.trim())}`)
+  }
   return bracketedPaste(`Review comments:\n\n${items.join("\n")}`)
 }
 

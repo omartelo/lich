@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { toast } from "sonner"
 import { ProjectService, Store } from "@/lib/rpc"
 import { closeIntent } from "@/lib/session/close-intent"
@@ -51,6 +51,7 @@ export function useWorktreeClose(
   const [pendingClose, setPendingClose] = useState<Session | null>(null)
   const [pendingAdopted, setPendingAdopted] = useState(true)
   const [pendingForce, setPendingForce] = useState<Session | null>(null)
+  const adoptedProbe = useRef(0)
 
   // Close first so the PTY running inside the worktree dies before git tries
   // to remove it. A refused removal surfaces as a toast; the checkout stays on
@@ -79,17 +80,23 @@ export function useWorktreeClose(
       case "confirm-running":
         setPendingRunning(session)
         return
-      case "ask-worktree":
+      case "ask-worktree": {
         // Asked as the dialog opens rather than at the click on Remove: an
         // adopted checkout has no removal to offer, and a button that only ever
         // ends in a refusal is worse than the one that is not there. A failed
         // check reads as adopted — the safe half of the answer.
         setPendingAdopted(true)
         setPendingClose(session)
+        const sequence = ++adoptedProbe.current
         void ProjectService.WorktreeAdopted(session.path ?? "")
           .catch(() => true)
-          .then(setPendingAdopted)
+          .then((adopted) => {
+            if (sequence === adoptedProbe.current) {
+              setPendingAdopted(adopted)
+            }
+          })
         return
+      }
       case "close":
         closeSession(projectId, session.id)
     }
@@ -116,6 +123,7 @@ export function useWorktreeClose(
     },
 
     cancel() {
+      adoptedProbe.current++
       setPendingRunning(null)
       setPendingClose(null)
       setPendingForce(null)

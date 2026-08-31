@@ -19,14 +19,16 @@ export interface DiffReview {
   onRemove: (index: number) => void
 }
 
-/** A resolved selection: what to call the lines, which new-file lines they are,
- * and the document line a composer opened on it hangs under. A selection that
+/** A resolved selection: what to call the lines and which new-file lines they are.
+ * A selection that
  * covers only deleted lines has no new-file range and so never becomes one of
  * these — commenting on the other side needs its own gesture. */
 export interface DiffSelection {
   lines: string
   range: NewLineRange
-  docLine: number
+  /** Full-file previews have no expandable gaps, so their document line is a
+   * stable anchor. Diff composers remap range.end instead. */
+  docLine?: number
 }
 
 /** The comment being written, and where it goes when it is filed. Held by the

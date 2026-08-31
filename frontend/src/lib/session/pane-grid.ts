@@ -12,7 +12,7 @@
 // wrapping stops being readable rather than merely tight. Height only has to
 // keep a pane from becoming a caption.
 export const MIN_PANE_WIDTH = 420
-export const MIN_PANE_HEIGHT = 160
+const MIN_PANE_HEIGHT = 160
 
 /** The smallest share of an axis one row or column may be dragged down to. */
 export const MIN_TRACK = 0.12
@@ -76,6 +76,7 @@ export function tracks(stored: readonly number[], count: number): number[] {
   const usable =
     stored.length === count &&
     stored.every((value) => Number.isFinite(value) && value >= MIN_TRACK) &&
+    // Floating-point accumulation tolerance for normalized track fractions.
     Math.abs(stored.reduce((sum, value) => sum + value, 0) - 1) < 0.01
   return usable ? [...stored] : Array.from({ length: count }, () => 1 / count)
 }
