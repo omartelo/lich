@@ -9,7 +9,7 @@ import { ProjectService } from "@/lib/rpc"
 import { closeSettings, isSettingsOpen, subscribeSettingsCard } from "@/lib/settings-card-store"
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
 import { delegateTargets } from "@/lib/session/delegate-targets"
-import { movingFrom, type PaneGroup, reorderGroups } from "@/lib/session/panes"
+import { type PaneGroup, reorderGroups, stageAction } from "@/lib/session/panes"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { usePanes } from "@/lib/session/use-panes"
 import {
@@ -155,13 +155,13 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   }
 
   const toggleStage = (sessionId: string) => {
-    const from = movingFrom(panes.groups, panes.current, sessionId)
+    const action = stageAction(panes.groups, panes.current, sessionId)
     const session = list.find((s) => s.id === sessionId)
-    if (from && session) {
-      setMoving({ session, from })
+    if (action.kind === "confirm" && session) {
+      setMoving({ session, from: action.from })
       return
     }
-    if (panes.current?.cells.includes(sessionId)) {
+    if (action.kind === "remove") {
       panes.remove(sessionId)
       return
     }
@@ -491,7 +491,14 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
       <ConfirmDialog
         open={!!moving}
         onCancel={() => setMoving(null)}
-        title={`Move ${moving?.session.label ?? ""} to this split?`}
+        // "this split" only when there is one: adding to no wall starts a new
+        // one around the active session, and naming a split the user cannot see
+        // is the same lie as the entry that promised to stop showing a card.
+        title={
+          panes.current
+            ? `Move ${moving?.session.label ?? ""} to this split?`
+            : `Show ${moving?.session.label ?? ""} beside this session?`
+        }
         description={
           moving?.from.cells.length === 1 ? (
             <>
@@ -500,8 +507,8 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
             </>
           ) : (
             <>
-              It is showing in <strong>{moving?.from.name}</strong>, and a session can only be on
-              one split at a time — it leaves that one. No session is closed either way.
+              It is on <strong>{moving?.from.name}</strong>, and a session can only be on one split
+              at a time — it leaves that one. No session is closed either way.
             </>
           )
         }

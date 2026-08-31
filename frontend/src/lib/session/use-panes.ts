@@ -4,16 +4,16 @@ import {
   addToGroup,
   defaultName,
   dissolveGroup,
+  focusAfterRemove,
   groupOf,
-  movingFrom,
-  nextCandidate,
   type PaneGroup,
+  planAdd,
   removeFromGroups,
+  reorderCells,
   resolveGroups,
   swapCells,
   updateGroup,
 } from "./panes"
-import { fits } from "./pane-grid"
 import { stageSize, useStoredGroups, writeGroups } from "./panes-store"
 
 export interface Panes {
@@ -44,7 +44,8 @@ export interface Panes {
   /** Swap two cells of the wall on screen. */
   swap: (from: number, to: number) => void
   /** Set a wall's whole pane order — what dragging its cards in the sidebar
-   * does, from the other end of the same arrangement. */
+   * does, from the other end of the same arrangement. An order that no longer
+   * names the wall's exact members is dropped. */
   reorderCells: (groupId: string, ids: string[]) => void
   /** Build a wall out of a session and the ones it delegated to. Answers how
    * many of them were left where they were, which is what the caller says out
@@ -87,10 +88,9 @@ export function usePanes(projectId: string): Panes {
     if (sessionId !== activeId) {
       return
     }
-    const rest = group.cells.filter((id) => id !== sessionId)
-    if (rest.length > 0) {
-      const at = group.cells.indexOf(sessionId)
-      activateSession(projectId, rest[Math.min(at, rest.length - 1)])
+    const next = focusAfterRemove(group.cells, sessionId)
+    if (next) {
+      activateSession(projectId, next)
     }
   }
 
@@ -116,19 +116,20 @@ export function usePanes(projectId: string): Panes {
       }
     },
     add(sessionId, opts) {
-      const id = sessionId ?? nextCandidate(list, groups)
-      const { width, height } = stageSize()
-      if (!projectId || !id || id === activeId || !activeId) {
+      const plan = planAdd({
+        sessions: list,
+        groups,
+        current,
+        activeId,
+        stage: stageSize(),
+        sessionId,
+        move: opts?.move,
+      })
+      if (!projectId || plan.kind === "none") {
         return false
       }
-      if (movingFrom(groups, current, id) && !opts?.move) {
-        return false
-      }
-      if (!fits(cells.length + 1, width, height)) {
-        return false
-      }
-      if (current) {
-        commit(addToGroup(groups, current.id, id))
+      if (plan.kind === "join") {
+        commit(addToGroup(groups, plan.groupId, plan.sessionId))
         return true
       }
       // On no wall: this starts one, named after the session it grew from —
@@ -137,12 +138,12 @@ export function usePanes(projectId: string): Panes {
       // user makes.
       const born: PaneGroup = {
         id: newGroupId(),
-        name: defaultName(list, activeId),
-        cells: [activeId, id],
+        name: defaultName(list, plan.around),
+        cells: [plan.around, plan.sessionId],
         cols: [],
         rows: [],
       }
-      commit([...removeFromGroups(groups, id), born])
+      commit([...removeFromGroups(groups, plan.sessionId), born])
       return true
     },
     remove,
@@ -155,7 +156,7 @@ export function usePanes(projectId: string): Panes {
       }
     },
     reorderCells(groupId, ids) {
-      commit(updateGroup(groups, groupId, { cells: ids }))
+      commit(reorderCells(groups, groupId, ids))
     },
     groupWith(sessionId, delegateIds) {
       const free = delegateIds.filter((id) => !groupOf(groups, id))
