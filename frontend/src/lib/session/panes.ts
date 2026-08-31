@@ -26,6 +26,8 @@
 // Nothing here remembers a focused cell. The cursor is the active session and
 // its cell is wherever that id sits in the group, so focus is read rather than
 // stored and a stale one cannot outlive the cell it named.
+import { applyOrder } from "@/lib/reorder"
+import { fits } from "./pane-grid"
 import type { Session } from "./sessions"
 
 export interface PaneGroup {
@@ -217,7 +219,122 @@ export function swapCells(cells: readonly string[], from: number, to: number): s
 // the user arranged, so what arrives is the one they can predict, and skipping
 // what is already grouped keeps the shortcut from quietly moving one wall's
 // member onto another.
-export function nextCandidate(sessions: readonly Session[], groups: readonly PaneGroup[]): string {
+//
+// The active session is skipped with them, and for the same reason it is skipped
+// by the caller that refuses to add a session to itself: on no wall it is the
+// first card the search would find, and the shortcut that promises to start a
+// wall *around* it would answer with the session it is already showing.
+export function nextCandidate(
+  sessions: readonly Session[],
+  groups: readonly PaneGroup[],
+  activeId: string,
+): string {
   const taken = grouped(groups)
-  return sessions.find((session) => !taken.has(session.id))?.id ?? ""
+  return sessions.find((session) => session.id !== activeId && !taken.has(session.id))?.id ?? ""
+}
+
+/** What adding one more pane comes to: nothing, a session joining the wall on
+ * screen, or a new wall around the active session. */
+export type AddPlan =
+  | { kind: "none" }
+  | { kind: "join"; groupId: string; sessionId: string }
+  | { kind: "start"; around: string; sessionId: string }
+
+export interface AddRequest {
+  sessions: readonly Session[]
+  groups: readonly PaneGroup[]
+  /** The wall the active session is on, or null when it is on none. */
+  current: PaneGroup | null
+  activeId: string
+  /** The stage as measured, for the "would one more still be readable" guard. */
+  stage: { width: number; height: number }
+  /** The session to show, or absent for "the next card on no wall". */
+  sessionId?: string
+  /** Whether the user has agreed to take the session off another wall. */
+  move?: boolean
+}
+
+// planAdd is the whole refusal matrix of the add affordance, decided before
+// anything is written: nothing left to show, no active session to show it
+// beside, no room for one more pane, or a session on somebody else's wall with
+// no answer from the user yet. That last refusal is the guard — taking a session
+// off an arrangement the click was not aimed at is the user's decision, so a
+// caller that forgets to ask gets a no-op rather than a silent move.
+export function planAdd(request: AddRequest): AddPlan {
+  const { sessions, groups, current, activeId, stage, sessionId, move } = request
+  const id = sessionId ?? nextCandidate(sessions, groups, activeId)
+  if (!id || !activeId || id === activeId) {
+    return { kind: "none" }
+  }
+  if (movingFrom(groups, current, id) && !move) {
+    return { kind: "none" }
+  }
+  // On no wall the stage draws the active session alone, so one more makes two.
+  if (!fits((current ? current.cells.length : 1) + 1, stage.width, stage.height)) {
+    return { kind: "none" }
+  }
+  return current
+    ? { kind: "join", groupId: current.id, sessionId: id }
+    : { kind: "start", around: activeId, sessionId: id }
+}
+
+// focusAfterRemove answers where the cursor goes when the pane holding it is
+// taken away: the cell that slid into its place, or the last one when what left
+// was the last. "" is "leave the window where it is" — the wall has nothing left
+// to hold a cursor, or it never held this session and so lost no pane.
+export function focusAfterRemove(cells: readonly string[], sessionId: string): string {
+  const at = cells.indexOf(sessionId)
+  const rest = cells.filter((id) => id !== sessionId)
+  if (at < 0 || rest.length === 0) {
+    return ""
+  }
+  return rest[Math.min(at, rest.length - 1)]
+}
+
+/** What the sidebar's one stage entry does for a card, matching what its label
+ * offers. `confirm` carries the wall the session would be taken off. */
+export type StageAction =
+  | { kind: "add" }
+  | { kind: "remove" }
+  | { kind: "confirm"; from: PaneGroup }
+
+// stageAction reads the card the same way the card's own label does: a session
+// drawing in a pane right now is taken off its wall, and any other is put on the
+// one on screen. Membership of a *parked* wall is not the question — that card
+// is not showing, so the entry reads "Show beside" and this moves it here, after
+// the user has answered for the wall it leaves.
+export function stageAction(
+  groups: readonly PaneGroup[],
+  current: PaneGroup | null,
+  sessionId: string,
+): StageAction {
+  if (current?.cells.includes(sessionId)) {
+    return { kind: "remove" }
+  }
+  const from = movingFrom(groups, current, sessionId)
+  return from ? { kind: "confirm", from } : { kind: "add" }
+}
+
+// reorderCells sets one wall's whole pane order — what dragging its cards in the
+// sidebar does. An order that no longer names that wall's exact members is
+// dropped whole, the way reorderSessions drops a drag a close raced: a session
+// added to the wall while the cards were being dragged is not in the dropped
+// order, and writing it would take that session straight back off the wall.
+export function reorderCells(
+  groups: readonly PaneGroup[],
+  groupId: string,
+  ids: readonly string[],
+): PaneGroup[] {
+  const group = groups.find((candidate) => candidate.id === groupId)
+  if (!group) {
+    return [...groups]
+  }
+  // applyOrder wants items with an id; a cell is the id itself.
+  const ordered = applyOrder(
+    group.cells.map((id) => ({ id })),
+    [...ids],
+  )
+  return ordered
+    ? updateGroup(groups, groupId, { cells: ordered.map((cell) => cell.id) })
+    : [...groups]
 }

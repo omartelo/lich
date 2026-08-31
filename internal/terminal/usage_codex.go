@@ -133,49 +133,85 @@ func consumeCodexUsageLine(line []byte, usage *contextUsage, haveTokens *bool) b
 // Claude transcript's per-turn deltas, total_token_usage is already the
 // conversation's cumulative cost, so the last line is the whole answer — no
 // ledger walk, no offset to resume from. ok is false when the rollout carries
-// no cost line yet, or when rates cannot price the model that ran it.
+// no cost line yet, when rates cannot price the model that ran it, and when
+// more than one model did (see codexCostScan.mixed).
+//
+// The scan reaching the start of the file is the ordinary end of it, not a
+// failure: unlike the context readout, which stops at the current turn, this one
+// has to see every turn_context the total covers. A file that cannot be read
+// stops there with no token line, which is the same absent answer.
 func codexTranscriptCost(path string, rates rateSource) (float64, bool) {
-	var tokens pricing.Tokens
-	var model string
-	haveTokens := false
-	if !codexReverseScan(path, func(line []byte) bool {
-		return consumeCodexCostLine(line, &tokens, &model, &haveTokens)
-	}) {
+	var scan codexCostScan
+	codexReverseScan(path, scan.consume)
+	if !scan.haveTokens || scan.mixed || scan.model == "" {
 		return 0, false
 	}
-	rate, ok := rates.Rate(model)
+	rate, ok := rates.Rate(scan.model)
 	if !ok {
 		return 0, false
 	}
-	return rate.Cost(tokens)
+	return rate.Cost(scan.tokens)
 }
 
-// consumeCodexCostLine mirrors consumeCodexUsageLine's two-phase reverse
-// walk, gathering the running token total and the model id that priced it
-// instead of the window and effort the context readout needs.
-func consumeCodexCostLine(line []byte, tokens *pricing.Tokens, model *string, haveTokens *bool) bool {
+// codexCostScan is what pricing a rollout takes from a reverse walk: the
+// conversation's last cumulative token total, and the model that produced it.
+type codexCostScan struct {
+	tokens     pricing.Tokens
+	haveTokens bool
+	model      string
+	// mixed marks a conversation that changed model part-way through (`/model`).
+	// total_token_usage is one running total over both of them and the rollout
+	// does not split it, so pricing it at either rate bills some of the tokens
+	// wrong. The money rule the Claude scan follows for a line it cannot price
+	// (usage_cost.go) applies to a total nothing can attribute: the number stays
+	// absent rather than becoming a guess.
+	mixed bool
+}
+
+// consume mirrors consumeCodexUsageLine's two-phase reverse walk, gathering the
+// running token total and the model ids that priced it instead of the window and
+// effort the context readout needs. Done only once a second, different model is
+// found — otherwise the walk runs out the file, which is what proves there was
+// only one.
+func (c *codexCostScan) consume(line []byte) bool {
+	// Every line of the conversation passes through here, so the two records
+	// that matter are picked out by a byte scan rather than by unmarshalling
+	// each of them.
+	if !bytes.Contains(line, []byte(`"token_count"`)) &&
+		!bytes.Contains(line, []byte(`"turn_context"`)) {
+		return false
+	}
 	var entry codexRolloutEntry
 	if json.Unmarshal(line, &entry) != nil {
 		return false
 	}
-	if !*haveTokens {
+	if !c.haveTokens {
+		// turn_context lines below the last token_count belong to a turn that has
+		// billed nothing yet, so they name no model this total was priced at.
 		if entry.Type != "event_msg" || entry.Payload.Type != "token_count" ||
 			entry.Payload.Info == nil || entry.Payload.Info.Total == nil {
 			return false
 		}
 		t := entry.Payload.Info.Total
-		*tokens = pricing.Tokens{
+		c.tokens = pricing.Tokens{
 			Input:      t.Input - t.Cached,
 			CacheRead:  t.Cached,
 			CacheWrite: t.CacheWrite,
 			Output:     t.Output,
 		}
-		*haveTokens = true
+		c.haveTokens = true
 		return false
 	}
 	if entry.Type != "turn_context" || entry.Payload.Model == "" {
 		return false
 	}
-	*model = entry.Payload.Model
-	return true
+	if c.model == "" {
+		c.model = entry.Payload.Model
+		return false
+	}
+	if entry.Payload.Model != c.model {
+		c.mixed = true
+		return true
+	}
+	return false
 }

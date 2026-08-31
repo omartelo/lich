@@ -29,7 +29,10 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   `total_token_usage` is a running total lich prices from its last line, the cost rung too. But
   `internal/pricing/prices.json` is baked with Claude models only, so a Codex model prices only after the
   remote LiteLLM refresh (`internal/pricing/pricing.go`) — an offline machine never shows a Codex cost, and
-  a model LiteLLM has not priced either never will.
+  a model LiteLLM has not priced either never will. **A Codex conversation that ran `/model` shows no cost
+  at all** from that turn on (`codexCostScan.mixed`): the one running total spans both models and the
+  rollout never splits it, so no rate prices it — absent, the way an unpriced line is absent, rather than
+  a number billed at whichever model happened to go last.
 - **Hands-on time is read off three signals, and one of them is not universal**
   (`internal/terminal/handson.go`, `noteOutput`, `closableState`): the figure beside the cost
   counts the gap between consecutive signs of life in a session — a session-state report, a

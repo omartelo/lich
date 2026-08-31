@@ -37,8 +37,9 @@ const cache = new Map<string, { raw: string | null; value: PaneGroup[] }>()
 
 /** The stored groups, unreconciled — put them through resolveGroups with the
  * project's live sessions before drawing anything. Outside React too, for the
- * two readers that are not components: the collapsed rail and the neighbour
- * walk, both of which order cards the way the sidebar draws them. */
+ * neighbour walk, which orders cards the way the sidebar draws them. A component
+ * takes useStoredGroups instead: this read holds no listener, so what it returns
+ * goes stale the moment a pane moves. */
 export function storedGroups(projectId: string): PaneGroup[] {
   if (!projectId) {
     return EMPTY
