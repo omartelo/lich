@@ -234,6 +234,29 @@ export function contextLines(texts: string[], newFrom: number, oldFrom: number):
   }))
 }
 
+// appendExpansion folds one answer into what a gap has pulled in so far.
+//
+// Appended, never replaced: a gap wider than the backend's cap comes in several
+// answers, each starting where the last one stopped. Which is also why an answer
+// that does *not* start there is dropped whole — two expand clicks on the same
+// gap can be in flight at once (a PR's head is read over the network), and both
+// resolve against the gap as it was before either landed. Appending the second
+// would write the same lines twice, gutter numbers and all, with nothing on a
+// PR or turn diff to refetch them away.
+export function appendExpansion(
+  held: Expansions,
+  gap: DiffGap,
+  texts: readonly string[],
+): Expansions {
+  const pulled = held.get(gap.key) ?? []
+  if (gap.from !== gap.key + pulled.length) {
+    return held
+  }
+  const next = new Map(held)
+  next.set(gap.key, [...pulled, ...contextLines([...texts], gap.from, gap.oldFrom)])
+  return next
+}
+
 // buildFileDoc assembles the document, laying whatever has been pulled into a
 // gap where the diff left a hole. A gap that is still open keeps its separator
 // line and is reported in `gaps`; one that has been filled in whole has no

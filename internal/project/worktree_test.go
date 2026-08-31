@@ -334,6 +334,32 @@ func TestCreateWorktreeRemoteBaseAmbiguousName(t *testing.T) {
 	}
 }
 
+// TestCreateWorktreeRemoteBaseRefusesAStaleRefOffline proves a failed fetch is a
+// refusal even when refs/remotes/origin/feature is already there. It is only
+// there because an earlier fetch left it, so accepting it bases the worktree on
+// whatever the branch looked like the last time the machine had the remote —
+// silently, on a create the person asked for precisely to start from the remote
+// tip. The ref is tolerated after a failed fetch only when it *moved* during the
+// call, which is a concurrent fetch landing it rather than an old one.
+func TestCreateWorktreeRemoteBaseRefusesAStaleRefOffline(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	repo, git := initRepo(t)
+	addLocalOrigin(t, git)
+	if _, err := runGit(repo, "rev-parse", "--verify", "refs/remotes/origin/feature"); err != nil {
+		t.Fatalf("setup: want the ref an earlier fetch left behind: %v", err)
+	}
+	// The remote as an offline machine has it: a URL git cannot reach. A local
+	// path that is not a repository fails at once, with no network and no wait.
+	git("remote", "set-url", "origin", filepath.Join(t.TempDir(), "unreachable"))
+
+	svc := New(nil)
+	_, err := svc.CreateWorktree(repo, "pid", "from-remote", "origin/feature", true)
+
+	if err == nil {
+		t.Fatal("CreateWorktree(failed fetch, stale ref) = nil error, want a refusal")
+	}
+}
+
 // TestCreateWorktreeRemoteBaseNotFetched proves the guard is the ref, not git's
 // exit status. With the remote's refspec narrowed to one branch — what a
 // --single-branch clone or `remote add -t` leaves behind — `git fetch origin --

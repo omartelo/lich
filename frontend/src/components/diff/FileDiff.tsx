@@ -8,8 +8,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { gapExpanders } from "@/lib/codemirror"
 import { threadSlots, type SlotElements, type ThreadSlot } from "@/lib/codemirror-threads"
 import {
+  appendExpansion,
   buildFileDoc,
-  contextLines,
   docLineAt,
   formatLineRef,
   newLineRange,
@@ -142,16 +142,7 @@ export function FileDiff({
         if (!texts || texts.length === 0) {
           return
         }
-        setExpansions((held) => {
-          const next = new Map(held)
-          // Appended, never replaced: a gap wider than the backend's cap comes
-          // in several answers, each starting where the last one stopped.
-          next.set(gap.key, [
-            ...(held.get(gap.key) ?? []),
-            ...contextLines(texts, gap.from, gap.oldFrom),
-          ])
-          return next
-        })
+        setExpansions((held) => appendExpansion(held, gap, texts))
       } catch (error) {
         toast.error(`Couldn't read ${file.newPath}`, { description: errorText(error) })
       }

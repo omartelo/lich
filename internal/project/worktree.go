@@ -212,15 +212,25 @@ const baseFetchBudget = 60 * time.Second
 // fetchBase updates refs/remotes/<remote>/<branch> and reports whether the ref
 // is there afterwards, which is the question `worktree add` is about to ask.
 //
-// git's exit status does not answer it: under a narrowed refspec — a
+// git's exit status alone does not answer it: under a narrowed refspec — a
 // --single-branch clone, `remote add -t`, a hand-edited remote.<name>.fetch —
 // `git fetch origin -- other` writes the branch to FETCH_HEAD, says "* branch
 // other -> FETCH_HEAD", and exits 0 without creating the remote-tracking ref.
-// Only the ref itself settles it, and it is checked again after a failed fetch
-// in case a concurrent one landed the ref this call needed.
+// So a fetch that succeeded is believed only once the ref is there.
+//
+// A fetch that *failed* is a refusal even when the ref is there, because then it
+// is whatever an earlier fetch left behind: a worktree silently based on a
+// week-old ref is worse than one that was never created. The exception is a ref
+// that moved during this call — a concurrent fetch landed what this one needed,
+// which is what two sessions creating a worktree at once do to each other. One
+// that found nothing new leaves the ref where it was and is refused with it;
+// retrying the create is the whole cost.
 func fetchBase(projectPath, remote, branch string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), baseFetchBudget)
 	defer cancel()
+
+	ref := "refs/remotes/" + remote + "/" + branch
+	before, _ := gitQuiet(projectPath, "rev-parse", "--verify", "--quiet", ref)
 
 	args := []string{"-C", projectPath, "fetch", "--", remote, branch}
 	cmd := commandContext(ctx, "git", args...)
@@ -232,8 +242,8 @@ func fetchBase(projectPath, remote, branch string) error {
 	cmd.Stderr = &stderr
 	fetchErr := cmd.Run()
 
-	ref := "refs/remotes/" + remote + "/" + branch
-	if _, ok := gitQuiet(projectPath, "rev-parse", "--verify", "--quiet", ref); ok {
+	after, ok := gitQuiet(projectPath, "rev-parse", "--verify", "--quiet", ref)
+	if ok && (fetchErr == nil || after != before) {
 		return nil
 	}
 	if fetchErr != nil {

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest"
 import {
+  appendExpansion,
   buildFileDoc,
   contextLines,
+  type Expansions,
   discardTargets,
   docLineAt,
   formatLineRef,
@@ -336,6 +338,35 @@ describe("diff gaps", () => {
     const doc = buildFileDoc(file, new Map([[1, contextLines(["a", "b", "c", "d", "e"], 1, 1)]]))
     expect(docLineAt(doc.lineMeta, "RIGHT", 3)).toBe(3)
     expect(newLineRange(doc.lineMeta, 1, 3)).toEqual({ start: 1, end: 3 })
+  })
+})
+
+describe("appendExpansion", () => {
+  const file = parseDiff(gappedDiff)[0]
+  const gapNow = (held: Expansions) => buildFileDoc(file, held).gaps[0]
+
+  // A gap wider than the backend's cap comes in several answers, each starting
+  // where the last one stopped.
+  it("appends an answer that starts where the run ends", () => {
+    const first = appendExpansion(new Map(), gapNow(new Map()), ["a", "b"])
+    expect(first.get(1)).toEqual(contextLines(["a", "b"], 1, 1))
+
+    const second = appendExpansion(first, gapNow(first), ["c"])
+    expect(second.get(1)).toEqual(contextLines(["a", "b", "c"], 1, 1))
+  })
+
+  // Two clicks on the same expander before the first answer lands both resolve
+  // against the gap as it was. Appending the loser would write the same lines
+  // twice — duplicated text and gutter numbers, with nothing on a PR or turn
+  // diff to refetch them away.
+  it("drops an answer numbered from where the run no longer starts", () => {
+    const stale = gapNow(new Map())
+    const held = appendExpansion(new Map(), stale, ["a", "b"])
+
+    const after = appendExpansion(held, stale, ["a", "b"])
+
+    expect(after).toBe(held)
+    expect(after.get(1)).toEqual(contextLines(["a", "b"], 1, 1))
   })
 })
 

@@ -76,12 +76,10 @@ interface SessionCardProps {
   // session nobody delegated, which is most of them (sessionOrigin).
   origin: string
   active: boolean
-  // Whether this session is on the stage at all. It is what the menu entry
-  // answers to, and it is true for a member of a wall that is parked — the block
-  // this card is drawn in is the mark, so nothing is repeated on the card.
-  onStage: boolean
   // Whether it is drawing in a pane *right now*. Never true for a member of a
-  // parked wall, which is exactly the difference the block cannot show.
+  // parked wall, which the block this card sits in shows instead. It is also
+  // what the stage entry answers to: only a card on screen can be taken off it,
+  // and one on a parked wall is put on the stage like any other.
   showing: boolean
   // Put this card on the stage, or take it off when it is already there.
   onStageToggle: () => void
@@ -122,7 +120,6 @@ export function SessionCard({
   path,
   origin,
   active,
-  onStage,
   showing,
   onStageToggle,
   delegateCount,
@@ -601,7 +598,7 @@ export function SessionCard({
           {!active && (
             <ContextMenuItem onClick={onStageToggle}>
               <Columns2 />
-              {onStage ? "Stop showing" : "Show beside"}
+              {showing ? "Stop showing" : "Show beside"}
             </ContextMenuItem>
           )}
           <ContextMenuItem onClick={() => setEditing(true)}>

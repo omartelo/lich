@@ -79,7 +79,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   only — Codex's Settings pane didn't even offer the option. A Codex rollout
   reports its running token total on every turn, and lich now prices that the
   same way it prices a Claude transcript: the number stays absent, never
-  guessed, until the model it ran is one lich's price table knows.
+  guessed, until the model it ran is one lich's price table knows — and a
+  conversation you moved to a different model with `/model` keeps it absent,
+  because that one running total covers both and the rollout never says which
+  tokens are whose.
 
 ### Changed
 

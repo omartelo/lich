@@ -221,7 +221,6 @@ export function SessionGroup({
                       active={session.id === activeId}
                       // Membership is the block itself; what the card still has to
                       // answer is whether that member is on screen this moment.
-                      onStage={!!stage}
                       showing={stageIds.includes(session.id)}
                       onStageToggle={() => onStageToggle(session.id)}
                       delegateCount={delegates.length}

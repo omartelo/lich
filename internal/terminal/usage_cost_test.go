@@ -537,6 +537,51 @@ func TestCodexTranscriptCostWithholdsForAnUnpricedModel(t *testing.T) {
 	}
 }
 
+// TestCodexTranscriptCostWithholdsAcrossAModelSwitch pins the money rule over a
+// rollout whose conversation ran `/model`: total_token_usage is one running
+// total spanning both models and the rollout never splits it, so pricing it at
+// either rate bills some of those tokens wrong. Absent beats a guess — the same
+// answer an unpriced line gets.
+func TestCodexTranscriptCostWithholdsAcrossAModelSwitch(t *testing.T) {
+	rates := fixedRates{
+		"gpt-5.1-codex":      {Input: 0.001, Output: 0.01, CacheRead: 0.0005, CacheWrite: 0.002},
+		"gpt-5.1-codex-mini": {Input: 0.0001, Output: 0.001, CacheRead: 0.00005, CacheWrite: 0.0002},
+	}
+	path := writeFile(t,
+		codexTurnContextJSON("gpt-5.1-codex-mini")+"\n"+
+			codexTokenLineJSON(500, 0, 0, 5)+"\n"+
+			codexTurnContextJSON("gpt-5.1-codex")+"\n"+
+			codexTokenLineJSON(1000, 400, 0, 10)+"\n")
+
+	if cost, ok := codexTranscriptCost(path, rates); ok {
+		t.Errorf("codexTranscriptCost = %v, want a miss: the total spans two models", cost)
+	}
+}
+
+// The counterpart: one model named again on every turn is still one model, and
+// the walk that reaches the start of the file without finding a second is what
+// proves it — not a failure to price.
+func TestCodexTranscriptCostPricesTheWholeTotalForOneModel(t *testing.T) {
+	path := writeFile(t,
+		codexTurnContextJSON("gpt-5.1-codex")+"\n"+
+			codexTokenLineJSON(500, 0, 0, 5)+"\n"+
+			codexTurnContextJSON("gpt-5.1-codex")+"\n"+
+			codexTokenLineJSON(1000, 400, 0, 10)+"\n"+
+			// A turn that has opened but billed nothing yet names no model the
+			// total was priced at, so it must not read as a switch.
+			codexTurnContextJSON("gpt-5.1-codex-mini")+"\n")
+
+	cost, ok := codexTranscriptCost(path, codexTestRate)
+
+	if !ok {
+		t.Fatal("codexTranscriptCost: want ok")
+	}
+	want := 600*0.001 + 400*0.0005 + 10*0.01
+	if !nearly(cost, want) {
+		t.Errorf("cost = %v, want %v", cost, want)
+	}
+}
+
 func TestCodexTranscriptCostMissesWithoutATokenLine(t *testing.T) {
 	path := writeFile(t, codexTurnContextJSON("gpt-5.1-codex")+"\n")
 

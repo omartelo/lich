@@ -479,7 +479,14 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
       <ConfirmDialog
         open={!!moving}
         onCancel={cancelMove}
-        title={`Move ${moving?.session.label ?? ""} to this split?`}
+        // "this split" only when there is one: adding to no wall starts a new
+        // one around the active session, and naming a split the user cannot see
+        // is the same lie as the entry that promised to stop showing a card.
+        title={
+          panes.current
+            ? `Move ${moving?.session.label ?? ""} to this split?`
+            : `Show ${moving?.session.label ?? ""} beside this session?`
+        }
         description={
           moving?.from.cells.length === 1 ? (
             <>
@@ -488,8 +495,8 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
             </>
           ) : (
             <>
-              It is showing in <strong>{moving?.from.name}</strong>, and a session can only be on
-              one split at a time — it leaves that one. No session is closed either way.
+              It is on <strong>{moving?.from.name}</strong>, and a session can only be on one split
+              at a time — it leaves that one. No session is closed either way.
             </>
           )
         }
