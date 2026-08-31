@@ -83,6 +83,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   leaves the checkout instead of following it. Links that stay inside the tree
   read exactly as before.
 
+- **The Linux launcher no longer says "lich" twice.** The packaged desktop entry
+  carried a name and nothing else, so an application menu with a second line to
+  print about an entry had nothing to put there and repeated the name as its own
+  description. It now carries both of the lines a menu may look for — what lich
+  is, and what it does — so it reads the way every other application on the
+  machine does.
+
 ## [0.42.0] - 2026-08-27
 
 ### Changed
