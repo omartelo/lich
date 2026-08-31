@@ -108,7 +108,7 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
   const handsOn = useRemoteResource(
     sessionId ? `${sessionId}:${now.getTime()}` : "",
     () => TerminalService.HandsOn(sessionId),
-    { empty: 0 },
+    { empty: 0, resetOn: sessionId },
   )
 
   // The picker runs on the backend (DropService.Attach), not through
@@ -197,6 +197,7 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
           <span className="font-mono text-xs text-muted-foreground">
             {spellHandsOn(handsOn.data)}
           </span>
+          {/* Keep in sync with handsOnIdleGap in internal/terminal/handson.go. */}
           <span className="text-xs text-muted-foreground">
             How long this session has been worked on — typed at, reporting, or running a turn. A gap
             longer than 15 minutes counts as time away.

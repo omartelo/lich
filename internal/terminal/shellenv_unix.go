@@ -5,7 +5,10 @@ package terminal
 import (
 	"bytes"
 	"context"
+	"errors"
+	"io"
 	"os/exec"
+	"syscall"
 	"time"
 
 	"github.com/creack/pty"
@@ -47,20 +50,29 @@ func runShellDump(ctx context.Context, shell, cmdStr string, env []string) (stri
 		return "", err
 	}
 
-	chunks := make(chan []byte)
+	type result struct {
+		chunk []byte
+		err   error
+	}
+	results := make(chan result)
 	go func() {
-		defer cmd.Wait()
 		defer ptmx.Close()
 		buf := make([]byte, 4096)
 		for {
-			n, err := ptmx.Read(buf)
+			n, readErr := ptmx.Read(buf)
 			if n > 0 {
 				cp := make([]byte, n)
 				copy(cp, buf[:n])
-				chunks <- cp
+				results <- result{chunk: cp}
 			}
-			if err != nil {
-				close(chunks)
+			if readErr != nil {
+				waitErr := cmd.Wait()
+				if waitErr != nil {
+					readErr = waitErr
+				} else if errors.Is(readErr, io.EOF) || errors.Is(readErr, syscall.EIO) {
+					readErr = nil
+				}
+				results <- result{err: readErr}
 				return
 			}
 		}
@@ -70,11 +82,11 @@ func runShellDump(ctx context.Context, shell, cmdStr string, env []string) (stri
 	var quiet <-chan time.Time
 	for {
 		select {
-		case b, ok := <-chunks:
-			if !ok {
-				return out.String(), nil
+		case result := <-results:
+			if result.err != nil || result.chunk == nil {
+				return out.String(), result.err
 			}
-			out.Write(b)
+			out.Write(result.chunk)
 			quiet = time.After(shellDumpQuiet)
 		case <-quiet:
 			return out.String(), nil

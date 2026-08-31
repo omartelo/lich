@@ -10,6 +10,7 @@ import { threadSlots, type SlotElements, type ThreadSlot } from "@/lib/codemirro
 import {
   appendExpansion,
   buildFileDoc,
+  docLineAt,
   formatLineRef,
   newLineRange,
   type DiffFile,
@@ -336,16 +337,13 @@ function DiffBody({ doc, path, onInject, onSessionComment, review, onExpandGap }
     return layers.length > 0 ? layers : undefined
   }, [gapped, slots, doc, onExpandGap])
   const { containerRef, getSelectedDocLines, view } = useDiffEditor(doc, path, extra)
-  // Both halves of the resolved selection: the file lines a comment is filed
-  // against, and the doc line a composer hangs under. They differ — a selection
-  // ending on a deleted line has a doc line but no new-file one.
+  // The resolved new-file lines a comment is filed against.
   const [selection, setSelection] = useState<DiffSelection | null>(null)
   const [composer, setComposer] = useState<Composer | null>(null)
 
-  // Where the gaps go, never what is in them: keyed off the composer's line
-  // rather than the composer, so typing into it does not re-dispatch the whole
-  // slot set on every keystroke.
-  const composerLine = composer?.docLine ?? 0
+  // Map the stable file line on every render: expanding a gap shifts document
+  // lines, while the line the comment is filed against does not move.
+  const composerLine = composer ? (docLineAt(doc.lineMeta, "RIGHT", composer.range.end) ?? 0) : 0
   const wanted = useMemo((): ThreadSlot[] => {
     const built = review
       ? reviewSlots({
@@ -354,8 +352,6 @@ function DiffBody({ doc, path, onInject, onSessionComment, review, onExpandGap }
           drafts: review.drafts.map(({ comment }) => comment),
         })
       : []
-    // The composer is placed by doc line, not by file line: it belongs under
-    // the last line the selection covered, whichever side that line came from.
     return composerLine > 0 ? [...built, { key: COMPOSER_KEY, docLine: composerLine }] : built
   }, [review, doc.lineMeta, composerLine])
 
@@ -406,9 +402,7 @@ function DiffBody({ doc, path, onInject, onSessionComment, review, onExpandGap }
           }
           const selected = getSelectedDocLines()
           const range = selected ? newLineRange(doc.lineMeta, selected.from, selected.to) : null
-          setSelection(
-            selected && range ? { lines: formatLineRef(range), range, docLine: selected.to } : null,
-          )
+          setSelection(selected && range ? { lines: formatLineRef(range), range } : null)
         }}
         onInject={onInject}
         // Both items are offered whenever their destination exists, not only

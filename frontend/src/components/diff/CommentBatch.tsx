@@ -42,14 +42,19 @@ export function CommentBatch({ target, onInject }: CommentBatchProps) {
     setNote("")
   }
 
+  const clear = () => {
+    clearReviewComments(target)
+    setNote("")
+  }
+
   // Comments are the one thing here the user typed, so they survive a failed
   // send: only a write the session took clears them.
   const send = () => {
-    if (!onInject(composeReviewComments(comments))) {
+    if (!onInject(composeReviewComments(comments, note))) {
       toast.error("Open a session to send these comments to")
       return
     }
-    clearReviewComments(target)
+    clear()
   }
 
   return (
@@ -99,7 +104,7 @@ export function CommentBatch({ target, onInject }: CommentBatchProps) {
           {comments.length} {comments.length === 1 ? "comment" : "comments"}
         </span>
         <span className="ml-auto flex items-center gap-1">
-          <Button variant="ghost" size="sm" onClick={() => clearReviewComments(target)}>
+          <Button variant="ghost" size="sm" onClick={clear}>
             Clear
           </Button>
           <Button

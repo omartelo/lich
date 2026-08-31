@@ -84,6 +84,14 @@ describe("review-comments", () => {
     )
   })
 
+  it("includes an uncommitted note when the batch is sent", () => {
+    const t = target("pending-note")
+    addReviewComment(t, "src/a.ts", "12", "leaks the listener")
+    expect(composeReviewComments(reviewComments(t), "  same bug everywhere  ")).toContain(
+      "- same bug everywhere\x1b[201~",
+    )
+  })
+
   it("drops a blank note like a blank comment", () => {
     const t = target("blank-note")
     addReviewNote(t, "  \n ")

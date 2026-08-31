@@ -26,6 +26,74 @@ const probe: SpawnProbe = {
   resumeAvailable: TerminalService.ResumeAvailable,
 }
 
+interface PaneDrag {
+  from: number | null
+  over: number | null
+}
+
+interface PaneHeaderProps {
+  session: Session
+  index: number
+  focused: boolean
+  drag: PaneDrag
+  onDrag: (drag: PaneDrag) => void
+  onFocus: (index: number) => void
+  onSwap: (from: number, to: number) => void
+  onDrop: (index: number) => void
+}
+
+function paneUnder(x: number, y: number): number | null {
+  const el = document.elementFromPoint(x, y)?.closest("[data-pane]")
+  const index = Number(el?.getAttribute("data-pane"))
+  return Number.isInteger(index) ? index : null
+}
+
+function PaneHeader({
+  session,
+  index,
+  focused,
+  drag,
+  onDrag,
+  onFocus,
+  onSwap,
+  onDrop,
+}: PaneHeaderProps) {
+  return (
+    <div
+      className={cn(
+        "group flex shrink-0 cursor-grab items-center gap-1.5 px-2.5 pb-1 pt-1.5 text-xs",
+        focused ? "text-foreground" : "text-muted-foreground",
+        drag.from === index && "cursor-grabbing opacity-60",
+        drag.over === index && drag.from !== null && drag.from !== index && "bg-accent/60",
+      )}
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture(event.pointerId)
+        onDrag({ from: index, over: null })
+      }}
+      onPointerMove={(event) => {
+        if (drag.from === index) {
+          onDrag({ from: index, over: paneUnder(event.clientX, event.clientY) })
+        }
+      }}
+      onPointerUp={(event) => {
+        event.currentTarget.releasePointerCapture(event.pointerId)
+        const target = paneUnder(event.clientX, event.clientY)
+        onDrag({ from: null, over: null })
+        target === null || target === index ? onFocus(index) : onSwap(index, target)
+      }}
+      onPointerCancel={() => onDrag({ from: null, over: null })}
+    >
+      <ProviderIcon kind={session.kind} size={12} />
+      <span className="min-w-0 truncate font-medium">{session.label}</span>
+      <CloseButton
+        label={`Stop showing ${session.label}`}
+        className="ml-auto"
+        onClick={() => onDrop(index)}
+      />
+    </div>
+  )
+}
+
 // TerminalHost keeps one persistent terminal per session, across every open
 // project, stacked in the same area. The router picks the active project and the
 // per-project active session decides which layer is visible — terminals are
@@ -74,14 +142,7 @@ export function TerminalHost() {
   // The pane a dragged one is hovering over, for the drop hint. The drag itself
   // is a pointer gesture on the label rather than HTML5 drag-and-drop, which the
   // window already spends on files dropped into a terminal.
-  const [dragFrom, setDragFrom] = useState<number | null>(null)
-  const [dragOver, setDragOver] = useState<number | null>(null)
-
-  const paneUnder = (x: number, y: number): number | null => {
-    const el = document.elementFromPoint(x, y)?.closest("[data-pane]")
-    const index = Number(el?.getAttribute("data-pane"))
-    return Number.isInteger(index) ? index : null
-  }
+  const [paneDrag, setPaneDrag] = useState<PaneDrag>({ from: null, over: null })
 
   // The close an exited session's banner raises, on its own instance of the
   // sidebar's flow — the sidebar is not always mounted (collapsed to the rail)
@@ -234,45 +295,16 @@ export function TerminalHost() {
               onPointerDownCapture={visible && !focused ? () => stage.focusCell(index) : undefined}
             >
               {split && visible && (
-                <div
-                  className={cn(
-                    "group flex shrink-0 cursor-grab items-center gap-1.5 px-2.5 pb-1 pt-1.5 text-xs",
-                    focused ? "text-foreground" : "text-muted-foreground",
-                    dragFrom === index && "cursor-grabbing opacity-60",
-                    dragOver === index && dragFrom !== null && dragFrom !== index && "bg-accent/60",
-                  )}
-                  // The label is the grip: a pointer gesture on the terminal
-                  // itself is a text selection, and one on the pane is how the
-                  // cursor moves into it.
-                  onPointerDown={(event) => {
-                    event.currentTarget.setPointerCapture(event.pointerId)
-                    setDragFrom(index)
-                  }}
-                  onPointerMove={(event) => {
-                    if (dragFrom === index) {
-                      setDragOver(paneUnder(event.clientX, event.clientY))
-                    }
-                  }}
-                  onPointerUp={(event) => {
-                    event.currentTarget.releasePointerCapture(event.pointerId)
-                    const target = paneUnder(event.clientX, event.clientY)
-                    setDragFrom(null)
-                    setDragOver(null)
-                    if (target === null || target === index) {
-                      stage.focusCell(index)
-                      return
-                    }
-                    stage.swap(index, target)
-                  }}
-                >
-                  <ProviderIcon kind={session.kind} size={12} />
-                  <span className="min-w-0 truncate font-medium">{session.label}</span>
-                  <CloseButton
-                    label={`Stop showing ${session.label}`}
-                    className="ml-auto"
-                    onClick={() => stage.drop(index)}
-                  />
-                </div>
+                <PaneHeader
+                  session={session}
+                  index={index}
+                  focused={focused}
+                  drag={paneDrag}
+                  onDrag={setPaneDrag}
+                  onFocus={stage.focusCell}
+                  onSwap={stage.swap}
+                  onDrop={stage.drop}
+                />
               )}
               <div className="relative min-h-0 flex-1">
                 <TerminalView

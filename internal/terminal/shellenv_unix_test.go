@@ -65,3 +65,12 @@ func TestRunShellDumpBackgroundJobStillYieldsOutput(t *testing.T) {
 		t.Fatalf("runShellDump took %v, want it end near the %v quiet window rather than the 5s ctx", elapsed, shellDumpQuiet)
 	}
 }
+
+func TestRunShellDumpSurfacesShellFailure(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if _, err := runShellDump(ctx, "/bin/sh", "exit 7", os.Environ()); err == nil {
+		t.Fatal("runShellDump: want the shell's exit error")
+	}
+}
