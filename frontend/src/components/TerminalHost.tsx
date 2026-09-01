@@ -42,6 +42,12 @@ interface PaneHeaderProps {
   onDrop: (index: number) => void
 }
 
+/** Whether a pointer landed on a control inside the header — its × is the only
+ * one, and it is a span with a button role (CloseButton). */
+function onControl(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest('[role="button"]') !== null
+}
+
 function paneUnder(x: number, y: number): number | null {
   const el = document.elementFromPoint(x, y)?.closest("[data-pane]")
   const index = Number(el?.getAttribute("data-pane"))
@@ -67,6 +73,14 @@ function PaneHeader({
         drag.over === index && drag.from !== null && drag.from !== index && "bg-accent/60",
       )}
       onPointerDown={(event) => {
+        // A gesture that starts on a control belongs to that control. The header
+        // captures the pointer to drag the pane, and a capture retargets the
+        // rest of the gesture — pointerup and the mouse events the click is
+        // synthesised from — at the header, so the × below never sees a click of
+        // its own and dies silently.
+        if (onControl(event.target)) {
+          return
+        }
         event.currentTarget.setPointerCapture(event.pointerId)
         onDrag({ from: index, over: null })
       }}
@@ -76,6 +90,11 @@ function PaneHeader({
         }
       }}
       onPointerUp={(event) => {
+        // No drag was started, so this is the tail of a gesture the header does
+        // not own: leave it to the control it began on.
+        if (drag.from !== index) {
+          return
+        }
         event.currentTarget.releasePointerCapture(event.pointerId)
         const target = paneUnder(event.clientX, event.clientY)
         onDrag({ from: null, over: null })
