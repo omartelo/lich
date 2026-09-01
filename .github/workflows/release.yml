@@ -299,6 +299,7 @@ jobs:
         with:
           pkgname: lich-bin
           pkgbuild: ./PKGBUILD
+          assets: build/linux/aur/lich-bin.install
           updpkgsums: true
           commit_username: omartelo
           commit_email: meopedevts@proton.me

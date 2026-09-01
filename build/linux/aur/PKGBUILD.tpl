@@ -10,7 +10,8 @@ url="https://github.com/omartelo/lich"
 license=('AGPL-3.0-only')
 provides=('lich')
 conflicts=('lich')
-optdepends=('chromium: app window (any Chromium-family browser works: chromium, google-chrome, brave)'
+install=lich-bin.install
+optdepends=('chromium: app window (any Chromium-family browser works: chromium, google-chrome, brave, helium-browser)'
             'zenity: native folder picker')
 source=("lich-v${pkgver}-linux-amd64::${url}/releases/download/v${pkgver}/lich-v${pkgver}-linux-amd64"
         "lich-${pkgver}.desktop::https://raw.githubusercontent.com/omartelo/lich/v${pkgver}/build/linux/lich.desktop"

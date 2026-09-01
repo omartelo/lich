@@ -297,6 +297,17 @@ func runChromium(term *terminal.Service, configDir string, coord *restart.Coordi
 	}
 	if err := chromium.Run(url, profileDir, class, extra, coord.SetWindow); err != nil {
 		slog.Error("chromium shell", "err", err)
+		// Same silence as handleBindFailure: a launcher start has no terminal,
+		// so without a dialog a missing browser reads as lich doing nothing
+		// (#409). Best effort — where no dialog backend answers, the log line
+		// above still has the story.
+		_ = zenity.Error(fmt.Sprintf(
+			"lich could not open its window.\n\n%v\n\n"+
+				"lich does not bundle a browser runtime; it opens its window in "+
+				"a Chromium-family browser installed on this machine.\n\n"+
+				"Log: %s",
+			err, logging.Path(filepath.Join(configDir, "lich"))),
+			zenity.Title("lich"))
 		os.Exit(1)
 	}
 	slog.Info("window closed, exiting")
