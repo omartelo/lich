@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A missing browser now says so on screen.** lich opens its window in a
+  Chromium-family browser installed on the machine — a deliberate decision
+  (no Electron, no bundled runtime). Launched from a desktop launcher without
+  one, it used to die in silence, the explanation only in a terminal nobody
+  had open. That failure now raises an error dialog naming what is missing
+  and where the log is, the AUR package checks for a browser at install time,
+  and INSTALL.md spells the requirement out. (#409)
+
 ## [0.43.0] - 2026-08-31
 
 ### Added

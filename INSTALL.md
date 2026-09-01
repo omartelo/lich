@@ -16,7 +16,12 @@ Pick your system:
 - [If it does not start](#if-it-does-not-start)
 
 **Runtime dependencies** — lich opens its window in a Chromium-family browser;
-none is bundled. On Linux any of `chromium`, `google-chrome`, `helium-browser` or `brave`
+none is bundled. This is a decision, not a gap: lich rejected Electron and
+moved off Wails to stay one static Go binary that drives the browser already
+on your machine ([docs/chromium-shell.md](docs/chromium-shell.md)), so a
+Chromium-family browser is a hard runtime requirement — without one, lich
+cannot open its window and says so in a dialog and in the log. On Linux any of
+`chromium`, `google-chrome`, `helium-browser` or `brave`
 satisfies it, and `zenity` provides the folder picker. On macOS, Chrome,
 Chromium, Edge or Brave are looked up as `.app` bundles under `/Applications`
 (and `~/Applications`), and the folder picker is native. On Windows, Chrome,
