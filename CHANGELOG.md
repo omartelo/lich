@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A pane's × takes it off the wall again.** The pane header is also the handle
+  that drags a pane to another cell, and it took the pointer for that drag the
+  moment one went down anywhere on it — including on its own ×, whose click the
+  capture then swallowed. The button did nothing, said nothing. A gesture that
+  starts on the × is the ×'s now, and the drag begins only on the header itself.
+
 - **A missing browser now says so on screen.** lich opens its window in a
   Chromium-family browser installed on the machine — a deliberate decision
   (no Electron, no bundled runtime). Launched from a desktop launcher without
