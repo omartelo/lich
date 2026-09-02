@@ -8,10 +8,10 @@ func (s *Service) openDefault(full string) error {
 	return s.run("xdg-open", full)
 }
 
-// openURL hands an external URL to the desktop's default browser — the same
-// resolver, and the reason a link opens outside the app window.
-func (s *Service) openURL(rawURL string) error {
-	return s.run("xdg-open", rawURL)
+// urlOpenArgv is how this desktop opens a URL in the user's browser — the same
+// resolver as openDefault, and the reason a link opens outside the app window.
+func urlOpenArgv(rawURL string) []string {
+	return []string{"xdg-open", rawURL}
 }
 
 // quoteForShell quotes a path for the POSIX shell a Linux session runs.

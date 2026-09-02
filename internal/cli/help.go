@@ -110,6 +110,16 @@ const helpFooter = `
 
 Every command takes --help for its own flags.
 
+With no command, lich opens its window. Two flags belong to that launch:
+
+  lich --browser <name-or-path>
+      Open the window in this browser instead of the one lich would find.
+      LICH_BROWSER says the same thing; the flag wins. Either way lich fails
+      loudly when it is not there, rather than opening a different browser.
+
+  lich -- <flags>
+      Pass everything after -- to the browser (e.g. --ozone-platform=wayland).
+
 Run inside a lich session these address the sessions beside it. Run anywhere
 else on the machine they find the running lich on their own, and what they
 relay is attributed to the command line rather than to a session.

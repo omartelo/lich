@@ -21,12 +21,13 @@ func (s *Service) quoteForShell(full string) string {
 	return shquote.QuotePwsh(full)
 }
 
-// openURL hands an external URL to the default browser. Deliberately not the
-// `cmd /c start` above: cmd parses metacharacters out of its command line before
-// start ever sees them, so a `&` in a query string would end the command and run
-// what follows it. rundll32 is launched directly, with no shell in between.
-func (s *Service) openURL(rawURL string) error {
-	return s.run("rundll32", "url.dll,FileProtocolHandler", rawURL)
+// urlOpenArgv is how Windows opens a URL in the default browser. Deliberately
+// not the `cmd /c start` above: cmd parses metacharacters out of its command
+// line before start ever sees them, so a `&` in a query string would end the
+// command and run what follows it. rundll32 is launched directly, with no shell
+// in between.
+func urlOpenArgv(rawURL string) []string {
+	return []string{"rundll32", "url.dll,FileProtocolHandler", rawURL}
 }
 
 // openFolder shows a directory in File Explorer. Same launcher as openDefault,

@@ -608,3 +608,24 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   pull request's file on the next one's tree. The re-read is held in state and never in a ref, for the replay
   reason `use-remote-resource.ts` documents, and `use-active-file.test.tsx` pins it by moving the pull
   request on a live component — a probe that remounted instead would call the ref version green.
+- **One Chromium profile serves whichever browser resolution picked**
+  (`internal/chromium/resolve.go`): `<config>/lich/chromium-profile` is not keyed by browser, so the ladder's
+  answer moving — a second Chromium-family browser installed, a new desktop default — hands one browser's
+  profile to another. Only a machine with *several* of them can move at all: with one installed, the default
+  rung and the scan land on the same binary. Measured across a patch-level gap (a profile written by Chromium
+  151.0.7922.169, opened by Helium's 151.0.7922.137): the fork adopts it in silence, the window opens, the UI
+  preferences in its localStorage survive, and the profile's recorded version is rewritten *downwards* — the
+  benign case, and the common one. A wide version gap meets Chromium's own guard against a profile from a
+  newer build instead, which refuses to start; lich then dies on a browser exit code and its dialog can only
+  say `exit status 1`, naming nothing. `LICH_BROWSER` pins the answer; nothing else does.
+- **With no Chromium-family browser there is no window lifecycle** (`main.go`, `openWithoutWindow`): lich opens
+  a plain tab and then runs until it is signalled, because a tab it did not spawn cannot be waited on. Closing
+  the tab leaves lich serving, and `/restart` — which frees the pinned port by terminating "the window" — is
+  handed this process instead. On Windows that terminate is a `taskkill` WM_CLOSE against a process that has
+  no window, so an in-place update on a browserless Windows leaves the successor racing a port that never
+  frees.
+- **The tab fallback cannot tell "opened" from "nothing happened"** (`internal/system.OpenURL`): `xdg-open`,
+  `open` and `rundll32` are started and never waited on — waiting would block for the life of the browser they
+  hand off to. A desktop with a URL handler installed but no browser behind it therefore looks like success:
+  lich stays up with a notification and nothing on screen. Only a machine missing the opener itself reaches
+  the dialog that carries the URL.

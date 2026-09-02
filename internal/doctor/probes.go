@@ -1,8 +1,6 @@
 package doctor
 
 import (
-	"os/exec"
-
 	"github.com/omartelo/lich/internal/chromium"
 	"github.com/omartelo/lich/internal/providers"
 	"github.com/omartelo/lich/internal/singleton"
@@ -13,9 +11,15 @@ import (
 // They live here, exported, because a probe that drifted between the two tools
 // would have them describe two different machines.
 
-// Browser resolves the Chromium-family binary the window is launched as.
+// Browser resolves the browser the window is launched as, and says which rung
+// of the resolution ladder produced it — a machine where lich opens the "wrong"
+// browser is diagnosed by that step and by nothing else.
 func Browser() (string, error) {
-	return chromium.FindBrowser(exec.LookPath)
+	found, err := chromium.Resolve(chromium.RealEnv())
+	if err != nil {
+		return "", err
+	}
+	return found.Describe(), nil
 }
 
 // Providers lists the harnesses on PATH. A detection that fails outright is

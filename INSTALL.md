@@ -18,15 +18,24 @@ Pick your system:
 **Runtime dependencies** — lich opens its window in a Chromium-family browser;
 none is bundled. This is a decision, not a gap: lich rejected Electron and
 moved off Wails to stay one static Go binary that drives the browser already
-on your machine ([docs/chromium-shell.md](docs/chromium-shell.md)), so a
-Chromium-family browser is a hard runtime requirement — without one, lich
-cannot open its window and says so in a dialog and in the log. On Linux any of
-`chromium`, `google-chrome`, `helium-browser` or `brave`
-satisfies it, and `zenity` provides the folder picker. On macOS, Chrome,
-Chromium, Edge or Brave are looked up as `.app` bundles under `/Applications`
-(and `~/Applications`), and the folder picker is native. On Windows, Chrome,
-Edge or Brave are found via their conventional install paths (Edge ships with
-Windows) and the folder picker is native.
+on your machine ([docs/chromium-shell.md](docs/chromium-shell.md)). It looks
+for one in this order: the browser you pinned with `--browser` or
+`LICH_BROWSER`, your desktop's default browser when it is Chromium-family,
+the browsers installed on the machine, then Flatpak. On Linux that scan covers
+`chromium`, `chrome`, `brave`, `vivaldi`, `edge`, `thorium`,
+`ungoogled-chromium` and `helium`, and `zenity` provides the folder picker. On
+macOS, Chrome, Chromium, Edge, Brave and Vivaldi are looked up as `.app`
+bundles under `/Applications` (and `~/Applications`), and the folder picker is
+native. On Windows, Chrome, Edge, Brave and Vivaldi are found via their
+conventional install paths (Edge ships with Windows) and the folder picker is
+native. A browser installed somewhere else entirely is what `--browser` is for.
+
+With **no** Chromium-family browser, lich does not fail: it opens a plain tab
+in whatever browser you do have, tells you so in a desktop notification, and
+goes on running until you stop it. What is lost is the window of its own —
+Firefox has no equivalent of Chromium's `--app` mode, so a tab is the honest
+best. `lich doctor` reports which browser was resolved and which of the steps
+above found it.
 
 **git and the GitHub CLI** — every version control surface shells out to
 `git`, and lich does not bundle it: without `git` on your `PATH`, branches,

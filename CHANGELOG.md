@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **lich opens in the browser you actually have.** The window used to be
+  launched from a short list of binary names, so a machine running Vivaldi —
+  Chromium-based, `--app` mode and all — got nothing at all. Resolution is now
+  a ladder: `--browser` / `LICH_BROWSER` pin one outright, then the desktop's
+  own default browser when it is Chromium-family, then a scan that knows
+  Vivaldi, Brave, Edge, Thorium and ungoogled-chromium alongside Chromium and
+  Chrome, then Flatpak (the profile moves inside the sandbox, where it can be
+  written). `lich doctor` and `lich rage` name the browser *and* the step that
+  found it, so a window in the wrong browser is one line to diagnose.
+
+- **No Chromium-family browser is no longer a dead end.** lich hands its URL
+  to whatever browser is installed, raises a desktop notification saying it is
+  running and where, prints the URL, and goes on serving until it is stopped.
+  The window of its own is what is lost — Firefox has no `--app` equivalent —
+  not the product. With no browser at all, the dialog carries the URL instead
+  of lich exiting in silence.
+
 ## [0.43.1] - 2026-09-01
 
 ### Fixed
