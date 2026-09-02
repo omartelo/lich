@@ -608,3 +608,21 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   pull request's file on the next one's tree. The re-read is held in state and never in a ref, for the replay
   reason `use-remote-resource.ts` documents, and `use-active-file.test.tsx` pins it by moving the pull
   request on a live component — a probe that remounted instead would call the ref version green.
+- **One Chromium profile serves whichever browser resolution picked**
+  (`internal/chromium/resolve.go`): `<config>/lich/chromium-profile` is not keyed by browser, and the ladder's
+  answer can move under a user who installs a second Chromium-family browser or changes their desktop default
+  — the new browser then inherits a profile another one wrote. Chromium refuses a profile written by a build
+  newer than itself, and the frontend's `lich.*` settings live in that profile's localStorage, so the visible
+  symptom is settings that reset or a window that will not open, with nothing naming the browser swap as the
+  cause. `LICH_BROWSER` pins the answer; nothing else does.
+- **With no Chromium-family browser there is no window lifecycle** (`main.go`, `openWithoutWindow`): lich opens
+  a plain tab and then runs until it is signalled, because a tab it did not spawn cannot be waited on. Closing
+  the tab leaves lich serving, and `/restart` — which frees the pinned port by terminating "the window" — is
+  handed this process instead. On Windows that terminate is a `taskkill` WM_CLOSE against a process that has
+  no window, so an in-place update on a browserless Windows leaves the successor racing a port that never
+  frees.
+- **The tab fallback cannot tell "opened" from "nothing happened"** (`internal/system.OpenURL`): `xdg-open`,
+  `open` and `rundll32` are started and never waited on — waiting would block for the life of the browser they
+  hand off to. A desktop with a URL handler installed but no browser behind it therefore looks like success:
+  lich stays up with a notification and nothing on screen. Only a machine missing the opener itself reaches
+  the dialog that carries the URL.

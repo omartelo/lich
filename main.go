@@ -2,13 +2,16 @@ package main
 
 import (
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
+	"syscall"
 
 	"github.com/ncruces/zenity"
 	"github.com/omartelo/lich/internal/agentplugin"
@@ -59,6 +62,17 @@ func main() {
 	// including `lich -- <chromium flags>` — falls through and opens the app.
 	if code := cli.Run(os.Args[1:], version, os.Getenv, os.Stdout, os.Stderr); code != cli.NotACommand {
 		os.Exit(code)
+	}
+
+	// --browser is carried in the environment rather than passed down: the
+	// restart successor inherits it, and `lich doctor` then reports the browser
+	// a launch here would really open. Everything after `--` is the browser's.
+	pinnedBrowser, chromiumArgs := chromium.ParseFlags(os.Args[1:])
+	if pinnedBrowser != "" {
+		if err := os.Setenv(chromium.OverrideEnv, pinnedBrowser); err != nil {
+			slog.Error("set "+chromium.OverrideEnv, "err", err)
+			os.Exit(1)
+		}
 	}
 
 	// Snapshot before any env tweaks: spawned terminal sessions must inherit
@@ -193,7 +207,7 @@ func main() {
 	coord := restart.New(exe, os.Environ())
 	term.SetRestart(coord.Do)
 
-	runChromium(term, configDir, coord)
+	runChromium(term, configDir, chromiumArgs, coord)
 }
 
 // denyInternal hides the methods that exist for Go callers inside this process
@@ -249,7 +263,7 @@ func denyInternal(d *rpc.Handler) {
 // LICH_DEV_URL points the window at the Vite dev server instead of the
 // embedded frontend (see `task dev`); the token and the backend port ride the
 // query string so the page can find the RPC listener across the origin split.
-func runChromium(term *terminal.Service, configDir string, coord *restart.Coordinator) {
+func runChromium(term *terminal.Service, configDir string, extra []string, coord *restart.Coordinator) {
 	info := term.Transport()
 	if info.Port == 0 {
 		handleBindFailure(configDir, term.TransportError()) // never returns
@@ -291,16 +305,18 @@ func runChromium(term *terminal.Service, configDir string, coord *restart.Coordi
 	}
 	slog.Info("chromium shell opening", "addr", addr)
 
-	var extra []string
-	if args := os.Args[1:]; len(args) > 1 && args[0] == "--" {
-		extra = args[1:]
-	}
-	if err := chromium.Run(url, profileDir, class, extra, coord.SetWindow); err != nil {
+	err = chromium.Run(url, profileDir, class, extra, coord.SetWindow)
+	switch {
+	case err == nil:
+		slog.Info("window closed, exiting")
+	case errors.Is(err, chromium.ErrNoBrowser):
+		openWithoutWindow(url, addr, configDir, coord)
+	default:
 		slog.Error("chromium shell", "err", err)
 		// Same silence as handleBindFailure: a launcher start has no terminal,
-		// so without a dialog a missing browser reads as lich doing nothing
-		// (#409). Best effort — where no dialog backend answers, the log line
-		// above still has the story.
+		// so without a dialog a browser that will not launch reads as lich
+		// doing nothing (#409). Best effort — where no dialog backend answers,
+		// the log line above still has the story.
 		_ = zenity.Error(fmt.Sprintf(
 			"lich could not open its window.\n\n%v\n\n"+
 				"lich does not bundle a browser runtime; it opens its window in "+
@@ -310,7 +326,53 @@ func runChromium(term *terminal.Service, configDir string, coord *restart.Coordi
 			zenity.Title("lich"))
 		os.Exit(1)
 	}
-	slog.Info("window closed, exiting")
+}
+
+// openWithoutWindow is the last rung of browser resolution, and the one that
+// keeps a product on a machine with no Chromium-family browser: lich hands its
+// URL to whatever browser the user does have and goes on serving it. The
+// chromeless window is lost, lich is not.
+//
+// It returns when the process is signalled, so the caller's defers still run.
+// Every other launch ends when the window closes; a tab lich did not spawn
+// cannot be waited on, so nothing here ends on its own — closing the tab leaves
+// lich running, which the notification says.
+func openWithoutWindow(url, addr, configDir string, coord *restart.Coordinator) {
+	slog.Warn("no chromium-family browser found, opening a plain tab", "addr", addr)
+	// stdout rather than the log: the URL carries the session token, and the
+	// log file outlives this run (see the addr/url split above). A terminal
+	// launch reads it here; a launcher launch reads the notification below.
+	fmt.Println("lich is running at", url)
+
+	if err := system.OpenURL(url); err != nil {
+		slog.Error("no browser to open at all", "err", err)
+		_ = zenity.Error(fmt.Sprintf(
+			"lich is running, but found no browser to show it in.\n\n"+
+				"Open this URL in any browser:\n%s\n\n"+
+				"For a window of its own, install a Chromium-family browser "+
+				"(chromium, chrome, brave, vivaldi, edge).\n\nLog: %s",
+			url, logging.Path(filepath.Join(configDir, "lich"))),
+			zenity.Title("lich"))
+		os.Exit(1)
+	}
+	_ = zenity.Notify(
+		"lich is running at "+addr+" — opened in your default browser. "+
+			"No Chromium-family browser here, so it has no window of its own: "+
+			"closing the tab leaves lich running.",
+		zenity.Title("lich"))
+
+	// The window's exit is the app lifecycle everywhere else, and /restart
+	// terminates that window to free the pinned port for its successor. With no
+	// window, this process is what has to go — so it is what the coordinator is
+	// handed, and the signal it sends is the one waited on here.
+	if self, err := os.FindProcess(os.Getpid()); err == nil {
+		coord.SetWindow(self)
+	}
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	slog.Info("serving without a window", "addr", addr)
+	<-stop
+	slog.Info("signal received, exiting")
 }
 
 // handleBindFailure runs when the pinned listener would not bind, and never
@@ -368,5 +430,10 @@ func focusRunning(configDir string, running *singleton.Info) {
 	url := fmt.Sprintf("http://127.0.0.1:%d/?token=%s", running.Port, running.Token)
 	if err := chromium.Run(url, profileDir, "lich", nil, nil); err != nil {
 		slog.Warn("focus existing window", "err", err)
+		// The running lich has no window of its own either (it is serving a
+		// tab); the honest "focus" is another tab pointed at it.
+		if errors.Is(err, chromium.ErrNoBrowser) {
+			_ = system.OpenURL(url)
+		}
 	}
 }

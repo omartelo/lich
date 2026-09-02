@@ -4,33 +4,21 @@
 package chromium
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 )
 
-// FindBrowser returns the first Chromium-family binary that resolves, trying
-// this OS's candidates (candidates_unix.go / candidates_windows.go) in
-// preference order. lookPath is injectable for tests (production passes
-// exec.LookPath, which also accepts the absolute paths the Windows list uses).
-func FindBrowser(lookPath func(name string) (string, error)) (string, error) {
-	candidates := browserCandidates()
-	for _, name := range candidates {
-		if path, err := lookPath(name); err == nil {
-			return path, nil
-		}
-	}
-	return "", errors.New("no chromium-family browser found (tried " +
-		fmt.Sprint(candidates) + "); install chromium, chrome, edge, brave, or helium")
-}
-
 // windowsBrowserCandidates builds the Windows candidate list: chrome, then
-// edge (present on every Windows), then brave, each under the install roots
-// Windows exposes as environment variables, with bare PATH names last.
-// Paths are joined with a literal backslash so the pure logic tests the same
-// on any OS. Kept out of the build-tagged file for exactly that reason.
+// edge (present on every Windows), then brave and vivaldi, each under the
+// install roots Windows exposes as environment variables, with bare PATH names
+// last. Paths are joined with a literal backslash so the pure logic tests the
+// same on any OS. Kept out of the build-tagged file for exactly that reason.
+//
+// No registry read behind it: StartMenuInternet would name a browser installed
+// somewhere else entirely, and reaching for it costs a dependency for the
+// install nobody has. LICH_BROWSER covers that machine in one variable.
 func windowsBrowserCandidates(getenv func(string) string) []string {
 	roots := []struct{ env, rel string }{
 		{"ProgramFiles", `Google\Chrome\Application\chrome.exe`},
@@ -39,6 +27,9 @@ func windowsBrowserCandidates(getenv func(string) string) []string {
 		{"ProgramFiles(x86)", `Microsoft\Edge\Application\msedge.exe`},
 		{"ProgramFiles", `Microsoft\Edge\Application\msedge.exe`},
 		{"ProgramFiles", `BraveSoftware\Brave-Browser\Application\brave.exe`},
+		{"LocalAppData", `BraveSoftware\Brave-Browser\Application\brave.exe`},
+		{"ProgramFiles", `Vivaldi\Application\vivaldi.exe`},
+		{"LocalAppData", `Vivaldi\Application\vivaldi.exe`},
 	}
 	var out []string
 	for _, r := range roots {
@@ -50,7 +41,7 @@ func windowsBrowserCandidates(getenv func(string) string) []string {
 }
 
 // darwinBrowserCandidates builds the macOS candidate list: chrome, then
-// chromium, then edge, then brave, each as its .app executable under the
+// chromium, then edge, then brave, then vivaldi, each as its .app executable under the
 // system (/Applications) and per-user (~/Applications) install roots, with
 // bare PATH names last for a Homebrew-formula install. Paths are joined with a
 // literal slash so the pure logic tests the same on any OS. Kept out of the
@@ -61,6 +52,7 @@ func darwinBrowserCandidates(getenv func(string) string) []string {
 		"Chromium.app/Contents/MacOS/Chromium",
 		"Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
 		"Brave Browser.app/Contents/MacOS/Brave Browser",
+		"Vivaldi.app/Contents/MacOS/Vivaldi",
 	}
 	roots := []string{"/Applications"}
 	if home := getenv("HOME"); home != "" {
@@ -104,15 +96,20 @@ func Args(url, dataDir, class string, extra []string) []string {
 }
 
 // Run opens the window and blocks until the user closes it — the browser
-// process exiting is the app lifecycle. Extra args pass through to Chromium
-// (e.g. --ozone-platform=wayland). onStart, when non-nil, receives the browser
-// process once launched, so the caller can close the window itself (the restart
-// flow terminates it to relaunch lich); it is called before the blocking wait.
+// process exiting is the app lifecycle. The browser is whatever Resolve found;
+// ErrNoBrowser comes back untouched, because the answer to a machine with no
+// Chromium-family browser on it is not this function's to give. Extra args pass
+// through to Chromium (e.g. --ozone-platform=wayland). onStart, when non-nil,
+// receives the browser process once launched, so the caller can close the window
+// itself (the restart flow terminates it to relaunch lich); it is called before
+// the blocking wait.
 func Run(url, dataDir, class string, extra []string, onStart func(*os.Process)) error {
-	browser, err := FindBrowser(exec.LookPath)
+	browser, err := Resolve(RealEnv())
 	if err != nil {
 		return err
 	}
+	slog.Info("browser resolved", "browser", browser.Describe())
+	dataDir = browser.ProfileDir(dataDir)
 	// The data dir is required to launch at all; the prefs inside it only
 	// decide how quiet the window is.
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
@@ -124,11 +121,12 @@ func Run(url, dataDir, class string, extra []string, onStart func(*os.Process)) 
 		// refuse to open the window.
 		slog.Warn("chromium profile prefs", "err", err)
 	}
-	cmd := exec.Command(browser, Args(url, dataDir, class, extra)...)
+	argv := append(append([]string{}, browser.Prefix...), Args(url, dataDir, class, extra)...)
+	cmd := exec.Command(browser.Path, argv...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("launch %s: %w", browser, err)
+		return fmt.Errorf("launch %s: %w", browser.Path, err)
 	}
 	if onStart != nil {
 		onStart(cmd.Process)

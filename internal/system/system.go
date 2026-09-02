@@ -153,7 +153,19 @@ func (s *Service) OpenExternal(rawURL string) error {
 	if err := ValidateExternalURL(rawURL); err != nil {
 		return err
 	}
-	return s.openURL(rawURL)
+	argv := urlOpenArgv(rawURL)
+	return s.run(argv[0], argv[1:]...)
+}
+
+// OpenURL hands a URL to the desktop's default browser, through the same
+// per-OS launcher OpenExternal uses. It is package-level because the launch
+// path needs it before any service exists: a machine with no Chromium-family
+// browser gets no app window, and lich degrades to a plain tab in whatever
+// browser it does have (main.go). No scheme gate here — the only caller passes
+// lich's own loopback URL, not one a page handed it.
+func OpenURL(rawURL string) error {
+	argv := urlOpenArgv(rawURL)
+	return exec.Command(argv[0], argv[1:]...).Start()
 }
 
 // OpenInEditor decides how to open a work-tree file. rel is validated against
