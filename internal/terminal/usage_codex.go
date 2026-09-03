@@ -42,19 +42,11 @@ type codexRolloutEntry struct {
 	} `json:"payload"`
 }
 
-// codexContextUsage reads the latest active context size, model and effort from
-// a Codex rollout. The rollout carries the effective window selected for that
-// session, including a model_context_window override. The reverse scan stops at
-// the current turn's turn_context, so an old conversation costs no more to read
-// than a new one.
-func codexContextUsage(providerSessionID string) (contextUsage, bool) {
-	path, ok := codexTranscriptPath(providerSessionID)
-	if !ok {
-		return contextUsage{}, false
-	}
-	return scanCodexContextUsage(path)
-}
-
+// scanCodexContextUsage reads the latest active context size, model and effort
+// from a Codex rollout. The rollout carries the effective window selected for
+// that session, including a model_context_window override. The reverse scan
+// stops at the current turn's turn_context, so an old conversation costs no more
+// to read than a new one.
 func scanCodexContextUsage(path string) (contextUsage, bool) {
 	var usage contextUsage
 	haveTokens := false

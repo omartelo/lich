@@ -228,9 +228,13 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
   ) : null
 
   // The context-window readout — the ring plus percent, with a detailed
-  // tooltip. Null when the user turned it off (Settings › Providers).
+  // tooltip. Null when the user turned it off (Settings › Providers), and null
+  // for a provider that reports no window at all: oh-my-pi, opencode and Crush
+  // record what a turn spent but not what it spent it against, so the footer
+  // degrades to the cost beside it rather than drawing a 0% ring around
+  // "0 / 0 tokens" (docs/ceilings.md).
   const contextReadout =
-    usage && showContextUsage ? (
+    usage && showContextUsage && usage.window > 0 ? (
       <Tooltip>
         <TooltipTrigger
           render={

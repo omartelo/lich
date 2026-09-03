@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **oh-my-pi, opencode and Crush sessions now show what they cost.** All three
+  price every turn as they run it, but none of them records the model's context
+  window, and the footer read that as nothing to show — so a session spending
+  real money showed an empty corner. The cost now stands on its own: the figure
+  is the provider's own, exactly as its own interface reports it, and the
+  context ring simply is not drawn. Five of the seven providers are now on the
+  readout, and `docs/ceilings.md` carries the table of which rung each one is on
+  and why.
+
 - **A Codex session shows its cost on a machine with no network.** The price
   table shipped in the binary carried Claude models only, so a Codex cost
   appeared only once the remote refresh had landed — never, on a machine that

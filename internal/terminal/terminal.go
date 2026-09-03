@@ -240,10 +240,11 @@ type Service struct {
 	// without answering (internal/relay). Guarded by mu: wired after the
 	// transport is already serving.
 	onState func(id, state string)
-	// kinds is what each live session's PTY was spawned to run — a provider id,
-	// or KindShell — keyed by session id. Read by providerKind, which is what
-	// stops a session-start report from repainting a card lich itself chose the
-	// provider for, and by the state report's own filter.
+	// spawns is how each live session's PTY was started — what it runs and where
+	// — keyed by session id. Read by providerKind, which is what stops a
+	// session-start report from repainting a card lich itself chose the provider
+	// for, by the state report's own filter, and by the cost readout, which asks
+	// where Crush keeps the database for this checkout.
 	//
 	// Deliberately not under mu, and that is the whole reason it is not simply a
 	// field on session: spawnSession holds mu across the PTY spawn, so a report
@@ -251,7 +252,7 @@ type Service struct {
 	// session's spawn — which is exactly what the note on turns below forbids.
 	// Written once per spawn and read on every report, which is what sync.Map
 	// is for.
-	kinds sync.Map
+	spawns sync.Map
 	// turns is which sessions have a turn open right now, which is what tells a
 	// `waiting` report that a human is blocking from one that only says the
 	// session is sitting at its prompt (see turnLog). It carries its own lock:
@@ -724,9 +725,9 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, se
 		confined: inSandbox,
 	}
 	s.sessions[id] = sess
-	// Outside mu's protection by design (see Service.kinds), and stored with the
+	// Outside mu's protection by design (see Service.spawns), and stored with the
 	// registration so no report can arrive for a session whose kind is unknown.
-	s.kinds.Store(id, kind)
+	s.spawns.Store(id, spawn{kind: kind, cwd: cwd})
 	go s.stream(id, sess)
 	return sess, cwd, nil
 }
@@ -742,17 +743,29 @@ func (s *Service) providerKind(id, reported string) string {
 	return reported
 }
 
-// kindOf is what a live session's PTY was spawned to run, or "" once it is gone.
-// It never takes mu: a hook asks this on every report, and mu is held across a
-// PTY spawn (see Service.kinds).
-func (s *Service) kindOf(id string) string {
-	kind, ok := s.kinds.Load(id)
-	if !ok {
-		return ""
-	}
-	spawned, _ := kind.(string)
-	return spawned
+// spawn is how one live session's PTY was started: the kind it runs and the
+// directory it was rooted at. The cwd is the spawn directory and not the
+// foreground one the watcher follows (cwd.go) — Crush keeps its database in the
+// checkout it was started in, which a `cd` inside the session does not move.
+type spawn struct {
+	kind string
+	cwd  string
 }
+
+// spawnOf is how a live session's PTY was started, or the zero spawn once it is
+// gone. It never takes mu: a hook asks this on every report, and mu is held
+// across a PTY spawn (see Service.spawns).
+func (s *Service) spawnOf(id string) spawn {
+	v, ok := s.spawns.Load(id)
+	if !ok {
+		return spawn{}
+	}
+	started, _ := v.(spawn)
+	return started
+}
+
+// kindOf is what a live session's PTY was spawned to run, or "" once it is gone.
+func (s *Service) kindOf(id string) string { return s.spawnOf(id).kind }
 
 // closableState reports whether a state reported from inside a session of this
 // kind is one that harness can also end. A state nothing ends is worse than no
@@ -823,7 +836,7 @@ func (s *Service) stream(id string, sess *session) {
 	// respawn under this id must not drop the kind the live session was
 	// registered with.
 	if reaped {
-		s.kinds.Delete(id)
+		s.spawns.Delete(id)
 	}
 	s.mu.Unlock()
 
@@ -1058,7 +1071,7 @@ func (s *Service) Close(id string) error {
 		close(sess.done)
 	}
 	s.mu.Unlock()
-	s.kinds.Delete(id)
+	s.spawns.Delete(id)
 
 	// Before the bail below, because a card is closed far more often than it is
 	// running: its row is deleted either way, so nothing will ever ask what its

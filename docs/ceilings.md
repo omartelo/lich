@@ -22,18 +22,43 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   only when the reason is standing (`costMiss.spoken` in `internal/terminal/usage_cost.go`): a transcript that
   merely could not be read this turn says nothing and keeps the last figure, so a reader cannot tell that
   absence from a session still on its first turn.
-- **The session readout understands Claude Code and Codex transcripts only**
-  (`internal/terminal/usage_claude.go`, `internal/terminal/usage_codex.go`): oh-my-pi, opencode and Crush record
-  token usage but not the model's context-window size, so lich cannot turn those counts into a trustworthy
-  percentage, and Antigravity and Cursor CLI file their conversations as SQLite rather than as a transcript lich
-  reads at all.
-  Their footer therefore carries no model or context ring. Codex rollouts carry the effective window
-  selected for that session — 95% of its default or configured `model_context_window` — and, since
-  `total_token_usage` is a running total lich prices from its last line, the cost rung too. But
-  `internal/pricing/prices.json` bakes a fixed slice of OpenAI rates beside the Claude ones, copied by hand
-  from the same LiteLLM table the refresh reads, so an offline Codex session shows a cost at the rate that
-  shipped — **stale by however long it has been since the release**, until the refresh
-  (`internal/pricing/pricing.go`) lands and overrides it. Nothing regenerates that slice, so what is left
+- **The session readout sits on three rungs, and only two providers reach the top one**
+  (`internal/terminal/usage.go`, `usageSourceFor`). Which rung a provider is on is decided by what it writes
+  down, not by what lich chose to read:
+
+  | Provider | Rung | Why |
+  | --- | --- | --- |
+  | Claude Code | full readout | per-turn token counts, and a model whose window is named (`windowForModel`) |
+  | Codex | full readout | the effective `model_context_window`, and a running `total_token_usage` |
+  | oh-my-pi | cost only | a USD total on every assistant turn; no line carries a context window |
+  | opencode | cost only | `session.cost` per conversation; no window recorded with it |
+  | Crush | cost only | `sessions.cost` per conversation; no window recorded with it |
+  | Antigravity | nothing | conversation filed as SQLite lich has no reader for |
+  | Cursor CLI | nothing | chat filed as SQLite lich has no reader for |
+
+  The cost-only rung's footer shows the figure and nothing else: its usage event carries a zero window, and a
+  zero window is what tells `FooterBar` to drop the ring and `SessionModel` to render nothing rather than a
+  provider glyph beside a model nobody reported. **Those three figures are the providers' own arithmetic, never
+  re-priced here** — they bill models `internal/pricing` has never heard of, so a second opinion would only be a
+  second, disagreeing number — and each therefore inherits what its own accounting leaves out. oh-my-pi's total
+  is the sum of its assistant turns, the same walk its own status line makes, so a `task` sub-agent's spend is
+  missing from lich's figure exactly as it is from omp's. opencode files each sub-agent as a session of its own
+  and does *not* roll it into the parent, so the read walks the `parent_id` chain; Crush does roll it in
+  (`updateParentSessionCost`), so summing its children would bill them twice. **Both of those are measured
+  behaviour of another tool's schema, not a promise it made** — the day either changes its mind about the
+  rollup, the footer is silently wrong in one direction or the other, with nothing on screen saying so. A zero
+  from any of the three is an answer and not a gap: it is what they record for a free model and for a
+  subscription — while an oh-my-pi turn written with no total at all withholds the session's whole number and
+  borrows the `unpriced-model` marker, whose tooltip then blames a network that would not have helped. That
+  branch has never been seen in the wild and gets no reason of its own until it is. The two bottom-rung
+  providers get no bullet beyond their row — a reader for either means a reader for its own SQLite schema, and
+  neither schema is a contract anybody promised to keep.
+  The Codex window in that table is 95% of the rollout's default or configured `model_context_window`, and
+  Codex is the one rung lich prices itself. `internal/pricing/prices.json` bakes a fixed slice of OpenAI rates
+  beside the Claude ones, copied by hand from the same LiteLLM table the refresh reads, so an offline Codex
+  session shows a cost at the rate that shipped — **stale by however long it has been since the release**,
+  until the refresh (`internal/pricing/pricing.go`) lands and overrides it. Nothing regenerates that slice, so
+  what is left
   with no price at all is a model newer than the build, or one LiteLLM never priced — and with no network
   the refresh that would settle it never runs. A Codex conversation that ran `/model` has no cost from that
   turn on (`codexCostScan.mixed`): the one running total spans both models and the rollout never splits it,

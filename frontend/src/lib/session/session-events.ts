@@ -65,6 +65,10 @@ export const SANDBOX_EVENT = "session-sandbox"
 // has to know about: lich cannot price this conversation, as opposed to lich
 // not pricing it (the readout is off, which is the whole design on a
 // subscription).
+//
+// All five context fields are zero for a provider that records a turn's spend
+// and no window to take it against, and a zero window is what tells the footer
+// to draw the cost without a ring (docs/ceilings.md).
 export const USAGE_EVENT = "session-usage"
 
 // Global event the backend emits while one session has a request open with

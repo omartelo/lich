@@ -578,7 +578,7 @@ func TestProviderKindOutranksTheReport(t *testing.T) {
 		"shell-card":  KindShell,
 		"odd-card":    "something-else",
 	} {
-		svc.kinds.Store(id, kind)
+		svc.spawns.Store(id, spawn{kind: kind})
 	}
 	cases := []struct {
 		name, id, reported, want string
@@ -603,7 +603,7 @@ func TestProviderKindOutranksTheReport(t *testing.T) {
 // however long another session takes to spawn.
 func TestAReportNeverQueuesBehindASpawn(t *testing.T) {
 	svc := &Service{}
-	svc.kinds.Store("s1", providers.Cursor)
+	svc.spawns.Store("s1", spawn{kind: providers.Cursor})
 
 	// Stands in for a spawn in flight: the same lock, held by another session.
 	svc.mu.Lock()
@@ -625,7 +625,7 @@ func TestAReportNeverQueuesBehindASpawn(t *testing.T) {
 // that is gone, which is the one case the report is the better answer.
 func TestClosingASessionDropsItsKind(t *testing.T) {
 	svc := &Service{sessions: map[string]*session{}}
-	svc.kinds.Store("s1", providers.Cursor)
+	svc.spawns.Store("s1", spawn{kind: providers.Cursor})
 	if err := svc.Close("s1"); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
