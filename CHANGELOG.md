@@ -42,6 +42,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   event fires once per tool call, which puts its figure on the same rung as
   Cursor CLI's. Nothing to reinstall: the reports were already arriving.
 
+- **A cost lich cannot work out now says so instead of vanishing.** The footer
+  used to simply drop the figure whenever a session could not be priced, which
+  reads as a session that has spent nothing. It now shows `$—` with a tooltip
+  naming the reason: a conversation that switched models carries one running
+  token total over both and no rate can attribute it, and a model with no known
+  price is one neither the rates in this build nor the refresh have reached.
+  Turning the readout off, and a subscription, still show nothing at all: that
+  is the design, not a failure.
+
 ## [0.43.1] - 2026-09-01
 
 ### Fixed

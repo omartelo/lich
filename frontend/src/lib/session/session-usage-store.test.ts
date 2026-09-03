@@ -48,6 +48,7 @@ describe("createSessionUsageStore", () => {
       model: opus,
       effort: eff,
       costUsd: null,
+      costMiss: null,
     })
     expect(store.get("s2")).toEqual({
       percent: 5,
@@ -56,6 +57,7 @@ describe("createSessionUsageStore", () => {
       model: opus,
       effort: eff,
       costUsd: null,
+      costMiss: null,
     })
   })
 
@@ -95,6 +97,7 @@ describe("createSessionUsageStore", () => {
       model: opus,
       effort: "xhigh",
       costUsd: null,
+      costMiss: null,
     })
   })
 
@@ -110,6 +113,7 @@ describe("createSessionUsageStore", () => {
       model: opus,
       effort: eff,
       costUsd: null,
+      costMiss: null,
     })
   })
 
@@ -166,6 +170,36 @@ describe("createSessionUsageStore", () => {
 
     emit({ ...base, percent: 12, costUsd: Number.NaN })
     expect(store.get("s1")?.costUsd).toBeNull()
+  })
+
+  // The reason travels beside the missing number, and only when it is one this
+  // build has a sentence for: an unlabelled marker would say less than the
+  // blank it replaces.
+  it("keeps the reason a cost is missing, and drops one it cannot name", () => {
+    const { store, emit } = harness()
+    const base = { id: "s1", percent: 10, tokens: 20000, window: 200000, model: opus, effort: eff }
+
+    emit({ ...base, costMiss: "mixed-models" })
+    expect(store.get("s1")?.costMiss).toBe("mixed-models")
+
+    emit({ ...base, percent: 11, costMiss: "unpriced-model" })
+    expect(store.get("s1")?.costMiss).toBe("unpriced-model")
+
+    emit({ ...base, percent: 12, costMiss: "a-reason-from-a-newer-backend" })
+    expect(store.get("s1")?.costMiss).toBeNull()
+
+    emit({ ...base, percent: 13 })
+    expect(store.get("s1")?.costMiss).toBeNull()
+  })
+
+  it("re-renders when only the reason moved", () => {
+    const { store, emit } = harness()
+    let calls = 0
+    store.subscribe("s1", () => calls++)
+    const base = { id: "s1", percent: 10, tokens: 20000, window: 200000, model: opus, effort: eff }
+    emit({ ...base, costMiss: "mixed-models" })
+    emit({ ...base, costMiss: "unpriced-model" })
+    expect(calls).toBe(2)
   })
 
   it("re-renders when only the cost moved", () => {

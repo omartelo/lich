@@ -61,7 +61,10 @@ export const SANDBOX_EVENT = "session-sandbox"
 // model its id, effort the reasoning level ("" when the turn records none) —
 // plus an optional costUsd, which is present only when the cost readout is on
 // and every model in the session has a known price. Its absence is the answer,
-// not a zero.
+// not a zero — and an optional costMiss names the one kind of absence the user
+// has to know about: lich cannot price this conversation, as opposed to lich
+// not pricing it (the readout is off, which is the whole design on a
+// subscription).
 export const USAGE_EVENT = "session-usage"
 
 // Global event the backend emits while one session has a request open with
@@ -147,10 +150,19 @@ export function toSessionRelay(data: unknown): SessionRelay | null {
   }
 }
 
+// Why a session has no cost figure, when the reason is one the user can do
+// nothing about and no turn will heal — the backend's costMiss (see
+// internal/terminal/usage_cost.go). Every other absence sends nothing.
+const COST_MISSES = ["mixed-models", "unpriced-model"] as const
+
+export type CostMiss = (typeof COST_MISSES)[number]
+
 // A session's context-window occupancy as the footer shows it, and what the
 // session has cost so far. costUsd is null whenever the backend sent no number:
 // the setting is off (the case on a subscription, where the figure is noise) or
-// a model has no price yet. Nothing is rendered for it then.
+// a model has no price yet. costMiss is that second kind of absence, named — a
+// money readout that simply vanishes is read as zero spend — and stays null for
+// the first, where there is nothing to say.
 export interface SessionUsage {
   percent: number
   tokens: number
@@ -158,6 +170,7 @@ export interface SessionUsage {
   model: string
   effort: string
   costUsd: number | null
+  costMiss: CostMiss | null
 }
 
 // The states a card renders an indicator for. The contract also defines "idle"
@@ -335,6 +348,7 @@ export function isUsageEvent(data: unknown): data is {
   model: string
   effort: string
   costUsd?: number
+  costMiss?: string
 } {
   return (
     isIdEvent(data) &&
@@ -352,6 +366,16 @@ export function isUsageEvent(data: unknown): data is {
 // a total is either trustworthy or not rendered.
 export function usageCost(data: { costUsd?: unknown }): number | null {
   return typeof data.costUsd === "number" && Number.isFinite(data.costUsd) ? data.costUsd : null
+}
+
+// usageCostMiss reads the named absence off a usage payload. A reason this
+// build has no sentence for — one added by a newer backend — reads as no
+// reason: an unlabelled marker says less than the missing number already does.
+export function usageCostMiss(data: { costMiss?: unknown }): CostMiss | null {
+  const { costMiss } = data
+  return typeof costMiss === "string" && (COST_MISSES as readonly string[]).includes(costMiss)
+    ? (costMiss as CostMiss)
+    : null
 }
 
 // shouldToastAttention decides whether a session needing the user deserves the

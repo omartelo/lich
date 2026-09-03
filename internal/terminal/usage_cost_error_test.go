@@ -38,10 +38,10 @@ func TestAFailedReadIsNotACompleteScan(t *testing.T) {
 	body := costLineJSON("m1", modelOpus, 100, 0, 0, 0) + "\n"
 	r := &haltingReader{body: []byte(body), err: errors.New("input/output error")}
 
-	ledger, complete := accumulate(bufio.NewReader(r), costLedger{}, testRate)
+	ledger, miss := accumulate(bufio.NewReader(r), costLedger{}, testRate)
 
-	if complete {
-		t.Error("a scan stopped by a read error reported itself complete")
+	if miss != costMissUnread {
+		t.Errorf("miss = %q, want %q: a read error is not the end of the file", miss, costMissUnread)
 	}
 	if ledger.cost == 0 {
 		t.Error("the lines that were read were dropped, want them kept for the next resume")
@@ -54,8 +54,8 @@ func TestReachingTheEndIsACompleteScan(t *testing.T) {
 	body := costLineJSON("m1", modelOpus, 100, 0, 0, 0) + "\n"
 	r := &haltingReader{body: []byte(body), err: io.EOF}
 
-	if _, complete := accumulate(bufio.NewReader(r), costLedger{}, testRate); !complete {
-		t.Error("a scan that reached the end of the file reported itself incomplete")
+	if _, miss := accumulate(bufio.NewReader(r), costLedger{}, testRate); miss != costMissNone {
+		t.Errorf("miss = %q, want none: the scan reached the end of the file", miss)
 	}
 }
 
@@ -83,8 +83,14 @@ func TestAStoreFailureShowsNoCost(t *testing.T) {
 			svc := New(store, nil, events.New())
 			svc.prices = testRate
 
-			if cost, ok := svc.sessionCost("s1", "uuid-cost"); ok {
+			cost, miss, ok := svc.sessionCost("s1", "uuid-cost")
+			if ok {
 				t.Errorf("sessionCost = %v, want a miss", cost)
+			}
+			// A store that failed is a miss that heals: nothing is said on
+			// screen, unlike a rate that is never coming.
+			if miss.spoken() {
+				t.Errorf("miss = %q, want one the footer stays quiet about", miss)
 			}
 			// The context readout beside it is unaffected: only the money is
 			// missing, and the card still reports its window.
@@ -94,6 +100,9 @@ func TestAStoreFailureShowsNoCost(t *testing.T) {
 			}
 			if got.CostUSD != nil {
 				t.Errorf("CostUSD = %v, want absent", *got.CostUSD)
+			}
+			if got.CostMiss != "" {
+				t.Errorf("CostMiss = %q, want empty", got.CostMiss)
 			}
 		})
 	}

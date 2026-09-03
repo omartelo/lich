@@ -17,7 +17,7 @@ import type { DockTab } from "@/components/dock/RightDock"
 import { useActiveSession } from "@/lib/session/use-active-session"
 import { useSessionUsage } from "@/lib/session/use-session-usage"
 import { useCostReadout } from "@/lib/use-cost-readout"
-import { budgetShare, formatCost } from "@/lib/session/session-cost"
+import { COST_MISS_REASON, budgetShare, formatCost } from "@/lib/session/session-cost"
 import { formatHandsOn, spellHandsOn } from "@/lib/session/hands-on"
 import { useRemoteResource } from "@/lib/use-remote-resource"
 import { baseName, displayPath } from "@/lib/paths"
@@ -142,11 +142,10 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
   }
 
   // What the session has cost, beside the ring. Rendered only when the backend
-  // sent a number: on a subscription — and for a model no price table knows —
-  // there is nothing here at all, which is the point of the setting. With a
-  // spend ceiling set it takes the same colour ramp as the context ring, so a
-  // session running long shows it in the corner of the eye rather than only to
-  // whoever reads the figure.
+  // sent a number: on a subscription there is nothing here at all, which is the
+  // point of the setting. With a spend ceiling set it takes the same colour ramp
+  // as the context ring, so a session running long shows it in the corner of the
+  // eye rather than only to whoever reads the figure.
   const costReadout =
     usage && showCost && usage.costUsd !== null ? (
       <Tooltip>
@@ -170,6 +169,27 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
             <span className="text-xs text-muted-foreground">
               API pricing for every turn this session has run, this conversation and the ones it
               cleared.
+            </span>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    ) : null
+
+  // The same slot when there is a number lich cannot produce rather than none to
+  // show. An empty corner reads as zero spend, so the absence gets a mark of its
+  // own and the tooltip names which of the two standing reasons it is. Muted and
+  // never on the budget ramp: nothing is known to be near a ceiling.
+  const costMissReadout =
+    usage && showCost && usage.costUsd === null && usage.costMiss ? (
+      <Tooltip>
+        <TooltipTrigger render={<span className="tabular-nums text-muted-foreground" />}>
+          $&mdash;
+        </TooltipTrigger>
+        <TooltipContent side="top" className="border border-border bg-card text-foreground">
+          <div className="flex max-w-64 flex-col gap-1">
+            <span className="font-medium">Cost unavailable</span>
+            <span className="text-xs text-muted-foreground">
+              {COST_MISS_REASON[usage.costMiss]}
             </span>
           </div>
         </TooltipContent>
@@ -294,17 +314,18 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
       <span className="ml-auto flex items-center gap-4">
         {showContextUsage && <SessionModel sessionId={sessionId} kind={kind} />}
         <PlanQuota kind={kind} sessionId={sessionId} />
-        {(costReadout || handsOnReadout) && (
+        {(costReadout || costMissReadout || handsOnReadout) && (
           <span className="flex items-center gap-1.5">
-            {costReadout}
-            {costReadout && handsOnReadout && <span className="opacity-50">·</span>}
+            {costReadout ?? costMissReadout}
+            {(costReadout || costMissReadout) && handsOnReadout && (
+              <span className="opacity-50">·</span>
+            )}
             {handsOnReadout}
           </span>
         )}
         {contextReadout}
-        {(contextReadout || costReadout || handsOnReadout) && (status?.branch || path) && (
-          <Separator orientation="vertical" className="h-4" />
-        )}
+        {(contextReadout || costReadout || costMissReadout || handsOnReadout) &&
+          (status?.branch || path) && <Separator orientation="vertical" className="h-4" />}
         {status?.branch && (
           <span className="flex items-center gap-1">
             <GitBranch className="size-3.5" />

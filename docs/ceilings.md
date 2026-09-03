@@ -18,7 +18,10 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **The cost readout bills per `(session, transcript)`** (`internal/pricing`, `internal/terminal/usage_cost.go`): a
   conversation forked inside the PTY bills its copied history twice — lich's own resume continues the same
   transcript and is unaffected — and each sub-agent's own transcript is counted in, so one unreadable or
-  unpriceable sub-agent withholds the whole session's number.
+  unpriceable sub-agent withholds the whole session's number. A withheld number is marked `$—` on the footer
+  only when the reason is standing (`costMiss.spoken` in `internal/terminal/usage_cost.go`): a transcript that
+  merely could not be read this turn says nothing and keeps the last figure, so a reader cannot tell that
+  absence from a session still on its first turn.
 - **The session readout understands Claude Code and Codex transcripts only**
   (`internal/terminal/usage_claude.go`, `internal/terminal/usage_codex.go`): oh-my-pi, opencode and Crush record
   token usage but not the model's context-window size, so lich cannot turn those counts into a trustworthy
@@ -30,12 +33,17 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   `internal/pricing/prices.json` bakes a fixed slice of OpenAI rates beside the Claude ones, copied by hand
   from the same LiteLLM table the refresh reads, so an offline Codex session shows a cost at the rate that
   shipped — **stale by however long it has been since the release**, until the refresh
-  (`internal/pricing/pricing.go`) lands and overrides it. Nothing regenerates that slice: a model released
-  after the build, or one LiteLLM has not priced, still shows nothing until the refresh reaches it.
-  **A Codex conversation that ran `/model` shows no cost at all** from that turn on
-  (`codexCostScan.mixed`): the one running total spans both models and the rollout never splits it, so no
-  rate prices it — absent, the way an unpriced line is absent, rather than a number billed at whichever
-  model happened to go last.
+  (`internal/pricing/pricing.go`) lands and overrides it. Nothing regenerates that slice, so what is left
+  with no price at all is a model newer than the build, or one LiteLLM never priced — and with no network
+  the refresh that would settle it never runs. A Codex conversation that ran `/model` has no cost from that
+  turn on (`codexCostScan.mixed`): the one running total spans both models and the rollout never splits it,
+  so no rate prices it — absent, the way an unpriced line is absent, rather than a number billed at
+  whichever model happened to go last. **Those two absences are spoken; the staleness is not.** A session
+  lich cannot price draws `$—` with a tooltip naming which of the two it is (`usageEvent.CostMiss`,
+  `COST_MISS_REASON` in `frontend/src/lib/session/session-cost.ts`), while a cost billed at a rate the
+  release froze reads as an ordinary figure with nothing beside it. The marker also names the reason and
+  never the model or the turn, so a session whose sub-agent alone is unpriced looks like one whose every
+  turn is.
 - **Hands-on time is read off three signals, and one of them is not universal**
   (`internal/terminal/handson.go`, `noteOutput`, `closableState`): the figure beside the cost
   counts the gap between consecutive signs of life in a session — any hook report naming it, a

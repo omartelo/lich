@@ -16,6 +16,34 @@ type rateSource interface {
 	Rate(model string) (pricing.Rate, bool)
 }
 
+// costMiss names why a session has no cost figure. "" is the ordinary absence:
+// a total that is complete, or a miss the next turn heals on its own. The two
+// named ones are what the footer says out loud, because nothing the user waits
+// for brings the number back — and a money readout that simply disappears is
+// read as zero spend.
+type costMiss string
+
+const (
+	costMissNone costMiss = ""
+	// A model in the conversation has no price: the baked table is Claude-only,
+	// and the LiteLLM refresh has not landed or cannot (an offline machine, a
+	// model LiteLLM never priced).
+	costMissUnpriced costMiss = "unpriced-model"
+	// A Codex conversation ran `/model`: one running token total over two
+	// models, which the rollout never splits (codexCostScan.mixed).
+	costMissMixed costMiss = "mixed-models"
+	// The scan stopped where it will not stop next time — an unreadable file, a
+	// read error mid-transcript, a ledger row that could not be stored. It
+	// withholds the number like the rest and says nothing: a reason that heals
+	// itself is noise on screen.
+	costMissUnread costMiss = "unread-transcript"
+)
+
+// spoken reports whether a miss is worth putting in front of the user, which is
+// the whole difference between "lich cannot price this" and "there is nothing
+// to show". Only the two standing ones qualify.
+func (m costMiss) spoken() bool { return m == costMissUnpriced || m == costMissMixed }
+
 // costLedger is how far one transcript has been accounted for and what that
 // stretch cost, mirroring the row the store keeps (see store.CostLedger). It
 // travels through a scan: in as where to resume, out as where to resume next
@@ -43,22 +71,23 @@ type costLine struct {
 // the last scan stopped so a turn re-reads only what was appended since. ok is
 // false when the file cannot be read at all.
 //
-// complete reports that the scan reached the end of the file. It is false when
-// a line names a model nothing can price yet: the scan stops there rather than
-// skipping the line, because a total missing one turn is a wrong number, and a
-// wrong number about money is worse than none. The lookup that missed schedules
-// the price refresh that may unblock it, so the next turn resumes from the same
-// line — this heals itself or stays absent, and never guesses.
-func scanTranscriptCost(path string, from costLedger, rates rateSource) (costLedger, bool, bool) {
+// costMissNone reports that the scan reached the end of the file. It is
+// costMissUnpriced when a line names a model nothing can price yet: the scan
+// stops there rather than skipping the line, because a total missing one turn
+// is a wrong number, and a wrong number about money is worse than none. The
+// lookup that missed schedules the price refresh that may unblock it, so the
+// next turn resumes from the same line — this heals itself or stays absent, and
+// never guesses.
+func scanTranscriptCost(path string, from costLedger, rates rateSource) (costLedger, costMiss, bool) {
 	f, err := os.Open(path)
 	if err != nil {
-		return from, false, false
+		return from, costMissUnread, false
 	}
 	defer func() { _ = f.Close() }()
 
 	info, err := f.Stat()
 	if err != nil {
-		return from, false, false
+		return from, costMissUnread, false
 	}
 	// A transcript shorter than what was already counted is not the file that
 	// was counted: it was replaced or truncated, so the row it backs is rebuilt
@@ -67,10 +96,10 @@ func scanTranscriptCost(path string, from costLedger, rates rateSource) (costLed
 		from = costLedger{}
 	}
 	if _, err := f.Seek(from.offset, io.SeekStart); err != nil {
-		return from, false, false
+		return from, costMissUnread, false
 	}
-	ledger, complete := accumulate(bufio.NewReader(f), from, rates)
-	return ledger, complete, true
+	ledger, miss := accumulate(bufio.NewReader(f), from, rates)
+	return ledger, miss, true
 }
 
 // accumulate walks complete lines from r, folding each priced assistant message
@@ -81,11 +110,14 @@ func scanTranscriptCost(path string, from costLedger, rates rateSource) (costLed
 // somewhere in the middle, and a total that stops in the middle of a transcript
 // is a money number that is simply too small — the caller shows nothing and the
 // next turn resumes from the same offset.
-func accumulate(r *bufio.Reader, ledger costLedger, rates rateSource) (costLedger, bool) {
+func accumulate(r *bufio.Reader, ledger costLedger, rates rateSource) (costLedger, costMiss) {
 	for {
 		line, err := r.ReadBytes('\n')
 		if err != nil {
-			return ledger, err == io.EOF
+			if err == io.EOF {
+				return ledger, costMissNone
+			}
+			return ledger, costMissUnread
 		}
 		entry, ok := parseCostLine(line)
 		// An id is what makes a repeat recognisable; a line carrying none is
@@ -100,13 +132,13 @@ func accumulate(r *bufio.Reader, ledger costLedger, rates rateSource) (costLedge
 		}
 		rate, priced := rates.Rate(entry.model)
 		if !priced {
-			return ledger, false
+			return ledger, costMissUnpriced
 		}
 		// A rate that cannot price every counter on the line is the same miss as
 		// no rate at all — see Rate.Cost for the counter that can be missing.
 		cost, complete := rate.Cost(entry.tokens)
 		if !complete {
-			return ledger, false
+			return ledger, costMissUnpriced
 		}
 		ledger.cost += cost
 		ledger.lastMessage = entry.messageID

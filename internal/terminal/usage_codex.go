@@ -134,23 +134,33 @@ func consumeCodexUsageLine(line []byte, usage *contextUsage, haveTokens *bool) b
 // conversation's cumulative cost, so the last line is the whole answer — no
 // ledger walk, no offset to resume from. ok is false when the rollout carries
 // no cost line yet, when rates cannot price the model that ran it, and when
-// more than one model did (see codexCostScan.mixed).
+// more than one model did (see codexCostScan.mixed) — the last two name themselves
+// through costMiss, because they are standing, not a turn away from healing.
 //
 // The scan reaching the start of the file is the ordinary end of it, not a
 // failure: unlike the context readout, which stops at the current turn, this one
 // has to see every turn_context the total covers. A file that cannot be read
 // stops there with no token line, which is the same absent answer.
-func codexTranscriptCost(path string, rates rateSource) (float64, bool) {
+func codexTranscriptCost(path string, rates rateSource) (float64, costMiss, bool) {
 	var scan codexCostScan
 	codexReverseScan(path, scan.consume)
-	if !scan.haveTokens || scan.mixed || scan.model == "" {
-		return 0, false
+	// mixed is checked first: the walk stops the moment it finds the second
+	// model, so it is the reason even though the tokens were read.
+	if scan.mixed {
+		return 0, costMissMixed, false
+	}
+	if !scan.haveTokens || scan.model == "" {
+		return 0, costMissNone, false
 	}
 	rate, ok := rates.Rate(scan.model)
 	if !ok {
-		return 0, false
+		return 0, costMissUnpriced, false
 	}
-	return rate.Cost(scan.tokens)
+	cost, priced := rate.Cost(scan.tokens)
+	if !priced {
+		return 0, costMissUnpriced, false
+	}
+	return cost, costMissNone, true
 }
 
 // codexCostScan is what pricing a rollout takes from a reverse walk: the
