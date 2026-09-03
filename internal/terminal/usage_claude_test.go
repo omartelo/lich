@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
+
+	"github.com/omartelo/lich/internal/providers"
 )
 
 const (
@@ -262,7 +264,9 @@ func TestReadTailMissingFile(t *testing.T) {
 }
 
 // TestClaudeContextUsageEndToEnd drives the glob-by-UUID locate through a
-// CLAUDE_CONFIG_DIR override, so no real ~/.claude is touched.
+// CLAUDE_CONFIG_DIR override, so no real ~/.claude is touched. It goes through
+// usageSourceFor, which is what turns a conversation id into the file the
+// readers take.
 func TestClaudeContextUsageEndToEnd(t *testing.T) {
 	base := t.TempDir()
 	slug := filepath.Join(base, "projects", "-home-user-proj")
@@ -279,7 +283,11 @@ func TestClaudeContextUsageEndToEnd(t *testing.T) {
 	}
 	t.Setenv("CLAUDE_CONFIG_DIR", base)
 
-	u, ok := claudeContextUsage(id)
+	src, ok := usageSourceFor(id, "")
+	if !ok || src.kind != providers.Claude {
+		t.Fatalf("usageSourceFor = %+v, ok %v, want the Claude transcript", src, ok)
+	}
+	u, ok := claudeContextUsage(src.path)
 	if !ok {
 		t.Fatal("claudeContextUsage ok = false")
 	}
@@ -287,7 +295,7 @@ func TestClaudeContextUsageEndToEnd(t *testing.T) {
 		t.Errorf("usage = %+v, want tokens 20002 percent 10 model %q", u, modelHaiku)
 	}
 
-	if _, ok := claudeContextUsage("no-such-id"); ok {
+	if _, ok := usageSourceFor("no-such-id", ""); ok {
 		t.Error("an unknown id should be not-ok")
 	}
 }

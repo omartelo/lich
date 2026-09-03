@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/omartelo/lich/internal/providers"
 	_ "modernc.org/sqlite"
 )
 
@@ -86,4 +87,70 @@ func sessionRowExists(path, table, id string) bool {
 	var found int
 	query := "SELECT 1 FROM " + table + " WHERE id = ? LIMIT 1"
 	return db.QueryRow(query, id).Scan(&found) == nil
+}
+
+// The SQL each database provider answers "what has this conversation cost" with,
+// in USD, from the figure it billed at itself. Neither is re-priced from a table
+// here: both bill models no table in lich knows, and the number on screen is the
+// one their own UI shows.
+const (
+	// opencode files each sub-agent as a session of its own and leaves the
+	// parent's cost its own turns alone — measured against 1.18.23, where a task
+	// call left the parent at $0.021 and the child at $0.0105 — so the total
+	// walks down the parent chain. Recursive rather than one level deep: a
+	// sub-agent can call the task tool again.
+	//
+	// SUM over no rows is NULL, which is how a conversation this database has
+	// never heard of is told apart from one that has genuinely cost nothing.
+	opencodeCostQuery = `WITH RECURSIVE tree(id) AS (
+		SELECT id FROM session WHERE id = ?
+		UNION SELECT s.id FROM session s JOIN tree t ON s.parent_id = t.id
+	) SELECT SUM(s.cost) FROM session s JOIN tree t ON s.id = t.id`
+
+	// Crush rolls a sub-agent's spend into the session that dispatched it
+	// (`updateParentSessionCost`), so one row is the whole number — measured
+	// against 0.88.0, where a parent billed $0.0525 against its child's $0.021.
+	crushCostQuery = `SELECT cost FROM sessions WHERE id = ?`
+)
+
+// costQueryFor is the query above for a provider id, and "" for a provider that
+// keeps no such database. sessionDBCost refuses the empty one, so a kind that
+// reaches here by mistake reads as "nothing to show" rather than as free.
+func costQueryFor(kind string) string {
+	switch kind {
+	case providers.OpenCode:
+		return opencodeCostQuery
+	case providers.Crush:
+		return crushCostQuery
+	}
+	return ""
+}
+
+// sessionDBCost reads what one conversation cost out of a provider's own
+// database. False for every failure and for a total the database cannot produce
+// — a missing file, a row that is not there, a schema that moved, a NULL sum —
+// which is the same "keep the last figure" the transcript readers answer with.
+//
+// Read-only and opened per call, for the reasons sessionRowExists gives: lich
+// must never write into a database another tool owns, and holding a handle on
+// one being migrated would be the more expensive mistake.
+func sessionDBCost(path, query, id string) (float64, bool) {
+	if id == "" || query == "" {
+		return 0, false
+	}
+	if _, err := os.Stat(path); err != nil {
+		return 0, false
+	}
+	dsn := fmt.Sprintf("file:%s?mode=ro&_pragma=busy_timeout(%d)", path, sessionDBBusyMS)
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return 0, false
+	}
+	defer func() { _ = db.Close() }()
+
+	var cost sql.NullFloat64
+	if err := db.QueryRow(query, id).Scan(&cost); err != nil || !cost.Valid {
+		return 0, false
+	}
+	return cost.Float64, true
 }

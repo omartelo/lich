@@ -174,6 +174,19 @@ const usageEvent = (id: string) => ({
   effort: "",
 })
 
+// What the cost-only rung reports: oh-my-pi, opencode and Crush record what a
+// turn spent and no window to take it against, so every context field arrives
+// zeroed (docs/ceilings.md).
+const costOnlyUsageEvent = (id: string) => ({
+  id,
+  percent: 0,
+  tokens: 0,
+  window: 0,
+  model: "",
+  effort: "",
+  costUsd: 0.25,
+})
+
 // A busy card counts how long it has been busy, on a shared 1s clock (see
 // session-age). Left running it lands a repaint of its own in the middle of a
 // budget, so the clock is frozen. Only the timers: faking the microtask queue
@@ -278,6 +291,34 @@ test("a usage event for the active session repaints the footer, not the sidebar"
     TooltipTrigger: 8,
     TooltipContent: 4,
     TooltipPortal: 4,
+    Paperclip: 1,
+    Folder: 1,
+    Code: 1,
+    Anonymous: 3,
+  })
+  await budget.unmount()
+})
+
+test("a usage event with no context window draws no ring", async () => {
+  const budget = await mountSidebar()
+  await budget.act(() => bus.emit(USAGE_EVENT, costOnlyUsageEvent("s1")))
+  // The footer still repaints, but no ContextRing and no provider glyph: a
+  // report with no window has no percentage to draw a ring around, and the model
+  // slot renders nothing rather than naming zero of zero tokens. Against the
+  // budget above, the missing ContextRing, ProviderIcon, BrandIcon and one
+  // Separator are the whole degradation to the cost-only rung. (The cost figure
+  // itself is not here: its setting is an RPC, and every RPC hangs in this rig.)
+  expect(budget.take()).toEqual({
+    FooterBar: 1,
+    FooterButton: 2,
+    SessionModel: 1,
+    PlanQuota: 1,
+    Separator: 2,
+    Tooltip: 3,
+    TooltipRoot: 3,
+    TooltipTrigger: 6,
+    TooltipContent: 3,
+    TooltipPortal: 3,
     Paperclip: 1,
     Folder: 1,
     Code: 1,

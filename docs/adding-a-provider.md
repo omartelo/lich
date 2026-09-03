@@ -58,6 +58,7 @@ tool.
 | `internal/terminal/command.go` | what a spawn runs | entries in `skipPermissionFlags`, `modelFlags`, `briefingFlags` and `resumeArgs` — each one optional, and absent means "no flag rather than somebody else's" |
 | `internal/terminal/resume.go` | whether a resume can be offered | a `ResumeAvailable` case answering from what that provider left on disk |
 | `internal/terminal/transcript.go`, `sessiondb.go` | where that state lives | the path resolver the case above calls |
+| `internal/terminal/usage.go` | the footer's session readout | a `usageSourceFor` arm, plus a `sessionCost` arm reading whatever that provider records about spend — and a `contextUsageFor` arm only if it also records the model's context window. Which rung that lands the provider on is a row in `docs/ceilings.md`, in the same PR |
 | `internal/sandbox/sandbox.go` | what a confined session can still reach | a `stateDirs` case — a provider missing here confines to a home with no credentials, which is a session that opens and cannot log in |
 | `internal/agentplugin/` | the companion plugin | a `<provider>.go` with install / installed-version, plus the four switches and the `supported` list in `agentplugin.go` |
 | `internal/cli/mcp.go` | the `open_session` tool schema | the new id in the `kind` description |

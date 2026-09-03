@@ -47,16 +47,10 @@ type contextUsage struct {
 }
 
 // claudeContextUsage reads the context-window usage of a Claude conversation
-// from its transcript. The transcript is ~/.claude/projects/<slug>/<id>.jsonl;
-// the id is a globally-unique UUID, so a glob across every project slug finds it
-// without reconstructing Claude's path-encoding of the slug. ok is false on any
-// miss (not found, unreadable, no assistant usage in the tail) — each is a "keep
-// the last value" for the caller, none worth logging once per turn.
-func claudeContextUsage(providerSessionID string) (contextUsage, bool) {
-	path, ok := claudeTranscriptPath(providerSessionID)
-	if !ok {
-		return contextUsage{}, false
-	}
+// from its transcript, which usageSourceFor already located. ok is false on any
+// miss (unreadable, no assistant usage in the tail) — each is a "keep the last
+// value" for the caller, none worth logging once per turn.
+func claudeContextUsage(path string) (contextUsage, bool) {
 	tail, ok := readTail(path, usageTailBytes)
 	if !ok {
 		return contextUsage{}, false

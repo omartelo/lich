@@ -83,7 +83,11 @@ func TestAStoreFailureShowsNoCost(t *testing.T) {
 			svc := New(store, nil, events.New())
 			svc.prices = testRate
 
-			cost, miss, ok := svc.sessionCost("s1", "uuid-cost")
+			src, ok := usageSourceFor("uuid-cost", "")
+			if !ok {
+				t.Fatal("usageSourceFor: want the planted transcript")
+			}
+			cost, miss, ok := svc.sessionCost("s1", src)
 			if ok {
 				t.Errorf("sessionCost = %v, want a miss", cost)
 			}
