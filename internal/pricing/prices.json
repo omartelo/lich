@@ -163,5 +163,163 @@
     "cacheRead": 2e-07,
     "cacheWrite": 2.5e-06,
     "cacheWrite1h": 4e-06
+  },
+  "codex-mini-latest": {
+    "input": 1.5e-06,
+    "output": 6e-06,
+    "cacheRead": 3.75e-07
+  },
+  "gpt-5": {
+    "input": 1.25e-06,
+    "output": 1e-05,
+    "cacheRead": 1.25e-07
+  },
+  "gpt-5-chat": {
+    "input": 1.25e-06,
+    "output": 1e-05,
+    "cacheRead": 1.25e-07
+  },
+  "gpt-5-chat-latest": {
+    "input": 1.25e-06,
+    "output": 1e-05,
+    "cacheRead": 1.25e-07
+  },
+  "gpt-5-codex": {
+    "input": 1.25e-06,
+    "output": 1e-05,
+    "cacheRead": 1.25e-07
+  },
+  "gpt-5-mini": {
+    "input": 2.5e-07,
+    "output": 2e-06,
+    "cacheRead": 2.5e-08
+  },
+  "gpt-5-nano": {
+    "input": 5e-08,
+    "output": 4e-07,
+    "cacheRead": 5e-09
+  },
+  "gpt-5-pro": {
+    "input": 1.5e-05,
+    "output": 0.00012
+  },
+  "gpt-5-search-api": {
+    "input": 1.25e-06,
+    "output": 1e-05,
+    "cacheRead": 1.25e-07
+  },
+  "gpt-5.1": {
+    "input": 1.25e-06,
+    "output": 1e-05,
+    "cacheRead": 1.25e-07
+  },
+  "gpt-5.1-chat-latest": {
+    "input": 1.25e-06,
+    "output": 1e-05,
+    "cacheRead": 1.25e-07
+  },
+  "gpt-5.1-codex": {
+    "input": 1.25e-06,
+    "output": 1e-05,
+    "cacheRead": 1.25e-07
+  },
+  "gpt-5.1-codex-max": {
+    "input": 1.25e-06,
+    "output": 1e-05,
+    "cacheRead": 1.25e-07
+  },
+  "gpt-5.1-codex-mini": {
+    "input": 2.5e-07,
+    "output": 2e-06,
+    "cacheRead": 2.5e-08
+  },
+  "gpt-5.2": {
+    "input": 1.75e-06,
+    "output": 1.4e-05,
+    "cacheRead": 1.75e-07
+  },
+  "gpt-5.2-chat-latest": {
+    "input": 1.75e-06,
+    "output": 1.4e-05,
+    "cacheRead": 1.75e-07
+  },
+  "gpt-5.2-codex": {
+    "input": 1.75e-06,
+    "output": 1.4e-05,
+    "cacheRead": 1.75e-07
+  },
+  "gpt-5.2-pro": {
+    "input": 2.1e-05,
+    "output": 0.000168
+  },
+  "gpt-5.3-chat-latest": {
+    "input": 1.75e-06,
+    "output": 1.4e-05,
+    "cacheRead": 1.75e-07
+  },
+  "gpt-5.3-codex": {
+    "input": 1.75e-06,
+    "output": 1.4e-05,
+    "cacheRead": 1.75e-07
+  },
+  "gpt-5.4": {
+    "input": 2.5e-06,
+    "output": 1.5e-05,
+    "cacheRead": 2.5e-07
+  },
+  "gpt-5.4-mini": {
+    "input": 7.5e-07,
+    "output": 4.5e-06,
+    "cacheRead": 7.5e-08
+  },
+  "gpt-5.4-nano": {
+    "input": 2e-07,
+    "output": 1.25e-06,
+    "cacheRead": 2e-08
+  },
+  "gpt-5.4-pro": {
+    "input": 3e-05,
+    "output": 0.00018,
+    "cacheRead": 3e-06
+  },
+  "gpt-5.5": {
+    "input": 5e-06,
+    "output": 3e-05,
+    "cacheRead": 5e-07
+  },
+  "gpt-5.5-pro": {
+    "input": 3e-05,
+    "output": 0.00018,
+    "cacheRead": 3e-06
+  },
+  "gpt-5.6": {
+    "input": 4e-06,
+    "output": 2e-05,
+    "cacheRead": 4e-07,
+    "cacheWrite": 5e-06
+  },
+  "gpt-5.6-cyber": {
+    "input": 1.25e-05,
+    "output": 7.5e-05,
+    "cacheRead": 1.25e-06,
+    "cacheWrite": 1.5625e-05
+  },
+  "gpt-5.6-luna": {
+    "input": 2e-07,
+    "output": 1.2e-06,
+    "cacheRead": 2e-08,
+    "cacheWrite": 2.5e-07
+  },
+  "gpt-5.6-sol": {
+    "input": 4e-06,
+    "output": 2e-05,
+    "cacheRead": 4e-07,
+    "cacheWrite": 5e-06
+  },
+  "gpt-5.6-terra": {
+    "input": 2e-06,
+    "output": 1.2e-05,
+    "cacheRead": 2e-07,
+    "cacheWrite": 2.5e-06
   }
 }

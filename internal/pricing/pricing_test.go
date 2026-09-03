@@ -59,6 +59,28 @@ func TestBakedTablePricesAShippedModel(t *testing.T) {
 	}
 }
 
+// TestBakedTablePricesACodexModel proves the floor is not Claude-only: a Codex
+// session on a machine that has never reached the network still shows a cost.
+// The rates are pinned, not read from the table, so regenerating the baked slice
+// without OpenAI in it fails here instead of going quiet in the footer.
+func TestBakedTablePricesACodexModel(t *testing.T) {
+	table := newTable("http://0.0.0.0:0", filepath.Join(t.TempDir(), "prices.json"), http.DefaultClient)
+
+	rate, ok := table.Rate("gpt-5.1-codex")
+	if !ok {
+		t.Fatal("Rate(gpt-5.1-codex): want a price from the baked table")
+	}
+	if rate.Input != 1.25e-06 || rate.Output != 1e-05 || rate.CacheRead != 1.25e-07 {
+		t.Errorf("Rate = %+v, want the published gpt-5.1-codex rates", rate)
+	}
+	// OpenAI does not bill for writing the cache, and the Codex scan never
+	// reports an hour-long write — so a rate with neither must still price a
+	// turn rather than report the missing-1h refusal Cost gives a Claude rate.
+	if _, ok := rate.Cost(Tokens{Input: 1000, Output: 100, CacheRead: 500}); !ok {
+		t.Error("Cost: an OpenAI rate with no cache-write price must still price a turn")
+	}
+}
+
 // TestDatedModelIdResolvesToItsFamily proves the id a transcript records
 // ("…-20251101", pinning a release) prices off the undated entry. Without it
 // every dated id would read as unknown and the readout would never appear.

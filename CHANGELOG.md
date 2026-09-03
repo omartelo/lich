@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A Codex session shows its cost on a machine with no network.** The price
+  table shipped in the binary carried Claude models only, so a Codex cost
+  appeared only once the remote refresh had landed — never, on a machine that
+  cannot reach it. OpenAI's rates now ship beside Claude's; the refresh still
+  overrides them when it runs, so the cost is at worst stale by a release
+  rather than missing entirely.
+
 - **lich opens in the browser you actually have.** The window used to be
   launched from a short list of binary names, so a machine running Vivaldi —
   Chromium-based, `--app` mode and all — got nothing at all. Resolution is now

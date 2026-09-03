@@ -27,12 +27,15 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   Their footer therefore carries no model or context ring. Codex rollouts carry the effective window
   selected for that session — 95% of its default or configured `model_context_window` — and, since
   `total_token_usage` is a running total lich prices from its last line, the cost rung too. But
-  `internal/pricing/prices.json` is baked with Claude models only, so a Codex model prices only after the
-  remote LiteLLM refresh (`internal/pricing/pricing.go`) — an offline machine never shows a Codex cost, and
-  a model LiteLLM has not priced either never will. **A Codex conversation that ran `/model` shows no cost
-  at all** from that turn on (`codexCostScan.mixed`): the one running total spans both models and the
-  rollout never splits it, so no rate prices it — absent, the way an unpriced line is absent, rather than
-  a number billed at whichever model happened to go last.
+  `internal/pricing/prices.json` bakes a fixed slice of OpenAI rates beside the Claude ones, copied by hand
+  from the same LiteLLM table the refresh reads, so an offline Codex session shows a cost at the rate that
+  shipped — **stale by however long it has been since the release**, until the refresh
+  (`internal/pricing/pricing.go`) lands and overrides it. Nothing regenerates that slice: a model released
+  after the build, or one LiteLLM has not priced, still shows nothing until the refresh reaches it.
+  **A Codex conversation that ran `/model` shows no cost at all** from that turn on
+  (`codexCostScan.mixed`): the one running total spans both models and the rollout never splits it, so no
+  rate prices it — absent, the way an unpriced line is absent, rather than a number billed at whichever
+  model happened to go last.
 - **Hands-on time is read off three signals, and one of them is not universal**
   (`internal/terminal/handson.go`, `noteOutput`, `closableState`): the figure beside the cost
   counts the gap between consecutive signs of life in a session — a session-state report, a
