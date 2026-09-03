@@ -9,6 +9,9 @@ package terminal
 
 import (
 	"errors"
+	"fmt"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -168,5 +171,50 @@ func TestClosingASessionWritesWhatItWasWorked(t *testing.T) {
 
 	if store.handsOn["s1"] != 20 {
 		t.Errorf("closing wrote %ds, want 20", store.handsOn["s1"])
+	}
+}
+
+// TestEveryHookReportBeats is the rung Crush is on. Its only hook event is
+// `PreToolUse`, and neither script the plugin registers there reports a state
+// (docs/hooks/session-state.md) — so a Crush turn reaches lich as
+// `/session-start`, once per tool call (measured 2026-09-03 against Crush
+// 0.88.0, three tool calls in one turn, three POSTs). A beat wired to the state
+// report alone counts that turn as nothing at all, and the hour the user
+// watched it work reads as the seconds they typed in.
+//
+// Driven over the transport rather than by calling beatHandsOn, because the
+// wiring is the whole claim: the beat has to survive being written into a
+// callback that is about something else.
+func TestEveryHookReportBeats(t *testing.T) {
+	for _, tc := range []struct{ name, path, body string }{
+		{"session-start", "/session-start", `{"session_id":"s1","provider_session_id":"u9","provider":"crush"}`},
+		{"session-title", "/session-title", `{"session_id":"s1","title":"Explore this directory"}`},
+		{"session-touched", "/session-touched", `{"session_id":"s1"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			clock := newFakeClock()
+			svc := newQuietService(stubBins{}, clock)
+			if svc.ws == nil {
+				t.Fatalf("transport did not start: %v", svc.wsErr)
+			}
+			url := fmt.Sprintf("http://127.0.0.1:%d%s?token=%s", svc.ws.port, tc.path, svc.ws.token)
+			post := func() {
+				resp, err := http.Post(url, "application/json", strings.NewReader(tc.body))
+				if err != nil {
+					t.Fatalf("post %s: %v", tc.path, err)
+				}
+				_ = resp.Body.Close()
+				if resp.StatusCode != http.StatusNoContent {
+					t.Fatalf("%s status = %d, want 204", tc.path, resp.StatusCode)
+				}
+			}
+			post()
+			clock.advance(2 * time.Minute)
+			post()
+
+			if got := drainSeconds(&svc.hands, "s1"); got != 120 {
+				t.Errorf("two reports two minutes apart counted %ds, want 120", got)
+			}
+		})
 	}
 }
