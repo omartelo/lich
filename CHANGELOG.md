@@ -35,6 +35,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A pinned session is at the top of the sidebar again.** Split groups were
+  drawn above the pinned block, so a project with a split pushed the pinned
+  card below every wall — the one thing a pin promises. Pinned is now the first
+  block, whatever else the project holds.
+
+- **A split with one session left ends instead of lingering.** Closing or
+  removing panes until a single session remained left it under a split header,
+  alone, with no way back to its checkout. A group now ends when fewer than two
+  sessions are left in it and the survivor drops back among its worktree's
+  cards; nothing is closed by it.
+
+- **Sidebar blocks reorder in one list.** Splits could only be dragged among
+  splits and checkouts among checkouts, so neither could ever pass the other.
+  Every block but the pinned one — which stays first — now drags freely among
+  the rest, and dragging cards inside a checkout works again when one of its
+  sessions is showing on a split.
+
 - **A Crush card's hands-on time now counts the work, not the typing.** The
   clock beat on the session-state report, and Crush reports no state — so an
   hour a Crush session worked while you watched read as the few seconds you

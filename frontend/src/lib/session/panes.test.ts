@@ -13,7 +13,6 @@ import {
   planAdd,
   removeFromGroups,
   reorderCells,
-  reorderGroups,
   resolveGroups,
   stageAction,
   swapCells,
@@ -59,18 +58,24 @@ describe("resolveGroups", () => {
     expect(resolveGroups([group("g1", ["a", "gone", "b"])], sessions)[0].cells).toEqual(["a", "b"])
   })
 
-  // A group of one is still something the user named and can add to; a group of
-  // none has nothing left for the name to be about.
-  it("keeps a group of one and drops a group of none", () => {
-    const groups = resolveGroups([group("g1", ["a"]), group("g2", ["gone"])], sessions)
+  // A wall of one draws nothing a solo session does not, so it stops being a
+  // group and its survivor goes back among its checkout's cards.
+  it("drops a group left with fewer than two live sessions", () => {
+    const groups = resolveGroups(
+      [group("g1", ["a", "b"]), group("g2", ["c", "gone"]), group("g3", ["gone"])],
+      sessions,
+    )
     expect(groups.map((g) => g.id)).toEqual(["g1"])
   })
 
   // The one-group rule is enforced on read too, so a stored value that somehow
   // holds a session twice cannot put it on two walls.
   it("gives a session to the first group that claims it", () => {
-    const groups = resolveGroups([group("g1", ["a", "b"]), group("g2", ["b", "c"])], sessions)
-    expect(groups.map((g) => g.cells)).toEqual([["a", "b"], ["c"]])
+    const groups = resolveGroups([group("g1", ["a", "b"]), group("g2", ["b", "c", "d"])], sessions)
+    expect(groups.map((g) => g.cells)).toEqual([
+      ["a", "b"],
+      ["c", "d"],
+    ])
   })
 })
 
@@ -105,28 +110,33 @@ describe("movingFrom", () => {
 
 describe("addToGroup", () => {
   it("appends to the named group", () => {
-    expect(addToGroup([group("g1", ["a"])], "g1", "b")[0].cells).toEqual(["a", "b"])
+    expect(addToGroup([group("g1", ["a", "b"])], "g1", "c")[0].cells).toEqual(["a", "b", "c"])
   })
 
   // At most one group per session, so adding is also a move.
   it("takes the session off whatever wall had it", () => {
-    const groups = addToGroup([group("g1", ["a", "b"]), group("g2", ["c"])], "g2", "b")
-    expect(groups.map((g) => g.cells)).toEqual([["a"], ["c", "b"]])
+    const groups = addToGroup([group("g1", ["a", "b", "d"]), group("g2", ["c"])], "g2", "b")
+    expect(groups.map((g) => g.cells)).toEqual([
+      ["a", "d"],
+      ["c", "b"],
+    ])
   })
 
-  it("drops a group the move emptied", () => {
-    const groups = addToGroup([group("g1", ["b"]), group("g2", ["c"])], "g2", "b")
+  it("ends a group the move left below two", () => {
+    const groups = addToGroup([group("g1", ["a", "b"]), group("g2", ["c", "d"])], "g2", "b")
     expect(groups.map((g) => g.id)).toEqual(["g2"])
   })
 })
 
 describe("removeFromGroups", () => {
-  it("keeps the group at one member", () => {
-    expect(removeFromGroups([group("g1", ["a", "b"])], "b")[0].cells).toEqual(["a"])
+  it("keeps a group that still has two members", () => {
+    expect(removeFromGroups([group("g1", ["a", "b", "c"])], "b")[0].cells).toEqual(["a", "c"])
   })
 
-  it("ends the group when its last member leaves", () => {
-    expect(removeFromGroups([group("g1", ["a"])], "a")).toEqual([])
+  // The pane that leaves takes the group with it: one session is not a split,
+  // and the survivor belongs back among its own checkout's cards.
+  it("ends the group when only one member would be left", () => {
+    expect(removeFromGroups([group("g1", ["a", "b"])], "a")).toEqual([])
   })
 })
 
@@ -158,19 +168,6 @@ describe("updateGroup / dissolveGroup", () => {
     expect(dissolveGroup([group("g1", ["a"]), group("g2", ["b"])], "g1").map((g) => g.id)).toEqual([
       "g2",
     ])
-  })
-})
-
-describe("reorderGroups", () => {
-  it("puts the walls in the order the drag named", () => {
-    const groups = [group("g1", ["a"]), group("g2", ["b"]), group("g3", ["c"])]
-    expect(reorderGroups(groups, ["g3", "g1", "g2"]).map((g) => g.id)).toEqual(["g3", "g1", "g2"])
-  })
-
-  // An id set that raced a dissolve must not cost the user a group.
-  it("keeps a wall the drag did not name", () => {
-    const groups = [group("g1", ["a"]), group("g2", ["b"])]
-    expect(reorderGroups(groups, ["g2"]).map((g) => g.id)).toEqual(["g2", "g1"])
   })
 })
 

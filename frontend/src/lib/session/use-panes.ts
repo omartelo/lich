@@ -57,8 +57,6 @@ export interface Panes {
   dissolve: (groupId: string) => void
   /** Persist a wall's dragged column or row shares. */
   setTracks: (groupId: string, change: { cols?: number[]; rows?: number[] }) => void
-  /** Reorder the walls themselves, which is what dragging their blocks does. */
-  reorder: (groups: PaneGroup[]) => void
 }
 
 // The one definition of what the walls do, shared by the terminals that draw one
@@ -192,9 +190,6 @@ export function usePanes(projectId: string): Panes {
     },
     setTracks(groupId, change) {
       commit(updateGroup(groups, groupId, change))
-    },
-    reorder(next) {
-      commit(next)
     },
   }
 }

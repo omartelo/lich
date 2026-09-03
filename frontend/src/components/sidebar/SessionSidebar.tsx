@@ -9,7 +9,6 @@ import { ProjectService } from "@/lib/rpc"
 import { closeSettings, isSettingsOpen, subscribeSettingsCard } from "@/lib/settings-card-store"
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
 import { delegateTargets } from "@/lib/session/delegate-targets"
-import { reorderGroups } from "@/lib/session/panes"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { usePanes } from "@/lib/session/use-panes"
 import { useStageToggle } from "@/lib/session/use-stage-toggle"
@@ -36,11 +35,10 @@ import { filterSessions } from "@/lib/session/session-filter"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
 import {
   activeSessionId,
-  orderGroups,
+  dragOrder,
   reorderSubset,
   sessionsOf,
   sidebarGroups,
-  type Session,
   type SidebarGroup,
 } from "@/lib/session/sessions"
 import { useSortableList, verticalAxis, withinList } from "@/lib/use-sortable-list"
@@ -163,25 +161,20 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   // The split's own block is built from the members, not from what is on screen:
   // a parked wall is exactly the case the user could not see before.
   const groups = sidebarGroups(visible, panes.groups)
-  // The pinned block is out of the drag list entirely: it is always first, and
-  // the worktree blocks reorder among themselves. Dragging one moves its whole
-  // block of ids inside the flat list the groups are read back from — there is
-  // no separate group order to store — leaving the pinned sessions where they
-  // sit in it, so unpinning still drops a card among its old neighbours.
-  const dragKeys = groups.filter((group) => !group.pinned && !group.stage).map((group) => group.key)
+  // One drag list for every block that moves — walls and checkouts together, so
+  // a wall can be dragged below a worktree instead of being penned in a list of
+  // its own. Both kinds sit where their first card sits in the stored flat list,
+  // so a drop is one write: move that block's ids inside the list the groups are
+  // read back from.
+  //
+  // The pinned block is the only one out of it: it is always first. Its cards
+  // keep their slots in the flat list, so unpinning still drops a card among its
+  // old neighbours — which is why the drag only claims the ids its own blocks
+  // drew, and not simply every unpinned session (a pinned card on a wall is
+  // drawn in the wall, and its slot moves with it).
+  const dragKeys = groups.filter((group) => !group.pinned).map((group) => group.key)
   const { sensors, onDragEnd } = useSortableList(dragKeys, (keys) =>
-    reorderSessions(
-      projectId ?? "",
-      reorderSubset(list, orderGroups(groups, keys), (session) => !session.pinned),
-    ),
-  )
-  // The walls reorder in a list of their own. They have to: a worktree block's
-  // place is derived from where its sessions sit in the stored flat list, and a
-  // wall's is the order of the groups themselves — one drag list holding both
-  // would have to write two unrelated things depending on what was picked up.
-  const stageKeys = panes.groups.map((group) => group.id)
-  const { sensors: stageSensors, onDragEnd: onStageDragEnd } = useSortableList(stageKeys, (keys) =>
-    panes.reorder(reorderGroups(panes.groups, keys)),
+    reorderSessions(projectId ?? "", dragOrder(list, groups, keys)),
   )
   // Resolved once here, not per group: the list spans every open project, so
   // it is the same for every card in the sidebar. Memoised because the picker
@@ -240,9 +233,16 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
       panes.reorderCells(group.stage.id, ids)
       return
     }
-    const member = (session: Session) =>
-      group.pinned ? !!session.pinned : !session.pinned && (session.path ?? "") === group.path
-    reorderSessions(projectId, reorderSubset(list, ids, member))
+    // The slots the drag may fill are the cards this block drew, asked of the
+    // block itself rather than restated as a rule about pins and paths: a
+    // checkout whose sibling sits on a wall has that card in neither, and a
+    // predicate that claimed it anyway would hand reorderSubset one id too many
+    // — an id-set mismatch, which reorderSessions drops whole.
+    const drawn = new Set(group.sessions.map((session) => session.id))
+    reorderSessions(
+      projectId,
+      reorderSubset(list, ids, (session) => drawn.has(session.id)),
+    )
   }
 
   const createWorktree = async (
@@ -439,20 +439,9 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
             No sessions match “{query.trim()}”. The active session stays.
           </Notice>
         )}
-        {/* The walls first, in their own drag list, then everything else in
-            the one whose order lives in the stored session list. */}
-        {stageKeys.length > 0 && (
-          <DndContext
-            sensors={stageSensors}
-            collisionDetection={closestCenter}
-            modifiers={[verticalAxis, withinList]}
-            onDragEnd={onStageDragEnd}
-          >
-            <SortableContext items={stageKeys} strategy={verticalListSortingStrategy}>
-              {groups.filter((group) => group.stage).map(renderGroup)}
-            </SortableContext>
-          </DndContext>
-        )}
+        {/* Every block in one list, in the order sidebarGroups drew them: the
+            pinned one first and fixed, the rest — walls and checkouts alike —
+            sortable among each other. */}
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -460,7 +449,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
           onDragEnd={onDragEnd}
         >
           <SortableContext items={dragKeys} strategy={verticalListSortingStrategy}>
-            {groups.filter((group) => !group.stage).map(renderGroup)}
+            {groups.map(renderGroup)}
           </SortableContext>
         </DndContext>
       </div>
@@ -488,10 +477,10 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
             : `Show ${moving?.session.label ?? ""} beside this session?`
         }
         description={
-          moving?.from.cells.length === 1 ? (
+          moving?.from.cells.length === 2 ? (
             <>
-              It is the only session in <strong>{moving.from.name}</strong>, so that group ends when
-              it leaves. No session is closed either way.
+              It is one of only two sessions in <strong>{moving.from.name}</strong>, so that group
+              ends when it leaves. No session is closed either way.
             </>
           ) : (
             <>
