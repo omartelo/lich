@@ -2,14 +2,16 @@
 // per-session cost readout. It is keyed by model id and knows nothing about who
 // ran the model: a second provider's reader gets its prices from the same table.
 //
-// The table has two layers. A small baked one (prices.json, the Claude models
-// known at build time) is the floor, so a fresh install prices correctly with no
-// network at all. A model the floor has never heard of — one released after this
-// build — triggers a single remote refresh, whose result is cached under the
-// config dir and overlays the floor from then on. Nothing here blocks a caller:
-// the refresh runs in the background and the lookup that missed simply reports
-// "unknown", which the readout renders as absent rather than as zero. Pricing a
-// model at nothing is the one answer this package must never give.
+// The table has two layers. A small baked one (prices.json, the Claude and
+// OpenAI models known at build time) is the floor, so a fresh install prices
+// correctly with no network at all — a machine that never reaches the network
+// still shows a Codex session's cost, at the rate that shipped. A model the
+// floor has never heard of — one released after this build — triggers a single
+// remote refresh, whose result is cached under the config dir and overlays the
+// floor from then on. Nothing here blocks a caller: the refresh runs in the
+// background and the lookup that missed simply reports "unknown", which the
+// readout renders as absent rather than as zero. Pricing a model at nothing is
+// the one answer this package must never give.
 package pricing
 
 import (
