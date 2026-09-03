@@ -21,7 +21,7 @@
     <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-blue" /></a>
     <a href="https://github.com/sponsors/omartelo"><img alt="Sponsor" src="https://img.shields.io/github/sponsors/omartelo?color=ea4aaa&logo=githubsponsors&label=sponsors" /></a>
   </p>
-  <img src="docs/media/session.png" alt="标签栏上的四个项目，侧栏里的五个会话 —— 各自带着 worktree、分支和 diff 徽标 —— 与此同时一个 Claude Code 会话正在终端里工作，底栏显示着模型和上下文圆环" width="900" />
+  <img src="docs/media/session.png" alt="同一面墙上并排的四个 Claude Code 会话，各自待在自己的 git worktree 里 —— 侧栏逐个列出它们的分支和 diff 徽标，底栏显示模型、套餐额度与分支" width="900" />
   <!-- sponsor-logos: company logos go here, between the screenshot and Why lich -->
 </div>
 
@@ -47,6 +47,10 @@
   走 MCP —— 其余的随插件获得。这整套能力同时也是任何 shell 里的 `lich` 命令，`--json`
   也在其中，所以脚本不需要智能体参与也能驱动一个会话
   （[`docs/cli.md`](docs/cli.md)）。
+- **一次看住好几个。** 把任意会话摆到你正在看的那个旁边，凑成一面墙，pane 怎么排由
+  lich 自己算 —— 依据有几个，以及窗口还剩多少地方：八个在超宽屏上是横四竖二，在笔记本
+  上则横着摆两个。一个把活派出去的会话，一次点击就能围着它把墙搭起来。每面墙都有名字，
+  一个项目想留多少面都行，每面墙在侧栏里各占一块，可以折叠、重命名，也可以拆掉。
 - **免去配置地分出一个 worktree。** 从任意基础分支开一个，lich 会把你被 gitignore 掉的
   `.env*` 文件播种进去，派给它一个既不与其他检出目录重合、也没被机器上任何进程占用的
   开发服务器端口，并在智能体启动前跑一遍按项目配置的初始化脚本。
@@ -78,9 +82,13 @@ curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh
 
 | 平台 | 安装方式 | 运行时依赖 |
 | --- | --- | --- |
-| **Linux** | 上面的 `install.sh`，或 AUR 的 [`lich-bin`](https://aur.archlinux.org/packages/lich-bin)（`yay -S lich-bin`） | `PATH` 上有 chromium / google-chrome / brave，外加 `zenity` |
-| **macOS** *(实验性)* | `brew install --cask omartelo/tap/lich` | `/Applications` 里有 Chrome / Chromium / Edge / Brave |
-| **Windows** *(实验性)* | 从 [Releases](https://github.com/omartelo/lich/releases) 下载安装程序 | Chrome / Edge / Brave |
+| **Linux** | 上面的 `install.sh`，或 AUR 的 [`lich-bin`](https://aur.archlinux.org/packages/lich-bin)（`yay -S lich-bin`） | `PATH` 上有一个 Chromium 系浏览器，外加 `zenity` |
+| **macOS** *(实验性)* | `brew install --cask omartelo/tap/lich` | `/Applications` 里有一个 Chromium 系浏览器 |
+| **Windows** *(实验性)* | 从 [Releases](https://github.com/omartelo/lich/releases) 下载安装程序 | 一个 Chromium 系浏览器 |
+
+Chromium、Chrome、Brave、Vivaldi、Edge、Thorium 和 ungoogled-chromium 都算数，
+Flatpak 装的也算；`--browser` 或 `LICH_BROWSER` 可以直接指定一个。这些一个都没有时，
+lich 会开在你确实装了的那个浏览器里 —— 丢掉的是它自己那扇窗，而不是这个应用。
 
 手动的分发版软件包和静态二进制文件见 [INSTALL.md](INSTALL.md)。macOS 和 Windows 的
 二进制文件未签名 —— 在公证/签名做好之前，Gatekeeper 和 SmartScreen 会发出警告。用
@@ -111,26 +119,9 @@ Homebrew 安装可以绕开 Gatekeeper 的提示；从 Releases 页面下载的�
   Claude Code 和 Codex 两节的开头是你的套餐还剩多少，往下是底栏会说些什么的那一档梯子
   —— 上下文圆环，以及 Claude Code 才有的费用读数；费用那一档默认关闭，因为只有当你按
   token 计费时这个数字才有意义。
-- **沙箱** —— 每个 provider 那一节里，权限梯子旁边还有一条 **Sandbox** 梯子：Off、
-  Ask each time、Worktrees only、Everywhere。它按 provider 生效，项目可以设自己的一
-  档，而 New worktree 对话框里的 **Run confined** 复选框只为那一个会话覆盖这一档 ——
-  连同它此后每一次重新启动。Linux 需要 bubblewrap，macOS 需要 `sandbox-exec`；两者都
-  没有的机器上，以及 Windows 上，这个控件不会出现。
 - **Worktree** —— 项目仓库里的 `.lich/setup-worktree.sh` 会在新 worktree 的终端里
   先于智能体运行；New worktree 对话框会展示这个脚本，若仓库没有则给出检测到的建议。
   `.worktreeinclude` 文件用来调整哪些被 gitignore 的文件会被复制过去。
-- **版本控制** —— 一个项目可以指定 `gh` 以哪个 GitHub 账号运行（设置 › Version
-  Control），用于只有你其中一个账号看得见的仓库。它管的是 lich 从 GitHub 读到什么，
-  而不是 git 推送时用谁的身份。
-- **快捷键** —— `Ctrl`/`Cmd`+`/` 列出 lich 绑定的每一个快捷键，重新绑定则在设置 ›
-  Hotkeys 里：按下你想要的组合键就会存下来，也可以把某一行重置回 lich 的默认值。两个动
-  作可以持有同一个组合键，撞上的行会自己说明。重绑存在页面的 `localStorage` 里，所以清
-  掉 lich 的 Chromium 配置目录会把它们一并带走。
-- **外观** —— 主题和字体都在设置里；你选定的主题持久化在工作区数据库里，
-  其余 UI 偏好以 `lich.*` 为键持久化在 `localStorage`（位于 lich 的 Chromium 配置目录
-  `~/.config/lich/chromium-profile`），导入的主题则以 JSON 存在 `<config-dir>/lich/themes` 下。
-- **工作区** —— 项目和会话持久化在 SQLite 里，路径为 `<config-dir>/lich/lich.db`。
-  关闭一个会话并不会删除它。
 - **会话钩子** —— 在设置里装上 [lich 插件](https://github.com/omartelo/lich-plugin)
   之后，会话会给自己的卡片起标题，并在它写入文件的那一刻刷新 git。
 
@@ -164,6 +155,9 @@ task test     # Go 与前端测试套件
 ```bash
 task package   # bin/ 下生成 .deb + .rpm + Arch .pkg.tar.zst
 ```
+
+在 lich 已经跑着的七个之外再加一个智能体 CLI，是唯一一处会落到两个仓库、十几个文件里
+的改动：[`docs/adding-a-provider.md`](docs/adding-a-provider.md) 就是那张地图。
 
 ## 赞助
 
