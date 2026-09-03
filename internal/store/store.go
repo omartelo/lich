@@ -97,6 +97,12 @@ CREATE TABLE IF NOT EXISTS session_costs (
     byte_offset     INTEGER NOT NULL DEFAULT 0,
     last_message_id TEXT NOT NULL DEFAULT '',
     cost_usd        REAL NOT NULL DEFAULT 0,
+    -- When this ledger last counted a turn, in unix seconds. It is what dates a
+    -- session's spend, and the only thing that can: the row is a running total
+    -- with no per-turn history behind it, so a window over it selects sessions
+    -- by their last counted turn rather than slicing the money by day. 0 on a
+    -- row written before the column existed, which no window can place.
+    updated_at      INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (session_id, transcript_id)
 );
 
@@ -247,6 +253,7 @@ func open(path string) (*Service, error) {
 		`ALTER TABLE sessions ADD COLUMN closed_at INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE projects ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE projects ADD COLUMN closed_seq INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE session_costs ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0`,
 	}
 	for _, stmt := range migrations {
 		if _, err := db.Exec(stmt); err != nil && !migrationApplied(err) {
