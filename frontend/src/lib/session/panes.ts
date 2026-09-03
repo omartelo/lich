@@ -8,8 +8,9 @@
 // A pane's × stops showing a session and closes nothing.
 //
 // A group is a thing the user made, not the current arrangement of the window.
-// It has a name, it survives its members being closed down to the last one, and
-// it ends only when they dissolve it or when nothing is left in it. Which is why
+// It has a name, it survives any one member leaving, and it ends when they
+// dissolve it or when fewer than two members are left — a wall of one is a
+// session on its own, and the survivor goes back to its checkout. Which is why
 // a project holds a list of them: an orchestrator and the three worktrees it
 // spawned are one group, the next investigation and its two are another, and
 // neither is "the" split.
@@ -97,9 +98,11 @@ export function formatGroups(groups: readonly PaneGroup[]): string {
 // after this. The same pass enforces the one-group rule, so a stored value that
 // somehow holds a session twice cannot put it on two walls.
 //
-// A group of one survives: it is still something the user named and can add to.
-// A group of none does not — its last member is gone, so there is nothing left
-// for the name to be about.
+// A group needs two live members to still be a group. A wall of one draws
+// nothing a solo session does not, so its survivor is better off back among its
+// own checkout's cards than alone under a header it cannot fill — and the group
+// the pane left is gone whichever way it emptied: a close, a park, a worktree
+// removal, a move onto another wall.
 export function resolveGroups(
   stored: readonly PaneGroup[],
   sessions: readonly Session[],
@@ -115,7 +118,7 @@ export function resolveGroups(
         cells.push(id)
       }
     }
-    if (cells.length > 0) {
+    if (cells.length > 1) {
       groups.push({ ...group, cells })
     }
   }
@@ -158,7 +161,8 @@ export function defaultName(sessions: readonly Session[], sessionId: string): st
   return sessions.find((session) => session.id === sessionId)?.label || "Split"
 }
 
-/** Put a session on a wall, taking it off whatever wall had it. */
+/** Put a session on a wall, taking it off whatever wall had it — and ending
+ * that one if this leaves it below two. */
 export function addToGroup(
   groups: readonly PaneGroup[],
   groupId: string,
@@ -170,15 +174,15 @@ export function addToGroup(
         ? { ...group, cells: [...group.cells.filter((id) => id !== sessionId), sessionId] }
         : { ...group, cells: group.cells.filter((id) => id !== sessionId) },
     )
-    .filter((group) => group.cells.length > 0)
+    .filter((group) => group.cells.length > 1)
 }
 
-/** Take a session off whatever wall it is on. The group stays, even at one
- * member; only its last member leaving ends it. */
+/** Take a session off whatever wall it is on. A wall left with one member ends
+ * with it: there is no split left to be a group about. */
 export function removeFromGroups(groups: readonly PaneGroup[], sessionId: string): PaneGroup[] {
   return groups
     .map((group) => ({ ...group, cells: group.cells.filter((id) => id !== sessionId) }))
-    .filter((group) => group.cells.length > 0)
+    .filter((group) => group.cells.length > 1)
 }
 
 export function updateGroup(
@@ -191,16 +195,6 @@ export function updateGroup(
 
 export function dissolveGroup(groups: readonly PaneGroup[], groupId: string): PaneGroup[] {
   return groups.filter((group) => group.id !== groupId)
-}
-
-/** Reorder the groups themselves, which is what dragging their blocks does. */
-export function reorderGroups(groups: readonly PaneGroup[], ids: readonly string[]): PaneGroup[] {
-  const byId = new Map(groups.map((group) => [group.id, group]))
-  const moved = ids.flatMap((id) => byId.get(id) ?? [])
-  // Anything the drag did not name keeps its place, at the end rather than being
-  // dropped: an id set that raced a dissolve must not cost the user a group.
-  const named = new Set(ids)
-  return [...moved, ...groups.filter((group) => !named.has(group.id))]
 }
 
 /** Swap two cells — what a pane dropped on another one does. */

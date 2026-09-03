@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   activeSessionId,
+  dragOrder,
   activeTarget,
   addSession,
   adoptSession,
@@ -398,7 +399,7 @@ describe("sidebarGroups", () => {
   // The blocks answer the question a wall could not: which sessions are in it.
   // They are built from the groups, not from what is on screen, so they stand
   // whether or not any of those walls is the thing being drawn.
-  it("lifts each wall into a block above everything, in the order it was arranged", () => {
+  it("lifts a wall into a block of its own, in the order its panes are laid out", () => {
     let state = addSession({}, P, "s1")
     state = addSession(state, P, "a1", "claude", "/wt/a")
     state = addSession(state, P, "b1", "claude", "/wt/b")
@@ -413,20 +414,35 @@ describe("sidebarGroups", () => {
   it("draws every wall, each as its own block", () => {
     const state = buildState(4)
     expect(
-      ids(sidebarGroups(sessionsOf(state, P), [wall("g1", ["s1", "s2"]), wall("g2", ["s3"])])),
+      ids(
+        sidebarGroups(sessionsOf(state, P), [wall("g1", ["s1", "s3"]), wall("g2", ["s2", "s4"])]),
+      ),
     ).toEqual([
-      ["g1", ["s1", "s2"]],
-      ["g2", ["s3"]],
-      [ROOT_GROUP_KEY, ["s4"]],
+      ["g1", ["s1", "s3"]],
+      ["g2", ["s2", "s4"]],
     ])
   })
 
-  it("draws the walls above the pinned block and takes their cards out of it", () => {
+  // A wall is not pinned to the top: it sits where its first card sits in the
+  // stored list, which is what lets a drag move it past a checkout's block.
+  it("puts a wall where its first card sits among the other blocks", () => {
+    let state = addSession({}, P, "a1", "claude", "/wt/a")
+    state = addSession(state, P, "s1")
+    state = addSession(state, P, "s2")
+    expect(ids(sidebarGroups(sessionsOf(state, P), [wall("g1", ["s1", "s2"])]))).toEqual([
+      ["/wt/a", ["a1"]],
+      ["g1", ["s1", "s2"]],
+    ])
+  })
+
+  // A pin promises the top of the list, so nothing is drawn above it — a wall
+  // included. Its own cards still come out of it: they are drawn in the wall.
+  it("draws the pinned block above the walls and takes their cards out of it", () => {
     let state = setSessionPinned(buildState(3), P, "s1", true)
     state = setSessionPinned(state, P, "s2", true)
     expect(ids(sidebarGroups(sessionsOf(state, P), [wall("g1", ["s2", "s3"])]))).toEqual([
-      ["g1", ["s2", "s3"]],
       [PINNED_GROUP_KEY, ["s1"]],
+      ["g1", ["s2", "s3"]],
     ])
   })
 
@@ -857,6 +873,47 @@ describe("orderGroups", () => {
   // drops the whole stale order instead of taking its sessions with it.
   it("contributes nothing for a key naming no group", () => {
     expect(orderGroups(groups, ["/wt/gone"])).toEqual([])
+  })
+})
+
+describe("dragOrder", () => {
+  const s = (id: string, extra: Partial<Session> = {}): Session => ({
+    id,
+    label: id,
+    kind: "shell",
+    ...extra,
+  })
+  const wall = (id: string, cells: string[]) => ({ id, name: id, cells, cols: [], rows: [] })
+
+  it("moves a wall past a checkout's block, carrying its cards", () => {
+    const stored = [s("a1", { path: "/wt/a" }), s("r1"), s("r2")]
+    const groups = sidebarGroups(stored, [wall("g1", ["r1", "r2"])])
+    expect(groups.map((g) => g.key)).toEqual(["/wt/a", "g1"])
+    expect(dragOrder(stored, groups, ["g1", "/wt/a"])).toEqual(["r1", "r2", "a1"])
+  })
+
+  // The pinned block never moves, so its cards keep their slots and an unpinned
+  // card still lands back among the neighbours it was lifted over.
+  it("leaves the pinned block's cards where the stored order has them", () => {
+    const stored = [s("p1", { pinned: true }), s("r1"), s("a1", { path: "/wt/a" })]
+    const groups = sidebarGroups(stored)
+    expect(dragOrder(stored, groups, ["/wt/a", ROOT_GROUP_KEY])).toEqual(["p1", "a1", "r1"])
+  })
+
+  // A pinned card on a wall is drawn in the wall, so its slot travels with the
+  // wall. Claiming only unpinned sessions would leave it out of the order and
+  // reorderSessions would drop the whole drop as an id-set mismatch.
+  it("carries a pinned card that is drawn on a wall", () => {
+    const stored = [s("p1", { pinned: true }), s("r1"), s("a1", { path: "/wt/a" })]
+    const groups = sidebarGroups(stored, [wall("g1", ["p1", "r1"])])
+    expect(groups.map((g) => g.key)).toEqual(["g1", "/wt/a"])
+    const ids = dragOrder(stored, groups, ["/wt/a", "g1"])
+    expect(ids).toEqual(["a1", "p1", "r1"])
+    expect(
+      reorderSessions({ [P]: { sessions: stored, activeId: "r1", nextSeq: 4 } }, P, ids)[
+        P
+      ].sessions.map((x) => x.id),
+    ).toEqual(["a1", "p1", "r1"])
   })
 })
 
