@@ -33,6 +33,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not the product. With no browser at all, the dialog carries the URL instead
   of lich exiting in silence.
 
+### Fixed
+
+- **A Crush card's hands-on time now counts the work, not the typing.** The
+  clock beat on the session-state report, and Crush reports no state — so an
+  hour a Crush session worked while you watched read as the few seconds you
+  typed into it. Every hook a session sends now beats it, and Crush's one hook
+  event fires once per tool call, which puts its figure on the same rung as
+  Cursor CLI's. Nothing to reinstall: the reports were already arriving.
+
 ## [0.43.1] - 2026-09-01
 
 ### Fixed

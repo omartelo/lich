@@ -38,20 +38,25 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   model happened to go last.
 - **Hands-on time is read off three signals, and one of them is not universal**
   (`internal/terminal/handson.go`, `noteOutput`, `closableState`): the figure beside the cost
-  counts the gap between consecutive signs of life in a session — a session-state report, a
+  counts the gap between consecutive signs of life in a session — any hook report naming it, a
   keystroke at its PTY, or its own output while a turn is open — and drops any gap longer than
   `handsOnIdleGap`. The output signal is the one that carries an unattended turn, and it is
   gated on the provider having reported `busy`, because a `tail -f`, a dev server or a TUI
-  repainting would otherwise bill hours nobody worked. **Crush reports no state at all**
-  (`docs/hooks/session-state.md`), so nothing ever opens a turn there and a Crush session
-  accrues from the user's keystrokes alone: an hour it spent working while the user watched
-  reads as the few seconds they typed in. **Cursor CLI is the near miss** — it delivers
-  `PreToolUse` and `PostToolUse`, and those beat even though `closableState` refuses to publish
-  them, so a Cursor turn is counted through its tool calls; what it still cannot count is a turn
-  that calls no tool at all. A plain shell session is keystrokes-only by design and not a gap:
-  there is no agent in it whose work could be missed. The trap is reading the number as
-  comparable across cards — the same hour of work is a smaller figure on Crush than on Claude
-  Code, and nothing on screen says which rung a card is on.
+  repainting would otherwise bill hours nobody worked. **Which turns get counted therefore
+  depends on what a provider's hooks report at all**, and there are two rungs. On the top one —
+  Claude Code, Codex, Antigravity, opencode, oh-my-pi — the turn opens, so a turn nobody
+  touches is counted from its own output. On the lower one — **Crush and Cursor CLI** — no turn
+  ever opens (`docs/hooks/session-state.md`), and the turn is counted through the reports its
+  tool calls fire: Cursor's `PreToolUse`/`PostToolUse` state reports, which beat even though
+  `closableState` refuses to publish them, and Crush's `/session-start`, which its only hook
+  event (`PreToolUse`) fires once per tool call — measured 2026-09-03 against Crush 0.88.0, three
+  tool calls in one turn, three POSTs. **What that rung cannot count is a turn that calls no tool
+  at all**: a long answer written straight out, with no keystroke and no report between the
+  prompt and the reply, is worth only the gap the prompt itself closed. A plain shell session is
+  keystrokes-only by design and not a gap: there is no agent in it whose work could be missed.
+  The trap is reading the number as exactly comparable across cards — a toolless turn is time on
+  a Claude Code card and nothing on a Crush one, and nothing on screen says which rung a card is
+  on.
 - **A split stage puts every pane on the visible cadence** (`internal/terminal/coalescer.go`,
   `frontend/src/components/TerminalHost.tsx`): the coalescer batches a *visible* session's output every
   8ms and a hidden one's every 250ms, and until the stage could divide, exactly one session per window

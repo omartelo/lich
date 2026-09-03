@@ -366,12 +366,15 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 			}
 		},
 		func(req hookRequest) {
-			// Ahead of every filter below, because this one is not about what
-			// the card can draw. A report lich refuses to publish still proves
-			// the session was being worked: Cursor CLI's tool reports are
-			// dropped a line down for want of anything that could end the
-			// spinner they would start, and they are the only proof a Cursor
-			// turn is running at all (see closableState).
+			// Ahead of every filter below, because a beat is not about what the
+			// card can draw: any hook naming a session is proof that session was
+			// being worked, whatever endpoint it arrived on and whether or not
+			// lich publishes it. That is why the other three callbacks beat too
+			// — a provider whose hooks report no state has no other way to say
+			// its agent is running. Cursor CLI's tool reports are dropped a line
+			// down for want of anything that could end the spinner they would
+			// start, and they are the only proof a Cursor turn is running at all
+			// (see closableState).
 			s.beatHandsOn(req.SessionID, 0)
 			// Dropped where the harness cannot close it, before the turn log
 			// ever sees it: a state nothing ends outlives what it describes.
@@ -410,6 +413,12 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 			}
 		},
 		func(sessionID, providerSessionID, provider string) error {
+			// The beat above, on the one report Crush can make. Its only hook
+			// event is PreToolUse and neither script it registers there reports
+			// a state (docs/hooks/session-state.md), so this arrives once per
+			// tool call — measured 2026.09.03 against Crush 0.88.0 — and is the
+			// only proof a Crush turn is running.
+			s.beatHandsOn(sessionID, 0)
 			if err := store.SetProviderSession(sessionID, providerSessionID); err != nil {
 				return err
 			}
@@ -429,6 +438,7 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 			return nil
 		},
 		func(id, title string) error {
+			s.beatHandsOn(id, 0)
 			applied, err := store.SetSessionTitle(id, title)
 			if err != nil {
 				return err
@@ -439,6 +449,7 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 			return nil
 		},
 		func(id string) {
+			s.beatHandsOn(id, 0)
 			hub.Emit(touchedEventName, touchedEvent{ID: id})
 		},
 	)
