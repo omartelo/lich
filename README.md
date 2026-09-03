@@ -21,7 +21,7 @@
     <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-blue" /></a>
     <a href="https://github.com/sponsors/omartelo"><img alt="Sponsor" src="https://img.shields.io/github/sponsors/omartelo?color=ea4aaa&logo=githubsponsors&label=sponsors" /></a>
   </p>
-  <img src="docs/media/session.png" alt="Four projects on the tab bar and five sessions in the sidebar — each with its worktree, branch and diff badge — while a Claude Code session works in the terminal and the footer shows the model and context ring" width="900" />
+  <img src="docs/media/session.png" alt="Four Claude Code sessions side by side on one wall, each in its own git worktree — the sidebar lists them with their branch and diff badge, and the footer shows the model, the plan and the branch" width="900" />
   <!-- sponsor-logos: company logos go here, between the screenshot and Why lich -->
 </div>
 
@@ -31,10 +31,10 @@ lich lets you:
 
 - **Run the agent you already have.** [Claude Code](https://www.anthropic.com/claude-code),
   [Codex](https://github.com/openai/codex), Antigravity,
-  [opencode](https://github.com/sst/opencode), oh-my-pi and
+  [opencode](https://github.com/sst/opencode), oh-my-pi,
   [Crush](https://github.com/charmbracelet/crush) and the
-  [Cursor CLI](https://cursor.com/docs/cli) are all first-class. Point lich at each binary once, then pick the default or choose
-  per session.
+  [Cursor CLI](https://cursor.com/docs/cli) are all first-class. Point lich at
+  each binary once, then pick the default or choose per session.
 - **Keep a real terminal.** PTY-backed shells, several per project, rendered on
   the GPU — searchable scrollback that survives a full page reload. Give one an
   entrypoint — `lazygit`, `k9s`, `pnpm dev` — and it opens straight into that
@@ -48,6 +48,12 @@ lich lets you:
   Code and Codex — or brought by the plugin. The whole surface doubles as the
   `lich` command in any shell, `--json` included, so a script can drive a
   session with no agent in the loop ([`docs/cli.md`](docs/cli.md)).
+- **Watch several of them at once.** Put any session on a wall beside the one
+  you are in and lich lays the panes out itself, from how many there are and how
+  much room the window has — eight land four across on an ultrawide and two
+  across on a laptop. A session that handed work to others builds the wall around
+  it in one click. Each wall is named, a project keeps as many as you like, and
+  each gets a block in the sidebar you can fold, rename or take apart.
 - **Branch off a worktree without the setup.** Spin one up from any base
   branch and lich seeds it with your gitignored `.env*` files, hands it a
   dev-server port no other checkout and no process on the machine is using, and
@@ -86,9 +92,14 @@ curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh
 
 | Platform | Get it | Needs at runtime |
 | --- | --- | --- |
-| **Linux** | `install.sh` above, or AUR [`lich-bin`](https://aur.archlinux.org/packages/lich-bin) (`yay -S lich-bin`) | chromium / google-chrome / brave on `PATH`, plus `zenity` |
-| **macOS** *(experimental)* | `brew install --cask omartelo/tap/lich` | Chrome / Chromium / Edge / Brave in `/Applications` |
-| **Windows** *(experimental)* | installer from [Releases](https://github.com/omartelo/lich/releases) | Chrome / Edge / Brave |
+| **Linux** | `install.sh` above, or AUR [`lich-bin`](https://aur.archlinux.org/packages/lich-bin) (`yay -S lich-bin`) | a Chromium-family browser on `PATH`, plus `zenity` |
+| **macOS** *(experimental)* | `brew install --cask omartelo/tap/lich` | a Chromium-family browser in `/Applications` |
+| **Windows** *(experimental)* | installer from [Releases](https://github.com/omartelo/lich/releases) | a Chromium-family browser |
+
+Chromium, Chrome, Brave, Vivaldi, Edge, Thorium and ungoogled-chromium all
+qualify, Flatpak installs included; `--browser` or `LICH_BROWSER` pins one
+outright. With none of them on the machine lich opens in whatever browser you
+do have — what is lost is the window of its own, not the app.
 
 Manual per-distro packages and the static binary: [INSTALL.md](INSTALL.md). The
 macOS and Windows binaries are unsigned — Gatekeeper and SmartScreen warn until
@@ -125,31 +136,10 @@ window. Upgrading from the old formula needs `brew uninstall lich` first —
   the footer says about a session — the context ring, plus the cost readout for
   Claude Code, that last rung off by default since the figure only means
   something when you are billed per token.
-- **Sandbox** — a **Sandbox** ladder sits beside the permission one in each
-  provider's section: Off, Ask each time, Worktrees only, Everywhere. It is per
-  provider, a project can set its own, and the New worktree dialog's **Run
-  confined** box overrides the rung for that session alone — every later spawn
-  of it included. Linux needs bubblewrap and macOS `sandbox-exec`; the control
-  is absent on a machine with neither, and on Windows.
 - **Worktrees** — `.lich/setup-worktree.sh` in the project checkout runs in a
   new worktree's terminal ahead of the agent; the New worktree dialog shows it
   and offers a detected suggestion when the repo ships none. A
   `.worktreeinclude` file tunes which gitignored files get copied over.
-- **Version control** — a project can name the GitHub account `gh` runs as
-  (Settings › Version Control), for a repository only one of your accounts can
-  see. It governs what lich reads from GitHub, not what git pushes.
-- **Hotkeys** — `Ctrl`/`Cmd`+`/` lists every shortcut lich binds, and Settings ›
-  Hotkeys is where you rebind one: press the combo you want and it is stored, or
-  reset the row to lich's default. Two actions may hold the same combo, and the
-  rows that do say so. Rebinds live in the page's `localStorage`, so wiping
-  lich's Chromium profile takes them with it.
-- **Appearance** — themes and fonts in Settings; the theme you pick persists in
-  the workspace database, the rest of the UI preferences in `localStorage` under
-  `lich.*` keys (inside lich's Chromium profile at
-  `~/.config/lich/chromium-profile`), and imported themes as JSON under
-  `<config-dir>/lich/themes`.
-- **Workspace** — projects and sessions persist in SQLite at
-  `<config-dir>/lich/lich.db`. Closing a session does not delete it.
 - **Session hooks** — with the
   [lich plugin](https://github.com/omartelo/lich-plugin) installed from Settings,
   a session titles its own card and refreshes git the moment it writes a file.
@@ -188,7 +178,7 @@ Package a Linux release locally (needs
 task package   # .deb + .rpm + Arch .pkg.tar.zst in bin/
 ```
 
-Adding another agent CLI to the six lich runs is the one change that lands in a
+Adding another agent CLI to the seven lich runs is the one change that lands in a
 dozen files across two repositories:
 [`docs/adding-a-provider.md`](docs/adding-a-provider.md) is the map.
 
