@@ -63,8 +63,11 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   prompt and the reply, is worth only the gap the prompt itself closed. A plain shell session is
   keystrokes-only by design and not a gap: there is no agent in it whose work could be missed.
   The trap is reading the number as exactly comparable across cards — a toolless turn is time on
-  a Claude Code card and nothing on a Crush one, and nothing on screen says which rung a card is
-  on.
+  a Claude Code card and nothing on a Crush one. **The tooltip under the figure says which rung
+  the session is on** (`handsOnDetail`, `frontend/src/lib/session/hands-on.ts`), in the same two
+  sentences on both, by naming what the clock listened to: a turn, or a tool call. What it does
+  not say is how much the rung cost this figure — nothing can know that without inventing the
+  turns it never heard.
 - **A split stage puts every pane on the visible cadence** (`internal/terminal/coalescer.go`,
   `frontend/src/components/TerminalHost.tsx`): the coalescer batches a *visible* session's output every
   8ms and a hidden one's every 250ms, and until the stage could divide, exactly one session per window

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { formatHandsOn, spellHandsOn } from "./hands-on"
+import { formatHandsOn, handsOnDetail, spellHandsOn } from "./hands-on"
 
 describe("formatHandsOn", () => {
   // Under a minute is not a small number, it is no number: the store is up to a
@@ -47,5 +47,45 @@ describe("spellHandsOn", () => {
     expect(spellHandsOn(3600 + 12 * 60)).toBe("1h 12m")
     expect(spellHandsOn(48 * 60)).toBe("48m")
     expect(spellHandsOn(30)).toBe("")
+  })
+})
+
+describe("handsOnDetail", () => {
+  // The two rungs, pinned as the literals the tooltip renders. A provider that
+  // opens a turn is counted through it; one that never does is heard only when
+  // a tool call reports.
+  it("names the turn for a provider whose hooks open one", () => {
+    expect(handsOnDetail("claude")).toBe(
+      "How long this session has been worked on — typed at, reporting, or running a turn. A gap longer than 15 minutes counts as time away.",
+    )
+    expect(handsOnDetail("codex")).toBe(handsOnDetail("claude"))
+    expect(handsOnDetail("antigravity")).toBe(handsOnDetail("claude"))
+    expect(handsOnDetail("opencode")).toBe(handsOnDetail("claude"))
+    expect(handsOnDetail("omp")).toBe(handsOnDetail("claude"))
+  })
+
+  it("names the tool call for a provider that never opens a turn", () => {
+    expect(handsOnDetail("crush")).toBe(
+      "How long this session has been worked on — typed at, or reporting a tool call. A gap longer than 15 minutes counts as time away.",
+    )
+    expect(handsOnDetail("cursor")).toBe(handsOnDetail("crush"))
+  })
+
+  // The shape is the contract: same two sentences on both rungs. A third
+  // sentence on one provider, or a longer one, is lich explaining itself.
+  it("says it in the same two sentences on both rungs", () => {
+    const sentences = (text: string) => text.split(". ").length
+    expect(sentences(handsOnDetail("claude"))).toBe(2)
+    expect(sentences(handsOnDetail("crush"))).toBe(2)
+    expect(
+      Math.abs(handsOnDetail("crush").length - handsOnDetail("claude").length),
+    ).toBeLessThanOrEqual(8)
+  })
+
+  // A shell has no hooks on either rung, and no session at all is still a
+  // tooltip that has to read.
+  it("keeps the turn wording for a shell and for no session", () => {
+    expect(handsOnDetail("shell")).toBe(handsOnDetail("claude"))
+    expect(handsOnDetail("")).toBe(handsOnDetail("claude"))
   })
 })

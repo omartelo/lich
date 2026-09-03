@@ -16,9 +16,10 @@ import { DropService, Terminal as TerminalService } from "@/lib/rpc"
 import type { DockTab } from "@/components/dock/RightDock"
 import { useActiveSession } from "@/lib/session/use-active-session"
 import { useSessionUsage } from "@/lib/session/use-session-usage"
+import { useSessionAgent } from "@/lib/session/use-session-agent"
 import { useCostReadout } from "@/lib/use-cost-readout"
 import { COST_MISS_REASON, budgetShare, formatCost } from "@/lib/session/session-cost"
-import { formatHandsOn, spellHandsOn } from "@/lib/session/hands-on"
+import { formatHandsOn, handsOnDetail, spellHandsOn } from "@/lib/session/hands-on"
 import { useRemoteResource } from "@/lib/use-remote-resource"
 import { baseName, displayPath } from "@/lib/paths"
 import { isWindows } from "@/lib/platform"
@@ -93,6 +94,10 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
   // Context-window occupancy of the active session, read off its transcript at
   // each turn's end (null until the first turn of a supported session lands).
   const usage = useSessionUsage(sessionId)
+  // Which provider the clock is listening to, resolved the way the card and
+  // SessionModel resolve it: a CLI started by hand inside a shell wins over the
+  // session's persisted kind. It is what the hands-on tooltip reads its rung off.
+  const provider = useSessionAgent(sessionId) ?? kind
   // The footer context readout is opt-out (Settings › Providers); the cost
   // beside it is opt-in, and off for everyone not billed per token.
   const { showContextUsage, costBudget } = useSettings()
@@ -217,11 +222,7 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
           <span className="font-mono text-xs text-muted-foreground">
             {spellHandsOn(handsOn.data)}
           </span>
-          {/* Keep in sync with handsOnIdleGap in internal/terminal/handson.go. */}
-          <span className="text-xs text-muted-foreground">
-            How long this session has been worked on — typed at, reporting, or running a turn. A gap
-            longer than 15 minutes counts as time away.
-          </span>
+          <span className="text-xs text-muted-foreground">{handsOnDetail(provider)}</span>
         </div>
       </TooltipContent>
     </Tooltip>

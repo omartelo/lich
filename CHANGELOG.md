@@ -33,6 +33,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not the product. With no browser at all, the dialog carries the URL instead
   of lich exiting in silence.
 
+### Changed
+
+- **The hands-on tooltip now says what the clock actually heard in that
+  session.** It described every session the same way — typed at, reporting, or
+  running a turn — but a Crush or Cursor CLI session never opens a turn, so on
+  those cards the sentence named something that does not happen there. Those
+  two now read "typed at, or reporting a tool call"; every other session keeps
+  the wording it had.
+
 ### Fixed
 
 - **A Crush card's hands-on time now counts the work, not the typing.** The
