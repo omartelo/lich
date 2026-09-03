@@ -82,10 +82,10 @@ func TestCostSumsEveryAssistantLine(t *testing.T) {
 			`{"type":"user","message":{"content":"hi"}}`+"\n"+
 			costLineJSON("m2", modelOpus, 200, 20, 0, 0)+"\n")
 
-	ledger, complete, ok := scanTranscriptCost(path, costLedger{}, testRate)
+	ledger, miss, ok := scanTranscriptCost(path, costLedger{}, testRate)
 
-	if !ok || !complete {
-		t.Fatalf("scan: ok=%v complete=%v, want both true", ok, complete)
+	if !ok || miss != costMissNone {
+		t.Fatalf("scan: ok=%v miss=%q, want ok and no miss", ok, miss)
 	}
 	want := 300*0.001 + 30*0.01
 	if !nearly(ledger.cost, want) {
@@ -124,10 +124,10 @@ func TestAPartialLineIsLeftForTheNextScan(t *testing.T) {
 	whole := costLineJSON("m1", modelOpus, 100, 0, 0, 0) + "\n"
 	path := writeFile(t, whole+`{"type":"assistant","message":{"id":"m2"`)
 
-	ledger, complete, ok := scanTranscriptCost(path, costLedger{}, testRate)
+	ledger, miss, ok := scanTranscriptCost(path, costLedger{}, testRate)
 
-	if !ok || !complete {
-		t.Fatalf("scan: ok=%v complete=%v, want both true", ok, complete)
+	if !ok || miss != costMissNone {
+		t.Fatalf("scan: ok=%v miss=%q, want ok and no miss", ok, miss)
 	}
 	if ledger.offset != int64(len(whole)) {
 		t.Errorf("offset = %d, want %d — the partial line must stay unread", ledger.offset, len(whole))
@@ -179,13 +179,14 @@ func TestAnUnpricedModelStopsTheCount(t *testing.T) {
 			costLineJSON("m2", "model-from-the-future", 900, 0, 0, 0)+"\n"+
 			costLineJSON("m3", modelOpus, 100, 0, 0, 0)+"\n")
 
-	ledger, complete, ok := scanTranscriptCost(path, costLedger{}, testRate)
+	ledger, miss, ok := scanTranscriptCost(path, costLedger{}, testRate)
 
 	if !ok {
 		t.Fatal("scan: want ok")
 	}
-	if complete {
-		t.Error("complete = true, want false — an unpriced line must withhold the total")
+	if miss != costMissUnpriced {
+		t.Errorf("miss = %q, want %q — an unpriced line must withhold the total and name why",
+			miss, costMissUnpriced)
 	}
 	if !nearly(ledger.cost, 0.1) {
 		t.Errorf("cost = %v, want only the priced line before the stop", ledger.cost)
@@ -194,9 +195,9 @@ func TestAnUnpricedModelStopsTheCount(t *testing.T) {
 	// The price lands (the miss scheduled the refresh) and the same line is
 	// picked up from where the scan stopped.
 	taught := fixedRates{modelOpus: testRate[modelOpus], "model-from-the-future": {Input: 0.001}}
-	next, complete, _ := scanTranscriptCost(path, ledger, taught)
-	if !complete {
-		t.Error("complete = false after the price landed, want true")
+	next, miss, _ := scanTranscriptCost(path, ledger, taught)
+	if miss != costMissNone {
+		t.Errorf("miss = %q after the price landed, want none", miss)
 	}
 	if !nearly(next.cost, 0.1+0.9+0.1) {
 		t.Errorf("cost = %v, want every line counted once the model was priced", next.cost)
@@ -211,10 +212,10 @@ func TestASyntheticLineIsNotAModelToPrice(t *testing.T) {
 		costLineJSON("m1", "<synthetic>", 0, 0, 0, 0)+"\n"+
 			costLineJSON("m2", modelOpus, 100, 0, 0, 0)+"\n")
 
-	ledger, complete, ok := scanTranscriptCost(path, costLedger{}, testRate)
+	ledger, miss, ok := scanTranscriptCost(path, costLedger{}, testRate)
 
-	if !ok || !complete {
-		t.Fatalf("scan: ok=%v complete=%v, want both true", ok, complete)
+	if !ok || miss != costMissNone {
+		t.Fatalf("scan: ok=%v miss=%q, want ok and no miss", ok, miss)
 	}
 	if !nearly(ledger.cost, 0.1) {
 		t.Errorf("cost = %v, want 0.1 — the synthetic line must be passed over", ledger.cost)
@@ -246,10 +247,10 @@ func TestACacheWriteIsPricedByHowLongItIsKept(t *testing.T) {
 			if tc.hour < 0 {
 				line = costLineJSON("m1", modelOpus, 0, 0, 0, tc.cacheCreate)
 			}
-			ledger, complete, ok := scanTranscriptCost(writeFile(t, line+"\n"), costLedger{}, testRate)
+			ledger, miss, ok := scanTranscriptCost(writeFile(t, line+"\n"), costLedger{}, testRate)
 
-			if !ok || !complete {
-				t.Fatalf("scan: ok=%v complete=%v, want both true", ok, complete)
+			if !ok || miss != costMissNone {
+				t.Fatalf("scan: ok=%v miss=%q, want ok and no miss", ok, miss)
 			}
 			if !nearly(ledger.cost, tc.want) {
 				t.Errorf("cost = %v, want %v", ledger.cost, tc.want)
@@ -266,13 +267,14 @@ func TestAnUnpricedCacheLifetimeStopsTheCount(t *testing.T) {
 	fiveMinuteOnly := fixedRates{modelOpus: {Input: 0.001, Output: 0.01, CacheRead: 0.001, CacheWrite: 0.001}}
 	path := writeFile(t, cacheLineJSON("m1", modelOpus, 1000, 1000)+"\n")
 
-	ledger, complete, ok := scanTranscriptCost(path, costLedger{}, fiveMinuteOnly)
+	ledger, miss, ok := scanTranscriptCost(path, costLedger{}, fiveMinuteOnly)
 
 	if !ok {
 		t.Fatal("scan: want ok")
 	}
-	if complete {
-		t.Error("complete = true, want false — an hour-long write with no price must withhold the total")
+	if miss != costMissUnpriced {
+		t.Errorf("miss = %q, want %q — an hour-long write with no price must withhold the total",
+			miss, costMissUnpriced)
 	}
 	if ledger.cost != 0 {
 		t.Errorf("cost = %v, want nothing counted past the line it cannot price", ledger.cost)
@@ -492,7 +494,7 @@ func TestCodexTranscriptCostPricesTheRunningTotal(t *testing.T) {
 	path := writeFile(t,
 		codexTurnContextJSON("gpt-5.1-codex")+"\n"+codexTokenLineJSON(1000, 400, 25, 10)+"\n")
 
-	cost, ok := codexTranscriptCost(path, codexTestRate)
+	cost, _, ok := codexTranscriptCost(path, codexTestRate)
 
 	if !ok {
 		t.Fatal("codexTranscriptCost: want ok")
@@ -514,7 +516,7 @@ func TestCodexTranscriptCostIsCumulativeNotSummed(t *testing.T) {
 			codexTurnContextJSON("gpt-5.1-codex")+"\n"+
 			codexTokenLineJSON(1000, 400, 0, 10)+"\n")
 
-	cost, ok := codexTranscriptCost(path, codexTestRate)
+	cost, _, ok := codexTranscriptCost(path, codexTestRate)
 
 	if !ok {
 		t.Fatal("codexTranscriptCost: want ok")
@@ -532,8 +534,12 @@ func TestCodexTranscriptCostWithholdsForAnUnpricedModel(t *testing.T) {
 	path := writeFile(t,
 		codexTurnContextJSON("model-from-the-future")+"\n"+codexTokenLineJSON(1000, 0, 0, 10)+"\n")
 
-	if _, ok := codexTranscriptCost(path, codexTestRate); ok {
+	_, miss, ok := codexTranscriptCost(path, codexTestRate)
+	if ok {
 		t.Error("codexTranscriptCost: want a miss for an unpriced model")
+	}
+	if miss != costMissUnpriced {
+		t.Errorf("miss = %q, want %q", miss, costMissUnpriced)
 	}
 }
 
@@ -553,8 +559,12 @@ func TestCodexTranscriptCostWithholdsAcrossAModelSwitch(t *testing.T) {
 			codexTurnContextJSON("gpt-5.1-codex")+"\n"+
 			codexTokenLineJSON(1000, 400, 0, 10)+"\n")
 
-	if cost, ok := codexTranscriptCost(path, rates); ok {
+	cost, miss, ok := codexTranscriptCost(path, rates)
+	if ok {
 		t.Errorf("codexTranscriptCost = %v, want a miss: the total spans two models", cost)
+	}
+	if miss != costMissMixed {
+		t.Errorf("miss = %q, want %q — the footer has to say the switch happened", miss, costMissMixed)
 	}
 }
 
@@ -571,7 +581,7 @@ func TestCodexTranscriptCostPricesTheWholeTotalForOneModel(t *testing.T) {
 			// total was priced at, so it must not read as a switch.
 			codexTurnContextJSON("gpt-5.1-codex-mini")+"\n")
 
-	cost, ok := codexTranscriptCost(path, codexTestRate)
+	cost, _, ok := codexTranscriptCost(path, codexTestRate)
 
 	if !ok {
 		t.Fatal("codexTranscriptCost: want ok")
@@ -585,8 +595,14 @@ func TestCodexTranscriptCostPricesTheWholeTotalForOneModel(t *testing.T) {
 func TestCodexTranscriptCostMissesWithoutATokenLine(t *testing.T) {
 	path := writeFile(t, codexTurnContextJSON("gpt-5.1-codex")+"\n")
 
-	if _, ok := codexTranscriptCost(path, codexTestRate); ok {
+	_, miss, ok := codexTranscriptCost(path, codexTestRate)
+	if ok {
 		t.Error("codexTranscriptCost: want a miss with no token_count line")
+	}
+	// A rollout that has billed nothing yet is not one lich cannot price:
+	// nothing is said, and the next turn brings the number.
+	if miss.spoken() {
+		t.Errorf("miss = %q, want one the footer stays quiet about", miss)
 	}
 }
 
@@ -640,5 +656,119 @@ func TestCodexCostAccumulatesAcrossConversations(t *testing.T) {
 	want := 100*0.001 + 300*0.001
 	if got.CostUSD == nil || !nearly(*got.CostUSD, want) {
 		t.Errorf("CostUSD = %v, want %v — the first rollout's cost still counts", got.CostUSD, want)
+	}
+}
+
+// The usage event's CostMiss is the whole point of the reason travelling up:
+// a footer that just loses the number reads as zero spend. It carries only the
+// standing reasons, which is what separates "lich cannot price this" from
+// "there is nothing to show".
+func TestTheUsageEventNamesWhyACostIsMissing(t *testing.T) {
+	tests := []struct {
+		name       string
+		transcript func(t *testing.T)
+		rates      rateSource
+		want       string
+	}{
+		{
+			// #427: the conversation ran `/model`, so one running total spans
+			// two models and no rate can attribute it.
+			name: "a Codex conversation that switched models",
+			transcript: func(t *testing.T) {
+				writeCodexTranscript(t, "uuid-cost",
+					codexTurnContextJSON("gpt-5.1-codex-mini")+"\n"+
+						codexTokenLineJSON(500, 0, 0, 5)+"\n"+
+						codexTurnContextJSON("gpt-5.1-codex")+"\n"+
+						codexTokenLineJSON(1000, 400, 0, 10)+"\n")
+			},
+			rates: fixedRates{
+				"gpt-5.1-codex":      {Input: 0.001, Output: 0.01},
+				"gpt-5.1-codex-mini": {Input: 0.0001, Output: 0.001},
+			},
+			want: string(costMissMixed),
+		},
+		{
+			// #428: an offline machine, or a model LiteLLM never priced. Same
+			// silence before, and the same sentence needed.
+			name: "a model no price table knows",
+			transcript: func(t *testing.T) {
+				writeCodexTranscript(t, "uuid-cost",
+					codexTurnContextJSON("model-from-the-future")+"\n"+
+						codexTokenLineJSON(1000, 0, 0, 10)+"\n")
+			},
+			rates: codexTestRate,
+			want:  string(costMissUnpriced),
+		},
+		{
+			name: "a Claude transcript stopped at an unpriced line",
+			transcript: func(t *testing.T) {
+				writeTranscript(t, "uuid-cost",
+					costLineJSON("m1", modelOpus, 100, 0, 0, 0)+"\n"+
+						costLineJSON("m2", "model-from-the-future", 900, 0, 0, 0)+"\n")
+			},
+			rates: testRate,
+			want:  string(costMissUnpriced),
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.transcript(t)
+			svc := New(newCostStore("uuid-cost"), nil, events.New())
+			svc.prices = tc.rates
+
+			got, ok := svc.sessionUsage("s1")
+
+			if !ok {
+				t.Fatal("sessionUsage: want ok — only the money is missing")
+			}
+			if got.CostUSD != nil {
+				t.Errorf("CostUSD = %v, want absent", *got.CostUSD)
+			}
+			if got.CostMiss != tc.want {
+				t.Errorf("CostMiss = %q, want %q", got.CostMiss, tc.want)
+			}
+		})
+	}
+}
+
+// The readout being off is not a failure to price, and a subscription is the
+// case it exists for: the field never appears, so the footer says nothing at
+// all rather than inventing a reason for the design.
+func TestACostReadoutTurnedOffNamesNoReason(t *testing.T) {
+	writeCodexTranscript(t, "uuid-cost",
+		codexTurnContextJSON("model-from-the-future")+"\n"+codexTokenLineJSON(1000, 0, 0, 10)+"\n")
+	store := newCostStore("uuid-cost")
+	store.costOn = false
+	svc := New(store, nil, events.New())
+	svc.prices = codexTestRate
+
+	got, ok := svc.sessionUsage("s1")
+
+	if !ok {
+		t.Fatal("sessionUsage: want ok")
+	}
+	if got.CostUSD != nil || got.CostMiss != "" {
+		t.Errorf("CostUSD = %v, CostMiss = %q, want both absent", got.CostUSD, got.CostMiss)
+	}
+}
+
+// A conversation lich can price says nothing beside the number: the marker is
+// for an absence, and one riding along with a total would be noise.
+func TestAPricedSessionCarriesNoMissReason(t *testing.T) {
+	writeCodexTranscript(t, "uuid-cost",
+		codexTurnContextJSON("gpt-5.1-codex")+"\n"+codexTokenLineJSON(1000, 400, 0, 10)+"\n")
+	svc := New(newCostStore("uuid-cost"), nil, events.New())
+	svc.prices = codexTestRate
+
+	got, ok := svc.sessionUsage("s1")
+
+	if !ok {
+		t.Fatal("sessionUsage: want ok")
+	}
+	if got.CostUSD == nil {
+		t.Fatal("CostUSD is absent, want the session's cost")
+	}
+	if got.CostMiss != "" {
+		t.Errorf("CostMiss = %q, want empty beside a number", got.CostMiss)
 	}
 }

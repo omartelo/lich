@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { budgetShare, formatCost } from "./session-cost"
+import { COST_MISS_REASON, budgetShare, formatCost } from "./session-cost"
 
 describe("formatCost", () => {
   it("shows cents once there are dollars to anchor them", () => {
@@ -57,5 +57,15 @@ describe("budgetShare", () => {
     expect(budgetShare(Number.NaN, 10)).toBe(0)
     expect(budgetShare(-1, 10)).toBe(0)
     expect(budgetShare(1, Number.POSITIVE_INFINITY)).toBe(0)
+  })
+})
+
+// Every reason the backend can send has a sentence here: a marker the user
+// cannot read is no better than the blank it replaced.
+describe("COST_MISS_REASON", () => {
+  it("has a sentence for every reason the contract carries", () => {
+    for (const reason of ["mixed-models", "unpriced-model"] as const) {
+      expect(COST_MISS_REASON[reason]).toMatch(/\S/)
+    }
   })
 })
