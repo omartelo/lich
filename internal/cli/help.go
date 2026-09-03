@@ -80,11 +80,21 @@ var commands = []command{
 			"sessions are open in it.",
 	},
 	{
+		name: "cost",
+		args: "[--project <name>] [--provider <provider>] [--since <window>]\n" +
+			"            [--json|--csv]",
+		about: "What the sessions lich remembers have cost, per project, at API prices.\n" +
+			"--since keeps the ones active in a window (7d, 24h, 90m). The total\n" +
+			"always says how many sessions it could not price: with any of those,\n" +
+			"it is a lower bound.",
+	},
+	{
 		name: "mcp",
 		args: "",
-		about: "Serve the commands above as MCP tools over stdio. lich registers this\n" +
-			"itself for the providers that support it; you only run it by hand to\n" +
-			"point another MCP client at lich.",
+		about: "Serve the session commands above as MCP tools over stdio — cost is\n" +
+			"not one of them. lich registers this itself for the providers that\n" +
+			"support it; you only run it by hand to point another MCP client at\n" +
+			"lich.",
 	},
 	{
 		name: "rage",

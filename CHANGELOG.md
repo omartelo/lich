@@ -18,6 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   readout, and `docs/ceilings.md` carries the table of which rung each one is on
   and why.
 
+- **`lich cost` totals what a project or a window of time has spent.** The cost
+  figure was per session and nothing summed it, so the only way to ask what a
+  project cost this week was to read the cards one at a time and add them up.
+  The command reports a row per project with `--project`, `--provider` and
+  `--since 7d` narrowing it, and `--json` / `--csv` taking the number out of
+  lich. The total always says how many sessions it could **not** price: with
+  any of those it is a lower bound, and a sum that quietly omitted them would be
+  the one thing that makes the number not worth reading.
+
 - **A Codex session shows its cost on a machine with no network.** The price
   table shipped in the binary carried Claude models only, so a Codex cost
   appeared only once the remote refresh had landed — never, on a machine that

@@ -94,8 +94,8 @@ guess at the one it resembles, and exit 1 — a typo does not open a window.
 Arguments the app itself takes still do: bare `lich`, and `lich --` with the
 Chromium flags behind it.
 
-`--json` on `sessions`, `send`, `wait`, `open`, `close` and `worktrees` replaces
-the prose with one JSON line: the peer array, the result object and the session
+`--json` on `sessions`, `send`, `wait`, `open`, `close`, `worktrees` and `cost`
+replaces the prose with one JSON line: the peer array, the result object and the session
 object exactly as this document describes them. An empty roster is `[]`, never
 `null` — a script should not have to tell those apart. One line is the contract:
 `open --prompt` does two things and still prints one object (see below).
@@ -403,9 +403,89 @@ one whose fate that session's close decides, and a checkout with none is one
 nobody is working in. The project's own directory is not listed — it is the
 checkout every project has and the one that cannot be removed.
 
+### `lich cost [--project <name>] [--provider <provider>] [--since <window>] [--json|--csv]`
+
+What the sessions lich still remembers have cost, at API prices, one row per
+project and a total under them:
+
+```
+project	sessions	unpriced	cost
+lich	12	2	$4.31
+revu	3	0	$0.88
+total	15	2	$5.19
+Lower bound: 2 unpriced of 15 sessions — their spend is not in this total.
+```
+
+**The last line is the contract.** A session lich never priced holds no ledger
+row and contributes nothing, so a sum over a unit containing one is a *lower
+bound* — and nothing else on screen would say so. The count travels with the
+money on every surface: the `unpriced` column, the line under the table, the
+`unpriced` field in `--json`, the `unpriced` column in `--csv`. With none, the
+line reads `Complete: every session in this total is priced.` instead.
+
+Why a session has no price is not reported here. That is the live scan's
+`costMiss` (`internal/terminal/usage_cost.go`), decided per turn and never
+persisted, so the ledger can only say a session carries no price — an
+unreadable transcript, an unpriced model, a provider lich has no reader for
+(Antigravity and Cursor CLI), or a session that ran while the readout was off
+all land in the same count.
+
+The money it *does* carry comes from two kinds of accounting, and the report
+does not separate them: lich prices Claude Code and Codex itself from their
+token counts, while oh-my-pi, opencode and Crush each report a figure they
+computed themselves, with the omission their own accounting has. How close a
+project's total is therefore depends on which providers ran under it —
+`docs/ceilings.md` has the rung each is on and what each one leaves out.
+
+With the cost readout switched off, no transcript is ever summed and every
+session is unpriced, so the total can only be `$0.00`. That case adds a second
+line naming the setting, because a zero on a machine that was never asked to
+count reads exactly like a machine that spent nothing.
+
+The filters:
+
+- `--project <name>` — one project, matched case-insensitively the way every
+  other command matches one. A name no session sits under is **refused**, not
+  answered with a zero: about money, a typo that reads as "that project cost
+  nothing" is worse than no answer.
+- `--provider <provider>` — one session kind (`claude`, `codex`, `crush`, …).
+  Combined with the total line this is what a provider cost across the machine.
+  An unknown provider is not refused; it matches nothing and the report is
+  empty.
+- `--since <window>` — `7d`, `24h`, `90m`. Sessions **active** in the window,
+  counted whole: a session's activity is its last counted turn, and a session
+  that ran through the boundary brings all of its cost with it. The ledger is a
+  running total with no per-turn history behind it, so this is a filter over
+  sessions, never a slice of the money by day. A session with nothing counted is
+  dated by when it was parked, or by now while it is still open.
+
+`--csv` writes the per-project rows and no total — the totals are a sum of the
+columns, `unpriced` included, so the bound survives the export:
+
+```
+project,sessions,unpriced,cost_usd
+lich,12,2,4.312500
+revu,3,0,0.880000
+```
+
+`--json` is the whole report on one line — `projects`, the summed `sessions`,
+`unpriced` and `costUsd`, and `readout` for whether anything is being counted
+at all.
+
+It is not registered as an MCP tool. Every tool definition is in the prompt of
+every session lich spawns whether or not it is used (see the ceiling below), and
+a total nobody asked for is not worth that on every turn — an agent that wants
+it runs the command.
+
+There is no `--model` breakdown. The ledger records what a `(session,
+transcript)` pair cost and never which model each priced turn ran under, and
+the model on a session row is the one selected now — so a per-model total would
+have to be a second accounting path, not a filter on this one.
+
 ### `lich mcp`
 
-Serves the commands above as MCP tools over stdio: one JSON-RPC 2.0 message per
+Serves the session commands above as MCP tools over stdio — `cost` is not one
+of them: one JSON-RPC 2.0 message per
 line, `initialize` / `tools/list` / `tools/call` / `ping`. stdout carries
 protocol and nothing else.
 
@@ -713,6 +793,10 @@ whoever asked.
 
 ## Known ceilings
 
+- **`cost` only sees the sessions lich still holds a row for.** A session
+  deleted for good took its ledger with it (`ON DELETE CASCADE`), so its spend
+  is in no total and in no unpriced count either — it is not excluded, it is
+  invisible. A parked session is still counted; a removed one never happened.
 - **Closing has no undo.** The window offers one for ten seconds after a close;
   nothing here does. A removed checkout is gone from disk, and a deleted session
   row with it. `--force` on a dirty checkout is the only step that asks for

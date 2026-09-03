@@ -69,6 +69,23 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   release froze reads as an ordinary figure with nothing beside it. The marker also names the reason and
   never the model or the turn, so a session whose sub-agent alone is unpriced looks like one whose every
   turn is.
+- **`lich cost --since` windows on sessions, never on days** (`store.CostTotals`): the ledger is a running
+  total per `(session, transcript)` with no per-turn history behind it, so the only date a session's spend
+  carries is when it was last counted. A window therefore selects *sessions active in it* and counts each one
+  whole — a session that ran through the boundary brings every dollar of its life into the window, and one
+  idle since before it brings none. Reading a windowed total as "what was spent that week" overstates a
+  long-lived card by however long it has been running. A session with nothing counted has no ledger to date
+  it at all and falls back on its own life: parked, it is dated by the close; open, it is dated *now*, so it
+  is unpriced in every window ending today. Slicing money by day would need a second ledger keyed by day, and
+  there is none.
+- **A `lich cost` total adds lich's own arithmetic to three other tools'** (`store.CostTotals`): five providers
+  write to the same ledger, but only Claude Code and Codex are priced here. oh-my-pi, opencode and Crush each
+  hand over a figure they computed themselves, carrying the omission their own accounting has — the rungs above
+  name one per provider — and the sum says nothing about the difference. A dollar lich derived from token
+  counts and a dollar Crush reported read identically in the table, in `--json` and in `--csv`, so how close a
+  project's number is depends on which providers ran under it, with nothing on any of those surfaces saying
+  which did. The `unpriced` count answers the other question — what is missing outright — and cannot answer
+  this one.
 - **Hands-on time is read off three signals, and one of them is not universal**
   (`internal/terminal/handson.go`, `noteOutput`, `closableState`): the figure beside the cost
   counts the gap between consecutive signs of life in a session — any hook report naming it, a
