@@ -421,11 +421,7 @@ export function PullRequestView({
           ) : (
             <ChecksStat checks={detail.checks} />
           )}
-          <MergeableStat
-            mergeable={detail.mergeable}
-            base={detail.baseRefName}
-            state={detail.state}
-          />
+          <MergeableStat detail={detail} />
           <ReviewStat decision={detail.reviewDecision} />
         </div>
 

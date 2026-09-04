@@ -9,11 +9,13 @@ import { StrictMode, createElement, useLayoutEffect } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { usePullRequestConflicts } from "./use-pull-request-conflicts"
 
+const PR_URL = "https://github.com/owner/repo/pull/7"
+
 const conflicts = vi.fn()
 vi.mock("@/lib/rpc", () => ({
   ProjectService: {
-    PullRequestConflicts: (path: string, number: number, base: string) =>
-      conflicts(path, number, base),
+    PullRequestConflicts: (path: string, number: number, base: string, url: string) =>
+      conflicts(path, number, base, url),
   },
 }))
 
@@ -21,7 +23,7 @@ vi.mock("@/lib/rpc", () => ({
 // React discarded is not counted as one the screen saw.
 function panel(seen: string[][], conflicting: boolean, number = 7, base = "main") {
   function Panel() {
-    const { files } = usePullRequestConflicts("/repo", number, base, conflicting)
+    const { files } = usePullRequestConflicts("/repo", number, base, PR_URL, conflicting)
     useLayoutEffect(() => {
       seen.push(files)
     })
@@ -41,7 +43,7 @@ describe("usePullRequestConflicts", () => {
     const mounted = await mountBudget(panel(seen, true))
     await mounted.act(() => {})
 
-    expect(conflicts).toHaveBeenCalledWith("/repo", 7, "main")
+    expect(conflicts).toHaveBeenCalledWith("/repo", 7, "main", PR_URL)
     expect(seen[seen.length - 1]).toEqual(["internal/project/pr.go", "CHANGELOG.md"])
   })
 
