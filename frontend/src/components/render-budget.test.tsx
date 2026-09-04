@@ -152,7 +152,7 @@ const workspace: ProjectsValue = {
   closeProject: noop,
   newSession: () => "",
   newWorktreeSession: () => "",
-  reopenWorktreeSession: async () => {},
+  reopenWorktreeSession: async () => "",
   resumeClosedSession: async () => {},
   closeSession: noop,
   discardSession: noop,

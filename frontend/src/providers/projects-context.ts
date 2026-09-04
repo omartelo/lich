@@ -31,8 +31,9 @@ export interface ProjectsValue {
     sandbox?: string,
   ) => string
   /** Resume a worktree: reopen its parked session when one exists, else open a
-   * fresh session on it. */
-  reopenWorktreeSession: (projectId: string, wt: { name: string; path: string }) => Promise<void>
+   * fresh session on it. Answers with the session either way, for a caller with
+   * something to hand it. */
+  reopenWorktreeSession: (projectId: string, wt: { name: string; path: string }) => Promise<string>
   /** Resume a session picked out of the history, reopening its project first
    * when that project's tab is gone. */
   resumeClosedSession: (closed: ClosedSession) => Promise<void>

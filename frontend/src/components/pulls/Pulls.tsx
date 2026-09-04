@@ -14,6 +14,7 @@ import { closePulls, openPulls } from "@/lib/pulls-card-store"
 import { sessionsOf } from "@/lib/session/sessions"
 import { useActiveSession } from "@/lib/session/use-active-session"
 import { queueSetup } from "@/lib/terminal/setup-queue"
+import { writeAtPrompt } from "@/lib/terminal/write-at-prompt"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { useCheckouts } from "@/lib/git/use-checkouts"
 import { invalidatePullRequests } from "@/lib/pulls/pull-request-lookup"
@@ -219,42 +220,72 @@ export function Pulls({ list = false }: PullsProps) {
   // git refuses to check one branch out twice, so a checkout that already holds
   // it is reused rather than recreated — and that includes the project's own
   // directory, which is where a branch usually is.
-  const openInSession = async () => {
+  //
+  // It answers with the session the work lands in, so a caller with something to
+  // hand that session knows where to write; "" when nothing was opened.
+  const openInSession = async (): Promise<string> => {
     if (!projectId || !detail) {
-      return
+      return ""
     }
     const existing = checkedOut
     if (existing) {
       const live = sessionsOf(sessions, projectId).find((s) => s.path === existing.path)
+      let target: string
       if (live) {
         activateSession(projectId, live.id)
+        target = live.id
       } else if (existing.path === projectPath) {
         // The project's own checkout is not a worktree: it has no parked
         // session to resume and must never be handed to the worktree flows.
-        newSession(projectId)
+        target = newSession(projectId)
       } else {
-        await reopenWorktreeSession(projectId, existing)
+        target = await reopenWorktreeSession(projectId, existing)
       }
       openPulls(existing.path)
       navigate(`/projects/${projectId}`)
-      return
+      return target
     }
     setOpening(true)
     try {
       const wt = await ProjectService.CreateWorktreeFromPR(projectPath, projectId, detail.number)
       if (!wt) {
-        return
+        return ""
       }
       // A fresh checkout is the one moment the project's setup script runs, and
       // the pull request card rides along so the session carries its PR.
-      queueSetup(newWorktreeSession(projectId, wt))
+      const target = newWorktreeSession(projectId, wt)
+      queueSetup(target)
       openPulls(wt.path)
       refreshCheckouts()
       navigate(`/projects/${projectId}`)
+      return target
     } catch (err: unknown) {
       toast.error(`Couldn’t open a session: ${errorText(err)}`)
+      return ""
     } finally {
       setOpening(false)
+    }
+  }
+
+  // The problem in the way, written at the prompt of the session that would fix
+  // it: the one on the pull request's own branch, opened here when there is
+  // none, and brought into view either way. The screen the click happened on
+  // cannot show what became of it, and a prompt filled in a session nobody is
+  // looking at is a click that did nothing — which is how this button was first
+  // used, back when it wrote into whichever session happened to be active.
+  //
+  // lich stops at the prompt. The text is there to read, edit and send, and the
+  // Enter is the user's: the relay is the one place lich presses it, for a
+  // sender that is not a person (internal/relay, submitDelay).
+  const handOff = async (prompt: string) => {
+    const target = await openInSession()
+    if (!target) {
+      return
+    }
+    try {
+      await writeAtPrompt(target, prompt)
+    } catch (err: unknown) {
+      toast.error(`Couldn’t hand this to the session: ${errorText(err)}`)
     }
   }
 
@@ -293,6 +324,7 @@ export function Pulls({ list = false }: PullsProps) {
         onRefresh={reload}
         onMerged={onMerged}
         onInject={inject}
+        onHandOff={handOff}
         conversation={conversation.conversation}
         conversationLoading={conversation.loading}
         onConversationRefresh={conversation.refresh}

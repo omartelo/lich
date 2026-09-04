@@ -132,6 +132,12 @@ export const Terminal = {
     rows: number,
   ) => call<null>("terminal.Start", [id, projectID, cwd, kind, resume, name, setup, cols, rows]),
   Write: (id: string, data: string) => call<null>("terminal.Write", [id, data]),
+  /** Whether this session can be given work: its provider is the program
+   * reading the PTY — not the checkout's setup script, not a TUI still taking
+   * the tty over — and the prompt is not half-filled by the person at it. False
+   * for a session that is not running, including one whose card exists but
+   * whose terminal has never been opened (lib/terminal/write-at-prompt). */
+  Ready: (id: string) => call<boolean>("terminal.Ready", [id]),
   Resize: (id: string, cols: number, rows: number) =>
     call<null>("terminal.Resize", [id, cols, rows]),
   SetVisible: (id: string, visible: boolean) => call<null>("terminal.SetVisible", [id, visible]),
