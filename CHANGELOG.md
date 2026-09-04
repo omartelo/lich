@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A theme file can now be checked before it is imported.**
+  `themes/lich-theme.schema.json` is a JSON Schema naming every app and terminal
+  token, which color spellings each of the two blocks accepts, and the id and
+  name rules — so a token left out or an `oklch()` where the terminal wanted hex
+  is a red squiggle in the editor rather than an import error after the fact.
+  A theme opts in with a `$schema` line at the top of the file, pointed at the
+  copy in this repository; the starter written by Settings › Appearance ›
+  **Save template** already carries one. The schema is generated from the same
+  token sets and patterns the importer validates against, and a test fails when
+  the checked-in copy no longer matches them — a schema that drifts rejects
+  valid themes, which is worse than shipping none.
+
 - **A screen or panel that breaks no longer takes the window with it.** A single
   rendering bug anywhere in the interface used to blank lich entirely — sidebar,
   terminals, footer and all — while the agents kept running behind it with

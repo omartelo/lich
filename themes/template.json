@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/omartelo/lich/main/themes/lich-theme.schema.json",
   "id": "purple-night",
   "name": "Purple Night",
   "scheme": "dark",
