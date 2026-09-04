@@ -203,10 +203,11 @@ func TestDescribe(t *testing.T) {
 
 func TestParseFlags(t *testing.T) {
 	tests := []struct {
-		name   string
-		args   []string
-		pinned string
-		extra  []string
+		name     string
+		args     []string
+		pinned   string
+		noWindow bool
+		extra    []string
 	}{
 		{name: "nothing"},
 		{name: "separate value", args: []string{"--browser", "vivaldi"}, pinned: "vivaldi"},
@@ -230,12 +231,29 @@ func TestParseFlags(t *testing.T) {
 			extra: []string{"--browser=chromium"},
 		},
 		{name: "value missing", args: []string{"--browser"}},
+		{name: "no window", args: []string{"--no-window"}, noWindow: true},
+		// The two flags answer different questions and must not cancel each
+		// other: --browser still names who opens the tab.
+		{
+			name:     "no window with a pinned browser",
+			args:     []string{"--no-window", "--browser", "firefox"},
+			pinned:   "firefox",
+			noWindow: true,
+		},
+		{
+			name:  "no window after the separator is the browser's",
+			args:  []string{"--", "--no-window"},
+			extra: []string{"--no-window"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pinned, extra := ParseFlags(tt.args)
+			pinned, noWindow, extra := ParseFlags(tt.args)
 			if pinned != tt.pinned {
 				t.Fatalf("pinned = %q, want %q", pinned, tt.pinned)
+			}
+			if noWindow != tt.noWindow {
+				t.Fatalf("noWindow = %v, want %v", noWindow, tt.noWindow)
 			}
 			if !slices.Equal(extra, tt.extra) {
 				t.Fatalf("extra = %v, want %v", extra, tt.extra)

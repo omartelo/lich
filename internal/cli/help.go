@@ -120,12 +120,17 @@ const helpFooter = `
 
 Every command takes --help for its own flags.
 
-With no command, lich opens its window. Two flags belong to that launch:
+With no command, lich opens its window. Three flags belong to that launch:
 
   lich --browser <name-or-path>
       Open the window in this browser instead of the one lich would find.
       LICH_BROWSER says the same thing; the flag wins. Either way lich fails
       loudly when it is not there, rather than opening a different browser.
+
+  lich --no-window
+      Skip the window and open lich as a plain tab in your default browser —
+      Firefox included. LICH_NO_WINDOW says the same thing. Closing the tab
+      leaves lich running; stop it with Ctrl-C or by signalling the process.
 
   lich -- <flags>
       Pass everything after -- to the browser (e.g. --ozone-platform=wayland).

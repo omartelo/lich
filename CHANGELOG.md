@@ -21,6 +21,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the checked-in copy no longer matches them — a schema that drifts rejects
   valid themes, which is worse than shipping none.
 
+- **lich can now run without a window of its own, on purpose.** It opens its
+  window in a Chromium-family browser, and until now the plain-tab mode was
+  only what you got when the machine had none — so anyone who would rather not
+  run Chromium had no way to say so. `lich --no-window` (or `LICH_NO_WINDOW=1`,
+  which a desktop launcher can carry) now asks for it: lich serves itself and
+  hands the URL to your default browser, Firefox included. The trade is the one
+  it always was — a tab is not a window, so closing it leaves lich running, and
+  you stop it with Ctrl-C. `lich doctor` no longer reports a missing
+  Chromium-family browser as a failure when the launch never wanted one.
+
 - **A screen or panel that breaks no longer takes the window with it.** A single
   rendering bug anywhere in the interface used to blank lich entirely — sidebar,
   terminals, footer and all — while the agents kept running behind it with

@@ -64,13 +64,20 @@ func main() {
 		os.Exit(code)
 	}
 
-	// --browser is carried in the environment rather than passed down: the
-	// restart successor inherits it, and `lich doctor` then reports the browser
-	// a launch here would really open. Everything after `--` is the browser's.
-	pinnedBrowser, chromiumArgs := chromium.ParseFlags(os.Args[1:])
+	// --browser and --no-window are carried in the environment rather than passed
+	// down: the restart successor inherits them (it is re-executed with no
+	// arguments), and `lich doctor` then reports the browser a launch here would
+	// really open. Everything after `--` is the browser's.
+	pinnedBrowser, noWindow, chromiumArgs := chromium.ParseFlags(os.Args[1:])
 	if pinnedBrowser != "" {
 		if err := os.Setenv(chromium.OverrideEnv, pinnedBrowser); err != nil {
 			slog.Error("set "+chromium.OverrideEnv, "err", err)
+			os.Exit(1)
+		}
+	}
+	if noWindow {
+		if err := os.Setenv(chromium.NoWindowEnv, "1"); err != nil {
+			slog.Error("set "+chromium.NoWindowEnv, "err", err)
 			os.Exit(1)
 		}
 	}
@@ -303,6 +310,13 @@ func runChromium(term *terminal.Service, configDir string, extra []string, coord
 		// capture the dev window.
 		class = "lichdev"
 	}
+	// Asked for no window at all: serve and hand the URL to whatever browser the
+	// user does use. Same path as having no Chromium, reached on purpose.
+	if os.Getenv(chromium.NoWindowEnv) != "" {
+		openWithoutWindow(url, addr, configDir, coord, true)
+		return
+	}
+
 	slog.Info("chromium shell opening", "addr", addr)
 
 	err = chromium.Run(url, profileDir, class, extra, coord.SetWindow)
@@ -310,7 +324,7 @@ func runChromium(term *terminal.Service, configDir string, extra []string, coord
 	case err == nil:
 		slog.Info("window closed, exiting")
 	case errors.Is(err, chromium.ErrNoBrowser):
-		openWithoutWindow(url, addr, configDir, coord)
+		openWithoutWindow(url, addr, configDir, coord, false)
 	default:
 		slog.Error("chromium shell", "err", err)
 		// Same silence as handleBindFailure: a launcher start has no terminal,
@@ -337,28 +351,39 @@ func runChromium(term *terminal.Service, configDir string, extra []string, coord
 // Every other launch ends when the window closes; a tab lich did not spawn
 // cannot be waited on, so nothing here ends on its own — closing the tab leaves
 // lich running, which the notification says.
-func openWithoutWindow(url, addr, configDir string, coord *restart.Coordinator) {
-	slog.Warn("no chromium-family browser found, opening a plain tab", "addr", addr)
+func openWithoutWindow(url, addr, configDir string, coord *restart.Coordinator, chosen bool) {
+	// Why there is no window decides the whole message: a machine with no
+	// Chromium is missing something and should hear about it, a --no-window
+	// launch got exactly what it asked for.
+	if chosen {
+		slog.Info("--no-window, opening a plain tab", "addr", addr)
+	} else {
+		slog.Warn("no chromium-family browser found, opening a plain tab", "addr", addr)
+	}
 	// stdout rather than the log: the URL carries the session token, and the
 	// log file outlives this run (see the addr/url split above). A terminal
 	// launch reads it here; a launcher launch reads the notification below.
 	fmt.Println("lich is running at", url)
 
+	hint := "For a window of its own, install a Chromium-family browser " +
+		"(chromium, chrome, brave, vivaldi, edge)."
+	lost := "No Chromium-family browser here, so it has no window of its own"
+	if chosen {
+		hint = "lich was started with --no-window, so it did not try to open one itself."
+		lost = "Started with --no-window, so it has no window of its own"
+	}
 	if err := system.OpenURL(url); err != nil {
 		slog.Error("no browser to open at all", "err", err)
 		_ = zenity.Error(fmt.Sprintf(
 			"lich is running, but found no browser to show it in.\n\n"+
-				"Open this URL in any browser:\n%s\n\n"+
-				"For a window of its own, install a Chromium-family browser "+
-				"(chromium, chrome, brave, vivaldi, edge).\n\nLog: %s",
-			url, logging.Path(filepath.Join(configDir, "lich"))),
+				"Open this URL in any browser:\n%s\n\n%s\n\nLog: %s",
+			url, hint, logging.Path(filepath.Join(configDir, "lich"))),
 			zenity.Title("lich"))
 		os.Exit(1)
 	}
 	_ = zenity.Notify(
 		"lich is running at "+addr+" — opened in your default browser. "+
-			"No Chromium-family browser here, so it has no window of its own: "+
-			"closing the tab leaves lich running.",
+			lost+": closing the tab leaves lich running.",
 		zenity.Title("lich"))
 
 	// The window's exit is the app lifecycle everywhere else, and /restart

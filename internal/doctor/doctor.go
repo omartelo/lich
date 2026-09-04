@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/omartelo/lich/internal/chromium"
 	"github.com/omartelo/lich/internal/logging"
 	"github.com/omartelo/lich/internal/providers"
 	"github.com/omartelo/lich/internal/singleton"
@@ -71,6 +72,7 @@ type Doctor struct {
 	detect   func() []providers.Detected
 	store    func() (io.Closer, error)
 	lookPath func(string) (string, error)
+	getenv   func(string) string
 }
 
 // New returns a Doctor for this machine. configDir is the OS config dir, and
@@ -85,6 +87,7 @@ func New(configDir string, getenv func(string) string) *Doctor {
 		detect:    Providers,
 		store:     func() (io.Closer, error) { return store.New() },
 		lookPath:  exec.LookPath,
+		getenv:    getenv,
 	}
 }
 
@@ -185,10 +188,15 @@ func (d *Doctor) checkStore(info *singleton.Info, running bool) (Status, string)
 }
 
 // checkBrowser resolves the Chromium-family binary the window is. Its absence
-// is the one failure where lich runs perfectly and shows nothing.
+// is the one failure where lich runs perfectly and shows nothing — unless the
+// launch asked for no window, which is the one case where there is nothing to
+// resolve and nothing wrong.
 func (d *Doctor) checkBrowser() (Status, string) {
 	path, err := d.browser()
-	if err != nil {
+	switch {
+	case err != nil && d.getenv(chromium.NoWindowEnv) != "":
+		return OK, "not used — " + chromium.NoWindowEnv + " opens a plain tab in the default browser"
+	case err != nil:
 		return Fail, err.Error()
 	}
 	return OK, path

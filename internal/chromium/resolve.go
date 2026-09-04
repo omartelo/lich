@@ -27,6 +27,13 @@ var ErrNoBrowser = errors.New(
 // browser a launch here would actually open.
 const OverrideEnv = "LICH_BROWSER"
 
+// NoWindowEnv opens lich as a plain tab in the default browser instead of a
+// Chromium --app window — the answer for a machine whose owner would rather not
+// run a Chromium-family browser at all, Firefox users among them. It carries
+// the --no-window flag the same way OverrideEnv carries --browser, so the
+// restart successor keeps the choice.
+const NoWindowEnv = "LICH_NO_WINDOW"
+
 // The rung of the ladder that answered, as the diagnostics name it.
 const (
 	stepPinned  = "pinned by LICH_BROWSER"
@@ -273,15 +280,18 @@ func flatpakBrowser(env Env) (Result, bool) {
 }
 
 // ParseFlags splits lich's own launch arguments: --browser <name-or-path> pins
-// the browser to open the window in, and everything after `--` passes through
-// to that browser. The flag wins over LICH_BROWSER because the caller writes it
-// into the environment (main.go), which is also what carries it to the restart
+// the browser to open the window in, --no-window trades that window for a plain
+// tab, and everything after `--` passes through to the browser. The flags win
+// over their environment variables because the caller writes them into the
+// environment (main.go), which is also what carries them to the restart
 // successor.
-func ParseFlags(args []string) (pinned string, extra []string) {
+func ParseFlags(args []string) (pinned string, noWindow bool, extra []string) {
 	for i := 0; i < len(args); i++ {
 		switch arg := args[i]; {
 		case arg == "--":
-			return pinned, args[i+1:]
+			return pinned, noWindow, args[i+1:]
+		case arg == "--no-window":
+			noWindow = true
 		case arg == "--browser" && i+1 < len(args):
 			i++
 			pinned = args[i]
@@ -289,5 +299,5 @@ func ParseFlags(args []string) (pinned string, extra []string) {
 			pinned = strings.TrimPrefix(arg, "--browser=")
 		}
 	}
-	return pinned, nil
+	return pinned, noWindow, nil
 }

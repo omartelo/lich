@@ -37,6 +37,12 @@ Firefox has no equivalent of Chromium's `--app` mode, so a tab is the honest
 best. `lich doctor` reports which browser was resolved and which of the steps
 above found it.
 
+That tab is also a choice, not only a fallback: `lich --no-window` (or
+`LICH_NO_WINDOW=1`, which a `.desktop` launcher can carry) skips the window on
+a machine that *has* a Chromium-family browser but whose owner would rather not
+run one. lich serves itself and hands the URL to your default browser; closing
+the tab leaves it running, so stop it with Ctrl-C or by signalling the process.
+
 **git and the GitHub CLI** — every version control surface shells out to
 `git`, and lich does not bundle it: without `git` on your `PATH`, branches,
 diffs and worktrees stay empty, though sessions still run. Pull requests,
