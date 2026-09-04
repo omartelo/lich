@@ -71,6 +71,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prompt is written once its agent is at a prompt to take it, rather than into a
   setup script still installing the checkout. The Enter stays yours.
 
+### Fixed
+
+- **On Windows, an answer that named no ticket could close the wrong request.**
+  `lich reply "<answer>"` and `reply_to_session` without a ticket close the
+  oldest request delivered to that session — but "oldest" was read off the
+  clock, and Windows' only moves every ~15.6ms, so two requests handed to one
+  session inside a single tick carried the same timestamp and the tie was broken
+  at random. Roughly one time in ten, with two errands open, the answer went
+  home to the wrong sender, and both senders read a confident wrong report.
+  Delivery order is now counted rather than timed, so no clock's resolution can
+  flatten it. Linux and macOS have a fine enough clock that this was never
+  reachable there.
+
 ## [0.44.0] - 2026-09-03
 
 ### Added

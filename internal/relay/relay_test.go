@@ -1434,6 +1434,36 @@ func TestReplyWithoutATicketAnswersTheOldestErrandDelivered(t *testing.T) {
 	}
 }
 
+// TestErrandOrderSurvivesAClockThatCannotTellThemApart pins the tie the
+// timestamp could not break. Windows' clock only moves every ~15.6ms, so two
+// hand-offs inside one tick carry the same delivered time; ordering on that
+// timestamp then fell through to Go's randomised map iteration and closed the
+// wrong errand about one run in ten on the Windows runner.
+//
+// The two tickets here share a delivered time exactly, which is the case the
+// runner hits by accident: any ordering that reads the clock has nothing left
+// to choose by, and only the hand-off counter still answers.
+func TestErrandOrderSurvivesAClockThatCannotTellThemApart(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1", "s2", "s3"), &fakeEvents{})
+	tick := time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC)
+	svc.tickets = map[string]*ticket{
+		"second": {fromID: "s3", targetID: "s2", delivered: tick, deliverySeq: 2},
+		"first":  {fromID: "s1", targetID: "s2", delivered: tick, deliverySeq: 1},
+	}
+
+	// Run it more than once: one pass can pick the right entry out of a map by
+	// luck, and luck is the thing being tested away.
+	for i := 0; i < 50; i++ {
+		got, err := svc.errandOfLocked("s2")
+		if err != nil {
+			t.Fatalf("errandOfLocked: %v", err)
+		}
+		if got != "first" {
+			t.Fatalf("errand = %q, want the first delivered", got)
+		}
+	}
+}
+
 // TestReplyWithoutATicketNeedsAnErrandItCanName proves the guess is refused
 // rather than made badly: a caller with no session of its own has nothing to
 // look the errand up by, a session nobody asked anything has none, and a task
