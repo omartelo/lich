@@ -62,6 +62,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The merge dialog has room for the commit message it is editing.** Squashing
+  a pull request opened a dialog sized for a sentence: the subject ran off the
+  end of a one-line field — taking the PR number with it — and the body showed
+  four lines of a ten-line description. The dialog is wider now, the subject
+  wraps so the whole title is visible (⏎ still merges), and the description
+  grows with what it holds, up to half the window.
+
 - **A pinned session is at the top of the sidebar again.** Split groups were
   drawn above the pinned block, so a project with a split pushed the pinned
   card below every wall — the one thing a pin promises. Pinned is now the first
