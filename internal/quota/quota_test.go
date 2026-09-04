@@ -64,6 +64,10 @@ func serve(t *testing.T, status int, body string) (url string, calls *int) {
 }
 
 // newService builds a Service pointed at the given endpoints with a fixed clock.
+// newService points a Service at local servers. profileURL is left unset, so a
+// reading names no account unless the test asks for one — which is also the
+// production behaviour when the route cannot be reached, and keeps every test
+// about windows counting the requests it meant to.
 func newService(claudeURL, codexURL string, now time.Time) *Service {
 	return &Service{
 		http:      &http.Client{Timeout: httpTimeout},

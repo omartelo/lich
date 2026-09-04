@@ -504,6 +504,9 @@ export interface QuotaPlan {
   provider: string
   name: string
   plan?: string
+  /** The login the windows were read against, where the provider names one —
+   * absent is an unnamed account, never a failed reading. */
+  account?: string
   windows?: QuotaWindow[]
   status: "ok" | "signed-out" | "error" | "unknown"
 }

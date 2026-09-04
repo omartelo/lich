@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The plan gauge now names the account it is measuring.** lich has always
+  drawn the gauge and never said whose plan it was drawing — which matters
+  precisely because a session can be spawned from a binary of your own that
+  points Claude Code or Codex at a second account. The tooltip carries the
+  account under the plan now: read from Claude's own profile route, and from the
+  id token Codex writes beside its access token, both on the reading the gauge
+  already takes rather than a request of their own. A login that will not say
+  which account it is keeps the gauge and shows no name — a session signed in
+  with `claude setup-token` is one, and so is every provider lich reads no plan
+  from.
+
 - **A conflicting pull request now names the files it conflicts on.** GitHub
   publishes one word — the pull request conflicts with its base — and never
   which files, so the way to find out was opening the PR on github.com or a

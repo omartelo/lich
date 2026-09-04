@@ -20,6 +20,11 @@ interface PlanQuotaProps {
 // subscription is spent, with every window behind a tooltip. Self-contained like
 // SessionModel — it resolves its own reading from the provider id.
 //
+// The tooltip names the account the reading was taken against under the plan,
+// where the provider says which — a session spawned from a wrapper binary
+// spends a login lich's own environment does not name, which is the whole
+// reason that line exists. It is absent for a provider that names nobody.
+//
 // One window is shown, and it is the fullest one: a weekly cap about to run out
 // must not hide behind a session window that reset an hour ago. Nothing renders
 // at all for a provider that meters no subscription, while the reading is
@@ -50,9 +55,12 @@ export function PlanQuota({ kind, sessionId }: PlanQuotaProps) {
       </TooltipTrigger>
       <TooltipContent side="top" className="border border-border bg-card text-foreground">
         <div className="flex min-w-52 flex-col gap-2.5">
-          <span className="font-medium">
-            {plan.plan ? `${plan.name} · ${plan.plan}` : plan.name}
-          </span>
+          <div className="flex flex-col">
+            <span className="font-medium">
+              {plan.plan ? `${plan.name} · ${plan.plan}` : plan.name}
+            </span>
+            {plan.account && <span className="text-muted-foreground text-xs">{plan.account}</span>}
+          </div>
           {(plan.windows ?? []).map((w) => (
             <QuotaGauge key={w.label} window={w} now={now} stacked />
           ))}
