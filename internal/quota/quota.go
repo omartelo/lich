@@ -109,7 +109,8 @@ var accountVars = append([]string{
 // provider does not report one. ResetsAt is RFC 3339, empty when unreported.
 // Active is the provider's own verdict on which window is the binding one, when
 // it reports one at all. LockedReason is non-empty only when the provider says
-// this window cannot be spent past regardless of its percentage.
+// this window cannot be spent past regardless of its percentage. Ahead is
+// lich's own reading of the rate rather than the provider's — see pace.go.
 type Window struct {
 	Label        string `json:"label"`
 	Seconds      int    `json:"seconds"`
@@ -117,6 +118,7 @@ type Window struct {
 	ResetsAt     string `json:"resetsAt,omitempty"`
 	Active       bool   `json:"active,omitempty"`
 	LockedReason string `json:"lockedReason,omitempty"`
+	Ahead        bool   `json:"ahead,omitempty"`
 }
 
 // Plan is one provider's quota reading. Provider is a providers.Registry id, so
@@ -250,7 +252,9 @@ func (s *Service) Plans(sessionID string) []Plan {
 		return cached.plans
 	}
 	plans := []Plan{s.claudePlan(account), s.codexPlan(account)}
-	s.cache[key] = reading{plans: plans, at: s.now()}
+	at := s.now()
+	pace(plans, at)
+	s.cache[key] = reading{plans: plans, at: at}
 	return plans
 }
 

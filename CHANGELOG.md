@@ -31,6 +31,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `claude setup-token` is one, and so is every provider lich reads no plan
   from.
 
+- **A weekly quota window now says when it is being spent faster than its own
+  clock.** Forty percent of a week gone on day two and forty percent gone on day
+  six draw exactly the same bar, and only one of them runs out early. The gauge
+  marks the first: when spend runs at least fifteen points past the share of the
+  window that has elapsed, the window carries a marker, on the footer tooltip and
+  on the Settings screen alike. It is derived from the reading lich already takes
+  — no extra request, and no provider reports it — so it appears for every
+  provider that reports a weekly window, which today is Claude Code and Codex.
+  Only weekly windows are paced: a five-hour window turns over too fast for a
+  rate to mean anything. Nothing is marked in the first day after a reset, where
+  almost any use at all would read as far ahead of a share that is still near
+  zero.
+
 - **A conflicting pull request now names the files it conflicts on.** GitHub
   publishes one word — the pull request conflicts with its base — and never
   which files, so the way to find out was opening the PR on github.com or a

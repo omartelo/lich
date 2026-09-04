@@ -494,6 +494,9 @@ export interface QuotaWindow {
   /** Present only when the provider says this window is locked regardless of
    * its percentage; the reason travels to the tooltip verbatim. */
   lockedReason?: string
+  /** lich's own reading, not the provider's: this weekly window is being spent
+   * faster than its own clock runs. Only weekly windows carry it. */
+  ahead?: boolean
 }
 
 /** internal/quota.Plan — one provider's quota reading. Windows are empty for

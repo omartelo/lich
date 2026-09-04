@@ -478,6 +478,18 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   those logins and never writes them: it does not refresh the token, so an expired one reads as signed out until
   the provider's own CLI rotates it. A reading is cached for five minutes because both endpoints rate-limit hard —
   the number on screen is up to that old, and nothing on it says so.
+- **The pace marker is borrowed calibration, and it is silent far more often than it is wrong**
+  (`internal/quota/pace.go`): the two numbers that decide when a weekly window is marked as spending ahead —
+  fifteen percentage points past the elapsed share, and no marking at all in the first twenty-four hours after
+  a reset — are the claude-swap project's measurements (`src/claude_swap/pace.py`, its issue #125), not lich's
+  own. Nothing here has been tuned against a lich user's accounts. The consequence to know before debugging a
+  marker that "never appears": a window ninety percent spent on the first day of its cycle is deliberately
+  unmarked, because just after a reset the elapsed share is near zero and almost any use at all would read as
+  far ahead. Only the weekly window is paced, so the five-hour one and Codex's monthly free-tier window carry
+  no marker however they are spent. The verdict is derived from the window's own reset time, which is the next
+  reset and never the start — the start is that time rolled back whole windows — so a provider that stops
+  reporting a reset time silently drops the marker rather than the gauge.
+
 - **Two more fields of Claude's usage payload are read no further than measuring them**
   (`internal/quota/claude.go`, `limits[].severity` and the top-level `extra_usage`/`spend` blocks): every
   `severity` observed on a live account reads `"normal"`, so its scale — what a non-normal value looks like,
