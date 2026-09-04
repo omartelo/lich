@@ -1,6 +1,9 @@
 package quota
 
 import (
+	"encoding/base64"
+	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/omartelo/lich/internal/providers"
@@ -17,10 +20,13 @@ const (
 )
 
 // codexCredentials is the part of ~/.codex/auth.json lich reads. As with
-// Claude, the refresh token beside it is left alone.
+// Claude, the refresh token beside it is left alone. IDToken is the OIDC id
+// token the login wrote for its own use, and is read for the account name
+// alone (jwtEmail) — never sent anywhere.
 type codexCredentials struct {
 	Tokens struct {
 		AccessToken string `json:"access_token"`
+		IDToken     string `json:"id_token"`
 	} `json:"tokens"`
 }
 
@@ -67,6 +73,7 @@ func (s *Service) codexPlan(a Account) Plan {
 		return failed(p)
 	}
 	p.Plan = title(usage.PlanType)
+	p.Account = jwtEmail(creds.Tokens.IDToken, s.now())
 	p.Windows = usage.windows()
 	if len(p.Windows) == 0 {
 		return failed(p)
@@ -108,6 +115,36 @@ func codexLabel(seconds int) string {
 	default:
 		return "Monthly"
 	}
+}
+
+// jwtEmail reads the `email` claim off an OIDC id token, and nothing about the
+// token is verified: the signature says who issued it, and lich is not deciding
+// anything on the answer — it already trusts this file for the access token it
+// authenticates with, and the claim is a label under a gauge, not a permission.
+// Decoding the payload alone is why this needs no dependency.
+//
+// The expiry is the one claim that is checked, and it is not ceremony: the CLI
+// rotates the access token beside this one without necessarily rewriting it, so
+// a stale id token can name the account the user was signed in as *before* the
+// login they are spending now. A gauge under the wrong name is worse than a
+// gauge under none, so an expired token names nobody.
+func jwtEmail(token string, now time.Time) string {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return ""
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(parts[1], "="))
+	if err != nil {
+		return ""
+	}
+	var claims struct {
+		Email string `json:"email"`
+		Exp   int64  `json:"exp"`
+	}
+	if json.Unmarshal(payload, &claims) != nil || claims.Exp <= 0 || now.Unix() >= claims.Exp {
+		return ""
+	}
+	return claims.Email
 }
 
 // unixTimestamp renders a Unix-seconds reset as the RFC 3339 the frontend

@@ -20,6 +20,12 @@
 // read that from, yet knows runs a binary it did not choose, is reported as
 // StatusUnknown: a gauge drawn for the wrong account is worse than no gauge.
 //
+// That login is also named where the provider will say: Claude's own profile
+// route, and the OIDC id token Codex writes beside its access token. Neither is
+// a second reading — both ride the cache the windows do. A provider that names
+// nobody reports an empty Plan.Account, which is the gauge lich has always
+// drawn, not a failure.
+//
 // lich reads those credentials and never writes them. Token rotation belongs to
 // the CLI that owns the login: a refresh whose write-back fails spends the
 // stored refresh token and logs the user out of their agent, which is a far
@@ -115,10 +121,17 @@ type Window struct {
 
 // Plan is one provider's quota reading. Provider is a providers.Registry id, so
 // the frontend resolves the icon and the login command it already knows.
+//
+// Account names the login the windows were read against — the whole point of
+// the custom-binary path being that a session can spend an account lich's own
+// environment does not name. It is empty whenever the provider will not say
+// which, which is a reading without a name and never an error: a gauge that
+// cannot name its account is exactly what lich drew before this field existed.
 type Plan struct {
 	Provider string   `json:"provider"`
 	Name     string   `json:"name"`
 	Plan     string   `json:"plan,omitempty"`
+	Account  string   `json:"account,omitempty"`
 	Windows  []Window `json:"windows,omitempty"`
 	Status   string   `json:"status"`
 }
@@ -174,11 +187,12 @@ type Sessions func(sessionID string) Account
 // Service reads plan quota, caching one reading per account.
 type Service struct {
 	http *http.Client
-	// claudeURL, codexURL and probeURL are the endpoints, fields so tests drive
-	// the parsers against a local server.
-	claudeURL string
-	codexURL  string
-	probeURL  string
+	// claudeURL, codexURL, probeURL and profileURL are the endpoints, fields so
+	// tests drive the parsers against a local server.
+	claudeURL  string
+	codexURL   string
+	probeURL   string
+	profileURL string
 
 	// now is time.Now, a field so a test can age the cache without sleeping.
 	now func() time.Time
@@ -203,12 +217,13 @@ type reading struct {
 // New returns a Service pointed at the live endpoints.
 func New() *Service {
 	return &Service{
-		http:      &http.Client{Timeout: httpTimeout},
-		claudeURL: claudeUsageURL,
-		codexURL:  codexUsageURL,
-		probeURL:  claudeProbeURL,
-		now:       time.Now,
-		cache:     make(map[string]reading),
+		http:       &http.Client{Timeout: httpTimeout},
+		claudeURL:  claudeUsageURL,
+		codexURL:   codexUsageURL,
+		probeURL:   claudeProbeURL,
+		profileURL: claudeProfileURL,
+		now:        time.Now,
+		cache:      make(map[string]reading),
 	}
 }
 

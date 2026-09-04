@@ -77,6 +77,13 @@ function PlanBody({ plan, now }: { plan: QuotaPlan; now: Date }) {
       {(plan.windows ?? []).map((window) => (
         <QuotaGauge key={window.label} window={window} now={now} />
       ))}
+      {/* The login this reading was taken against. Settings asks the machine-wide
+          question, so this is lich's own — never a session's wrapper binary. */}
+      {plan.account && (
+        <span className="break-all font-mono text-[11px] text-muted-foreground">
+          {plan.account}
+        </span>
+      )}
     </div>
   )
 }

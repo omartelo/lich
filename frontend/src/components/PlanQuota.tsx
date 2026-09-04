@@ -20,6 +20,13 @@ interface PlanQuotaProps {
 // subscription is spent, with every window behind a tooltip. Self-contained like
 // SessionModel — it resolves its own reading from the provider id.
 //
+// The account the reading was taken against sits at the foot, under a seam:
+// a session spawned from a wrapper binary spends a login lich's own environment
+// does not name, which is the whole reason it is said at all. It is provenance
+// rather than part of the plan's name, so it reads last and in the mono the app
+// gives every other identifier. Absent for a provider that names nobody, which
+// is what the gauge has always looked like.
+//
 // One window is shown, and it is the fullest one: a weekly cap about to run out
 // must not hide behind a session window that reset an hour ago. Nothing renders
 // at all for a provider that meters no subscription, while the reading is
@@ -56,6 +63,11 @@ export function PlanQuota({ kind, sessionId }: PlanQuotaProps) {
           {(plan.windows ?? []).map((w) => (
             <QuotaGauge key={w.label} window={w} now={now} stacked />
           ))}
+          {plan.account && (
+            <span className="break-all border-border border-t pt-2 font-mono text-[11px] text-muted-foreground">
+              {plan.account}
+            </span>
+          )}
         </div>
       </TooltipContent>
     </Tooltip>

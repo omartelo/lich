@@ -508,6 +508,36 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   the API rejects an OAuth token without it — the same coupling as the user agent, and it fails closed, as a
   failed reading. Headers carry the two account-wide windows and no plan name, so such a session shows no
   model-scoped weekly cap and no "Max 5x" badge.
+- **A token-only login has a gauge and no name** (`internal/quota/claude.go`): the same
+  `claude setup-token` scope that keeps the usage route out of reach keeps `/api/oauth/profile` out of reach —
+  it wants `user:profile`, and `user:inference` is all that token has — so the profile route is not asked at
+  all on that path rather than asked once per cache window for a 403. Such a session shows its windows under
+  the provider's name with no account line, which is the same thing a session on a provider that names nobody
+  shows, and nothing on screen tells the two apart.
+- **Only two providers name the account a session spends, and the reasons the other six do not are not one
+  reason** (`internal/quota`, `Plan.Account`): Claude Code answers a profile route with the credentials token,
+  and Codex carries an `email` claim in the OIDC id token beside its access token (read unverified, and
+  discarded once its `exp` has passed — the CLI can rotate the access token without rewriting the id one, and a
+  gauge under a login the user has left is worse than one under no name). opencode, Crush and oh-my-pi run on
+  the user's own API keys: there is no plan account to name, which is the same reason they have no gauge.
+  Antigravity's `~/.gemini/oauth_creds.json` *does* carry the same `email` claim and it is deliberately not
+  read: there is no `antigravityPlan`, so a `Plan` naming an account with no window in it renders nothing at
+  all (`PlanQuota` draws only a reading with a window) — the name arrives with the gauge or not at all. Cursor
+  CLI and Kiro CLI were measured on 2026-09-04 and carry no such claim: Cursor's `~/.config/cursor/auth.json`
+  token is a JWT whose `sub` is an opaque `github|user_…` and whose claims contain no email, and Kiro's login
+  is a row in `~/.local/share/kiro-cli/data.sqlite3` holding an opaque `aoa…` token, a `github` provider label
+  and an AWS profile ARN — nothing a person recognises as their account. Naming either would take a network
+  call against an unmeasured route, for a provider that has no gauge to hang the name under.
+- **`CLAUDE_SECURESTORAGE_CONFIG_DIR` decides which Keychain item a Claude login is, and lich reads it
+  nowhere** (`internal/quota/claude.go`, confirmed by grep — the variable appears in no file here): Claude Code
+  looks for its secure storage under that variable whenever it is *defined*, empty string included, and only
+  falls back to `CLAUDE_CONFIG_DIR`; the value is NFC-normalised and hashed into the Keychain service name, so
+  two values that differ by a combining accent are two different logins. Today this changes nothing: on Linux
+  the credential is the plaintext file under the config dir, and on macOS no session's environment is readable
+  at all (`envReadable`), so the question never arises. The trap is the day somebody writes the macOS
+  `KERN_PROCARGS2` reading promised above and resolves the credential from `CLAUDE_CONFIG_DIR` alone — that
+  reads the wrong Keychain item and reports, with a gauge and an account name under it, a login the session is
+  not spending. Resolve the pair in that order, or report `unknown`.
 - **The sandbox confines a working agent, not hostile code** (`internal/sandbox`): namespaces and mounts on
   Linux, a path policy on macOS, and nothing else — no seccomp filter, no Landlock ruleset. The network is
   never cut (the agent needs its API and the plugin's hooks report over loopback), so anything readable
