@@ -15,10 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   session on the branch. The screen answers it now: under the status line, the
   conflicting paths, six of them with the rest a click away. lich computes the
   answer rather than asking for it, merging the pull request's head and its base
-  in git's object database (`git merge-tree`), so nothing touches a worktree,
-  an index or HEAD. The list is what your clone merges right now and the chip
-  above it is GitHub's own verdict, so the two disagree for a few seconds after
-  a push — the row says which one is the fresh reading.
+  in git's object database (`git merge-tree`), so nothing touches a worktree, an
+  index or HEAD — which takes git 2.38 or newer, and says so rather than
+  reporting a merge it could not compute as a clean one. The commits are fetched
+  from the remote the pull request itself names, so a clone of a fork reads the
+  repository the pull request was opened against rather than the fork. The list
+  is what your clone merges right now and the chip above it is GitHub's own
+  verdict, so the two disagree for a few seconds after a push — the row says
+  which one is the fresh reading.
 
 ### Changed
 
