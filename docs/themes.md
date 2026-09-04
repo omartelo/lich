@@ -66,6 +66,21 @@ before saving. `source` is written by lich for a theme installed from a
 repository (below) and stripped from a picked file — a standalone theme carries
 no version and is never updated in place.
 
+## Schema
+
+`themes/lich-theme.schema.json` is generated from the token sets and color
+patterns the importer itself validates against. Naming it turns the rules below
+into editor completion and errors, before the file is ever imported:
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/omartelo/lich/main/themes/lich-theme.schema.json",
+  "id": "tokyo-night"
+}
+```
+
+The saved template already carries the line, and lich ignores the key on import.
+
 ## Theme Repositories
 
 A repository is the versioned way in. It is a plain git repository with a
