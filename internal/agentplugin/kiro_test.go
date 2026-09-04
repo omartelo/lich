@@ -318,7 +318,7 @@ func TestKiroInstallWritesTheAgentAndTheScripts(t *testing.T) {
 	if err := json.Unmarshal(data, &agent); err != nil {
 		t.Fatalf("installed agent is not JSON: %v", err)
 	}
-	scriptDir := filepath.Join(configDir, "lich", "plugin", "hooks")
+	scriptDir := filepath.Join(configDir, "lich", "plugin", "hooks", providers.Kiro)
 	for _, script := range kiroScripts() {
 		installed := filepath.Join(scriptDir, filepath.Base(script))
 		info, err := os.Stat(installed)

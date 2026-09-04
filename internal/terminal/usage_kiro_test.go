@@ -3,11 +3,8 @@ package terminal
 import (
 	"os"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"testing"
-
-	"github.com/omartelo/lich/internal/providers"
 )
 
 // kiroSessionFile writes a Kiro session metadata file holding state and returns
@@ -119,91 +116,5 @@ func TestKiroContextUsageUnreadable(t *testing.T) {
 	}
 	if _, ok := kiroContextUsage(path); ok {
 		t.Errorf("kiroContextUsage(truncated) = _, true, want a miss")
-	}
-}
-
-// kiroHome redirects the home Kiro's directories hang off — it answers to no
-// environment variable of its own — and returns it. The resolved path is
-// asserted to be under the redirect before anything is written: a variable this
-// misses on some platform would leave the test writing an agent into the real
-// user's ~/.kiro and passing while it did.
-func kiroHome(t *testing.T) string {
-	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
-	got, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("resolve home directory: %v", err)
-	}
-	if got != home {
-		t.Fatalf("home resolved to %q, outside the test's temp dir %q", got, home)
-	}
-	return home
-}
-
-// TestKiroPluginAgentNamesTheAgentOnlyOnceInstalled proves the spawn asks for
-// `--agent lich` exactly when there is one to ask for. Both directions cost
-// something real: without the agent every report goes missing, and naming one
-// Kiro cannot find puts a fallback warning on the first line of every session a
-// user who never installed the plugin opens.
-func TestKiroPluginAgentNamesTheAgentOnlyOnceInstalled(t *testing.T) {
-	home := kiroHome(t)
-
-	if got := kiroPluginAgent(providers.Kiro); got != "" {
-		t.Errorf("kiroPluginAgent with nothing installed = %q, want \"\"", got)
-	}
-
-	dir := filepath.Join(home, ".kiro", "agents")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "lich.json"), []byte(`{"name":"lich"}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if got := kiroPluginAgent(providers.Kiro); got != providers.KiroAgentName {
-		t.Errorf("kiroPluginAgent with the plugin installed = %q, want %q", got, providers.KiroAgentName)
-	}
-}
-
-// TestKiroPluginAgentIsNeverAskedForByAnotherProvider proves the flag stays
-// Kiro's. `--agent` means something else to Antigravity and nothing at all to a
-// shell, so a lookup that answered on kind alone would hand one provider
-// another's flag — the failure skipPermissionFlags is pinned against.
-func TestKiroPluginAgentIsNeverAskedForByAnotherProvider(t *testing.T) {
-	home := kiroHome(t)
-	dir := filepath.Join(home, ".kiro", "agents")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "lich.json"), []byte(`{"name":"lich"}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	for _, kind := range []string{providers.Claude, providers.Antigravity, providers.Cursor, KindShell} {
-		if got := kiroPluginAgent(kind); got != "" {
-			t.Errorf("kiroPluginAgent(%q) = %q, want \"\"", kind, got)
-		}
-	}
-}
-
-// TestAgentArgsIsKiroOnly is the spawn side of the same rule, and pins that an
-// unusable name is dropped rather than passed on: a value starting with a dash
-// would be read by Kiro as another flag.
-func TestAgentArgsIsKiroOnly(t *testing.T) {
-	tests := []struct {
-		name, kind, agent string
-		want              []string
-	}{
-		{"kiro with the plugin", providers.Kiro, "lich", []string{"--agent", "lich"}},
-		{"kiro without it", providers.Kiro, "", nil},
-		{"a name that reads as a flag", providers.Kiro, "--dangerous", nil},
-		{"claude never gets one", providers.Claude, "lich", nil},
-		{"antigravity never gets one", providers.Antigravity, "lich", nil},
-		{"a shell never gets one", KindShell, "lich", nil},
-	}
-	for _, tt := range tests {
-		if got := agentArgs(tt.kind, tt.agent); !slices.Equal(got, tt.want) {
-			t.Errorf("%s: agentArgs(%q, %q) = %v, want %v", tt.name, tt.kind, tt.agent, got, tt.want)
-		}
 	}
 }

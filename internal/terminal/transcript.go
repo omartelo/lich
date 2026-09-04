@@ -200,7 +200,8 @@ func kiroSessionPath(providerSessionID string) (string, bool) {
 // kiroPluginAgent is the name of the agent lich spawns Kiro CLI with, or "" when
 // the plugin was never installed into it. Only the name crosses into the spawn
 // (command.go, agentArgs): the file it points at is written by
-// internal/agentplugin, which owns its contents.
+// internal/agentplugin, which owns its contents, and both resolve it through
+// providers.KiroAgentPath so they cannot drift to different files.
 //
 // The check is a stat rather than a stored flag because the file is a user's to
 // delete: an agent lich still names after that is a warning line on every
@@ -209,24 +210,12 @@ func kiroPluginAgent(kind string) string {
 	if kind != providers.Kiro {
 		return ""
 	}
-	path, ok := kiroAgentPath()
-	if !ok {
+	path, err := providers.KiroAgentPath()
+	if err != nil {
 		return ""
 	}
 	if _, err := os.Stat(path); err != nil {
 		return ""
 	}
 	return providers.KiroAgentName
-}
-
-// kiroAgentPath is where that agent config lives: Kiro's global agents
-// directory, which hangs off the home alone — 2.21.0 honours no environment
-// variable for it. Shared with internal/agentplugin through providers so the two
-// cannot drift to different files.
-func kiroAgentPath() (string, bool) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", false
-	}
-	return filepath.Join(home, ".kiro", "agents", providers.KiroAgentName+".json"), true
 }
