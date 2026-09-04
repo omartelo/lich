@@ -403,10 +403,10 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       // it as unspawned and asks before continuing. No parked row → start fresh.
       const restored = await Store.ReopenWorktreeSession(projectId, wt.path, newSessionId())
       if (!restored) {
-        newWorktreeSession(projectId, wt)
-        return
+        return newWorktreeSession(projectId, wt)
       }
       commit(restoreSession(sessionsRef.current, projectId, cardFromStored(restored)))
+      return restored.id
     },
     [newWorktreeSession],
   )

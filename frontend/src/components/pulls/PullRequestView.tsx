@@ -96,6 +96,9 @@ interface PullRequestViewProps {
   onMerged: () => void
   /** Write into the session's terminal; false when no session took it. */
   onInject: (text: string) => boolean
+  /** Hand the pull request's problem to a session on its branch — opening one
+   * and going there, so the prompt is written where it can be read. */
+  onHandOff: (prompt: string) => Promise<void>
   /** What has been said about this pull request, and how to re-read it after a
    * reply, a resolve or a submitted review. */
   conversation: PullRequestConversation | null
@@ -115,11 +118,13 @@ export function PullRequestView({
   onRefresh,
   onMerged,
   onInject,
+  onHandOff,
   conversation,
   conversationLoading,
   onConversationRefresh,
 }: PullRequestViewProps) {
   const [merging, setMerging] = useState(false)
+  const [handingOff, setHandingOff] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [verdict, setVerdict] = useState<ReviewEvent | null>(null)
   const [edit, setEdit] = useState<MergeEdit | null>(null)
@@ -148,12 +153,18 @@ export function PullRequestView({
 
   // The problem in the way, written at the agent's prompt and nothing more:
   // lich pastes it and stops there — no run, no watch, no second attempt when
-  // the checks come back red again. The comments are the user's own text and
-  // survive a failed send (CommentBatch); this is derived from the pull request
-  // and can simply be asked for again, so a session-less click only says so.
-  const handOff = () => {
-    if (handoff && !onInject(handoff.prompt)) {
-      toast.error("Open a session to send this to")
+  // the checks come back red again. Where it goes, and what it takes to get a
+  // session there, is the screen's (Pulls, handOff); the flag is only so the
+  // button says the session is coming while a worktree is being made.
+  const handOff = async () => {
+    if (!handoff) {
+      return
+    }
+    setHandingOff(true)
+    try {
+      await onHandOff(handoff.prompt)
+    } finally {
+      setHandingOff(false)
     }
   }
 
@@ -265,11 +276,11 @@ export function PullRequestView({
                 <Button
                   variant="ghost"
                   size="sm"
-                  disabled={session.blocked !== null}
-                  onClick={handOff}
+                  disabled={handingOff || session.blocked !== null}
+                  onClick={() => void handOff()}
                 >
                   <Wrench />
-                  {handoff.label}
+                  {handingOff ? "Opening session…" : handoff.label}
                 </Button>
               </span>
             )}

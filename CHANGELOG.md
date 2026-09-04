@@ -20,6 +20,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   above it is GitHub's own verdict, so the two disagree for a few seconds after
   a push — the row says which one is the fresh reading.
 
+### Changed
+
+- **"Resolve conflicts" and "Fix CI errors" now open the session they hand the
+  work to.** The button wrote its prompt into whichever session happened to be
+  active — the one you were last in, on another branch, with nothing on screen
+  to say it had happened — or refused outright when there was none, which read
+  as having to press "Open in Session" first. It works on the pull request's own
+  branch now: the session already there, the parked one resumed, or the worktree
+  created and a session opened on it, and that session is brought into view. The
+  prompt is written once its agent is at a prompt to take it, rather than into a
+  setup script still installing the checkout. The Enter stays yours.
+
 ## [0.44.0] - 2026-09-03
 
 ### Added
