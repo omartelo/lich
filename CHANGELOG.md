@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.44.0] - 2026-09-03
+
 ### Added
 
 - **Kiro CLI is the eighth provider.** Point lich at `kiro-cli` and it runs in a
@@ -3732,7 +3734,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.43.1...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.44.0...HEAD
+[0.44.0]: https://github.com/omartelo/lich/compare/v0.43.1...v0.44.0
 [0.43.1]: https://github.com/omartelo/lich/compare/v0.43.0...v0.43.1
 [0.43.0]: https://github.com/omartelo/lich/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/omartelo/lich/compare/v0.41.0...v0.42.0
