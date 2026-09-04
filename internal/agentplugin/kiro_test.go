@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -160,12 +161,17 @@ func TestKiroAgentMatchersAreBareToolNames(t *testing.T) {
 // a relative command would be resolved against the user's checkout — where the
 // script is not.
 func TestKiroAgentCommandsAreAbsolute(t *testing.T) {
-	agent := decodeKiroAgent(t, "0.12.0", "/opt/lich/hooks")
+	// Built with filepath.Join rather than written with slashes: the command is
+	// joined the same way, so a literal "/opt/lich/hooks/" would be asserting
+	// Unix separators against a Windows path.
+	scriptDir := filepath.Join("/opt", "lich", "hooks")
+	agent := decodeKiroAgent(t, "0.12.0", scriptDir)
 	hooks := agent["hooks"].(map[string]any)
 	for event := range hooks {
 		for _, command := range hookCommands(t, agent, event) {
-			if !strings.Contains(command, "/opt/lich/hooks/") {
-				t.Errorf("%s runs %q, want it under the installed script directory", event, command)
+			if !strings.Contains(command, scriptDir+string(filepath.Separator)) {
+				t.Errorf("%s runs %q, want it under the installed script directory %q",
+					event, command, scriptDir)
 			}
 		}
 	}
@@ -236,6 +242,32 @@ func TestKiroScriptsAreFetchedOnce(t *testing.T) {
 	}
 }
 
+// kiroTestHome redirects both directories a Kiro install writes into and returns
+// them: the config dir the scripts go to, and the home ~/.kiro hangs off.
+//
+// USERPROFILE is set on top of what lichConfigHome does, and it is the whole
+// point of this helper. lichConfigHome redirects os.UserConfigDir, which reads
+// HOME only on Linux — os.UserHomeDir on Windows reads USERPROFILE, so a test
+// that set neither would resolve the *real* profile and let the install write an
+// agent into the machine's own ~/.kiro while still passing. Both answers are
+// asserted to be under the temp root before anything is written, so the failure
+// is the redirect rather than the leak.
+func kiroTestHome(t *testing.T) (configDir, home string) {
+	t.Helper()
+	configDir = lichConfigHome(t)
+	root := t.TempDir()
+	t.Setenv("HOME", root)
+	t.Setenv("USERPROFILE", root)
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("resolve home directory: %v", err)
+	}
+	if home != root {
+		t.Fatalf("home resolved to %q, outside the test's temp dir %q", home, root)
+	}
+	return configDir, home
+}
+
 // kiroFiles is the release the fake server hands back: one body per script the
 // Kiro install fetches.
 func kiroFiles() map[string]string {
@@ -262,15 +294,7 @@ func TestKiroInstallWritesTheAgentAndTheScripts(t *testing.T) {
 	t.Setenv(fakeCLIGuard, "1")
 	t.Setenv(fakeCLILog, log)
 	s.bins = stubBin(self)
-	// Redirects both the config directory the scripts go to and the home the
-	// agent hangs off, so nothing here touches the real machine. The two are the
-	// same directory on Linux and different ones elsewhere, so each is resolved
-	// the way the code under test resolves it.
-	configDir := lichConfigHome(t)
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("resolve home directory: %v", err)
-	}
+	configDir, home := kiroTestHome(t)
 
 	if err := s.Install(providers.Kiro); err != nil {
 		t.Fatalf("Install: %v", err)
@@ -293,7 +317,12 @@ func TestKiroInstallWritesTheAgentAndTheScripts(t *testing.T) {
 			t.Fatalf("script %s was not installed: %v", script, err)
 		}
 		// Executable, because Kiro runs the command through a shell and a
-		// shebang'd script without the bit is a report that never runs.
+		// shebang'd script without the bit is a report that never runs. Windows
+		// has no such bit — a 0o755 write lands as -rw-rw-rw- there — so the
+		// assertion is the Unix half of the same install.
+		if runtime.GOOS == "windows" {
+			continue
+		}
 		if info.Mode().Perm()&0o111 == 0 {
 			t.Errorf("%s is not executable (mode %v)", installed, info.Mode())
 		}
@@ -330,7 +359,7 @@ func TestKiroInstallRegistersTheServerInItsOwnAgent(t *testing.T) {
 	t.Setenv(fakeCLIGuard, "1")
 	t.Setenv(fakeCLILog, log)
 	s.bins = stubBin(self)
-	lichConfigHome(t)
+	kiroTestHome(t)
 
 	if err := s.Install(providers.Kiro); err != nil {
 		t.Fatalf("Install: %v", err)
@@ -355,11 +384,7 @@ func TestKiroInstallStopsOnAMissingScript(t *testing.T) {
 	files := kiroFiles()
 	delete(files, tagged("hooks/report-touched.sh"))
 	s, _ := fileServer(t, files)
-	lichConfigHome(t)
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("resolve home directory: %v", err)
-	}
+	_, home := kiroTestHome(t)
 
 	if err := s.Install(providers.Kiro); err == nil {
 		t.Fatalf("Install = nil, want an error for a release missing a script")
