@@ -245,25 +245,34 @@ func TestKiroScriptsAreFetchedOnce(t *testing.T) {
 // kiroTestHome redirects both directories a Kiro install writes into and returns
 // them: the config dir the scripts go to, and the home ~/.kiro hangs off.
 //
-// USERPROFILE is set on top of what lichConfigHome does, and it is the whole
-// point of this helper. lichConfigHome redirects os.UserConfigDir, which reads
-// HOME only on Linux — os.UserHomeDir on Windows reads USERPROFILE, so a test
-// that set neither would resolve the *real* profile and let the install write an
-// agent into the machine's own ~/.kiro while still passing. Both answers are
-// asserted to be under the temp root before anything is written, so the failure
-// is the redirect rather than the leak.
+// USERPROFILE is the one variable added on top of what lichConfigHome does, and
+// it is the whole point of this helper: lichConfigHome redirects HOME, which
+// os.UserConfigDir reads on Linux and macOS, but os.UserHomeDir on Windows reads
+// USERPROFILE — which nothing there sets. A test that left it would resolve the
+// machine's *real* profile and let the install write an agent into its ~/.kiro
+// while still passing.
+//
+// It is pointed at the HOME lichConfigHome already chose rather than at a second
+// temp directory. Redirecting HOME again after that call would move the config
+// dir out from under the value it returned on macOS, where os.UserConfigDir is
+// $HOME/Library/Application Support — the scripts would land under one root
+// while the assertions read the other.
 func kiroTestHome(t *testing.T) (configDir, home string) {
 	t.Helper()
 	configDir = lichConfigHome(t)
-	root := t.TempDir()
-	t.Setenv("HOME", root)
+	root := os.Getenv("HOME")
 	t.Setenv("USERPROFILE", root)
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Fatalf("resolve home directory: %v", err)
 	}
-	if home != root {
+	// Asserted before anything is written, so a redirect that misses a platform
+	// fails as a redirect rather than as files left on the machine.
+	if home != root || root == "" {
 		t.Fatalf("home resolved to %q, outside the test's temp dir %q", home, root)
+	}
+	if !strings.HasPrefix(configDir, root) {
+		t.Fatalf("config dir %q is outside the test's home %q", configDir, root)
 	}
 	return configDir, home
 }
