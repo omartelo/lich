@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { HashRouter, Outlet, Route, Routes, useMatch } from "react-router-dom"
+import { HashRouter, Outlet, Route, Routes, useLocation, useMatch } from "react-router-dom"
 import { SettingsProvider, useSettings } from "@/providers/settings"
 import { useHotkey } from "@/lib/use-hotkey"
 import { parseBoolPref, readPref, writePref } from "@/lib/prefs"
@@ -15,6 +15,7 @@ import { ProjectTabs } from "@/components/tabs/ProjectTabs"
 import { SessionSidebar } from "@/components/sidebar/SessionSidebar"
 import { SidebarRail } from "@/components/sidebar/SidebarRail"
 import { TerminalHost } from "@/components/TerminalHost"
+import { ErrorBoundary } from "@/components/common/ErrorBoundary"
 import { RightDock, type DockTab } from "@/components/dock/RightDock"
 import { FooterBar } from "@/components/FooterBar"
 import { Home } from "@/components/Home"
@@ -43,6 +44,7 @@ function Layout() {
   const { hotkeys } = useSettings()
   const { sessions } = useProjects()
   const match = useMatch("/projects/:projectId/*")
+  const location = useLocation()
   const projectId = match?.params.projectId ?? ""
   const [dock, setDock] = useState<DockTab | null>(null)
   const [sidebar, setSidebar] = useState(() => parseBoolPref(readPref(SIDEBAR_KEY), true))
@@ -118,10 +120,25 @@ function Layout() {
           {/* relative: RightDock overlays this area when in full screen. */}
           <div className="relative flex flex-1 overflow-hidden">
             <div className="relative flex-1 overflow-hidden">
+              {/* TerminalHost is outside on purpose — unmounting it destroys
+                  every session's xterm, and no remount brings those back
+                  (docs/ceilings.md). The screens over it are what is caught:
+                  the fallback takes the same overlay they do, and the route
+                  resets it, so navigating away from a blown screen is enough. */}
               <TerminalHost />
-              <Outlet />
+              <ErrorBoundary
+                label="This screen"
+                resetKey={location.pathname}
+                className="absolute inset-0 z-10"
+              >
+                <Outlet />
+              </ErrorBoundary>
             </div>
-            {dock && <RightDock tab={dock} onTab={setDock} onClose={() => setDock(null)} />}
+            {dock && (
+              <ErrorBoundary label="The panel" className="w-80 shrink-0 border-l border-border">
+                <RightDock tab={dock} onTab={setDock} onClose={() => setDock(null)} />
+              </ErrorBoundary>
+            )}
           </div>
           <FooterBar dock={dock} onDock={toggleDock} />
         </main>
