@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A screen or panel that breaks no longer takes the window with it.** A single
+  rendering bug anywhere in the interface used to blank lich entirely — sidebar,
+  terminals, footer and all — while the agents kept running behind it with
+  nothing on screen saying so, and a reload was the only way back. The screens
+  over the terminals and the right dock's Code and Review panels are now caught
+  where they break: what failed says so in place, with the error and a "Try
+  again", and everything around it stays where it was. The terminals themselves
+  stay outside that net on purpose — catching there would mean throwing away
+  every session's scrollback to redraw a panel.
+
 - **The plan gauge now names the account it is measuring.** lich has always
   drawn the gauge and never said whose plan it was drawing — which matters
   precisely because a session can be spawned from a binary of your own that
