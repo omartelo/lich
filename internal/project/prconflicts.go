@@ -90,16 +90,18 @@ func repoFromPRURL(prURL string) string {
 	return strings.ToLower(parts[0] + "/" + parts[1])
 }
 
-// remoteRepo reads the same "owner/name" out of a remote's URL, in either
-// spelling git accepts: git@host:owner/name.git and https://host/owner/name.
-// The " (fetch)"/" (push)" tail `git remote -v` writes goes with it.
+// remoteURLSeparators makes one separator of the three a remote URL can put
+// owner/name behind: the colon of git@host:owner/name, the slash of
+// https://host/owner/name, and the backslash of a local path on Windows — which
+// is a remote like any other, and the one a clone made by a test has.
+var remoteURLSeparators = strings.NewReplacer(":", "/", "\\", "/")
+
+// remoteRepo reads the same "owner/name" out of a remote's URL. The
+// " (fetch)"/" (push)" tail `git remote -v` writes is taken off by name rather
+// than by splitting on spaces: a path remote may hold one.
 func remoteRepo(remoteURL string) string {
-	fields := strings.Fields(remoteURL)
-	if len(fields) == 0 {
-		return ""
-	}
-	trimmed := strings.TrimSuffix(fields[0], ".git")
-	trimmed = strings.ReplaceAll(trimmed, ":", "/")
+	trimmed := strings.TrimSuffix(strings.TrimSuffix(remoteURL, " (fetch)"), " (push)")
+	trimmed = remoteURLSeparators.Replace(strings.TrimSuffix(trimmed, ".git"))
 	parts := strings.Split(strings.Trim(trimmed, "/"), "/")
 	if len(parts) < 2 {
 		return ""

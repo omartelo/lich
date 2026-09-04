@@ -115,6 +115,8 @@ func TestRemoteRepoReadsBothSpellings(t *testing.T) {
 		{"https://github.com/owner/repo.git (push)", "owner/repo"},
 		{"https://github.com/owner/repo", "owner/repo"},
 		{"ssh://git@github.com/owner/repo.git", "owner/repo"},
+		{`C:\Users\runner\Temp\001\origin (fetch)`, "001/origin"},
+		{"/home/someone/my repos/001/origin", "001/origin"},
 		{"", ""},
 		{"weird", ""},
 	} {
