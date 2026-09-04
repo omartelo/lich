@@ -25,7 +25,7 @@ Content-Type: application/json
   non-empty.
 - `provider` — which CLI is reporting, as a provider id from
   `internal/providers.Registry` (`claude`, `codex`, `antigravity`, `opencode`,
-  `omp`, `crush`).
+  `omp`, `crush`, `cursor`, `kiro`).
   Optional: absent means `claude`, the only provider that reported before the
   field existed. An id outside the registry is rejected, like an unknown state
   on `/hook` — lich ships its side of a contract first, so a provider it has no
@@ -43,11 +43,11 @@ deprecated alias and the defaulted `provider`.
 
 ## Event → action mapping
 
-| Claude Code hook | Codex hook     | Antigravity hook | opencode event     | oh-my-pi event  | Crush hook    | Cursor CLI hook | action                                    |
-|------------------|----------------|------------------|--------------------|-----------------|---------------|-----------------|-------------------------------------------|
-| `SessionStart`   | `SessionStart` | `PreInvocation`  | `session.created`  | `session_start` | `PreToolUse`  | `SessionStart`  | store `provider_session_id` on the lich   |
-|                  |                |                  |                    |                 |               |                 | session row, and mark the card as running |
-|                  |                |                  |                    |                 |               |                 | `provider` (the `session-agent` app event)|
+| Claude Code hook | Codex hook     | Antigravity hook | opencode event     | oh-my-pi event  | Crush hook    | Cursor CLI hook | Kiro CLI hook | action                                    |
+|------------------|----------------|------------------|--------------------|-----------------|---------------|-----------------|---------------|-------------------------------------------|
+| `SessionStart`   | `SessionStart` | `PreInvocation`  | `session.created`  | `session_start` | `PreToolUse`  | `SessionStart`  | `agentSpawn`  | store `provider_session_id` on the lich   |
+|                  |                |                  |                    |                 |               |                 |               | session row, and mark the card as running |
+|                  |                |                  |                    |                 |               |                 |               | `provider` (the `session-agent` app event)|
 
 `SessionStart` fires on startup, resume, `/clear` and compaction. A resume
 reports the resumed session's id and overwrites the stored value — lich always
@@ -69,6 +69,17 @@ reports on stdin — so a Crush session announces itself when it first reaches f
 a tool, and a conversation that answers without one never announces itself at
 all. That is a late report, not a wrong one: nothing downstream of this contract
 cares when the id arrived, only which conversation it names.
+
+**Kiro's `agentSpawn` fires once per session, before the first prompt**, and its
+payload carries `session_id` — the same id `kiro-cli --resume-id` takes, and the
+one it prints as "Resume with:" when the session ends (measured on 2.21.0). It
+is the earliest report of the eight and needs no repeat.
+
+One thing about it is Kiro's alone: **the id is on the payload only in the
+interactive TUI**, which is what lich spawns. The same hook under
+`--no-interactive` carries `cwd` and `prompt` and no id at all, because that mode
+files the conversation in a different store — so a payload measured from a
+scripted run would have said this contract could not be closed.
 
 ## lich server side
 

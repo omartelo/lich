@@ -681,7 +681,7 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, se
 	// reload, and the resume of a parked worktree session all arrive here.
 	spec := ptySpec{
 		bin:  resolveCommand(kind, s.store.ProviderBin(kind, projectID), userShell()),
-		args: providerArgs(kind, name, resume, s.store.SessionModel(id), mcpBin, skipPermissions),
+		args: providerArgs(kind, name, resume, s.store.SessionModel(id), mcpBin, kiroPluginAgent(kind), skipPermissions),
 		dir:  cwd,
 		env:  s.sessionEnv(id, projectID, cwd),
 		cols: cols,

@@ -33,8 +33,18 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   | oh-my-pi | cost only | a USD total on every assistant turn; no line carries a context window |
   | opencode | cost only | `session.cost` per conversation; no window recorded with it |
   | Crush | cost only | `sessions.cost` per conversation; no window recorded with it |
+  | Kiro CLI | context only | a window and a per-request percentage; spend is metered in credits, not dollars |
   | Antigravity | nothing | conversation filed as SQLite lich has no reader for |
   | Cursor CLI | nothing | chat filed as SQLite lich has no reader for |
+
+  **Kiro CLI is the mirror image of the cost-only rung, and the only provider on its own one.** It records
+  `context_usage_percentage` against a `context_window_tokens` (`internal/terminal/usage_kiro.go`), so the ring
+  is real — but it files *every* token count as zero even on a turn that spent them, so the tooltip's
+  "n / window tokens" is **derived from the percentage**, not read. It is Kiro's own percentage against Kiro's
+  own window, and it is what keeps the tooltip agreeing with the ring; it is not a token count anybody measured.
+  Its spend never appears at all: `metering_usage` is denominated in **credits**, whose dollar value depends on
+  the account's plan, and lich's readout is dollars — so a Kiro session shows a context ring and no cost, and the
+  CLI's own footer is the only place that credit figure can be read.
 
   The cost-only rung's footer shows the figure and nothing else: its usage event carries a zero window, and a
   zero window is what tells `FooterBar` to drop the ring and `SessionModel` to render nothing rather than a
@@ -317,6 +327,37 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   first, and both senders read a confident wrong report — nothing anywhere reports the mismatch. Naming the ticket
   is still the only exact route, which is why every relayed message spells it and why the card's tooltip shows it.
 
+- **A lich-spawned Kiro session runs lich's agent, not the user's** (`internal/agentplugin/kiro.go`,
+  `internal/terminal/command.go`, `agentArgs`): Kiro keeps its hooks inside an *agent config*, and its built-in
+  `kiro_default` cannot be shadowed — a `kiro_default.json` in the agents directory is ignored outright (measured
+  on 2.21.0). So the only place a hook can be registered is an agent lich writes itself, which the spawn then
+  names with `--agent lich`. Two things follow, and neither is visible on the card. The agent lich writes carries
+  no `prompt`, so a session loses the paragraph `kiro_default` adds about subagents, the planner and LSP — the
+  model still has every tool, it is just not told about those. And a default the user set with
+  `kiro-cli agent set-default` is **not** what a lich session runs; their own agent applies to Kiro started from a
+  terminal and not to Kiro started from a card. Deleting `~/.kiro/agents/lich.json` puts the session back on
+  `kiro_default` and silently ends every report with it: the spawn stops naming an agent it cannot find, which is
+  the one case where that costs a warning line rather than the reports.
+- **Kiro enforces no hook timeout, and blocks the turn behind one**
+  (`internal/agentplugin/kiro.go`): its TUI draws "0 of 1 hooks finished" while a report runs, and a hook that
+  slept four seconds ran to completion under both `timeout_ms: 1000` and `timeout: 1` (2.21.0). So lich writes no
+  timeout into the agent — a field that bounds nothing is a promise the file does not keep — and what actually
+  bounds a report is the request timeout inside the script itself. A lich whose listener has gone away costs a
+  Kiro turn that wait on every hook it fires, where the other harnesses cut it off themselves.
+- **Kiro's skip-permissions flag still stops once** (`internal/terminal/command.go`, `skipPermissionFlags`): with
+  the switch on, lich passes `--trust-all-tools`, and Kiro's TUI opens on a full-screen confirmation
+  ("No, exit / Yes, I accept / Yes, and don't ask again") that has to be answered before the session starts. The
+  flag is real and every tool afterwards runs unconfirmed; it is the *first* screen that is not skipped, which is
+  the one thing a user who ticked the box does not expect. Kiro's own `chat.disableTrustAllConfirmation` setting
+  turns it off for good, and lich does not write it — that setting disables a safety confirmation for every Kiro
+  on the machine, including the ones lich never spawned.
+- **A Kiro session never reports `waiting`, `idle`, or a title** (`docs/hooks/`): its five events are
+  `agentSpawn`, `userPromptSubmit`, `preToolUse`, `postToolUse` and `stop`, so lich closes session-start,
+  session-state's busy/tool/done rows and session-touched, and nothing else. A Kiro session sitting on a
+  permission prompt reads as `busy` — true, but it does not say what it is waiting for — and the card keeps the
+  provider's mark until the PTY itself goes, because there is no session-end event to clear it. The title report
+  needs a transcript path off the hook payload, which Kiro passes on none of the five; it does write a `title`
+  into its session metadata, so closing that gap later means lich reading the file rather than another hook.
 - **A Cursor CLI session reports through Claude Code's plugin, or not at all** (`internal/agentplugin`,
   `internal/terminal/terminal.go`, `providerKind`): lich installs no plugin into Cursor, and it does not have to —
   the CLI executes every Claude Code hook on the machine, the user's own and each installed plugin's (measured on

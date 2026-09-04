@@ -45,6 +45,9 @@ const RUNG: Record<ProviderKind, "turn" | "tool"> = {
   omp: "turn",
   crush: "tool",
   cursor: "tool",
+  // Kiro opens a turn: lich registers userPromptSubmit for busy and stop for
+  // done, so a turn the user never interrupts is still counted from end to end.
+  kiro: "turn",
 }
 
 // handsOnDetail is the sentence under the figure in the tooltip: what the clock

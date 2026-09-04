@@ -79,6 +79,7 @@ const (
 var supported = []string{
 	providers.Claude, providers.Codex, providers.Antigravity,
 	providers.OpenCode, providers.OMP, providers.Crush, providers.Cursor,
+	providers.Kiro,
 }
 
 // BinResolver supplies the binary to shell out to for a provider. The store
@@ -197,7 +198,8 @@ func (s *Service) HasTools(provider string) bool {
 // because its plugin defines the tools itself, with no binary to name.
 func registersServerAtInstall(provider string) bool {
 	return provider == providers.Crush || provider == providers.OMP ||
-		provider == providers.Antigravity || provider == providers.Cursor
+		provider == providers.Antigravity || provider == providers.Cursor ||
+		provider == providers.Kiro
 }
 
 // Installed reports whether the lich plugin is installed for a provider — that
@@ -255,6 +257,8 @@ func (s *Service) Install(provider string) error {
 		return s.crushInstall()
 	case providers.Cursor:
 		return s.cursorInstall()
+	case providers.Kiro:
+		return s.kiroInstall()
 	}
 	return fmt.Errorf("no lich plugin for provider %q", provider)
 }
@@ -279,6 +283,8 @@ func (s *Service) Update(provider string) error {
 		return s.crushInstall()
 	case providers.Cursor:
 		return s.cursorInstall()
+	case providers.Kiro:
+		return s.kiroInstall()
 	}
 	return fmt.Errorf("no lich plugin for provider %q", provider)
 }
@@ -301,6 +307,8 @@ func (s *Service) installedVersion(provider string) (string, bool) {
 		return s.crushInstalledVersion()
 	case providers.Cursor:
 		return s.cursorInstalledVersion()
+	case providers.Kiro:
+		return s.kiroInstalledVersion()
 	}
 	return "", false
 }

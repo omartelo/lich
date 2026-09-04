@@ -252,7 +252,7 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
   **Outside a session there is no default** and the project must be named — the
   error lists what is open.
 - `--kind` is what the session runs: any provider id (`claude`, `codex`,
-  `antigravity`, `opencode`, `omp`, `crush`, `cursor`) or `shell`. The default is the caller's own
+  `antigravity`, `opencode`, `omp`, `crush`, `cursor`, `kiro`) or `shell`. The default is the caller's own
   provider, so an agent opening a worker gets another of itself; a caller that
   is not a session at all gets Claude Code.
 - `--worktree` is the **branch name** of a git worktree, created off `--base`
@@ -558,7 +558,7 @@ lich v0.25.0 — linux/amd64
   ok    listener     <1ms  port 47821 is held by the running lich (pid 4242)
   skip  store        <1ms  held by the running lich (pid 4242)
   ok    browser       2ms  /usr/bin/chromium
-  ok    providers     3ms  4 of 7 on PATH: claude, codex, opencode, crush
+  ok    providers     3ms  4 of 8 on PATH: claude, codex, opencode, crush
         total         6ms
 
 lich starts here — nothing is in the way.
@@ -603,6 +603,7 @@ own command line (`providers.AcceptsMCPServer`):
 | opencode | its plugin defines the same eight as tools of its own — a plugin there cannot register an MCP server | with the plugin |
 | oh-my-pi | a `lich` entry merged into `mcp.json` beside the extension the plugin install writes | with the plugin |
 | Cursor CLI | a `lich` entry merged into `~/.cursor/mcp.json` by the install — its `mcp` subcommand only lists, enables and disables what is already there | with the plugin |
+| Kiro CLI | a `kiro-cli mcp add --agent lich` the plugin install runs, so the entry lands in the agent lich owns rather than in the user's global `mcp.json` | with the plugin |
 
 Only the first two can be told on their own command line, which is what makes
 their registration per-session and secret-free. The rest arrive with the plugin

@@ -9,12 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Kiro CLI is the eighth provider.** Point lich at `kiro-cli` and it runs in a
+  card like any other agent: resume by conversation id, the plugin's reports for
+  what a session is doing and which files it touched, its MCP tools for driving
+  the sessions beside it, and a sandbox that still reaches its login. The footer
+  draws a context ring for it — Kiro records the share of the window a
+  conversation occupies — but no cost: Kiro meters spend in credits rather than
+  dollars, and its own footer is the only place that figure can be read. Two
+  things a Kiro session does differently are in `docs/ceilings.md`: it runs an
+  agent lich installs rather than `kiro_default` or one you set yourself, and
+  with skip-permissions on it still opens on Kiro's own trust confirmation once.
+
 - **oh-my-pi, opencode and Crush sessions now show what they cost.** All three
   price every turn as they run it, but none of them records the model's context
   window, and the footer read that as nothing to show — so a session spending
   real money showed an empty corner. The cost now stands on its own: the figure
   is the provider's own, exactly as its own interface reports it, and the
-  context ring simply is not drawn. Five of the seven providers are now on the
+  context ring simply is not drawn. Six of the eight providers are now on the
   readout, and `docs/ceilings.md` carries the table of which rung each one is on
   and why.
 

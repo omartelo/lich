@@ -23,9 +23,14 @@ const defaultBin = providers.Claude
 const KindShell = "shell"
 
 // How each provider reopens an existing conversation by id: Claude Code,
-// Antigravity, oh-my-pi and Cursor CLI take a flag of their own, Codex a
-// subcommand, and opencode and Crush happen to agree on one spelling. Every one
-// of them was read off that CLI's own --help.
+// Antigravity, oh-my-pi, Cursor CLI and Kiro CLI take a flag of their own, Codex
+// a subcommand, and opencode and Crush happen to agree on one spelling. Every
+// one of them was read off that CLI's own --help.
+//
+// Kiro's is kept apart from the two `--resume` spellings for the same reason
+// they are kept apart from each other: its own `--resume` takes no id at all
+// (it reopens the most recent conversation in the current directory), so the
+// flag that carries one is a different flag with a different name.
 //
 // Cursor's spells the same word Claude Code's does and is kept apart from it on
 // purpose: its value is optional (`--resume [chatId]`, measured on 2026.08.11),
@@ -38,7 +43,16 @@ const (
 	ompResumeFlag         = "-r"
 	sessionResumeFlag     = "--session"
 	cursorResumeFlag      = "--resume"
+	kiroResumeFlag        = "--resume-id"
 )
+
+// kiroAgentFlag picks the agent profile a Kiro session runs. lich passes it only
+// to reach the hooks: Kiro keeps them inside an agent config and its built-in
+// `kiro_default` cannot be shadowed by a file (measured on 2.21.0 — a
+// `kiro_default.json` in the agents directory is ignored outright), so the only
+// way to register a hook is an agent of lich's own, which internal/agentplugin
+// writes and this flag selects.
+const kiroAgentFlag = "--agent"
 
 // claudeNameFlag sets the name a session answers to in Claude Code's peer
 // roster — the list its cross-session messaging addresses, and what
@@ -62,6 +76,7 @@ var skipPermissionFlags = map[string]string{
 	providers.OMP:         "--auto-approve",
 	providers.Crush:       "--yolo",
 	providers.Cursor:      "--force",
+	providers.Kiro:        "--trust-all-tools",
 }
 
 // modelFlags is how each provider is told which model to run, for a session
@@ -80,6 +95,7 @@ var modelFlags = map[string]string{
 	providers.OpenCode:    "--model",
 	providers.OMP:         "--model",
 	providers.Cursor:      "--model",
+	providers.Kiro:        "--model",
 }
 
 // SupportsModel reports whether a provider can be told which model to run when
@@ -211,9 +227,10 @@ func flagValue(value string) (string, bool) {
 // subcommand, so its global options have to come first, while Claude Code's
 // --mcp-config is variadic and reads everything after it as another config
 // path, so it has to come last.
-func providerArgs(kind, name, resume, model, lichBin string, skipPermissions bool) []string {
+func providerArgs(kind, name, resume, model, lichBin, agent string, skipPermissions bool) []string {
 	mcp := mcpArgs(kind, lichBin)
 	args := append([]string{}, nameArgs(kind, name, resume)...)
+	args = append(args, agentArgs(kind, agent)...)
 	args = append(args, resumeArgs(kind, resume)...)
 	args = append(args, skipPermissionArgs(kind, skipPermissions)...)
 	args = append(args, modelArgs(kind, model)...)
@@ -222,6 +239,26 @@ func providerArgs(kind, name, resume, model, lichBin string, skipPermissions boo
 		return append(mcp, args...)
 	}
 	return append(args, mcp...)
+}
+
+// agentArgs returns the arguments that pick the agent profile a provider runs,
+// or nil when there is none to name. Kiro CLI is the only provider with one,
+// and it is not a preference: the agent is where its hooks live, so a session
+// spawned without it reports nothing (docs/hooks/).
+//
+// Empty when the plugin is not installed, which is what keeps a warning off the
+// screen of a user who never asked for one: a `--agent` Kiro cannot find is not
+// fatal — it falls back to `kiro_default` and says so on the first line of the
+// session (measured on 2.21.0) — but that line would be there on every spawn.
+func agentArgs(kind, agent string) []string {
+	if kind != providers.Kiro {
+		return nil
+	}
+	agent, ok := flagValue(agent)
+	if !ok {
+		return nil
+	}
+	return []string{kiroAgentFlag, agent}
 }
 
 // modelArgs returns the arguments that pick the model a provider runs, or nil
@@ -339,6 +376,8 @@ func resumeArgs(kind, resume string) []string {
 		return []string{sessionResumeFlag, resume}
 	case providers.Cursor:
 		return []string{cursorResumeFlag, resume}
+	case providers.Kiro:
+		return []string{kiroResumeFlag, resume}
 	}
 	return nil
 }

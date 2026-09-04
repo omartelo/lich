@@ -46,6 +46,9 @@ func (*Service) ResumeAvailable(kind, providerSessionID, cwd string) bool {
 	case providers.Cursor:
 		_, ok := cursorChatStore(providerSessionID, cwd)
 		return ok
+	case providers.Kiro:
+		_, ok := kiroSessionPath(providerSessionID)
+		return ok
 	}
 	return false
 }

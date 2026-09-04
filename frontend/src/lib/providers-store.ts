@@ -60,6 +60,7 @@ export const skipPermissionFlags: Record<string, string> = {
   omp: "--auto-approve",
   crush: "--yolo",
   cursor: "--force",
+  kiro: "--trust-all-tools",
 }
 
 // How far a provider runs without asking, as one ladder ordered by risk. The

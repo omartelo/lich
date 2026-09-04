@@ -65,7 +65,7 @@ type Spec struct {
 //
 // A provider missing from here confines to a home with no credentials in it,
 // which is a session that opens and cannot log in. The registry is the
-// checklist, so all seven are listed.
+// checklist, so all eight are listed.
 func stateDirs(providerID, home string) []string {
 	switch providerID {
 	case providers.Claude:
@@ -111,6 +111,18 @@ func stateDirs(providerID, home string) []string {
 			dirs = append(dirs, underHome)
 		}
 		return dirs
+	case providers.Kiro:
+		// Two, because Kiro splits credentials from everything else and only the
+		// first half is xdg-basedir: the login token lives in the SQLite store
+		// under the data home (`kiro-cli/data.sqlite3`, key
+		// `kirocli:social:token`, and XDG_DATA_HOME is honoured — both measured
+		// on 2.21.0), while `~/.kiro` holds the agents lich installs into, the
+		// settings and the conversations usage.go reads. A session with only the
+		// second opens at the login prompt.
+		return []string{
+			filepath.Join(dataHome(home), "kiro-cli"),
+			filepath.Join(home, ".kiro"),
+		}
 	}
 	return nil
 }

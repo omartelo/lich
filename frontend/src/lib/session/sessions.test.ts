@@ -57,6 +57,7 @@ describe("isSessionKind", () => {
       "omp",
       "crush",
       "cursor",
+      "kiro",
       "shell",
     ]) {
       expect(isSessionKind(kind)).toBe(true)

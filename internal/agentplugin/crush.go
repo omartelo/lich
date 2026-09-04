@@ -77,7 +77,7 @@ func (s *Service) crushInstall() error {
 	if err != nil {
 		return err
 	}
-	dir, err := crushScriptDir()
+	dir, err := pluginScriptDir()
 	if err != nil {
 		return err
 	}
@@ -324,10 +324,11 @@ func (s *Service) crushrcPath() (string, error) {
 	return filepath.Join(dir, "crushrc"), nil
 }
 
-// crushScriptDir is where lich keeps the hook scripts it installs: its own
-// config directory, not Crush's. They are lich's copy of another repository's
-// files, and a harness that never installed them should not be carrying them.
-func crushScriptDir() (string, error) {
+// pluginScriptDir is where lich keeps the hook scripts it installs: its own
+// config directory, not the harness's. They are lich's copy of another
+// repository's files, and a harness that never installed them should not be
+// carrying them. Shared with the Kiro install, which ships the same scripts.
+func pluginScriptDir() (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("resolve config directory: %w", err)

@@ -143,14 +143,22 @@ func usageSourceFor(providerSessionID, cwd string) (usageSource, bool) {
 		sessionRowExists(path, crushSessionTable, providerSessionID) {
 		return usageSource{kind: providers.Crush, path: path, id: providerSessionID}, true
 	}
+	if path, ok := kiroSessionPath(providerSessionID); ok {
+		return usageSource{kind: providers.Kiro, path: path, id: providerSessionID}, true
+	}
 	return usageSource{}, false
 }
 
 // contextUsageFor reads how much of the model's context window a conversation
 // occupies. supported is whether this provider records a window at all: only
-// Claude Code and Codex do, and for the rest a miss is the standing state
-// rather than a read that has not landed yet (docs/ceilings.md). Antigravity and
-// Cursor CLI never reach here — they file no transcript usageSourceFor finds.
+// Claude Code, Codex and Kiro CLI do, and for the rest a miss is the standing
+// state rather than a read that has not landed yet (docs/ceilings.md).
+// Antigravity and Cursor CLI never reach here — they file no transcript
+// usageSourceFor finds.
+//
+// Kiro is the odd one of the three: it records the percentage and the window but
+// no token count, so its arm derives the tokens rather than reading them
+// (usage_kiro.go).
 func contextUsageFor(src usageSource) (usage contextUsage, ok, supported bool) {
 	switch src.kind {
 	case providers.Claude:
@@ -158,6 +166,9 @@ func contextUsageFor(src usageSource) (usage contextUsage, ok, supported bool) {
 		return u, ok, true
 	case providers.Codex:
 		u, ok := scanCodexContextUsage(src.path)
+		return u, ok, true
+	case providers.Kiro:
+		u, ok := kiroContextUsage(src.path)
 		return u, ok, true
 	}
 	return contextUsage{}, false, false

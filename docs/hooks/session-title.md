@@ -28,9 +28,17 @@ Both sides test against the payloads in
 
 ## Event → action mapping
 
-| Claude Code hook          | Codex hook                | Antigravity hook          | opencode event    | oh-my-pi event                | Crush hook | Cursor CLI hook | action                                           |
-|---------------------------|---------------------------|---------------------------|-------------------|-------------------------------|------------|-----------------|--------------------------------------------------|
-| `PostToolUse` + `Stop`    | `PostToolUse` + `Stop`    | `PreInvocation` + `Stop`  | `session.updated` | `session_stop` + `turn_start` | —          | —               | set the session label to `title` (if still auto) |
+| Claude Code hook          | Codex hook                | Antigravity hook          | opencode event    | oh-my-pi event                | Crush hook | Cursor CLI hook | Kiro CLI hook | action                                           |
+|---------------------------|---------------------------|---------------------------|-------------------|-------------------------------|------------|-----------------|---------------|--------------------------------------------------|
+| `PostToolUse` + `Stop`    | `PostToolUse` + `Stop`    | `PreInvocation` + `Stop`  | `session.updated` | `session_stop` + `turn_start` | —          | —               | —             | set the session label to `title` (if still auto) |
+
+**Kiro registers no title report**, and the reason is not that it has no title:
+it writes one into its session metadata (`title`, derived from the first
+prompt). The report is a *script that reads a transcript path off the hook's own
+stdin*, and Kiro passes no path on any of its five events — its payloads carry
+`cwd`, `session_id` and the event's own fields and nothing else (measured on
+2.21.0). Closing it would mean lich resolving that file itself, which is a
+different mechanism from this contract rather than another column in it.
 
 The `ai-title` is an internal Haiku summary of the first prompt. It does not
 exist at `SessionStart`, but it lands long before the turn it belongs to ends:
