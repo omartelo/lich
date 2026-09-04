@@ -241,12 +241,19 @@ type ticket struct {
 	created  time.Time
 	// delivered is when the message started going into the target's PTY — zero
 	// while the ticket is still waiting out the target's setup script. Turn
-	// accounting reads it twice over: a turn observed on the target says nothing
-	// about an undelivered message, and when one turn ends with several errands
-	// open, the oldest delivery is the one that turn belongs to.
+	// accounting reads it to tell an undelivered message apart from a live one;
+	// which of two live ones came first is deliverySeq's question, never this
+	// timestamp's.
 	delivered time.Time
-	done      chan struct{}
-	answer    string
+	// deliverySeq is the order this ticket was handed off in, counting from one.
+	// Two errands can share a delivered timestamp — Windows' clock only moves
+	// every ~15.6ms, and two messages land inside one tick easily — and "the
+	// oldest delivery" then fell to Go's randomised map iteration, closing the
+	// wrong errand about one time in ten. A counter is the order itself rather
+	// than a reading of it, so no clock's resolution can flatten it.
+	deliverySeq uint64
+	done        chan struct{}
+	answer      string
 
 	// attended is how many callers are blocked on this ticket right now. An
 	// answer that lands while nobody is waiting has nowhere to be returned, so
@@ -290,6 +297,8 @@ type Service struct {
 	// outside s.mu. See announceInbox.
 	announceMu sync.Mutex
 	tickets    map[string]*ticket
+	// deliveries counts hand-offs, and stamps each ticket's deliverySeq.
+	deliveries uint64
 	// state is the last thing each session reported, so a delivery knows whether
 	// it is landing in the middle of a turn. Only sessions the relay has heard
 	// about appear; an unknown one is treated as not working, which is what a
@@ -493,6 +502,8 @@ func (s *Service) handOff(id string, t *ticket, kind, message string) error {
 	// on nothing; its done, and the skip meant for the turn already running is
 	// spent on the turn that carries the answer.
 	t.delivered = s.now()
+	s.deliveries++
+	t.deliverySeq = s.deliveries
 	s.mu.Unlock()
 
 	if err := s.deliver(t.targetID, message); err != nil {
@@ -824,8 +835,9 @@ func (s *Service) Reply(replierID, ticketID, answer string) error {
 }
 
 // errandOfLocked is the errand an answer that named no ticket belongs to: the
-// oldest message actually delivered to this session that is still open. Called
-// under s.mu.
+// first message actually delivered to this session that is still open — first
+// by hand-off order (deliverySeq), which is the order itself and not a clock
+// reading of it. Called under s.mu.
 //
 // Oldest-delivered is the same rule turnErrand closes a turn by, and for the
 // same reason: every provider queues typed input, so a session handed several
@@ -845,7 +857,7 @@ func (s *Service) errandOfLocked(replierID string) (string, error) {
 		if t.targetID != replierID || t.delivered.IsZero() {
 			continue
 		}
-		if oldest == nil || t.delivered.Before(oldest.delivered) {
+		if oldest == nil || t.deliverySeq < oldest.deliverySeq {
 			oldestID, oldest = id, t
 		}
 	}
@@ -1090,7 +1102,7 @@ func (s *Service) turnErrand(sessionID string) (string, *ticket) {
 		if !t.sawBusy {
 			continue
 		}
-		if oldest == nil || t.delivered.Before(oldest.delivered) {
+		if oldest == nil || t.deliverySeq < oldest.deliverySeq {
 			oldestID, oldest = id, t
 		}
 	}
