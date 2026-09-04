@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A conflicting pull request now names the files it conflicts on.** GitHub
+  publishes one word — the pull request conflicts with its base — and never
+  which files, so the way to find out was opening the PR on github.com or a
+  session on the branch. The screen answers it now: under the status line, the
+  conflicting paths, six of them with the rest a click away. lich computes the
+  answer rather than asking for it, merging the pull request's head and its base
+  in git's object database (`git merge-tree`), so nothing touches a worktree,
+  an index or HEAD. The list is what your clone merges right now and the chip
+  above it is GitHub's own verdict, so the two disagree for a few seconds after
+  a push — the row says which one is the fresh reading.
+
 ## [0.44.0] - 2026-09-03
 
 ### Added

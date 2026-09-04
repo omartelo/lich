@@ -1,4 +1,5 @@
 import type { PullRequestDetail } from "@/lib/api-types"
+import { conflictsWithBase } from "@/lib/pulls/merge-gate"
 import { bracketedPaste } from "@/lib/terminal/bracketed-paste"
 
 // How many failed checks the prompt names before it stops and says how many it
@@ -25,9 +26,7 @@ export function pullRequestHandoff(detail: PullRequestDetail): PullRequestHandof
   if (detail.state !== "OPEN") {
     return null
   }
-  // Both fields, for the reason mergeBlockedReason reads both: mergeable is
-  // what an older gh reports, mergeStateStatus what a current one does.
-  if (detail.mergeStateStatus === "DIRTY" || detail.mergeable === "CONFLICTING") {
+  if (conflictsWithBase(detail)) {
     return {
       label: "Resolve conflicts",
       prompt: bracketedPaste(

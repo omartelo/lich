@@ -19,6 +19,16 @@ export function allowedMergeMethods(rules: BranchRules | null): MergeMethod[] {
   return allowed.length > 0 ? allowed : EVERY_METHOD
 }
 
+// conflictsWithBase reports whether GitHub says this pull request collides with
+// the branch it would merge into. Both fields, because they answer at different
+// times: mergeable is what an older gh reports, mergeStateStatus what a current
+// one does — and everything that reacts to a conflict (the dead Merge button,
+// the handoff prompt, the list of conflicting files) has to read the pair the
+// same way or they disagree on screen.
+export function conflictsWithBase(detail: PullRequestDetail): boolean {
+  return detail.mergeStateStatus === "DIRTY" || detail.mergeable === "CONFLICTING"
+}
+
 // The review verdicts that keep a BLOCKED pull request blocked. An approval —
 // or a repository that asks for none — leaves BLOCKED meaning only that a rule
 // applies to the base branch, which GitHub merges from every day.
@@ -52,9 +62,7 @@ export function mergeBlockedReason(detail: PullRequestDetail): string | null {
   if (detail.isDraft) {
     return "Pull request is a draft"
   }
-  // Both fields, because they answer at different times: mergeable is what an
-  // older gh reports, mergeStateStatus what a current one does.
-  if (detail.mergeStateStatus === "DIRTY" || detail.mergeable === "CONFLICTING") {
+  if (conflictsWithBase(detail)) {
     return `Conflicts with ${detail.baseRefName}`
   }
   if (detail.mergeStateStatus === "BEHIND") {
@@ -89,9 +97,9 @@ export function canAdminOverride(detail: PullRequestDetail, rules: BranchRules |
   if (detail.state !== "OPEN" || detail.isDraft) {
     return false
   }
-  // Both fields again, for the reason mergeBlockedReason reads both: GitHub
-  // answers BLOCKED over a conflict while its merge state is still stale, and a
-  // bypass offered there is the dead click this whole gate exists to remove.
+  // The narrow read on purpose, not conflictsWithBase: GitHub answers BLOCKED
+  // over a conflict while its merge state is still stale, and a bypass offered
+  // there is the dead click this whole gate exists to remove.
   if (detail.mergeable === "CONFLICTING") {
     return false
   }
