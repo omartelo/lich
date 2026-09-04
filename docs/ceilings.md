@@ -264,9 +264,12 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   dirty count all come out of one `git status --porcelain=v2 --branch` parse. A git release that changes those
   records breaks all three together rather than one at a time, and there is no second call left to disagree with
   the first — `Branch` still asks `symbolic-ref`, but nothing on the polled path calls it.
-- **lich fetches on its own** (`internal/project/basestatus.go`) — the only git write lich makes outside the
-  worktree flows: it moves remote refs in the user's own repository, unannounced, for as long as a card is on
-  screen.
+- **lich fetches on its own** (`internal/project/basestatus.go`, `internal/project/prconflicts.go`) — the only
+  git writes lich makes outside the worktree flows: the base-branch readout moves remote refs in the user's own
+  repository, unannounced, for as long as a card is on screen. Naming a conflicting pull request's files is the
+  second, made when that pull request is opened on the Pulls screen: it fetches GitHub's `refs/pull/<n>/head`
+  and the base branch into `refs/lich/pr/<n>/head` and `refs/lich/pr/<n>/base`, and never deletes them — they
+  outlive the answer, and a `git push --mirror` carries them to the remote.
 - **Persistence is hybrid**: UI prefs in the page's localStorage (`lich.*` keys — the reason the listener port is
   pinned at 47821; `LICH_LISTEN_PORT` overrides it, `LICH_PORT` is the distinct per-session hook variable), the
   workspace in SQLite (`<config-dir>/lich/lich.db`, `internal/store`). Closing a session deletes its row; keeping a

@@ -47,6 +47,7 @@ import {
 import { MergeMessageDialog, mergeEditFor, type MergeEdit } from "./MergeMessageDialog"
 import { PullsChecks } from "./PullsChecks"
 import { PullsCommits } from "./PullsCommits"
+import { PullsConflicts } from "./PullsConflicts"
 import { PullsConversation } from "./PullsConversation"
 import { PullsFiles } from "./PullsFiles"
 import { PullsOverview } from "./PullsOverview"
@@ -427,6 +428,11 @@ export function PullRequestView({
           />
           <ReviewStat decision={detail.reviewDecision} />
         </div>
+
+        {/* Keyed by the pull request: whether the whole list is unfolded is a
+            reading of this one, and carrying it to the next PR opened would
+            unfold a list nobody asked to see. */}
+        <PullsConflicts key={detail.url} path={path} detail={detail} />
 
         <div role="tablist" className="mt-4 flex gap-1">
           <TabButton active={tab === "overview"} onClick={() => showTab("overview")}>

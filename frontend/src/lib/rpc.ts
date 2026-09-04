@@ -231,6 +231,11 @@ export const ProjectService = {
   /** One open PR in full (title, body, checks): the given number, or 0 for the checkout's own branch. */
   PullRequestDetail: (path: string, number: number) =>
     call<PullRequestDetail | null>("project.PullRequestDetail", [path, number]),
+  /** Which files a conflicting PR collides with its base on — GitHub answers
+   * that a pull request conflicts and never where. A network round trip (it
+   * fetches both commits), so it is asked only once mergeable says CONFLICTING. */
+  PullRequestConflicts: (path: string, number: number, base: string) =>
+    call<string[] | null>("project.PullRequestConflicts", [path, number, base]),
   /** Merge a PR on GitHub (0 = the checkout's branch). The backend allow-lists
    * the method. `admin` merges with administrator privileges — GitHub's own
    * bypass of the rules on the base branch, and the only way gh calls GitHub at

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   allowedMergeMethods,
   canAdminOverride,
+  conflictsWithBase,
   mergeBlockedReason,
   mergeRuleNote,
 } from "./merge-gate"
@@ -266,5 +267,21 @@ describe("mergeRuleNote", () => {
     expect(mergeRuleNote(blocked, null)).toBeNull()
     expect(mergeRuleNote(blocked, rules())).toBeNull()
     expect(mergeRuleNote(blocked, rules({ commitPatterns: [] }))).toBeNull()
+  })
+})
+
+describe("conflictsWithBase", () => {
+  it("reads the field an older gh answers with", () => {
+    expect(conflictsWithBase(detail({ mergeable: "CONFLICTING" }))).toBe(true)
+  })
+
+  it("reads the field a current gh answers with", () => {
+    expect(conflictsWithBase(detail({ mergeStateStatus: "DIRTY" }))).toBe(true)
+  })
+
+  it("says no while GitHub is still recomputing", () => {
+    expect(conflictsWithBase(detail({ mergeable: "UNKNOWN", mergeStateStatus: "UNKNOWN" }))).toBe(
+      false,
+    )
   })
 })
