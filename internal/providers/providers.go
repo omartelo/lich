@@ -1,6 +1,6 @@
 // Package providers is the registry of AI coding CLI harnesses lich can run in
 // a session (Claude Code, Codex, Antigravity, opencode, oh-my-pi, Crush, Cursor
-// CLI). A provider id doubles as the session kind that spawns it; the terminal
+// CLI, Kiro CLI). A provider id doubles as the session kind that spawns it; the terminal
 // resolves the id to a binary, and the settings store keys per-provider
 // overrides on it. Detection is a PATH scan, mirroring internal/chromium's
 // browser detection.
@@ -18,6 +18,7 @@ const (
 	OMP         = "omp"
 	Crush       = "crush"
 	Cursor      = "cursor"
+	Kiro        = "kiro"
 )
 
 // Provider is a known harness: a stable id, a display name, the executable
@@ -51,7 +52,16 @@ var Registry = []Provider{
 	{ID: OMP, Name: "oh-my-pi", Binaries: []string{"omp"}, Docs: "https://github.com/can1357/oh-my-pi"},
 	{ID: Crush, Name: "Crush", Binaries: []string{"crush"}, Docs: "https://github.com/charmbracelet/crush"},
 	{ID: Cursor, Name: "Cursor CLI", Binaries: []string{"cursor-agent"}, Docs: "https://cursor.com/docs/cli/installation"},
+	{ID: Kiro, Name: "Kiro CLI", Binaries: []string{"kiro-cli"}, Docs: "https://kiro.dev/docs/cli/installation/"},
 }
+
+// KiroAgentName is the agent profile lich installs into Kiro CLI and spawns it
+// with. Kiro keeps its hooks inside an agent config and its built-in
+// `kiro_default` cannot be shadowed by a file, so lich's four reports only reach
+// a Kiro session through an agent of lich's own — written by
+// internal/agentplugin, named on the command line by internal/terminal, and
+// spelled once here so those two cannot drift apart.
+const KiroAgentName = "lich"
 
 // Known reports whether id names a registered provider. It guards a provider id
 // that arrives from outside lich — a hook payload — before it is used as one.

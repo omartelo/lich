@@ -92,6 +92,18 @@ func TestResumeAvailable(t *testing.T) {
 	}
 	t.Setenv("CURSOR_CONFIG_DIR", cursorBase)
 
+	// Kiro hangs off the home too, so it shares the redirect Antigravity needed.
+	// One flat file per conversation, and only the interactive store: a lich
+	// session always spawns the TUI, which is the engine that writes here.
+	kiroDir := filepath.Join(agyHome, ".kiro", "sessions", "cli")
+	if err := os.MkdirAll(kiroDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const kiroLive = "f5d98acc-da1a-4029-a2eb-ecc1f666af06"
+	if err := os.WriteFile(filepath.Join(kiroDir, kiroLive+".json"), []byte(`{"session_id":"x"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
 	crushCwd := t.TempDir()
 	const crushLive = "18345afc-f497-4d53-8dfd-f7c4e4d9b313"
 	writeSessionDB(t, filepath.Join(crushCwd, ".crush", "crush.db"), "sessions", crushLive)
@@ -138,6 +150,13 @@ func TestResumeAvailable(t *testing.T) {
 		// cannot name has no chat directory to ask at all.
 		{"cursor chat belongs to another checkout", providers.Cursor, cursorLive, otherCwd, false},
 		{"cursor without a working directory", providers.Cursor, cursorLive, "", false},
+		{"kiro conversation on disk", providers.Kiro, kiroLive, "", true},
+		{"kiro conversation deleted", providers.Kiro,
+			"00000000-0000-0000-0000-000000000000", "", false},
+		{"kiro never sees a claude transcript", providers.Kiro, live, "", false},
+		// Kiro files one conversation per machine rather than per checkout, so
+		// unlike Crush and Cursor the answer does not move with the directory.
+		{"kiro does not care which checkout asks", providers.Kiro, kiroLive, otherCwd, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

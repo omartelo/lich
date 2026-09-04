@@ -25,9 +25,9 @@ Both sides test against the payloads in
 
 ## Event → action mapping
 
-| Claude Code hook                    | Codex hook                          | Antigravity hook                    | opencode event | oh-my-pi event                      | Crush hook                          | Cursor CLI hook | action                           |
-|-------------------------------------|-------------------------------------|-------------------------------------|----------------|-------------------------------------|-------------------------------------|-----------------|----------------------------------|
-| `PostToolUse` (file-mutating tools) | `PostToolUse` (file-mutating tools) | `PostToolUse` (file-mutating tools) | `file.edited`  | `tool_result` (file-mutating tools) | `PreToolUse` (file-mutating tools)  | `PostToolUse`   | refresh the session's git status |
+| Claude Code hook                    | Codex hook                          | Antigravity hook                    | opencode event | oh-my-pi event                      | Crush hook                          | Cursor CLI hook | Kiro CLI hook                       | action                           |
+|-------------------------------------|-------------------------------------|-------------------------------------|----------------|-------------------------------------|-------------------------------------|-----------------|-------------------------------------|----------------------------------|
+| `PostToolUse` (file-mutating tools) | `PostToolUse` (file-mutating tools) | `PostToolUse` (file-mutating tools) | `file.edited`  | `tool_result` (file-mutating tools) | `PreToolUse` (file-mutating tools)  | `PostToolUse`   | `postToolUse` (file-mutating tools) | refresh the session's git status |
 
 Fire it from `PostToolUse` **only for tools that write to disk** — the names are
 the provider's, so match its own: `Edit`, `Write`, `NotebookEdit`, `Bash` on
@@ -47,6 +47,18 @@ on a real 1.1.19 run: `write_to_file`, `replace_file_content`, `run_command`,
 `view_file`, `list_dir`, `call_mcp_tool`. Their arguments are PascalCase
 (`TargetFile`, `CodeContent`, `CommandLine`, `AbsolutePath`, `DirectoryPath`),
 which is the other half a filtering script reads.
+
+**Kiro's write tools are `write` and `shell`**, and its matchers are registered
+as those two bare words rather than as one pattern. `*` matched every tool on a
+real 2.21.0 run and `*` is not a valid regular expression, so its matchers are
+glob-like rather than regex — and a bare literal is the one spelling that names
+the same tool under glob, regex, exact or substring alike. An anchored
+alternation copied from Crush would match nothing there, silently.
+
+Those are the **TUI's** names, which is the engine lich spawns. The same two
+tools are `fs_write` and `execute_bash` under `--no-interactive`, and `fs_read`,
+`fs_write` and `execute_bash` are the names Kiro's own `--trust-tools` help
+prints — so the help is not the place to read them from, the payload is.
 
 opencode needs no matcher: `file.edited` fires only when a file actually
 changed, which is the signal the other harnesses approximate by filtering tool

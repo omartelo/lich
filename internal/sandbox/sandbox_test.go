@@ -67,6 +67,14 @@ func TestStateDirsPerProvider(t *testing.T) {
 		// config dir and the directory it reads off the home are the same one,
 		// so there is a single entry — the split is asserted below.
 		{providers.Cursor, []string{filepath.Join(home, ".cursor")}},
+		// Kiro splits the two halves across different roots, and only the first
+		// is xdg-basedir: the login token is in the SQLite store under the data
+		// home, everything else — agents, settings, conversations — under
+		// ~/.kiro. A session with only the second opens at the login prompt.
+		{providers.Kiro, []string{
+			filepath.Join(home, ".local", "share", "kiro-cli"),
+			filepath.Join(home, ".kiro"),
+		}},
 	}
 	for _, tt := range tests {
 		if got := stateDirs(tt.provider, home); !slices.Equal(got, tt.want) {

@@ -170,3 +170,63 @@ func ompAgentDir() (string, bool) {
 	}
 	return harnessDir("PI_CODING_AGENT_DIR", filepath.Join(".omp", "agent"))
 }
+
+// kiroSessionPath is the file Kiro CLI keeps one conversation's metadata in,
+// under ~/.kiro — the CLI reads that root off the home directory alone, with no
+// environment variable to honour (2.21.0 resolves `$HOME/.kiro`, measured
+// against a throwaway home).
+//
+// It is not a transcript: Kiro writes the turns into the `.jsonl` beside it and
+// the metadata — model, context window, per-request context usage — into this
+// `.json`, which is the file usage.go reads and the one whose existence answers
+// "can this id still be reopened".
+//
+// Only the interactive store is resolved here, which is the only one a lich
+// session writes: `kiro-cli chat --no-interactive` files its conversation in the
+// classic SQLite store instead (~/.local/share/kiro-cli/data.sqlite3, keyed on
+// cwd), and lich always spawns the TUI.
+func kiroSessionPath(providerSessionID string) (string, bool) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", false
+	}
+	path := filepath.Join(home, ".kiro", "sessions", "cli", providerSessionID+".json")
+	if _, err := os.Stat(path); err != nil {
+		return "", false
+	}
+	return path, true
+}
+
+// kiroPluginAgent is the name of the agent lich spawns Kiro CLI with, or "" when
+// the plugin was never installed into it. Only the name crosses into the spawn
+// (command.go, agentArgs): the file it points at is written by
+// internal/agentplugin, which owns its contents.
+//
+// The check is a stat rather than a stored flag because the file is a user's to
+// delete: an agent lich still names after that is a warning line on every
+// session, and a session with no hooks either way.
+func kiroPluginAgent(kind string) string {
+	if kind != providers.Kiro {
+		return ""
+	}
+	path, ok := kiroAgentPath()
+	if !ok {
+		return ""
+	}
+	if _, err := os.Stat(path); err != nil {
+		return ""
+	}
+	return providers.KiroAgentName
+}
+
+// kiroAgentPath is where that agent config lives: Kiro's global agents
+// directory, which hangs off the home alone — 2.21.0 honours no environment
+// variable for it. Shared with internal/agentplugin through providers so the two
+// cannot drift to different files.
+func kiroAgentPath() (string, bool) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", false
+	}
+	return filepath.Join(home, ".kiro", "agents", providers.KiroAgentName+".json"), true
+}

@@ -1,7 +1,7 @@
 # Adding a provider
 
 A **provider** is an agent CLI lich can run inside a session's PTY. There are
-seven (`internal/providers.Registry`), and adding an eighth means landing in
+eight (`internal/providers.Registry`), and adding a ninth means landing in
 about a dozen files across two repositories. This is the map — written after
 Antigravity, so it names what that change actually touched rather than what it
 should have. Cursor CLI came later and needed no plugin install at all — it runs
@@ -76,6 +76,7 @@ everything on the id (`provider.<id>.bin`, `.enabled`, `.sandbox`,
 | `frontend/src/components/ProviderIcon.tsx` | a brand path, or a lucide fallback |
 | `frontend/src/lib/session/delegate-prompt.ts` | `TOOL_KINDS` only if it is handed lich's tools at spawn |
 | `frontend/src/lib/session/tool-label.ts` | a rule only if it spells MCP tool names in a shape not already handled |
+| `frontend/src/lib/session/hands-on.ts` | a rung in `RUNG`: whether the hands-on clock hears that provider through a turn its hooks open, or only through its tool calls. The record is exhaustive over `ProviderKind`, so `tsc` refuses a provider that has not picked a side |
 | `frontend/src/lib/api-types.ts` | nothing, unless the change moves a JSON tag — the `DetectedProvider` mirror is hand-owned and moves in the same commit |
 
 `Registry.Docs` is the one field with a check outside the compiler: it is what the

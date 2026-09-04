@@ -1,13 +1,14 @@
 import type { ComponentType } from "react"
-import { Sparkles, Terminal } from "lucide-react"
+import { Ghost, Sparkles, Terminal } from "lucide-react"
 import type { SessionKind } from "@/lib/session/sessions"
 
 // Brand marks for the AI providers. The Claude/Codex/Antigravity/opencode/oh-my-pi/
 // Cursor SVG paths are vendored from @lobehub/icons (MIT — github.com/lobehub/lobe-icons),
 // inlined so lich does not depend on that package's ~500-package tree (antd, shiki,
-// …) for six icons. Crush has no lobehub mark yet and borrows a lucide glyph;
-// shell shows a terminal. All render monochrome (currentColor), inheriting the
-// surrounding text color on both themes.
+// …) for six icons. Crush and Kiro have no lobehub mark yet and borrow a lucide
+// glyph — Kiro a ghost, after the mark its own CLI wears; shell shows a
+// terminal. All render monochrome (currentColor), inheriting the surrounding
+// text color on both themes.
 
 // viewBox 0 0 24 24, fill currentColor.
 const PATHS: Partial<Record<SessionKind, string>> = {
@@ -46,6 +47,7 @@ type SizedIcon = ComponentType<{ size?: number | string }>
 
 const FALLBACK: Partial<Record<SessionKind, SizedIcon>> = {
   crush: Sparkles,
+  kiro: Ghost,
   shell: Terminal,
 }
 

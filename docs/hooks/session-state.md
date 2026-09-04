@@ -42,14 +42,26 @@ Both sides test against the payloads in
 
 ## Event → state mapping
 
-| Claude Code hook   | Codex hook          | Antigravity hook | opencode event           | oh-my-pi event | Crush hook | Cursor CLI hook    | state     |
-|--------------------|---------------------|------------------|--------------------------|----------------|------------|--------------------|-----------|
-| `UserPromptSubmit` | `UserPromptSubmit`  | `PreInvocation`  | `session.status` (`busy`) | `input`        | —          | —                  | `busy`    |
-| `PreToolUse`       | `PreToolUse`        | `PreToolUse`     | `tool.execute.before`    | `tool_call`    | —          | dropped            | `busy` + `tool` |
-| `PostToolUse`      | `PostToolUse`       | —                | `tool.execute.after`     | `turn_start`   | —          | dropped            | `busy`    |
-| `Notification`     | `PermissionRequest` | —                | any `*.asked`            | —              | —          | —                  | `waiting` + `reason` |
-| `Stop`             | `Stop`              | `Stop`           | `session.status` (`idle`) | `session_stop` | —          | —                  | `done`    |
-| `SessionEnd`       | —                   | —                | —                        | —              | —          | `SessionEnd`       | `idle`    |
+| Claude Code hook   | Codex hook          | Antigravity hook | opencode event           | oh-my-pi event | Crush hook | Cursor CLI hook    | Kiro CLI hook      | state     |
+|--------------------|---------------------|------------------|--------------------------|----------------|------------|--------------------|--------------------|-----------|
+| `UserPromptSubmit` | `UserPromptSubmit`  | `PreInvocation`  | `session.status` (`busy`) | `input`        | —          | —                  | `userPromptSubmit` | `busy`    |
+| `PreToolUse`       | `PreToolUse`        | `PreToolUse`     | `tool.execute.before`    | `tool_call`    | —          | dropped            | `preToolUse`       | `busy` + `tool` |
+| `PostToolUse`      | `PostToolUse`       | —                | `tool.execute.after`     | `turn_start`   | —          | dropped            | `postToolUse`      | `busy`    |
+| `Notification`     | `PermissionRequest` | —                | any `*.asked`            | —              | —          | —                  | —                  | `waiting` + `reason` |
+| `Stop`             | `Stop`              | `Stop`           | `session.status` (`idle`) | `session_stop` | —          | —                  | `stop`             | `done`    |
+| `SessionEnd`       | —                   | —                | —                        | —              | —          | `SessionEnd`       | —                  | `idle`    |
+
+**Kiro closes four of the six rows and neither of the other two.** It has no
+permission event, so a Kiro session waiting on a confirmation reads as `busy`
+rather than `waiting` — the card says it is working, which is true, and does not
+say what it is waiting for. It has no session-end event either, so the card keeps
+the provider's mark until the PTY itself goes (docs/ceilings.md).
+
+Kiro is also the one harness that reads a hook's **stdout back into the
+conversation as context** — that is what its hooks are for. Every report script
+is silent by contract already, which is what makes them observations; on Kiro
+that stops being a style choice, because anything printed would arrive in front
+of the model as if the user had typed it.
 
 opencode is the one harness that reports a state rather than an event: its
 `session.status` carries `busy`, `idle` or `retry` for the session named in the

@@ -67,6 +67,10 @@ describe("provider setting keys", () => {
     // --yolo is Cursor's own alias for it; lich passes the canonical spelling,
     // which is not the one Crush answers to above.
     expect(skipPermissionFlags.cursor).toBe("--force")
+    // Kiro's is the one spelling here that does not fully deliver: with it on,
+    // its TUI still opens on a confirmation the user accepts once
+    // (docs/ceilings.md). The switch is still offered, because the flag is real.
+    expect(skipPermissionFlags.kiro).toBe("--trust-all-tools")
     expect(skipPermissionFlags.shell).toBeUndefined()
   })
 })
