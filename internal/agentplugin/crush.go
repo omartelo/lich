@@ -77,7 +77,7 @@ func (s *Service) crushInstall() error {
 	if err != nil {
 		return err
 	}
-	dir, err := pluginScriptDir()
+	dir, err := pluginScriptDir(providers.Crush)
 	if err != nil {
 		return err
 	}
@@ -324,14 +324,21 @@ func (s *Service) crushrcPath() (string, error) {
 	return filepath.Join(dir, "crushrc"), nil
 }
 
-// pluginScriptDir is where lich keeps the hook scripts it installs: its own
-// config directory, not the harness's. They are lich's copy of another
-// repository's files, and a harness that never installed them should not be
-// carrying them. Shared with the Kiro install, which ships the same scripts.
-func pluginScriptDir() (string, error) {
+// pluginScriptDir is where lich keeps the hook scripts it installs for one
+// file-shipped harness: its own config directory, not the harness's. They are
+// lich's copy of another repository's files, and a harness that never installed
+// them should not be carrying them.
+//
+// One directory per provider, even though Crush and Kiro ship the same scripts.
+// releaseVersion resolves whatever the plugin repository has released, not the
+// version of the lich running the install, so a shared directory would let a
+// Kiro install fetched today overwrite the scripts a Crush install fetched at an
+// older release — leaving Crush's marker naming a version that is no longer on
+// disk, which is the one thing that marker exists to answer.
+func pluginScriptDir(provider string) (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("resolve config directory: %w", err)
 	}
-	return filepath.Join(dir, "lich", "plugin", "hooks"), nil
+	return filepath.Join(dir, "lich", "plugin", "hooks", provider), nil
 }

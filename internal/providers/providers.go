@@ -6,7 +6,12 @@
 // browser detection.
 package providers
 
-import "os/exec"
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+)
 
 // Provider ids. Each id is also the session kind (store column + terminal.Start)
 // that runs the provider. Kept in sync with frontend/src/lib/session/sessions.ts.
@@ -62,6 +67,19 @@ var Registry = []Provider{
 // internal/agentplugin, named on the command line by internal/terminal, and
 // spelled once here so those two cannot drift apart.
 const KiroAgentName = "lich"
+
+// KiroAgentPath is the file that agent lives in, inside Kiro's global agents
+// directory. That root hangs off the home alone — 2.21.0 honours no environment
+// variable for it. Resolved here rather than in either caller so the install
+// that writes the file (internal/agentplugin) and the spawn that decides whether
+// to name it (internal/terminal) cannot drift to different paths.
+func KiroAgentPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve home directory: %w", err)
+	}
+	return filepath.Join(home, ".kiro", "agents", KiroAgentName+".json"), nil
+}
 
 // Known reports whether id names a registered provider. It guards a provider id
 // that arrives from outside lich — a hook payload — before it is used as one.

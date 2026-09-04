@@ -470,7 +470,7 @@ func installCrush(t *testing.T, s *Service, existingRC string) (string, string) 
 	if err != nil {
 		t.Fatalf("read crushrc: %v", err)
 	}
-	return string(data), filepath.Join(lichConfig, "lich", "plugin", "hooks")
+	return string(data), filepath.Join(lichConfig, "lich", "plugin", "hooks", providers.Crush)
 }
 
 func crushFiles() map[string]string {

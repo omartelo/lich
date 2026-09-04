@@ -46,6 +46,15 @@ const (
 	kiroResumeFlag        = "--resume-id"
 )
 
+// kiroChatSubcmd is the subcommand a Kiro session runs, and it is not optional.
+// Kiro splits the flags lich passes across two parsers: its root takes --agent
+// and --resume-id, but --model and --trust-all-tools belong to `chat` alone, and
+// either one at the root exits 2 with `unexpected argument` before the session
+// exists (measured on 2.21.0). `chat` takes every flag the root does, so lich
+// spawns it whether or not those two are set rather than assembling a different
+// command per setting.
+const kiroChatSubcmd = "chat"
+
 // kiroAgentFlag picks the agent profile a Kiro session runs. lich passes it only
 // to reach the hooks: Kiro keeps them inside an agent config and its built-in
 // `kiro_default` cannot be shadowed by a file (measured on 2.21.0 — a
@@ -222,14 +231,16 @@ func flagValue(value string) (string, bool) {
 }
 
 // providerArgs assembles the whole argument list for one spawn. Ordering is
-// decided here rather than by appending in call order, because the two
-// providers constrain it in opposite directions: Codex spells resume as a
-// subcommand, so its global options have to come first, while Claude Code's
-// --mcp-config is variadic and reads everything after it as another config
-// path, so it has to come last.
+// decided here rather than by appending in call order, because the providers
+// constrain it in opposite directions: Codex spells resume as a subcommand, so
+// its global options have to come first, while Claude Code's --mcp-config is
+// variadic and reads everything after it as another config path, so it has to
+// come last. Kiro's subcommand opens the session rather than a conversation, so
+// it comes before every flag.
 func providerArgs(kind, name, resume, model, lichBin, agent string, skipPermissions bool) []string {
 	mcp := mcpArgs(kind, lichBin)
-	args := append([]string{}, nameArgs(kind, name, resume)...)
+	args := append([]string{}, subcommandArgs(kind)...)
+	args = append(args, nameArgs(kind, name, resume)...)
 	args = append(args, agentArgs(kind, agent)...)
 	args = append(args, resumeArgs(kind, resume)...)
 	args = append(args, skipPermissionArgs(kind, skipPermissions)...)
@@ -239,6 +250,20 @@ func providerArgs(kind, name, resume, model, lichBin, agent string, skipPermissi
 		return append(mcp, args...)
 	}
 	return append(args, mcp...)
+}
+
+// subcommandArgs returns the subcommand that opens a session, or nil when the
+// provider's root command is the session. Kiro CLI is the only one that needs
+// it, and it goes first: the flags after it are split across Kiro's two parsers
+// and only `chat` accepts them all (kiroChatSubcmd).
+//
+// Codex spells a subcommand too, but its is `resume` — a way of opening one
+// conversation rather than the session itself — so it rides resumeArgs.
+func subcommandArgs(kind string) []string {
+	if kind != providers.Kiro {
+		return nil
+	}
+	return []string{kiroChatSubcmd}
 }
 
 // agentArgs returns the arguments that pick the agent profile a provider runs,

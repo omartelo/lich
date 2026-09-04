@@ -15,7 +15,12 @@ Two rules govern the whole exercise, and both are in
 - **Every table here is read off that CLI's own `--help` or a real run.** A flag
   guessed from a sibling is a spawn that dies before the session exists, and an
   event name copied from another harness is a report that silently never fires.
-  Nothing below is inferred from a provider's documentation alone.
+  Nothing below is inferred from a provider's documentation alone. Read the
+  `--help` of the command lich actually spawns: a CLI with subcommands has one
+  parser per level, and a flag that exists under one is rejected by the other.
+  Kiro CLI is the worked example — `--agent` and `--resume-id` are its root's,
+  `--model` and `--trust-all-tools` its `chat` subcommand's, so lich spawns
+  `kiro-cli chat` and `subcommandArgs` puts that word first.
 - **A gap is allowed; a silent one is not.** Equal behaviour across providers is
   often impossible. Where the new provider cannot do something the others can,
   the same PR adds a [`ceilings.md`](ceilings.md) bullet naming what is out and
@@ -55,7 +60,7 @@ tool.
 | File | What it holds | What a new provider adds |
 |---|---|---|
 | `internal/providers/providers.go` | the registry | an id constant, a `Registry` entry (id, display name, binary names, install-docs URL), and a line in `AcceptsMCPServer` if it takes an MCP server on its command line |
-| `internal/terminal/command.go` | what a spawn runs | entries in `skipPermissionFlags`, `modelFlags`, `briefingFlags` and `resumeArgs` — each one optional, and absent means "no flag rather than somebody else's" |
+| `internal/terminal/command.go` | what a spawn runs | entries in `skipPermissionFlags`, `modelFlags`, `briefingFlags` and `resumeArgs` — each one optional, and absent means "no flag rather than somebody else's" — plus a `subcommandArgs` arm if the session is a subcommand rather than the bare binary |
 | `internal/terminal/resume.go` | whether a resume can be offered | a `ResumeAvailable` case answering from what that provider left on disk |
 | `internal/terminal/transcript.go`, `sessiondb.go` | where that state lives | the path resolver the case above calls |
 | `internal/terminal/usage.go` | the footer's session readout | a `usageSourceFor` arm, plus a `sessionCost` arm reading whatever that provider records about spend — and a `contextUsageFor` arm only if it also records the model's context window. Which rung that lands the provider on is a row in `docs/ceilings.md`, in the same PR |

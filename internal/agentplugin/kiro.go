@@ -78,7 +78,7 @@ func (s *Service) kiroInstall() error {
 	if err != nil {
 		return err
 	}
-	dir, err := pluginScriptDir()
+	dir, err := pluginScriptDir(providers.Kiro)
 	if err != nil {
 		return err
 	}
@@ -100,7 +100,7 @@ func (s *Service) kiroInstall() error {
 			return err
 		}
 	}
-	path, err := kiroAgentPath()
+	path, err := providers.KiroAgentPath()
 	if err != nil {
 		return err
 	}
@@ -179,7 +179,7 @@ func kiroAgentFile(version, scriptDir string) ([]byte, error) {
 		Hooks:          hooks,
 	}, "", "  ")
 	if err != nil {
-		return nil, fmt.Errorf("encode %s: %w", filepath.Base(providers.KiroAgentName), err)
+		return nil, fmt.Errorf("encode the %s agent: %w", providers.KiroAgentName, err)
 	}
 	return append(body, '\n'), nil
 }
@@ -240,7 +240,7 @@ func (s *Service) kiroRegisterMCP() error {
 // kiroInstalledVersion reads the version off the agent lich wrote, or ("",
 // false) when it is absent, unreadable, or was not written by lich.
 func (s *Service) kiroInstalledVersion() (string, bool) {
-	path, err := kiroAgentPath()
+	path, err := providers.KiroAgentPath()
 	if err != nil {
 		return "", false
 	}
@@ -249,16 +249,4 @@ func (s *Service) kiroInstalledVersion() (string, bool) {
 		return "", false
 	}
 	return versionOf(data, `"description": "Installed by`)
-}
-
-// kiroAgentPath is the agent config lich owns, in Kiro's global agents
-// directory. That root hangs off the home alone — 2.21.0 honours no environment
-// variable for it — and internal/terminal resolves the same file the same way to
-// decide whether to name it at spawn.
-func kiroAgentPath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve home directory: %w", err)
-	}
-	return filepath.Join(home, ".kiro", "agents", providers.KiroAgentName+".json"), nil
 }
