@@ -32,9 +32,8 @@ tasks:
     desc: Build the Linux window (embedded Chromium) into bin/shell/
     platforms: [linux]
     # Skipped while bin/shell is up to date with the crate: the window changes
-    # far less often than the Go side, and CI caches bin/shell on these same
-    # sources so most releases never run cargo at all. Not shell/target: cargo's
-    # own artifacts would make every restore a mismatch.
+    # far less often than the Go side, and `task dev` should not wait on cargo
+    # for it.
     sources:
       - shell/src/**/*
       - shell/Cargo.toml
