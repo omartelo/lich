@@ -413,7 +413,8 @@ func claudeMCPConfig(lichBin string) string {
 // is honoured only where the provider has a verb for it: a fork flag invented
 // for one that has none would kill the spawn before the session exists, so the
 // three that do are spelled below and every other kind resumes as it always
-// did. providers.SupportsFork is what stops the offer reaching here at all.
+// did. Start refuses a fork for any other kind (providers.SupportsFork), so
+// the plain resume arms below are never reached with fork set.
 func resumeArgs(kind, resume string, fork bool) []string {
 	if resume == "" {
 		return nil

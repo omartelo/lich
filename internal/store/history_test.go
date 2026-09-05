@@ -166,6 +166,35 @@ func TestReopenSessionRestoresByID(t *testing.T) {
 	}
 }
 
+// TestReopenSessionKeepsThePin: the pin holds until the user takes it off, and
+// a park by `lich close` — which the sidebar's withheld close button cannot
+// stop — is not that. A resume that dropped it would put the card back in the
+// drag order with its close affordances restored, unasked.
+func TestReopenSessionKeepsThePin(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "keep", "Session 1", "claude", "", 2, "")
+	_ = svc.AddSession("p1", "root", "root work", "claude", "", 3, "")
+	if err := svc.SetSessionPinned("root", true); err != nil {
+		t.Fatalf("SetSessionPinned: %v", err)
+	}
+	_ = svc.CloseSession("p1", "root", "keep")
+
+	restored, err := svc.ReopenSession("root", "fresh")
+	if err != nil {
+		t.Fatalf("ReopenSession: %v", err)
+	}
+	if restored == nil || !restored.Pinned {
+		t.Fatalf("restored = %+v, want the pin carried over", restored)
+	}
+	projects, _ := svc.LoadState()
+	for _, s := range projects[0].Sessions {
+		if s.ID == "fresh" && !s.Pinned {
+			t.Errorf("reloaded session = %+v, want pinned", s)
+		}
+	}
+}
+
 // TestReopenSessionClearsTheCloseStamp keeps a resumed row from dating its next
 // close before it happens — the stamp belongs to the close that made it, and
 // carrying it over would sort the row by a close it no longer had.

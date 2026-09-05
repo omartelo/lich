@@ -417,7 +417,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   the prompt never fires and never comes back with the card, with nothing on screen having said it was
   forfeited.
 
-- **An answer that names no ticket is matched by delivery order** (`internal/relay/relay.go`,
+- **An answer that names no ticket is matched by delivery order** (`internal/relay/answer.go`,
   `errandOfLocked`): `lich reply "<answer>"` and `reply_to_session` without a ticket close the oldest message
   delivered to that session and still open, because nothing in an answer itself says which request it belongs to.
   A session working two relayed tasks at once that answers the second one first sends it home as the answer to the
@@ -456,7 +456,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   needs a transcript path off the hook payload, which Kiro passes on none of the five; it does write a `title`
   into its session metadata, so closing that gap later means lich reading the file rather than another hook.
 - **A Cursor CLI session reports through Claude Code's plugin, or not at all** (`internal/agentplugin`,
-  `internal/terminal/terminal.go`, `providerKind`): lich installs no plugin into Cursor, and it does not have to —
+  `internal/terminal/start.go`, `providerKind`): lich installs no plugin into Cursor, and it does not have to —
   the CLI executes every Claude Code hook on the machine, the user's own and each installed plugin's (measured on
   2026.08.11: `hookSource: claude-user` and `claude-plugin`, with `${CLAUDE_PLUGIN_ROOT}` expanded). So on a
   machine where the lich plugin is installed in Claude Code, a Cursor session reports the chat id it is running

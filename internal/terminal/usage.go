@@ -222,26 +222,10 @@ func (s *Service) sessionCost(id string, src usageSource) (float64, costMiss, bo
 				return 0, miss, false
 			}
 		}
-	case providers.Codex:
-		cost, miss, ok := codexTranscriptCost(src.path, s.prices)
+	case providers.Codex, providers.OMP, providers.OpenCode, providers.Crush:
+		cost, miss, ok := s.wholeCost(src)
 		if !ok {
 			return 0, miss, false
-		}
-		if miss, ok := s.saveWholeCost(id, src.id, cost); !ok {
-			return 0, miss, false
-		}
-	case providers.OMP:
-		cost, miss, ok := ompTranscriptCost(src.path)
-		if !ok {
-			return 0, miss, false
-		}
-		if miss, ok := s.saveWholeCost(id, src.id, cost); !ok {
-			return 0, miss, false
-		}
-	case providers.OpenCode, providers.Crush:
-		cost, ok := sessionDBCost(src.path, costQueryFor(src.kind), src.id)
-		if !ok {
-			return 0, costMissUnread, false
 		}
 		if miss, ok := s.saveWholeCost(id, src.id, cost); !ok {
 			return 0, miss, false
@@ -255,6 +239,23 @@ func (s *Service) sessionCost(id string, src usageSource) (float64, costMiss, bo
 		return 0, costMissUnread, false
 	}
 	return total, costMissNone, true
+}
+
+// wholeCost prices one conversation whole, for the providers that report a
+// running total rather than per-turn deltas: each reads its own store, and
+// the two database providers say only that the row could not be read.
+func (s *Service) wholeCost(src usageSource) (float64, costMiss, bool) {
+	switch src.kind {
+	case providers.Codex:
+		return codexTranscriptCost(src.path, s.prices)
+	case providers.OMP:
+		return ompTranscriptCost(src.path)
+	}
+	cost, ok := sessionDBCost(src.path, costQueryFor(src.kind), src.id)
+	if !ok {
+		return 0, costMissUnread, false
+	}
+	return cost, costMissNone, true
 }
 
 // saveWholeCost files what one conversation has cost so far, for every provider

@@ -451,6 +451,43 @@ func TestStartForksIntoItsOwnConversation(t *testing.T) {
 	spawnPins(t, got, want...)
 }
 
+// TestStartRefusesAForkTheProviderCannotSpell proves the guard sits in Start,
+// not in the frontend's copy of the list: a fork for a kind with no verb would
+// otherwise reopen the parent's own conversation under a second card, which
+// is the one outcome a fork promises against. Nothing is spawned.
+func TestStartRefusesAForkTheProviderCannotSpell(t *testing.T) {
+	bin := stayAliveBin(t)
+	svc := New(stubBins{bin: bin}, nil, events.New())
+	t.Cleanup(func() { _ = svc.Close("s1") })
+
+	err := svc.Start("s1", "p1", t.TempDir(), "crush", "abc-123", "", true, false, 80, 24)
+	if err == nil {
+		t.Fatal("Start = nil, want a refusal for a kind that cannot fork")
+	}
+	if !strings.Contains(err.Error(), "crush") {
+		t.Errorf("Start error = %q, want it to name the kind", err)
+	}
+	if svc.Live("s1") {
+		t.Error("session spawned despite the refusal")
+	}
+}
+
+// TestStartRefusesAForkWithNothingToBranch: a fork carries the parent's id or
+// it is not a fork — without one resumeArgs would start fresh and the card
+// would claim a conversation it never copied.
+func TestStartRefusesAForkWithNothingToBranch(t *testing.T) {
+	bin := stayAliveBin(t)
+	svc := New(stubBins{bin: bin}, nil, events.New())
+	t.Cleanup(func() { _ = svc.Close("s1") })
+
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", true, false, 80, 24); err == nil {
+		t.Fatal("Start = nil, want a refusal for a fork with no resume id")
+	}
+	if svc.Live("s1") {
+		t.Error("session spawned despite the refusal")
+	}
+}
+
 // TestStartWithoutResumeSpawnsBare proves a session with no id to resume spawns
 // the binary alone, with no dangling flag.
 func TestStartWithoutResumeSpawnsBare(t *testing.T) {

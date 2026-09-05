@@ -48,6 +48,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/omartelo/lich/internal/rpc"
+
 	"github.com/omartelo/lich/internal/sandbox"
 )
 
@@ -298,15 +300,9 @@ func matches(item Item, entry fs.DirEntry) bool {
 // at. The name and the session ride the query because the body is the file
 // itself.
 func (s *Service) Upload(w http.ResponseWriter, r *http.Request) {
-	// CORS like the RPC's (internal/rpc): in dev the page's origin is the Vite
-	// server, not this listener, and the token is the actual auth. The preflight
-	// is not optional here — the body carries the file's own content type, which
-	// is not one a simple request may have.
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusNoContent)
+	// The preflight is not optional here — the body carries the file's own
+	// content type, which is not one a simple request may have.
+	if rpc.Preflight(w, r) {
 		return
 	}
 	if r.Method != http.MethodPost {
