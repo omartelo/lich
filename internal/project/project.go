@@ -321,3 +321,48 @@ func projectID(path string) string {
 	sum := sha256.Sum256([]byte(path))
 	return hex.EncodeToString(sum[:projectIDBytes])
 }
+
+// Identify turns a directory path into the same identity the picker would give
+// it: the id its sessions and its worktree directory hang off, and the name its
+// tab wears. It is the path a caller outside the window hands in — the `lich`
+// command line and its MCP tools — so it normalizes what a person or an agent
+// types, and validates it here rather than letting a typo become a project.
+//
+// A leading ~ is expanded because an MCP tool call reaches lich through no shell
+// at all: the tilde arrives literally, and a project named "~" is nobody's
+// intent. ~user is not expanded — the home directory of another user is not a
+// path this ever means.
+//
+// A relative path is refused rather than resolved. There is no shell at this end
+// either: Abs would resolve it against the directory the lich window was
+// launched from, which is not the caller's, and the project that opened would be
+// a different one than the one asked for with nothing on screen saying so.
+func Identify(path string) (*Project, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil, fmt.Errorf("no path given")
+	}
+	if path == "~" || strings.HasPrefix(path, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("resolve home dir: %w", err)
+		}
+		path = filepath.Join(home, strings.TrimPrefix(path[1:], "/"))
+	}
+	if !filepath.IsAbs(path) {
+		return nil, fmt.Errorf(
+			"%q is a relative path, and lich would resolve it against its own window's "+
+				"directory rather than yours — give the absolute path",
+			path,
+		)
+	}
+	path = filepath.Clean(path)
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("no directory at %q", path)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("%q is a file, and a project is a directory", path)
+	}
+	return newProject(path), nil
+}

@@ -289,6 +289,21 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   gone relocates it instead, keeping the stored id its sessions and its worktree directory hang off. Only the 25
   most recent closes are offered back (`recentLimit`, `internal/store/store.go`) — the row survives, but past that
   a project is reachable only through the directory picker, and neither the menu nor the palette says so.
+- **A project opened from outside the window is matched by the spelling of its path**
+  (`internal/project/project.go`, `Identify`; `internal/spawn/projects.go`): `lich open --project <dir>` normalizes
+  what it is handed — `~` expanded, cleaned, refused unless absolute — and then matches that string against the
+  open projects and the workspace's history. It stops there. A symlink to a directory, or a bind mount of it, is a
+  different string and opens a second project on the same real directory: two rows, two ids, two tabs, and every
+  path-addressed lookup lich makes (which project a checkout belongs to, which gh account its calls run as)
+  answering with whichever the query reached first. The window's picker has the same hole — it takes the path
+  zenity hands back — so resolving symlinks here would make the two surfaces disagree about which project a
+  directory *is*, which is worse than the duplicate. The trap is a workspace where `/home/you/work` and
+  `/home/you/src/work` are the same checkout: nothing on screen says the two tabs are one directory.
+  It also moves a boundary that used to be the window's: until this, an agent could reach only the projects
+  somebody had opened in front of it. Any directory on the machine is now one `open_session` away from a tab, with
+  no confirmation on the way. It is not a new privilege — the agent already runs as you, in a shell that can read
+  the same disk — but it is new visibility, and a card it opens there is a card with a PTY in it.
+
 - **A hotkey is taken from the agent, and its rebind lives only in the page** (`frontend/src/lib/use-hotkey.ts`,
   `hotkeys.ts`): every bound combo is caught in the window capture phase and stopped there, so the chord never
   reaches the PTY — the defaults spend chords no TUI can bind, but a rebind is checked against nothing, and

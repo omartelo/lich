@@ -255,7 +255,10 @@ func sessionState(state string) string {
 
 func (c *client) send(args []string) error {
 	flags := newFlagSet("send")
-	project := flags.String("project", "", "narrow the target to one project when the label is ambiguous")
+	project := flags.String(
+		"project", "",
+		"narrow the target to one project, by name or by directory path, when the label is ambiguous",
+	)
 	timeout := flags.Int("timeout", 0, "seconds to wait for an answer before handing back a ticket")
 	asJSON := flags.Bool("json", false, "print the result as JSON")
 	if err := c.parse(flags, args); err != nil {
@@ -327,7 +330,11 @@ func (c *client) reply(args []string) error {
 
 func (c *client) open(args []string) error {
 	flags := newFlagSet("open")
-	project := flags.String("project", "", "project to open the session in; defaults to the caller's own")
+	project := flags.String(
+		"project", "",
+		"project to open the session in, by name or by directory path; a path lich is "+
+			"not holding open is opened first. Defaults to the caller's own",
+	)
 	kind := flags.String("kind", "", "what the session runs; defaults to the caller's own provider")
 	worktree := flags.String("worktree", "", "branch name of a git worktree to root the session in; an existing branch is checked out as it stands")
 	base := flags.String("base", "", "branch a new worktree starts from; defaults to the project's current branch, ignored when the branch exists")
@@ -531,7 +538,10 @@ func archiveRoot(path string) string {
 
 func (c *client) close(args []string) error {
 	flags := newFlagSet("close")
-	project := flags.String("project", "", "narrow the target to one project when the label is ambiguous")
+	project := flags.String(
+		"project", "",
+		"narrow the target to one project, by name or by directory path, when the label is ambiguous",
+	)
 	worktree := flags.String("worktree", "",
 		"what to do with the checkout when this is its last session: keep or remove")
 	force := flags.Bool("force", false, "remove a checkout that still has uncommitted work")
@@ -577,7 +587,10 @@ func closedText(closed spawn.Closed) string {
 // is doing, not what its card is called); a target before it renames that one.
 func (c *client) rename(args []string) error {
 	flags := newFlagSet("rename")
-	project := flags.String("project", "", "narrow the target to one project when the label is ambiguous")
+	project := flags.String(
+		"project", "",
+		"narrow the target to one project, by name or by directory path, when the label is ambiguous",
+	)
 	asJSON := flags.Bool("json", false, "print the result as JSON")
 	if err := c.parse(flags, args); err != nil {
 		return err
@@ -613,7 +626,9 @@ func renamedText(renamed spawn.Renamed) string {
 
 func (c *client) worktrees(args []string) error {
 	flags := newFlagSet("worktrees")
-	project := flags.String("project", "", "project to list; defaults to the caller's own")
+	project := flags.String(
+		"project", "", "project to list, by name or by directory path; defaults to the caller's own",
+	)
 	asJSON := flags.Bool("json", false, "print the result as JSON")
 	if err := c.parse(flags, args); err != nil {
 		return err

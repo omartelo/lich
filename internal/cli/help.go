@@ -51,31 +51,34 @@ var commands = []command{
 	},
 	{
 		name: "open",
-		args: "[--project <name>] [--kind <provider>] [--worktree <branch>]\n" +
+		args: "[--project <name-or-path>] [--kind <provider>] [--worktree <branch>]\n" +
 			"            [--base <branch>] [--model <model>] [--prompt <task>] [--json]",
-		about: "Open a new session and start it. --worktree creates a git worktree of\n" +
-			"that branch name first and roots the session in it. --model runs the\n" +
-			"provider on that model, in the provider's own spelling. --prompt hands\n" +
-			"the new session that task as soon as its agent is up, so opening a\n" +
-			"worker for a task is one command rather than two. Prints the name the\n" +
-			"new session is addressed by.",
+		about: "Open a new session and start it. --project takes a project already open,\n" +
+			"by name, or the absolute path of a directory, which is opened as a\n" +
+			"project first — one lich closed comes back with the sessions it was\n" +
+			"closed with. --worktree creates a git worktree of that branch name first\n" +
+			"and roots the session in it. --model runs the provider on that model, in\n" +
+			"the provider's own spelling. --prompt hands the new session that task as\n" +
+			"soon as its agent is up, so opening a worker for a task is one command\n" +
+			"rather than two. Prints the name the new session is addressed by.",
 	},
 	{
 		name: "close",
-		args: "[--project <name>] [--worktree keep|remove] [--force] [--json] <session>",
+		args: "[--project <name-or-path>] [--worktree keep|remove] [--force] [--json]\n" +
+			"            <session>",
 		about: "Close a session. Closing the last one in a worktree needs --worktree to\n" +
 			"say whether the checkout stays; removing a dirty one needs --force.",
 	},
 	{
 		name: "rename",
-		args: "[--project <name>] [--json] [<session>] <label>",
+		args: "[--project <name-or-path>] [--json] [<session>] <label>",
 		about: "Rename a session's card. With <session> it renames that one, with only a\n" +
 			"name it renames the session the command runs in. The name becomes the\n" +
 			"user's: the provider's auto-title never overwrites it again.",
 	},
 	{
 		name: "worktrees",
-		args: "[--project <name>] [--json]",
+		args: "[--project <name-or-path>] [--json]",
 		about: "List a project's git worktrees: what is uncommitted in each and which\n" +
 			"sessions are open in it.",
 	},

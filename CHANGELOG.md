@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`lich open` and its MCP tool now open a project, not only a session in one.**
+  `--project` took the name of a project already on screen, so an agent could
+  fan work out across the projects you had open and no further: putting a
+  directory on screen was yours to do, through the window's own picker. It takes
+  a directory path now — `lich open --project ~/src/revu` — and a path lich is
+  not holding open becomes a project first, with the session in it. A directory
+  it had open before comes back the way reopening it from the window does: same
+  id, same name, and the sessions it was closed with parked on their cards,
+  because the row is matched by path through the workspace's history rather than
+  created again. The tab appears without a reload and without stealing the view,
+  like a session opened beside you. The path must be absolute — there is no
+  shell at lich's end, and a relative one would resolve against the directory the
+  window was launched from rather than yours — and a leading `~` is expanded,
+  because an MCP tool call reaches lich through no shell at all. `close`,
+  `rename` and `worktrees` read `--project` the same way, but only narrow with
+  it: opening a project is something only `open` does.
+
 - **A theme file can now be checked before it is imported.**
   `themes/lich-theme.schema.json` is a JSON Schema naming every app and terminal
   token, which color spellings each of the two blocks accepts, and the id and

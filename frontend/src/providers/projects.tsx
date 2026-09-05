@@ -42,6 +42,7 @@ import { resolveNewSessionKind } from "@/lib/session/new-session-kind"
 import {
   CLOSED_EVENT,
   OPENED_EVENT,
+  PROJECT_OPENED_EVENT,
   RELAY_STALLED_EVENT,
   SANDBOX_EVENT,
   STATUS_EVENT,
@@ -56,6 +57,7 @@ import {
   shouldToastAttention,
   statusReason,
   toClosedSession,
+  toOpenedProject,
   toOpenedSession,
   toSessionStatus,
   type SessionStatus,
@@ -220,6 +222,29 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       if (next !== sessionsRef.current) {
         commit(next)
       }
+    })
+    return () => off()
+  }, [])
+
+  // A project an agent opened through the CLI or its MCP tools by naming a
+  // directory: the row is written, so nothing is persisted here — the tab is
+  // drawn from the payload, which carries the sessions a project reopened from
+  // the history comes back with.
+  //
+  // Nothing here waits on a reload, and that is load-bearing rather than an
+  // optimisation: the session event that follows lands in this project, and a
+  // card whose project is not on screen yet is dropped (adoptSession). Nor is it
+  // navigated to — nobody in front of the window asked for this tab, and an
+  // agent opening three would otherwise drag the view along three times.
+  useEffect(() => {
+    const off = onAppEvent(PROJECT_OPENED_EVENT, (data) => {
+      const project = toOpenedProject(data)
+      if (!project || projectsRef.current.some((p) => p.id === project.id)) {
+        return
+      }
+      hydrateProjectProviderDefaults([project])
+      setProjects((prev) => [...prev, toProject(project)])
+      commit({ ...sessionsRef.current, ...buildSessionState([project]) })
     })
     return () => off()
   }, [])
