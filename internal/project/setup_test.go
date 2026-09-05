@@ -128,3 +128,71 @@ func TestSaveWorktreeSetup(t *testing.T) {
 		t.Errorf("empty save with no file: %v", err)
 	}
 }
+
+// TestRunScriptIsItsOwnFile pins that the two scripts never read each other:
+// a checkout with a setup script and no run script offers no run card, and the
+// reverse leaves the setup unwrapped.
+func TestRunScriptIsItsOwnFile(t *testing.T) {
+	svc := &Service{}
+	dir := t.TempDir()
+	writeSetup(t, dir, "pnpm install")
+	if got := RunScript(dir); got != "" {
+		t.Errorf("setup only: RunScript = %q, want empty", got)
+	}
+
+	if err := svc.SaveWorktreeRun(dir, "pnpm dev --port $LICH_WORKTREE_PORT"); err != nil {
+		t.Fatal(err)
+	}
+	if got := RunScript(dir); got != "pnpm dev --port $LICH_WORKTREE_PORT" {
+		t.Errorf("RunScript = %q, want the saved command", got)
+	}
+	if got := SetupScript(dir); got != "pnpm install" {
+		t.Errorf("saving a run script moved the setup one: %q", got)
+	}
+
+	info := svc.WorktreeSetup(dir)
+	if info.Script != "pnpm install" || info.Run != "pnpm dev --port $LICH_WORKTREE_PORT" {
+		t.Errorf("WorktreeSetup = %+v, want both scripts", info)
+	}
+}
+
+// An empty save removes the run file, which is how a project stops offering a
+// run card at all.
+func TestSaveWorktreeRunRemovesOnEmpty(t *testing.T) {
+	svc := &Service{}
+	dir := t.TempDir()
+
+	if err := svc.SaveWorktreeRun(dir, "task dev"); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SaveWorktreeRun(dir, "  "); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".lich", "run-worktree.sh")); !os.IsNotExist(err) {
+		t.Error("empty save must remove the file, not truncate it")
+	}
+	if err := svc.SaveWorktreeRun(dir, ""); err != nil {
+		t.Errorf("empty save with no file: %v", err)
+	}
+}
+
+// The run script has no suggestion beside it: a lockfile names how a checkout
+// installs, never how the project starts.
+func TestWorktreeSetupDetectionIgnoresTheRunScript(t *testing.T) {
+	svc := &Service{}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "pnpm-lock.yaml"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SaveWorktreeRun(dir, "pnpm dev"); err != nil {
+		t.Fatal(err)
+	}
+
+	got := svc.WorktreeSetup(dir)
+	if got.Suggestion != "pnpm install" {
+		t.Errorf("suggestion = %q, want the setup one still offered", got.Suggestion)
+	}
+	if got.Run != "pnpm dev" {
+		t.Errorf("run = %q, want the saved command", got.Run)
+	}
+}

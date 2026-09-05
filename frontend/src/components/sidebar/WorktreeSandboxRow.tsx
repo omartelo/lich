@@ -8,7 +8,7 @@ import type { SandboxChoice } from "@/lib/use-sandbox-choice"
 // when Create is pressed is recorded on that session alone — a later change to
 // the rung never moves a session already open.
 //
-// Absent on a machine with no backend for it, WorktreeSetupRow's rule: a control
+// Absent on a machine with no backend for it, WorktreeScriptRows' rule: a control
 // that cannot change anything is worse than no control.
 export function WorktreeSandboxRow({ choice }: { choice: SandboxChoice }) {
   if (!choice.available) {

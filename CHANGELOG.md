@@ -20,6 +20,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nothing here can read. A session on one of those three simply contributes no
   rows, which is what a session with nothing to match has always looked like.
 
+- **A checkout can now run the project's own app.** lich has reserved a
+  dev-server port per checkout for a while — `LICH_WORKTREE_PORT`, a number the
+  worktree owns — and then left it to you to find a terminal and start something
+  on it. Write the command once in `.lich/run-worktree.sh`, versioned beside the
+  setup script and shared with everyone who clones the repository, and every
+  checkout's **+** menu carries a **Run** item that opens it in a card of its
+  own: a terminal named after the command, started by the backend, so the app is
+  up whether or not you ever look at it. The New worktree dialog is where the
+  file is written, on the line under the setup script. Nothing supervises what
+  it starts — when the command exits you are left in your own shell in the same
+  card with the error still on screen, and ↑ Enter is the retry. Absent on
+  Windows, where the file's `sh` would be read by PowerShell.
+
 - **`lich open` and its MCP tool now open a project, not only a session in one.**
   `--project` took the name of a project already on screen, so an agent could
   fan work out across the projects you had open and no further: putting a

@@ -4,7 +4,7 @@ import { ProjectService } from "@/lib/rpc"
 import type { Branches, Worktree } from "@/lib/api-types"
 import { SearchInput } from "@/components/common/SearchInput"
 import { WorktreeSandboxRow } from "@/components/sidebar/WorktreeSandboxRow"
-import { WorktreeSetupRow } from "@/components/sidebar/WorktreeSetupRow"
+import { WorktreeScriptRows } from "@/components/sidebar/WorktreeScriptRows"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -332,7 +332,7 @@ export function WorktreeDialog({
           </div>
         </div>
 
-        <WorktreeSetupRow projectPath={projectPath} />
+        <WorktreeScriptRows projectPath={projectPath} />
 
         <WorktreeSandboxRow choice={sandbox} />
 

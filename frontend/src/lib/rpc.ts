@@ -219,12 +219,17 @@ export const ProjectService = {
     call<string[] | null>("project.FileLines", [path, rel, ref, from, to]),
   DiscardFile: (path: string, rel: string) => call<null>("project.DiscardFile", [path, rel]),
   ListBranches: (path: string) => call<Branches>("project.ListBranches", [path]),
-  /** The setup script a new worktree of this project will run, or the
-   * suggestion to offer when the repo ships none. */
+  /** The setup script a new worktree of this project will run (or the
+   * suggestion to offer when the repo ships none), and the run command its
+   * checkouts open a Run card on. */
   WorktreeSetup: (path: string) => call<WorktreeSetup>("project.WorktreeSetup", [path]),
   /** Write .lich/setup-worktree.sh in the project checkout ("" removes it). */
   SaveWorktreeSetup: (path: string, script: string) =>
     call<null>("project.SaveWorktreeSetup", [path, script]),
+  /** Write .lich/run-worktree.sh in the project checkout ("" removes it, which
+   * is how a project stops offering a Run card). */
+  SaveWorktreeRun: (path: string, script: string) =>
+    call<null>("project.SaveWorktreeRun", [path, script]),
   /** The logins gh is authenticated as, for the project's account picker;
    * errors when gh is missing or logged out. */
   GitHubAccounts: () => call<string[] | null>("project.GitHubAccounts", []),
@@ -509,6 +514,15 @@ export const Quota = {
    * question. Served from a five-minute cache per account, so calling it often
    * is cheap and asks nothing extra of endpoints that rate-limit. */
   Plans: (sessionId: string) => call<QuotaPlan[]>("quota.Plans", [sessionId]),
+}
+
+export const Spawn = {
+  /** Open the project's Run card in the checkout at cwd: a terminal session
+   * whose entrypoint is .lich/run-worktree.sh, its PTY started by the backend
+   * so the app is up whether or not the card is ever looked at. Rejects a
+   * project that ships no run script. The card arrives through session-opened,
+   * like every other session opened outside the window. */
+  Run: (projectId: string, cwd: string) => call<null>("spawn.Run", [projectId, cwd]),
 }
 
 export const Themes = {

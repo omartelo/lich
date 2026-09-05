@@ -171,6 +171,8 @@ func (s *spawnStore) SetSessionModel(_, model string) error {
 	return nil
 }
 
+func (s *spawnStore) SetSessionEntrypoint(_, _ string) error { return nil }
+
 func (s *spawnStore) DeleteSession(_, _, _ string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

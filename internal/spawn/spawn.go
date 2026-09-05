@@ -84,6 +84,7 @@ type Sessions interface {
 		projectID, sessionID, label, kind, path string, nextSeq int, originID, originLabel string,
 	) error
 	SetSessionModel(sessionID, model string) error
+	SetSessionEntrypoint(sessionID, entrypoint string) error
 	RenameSession(sessionID, label string) error
 	DeleteSession(projectID, sessionID, activeID string) error
 	CloseSession(projectID, sessionID, activeID string) error
