@@ -209,9 +209,16 @@ func findSession(projects []store.Project, target, projectName string) (located,
 		return located{}, fmt.Errorf("no session given to close")
 	}
 
+	// Resolved once rather than per project: a path argument stats the
+	// directory it names, and this loop runs over every project open.
+	inProject, err := projectFilter(projectName)
+	if err != nil {
+		return located{}, err
+	}
+
 	var byLabel, byName []located
 	for _, p := range projects {
-		if projectName != "" && !strings.EqualFold(p.Name, projectName) {
+		if !inProject(p) {
 			continue
 		}
 		for _, sess := range p.Sessions {

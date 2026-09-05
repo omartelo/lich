@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { StoredProject, StoredSession } from "@/lib/api-types"
+import { toOpenedProject } from "@/lib/session/session-events"
+import { adoptSession } from "@/lib/session/sessions"
 import { buildSessionState, toProject } from "./project-workspace"
 
 const storedSession = (overrides: Partial<StoredSession> = {}): StoredSession => ({
@@ -145,5 +147,59 @@ describe("confined sessions", () => {
       ])
       expect(state.p1?.sessions[0]?.sandboxed).toBeUndefined()
     }
+  })
+})
+
+// The two halves of an agent opening a project it had to put on screen first:
+// the tab arrives as a payload rather than a reload, and the session event right
+// behind it has to find the project already there — adoptSession drops a card
+// whose project it does not know.
+describe("a project opened outside the window", () => {
+  const payload = (): unknown => ({
+    id: "p9",
+    name: "revu",
+    path: "/src/revu",
+    nextSeq: 7,
+    activeSessionId: "parked",
+    defaultProvider: "",
+    sessions: [storedSession({ id: "parked", label: "Session 6" })],
+  })
+
+  it("takes the tab in with the sessions it was closed with", () => {
+    const project = toOpenedProject(payload())
+    expect(project).not.toBeNull()
+    const state = buildSessionState([project as StoredProject])
+    expect(state.p9).toMatchObject({ activeId: "parked", nextSeq: 7 })
+    expect(state.p9?.sessions).toHaveLength(1)
+  })
+
+  it("holds the session that follows it", () => {
+    const project = toOpenedProject(payload()) as StoredProject
+    const state = { ...buildSessionState([project]) }
+    const next = adoptSession(state, "p9", { id: "new", label: "Session 7", kind: "claude" }, 8)
+    expect(next.p9?.sessions.map((s) => s.id)).toEqual(["parked", "new"])
+    expect(next.p9?.nextSeq).toBe(8)
+  })
+
+  it("refuses a payload with no project in it", () => {
+    expect(toOpenedProject({ id: "", name: "revu", path: "/src/revu" })).toBeNull()
+    expect(toOpenedProject({ id: "p9", name: "", path: "/src/revu" })).toBeNull()
+    expect(toOpenedProject({ id: "p9", name: "revu", path: "" })).toBeNull()
+  })
+
+  // A brand-new project has no sessions, and they cross as null rather than []
+  // — a nil slice in Go.
+  it("reads a project with no sessions", () => {
+    const project = toOpenedProject({
+      ...(payload() as object),
+      sessions: null,
+      activeSessionId: "",
+      nextSeq: 1,
+    })
+    expect(buildSessionState([project as StoredProject]).p9).toMatchObject({
+      sessions: [],
+      activeId: "",
+      nextSeq: 1,
+    })
   })
 })

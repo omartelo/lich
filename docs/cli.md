@@ -239,7 +239,7 @@ tasks to its agent in; a task still queued for a prompt that has not received it
 is never picked. Outside a session, or with nothing open, it is an error rather
 than a guess, and the ticket is still the way to name a specific errand.
 
-### `lich open [--project <name>] [--kind <provider>] [--worktree <branch>] [--base <branch>] [--model <model>] [--prompt <task>]`
+### `lich open [--project <name-or-path>] [--kind <provider>] [--worktree <branch>] [--base <branch>] [--model <model>] [--prompt <task>]`
 
 Opens a new session, starts it, and prints the two names it is addressed by:
 
@@ -251,6 +251,22 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
 - `--project` names the project it lands in; the default is the caller's own.
   **Outside a session there is no default** and the project must be named — the
   error lists what is open.
+  It takes a **name or a directory path**, and a path is the only way to reach a
+  project the window is not already holding: lich opens the directory as a
+  project first, then the session in it. A directory it had open before comes
+  back the way reopening it from the window does — same id, same name, and the
+  sessions it was closed with parked on their cards — because the row is matched
+  by path through the workspace's history rather than created again. A directory
+  it has never seen becomes a new project, and its tab appears without a reload.
+  The path must be **absolute**: there is no shell at lich's end, so a relative
+  one would resolve against the directory the window was launched from rather
+  than the caller's, and open a project somewhere else without saying so. A
+  leading `~` is expanded, because an MCP tool call reaches lich through no
+  shell at all. A bare word with no separator in it is always read as a project
+  name, never as a path.
+  Every other `--project` — `close`, `rename`, `worktrees` — takes a path in the
+  same spelling, but only narrows with it: opening a project is something only
+  `open` does.
 - `--kind` is what the session runs: any provider id (`claude`, `codex`,
   `antigravity`, `opencode`, `omp`, `crush`, `cursor`, `kiro`) or `shell`. The default is the caller's own
   provider, so an agent opening a worker gets another of itself; a caller that
@@ -499,7 +515,7 @@ at lich.
 | `send_to_session` | `session`, `prompt`, optional `project` and `timeout_seconds`. |
 | `wait_for_answer` | optional `ticket` and `timeout_seconds` — with a ticket, `lich wait <ticket>`; without one, the collect: everything ready at once. |
 | `reply_to_session` | `answer`, optional `ticket` — what a relayed message asks for; without a ticket, the request open against the calling session. |
-| `open_session` | optional `project`, `kind`, `worktree`, `base`, `model` — `lich open` — plus optional `prompt` — `lich open --prompt`, the same hand-off in the same call. |
+| `open_session` | optional `project` (a name, or an absolute directory path, which is opened as a project first), `kind`, `worktree`, `base`, `model` — `lich open` — plus optional `prompt` — `lich open --prompt`, the same hand-off in the same call. |
 | `close_session` | `session`, optional `project`, `worktree` (`keep`/`remove`), `force`. |
 | `rename_session` | `label`, optional `session` (omitted renames the caller's own) and `project` — `lich rename`. |
 | `list_worktrees` | optional `project` — the checkouts, as JSON. |

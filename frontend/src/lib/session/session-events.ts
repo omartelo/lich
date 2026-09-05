@@ -5,6 +5,7 @@
 // alone. Kept pure (no bindings, no React) so the provider and the card only
 // wire it up.
 
+import type { StoredProject, StoredSession } from "@/lib/api-types"
 import { isSessionKind, projectOfSession, type SessionKind, type SessionState } from "./sessions"
 
 // A subscription to one of the global session events, injected so every store
@@ -83,6 +84,16 @@ export const RELAY_EVENT = "session-relay"
 // Payload: the whole session, because the card is drawn from it rather than
 // looked up: the row is already written and its PTY is already running.
 export const OPENED_EVENT = "session-opened"
+
+// Global event the backend emits when a project was opened outside the window —
+// an agent naming a directory rather than a project already on screen (see
+// spawn.ProjectOpenedEventName). Payload: the whole store.Project, sessions
+// included, because the tab is drawn from it rather than looked up — and because
+// a project reopened from the history comes back with the cards it was closed
+// with. It arrives before the session event that follows it, and has to be
+// applied without waiting on anything: a session-opened whose project is not on
+// screen yet is dropped (adoptSession).
+export const PROJECT_OPENED_EVENT = "project-opened"
 
 // Global event the backend emits when a session was closed outside the window —
 // an agent running `lich close` or its MCP tool (see spawn.ClosedEventName).
@@ -310,6 +321,42 @@ export function toOpenedSession(data: unknown): OpenedSession | null {
     nextSeq: typeof nextSeq === "number" ? nextSeq : 1,
     originSessionId: typeof originSessionId === "string" ? originSessionId : "",
     originLabel: typeof originLabel === "string" ? originLabel : "",
+  }
+}
+
+// toOpenedProject narrows a project-opened payload to the row the workspace
+// draws a tab from, or null when it names no project this window can place.
+// Everything past the identity is left to buildSessionState, which already
+// tolerates a missing session list and a kind this build does not know; a card
+// with no id is dropped here, because that is the one field nothing downstream
+// can do without.
+export function toOpenedProject(data: unknown): StoredProject | null {
+  // isIdEvent only asks for a string; an empty one would key the workspace's
+  // session state under "" and put a tab on screen that no session can reach.
+  if (!isIdEvent(data) || data.id === "") {
+    return null
+  }
+  const { name, path, nextSeq, activeSessionId, defaultProvider, sessions } = data as {
+    name?: unknown
+    path?: unknown
+    nextSeq?: unknown
+    activeSessionId?: unknown
+    defaultProvider?: unknown
+    sessions?: unknown
+  }
+  if (typeof name !== "string" || name === "" || typeof path !== "string" || path === "") {
+    return null
+  }
+  return {
+    id: data.id,
+    name,
+    path,
+    nextSeq: typeof nextSeq === "number" ? nextSeq : 1,
+    activeSessionId: typeof activeSessionId === "string" ? activeSessionId : "",
+    defaultProvider: typeof defaultProvider === "string" ? defaultProvider : "",
+    sessions: Array.isArray(sessions)
+      ? (sessions as StoredSession[]).filter((s) => typeof s?.id === "string" && s.id !== "")
+      : null,
   }
 }
 

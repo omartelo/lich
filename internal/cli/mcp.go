@@ -390,7 +390,10 @@ var mcpTools = []mcpTool{
 			"as send_to_session returns one.",
 		Schema: schema(map[string]any{
 			"project": property("string",
-				"Project to open the session in, by name. Defaults to your own project."),
+				"Project to open the session in: the name of one already open, or the "+
+					"absolute path of a directory, which is opened as a project first — a "+
+					"directory lich closed comes back with the sessions it was closed with. "+
+					"Defaults to your own project."),
 			"kind": property("string",
 				"What the session runs: claude, codex, antigravity, opencode, omp, crush, "+
 					"cursor, kiro, or shell. Defaults to the same agent you are."),
@@ -439,7 +442,8 @@ var mcpTools = []mcpTool{
 			"session": property("string",
 				"The session to close, by the label on its card or the name it answers to."),
 			"project": property("string",
-				"Project to narrow to, when the same label exists in more than one."),
+				"Project to narrow to, by name or by directory path, when the same label "+
+					"exists in more than one."),
 			"worktree": property("string",
 				"Required when this is the last session in a worktree: \"keep\" leaves the "+
 					"checkout on disk, \"remove\" deletes it."),
@@ -472,7 +476,8 @@ var mcpTools = []mcpTool{
 				"Session to rename, by the label on its card or the name it answers to. "+
 					"Omit to rename the session you are running in."),
 			"project": property("string",
-				"Project to narrow to, when the same label exists in more than one."),
+				"Project to narrow to, by name or by directory path, when the same label "+
+					"exists in more than one."),
 		}, "label"),
 		Run: func(c *client, args mcpArgs) (string, error) {
 			var renamed spawn.Renamed
@@ -490,7 +495,8 @@ var mcpTools = []mcpTool{
 			"session on a branch (one that is already checked out is opened, not created) " +
 			"and before closing one (the last session in a checkout decides its fate).",
 		Schema: schema(map[string]any{
-			"project": property("string", "Project to list. Defaults to your own."),
+			"project": property("string",
+				"Project to list, by name or by directory path. Defaults to your own."),
 		}),
 		ReadOnly: true,
 		Run: func(c *client, args mcpArgs) (string, error) {

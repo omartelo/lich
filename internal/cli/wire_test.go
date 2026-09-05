@@ -187,6 +187,12 @@ func (s *spawnStore) RenameSession(sessionID, label string) error {
 
 func (*spawnStore) CloseSession(_, _, _ string) error { return nil }
 
+func (*spawnStore) RecentProjects() ([]store.Recent, error) { return nil, nil }
+
+// The wire tests never open a project: what they prove is the arguments a
+// command posts, and the workspace this fixture answers with is already open.
+func (*spawnStore) AddProject(_, _, _ string) error { return nil }
+
 func (*spawnStore) PurgeWorktreeSessions(_, _ string) error { return nil }
 
 // spawnGit stands in for the repository: creating a checkout is refused because

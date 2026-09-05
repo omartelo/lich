@@ -25,8 +25,14 @@ type added struct {
 type fakeSessions struct {
 	projects []store.Project
 	loadErr  error
-	rows     []added
-	addErr   error
+	// closed is the workspace's history: projects with is_open = 0, which
+	// RecentProjects offers back and AddProject reopens with their sessions
+	// intact, exactly as the store does.
+	closed     []store.Project
+	recentErr  error
+	addProjErr error
+	rows       []added
+	addErr     error
 	// models records the model written on each session row, keyed by session id.
 	models   map[string]string
 	modelErr error
@@ -76,6 +82,42 @@ func (f *fakeSessions) PurgeWorktreeSessions(_, path string) error {
 
 func (f *fakeSessions) LoadState() ([]store.Project, error) {
 	return f.projects, f.loadErr
+}
+
+func (f *fakeSessions) RecentProjects() ([]store.Recent, error) {
+	if f.recentErr != nil {
+		return nil, f.recentErr
+	}
+	recents := make([]store.Recent, 0, len(f.closed))
+	for _, p := range f.closed {
+		recents = append(recents, store.Recent{ID: p.ID, Name: p.Name, Path: p.Path})
+	}
+	return recents, nil
+}
+
+// AddProject mirrors the store's upsert: a closed project's row is reopened as
+// it stands — its sessions, its label counter and its name all come back — and
+// an id nothing holds opens as a new project.
+func (f *fakeSessions) AddProject(id, name, path string) error {
+	if f.addProjErr != nil {
+		return f.addProjErr
+	}
+	for i, p := range f.projects {
+		if p.ID == id {
+			f.projects[i].Name, f.projects[i].Path = name, path
+			return nil
+		}
+	}
+	for i, p := range f.closed {
+		if p.ID == id {
+			p.Name, p.Path = name, path
+			f.closed = append(f.closed[:i], f.closed[i+1:]...)
+			f.projects = append(f.projects, p)
+			return nil
+		}
+	}
+	f.projects = append(f.projects, store.Project{ID: id, Name: name, Path: path, NextSeq: 1})
+	return nil
 }
 
 func (f *fakeSessions) AddSessionFrom(
