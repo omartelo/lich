@@ -33,6 +33,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   card with the error still on screen, and ↑ Enter is the retry. Absent on
   Windows, where the file's `sh` would be read by PowerShell.
 
+- **A prompt can now be left on a session for later.**
+  **Schedule a prompt…** on a card's menu takes what you want that session to do
+  and one of four times — 15 minutes, an hour, four hours, or tomorrow morning —
+  and types it at that prompt when the time comes, exactly as if you had typed it
+  yourself. It is the reminder that arrives as work: the release checklist at
+  nine, the rebase after the build, the thing you will not remember to ask for at
+  four. Each time button carries the wall clock it resolves to, so *Tomorrow*
+  never has to be taken on trust. The card counts down on its own line and the
+  tooltip holds the prompt and the day, so a session with something coming says
+  so before you open anything. A session holds one at a time — scheduling again
+  replaces it, and the same dialog is where you cancel. It works the same on
+  every provider, because delivering it is typing at a prompt, and a prompt that
+  comes due while that session is mid-setup, mid-sentence or without a terminal
+  waits for one rather than being dropped — including one that came due while
+  lich was closed, which lands when lich is next up.
+
 - **`lich open` and its MCP tool now open a project, not only a session in one.**
   `--project` took the name of a project already on screen, so an agent could
   fan work out across the projects you had open and no further: putting a

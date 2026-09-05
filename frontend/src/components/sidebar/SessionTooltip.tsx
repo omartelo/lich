@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   ArrowRight,
+  Clock,
   GitBranch,
   GitPullRequestArrow,
   Play,
@@ -10,6 +11,7 @@ import {
 import type { Session } from "@/lib/session/sessions"
 import { useSessionCwd } from "@/lib/session/use-session-cwd"
 import { useSessionRelay } from "@/lib/session/use-session-relay"
+import { scheduledFor } from "@/lib/session/schedule"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { baseReadout } from "@/lib/git/base-status"
 import { usePullRequest } from "@/lib/pulls/use-pull-request"
@@ -78,6 +80,26 @@ export function SessionTooltip({ session, path }: SessionTooltipProps) {
                 {`lich reply ${relay.ticket} "…"`}
               </span>
             )}
+          </span>
+        )}
+        {/* The prompt parked on this session. The card counts down to it; the
+            day and the wording are here, because "in 2d" is not a time anyone
+            can plan around and the prompt itself is the part the user has to
+            recognise to know whether to leave it there. */}
+        {session.scheduledAt && (
+          <span className="flex flex-col gap-0.5">
+            <span className="flex items-center gap-1.5 text-muted-foreground">
+              <Clock className="size-3 shrink-0" />
+              <span>
+                Scheduled for{" "}
+                <span className="font-medium text-foreground">
+                  {scheduledFor(session.scheduledAt, new Date())}
+                </span>
+              </span>
+            </span>
+            <span className="line-clamp-2 text-muted-foreground italic">
+              {session.scheduledPrompt}
+            </span>
           </span>
         )}
         {/* The command this terminal opens into. The card's label already says

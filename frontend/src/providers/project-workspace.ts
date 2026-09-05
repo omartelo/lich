@@ -20,6 +20,9 @@ export function buildSessionState(loaded: StoredProject[]): SessionState {
       ...(session.originSessionId
         ? { originSessionId: session.originSessionId, originLabel: session.originLabel }
         : {}),
+      ...(session.scheduledAt
+        ? { scheduledAt: session.scheduledAt, scheduledPrompt: session.scheduledPrompt }
+        : {}),
     }))
     state[project.id] = {
       sessions,

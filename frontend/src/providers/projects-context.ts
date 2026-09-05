@@ -52,6 +52,9 @@ export interface ProjectsValue {
   // Record the command a terminal session opens into, "" to clear it. Refused
   // by the store on anything but a shell session.
   setEntrypoint: (projectId: string, sessionId: string, entrypoint: string) => void
+  // Park a prompt to be typed at a session at unix second `at`, or clear the
+  // one it holds with at 0. One per session: this replaces what was there.
+  scheduleSession: (sessionId: string, at: number, prompt: string) => void
   /** Pin a session to the head of its project's list, or unpin it. */
   pinSession: (projectId: string, sessionId: string, pinned: boolean) => void
   /** Rearrange the project tabs to the given id order. */

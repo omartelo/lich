@@ -32,6 +32,9 @@ func (wiredSessions) LoadState() ([]store.Project, error) {
 	}}}, nil
 }
 
+// Nothing here schedules a prompt; the relay only ever calls this to clear one.
+func (wiredSessions) SetSessionSchedule(string, int64, string) error { return nil }
+
 type wiredTerminal struct {
 	mu    sync.Mutex
 	typed string

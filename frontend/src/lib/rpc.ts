@@ -406,6 +406,11 @@ export const Store = {
    * shell. The store refuses it on anything but a shell session. */
   SetSessionEntrypoint: (sessionID: string, entrypoint: string) =>
     call<null>("store.SetSessionEntrypoint", [sessionID, entrypoint]),
+  /** Park a prompt to be typed at a session later, at unix second `at`. A 0
+   * time, or an empty prompt, clears whatever was parked — a session holds one
+   * scheduled prompt at a time, and scheduling again replaces it. */
+  SetSessionSchedule: (sessionID: string, at: number, prompt: string) =>
+    call<null>("store.SetSessionSchedule", [sessionID, at, prompt]),
   /** Whether this one session runs confined, overriding the provider's rung for
    * it alone: "on", "off", or "" to follow the setting. Read on every later
    * spawn, so a reload and a resume keep the answer the session opened with. */

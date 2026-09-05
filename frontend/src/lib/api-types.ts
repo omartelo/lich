@@ -312,6 +312,12 @@ export interface StoredSession {
   originSessionId: string
   /** What that session was called at the time; all that survives its close. */
   originLabel: string
+  /** When the prompt below is due, in unix seconds; 0 for a session with
+   * nothing waiting. One slot per session — scheduling again replaces it. */
+  scheduledAt: number
+  /** The prompt to type at this session when that time comes, as the user
+   * wrote it. Empty when nothing is scheduled. */
+  scheduledPrompt: string
 }
 
 /** internal/store.ClosedSession — one parked session offered for resuming. What
