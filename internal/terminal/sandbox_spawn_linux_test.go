@@ -36,7 +36,7 @@ func TestAConfinedSessionRunsInItsPTY(t *testing.T) {
 	svc := New(stubBins{sandboxOn: true}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", cwd, KindShell, "", "", false, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", cwd, KindShell, "", "", false, false, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 	// Both markers are assembled from two shell variables, so the PTY's echo of

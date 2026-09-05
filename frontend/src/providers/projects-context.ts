@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react"
 import type { ClosedSession, Project, RecentProject } from "@/lib/api-types"
-import type { SessionKind, SessionState } from "@/lib/session/sessions"
+import type { Session, SessionKind, SessionState } from "@/lib/session/sessions"
 
 export interface ProjectsValue {
   projects: Project[]
@@ -24,11 +24,13 @@ export interface ProjectsValue {
   newSession: (projectId: string, kind?: SessionKind, path?: string) => string
   /** Open a project-default session rooted at a git worktree, labeled after it,
    * returning its id. sandbox is the dialog's confinement answer ("on"/"off"),
-   * "" to follow the provider's rung. */
+   * "" to follow the provider's rung. from is the session being forked into this
+   * checkout, which lends the new card its provider and its lineage. */
   newWorktreeSession: (
     projectId: string,
     wt: { name: string; path: string },
     sandbox?: string,
+    from?: Session | null,
   ) => string
   /** Resume a worktree: reopen its parked session when one exists, else open a
    * fresh session on it. Answers with the session either way, for a caller with

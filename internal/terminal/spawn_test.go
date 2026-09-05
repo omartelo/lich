@@ -25,7 +25,7 @@ func TestASetupSpawnWithNoScriptIsReadyAnyway(t *testing.T) {
 	svc := New(stubBins{}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), KindShell, "", "", true, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), KindShell, "", "", false, true, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 
@@ -44,7 +44,7 @@ func TestASetupSpawnWithAScriptWaitsForItsMarker(t *testing.T) {
 	svc := New(stubBins{projectPath: projectWithSetup(t, "sleep 30")}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), KindShell, "", "", true, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), KindShell, "", "", false, true, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 
@@ -110,7 +110,7 @@ func TestAPartialMarkerNeverEndsTheSetup(t *testing.T) {
 func TestStartReportsAPtyThatCannotSpawn(t *testing.T) {
 	svc := New(stubBins{bin: "/nonexistent/lich-test-provider"}, nil, events.New())
 
-	err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, 80, 24)
+	err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, false, 80, 24)
 
 	if err == nil {
 		t.Fatal("Start = nil, want the spawn failure")
@@ -130,7 +130,7 @@ func TestASpawnWithNoDirectoryStartsAtHome(t *testing.T) {
 	svc := New(stubBins{bin: stayAliveBin(t)}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	_, cwd, err := svc.spawnSession("s1", "p1", "", "claude", "", "", false, 80, 24)
+	_, cwd, err := svc.spawnSession("s1", "p1", "", "claude", "", "", false, false, 80, 24)
 	if err != nil {
 		t.Fatalf("spawnSession = %v, want nil", err)
 	}

@@ -31,7 +31,7 @@ const reapSettle = 250 * time.Millisecond
 // is all that goroutine has left to do.
 func respawn(t *testing.T, svc *Service, id string) *session {
 	t.Helper()
-	if err := svc.Start(id, "p1", t.TempDir(), "claude", "", "", false, 80, 24); err != nil {
+	if err := svc.Start(id, "p1", t.TempDir(), "claude", "", "", false, false, 80, 24); err != nil {
 		t.Fatalf("first start: %v", err)
 	}
 	svc.mu.Lock()
@@ -44,7 +44,7 @@ func respawn(t *testing.T, svc *Service, id string) *session {
 	if err := svc.Close(id); err != nil {
 		t.Fatalf("close: %v", err)
 	}
-	if err := svc.Start(id, "p1", t.TempDir(), "claude", "", "", false, 80, 24); err != nil {
+	if err := svc.Start(id, "p1", t.TempDir(), "claude", "", "", false, false, 80, 24); err != nil {
 		t.Fatalf("second start: %v", err)
 	}
 
@@ -108,7 +108,7 @@ func TestExitEventCarriesTheExitCode(t *testing.T) {
 	svc := New(stubBins{bin: exitBin(t, 3)}, nil, hub)
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, false, 80, 24); err != nil {
 		t.Fatalf("start: %v", err)
 	}
 
@@ -138,7 +138,7 @@ func TestExitEventOmitsAnUnobservedStatus(t *testing.T) {
 	svc := New(stubBins{bin: echoBin(t)}, nil, hub)
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, false, 80, 24); err != nil {
 		t.Fatalf("start: %v", err)
 	}
 	// Killed behind the service's back: Close would evict the session first and

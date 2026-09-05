@@ -119,6 +119,9 @@ export const Terminal = {
   /** resume: a provider session id to reopen (--resume); "" starts fresh.
    * name: what the session answers to in its provider's peer roster (lib/session/peer-name);
    * only Claude Code has one, every other kind ignores it.
+   * fork: branch that conversation instead of continuing it — the copy is this
+   * session's, the original is left where it is. Only for the three kinds whose
+   * CLI can (lib/session/sessions.forkableSession), and always with a resume id.
    * setup: run the project's worktree setup script ahead of the provider —
    * passed once, by the first Start after the worktree is created. */
   Start: (
@@ -128,10 +131,12 @@ export const Terminal = {
     kind: string,
     resume: string,
     name: string,
+    fork: boolean,
     setup: boolean,
     cols: number,
     rows: number,
-  ) => call<null>("terminal.Start", [id, projectID, cwd, kind, resume, name, setup, cols, rows]),
+  ) =>
+    call<null>("terminal.Start", [id, projectID, cwd, kind, resume, name, fork, setup, cols, rows]),
   Write: (id: string, data: string) => call<null>("terminal.Write", [id, data]),
   /** Whether this session can be given work: its provider is the program
    * reading the PTY — not the checkout's setup script, not a TUI still taking

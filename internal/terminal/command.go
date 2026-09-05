@@ -46,6 +46,21 @@ const (
 	kiroResumeFlag        = "--resume-id"
 )
 
+// How the three providers that can branch a conversation spell it
+// (providers.SupportsFork). Two of them add a flag to the resume they already
+// take; Codex replaces the subcommand, because its `fork` and `resume` are
+// siblings with the same argument shape — `codex fork <SESSION_ID>` (0.151.0).
+//
+// A fork asks the provider to copy the conversation into a new one of its own,
+// so the id lich holds names the *parent* for exactly one spawn: the copy gets
+// an id the provider assigns, and lich learns it the way it learns every other
+// one, from that session's own session-start report.
+const (
+	claudeForkFlag   = "--fork-session"
+	codexForkSubcmd  = "fork"
+	opencodeForkFlag = "--fork"
+)
+
 // kiroChatSubcmd is the subcommand a Kiro session runs, and it is not optional.
 // Kiro splits the flags lich passes across two parsers: its root takes --agent
 // and --resume-id, but --model and --trust-all-tools belong to `chat` alone, and
@@ -206,8 +221,15 @@ func resolveBin(kind, bin string) string {
 // carrying no name at all — a spawn whose name flagValue rejected — which
 // resumes into Claude Code's own fallback, the working directory, and that is
 // the same string for every session in one checkout.
-func nameArgs(kind, name, resume string) []string {
-	if kind != providers.Claude || resume != "" {
+//
+// A fork is a birth, which is why it names one despite carrying a resume id.
+// The conversation the provider is about to write is new, so there is no
+// /rename inside it to undo — and the copy inherits the parent's name (measured
+// on 2.1.261: the forked transcript carries the parent's `agent-name` line), so
+// staying silent here is what would leave two cards answering to one string in
+// the roster the relay resolves against.
+func nameArgs(kind, name, resume string, fork bool) []string {
+	if kind != providers.Claude || (resume != "" && !fork) {
 		return nil
 	}
 	name, ok := flagValue(name)
@@ -237,12 +259,14 @@ func flagValue(value string) (string, bool) {
 // variadic and reads everything after it as another config path, so it has to
 // come last. Kiro's subcommand opens the session rather than a conversation, so
 // it comes before every flag.
-func providerArgs(kind, name, resume, model, lichBin, agent string, skipPermissions bool) []string {
+func providerArgs(
+	kind, name, resume, model, lichBin, agent string, fork, skipPermissions bool,
+) []string {
 	mcp := mcpArgs(kind, lichBin)
 	args := append([]string{}, subcommandArgs(kind)...)
-	args = append(args, nameArgs(kind, name, resume)...)
+	args = append(args, nameArgs(kind, name, resume, fork)...)
 	args = append(args, agentArgs(kind, agent)...)
-	args = append(args, resumeArgs(kind, resume)...)
+	args = append(args, resumeArgs(kind, resume, fork)...)
 	args = append(args, skipPermissionArgs(kind, skipPermissions)...)
 	args = append(args, modelArgs(kind, model)...)
 	args = append(args, briefingArgs(kind)...)
@@ -384,20 +408,37 @@ func claudeMCPConfig(lichBin string) string {
 // and a provider with no spelling here never grows one — the frontend only
 // passes a resume id for a kind it knows resumes, but a stray one must not reach
 // a shell either.
-func resumeArgs(kind, resume string) []string {
+//
+// fork asks for the conversation to be branched rather than continued, and it
+// is honoured only where the provider has a verb for it: a fork flag invented
+// for one that has none would kill the spawn before the session exists, so the
+// three that do are spelled below and every other kind resumes as it always
+// did. providers.SupportsFork is what stops the offer reaching here at all.
+func resumeArgs(kind, resume string, fork bool) []string {
 	if resume == "" {
 		return nil
 	}
 	switch kind {
 	case providers.Claude:
+		if fork {
+			return []string{claudeResumeFlag, resume, claudeForkFlag}
+		}
 		return []string{claudeResumeFlag, resume}
 	case providers.Codex:
+		if fork {
+			return []string{codexForkSubcmd, resume}
+		}
 		return []string{codexResumeSubcmd, resume}
+	case providers.OpenCode:
+		if fork {
+			return []string{sessionResumeFlag, resume, opencodeForkFlag}
+		}
+		return []string{sessionResumeFlag, resume}
 	case providers.Antigravity:
 		return []string{antigravityResumeFlag, resume}
 	case providers.OMP:
 		return []string{ompResumeFlag, resume}
-	case providers.OpenCode, providers.Crush:
+	case providers.Crush:
 		return []string{sessionResumeFlag, resume}
 	case providers.Cursor:
 		return []string{cursorResumeFlag, resume}

@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A session can now be forked into a worktree of its own.**
+  Right-click a card and pick *Fork to worktree…*: the New worktree dialog opens
+  saying which conversation it will carry, and the session it creates starts on a
+  copy of that conversation and keeps going from there. The card you forked is
+  untouched — same branch, same history, still running — so it is the way to try
+  a second direction without losing the first, or to hand a long conversation to
+  a clean checkout. The new card wears the *from …* line delegated sessions
+  already have, so which session it came out of stays on screen. It runs the
+  provider the conversation belongs to rather than the project's default, and it
+  is named at birth like any other session — a fork used to inherit the name of
+  the card it came from, which left two of them answering to one name.
+  Offered for Claude Code, Codex and opencode, the three whose CLI can branch a
+  conversation; the item is absent on the other five, which only reopen one. If
+  the provider has since pruned the conversation, lich says so instead of making
+  a checkout for a session that would fail to start.
+
 - **The palette searches what was said in Codex, oh-my-pi, Kiro CLI and
   Antigravity sessions too.** The `Messages` group read Claude Code conversations
   and nothing else, so on any other provider the one thing you actually remember

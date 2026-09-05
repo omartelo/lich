@@ -59,8 +59,8 @@ tool.
 
 | File | What it holds | What a new provider adds |
 |---|---|---|
-| `internal/providers/providers.go` | the registry | an id constant, a `Registry` entry (id, display name, binary names, install-docs URL), and a line in `AcceptsMCPServer` if it takes an MCP server on its command line |
-| `internal/terminal/command.go` | what a spawn runs | entries in `skipPermissionFlags`, `modelFlags`, `briefingFlags` and `resumeArgs` — each one optional, and absent means "no flag rather than somebody else's" — plus a `subcommandArgs` arm if the session is a subcommand rather than the bare binary |
+| `internal/providers/providers.go` | the registry | an id constant, a `Registry` entry (id, display name, binary names, install-docs URL), a line in `AcceptsMCPServer` if it takes an MCP server on its command line, and one in `SupportsFork` — that one is a table every provider must appear in, so a new id fails its test until it is answered |
+| `internal/terminal/command.go` | what a spawn runs | entries in `skipPermissionFlags`, `modelFlags`, `briefingFlags` and `resumeArgs` (with a fork arm there if the CLI branches a conversation) — each one optional, and absent means "no flag rather than somebody else's" — plus a `subcommandArgs` arm if the session is a subcommand rather than the bare binary |
 | `internal/terminal/resume.go` | whether a resume can be offered | a `ResumeAvailable` case answering from what that provider left on disk |
 | `internal/terminal/transcript.go`, `sessiondb.go` | where that state lives | the path resolver the case above calls |
 | `internal/terminal/usage.go` | the footer's session readout | a `usageSourceFor` arm, plus a `sessionCost` arm reading whatever that provider records about spend — and a `contextUsageFor` arm only if it also records the model's context window. Which rung that lands the provider on is a row in `docs/ceilings.md`, in the same PR |
@@ -76,7 +76,7 @@ everything on the id (`provider.<id>.bin`, `.enabled`, `.sandbox`,
 
 | File | What a new provider adds |
 |---|---|
-| `frontend/src/lib/session/sessions.ts` | the id in `PROVIDER_KINDS`, and in `RESUMABLE_KINDS` if its CLI reopens a conversation |
+| `frontend/src/lib/session/sessions.ts` | the id in `PROVIDER_KINDS`, in `RESUMABLE_KINDS` if its CLI reopens a conversation, and in `FORKABLE_KINDS` if it branches one |
 | `frontend/src/lib/providers-store.ts` | its `skipPermissionFlags` spelling — the switch in Settings is hidden for a provider absent here, which is what stops the UI promising a flag the spawn has none for |
 | `frontend/src/components/ProviderIcon.tsx` | a brand path, or a lucide fallback |
 | `frontend/src/lib/session/delegate-prompt.ts` | `TOOL_KINDS` only if it is handed lich's tools at spawn |

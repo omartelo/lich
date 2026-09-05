@@ -45,6 +45,8 @@ interface SessionGroupProps {
   onStageToggle: (sessionId: string) => void
   // Gather a session and the ones it delegated to into a wall of their own.
   onGroupDelegates: (sessionId: string, delegateIds: string[]) => void
+  /** Branch this session's conversation into a checkout of its own. */
+  onFork: (session: Session) => void
   // A divider label is drawn only when the sidebar holds more than one group; a
   // lone project with no worktrees keeps its old flat, header-less list. The
   // header doubles as the group's drag handle, so a lone group is also the case
@@ -103,6 +105,7 @@ export function SessionGroup({
   stageIds,
   onStageToggle,
   onGroupDelegates,
+  onFork,
   showHeader,
   sortable,
   onReorder,
@@ -229,6 +232,7 @@ export function SessionGroup({
                       showing={stageIds.includes(session.id)}
                       onStageToggle={() => onStageToggle(session.id)}
                       delegateCount={delegates.length}
+                      onFork={() => onFork(session)}
                       onGroupDelegates={() =>
                         onGroupDelegates(
                           session.id,
