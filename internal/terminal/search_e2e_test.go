@@ -78,6 +78,49 @@ func TestSearchTranscriptsWalksEverySession(t *testing.T) {
 	}
 }
 
+// TestSearchTranscriptsFindsANonClaudeSession proves the chain a search rides for
+// a provider that is not Claude Code: the id resolves to no Claude
+// transcript, usageSourceFor finds the Codex rollout filed under it instead, and
+// the rollout's own block names are read. Planting both stores at once is the
+// point — the search asks the disk which provider ran a conversation, exactly as
+// the cost and context readouts do.
+func TestSearchTranscriptsFindsANonClaudeSession(t *testing.T) {
+	plantTranscripts(t, map[string]string{"uuid-claude": userLine("a claude worktree turn") + "\n"})
+	plantCodexRollout(t, "uuid-codex",
+		`{"type":"response_item","payload":{"type":"message","role":"assistant",`+
+			`"content":[{"type":"output_text","text":"The worktree port is a hash."}]}}`+"\n")
+	store := searchStore{providerSessions: map[string]string{
+		"s-claude": "uuid-claude",
+		"s-codex":  "uuid-codex",
+	}}
+	svc := New(store, nil, events.New())
+
+	got := svc.SearchTranscripts([]string{"s-claude", "s-codex"}, "worktree")
+	want := []TranscriptMatch{
+		{ID: "s-claude", Snippet: "a claude worktree turn", Count: 1},
+		{ID: "s-codex", Snippet: "The worktree port is a hash.", Count: 1},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("SearchTranscripts = %+v, want %+v", got, want)
+	}
+}
+
+// plantCodexRollout writes one rollout under a throwaway CODEX_HOME, in the
+// dated directory Codex files them in.
+func plantCodexRollout(t *testing.T, providerSessionID, body string) {
+	t.Helper()
+	dir := t.TempDir()
+	sessions := filepath.Join(dir, "sessions", "2026", "09", "05")
+	if err := os.MkdirAll(sessions, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(sessions, "rollout-2026-09-05T10-00-00-"+providerSessionID+".jsonl")
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CODEX_HOME", dir)
+}
+
 // TestSnippetAroundSurvivesGrowingCaseFolding pins the offset contract of the
 // snippet: lowercasing "Ⱥ" yields a longer rune, so a match offset taken from a
 // lowered copy runs past the end of the text it is meant to index.

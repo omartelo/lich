@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The palette searches what was said in Codex, oh-my-pi, Kiro CLI and
+  Antigravity sessions too.** The `Messages` group read Claude Code conversations
+  and nothing else, so on any other provider the one thing you actually remember
+  — a sentence from the conversation — found nothing, with no sign that the
+  search had skipped the session. It now reads every provider that files its
+  conversation as a transcript: five of the eight, your turns and the agent's,
+  the same as before. opencode and Crush keep their messages in a database
+  instead and are still searched by name only; Cursor CLI files a chat in a form
+  nothing here can read. A session on one of those three simply contributes no
+  rows, which is what a session with nothing to match has always looked like.
+
 - **`lich open` and its MCP tool now open a project, not only a session in one.**
   `--project` took the name of a project already on screen, so an agent could
   fan work out across the projects you had open and no further: putting a
@@ -126,6 +137,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   setup script still installing the checkout. The Enter stays yours.
 
 ### Fixed
+
+- **The Kiro CLI recap band was empty whenever the agent thought before it
+  spoke.** "Last turn" reads the closing words out of the provider's own
+  transcript, and Kiro types each block of a message differently — a `text` block
+  carries a string, a `thinking` block an object. Reading them all as strings
+  failed the whole line, so any turn that reasoned first — nearly every one —
+  read as a turn that said nothing, and the band did not appear.
 
 - **On Windows, an answer that named no ticket could close the wrong request.**
   `lich reply "<answer>"` and `reply_to_session` without a ticket close the
