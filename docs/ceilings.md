@@ -779,12 +779,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   benign case, and the common one. A wide version gap meets Chromium's own guard against a profile from a
   newer build instead, which refuses to start; lich then dies on a browser exit code and its dialog can only
   say `exit status 1`, naming nothing. `LICH_BROWSER` pins the answer; nothing else does.
-- **With no Chromium-family browser there is no window lifecycle** (`main.go`, `openWithoutWindow`): lich opens
-  a plain tab and then runs until it is signalled, because a tab it did not spawn cannot be waited on. Closing
-  the tab leaves lich serving, and `/restart` — which frees the pinned port by terminating "the window" — is
-  handed this process instead. On Windows that terminate is a `taskkill` WM_CLOSE against a process that has
-  no window, so an in-place update on a browserless Windows leaves the successor racing a port that never
-  frees.
+- **Without a Chromium `--app` window there is no window lifecycle** (`main.go`, `openWithoutWindow`) —
+  reached with no Chromium-family browser installed, or on purpose with `--no-window`/`LICH_NO_WINDOW`. lich
+  opens a plain tab and then runs until it is signalled, because a tab it did not spawn cannot be waited on.
+  Closing the tab leaves lich serving, and `/restart` — which frees the pinned port by terminating "the
+  window" — is handed this process instead. On Windows that terminate is a `taskkill` WM_CLOSE against a
+  process that has no window, so an in-place update leaves the successor racing a port that never frees:
+  a `--no-window` launch now buys that trap on a machine that could have had a window.
 - **The tab fallback cannot tell "opened" from "nothing happened"** (`internal/system.OpenURL`): `xdg-open`,
   `open` and `rundll32` are started and never waited on — waiting would block for the life of the browser they
   hand off to. A desktop with a URL handler installed but no browser behind it therefore looks like success:

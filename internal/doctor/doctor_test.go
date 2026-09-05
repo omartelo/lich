@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/omartelo/lich/internal/chromium"
 	"github.com/omartelo/lich/internal/providers"
 	"github.com/omartelo/lich/internal/singleton"
 )
@@ -216,6 +217,29 @@ func TestADatabaseThatWillNotCloseWarns(t *testing.T) {
 type closerFunc func() error
 
 func (c closerFunc) Close() error { return c() }
+
+// A --no-window launch resolves no browser on purpose, so the absence that
+// stops every other launch must not fail this one — otherwise doctor tells a
+// Firefox user to install Chromium and exits non-zero on a machine that runs.
+func TestNoWindowMakesAMissingBrowserFine(t *testing.T) {
+	d := healthy(t)
+	d.browser = func() (string, error) { return "", errors.New("no chromium-family browser found") }
+	d.getenv = func(key string) string {
+		if key == chromium.NoWindowEnv {
+			return "1"
+		}
+		return ""
+	}
+
+	checks := statuses(d.Run())
+
+	if checks["browser"].Status != OK {
+		t.Errorf("browser = %s, want ok — the launch asked for no window", checks["browser"].Status)
+	}
+	if !strings.Contains(checks["browser"].Detail, chromium.NoWindowEnv) {
+		t.Errorf("browser detail = %q, want it to name %s", checks["browser"].Detail, chromium.NoWindowEnv)
+	}
+}
 
 func TestAMissingBrowserStopsALaunchAndMissingProvidersDoNot(t *testing.T) {
 	d := healthy(t)
