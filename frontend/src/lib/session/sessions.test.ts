@@ -28,6 +28,7 @@ import {
   setSessionEntrypoint,
   setSessionPinned,
   setSessionSandboxed,
+  setSessionSchedule,
   delegatesOf,
   sidebarGroups,
   type Session,
@@ -1036,6 +1037,39 @@ describe("dropClosedSession", () => {
     const before = buildState(2)
     expect(dropClosedSession(before, P, "ghost", "s1")).toBe(before)
     expect(dropClosedSession(before, "other", "s1", "")).toBe(before)
+  })
+})
+
+describe("setSessionSchedule", () => {
+  const state = () => buildState(2)
+
+  it("parks the prompt on the session it names, and nowhere else", () => {
+    const next = setSessionSchedule(state(), "s1", 1700000000, "run the checklist")
+    expect(next[P]?.sessions[0]?.scheduledAt).toBe(1700000000)
+    expect(next[P]?.sessions[0]?.scheduledPrompt).toBe("run the checklist")
+    expect(next[P]?.sessions[1]?.scheduledAt).toBeUndefined()
+  })
+
+  it("replaces what was parked rather than queueing behind it", () => {
+    const first = setSessionSchedule(state(), "s1", 1700000000, "first")
+    const next = setSessionSchedule(first, "s1", 1700000060, "second")
+    expect(next[P]?.sessions[0]?.scheduledAt).toBe(1700000060)
+    expect(next[P]?.sessions[0]?.scheduledPrompt).toBe("second")
+  })
+
+  // Both keys leave together — a cancel and a prompt the backend has just typed
+  // arrive the same way, and one field left behind would outlive the other.
+  it("leaves no key behind when it is cleared", () => {
+    const parked = setSessionSchedule(buildState(1), "s1", 1700000000, "run it")
+    const cleared = setSessionSchedule(parked, "s1", 0, "")
+    const session = cleared[P]?.sessions[0]
+    expect(session && "scheduledAt" in session).toBe(false)
+    expect(session && "scheduledPrompt" in session).toBe(false)
+  })
+
+  it("ignores a session it does not know", () => {
+    const current = state()
+    expect(setSessionSchedule(current, "gone", 1700000000, "run it")).toBe(current)
   })
 })
 

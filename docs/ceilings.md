@@ -383,6 +383,16 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   a paste ends from timing alone. A target that repaints on a timer of its own never goes quiet and gets its Enter
   at `defaultSettleLimit` regardless, which is the case this cannot tell from a paste still arriving.
 
+- **A scheduled prompt is late or gone, never on time** (`internal/relay/later.go`, `deliverDue`): due prompts
+  are looked for every `scheduleTick`, and one whose session is not at a prompt — mid-setup, a draft on the
+  line, no terminal opened — is left parked for the next pass, so it lands whenever that session next has
+  somewhere to type, hours later if that is when. That covers lich having been closed at the time: the first
+  pass after launch types a prompt that came due days ago, unannounced. The other end of it is a session that
+  is closed rather than busy — a parked worktree card, a card closed for good. Its row leaves the roster
+  (`LoadState` reads open sessions only) and the resume reinserts it under a fresh id without the schedule, so
+  the prompt never fires and never comes back with the card, with nothing on screen having said it was
+  forfeited.
+
 - **An answer that names no ticket is matched by delivery order** (`internal/relay/relay.go`,
   `errandOfLocked`): `lich reply "<answer>"` and `reply_to_session` without a ticket close the oldest message
   delivered to that session and still open, because nothing in an answer itself says which request it belongs to.

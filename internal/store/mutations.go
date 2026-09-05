@@ -510,6 +510,38 @@ func (s *Service) SetSessionEntrypoint(sessionID, entrypoint string) error {
 	return nil
 }
 
+// schedulePromptLimit bounds a scheduled prompt. It is typed into a TUI a
+// character at a time when it comes due — the same delivery a relayed message
+// gets, and the same reason that one is bounded (internal/relay, promptLimit):
+// a megabyte of it is a hang, not a prompt. Checked here rather than at
+// delivery so the person writing it is told while they can still shorten it.
+const schedulePromptLimit = 8192
+
+// SetSessionSchedule parks a prompt to be typed at a session later. at is unix
+// seconds; 0, or an empty prompt, clears whatever was there — there is nothing
+// else to cancel, because a session holds one scheduled prompt at a time and
+// scheduling again replaces it.
+//
+// A session whose row is gone matches nothing and is not an error: the schedule
+// belongs to the card, and a card that is gone has taken its schedule with it.
+func (s *Service) SetSessionSchedule(sessionID string, at int64, prompt string) error {
+	prompt = strings.TrimSpace(prompt)
+	if len(prompt) > schedulePromptLimit {
+		return fmt.Errorf("scheduled prompt is %d bytes, over the %d limit",
+			len(prompt), schedulePromptLimit)
+	}
+	if at <= 0 || prompt == "" {
+		at, prompt = 0, ""
+	}
+	if _, err := s.db.Exec(
+		`UPDATE sessions SET scheduled_at = ?, scheduled_prompt = ? WHERE id = ?`,
+		at, prompt, sessionID,
+	); err != nil {
+		return fmt.Errorf("set schedule on %q: %w", sessionID, err)
+	}
+	return nil
+}
+
 // SessionEntrypoint returns the command recorded for a session, or "" for none —
 // which is what every provider session has, and what leaves a terminal on a
 // plain shell. A read failure answers "" for the same reason SessionModel does:

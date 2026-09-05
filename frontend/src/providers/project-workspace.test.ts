@@ -8,6 +8,8 @@ const storedSession = (overrides: Partial<StoredSession> = {}): StoredSession =>
   id: "s1",
   label: "Session 1",
   kind: "claude",
+  scheduledAt: 0,
+  scheduledPrompt: "",
   path: "",
   providerSessionId: "",
   entrypoint: "",
