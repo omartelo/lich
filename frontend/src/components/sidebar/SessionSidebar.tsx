@@ -34,6 +34,7 @@ import {
 import { useProjects } from "@/providers/projects"
 import { queueFork } from "@/lib/terminal/fork-queue"
 import { queueSetup } from "@/lib/terminal/setup-queue"
+import { writeAtPrompt } from "@/lib/terminal/write-at-prompt"
 import { filterSessions } from "@/lib/session/session-filter"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
 import {
@@ -287,6 +288,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
     base: string,
     baseIsRemote: boolean,
     sandbox: string,
+    prompt: string,
   ) => {
     const wt = await ProjectService.CreateWorktree(path, projectId, name, base, baseIsRemote)
     if (wt) {
@@ -299,6 +301,15 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
       // A fresh checkout is the one moment the project's setup script runs;
       // reopening an existing worktree never queues it.
       queueSetup(opened)
+      // The issue the worktree was named after, written at that session's
+      // prompt once it has one — the setup script and the provider's boot come
+      // first, which is what writeAtPrompt waits out. Not awaited: the dialog
+      // closes on a worktree that exists, and the wait can be minutes.
+      if (prompt) {
+        void writeAtPrompt(opened, prompt).catch((err: unknown) => {
+          toast.error(`Couldn’t hand the issue to the session: ${errorText(err)}`)
+        })
+      }
     }
     setWorktreeOpen(false)
   }

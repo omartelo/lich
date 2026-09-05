@@ -65,6 +65,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   waits for one rather than being dropped — including one that came due while
   lich was closed, which lands when lich is next up.
 
+- **A GitHub issue can now be the worktree.**
+  The New worktree dialog's name field takes an issue — `#128`, or the URL copied
+  out of the browser — beside the branch names and plain words it already took.
+  lich looks the issue up through `gh` on the project's own account, prints its
+  title and the exact branch it will create under the field before anything
+  exists, and hands the issue to the session that opens on it: the number, the
+  title, the link and the body, waiting unsent at the agent's prompt for you to
+  read, edit and send. Nothing is auto-generated on your behalf — a worktree
+  named `#128` used to be a branch called `128`, and typing the task in by hand
+  was the only way the agent learned what it was for. A bare number is still just
+  a branch name, because that is what git makes of it; a pull request's number is
+  refused with the screen that does open pull requests named, since GitHub counts
+  both in one sequence and `gh` will answer for either.
+
 - **`lich open` and its MCP tool now open a project, not only a session in one.**
   `--project` took the name of a project already on screen, so an agent could
   fan work out across the projects you had open and no further: putting a

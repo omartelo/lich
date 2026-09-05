@@ -396,9 +396,10 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   `draftIdle` for nothing. The stale-draft release is what keeps that a delay instead of a wedged relay. Two gaps
   stay open: input arriving between the paste and its Enter still rides along — a window that is `defaultSubmitDelay`
   at best and lasts until the target's PTY goes quiet at worst (`internal/relay`, `awaitSettled`) — and a provider
-  that takes keystrokes through anything other than this PTY is invisible here. The pull request handoff waits on
-  the same answer (`frontend/src/lib/terminal/write-at-prompt.ts`) with no Enter of its own to justify it: hand a
-  conflict to a session you left half a sentence in, and nothing appears at that prompt until the draft goes stale.
+  that takes keystrokes through anything other than this PTY is invisible here. The pull request and issue handoffs
+  wait on the same answer (`frontend/src/lib/terminal/write-at-prompt.ts`) with no Enter of their own to justify it:
+  hand a conflict to a session you left half a sentence in, and nothing appears at that prompt until the draft goes
+  stale.
 - **A relayed Enter is timed against silence, not against the target** (`internal/relay`, `awaitSettled`): lich
   presses Enter once the target's PTY has been quiet for `defaultSubmitDelay`, because nothing here can read a TUI's
   screen to know it has taken the paste in. On Windows that quiet is the whole instrument — ConPTY hands a child key
