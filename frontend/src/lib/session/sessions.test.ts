@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  forkableSession,
   activeSessionId,
   dragOrder,
   activeTarget,
@@ -598,6 +599,30 @@ describe("setSessionPinned", () => {
     const state = buildState(3)
     setSessionPinned(state, P, "s3", true)
     expect(sessionsOf(state, P)[2].pinned).toBeUndefined()
+  })
+})
+
+describe("forkableSession", () => {
+  // The three the CLIs themselves branch (providers.SupportsFork).
+  it.each(["claude", "codex", "opencode"] as const)("offers a %s session", (kind) => {
+    const state = withClaudeSession(buildState(2), "s1", "conv-1", kind)
+    expect(forkableSession(state[P].sessions[0])).toMatchObject({ id: "s1", kind })
+  })
+
+  // The five with resume and no fork. Listed one by one rather than looped over
+  // the kind union: a provider that grows a fork must be added here on purpose,
+  // and a provider that loses one must fail here.
+  it.each(["antigravity", "omp", "crush", "cursor", "kiro", "shell"] as const)(
+    "withholds the offer from a %s session",
+    (kind) => {
+      const state = withClaudeSession(buildState(2), "s1", "conv-1", kind)
+      expect(forkableSession(state[P].sessions[0])).toBeNull()
+    },
+  )
+
+  // Nothing to branch: the card has never reported a conversation.
+  it("returns null without a provider session id", () => {
+    expect(forkableSession(buildState(2)[P].sessions[0])).toBeNull()
   })
 })
 

@@ -266,7 +266,30 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   at. And `.lich/setup-worktree.sh` is one file, versioned and shared by every checkout, holding sh — so a
   Windows session skips it rather than feeding it to PowerShell, which would run the leading words of every line
   as commands. A worktree opens there with its setup silently not done.
-- **A session is named at birth, never on resume** (`internal/terminal/command.go`, `nameArgs`): the trap is that
+- **A fork is offered by three providers of eight, and the other five never grow one**
+  (`internal/providers.SupportsFork`, `internal/terminal/command.go`, `resumeArgs`): Claude Code, Codex and
+  opencode branch a conversation themselves, so lich asks them to. The other five keep resume and no fork, and
+  lich will not forge one: a copy would mean writing into that harness's own private store — two SQLite
+  schemas with triggers (Crush's per-checkout `.crush/crush.db`, Antigravity's one database per conversation),
+  a blob store keyed on the md5 of the checkout (Cursor), and two JSONL formats with the id and cwd written
+  inside them (oh-my-pi, Kiro CLI) — none of them documented, each versioned by its own CLI, and the blast
+  radius of getting one wrong is the user's real history. The trap is that the menu item is simply absent
+  there, with nothing saying why, so a user who forks a Claude Code card and then looks for the same thing on
+  their Crush card finds no answer on screen.
+- **opencode files a fork under the parent's directory, not the new checkout's** (measured on 1.18.23): the
+  copied session's `directory` column is the one the original ran in, and its `parent_id` is left empty, so
+  opencode's own session list places a fork in the checkout it came from and records no lineage. lich's own
+  card is right — it carries the worktree it was opened in, and `origin_session_id` names the parent — but the
+  two disagree, and only lich's side is visible in lich.
+- **A fork is billed as a second conversation from its first turn** (`internal/pricing`,
+  `internal/terminal/usage_cost.go`): the copy is a transcript of its own carrying every token of the history
+  it was branched from, so the pair reports roughly twice what one conversation spent. It is the same
+  arithmetic as the `(session, transcript)` bullet above, arrived at deliberately rather than by accident —
+  a lich-driven fork makes that path ordinary.
+- **A session is named at birth, and a fork is a birth** (`internal/terminal/command.go`, `nameArgs`): a
+  resume never renames — Claude Code restores the name from the transcript, including a `/rename` typed inside
+  the session — but a fork does, because the conversation it opens is new and inherits the parent's name
+  otherwise (measured on 2.1.261). The trap is that
   lich still *derives* that name (`internal/relay/rostername.go`, its page-side half
   `frontend/src/lib/session/peer-name.ts`) for the relay to resolve against, and the derived string goes stale the
   moment anyone renames — it then addresses a session that no longer answers to it. Nothing reads the real name

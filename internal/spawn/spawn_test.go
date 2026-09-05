@@ -252,7 +252,7 @@ func (f *fakeTerminal) Close(id string) error {
 }
 
 func (f *fakeTerminal) Start(
-	id, projectID, cwd, kind, _, name string, setup bool, cols, rows int,
+	id, projectID, cwd, kind, _, name string, _, setup bool, cols, rows int,
 ) error {
 	f.spawns = append(f.spawns, started{id, projectID, cwd, kind, name, setup, cols, rows})
 	return f.err

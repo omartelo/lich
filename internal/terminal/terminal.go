@@ -615,6 +615,14 @@ const readBufSize = 32 * 1024
 // that slips through (pruned between the check and the spawn) fails in the PTY
 // like any other bad invocation — the user sees the provider's own error.
 //
+// fork turns that resume into a branch: the provider copies the conversation
+// into a new one of its own and leaves the original alone, so the card that ran
+// it stays where it is with its history intact. Only the three kinds
+// providers.SupportsFork names can do it, and only alongside a resume id — the
+// conversation being branched is the one that id points at. The copy's own id
+// is the provider's to assign, and reaches lich through this session's
+// session-start report like any other.
+//
 // name is what the session answers to in its provider's peer roster (Claude
 // Code's `/list-agents`), passed by the frontend so the roster names the card
 // the user sees. Only Claude Code has a roster; every other kind ignores it.
@@ -625,8 +633,10 @@ const readBufSize = 32 * 1024
 // installs its dependencies in view. A respawn or resume never sets it. The
 // script runs in the session's own environment, so it reads the same
 // LICH_WORKTREE_PORT the provider will.
-func (s *Service) Start(id, projectID, cwd, kind, resume, name string, setup bool, cols, rows int) error {
-	sess, cwd, err := s.spawnSession(id, projectID, cwd, kind, resume, name, setup, cols, rows)
+func (s *Service) Start(
+	id, projectID, cwd, kind, resume, name string, fork, setup bool, cols, rows int,
+) error {
+	sess, cwd, err := s.spawnSession(id, projectID, cwd, kind, resume, name, fork, setup, cols, rows)
 	if err != nil || sess == nil {
 		return err
 	}
@@ -648,7 +658,9 @@ func (s *Service) Start(id, projectID, cwd, kind, resume, name string, setup boo
 // registration. A nil session with a nil error means id was already running.
 // The returned cwd is the effective start directory (the input, or the
 // resolved home when it was empty).
-func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, setup bool, cols, rows int) (*session, string, error) {
+func (s *Service) spawnSession(
+	id, projectID, cwd, kind, resume, name string, fork, setup bool, cols, rows int,
+) (*session, string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -680,8 +692,11 @@ func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, se
 	// spawn this session ever gets: the window's first view, a respawn after a
 	// reload, and the resume of a parked worktree session all arrive here.
 	spec := ptySpec{
-		bin:  resolveCommand(kind, s.store.ProviderBin(kind, projectID), userShell()),
-		args: providerArgs(kind, name, resume, s.store.SessionModel(id), mcpBin, kiroPluginAgent(kind), skipPermissions),
+		bin: resolveCommand(kind, s.store.ProviderBin(kind, projectID), userShell()),
+		args: providerArgs(
+			kind, name, resume, s.store.SessionModel(id), mcpBin, kiroPluginAgent(kind),
+			fork, skipPermissions,
+		),
 		dir:  cwd,
 		env:  s.sessionEnv(id, projectID, cwd),
 		cols: cols,

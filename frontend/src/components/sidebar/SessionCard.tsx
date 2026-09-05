@@ -11,6 +11,7 @@ import {
   FolderCode,
   FolderOpen,
   GitBranch,
+  GitFork,
   GitPullRequestArrow,
   Inbox,
   Pencil,
@@ -28,7 +29,7 @@ import { toast } from "sonner"
 import { cn, errorText } from "@/lib/utils"
 import { dragStyle } from "@/lib/use-sortable-list"
 import { displayPath } from "@/lib/paths"
-import type { Session } from "@/lib/session/sessions"
+import { forkableSession, type Session } from "@/lib/session/sessions"
 import {
   useSessionStatus,
   useSessionStatusAge,
@@ -90,6 +91,11 @@ interface SessionCardProps {
   // them into a wall around it. Zero is the usual case and offers nothing.
   delegateCount: number
   onGroupDelegates: () => void
+  // Branch this session's conversation into a checkout of its own. Offered only
+  // where the provider can fork one (forkableSession) — the card does not ask
+  // whether the conversation is still on disk, which is the fork flow's own
+  // first question.
+  onFork: () => void
   onSelect: () => void
   onClose: () => void
   onRename: (label: string) => void
@@ -127,6 +133,7 @@ export function SessionCard({
   onStageToggle,
   delegateCount,
   onGroupDelegates,
+  onFork,
   onSelect,
   onClose,
   onRename,
@@ -270,6 +277,7 @@ export function SessionCard({
   // as an agent is started and quit by hand offers no action the user can rely
   // on being there.
   const canDelegate = active && session.kind !== "shell"
+  const canFork = forkableSession(session) !== null
 
   // The picker is only rendered while the card can delegate, so losing that
   // unmounts it — and an open flag left behind would spring the dialog back up
@@ -613,6 +621,12 @@ export function SessionCard({
           <SessionTooltip session={session} path={path} />
         </Tooltip>
         <ContextMenuContent>
+          {canFork && (
+            <ContextMenuItem onClick={onFork}>
+              <GitFork />
+              Fork to worktree…
+            </ContextMenuItem>
+          )}
           {canDelegate && (
             <ContextMenuItem onClick={() => setDelegatePickerOpen(true)}>
               <ArrowRight />

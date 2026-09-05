@@ -237,7 +237,7 @@ type spawnTerminal struct {
 	closed string
 }
 
-func (s *spawnTerminal) Start(_, _, cwd, kind, _, _ string, _ bool, _, _ int) error {
+func (s *spawnTerminal) Start(_, _, cwd, kind, _, _ string, _, _ bool, _, _ int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cwd, s.kind = cwd, kind

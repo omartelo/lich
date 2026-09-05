@@ -582,6 +582,27 @@ const RESUMABLE_KINDS: readonly SessionKind[] = [
   "kiro",
 ]
 
+// The provider kinds whose CLI can branch a conversation rather than only
+// reopen it, mirrored from providers.SupportsFork (Go) — keep in sync. Three of
+// the eight, and the rest is not a gap lich can close from this side: the offer
+// is withheld where the CLI has no verb for it.
+const FORKABLE_KINDS: readonly SessionKind[] = ["claude", "codex", "opencode"]
+
+// forkableSession returns the session a "Fork to worktree" offer can be made
+// for: one running a provider that forks, carrying the conversation to branch.
+// Null for every other card, which is what keeps the menu item off it — a row
+// that could only fail is worse than no row.
+//
+// Whether that conversation is still on disk is the backend's answer
+// (ResumeAvailable), asked by the caller when the offer is taken up rather than
+// on every render of every card.
+export function forkableSession(session: Session): Session | null {
+  if (!FORKABLE_KINDS.includes(session.kind) || !session.providerSessionId) {
+    return null
+  }
+  return session
+}
+
 // resumableSession returns the session whose PTY should ask before it spawns,
 // because it carries the provider conversation it ran before the last restart.
 // Null for everything with nothing to resume: unknown ids, sessions created in

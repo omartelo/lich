@@ -419,14 +419,37 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
   // sandbox is the answer the new-worktree dialog collected: "on", "off", or ""
   // when the machine cannot confine anything and nothing was asked.
+  //
+  // from is the session this one is being forked out of, when it is: it decides
+  // the provider the new card runs — a fork has to spawn the CLI that wrote the
+  // conversation it carries, not whatever the project defaults to — and records
+  // the lineage the sidebar already draws for a delegate ("from <parent>").
   const newWorktreeSession = useCallback(
-    (projectId: string, wt: { name: string; path: string }, sandbox = "") => {
+    (
+      projectId: string,
+      wt: { name: string; path: string },
+      sandbox = "",
+      from: Session | null = null,
+    ) => {
       const sessionId = newSessionId()
-      const kind = projectNewSessionKind(projectId)
+      const kind = from?.kind ?? projectNewSessionKind(projectId)
       const next = addSession(sessionsRef.current, projectId, sessionId, kind, wt.path, wt.name)
       const project = next[projectId]
       const created = project.sessions[project.sessions.length - 1]
       commit(next)
+      if (from) {
+        void Store.AddSessionFrom(
+          projectId,
+          sessionId,
+          created.label,
+          kind,
+          wt.path,
+          project.nextSeq,
+          from.id,
+          from.label,
+        )
+        return sessionId
+      }
       void Store.AddSession(
         projectId,
         sessionId,

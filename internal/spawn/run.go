@@ -89,10 +89,11 @@ func (s *Service) Run(projectID, cwd string) (Session, error) {
 	if s.events != nil {
 		s.events.Emit(OpenedEventName, opened)
 	}
-	// setup is false: the run card opens in a checkout that already exists, and
-	// the setup script belongs to the session that created it.
+	// fork and setup are both false: the run card opens a shell in a checkout
+	// that already exists — it has no conversation to branch, and the setup
+	// script belongs to the session that created the checkout.
 	if err := s.term.Start(
-		id, target.ID, cwd, opened.Kind, "", "", false, startCols, startRows,
+		id, target.ID, cwd, opened.Kind, "", "", false, false, startCols, startRows,
 	); err != nil {
 		return Session{}, fmt.Errorf("the run card was created but its terminal did not start: %w", err)
 	}

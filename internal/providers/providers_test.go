@@ -135,3 +135,34 @@ func TestDetectCarriesTheDocs(t *testing.T) {
 		}
 	}
 }
+
+// TestSupportsFork pins the three providers that can branch a conversation and,
+// more importantly, the five that cannot: a false turning true here is a fork
+// flag reaching a CLI with no verb for it, which kills the spawn before the
+// session exists. Every id is listed rather than looped over the Registry, so a
+// provider added without an answer fails this test instead of inheriting one.
+func TestSupportsFork(t *testing.T) {
+	cases := map[string]bool{
+		Claude:      true,
+		Codex:       true,
+		OpenCode:    true,
+		Antigravity: false,
+		OMP:         false,
+		Crush:       false,
+		Cursor:      false,
+		Kiro:        false,
+		"shell":     false,
+		"nope":      false,
+		"":          false,
+	}
+	for _, p := range Registry {
+		if _, listed := cases[p.ID]; !listed {
+			t.Errorf("provider %q has no fork answer — add one to this table", p.ID)
+		}
+	}
+	for id, want := range cases {
+		if got := SupportsFork(id); got != want {
+			t.Errorf("SupportsFork(%q) = %v, want %v", id, got, want)
+		}
+	}
+}
