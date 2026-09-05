@@ -532,3 +532,12 @@ export interface LastTurn {
    * with a diff. */
   after?: string
 }
+
+/** internal/terminal.LastSaid — the prose the agent ended its last turn with,
+ * read out of the provider's own transcript. Absent for every absence there is:
+ * a turn that ended on a tool call, a provider whose conversation lich cannot
+ * read, a transcript still being written. The panel draws nothing either way,
+ * which is why there is no reason field to render. */
+export interface LastSaid {
+  text?: string
+}
