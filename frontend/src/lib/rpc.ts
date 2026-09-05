@@ -12,6 +12,7 @@ import type {
   BinaryCheck,
   BranchRules,
   ClosedSession,
+  LastSaid,
   LastTurn,
   Branches,
   CommitIdentity,
@@ -157,6 +158,10 @@ export const Terminal = {
   /** What changed on disk while this session's last finished turn ran — a
    * window of time, not an attribution (see internal/terminal.LastTurnDiff). */
   LastTurnDiff: (id: string) => call<LastTurn>("terminal.LastTurnDiff", [id]),
+  /** The last thing the agent said in this session's conversation — its own
+   * closing words, not a summary of them (see internal/terminal.LastTurnSaid).
+   * `text` is absent whenever there are none to show. */
+  LastTurnSaid: (id: string) => call<LastSaid>("terminal.LastTurnSaid", [id]),
 }
 
 export const DropService = {

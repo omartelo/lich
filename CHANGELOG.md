@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The palette searches what was said in Codex, oh-my-pi, Kiro CLI and
+  Antigravity sessions too.** The `Messages` group read Claude Code conversations
+  and nothing else, so on any other provider the one thing you actually remember
+  — a sentence from the conversation — found nothing, with no sign that the
+  search had skipped the session. It now reads every provider that files its
+  conversation as a transcript: five of the eight, your turns and the agent's,
+  the same as before. opencode and Crush keep their messages in a database
+  instead and are still searched by name only; Cursor CLI files a chat in a form
+  nothing here can read. A session on one of those three simply contributes no
+  rows, which is what a session with nothing to match has always looked like.
+
 - **A checkout can now run the project's own app.** lich has reserved a
   dev-server port per checkout for a while — `LICH_WORKTREE_PORT`, a number the
   worktree owns — and then left it to you to find a terminal and start something
@@ -111,6 +122,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verdict, so the two disagree for a few seconds after a push — the row says
   which one is the fresh reading.
 
+- **The Review panel's "Last turn" now shows what the agent said, not only what
+  it changed.** Coming back to a card told you it had news, what it cost and how
+  long you had been in it, and never what it did — catching up meant scrolling
+  the terminal. Above the turn's diff there is now the agent's own closing
+  sentence for that turn, read straight out of the provider's transcript.
+  Nothing is generated and no model is called: every agent already ends a turn
+  by saying what it did, and lich only finds that sentence. It earns its place
+  on the turn the diff cannot describe — the one that ran the suite, found three
+  failures and edited nothing, which used to read as "Nothing changed in this
+  window" and no more. The band appears only when there are words to show, and
+  scrolls in its own right, so a long report never pushes the file list off
+  screen. Read for Claude Code, Codex, Antigravity, opencode, oh-my-pi and Kiro
+  CLI; Crush and Cursor CLI report no turn boundary, so they are not offered the
+  "Last turn" mode this sits in at all.
+
 ### Changed
 
 - **"Resolve conflicts" and "Fix CI errors" now open the session they hand the
@@ -124,6 +150,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   setup script still installing the checkout. The Enter stays yours.
 
 ### Fixed
+
+- **The Kiro CLI recap band was empty whenever the agent thought before it
+  spoke.** "Last turn" reads the closing words out of the provider's own
+  transcript, and Kiro types each block of a message differently — a `text` block
+  carries a string, a `thinking` block an object. Reading them all as strings
+  failed the whole line, so any turn that reasoned first — nearly every one —
+  read as a turn that said nothing, and the band did not appear.
 
 - **On Windows, an answer that named no ticket could close the wrong request.**
   `lich reply "<answer>"` and `reply_to_session` without a ticket close the

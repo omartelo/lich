@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/omartelo/lich/internal/providers"
 )
@@ -84,9 +85,9 @@ func codexTranscriptPath(providerSessionID string) (string, bool) {
 // honour here but the home itself.
 //
 // It is not a transcript: Antigravity files the conversation as SQLite and
-// writes its JSONL under `brain/<id>/`, a path the hook payload hands over
-// rather than one lich reconstructs. This resolves the one file whose existence
-// answers "can this id still be reopened".
+// writes its JSONL beside it under `brain/<id>/` (antigravityTranscriptPath).
+// This resolves the one file whose existence answers "can this id still be
+// reopened".
 func antigravityConversationPath(providerSessionID string) (string, bool) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -97,6 +98,40 @@ func antigravityConversationPath(providerSessionID string) (string, bool) {
 		return "", false
 	}
 	return path, true
+}
+
+// antigravityTranscriptPath locates the JSONL Antigravity writes a conversation
+// to, beside the SQLite file that proves the conversation exists.
+//
+// The directory under `brain/` is named after the conversation id itself, so the
+// path is reconstructed here rather than taken off a hook payload — measured
+// against 1.1.19, where every `conversations/<id>.db` had a `brain/<id>/` of its
+// own. `transcript_full.jsonl` sits next to it and is the same conversation with
+// nothing elided; the shorter file is the one read, for the same reason every
+// other provider's tail is bounded.
+func antigravityTranscriptPath(providerSessionID string) (string, bool) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", false
+	}
+	path := filepath.Join(home, ".gemini", "antigravity-cli", "brain", providerSessionID,
+		".system_generated", "logs", "transcript.jsonl")
+	if _, err := os.Stat(path); err != nil {
+		return "", false
+	}
+	return path, true
+}
+
+// kiroTranscriptPath is the conversation beside the metadata file
+// kiroSessionPath resolves: Kiro writes the turns to `<id>.jsonl` and the model
+// and context accounting to the `<id>.json` usage.go reads. Empty for anything
+// that is not that metadata path, so a caller can never turn some other
+// provider's file into a Kiro one by suffix alone.
+func kiroTranscriptPath(sessionPath string) string {
+	if !strings.HasSuffix(sessionPath, ".json") {
+		return ""
+	}
+	return strings.TrimSuffix(sessionPath, ".json") + ".jsonl"
 }
 
 // cursorChatStore is the database Cursor CLI keeps one chat in, under its own
