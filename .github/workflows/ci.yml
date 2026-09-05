@@ -110,9 +110,13 @@ jobs:
           path: .cef
           key: cef-linux-${{ hashFiles('shell/Cargo.lock') }}
 
+      # shared-key: a release runs on a tag, and a tag can only read caches
+      # made on its own ref or on main — this job on main is what makes them.
+      # The default key is per job, and the release job would never see it.
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: shell
+          shared-key: shell
 
       - name: Format
         working-directory: shell
