@@ -71,13 +71,13 @@ func TestLastTurnSaidMissesAreSilent(t *testing.T) {
 func TestSaidReadersPickTheLastProse(t *testing.T) {
 	tests := []struct {
 		name string
-		say  func([]byte) (string, bool)
+		read turnReader
 		body []string
 		want string
 	}{
 		{
 			name: "claude skips sub-agent conversations",
-			say:  claudeSaid,
+			read: claudeTurn,
 			body: []string{
 				`{"type":"assistant","message":{"content":[{"type":"text","text":"parent speaks"}]}}`,
 				`{"type":"assistant","isSidechain":true,"message":{"content":[{"type":"text","text":"sub-agent speaks"}]}}`,
@@ -86,7 +86,7 @@ func TestSaidReadersPickTheLastProse(t *testing.T) {
 		},
 		{
 			name: "codex reads output_text off assistant items",
-			say:  codexSaid,
+			read: codexTurn,
 			body: []string{
 				`{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"go"}]}}`,
 				`{"type":"response_item","payload":{"type":"reasoning","summary":[]}}`,
@@ -97,7 +97,7 @@ func TestSaidReadersPickTheLastProse(t *testing.T) {
 		},
 		{
 			name: "omp ignores the turns that are only thinking and tools",
-			say:  ompSaid,
+			read: ompTurn,
 			body: []string{
 				`{"type":"message","message":{"role":"assistant","content":[{"type":"thinking","thinking":"x"},{"type":"toolCall","name":"bash"}]}}`,
 				`{"type":"message","message":{"role":"assistant","content":[{"type":"thinking","thinking":"y"},{"type":"text","text":"Done, 12 files."}]}}`,
@@ -106,18 +106,18 @@ func TestSaidReadersPickTheLastProse(t *testing.T) {
 			want: "Done, 12 files.",
 		},
 		{
-			name: "kiro reads lower-case text blocks out of a PascalCase envelope",
-			say:  kiroSaid,
+			name: "kiro reads text past the blocks whose payload is an object",
+			read: kiroTurn,
 			body: []string{
 				`{"kind":"Prompt","version":1,"data":{"content":[{"kind":"text","data":"make a note"}]}}`,
-				`{"kind":"AssistantMessage","version":1,"data":{"content":[{"kind":"thinking","data":"z"},{"kind":"text","data":"Created note.txt."},{"kind":"toolUse","data":""}]}}`,
+				`{"kind":"AssistantMessage","version":1,"data":{"content":[{"kind":"thinking","data":{"text":"z","signature":null}},{"kind":"text","data":"Created note.txt."},{"kind":"toolUse","data":{"name":"fs_write"}}]}}`,
 				`{"kind":"ToolResults","version":1,"data":{"content":[]}}`,
 			},
 			want: "Created note.txt.",
 		},
 		{
 			name: "antigravity takes PLANNER_RESPONSE, never the tool output beside it",
-			say:  antigravitySaid,
+			read: antigravityTurn,
 			body: []string{
 				`{"type":"PLANNER_RESPONSE","source":"MODEL","content":"Opened the PR."}`,
 				`{"type":"GENERIC","source":"MODEL","content":"The command exited with code 1."}`,
@@ -132,7 +132,7 @@ func TestSaidReadersPickTheLastProse(t *testing.T) {
 			if err := os.WriteFile(path, []byte(strings.Join(tc.body, "\n")+"\n"), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			if got := lastSaidInTail(path, tc.say); got != tc.want {
+			if got := lastSaidInTail(path, tc.read); got != tc.want {
 				t.Errorf("lastSaidInTail = %q, want %q", got, tc.want)
 			}
 		})
@@ -148,7 +148,7 @@ func TestLastSaidInTailSkipsAHalfLine(t *testing.T) {
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := lastSaidInTail(path, claudeSaid); got != "whole line" {
+	if got := lastSaidInTail(path, claudeTurn); got != "whole line" {
 		t.Errorf("lastSaidInTail = %q, want the whole line", got)
 	}
 }

@@ -203,7 +203,9 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   call looks like. And its provider list is *not* the one the switch above it is drawn from: six of the
   eight are read (Claude Code, Codex, Antigravity, opencode, oh-my-pi, Kiro CLI), and the two that are not
   are the two with no last turn to begin with, so the gap is invisible today and would surface the moment
-  Crush or Cursor CLI started reporting a state. Crush is a query away — its `parts` column carries the
+  Crush or Cursor CLI started reporting a state. Kiro CLI was on that list and silent in practice until the
+  palette's search reused the same reader: its block payloads are typed per block kind, and declaring one as
+  a string failed every line where the agent thought before it spoke — which is nearly all of them. Crush is a query away — its `parts` column carries the
   same `{type,text}` shape opencode's does — and Cursor CLI is not: it files a chat as content-addressed
   blobs ordered by a protobuf index, with a `blobEncryptionKey` sitting in its own metadata.
 - **A finished turn is unread until its own card is watched** (`frontend/src/lib/session/session-status-store.ts`,
@@ -694,10 +696,19 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **The History tab searches names, never what was said** (`internal/terminal/search.go`): the Messages tab
   reads a 4 MB tail per session per keystroke, and it is pointed at the sessions the palette can route to —
   the open ones. History is the long list, so widening the transcript search to it would put a hundred disk
-  reads behind every character typed. The parked row keeps its `provider_session_id`, so the transcript is
-  still there to be searched by whatever does it later; and that search is Claude-only today
-  (`claudeTranscriptPath`) while `canResume` locates all six providers, so widening it would inherit that gap
-  rather than close it.
+  reads behind every character typed, on a machine that can hold hundreds of transcripts and a single one
+  of 169 MB. The parked row keeps its `provider_session_id`, so the transcript is still there to be searched
+  by whatever does it later; the fix when it bites is a query, not a bigger tail.
+- **The Messages tab reads five of the eight providers, and the three it misses are the ones with no
+  transcript to walk** (`transcriptReaderFor`, `internal/terminal/said.go`): the search and the last-turn
+  recap share one reader per provider, so both reach Claude Code, Codex, oh-my-pi, Kiro CLI and Antigravity —
+  every provider that files its conversation as JSONL. opencode keeps its messages in SQLite and is a `LIKE`
+  away, but a `LIKE` is a second mechanism (a query that counts and windows its own snippet) rather than a
+  sixth reader, and it is unwritten until somebody asks for it; Crush is the same query against its `parts`
+  column. Cursor CLI is the one that is not a query: it files a chat as content-addressed blobs ordered by a
+  protobuf index, with a `blobEncryptionKey` in its own metadata. A session on any of the three contributes
+  no rows and says nothing about it — the group simply does not list it, which is what every other miss in
+  that search looks like too.
 - **A filed backend answer outlives the screen that asked, under a key its caller writes by hand**
   (`frontend/src/lib/remote-cache.ts`): a `useRemoteResource` caller that passes `cache` has its answers kept
   in module memory until the page reloads, under exactly the string it composed. Two callers that compose the
