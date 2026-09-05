@@ -9,8 +9,9 @@
   <p>
     Open your projects, run agents like Claude Code, Codex and opencode in real
     terminals, and keep git — worktrees, diffs and pull requests — in view
-    without leaving the window. One static Go binary, no Electron: the UI opens
-    in your system's Chromium-family browser in <code>--app</code> mode.
+    without leaving the window. One static Go binary, no Electron: on Linux the
+    UI opens in lich's own embedded Chromium; on macOS and Windows in your
+    system's Chromium-family browser, in <code>--app</code> mode.
   </p>
   <p><a href="https://omartelo.github.io/lich/"><strong>omartelo.github.io/lich</strong></a></p>
   <p>
@@ -93,14 +94,14 @@ curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh
 
 | Platform | Get it | Needs at runtime |
 | --- | --- | --- |
-| **Linux** | `install.sh` above, or AUR [`lich-bin`](https://aur.archlinux.org/packages/lich-bin) (`yay -S lich-bin`) | a Chromium-family browser on `PATH`, plus `zenity` |
+| **Linux** | `install.sh` above, or AUR [`lich-bin`](https://aur.archlinux.org/packages/lich-bin) (`yay -S lich-bin`) | `zenity` — the window ships in the package |
 | **macOS** *(experimental)* | `brew install --cask omartelo/tap/lich` | a Chromium-family browser in `/Applications` |
 | **Windows** *(experimental)* | installer from [Releases](https://github.com/omartelo/lich/releases) | a Chromium-family browser |
 
-Chromium, Chrome, Brave, Vivaldi, Edge, Thorium and ungoogled-chromium all
-qualify, Flatpak installs included; `--browser` or `LICH_BROWSER` pins one
-outright. With none of them on the machine lich opens in whatever browser you
-do have — what is lost is the window of its own, not the app.
+On macOS and Windows, Chrome, Chromium, Brave, Vivaldi and Edge all qualify;
+`--browser` or `LICH_BROWSER` pins one outright, on Linux too. With none of
+them on the machine lich opens in whatever browser you do have — what is lost
+is the window of its own, not the app.
 
 Manual per-distro packages and the static binary: [INSTALL.md](INSTALL.md). The
 macOS and Windows binaries are unsigned — Gatekeeper and SmartScreen warn until
@@ -162,8 +163,10 @@ TypeScript / Vite frontend over a token-authenticated loopback listener (HTTP RP
 + WebSockets). Terminals are xterm.js with the WebGL addon; the code and diff
 surfaces are CodeMirror 6. The Chromium shell is a decision record:
 [`docs/chromium-shell.md`](docs/chromium-shell.md). Prerequisites are **Go
-1.27.0+**, **Node + pnpm** and **[Task](https://taskfile.dev)** — no C toolchain,
-no system dev libraries.
+1.27.0+**, **Node + pnpm** and **[Task](https://taskfile.dev)** — no C toolchain
+for the Go binary. The Linux window (`shell/`, Rust on CEF) adds a Rust
+toolchain, CMake, Ninja and Chromium's dev libraries; [CONTRIBUTING.md](CONTRIBUTING.md)
+lists them.
 
 ```bash
 task dev      # hot-reload dev mode (Vite on :9245)

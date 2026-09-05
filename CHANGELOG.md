@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **On Linux, lich now brings its own window: no browser needs to be installed.**
+  The packages ship an embedded Chromium (CEF) beside the binary, and lich
+  opens in it instead of looking for Chromium, Chrome, Brave or another
+  Chromium-family browser on the machine. The window is lich's own, not a
+  browser's: it carries the `lich` window class and title, so the launcher
+  icon, `StartupWMClass` and per-app compositor rules all match it; no
+  profile picker, translate bubble, account chooser or system-wide browser
+  extension can appear in it; and the Chromium version is pinned per release
+  rather than being whatever the machine has. Native Wayland, XWayland and X11
+  all work. `--browser` / `LICH_BROWSER` still pin a browser of your choice
+  above it, and `lich -- <flags>` still reaches the window — on NVIDIA under
+  Wayland, `lich -- --ozone-platform=wayland` opens it native (the default
+  there is XWayland). macOS and Windows keep opening the system browser for
+  now; the shipped window is Linux-only.
+
 - **`lich open` and its MCP tool now open a project, not only a session in one.**
   `--project` took the name of a project already on screen, so an agent could
   fan work out across the projects you had open and no further: putting a
@@ -99,6 +114,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which one is the fresh reading.
 
 ### Changed
+
+- **The Linux packages are ~120 MB to download and ~480 MB installed, up from
+  ~10 MB.** That is the embedded Chromium: `libcef.so` stripped of its debug
+  info (its symbol table has to stay — CEF resolves it at runtime), the
+  resources, the ANGLE GL libraries and the one locale pack the UI uses. The
+  `chromium` recommends is gone from the deb, rpm and Arch packages, and the AUR
+  package now fetches the window as a second release asset; `zenity` is the
+  only runtime dependency the installer still checks for.
 
 - **"Resolve conflicts" and "Fix CI errors" now open the session they hand the
   work to.** The button wrote its prompt into whichever session happened to be
