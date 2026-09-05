@@ -31,6 +31,19 @@ tasks:
   build:shell:
     desc: Build the Linux window (embedded Chromium) into bin/shell/
     platforms: [linux]
+    # Skipped while bin/shell is up to date with the crate: the window changes
+    # far less often than the Go side, and CI caches bin/shell on these same
+    # sources so most releases never run cargo at all. Not shell/target: cargo's
+    # own artifacts would make every restore a mismatch.
+    sources:
+      - shell/src/**/*
+      - shell/Cargo.toml
+      - shell/Cargo.lock
+      - shell/.cargo/config.toml
+      - build/linux/shell/assemble.sh
+    generates:
+      - "{{.BIN_DIR}}/shell/lich-shell"
+      - "{{.BIN_DIR}}/shell/cef/libcef.so"
     cmds:
       # The Go binary stays pure and static; the window is a separate Rust
       # binary on CEF, found beside it at run time (internal/chromium/shell.go).

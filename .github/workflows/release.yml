@@ -66,6 +66,16 @@ jobs:
         with:
           workspaces: shell
 
+      # The assembled window, keyed on the crate's sources: on a hit, task sees
+      # bin/shell up to date (its checksums live in .task/) and never runs cargo.
+      - name: Cache the assembled window
+        uses: actions/cache@v4
+        with:
+          path: |
+            bin/shell
+            .task
+          key: window-linux-${{ hashFiles('shell/src/**', 'shell/Cargo.toml', 'shell/Cargo.lock', 'shell/.cargo/config.toml', 'build/linux/shell/assemble.sh') }}
+
       # Packaging needs task and nfpm.
       #
       # GOTOOLCHAIN=auto only here: setup-go exports `local`, which is right for
@@ -111,8 +121,10 @@ jobs:
           mv "lich.pkg.tar.zst"     "lich-${tag}-x86_64.pkg.tar.zst"
           cp lich "lich-${tag}-linux-amd64"
           # The window for the bare binary and the AUR package: the PKGBUILD
-          # unpacks it into /usr/lib/lich/shell.
-          tar --zstd -cf "lich-${tag}-linux-amd64-shell.tar.zst" shell
+          # unpacks it into /usr/lib/lich/shell. zstd's default level leaves
+          # ~30 MB on the table for a minute of CPU; the env is how tar's zstd
+          # takes a level.
+          ZSTD_CLEVEL=19 ZSTD_NBTHREADS=0 tar --zstd -cf "lich-${tag}-linux-amd64-shell.tar.zst" shell
           ls -la lich-${tag}-*
 
       - name: Upload Linux assets
