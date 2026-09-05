@@ -16,9 +16,19 @@ import (
 type fakeSessions struct {
 	projects []store.Project
 	err      error
+	// schedule, when set, takes the scheduled-prompt writes deliverDue makes. A
+	// test that does not schedule anything leaves it nil, which accepts them.
+	schedule func(sessionID string, at int64, prompt string) error
 }
 
 func (f fakeSessions) LoadState() ([]store.Project, error) { return f.projects, f.err }
+
+func (f fakeSessions) SetSessionSchedule(sessionID string, at int64, prompt string) error {
+	if f.schedule == nil {
+		return nil
+	}
+	return f.schedule(sessionID, at, prompt)
+}
 
 // fakeTerminal records what was typed at which session, and answers Live from
 // an explicit set so a test can park a session without a PTY.
@@ -168,6 +178,7 @@ type fakeEvents struct {
 	sent  []RelayEvent
 	halts []StalledEvent
 	inbox []InboxEvent
+	marks []ScheduleEvent
 }
 
 func (f *fakeEvents) Emit(name string, data any) {
@@ -182,11 +193,22 @@ func (f *fakeEvents) Emit(name string, data any) {
 		if name == StalledEventName {
 			f.halts = append(f.halts, event)
 		}
+	case ScheduleEvent:
+		if name == ScheduleEventName {
+			f.marks = append(f.marks, event)
+		}
 	case InboxEvent:
 		if name == InboxEventName {
 			f.inbox = append(f.inbox, event)
 		}
 	}
+}
+
+// schedules is every scheduled-prompt mark the relay moved, in order.
+func (f *fakeEvents) schedules() []ScheduleEvent {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]ScheduleEvent(nil), f.marks...)
 }
 
 func (f *fakeEvents) stalled() []StalledEvent {

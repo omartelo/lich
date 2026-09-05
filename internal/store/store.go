@@ -75,7 +75,13 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- fresh id — so the history the palette lists would reorder itself every
     -- time a session came back. Seconds, not a counter like projects.closed_seq:
     -- that list only had to order, and this one has to say when.
-    closed_at           INTEGER NOT NULL DEFAULT 0
+    closed_at           INTEGER NOT NULL DEFAULT 0,
+    -- A prompt to type at this session later, and when, in unix seconds. One
+    -- slot rather than a queue: scheduling again replaces what was there, which
+    -- is what keeps the card able to say the whole of it in a line and this
+    -- feature a reminder rather than a job runner. 0 means nothing is waiting.
+    scheduled_at        INTEGER NOT NULL DEFAULT 0,
+    scheduled_prompt    TEXT    NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
 
@@ -182,6 +188,12 @@ type Session struct {
 	Pinned          bool   `json:"pinned"`
 	OriginSessionID string `json:"originSessionId"`
 	OriginLabel     string `json:"originLabel"`
+	// ScheduledAt is when the prompt below is due, in unix seconds, 0 for a
+	// session with nothing waiting. It rides the session row so the card that
+	// draws the countdown and the relay that delivers it read the same hydration
+	// call, and neither needs a channel of its own.
+	ScheduledAt     int64  `json:"scheduledAt"`
+	ScheduledPrompt string `json:"scheduledPrompt"`
 }
 
 // Project is a persisted project together with its restorable session state.
@@ -251,6 +263,8 @@ func open(path string) (*Service, error) {
 		`ALTER TABLE sessions ADD COLUMN origin_label TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE sessions ADD COLUMN sandbox TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE sessions ADD COLUMN closed_at INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE sessions ADD COLUMN scheduled_at INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE sessions ADD COLUMN scheduled_prompt TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE projects ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE projects ADD COLUMN closed_seq INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE session_costs ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0`,
@@ -517,7 +531,7 @@ func (s *Service) ProjectAt(path string) (string, string) {
 func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	rows, err := s.db.Query(
 		`SELECT id, label, kind, path, provider_session_id, entrypoint, sandbox, pinned,
-		        origin_session_id, origin_label
+		        origin_session_id, origin_label, scheduled_at, scheduled_prompt
 		   FROM sessions WHERE project_id = ? AND is_open = 1 ORDER BY position, rowid`,
 		projectID,
 	)
@@ -532,6 +546,7 @@ func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 		if err := rows.Scan(
 			&sess.ID, &sess.Label, &sess.Kind, &sess.Path, &sess.ProviderSessionID,
 			&sess.Entrypoint, &sess.Sandbox, &sess.Pinned, &sess.OriginSessionID, &sess.OriginLabel,
+			&sess.ScheduledAt, &sess.ScheduledPrompt,
 		); err != nil {
 			return nil, fmt.Errorf("scan session: %w", err)
 		}

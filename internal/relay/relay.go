@@ -172,6 +172,10 @@ type RelayEvent struct {
 // may address. The store implements it.
 type Sessions interface {
 	LoadState() ([]store.Project, error)
+	// SetSessionSchedule clears a scheduled prompt once it has been typed at its
+	// session (see deliverDue). Only ever called to clear here: the window is
+	// what parks one.
+	SetSessionSchedule(sessionID string, at int64, prompt string) error
 }
 
 // Events is where the relay announces a request in flight. The app's event hub

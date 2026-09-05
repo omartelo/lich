@@ -4,7 +4,7 @@ import { ProjectService } from "@/lib/rpc"
 import type { Branches, Issue, Worktree } from "@/lib/api-types"
 import { SearchInput } from "@/components/common/SearchInput"
 import { WorktreeSandboxRow } from "@/components/sidebar/WorktreeSandboxRow"
-import { WorktreeSetupRow } from "@/components/sidebar/WorktreeSetupRow"
+import { WorktreeScriptRows } from "@/components/sidebar/WorktreeScriptRows"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -51,6 +51,12 @@ interface WorktreeDialogProps {
   ) => Promise<void>
   /** Reopen a session on an already-existing worktree. */
   onResume: (wt: { name: string; path: string }) => void
+  /** The session whose conversation this worktree's session will carry, when
+   * the dialog was opened by a fork rather than by the + button. It only
+   * changes what the dialog says: the branching itself is the caller's, and
+   * the base list, the setup row and the confinement row are the same either
+   * way. */
+  forkOf?: { label: string } | null
 }
 
 // Row values carry their group so one string identifies the selection:
@@ -132,6 +138,7 @@ export function WorktreeDialog({
   currentBranch,
   onCreate,
   onResume,
+  forkOf = null,
 }: WorktreeDialogProps) {
   const [branches, setBranches] = useState<Branches | null>(null)
   const [name, setName] = useState("")
@@ -300,13 +307,32 @@ export function WorktreeDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Fixed-height dialog: the base-branch section takes the leftover row
         (minmax(0,1fr)) so its list scrolls instead of growing the modal. */}
-      <DialogContent className="h-[85vh] grid-rows-[auto_auto_minmax(0,1fr)_auto_auto_auto] sm:max-w-2xl">
+      <DialogContent
+        className={cn(
+          "h-[85vh] sm:max-w-2xl",
+          forkOf
+            ? "grid-rows-[auto_auto_auto_minmax(0,1fr)_auto_auto_auto]"
+            : "grid-rows-[auto_auto_minmax(0,1fr)_auto_auto_auto]",
+        )}
+      >
         <DialogHeader>
-          <DialogTitle>New worktree</DialogTitle>
+          <DialogTitle>
+            {forkOf ? `Fork ${forkOf.label} to a new worktree` : "New worktree"}
+          </DialogTitle>
           <DialogDescription>
             Pick a base branch and (optionally) a name for the new worktree.
           </DialogDescription>
         </DialogHeader>
+
+        {forkOf && (
+          <div className="border-l-2 border-primary/60 pl-3">
+            <div className="text-sm font-medium">Carries the conversation</div>
+            <span className="text-xs text-muted-foreground">
+              The new session opens on a copy of {forkOf.label}&rsquo;s history and keeps going from
+              there. The original card is untouched.
+            </span>
+          </div>
+        )}
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="worktree-name" className="text-xs uppercase tracking-wide">
@@ -364,10 +390,14 @@ export function WorktreeDialog({
           >
             <Group
               title="Worktrees"
-              items={vis.worktrees.map((wt) => ({
-                value: rowValue("worktree", wt.path),
-                label: wt.name,
-              }))}
+              items={
+                forkOf
+                  ? []
+                  : vis.worktrees.map((wt) => ({
+                      value: rowValue("worktree", wt.path),
+                      label: wt.name,
+                    }))
+              }
               base={base}
               onSelect={setBase}
             />
@@ -404,7 +434,7 @@ export function WorktreeDialog({
           </div>
         </div>
 
-        <WorktreeSetupRow projectPath={projectPath} />
+        <WorktreeScriptRows projectPath={projectPath} />
 
         <WorktreeSandboxRow choice={sandbox} />
 
@@ -415,7 +445,13 @@ export function WorktreeDialog({
         <DialogFooter>
           <DialogClose render={<Button variant="ghost" />}>Cancel</DialogClose>
           <Button onClick={() => void submit()} disabled={!base || submitting}>
-            {submitting ? "Creating…" : isResume ? "Open worktree" : "Create worktree"}
+            {submitting
+              ? "Creating…"
+              : isResume
+                ? "Open worktree"
+                : forkOf
+                  ? "Fork"
+                  : "Create worktree"}
           </Button>
         </DialogFooter>
       </DialogContent>

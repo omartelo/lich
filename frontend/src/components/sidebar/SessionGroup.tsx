@@ -45,6 +45,8 @@ interface SessionGroupProps {
   onStageToggle: (sessionId: string) => void
   // Gather a session and the ones it delegated to into a wall of their own.
   onGroupDelegates: (sessionId: string, delegateIds: string[]) => void
+  /** Branch this session's conversation into a checkout of its own. */
+  onFork: (session: Session) => void
   // A divider label is drawn only when the sidebar holds more than one group; a
   // lone project with no worktrees keeps its old flat, header-less list. The
   // header doubles as the group's drag handle, so a lone group is also the case
@@ -61,6 +63,9 @@ interface SessionGroupProps {
   // Closing stays the sidebar's: the last session of a worktree raises the
   // keep-or-remove dialog it owns (useWorktreeClose).
   onClose: (session: Session) => void
+  // Open this checkout's Run card. Absent when the project ships no run script,
+  // and on the gathered blocks, which are not checkouts.
+  onRun?: () => void
   // The worktree's pull-request entry: opens the Pulls screen for this branch.
   // pullsActive marks it when that screen is showing this group's PR. Rendered
   // only for worktree groups (a truthy path).
@@ -100,10 +105,12 @@ export function SessionGroup({
   stageIds,
   onStageToggle,
   onGroupDelegates,
+  onFork,
   showHeader,
   sortable,
   onReorder,
   onClose,
+  onRun,
   pullsActive,
   onPulls,
   onClosePulls,
@@ -186,6 +193,7 @@ export function SessionGroup({
           activatorProps={fixed ? {} : { ...group.attributes, ...group.listeners }}
           onToggle={toggle}
           onNewSession={(kind) => newSession(projectId, kind, path)}
+          onRun={onRun}
         />
       )}
       <div
@@ -224,6 +232,7 @@ export function SessionGroup({
                       showing={stageIds.includes(session.id)}
                       onStageToggle={() => onStageToggle(session.id)}
                       delegateCount={delegates.length}
+                      onFork={() => onFork(session)}
                       onGroupDelegates={() =>
                         onGroupDelegates(
                           session.id,

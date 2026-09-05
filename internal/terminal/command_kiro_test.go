@@ -127,7 +127,10 @@ func TestKiroSpawnsTheChatSubcommandBeforeEveryFlag(t *testing.T) {
 			want: []string{"chat", "--agent", "lich", "--resume-id", "s1", "--trust-all-tools", "--model", "auto"}},
 	}
 	for _, tt := range tests {
-		got := providerArgs(providers.Kiro, "", tt.resume, tt.model, "/usr/bin/lich", tt.agent, tt.skipPermissions)
+		got := providerArgs(
+			providers.Kiro, "", tt.resume, tt.model, "/usr/bin/lich", tt.agent,
+			false, tt.skipPermissions,
+		)
 		if !slices.Equal(got, tt.want) {
 			t.Errorf("%s: args = %v, want %v", tt.name, got, tt.want)
 		}

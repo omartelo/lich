@@ -26,6 +26,7 @@ import {
   setSessionEntrypoint as recordEntrypoint,
   setSessionPinned,
   setSessionSandboxed,
+  setSessionSchedule,
   type Session,
   type SessionKind,
   type SessionState,
@@ -39,12 +40,14 @@ import {
   projectNewSessionKind,
 } from "@/lib/providers-store"
 import { resolveNewSessionKind } from "@/lib/session/new-session-kind"
+import { scheduledFor, timeUntil } from "@/lib/session/schedule"
 import {
   CLOSED_EVENT,
   OPENED_EVENT,
   PROJECT_OPENED_EVENT,
   RELAY_STALLED_EVENT,
   SANDBOX_EVENT,
+  SCHEDULE_EVENT,
   STATUS_EVENT,
   TITLE_EVENT,
   TOUCHED_EVENT,
@@ -52,6 +55,7 @@ import {
   isIdEvent,
   isRelayStalledEvent,
   isSandboxEvent,
+  isScheduleEvent,
   isStatusEvent,
   isTitleEvent,
   shouldToastAttention,
@@ -219,6 +223,22 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         return
       }
       const next = setSessionSandboxed(sessionsRef.current, data.id, data.confined)
+      if (next !== sessionsRef.current) {
+        commit(next)
+      }
+    })
+    return () => off()
+  }, [])
+
+  // A scheduled prompt has been typed at its session, so the mark comes off the
+  // card at that moment rather than at the next reload. The row is already
+  // cleared on the backend's side of it, so this never writes back.
+  useEffect(() => {
+    const off = onAppEvent(SCHEDULE_EVENT, (data) => {
+      if (!isScheduleEvent(data)) {
+        return
+      }
+      const next = setSessionSchedule(sessionsRef.current, data.id, data.at, "")
       if (next !== sessionsRef.current) {
         commit(next)
       }
@@ -399,14 +419,37 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
   // sandbox is the answer the new-worktree dialog collected: "on", "off", or ""
   // when the machine cannot confine anything and nothing was asked.
+  //
+  // from is the session this one is being forked out of, when it is: it decides
+  // the provider the new card runs — a fork has to spawn the CLI that wrote the
+  // conversation it carries, not whatever the project defaults to — and records
+  // the lineage the sidebar already draws for a delegate ("from <parent>").
   const newWorktreeSession = useCallback(
-    (projectId: string, wt: { name: string; path: string }, sandbox = "") => {
+    (
+      projectId: string,
+      wt: { name: string; path: string },
+      sandbox = "",
+      from: Session | null = null,
+    ) => {
       const sessionId = newSessionId()
-      const kind = projectNewSessionKind(projectId)
+      const kind = from?.kind ?? projectNewSessionKind(projectId)
       const next = addSession(sessionsRef.current, projectId, sessionId, kind, wt.path, wt.name)
       const project = next[projectId]
       const created = project.sessions[project.sessions.length - 1]
       commit(next)
+      if (from) {
+        void Store.AddSessionFrom(
+          projectId,
+          sessionId,
+          created.label,
+          kind,
+          wt.path,
+          project.nextSeq,
+          from.id,
+          from.label,
+        )
+        return sessionId
+      }
       void Store.AddSession(
         projectId,
         sessionId,
@@ -875,6 +918,21 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       .catch((error: unknown) => toast.error(`Could not save the entrypoint: ${errorText(error)}`))
   }, [])
 
+  // scheduleSession is written through and mirrored like every other session
+  // mutation. It takes no project id: the schedule belongs to one card, the
+  // state helper finds the project it sits in, and the dialog is the same call
+  // whichever list that card was drawn in.
+  const scheduleSession = useCallback((sessionId: string, at: number, prompt: string) => {
+    Store.SetSessionSchedule(sessionId, at, prompt)
+      .then(() => {
+        commit(setSessionSchedule(sessionsRef.current, sessionId, at, prompt))
+        toast.success(at ? `Scheduled ${timeUntil(at, new Date()) ?? "now"}` : "Schedule cleared", {
+          description: at ? scheduledFor(at, new Date()) : undefined,
+        })
+      })
+      .catch((error: unknown) => toast.error(`Could not schedule it: ${errorText(error)}`))
+  }, [])
+
   const pinSession = useCallback((projectId: string, sessionId: string, pinned: boolean) => {
     const next = setSessionPinned(sessionsRef.current, projectId, sessionId, pinned)
     if (next === sessionsRef.current) {
@@ -903,6 +961,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       activateSession,
       renameSession,
       setEntrypoint,
+      scheduleSession,
       pinSession,
       reorderProjects,
       reorderSessions,
@@ -925,6 +984,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       activateSession,
       renameSession,
       setEntrypoint,
+      scheduleSession,
       pinSession,
       reorderProjects,
       reorderSessions,

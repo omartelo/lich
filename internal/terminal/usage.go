@@ -105,8 +105,8 @@ func (s *Service) sessionUsage(id string) (usageEvent, bool) {
 }
 
 // usageSource is where one conversation's records live: which provider wrote
-// them and the one file that holds them — a transcript for Claude Code, Codex
-// and oh-my-pi, a database for opencode and Crush.
+// them and the one file that holds them — a transcript for Claude Code, Codex,
+// oh-my-pi, Antigravity and Kiro CLI, a database for opencode and Crush.
 type usageSource struct {
 	kind string
 	path string
@@ -135,6 +135,9 @@ func usageSourceFor(providerSessionID, cwd string) (usageSource, bool) {
 	if path, ok := ompTranscriptPath(providerSessionID); ok {
 		return usageSource{kind: providers.OMP, path: path, id: providerSessionID}, true
 	}
+	if path, ok := antigravityTranscriptPath(providerSessionID); ok {
+		return usageSource{kind: providers.Antigravity, path: path, id: providerSessionID}, true
+	}
 	if path, ok := opencodeSessionDB(); ok &&
 		sessionRowExists(path, opencodeSessionTable, providerSessionID) {
 		return usageSource{kind: providers.OpenCode, path: path, id: providerSessionID}, true
@@ -153,8 +156,8 @@ func usageSourceFor(providerSessionID, cwd string) (usageSource, bool) {
 // occupies. supported is whether this provider records a window at all: only
 // Claude Code, Codex and Kiro CLI do, and for the rest a miss is the standing
 // state rather than a read that has not landed yet (docs/ceilings.md).
-// Antigravity and Cursor CLI never reach here — they file no transcript
-// usageSourceFor finds.
+// Antigravity reaches here — its transcript is located for the last-turn recap
+// (said.go) — and falls through with the rest; Cursor CLI never does.
 //
 // Kiro is the odd one of the three: it records the percentage and the window but
 // no token count, so its arm derives the tokens rather than reading them

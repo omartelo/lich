@@ -160,6 +160,7 @@ const workspace: ProjectsValue = {
   activateSession: noop,
   renameSession: noop,
   setEntrypoint: noop,
+  scheduleSession: noop,
   pinSession: noop,
   reorderProjects: noop,
   reorderSessions: noop,

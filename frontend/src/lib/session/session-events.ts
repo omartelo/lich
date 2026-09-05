@@ -72,6 +72,13 @@ export const SANDBOX_EVENT = "session-sandbox"
 // to draw the cost without a ring (docs/ceilings.md).
 export const USAGE_EVENT = "session-usage"
 
+// Global event the backend emits when a session's scheduled prompt has been
+// typed at it (see relay.ScheduleEventName). Payload: { id, at } — at is 0,
+// because the prompt has just been delivered and nothing is waiting anymore.
+// The window is the only other writer of that row and already knows what it
+// wrote; this is what the clock did.
+export const SCHEDULE_EVENT = "session-schedule"
+
 // Global event the backend emits while one session has a request open with
 // another (see relay.RelayEventName). Payload: { id, peer, direction, ticket } —
 // the session whose card changes, the label at the other end, which way the
@@ -226,6 +233,10 @@ export function isIdEvent(data: unknown): data is { id: string } {
   return (
     typeof data === "object" && data !== null && typeof (data as { id?: unknown }).id === "string"
   )
+}
+
+export function isScheduleEvent(data: unknown): data is { id: string; at: number } {
+  return isIdEvent(data) && typeof (data as { at?: unknown }).at === "number"
 }
 
 export function isSandboxEvent(data: unknown): data is { id: string; confined: boolean } {

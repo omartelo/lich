@@ -5,11 +5,13 @@ import {
   ArrowLeft,
   ArrowRight,
   CircleQuestionMark,
+  Clock,
   Copy,
   CornerDownLeft,
   FolderCode,
   FolderOpen,
   GitBranch,
+  GitFork,
   GitPullRequestArrow,
   Inbox,
   Pencil,
@@ -27,7 +29,7 @@ import { toast } from "sonner"
 import { cn, errorText } from "@/lib/utils"
 import { dragStyle } from "@/lib/use-sortable-list"
 import { displayPath } from "@/lib/paths"
-import type { Session } from "@/lib/session/sessions"
+import { forkableSession, type Session } from "@/lib/session/sessions"
 import {
   useSessionStatus,
   useSessionStatusAge,
@@ -66,8 +68,10 @@ import { bracketedPaste } from "@/lib/terminal/bracketed-paste"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
 import { useSessionIntent } from "@/lib/use-sidebar-intent"
 import { useProjects } from "@/providers/projects"
+import { timeUntil } from "@/lib/session/schedule"
 import { SessionTargetPicker } from "./SessionTargetPicker"
 import { EntrypointDialog } from "./EntrypointDialog"
+import { SchedulePromptDialog } from "./SchedulePromptDialog"
 
 interface SessionCardProps {
   session: Session
@@ -87,6 +91,11 @@ interface SessionCardProps {
   // them into a wall around it. Zero is the usual case and offers nothing.
   delegateCount: number
   onGroupDelegates: () => void
+  // Branch this session's conversation into a checkout of its own. Offered only
+  // where the provider can fork one (forkableSession) — the card does not ask
+  // whether the conversation is still on disk, which is the fork flow's own
+  // first question.
+  onFork: () => void
   onSelect: () => void
   onClose: () => void
   onRename: (label: string) => void
@@ -124,6 +133,7 @@ export function SessionCard({
   onStageToggle,
   delegateCount,
   onGroupDelegates,
+  onFork,
   onSelect,
   onClose,
   onRename,
@@ -137,12 +147,13 @@ export function SessionCard({
   // Read here rather than threaded down as a prop: the `lich send` line names
   // the project only when another session shares this card's label, and that is
   // a question about every open project — not about the one this card sits in.
-  const { projects, sessions } = useProjects()
+  const { projects, sessions, scheduleSession } = useProjects()
   const pinned = !!session.pinned
   const pathRef = useRef<HTMLSpanElement>(null)
   const [pathOverflow, setPathOverflow] = useState(false)
   const [editing, setEditing] = useState(false)
   const [delegatePickerOpen, setDelegatePickerOpen] = useState(false)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
   const [entrypointOpen, setEntrypointOpen] = useState(false)
   // Processing state reported by the lich Claude Code hook, drawn as a ring
   // around the provider icon: a spinning ring while Claude produces output,
@@ -178,6 +189,18 @@ export function SessionCard({
   // tasks it delegated, uncollected. Zero — the usual case — draws nothing.
   const inbox = useSessionInbox(session.id)
   const ToolGlyph = tool && toolGlyph(tool.name)
+  // The prompt parked on this card, and how far off it is. Read at render
+  // rather than counted down on a timer of its own: a card redraws often enough
+  // that "in 3h" is never wrong by anything a person reads, and a clock ticking
+  // per card would cost the sidebar a render a second to say the same thing.
+  // null once it is due, which is the state the rung words differently.
+  const scheduledAt = session.scheduledAt ?? 0
+  const scheduledIn = scheduledAt ? timeUntil(scheduledAt, new Date()) : null
+  const scheduleItem = !scheduledAt
+    ? "Schedule a prompt…"
+    : scheduledIn
+      ? `Scheduled ${scheduledIn}…`
+      : "Scheduled…"
   // The live working directory the backend's cwd watcher reports ("" until it
   // does): a `cd` in the terminal moves the card with it. Falls back to the
   // session's static start path — a worktree session lives in its own checkout,
@@ -254,6 +277,7 @@ export function SessionCard({
   // as an agent is started and quit by hand offers no action the user can rely
   // on being there.
   const canDelegate = active && session.kind !== "shell"
+  const canFork = forkableSession(session) !== null
 
   // The picker is only rendered while the card can delegate, so losing that
   // unmounts it — and an open flag left behind would spring the dialog back up
@@ -403,9 +427,10 @@ export function SessionCard({
                   </span>
                 </span>
               )}
-              {/* One line, five rungs: an open request, then a session blocked
+              {/* One line, six rungs: an open request, then a session blocked
                   on the user, then results waiting to be collected, then the
-                  tool, then where the session came from. A request in flight
+                  tool, then a prompt scheduled for later, then where the session
+                  came from. A request in flight
                   explains the whole turn — a card working because another
                   session asked it to, or one stalled waiting on a card
                   elsewhere in the list. A block outranks the rest for the
@@ -418,7 +443,11 @@ export function SessionCard({
                   because it is never news: it says something that has been true
                   since the card was created, so it surfaces only once the card
                   is quiet, which is when somebody scanning the sidebar is
-                  working out where a card came from. Only one rung ever draws,
+                  working out where a card came from. A scheduled prompt sits
+                  just above it for half that reason: it is not what this session
+                  is doing, so it never takes the line from the turn — but it is
+                  the one rung about something that has not happened yet, and a
+                  quiet card is exactly where that is worth reading. Only one rung ever draws,
                   so the card grows by one row at most. */}
               {relay ? (
                 <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
@@ -472,6 +501,21 @@ export function SessionCard({
                     <span className="min-w-0 shrink-[9999] truncate font-mono">
                       <span className="opacity-50">·</span> {tool.detail}
                     </span>
+                  )}
+                </span>
+              ) : scheduledAt ? (
+                <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                  <Clock className="size-3 shrink-0" />
+                  {scheduledIn ? (
+                    <span className="truncate">
+                      Scheduled <span className="font-medium text-foreground">{scheduledIn}</span>
+                    </span>
+                  ) : (
+                    // Due and still here: the prompt is waiting on somewhere to
+                    // be typed — a setup script still running, a half-written
+                    // line at that prompt, a card whose terminal was never
+                    // opened — and it goes in the moment there is one.
+                    <span className="truncate">Waiting for a prompt</span>
                   )}
                 </span>
               ) : (
@@ -577,12 +621,27 @@ export function SessionCard({
           <SessionTooltip session={session} path={path} />
         </Tooltip>
         <ContextMenuContent>
+          {canFork && (
+            <ContextMenuItem onClick={onFork}>
+              <GitFork />
+              Fork to worktree…
+            </ContextMenuItem>
+          )}
           {canDelegate && (
             <ContextMenuItem onClick={() => setDelegatePickerOpen(true)}>
               <ArrowRight />
               Delegate to session…
             </ContextMenuItem>
           )}
+          {/* Under delegation, because the two are the same move a beat apart:
+              hand this work to somebody else, or hand it to this session later.
+              One item either way — it names what is already parked rather than
+              growing a second one to cancel with, which is what the dialog is
+              for. */}
+          <ContextMenuItem onClick={() => setScheduleOpen(true)}>
+            <Clock />
+            {scheduleItem}
+          </ContextMenuItem>
           <ContextMenuItem onClick={copySendCommand}>
             <Copy />
             Copy send command
@@ -651,6 +710,19 @@ export function SessionCard({
           groups={delegateGroups}
           onPick={(target) => delegate(target.label)}
           onPickWorktree={delegateWorktree}
+        />
+      )}
+      {/* Mounted only while it is open, unlike the entrypoint dialog beside it:
+          this one is offered on every card, and a dialog per card is a render
+          per card the sidebar was not paying before (render-budget.test.tsx). */}
+      {scheduleOpen && (
+        <SchedulePromptDialog
+          open
+          onOpenChange={setScheduleOpen}
+          label={session.label}
+          prompt={session.scheduledPrompt ?? ""}
+          at={scheduledAt}
+          onSchedule={(at, prompt) => scheduleSession(session.id, at, prompt)}
         />
       )}
       {session.kind === "shell" && (

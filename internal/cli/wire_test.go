@@ -32,6 +32,9 @@ func (wiredSessions) LoadState() ([]store.Project, error) {
 	}}}, nil
 }
 
+// Nothing here schedules a prompt; the relay only ever calls this to clear one.
+func (wiredSessions) SetSessionSchedule(string, int64, string) error { return nil }
+
 type wiredTerminal struct {
 	mu    sync.Mutex
 	typed string
@@ -171,6 +174,8 @@ func (s *spawnStore) SetSessionModel(_, model string) error {
 	return nil
 }
 
+func (s *spawnStore) SetSessionEntrypoint(_, _ string) error { return nil }
+
 func (s *spawnStore) DeleteSession(_, _, _ string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -232,7 +237,7 @@ type spawnTerminal struct {
 	closed string
 }
 
-func (s *spawnTerminal) Start(_, _, cwd, kind, _, _ string, _ bool, _, _ int) error {
+func (s *spawnTerminal) Start(_, _, cwd, kind, _, _ string, _, _ bool, _, _ int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cwd, s.kind = cwd, kind

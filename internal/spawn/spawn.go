@@ -84,6 +84,7 @@ type Sessions interface {
 		projectID, sessionID, label, kind, path string, nextSeq int, originID, originLabel string,
 	) error
 	SetSessionModel(sessionID, model string) error
+	SetSessionEntrypoint(sessionID, entrypoint string) error
 	RenameSession(sessionID, label string) error
 	DeleteSession(projectID, sessionID, activeID string) error
 	CloseSession(projectID, sessionID, activeID string) error
@@ -105,7 +106,7 @@ type Worktrees interface {
 // first viewed, and the same close it asks for when a card goes away. The
 // terminal service implements it.
 type Terminal interface {
-	Start(id, projectID, cwd, kind, resume, name string, setup bool, cols, rows int) error
+	Start(id, projectID, cwd, kind, resume, name string, fork, setup bool, cols, rows int) error
 	Close(id string) error
 }
 
@@ -276,7 +277,7 @@ func (s *Service) Open(fromID, projectName, kind, worktree, base, model string) 
 			)
 		}
 	}
-	if err := s.term.Start(id, target.ID, cwd, kind, "", opened.Name, setup, startCols, startRows); err != nil {
+	if err := s.term.Start(id, target.ID, cwd, kind, "", opened.Name, false, setup, startCols, startRows); err != nil {
 		return Session{}, fmt.Errorf("session %q was created but its terminal did not start: %w", label, err)
 	}
 	if modelErr != nil {

@@ -9,6 +9,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A session can now be forked into a worktree of its own.**
+  Right-click a card and pick *Fork to worktree…*: the New worktree dialog opens
+  saying which conversation it will carry, and the session it creates starts on a
+  copy of that conversation and keeps going from there. The card you forked is
+  untouched — same branch, same history, still running — so it is the way to try
+  a second direction without losing the first, or to hand a long conversation to
+  a clean checkout. The new card wears the *from …* line delegated sessions
+  already have, so which session it came out of stays on screen. It runs the
+  provider the conversation belongs to rather than the project's default, and it
+  is named at birth like any other session — a fork used to inherit the name of
+  the card it came from, which left two of them answering to one name.
+  Offered for Claude Code, Codex and opencode, the three whose CLI can branch a
+  conversation; the item is absent on the other five, which only reopen one. If
+  the provider has since pruned the conversation, lich says so instead of making
+  a checkout for a session that would fail to start.
+
+- **The palette searches what was said in Codex, oh-my-pi, Kiro CLI and
+  Antigravity sessions too.** The `Messages` group read Claude Code conversations
+  and nothing else, so on any other provider the one thing you actually remember
+  — a sentence from the conversation — found nothing, with no sign that the
+  search had skipped the session. It now reads every provider that files its
+  conversation as a transcript: five of the eight, your turns and the agent's,
+  the same as before. opencode and Crush keep their messages in a database
+  instead and are still searched by name only; Cursor CLI files a chat in a form
+  nothing here can read. A session on one of those three simply contributes no
+  rows, which is what a session with nothing to match has always looked like.
+
+- **A checkout can now run the project's own app.** lich has reserved a
+  dev-server port per checkout for a while — `LICH_WORKTREE_PORT`, a number the
+  worktree owns — and then left it to you to find a terminal and start something
+  on it. Write the command once in `.lich/run-worktree.sh`, versioned beside the
+  setup script and shared with everyone who clones the repository, and every
+  checkout's **+** menu carries a **Run** item that opens it in a card of its
+  own: a terminal named after the command, started by the backend, so the app is
+  up whether or not you ever look at it. The New worktree dialog is where the
+  file is written, on the line under the setup script. Nothing supervises what
+  it starts — when the command exits you are left in your own shell in the same
+  card with the error still on screen, and ↑ Enter is the retry. Absent on
+  Windows, where the file's `sh` would be read by PowerShell.
+
+- **A prompt can now be left on a session for later.**
+  **Schedule a prompt…** on a card's menu takes what you want that session to do
+  and one of four times — 15 minutes, an hour, four hours, or tomorrow morning —
+  and types it at that prompt when the time comes, exactly as if you had typed it
+  yourself. It is the reminder that arrives as work: the release checklist at
+  nine, the rebase after the build, the thing you will not remember to ask for at
+  four. Each time button carries the wall clock it resolves to, so *Tomorrow*
+  never has to be taken on trust. The card counts down on its own line and the
+  tooltip holds the prompt and the day, so a session with something coming says
+  so before you open anything. A session holds one at a time — scheduling again
+  replaces it, and the same dialog is where you cancel. It works the same on
+  every provider, because delivering it is typing at a prompt, and a prompt that
+  comes due while that session is mid-setup, mid-sentence or without a terminal
+  waits for one rather than being dropped — including one that came due while
+  lich was closed, which lands when lich is next up.
+
 - **A GitHub issue can now be the worktree.**
   The New worktree dialog's name field takes an issue — `#128`, or the URL copied
   out of the browser — beside the branch names and plain words it already took.
@@ -112,6 +168,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verdict, so the two disagree for a few seconds after a push — the row says
   which one is the fresh reading.
 
+- **The Review panel's "Last turn" now shows what the agent said, not only what
+  it changed.** Coming back to a card told you it had news, what it cost and how
+  long you had been in it, and never what it did — catching up meant scrolling
+  the terminal. Above the turn's diff there is now the agent's own closing
+  sentence for that turn, read straight out of the provider's transcript.
+  Nothing is generated and no model is called: every agent already ends a turn
+  by saying what it did, and lich only finds that sentence. It earns its place
+  on the turn the diff cannot describe — the one that ran the suite, found three
+  failures and edited nothing, which used to read as "Nothing changed in this
+  window" and no more. The band appears only when there are words to show, and
+  scrolls in its own right, so a long report never pushes the file list off
+  screen. Read for Claude Code, Codex, Antigravity, opencode, oh-my-pi and Kiro
+  CLI; Crush and Cursor CLI report no turn boundary, so they are not offered the
+  "Last turn" mode this sits in at all.
+
 ### Changed
 
 - **"Resolve conflicts" and "Fix CI errors" now open the session they hand the
@@ -125,6 +196,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   setup script still installing the checkout. The Enter stays yours.
 
 ### Fixed
+
+- **The Kiro CLI recap band was empty whenever the agent thought before it
+  spoke.** "Last turn" reads the closing words out of the provider's own
+  transcript, and Kiro types each block of a message differently — a `text` block
+  carries a string, a `thinking` block an object. Reading them all as strings
+  failed the whole line, so any turn that reasoned first — nearly every one —
+  read as a turn that said nothing, and the band did not appear.
 
 - **On Windows, an answer that named no ticket could close the wrong request.**
   `lich reply "<answer>"` and `reply_to_session` without a ticket close the

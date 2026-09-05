@@ -109,6 +109,23 @@ func AcceptsMCPServer(id string) bool {
 	return id == Claude || id == Codex
 }
 
+// SupportsFork reports whether a provider can branch an existing conversation
+// into a second one — the copy carries the history, the original is left
+// untouched — so lich can offer to carry a session's conversation into a new
+// checkout instead of only reopening it where it was.
+//
+// Three of the eight spell it themselves and lich forks through no other route:
+// Claude Code's `--fork-session` rides its `--resume`, Codex swaps its `resume`
+// subcommand for `fork`, and opencode's `--fork` rides its `--session`
+// (measured on 2.1.261, 0.151.0 and 1.18.23). The other five keep no such verb
+// — oh-my-pi, Crush, Cursor CLI, Kiro CLI and Antigravity offer resume alone —
+// and forging a fork for them would mean writing a copy of the conversation
+// into that harness's own private store, which docs/ceilings.md names along
+// with what it would cost.
+func SupportsFork(id string) bool {
+	return id == Claude || id == Codex || id == OpenCode
+}
+
 // DefaultBinary returns a provider's preferred executable name, or "" for an
 // unknown id.
 func DefaultBinary(id string) string {

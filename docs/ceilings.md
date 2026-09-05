@@ -14,7 +14,22 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   them: noreply forms, vanity domains and org aliases make a mismatch warning a false-positive farm. lich never
   writes `user.email`.
 - **`LICH_WORKTREE_PORT` is reserved, never held** (`internal/terminal/worktreeport.go`): the number is a name the
-  checkout owns, nothing binds it, and anything on the machine can take the port before the dev server starts.
+  checkout owns, nothing binds it, and anything on the machine can take the port before the dev server starts. A
+  Run card shortens that window rather than closing it — the process it starts is what binds the port, and
+  whether the script even mentions the variable is the project's own business.
+- **A Run card is a terminal, not a supervisor** (`internal/spawn/run.go`, `.lich/run-worktree.sh`): lich starts
+  the command and stops caring. Nothing restarts it, nothing reports memory or CPU, and nothing dedupes — asking
+  twice opens two cards, and the second one's own `address already in use` is the whole of the report. When the
+  command exits the entrypoint wrapper leaves the user's shell in the same card with the error still on screen
+  (`internal/terminal/entrypoint.go`), which is the retry: ↑, Enter. The script is one command, so a project with
+  a web server and a worker beside it opens two cards or writes a script that backgrounds one of them.
+- **The Run card is never started for you, and never on Windows** (`frontend/src/components/sidebar/SessionSidebar.tsx`):
+  a fresh worktree's setup script is still installing dependencies in the agent's card when the checkout appears,
+  and lich has no "setup finished" signal to hang an automatic start on — `terminal.Ready` answers a different
+  question, going false again for every turn the agent takes. So the card is one gesture, which is also what
+  keeps eight worktrees from meaning eight dev servers. On Windows the menu item is absent for the setup script's
+  reason: `.lich/run-worktree.sh` holds sh, and a session there runs PowerShell, where `$LICH_WORKTREE_PORT`
+  expands to nothing in silence.
 - **The cost readout bills per `(session, transcript)`** (`internal/pricing`, `internal/terminal/usage_cost.go`): a
   conversation forked inside the PTY bills its copied history twice — lich's own resume continues the same
   transcript and is unaffected — and each sub-agent's own transcript is counted in, so one unreadable or
@@ -192,6 +207,22 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   so **Crush and Cursor CLI have no last turn at all**: neither reports a state (`docs/hooks/session-state.md`),
   so nothing ever opens or closes a window there and the switch is never drawn — a rule read off the
   session's own reports, not a list of providers, so it corrects itself the day either one starts reporting.
+- **The recap beside that diff answers to a different clock, and to a different set of providers**
+  (`internal/terminal/said.go`): the band reads the last thing the agent *said* out of the provider's own
+  transcript, where the diff beside it brackets the window a turn ran in. The two agree once a turn has
+  finished — which is the only time a diff is offered — but mid-turn the band still shows the previous
+  turn's words with no date on them, beside a diff that reads "unavailable"; nothing in the panel says
+  which turn is speaking, and only the card's spinner does. The read is a bounded tail for the reason the
+  transcript search's is (`searchTailBytes`), so a turn whose closing words sit behind more than 4 MB of
+  tool output shows none — the band simply does not appear, which is also what a turn that ended on a tool
+  call looks like. And its provider list is *not* the one the switch above it is drawn from: six of the
+  eight are read (Claude Code, Codex, Antigravity, opencode, oh-my-pi, Kiro CLI), and the two that are not
+  are the two with no last turn to begin with, so the gap is invisible today and would surface the moment
+  Crush or Cursor CLI started reporting a state. Kiro CLI was on that list and silent in practice until the
+  palette's search reused the same reader: its block payloads are typed per block kind, and declaring one as
+  a string failed every line where the agent thought before it spoke — which is nearly all of them. Crush is a query away — its `parts` column carries the
+  same `{type,text}` shape opencode's does — and Cursor CLI is not: it files a chat as content-addressed
+  blobs ordered by a protobuf index, with a `blobEncryptionKey` sitting in its own metadata.
 - **A finished turn is unread until its own card is watched** (`frontend/src/lib/session/session-status-store.ts`,
   `frontend/src/providers/projects.tsx`): the solid emerald ring means "back from the agent, not read yet", and it
   fades only for the session whose terminal is on screen **while the window has focus**. Two things follow. A card
@@ -235,7 +266,30 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   at. And `.lich/setup-worktree.sh` is one file, versioned and shared by every checkout, holding sh — so a
   Windows session skips it rather than feeding it to PowerShell, which would run the leading words of every line
   as commands. A worktree opens there with its setup silently not done.
-- **A session is named at birth, never on resume** (`internal/terminal/command.go`, `nameArgs`): the trap is that
+- **A fork is offered by three providers of eight, and the other five never grow one**
+  (`internal/providers.SupportsFork`, `internal/terminal/command.go`, `resumeArgs`): Claude Code, Codex and
+  opencode branch a conversation themselves, so lich asks them to. The other five keep resume and no fork, and
+  lich will not forge one: a copy would mean writing into that harness's own private store — two SQLite
+  schemas with triggers (Crush's per-checkout `.crush/crush.db`, Antigravity's one database per conversation),
+  a blob store keyed on the md5 of the checkout (Cursor), and two JSONL formats with the id and cwd written
+  inside them (oh-my-pi, Kiro CLI) — none of them documented, each versioned by its own CLI, and the blast
+  radius of getting one wrong is the user's real history. The trap is that the menu item is simply absent
+  there, with nothing saying why, so a user who forks a Claude Code card and then looks for the same thing on
+  their Crush card finds no answer on screen.
+- **opencode files a fork under the parent's directory, not the new checkout's** (measured on 1.18.23): the
+  copied session's `directory` column is the one the original ran in, and its `parent_id` is left empty, so
+  opencode's own session list places a fork in the checkout it came from and records no lineage. lich's own
+  card is right — it carries the worktree it was opened in, and `origin_session_id` names the parent — but the
+  two disagree, and only lich's side is visible in lich.
+- **A fork is billed as a second conversation from its first turn** (`internal/pricing`,
+  `internal/terminal/usage_cost.go`): the copy is a transcript of its own carrying every token of the history
+  it was branched from, so the pair reports roughly twice what one conversation spent. It is the same
+  arithmetic as the `(session, transcript)` bullet above, arrived at deliberately rather than by accident —
+  a lich-driven fork makes that path ordinary.
+- **A session is named at birth, and a fork is a birth** (`internal/terminal/command.go`, `nameArgs`): a
+  resume never renames — Claude Code restores the name from the transcript, including a `/rename` typed inside
+  the session — but a fork does, because the conversation it opens is new and inherits the parent's name
+  otherwise (measured on 2.1.261). The trap is that
   lich still *derives* that name (`internal/relay/rostername.go`, its page-side half
   `frontend/src/lib/session/peer-name.ts`) for the relay to resolve against, and the derived string goes stale the
   moment anyone renames — it then addresses a session that no longer answers to it. Nothing reads the real name
@@ -352,6 +406,16 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   events rather than bytes, the bracketed paste markers do not survive, and every provider TUI then guesses at where
   a paste ends from timing alone. A target that repaints on a timer of its own never goes quiet and gets its Enter
   at `defaultSettleLimit` regardless, which is the case this cannot tell from a paste still arriving.
+
+- **A scheduled prompt is late or gone, never on time** (`internal/relay/later.go`, `deliverDue`): due prompts
+  are looked for every `scheduleTick`, and one whose session is not at a prompt — mid-setup, a draft on the
+  line, no terminal opened — is left parked for the next pass, so it lands whenever that session next has
+  somewhere to type, hours later if that is when. That covers lich having been closed at the time: the first
+  pass after launch types a prompt that came due days ago, unannounced. The other end of it is a session that
+  is closed rather than busy — a parked worktree card, a card closed for good. Its row leaves the roster
+  (`LoadState` reads open sessions only) and the resume reinserts it under a fresh id without the schedule, so
+  the prompt never fires and never comes back with the card, with nothing on screen having said it was
+  forfeited.
 
 - **An answer that names no ticket is matched by delivery order** (`internal/relay/relay.go`,
   `errandOfLocked`): `lich reply "<answer>"` and `reply_to_session` without a ticket close the oldest message
@@ -681,10 +745,19 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **The History tab searches names, never what was said** (`internal/terminal/search.go`): the Messages tab
   reads a 4 MB tail per session per keystroke, and it is pointed at the sessions the palette can route to —
   the open ones. History is the long list, so widening the transcript search to it would put a hundred disk
-  reads behind every character typed. The parked row keeps its `provider_session_id`, so the transcript is
-  still there to be searched by whatever does it later; and that search is Claude-only today
-  (`claudeTranscriptPath`) while `canResume` locates all six providers, so widening it would inherit that gap
-  rather than close it.
+  reads behind every character typed, on a machine that can hold hundreds of transcripts and a single one
+  of 169 MB. The parked row keeps its `provider_session_id`, so the transcript is still there to be searched
+  by whatever does it later; the fix when it bites is a query, not a bigger tail.
+- **The Messages tab reads five of the eight providers, and the three it misses are the ones with no
+  transcript to walk** (`transcriptReaderFor`, `internal/terminal/said.go`): the search and the last-turn
+  recap share one reader per provider, so both reach Claude Code, Codex, oh-my-pi, Kiro CLI and Antigravity —
+  every provider that files its conversation as JSONL. opencode keeps its messages in SQLite and is a `LIKE`
+  away, but a `LIKE` is a second mechanism (a query that counts and windows its own snippet) rather than a
+  sixth reader, and it is unwritten until somebody asks for it; Crush is the same query against its `parts`
+  column. Cursor CLI is the one that is not a query: it files a chat as content-addressed blobs ordered by a
+  protobuf index, with a `blobEncryptionKey` in its own metadata. A session on any of the three contributes
+  no rows and says nothing about it — the group simply does not list it, which is what every other miss in
+  that search looks like too.
 - **A filed backend answer outlives the screen that asked, under a key its caller writes by hand**
   (`frontend/src/lib/remote-cache.ts`): a `useRemoteResource` caller that passes `cache` has its answers kept
   in module memory until the page reloads, under exactly the string it composed. Two callers that compose the

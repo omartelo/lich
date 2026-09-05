@@ -192,6 +192,9 @@ func main() {
 	// report at all, and whether they can answer with a tool — are about what
 	// the plugin put there.
 	rl.SetPlugins(plugins)
+	// The scheduled prompts are the relay's other clock: nobody calls in for
+	// them, they come due.
+	go rl.RunSchedules()
 	dispatcher.Register("relay", rl)
 	// Its caller is not the window either: opening a session for an agent starts
 	// the PTY here rather than waiting for someone to click the card.
@@ -235,6 +238,10 @@ func main() {
 //   - terminal.SessionAccount hands back the environment of the process a
 //     session runs, credentials and all, so the quota reader can tell which
 //     account that session spends.
+//   - relay.RunSchedules is the scheduled-prompt loop, started once at launch
+//     and never returning: called over /rpc/ it holds that request open for the
+//     life of the process and starts a second loop racing the first for every
+//     due prompt.
 //   - relay.SetPlugins, project.SetAccounts, project.SetProjects,
 //     quota.SetSessions, store.SetSessionGone and terminal.SetDropDir are
 //     startup wiring. Called with [null] they silently nil what they wired
@@ -251,6 +258,7 @@ func denyInternal(d *rpc.Handler) {
 		"drop.Purge",
 		"drop.SetPicker",
 		"relay.Observe",
+		"relay.RunSchedules",
 		"relay.SetPlugins",
 		"project.SetAccounts",
 		"project.SetProjects",

@@ -288,6 +288,8 @@ export interface Issue {
  * detected from the repository root when the file is absent. */
 export interface WorktreeSetup {
   script: string
+  /** The run command every checkout of the project opens a Run card on. */
+  run: string
   suggestion?: string
   /** The files behind suggestion, e.g. "pnpm-lock.yaml". */
   detected?: string
@@ -320,6 +322,12 @@ export interface StoredSession {
   originSessionId: string
   /** What that session was called at the time; all that survives its close. */
   originLabel: string
+  /** When the prompt below is due, in unix seconds; 0 for a session with
+   * nothing waiting. One slot per session — scheduling again replaces it. */
+  scheduledAt: number
+  /** The prompt to type at this session when that time comes, as the user
+   * wrote it. Empty when nothing is scheduled. */
+  scheduledPrompt: string
 }
 
 /** internal/store.ClosedSession — one parked session offered for resuming. What
@@ -541,4 +549,13 @@ export interface LastTurn {
    * expands unchanged lines against (ProjectService.FileLines). Present only
    * with a diff. */
   after?: string
+}
+
+/** internal/terminal.LastSaid — the prose the agent ended its last turn with,
+ * read out of the provider's own transcript. Absent for every absence there is:
+ * a turn that ended on a tool call, a provider whose conversation lich cannot
+ * read, a transcript still being written. The panel draws nothing either way,
+ * which is why there is no reason field to render. */
+export interface LastSaid {
+  text?: string
 }

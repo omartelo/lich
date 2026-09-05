@@ -64,6 +64,12 @@ export interface Session {
   // is closed. Read them through sessionOrigin, never on their own.
   originSessionId?: string
   originLabel?: string
+  // A prompt parked to be typed at this session later, and when it is due in
+  // unix seconds. Both absent when nothing is waiting; the backend types the
+  // prompt and clears the pair (internal/relay, deliverDue), which reaches the
+  // card as SCHEDULE_EVENT.
+  scheduledAt?: number
+  scheduledPrompt?: string
 }
 
 export interface ProjectSessions {
@@ -284,6 +290,38 @@ export function setSessionSandboxed(
         // no key at all — the shape the two hydration paths produce.
         const { sandboxed: _was, ...rest } = s
         return sandboxed ? { ...rest, sandboxed: true } : rest
+      }),
+    },
+  }
+}
+
+// setSessionSchedule parks a prompt on a session, or takes one off it: at 0
+// clears both keys, which is what a cancel and a delivered prompt both are.
+// Unknown ids leave the state untouched.
+export function setSessionSchedule(
+  state: SessionState,
+  sessionId: string,
+  at: number,
+  prompt: string,
+): SessionState {
+  const projectId = projectOfSession(state, sessionId)
+  const current = projectId ? state[projectId] : undefined
+  if (!projectId || !current || !current.sessions.some((s) => s.id === sessionId)) {
+    return state
+  }
+  return {
+    ...state,
+    [projectId]: {
+      ...current,
+      sessions: current.sessions.map((s) => {
+        if (s.id !== sessionId) {
+          return s
+        }
+        // Dropped rather than zeroed, for the reason setSessionSandboxed drops
+        // its key: a session with nothing scheduled is the shape hydration
+        // produces, and one field left behind would outlive the other.
+        const { scheduledAt: _at, scheduledPrompt: _prompt, ...rest } = s
+        return at > 0 && prompt ? { ...rest, scheduledAt: at, scheduledPrompt: prompt } : rest
       }),
     },
   }
@@ -543,6 +581,27 @@ const RESUMABLE_KINDS: readonly SessionKind[] = [
   "cursor",
   "kiro",
 ]
+
+// The provider kinds whose CLI can branch a conversation rather than only
+// reopen it, mirrored from providers.SupportsFork (Go) — keep in sync. Three of
+// the eight, and the rest is not a gap lich can close from this side: the offer
+// is withheld where the CLI has no verb for it.
+const FORKABLE_KINDS: readonly SessionKind[] = ["claude", "codex", "opencode"]
+
+// forkableSession returns the session a "Fork to worktree" offer can be made
+// for: one running a provider that forks, carrying the conversation to branch.
+// Null for every other card, which is what keeps the menu item off it — a row
+// that could only fail is worse than no row.
+//
+// Whether that conversation is still on disk is the backend's answer
+// (ResumeAvailable), asked by the caller when the offer is taken up rather than
+// on every render of every card.
+export function forkableSession(session: Session): Session | null {
+  if (!FORKABLE_KINDS.includes(session.kind) || !session.providerSessionId) {
+    return null
+  }
+  return session
+}
 
 // resumableSession returns the session whose PTY should ask before it spawns,
 // because it carries the provider conversation it ran before the last restart.

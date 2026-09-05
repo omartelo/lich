@@ -39,7 +39,9 @@ lich lets you:
 - **Keep a real terminal.** PTY-backed shells, several per project, rendered on
   the GPU — searchable scrollback that survives a full page reload. Give one an
   entrypoint — `lazygit`, `k9s`, `pnpm dev` — and it opens straight into that
-  tool every time. The footer follows `cd` and names the branch — and, for a
+  tool every time; write your dev server into `.lich/run-worktree.sh` and every
+  checkout gets a **Run** card for it, on the port lich reserved for that
+  worktree. The footer follows `cd` and names the branch — and, for a
   Claude Code or Codex session, the model, the context window in use and how
   much of your plan's rolling window is left; for Claude Code, if you ask, what
   the session has spent.

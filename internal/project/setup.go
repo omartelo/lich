@@ -7,30 +7,54 @@ import (
 	"strings"
 )
 
-// setupScriptPath is the repo-relative path of the worktree setup script: the
-// shell that runs in a new worktree's terminal before its provider starts. It
-// lives in the repository rather than lich's store so the script is versioned
-// and shared like the code it bootstraps; an untracked copy works too.
-const setupScriptPath = ".lich/setup-worktree.sh"
+// The repo-relative paths of the two scripts a checkout can ship. They live in
+// the repository rather than lich's store so both are versioned and shared like
+// the code they bootstrap; an untracked copy works too.
+//
+// setupScriptPath runs once in a new worktree's terminal before its provider
+// starts. runScriptPath is the project's own app — the command a run card opens
+// into, in a checkout that already has its dependencies.
+const (
+	setupScriptPath = ".lich/setup-worktree.sh"
+	runScriptPath   = ".lich/run-worktree.sh"
+)
 
 // SetupScript returns the project's worktree setup script, or "" when the
 // repository ships none. Always read from the main checkout, never from the
 // worktree being created: a worktree opened on somebody else's branch (the PR
 // flow) must not execute that branch's script.
 func SetupScript(projectPath string) string {
-	data, err := os.ReadFile(filepath.Join(projectPath, filepath.FromSlash(setupScriptPath)))
+	return readScript(projectPath, setupScriptPath)
+}
+
+// RunScript returns the project's run script, or "" when the repository ships
+// none. Read from the main checkout for the same reason SetupScript is: the
+// command belongs to the project, not to whichever branch a worktree holds.
+func RunScript(projectPath string) string {
+	return readScript(projectPath, runScriptPath)
+}
+
+// readScript reads one of the two scripts, answering "" for every failure — a
+// script lich cannot read is a script it will not run either.
+func readScript(projectPath, rel string) string {
+	data, err := os.ReadFile(filepath.Join(projectPath, filepath.FromSlash(rel)))
 	if err != nil {
 		return ""
 	}
 	return strings.TrimSpace(string(data))
 }
 
-// WorktreeSetup is what the New-worktree dialog shows about a project's setup:
-// the script when the repository ships one, otherwise a suggestion detected
-// from files at its root. Mirrored in frontend/src/lib/api-types.ts.
+// WorktreeSetup is what the New-worktree dialog shows about a project's two
+// scripts: the setup one when the repository ships it, otherwise a suggestion
+// detected from files at its root, and the run one beside it. Mirrored in
+// frontend/src/lib/api-types.ts.
 type WorktreeSetup struct {
 	// Script is the setup file's content; empty when the repository has none.
 	Script string `json:"script"`
+	// Run is the run file's content; empty when the repository has none. It has
+	// no suggestion beside it — a lockfile names how a checkout installs, never
+	// how the project starts.
+	Run string `json:"run"`
 	// Suggestion is a command proposed from Detected. It never runs on its
 	// own — the dialog offers it and only an accepted offer is saved and run.
 	Suggestion string `json:"suggestion,omitempty"`
@@ -41,11 +65,11 @@ type WorktreeSetup struct {
 // WorktreeSetup reports the setup script the dialog should show for the
 // project at path, falling back to a lockfile-detected suggestion.
 func (s *Service) WorktreeSetup(path string) WorktreeSetup {
-	if script := SetupScript(path); script != "" {
-		return WorktreeSetup{Script: script}
+	info := WorktreeSetup{Script: SetupScript(path), Run: RunScript(path)}
+	if info.Script == "" {
+		info.Suggestion, info.Detected = detectSetup(path)
 	}
-	suggestion, detected := detectSetup(path)
-	return WorktreeSetup{Suggestion: suggestion, Detected: detected}
+	return info
 }
 
 // SaveWorktreeSetup writes the setup script into the project checkout — the
@@ -53,18 +77,30 @@ func (s *Service) WorktreeSetup(path string) WorktreeSetup {
 // user's call. Saving an empty script removes the file instead, returning the
 // dialog to the suggestion state rather than pinning an empty setup.
 func (s *Service) SaveWorktreeSetup(path, script string) error {
-	target := filepath.Join(path, filepath.FromSlash(setupScriptPath))
+	return writeScript(path, setupScriptPath, script)
+}
+
+// SaveWorktreeRun writes the run script into the project checkout, the same way
+// SaveWorktreeSetup writes the setup one. Saving an empty script removes the
+// file, which is also how a project stops offering a run card.
+func (s *Service) SaveWorktreeRun(path, script string) error {
+	return writeScript(path, runScriptPath, script)
+}
+
+// writeScript is the one write behind both, an empty script removing the file.
+func writeScript(path, rel, script string) error {
+	target := filepath.Join(path, filepath.FromSlash(rel))
 	if strings.TrimSpace(script) == "" {
 		if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("remove %s: %w", setupScriptPath, err)
+			return fmt.Errorf("remove %s: %w", rel, err)
 		}
 		return nil
 	}
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-		return fmt.Errorf("create %s: %w", filepath.Dir(setupScriptPath), err)
+		return fmt.Errorf("create %s: %w", filepath.Dir(rel), err)
 	}
 	if err := os.WriteFile(target, []byte(script+"\n"), 0o755); err != nil {
-		return fmt.Errorf("write %s: %w", setupScriptPath, err)
+		return fmt.Errorf("write %s: %w", rel, err)
 	}
 	return nil
 }

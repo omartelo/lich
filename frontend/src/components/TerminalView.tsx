@@ -13,6 +13,7 @@ import { ensureTransport, onSessionData, sendInput } from "@/lib/terminal/term-t
 import { chordSequence, isSearchOpenChord } from "@/lib/terminal/term-keys"
 import { makeReplayBuffer } from "@/lib/terminal/replay-buffer"
 import { takePaste } from "@/lib/terminal/paste-queue"
+import { takeFork } from "@/lib/terminal/fork-queue"
 import { takeSetup } from "@/lib/terminal/setup-queue"
 import { peerName } from "@/lib/session/peer-name"
 import type { PaletteSession } from "@/lib/session/command-palette"
@@ -252,6 +253,7 @@ export function TerminalView({
       kind,
       "",
       peerName(cwd, sessionId),
+      false,
       false,
       live.term.cols,
       live.term.rows,
@@ -592,14 +594,19 @@ export function TerminalView({
         resizeObserver.disconnect()
       })
 
+      // A queued fork carries the conversation to branch, which stands in for
+      // the resume id this spawn would otherwise have had: a card born of a
+      // fork has none of its own yet, and one that does is not being forked.
+      const fork = takeFork(sessionId)
       try {
         await Service.Start(
           sessionId,
           projectId,
           cwd,
           kind,
-          resume,
+          fork || resume,
           peerName(cwd, sessionId),
+          fork !== "",
           takeSetup(sessionId),
           live.term.cols,
           live.term.rows,

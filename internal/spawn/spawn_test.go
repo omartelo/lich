@@ -36,6 +36,10 @@ type fakeSessions struct {
 	// models records the model written on each session row, keyed by session id.
 	models   map[string]string
 	modelErr error
+	// entrypoints records the run command written on each session row, keyed by
+	// session id.
+	entrypoints   map[string]string
+	entrypointErr error
 	// deleted/parked/purged record what a close asked the store to do, and
 	// against which active session it left the project.
 	deleted []closedRow
@@ -150,6 +154,17 @@ func (f *fakeSessions) SetSessionModel(sessionID, model string) error {
 	return nil
 }
 
+func (f *fakeSessions) SetSessionEntrypoint(sessionID, entrypoint string) error {
+	if f.entrypointErr != nil {
+		return f.entrypointErr
+	}
+	if f.entrypoints == nil {
+		f.entrypoints = map[string]string{}
+	}
+	f.entrypoints[sessionID] = entrypoint
+	return nil
+}
+
 // createdWorktree is one CreateWorktree call, so a test can assert the base the
 // service resolved rather than only the checkout it got back.
 type createdWorktree struct {
@@ -237,7 +252,7 @@ func (f *fakeTerminal) Close(id string) error {
 }
 
 func (f *fakeTerminal) Start(
-	id, projectID, cwd, kind, _, name string, setup bool, cols, rows int,
+	id, projectID, cwd, kind, _, name string, _, setup bool, cols, rows int,
 ) error {
 	f.spawns = append(f.spawns, started{id, projectID, cwd, kind, name, setup, cols, rows})
 	return f.err

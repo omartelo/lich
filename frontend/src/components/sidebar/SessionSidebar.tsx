@@ -5,7 +5,9 @@ import { DndContext, closestCenter } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { GitPullRequestArrow, PanelLeftClose, Plus, Search } from "lucide-react"
 import { toast } from "sonner"
-import { ProjectService } from "@/lib/rpc"
+import { ProjectService, Spawn, Terminal as TerminalService } from "@/lib/rpc"
+import { isWindows } from "@/lib/platform"
+import { errorText } from "@/lib/utils"
 import { closeSettings, isSettingsOpen, subscribeSettingsCard } from "@/lib/settings-card-store"
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
 import { delegateTargets } from "@/lib/session/delegate-targets"
@@ -30,6 +32,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useProjects } from "@/providers/projects"
+import { queueFork } from "@/lib/terminal/fork-queue"
 import { queueSetup } from "@/lib/terminal/setup-queue"
 import { writeAtPrompt } from "@/lib/terminal/write-at-prompt"
 import { filterSessions } from "@/lib/session/session-filter"
@@ -38,6 +41,7 @@ import {
   activeSessionId,
   dragOrder,
   reorderSubset,
+  type Session,
   sessionsOf,
   sidebarGroups,
   type SidebarGroup,
@@ -51,7 +55,6 @@ import { useGitStatus } from "@/lib/git/use-git-status"
 import { usePanelWidth } from "@/lib/use-panel-width"
 import { useWorktreeDialogIntent } from "@/lib/use-sidebar-intent"
 import { SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
-import { errorText } from "@/lib/utils"
 
 // Named here like every other `lich.*` pref rather than spelled at the call
 // site. The bounds go with it: wide enough for a session label and its branch,
@@ -110,6 +113,36 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
     edge: "right",
   })
   const [worktreeOpen, setWorktreeOpen] = useState(false)
+  // Whether the project ships a run command, which is what puts Run in a
+  // checkout's + menu. Re-read when the worktree dialog closes, the one place
+  // inside lich that writes the file; edited on disk it goes stale until the
+  // project is reopened, exactly as the dialog's own reading of it does.
+  //
+  // Never on Windows, for the setup script's reason: the file holds sh and a
+  // session there runs PowerShell, which would take its lines as commands of
+  // its own and expand $LICH_WORKTREE_PORT to nothing.
+  const [runnable, setRunnable] = useState(false)
+  useEffect(() => {
+    if (!path || worktreeOpen || isWindows) {
+      return
+    }
+    let stale = false
+    ProjectService.WorktreeSetup(path)
+      .then((info) => {
+        if (!stale) {
+          setRunnable(info.run !== "")
+        }
+      })
+      .catch(() => {})
+    return () => {
+      stale = true
+    }
+  }, [path, worktreeOpen])
+
+  // The session the open worktree dialog is forking, or null when it was opened
+  // to make an ordinary checkout. It is state rather than a flag because the
+  // dialog names the session, and the create below has to hand it over.
+  const [forking, setForking] = useState<Session | null>(null)
   // The filter over this project's cards. Deliberately neither persisted nor a
   // store: the sidebar's width and collapsed state survive a restart because
   // they are layout, but a filter is a lens held while working — a lich that
@@ -126,7 +159,10 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   // the menu item is disabled without a branch: git status may still be loading
   // on the render this mounts in, and the dialog reports git's own error in
   // place anyway.
-  useWorktreeDialogIntent(projectId ?? "", () => setWorktreeOpen(true))
+  useWorktreeDialogIntent(projectId ?? "", () => {
+    setForking(null)
+    setWorktreeOpen(true)
+  })
   // Resolved ahead of the no-project bail below: hooks cannot sit behind it.
   const list = sessionsOf(sessions, projectId ?? "")
   const worktreeClose = useWorktreeClose(projectId ?? "", path, list)
@@ -256,21 +292,46 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   ) => {
     const wt = await ProjectService.CreateWorktree(path, projectId, name, base, baseIsRemote)
     if (wt) {
+      const opened = newWorktreeSession(projectId, wt, sandbox, forking)
+      // Queued before the card mounts, so the first spawn branches the parent's
+      // conversation instead of opening an empty one (fork-queue.ts).
+      if (forking?.providerSessionId) {
+        queueFork(opened, forking.providerSessionId)
+      }
       // A fresh checkout is the one moment the project's setup script runs;
       // reopening an existing worktree never queues it.
-      const target = newWorktreeSession(projectId, wt, sandbox)
-      queueSetup(target)
+      queueSetup(opened)
       // The issue the worktree was named after, written at that session's
       // prompt once it has one — the setup script and the provider's boot come
       // first, which is what writeAtPrompt waits out. Not awaited: the dialog
       // closes on a worktree that exists, and the wait can be minutes.
       if (prompt) {
-        void writeAtPrompt(target, prompt).catch((err: unknown) => {
+        void writeAtPrompt(opened, prompt).catch((err: unknown) => {
           toast.error(`Couldn’t hand the issue to the session: ${errorText(err)}`)
         })
       }
     }
     setWorktreeOpen(false)
+  }
+
+  // Fork a session's conversation into a checkout of its own. The dialog does
+  // the asking; the offer itself is the card's, and only for a provider that
+  // can branch a conversation at all (forkableSession).
+  //
+  // Whether the provider still has that conversation is asked here rather than
+  // on the card: it is a stat per call, and a card that asked on every render
+  // would ask for every session in the sidebar, forever. A conversation the
+  // provider has pruned dies in the PTY with its own error otherwise, after the
+  // user has already named a branch and made a checkout.
+  const forkSession = async (session: Session) => {
+    const cwd = session.path || path || ""
+    const conversation = session.providerSessionId ?? ""
+    if (!(await TerminalService.ResumeAvailable(session.kind, conversation, cwd))) {
+      toast.error(`${session.label} has no conversation left to fork — ${session.kind} pruned it.`)
+      return
+    }
+    setForking(session)
+    setWorktreeOpen(true)
   }
 
   const resumeWorktree = (wt: { name: string; path: string }) => {
@@ -302,6 +363,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
         stageIds={stageIds}
         onStageToggle={toggleStage}
         onGroupDelegates={groupDelegates}
+        onFork={(session) => void forkSession(session)}
         // The divider only earns its place once a worktree — or a pin
         // — splits the list; a lone group keeps the old flat,
         // header-less look. A filter is the exception: which checkout
@@ -316,6 +378,17 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
         sortable={!filtering}
         onReorder={(ids) => commitGroupOrder(group, ids)}
         onClose={worktreeClose.requestClose}
+        // Offered on a checkout's block alone: a wall and the pinned block
+        // gather cards from everywhere and have no directory to run one in.
+        onRun={
+          runnable && !group.pinned && !group.stage
+            ? () => {
+                Spawn.Run(projectId, group.path || path).catch((error) =>
+                  toast.error(errorText(error)),
+                )
+              }
+            : undefined
+        }
         pullsActive={onPullsRoute && groupActive}
         onPulls={() => {
           openPulls(group.path || path)
@@ -364,7 +437,10 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
               onNewSession={(kind) => newSession(projectId, kind)}
               worktree={{
                 disabled: !git?.branch,
-                onSelect: () => setWorktreeOpen(true),
+                onSelect: () => {
+                  setForking(null)
+                  setWorktreeOpen(true)
+                },
               }}
             />
           </DropdownMenuContent>
@@ -476,6 +552,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
         currentBranch={git?.branch ?? ""}
         onCreate={createWorktree}
         onResume={resumeWorktree}
+        forkOf={forking}
       />
       <WorktreeCloseDialogs close={worktreeClose} />
       <ConfirmDialog

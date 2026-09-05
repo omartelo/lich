@@ -12,6 +12,7 @@ import type {
   BinaryCheck,
   BranchRules,
   ClosedSession,
+  LastSaid,
   LastTurn,
   Branches,
   CommitIdentity,
@@ -119,6 +120,9 @@ export const Terminal = {
   /** resume: a provider session id to reopen (--resume); "" starts fresh.
    * name: what the session answers to in its provider's peer roster (lib/session/peer-name);
    * only Claude Code has one, every other kind ignores it.
+   * fork: branch that conversation instead of continuing it — the copy is this
+   * session's, the original is left where it is. Only for the three kinds whose
+   * CLI can (lib/session/sessions.forkableSession), and always with a resume id.
    * setup: run the project's worktree setup script ahead of the provider —
    * passed once, by the first Start after the worktree is created. */
   Start: (
@@ -128,10 +132,12 @@ export const Terminal = {
     kind: string,
     resume: string,
     name: string,
+    fork: boolean,
     setup: boolean,
     cols: number,
     rows: number,
-  ) => call<null>("terminal.Start", [id, projectID, cwd, kind, resume, name, setup, cols, rows]),
+  ) =>
+    call<null>("terminal.Start", [id, projectID, cwd, kind, resume, name, fork, setup, cols, rows]),
   Write: (id: string, data: string) => call<null>("terminal.Write", [id, data]),
   /** Whether this session can be given work: its provider is the program
    * reading the PTY — not the checkout's setup script, not a TUI still taking
@@ -158,6 +164,10 @@ export const Terminal = {
   /** What changed on disk while this session's last finished turn ran — a
    * window of time, not an attribution (see internal/terminal.LastTurnDiff). */
   LastTurnDiff: (id: string) => call<LastTurn>("terminal.LastTurnDiff", [id]),
+  /** The last thing the agent said in this session's conversation — its own
+   * closing words, not a summary of them (see internal/terminal.LastTurnSaid).
+   * `text` is absent whenever there are none to show. */
+  LastTurnSaid: (id: string) => call<LastSaid>("terminal.LastTurnSaid", [id]),
 }
 
 export const DropService = {
@@ -215,12 +225,17 @@ export const ProjectService = {
     call<string[] | null>("project.FileLines", [path, rel, ref, from, to]),
   DiscardFile: (path: string, rel: string) => call<null>("project.DiscardFile", [path, rel]),
   ListBranches: (path: string) => call<Branches>("project.ListBranches", [path]),
-  /** The setup script a new worktree of this project will run, or the
-   * suggestion to offer when the repo ships none. */
+  /** The setup script a new worktree of this project will run (or the
+   * suggestion to offer when the repo ships none), and the run command its
+   * checkouts open a Run card on. */
   WorktreeSetup: (path: string) => call<WorktreeSetup>("project.WorktreeSetup", [path]),
   /** Write .lich/setup-worktree.sh in the project checkout ("" removes it). */
   SaveWorktreeSetup: (path: string, script: string) =>
     call<null>("project.SaveWorktreeSetup", [path, script]),
+  /** Write .lich/run-worktree.sh in the project checkout ("" removes it, which
+   * is how a project stops offering a Run card). */
+  SaveWorktreeRun: (path: string, script: string) =>
+    call<null>("project.SaveWorktreeRun", [path, script]),
   /** The logins gh is authenticated as, for the project's account picker;
    * errors when gh is missing or logged out. */
   GitHubAccounts: () => call<string[] | null>("project.GitHubAccounts", []),
@@ -400,6 +415,11 @@ export const Store = {
    * shell. The store refuses it on anything but a shell session. */
   SetSessionEntrypoint: (sessionID: string, entrypoint: string) =>
     call<null>("store.SetSessionEntrypoint", [sessionID, entrypoint]),
+  /** Park a prompt to be typed at a session later, at unix second `at`. A 0
+   * time, or an empty prompt, clears whatever was parked — a session holds one
+   * scheduled prompt at a time, and scheduling again replaces it. */
+  SetSessionSchedule: (sessionID: string, at: number, prompt: string) =>
+    call<null>("store.SetSessionSchedule", [sessionID, at, prompt]),
   /** Whether this one session runs confined, overriding the provider's rung for
    * it alone: "on", "off", or "" to follow the setting. Read on every later
    * spawn, so a reload and a resume keep the answer the session opened with. */
@@ -508,6 +528,15 @@ export const Quota = {
    * question. Served from a five-minute cache per account, so calling it often
    * is cheap and asks nothing extra of endpoints that rate-limit. */
   Plans: (sessionId: string) => call<QuotaPlan[]>("quota.Plans", [sessionId]),
+}
+
+export const Spawn = {
+  /** Open the project's Run card in the checkout at cwd: a terminal session
+   * whose entrypoint is .lich/run-worktree.sh, its PTY started by the backend
+   * so the app is up whether or not the card is ever looked at. Rejects a
+   * project that ships no run script. The card arrives through session-opened,
+   * like every other session opened outside the window. */
+  Run: (projectId: string, cwd: string) => call<null>("spawn.Run", [projectId, cwd]),
 }
 
 export const Themes = {
