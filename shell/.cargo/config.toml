@@ -1,0 +1,6 @@
+[build]
+# libcef.so is looked up beside the binary: in cef/ for the layout
+# build/linux/shell/assemble.sh produces, one level up for cargo's own
+# target/<profile>/deps/ test binaries (cef-rs copies the runtime into
+# target/<profile>/).
+rustflags = ["-C", "link-arg=-Wl,-rpath,$ORIGIN/cef:$ORIGIN/.."]

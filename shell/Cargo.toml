@@ -1,0 +1,13 @@
+[package]
+name = "lich-shell"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "lich's window: an embedded Chromium (CEF) launched by the Go backend"
+license = "AGPL-3.0-only"
+
+[dependencies]
+# A fork carrying window_class / window_title / cache_dir on top of upstream
+# eedaedc, submitted upstream as a PR; move back to 0x48piraj/kurogane once it
+# lands (build/linux/shell/README.md).
+kurogane = { git = "https://github.com/omartelo/kurogane", rev = "575424265f0b41bd46bc2ab0616e4c7756e8c02b" }

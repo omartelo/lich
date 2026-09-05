@@ -11,17 +11,22 @@ license=('AGPL-3.0-only')
 provides=('lich')
 conflicts=('lich')
 install=lich-bin.install
-optdepends=('chromium: app window (any Chromium-family browser works: chromium, google-chrome, brave, helium-browser)'
-            'zenity: native folder picker')
+optdepends=('zenity: native folder picker')
 source=("lich-v${pkgver}-linux-amd64::${url}/releases/download/v${pkgver}/lich-v${pkgver}-linux-amd64"
+        "lich-v${pkgver}-linux-amd64-shell.tar.zst::${url}/releases/download/v${pkgver}/lich-v${pkgver}-linux-amd64-shell.tar.zst"
         "lich-${pkgver}.desktop::https://raw.githubusercontent.com/omartelo/lich/v${pkgver}/build/linux/lich.desktop"
         "lich-${pkgver}.png::https://raw.githubusercontent.com/omartelo/lich/v${pkgver}/build/appicon.png")
 sha256sums=('SKIP'
+            'SKIP'
             'SKIP'
             'SKIP')
 
 package() {
   install -Dm755 "lich-v${pkgver}-linux-amd64" "${pkgdir}/usr/bin/lich"
+  # The window (lich's own Chromium), unpacked by makepkg into shell/, where
+  # /usr/bin/lich looks for it: /usr/lib/lich/shell.
+  install -d "${pkgdir}/usr/lib/lich"
+  cp -a shell "${pkgdir}/usr/lib/lich/shell"
   install -Dm644 "lich-${pkgver}.desktop" "${pkgdir}/usr/share/applications/lich.desktop"
   install -Dm644 "lich-${pkgver}.png" "${pkgdir}/usr/share/icons/hicolor/128x128/apps/lich.png"
 }
