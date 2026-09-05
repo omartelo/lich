@@ -15,27 +15,29 @@ Pick your system:
 - [Verifying checksums](#verifying-checksums)
 - [If it does not start](#if-it-does-not-start)
 
-**Runtime dependencies** — lich opens its window in a Chromium-family browser;
-none is bundled. This is a decision, not a gap: lich rejected Electron and
-moved off Wails to stay one static Go binary that drives the browser already
-on your machine ([docs/chromium-shell.md](docs/chromium-shell.md)). It looks
-for one in this order: the browser you pinned with `--browser` or
-`LICH_BROWSER`, your desktop's default browser when it is Chromium-family,
-the browsers installed on the machine, then Flatpak. On Linux that scan covers
-`chromium`, `chrome`, `brave`, `vivaldi`, `edge`, `thorium`,
-`ungoogled-chromium` and `helium`, and `zenity` provides the folder picker. On
+**Runtime dependencies** — on Linux, lich ships its own window: an embedded
+Chromium (CEF) inside the package, so no browser is required and `zenity` is
+the one thing left to install, for the folder picker. The window carries
+lich's own class and title, so the launcher icon, window rules by class and
+`StartupWMClass` all match it. `--browser` or `LICH_BROWSER` still pins a
+browser of your choice above it ([docs/chromium-shell.md](docs/chromium-shell.md)).
+
+On macOS and Windows, lich opens its window in a Chromium-family browser on
+the machine; none is bundled there yet. It looks for one in this order: the
+browser you pinned with `--browser` or `LICH_BROWSER`, your desktop's default
+browser when it is Chromium-family, the browsers installed on the machine. On
 macOS, Chrome, Chromium, Edge, Brave and Vivaldi are looked up as `.app`
 bundles under `/Applications` (and `~/Applications`), and the folder picker is
 native. On Windows, Chrome, Edge, Brave and Vivaldi are found via their
 conventional install paths (Edge ships with Windows) and the folder picker is
 native. A browser installed somewhere else entirely is what `--browser` is for.
 
-With **no** Chromium-family browser, lich does not fail: it opens a plain tab
-in whatever browser you do have, tells you so in a desktop notification, and
-goes on running until you stop it. What is lost is the window of its own —
-Firefox has no equivalent of Chromium's `--app` mode, so a tab is the honest
-best. `lich doctor` reports which browser was resolved and which of the steps
-above found it.
+With **no** Chromium-family browser on those two, lich does not fail: it opens
+a plain tab in whatever browser you do have, tells you so in a desktop
+notification, and goes on running until you stop it. What is lost is the
+window of its own — Firefox has no equivalent of Chromium's `--app` mode, so a
+tab is the honest best. `lich doctor` reports which window was resolved and
+which of the steps above found it.
 
 That tab is also a choice, not only a fallback: `lich --no-window` (or
 `LICH_NO_WINDOW=1`, which a `.desktop` launcher can carry) skips the window on
@@ -66,11 +68,11 @@ runtime dependencies on its own (they are Recommends):
 sudo apt-get install ./lich-*-amd64.deb
 ```
 
-If your apt is configured with `--no-install-recommends`, install them
+If your apt is configured with `--no-install-recommends`, install it
 yourself:
 
 ```bash
-sudo apt-get install chromium zenity
+sudo apt-get install zenity
 ```
 
 ## Fedora / RHEL
@@ -85,7 +87,7 @@ sudo dnf install ./lich-*-x86_64.rpm
 If dnf runs with `install_weak_deps=False`, install them yourself:
 
 ```bash
-sudo dnf install chromium zenity
+sudo dnf install zenity
 ```
 
 ## Arch
@@ -106,7 +108,7 @@ pacman has no Recommends (the runtime dependencies are `optdepends`), so
 install them yourself:
 
 ```bash
-sudo pacman -S chromium zenity
+sudo pacman -S zenity
 ```
 
 ## Static binary
@@ -117,10 +119,14 @@ your PATH:
 
 ```bash
 install -Dm755 lich-*-linux-amd64 ~/.local/bin/lich
+tar --zstd -xf lich-*-linux-amd64-shell.tar.zst -C ~/.local/bin
 ```
 
-You still need the runtime dependencies — install `chromium` (or another
-Chromium-family browser) and `zenity` through your package manager.
+The second line unpacks the window beside the binary, as `~/.local/bin/shell/`
+— lich looks for it there, and under `../lib/lich/shell` relative to its bin.
+Without it — or if it fails to start on your machine — lich falls back to a
+Chromium-family browser you have installed, and says so in a notification and
+its log. `zenity` still comes from your package manager.
 
 ## macOS (experimental)
 
@@ -210,7 +216,8 @@ It walks the same boot a launch walks — the config directory, the log file, th
 pinned loopback port, the workspace database, the browser, the provider CLIs on
 PATH — and says which step would stop it, exiting non-zero when one does. A port
 already held by the lich you have open is not a failure; a port held by
-something else is, and so is a missing Chromium-family browser.
+something else is, and so is a missing window: on Linux the one lich ships,
+on macOS and Windows a Chromium-family browser.
 
 When you file the issue, attach the bundle:
 

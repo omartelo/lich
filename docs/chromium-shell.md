@@ -1,9 +1,9 @@
 # Decision: move the shell from WebKitGTK to Chromium
 
-**Status: spike VALIDATED (2026-07-15) on the reference machine — "é outro
-terminal", paint jank gone under Chromium with the identical terminal stack
-and an uncoalesced transport. The migration below is greenlit; option 2 is
-still deferred until the project grows.**
+**Status: option 1 shipped in v0.4.0 (2026-07-15) and is still how Windows
+and macOS open the window. On Linux, option 2 shipped on 2026-09-05: lich
+bundles its own Chromium (CEF, through kurogane) and no browser is required —
+see the section at the end.**
 
 ## Why
 
@@ -131,23 +131,41 @@ above. Files to delete when the decision lands: `cmd/spike/`,
 `frontend/spike.html`, `frontend/src/spike/`, the `spike` input in
 `frontend/vite.config.ts`.
 
-## Option 2 — embedded CEF via `energye/energy` (deferred)
+## Option 2 — embedded CEF (shipped on Linux, 2026-09-05)
 
-Chromium compiled into/shipped with the app (CEF), Go bindings through the
-`energy` framework. No dependency on a system browser; full control of the
-Chromium version; window is truly ours.
+Chromium shipped with the app (CEF). No dependency on a system browser, the
+Chromium version pinned per release, and a window that is lich's own: its
+WM_CLASS / app_id, its title, its keyboard, no browser prompts, no system
+extensions loading into it.
 
-Costs, and why it waits:
+What was written when this was deferred still holds, and is now the price
+paid: +100 MB per package download (~300 MB on disk), and a Rust toolchain
+with CMake in CI. What changed is the route. `energye/energy` (Go bindings,
+CGO) was never taken. The window is a **separate binary**, `shell/`, a Rust
+crate on [kurogane](https://github.com/0x48piraj/kurogane) (cef-rs
+underneath), and the Go binary launches it exactly the way it launches a
+system browser — the same `internal/chromium.Args` argv, `--app=<url>`,
+`--class`, `--user-data-dir`, the user's `--` switches. Nothing in the Go
+side knows which one it got; `CGO_ENABLED=0` and the static binary stand.
+The migration path really was "swap who provides the window": one new rung
+in the resolution ladder, above the desktop's default and below the pin.
 
-- +150-200MB bundle (CEF binaries per-arch), CI packaging gets heavy.
-- `energy` is the only maintained Go/CEF route; ecosystem is thin and exotic
-  compared to plain `net/http` + a browser flag.
-- Every benefit it adds over option 1 only matters when lich stops being a
-  personal harness — i.e. distribution to machines we don't control, where
-  "install chromium" is unacceptable friction.
+Measured on the reference machine (RTX 3050, Hyprland, Chromium 150 in CEF
+against Helium 151 as the system browser): no perceptible difference, which
+is the point — same engine, same GPU path, WebGL on ANGLE over the NVIDIA
+driver in both. `seq 1 400000` into an xterm.js session paced at 84 rAF/s on
+a 100 Hz display. Native Wayland, XWayland and X11 all open with the class
+and title the Go side asks for.
 
-**Trigger to revisit**: the project grows an audience — packaging for users
-who won't install a browser dependency, or a hard requirement to pin the
-Chromium version. The migration path from option 1 is small: the whole app is
-already "Go server + browser window"; option 2 only swaps who provides the
-window.
+kurogane needed two things it did not have — a WM_CLASS / app_id and a
+title on the window it creates — so `shell/` builds against a fork carrying
+that patch (`App::window_class`, `App::window_title`; cef-rs drops an owned
+string on the way back into a CEF out-struct, so the fork allocates them
+through CEF itself). The patch is upstream as
+[kurogane#11](https://github.com/0x48piraj/kurogane/pull/11); the fork
+(`omartelo/kurogane`) is the pin until it lands.
+
+Windows and macOS stay on option 1 for now. The window has only been built
+and measured on Linux; macOS in particular needs the CEF framework plus its
+helper apps laid out inside `Lich.app`, and there is no hardware here to
+measure it on. `docs/ceilings.md` carries the gap.

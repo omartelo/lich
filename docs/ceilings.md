@@ -808,6 +808,42 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   benign case, and the common one. A wide version gap meets Chromium's own guard against a profile from a
   newer build instead, which refuses to start; lich then dies on a browser exit code and its dialog can only
   say `exit status 1`, naming nothing. `LICH_BROWSER` pins the answer; nothing else does.
+- **On Linux the window is lich's own, and only Linux** (`internal/chromium/shell.go`, `shell/`): the packages
+  ship an embedded Chromium (CEF through kurogane) beside the binary, and the ladder takes it above the
+  desktop's default and every scan. Windows and macOS still open the system browser — the window has been
+  built and measured on Linux alone, and on macOS it means the CEF framework and its helper apps inside
+  `Lich.app`, with no hardware here to measure it on. The trap: the two are one launch path, so a
+  window-side change (a flag in `Args`, a prefs write, the restart signal) lands on a system browser on two
+  platforms and on lich's own Chromium on the third, and the Go side cannot tell which it got.
+- **A Linux install whose window is missing or dies at startup opens a system browser instead**
+  (`internal/chromium.Run`): `go run`, a bare binary copied out of the tarball, a package missing
+  `lib/lich/shell` — each falls through to the ladder below with one `Warn` line; a window that exits with
+  an error inside `startupGrace` (10 s: a segfault on first paint, a system library `libcef.so` cannot find
+  on this distribution) is relaunched the same way, with a desktop notification naming the browser. Refusing
+  to open would turn a packaging slip or a bad update into a lich that does nothing. The grace is the trap:
+  a crash at 10.1 s is the window's lifecycle ending, as it always was, and a window closed by hand inside
+  it exits 0 and never falls back. A pinned browser never falls back either — it is the user's word — and
+  with no browser at all the crash lands on the tab path, where the log has the story and the
+  notification does not. `lich doctor` names the rung that answered; `task dev` pins the window it built
+  (`LICH_BROWSER`), since `go run` never has one beside it.
+- **The bundled window and a pinned browser share one profile directory** (`shell/src/main.rs`,
+  `internal/chromium.Run`): the shell is told `cache_dir` = the `--user-data-dir` lich hands every browser,
+  so CEF writes `<config>/lich/chromium-profile` as its own Chromium profile. Pin a browser with `--browser`
+  and that profile is handed to a different Chromium — the bullet above, now with the window on one side
+  of it. The prefs write is skipped for the window: it has no account chooser or translate bubble to hold
+  down, and the file would be dead weight in a profile CEF owns.
+- **On NVIDIA under Wayland the window is XWayland unless asked otherwise** (`shell/src/main.rs`): kurogane
+  forces `--ozone-platform=x11` there, on its own reading of NVIDIA's EGL. The user's switches go through
+  kurogane so they win, and `lich -- --ozone-platform=wayland` opens native Wayland (measured on the
+  reference machine, RTX 3050 + Hyprland: it works). A compositor with no XWayland — niri — needs that
+  switch on NVIDIA; on any other GPU kurogane leaves the choice to Chromium's own hint, which picks Wayland.
+- **The window opens at CEF's default size** (`shell/src/main.rs`): a system browser remembered the
+  window's last size and position in its profile; the CEF Views window does not, so each launch is the
+  default rectangle until the window manager places it. Tiling compositors never notice.
+- **The window's sandbox is Chromium's namespace sandbox** (`shell/`): kurogane passes
+  `--disable-setuid-sandbox`, so a kernel that forbids unprivileged user namespaces (a hardened distro, an
+  AppArmor profile that restricts them) has no sandbox to give, and Chromium refuses to start. The escape
+  is the same passthrough: `lich -- --no-sandbox`. Nothing here is measured on such a kernel.
 - **Without a Chromium `--app` window there is no window lifecycle** (`main.go`, `openWithoutWindow`) —
   reached with no Chromium-family browser installed, or on purpose with `--no-window`/`LICH_NO_WINDOW`. lich
   opens a plain tab and then runs until it is signalled, because a tab it did not spawn cannot be waited on.

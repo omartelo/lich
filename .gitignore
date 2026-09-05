@@ -1,5 +1,7 @@
 .task
 bin
+# CEF distribution cef-rs downloads when CEF_PATH points here (CI does)
+.cef
 # Stray root binaries from `go build .` (use `task build` -> bin/)
 /lich
 # IDE

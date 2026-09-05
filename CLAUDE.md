@@ -25,7 +25,9 @@ lives in the code, `docs/` and `CHANGELOG.md` — never restate any of it here.
 
 ## Rules of the codebase
 
-- Go 1.27, pure Go: `CGO_ENABLED=0` and a fully static binary are a constraint, not a default.
+- Go 1.27, pure Go: `CGO_ENABLED=0` and a fully static binary are a constraint, not a default. The Linux
+  window is a *separate* binary, `shell/` (Rust on CEF via a kurogane fork), launched with the same argv as a
+  system browser — nothing about it reaches the Go build (`docs/chromium-shell.md`).
 - OS-specific code is selected by build tags behind small seams, never by runtime checks — the PTY is the model
   (`internal/terminal`).
 - Service shapes are hand-owned in `frontend/src/lib/api-types.ts`: touch a Go struct's JSON tags and that mirror
@@ -36,6 +38,8 @@ lives in the code, `docs/` and `CHANGELOG.md` — never restate any of it here.
 - `gofmt -l .` clean (fix with `gofmt -w .`) and `go vet ./...` clean.
 - `cd frontend && pnpm check` clean — biome is the frontend's gofmt + vet (fix with `pnpm format`).
 - `go test ./...` (backend) and `cd frontend && pnpm test` (frontend) green — or `task test` for both.
+- Touched `shell/`? `cd shell && cargo fmt --check && cargo clippy --release --all-targets -- -D warnings &&
+  cargo test --release` clean (`--release` shares the CEF build with `task build:shell`).
 - `cd frontend && pnpm build` succeeds (tsc typecheck + vite).
 - Shipped anything a user can see? Its `CHANGELOG.md` `[Unreleased]` entry lands in the same PR — the release notes
   are read from there, so an entry written later is an entry that missed its release.

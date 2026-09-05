@@ -16,6 +16,7 @@ type fakeEnv struct {
 	vars      map[string]string
 	output    map[string]string
 	names     []string
+	shell     string
 }
 
 func (f fakeEnv) env() Env {
@@ -40,6 +41,43 @@ func (f fakeEnv) env() Env {
 			}
 			return chromiumNames
 		},
+		Shell: func() string { return f.shell },
+	}
+}
+
+// TestResolveBundledShellOutranksEveryBrowser proves the window lich ships
+// beats the desktop's default and the scan: it is lich's own window, and the
+// user's browsers are not what it is chosen among.
+func TestResolveBundledShellOutranksEveryBrowser(t *testing.T) {
+	machine := fakeEnv{
+		installed: map[string]bool{"chromium": true, "xdg-settings": true},
+		output:    map[string]string{"xdg-settings": "chromium.desktop\n"},
+		shell:     "/usr/local/lib/lich/shell/lich-shell",
+	}
+	got, err := Resolve(machine.env())
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if got.Path != machine.shell || got.Step != stepShell {
+		t.Fatalf("Resolve = %q (%s), want the bundled window", got.Path, got.Step)
+	}
+}
+
+// TestResolvePinOutranksBundledShell: the pin is the user's word, and it
+// still wins over lich's own window — that is how the dev shell and a
+// browser-only run are reached.
+func TestResolvePinOutranksBundledShell(t *testing.T) {
+	machine := fakeEnv{
+		installed: map[string]bool{"vivaldi": true},
+		vars:      map[string]string{OverrideEnv: "vivaldi"},
+		shell:     "/usr/local/lib/lich/shell/lich-shell",
+	}
+	got, err := Resolve(machine.env())
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if got.Path != "/usr/bin/vivaldi" || got.Step != stepPinned {
+		t.Fatalf("Resolve = %q (%s), want the pinned browser", got.Path, got.Step)
 	}
 }
 

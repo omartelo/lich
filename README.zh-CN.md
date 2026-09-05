@@ -10,7 +10,8 @@
   <p>
     打开你的项目，在真实终端里运行 Claude Code、Codex、opencode 这样的智能体，
     并把 git —— worktree、diff 和 Pull Request —— 一并留在视野里，无需离开窗口。
-    单个静态 Go 二进制文件，没有 Electron：界面在你系统自带的 Chromium 系浏览器中以
+    单个静态 Go 二进制文件，没有 Electron：在 Linux 上，界面在 lich 自带的内嵌
+    Chromium 里打开；在 macOS 和 Windows 上，则在你系统的 Chromium 系浏览器中以
     <code>--app</code> 模式打开。
   </p>
   <p>
@@ -83,13 +84,13 @@ curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh
 
 | 平台 | 安装方式 | 运行时依赖 |
 | --- | --- | --- |
-| **Linux** | 上面的 `install.sh`，或 AUR 的 [`lich-bin`](https://aur.archlinux.org/packages/lich-bin)（`yay -S lich-bin`） | `PATH` 上有一个 Chromium 系浏览器，外加 `zenity` |
+| **Linux** | 上面的 `install.sh`，或 AUR 的 [`lich-bin`](https://aur.archlinux.org/packages/lich-bin)（`yay -S lich-bin`） | `zenity` —— 窗口随软件包一起附带 |
 | **macOS** *(实验性)* | `brew install --cask omartelo/tap/lich` | `/Applications` 里有一个 Chromium 系浏览器 |
 | **Windows** *(实验性)* | 从 [Releases](https://github.com/omartelo/lich/releases) 下载安装程序 | 一个 Chromium 系浏览器 |
 
-Chromium、Chrome、Brave、Vivaldi、Edge、Thorium 和 ungoogled-chromium 都算数，
-Flatpak 装的也算；`--browser` 或 `LICH_BROWSER` 可以直接指定一个。这些一个都没有时，
-lich 会开在你确实装了的那个浏览器里 —— 丢掉的是它自己那扇窗，而不是这个应用。
+在 macOS 和 Windows 上，Chromium、Chrome、Brave、Vivaldi 和 Edge 都算数；`--browser`
+或 `LICH_BROWSER` 可以直接指定一个，Linux 上也可以。这些一个都没有时，lich 会开在你确实
+装了的那个浏览器里 —— 丢掉的是它自己那扇窗，而不是这个应用。
 
 手动的分发版软件包和静态二进制文件见 [INSTALL.md](INSTALL.md)。macOS 和 Windows 的
 二进制文件未签名 —— 在公证/签名做好之前，Gatekeeper 和 SmartScreen 会发出警告。用

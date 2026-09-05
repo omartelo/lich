@@ -47,22 +47,14 @@ as_root() {
   if [ "$(id -u)" -eq 0 ]; then "$@"; else sudo "$@"; fi
 }
 
+# The window ships inside the package (lich's own Chromium); zenity, the
+# folder picker, is the one runtime dependency left to check for.
 check_runtime_deps() {
-  browser=""
-  for candidate in chromium chromium-browser google-chrome-stable google-chrome helium-browser brave; do
-    if have "$candidate"; then browser="$candidate"; break; fi
-  done
-  missing=""
-  [ -n "$browser" ] || missing="a Chromium-family browser (chromium, google-chrome, helium-browser, brave, ...)"
-  if ! have zenity; then
-    [ -z "$missing" ] || missing="${missing} and "
-    missing="${missing}zenity"
-  fi
-  if [ -n "$missing" ]; then
-    info "still missing: ${missing}"
-    info "install through your package manager, e.g.: $1"
+  if have zenity; then
+    info "runtime dependencies present (zenity)"
   else
-    info "runtime dependencies present (${browser}, zenity)"
+    info "still missing: zenity (the folder picker)"
+    info "install through your package manager, e.g.: $1"
   fi
 }
 
@@ -122,17 +114,17 @@ main() {
 
   info "installing ${asset}"
   case "$family" in
-    # apt/dnf resolve the Recommends (chromium, zenity) on their own;
-    # pacman has no Recommends, so arch relies on the check below.
+    # apt/dnf resolve the Recommends (zenity) on their own; pacman has no
+    # Recommends, so arch relies on the check below.
     deb) as_root apt-get install -y "${tmp}/${asset}" ;;
     rpm) as_root dnf install -y "${tmp}/${asset}" ;;
     arch) as_root pacman -U --noconfirm "${tmp}/${asset}" ;;
   esac
 
   case "$family" in
-    deb) check_runtime_deps "sudo apt-get install chromium zenity" ;;
-    rpm) check_runtime_deps "sudo dnf install chromium zenity" ;;
-    arch) check_runtime_deps "sudo pacman -S chromium zenity" ;;
+    deb) check_runtime_deps "sudo apt-get install zenity" ;;
+    rpm) check_runtime_deps "sudo dnf install zenity" ;;
+    arch) check_runtime_deps "sudo pacman -S zenity" ;;
   esac
 
   restart_running_lich

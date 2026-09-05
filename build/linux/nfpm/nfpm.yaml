@@ -1,7 +1,8 @@
 # nfpm config for the lich packages (deb, rpm, archlinux) — invoked directly
-# by the root Taskfile (`task package`). The binary is static pure Go; the
-# only runtime needs are a Chromium-family browser and zenity, both soft
-# (recommends where the format supports it) so installs never block.
+# by the root Taskfile (`task package`). The binary is static pure Go and the
+# window (lich's own Chromium, bin/shell) ships beside it; the only runtime
+# needs left are zenity and git, both soft (recommends where the format
+# supports it) so installs never block.
 
 name: "lich"
 arch: ${GOARCH}
@@ -19,6 +20,11 @@ license: "AGPL-3.0-only"
 contents:
   - src: "./bin/lich"
     dst: "/usr/local/bin/lich"
+  # The window, where /usr/local/bin/lich looks for it: the lib directory
+  # sibling to its bin (internal/chromium/shell.go).
+  - src: "./bin/shell"
+    dst: "/usr/local/lib/lich/shell"
+    type: tree
   - src: "./build/appicon.png"
     dst: "/usr/share/icons/hicolor/128x128/apps/lich.png"
   - src: "./build/linux/lich.desktop"
@@ -29,16 +35,15 @@ contents:
 # the wrong package as often as the right one. INSTALL.md and the app both
 # point at cli.github.com instead.
 recommends:
-  - chromium
   - zenity
   - git
 
-overrides:
-  deb:
-    recommends:
-      - chromium | chromium-browser | google-chrome-stable
-      - zenity
-      - git
+# xz rather than the gzip default: ~30 MB less per package for the 480 MB
+# window, and unlike zstd every dpkg and rpm still in use unpacks it.
+deb:
+  compression: xz
+rpm:
+  compression: xz
 
 scripts:
   postinstall: "./build/linux/nfpm/scripts/postinstall.sh"

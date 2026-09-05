@@ -55,6 +55,9 @@ type Env struct {
 	Getenv     func(key string) string
 	Output     func(name string, args ...string) ([]byte, error)
 	Candidates func() []string
+	// Shell is the path of the window this install bundles, "" when it has
+	// none (shell.go).
+	Shell func() string
 }
 
 // RealEnv reaches the machine lich is running on.
@@ -72,6 +75,7 @@ func RealEnv() Env {
 			return cmd.Output()
 		},
 		Candidates: browserCandidates,
+		Shell:      bundledShell,
 	}
 }
 
@@ -168,9 +172,10 @@ var flatpakIDs = []string{
 }
 
 // Resolve finds the browser to be the window, climbing the ladder in order: the
-// browser the user pinned, the desktop's default when it is one lich can drive,
-// this platform's candidates, then Flatpak. It returns ErrNoBrowser when the
-// machine has none, which is a fallback and not a failure — see that variable.
+// browser the user pinned, the window lich itself bundles, the desktop's default
+// when it is one lich can drive, this platform's candidates, then Flatpak. It
+// returns ErrNoBrowser when the machine has none, which is a fallback and not a
+// failure — see that variable.
 func Resolve(env Env) (Result, error) {
 	if pinned := strings.TrimSpace(env.Getenv(OverrideEnv)); pinned != "" {
 		path, err := env.LookPath(pinned)
@@ -181,6 +186,12 @@ func Resolve(env Env) (Result, error) {
 			return Result{}, fmt.Errorf("%s=%s: %w", OverrideEnv, pinned, err)
 		}
 		return Result{Path: path, Step: stepPinned}, nil
+	}
+	// Below the pin and above everything else: this is lich's own window, so
+	// none of what the rungs below weigh — the user's default, their
+	// extensions, their window rules — applies to it.
+	if shell := env.Shell(); shell != "" {
+		return Result{Path: shell, Step: stepShell}, nil
 	}
 	if found, ok := defaultBrowser(env); ok {
 		return found, nil
