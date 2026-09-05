@@ -109,17 +109,28 @@ func Run(url, dataDir, class string, extra []string, onStart func(*os.Process)) 
 		return err
 	}
 	slog.Info("browser resolved", "browser", browser.Describe())
+	if shellExpected && browser.Step != stepShell && browser.Step != stepPinned {
+		// A Linux install without its window is a broken package or a bare
+		// binary, and the browser it falls back to is not what shipped.
+		slog.Warn("bundled window not found beside the binary, opening a system browser instead",
+			"browser", browser.Path)
+	}
 	dataDir = browser.ProfileDir(dataDir)
 	// The data dir is required to launch at all; the prefs inside it only
 	// decide how quiet the window is.
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		return fmt.Errorf("chromium profile dir: %w", err)
 	}
-	if err := writePrefs(dataDir); err != nil {
-		// A profile lich could not pre-configure is a browser that may ask
-		// about translation or Google accounts. Annoying; not a reason to
-		// refuse to open the window.
-		slog.Warn("chromium profile prefs", "err", err)
+	// The bundled window keeps its own profile under this directory and has
+	// no Google account or translate bubble to silence; the prefs are for a
+	// browser.
+	if browser.Step != stepShell {
+		if err := writePrefs(dataDir); err != nil {
+			// A profile lich could not pre-configure is a browser that may
+			// ask about translation or Google accounts. Annoying; not a
+			// reason to refuse to open the window.
+			slog.Warn("chromium profile prefs", "err", err)
+		}
 	}
 	argv := append(append([]string{}, browser.Prefix...), Args(url, dataDir, class, extra)...)
 	cmd := exec.Command(browser.Path, argv...)
