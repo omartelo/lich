@@ -801,11 +801,17 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   `Lich.app`, with no hardware here to measure it on. The trap: the two are one launch path, so a
   window-side change (a flag in `Args`, a prefs write, the restart signal) lands on a system browser on two
   platforms and on lich's own Chromium on the third, and the Go side cannot tell which it got.
-- **A Linux install without its window opens a system browser, and only the log says so**
+- **A Linux install whose window is missing or dies at startup opens a system browser instead**
   (`internal/chromium.Run`): `go run`, a bare binary copied out of the tarball, a package missing
-  `lib/lich/shell` — each falls through to the ladder below with one `Warn` line, because refusing to open
-  would turn a packaging slip into a lich that does nothing. `lich doctor` names the rung that answered.
-  `task dev` pins the window it built (`LICH_BROWSER`), since `go run` never has one beside it.
+  `lib/lich/shell` — each falls through to the ladder below with one `Warn` line; a window that exits with
+  an error inside `startupGrace` (10 s: a segfault on first paint, a system library `libcef.so` cannot find
+  on this distribution) is relaunched the same way, with a desktop notification naming the browser. Refusing
+  to open would turn a packaging slip or a bad update into a lich that does nothing. The grace is the trap:
+  a crash at 10.1 s is the window's lifecycle ending, as it always was, and a window closed by hand inside
+  it exits 0 and never falls back. A pinned browser never falls back either — it is the user's word — and
+  with no browser at all the crash lands on the tab path, where the log has the story and the
+  notification does not. `lich doctor` names the rung that answered; `task dev` pins the window it built
+  (`LICH_BROWSER`), since `go run` never has one beside it.
 - **The bundled window and a pinned browser share one profile directory** (`shell/src/main.rs`,
   `internal/chromium.Run`): the shell is told `cache_dir` = the `--user-data-dir` lich hands every browser,
   so CEF writes `<config>/lich/chromium-profile` as its own Chromium profile. Pin a browser with `--browser`

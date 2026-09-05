@@ -119,9 +119,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ~10 MB.** That is the embedded Chromium: `libcef.so` stripped of its debug
   info (its symbol table has to stay — CEF resolves it at runtime), the
   resources, the ANGLE GL libraries and the one locale pack the UI uses. The
-  `chromium` recommends is gone from the deb, rpm and Arch packages, and the AUR
-  package now fetches the window as a second release asset; `zenity` is the
-  only runtime dependency the installer still checks for.
+  `chromium` recommends is gone from the deb, rpm and Arch packages (which now
+  compress with xz), and the AUR package now fetches the window as a second
+  release asset; `zenity` is the only runtime dependency the installer still
+  checks for.
 
 - **"Resolve conflicts" and "Fix CI errors" now open the session they hand the
   work to.** The button wrote its prompt into whichever session happened to be

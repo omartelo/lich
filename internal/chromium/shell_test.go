@@ -69,3 +69,30 @@ func TestFindShellSkipsDirectoriesAndMissing(t *testing.T) {
 		t.Fatalf("findShell = %q, want none when nothing exists", got)
 	}
 }
+
+// TestFallsBack pins the three conditions: only the bundled window, only an
+// error exit, only inside the startup grace. A close (nil error) never falls
+// back, a pinned browser never does, and a crash after the grace is the window
+// lifecycle ending.
+func TestFallsBack(t *testing.T) {
+	crashed := errors.New("signal: segmentation fault")
+	cases := []struct {
+		name    string
+		step    string
+		err     error
+		elapsed time.Duration
+		want    bool
+	}{
+		{"shell crashes at startup", stepShell, crashed, 2 * time.Second, true},
+		{"shell crashes just inside the grace", stepShell, crashed, startupGrace - time.Millisecond, true},
+		{"shell closed by the user", stepShell, nil, 2 * time.Second, false},
+		{"shell crashes after the grace", stepShell, crashed, startupGrace, false},
+		{"pinned browser crashes", stepPinned, crashed, time.Second, false},
+		{"system browser crashes", stepDefault, crashed, time.Second, false},
+	}
+	for _, c := range cases {
+		if got := fallsBack(c.step, c.err, c.elapsed); got != c.want {
+			t.Errorf("%s: fallsBack = %v, want %v", c.name, got, c.want)
+		}
+	}
+}

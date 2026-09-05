@@ -124,8 +124,9 @@ tar --zstd -xf lich-*-linux-amd64-shell.tar.zst -C ~/.local/bin
 
 The second line unpacks the window beside the binary, as `~/.local/bin/shell/`
 — lich looks for it there, and under `../lib/lich/shell` relative to its bin.
-Without it lich falls back to a Chromium-family browser on the machine, and
-says so in its log. `zenity` still comes from your package manager.
+Without it — or if it fails to start on your machine — lich falls back to a
+Chromium-family browser you have installed, and says so in a notification and
+its log. `zenity` still comes from your package manager.
 
 ## macOS (experimental)
 
