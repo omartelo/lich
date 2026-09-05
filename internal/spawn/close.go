@@ -93,14 +93,6 @@ func (s *Service) Close(fromID, target, projectName, worktree string, force bool
 	}
 
 	active := neighborOf(found.project, found.session.ID)
-	if last && worktree == KeepWorktree {
-		if err := s.sessions.CloseSession(found.project.ID, found.session.ID, active); err != nil {
-			return Closed{}, err
-		}
-		closed.Kept = true
-		s.finish(found, active)
-		return closed, nil
-	}
 	if last && worktree == RemoveWorktree {
 		if err := s.removeCheckout(found, active, force); err != nil {
 			return Closed{}, err
@@ -114,10 +106,12 @@ func (s *Service) Close(fromID, target, projectName, worktree string, force bool
 	// session. The row carries the conversation, the cost ledgers and the name
 	// the user gave it, and it is what puts the session in the history a resume
 	// reads back — the same close the window performs (projects.tsx,
-	// closeSession). Only a checkout's removal takes a row with it.
+	// closeSession). Only a checkout's removal takes a row with it. For the
+	// last session of a worktree this is the keep answer, and the row says so.
 	if err := s.sessions.CloseSession(found.project.ID, found.session.ID, active); err != nil {
 		return Closed{}, err
 	}
+	closed.Kept = last
 	s.finish(found, active)
 	return closed, nil
 }

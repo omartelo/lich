@@ -197,6 +197,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A pinned session stays pinned across a park and resume.** Closing it from
+  the `lich` command line parked the row, and resuming it brought the card back
+  unpinned — in the drag order, close button restored — though nobody had taken
+  the pin off. The pin now rides the resume like the label and the model do.
+
 - **The Kiro CLI recap band was empty whenever the agent thought before it
   spoke.** "Last turn" reads the closing words out of the provider's own
   transcript, and Kiro types each block of a message differently — a `text` block

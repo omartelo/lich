@@ -260,7 +260,7 @@ func (s *Service) ReopenSession(sessionID, newSessionID string) (*Session, error
 // reopen is the resume behind both doors: it finds one parked session with the
 // given WHERE clause and re-adds it to the workspace under a fresh id
 // (newSessionID), carrying over the old label, kind, path, provider session id,
-// label_auto flag, model, entrypoint, sandbox and origin. The fresh id is
+// label_auto flag, model, entrypoint, sandbox, pin and origin. The fresh id is
 // deliberate: it makes the frontend treat the card as never-spawned, so its
 // resume prompt fires and the provider conversation continues instead of
 // starting cold.
@@ -285,13 +285,13 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		var projectID, model, entrypoint, sandbox string
 		row := tx.QueryRow(
 			`SELECT id, project_id, label, kind, path, provider_session_id, label_auto,
-			        model, entrypoint, sandbox, origin_session_id, origin_label
+			        model, entrypoint, sandbox, pinned, origin_session_id, origin_label
 			   FROM sessions `+where,
 			args...,
 		)
 		if err := row.Scan(
 			&old.ID, &projectID, &old.Label, &old.Kind, &old.Path, &old.ProviderSessionID,
-			&labelAuto, &model, &entrypoint, &sandbox, &old.OriginSessionID, &old.OriginLabel,
+			&labelAuto, &model, &entrypoint, &sandbox, &old.Pinned, &old.OriginSessionID, &old.OriginLabel,
 		); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil // nothing parked; caller creates a new session
@@ -319,13 +319,16 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		// closed_at is left to its default: the reinserted row is open again, and
 		// a resume that carried the old stamp over would date the next close
 		// before it happened.
+		// pinned rides along too: the pin holds "until it is unpinned" (Session),
+		// and a park by `lich close` — the one close the sidebar's withheld
+		// affordance does not stop — is not that.
 		if _, err := tx.Exec(
 			`INSERT INTO sessions
 			   (id, project_id, label, kind, path, provider_session_id, label_auto,
-			    model, entrypoint, sandbox, origin_session_id, origin_label, position)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
+			    model, entrypoint, sandbox, pinned, origin_session_id, origin_label, position)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
 			newSessionID, projectID, old.Label, old.Kind, old.Path, old.ProviderSessionID, labelAuto,
-			model, entrypoint, sandbox, old.OriginSessionID, old.OriginLabel, projectID,
+			model, entrypoint, sandbox, old.Pinned, old.OriginSessionID, old.OriginLabel, projectID,
 		); err != nil {
 			return fmt.Errorf("reinsert session %q: %w", newSessionID, err)
 		}
@@ -346,6 +349,7 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 			ProviderSessionID: old.ProviderSessionID,
 			Entrypoint:        entrypoint,
 			Sandbox:           sandbox,
+			Pinned:            old.Pinned,
 			OriginSessionID:   old.OriginSessionID,
 			OriginLabel:       old.OriginLabel,
 		}

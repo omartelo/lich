@@ -63,7 +63,8 @@ const (
 // duration itself and is read from the payload.
 const (
 	sessionWindow = 5 * 60 * 60
-	weeklyWindow  = 7 * 24 * 60 * 60
+	dailyWindow   = 24 * 60 * 60
+	weeklyWindow  = 7 * dailyWindow
 )
 
 // A plan's Status. Anything other than StatusOK carries no windows: the reading

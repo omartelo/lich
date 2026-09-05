@@ -7,22 +7,16 @@ package terminal
 
 import (
 	"encoding/base64"
-	"fmt"
 	"log/slog"
-	"math"
 	"net/http"
 	"os"
-	"runtime"
 	"slices"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/omartelo/lich/internal/events"
 	"github.com/omartelo/lich/internal/pricing"
-	"github.com/omartelo/lich/internal/project"
-	"github.com/omartelo/lich/internal/providers"
 )
 
 // Event names. A terminal I/O event carries the session ID as a suffix (e.g.
@@ -352,108 +346,7 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 	s.snaps.filed = func(id string) {
 		hub.Emit(turnEventName, turnEvent{ID: id})
 	}
-	ws, err := newTransport(
-		func(id string, data []byte) {
-			// Only this callback, never writeBytes: what arrives here is the
-			// window's own input frames, which is a person at the keyboard. A
-			// relayed message another session pasted through Write is that
-			// session's work, not this one's.
-			s.beatHandsOn(id, 0)
-			if s.noteInput(id, data) {
-				s.noteInterrupt(id)
-			}
-			if err := s.writeBytes(id, data); err != nil {
-				slog.Warn("terminal: input write failed", "session", id, "err", err)
-			}
-		},
-		func(req hookRequest) {
-			// Ahead of every filter below, because a beat is not about what the
-			// card can draw: any hook naming a session is proof that session was
-			// being worked, whatever endpoint it arrived on and whether or not
-			// lich publishes it. That is why the other three callbacks beat too
-			// — a provider whose hooks report no state has no other way to say
-			// its agent is running. Cursor CLI's tool reports are dropped a line
-			// down for want of anything that could end the spinner they would
-			// start, and they are the only proof a Cursor turn is running at all
-			// (see closableState).
-			s.beatHandsOn(req.SessionID, 0)
-			// Dropped where the harness cannot close it, before the turn log
-			// ever sees it: a state nothing ends outlives what it describes.
-			if !closableState(s.kindOf(req.SessionID), req.State) {
-				return
-			}
-			// The window is told what the report means, not what it said: a
-			// `waiting` outside a turn is a session idle at its prompt, and the
-			// card would draw it as a human being blocked (see turnLog).
-			if s.turns.report(req.SessionID, req.State) {
-				hub.Emit(statusEventName, statusEvent{
-					ID:     req.SessionID,
-					State:  req.State,
-					Tool:   req.Tool,
-					Detail: req.Detail,
-					Reason: req.Reason,
-				})
-			}
-			// The relay reads the stream raw: it keeps its own turn accounting,
-			// and a report held back from the window still moves an errand.
-			if watch := s.stateWatcher(); watch != nil {
-				watch(req.SessionID, req.State)
-			}
-			// The same boundary brackets the Review panel's "Last turn": `busy`
-			// opens the window, `done` closes it. Queued, never taken here — a
-			// snapshot on this goroutine would hold the hook's own response, and
-			// with it the agent's next step (see turnSnaps).
-			s.snaps.note(req.SessionID, req.State)
-			// Every non-idle state is a point where a fresh assistant usage line
-			// may have landed — a tool call mid-turn (busy), a prompt (waiting),
-			// or the turn's end (done) — so refresh the context window then, and
-			// off-thread so a stalled emit never blocks the hook's response. Skip
-			// idle (SessionEnd): the session is ending, nothing new to read.
-			if req.State != statusIdle {
-				go s.emitUsage(req.SessionID)
-			}
-		},
-		func(sessionID, providerSessionID, provider string) error {
-			// The beat above, on the one report Crush can make. Its only hook
-			// event is PreToolUse and neither script it registers there reports
-			// a state (docs/hooks/session-state.md), so this arrives once per
-			// tool call — measured 2026.09.03 against Crush 0.88.0 — and is the
-			// only proof a Crush turn is running.
-			s.beatHandsOn(sessionID, 0)
-			if err := store.SetProviderSession(sessionID, providerSessionID); err != nil {
-				return err
-			}
-			// A SessionStart report is proof that *a* provider's CLI is running
-			// in this PTY, and for a shell session that report is the only thing
-			// that knows which — so its icon wears the reported mark.
-			//
-			// For a session lich spawned as a provider, the kind is the better
-			// answer and it wins. A harness can run another harness's hooks:
-			// Cursor CLI executes every Claude Code hook on the machine, the
-			// user's own and each installed plugin's (measured on 2026.08.11,
-			// `hookSource: claude-plugin`), so the lich plugin's own script
-			// reports `claude` from inside a Cursor session and the card wore
-			// Claude's mark one turn in. What a hook says is a claim; what lich
-			// spawned is a fact.
-			hub.Emit(agentEventName, agentEvent{ID: sessionID, Agent: s.providerKind(sessionID, provider)})
-			return nil
-		},
-		func(id, title string) error {
-			s.beatHandsOn(id, 0)
-			applied, err := store.SetSessionTitle(id, title)
-			if err != nil {
-				return err
-			}
-			if applied {
-				hub.Emit(titleEventName, titleEvent{ID: id, Label: title})
-			}
-			return nil
-		},
-		func(id string) {
-			s.beatHandsOn(id, 0)
-			hub.Emit(touchedEventName, touchedEvent{ID: id})
-		},
-	)
+	ws, err := newTransport(s.onInput, s.onHookState, s.onSessionStart, s.onTitle, s.onTouched)
 	s.ws, s.wsErr = ws, err
 	if ws != nil {
 		// The transport is built before the service that owns the bridge, so the
@@ -461,6 +354,118 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 		ws.setFallback(s.emitData)
 	}
 	return s
+}
+
+// onInput is the transport's keyboard callback. Only this path, never
+// writeBytes, beats hands-on: what arrives here is the window's own input
+// frames, which is a person at the keyboard. A relayed message another session
+// pasted through Write is that session's work, not this one's.
+func (s *Service) onInput(id string, data []byte) {
+	s.beatHandsOn(id, 0)
+	if s.noteInput(id, data) {
+		s.noteInterrupt(id)
+	}
+	if err := s.writeBytes(id, data); err != nil {
+		slog.Warn("terminal: input write failed", "session", id, "err", err)
+	}
+}
+
+// onHookState is the transport's state-report callback, one per hook a
+// session's provider fires.
+func (s *Service) onHookState(req hookRequest) {
+	// Ahead of every filter below, because a beat is not about what the
+	// card can draw: any hook naming a session is proof that session was
+	// being worked, whatever endpoint it arrived on and whether or not
+	// lich publishes it. That is why the other three callbacks beat too
+	// — a provider whose hooks report no state has no other way to say
+	// its agent is running. Cursor CLI's tool reports are dropped a line
+	// down for want of anything that could end the spinner they would
+	// start, and they are the only proof a Cursor turn is running at all
+	// (see closableState).
+	s.beatHandsOn(req.SessionID, 0)
+	// Dropped where the harness cannot close it, before the turn log
+	// ever sees it: a state nothing ends outlives what it describes.
+	if !closableState(s.kindOf(req.SessionID), req.State) {
+		return
+	}
+	// The window is told what the report means, not what it said: a
+	// `waiting` outside a turn is a session idle at its prompt, and the
+	// card would draw it as a human being blocked (see turnLog).
+	if s.turns.report(req.SessionID, req.State) {
+		s.hub.Emit(statusEventName, statusEvent{
+			ID:     req.SessionID,
+			State:  req.State,
+			Tool:   req.Tool,
+			Detail: req.Detail,
+			Reason: req.Reason,
+		})
+	}
+	// The relay reads the stream raw: it keeps its own turn accounting,
+	// and a report held back from the window still moves an errand.
+	if watch := s.stateWatcher(); watch != nil {
+		watch(req.SessionID, req.State)
+	}
+	// The same boundary brackets the Review panel's "Last turn": `busy`
+	// opens the window, `done` closes it. Queued, never taken here — a
+	// snapshot on this goroutine would hold the hook's own response, and
+	// with it the agent's next step (see turnSnaps).
+	s.snaps.note(req.SessionID, req.State)
+	// Every non-idle state is a point where a fresh assistant usage line
+	// may have landed — a tool call mid-turn (busy), a prompt (waiting),
+	// or the turn's end (done) — so refresh the context window then, and
+	// off-thread so a stalled emit never blocks the hook's response. Skip
+	// idle (SessionEnd): the session is ending, nothing new to read.
+	if req.State != statusIdle {
+		go s.emitUsage(req.SessionID)
+	}
+}
+
+// onSessionStart is the transport's session-start callback: the provider's
+// CLI reporting which conversation it runs.
+func (s *Service) onSessionStart(sessionID, providerSessionID, provider string) error {
+	// The beat above, on the one report Crush can make. Its only hook
+	// event is PreToolUse and neither script it registers there reports
+	// a state (docs/hooks/session-state.md), so this arrives once per
+	// tool call — measured 2026.09.03 against Crush 0.88.0 — and is the
+	// only proof a Crush turn is running.
+	s.beatHandsOn(sessionID, 0)
+	if err := s.store.SetProviderSession(sessionID, providerSessionID); err != nil {
+		return err
+	}
+	// A SessionStart report is proof that *a* provider's CLI is running
+	// in this PTY, and for a shell session that report is the only thing
+	// that knows which — so its icon wears the reported mark.
+	//
+	// For a session lich spawned as a provider, the kind is the better
+	// answer and it wins. A harness can run another harness's hooks:
+	// Cursor CLI executes every Claude Code hook on the machine, the
+	// user's own and each installed plugin's (measured on 2026.08.11,
+	// `hookSource: claude-plugin`), so the lich plugin's own script
+	// reports `claude` from inside a Cursor session and the card wore
+	// Claude's mark one turn in. What a hook says is a claim; what lich
+	// spawned is a fact.
+	s.hub.Emit(agentEventName, agentEvent{ID: sessionID, Agent: s.providerKind(sessionID, provider)})
+	return nil
+}
+
+// onTitle is the transport's ai-title callback.
+func (s *Service) onTitle(id, title string) error {
+	s.beatHandsOn(id, 0)
+	applied, err := s.store.SetSessionTitle(id, title)
+	if err != nil {
+		return err
+	}
+	if applied {
+		s.hub.Emit(titleEventName, titleEvent{ID: id, Label: title})
+	}
+	return nil
+}
+
+// onTouched is the transport's callback for a hook that names a session and
+// reports nothing else.
+func (s *Service) onTouched(id string) {
+	s.beatHandsOn(id, 0)
+	s.hub.Emit(touchedEventName, touchedEvent{ID: id})
 }
 
 // emitData puts one session's output on the /events bridge — where terminal
@@ -596,486 +601,6 @@ var lichBin = sync.OnceValue(func() string {
 	}
 	return exe
 })
-
-// readBufSize is the chunk size read from a session's PTY per iteration.
-const readBufSize = 32 * 1024
-
-// Start spawns the binary for session id under project projectID — the user's
-// shell when kind is "shell", otherwise the provider binary for that kind
-// resolved from the project's settings (falling back to the provider's default
-// on $PATH) — attached to a new PTY sized to cols x rows and rooted at cwd, then
-// streams its output to the frontend. An empty cwd defaults to the user's home
-// directory. Starting a session that is already running is a no-op.
-//
-// A non-empty resume is a provider conversation id to reopen, spelled for the
-// session's kind by resumeArgs, which the frontend passes after the user
-// accepted the prompt to continue the session this card ran before the last
-// restart. The prompt is only raised for a conversation ResumeAvailable still
-// finds, so an id the provider no longer knows normally never reaches here; one
-// that slips through (pruned between the check and the spawn) fails in the PTY
-// like any other bad invocation — the user sees the provider's own error.
-//
-// fork turns that resume into a branch: the provider copies the conversation
-// into a new one of its own and leaves the original alone, so the card that ran
-// it stays where it is with its history intact. Only the three kinds
-// providers.SupportsFork names can do it, and only alongside a resume id — the
-// conversation being branched is the one that id points at. The copy's own id
-// is the provider's to assign, and reaches lich through this session's
-// session-start report like any other.
-//
-// name is what the session answers to in its provider's peer roster (Claude
-// Code's `/list-agents`), passed by the frontend so the roster names the card
-// the user sees. Only Claude Code has a roster; every other kind ignores it.
-//
-// setup is passed once, by the flow that just created this session's worktree:
-// it runs the project's worktree setup script (.lich/setup-worktree.sh, see
-// project.SetupScript) in the PTY before the provider, so a fresh checkout
-// installs its dependencies in view. A respawn or resume never sets it. The
-// script runs in the session's own environment, so it reads the same
-// LICH_WORKTREE_PORT the provider will.
-func (s *Service) Start(
-	id, projectID, cwd, kind, resume, name string, fork, setup bool, cols, rows int,
-) error {
-	sess, cwd, err := s.spawnSession(id, projectID, cwd, kind, resume, name, fork, setup, cols, rows)
-	if err != nil || sess == nil {
-		return err
-	}
-	// Emitted outside s.mu: Emit blocks on a stalled /events client, which
-	// would freeze every session's I/O. Both are unconditional so a respawn
-	// overwrites whatever the previous PTY left in the frontend's stores.
-	s.hub.Emit(cwdEventName, cwdEvent{ID: id, Cwd: cwd})
-	s.hub.Emit(agentEventName, agentEvent{ID: id, Agent: ""})
-	s.hub.Emit(sandboxEventName, sandboxEvent{ID: id, Confined: sess.confined})
-	// Bound to the effective cwd rather than the requested one, and outside
-	// s.mu: track queues a warm-up of this checkout's snapshot index, and the
-	// first one on a large repository is measured in seconds.
-	s.snaps.track(id, cwd)
-	go watchCwd(id, sess.pty.Pid(), cwd, sess.done, s.hub)
-	return nil
-}
-
-// spawnSession is the locked half of Start: dedupe, PTY spawn and session-map
-// registration. A nil session with a nil error means id was already running.
-// The returned cwd is the effective start directory (the input, or the
-// resolved home when it was empty).
-func (s *Service) spawnSession(
-	id, projectID, cwd, kind, resume, name string, fork, setup bool, cols, rows int,
-) (*session, string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if _, running := s.sessions[id]; running {
-		return nil, "", nil
-	}
-	// Whatever the previous provider left open under this id died with its PTY,
-	// and the first report of the new one has to be read against its own turn.
-	s.turns.forget(id)
-	cols, rows = s.sizeFor(cols, rows)
-
-	if cwd == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, "", fmt.Errorf("failed to resolve home directory: %w", err)
-		}
-		cwd = home
-	}
-
-	// The MCP registration is withheld without a transport for the same reason
-	// the hook coordinates are: the server it points at would have nothing to
-	// talk to, so the session would carry tools that can only fail.
-	mcpBin := ""
-	if s.ws != nil {
-		mcpBin = lichBin()
-	}
-	skipPermissions := s.store.SkipPermissions(kind, projectID, cwd)
-	// The model is read from the row rather than passed in, so it survives every
-	// spawn this session ever gets: the window's first view, a respawn after a
-	// reload, and the resume of a parked worktree session all arrive here.
-	spec := ptySpec{
-		bin: resolveCommand(kind, s.store.ProviderBin(kind, projectID), userShell()),
-		args: providerArgs(
-			kind, name, resume, s.store.SessionModel(id), mcpBin, kiroPluginAgent(kind),
-			fork, skipPermissions,
-		),
-		dir:  cwd,
-		env:  s.sessionEnv(id, projectID, cwd),
-		cols: cols,
-		rows: rows,
-	}
-	// Before wrapSetup, so a fresh worktree terminal carrying both runs the
-	// project's setup script first, then the entrypoint, then the shell.
-	spec = wrapEntrypoint(spec, kind, s.store.SessionEntrypoint(id), runtime.GOOS)
-	settingUp := false
-	if setup {
-		spec, settingUp = wrapSetup(spec, project.SetupScript(s.store.ProjectPath(projectID)), runtime.GOOS)
-	}
-	// Outermost, so the setup script and the entrypoint are confined with the
-	// session they run in front of.
-	inSandbox := confined(s.store, id, kind, projectID, cwd)
-	creds := s.sandboxCredentials(projectID, cwd, inSandbox)
-	spec = wrapSandbox(spec, kind, userHome(), sessionDropDir(s.dropDir, id, inSandbox), inSandbox, creds)
-	p, err := startPTY(spec)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to start pty for %q: %w", id, err)
-	}
-
-	box := newOutbox(func(data []byte) {
-		if s.ws != nil && s.ws.send(id, data) {
-			return
-		}
-		s.emitData(id, data)
-	}, outboxDepth)
-	out := newCoalescer(box.push, visibleFlushInterval, hiddenFlushInterval)
-	sess := &session{
-		pty:       p,
-		out:       out,
-		done:      make(chan struct{}),
-		replay:    newReplayBuffer(replayCapBytes),
-		outbox:    box,
-		settingUp: settingUp,
-		// Timed from the spawn, so a program that never writes anything still
-		// becomes ready once: quiet is the signal, and silence from the start
-		// is quiet too.
-		lastOut:  time.Now(),
-		confined: inSandbox,
-	}
-	s.sessions[id] = sess
-	// Outside mu's protection by design (see Service.spawns), and stored with the
-	// registration so no report can arrive for a session whose kind is unknown.
-	s.spawns.Store(id, spawn{kind: kind, cwd: cwd})
-	go s.stream(id, sess)
-	return sess, cwd, nil
-}
-
-// providerKind resolves which provider mark a session-start report puts on a
-// card: the kind lich spawned when that kind is a provider, else the reported
-// one. A session that is not running — the report raced its own PTY's exit —
-// falls back to the report, which is all that is left to answer from.
-func (s *Service) providerKind(id, reported string) string {
-	if kind := s.kindOf(id); providers.Known(kind) {
-		return kind
-	}
-	return reported
-}
-
-// spawn is how one live session's PTY was started: the kind it runs and the
-// directory it was rooted at. The cwd is the spawn directory and not the
-// foreground one the watcher follows (cwd.go) — Crush keeps its database in the
-// checkout it was started in, which a `cd` inside the session does not move.
-type spawn struct {
-	kind string
-	cwd  string
-}
-
-// spawnOf is how a live session's PTY was started, or the zero spawn once it is
-// gone. It never takes mu: a hook asks this on every report, and mu is held
-// across a PTY spawn (see Service.spawns).
-func (s *Service) spawnOf(id string) spawn {
-	v, ok := s.spawns.Load(id)
-	if !ok {
-		return spawn{}
-	}
-	started, _ := v.(spawn)
-	return started
-}
-
-// kindOf is what a live session's PTY was spawned to run, or "" once it is gone.
-func (s *Service) kindOf(id string) string { return s.spawnOf(id).kind }
-
-// closableState reports whether a state reported from inside a session of this
-// kind is one that harness can also end. A state nothing ends is worse than no
-// state: `busy` with no end-of-turn event behind it pins a spinner to the card
-// for the rest of the session, which is wrong for far longer than it is right —
-// the rule docs/adding-a-provider.md states, and the reason Crush's plugin
-// registers two of the four reports rather than four.
-//
-// Only Cursor CLI is filtered, and only here rather than in what it registers,
-// because lich does not own its registration: Cursor runs the plugin installed
-// in Claude Code, which registers all of them. Of those, Cursor was measured
-// (2026.08.11, hooks in its own format and in Claude Code's alike) to deliver
-// `SessionStart`, `PreToolUse`, `PostToolUse` and `SessionEnd` and nothing else
-// — no `UserPromptSubmit`, so a turn that calls no tool never begins, and no
-// `Stop`, so one that does never ends. `idle` is the one state it can both
-// report and mean, and it survives.
-func closableState(kind, state string) bool {
-	if kind != providers.Cursor {
-		return true
-	}
-	return state == statusIdle
-}
-
-// stream copies PTY output to the frontend until the PTY is closed, then reaps
-// the process, drops the session and emits its exit event. Output goes through
-// the session's coalescer, which batches it on a short cadence while the
-// terminal is visible and a long one while it is hidden, and then through its
-// outbox, which delivers it off this goroutine.
-func (s *Service) stream(id string, sess *session) {
-	p := sess.pty
-	buf := make([]byte, readBufSize)
-	for {
-		n, err := p.Read(buf)
-		if n > 0 {
-			s.noteOutput(id, sess, buf[:n])
-			sess.replay.append(buf[:n])
-			sess.out.Write(buf[:n])
-		}
-		if err != nil {
-			break
-		}
-	}
-	code, _ := p.Wait()
-	// Release the PTY handle: on a natural child exit nobody else closes it
-	// (Close only reaps sessions still in the map), and after a user-driven
-	// Close this is the second one — a no-op each seam has to make safe, since
-	// the handles are already gone (see windowsPTY, where they are reissued).
-	_ = p.Close()
-	// Flush any batched output and wait for it to be delivered before the exit
-	// event, so the frontend always sees the final bytes ahead of the exit
-	// banner. Delivery now ends at the transport's writer rather than at the
-	// socket, so the wait runs one step further: the outbox for this session's
-	// own frames, then the connection's queue for the wire.
-	sess.out.Close()
-	sess.outbox.close()
-	if s.ws != nil {
-		s.ws.flush()
-	}
-
-	s.mu.Lock()
-	reaped := false
-	if current, ok := s.sessions[id]; ok && current.pty == p {
-		delete(s.sessions, id)
-		close(current.done)
-		reaped = true
-	}
-	// Inside the same guard the map delete is: a reap that lost the race to a
-	// respawn under this id must not drop the kind the live session was
-	// registered with.
-	if reaped {
-		s.spawns.Delete(id)
-	}
-	s.mu.Unlock()
-
-	// Only the goroutine that actually evicted its own PTY owes an exit event:
-	// a reap that lost the race to a respawn under the same id would otherwise
-	// tell a live session it exited, and the frontend writes "[process exited]"
-	// into that terminal. Emitted outside s.mu for the reason Start gives —
-	// Emit blocks on a stalled /events client, and holding s.mu across it would
-	// freeze every session's I/O.
-	if reaped {
-		s.hub.Emit(exitEventPrefix+id, exitPayload(code))
-	}
-}
-
-// Write forwards keyboard input from the frontend to a session's PTY.
-func (s *Service) Write(id, data string) error {
-	return s.writeBytes(id, []byte(data))
-}
-
-// writeBytes delivers input bytes to a session's PTY; unknown sessions are a
-// no-op. It is the shared sink for the RPC Write and the WebSocket
-// transport's input frames.
-//
-// It loops until every byte is written. A single call is not enough:
-// ConPTY's input pipe (pty_windows.go) is a plain Windows anonymous pipe, and
-// WriteFile on one can legitimately return fewer bytes than given rather than
-// blocking for the rest — the caller is documented to retry. A large paste
-// landing exactly on that boundary lost its tail silently, closing bracket
-// and all, so bracketed paste never closed and the Enter that followed
-// landed inside it instead of submitting it. Unix's *os.File already loops
-// internally, so this is a no-op extra check there.
-func (s *Service) writeBytes(id string, data []byte) error {
-	p := s.ptyOf(id)
-	if p == nil {
-		return nil
-	}
-	for len(data) > 0 {
-		n, err := p.Write(data)
-		if err != nil {
-			return err
-		}
-		data = data[n:]
-	}
-	return nil
-}
-
-// SetVisible tells the session's output coalescer whether its terminal is on
-// screen. Hidden sessions batch output (~250ms per event); flipping to visible
-// flushes pending output immediately. Unknown sessions are a no-op.
-func (s *Service) SetVisible(id string, visible bool) error {
-	s.mu.Lock()
-	sess, ok := s.sessions[id]
-	s.mu.Unlock()
-	if !ok {
-		return nil
-	}
-	sess.out.SetVisible(visible)
-	return nil
-}
-
-// Replay returns the capped tail of a session's PTY output, base64-encoded, so a
-// reconnecting frontend can reseed its scrollback after a page reload discarded
-// the page-side buffer. Empty for an unknown session — a brand-new one has no
-// history yet. Base64 for the same reason the data event is: raw PTY bytes may
-// split a multi-byte UTF-8 sequence across the JSON envelope.
-func (s *Service) Replay(id string) (string, error) {
-	s.mu.Lock()
-	sess, ok := s.sessions[id]
-	s.mu.Unlock()
-	if !ok {
-		return "", nil
-	}
-	return base64.StdEncoding.EncodeToString(sess.replay.snapshot()), nil
-}
-
-// Resize updates a session's PTY window size. The frontend only calls this for
-// the visible terminal; a hidden terminal is resized on the next time it is
-// shown.
-func (s *Service) Resize(id string, cols, rows int) error {
-	// Recorded even when the session it names is gone: it is the window's own
-	// terminal being measured, and the next session spawned without one starts
-	// at that size (see sizeFor).
-	if cols > 0 && rows > 0 {
-		s.mu.Lock()
-		s.lastCols, s.lastRows = cols, rows
-		s.mu.Unlock()
-	}
-	p := s.ptyOf(id)
-	if p == nil {
-		return nil
-	}
-	return p.Resize(cols, rows)
-}
-
-// noteOutput reads one chunk of a session's output for the three things lich
-// has to know about it from outside: whether the worktree setup script is still
-// the program on the other end of this PTY (see setupDone), whether that
-// program has ever stopped drawing (see Ready), and whether the agent is
-// working right now (see handsOn).
-func (s *Service) noteOutput(id string, sess *session, chunk []byte) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	// The quiet is recorded as it passes, never sampled when somebody finally
-	// asks. A session settles seconds after it starts and is asked hours later,
-	// by then mid-turn: sampling there reads a spinner redrawing every few
-	// frames and calls a session that has been at its prompt all day unready.
-	//
-	// A setup script pauses too — between one package and the next — and that
-	// quiet belongs to a program the provider has not replaced yet, so it is
-	// not the provider's and does not count.
-	if !sess.settingUp && !sess.lastOut.IsZero() && time.Since(sess.lastOut) >= readySettle {
-		sess.ready = true
-	}
-	sess.lastOut = time.Now()
-	if sess.settingUp && sess.setupEnded(chunk) {
-		sess.settingUp = false
-		// The provider starts drawing from here, so the quiet this waits for is
-		// measured from the exec, not from the setup script's last line. The
-		// clock goes with the flag: the exec itself takes a second or two — the
-		// image is replaced, a runtime starts, a splash is composed — and that
-		// silence is nobody's quiet. Measured from the script's last line it
-		// would clear the settle on the provider's very first byte, mid-splash,
-		// which is the write that lands on screen as literal paste markers.
-		sess.ready = false
-		sess.lastOut = time.Time{}
-	}
-	// Output is the one beat source that has to be qualified, because a
-	// terminal draws for reasons that are nobody's work: a `tail -f`, a dev
-	// server logging requests, a TUI repainting its own spinner. An open turn
-	// is what separates the agent working from a program talking to itself —
-	// so nothing here counts unless the session's own last report said `busy`,
-	// and even then only once every handsOnOutputBeat.
-	if s.turns.busy(id) {
-		s.beatHandsOn(id, handsOnOutputBeat)
-	}
-}
-
-// setupEnded reports whether chunk completes the wrapper's end marker, matching
-// across the seam between two reads: the wrapper prints the marker in one write,
-// but a PTY read can cut it anywhere, and neither half matches on its own — a
-// session that missed it waits out every relay it is ever sent.
-//
-// Called under s.mu.
-func (sess *session) setupEnded(chunk []byte) bool {
-	joined := sess.setupTail + string(chunk)
-	if strings.Contains(joined, setupDone) {
-		sess.setupTail = ""
-		return true
-	}
-	// One byte short of the marker is the most that can still be its beginning.
-	if keep := len(setupDone) - 1; len(joined) > keep {
-		joined = joined[len(joined)-keep:]
-	}
-	sess.setupTail = joined
-	return false
-}
-
-// Ready reports whether a session can be given work — whether what reads this
-// PTY is the provider rather than the project's setup script, and whether the
-// prompt is free rather than half-filled by the person sitting at it. False for
-// a session that is not running at all.
-//
-// Live is not this question. A session whose checkout is still installing its
-// dependencies has a PTY, appears in the roster, and accepts writes that go
-// straight into `pnpm install`'s stdin and are discarded before the provider
-// ever starts. It looked delivered to everyone involved: the sender waited out
-// its ticket on an agent that was never asked anything.
-func (s *Service) Ready(id string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	sess, ok := s.sessions[id]
-	if !ok || sess.settingUp {
-		return false
-	}
-	// Unlike the rest of this, being ready is not a state a session reaches and
-	// keeps: the user starts typing and the prompt is theirs again until they
-	// send it (see draft.go).
-	if sess.drafting(time.Now()) {
-		return false
-	}
-	if sess.ready {
-		return true
-	}
-	// A TUI that has stopped drawing is one that has taken the terminal and is
-	// waiting on input. Before that, a message is written into a program still
-	// setting the tty up, which discards what it finds there — the bracketed
-	// paste then lands on screen as literal text, ahead of a prompt that never
-	// received it.
-	//
-	// Quiet right now answers it too, for the session that has not produced a
-	// byte since its last one; a quiet that passed earlier was recorded when it
-	// happened (see noteOutput). Either way the session stays ready from then
-	// on. A busy agent draws continuously, and a target mid-turn has always
-	// been written to — its provider queues the input and answers a turn later.
-	if !sess.lastOut.IsZero() && time.Since(sess.lastOut) >= readySettle {
-		sess.ready = true
-		return true
-	}
-	return false
-}
-
-// QuietFor reports how long a session's PTY has produced nothing, which is the
-// only way from outside to tell that the program on the other end has finished
-// taking in what was typed at it. A session that has never written a byte — and
-// one nobody knows — is as quiet as a session gets.
-//
-// Ready answers a coarser version of the same question once, and latches; this
-// one is asked again in the middle of a delivery, where the quiet that matters
-// is the one happening right now (internal/relay, awaitSettled).
-func (s *Service) QuietFor(id string) time.Duration {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	sess, ok := s.sessions[id]
-	if !ok || sess.lastOut.IsZero() {
-		return quietForever
-	}
-	return time.Since(sess.lastOut)
-}
-
-// quietForever is the answer for a session with no output to time from. Large
-// enough that every caller reads it as "settled", and a duration rather than a
-// second return value because there is nothing here a caller would do
-// differently.
-const quietForever = time.Duration(math.MaxInt64)
 
 // Close terminates a session's shell, if any.
 func (s *Service) Close(id string) error {

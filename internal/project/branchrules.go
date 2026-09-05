@@ -6,7 +6,7 @@ import (
 	"net/url"
 )
 
-// What a repository's rulesets say about merging into one branch. GitHub's
+// BranchRules is what a repository's rulesets say about merging into one branch. GitHub's
 // pull request fields do not carry it: `mergeStateStatus` answers whether this
 // merge can happen, never which methods the branch would accept, so a Merge
 // menu built without this offers buttons the ruleset refuses — and gh's

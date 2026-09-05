@@ -106,6 +106,7 @@ func contentsPath(rel, ref string) string {
 // ever names, and the guard that keeps a value from the page out of git's
 // option parsing and out of GitHub's URL.
 func isOID(ref string) bool {
+	// 7 is the shortest abbreviation git prints; 64 is a full SHA-256 name.
 	if len(ref) < 7 || len(ref) > 64 {
 		return false
 	}

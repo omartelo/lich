@@ -108,7 +108,7 @@ func codexLabel(seconds int) string {
 	switch {
 	case seconds <= 0:
 		return "Usage"
-	case seconds < 24*60*60:
+	case seconds < dailyWindow:
 		return "Session"
 	case seconds <= weeklyWindow:
 		return "Weekly"
