@@ -21,6 +21,7 @@ import type {
   DraftReviewComment,
   Attachment,
   DropItem,
+  Issue,
   MergeMethod,
   PatchNotes as PatchNotesData,
   PluginStatus,
@@ -315,6 +316,9 @@ export const ProjectService = {
       base,
       baseIsRemote,
     ]),
+  /** One GitHub issue, for the New worktree dialog: its title names the branch,
+   * its body is handed to the session. A pull request's number is refused. */
+  Issue: (path: string, number: number) => call<Issue>("project.Issue", [path, number]),
   /** Check a pull request's head branch out into its own worktree; rejects a fork PR. */
   CreateWorktreeFromPR: (projectPath: string, projectID: string, number: number) =>
     call<Worktree | null>("project.CreateWorktreeFromPR", [projectPath, projectID, number]),

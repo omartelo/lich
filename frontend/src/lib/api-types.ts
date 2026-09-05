@@ -273,6 +273,16 @@ export interface Branches {
   worktrees: Worktree[] | null
 }
 
+/** internal/project.Issue — the little of a GitHub issue the New-worktree
+ * dialog needs: the title names the branch, the body is what the session it
+ * opens finds at its prompt. The body arrives already cut (maxIssueBody). */
+export interface Issue {
+  number: number
+  title: string
+  body: string
+  url: string
+}
+
 /** internal/project.WorktreeSetup — what the New-worktree dialog shows about
  * the project's setup: the .lich/setup-worktree.sh content, or a suggestion
  * detected from the repository root when the file is absent. */

@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useProjects } from "@/providers/projects"
 import { queueSetup } from "@/lib/terminal/setup-queue"
+import { writeAtPrompt } from "@/lib/terminal/write-at-prompt"
 import { filterSessions } from "@/lib/session/session-filter"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
 import {
@@ -50,6 +51,7 @@ import { useGitStatus } from "@/lib/git/use-git-status"
 import { usePanelWidth } from "@/lib/use-panel-width"
 import { useWorktreeDialogIntent } from "@/lib/use-sidebar-intent"
 import { SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
+import { errorText } from "@/lib/utils"
 
 // Named here like every other `lich.*` pref rather than spelled at the call
 // site. The bounds go with it: wide enough for a session label and its branch,
@@ -250,12 +252,23 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
     base: string,
     baseIsRemote: boolean,
     sandbox: string,
+    prompt: string,
   ) => {
     const wt = await ProjectService.CreateWorktree(path, projectId, name, base, baseIsRemote)
     if (wt) {
       // A fresh checkout is the one moment the project's setup script runs;
       // reopening an existing worktree never queues it.
-      queueSetup(newWorktreeSession(projectId, wt, sandbox))
+      const target = newWorktreeSession(projectId, wt, sandbox)
+      queueSetup(target)
+      // The issue the worktree was named after, written at that session's
+      // prompt once it has one — the setup script and the provider's boot come
+      // first, which is what writeAtPrompt waits out. Not awaited: the dialog
+      // closes on a worktree that exists, and the wait can be minutes.
+      if (prompt) {
+        void writeAtPrompt(target, prompt).catch((err: unknown) => {
+          toast.error(`Couldn’t hand the issue to the session: ${errorText(err)}`)
+        })
+      }
     }
     setWorktreeOpen(false)
   }
