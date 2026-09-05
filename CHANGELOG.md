@@ -98,6 +98,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verdict, so the two disagree for a few seconds after a push — the row says
   which one is the fresh reading.
 
+- **The Review panel's "Last turn" now shows what the agent said, not only what
+  it changed.** Coming back to a card told you it had news, what it cost and how
+  long you had been in it, and never what it did — catching up meant scrolling
+  the terminal. Above the turn's diff there is now the agent's own closing
+  sentence for that turn, read straight out of the provider's transcript.
+  Nothing is generated and no model is called: every agent already ends a turn
+  by saying what it did, and lich only finds that sentence. It earns its place
+  on the turn the diff cannot describe — the one that ran the suite, found three
+  failures and edited nothing, which used to read as "Nothing changed in this
+  window" and no more. The band appears only when there are words to show, and
+  scrolls in its own right, so a long report never pushes the file list off
+  screen. Read for Claude Code, Codex, Antigravity, opencode, oh-my-pi and Kiro
+  CLI; Crush and Cursor CLI report no turn boundary, so they are not offered the
+  "Last turn" mode this sits in at all.
+
 ### Changed
 
 - **"Resolve conflicts" and "Fix CI errors" now open the session they hand the

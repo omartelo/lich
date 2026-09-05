@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { Notice } from "@/components/common/Notice"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import type { LastTurn } from "@/lib/api-types"
+import type { LastSaid, LastTurn } from "@/lib/api-types"
 import { onAppEvent } from "@/lib/app-events"
 import { readDiffSource, writeDiffSource, type DiffSource } from "@/lib/dock-prefs"
 import { discardTargets, parseDiff, type DiffFile } from "@/lib/git/diff"
@@ -70,6 +70,9 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
   const [failed, setFailed] = useState(false)
   const [turnState, setTurnState] = useState<LastTurn["state"] | null>(null)
   const [endedAt, setEndedAt] = useState<number | null>(null)
+  // The agent's own closing words for the shown turn; "" whenever there are
+  // none, which is also every state the working tree is in.
+  const [said, setSaid] = useState("")
   // The revision the shown diff's new side stands at, which is what the
   // expander reads unchanged lines from: "" is the working tree, and a turn
   // carries the snapshot tree it ended on.
@@ -94,16 +97,30 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
       // The working tree wears the same shape rather than branching the whole
       // read: it is always "ok", it has no window to date, and every line below
       // then reads one source.
-      const turn: LastTurn =
-        source === "turn"
-          ? await Terminal.LastTurnDiff(sessionId)
-          : { state: "ok", diff: await ProjectService.DiffText(path) }
+      //
+      // The words are read beside the diff rather than after it — they are two
+      // reads of the same moment — and their own failure is swallowed: a recap
+      // lich could not find is a band that does not appear, never a panel that
+      // reports it could not read the turn.
+      let turn: LastTurn
+      let words = ""
+      if (source === "turn") {
+        const [diff, said] = await Promise.all([
+          Terminal.LastTurnDiff(sessionId),
+          Terminal.LastTurnSaid(sessionId).catch(() => ({}) as LastSaid),
+        ])
+        turn = diff
+        words = said.text ?? ""
+      } else {
+        turn = { state: "ok", diff: await ProjectService.DiffText(path) }
+      }
       if (mine !== seq.current) {
         return
       }
       setFailed(false)
       setTurnState(turn.state)
       setEndedAt(turn.endedAt ?? null)
+      setSaid(words)
       setRef(source === "turn" ? (turn.after ?? "") : "")
       const text = turn.diff ?? ""
       if (text === lastText.current) {
@@ -131,6 +148,7 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
     setFiles(null)
     setTurnState(null)
     setEndedAt(null)
+    setSaid("")
     setRef("")
   }, [source, path, sessionId])
 
@@ -186,6 +204,7 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
   return (
     <div className="flex h-full flex-col">
       {switchable && <SourceRow source={source} onSource={changeSource} endedAt={endedAt} />}
+      {source === "turn" && said !== "" && <SaidBand text={said} />}
       <div className="flex-1 overflow-y-auto">
         <PanelBody
           source={source}
@@ -208,6 +227,26 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
         onCancel={() => setPendingDiscard(null)}
         onDiscard={() => void discard()}
       />
+    </div>
+  )
+}
+
+// SaidBand is the agent's own closing words for the shown turn, above the files
+// it changed. A band rather than a card: it shares the panel's edges and is set
+// apart by its ground alone, because the diff below is the object that carries
+// the hierarchy.
+//
+// It sits outside the scrolling body and scrolls in its own right, so a turn
+// that ended in a long report cannot push the file list off screen. The text is
+// rendered as text — the agent writes markdown, and a panel that parsed it would
+// be claiming to know which provider's flavour this is.
+function SaidBand({ text }: { text: string }) {
+  return (
+    <div className="flex shrink-0 flex-col gap-1 border-b border-border bg-muted px-2.5 pt-2 pb-2.5">
+      <span className="text-[0.625rem] font-medium tracking-wider text-muted-foreground uppercase">
+        Said
+      </span>
+      <p className="max-h-32 overflow-y-auto whitespace-pre-wrap text-xs">{text}</p>
     </div>
   )
 }

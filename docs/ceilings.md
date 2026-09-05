@@ -192,6 +192,20 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   so **Crush and Cursor CLI have no last turn at all**: neither reports a state (`docs/hooks/session-state.md`),
   so nothing ever opens or closes a window there and the switch is never drawn — a rule read off the
   session's own reports, not a list of providers, so it corrects itself the day either one starts reporting.
+- **The recap beside that diff answers to a different clock, and to a different set of providers**
+  (`internal/terminal/said.go`): the band reads the last thing the agent *said* out of the provider's own
+  transcript, where the diff beside it brackets the window a turn ran in. The two agree once a turn has
+  finished — which is the only time a diff is offered — but mid-turn the band still shows the previous
+  turn's words with no date on them, beside a diff that reads "unavailable"; nothing in the panel says
+  which turn is speaking, and only the card's spinner does. The read is a bounded tail for the reason the
+  transcript search's is (`searchTailBytes`), so a turn whose closing words sit behind more than 4 MB of
+  tool output shows none — the band simply does not appear, which is also what a turn that ended on a tool
+  call looks like. And its provider list is *not* the one the switch above it is drawn from: six of the
+  eight are read (Claude Code, Codex, Antigravity, opencode, oh-my-pi, Kiro CLI), and the two that are not
+  are the two with no last turn to begin with, so the gap is invisible today and would surface the moment
+  Crush or Cursor CLI started reporting a state. Crush is a query away — its `parts` column carries the
+  same `{type,text}` shape opencode's does — and Cursor CLI is not: it files a chat as content-addressed
+  blobs ordered by a protobuf index, with a `blobEncryptionKey` sitting in its own metadata.
 - **A finished turn is unread until its own card is watched** (`frontend/src/lib/session/session-status-store.ts`,
   `frontend/src/providers/projects.tsx`): the solid emerald ring means "back from the agent, not read yet", and it
   fades only for the session whose terminal is on screen **while the window has focus**. Two things follow. A card
