@@ -38,5 +38,12 @@ recommends:
   - zenity
   - git
 
+# xz rather than the gzip default: ~30 MB less per package for the 480 MB
+# window, and unlike zstd every dpkg and rpm still in use unpacks it.
+deb:
+  compression: xz
+rpm:
+  compression: xz
+
 scripts:
   postinstall: "./build/linux/nfpm/scripts/postinstall.sh"
