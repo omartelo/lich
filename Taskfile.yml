@@ -1,7 +1,9 @@
 version: '3'
 
-# lich is a pure-Go binary (no CGO) serving its embedded frontend to a system
-# Chromium --app window — see docs/chromium-shell.md. Linux first; an
+# lich is a pure-Go binary (no CGO) serving its embedded frontend to a Chromium
+# --app window — see docs/chromium-shell.md. On Linux that window is lich's
+# own, an embedded Chromium built out of shell/ (Rust, CEF) and launched like a
+# browser; Windows and macOS still open the system browser. Linux first; an
 # experimental Windows build cross-compiles via build:windows.
 
 vars:
@@ -26,9 +28,20 @@ tasks:
     cmds:
       - cmd: cd frontend && pnpm install --frozen-lockfile && pnpm run build
 
+  build:shell:
+    desc: Build the Linux window (embedded Chromium) into bin/shell/
+    platforms: [linux]
+    cmds:
+      # The Go binary stays pure and static; the window is a separate Rust
+      # binary on CEF, found beside it at run time (internal/chromium/shell.go).
+      # assemble.sh strips libcef.so and keeps only the runtime files lich
+      # needs — the 1.3 GB cargo leaves in target/ becomes ~300 MB.
+      - cmd: cd shell && cargo build --release
+      - cmd: build/linux/shell/assemble.sh shell/target/release {{.BIN_DIR}}/shell
+
   build:
-    desc: Build the static binary into bin/
-    deps: [build:frontend]
+    desc: Build the static binary into bin/ (with the window on Linux)
+    deps: [build:frontend, build:shell]
     cmds:
       # {{exeExt}}: `go build -o bin/lich` writes exactly that name — no .exe —
       # and Windows then refuses to exec it (PATHEXT resolution needs the
@@ -79,6 +92,7 @@ tasks:
 
   dev:
     desc: Dev mode — Vite HMR, isolated DB, port and Chromium profile
+    deps: [build:shell]
     cmds:
       # frontend/dist must exist for go:embed to compile, even though the
       # window loads the Vite server; build it once, then serve with HMR.
@@ -97,13 +111,25 @@ tasks:
           # box has no such binary on PATH and `task dev` dies right here. node
           # is already required by the pnpm line above.
           node -e "setTimeout(() => {}, 1500)"
-          LICH_DEV=1 LICH_DEV_URL="http://127.0.0.1:{{.VITE_PORT}}" LICH_LISTEN_PORT=47822 go run .
+          # go run leaves the binary in a temp dir, where the bundled-window
+          # lookup finds nothing; the pin names the window build:shell made.
+          # Empty off Linux, where the system browser still answers.
+          LICH_DEV=1 LICH_DEV_URL="http://127.0.0.1:{{.VITE_PORT}}" LICH_LISTEN_PORT=47822 LICH_BROWSER="{{if eq OS "linux"}}{{.ROOT_DIR}}/{{.BIN_DIR}}/shell/lich-shell{{end}}" go run .
+
+  test:shell:
+    desc: Run the window crate's suite (Linux)
+    platforms: [linux]
+    cmds:
+      # --release shares cargo's CEF download and C++ wrapper build with
+      # build:shell; a debug profile would fetch and build both again.
+      - cmd: cd shell && cargo test --release
 
   test:
-    desc: Run the backend and frontend suites
+    desc: Run the backend, frontend and window suites
     cmds:
       - cmd: go test ./...
       - cmd: cd frontend && pnpm test
+      - task: test:shell
 
   mutation:
     desc: Mutation tests via gremlins — .gremlins.yaml, scope with -- ./internal/pkg/

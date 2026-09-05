@@ -79,6 +79,53 @@ jobs:
       - name: Backend tests
         run: bash .github/scripts/go-test-summary.sh linux
 
+  # The window (shell/, Rust on CEF): format, lint and the crate's suite.
+  # Linking needs the CEF distribution, so this carries the same download cache
+  # the release build does; --release shares one CEF wrapper build between
+  # clippy and the tests.
+  shell:
+    runs-on: ubuntu-latest
+    env:
+      CEF_PATH: ${{ github.workspace }}/.cef
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Install window build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build pkg-config \
+            libgtk-3-dev libnss3-dev libnspr4-dev \
+            libasound2-dev libcups2-dev libdrm-dev libgbm-dev \
+            libxcomposite-dev libxdamage-dev libxfixes-dev libxrandr-dev \
+            libxkbcommon-dev libxss-dev libxtst-dev libwayland-dev
+
+      - name: Cache CEF
+        uses: actions/cache@v4
+        with:
+          path: .cef
+          key: cef-linux-${{ hashFiles('shell/Cargo.lock') }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: shell
+
+      - name: Format
+        working-directory: shell
+        run: cargo fmt --check
+
+      - name: Clippy
+        working-directory: shell
+        run: cargo clippy --release --all-targets -- -D warnings
+
+      - name: Tests
+        working-directory: shell
+        run: cargo test --release
+
   # The backend suite on the OSes the linux job cannot speak for. The
   # cross-compile step above proves every target still builds; only a real runner
   # proves it still passes — v0.18.0 shipped a path guard that read a rooted path
