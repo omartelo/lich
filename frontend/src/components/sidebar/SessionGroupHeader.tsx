@@ -32,6 +32,8 @@ interface SessionGroupHeaderProps {
   activatorProps: ComponentPropsWithoutRef<"button">
   onToggle: () => void
   onNewSession: (kind: ProviderKind | "shell") => void
+  // Open this checkout's Run card. Absent when the project ships no run script.
+  onRun?: () => void
 }
 
 interface SessionGroupTitleButtonProps {
@@ -91,6 +93,7 @@ export function SessionGroupHeader({
   activatorProps,
   onToggle,
   onNewSession,
+  onRun,
 }: SessionGroupHeaderProps) {
   const [editing, setEditing] = useState(false)
 
@@ -153,6 +156,7 @@ export function SessionGroupHeader({
               providers={providers}
               terminalLabel="New Terminal"
               onNewSession={onNewSession}
+              onRun={onRun}
             />
           </DropdownMenuContent>
         </DropdownMenu>

@@ -5,7 +5,9 @@ import { DndContext, closestCenter } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { GitPullRequestArrow, PanelLeftClose, Plus, Search } from "lucide-react"
 import { toast } from "sonner"
-import { ProjectService } from "@/lib/rpc"
+import { ProjectService, Spawn } from "@/lib/rpc"
+import { isWindows } from "@/lib/platform"
+import { errorText } from "@/lib/utils"
 import { closeSettings, isSettingsOpen, subscribeSettingsCard } from "@/lib/settings-card-store"
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
 import { delegateTargets } from "@/lib/session/delegate-targets"
@@ -108,6 +110,31 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
     edge: "right",
   })
   const [worktreeOpen, setWorktreeOpen] = useState(false)
+  // Whether the project ships a run command, which is what puts Run in a
+  // checkout's + menu. Re-read when the worktree dialog closes, the one place
+  // inside lich that writes the file; edited on disk it goes stale until the
+  // project is reopened, exactly as the dialog's own reading of it does.
+  //
+  // Never on Windows, for the setup script's reason: the file holds sh and a
+  // session there runs PowerShell, which would take its lines as commands of
+  // its own and expand $LICH_WORKTREE_PORT to nothing.
+  const [runnable, setRunnable] = useState(false)
+  useEffect(() => {
+    if (!path || worktreeOpen || isWindows) {
+      return
+    }
+    let stale = false
+    ProjectService.WorktreeSetup(path)
+      .then((info) => {
+        if (!stale) {
+          setRunnable(info.run !== "")
+        }
+      })
+      .catch(() => {})
+    return () => {
+      stale = true
+    }
+  }, [path, worktreeOpen])
   // The filter over this project's cards. Deliberately neither persisted nor a
   // store: the sidebar's width and collapsed state survive a restart because
   // they are layout, but a filter is a lens held while working — a lich that
@@ -303,6 +330,17 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
         sortable={!filtering}
         onReorder={(ids) => commitGroupOrder(group, ids)}
         onClose={worktreeClose.requestClose}
+        // Offered on a checkout's block alone: a wall and the pinned block
+        // gather cards from everywhere and have no directory to run one in.
+        onRun={
+          runnable && !group.pinned && !group.stage
+            ? () => {
+                Spawn.Run(projectId, group.path || path).catch((error) =>
+                  toast.error(errorText(error)),
+                )
+              }
+            : undefined
+        }
         pullsActive={onPullsRoute && groupActive}
         onPulls={() => {
           openPulls(group.path || path)

@@ -1,4 +1,4 @@
-import { GitBranch, Terminal } from "lucide-react"
+import { GitBranch, Play, Terminal } from "lucide-react"
 import { ProviderIcon } from "@/components/ProviderIcon"
 import {
   DropdownMenuGroup,
@@ -18,6 +18,9 @@ interface SessionLaunchMenuItemsProps {
   terminalLabel: "Terminal" | "New Terminal"
   onNewSession: (kind: ProviderKind | "shell") => void
   worktree?: WorktreeMenuAction
+  /** Open the checkout's Run card. Absent when the project ships no
+   * .lich/run-worktree.sh — there would be no command to run. */
+  onRun?: () => void
 }
 
 export function SessionLaunchMenuItems({
@@ -25,6 +28,7 @@ export function SessionLaunchMenuItems({
   terminalLabel,
   onNewSession,
   worktree,
+  onRun,
 }: SessionLaunchMenuItemsProps) {
   return (
     <>
@@ -42,6 +46,12 @@ export function SessionLaunchMenuItems({
           <Terminal />
           {terminalLabel}
         </DropdownMenuItem>
+        {onRun && (
+          <DropdownMenuItem onClick={onRun}>
+            <Play />
+            Run
+          </DropdownMenuItem>
+        )}
         {worktree && (
           <DropdownMenuItem disabled={worktree.disabled} onClick={worktree.onSelect}>
             <GitBranch />

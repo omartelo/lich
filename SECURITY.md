@@ -51,3 +51,7 @@ telemetry, so the interesting boundaries are local ones:
 - **Two checkouts sharing a `LICH_WORKTREE_PORT`.** lich reserves the number and
   proves it free at the time it is handed out, but nothing holds it until your
   dev server binds it.
+- **A Run card executing a file from your repository.** `.lich/run-worktree.sh`
+  is run when you pick Run, the way `.lich/setup-worktree.sh` is run when you
+  create a worktree — both are code in the checkout you opened, and opening a
+  repository you do not trust is the decision, not the menu item.

@@ -63,7 +63,8 @@ exports `LICH_WORKTREE_PORT`, a dev-server port belonging to the session's
 checkout, and `LICH_PROJECT_DIR`, the project's own directory (the main
 checkout, which for a session running in a worktree is somewhere else entirely).
 Neither addresses anything in lich and no hook reads them — they exist for the
-project's own setup script and commands (`PORT=$LICH_WORKTREE_PORT pnpm dev`,
+project's own setup and run scripts and for commands typed in a card
+(`PORT=$LICH_WORKTREE_PORT pnpm dev`,
 `cp --reflink=auto -r "$LICH_PROJECT_DIR/node_modules" .`).
 
 `LICH_BIN` is the fourth: the path of the lich this session belongs to, which

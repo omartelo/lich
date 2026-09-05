@@ -278,6 +278,8 @@ export interface Branches {
  * detected from the repository root when the file is absent. */
 export interface WorktreeSetup {
   script: string
+  /** The run command every checkout of the project opens a Run card on. */
+  run: string
   suggestion?: string
   /** The files behind suggestion, e.g. "pnpm-lock.yaml". */
   detected?: string
