@@ -317,6 +317,9 @@ jobs:
             lsappinfo list > "$diag/apps.txt" || true
             screencapture -x "$diag/screen.png" || true
             cp "$log" "$diag/" 2>/dev/null || true
+            # A subprocess that died leaves its report with the system, keyed
+            # by the user, not by HOME.
+            cp /Users/runner/Library/Logs/DiagnosticReports/lich* "$diag/" 2>/dev/null || true
             cat "$diag/ps.txt"
           }
           # Chromium's own log on stderr: a renderer or GPU process that fails
@@ -330,16 +333,23 @@ jobs:
           grep -q 'the bundled window' "$log" || { echo "::error::lich did not resolve its own window"; cat "$log"; exit 1; }
           for _ in $(seq 1 30); do
             sleep 1
+            # Every role seen while waiting: a renderer that comes and goes
+            # shows up here and nowhere else.
+            ps -eo args | grep -o '[l]ich-shell --type=[a-z-]*' | sort -u >> "$diag/roles.txt"
             curl -sf http://127.0.0.1:9334/json > "$RUNNER_TEMP/pages.json" 2>/dev/null && grep -q '"title": *"lich"' "$RUNNER_TEMP/pages.json" && break
           done
-          grep -q '"title": *"lich"' "$RUNNER_TEMP/pages.json" || { echo "::error::the window never loaded lich's page"; dump; cat "$log"; exit 1; }
+          grep -q '"title": *"lich"' "$RUNNER_TEMP/pages.json" || { echo "::error::the window never loaded lich's page"; dump; sort -u "$diag/roles.txt"; cat "$log"; exit 1; }
           sleep 10
           # The browser process is the one without a --type; the renderer and
           # GPU processes are the same binary re-executed with one.
           browser=$(pgrep -lf lich-shell | grep -v -- '--type=' | awk '{print $1}')
           test -n "$browser" || { echo "::error::the window died"; dump; cat "$log"; exit 1; }
+          # Exactly one application: the window. A second entry is a
+          # subprocess with an NSApplication of its own, and a Dock tile of
+          # its own with it (four of them, before kurogane#14).
           lsappinfo list > "$RUNNER_TEMP/apps.txt"
-          grep -q 'Lich.app' "$RUNNER_TEMP/apps.txt" || { echo "::error::macOS does not count the window as Lich.app"; dump; cat "$RUNNER_TEMP/apps.txt"; exit 1; }
+          apps=$(grep -c 'bundle path=.*Lich.app' "$RUNNER_TEMP/apps.txt" || true)
+          [ "$apps" = 1 ] || { echo "::error::macOS counts $apps applications in Lich.app, expected the window alone"; dump; grep -B1 -A3 'Lich.app' "$RUNNER_TEMP/apps.txt"; exit 1; }
           kill -TERM "$browser"
           for _ in $(seq 1 15); do sleep 1; pgrep -x lich > /dev/null || break; done
           if pgrep -x lich > /dev/null; then

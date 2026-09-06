@@ -9,9 +9,10 @@ license = "AGPL-3.0-only"
 [dependencies]
 # The fork's `lich` branch: upstream eedaedc plus window_class / window_title /
 # window_icon / cache_dir (kurogane#11) and the macOS bundle's Contents/Frameworks
-# lookup (kurogane#13); move back to 0x48piraj/kurogane once both land
+# lookup (kurogane#13), the NSApplication kept to the browser process
+# (kurogane#14); move back to 0x48piraj/kurogane once they land
 # (build/linux/shell/README.md).
-kurogane = { git = "https://github.com/omartelo/kurogane", rev = "cd1ef1d2756154ec84cd9ccc5bf3edc7a9ba162e" }
+kurogane = { git = "https://github.com/omartelo/kurogane", rev = "4d12e0e0b173d4e4ffb1ebee97bf92029968cb8d" }
 
 # The taskbar groups windows by AppUserModelID (main.rs); nothing else of the
 # Win32 API is used.

@@ -21,8 +21,8 @@ it writes an out-parameter struct back, so a `wm_class_class` built from `&str`
 arrives empty — the fork allocates those through CEF's own
 `cef_string_utf16_set` so they survive the write-back.
 
-When both PRs land, point `shell/Cargo.toml` back at `0x48piraj/kurogane` at
-a rev that includes them. Nothing else changes.
+When the PRs land, point `shell/Cargo.toml` back at `0x48piraj/kurogane` at
+a rev that includes them all. Nothing else changes.
 
 ## Building
 
