@@ -41,6 +41,16 @@ runs:
     - uses: ilammy/msvc-dev-cmd@v1
       if: runner.os == 'Windows'
 
+    # Under `shell: bash` Git's usr/bin sits ahead of MSVC on PATH, and it has
+    # a link.exe of its own (coreutils' link, which makes hard links): rustc
+    # then "links" every build script with it and fails. Naming MSVC's
+    # linker outright is what every cargo invocation in the job, task's
+    # included, honours.
+    - name: Point cargo at MSVC's linker
+      if: runner.os == 'Windows'
+      shell: bash
+      run: echo "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=${VCToolsInstallDir}bin\\HostX64\\x64\\link.exe" >> "$GITHUB_ENV"
+
     # cef-rs downloads the CEF distribution (~200 MB) into CEF_PATH, which the
     # calling job points at .cef. One distribution per OS.
     - name: Cache CEF
