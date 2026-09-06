@@ -900,9 +900,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   side cannot tell which it got. Windows and macOS have one more: both were built and smoke-tested on a CI
   runner only (`release.yml` opens the window and reads a page over CDP), never on a desk, so the taskbar
   icon and AppUserModelID grouping on Windows, the Dock tile, Cmd-Tab and menu bar name on macOS, and the
-  graceful close on restart on both are designed, not seen. macOS runs CEF's renderer and GPU roles as the
-  window binary re-executed rather than as the helper apps CEF's samples ship; a stray Dock tile per
-  subprocess is the thing to look for first on a desk.
+  graceful close on restart on both are designed, not seen; what the macOS runner did measure is that the
+  subprocesses hold no Dock tile of their own and the page renders (`release.yml`, the `mac` job).
 - **A Windows install with the window beside it does not self-update** (`internal/appupdate.windowed`):
   the self-apply asset is the bare exe, and swapping it under a `shell\` directory would leave a third of
   a gigabyte of Chromium at the installer's version. The update button sends that install to the release

@@ -13,7 +13,11 @@ methods fix that — `App::window_class`, `App::window_title`, `App::cache_dir` 
 submitted upstream as
 [0x48piraj/kurogane#11](https://github.com/0x48piraj/kurogane/pull/11), with
 the app-bundle framework lookup macOS needs as
-[0x48piraj/kurogane#13](https://github.com/0x48piraj/kurogane/pull/13), and
+[0x48piraj/kurogane#13](https://github.com/0x48piraj/kurogane/pull/13), the
+`NSApplication` kept to the browser process as
+[0x48piraj/kurogane#14](https://github.com/0x48piraj/kurogane/pull/14), the
+subprocesses run as the bundle's helper app as
+[0x48piraj/kurogane#15](https://github.com/0x48piraj/kurogane/pull/15), and
 carried meanwhile on the fork `shell/Cargo.toml` pins: `omartelo/kurogane`,
 branch `lich`, on top of upstream `eedaedc`.
 One wrinkle the patch works around: cef-rs hands CEF a *borrowed* string when

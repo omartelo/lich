@@ -7,9 +7,13 @@
 #
 # With a fourth argument, the window build/darwin/shell/assemble.sh laid out:
 # lich-shell goes beside lich in Contents/MacOS, where macOS counts a process
-# as the app's own (its Dock tile, its icon, its name in the menu bar), and
-# the CEF framework into Contents/Frameworks, where kurogane looks for it.
-# Without one the bundle opens a system browser (the Intel build).
+# as the app's own (its Dock tile, its icon, its name in the menu bar), the
+# CEF framework into Contents/Frameworks, where kurogane looks for it, and
+# five copies of lich-shell into the helper apps beside the framework that
+# CEF's subprocesses run as ("Lich Helper", plus the Renderer, GPU, Plugin
+# and Alerts variants Chromium derives from it: without them a bundled
+# browser never launches a renderer, measured). Without one the bundle opens
+# a system browser (the Intel build).
 #
 # macOS host only: sips and iconutil are Apple's, so the icon is generated at
 # build time from build/appicon-mac.png instead of committing an .icns — one
@@ -31,10 +35,27 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin" "$app/Contents/MacOS/lich"
 chmod +x "$app/Contents/MacOS/lich"
 
+# One helper app: <name>.app with the window's binary under that name and an
+# LSUIElement plist, so no subprocess owns a Dock tile.
+helper() {
+  name="$1"
+  role="$2"
+  dir="$app/Contents/Frameworks/$name.app/Contents"
+  mkdir -p "$dir/MacOS"
+  cp "$shell/lich-shell" "$dir/MacOS/$name"
+  sed -e "s/@VERSION@/${version}/g" -e "s/@NAME@/${name}/g" -e "s/@ROLE@/${role}/g" \
+    "$root/build/darwin/Helper-Info.plist.tpl" > "$dir/Info.plist"
+}
+
 if [ -n "$shell" ]; then
   mkdir -p "$app/Contents/Frameworks"
   cp "$shell/lich-shell" "$app/Contents/MacOS/lich-shell"
   ditto "$shell/$framework" "$app/Contents/Frameworks/$framework"
+  helper "Lich Helper" ""
+  helper "Lich Helper (Renderer)" ".renderer"
+  helper "Lich Helper (GPU)" ".gpu"
+  helper "Lich Helper (Plugin)" ".plugin"
+  helper "Lich Helper (Alerts)" ".alerts"
 fi
 
 sed "s/@VERSION@/${version}/g" "$root/build/darwin/Info.plist.tpl" \
@@ -54,8 +75,8 @@ rm -rf "$(dirname "$iconset")"
 # Ad-hoc signature: arm64 refuses to run an executable carrying none, and a
 # bundle whose seal does not cover Info.plist and the icon reads as damaged.
 # Innermost first, as codesign wants it: ANGLE's dylibs are not in a place
-# --deep would find them, and the framework's seal must cover the trimmed
-# Resources, not the distribution's.
+# --deep would find them, the framework's seal must cover the trimmed
+# Resources, not the distribution's, and each helper app seals its own plist.
 # This is not notarization — Gatekeeper still calls the developer unidentified.
 if [ -n "$shell" ]; then
   fw="$app/Contents/Frameworks/$framework"
@@ -63,6 +84,9 @@ if [ -n "$shell" ]; then
     codesign --force --sign - "$lib"
   done
   codesign --force --sign - "$fw"
+  for h in "$app/Contents/Frameworks/Lich Helper"*.app; do
+    codesign --force --sign - "$h"
+  done
   codesign --force --sign - "$app/Contents/MacOS/lich-shell"
 fi
 codesign --force --sign - "$app"
