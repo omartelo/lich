@@ -42,6 +42,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of the pane and named no session, so with split panes nothing said which one
   would take the file.
 
+- **A session card's right-click menu is grouped, and names its shortcuts.**
+  Every action sat in one flat list of up to fourteen items with no order to
+  it. They now fall in three blocks a hairline apart: what the session is
+  (rename, pin, show beside), who its work goes to (delegate, schedule, fork,
+  copy send command), and where its checkout opens, with Terminal, Editor
+  and File manager gathered under one "Open in". Rename, Pin, Delegate, Terminal
+  and Close session print their keyboard shortcut beside them on the active
+  session's card, which is the card those shortcuts act on.
+
+- **Arrange the footer in Settings › Appearance › Footer.**
+  Drag actions and readings between Available items, Left side and Right side,
+  reorder them, or use each item's menu from the keyboard. A preview follows
+  the layout, which persists across projects and restarts; Restore default
+  returns the original arrangement. Model, context, plan usage, cost, hands-on
+  time, date/time, branch, path, PR, files, changes and attachment can
+  each be placed independently. Session readings stay inline and wrap when
+  needed. These global controls replace the duplicated provider-page controls
+  and preserve existing visibility/cost choices. The editor uses compact
+  controls in full-width rows that wrap without horizontal scrolling; its
+  preview stays on one line. Branch and path are plain text without a checkout
+  popover. Plan usage retains its compact provider/plan heading and wide gauges,
+  without redundant labels, with more vertical space inside the tooltip.
+  Footer tooltips have a theme-colored border to separate them from the footer.
+- **Settings use the available window width** instead of a narrow centered
+  column. Descriptions retain a readable line length.
+
 ### Fixed
 
 - **Dropping a file on a session works again under Wayland.** The 0.45.0

@@ -26,10 +26,15 @@ export function SessionModel({ sessionId, kind }: SessionModelProps) {
     return null
   }
   return (
-    <span className="flex items-center gap-1.5">
+    <span
+      className="flex min-w-0 max-w-64 items-center gap-1.5"
+      title={`${usage.model}${usage.effort ? ` · ${usage.effort}` : ""}`}
+    >
       <ProviderIcon kind={provider} size={14} />
-      {formatModel(usage.model)}
-      {usage.effort ? ` · ${usage.effort}` : ""}
+      <span className="truncate">
+        {formatModel(usage.model)}
+        {usage.effort ? ` · ${usage.effort}` : ""}
+      </span>
     </span>
   )
 }

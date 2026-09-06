@@ -218,7 +218,10 @@ function ContextMenuShortcut({ className, ...props }: React.ComponentProps<"span
     <span
       data-slot="context-menu-shortcut"
       className={cn(
-        "ml-auto text-xs tracking-widest text-muted-foreground group-focus/context-menu-item:text-accent-foreground",
+        // pl-5 on top of the item's gap-2: ml-auto alone parks the chord hard
+        // against a label that fills the row, and the widest label is what sets
+        // the menu's width, so the collision is the normal case and not an edge.
+        "ml-auto pl-5 text-xs tracking-widest text-muted-foreground group-focus/context-menu-item:text-accent-foreground",
         className,
       )}
       {...props}

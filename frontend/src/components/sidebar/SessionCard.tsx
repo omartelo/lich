@@ -56,18 +56,24 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
 import { System, Terminal as TerminalService } from "@/lib/rpc"
 import { queuePaste } from "@/lib/terminal/paste-queue"
 import type { DelegateGroup } from "@/lib/session/delegate-targets"
 import { delegatePrompt, delegateWorktreePrompt } from "@/lib/session/delegate-prompt"
-import { isWindows } from "@/lib/platform"
+import { isMac, isWindows } from "@/lib/platform"
+import { formatCombo, type HotkeyId } from "@/lib/hotkeys"
 import { sendCommand } from "@/lib/session/send-command"
 import { bracketedPaste } from "@/lib/terminal/bracketed-paste"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
 import { useSessionIntent } from "@/lib/use-sidebar-intent"
 import { useProjects } from "@/providers/projects"
+import { useSettings } from "@/providers/settings"
 import { timeUntil } from "@/lib/session/schedule"
 import { SessionTargetPicker } from "./SessionTargetPicker"
 import { EntrypointDialog } from "./EntrypointDialog"
@@ -148,6 +154,13 @@ export function SessionCard({
   // the project only when another session shares this card's label, and that is
   // a question about every open project — not about the one this card sits in.
   const { projects, sessions, scheduleSession } = useProjects()
+  const { hotkeys } = useSettings()
+  // The card chords act on whichever session is active (App.tsx cardAction), so
+  // they are true of this card only while it is that one. On any other card the
+  // menu says nothing: naming a chord that renames somewhere else is worse than
+  // naming none.
+  const chord = (id: HotkeyId) =>
+    active ? <ContextMenuShortcut>{formatCombo(hotkeys[id], isMac)}</ContextMenuShortcut> : null
   const pinned = !!session.pinned
   const pathRef = useRef<HTMLSpanElement>(null)
   const [pathOverflow, setPathOverflow] = useState(false)
@@ -620,17 +633,46 @@ export function SessionCard({
           </ContextMenuTrigger>
           <SessionTooltip session={session} path={path} />
         </Tooltip>
+        {/* Three blocks, hairline apart: what this card is, what its work is
+            handed to, and where its checkout opens. The chords ride the items
+            that have one, since the menu is where a user meets them. */}
         <ContextMenuContent>
-          {canFork && (
-            <ContextMenuItem onClick={onFork}>
-              <GitFork />
-              Fork to worktree…
+          <ContextMenuItem onClick={() => setEditing(true)}>
+            <Pencil />
+            Rename
+            {chord("renameSession")}
+          </ContextMenuItem>
+          <ContextMenuItem onClick={() => onPin(!pinned)}>
+            {pinned ? <PinOff /> : <Pin />}
+            {pinned ? "Unpin" : "Pin"}
+            {chord("togglePin")}
+          </ContextMenuItem>
+          {session.kind === "shell" && (
+            <ContextMenuItem onClick={() => setEntrypointOpen(true)}>
+              <Play />
+              Entrypoint…
             </ContextMenuItem>
           )}
+          {!active && (
+            <ContextMenuItem onClick={onStageToggle}>
+              <Columns2 />
+              {showing ? "Stop showing" : "Show beside"}
+            </ContextMenuItem>
+          )}
+          {delegateCount > 0 && (
+            <ContextMenuItem onClick={onGroupDelegates}>
+              <Columns2 />
+              {delegateCount === 1
+                ? "Show beside its 1 delegate"
+                : `Show beside its ${delegateCount} delegates`}
+            </ContextMenuItem>
+          )}
+          <ContextMenuSeparator />
           {canDelegate && (
             <ContextMenuItem onClick={() => setDelegatePickerOpen(true)}>
               <ArrowRight />
               Delegate to session…
+              {chord("delegate")}
             </ContextMenuItem>
           )}
           {/* Under delegation, because the two are the same move a beat apart:
@@ -642,52 +684,40 @@ export function SessionCard({
             <Clock />
             {scheduleItem}
           </ContextMenuItem>
+          {canFork && (
+            <ContextMenuItem onClick={onFork}>
+              <GitFork />
+              Fork to worktree…
+            </ContextMenuItem>
+          )}
           <ContextMenuItem onClick={copySendCommand}>
             <Copy />
             Copy send command
           </ContextMenuItem>
-          {delegateCount > 0 && (
-            <ContextMenuItem onClick={onGroupDelegates}>
-              <Columns2 />
-              {delegateCount === 1
-                ? "Show beside its 1 delegate"
-                : `Show beside its ${delegateCount} delegates`}
-            </ContextMenuItem>
-          )}
-          {!active && (
-            <ContextMenuItem onClick={onStageToggle}>
-              <Columns2 />
-              {showing ? "Stop showing" : "Show beside"}
-            </ContextMenuItem>
-          )}
-          <ContextMenuItem onClick={() => setEditing(true)}>
-            <Pencil />
-            Rename
-          </ContextMenuItem>
-          {session.kind === "shell" && (
-            <ContextMenuItem onClick={() => setEntrypointOpen(true)}>
-              <Play />
-              Entrypoint…
-            </ContextMenuItem>
-          )}
-          <ContextMenuItem onClick={() => onPin(!pinned)}>
-            {pinned ? <PinOff /> : <Pin />}
-            {pinned ? "Unpin" : "Pin"}
-          </ContextMenuItem>
-          {session.kind !== "shell" && (
-            <ContextMenuItem onClick={() => onOpenTerminal(shownPath)}>
-              <Terminal />
-              Open Terminal
-            </ContextMenuItem>
-          )}
-          <ContextMenuItem onClick={openFolderInEditor}>
-            <FolderCode />
-            Open in editor
-          </ContextMenuItem>
-          <ContextMenuItem onClick={openFolder}>
-            <FolderOpen />
-            Open folder
-          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <FolderOpen />
+              Open in
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent>
+              {session.kind !== "shell" && (
+                <ContextMenuItem onClick={() => onOpenTerminal(shownPath)}>
+                  <Terminal />
+                  Terminal
+                  {chord("openTerminal")}
+                </ContextMenuItem>
+              )}
+              <ContextMenuItem onClick={openFolderInEditor}>
+                <FolderCode />
+                Editor
+              </ContextMenuItem>
+              <ContextMenuItem onClick={openFolder}>
+                <FolderOpen />
+                File manager
+              </ContextMenuItem>
+            </ContextMenuSubContent>
+          </ContextMenuSub>
           <ContextMenuItem onClick={onPulls}>
             <GitPullRequestArrow />
             Pull request
@@ -698,6 +728,7 @@ export function SessionCard({
               <ContextMenuItem variant="destructive" onClick={onClose}>
                 <X />
                 Close session
+                {chord("closeSession")}
               </ContextMenuItem>
             </>
           )}
