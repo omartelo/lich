@@ -33,6 +33,13 @@ fn parse<I: IntoIterator<Item = String>>(args: I) -> Launch {
             "app" => launch.url = value,
             "class" => launch.class = value,
             "user-data-dir" => launch.profile_dir = value,
+            // Feature lists stay in argv, where CEF reads them and unions them
+            // with the features it disables itself. Pushed through kurogane
+            // they would land as a plain switch write after that union and
+            // replace it — with `--disable-features=Translate` alone, the
+            // window came up with Chrome's Glic actor UI enabled and
+            // segfaulted attaching its first tab (measured, CEF 150).
+            "disable-features" | "enable-features" => {}
             _ => launch.switches.push((name.to_owned(), value)),
         }
     }
@@ -103,9 +110,21 @@ mod tests {
                 switches: vec![
                     ("profile-directory".into(), Some("Default".into())),
                     ("no-first-run".into(), None),
-                    ("disable-features".into(), Some("Translate".into())),
                 ],
             }
+        );
+    }
+
+    #[test]
+    fn leaves_feature_lists_to_cef() {
+        let launch = parse(args(&[
+            "--disable-features=Translate",
+            "--enable-features=Vulkan",
+            "--ozone-platform=wayland",
+        ]));
+        assert_eq!(
+            launch.switches,
+            vec![("ozone-platform".into(), Some("wayland".into()))]
         );
     }
 
