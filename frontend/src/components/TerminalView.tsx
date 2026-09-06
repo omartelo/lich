@@ -30,6 +30,7 @@ import {
 } from "@/lib/terminal/term-view"
 import { exitMarker, readSessionExit, type SessionExit } from "@/lib/terminal/session-exit"
 import { TerminalExitBanner } from "./TerminalExitBanner"
+import { TerminalDropHint } from "./TerminalDropHint"
 import { TerminalSearchBar, type SearchResults } from "./TerminalSearchBar"
 import { useTerminalDrop } from "./useTerminalDrop"
 import {
@@ -106,6 +107,8 @@ export interface TerminalViewProps {
    * dragged in from outside its checkout has to arrive as a copy.
    */
   sandboxed: boolean
+  /** The card's title, so the drop hint can say which session the file lands in. */
+  label: string
   /**
    * Close this session's card, through the same flow the sidebar's × runs —
    * raised by the exit banner, which is the only affordance here that ends a
@@ -140,6 +143,7 @@ export function TerminalView({
   visible,
   focused,
   sandboxed,
+  label,
   onClose,
   stillInWorkspace,
 }: TerminalViewProps) {
@@ -764,13 +768,7 @@ export function TerminalView({
           paddingLeft: TERMINAL_PADDING_LEFT,
         }}
       />
-      {dropping && (
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-end justify-center bg-accent/10 pb-6 ring-2 ring-inset ring-ring">
-          <span className="rounded-md bg-popover px-2 py-1 text-xs text-muted-foreground shadow-lg">
-            Drop to paste at the prompt
-          </span>
-        </div>
-      )}
+      {dropping && <TerminalDropHint label={label} confined={sandboxed} />}
       {exited && <TerminalExitBanner exit={exited} onRestart={restart} onClose={onClose} />}
       {searchOpen && (
         <TerminalSearchBar
