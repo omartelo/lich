@@ -182,7 +182,9 @@ jobs:
             echo "::error::the window never served a page over CDP"; cat "$RUNNER_TEMP/lich-smoke.log"; exit 1
           fi
           cat "$RUNNER_TEMP/pages.json"
-          taskkill //PID "$pid" //F //T > /dev/null
+          # $! is git-bash's own pid for the job, not the Windows one taskkill
+          # wants; the image name reaches every CEF process of the window.
+          taskkill //IM lich-shell.exe //F //T > /dev/null
 
       - name: Assemble Windows assets
         run: |
