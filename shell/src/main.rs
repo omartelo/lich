@@ -46,6 +46,19 @@ fn parse<I: IntoIterator<Item = String>>(args: I) -> Launch {
     launch
 }
 
+/// The display the window opens on. Chromium's own default is the hint `auto`,
+/// Wayland whenever WAYLAND_DISPLAY is set, and the system browser lich
+/// launched before the window followed it. kurogane instead forces X11 on
+/// NVIDIA, and an XWayland window under a Wayland file manager loses every
+/// file drop to the compositor's DnD bridge (Hyprland, measured; its issue
+/// #7800). Set before the user's switches, so `lich -- --ozone-platform=x11`
+/// still wins.
+fn display_switch(wayland_display: Option<&str>) -> Option<(&'static str, &'static str)> {
+    wayland_display
+        .filter(|display| !display.is_empty())
+        .map(|_| ("ozone-platform", "wayland"))
+}
+
 fn main() {
     // CEF re-executes this binary for the renderer, GPU and utility roles with
     // an argv of its own. Those roles exit inside run_or_exit before any window
@@ -71,9 +84,13 @@ fn main() {
     if let Some(dir) = launch.profile_dir {
         app = app.cache_dir(dir);
     }
+    let wayland = std::env::var("WAYLAND_DISPLAY").ok();
+    if let Some((name, value)) = display_switch(wayland.as_deref()) {
+        app = app.chromium_flag_with_value(name, value);
+    }
     // The user's switches go through kurogane rather than staying in argv, so
-    // they land after its own policy and win: --ozone-platform=wayland beats
-    // the x11 it forces on NVIDIA.
+    // they land after its own policy and win: --ozone-platform=x11 beats the
+    // Wayland chosen above.
     for (name, value) in launch.switches {
         app = match value {
             Some(value) => app.chromium_flag_with_value(name, value),
@@ -132,6 +149,16 @@ mod tests {
     fn keeps_the_first_equals_inside_a_value() {
         let launch = parse(args(&["--app=http://h/?a=1&b=2"]));
         assert_eq!(launch.url.as_deref(), Some("http://h/?a=1&b=2"));
+    }
+
+    #[test]
+    fn opens_native_wayland_when_a_wayland_display_exists() {
+        assert_eq!(
+            display_switch(Some("wayland-1")),
+            Some(("ozone-platform", "wayland"))
+        );
+        assert_eq!(display_switch(Some("")), None);
+        assert_eq!(display_switch(None), None);
     }
 
     #[test]
