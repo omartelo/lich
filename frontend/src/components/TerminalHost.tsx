@@ -336,6 +336,7 @@ export function TerminalHost() {
                   visible={visible}
                   focused={focused}
                   sandboxed={session.sandboxed ?? false}
+                  label={session.label}
                   onClose={() => worktreeClose.requestClose(session)}
                   stillInWorkspace={() => hasSession(sessionsRef.current, session.id)}
                 />

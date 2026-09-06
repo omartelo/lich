@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Dragging a file over a session now says where it will land.** The pane
+  under the cursor fills and reads "Attach to <session>", with the line under
+  it saying that the path is pasted at the prompt (or, for a sandboxed
+  session, that a file outside the checkout arrives as a copy). Before, a small "Drop to paste at the prompt" tag sat at the foot
+  of the pane and named no session, so with split panes nothing said which one
+  would take the file.
+
+### Fixed
+
+- **Dropping a file on a session works again under Wayland.** The 0.45.0
+  window opened on XWayland when the GPU is NVIDIA, and a file dragged from a
+  Wayland file manager onto an XWayland window never arrives on Hyprland: the
+  drop was silently lost. The window now opens native Wayland whenever a
+  Wayland display is present, as the system Chromium it replaced did;
+  `lich -- --ozone-platform=x11` brings the old behaviour back.
+
 ## [0.45.0] - 2026-09-05
 
 > [!IMPORTANT]
