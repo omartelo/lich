@@ -119,6 +119,13 @@ Short specs; the code is the detail. All follow the idiom above.
 - **Stepper / numeric field** — icon buttons flanking a bordered value box (`tabular-nums`).
 - **Switch** — off `bg-accent`, on `bg-primary`.
 - **Toast** (sonner) — popover surface, hairline, semantic glyph.
+- **Footer** — two independently ordered sides, configured globally in Appearance › Footer. Actions default
+  left; checkout, model, context, plan usage and hands-on time default right. Cost stays opt-in. The editor
+  offers full-width Available/Left/Right drop areas, compact items, menus for keyboard moves, and a
+  single-line preview. Editor items wrap when needed so none require horizontal scrolling to reach. Use
+  spacing and hairline seams to define drop areas; selected items use a subtle fill. Readings remain inline
+  and wrap when needed, never into an overflow menu. Branch and path are plain selectable text, with full
+  values on hover, not popover triggers. Plan usage keeps its provider/plan heading and wide window gauges.
 
 ## Fixed by decision — do not "fix" these
 

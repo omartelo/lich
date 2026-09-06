@@ -90,4 +90,39 @@ describe("costReadoutStore", () => {
 
     expect(notified).toBe(0)
   })
+
+  it("announces when the initial value settles without adding value notifications", async () => {
+    const ready = vi.fn()
+    const value = vi.fn()
+    const off = costReadoutStore.subscribeReady(ready)
+    costReadoutStore.subscribe(value)
+    expect(costReadoutStore.isReady()).toBe(false)
+    await flush()
+    expect(costReadoutStore.isReady()).toBe(true)
+    expect(ready).toHaveBeenCalledTimes(1)
+    expect(value).not.toHaveBeenCalled()
+    off()
+  })
+
+  it("rolls back a failed write and reports the error to the layout editor", async () => {
+    setSetting.mockRejectedValueOnce(new Error("offline"))
+    await expect(setCostReadout(true)).rejects.toThrow("offline")
+    expect(costReadoutStore.get()).toBe(false)
+  })
+
+  it("does not let a late initial read overwrite a user choice", async () => {
+    let finish: (value: string) => void = () => {}
+    getSetting.mockImplementationOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          finish = resolve
+        }),
+    )
+    costReadoutStore.subscribe(() => {})
+    await setCostReadout(true)
+    finish("false")
+    await flush()
+    expect(costReadoutStore.get()).toBe(true)
+    expect(costReadoutStore.isReady()).toBe(true)
+  })
 })

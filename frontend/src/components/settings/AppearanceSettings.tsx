@@ -32,6 +32,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { Stepper } from "@/components/common/Stepper"
 import { SettingBlock, SettingGroup } from "./SettingBlock"
 import { FontSetting } from "./FontSetting"
+import { FooterSettings } from "./FooterSettings"
 import { ImportThemeDialog } from "./ImportThemeDialog"
 import { Button } from "@/components/ui/button"
 import {
@@ -443,6 +444,7 @@ export function AppearanceSettings() {
 
         <FontSetting />
       </SettingGroup>
+      <FooterSettings />
     </>
   )
 }

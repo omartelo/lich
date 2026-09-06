@@ -7,3 +7,8 @@ import { costReadoutStore } from "./cost-readout-store"
 export function useCostReadout(): boolean {
   return useSyncExternalStore(costReadoutStore.subscribe, costReadoutStore.get)
 }
+
+// A layout edit must wait for the old cost choice before saving its migration.
+export function useCostReadoutReady(): boolean {
+  return useSyncExternalStore(costReadoutStore.subscribeReady, costReadoutStore.isReady)
+}

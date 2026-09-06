@@ -5,6 +5,7 @@ import {
   useSensors,
   type DragEndEvent,
   type Modifier,
+  type KeyboardCoordinateGetter,
 } from "@dnd-kit/core"
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable"
 import { CSS, type Transform } from "@dnd-kit/utilities"
@@ -57,13 +58,19 @@ export function dragStyle(transform: Transform | null, transition?: string) {
 // dnd-kit rides pointer events instead of the HTML5 DnD API — and it animates
 // with CSS transforms rather than reordering the DOM, so no rearranged-list
 // state has to exist while a drag is in flight.
-export function useSortableList(ids: string[], onCommit: (ids: string[]) => void) {
-  const sensors = useSensors(
+export function useDragSensors(
+  coordinateGetter: KeyboardCoordinateGetter = sortableKeyboardCoordinates,
+) {
+  return useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: DRAG_THRESHOLD_PX },
     }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    useSensor(KeyboardSensor, { coordinateGetter }),
   )
+}
+
+export function useSortableList(ids: string[], onCommit: (ids: string[]) => void) {
+  const sensors = useDragSensors()
 
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) {

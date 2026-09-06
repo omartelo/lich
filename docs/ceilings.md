@@ -62,7 +62,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   CLI's own footer is the only place that credit figure can be read.
 
   The cost-only rung's footer shows the figure and nothing else: its usage event carries a zero window, and a
-  zero window is what tells `FooterBar` to drop the ring and `SessionModel` to render nothing rather than a
+  zero window is what tells `FooterSession` to drop the ring and `SessionModel` to render nothing rather than a
   provider glyph beside a model nobody reported. **Those three figures are the providers' own arithmetic, never
   re-priced here** — they bill models `internal/pricing` has never heard of, so a second opinion would only be a
   second, disagreeing number — and each therefore inherits what its own accounting leaves out. oh-my-pi's total
@@ -94,6 +94,15 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   release froze reads as an ordinary figure with nothing beside it. The marker also names the reason and
   never the model or the turn, so a session whose sub-agent alone is unpriced looks like one whose every
   turn is.
+- **Footer choices cannot add readings a provider never reports** (`frontend/src/components/FooterSession.tsx`):
+  Appearance's global toggles preserve the gaps above — Claude Code and Codex full usage,
+  oh-my-pi/opencode/Crush cost only, Kiro context only, and Antigravity/Cursor no transcript usage.
+  Selecting a missing reading renders nothing, never a zero. The two ordered sides live in localStorage and
+  disappear with a cleared browser profile. Cost still uses the backend setting because it controls whether
+  transcripts are priced: when another profile disables it, an old layout cannot enable pricing just by
+  moving an unrelated item. The editor waits for that setting before migrating old visibility choices.
+  Hiding a reading hides its warning too. An item without data can occupy an editor slot while drawing
+  nothing in the live footer — a PR on a branch without one, or an unsupported provider reading.
 - **`lich cost --since` windows on sessions, never on days** (`store.CostTotals`): the ledger is a running
   total per `(session, transcript)` with no per-turn history behind it, so the only date a session's spend
   carries is when it was last counted. A window therefore selects *sessions active in it* and counts each one

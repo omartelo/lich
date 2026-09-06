@@ -275,27 +275,21 @@ test("a usage event for a background session repaints nothing", async () => {
 test("a usage event for the active session repaints the footer, not the sidebar", async () => {
   const budget = await mountSidebar()
   await budget.act(() => bus.emit(USAGE_EVENT, usageEvent("s1")))
-  // The whole footer re-renders for a token count, segments that know nothing
-  // about usage included — that is the measured cost, not an endorsement of it.
-  // No SessionCard appears, which is what this pins.
+  // Contract changed: readings can be placed independently on either side.
+  // Only the model/context readers repaint; actions, time and cards stay absent.
   expect(budget.take()).toEqual({
-    FooterBar: 1,
-    FooterButton: 2,
-    ContextRing: 1,
+    SessionContext: 1,
     SessionModel: 1,
-    PlanQuota: 1,
     ProviderIcon: 1,
     BrandIcon: 1,
-    Separator: 4,
-    Tooltip: 4,
-    TooltipRoot: 4,
-    TooltipTrigger: 8,
-    TooltipContent: 4,
-    TooltipPortal: 4,
-    Paperclip: 1,
-    Folder: 1,
-    Code: 1,
-    Anonymous: 3,
+    ContextReadout: 1,
+    ContextRing: 1,
+    FooterReadout: 1,
+    Tooltip: 1,
+    TooltipRoot: 1,
+    TooltipTrigger: 2,
+    TooltipContent: 1,
+    TooltipPortal: 1,
   })
   await budget.unmount()
 })
@@ -303,27 +297,11 @@ test("a usage event for the active session repaints the footer, not the sidebar"
 test("a usage event with no context window draws no ring", async () => {
   const budget = await mountSidebar()
   await budget.act(() => bus.emit(USAGE_EVENT, costOnlyUsageEvent("s1")))
-  // The footer still repaints, but no ContextRing and no provider glyph: a
-  // report with no window has no percentage to draw a ring around, and the model
-  // slot renders nothing rather than naming zero of zero tokens. Against the
-  // budget above, the missing ContextRing, ProviderIcon, BrandIcon and one
-  // Separator are the whole degradation to the cost-only rung. (The cost figure
-  // itself is not here: its setting is an RPC, and every RPC hangs in this rig.)
+  // Cost-only readings keep their missing model and context absent. Cost is
+  // off in this rig because its stored setting has not answered.
   expect(budget.take()).toEqual({
-    FooterBar: 1,
-    FooterButton: 2,
+    SessionContext: 1,
     SessionModel: 1,
-    PlanQuota: 1,
-    Separator: 2,
-    Tooltip: 3,
-    TooltipRoot: 3,
-    TooltipTrigger: 6,
-    TooltipContent: 3,
-    TooltipPortal: 3,
-    Paperclip: 1,
-    Folder: 1,
-    Code: 1,
-    Anonymous: 3,
   })
   await budget.unmount()
 })

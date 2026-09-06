@@ -204,7 +204,7 @@ export function Settings() {
       </aside>
 
       <div className="flex-1 overflow-auto">
-        <div className="mx-auto max-w-3xl px-8 py-8">
+        <div className="w-full px-6 py-8 lg:px-10">
           <h1 className="mb-4 text-2xl font-semibold text-foreground">{current.label}</h1>
           <div className="divide-y divide-border">{current.render(projectId)}</div>
         </div>

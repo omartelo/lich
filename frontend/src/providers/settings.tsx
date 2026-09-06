@@ -18,6 +18,8 @@ import {
   writePref,
 } from "@/lib/prefs"
 import { Store, Themes as ThemeRPC } from "@/lib/rpc"
+import { readFooterLayout, writeFooterLayout, type FooterLayout } from "@/lib/footer-layout"
+import { readFooterVisibility, type FooterVisibility } from "@/lib/footer-prefs"
 import {
   adoptStoredSelections,
   applyAppTheme,
@@ -177,7 +179,9 @@ interface SettingsValue {
   resetHotkey: (id: HotkeyId) => void
   /** Whether the footer shows the active session's context-window usage. */
   showContextUsage: boolean
-  setShowContextUsage: (show: boolean) => void
+  footerVisibility: FooterVisibility
+  footerLayout: FooterLayout | null
+  setFooterLayout: (layout: FooterLayout) => void
   /** Spend ceiling in USD the footer cost readout colours against; 0 is none. */
   costBudget: number
   setCostBudget: (usd: number) => void
@@ -204,7 +208,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [zoom, setZoomState] = useState<number>(readZoom)
   const [terminalTheme, setTerminalThemeState] = useState<TerminalTheme>(readTerminalTheme)
   const [hotkeys, setHotkeys] = useState<Hotkeys>(loadHotkeys)
-  const [showContextUsage, setShowContextUsageState] = useState<boolean>(readContextUsage)
+  const [showContextUsage] = useState<boolean>(readContextUsage)
+  const [footerLayout, setFooterLayoutState] = useState(readFooterLayout)
+  const [footerVisibility] = useState(() => readFooterVisibility(readContextUsage()))
   const [costBudget, setCostBudgetState] = useState<number>(readCostBudget)
   const [desktopNotifications, setDesktopNotificationsState] = useState<boolean | null>(
     readDesktopNotifications,
@@ -417,15 +423,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
-  const setShowContextUsage = useCallback((next: boolean) => {
-    setShowContextUsageState(next)
-    writePref(CONTEXT_USAGE_STORAGE_KEY, next)
-  }, [])
-
   const setCostBudget = useCallback((next: number) => {
     const clamped = clampCostBudget(next)
     setCostBudgetState(clamped)
     writePref(COST_BUDGET_STORAGE_KEY, clamped)
+  }, [])
+
+  const setFooterLayout = useCallback((next: FooterLayout) => {
+    writeFooterLayout(next)
+    setFooterLayoutState(next)
   }, [])
 
   // Writing either answer settles the question for good: a refusal is stored,
@@ -548,7 +554,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setHotkey,
       resetHotkey,
       showContextUsage,
-      setShowContextUsage,
+      footerVisibility,
+      footerLayout,
+      setFooterLayout,
       costBudget,
       setCostBudget,
       desktopNotifications,
@@ -578,7 +586,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setHotkey,
       resetHotkey,
       showContextUsage,
-      setShowContextUsage,
+      footerVisibility,
+      footerLayout,
+      setFooterLayout,
       costBudget,
       setCostBudget,
       desktopNotifications,
