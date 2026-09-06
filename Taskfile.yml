@@ -48,6 +48,14 @@ tasks:
       # binary on CEF, found beside it at run time (internal/chromium/shell.go).
       # assemble.sh strips libcef.so and keeps only the runtime files lich
       # needs — the 1.3 GB cargo leaves in target/ becomes ~300 MB.
+      #
+      # cef-dll-sys's build script is what copies libcef.so and the rest of the
+      # runtime into target/release, and it only runs when cargo decides the
+      # crate is stale. A target/ restored from CI's cache is not stale, but
+      # rust-cache drops every loose file in target/release when it saves — so
+      # the crate is fresh and the runtime is gone. Cleaning the crate is the
+      # one way to make its build script run again; a no-op everywhere else.
+      - cmd: test -f shell/target/release/libcef.so || (cd shell && cargo clean --release -p cef-dll-sys)
       - cmd: cd shell && cargo build --release
       - cmd: build/linux/shell/assemble.sh shell/target/release {{.BIN_DIR}}/shell
 
