@@ -9,6 +9,11 @@ use kurogane::App;
 /// The title the window carries. The page title is never used for it.
 const TITLE: &str = "lich";
 
+/// The icon the window carries: title bar, taskbar button and app switcher
+/// on Windows, _NET_WM_ICON under X11. One source with the packages' launcher
+/// icon; Wayland draws that one through the desktop entry instead.
+const ICON: &[u8] = include_bytes!("../../build/appicon.png");
+
 /// What the window's AppUserModelID starts with; the class follows. The Start
 /// Menu shortcut in build/windows/lich.iss spells the same id out.
 #[cfg(windows)]
@@ -73,6 +78,7 @@ fn main() {
         // kurogane's default.
         .profile_id("lich")
         .window_title(TITLE)
+        .window_icon(ICON)
         // CEF's Chrome runtime loads the extensions a distribution installs
         // system-wide (plasma-browser-integration on KDE). A window that is
         // not a browser has no use for them.

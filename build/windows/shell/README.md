@@ -17,6 +17,12 @@ What Windows has no WM_CLASS for is done two other ways:
   (`lich.iss`), so the taskbar groups the running window under the pinned
   icon rather than under a second button.
 
+The window's icon in the title bar and on the taskbar button is the PNG the
+shell hands CEF (`App::window_icon`, `build/appicon.png`); the executable's
+own icon resource covers Explorer, Alt-Tab and the moment before the window
+exists. The C runtime is linked statically: `vcruntime140.dll` is the Visual
+C++ redistributable's, not Windows's, and a clean machine has none.
+
 The sandbox stays off, as kurogane runs it on every platform, so the binary
 is a plain exe and not CEF's `bootstrap.exe` loading a DLL. Building needs
 Ninja on top of the runner's CMake and MSVC, and the CMake of CEF's wrapper

@@ -7,3 +7,10 @@
 # which lich does not ship, would need its own entry.
 [target.x86_64-unknown-linux-gnu]
 rustflags = ["-C", "link-arg=-Wl,-rpath,$ORIGIN/cef:$ORIGIN/.."]
+
+# The C runtime linked in: vcruntime140.dll is not part of Windows, it comes
+# with the Visual C++ redistributable some other program may have installed,
+# and lich-shell.exe must open on a machine that has none. libcef.dll carries
+# its own (CEF's README lists no redistributable among its requirements).
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
