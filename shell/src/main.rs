@@ -50,6 +50,13 @@ fn main() {
     // CEF re-executes this binary for the renderer, GPU and utility roles with
     // an argv of its own. Those roles exit inside run_or_exit before any window
     // exists, so a missing --app= is a subprocess, not an error.
+    // kurogane takes the runtime from CEF_PATH before the one beside the
+    // executable, a developer's override that a CEF developer's shell would
+    // carry into lich (the CI runner's did: "invalid CEF runtime at .cef").
+    // The window lich ships is the only runtime it runs on.
+    // SAFETY: no other thread exists yet, so nothing reads the environment
+    // concurrently.
+    unsafe { std::env::remove_var("CEF_PATH") };
     let launch = parse(std::env::args().skip(1));
     #[cfg(windows)]
     claim_taskbar_identity(launch.class.as_deref().unwrap_or("lich"));
