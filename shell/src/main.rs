@@ -103,7 +103,9 @@ fn main() {
     // and every start would ask the user for the Keychain again. The only
     // cookie this window holds is lich's own localhost session.
     #[cfg(target_os = "macos")]
-    let app = app.credential_storage(kurogane::CredentialStorage::Basic);
+    {
+        app = app.credential_storage(kurogane::CredentialStorage::Basic);
+    }
     if let Some(class) = launch.class {
         app = app.window_class(class);
     }
