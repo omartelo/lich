@@ -88,7 +88,8 @@ tasks:
       # only source of the exe's icon: the Start Menu shortcut and the native
       # file picker (an in-process COM dialog) both draw it. Nothing rebuilds
       # it automatically, so a new lich.ico that skips this task ships an
-      # executable still wearing the previous mark.
+      # executable still wearing the previous mark. lich.ico itself comes out
+      # of build/appicon.py, with appicon.png and appicon-256.png.
       - cmd: go run github.com/akavel/rsrc@v0.10.2 -ico build/windows/lich.ico -arch amd64 -o rsrc_windows_amd64.syso
 
   build:windows:

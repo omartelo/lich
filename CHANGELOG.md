@@ -20,6 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   installer rather than through the update button, which opens the release
   page instead. macOS keeps opening the system browser for now.
 
+### Changed
+
+- **The app icon sits on a dark plate.** The launcher, dock, taskbar and Start
+  Menu icon was the bare white mark on a transparent background, invisible on
+  a light taskbar or launcher, and no desktop swaps an app icon with its
+  theme. It is now the mark on a rounded dark plate, readable on either. The
+  favicon inside the window keeps following the color scheme as before.
+
 ## [0.45.0] - 2026-09-05
 
 > [!IMPORTANT]

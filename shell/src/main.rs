@@ -11,8 +11,9 @@ const TITLE: &str = "lich";
 
 /// The icon the window carries: title bar, taskbar button and app switcher
 /// on Windows, _NET_WM_ICON under X11 (Wayland draws the desktop entry's
-/// instead). A 256 px copy of build/appicon.png: X11 stores the icon as raw
-/// pixels on the window, 8 MB at 1024, 256 KB at this size.
+/// instead). A 256 px copy of build/appicon.png (build/appicon.py renders
+/// both): X11 stores the icon as raw pixels on the window, 8 MB at 1024,
+/// 256 KB at this size.
 const ICON: &[u8] = include_bytes!("../../build/appicon-256.png");
 
 /// What the window's AppUserModelID starts with; the class follows. The Start
