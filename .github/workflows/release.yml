@@ -158,33 +158,49 @@ jobs:
       - name: Backend tests (windows)
         run: bash .github/scripts/go-test-summary.sh windows
 
-      # The window has to open a page on this runner before it ships: a shell
-      # that loads and dies is what the fallback is for, not what a release
-      # is. Alive and serving a page over CDP after twenty seconds is the
-      # proof; alive alone is not, a crash keeps a process around while its
-      # dump is written.
-      - name: Smoke-test the window
+      # End to end on the runner before the assets ship: the installer installs
+      # silently, lich.exe finds the window beside itself and opens it, the page
+      # it serves loads (read over CDP: alive alone is not proof, a crash keeps
+      # a process around while its dump is written), the window closes on a
+      # plain close request, which is what the restart flow sends, and lich
+      # exits with it. Its config lives under an APPDATA of its own.
+      - name: Install and run lich end to end
+        env:
+          MSYS_NO_PATHCONV: "1"
         run: |
-          profile="$RUNNER_TEMP/lich-smoke"
-          bin/shell/lich-shell.exe --app=about:blank --user-data-dir="$profile" \
-            --profile-directory=Default --class=lich --no-first-run \
-            --remote-debugging-port=9334 > "$RUNNER_TEMP/lich-smoke.log" 2>&1 &
-          pid=$!
+          bin/lich-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG="$RUNNER_TEMP/setup.log"
+          app="$LOCALAPPDATA/Programs/lich"
+          test -f "$app/lich.exe" && test -f "$app/shell/lich-shell.exe" && test -f "$app/shell/libcef.dll"
+          # The C runtime is static: a machine without the Visual C++
+          # redistributable must open the window too.
+          dumpbin /DEPENDENTS "$app/shell/lich-shell.exe" > "$RUNNER_TEMP/deps.txt"
+          if grep -qi 'VCRUNTIME\|MSVCP' "$RUNNER_TEMP/deps.txt"; then
+            echo "::error::lich-shell.exe depends on the Visual C++ runtime"; cat "$RUNNER_TEMP/deps.txt"; exit 1
+          fi
+          export APPDATA="$RUNNER_TEMP/appdata" LICH_LISTEN_PORT=47899
+          mkdir -p "$APPDATA"
+          "$app/lich.exe" -- --remote-debugging-port=9334 &
           for _ in $(seq 1 30); do
             sleep 1
-            curl -sf http://127.0.0.1:9334/json > "$RUNNER_TEMP/pages.json" 2>/dev/null && break
+            token=$(python3 -c "import json;print(json.load(open('$APPDATA/lich/runtime.json'))['token'])" 2>/dev/null) && break
           done
-          sleep 20
-          if ! kill -0 "$pid" 2>/dev/null; then
-            echo "::error::the window died within 50 s of launch"; cat "$RUNNER_TEMP/lich-smoke.log"; exit 1
+          test -n "$token" || { echo "::error::lich never wrote runtime.json"; cat "$APPDATA/lich/lich.log"; exit 1; }
+          grep -q 'the bundled window' "$APPDATA/lich/lich.log" || { echo "::error::lich did not resolve its own window"; cat "$APPDATA/lich/lich.log"; exit 1; }
+          for _ in $(seq 1 30); do
+            sleep 1
+            curl -sf http://127.0.0.1:9334/json > "$RUNNER_TEMP/pages.json" 2>/dev/null && grep -q '"title": *"lich"' "$RUNNER_TEMP/pages.json" && break
+          done
+          grep -q '"title": *"lich"' "$RUNNER_TEMP/pages.json" || { echo "::error::the window never loaded lich's page"; cat "$APPDATA/lich/lich.log"; exit 1; }
+          sleep 10
+          tasklist | grep -q lich-shell.exe || { echo "::error::the window died"; cat "$APPDATA/lich/lich.log"; exit 1; }
+          # A close request, not a kill: the same WM_CLOSE the restart flow posts.
+          taskkill /IM lich-shell.exe > /dev/null
+          for _ in $(seq 1 15); do sleep 1; tasklist | grep -q '^lich.exe' || break; done
+          if tasklist | grep -q '^lich.exe'; then
+            echo "::error::lich.exe is still running after its window closed"; cat "$APPDATA/lich/lich.log"; exit 1
           fi
-          if ! grep -q '"type": *"page"' "$RUNNER_TEMP/pages.json"; then
-            echo "::error::the window never served a page over CDP"; cat "$RUNNER_TEMP/lich-smoke.log"; exit 1
-          fi
+          grep -q 'window closed, exiting' "$APPDATA/lich/lich.log" || { echo "::error::lich did not log the window closing"; cat "$APPDATA/lich/lich.log"; exit 1; }
           cat "$RUNNER_TEMP/pages.json"
-          # $! is git-bash's own pid for the job, not the Windows one taskkill
-          # wants; the image name reaches every CEF process of the window.
-          taskkill //IM lich-shell.exe //F //T > /dev/null
 
       - name: Assemble Windows assets
         run: |
