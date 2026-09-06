@@ -35,6 +35,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of the pane and named no session, so with split panes nothing said which one
   would take the file.
 
+- **A session card's right-click menu is grouped, and names its shortcuts.**
+  Every action sat in one flat list of up to fourteen items with no order to
+  it. They now fall in three blocks a hairline apart: what the session is
+  (rename, pin, show beside), who its work goes to (delegate, schedule, fork,
+  copy send command), and where its checkout opens, with Terminal, Editor
+  and File manager gathered under one "Open in". Rename, Pin, Delegate, Terminal
+  and Close session print their keyboard shortcut beside them on the active
+  session's card, which is the card those shortcuts act on.
+
 ### Fixed
 
 - **Dropping a file on a session works again under Wayland.** The 0.45.0
