@@ -21,8 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   all work. `--browser` / `LICH_BROWSER` still pin a browser of your choice
   above it, and `lich -- <flags>` still reaches the window — on NVIDIA under
   Wayland, `lich -- --ozone-platform=wayland` opens it native (the default
-  there is XWayland). If the bundled window is missing or dies within ten
-  seconds of launch — an update this machine cannot run — lich opens in a
+  there is XWayland). If the bundled window is missing or dies within half a
+  minute of launch — an update this machine cannot run — lich opens in a
   Chromium-family browser on the machine instead and says so in a
   notification. macOS and Windows keep opening the system browser for now; the
   shipped window is Linux-only.

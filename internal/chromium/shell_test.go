@@ -73,7 +73,7 @@ func TestFindShellSkipsDirectoriesAndMissing(t *testing.T) {
 // exit, only inside the startup grace, and only once the window ran. A close
 // (nil error) never falls back, a pinned browser never does, a crash after the
 // grace is the window lifecycle ending, and a profile directory that could not
-// be made is the next rung's failure too. The grace is the literal ten seconds
+// be made is the next rung's failure too. The grace is the literal half-minute
 // the CHANGELOG promises, not the constant: a change to one must fail here.
 func TestFallsBack(t *testing.T) {
 	crashed := errors.New("signal: segmentation fault")
@@ -86,9 +86,10 @@ func TestFallsBack(t *testing.T) {
 		want    bool
 	}{
 		{"shell crashes at startup", stepShell, crashed, 2 * time.Second, true},
-		{"shell crashes just inside the grace", stepShell, crashed, 10*time.Second - time.Millisecond, true},
+		{"shell crashes at startup, core dump written", stepShell, crashed, 19 * time.Second, true},
+		{"shell crashes just inside the grace", stepShell, crashed, 30*time.Second - time.Millisecond, true},
 		{"shell closed by the user", stepShell, nil, 2 * time.Second, false},
-		{"shell crashes after the grace", stepShell, crashed, 10 * time.Second, false},
+		{"shell crashes after the grace", stepShell, crashed, 30 * time.Second, false},
 		{"shell profile dir cannot be made", stepShell, noDir, time.Second, false},
 		{"pinned browser crashes", stepPinned, crashed, time.Second, false},
 		{"system browser crashes", stepDefault, crashed, time.Second, false},

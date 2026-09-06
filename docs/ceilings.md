@@ -884,13 +884,15 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **A Linux install whose window is missing or dies at startup opens a system browser instead**
   (`internal/chromium.Run`): `go run`, a bare binary copied out of the tarball, a package missing
   `lib/lich/shell` — each falls through to the ladder below with one `Warn` line; a window that exits with
-  an error inside `startupGrace` (10 s: a segfault on first paint, a system library `libcef.so` cannot find
+  an error inside `startupGrace` (30 s: a segfault on first paint, a system library `libcef.so` cannot find
   on this distribution — the packages declare Chromium's own list, so that is a bare binary on a slim
   install, or a glibc older than 2.34, Debian 11 and RHEL 8, which `lich-shell` will not load on) is
   relaunched the same way, with a desktop notification naming the browser. Refusing
   to open would turn a packaging slip or a bad update into a lich that does nothing. The grace is the trap:
-  a crash at 10.1 s is the window's lifecycle ending, as it always was, and a window closed by hand inside
-  it exits 0 and never falls back. A pinned browser never falls back either — it is the user's word — and
+  a crash at 30.1 s is the window's lifecycle ending, as it always was, and a window closed by hand inside
+  it exits 0 and never falls back. Thirty seconds and not ten because a segfault is reported only after
+  its core dump is written, and systemd-coredump takes ~18 s over the window's process tree (measured): a
+  crash one second in reaches `Wait` at nineteen. A pinned browser never falls back either — it is the user's word — and
   with no browser at all the crash lands on the tab path, where the log has the story and the
   notification does not. `lich doctor` names the rung that answered; `task dev` pins the window it built
   (`LICH_BROWSER`), since `go run` never has one beside it.

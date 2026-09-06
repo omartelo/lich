@@ -105,8 +105,11 @@ func Args(url, dataDir, class string, extra []string) []string {
 // as failing to open — a segfault on first paint, a system library libcef.so
 // cannot find on this distribution — rather than as the window's lifecycle
 // ending. The user closing it exits 0 and never trips this; a crash an hour in
-// is the exit it always was.
-const startupGrace = 10 * time.Second
+// is the exit it always was. Half a minute rather than the ten seconds a crash
+// itself takes: a segfault is only reported once its core dump is written, and
+// systemd-coredump took 18 s over the window's 1.3 GB tree (measured), so a
+// crash one second in reached Wait at nineteen and was read as a closed window.
+const startupGrace = 30 * time.Second
 
 // Run opens the window and blocks until the user closes it — the browser
 // process exiting is the app lifecycle. The browser is whatever Resolve found;
