@@ -30,7 +30,8 @@ func statOf(files map[string]bool) func(string) (os.FileInfo, error) {
 }
 
 // TestShellPaths pins the two layouts the packages and a bare tarball produce;
-// a change here moves nfpm.yaml, the AUR PKGBUILD and lich.iss with it. The
+// a change here moves nfpm.yaml, the AUR PKGBUILD, lich.iss and
+// appupdate.windowed with it. The
 // binary's name is the one thing taken from the constant: its suffix is the
 // OS's, not the layout's.
 func TestShellPaths(t *testing.T) {

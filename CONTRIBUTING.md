@@ -22,16 +22,19 @@ Bugs and ideas are welcome, and so are patches. This file is the short version;
 
 Prerequisites: **Go 1.27.0+**, **Node + pnpm**, and **[Task](https://taskfile.dev)**.
 The backend is pure Go (`CGO_ENABLED=0`) and needs no C toolchain. On Linux
-the window is lich's own Chromium, built out of `shell/` (Rust on CEF): that
-one needs a **stable Rust toolchain**, **CMake**, **Ninja** and the libraries
-Chromium links against (`libgtk-3-dev libnss3-dev libnspr4-dev libasound2-dev
+and Windows the window is lich's own Chromium, built out of `shell/` (Rust on
+CEF), and `task dev` and `task build` build it: that one needs a **stable Rust
+toolchain**, **CMake** and **Ninja**, plus on Linux the libraries Chromium
+links against (`libgtk-3-dev libnss3-dev libnspr4-dev libasound2-dev
 libcups2-dev libdrm-dev libgbm-dev libxcomposite-dev libxdamage-dev
 libxfixes-dev libxrandr-dev libxkbcommon-dev libxss-dev libxtst-dev
-libwayland-dev` on Debian/Ubuntu). The first build downloads the CEF
-distribution (~200 MB) and compiles its C++ wrapper — a few minutes and ~1.5 GB
-under `shell/target/`; later builds are seconds. On macOS and Windows the
-window is still a Chromium-family browser on the machine. `zenity` provides
-the folder picker on Linux.
+libwayland-dev` on Debian/Ubuntu) and on Windows **MSVC** (Visual Studio
+Build Tools), with the build run from a Visual Studio developer prompt so
+CEF's CMake finds it, and git-bash on PATH for the assemble script. The first
+build downloads the CEF distribution (~200 MB) and compiles its C++ wrapper — a
+few minutes and ~1.5 GB under `shell/target/`; later builds are seconds. On
+macOS the window is still a Chromium-family browser on the machine. `zenity`
+provides the folder picker on Linux.
 
 ```bash
 task dev      # Vite HMR + backend

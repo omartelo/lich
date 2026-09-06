@@ -9,6 +9,11 @@ use kurogane::App;
 /// The title the window carries. The page title is never used for it.
 const TITLE: &str = "lich";
 
+/// What the window's AppUserModelID starts with; the class follows. The Start
+/// Menu shortcut in build/windows/lich.iss spells the same id out.
+#[cfg(windows)]
+const AUMID_PREFIX: &str = "omartelo.";
+
 #[derive(Debug, Default, PartialEq)]
 struct Launch {
     url: Option<String>,
@@ -59,7 +64,9 @@ fn main() {
     unsafe { std::env::remove_var("CEF_PATH") };
     let launch = parse(std::env::args().skip(1));
     #[cfg(windows)]
-    claim_taskbar_identity(launch.class.as_deref().unwrap_or("lich"));
+    if let Some(class) = &launch.class {
+        claim_taskbar_identity(class);
+    }
     let mut app = App::url(launch.url.unwrap_or_else(|| "about:blank".into()))
         // Only reached without --user-data-dir, which lich always passes: a
         // shell launched by hand gets a profile under its own name rather than
@@ -94,15 +101,15 @@ fn main() {
 
 /// The AppUserModelID is Windows's WM_CLASS: the taskbar groups a process's
 /// windows under it and draws the icon of the Start Menu shortcut carrying the
-/// same id (lich.iss), so the running window and the pinned one are one
-/// button. The dev shell's own class keeps it off the daily driver's. Only
-/// the browser process has a class on its argv; CEF's subprocesses never
-/// own a window. Best effort: without it the button stands alone under the
-/// executable's icon.
+/// same id (lich.iss declares AUMID_PREFIX + "lich"), so the running window
+/// and the pinned one are one button. The dev shell's own class keeps it off
+/// the daily driver's. Only the browser process has a class on its argv, and
+/// only it is called here; CEF's subprocesses never own a window. Best
+/// effort: without it the button stands alone under the executable's icon.
 #[cfg(windows)]
 fn claim_taskbar_identity(class: &str) {
     use windows_sys::Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID;
-    let id: Vec<u16> = format!("omartelo.{class}\0").encode_utf16().collect();
+    let id: Vec<u16> = format!("{AUMID_PREFIX}{class}\0").encode_utf16().collect();
     // SAFETY: id is NUL-terminated and outlives the call, which copies it.
     let _ = unsafe { SetCurrentProcessExplicitAppUserModelID(id.as_ptr()) };
 }
