@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+> [!IMPORTANT]
+> **Linux users: lich now opens in its own window.** No browser needs to be
+> installed. If the window fails on your machine, lich falls back to a
+> Chromium-family browser and says so.
+
+> [!NOTE]
+> **NVIDIA under Wayland opens on XWayland by default.**
+> `lich -- --ozone-platform=wayland` opens it native.
+
 ### Added
 
 - **On Linux, lich now brings its own window: no browser needs to be installed.**
@@ -202,6 +211,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "Last turn" mode this sits in at all.
 
 ### Changed
+
+- **The What's new dialog opens on the release's headline and lists the rest
+  as rows.** A release can now carry its own announcement: an alert block
+  written under its heading in the changelog (`> [!IMPORTANT]`, the same
+  syntax GitHub renders as a callout on the release page) opens the dialog as
+  a headline, and a `> [!WARNING]` or `> [!NOTE]` follows it as a callout.
+  Below them every entry shows the bold sentence it opens with, and the
+  paragraph behind it opens on click, so a release with twenty entries is
+  scanned rather than scrolled. The header is one line — name, version and how
+  many entries were added, changed and fixed. The update toast is unchanged:
+  it says a release exists, and the dialog is where the release speaks.
 
 - **The Linux packages are ~120 MB to download and ~480 MB installed, up from
   ~10 MB.** That is the embedded Chromium: `libcef.so` stripped of its debug

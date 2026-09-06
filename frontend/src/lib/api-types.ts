@@ -461,9 +461,19 @@ export interface PatchNotesGroup {
   items: string[]
 }
 
+/** internal/patchnotes.Highlight — one GitHub alert block under the version heading. */
+export interface PatchNotesHighlight {
+  /** The alert type lowercased: "important", "warning", "note". */
+  kind: string
+  /** Text with markdown bold/code markers intact, rendered by the dialog. */
+  text: string
+}
+
 /** internal/patchnotes.Notes — the running build's changelog section. */
 export interface PatchNotes {
   version: string
+  /** null when the section carries no alert blocks. */
+  highlights: PatchNotesHighlight[] | null
   /** null when no section matches (a dev build, or a version not in the changelog). */
   groups: PatchNotesGroup[] | null
 }

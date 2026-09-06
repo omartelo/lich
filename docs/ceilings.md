@@ -835,6 +835,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   than being forgotten — but it also means a pane removed from the app for good leaves a pref that resolves
   silently, forever, and nothing rewrites it. Deleting a section means the users who were on it open on
   Appearance with no explanation.
+- **A release's highlight is read from the binary, so fixing it after the tag fixes nothing a user sees**
+  (`internal/patchnotes`): the What's new dialog parses the `CHANGELOG.md` embedded at build time — the alert
+  blocks under the version heading included. Editing that release on GitHub, or the changelog on `main`,
+  changes the release page and no dialog anywhere; the users who already updated have recorded the version as
+  seen, and the ones who have not will read the binary they install. A wrong headline is a patch release. The
+  update toast reads nothing from the release but its tag, on purpose: the toast says a release exists, and
+  the dialog is where it speaks.
 - **`agentplugin.Status` is the one settings read that is not remembered** (`UpdatesSettings.tsx`): it costs
   ~180 ms and its rows blank on every visit to Updates, while every other read on the screen paints from the
   last answer. It is not an oversight — `PluginSetting` awaits that read for its *outcome*, telling "Checked."

@@ -84,4 +84,10 @@ The version comes from the git tag (`git describe` in the Taskfile, env `VERSION
       greps `^## \[X.Y.Z\]` and ships empty notes if it misses. Keep the sections in their canonical order
       (Added, Changed, Deprecated, Removed, Fixed, Security), and refresh the compare links, `[Unreleased]`
       included.
+- [ ] Want the release to announce itself? Write GitHub alert blocks right under its heading, before the first
+      `###`: `> [!IMPORTANT]` is the release's headline and opens the What's new dialog (one per release — a
+      second one is demoted to a callout, which is the signal to fold it into the groups); `> [!WARNING]` is
+      something the reader must do or avoid; `> [!NOTE]` is a detail worth a line. One or two sentences each,
+      opening with a bold sentence that names its audience. The same blocks render as callouts on the release
+      page. Most releases carry none.
 - [ ] Push the `vX.Y.Z` tag — `.github/workflows/release.yml` does the rest, and reads the notes from that section.
