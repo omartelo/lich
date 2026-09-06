@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.45.0] - 2026-09-05
+
 > [!IMPORTANT]
 > **Linux users: lich now opens in its own window.** No browser needs to be
 > installed. If the window fails on your machine, lich falls back to a
@@ -3993,7 +3995,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.44.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.45.0...HEAD
+[0.45.0]: https://github.com/omartelo/lich/compare/v0.44.0...v0.45.0
 [0.44.0]: https://github.com/omartelo/lich/compare/v0.43.1...v0.44.0
 [0.43.1]: https://github.com/omartelo/lich/compare/v0.43.0...v0.43.1
 [0.43.0]: https://github.com/omartelo/lich/compare/v0.42.0...v0.43.0
