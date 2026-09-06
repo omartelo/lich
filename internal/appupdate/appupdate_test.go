@@ -68,12 +68,28 @@ func TestCanSelfApply(t *testing.T) {
 		{"unwritable dir", "darwin", filepath.Join("/nonexistent-abc123", "lich"), false},
 		{"homebrew cellar is brew's", "darwin", cellarExe(t), false},
 		{"app bundle keeps its signature", "darwin", bundleExe(t), false},
+		{"installer layout carries the window", "windows", windowedExe(t), false},
 	}
 	for _, tc := range tests {
 		if got := canSelfApply(tc.goos, tc.exePath); got != tc.want {
 			t.Errorf("canSelfApply(%q,%q) = %v, want %v", tc.goos, tc.exePath, got, tc.want)
 		}
 	}
+}
+
+// windowedExe returns a writable path with lich's window installed beside it,
+// the way the Windows installer lays it out.
+func windowedExe(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	shell := filepath.Join(dir, "shell")
+	if err := os.MkdirAll(shell, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(shell, "lich-shell.exe"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return filepath.Join(dir, "lich.exe")
 }
 
 // cellarExe returns a writable path shaped like a Homebrew formula install

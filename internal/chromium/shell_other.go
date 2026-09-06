@@ -1,10 +1,10 @@
-//go:build !linux
+//go:build !linux && !windows
 
 package chromium
 
-// Windows and macOS still open the system browser: the window has only been
-// built and measured on Linux (docs/ceilings.md). Both answer as if no window
-// were bundled, and the ladder below carries on unchanged.
+// macOS still opens the system browser: the window has not been built there
+// (docs/ceilings.md). It answers as if no window were bundled, and the ladder
+// below carries on unchanged.
 const shellExpected = false
 
 func bundledShell() string { return "" }

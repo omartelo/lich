@@ -38,9 +38,15 @@ SolidCompression=yes
 
 [Files]
 Source: "..\..\bin\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
+; The window (lich's own Chromium), where lich.exe looks for it: shell\ beside
+; the binary (internal/chromium/shell.go). Assembled by `task build:shell`.
+Source: "..\..\bin\shell\*"; DestDir: "{app}\shell"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"
+; The AppUserModelID is the one lich-shell.exe claims for its process
+; (shell/src/main.rs): the taskbar then groups the running window under this
+; shortcut and draws its icon, pinned or not.
+Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"; AppUserModelID: "omartelo.lich"
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "Launch {#AppName}"; Flags: nowait postinstall skipifsilent

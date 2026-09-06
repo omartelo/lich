@@ -1,7 +1,7 @@
 # Installing lich
 
 lich targets Linux x86_64 first; an experimental Windows x64 build ships
-alongside it. Every artifact comes from the
+alongside it, with the same window. Every artifact comes from the
 [Releases](https://github.com/omartelo/lich/releases) page.
 
 Pick your system:
@@ -15,9 +15,10 @@ Pick your system:
 - [Verifying checksums](#verifying-checksums)
 - [If it does not start](#if-it-does-not-start)
 
-**Runtime dependencies** — on Linux, lich ships its own window: an embedded
-Chromium (CEF) inside the package, so no browser is required and `zenity` is
-the one thing left to install, for the folder picker. The window needs glibc
+**Runtime dependencies** — on Linux and Windows, lich ships its own window: an
+embedded Chromium (CEF) inside the package, so no browser is required. On
+Linux `zenity` is the one thing left to install, for the folder picker; on
+Windows nothing is. The Linux window needs glibc
 2.34 or newer — Debian 12, Ubuntu 22.04, RHEL 9, or anything current — and
 the libraries Chromium itself links against, which the deb, rpm and AUR
 packages declare; on an older glibc lich falls back to a browser on the
@@ -26,17 +27,17 @@ lich's own class and title, so the launcher icon, window rules by class and
 `StartupWMClass` all match it. `--browser` or `LICH_BROWSER` still pins a
 browser of your choice above it ([docs/chromium-shell.md](docs/chromium-shell.md)).
 
-On macOS and Windows, lich opens its window in a Chromium-family browser on
-the machine; none is bundled there yet. It looks for one in this order: the
-browser you pinned with `--browser` or `LICH_BROWSER`, your desktop's default
-browser when it is Chromium-family, the browsers installed on the machine. On
-macOS, Chrome, Chromium, Edge, Brave and Vivaldi are looked up as `.app`
-bundles under `/Applications` (and `~/Applications`), and the folder picker is
-native. On Windows, Chrome, Edge, Brave and Vivaldi are found via their
-conventional install paths (Edge ships with Windows) and the folder picker is
-native. A browser installed somewhere else entirely is what `--browser` is for.
+On macOS, lich opens its window in a Chromium-family browser on the machine;
+none is bundled there yet. It looks for one in this order: the browser you
+pinned with `--browser` or `LICH_BROWSER`, your desktop's default browser when
+it is Chromium-family, the browsers installed on the machine. Chrome, Chromium,
+Edge, Brave and Vivaldi are looked up as `.app` bundles under `/Applications`
+(and `~/Applications`), and the folder picker is native. A browser installed
+somewhere else entirely is what `--browser` is for. The same ladder is what a
+Windows install falls back to when its own window fails: Chrome, Edge, Brave
+and Vivaldi via their conventional install paths (Edge ships with Windows).
 
-With **no** Chromium-family browser on those two, lich does not fail: it opens
+With **no** Chromium-family browser there, lich does not fail: it opens
 a plain tab in whatever browser you do have, tells you so in a desktop
 notification, and goes on running until you stop it. What is lost is the
 window of its own — Firefox has no equivalent of Chromium's `--app` mode, so a
@@ -183,8 +184,11 @@ xattr -d com.apple.quarantine ~/.local/bin/lich
 
 Download `lich-*-windows-amd64-setup.exe` from the releases page and run it.
 The install is per-user (no admin prompt): lich lands in
-`%LocalAppData%\Programs\lich`, shows up in the Start Menu and in Settings →
-Installed apps, and uninstalls from there like any other application.
+`%LocalAppData%\Programs\lich` with its window beside it as `shell\`, shows
+up in the Start Menu and in Settings → Installed apps, and uninstalls from
+there like any other application. An installed lich updates by running the
+next installer: the update button opens the release page, since the window is
+what an in-place swap of the exe would leave behind.
 
 The installer is not code-signed, so SmartScreen will warn on first run —
 "More info" → "Run anyway". Verify the download against `checksums.txt` first
@@ -193,7 +197,10 @@ The installer is not code-signed, so SmartScreen will warn on first run —
 lich runs windowless on Windows; diagnostics live in `%AppData%\lich\lich.log`.
 
 The bare `lich-*-windows-amd64.exe` is also published for a portable,
-no-install run — same binary the installer ships.
+no-install run — same binary the installer ships. Unzip
+`lich-*-windows-amd64-shell.zip` beside it to get the window as `shell\`;
+without it, lich opens in a Chromium-family browser on the machine, and says
+so in a notification.
 
 ## Verifying checksums
 

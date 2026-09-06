@@ -30,12 +30,14 @@ func statOf(files map[string]bool) func(string) (os.FileInfo, error) {
 }
 
 // TestShellPaths pins the two layouts the packages and a bare tarball produce;
-// a change here moves nfpm.yaml and the AUR PKGBUILD with it.
+// a change here moves nfpm.yaml, the AUR PKGBUILD and lich.iss with it. The
+// binary's name is the one thing taken from the constant: its suffix is the
+// OS's, not the layout's.
 func TestShellPaths(t *testing.T) {
 	got := shellPaths(filepath.FromSlash("/usr/local/bin/lich"))
 	want := []string{
-		filepath.FromSlash("/usr/local/bin/shell/lich-shell"),
-		filepath.FromSlash("/usr/local/lib/lich/shell/lich-shell"),
+		filepath.FromSlash("/usr/local/bin/shell/" + shellName),
+		filepath.FromSlash("/usr/local/lib/lich/shell/" + shellName),
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("shellPaths = %v, want %v", got, want)
@@ -43,8 +45,8 @@ func TestShellPaths(t *testing.T) {
 }
 
 func TestFindShellPrefersTheOneBesideTheBinary(t *testing.T) {
-	beside := filepath.FromSlash("/opt/lich/shell/lich-shell")
-	lib := filepath.FromSlash("/opt/lib/lich/shell/lich-shell")
+	beside := filepath.FromSlash("/opt/lich/shell/" + shellName)
+	lib := filepath.FromSlash("/opt/lib/lich/shell/" + shellName)
 	got := findShell(filepath.FromSlash("/opt/lich/lich"), statOf(map[string]bool{beside: false, lib: false}))
 	if got != beside {
 		t.Fatalf("findShell = %q, want %q", got, beside)
@@ -52,7 +54,7 @@ func TestFindShellPrefersTheOneBesideTheBinary(t *testing.T) {
 }
 
 func TestFindShellFallsBackToLib(t *testing.T) {
-	lib := filepath.FromSlash("/usr/lib/lich/shell/lich-shell")
+	lib := filepath.FromSlash("/usr/lib/lich/shell/" + shellName)
 	got := findShell(filepath.FromSlash("/usr/bin/lich"), statOf(map[string]bool{lib: false}))
 	if got != lib {
 		t.Fatalf("findShell = %q, want %q", got, lib)
@@ -60,7 +62,7 @@ func TestFindShellFallsBackToLib(t *testing.T) {
 }
 
 func TestFindShellSkipsDirectoriesAndMissing(t *testing.T) {
-	beside := filepath.FromSlash("/opt/lich/shell/lich-shell")
+	beside := filepath.FromSlash("/opt/lich/shell/" + shellName)
 	if got := findShell(filepath.FromSlash("/opt/lich/lich"), statOf(map[string]bool{beside: true})); got != "" {
 		t.Fatalf("findShell = %q, want none for a directory", got)
 	}

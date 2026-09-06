@@ -29,8 +29,8 @@ tasks:
       - cmd: cd frontend && pnpm install --frozen-lockfile && pnpm run build
 
   build:shell:
-    desc: Build the Linux window (embedded Chromium) into bin/shell/
-    platforms: [linux]
+    desc: Build the window (embedded Chromium) into bin/shell/ (Linux, Windows)
+    platforms: [linux, windows]
     # Skipped while bin/shell is up to date with the crate: the window changes
     # far less often than the Go side, and `task dev` should not wait on cargo
     # for it.
@@ -39,10 +39,14 @@ tasks:
       - shell/Cargo.toml
       - shell/Cargo.lock
       - shell/.cargo/config.toml
+      - shell/build.rs
       - build/linux/shell/assemble.sh
+      - build/windows/shell/assemble.sh
+      - build/windows/shell/lich-shell.exe.manifest
+      - build/windows/lich.ico
     generates:
-      - "{{.BIN_DIR}}/shell/lich-shell"
-      - "{{.BIN_DIR}}/shell/cef/libcef.so"
+      - "{{.BIN_DIR}}/shell/lich-shell{{exeExt}}"
+      - "{{.BIN_DIR}}/shell/{{if eq OS \"windows\"}}libcef.dll{{else}}cef/libcef.so{{end}}"
     cmds:
       # The Go binary stays pure and static; the window is a separate Rust
       # binary on CEF, found beside it at run time (internal/chromium/shell.go).
@@ -56,8 +60,17 @@ tasks:
       # the crate is fresh and the runtime is gone. Cleaning the crate is the
       # one way to make its build script run again; a no-op everywhere else.
       - cmd: test -f shell/target/release/libcef.so || (cd shell && cargo clean --release -p cef-dll-sys)
+        platforms: [linux]
+      - cmd: test -f shell/target/release/libcef.dll || (cd shell && cargo clean --release -p cef-dll-sys)
+        platforms: [windows]
       - cmd: cd shell && cargo build --release
       - cmd: build/linux/shell/assemble.sh shell/target/release {{.BIN_DIR}}/shell
+        platforms: [linux]
+      # Through bash on purpose: Task's own shell runs the command line, but a
+      # script file needs a real sh, and git-bash is the one every Windows
+      # machine with git has.
+      - cmd: bash build/windows/shell/assemble.sh shell/target/release {{.BIN_DIR}}/shell
+        platforms: [windows]
 
   build:
     desc: Build the static binary into bin/ (with the window on Linux)
@@ -133,11 +146,11 @@ tasks:
           node -e "setTimeout(() => {}, 1500)"
           # go run leaves the binary in a temp dir, where the bundled-window
           # lookup finds nothing; the pin names the window build:shell made.
-          # Empty off Linux, where the system browser still answers.
+          # Empty on macOS, where the system browser still answers.
           # The build reports "dev" unless VERSION is set: `VERSION=Unreleased
           # task dev` is how the What's new dialog is smoked against the
           # [Unreleased] changelog section, `VERSION=v0.44.0` against a release.
-          LICH_DEV=1 LICH_DEV_URL="http://127.0.0.1:{{.VITE_PORT}}" LICH_LISTEN_PORT=47822 LICH_BROWSER="{{if eq OS "linux"}}{{.ROOT_DIR}}/{{.BIN_DIR}}/shell/lich-shell{{end}}" go run {{if env "VERSION"}}-ldflags "-X main.version={{.VERSION}}" {{end}}.
+          LICH_DEV=1 LICH_DEV_URL="http://127.0.0.1:{{.VITE_PORT}}" LICH_LISTEN_PORT=47822 LICH_BROWSER="{{if ne OS "darwin"}}{{.ROOT_DIR}}/{{.BIN_DIR}}/shell/lich-shell{{exeExt}}{{end}}" go run {{if env "VERSION"}}-ldflags "-X main.version={{.VERSION}}" {{end}}.
 
   test:shell:
     desc: Run the window crate's suite (Linux)
@@ -176,8 +189,11 @@ tasks:
         vars: { FORMAT: archlinux, TARGET: '{{.APP_NAME}}.pkg.tar.zst' }
 
   package:windows:
-    desc: Build bin/lich-setup.exe (needs Inno Setup 6)
-    deps: [build:windows]
+    desc: Build bin/lich-setup.exe with the window inside (needs Inno Setup 6, on Windows)
+    # The window only builds on Windows itself (MSVC, CEF's wrapper), which
+    # is also the only place iscc runs; build:windows alone still
+    # cross-compiles the bare exe from anywhere.
+    deps: [build:windows, build:shell]
     preconditions:
       - sh: command -v iscc
         msg: "iscc (Inno Setup 6) is required — on Windows: choco install innosetup"

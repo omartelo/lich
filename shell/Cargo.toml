@@ -11,3 +11,12 @@ license = "AGPL-3.0-only"
 # eedaedc, submitted upstream as a PR; move back to 0x48piraj/kurogane once it
 # lands (build/linux/shell/README.md).
 kurogane = { git = "https://github.com/omartelo/kurogane", rev = "575424265f0b41bd46bc2ab0616e4c7756e8c02b" }
+
+# The taskbar groups windows by AppUserModelID (main.rs); nothing else of the
+# Win32 API is used.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_UI_Shell"] }
+
+# The executable's icon, version block and manifest (build.rs).
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"

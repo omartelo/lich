@@ -1,8 +1,9 @@
 name: Window build toolchain
 description: >-
   Rust, CEF's build dependencies and the caches the window (shell/, Rust on
-  CEF) needs. Shared by ci.yml's shell job and the release's linux job so a
-  dependency or a cache key changes in one place.
+  CEF) needs, on Linux and on Windows. Shared by ci.yml's shell job and the
+  release's linux and windows jobs so a dependency or a cache key changes in
+  one place.
 inputs:
   components:
     description: rustup components to install on top of the toolchain (rustfmt, clippy)
@@ -18,6 +19,7 @@ runs:
     # CMake and Ninja build CEF's C++ wrapper; the rest is what libcef.so
     # links against.
     - name: Install window build dependencies
+      if: runner.os == 'Linux'
       shell: bash
       run: |
         sudo apt-get update
@@ -28,13 +30,24 @@ runs:
           libxcomposite-dev libxdamage-dev libxfixes-dev libxrandr-dev \
           libxkbcommon-dev libxss-dev libxtst-dev libwayland-dev
 
+    # The runner has CMake and MSVC; Ninja is the one piece missing, and the
+    # wrapper's CMake only finds MSVC from inside a developer prompt, which
+    # msvc-dev-cmd turns the job into.
+    - name: Install window build dependencies (Windows)
+      if: runner.os == 'Windows'
+      shell: bash
+      run: choco install ninja -y --no-progress
+
+    - uses: ilammy/msvc-dev-cmd@v1
+      if: runner.os == 'Windows'
+
     # cef-rs downloads the CEF distribution (~200 MB) into CEF_PATH, which the
-    # calling job points at .cef.
+    # calling job points at .cef. One distribution per OS.
     - name: Cache CEF
       uses: actions/cache@v4
       with:
         path: .cef
-        key: cef-linux-${{ hashFiles('shell/Cargo.lock') }}
+        key: cef-${{ runner.os }}-${{ hashFiles('shell/Cargo.lock') }}
 
     # shared-key: a release runs on a tag, and a tag can only read caches made
     # on its own ref or on main — ci.yml's shell job on main is what makes

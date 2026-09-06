@@ -110,10 +110,16 @@ jobs:
       run:
         # bash (git-bash) keeps the steps byte-identical to the linux job's.
         shell: bash
+    env:
+      # The window's CEF distribution, as in the linux job.
+      CEF_PATH: ${{ github.workspace }}/.cef
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+
+      # The window's toolchain and caches; see the linux job.
+      - uses: ./.github/actions/shell-toolchain
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -152,12 +158,40 @@ jobs:
       - name: Backend tests (windows)
         run: bash .github/scripts/go-test-summary.sh windows
 
+      # The window has to open a page on this runner before it ships: a shell
+      # that loads and dies is what the fallback is for, not what a release
+      # is. Alive and serving a page over CDP after twenty seconds is the
+      # proof; alive alone is not, a crash keeps a process around while its
+      # dump is written.
+      - name: Smoke-test the window
+        run: |
+          profile="$RUNNER_TEMP/lich-smoke"
+          bin/shell/lich-shell.exe --app=about:blank --user-data-dir="$profile" \
+            --profile-directory=Default --class=lich --no-first-run \
+            --remote-debugging-port=9334 > "$RUNNER_TEMP/lich-smoke.log" 2>&1 &
+          pid=$!
+          for _ in $(seq 1 30); do
+            sleep 1
+            curl -sf http://127.0.0.1:9334/json > "$RUNNER_TEMP/pages.json" 2>/dev/null && break
+          done
+          sleep 20
+          if ! kill -0 "$pid" 2>/dev/null; then
+            echo "::error::the window died within 50 s of launch"; cat "$RUNNER_TEMP/lich-smoke.log"; exit 1
+          fi
+          if ! grep -q '"type": *"page"' "$RUNNER_TEMP/pages.json"; then
+            echo "::error::the window never served a page over CDP"; cat "$RUNNER_TEMP/lich-smoke.log"; exit 1
+          fi
+          cat "$RUNNER_TEMP/pages.json"
+          taskkill //PID "$pid" //F //T > /dev/null
+
       - name: Assemble Windows assets
         run: |
           cd bin
           tag="${GITHUB_REF_NAME//\//-}"
           mv lich.exe       "lich-${tag}-windows-amd64.exe"
           mv lich-setup.exe "lich-${tag}-windows-amd64-setup.exe"
+          # The window for the portable exe: unzipped beside it as shell\.
+          7z a -bso0 -bsp0 "lich-${tag}-windows-amd64-shell.zip" shell
           ls -la lich-${tag}-*
 
       - name: Upload Windows assets

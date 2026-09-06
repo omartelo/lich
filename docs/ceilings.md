@@ -881,13 +881,21 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   benign case, and the common one. A wide version gap meets Chromium's own guard against a profile from a
   newer build instead, which refuses to start; lich then dies on a browser exit code and its dialog can only
   say `exit status 1`, naming nothing. `LICH_BROWSER` pins the answer; nothing else does.
-- **On Linux the window is lich's own, and only Linux** (`internal/chromium/shell.go`, `shell/`): the packages
-  ship an embedded Chromium (CEF through kurogane) beside the binary, and the ladder takes it above the
-  desktop's default and every scan. Windows and macOS still open the system browser — the window has been
-  built and measured on Linux alone, and on macOS it means the CEF framework and its helper apps inside
-  `Lich.app`, with no hardware here to measure it on. The trap: the two are one launch path, so a
-  window-side change (a flag in `Args`, a prefs write, the restart signal) lands on a system browser on two
-  platforms and on lich's own Chromium on the third, and the Go side cannot tell which it got.
+- **On Linux and Windows the window is lich's own; on macOS it is the system browser's**
+  (`internal/chromium/shell.go`, `shell/`): the Linux packages and the Windows installer ship an embedded
+  Chromium (CEF through kurogane) beside the binary, and the ladder takes it above the desktop's default
+  and every scan. macOS still opens the system browser: the window there means the CEF framework and its
+  helper apps inside `Lich.app`, which kurogane does not bundle yet, with no hardware here to measure it on.
+  The trap: the three are one launch path, so a window-side change (a flag in `Args`, a prefs write, the
+  restart signal) lands on lich's own Chromium on two platforms and on a system browser on the third, and
+  the Go side cannot tell which it got. Windows has one more: it was built and smoke-tested on a CI runner
+  only (`release.yml` opens the window and reads a page over CDP), never on a desk, so the taskbar icon,
+  the AppUserModelID grouping and the graceful close on restart are designed, not seen.
+- **A Windows install with the window beside it does not self-update** (`internal/appupdate.windowed`):
+  the self-apply asset is the bare exe, and swapping it under a `shell\` directory would leave a third of
+  a gigabyte of Chromium at the installer's version. The update button sends that install to the release
+  page for the installer instead; the portable exe with no `shell\` beside it keeps self-applying, and
+  keeps opening a system browser.
 - **A Linux install whose window is missing or dies at startup opens a system browser instead**
   (`internal/chromium.Run`): `go run`, a bare binary copied out of the tarball, a package missing
   `lib/lich/shell` — each falls through to the ladder below with one `Warn` line; a window that exits with

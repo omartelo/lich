@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **On Windows, lich now brings its own window too.** The installer ships the
+  same embedded Chromium (CEF) the Linux packages do, beside `lich.exe` as
+  `shell\`, and lich opens in it instead of looking for Chrome, Edge, Brave or
+  Vivaldi; the window carries lich's icon in its title bar and on the taskbar,
+  and groups under the Start Menu shortcut, pinned or not. If the window fails
+  on your machine, lich falls back to a Chromium-family browser and says so.
+  The portable exe gets the window from `lich-*-windows-amd64-shell.zip`
+  unzipped beside it. An installed lich now updates by running the next
+  installer rather than through the update button, which opens the release
+  page instead. macOS keeps opening the system browser for now.
+
 ## [0.45.0] - 2026-09-05
 
 > [!IMPORTANT]

@@ -131,7 +131,7 @@ above. Files to delete when the decision lands: `cmd/spike/`,
 `frontend/spike.html`, `frontend/src/spike/`, the `spike` input in
 `frontend/vite.config.ts`.
 
-## Option 2 — embedded CEF (shipped on Linux, 2026-09-05)
+## Option 2 — embedded CEF (shipped on Linux 2026-09-05, Windows next)
 
 Chromium shipped with the app (CEF). No dependency on a system browser, the
 Chromium version pinned per release, and a window that is lich's own: its
@@ -165,7 +165,17 @@ through CEF itself). The patch is upstream as
 [kurogane#11](https://github.com/0x48piraj/kurogane/pull/11); the fork
 (`omartelo/kurogane`) is the pin until it lands.
 
-Windows and macOS stay on option 1 for now. The window has only been built
-and measured on Linux; macOS in particular needs the CEF framework plus its
-helper apps laid out inside `Lich.app`, and there is no hardware here to
-measure it on. `docs/ceilings.md` carries the gap.
+Windows ships the same window, flat beside `lich.exe` as `shell\` the way
+CEF lays itself out there, inside the installer (`build/windows/lich.iss`)
+and as a zip beside the portable exe. Two things the Linux window gets from
+its WM_CLASS come from elsewhere on Windows: the executable carries lich's
+icon and manifest as resources (`shell/build.rs`), and the process claims the
+AppUserModelID the Start Menu shortcut declares, which is what makes the
+taskbar group the running window under the pinned icon. The sandbox stays
+off, as kurogane runs it, so the binary is a plain exe rather than CEF's
+`bootstrap.exe` loading a DLL. Built and smoke-tested on the CI runner only.
+
+macOS stays on option 1 for now: the window there means the CEF framework
+plus its helper apps laid out inside `Lich.app`, which kurogane does not
+bundle yet, and there is no hardware here to measure it on. `docs/ceilings.md`
+carries the gap.

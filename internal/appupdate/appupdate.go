@@ -207,10 +207,20 @@ func canSelfApply(goos, exePath string) bool {
 	if exePath == "" {
 		return false
 	}
-	if brewOwned(exePath) || bundled(exePath) {
+	if brewOwned(exePath) || bundled(exePath) || windowed(exePath) {
 		return false
 	}
 	return dirWritable(filepath.Dir(exePath))
+}
+
+// windowed reports whether exePath has lich's own window installed beside it,
+// the Windows installer's layout (build/windows/lich.iss). The self-apply
+// asset is the bare exe, so swapping it would leave the window, a third of a
+// gigabyte of Chromium, at the version the installer put there; that install
+// updates through the installer.
+func windowed(exePath string) bool {
+	_, err := os.Stat(filepath.Join(filepath.Dir(exePath), "shell", "lich-shell.exe"))
+	return err == nil
 }
 
 // brewOwned reports whether exePath is a Homebrew formula install. The Cellar

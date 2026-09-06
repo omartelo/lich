@@ -8,8 +8,9 @@ import (
 // shellName is the window binary `task build:shell` produces out of shell/, a
 // Rust crate on CEF: lich's own Chromium, launched with the same arguments as
 // any browser on the ladder (Args), so nothing about the launch knows which
-// one it got.
-const shellName = "lich-shell"
+// one it got. The executable suffix is the only thing about it Windows changes
+// (shell_name_windows.go).
+const shellName = "lich-shell" + shellExt
 
 // stepShell names the rung the bundled window answers on.
 const stepShell = "the bundled window"
