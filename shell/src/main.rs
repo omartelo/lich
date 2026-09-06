@@ -45,6 +45,9 @@ fn main() {
     // exists, so a missing --app= is a subprocess, not an error.
     let launch = parse(std::env::args().skip(1));
     let mut app = App::url(launch.url.unwrap_or_else(|| "about:blank".into()))
+        // Only reached without --user-data-dir, which lich always passes: a
+        // shell launched by hand gets a profile under its own name rather than
+        // kurogane's default.
         .profile_id("lich")
         .window_title(TITLE)
         // CEF's Chrome runtime loads the extensions a distribution installs

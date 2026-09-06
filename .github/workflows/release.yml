@@ -40,36 +40,11 @@ jobs:
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 
-      # The window is a Rust crate on CEF (shell/): a Rust toolchain, CMake and
-      # Ninja for CEF's C++ wrapper, and the libraries libcef.so links against.
-      # The Go binary itself stays pure Go (CGO_ENABLED=0).
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install window build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            cmake ninja-build pkg-config \
-            libgtk-3-dev libnss3-dev libnspr4-dev \
-            libasound2-dev libcups2-dev libdrm-dev libgbm-dev \
-            libxcomposite-dev libxdamage-dev libxfixes-dev libxrandr-dev \
-            libxkbcommon-dev libxss-dev libxtst-dev libwayland-dev
-
-      - name: Cache CEF
-        uses: actions/cache@v4
-        with:
-          path: .cef
-          key: cef-linux-${{ hashFiles('shell/Cargo.lock') }}
-
-      # Restored from the cache ci.yml's shell job saves on main (shared-key):
-      # a tag reads main's caches and nothing else, and with the CEF wrapper
-      # already built cargo only compiles the crate itself — seconds, not the
-      # minutes a cold build costs.
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: shell
-          shared-key: shell
+      # The window is a Rust crate on CEF (shell/); the Go binary itself stays
+      # pure Go (CGO_ENABLED=0). The toolchain, CEF's build dependencies and the
+      # caches — restored from what ci.yml's shell job saves on main, the only
+      # caches a tag can read — are the composite action's.
+      - uses: ./.github/actions/shell-toolchain
 
       # Packaging needs task and nfpm.
       #

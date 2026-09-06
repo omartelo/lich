@@ -271,8 +271,9 @@ func denyInternal(d *rpc.Handler) {
 }
 
 // runChromium serves the embedded frontend on the loopback listener and opens
-// it in the system Chromium's --app mode; the browser process exiting is the
-// app lifecycle. Extra CLI args after `--` pass through to Chromium
+// it in a Chromium --app window — lich's own on Linux, the system browser
+// elsewhere (internal/chromium); the browser process exiting is the app
+// lifecycle. Extra CLI args after `--` pass through to Chromium
 // (e.g. `lich -- --ozone-platform=wayland`).
 //
 // LICH_DEV_URL points the window at the Vite dev server instead of the
@@ -340,10 +341,7 @@ func runChromium(term *terminal.Service, configDir string, extra []string, coord
 		// doing nothing (#409). Best effort — where no dialog backend answers,
 		// the log line above still has the story.
 		_ = zenity.Error(fmt.Sprintf(
-			"lich could not open its window.\n\n%v\n\n"+
-				"lich does not bundle a browser runtime; it opens its window in "+
-				"a Chromium-family browser installed on this machine.\n\n"+
-				"Log: %s",
+			"lich could not open its window.\n\n%v\n\nLog: %s",
 			err, logging.Path(filepath.Join(configDir, "lich"))),
 			zenity.Title("lich"))
 		os.Exit(1)
@@ -461,7 +459,7 @@ func focusRunning(configDir string, running *singleton.Info) {
 	}
 	profileDir := filepath.Join(configDir, "lich", "chromium-profile")
 	url := fmt.Sprintf("http://127.0.0.1:%d/?token=%s", running.Port, running.Token)
-	if err := chromium.Run(url, profileDir, "lich", nil, nil); err != nil {
+	if err := chromium.Focus(url, profileDir, "lich"); err != nil {
 		slog.Warn("focus existing window", "err", err)
 		// The running lich has no window of its own either (it is serving a
 		// tab); the honest "focus" is another tab pointed at it.

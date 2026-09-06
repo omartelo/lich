@@ -380,8 +380,14 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   guaranteed. Until then the queue holds `writeQueueDepth` frames for the whole app, and two things still wait on
   it across sessions: a push that finds it full, and the flush a session runs before its exit banner so the banner
   cannot overtake its own last bytes.
-- **Single instance via the pinned port**: the bind is the lock (`internal/singleton`); a duplicate launch focuses
-  the running window (best-effort, untested against a real window) and exits 0.
+- **Single instance via the pinned port**: the bind is the lock (`internal/singleton`); a duplicate launch hands
+  its URL to the running window through Chromium's profile lock (`chromium.Focus`, best-effort, untested
+  against a real window) and exits 0. With the bundled window the hand-off is a second `lich-shell` on the same
+  profile: CEF reports the forward as a failed initialise, the duplicate exits 1, and `focusRunning` logs one
+  Warn per duplicate launch. Focus never climbs the ladder — a fallback there would open lich a second time, in
+  a system browser, on the profile the window owns — so a lich already running in the fallback browser is not
+  focused by it either. What the running window does with the forwarded command line, focus or a second
+  window, is unmeasured for the shell.
 - **lich appends to the agent's system prompt, for two providers only**
   (`internal/terminal/command.go`, `briefingFlags` → `relay.SpawnBriefing`): Claude Code and oh-my-pi are spawned
   with `--append-system-prompt` carrying lich's own briefing, so text the user never wrote is in every session's

@@ -1,0 +1,47 @@
+name: Window build toolchain
+description: >-
+  Rust, CEF's build dependencies and the caches the window (shell/, Rust on
+  CEF) needs. Shared by ci.yml's shell job and the release's linux job so a
+  dependency or a cache key changes in one place.
+inputs:
+  components:
+    description: rustup components to install on top of the toolchain (rustfmt, clippy)
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        components: ${{ inputs.components }}
+
+    # CMake and Ninja build CEF's C++ wrapper; the rest is what libcef.so
+    # links against.
+    - name: Install window build dependencies
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          cmake ninja-build pkg-config \
+          libgtk-3-dev libnss3-dev libnspr4-dev \
+          libasound2-dev libcups2-dev libdrm-dev libgbm-dev \
+          libxcomposite-dev libxdamage-dev libxfixes-dev libxrandr-dev \
+          libxkbcommon-dev libxss-dev libxtst-dev libwayland-dev
+
+    # cef-rs downloads the CEF distribution (~200 MB) into CEF_PATH, which the
+    # calling job points at .cef.
+    - name: Cache CEF
+      uses: actions/cache@v4
+      with:
+        path: .cef
+        key: cef-linux-${{ hashFiles('shell/Cargo.lock') }}
+
+    # shared-key: a release runs on a tag, and a tag can only read caches made
+    # on its own ref or on main — ci.yml's shell job on main is what makes
+    # them. The default key is per job, and the release job would never see
+    # it. With the CEF wrapper already built, cargo only compiles the crate
+    # itself: seconds, not the minutes a cold build costs.
+    - uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: shell
+        shared-key: shell

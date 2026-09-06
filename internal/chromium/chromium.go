@@ -1,9 +1,11 @@
-// Package chromium launches the app window as a system Chromium in --app
-// mode, pointed at the loopback listener that serves the frontend and the
-// RPC/terminal transports — option 1 of docs/chromium-shell.md.
+// Package chromium launches the app window: a Chromium in --app mode — lich's
+// own on Linux (shell.go), a system browser elsewhere — pointed at the loopback
+// listener that serves the frontend and the RPC/terminal transports
+// (docs/chromium-shell.md).
 package chromium
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -120,7 +122,37 @@ const startupGrace = 10 * time.Second
 // with a dialog and no lich, so the ladder is climbed again without it — a
 // system browser, or ErrNoBrowser and the tab that answers it.
 func Run(url, dataDir, class string, extra []string, onStart func(*os.Process)) error {
-	env := RealEnv()
+	start := func(browser Result) error {
+		return launch(browser, url, dataDir, class, extra, onStart)
+	}
+	return run(RealEnv(), start, notifyDesktop)
+}
+
+// Focus hands url to the browser a running lich has its window in and waits
+// for the hand-off to end. It is Run without the ladder: the process is a
+// second instance that Chromium's profile lock forwards to the first, and its
+// exit is not a window failing to open — CEF reports the forward as a failed
+// initialise, so the bundled window's duplicate exits 1 by design. Falling
+// back on that would open lich a second time, in a system browser, on a
+// profile the window owns.
+func Focus(url, dataDir, class string) error {
+	browser, err := Resolve(RealEnv())
+	if err != nil {
+		return err
+	}
+	return launch(browser, url, dataDir, class, nil, nil)
+}
+
+// notifyDesktop is the fallback's desktop notification. Best effort: a window
+// that quietly opened in Chrome instead of as lich's own would otherwise read
+// as lich having changed its mind.
+func notifyDesktop(text string) {
+	_ = zenity.Notify(text, zenity.Title("lich"))
+}
+
+// run is Run's walk of the ladder, with the launch and the notification as
+// seams so the fallback is testable without a browser.
+func run(env Env, start func(Result) error, notify func(string)) error {
 	browser, err := Resolve(env)
 	if err != nil {
 		return err
@@ -133,35 +165,37 @@ func Run(url, dataDir, class string, extra []string, onStart func(*os.Process)) 
 			"browser", browser.Path)
 	}
 	started := time.Now()
-	err = launch(browser, url, dataDir, class, extra, onStart)
+	err = start(browser)
 	if !fallsBack(browser.Step, err, time.Since(started)) {
 		return err
 	}
-	slog.Warn("bundled window died at startup, opening a system browser instead", "err", err)
 	env.Shell = func() string { return "" }
 	fallback, rerr := Resolve(env)
 	if rerr != nil {
 		// No browser either. ErrNoBrowser reaches main.go's tab path, which
-		// keeps lich reachable; the crash itself is above, in the log.
-		slog.Error("bundled window failed and no system browser found", "err", err)
+		// keeps lich reachable; the crash itself is here, in the log.
+		slog.Error("bundled window died at startup and no system browser found", "err", err)
 		return rerr
 	}
-	slog.Info("browser resolved", "browser", fallback.Describe())
-	// Best effort: a window that quietly opened in Chrome instead of as lich's
-	// own would otherwise read as lich having changed its mind.
-	_ = zenity.Notify(
-		"lich's own window failed to open, so this one is "+filepath.Base(fallback.Path)+
-			". `lich rage` has the log.",
-		zenity.Title("lich"))
-	return launch(fallback, url, dataDir, class, extra, onStart)
+	slog.Warn("bundled window died at startup, opening a system browser instead",
+		"err", err, "browser", fallback.Describe())
+	notify("lich's own window failed to open, so this one is " + filepath.Base(fallback.Path) +
+		". `lich rage` has the log.")
+	return start(fallback)
 }
 
 // fallsBack is whether a launch that has ended is the bundled window failing to
 // open: only the bundled window (a pin is the user's word, a system browser has
 // nothing below it to fall to), only an error exit, and only within startupGrace.
+// A profile directory that could not be made is no exit at all — the window
+// never ran, and the next rung would fail on the same directory.
 func fallsBack(step string, err error, elapsed time.Duration) bool {
-	return step == stepShell && err != nil && elapsed < startupGrace
+	return step == stepShell && err != nil && !errors.Is(err, errProfileDir) && elapsed < startupGrace
 }
+
+// errProfileDir marks a launch that ended before the browser ran: its profile
+// directory could not be created.
+var errProfileDir = errors.New("chromium profile dir")
 
 // launch starts one resolved browser on the profile and waits for it to exit.
 func launch(browser Result, url, dataDir, class string, extra []string, onStart func(*os.Process)) error {
@@ -169,7 +203,7 @@ func launch(browser Result, url, dataDir, class string, extra []string, onStart 
 	// The data dir is required to launch at all; the prefs inside it only
 	// decide how quiet the window is.
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
-		return fmt.Errorf("chromium profile dir: %w", err)
+		return fmt.Errorf("%w: %w", errProfileDir, err)
 	}
 	// The bundled window keeps its own profile under this directory and has
 	// no Google account or translate bubble to silence; the prefs are for a
