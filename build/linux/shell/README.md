@@ -27,16 +27,17 @@ rev that includes it. Nothing else changes.
 `task build:shell` compiles the crate and runs `assemble.sh`, which reduces the
 1.3 GB cargo output to what ships:
 
-- `libcef.so` **`--strip-debug` only** — a full `strip` removes the symbol table
-  CEF resolves at runtime and the window segfaults on first paint (measured).
-  Debug info is ~1 GB; the symbols are another ~180 MB and stay. Result ~430 MB.
+- `libcef.so` fully stripped: debug info and symbol table are ~1.1 GB of the
+  1.3 GB, and what is left is ~260 MB. (A segfault was once blamed on the
+  symbol table going; it was the feature-list overwrite `shell/src/main.rs`
+  guards against, and a full strip was measured clean after that fix.)
 - resources (`.pak`, `icudtl.dat`, the V8 snapshot), the ANGLE GL libs, and only
   `locales/en-US.pak` — the UI is English and the other 219 packs only translate
   Chromium's own dialogs.
 - SwiftShader and the Vulkan loader are left out: software WebGL for a GPU-less
   machine, where xterm.js falls back to its canvas renderer anyway. 16 MB saved.
 
-On disk ~480 MB; ~120 MB compressed into the package. The first build downloads
+On disk ~300 MB; ~100 MB compressed into the package. The first build downloads
 the CEF distribution (~200 MB) and compiles its C++ wrapper — CMake and Ninja
 required, a few minutes once.
 

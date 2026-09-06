@@ -13,11 +13,11 @@ rm -rf "$out"
 mkdir -p "$out/cef/locales"
 cp "$src/lich-shell" "$out/lich-shell"
 
-# Debug info is ~1 GB of the 1.3 GB libcef.so; dropping it leaves ~430 MB.
-# --strip-debug only: a full strip removes the symbol table CEF resolves at
-# runtime and the window segfaults on first paint (measured), so the symbols
-# stay even though they are another ~180 MB.
-strip --strip-debug -o "$out/cef/libcef.so" "$src/libcef.so"
+# Debug info and the symbol table are ~1.1 GB of the 1.3 GB libcef.so; the
+# stripped library is ~260 MB. CEF resolves nothing through the symbol table
+# at run time: the segfault once blamed on stripping it was the feature-list
+# overwrite (shell/src/main.rs), measured again after that fix.
+strip -o "$out/cef/libcef.so" "$src/libcef.so"
 for f in libEGL.so libGLESv2.so chrome_100_percent.pak chrome_200_percent.pak \
   resources.pak icudtl.dat v8_context_snapshot.bin chrome-sandbox; do
   cp "$src/$f" "$out/cef/$f"

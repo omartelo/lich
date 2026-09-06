@@ -223,9 +223,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   many entries were added, changed and fixed. The update toast is unchanged:
   it says a release exists, and the dialog is where the release speaks.
 
-- **The Linux packages are ~120 MB to download and ~480 MB installed, up from
-  ~10 MB.** That is the embedded Chromium: `libcef.so` stripped of its debug
-  info (its symbol table has to stay — CEF resolves it at runtime), the
+- **The Linux packages are ~100 MB to download and ~300 MB installed, up from
+  ~10 MB.** That is the embedded Chromium: `libcef.so` stripped, the
   resources, the ANGLE GL libraries and the one locale pack the UI uses. The
   `chromium` recommends is gone from the deb, rpm and Arch packages (which now
   compress with xz), and the AUR package now fetches the window as a second

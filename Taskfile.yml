@@ -47,7 +47,7 @@ tasks:
       # The Go binary stays pure and static; the window is a separate Rust
       # binary on CEF, found beside it at run time (internal/chromium/shell.go).
       # assemble.sh strips libcef.so and keeps only the runtime files lich
-      # needs — the 1.3 GB cargo leaves in target/ becomes ~480 MB.
+      # needs — the 1.3 GB cargo leaves in target/ becomes ~300 MB.
       - cmd: cd shell && cargo build --release
       - cmd: build/linux/shell/assemble.sh shell/target/release {{.BIN_DIR}}/shell
 
