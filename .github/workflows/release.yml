@@ -307,7 +307,21 @@ jobs:
           export HOME="$RUNNER_TEMP/home" LICH_LISTEN_PORT=47899
           mkdir -p "$HOME"
           log="$HOME/Library/Application Support/lich/lich.log"
-          "$app/Contents/MacOS/lich" -- --remote-debugging-port=9334 &
+          diag="$RUNNER_TEMP/diag"
+          mkdir -p "$diag"
+          # What a failure leaves behind, for the artifact below: the page list
+          # CDP gave, every lich-shell process by role, what the screen shows.
+          dump() {
+            cp "$RUNNER_TEMP/pages.json" "$diag/" 2>/dev/null || true
+            ps -eo pid,ppid,args | grep '[l]ich' > "$diag/ps.txt" || true
+            lsappinfo list > "$diag/apps.txt" || true
+            screencapture -x "$diag/screen.png" || true
+            cp "$log" "$diag/" 2>/dev/null || true
+            cat "$diag/ps.txt"
+          }
+          # Chromium's own log on stderr: a renderer or GPU process that fails
+          # to launch says so there and nowhere else.
+          "$app/Contents/MacOS/lich" -- --remote-debugging-port=9334 --enable-logging=stderr &
           for _ in $(seq 1 30); do
             sleep 1
             token=$(jq -r .token "$HOME/Library/Application Support/lich/runtime.json" 2>/dev/null) && break
@@ -318,14 +332,14 @@ jobs:
             sleep 1
             curl -sf http://127.0.0.1:9334/json > "$RUNNER_TEMP/pages.json" 2>/dev/null && grep -q '"title": *"lich"' "$RUNNER_TEMP/pages.json" && break
           done
-          grep -q '"title": *"lich"' "$RUNNER_TEMP/pages.json" || { echo "::error::the window never loaded lich's page"; cat "$log"; exit 1; }
+          grep -q '"title": *"lich"' "$RUNNER_TEMP/pages.json" || { echo "::error::the window never loaded lich's page"; dump; cat "$log"; exit 1; }
           sleep 10
           # The browser process is the one without a --type; the renderer and
           # GPU processes are the same binary re-executed with one.
           browser=$(pgrep -lf lich-shell | grep -v -- '--type=' | awk '{print $1}')
-          test -n "$browser" || { echo "::error::the window died"; cat "$log"; exit 1; }
+          test -n "$browser" || { echo "::error::the window died"; dump; cat "$log"; exit 1; }
           lsappinfo list > "$RUNNER_TEMP/apps.txt"
-          grep -q 'Lich.app' "$RUNNER_TEMP/apps.txt" || { echo "::error::macOS does not count the window as Lich.app"; cat "$RUNNER_TEMP/apps.txt"; exit 1; }
+          grep -q 'Lich.app' "$RUNNER_TEMP/apps.txt" || { echo "::error::macOS does not count the window as Lich.app"; dump; cat "$RUNNER_TEMP/apps.txt"; exit 1; }
           kill -TERM "$browser"
           for _ in $(seq 1 15); do sleep 1; pgrep -x lich > /dev/null || break; done
           if pgrep -x lich > /dev/null; then
@@ -334,6 +348,14 @@ jobs:
           grep -q 'window closed, exiting' "$log" || { echo "::error::lich did not log the window closing"; cat "$log"; exit 1; }
           cat "$RUNNER_TEMP/pages.json"
           grep 'Lich.app' "$RUNNER_TEMP/apps.txt"
+
+      - name: Upload end-to-end diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: lich-macos-e2e
+          path: ${{ runner.temp }}/diag
+          if-no-files-found: ignore
 
       - name: Upload macOS assets
         uses: actions/upload-artifact@v7
