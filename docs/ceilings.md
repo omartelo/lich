@@ -879,7 +879,9 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   (`internal/chromium.Run`): `go run`, a bare binary copied out of the tarball, a package missing
   `lib/lich/shell` — each falls through to the ladder below with one `Warn` line; a window that exits with
   an error inside `startupGrace` (10 s: a segfault on first paint, a system library `libcef.so` cannot find
-  on this distribution) is relaunched the same way, with a desktop notification naming the browser. Refusing
+  on this distribution — the packages declare Chromium's own list, so that is a bare binary on a slim
+  install, or a glibc older than 2.34, Debian 11 and RHEL 8, which `lich-shell` will not load on) is
+  relaunched the same way, with a desktop notification naming the browser. Refusing
   to open would turn a packaging slip or a bad update into a lich that does nothing. The grace is the trap:
   a crash at 10.1 s is the window's lifecycle ending, as it always was, and a window closed by hand inside
   it exits 0 and never falls back. A pinned browser never falls back either — it is the user's word — and

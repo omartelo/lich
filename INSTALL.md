@@ -17,7 +17,11 @@ Pick your system:
 
 **Runtime dependencies** — on Linux, lich ships its own window: an embedded
 Chromium (CEF) inside the package, so no browser is required and `zenity` is
-the one thing left to install, for the folder picker. The window carries
+the one thing left to install, for the folder picker. The window needs glibc
+2.34 or newer — Debian 12, Ubuntu 22.04, RHEL 9, or anything current — and
+the libraries Chromium itself links against, which the deb, rpm and AUR
+packages declare; on an older glibc lich falls back to a browser on the
+machine. The window carries
 lich's own class and title, so the launcher icon, window rules by class and
 `StartupWMClass` all match it. `--browser` or `LICH_BROWSER` still pins a
 browser of your choice above it ([docs/chromium-shell.md](docs/chromium-shell.md)).

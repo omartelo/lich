@@ -38,6 +38,94 @@ recommends:
   - zenity
   - git
 
+# What the window links against — `objdump -p` on libcef.so and lich-shell,
+# the list Chromium's own package declares. Without it a slim install gets a
+# window that dies on a missing libnss3 and falls back to a browser. rpm takes
+# sonames, which resolve on Fedora, openSUSE and RHEL alike where package
+# names do not. GTK, Wayland, GL and Vulkan are dlopen'ed and optional.
+# build/linux/aur/PKGBUILD.tpl carries the archlinux list too.
+overrides:
+  deb:
+    depends:
+      - libc6 (>= 2.34)
+      - libgcc-s1
+      - libnss3
+      - libnspr4
+      - libglib2.0-0
+      - libatk1.0-0
+      - libatk-bridge2.0-0
+      - libatspi2.0-0
+      - libdbus-1-3
+      - libcups2
+      - libx11-6
+      - libxcomposite1
+      - libxdamage1
+      - libxext6
+      - libxfixes3
+      - libxrandr2
+      - libxcb1
+      - libgbm1
+      - libexpat1
+      - libxkbcommon0
+      - libcairo2
+      - libpango-1.0-0
+      - libudev1
+      - libasound2
+  rpm:
+    depends:
+      - libc.so.6(GLIBC_2.34)(64bit)
+      - libgcc_s.so.1()(64bit)
+      - libnss3.so()(64bit)
+      - libnssutil3.so()(64bit)
+      - libsmime3.so()(64bit)
+      - libnspr4.so()(64bit)
+      - libglib-2.0.so.0()(64bit)
+      - libgobject-2.0.so.0()(64bit)
+      - libgio-2.0.so.0()(64bit)
+      - libatk-1.0.so.0()(64bit)
+      - libatk-bridge-2.0.so.0()(64bit)
+      - libatspi.so.0()(64bit)
+      - libdbus-1.so.3()(64bit)
+      - libcups.so.2()(64bit)
+      - libX11.so.6()(64bit)
+      - libXcomposite.so.1()(64bit)
+      - libXdamage.so.1()(64bit)
+      - libXext.so.6()(64bit)
+      - libXfixes.so.3()(64bit)
+      - libXrandr.so.2()(64bit)
+      - libxcb.so.1()(64bit)
+      - libgbm.so.1()(64bit)
+      - libexpat.so.1()(64bit)
+      - libxkbcommon.so.0()(64bit)
+      - libcairo.so.2()(64bit)
+      - libpango-1.0.so.0()(64bit)
+      - libudev.so.1()(64bit)
+      - libasound.so.2()(64bit)
+  archlinux:
+    depends:
+      - glibc
+      - gcc-libs
+      - nss
+      - nspr
+      - glib2
+      - at-spi2-core
+      - dbus
+      - libcups
+      - libx11
+      - libxcomposite
+      - libxdamage
+      - libxext
+      - libxfixes
+      - libxrandr
+      - libxcb
+      - mesa
+      - expat
+      - libxkbcommon
+      - cairo
+      - pango
+      - systemd-libs
+      - alsa-lib
+
 # xz rather than the gzip default: ~30 MB less per package for the 480 MB
 # window, and unlike zstd every dpkg and rpm still in use unpacks it.
 deb:
