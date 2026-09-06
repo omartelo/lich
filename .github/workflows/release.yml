@@ -182,7 +182,7 @@ jobs:
           "$app/lich.exe" -- --remote-debugging-port=9334 &
           for _ in $(seq 1 30); do
             sleep 1
-            token=$(python3 -c "import json;print(json.load(open('$APPDATA/lich/runtime.json'))['token'])" 2>/dev/null) && break
+            token=$(jq -r .token "$APPDATA/lich/runtime.json" 2>/dev/null) && break
           done
           test -n "$token" || { echo "::error::lich never wrote runtime.json"; cat "$APPDATA/lich/lich.log"; exit 1; }
           grep -q 'the bundled window' "$APPDATA/lich/lich.log" || { echo "::error::lich did not resolve its own window"; cat "$APPDATA/lich/lich.log"; exit 1; }
