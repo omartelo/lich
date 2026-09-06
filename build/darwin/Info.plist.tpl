@@ -10,7 +10,8 @@
   window and its Dock tile, while a system browser owns the window, is the
   browser's; LSUIElement made no measured difference to that on a Mac and is
   not here.
---><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
   <key>CFBundleExecutable</key>

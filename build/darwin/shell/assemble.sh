@@ -30,7 +30,7 @@ ditto "$framework" "$out/$name"
 fw="$out/$name"
 # The UI is English and a locale pack only translates Chromium's own dialogs;
 # en is the one Chromium falls back to, and kurogane checks for any .lproj.
-test -d "$fw/Resources/en.lproj"
+test -d "$fw/Resources/en.lproj" || { echo "assemble.sh: no en.lproj in $fw/Resources" >&2; exit 1; }
 find "$fw/Resources" -maxdepth 1 -name '*.lproj' ! -name 'en.lproj' -exec rm -r {} +
 # Left out on purpose, as on Linux and Windows: SwiftShader, the software
 # WebGL for a machine with no GPU. xterm.js falls back to its canvas renderer.
