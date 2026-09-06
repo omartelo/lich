@@ -1,12 +1,12 @@
-//go:build linux || windows
+//go:build linux || windows || (darwin && arm64)
 
 package chromium
 
 import "os"
 
-// shellExpected: the Linux packages and the Windows installer ship the window,
-// so opening a system browser here is a fallback worth a warning, not the
-// design.
+// shellExpected: the Linux packages, the Windows installer and the Apple
+// Silicon Lich.app ship the window, so opening a system browser here is a
+// fallback worth a warning, not the design.
 const shellExpected = true
 
 // bundledShell is the window lich ships, found relative to its own executable.

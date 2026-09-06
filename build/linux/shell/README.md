@@ -11,16 +11,18 @@ kurogane could not yet name the window it creates (WM_CLASS / Wayland app_id,
 and a title) or place its Chromium profile where lich keeps one. Three builder
 methods fix that — `App::window_class`, `App::window_title`, `App::cache_dir` —
 submitted upstream as
-[0x48piraj/kurogane#11](https://github.com/0x48piraj/kurogane/pull/11) and
-carried meanwhile on the fork `shell/Cargo.toml` pins:
-`omartelo/kurogane`, branch `window-identity`, on top of upstream `eedaedc`.
+[0x48piraj/kurogane#11](https://github.com/0x48piraj/kurogane/pull/11), with
+the app-bundle framework lookup macOS needs as
+[0x48piraj/kurogane#13](https://github.com/0x48piraj/kurogane/pull/13), and
+carried meanwhile on the fork `shell/Cargo.toml` pins: `omartelo/kurogane`,
+branch `lich`, on top of upstream `eedaedc`.
 One wrinkle the patch works around: cef-rs hands CEF a *borrowed* string when
 it writes an out-parameter struct back, so a `wm_class_class` built from `&str`
 arrives empty — the fork allocates those through CEF's own
 `cef_string_utf16_set` so they survive the write-back.
 
-When the PR lands, point `shell/Cargo.toml` back at `0x48piraj/kurogane` at a
-rev that includes it. Nothing else changes.
+When both PRs land, point `shell/Cargo.toml` back at `0x48piraj/kurogane` at
+a rev that includes them. Nothing else changes.
 
 ## Building
 

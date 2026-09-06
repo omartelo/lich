@@ -1,9 +1,9 @@
 name: Window build toolchain
 description: >-
   Rust, CEF's build dependencies and the caches the window (shell/, Rust on
-  CEF) needs, on Linux and on Windows. Shared by ci.yml's shell job and the
-  release's linux and windows jobs so a dependency or a cache key changes in
-  one place.
+  CEF) needs, on Linux, Windows and macOS. Shared by ci.yml's shell job and
+  the release's linux, windows and mac jobs so a dependency or a cache key
+  changes in one place.
 inputs:
   components:
     description: rustup components to install on top of the toolchain (rustfmt, clippy)
@@ -37,6 +37,13 @@ runs:
       if: runner.os == 'Windows'
       shell: bash
       run: choco install ninja -y --no-progress
+
+    # The runner has CMake and the Xcode command line tools; Ninja is the one
+    # piece missing.
+    - name: Install window build dependencies (macOS)
+      if: runner.os == 'macOS'
+      shell: bash
+      run: brew install ninja
 
     - uses: ilammy/msvc-dev-cmd@v1
       if: runner.os == 'Windows'

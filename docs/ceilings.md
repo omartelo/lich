@@ -881,16 +881,19 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   benign case, and the common one. A wide version gap meets Chromium's own guard against a profile from a
   newer build instead, which refuses to start; lich then dies on a browser exit code and its dialog can only
   say `exit status 1`, naming nothing. `LICH_BROWSER` pins the answer; nothing else does.
-- **On Linux and Windows the window is lich's own; on macOS it is the system browser's**
-  (`internal/chromium/shell.go`, `shell/`): the Linux packages and the Windows installer ship an embedded
-  Chromium (CEF through kurogane) beside the binary, and the ladder takes it above the desktop's default
-  and every scan. macOS still opens the system browser: the window there means the CEF framework and its
-  helper apps inside `Lich.app`, which kurogane does not bundle yet, with no hardware here to measure it on.
-  The trap: the three are one launch path, so a window-side change (a flag in `Args`, a prefs write, the
-  restart signal) lands on lich's own Chromium on two platforms and on a system browser on the third, and
-  the Go side cannot tell which it got. Windows has one more: it was built and smoke-tested on a CI runner
-  only (`release.yml` opens the window and reads a page over CDP), never on a desk, so the taskbar icon,
-  the AppUserModelID grouping and the graceful close on restart are designed, not seen.
+- **On Linux, Windows and Apple Silicon the window is lich's own; on an Intel Mac it is the system
+  browser's** (`internal/chromium/shell.go`, `shell/`): the Linux packages, the Windows installer and the
+  arm64 `Lich.app` ship an embedded Chromium (CEF through kurogane) beside the binary, and the ladder takes
+  it above the desktop's default and every scan. The Intel bundle ships none: the release runner is arm64,
+  cross-building the window means cross-building CEF's C++ wrapper, and nobody here could run the result.
+  The trap: the four are one launch path, so a window-side change (a flag in `Args`, a prefs write, the
+  restart signal) lands on lich's own Chromium on three and on a system browser on the fourth, and the Go
+  side cannot tell which it got. Windows and macOS have one more: both were built and smoke-tested on a CI
+  runner only (`release.yml` opens the window and reads a page over CDP), never on a desk, so the taskbar
+  icon and AppUserModelID grouping on Windows, the Dock tile, Cmd-Tab and menu bar name on macOS, and the
+  graceful close on restart on both are designed, not seen. macOS runs CEF's renderer and GPU roles as the
+  window binary re-executed rather than as the helper apps CEF's samples ship; a stray Dock tile per
+  subprocess is the thing to look for first on a desk.
 - **A Windows install with the window beside it does not self-update** (`internal/appupdate.windowed`):
   the self-apply asset is the bare exe, and swapping it under a `shell\` directory would leave a third of
   a gigabyte of Chromium at the installer's version. The update button sends that install to the release

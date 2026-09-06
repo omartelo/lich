@@ -695,7 +695,7 @@ dependencies = [
 [[package]]
 name = "kurogane"
 version = "0.0.4"
-source = "git+https://github.com/omartelo/kurogane?rev=9bb9a6ae4e6224b18a9c0d65a046136648d854ab#9bb9a6ae4e6224b18a9c0d65a046136648d854ab"
+source = "git+https://github.com/omartelo/kurogane?rev=cd1ef1d2756154ec84cd9ccc5bf3edc7a9ba162e#cd1ef1d2756154ec84cd9ccc5bf3edc7a9ba162e"
 dependencies = [
  "cef",
  "ctrlc",
@@ -712,7 +712,7 @@ dependencies = [
 [[package]]
 name = "kurogane-layout"
 version = "0.0.4"
-source = "git+https://github.com/omartelo/kurogane?rev=9bb9a6ae4e6224b18a9c0d65a046136648d854ab#9bb9a6ae4e6224b18a9c0d65a046136648d854ab"
+source = "git+https://github.com/omartelo/kurogane?rev=cd1ef1d2756154ec84cd9ccc5bf3edc7a9ba162e#cd1ef1d2756154ec84cd9ccc5bf3edc7a9ba162e"
 dependencies = [
  "dirs",
  "serde",

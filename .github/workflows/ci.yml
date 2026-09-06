@@ -80,14 +80,14 @@ jobs:
         run: bash .github/scripts/go-test-summary.sh linux
 
   # The window (shell/, Rust on CEF): format, lint and the crate's suite, on
-  # both OSes that ship it. Linking needs the CEF distribution, so this
+  # the three OSes that ship it. Linking needs the CEF distribution, so this
   # carries the same toolchain and caches the release build does; --release
   # shares one CEF wrapper build between clippy and the tests.
   shell:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     defaults:
       run:

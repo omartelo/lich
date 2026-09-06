@@ -30,11 +30,11 @@ libcups2-dev libdrm-dev libgbm-dev libxcomposite-dev libxdamage-dev
 libxfixes-dev libxrandr-dev libxkbcommon-dev libxss-dev libxtst-dev
 libwayland-dev` on Debian/Ubuntu) and on Windows **MSVC** (Visual Studio
 Build Tools), with the build run from a Visual Studio developer prompt so
-CEF's CMake finds it, and git-bash on PATH for the assemble script. The first
-build downloads the CEF distribution (~200 MB) and compiles its C++ wrapper — a
-few minutes and ~1.5 GB under `shell/target/`; later builds are seconds. On
-macOS the window is still a Chromium-family browser on the machine. `zenity`
-provides the folder picker on Linux.
+CEF's CMake finds it, and git-bash on PATH for the assemble script; on macOS
+the Xcode command line tools, CMake and Ninja (`brew install cmake ninja`). The
+first build downloads the CEF distribution (~200 MB) and compiles its C++
+wrapper — a few minutes and ~1.5 GB under `shell/target/`; later builds are
+seconds. `zenity` provides the folder picker on Linux.
 
 ```bash
 task dev      # Vite HMR + backend

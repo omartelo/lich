@@ -18,7 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The portable exe gets the window from `lich-*-windows-amd64-shell.zip`
   unzipped beside it. An installed lich now updates by running the next
   installer rather than through the update button, which opens the release
-  page instead. macOS keeps opening the system browser for now.
+  page instead.
+- **On Apple Silicon, `Lich.app` brings its own window.** The same embedded
+  Chromium sits inside the app, and lich opens in it instead of looking for
+  Chrome, Chromium, Brave, Vivaldi or Edge in `/Applications`; the Dock,
+  Cmd-Tab and the menu bar show lich while it runs, where they showed the
+  browser before. If the window fails on your machine, lich falls back to a
+  Chromium-family browser and says so. Intel Macs keep opening the system
+  browser: the window is built on the Apple Silicon runner alone.
 
 ### Changed
 

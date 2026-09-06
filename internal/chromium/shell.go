@@ -16,14 +16,17 @@ const shellName = "lich-shell" + shellExt
 const stepShell = "the bundled window"
 
 // shellPaths lists where the bundled window sits relative to the lich
-// executable: beside it (a tarball, bin/ after `task build`), and under the
-// lib directory that is sibling to its bin — /usr/local/bin/lich finds
+// executable: under shell/ beside it (a tarball, bin/ after `task build`),
+// directly beside it (Lich.app's Contents/MacOS, where a process has to sit
+// for macOS to count it as the app's own, docs/chromium-shell.md), and under
+// the lib directory that is sibling to its bin — /usr/local/bin/lich finds
 // /usr/local/lib/lich/shell, /usr/bin/lich finds /usr/lib/lich/shell, which
 // is where the packages put it.
 func shellPaths(exe string) []string {
 	dir := filepath.Dir(exe)
 	return []string{
 		filepath.Join(dir, "shell", shellName),
+		filepath.Join(dir, shellName),
 		filepath.Join(dir, "..", "lib", "lich", "shell", shellName),
 	}
 }

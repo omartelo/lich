@@ -1,10 +1,10 @@
-//go:build !linux && !windows
+//go:build !linux && !windows && !(darwin && arm64)
 
 package chromium
 
-// macOS still opens the system browser: the window has not been built there
-// (docs/ceilings.md). It answers as if no window were bundled, and the ladder
-// below carries on unchanged.
+// An Intel Mac still opens the system browser: the window is built on the
+// Apple Silicon runner alone (docs/ceilings.md). It answers as if no window
+// were bundled, and the ladder below carries on unchanged.
 const shellExpected = false
 
 func bundledShell() string { return "" }

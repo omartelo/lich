@@ -1,10 +1,10 @@
 version: '3'
 
 # lich is a pure-Go binary (no CGO) serving its embedded frontend to a Chromium
-# --app window — see docs/chromium-shell.md. On Linux that window is lich's
-# own, an embedded Chromium built out of shell/ (Rust, CEF) and launched like a
-# browser; Windows and macOS still open the system browser. Linux first; an
-# experimental Windows build cross-compiles via build:windows.
+# --app window — see docs/chromium-shell.md. That window is lich's own, an
+# embedded Chromium built out of shell/ (Rust, CEF) and launched like a
+# browser, on Linux, Windows and Apple Silicon; an Intel Mac still opens the
+# system browser. Linux first; the Windows and macOS builds are experimental.
 
 vars:
   APP_NAME: "lich"
@@ -29,8 +29,7 @@ tasks:
       - cmd: cd frontend && pnpm install --frozen-lockfile && pnpm run build
 
   build:shell:
-    desc: Build the window (embedded Chromium) into bin/shell/ (Linux, Windows)
-    platforms: [linux, windows]
+    desc: Build the window (embedded Chromium) into bin/shell/
     # Skipped while bin/shell is up to date with the crate: the window changes
     # far less often than the Go side, and `task dev` should not wait on cargo
     # for it.
@@ -42,11 +41,18 @@ tasks:
       - shell/build.rs
       - build/linux/shell/assemble.sh
       - build/windows/shell/assemble.sh
+      - build/darwin/shell/assemble.sh
       - build/windows/shell/lich-shell.exe.manifest
       - build/windows/lich.ico
     generates:
       - "{{.BIN_DIR}}/shell/lich-shell{{exeExt}}"
-      - "{{.BIN_DIR}}/shell/{{if eq OS \"windows\"}}libcef.dll{{else}}cef/libcef.so{{end}}"
+      - "{{.BIN_DIR}}/shell/{{if eq OS \"windows\"}}libcef.dll{{else if eq OS \"darwin\"}}Chromium Embedded Framework.framework{{else}}cef/libcef.so{{end}}"
+    vars:
+      # On macOS cef-rs copies nothing out of the CEF distribution it
+      # downloads, so assemble.sh reads the framework straight from it, and
+      # the download has to land somewhere known: here, where CI points it too.
+      CEF_PATH:
+        sh: echo "${CEF_PATH:-{{.ROOT_DIR}}/.cef}"
     cmds:
       # The Go binary stays pure and static; the window is a separate Rust
       # binary on CEF, found beside it at run time (internal/chromium/shell.go).
@@ -64,6 +70,9 @@ tasks:
       - cmd: test -f shell/target/release/libcef.dll || (cd shell && cargo clean --release -p cef-dll-sys)
         platforms: [windows]
       - cmd: cd shell && cargo build --release
+        platforms: [linux, windows]
+      - cmd: cd shell && CEF_PATH="{{.CEF_PATH}}" cargo build --release
+        platforms: [darwin]
       - cmd: build/linux/shell/assemble.sh shell/target/release {{.BIN_DIR}}/shell
         platforms: [linux]
       # Through bash on purpose: Task's own shell runs the command line, but a
@@ -71,9 +80,11 @@ tasks:
       # machine with git has.
       - cmd: bash build/windows/shell/assemble.sh shell/target/release {{.BIN_DIR}}/shell
         platforms: [windows]
+      - cmd: build/darwin/shell/assemble.sh shell/target/release "{{.CEF_PATH}}" {{.BIN_DIR}}/shell
+        platforms: [darwin]
 
   build:
-    desc: Build the static binary into bin/ (with the window on Linux)
+    desc: Build the static binary into bin/ (with the window beside it)
     deps: [build:frontend, build:shell]
     cmds:
       # {{exeExt}}: `go build -o bin/lich` writes exactly that name — no .exe —
@@ -111,12 +122,12 @@ tasks:
       - cmd: CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build {{.GO_BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}-darwin-amd64 .
 
   bundle:mac:
-    desc: Wrap the macOS binary in bin/Lich.app (macOS host only)
-    deps: [build:mac]
+    desc: Wrap the macOS binary and the window in bin/Lich.app (macOS host only)
+    deps: [build:mac, build:shell]
     cmds:
       # The binary cross-compiles from anywhere; the bundle needs Apple's sips
       # and iconutil for the icon, so this task only runs on a Mac.
-      - cmd: build/darwin/bundle.sh {{.BIN_DIR}}/{{.APP_NAME}}-darwin-{{ARCH}} {{.VERSION}} {{.BIN_DIR}}
+      - cmd: build/darwin/bundle.sh {{.BIN_DIR}}/{{.APP_NAME}}-darwin-{{ARCH}} {{.VERSION}} {{.BIN_DIR}} {{.BIN_DIR}}/shell
 
   run:
     desc: Build and run
@@ -147,15 +158,14 @@ tasks:
           node -e "setTimeout(() => {}, 1500)"
           # go run leaves the binary in a temp dir, where the bundled-window
           # lookup finds nothing; the pin names the window build:shell made.
-          # Empty on macOS, where the system browser still answers.
           # The build reports "dev" unless VERSION is set: `VERSION=Unreleased
           # task dev` is how the What's new dialog is smoked against the
           # [Unreleased] changelog section, `VERSION=v0.44.0` against a release.
-          LICH_DEV=1 LICH_DEV_URL="http://127.0.0.1:{{.VITE_PORT}}" LICH_LISTEN_PORT=47822 LICH_BROWSER="{{if ne OS "darwin"}}{{.ROOT_DIR}}/{{.BIN_DIR}}/shell/lich-shell{{exeExt}}{{end}}" go run {{if env "VERSION"}}-ldflags "-X main.version={{.VERSION}}" {{end}}.
+          LICH_DEV=1 LICH_DEV_URL="http://127.0.0.1:{{.VITE_PORT}}" LICH_LISTEN_PORT=47822 LICH_BROWSER="{{.ROOT_DIR}}/{{.BIN_DIR}}/shell/lich-shell{{exeExt}}" go run {{if env "VERSION"}}-ldflags "-X main.version={{.VERSION}}" {{end}}.
 
   test:shell:
-    desc: Run the window crate's suite (Linux)
-    platforms: [linux]
+    desc: Run the window crate's suite (Linux, macOS)
+    platforms: [linux, darwin]
     cmds:
       # --release shares cargo's CEF download and C++ wrapper build with
       # build:shell; a debug profile would fetch and build both again.

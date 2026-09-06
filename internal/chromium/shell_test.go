@@ -29,15 +29,16 @@ func statOf(files map[string]bool) func(string) (os.FileInfo, error) {
 	}
 }
 
-// TestShellPaths pins the two layouts the packages and a bare tarball produce;
-// a change here moves nfpm.yaml, the AUR PKGBUILD, lich.iss and
-// appupdate.windowed with it. The
+// TestShellPaths pins the three layouts the packages, a bare tarball and the
+// macOS bundle produce; a change here moves nfpm.yaml, the AUR PKGBUILD,
+// lich.iss, build/darwin/bundle.sh and appupdate.windowed with it. The
 // binary's name is the one thing taken from the constant: its suffix is the
 // OS's, not the layout's.
 func TestShellPaths(t *testing.T) {
 	got := shellPaths(filepath.FromSlash("/usr/local/bin/lich"))
 	want := []string{
 		filepath.FromSlash("/usr/local/bin/shell/" + shellName),
+		filepath.FromSlash("/usr/local/bin/" + shellName),
 		filepath.FromSlash("/usr/local/lib/lich/shell/" + shellName),
 	}
 	if !slices.Equal(got, want) {
@@ -49,6 +50,14 @@ func TestFindShellPrefersTheOneBesideTheBinary(t *testing.T) {
 	beside := filepath.FromSlash("/opt/lich/shell/" + shellName)
 	lib := filepath.FromSlash("/opt/lib/lich/shell/" + shellName)
 	got := findShell(filepath.FromSlash("/opt/lich/lich"), statOf(map[string]bool{beside: false, lib: false}))
+	if got != beside {
+		t.Fatalf("findShell = %q, want %q", got, beside)
+	}
+}
+
+func TestFindShellInTheAppBundle(t *testing.T) {
+	beside := filepath.FromSlash("/Applications/Lich.app/Contents/MacOS/" + shellName)
+	got := findShell(filepath.FromSlash("/Applications/Lich.app/Contents/MacOS/lich"), statOf(map[string]bool{beside: false}))
 	if got != beside {
 		t.Fatalf("findShell = %q, want %q", got, beside)
 	}

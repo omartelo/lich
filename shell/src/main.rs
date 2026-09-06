@@ -98,6 +98,12 @@ fn main() {
         // system-wide (plasma-browser-integration on KDE). A window that is
         // not a browser has no use for them.
         .chromium_flag("disable-extensions");
+    // Chromium keeps the key for its cookie store in the Keychain, granted to
+    // one code identity; an ad-hoc signed binary gets a new one every build,
+    // and every start would ask the user for the Keychain again. The only
+    // cookie this window holds is lich's own localhost session.
+    #[cfg(target_os = "macos")]
+    let app = app.credential_storage(kurogane::CredentialStorage::Basic);
     if let Some(class) = launch.class {
         app = app.window_class(class);
     }

@@ -97,22 +97,22 @@ curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh
 | Platform | Get it | Needs at runtime |
 | --- | --- | --- |
 | **Linux** | `install.sh` above, or AUR [`lich-bin`](https://aur.archlinux.org/packages/lich-bin) (`yay -S lich-bin`) | `zenity` — the window ships in the package |
-| **macOS** *(experimental)* | `brew install --cask omartelo/tap/lich` | a Chromium-family browser in `/Applications` |
+| **macOS** *(experimental)* | `brew install --cask omartelo/tap/lich` | nothing on Apple Silicon — the window ships in the app; a Chromium-family browser in `/Applications` on Intel |
 | **Windows** *(experimental)* | installer from [Releases](https://github.com/omartelo/lich/releases) | nothing — the window ships in the installer |
 
-On macOS, Chrome, Chromium, Brave, Vivaldi and Edge all qualify; `--browser`
-or `LICH_BROWSER` pins one outright, on every platform. With none of them on
-the machine lich opens in whatever browser you do have — what is lost is the
-window of its own, not the app.
+On an Intel Mac, Chrome, Chromium, Brave, Vivaldi and Edge all qualify;
+`--browser` or `LICH_BROWSER` pins one outright, on every platform. With none
+of them on the machine lich opens in whatever browser you do have — what is
+lost is the window of its own, not the app.
 
 Manual per-distro packages and the static binary: [INSTALL.md](INSTALL.md). The
 macOS and Windows binaries are unsigned — Gatekeeper and SmartScreen warn until
 notarization/signing ship. Homebrew installs sidestep the Gatekeeper prompt;
 a download from the Releases page needs its quarantine flag cleared by hand.
 On macOS the cask installs `Lich.app`, so lich has its own icon in
-`/Applications`; the Dock, while it runs, shows the browser that owns the
-window. Upgrading from the old formula needs `brew uninstall lich` first —
-[INSTALL.md](INSTALL.md) says why.
+`/Applications` and, on Apple Silicon, in the Dock while it runs; on Intel the
+Dock shows the browser that owns the window. Upgrading from the old formula
+needs `brew uninstall lich` first — [INSTALL.md](INSTALL.md) says why.
 
 ## Getting started
 

@@ -148,10 +148,13 @@ the Finder list it under its own icon — and symlinks the same binary onto
 --cask omartelo/tap/lich` tracks new versions, and lich's own update button
 steps aside on a Homebrew install.
 
-The Dock, while lich runs, shows the icon of the Chromium-family browser: the
-window belongs to that browser, and macOS has no equivalent of the window class
-Linux matches against the lich launcher. The lich icon is the one you launch
-from, not the one you switch to.
+On Apple Silicon the app carries its own window, the same embedded Chromium
+the Linux packages ship, and the Dock shows the lich icon while it runs. On
+Intel the window is a Chromium-family browser from `/Applications`, and the
+Dock, while lich runs, shows that browser's icon: the window belongs to it,
+and macOS has no equivalent of the window class Linux matches against the
+lich launcher. There the lich icon is the one you launch from, not the one
+you switch to.
 
 **Upgrading from the old formula** — releases up to v0.32.0 shipped a bare CLI
 as `Formula/lich.rb`. Homebrew refuses to install the cask over it (both want
@@ -173,7 +176,8 @@ xattr -dr com.apple.quarantine /Applications/Lich.app
 ```
 
 The bare `lich-*-darwin-arm64` and `lich-*-darwin-amd64` binaries are still
-published for a CLI-only install by hand:
+published for a CLI-only install by hand; they carry no window and open a
+Chromium-family browser:
 
 ```bash
 install -m755 lich-*-darwin-arm64 ~/.local/bin/lich

@@ -220,10 +220,15 @@ jobs:
 
   mac:
     runs-on: macos-latest
+    env:
+      CEF_PATH: ${{ github.workspace }}/.cef
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+
+      # The window's toolchain and caches; see the linux job.
+      - uses: ./.github/actions/shell-toolchain
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -265,20 +270,70 @@ jobs:
       - name: Build macOS binaries
         run: task build:mac
 
+      # The window, for the runner's own architecture: Apple Silicon. The
+      # Intel bundle ships without one and opens a system browser.
+      - name: Build the window (arm64)
+        run: task build:shell
+
       # Two assets per arch: the .app the cask installs, and the bare binary the
       # in-app self-update and hand installs still download.
       - name: Assemble macOS assets
         run: |
           cd bin
           tag="${GITHUB_REF_NAME//\//-}"
+          ../build/darwin/bundle.sh lich-darwin-arm64 "${tag#v}" stage-arm64 shell
+          ../build/darwin/bundle.sh lich-darwin-amd64 "${tag#v}" stage-amd64
           for arch in arm64 amd64; do
-            ../build/darwin/bundle.sh "lich-darwin-${arch}" "${tag#v}" "stage-${arch}"
             # ditto, not zip: it is the archiver that keeps a bundle's symlinks,
             # permissions and signature intact for Homebrew Cask to unpack.
             ditto -c -k --keepParent "stage-${arch}/Lich.app" "lich-${tag}-darwin-${arch}.zip"
             mv "lich-darwin-${arch}" "lich-${tag}-darwin-${arch}"
           done
           ls -la lich-${tag}-*
+
+      # End to end on the runner before the assets ship, the Windows job's
+      # check on the bundle: the seal verifies, lich finds the window beside
+      # itself in Contents/MacOS and opens it, macOS counts that process as
+      # Lich.app (lsappinfo, which is what the Dock reads), the page loads
+      # (over CDP: alive alone is not proof), the window closes on SIGTERM,
+      # which is what the restart flow sends, and lich exits with it. Its
+      # config lives under a HOME of its own.
+      - name: Run Lich.app end to end
+        run: |
+          app="$PWD/bin/stage-arm64/Lich.app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          test -f "$app/Contents/MacOS/lich-shell"
+          test -f "$app/Contents/Frameworks/Chromium Embedded Framework.framework/Chromium Embedded Framework"
+          export HOME="$RUNNER_TEMP/home" LICH_LISTEN_PORT=47899
+          mkdir -p "$HOME"
+          log="$HOME/Library/Application Support/lich/lich.log"
+          "$app/Contents/MacOS/lich" -- --remote-debugging-port=9334 &
+          for _ in $(seq 1 30); do
+            sleep 1
+            token=$(jq -r .token "$HOME/Library/Application Support/lich/runtime.json" 2>/dev/null) && break
+          done
+          test -n "$token" || { echo "::error::lich never wrote runtime.json"; cat "$log"; exit 1; }
+          grep -q 'the bundled window' "$log" || { echo "::error::lich did not resolve its own window"; cat "$log"; exit 1; }
+          for _ in $(seq 1 30); do
+            sleep 1
+            curl -sf http://127.0.0.1:9334/json > "$RUNNER_TEMP/pages.json" 2>/dev/null && grep -q '"title": *"lich"' "$RUNNER_TEMP/pages.json" && break
+          done
+          grep -q '"title": *"lich"' "$RUNNER_TEMP/pages.json" || { echo "::error::the window never loaded lich's page"; cat "$log"; exit 1; }
+          sleep 10
+          # The browser process is the one without a --type; the renderer and
+          # GPU processes are the same binary re-executed with one.
+          browser=$(pgrep -lf lich-shell | grep -v -- '--type=' | awk '{print $1}')
+          test -n "$browser" || { echo "::error::the window died"; cat "$log"; exit 1; }
+          lsappinfo list > "$RUNNER_TEMP/apps.txt"
+          grep -q 'Lich.app' "$RUNNER_TEMP/apps.txt" || { echo "::error::macOS does not count the window as Lich.app"; cat "$RUNNER_TEMP/apps.txt"; exit 1; }
+          kill -TERM "$browser"
+          for _ in $(seq 1 15); do sleep 1; pgrep -x lich > /dev/null || break; done
+          if pgrep -x lich > /dev/null; then
+            echo "::error::lich is still running after its window closed"; cat "$log"; exit 1
+          fi
+          grep -q 'window closed, exiting' "$log" || { echo "::error::lich did not log the window closing"; cat "$log"; exit 1; }
+          cat "$RUNNER_TEMP/pages.json"
+          grep 'Lich.app' "$RUNNER_TEMP/apps.txt"
 
       - name: Upload macOS assets
         uses: actions/upload-artifact@v7
