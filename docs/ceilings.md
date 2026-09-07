@@ -837,6 +837,17 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   workspace database under the project's own id. The trap is for whoever adds a pane that is genuinely about
   one repository's content. Its remembered state belongs on the per-project side, which means a new key with
   the project id in it, not another global one beside these two.
+- **The settings search reads names, and its index is written by hand** (`frontend/src/lib/settings-index.ts`):
+  every control is listed there with the section and group it lives in, because the panes are React components
+  whose blocks exist only once rendered and the suite runs in node. Two things follow. A block added without
+  an entry is a control the search cannot find, which is why `settings-index.test.ts` reads the
+  `SettingBlock` literals back out of the source and fails on one nobody indexed; that guard is the only
+  thing standing between this file and silent rot, so deleting it costs more than it looks. And the search
+  matches titles plus a few hand-picked keywords, never a description, a stored value or a theme's name: a
+  user hunting for `emerald` or a port number finds nothing, and the empty state says as much rather than
+  pretending the setting is absent. Shortcuts and the panes themselves are indexed off `HOTKEY_ACTIONS` and
+  `SETTING_SECTIONS`, so those two never fall behind.
+
 - **A remembered section id is never validated, and a dead one resolves to Providers** (`Settings.tsx`):
   the pref is stored raw rather than parsed against a list, because the sections belong to the screen and
   `settings-prefs` is not where they live. An id this build cannot place (one of the `provider-<id>` panes

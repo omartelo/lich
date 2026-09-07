@@ -42,6 +42,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of the pane and named no session, so with split panes nothing said which one
   would take the file.
 
+- **The Settings search finds the setting, not just the section.**
+  The box read the eight names in the sidebar and nothing else, so looking for
+  "theme", "font", "ssh" or "cost" answered that nothing matched, with all four
+  sitting one pane away. It now searches every control by name: results replace
+  the nav while you type, each showing the path that tells two settings apart
+  ("Appearance > Terminal" against "Appearance > Interface"), and choosing one
+  opens its pane and briefly highlights the control. Keyboard shortcuts are in
+  there too, and a provider's own settings list once per provider you have
+  enabled. Arrows move, Enter opens, Esc clears. The search reads names, never
+  values: a theme's name or a port number still finds nothing, and the empty
+  state now says so.
+
 - **Settings is one list of six, and every provider lives on its own screen.**
   The sidebar grew a line for every provider you turned on, under three
   headings, with two entries both called "Providers": twelve rows of plain
