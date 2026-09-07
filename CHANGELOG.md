@@ -55,8 +55,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   text size lost their permanent greyed-out Reset button: clicking the value
   returns it to the default. The footer editor is always open at the foot of the
   pane, its items carrying the reading they will show ("3 · +10 −2", "42%")
-  rather than their setting name, with the remove and the item menu appearing on
-  hover instead of sitting on every chip. The theme template moved into the
+  rather than their setting name, and nothing else: the per-item menu and remove
+  button are gone, since dragging an item out to Available is what hides it. The
+  theme template moved into the
   Import dialog, where writing a theme starts, and the "Imported themes" list is
   gone: each theme's own card carries its repository, its version, and the
   update and remove buttons.

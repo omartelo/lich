@@ -878,7 +878,11 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   two ends of the footer. Chosen with the drag: the alternatives that never wrap are lists, one item per
   line, and moving an item then stops being a drag between the sides. Both sides stretch to the taller of the
   two so the block still reads as one thing. Whoever adds a thirteenth footer item is making that worse, and
-  the answer is not a narrower chip: it is deciding the drag is worth less than the alignment.
+  the answer is not a narrower chip: it is deciding the drag is worth less than the alignment. The chip also
+  carries nothing but its own reading: a menu and a remove button that appeared on hover were tried and taken
+  back out, because a control that grows under the pointer shifts the chips beside it at the exact moment a
+  drag is being aimed. Moving an item without a pointer is the dnd-kit keyboard sensor (focus the chip, Space,
+  arrows), which is why removing the menu costs no keyboard path.
 - **A release's highlight is read from the binary, so fixing it after the tag fixes nothing a user sees**
   (`internal/patchnotes`): the What's new dialog parses the `CHANGELOG.md` embedded at build time — the alert
   blocks under the version heading included. Editing that release on GitHub, or the changelog on `main`,

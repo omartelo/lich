@@ -17,10 +17,6 @@ import {
   useSortable,
 } from "@dnd-kit/sortable"
 import {
-  ArrowLeft,
-  ArrowRight,
-  ChevronLeft,
-  ChevronRight,
   Clock,
   Code,
   Coins,
@@ -30,16 +26,13 @@ import {
   Gauge,
   GitBranch,
   GitPullRequestArrow,
-  MoreHorizontal,
   Paperclip,
   Timer,
-  X,
   type LucideIcon,
 } from "lucide-react"
 import { dragStyle, useDragSensors } from "@/lib/use-sortable-list"
 import {
   FOOTER_ITEMS,
-  footerZone,
   hasFooterItem,
   isFooterItem,
   moveFooterItem,
@@ -49,13 +42,6 @@ import {
 } from "@/lib/footer-layout"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 
 const ICONS: Record<FooterItem, LucideIcon> = {
   attach: Paperclip,
@@ -145,28 +131,10 @@ export function FooterLayoutEditor({ layout, disabled, onChange }: FooterLayoutE
             side it will show on. Available lands below them: what is in the
             footer is what the pane is about. */}
         <div className="grid min-w-0 grid-cols-2 gap-3">
-          <FooterZoneView
-            zone="left"
-            items={layout.left}
-            layout={layout}
-            disabled={disabled}
-            onMove={move}
-          />
-          <FooterZoneView
-            zone="right"
-            items={layout.right}
-            layout={layout}
-            disabled={disabled}
-            onMove={move}
-          />
+          <FooterZoneView zone="left" items={layout.left} layout={layout} disabled={disabled} />
+          <FooterZoneView zone="right" items={layout.right} layout={layout} disabled={disabled} />
         </div>
-        <FooterZoneView
-          zone="available"
-          items={available}
-          layout={layout}
-          disabled={disabled}
-          onMove={move}
-        />
+        <FooterZoneView zone="available" items={available} layout={layout} disabled={disabled} />
       </div>
       <DragOverlay>
         {dragging && (
@@ -184,10 +152,9 @@ interface FooterZoneViewProps {
   items: FooterItem[]
   layout: FooterLayout
   disabled: boolean
-  onMove: (id: FooterItem, target: string) => void
 }
 
-function FooterZoneView({ zone, items, layout, disabled, onMove }: FooterZoneViewProps) {
+function FooterZoneView({ zone, items, layout, disabled }: FooterZoneViewProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: zone,
     disabled,
@@ -211,13 +178,7 @@ function FooterZoneView({ zone, items, layout, disabled, onMove }: FooterZoneVie
       >
         <SortableContext items={items} strategy={rectSortingStrategy}>
           {items.map((id) => (
-            <FooterEditorItem
-              key={id}
-              id={id}
-              layout={layout}
-              disabled={disabled}
-              onMove={onMove}
-            />
+            <FooterEditorItem key={id} id={id} layout={layout} disabled={disabled} />
           ))}
         </SortableContext>
         {items.length === 0 && (
@@ -234,10 +195,9 @@ interface FooterEditorItemProps {
   id: FooterItem
   layout: FooterLayout
   disabled: boolean
-  onMove: (id: FooterItem, target: string) => void
 }
 
-function FooterEditorItem({ id, layout, disabled, onMove }: FooterEditorItemProps) {
+function FooterEditorItem({ id, layout, disabled }: FooterEditorItemProps) {
   const {
     setNodeRef,
     setActivatorNodeRef,
@@ -256,8 +216,10 @@ function FooterEditorItem({ id, layout, disabled, onMove }: FooterEditorItemProp
       data-footer-item={id}
       className={cn(
         // The chip carries the reading the footer will show, not the setting's
-        // name: an item is recognised by what it puts on screen.
-        "group flex shrink-0 items-center rounded-md ring-1 ring-inset ring-border",
+        // name: an item is recognised by what it puts on screen. Nothing on it
+        // appears on hover: a control that grows under the pointer moves the
+        // chips beside it, which is exactly the moment a drag is being aimed.
+        "flex shrink-0 items-center rounded-md ring-1 ring-inset ring-border",
         inFooter ? "bg-background" : "bg-transparent text-muted-foreground",
         isDragging && "opacity-30",
       )}
@@ -275,78 +237,7 @@ function FooterEditorItem({ id, layout, disabled, onMove }: FooterEditorItemProp
         <Icon />
         {exampleOf(id)}
       </Button>
-      {/* Kept out of the resting chip: the menu and the remove are one hover
-          away, and a row of them across every chip was the loudest thing on the
-          pane. Collapsed to nothing rather than hidden, because `display: none`
-          takes them out of the tab order, and then focus-within can never fire
-          to bring them back — the keyboard would lose the only path to moving
-          an item without dragging it. */}
-      <span className="flex w-0 items-center overflow-hidden opacity-0 group-hover:w-auto group-hover:opacity-100 group-focus-within:w-auto group-focus-within:opacity-100">
-        <FooterItemMenu id={id} layout={layout} disabled={disabled} onMove={onMove} />
-        {inFooter && (
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            disabled={disabled}
-            aria-label={`Remove ${labelOf(id)}`}
-            onClick={() => onMove(id, "available")}
-          >
-            <X />
-          </Button>
-        )}
-      </span>
     </div>
-  )
-}
-
-function FooterItemMenu({ id, layout, disabled, onMove }: FooterEditorItemProps) {
-  const zone = footerZone(layout, id)
-  const items = zone === "available" ? [] : layout[zone]
-  const index = items.indexOf(id)
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        aria-label={`Options for ${labelOf(id)}`}
-        render={<Button variant="ghost" size="icon-xs" disabled={disabled} />}
-      >
-        <MoreHorizontal />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent>
-        <DropdownMenuGroup>
-          {zone !== "left" && (
-            <DropdownMenuItem onClick={() => onMove(id, "left")}>
-              <ArrowLeft />
-              {zone === "available" ? "Add to left" : "Move to left"}
-            </DropdownMenuItem>
-          )}
-          {zone !== "right" && (
-            <DropdownMenuItem onClick={() => onMove(id, "right")}>
-              <ArrowRight />
-              {zone === "available" ? "Add to right" : "Move to right"}
-            </DropdownMenuItem>
-          )}
-          {zone !== "available" && (
-            <>
-              <DropdownMenuItem disabled={index <= 0} onClick={() => onMove(id, items[index - 1])}>
-                <ChevronLeft />
-                Move earlier
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                disabled={index >= items.length - 1}
-                onClick={() => onMove(id, items[index + 1])}
-              >
-                <ChevronRight />
-                Move later
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onMove(id, "available")}>
-                <X />
-                Remove from footer
-              </DropdownMenuItem>
-            </>
-          )}
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
   )
 }
 

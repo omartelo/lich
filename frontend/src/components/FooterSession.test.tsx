@@ -261,24 +261,19 @@ test("zero cost remains a real reading", async () => {
   expect(button("Session cost").textContent).toContain("$0")
 })
 
-test("the editor removes items independently and restores the full default layout", async () => {
-  await act(async () => root.render(createElement(FooterSettings)))
-  await act(async () =>
-    container.querySelector<HTMLButtonElement>('[aria-label="Remove Model"]')?.click(),
-  )
-  expect(state.layout?.right).not.toContain("model")
-  expect(state.layout?.right).toContain("context")
-  await act(async () => root.render(createElement(FooterSettings)))
-  await act(async () =>
-    container.querySelector<HTMLButtonElement>('[aria-label="Remove Cost"]')?.click(),
-  )
-  const { setCostReadout } = await import("@/lib/cost-readout-store")
-  expect(setCostReadout).toHaveBeenCalledWith(false)
-  expect(state.context).toBe(true)
+// Contract changed: an item is moved and hidden by dragging it, so the chip has
+// no remove button to click. Restore default is the layout change jsdom can
+// still make, and it drops the cost item, which is the one that has to carry a
+// second write with it.
+test("restoring the default writes the layout and turns off the reading it drops", async () => {
+  state.layout = { left: ["attach"], right: ["cost", "context"] }
   await act(async () => root.render(createElement(FooterSettings)))
   await act(async () => button("Restore default").click())
+  const { setCostReadout } = await import("@/lib/cost-readout-store")
   expect(state.layout).toEqual(DEFAULT_FOOTER_LAYOUT)
+  expect(setCostReadout).toHaveBeenCalledWith(false)
   expect(state.cost).toBe(false)
+  expect(state.context).toBe(true)
 })
 
 test("the editor waits for the old cost setting before allowing a layout migration", async () => {
@@ -307,10 +302,9 @@ test("a saved layout controls the order and visibility of readings", async () =>
 test("a failed pricing-setting write leaves the previous layout in place", async () => {
   const { setCostReadout } = await import("@/lib/cost-readout-store")
   vi.mocked(setCostReadout).mockRejectedValueOnce(new Error("offline"))
+  state.layout = { left: ["attach"], right: ["cost"] }
   await act(async () => root.render(createElement(FooterSettings)))
-  await act(async () =>
-    container.querySelector<HTMLButtonElement>('[aria-label="Remove Cost"]')?.click(),
-  )
-  expect(state.layout).toBeNull()
-  expect(container.querySelector('[aria-label="Remove Cost"]')).not.toBeNull()
+  await act(async () => button("Restore default").click())
+  expect(state.layout).toEqual({ left: ["attach"], right: ["cost"] })
+  expect(container.querySelector('[data-footer-item="cost"]')).not.toBeNull()
 })
