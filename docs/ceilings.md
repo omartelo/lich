@@ -399,13 +399,15 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   it across sessions: a push that finds it full, and the flush a session runs before its exit banner so the banner
   cannot overtake its own last bytes.
 - **Single instance via the pinned port**: the bind is the lock (`internal/singleton`); a duplicate launch hands
-  its URL to the running window through Chromium's profile lock (`chromium.Focus`, best-effort, untested
-  against a real window) and exits 0. With the bundled window the hand-off is a second `lich-shell` on the same
-  profile: CEF reports the forward as a failed initialise, the duplicate exits 1, and `focusRunning` logs one
-  Warn per duplicate launch. Focus never climbs the ladder — a fallback there would open lich a second time, in
-  a system browser, on the profile the window owns — so a lich already running in the fallback browser is not
-  focused by it either. What the running window does with the forwarded command line, focus or a second
-  window, is unmeasured for the shell.
+  its URL to the running window through Chromium's profile lock (`chromium.Focus`) and exits 0. With the
+  bundled window the hand-off is a second `lich-shell` on the same profile: CEF forwards the command line to
+  the running one, which raises the window it has (the kurogane fork's relaunch hook; without it CEF opened a
+  second browser that kept lich alive after the window closed, #470), reports the forward as a failed
+  initialise, the duplicate exits 1, and `focusRunning` logs one Warn per duplicate launch. Raising is
+  best-effort: a Wayland compositor may only mark the window urgent. Focus never climbs the ladder — a
+  fallback there would open lich a second time, in a system browser, on the profile the window owns — so a
+  lich already running in the fallback browser is not focused by it either, and what a system browser does
+  with the forwarded command line is its own.
 - **lich appends to the agent's system prompt, for two providers only**
   (`internal/terminal/command.go`, `briefingFlags` → `relay.SpawnBriefing`): Claude Code and oh-my-pi are spawned
   with `--append-system-prompt` carrying lich's own briefing, so text the user never wrote is in every session's

@@ -193,6 +193,16 @@ jobs:
           grep -q '"title": *"lich"' "$RUNNER_TEMP/pages.json" || { echo "::error::the window never loaded lich's page"; cat "$APPDATA/lich/lich.log"; exit 1; }
           sleep 10
           tasklist | grep -q lich-shell.exe || { echo "::error::the window died"; cat "$APPDATA/lich/lich.log"; exit 1; }
+          # A second launch: lich finds the first on its port and hands the
+          # window its URL, which CEF forwards to the running browser. The
+          # forward used to open a second browser in it, a page more on CDP
+          # and a process that outlived the window's close (#470); the window
+          # now raises itself and the page count stays at one.
+          "$app/lich.exe" || { echo "::error::the duplicate launch exited $?"; cat "$APPDATA/lich/lich.log"; exit 1; }
+          sleep 5
+          curl -sf http://127.0.0.1:9334/json > "$RUNNER_TEMP/pages.json"
+          pages=$(grep -c '"type": *"page"' "$RUNNER_TEMP/pages.json")
+          [ "$pages" = 1 ] || { echo "::error::the forwarded launch left $pages pages in the window, expected one"; cat "$RUNNER_TEMP/pages.json"; cat "$APPDATA/lich/lich.log"; exit 1; }
           # A close request, not a kill: the same WM_CLOSE the restart flow posts.
           taskkill /IM lich-shell.exe > /dev/null
           for _ in $(seq 1 15); do sleep 1; tasklist | grep -q '^lich.exe' || break; done

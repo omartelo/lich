@@ -12,9 +12,10 @@ license = "AGPL-3.0-only"
 # supplies (kurogane#12), the NSApplication kept to the browser process
 # (kurogane#14), and the macOS bundle layout (framework in Contents/Frameworks,
 # subprocesses as the bundle's helper app) that upstream carries on its
-# seal-of-approval/distribution branch (53d51ba); move back to
+# seal-of-approval/distribution branch (53d51ba), and a relaunch on the
+# profile raising the window it already has (451bd7c); move back to
 # 0x48piraj/kurogane once they land (build/linux/shell/README.md).
-kurogane = { git = "https://github.com/omartelo/kurogane", rev = "12be327b0a47b9f16474ffcd7fa6700d7cf2af7f" }
+kurogane = { git = "https://github.com/omartelo/kurogane", rev = "451bd7c90ceb66447fa222f45402b7d1d794c74f" }
 
 # The CEF handler types a delegate returns (main.rs). Pinned to the revision
 # kurogane's own workspace pins: two cef crates in one binary are two different

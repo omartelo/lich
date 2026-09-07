@@ -161,6 +161,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Closing the window ends lich even after a second launch.** Starting lich
+  while it was already running raised its window, as it should, but the window
+  had been handed a whole second browser to do it, one with no window of its
+  own; closing the window you could see then left lich running with its port
+  held and no way back in, until it was killed. The window now raises itself on
+  that second launch and opens nothing else, so it closes the way it did before,
+  on Linux, Windows and macOS alike.
+
 - **Zooming the app now grows every label with it.** A handful of small labels
   were sized in absolute pixels rather than in the units the zoom control
   moves, so they stayed put while the chrome around them grew: the sandbox

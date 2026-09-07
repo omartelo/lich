@@ -5,8 +5,9 @@
 # is not proof), macOS counts exactly one application in Lich.app (lsappinfo,
 # which is what the Dock reads: a second entry is a subprocess with an
 # NSApplication of its own, and a Dock tile of its own with it, four of them
-# before kurogane#14), the window closes on SIGTERM, which is what the restart
-# flow sends, and lich exits with it. Its config lives under a HOME of its own.
+# before kurogane#14), a second launch is forwarded to the window without
+# opening a second browser in it (#470), the window closes on SIGTERM, which
+# is what the restart flow sends, and lich exits with it. Its config lives under a HOME of its own.
 # What a failure leaves behind goes to $RUNNER_TEMP/diag for the artifact the
 # workflow uploads.
 #
@@ -70,6 +71,16 @@ sleep 10
 # The browser process runs as lich-shell; the subprocesses are the helper apps.
 browser=$(pgrep -x lich-shell || true)
 test -n "$browser" || fail "the window died"
+
+# A second launch: lich finds the first on its port and hands the window its
+# URL, which CEF forwards to the running browser. The forward used to open a
+# second browser in it, a page more on CDP and a process that outlived the
+# window's close (#470); the window now raises itself and the count stays one.
+"$app/Contents/MacOS/lich" || fail "the duplicate launch exited $?"
+sleep 5
+curl -sf http://127.0.0.1:9334/json > "$pages"
+count=$(grep -c '"type": *"page"' "$pages" || true)
+[ "$count" = 1 ] || fail "the forwarded launch left $count pages in the window, expected one"
 
 lsappinfo list > "$RUNNER_TEMP/apps.txt"
 apps=$(grep -c 'bundle path=.*Lich.app' "$RUNNER_TEMP/apps.txt" || true)

@@ -21,8 +21,12 @@ the macOS bundle layout (the framework resolved from `Contents/Frameworks`,
 the subprocesses run as the bundle's helper app), which upstream carries on
 its `seal-of-approval/distribution` branch
 ([53d51ba](https://github.com/0x48piraj/kurogane/commit/53d51ba7d234161f8709109dcb8d6395f38c7bb4));
-lich's own PRs for that layout, #13 and #15, were closed as covered. All of
-it is carried meanwhile on the fork `shell/Cargo.toml` pins:
+lich's own PRs for that layout, #13 and #15, were closed as covered. One more
+fix is the fork's alone so far: a second launch on the profile makes CEF
+ask the running browser what to do with it, and kurogane answered nothing,
+so CEF opened a Chrome-style browser no window of ours owned and the app
+outlived its last window (lich#470); the fork raises the window it already
+has. All of it is carried meanwhile on the fork `shell/Cargo.toml` pins:
 `omartelo/kurogane`, branch `lich`, on top of upstream `eedaedc`.
 One wrinkle the patch works around: cef-rs hands CEF a *borrowed* string when
 it writes an out-parameter struct back, so a `wm_class_class` built from `&str`

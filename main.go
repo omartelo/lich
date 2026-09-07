@@ -449,10 +449,11 @@ func handleBindFailure(configDir string, cause error) {
 // window spawning its own process — see chromium.Args) instead of opening a new
 // one. Best effort — a failure only means the user raises the window by hand.
 //
-// Skipped for the dev shell (its own profile/port). On some Chromium builds a
-// forwarded --app may open a second app window rather than focus; the dup-free
-// fix is a per-platform window raise, which Wayland forbids for an external
-// process, so Chromium's IPC is the portable lever we have.
+// Skipped for the dev shell (its own profile/port). The bundled window raises
+// itself on the forward (the kurogane fork's relaunch hook); a system browser
+// does what it does with a forwarded --app. A per-platform raise from here is
+// no alternative: Wayland forbids it for an external process, so Chromium's
+// IPC is the portable lever we have.
 func focusRunning(configDir string, running *singleton.Info) {
 	if os.Getenv("LICH_DEV_URL") != "" {
 		return
