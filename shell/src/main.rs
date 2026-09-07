@@ -90,9 +90,13 @@ type OsEvent<'a> = *mut u8;
 
 /// Whether the page is given first refusal on a chord: every one carrying the
 /// primary modifier: Ctrl on Linux and Windows, Cmd on macOS.
+// The cast is required on Windows, where the flag's C int is signed, and
+// redundant on Linux and macOS, where it is not: the lint has to go, because
+// neither spelling alone builds on all three.
+#[allow(clippy::unnecessary_cast)]
 fn page_first(modifiers: u32) -> bool {
-    const PRIMARY: u32 =
-        cef_event_flags_t::EVENTFLAG_CONTROL_DOWN.0 | cef_event_flags_t::EVENTFLAG_COMMAND_DOWN.0;
+    const PRIMARY: u32 = cef_event_flags_t::EVENTFLAG_CONTROL_DOWN.0 as u32
+        | cef_event_flags_t::EVENTFLAG_COMMAND_DOWN.0 as u32;
     modifiers & PRIMARY != 0
 }
 
