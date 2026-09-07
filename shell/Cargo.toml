@@ -8,12 +8,12 @@ license = "AGPL-3.0-only"
 
 [dependencies]
 # The fork's `lich` branch: upstream eedaedc plus window_class / window_title /
-# window_icon / cache_dir (kurogane#11) and the macOS bundle's Contents/Frameworks
-# lookup (kurogane#13), the NSApplication kept to the browser process
-# (kurogane#14), the subprocesses run as the bundle's helper app (kurogane#15)
-# and the client handlers a browser delegate supplies (kurogane#12); move back
-# to 0x48piraj/kurogane once they land
-# (build/linux/shell/README.md).
+# window_icon / cache_dir (kurogane#11), the client handlers a browser delegate
+# supplies (kurogane#12), the NSApplication kept to the browser process
+# (kurogane#14), and the macOS bundle layout (framework in Contents/Frameworks,
+# subprocesses as the bundle's helper app) that upstream carries on its
+# seal-of-approval/distribution branch (53d51ba); move back to
+# 0x48piraj/kurogane once they land (build/linux/shell/README.md).
 kurogane = { git = "https://github.com/omartelo/kurogane", rev = "12be327b0a47b9f16474ffcd7fa6700d7cf2af7f" }
 
 # The CEF handler types a delegate returns (main.rs). Pinned to the revision

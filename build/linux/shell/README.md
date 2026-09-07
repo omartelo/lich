@@ -12,14 +12,18 @@ and a title) or place its Chromium profile where lich keeps one. Three builder
 methods fix that — `App::window_class`, `App::window_title`, `App::cache_dir` —
 submitted upstream as
 [0x48piraj/kurogane#11](https://github.com/0x48piraj/kurogane/pull/11), with
-the app-bundle framework lookup macOS needs as
-[0x48piraj/kurogane#13](https://github.com/0x48piraj/kurogane/pull/13), the
+the client handlers a browser delegate supplies (the keyboard handler that
+hands the page Chromium's reserved chords) as
+[0x48piraj/kurogane#12](https://github.com/0x48piraj/kurogane/pull/12), the
 `NSApplication` kept to the browser process as
-[0x48piraj/kurogane#14](https://github.com/0x48piraj/kurogane/pull/14), the
-subprocesses run as the bundle's helper app as
-[0x48piraj/kurogane#15](https://github.com/0x48piraj/kurogane/pull/15), and
-carried meanwhile on the fork `shell/Cargo.toml` pins: `omartelo/kurogane`,
-branch `lich`, on top of upstream `eedaedc`.
+[0x48piraj/kurogane#14](https://github.com/0x48piraj/kurogane/pull/14), and
+the macOS bundle layout (the framework resolved from `Contents/Frameworks`,
+the subprocesses run as the bundle's helper app), which upstream carries on
+its `seal-of-approval/distribution` branch
+([53d51ba](https://github.com/0x48piraj/kurogane/commit/53d51ba7d234161f8709109dcb8d6395f38c7bb4));
+lich's own PRs for that layout, #13 and #15, were closed as covered. All of
+it is carried meanwhile on the fork `shell/Cargo.toml` pins:
+`omartelo/kurogane`, branch `lich`, on top of upstream `eedaedc`.
 One wrinkle the patch works around: cef-rs hands CEF a *borrowed* string when
 it writes an out-parameter struct back, so a `wm_class_class` built from `&str`
 arrives empty — the fork allocates those through CEF's own
