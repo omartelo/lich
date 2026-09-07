@@ -8,10 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 > [!IMPORTANT]
-> **Lock your screen and walk away: the agents keep working.** While any
-> session has a turn open, lich holds the machine out of idle sleep the way a
-> playing media player does, on Windows, macOS and Linux alike. An idle prompt
-> lets it sleep again.
+> **Your own window on Windows and Apple Silicon, and agents that keep working
+> behind a locked screen.** The embedded Chromium the Linux packages ship now
+> sits inside the Windows installer and inside `Lich.app`, with lich's icon on
+> the taskbar and in the Dock. And while any session has a turn open, lich
+> holds the machine out of idle sleep the way a playing media player does.
 
 ### Added
 
