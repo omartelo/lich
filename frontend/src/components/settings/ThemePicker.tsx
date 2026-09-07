@@ -108,12 +108,6 @@ export function ThemePicker({
 }: ThemePickerProps) {
   const [open, setOpen] = useState(false)
   const system = value === SYSTEM_THEME
-  const choose = (id: Theme) => {
-    onSelect(id)
-    // The trigger repaints with the theme just picked, which is the receipt for
-    // the click; leaving the strip open would hide it behind the list.
-    setOpen(false)
-  }
 
   return (
     <div className="min-w-0">
@@ -155,7 +149,7 @@ export function ThemePicker({
               name="System"
               caption="follows the OS"
               selected={system}
-              onSelect={() => choose(SYSTEM_THEME)}
+              onSelect={() => onSelect(SYSTEM_THEME)}
               preview={<SystemMiniature themes={themes} className="h-[88px] w-full" />}
             />
             {themes.map((theme) => (
@@ -170,7 +164,7 @@ export function ThemePicker({
                       : "bundled"
                 }
                 selected={value === theme.id}
-                onSelect={() => choose(theme.id)}
+                onSelect={() => onSelect(theme.id)}
                 preview={<ThemeMiniature theme={theme} className="h-[88px] w-full" />}
                 actions={
                   theme.origin === "custom" && (
@@ -253,10 +247,13 @@ function ThemeCard({ name, caption, selected, preview, onSelect, actions }: Them
           "focus-visible:ring-2 focus-visible:ring-ring",
         )}
       >
+        {/* The ring sits inside the card: ring-offset draws outside the
+            element, and the strip scrolls, so the offset was clipped off
+            whichever card sat against an edge. */}
         <span
           className={cn(
             "block overflow-hidden rounded-md",
-            selected && "ring-2 ring-ring ring-offset-2 ring-offset-background",
+            selected && "ring-2 ring-inset ring-ring",
           )}
         >
           {preview}
