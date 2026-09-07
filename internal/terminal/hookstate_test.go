@@ -207,6 +207,14 @@ func TestInterruptedTurnReachesTheWindow(t *testing.T) {
 
 	postHook(t, svc, "s1", statusBusy)
 	sendInput(t, svc, "s1", []byte{esc})
+	// The keystroke is handled on the transport's own goroutine, so the write
+	// returning says only that the frame was sent. The hook below travels a
+	// second connection and is answered by a third goroutine: posting it here
+	// without waiting is a race the test would lose on a slow enough machine,
+	// and the contract is that the provider's report outranks the guess, never
+	// that the two cannot arrive at once.
+	waitFor(t, func() bool { return slices.Contains(rec.statesOf("s1"), statusInterrupted) },
+		"the interrupt raised at the PTY to reach the window")
 	postHook(t, svc, "s1", statusDone)
 
 	hub.Emit(probeReadyEvent, nil)
