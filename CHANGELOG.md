@@ -45,6 +45,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Appearance is a list now, and the theme shows its colors.** The pane put
+  every control under its own paragraph, so five settings filled a screen and a
+  256px dropdown sat in 600px of empty space. Each setting is one row: name on
+  the left, control on the right, the way Sandbox and Hotkeys already read.
+  Picking a theme opens a strip of previews under the row, two rows of
+  miniatures of the lich window in that theme, and choosing one closes it. The
+  terminal font row renders its sample in the font itself. Zoom and terminal
+  text size lost their permanent greyed-out Reset button: clicking the value
+  returns it to the default. The footer editor is always open at the foot of the
+  pane, its items carrying the reading they will show ("3 · +10 −2", "42%")
+  rather than their setting name, with the remove and the item menu appearing on
+  hover instead of sitting on every chip. The theme template moved into the
+  Import dialog, where writing a theme starts, and the "Imported themes" list is
+  gone: each theme's own card carries its repository, its version, and the
+  update and remove buttons.
+
 - **One theme now colors the app and the terminal.** Settings > Appearance had
   a second picker for the terminal, defaulting to "Match app", and every theme
   lich can install already carries both palettes: the interface tokens and the

@@ -27,17 +27,12 @@ export interface SettingEntry {
 
 // Every SettingBlock in the app, in the order its pane renders it.
 export const SETTING_ENTRIES: readonly SettingEntry[] = [
-  {
-    section: "appearance",
-    group: "Interface",
-    title: "Theme",
-    also: "colors dark light terminal palette",
-  },
-  { section: "appearance", group: "Interface", title: "Zoom" },
-  { section: "appearance", group: "Terminal", title: "Text size" },
-  { section: "appearance", group: "Terminal", title: "Font", also: "typeface monospace" },
-  { section: "appearance", group: "Footer", title: "Footer layout", also: "status bar arrange" },
-  { section: "appearance", group: "Footer", title: "Spend ceiling", also: "cost budget usd" },
+  { section: "appearance", title: "Theme", also: "colors dark light terminal palette" },
+  { section: "appearance", title: "Zoom" },
+  { section: "appearance", title: "Terminal text size" },
+  { section: "appearance", title: "Terminal font", also: "typeface monospace" },
+  { section: "appearance", title: "Footer", also: "status bar layout arrange" },
+  { section: "appearance", title: "Spend ceiling", also: "cost budget usd" },
   { section: "notifications", title: "Notify me when a session needs input" },
   { section: "notifications", title: "Notify me when a session finishes working" },
   { section: "providers", title: "Default provider", also: "agent new session" },

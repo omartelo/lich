@@ -1,16 +1,4 @@
-import {
-  CaseSensitive,
-  ChevronDown,
-  Download,
-  GitBranch,
-  Minus,
-  Plus,
-  RefreshCw,
-  Trash2,
-  Upload,
-  ZoomIn,
-  ZoomOut,
-} from "lucide-react"
+import { Minus, Plus, ZoomIn, ZoomOut } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 import {
@@ -29,35 +17,19 @@ import type { ThemeDefinition } from "@/lib/api-types"
 import { ProjectService, Themes } from "@/lib/rpc"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { Stepper } from "@/components/common/Stepper"
-import { SettingBlock, SettingGroup } from "./SettingBlock"
+import { SettingRow } from "./SettingBlock"
 import { FontSetting } from "./FontSetting"
 import { FooterSettings } from "./FooterSettings"
 import { ImportThemeDialog } from "./ImportThemeDialog"
+import { ThemePicker } from "./ThemePicker"
 import { Button } from "@/components/ui/button"
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import {
-  bundledThemes,
-  customThemes,
-  repoLabel,
-  SYSTEM_THEME,
-  THEME_TEMPLATE_FILENAME,
-  themeSelectItems,
-} from "@/lib/themes"
+import { THEME_TEMPLATE_FILENAME } from "@/lib/themes"
 import { errorText } from "@/lib/utils"
 
-// Appearance holds every look-and-feel control, split into an Interface group
-// (theme, zoom) and a Terminal group (text size, font) so the two concerns read
-// apart instead of as one flat list. The group label supplies the context, so
-// the block titles drop their "Interface"/"Terminal" prefix.
+// Appearance is a list of rows: a name on the left, its control on the right.
+// Two of them carry more than a control — the theme opens a strip of previews,
+// the footer an editor — and both open in place, below their own row, so the
+// pane never stops being one list.
 export function AppearanceSettings() {
   const [themePendingRemoval, setThemePendingRemoval] = useState<ThemeDefinition | null>(null)
   const [themePendingOverwrite, setThemePendingOverwrite] = useState<{
@@ -71,10 +43,10 @@ export function AppearanceSettings() {
   const [importOpen, setImportOpen] = useState(false)
   const [importing, setImporting] = useState(false)
   const [updatingID, setUpdatingID] = useState<string | null>(null)
-  const [importedThemesOpen, setImportedThemesOpen] = useState(false)
   const {
     themes,
     theme,
+    resolvedTheme,
     setTheme,
     importTheme,
     installThemesFromGit,
@@ -85,8 +57,6 @@ export function AppearanceSettings() {
     terminalFontSize,
     setTerminalFontSize,
   } = useSettings()
-  const importedThemes = customThemes(themes)
-  const hasCustomThemes = importedThemes.length > 0
 
   const onChooseThemeFile = async () => {
     setImporting(true)
@@ -181,278 +151,119 @@ export function AppearanceSettings() {
 
   return (
     <>
-      <SettingGroup label="Interface">
-        <SettingBlock
-          title="Theme"
-          description="Colors the interface and the terminal. System follows your OS and uses the bundled light or dark theme."
-        >
-          <div className="flex flex-wrap items-center gap-2">
-            <Select
-              value={theme}
-              items={themeSelectItems(themes, SYSTEM_THEME, "System")}
-              onValueChange={(value) => value && setTheme(value as Theme)}
-            >
-              <SelectTrigger className="w-64">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectLabel>Automatic</SelectLabel>
-                  <SelectItem value={SYSTEM_THEME}>System</SelectItem>
-                </SelectGroup>
-                <ThemeOptions themes={themes} />
-              </SelectContent>
-            </Select>
-            <Button type="button" variant="outline" onClick={() => setImportOpen(true)}>
-              <Upload />
-              Import
-            </Button>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Download Theme Template"
-                    onClick={() => void onDownloadThemeTemplate()}
-                  />
-                }
-              >
-                <Download />
-              </TooltipTrigger>
-              <TooltipContent>Download Theme Template</TooltipContent>
-            </Tooltip>
-          </div>
-          {hasCustomThemes && (
-            <div className="mt-3 w-full max-w-md">
-              <Button
-                type="button"
-                variant="ghost"
-                className="h-8 w-full justify-start px-1.5 text-muted-foreground"
-                aria-expanded={importedThemesOpen}
-                onClick={() => setImportedThemesOpen((open) => !open)}
-              >
-                <ChevronDown
-                  className={
-                    importedThemesOpen ? "transition-transform" : "-rotate-90 transition-transform"
-                  }
-                />
-                Imported themes ({importedThemes.length})
-              </Button>
-              {importedThemesOpen && (
-                <div className="mt-1 space-y-0.5">
-                  {importedThemes.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex min-h-10 items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent/50"
-                    >
-                      <span
-                        aria-hidden
-                        className="size-4 shrink-0 rounded-sm border border-border"
-                        style={{ backgroundColor: item.app.background }}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm">{item.name}</span>
-                        {/* The row is narrow: the repository replaces the id
-                            rather than sharing the line, or both truncate away. */}
-                        {item.source ? (
-                          <span className="flex min-w-0 items-center gap-1.5 font-mono text-xs text-muted-foreground">
-                            <GitBranch className="size-3 shrink-0" />
-                            <span className="truncate" title={item.source.url}>
-                              {repoLabel(item.source.url)}
-                            </span>
-                            <span className="shrink-0 tabular-nums">v{item.source.version}</span>
-                          </span>
-                        ) : (
-                          <span className="block truncate font-mono text-xs text-muted-foreground">
-                            {item.id}
-                          </span>
-                        )}
-                      </span>
-                      {item.source && (
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                aria-label={`Update ${item.name}`}
-                                disabled={updatingID !== null}
-                                onClick={() => void onUpdateTheme(item)}
-                              />
-                            }
-                          >
-                            <RefreshCw className={updatingID === item.id ? "animate-spin" : ""} />
-                          </TooltipTrigger>
-                          <TooltipContent>Check the repository for a newer version</TooltipContent>
-                        </Tooltip>
-                      )}
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label={`Remove ${item.name}`}
-                              onClick={() => setThemePendingRemoval(item)}
-                            />
-                          }
-                        >
-                          <Trash2 />
-                        </TooltipTrigger>
-                        <TooltipContent>{`Remove ${item.name}`}</TooltipContent>
-                      </Tooltip>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          <ImportThemeDialog
-            open={importOpen}
-            onOpenChange={setImportOpen}
-            onInstallRepository={(url) => installRepository(url, false)}
-            onChooseFile={onChooseThemeFile}
-            busy={importing}
-          />
-          <ConfirmDialog
-            open={packPendingOverwrite !== null}
-            onCancel={() => setPackPendingOverwrite(null)}
-            title="Replace imported themes?"
-            description={
-              <>
-                The repository carries themes that are already installed:{" "}
-                <span className="font-medium">{packPendingOverwrite?.conflicts.join(", ")}</span>.
-                Install anyway? This permanently deletes the previous versions.
-              </>
-            }
-          >
-            <Button
-              variant="destructive"
-              disabled={importing}
-              onClick={() => {
-                if (packPendingOverwrite) void installRepository(packPendingOverwrite.url, true)
-              }}
-            >
-              Replace themes
-            </Button>
-          </ConfirmDialog>
-          <ConfirmDialog
-            open={themePendingRemoval !== null}
-            onCancel={() => setThemePendingRemoval(null)}
-            title="Remove imported theme?"
-            description={
-              <>
-                Delete <span className="font-medium">{themePendingRemoval?.name}</span>? This
-                removes the imported theme file from lich.
-              </>
-            }
-          >
-            <Button variant="destructive" onClick={() => void onRemoveTheme()}>
-              Remove theme
-            </Button>
-          </ConfirmDialog>
-          <ConfirmDialog
-            open={themePendingOverwrite !== null}
-            onCancel={() => setThemePendingOverwrite(null)}
-            title="Replace imported theme?"
-            description={
-              <>
-                A theme with the id{" "}
-                <span className="font-medium">{themePendingOverwrite?.theme.id}</span> already
-                exists. Import anyway? This permanently deletes the previous theme.
-              </>
-            }
-          >
-            <Button variant="destructive" onClick={() => void onOverwriteTheme()}>
-              Replace theme
-            </Button>
-          </ConfirmDialog>
-        </SettingBlock>
+      <ThemePicker
+        themes={themes}
+        value={theme}
+        resolved={resolvedTheme}
+        onSelect={(id: Theme) => setTheme(id)}
+        onImport={() => setImportOpen(true)}
+        onUpdate={(item) => void onUpdateTheme(item)}
+        onRemove={setThemePendingRemoval}
+        updatingID={updatingID}
+      />
 
-        <SettingBlock
-          icon={<ZoomIn className="size-4" />}
-          title="Zoom"
-          description="Scales the interface."
-        >
-          <Stepper
-            value={zoom}
-            display={`${Math.round(zoom * 100)}%`}
-            min={ZOOM_MIN}
-            max={ZOOM_MAX}
-            step={ZOOM_STEP}
-            fallback={DEFAULT_ZOOM}
-            onChange={setZoom}
-            decrementIcon={<ZoomOut />}
-            incrementIcon={<ZoomIn />}
-            decrementLabel="Zoom out"
-            incrementLabel="Zoom in"
-          />
-        </SettingBlock>
-      </SettingGroup>
+      <SettingRow title="Zoom">
+        <Stepper
+          value={zoom}
+          display={`${Math.round(zoom * 100)}%`}
+          min={ZOOM_MIN}
+          max={ZOOM_MAX}
+          step={ZOOM_STEP}
+          fallback={DEFAULT_ZOOM}
+          name="the zoom"
+          onChange={setZoom}
+          decrementIcon={<ZoomOut />}
+          incrementIcon={<ZoomIn />}
+          decrementLabel="Zoom out"
+          incrementLabel="Zoom in"
+        />
+      </SettingRow>
 
-      <SettingGroup label="Terminal">
-        <SettingBlock
-          icon={<CaseSensitive className="size-4" />}
-          title="Text size"
-          description="Scales the terminal."
-        >
-          <Stepper
-            value={terminalFontSize}
-            display={`${terminalFontSize}px`}
-            min={TERMINAL_FONT_SIZE_MIN}
-            max={TERMINAL_FONT_SIZE_MAX}
-            step={TERMINAL_FONT_SIZE_STEP}
-            fallback={DEFAULT_TERMINAL_FONT_SIZE}
-            onChange={setTerminalFontSize}
-            decrementIcon={<Minus />}
-            incrementIcon={<Plus />}
-            decrementLabel="Smaller terminal text"
-            incrementLabel="Larger terminal text"
-          />
-        </SettingBlock>
+      <SettingRow title="Terminal text size">
+        <Stepper
+          value={terminalFontSize}
+          display={`${terminalFontSize}px`}
+          min={TERMINAL_FONT_SIZE_MIN}
+          max={TERMINAL_FONT_SIZE_MAX}
+          step={TERMINAL_FONT_SIZE_STEP}
+          fallback={DEFAULT_TERMINAL_FONT_SIZE}
+          name="the terminal text size"
+          onChange={setTerminalFontSize}
+          decrementIcon={<Minus />}
+          incrementIcon={<Plus />}
+          decrementLabel="Smaller terminal text"
+          incrementLabel="Larger terminal text"
+        />
+      </SettingRow>
 
-        <FontSetting />
-      </SettingGroup>
+      <FontSetting />
       <FooterSettings />
+
+      <ImportThemeDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onInstallRepository={(url) => installRepository(url, false)}
+        onChooseFile={onChooseThemeFile}
+        onDownloadTemplate={() => void onDownloadThemeTemplate()}
+        busy={importing}
+      />
+      <ConfirmDialog
+        open={packPendingOverwrite !== null}
+        onCancel={() => setPackPendingOverwrite(null)}
+        title="Replace imported themes?"
+        description={
+          <>
+            The repository carries themes that are already installed:{" "}
+            <span className="font-medium">{packPendingOverwrite?.conflicts.join(", ")}</span>.
+            Install anyway? This permanently deletes the previous versions.
+          </>
+        }
+      >
+        <Button
+          variant="destructive"
+          disabled={importing}
+          onClick={() => {
+            if (packPendingOverwrite) void installRepository(packPendingOverwrite.url, true)
+          }}
+        >
+          Replace themes
+        </Button>
+      </ConfirmDialog>
+      <ConfirmDialog
+        open={themePendingRemoval !== null}
+        onCancel={() => setThemePendingRemoval(null)}
+        title="Remove imported theme?"
+        description={
+          <>
+            Delete <span className="font-medium">{themePendingRemoval?.name}</span>? This removes
+            the imported theme file from lich.
+          </>
+        }
+      >
+        <Button variant="destructive" onClick={() => void onRemoveTheme()}>
+          Remove theme
+        </Button>
+      </ConfirmDialog>
+      <ConfirmDialog
+        open={themePendingOverwrite !== null}
+        onCancel={() => setThemePendingOverwrite(null)}
+        title="Replace imported theme?"
+        description={
+          <>
+            A theme with the id{" "}
+            <span className="font-medium">{themePendingOverwrite?.theme.id}</span> already exists.
+            Import anyway? This permanently deletes the previous theme.
+          </>
+        }
+      >
+        <Button variant="destructive" onClick={() => void onOverwriteTheme()}>
+          Replace theme
+        </Button>
+      </ConfirmDialog>
     </>
   )
 }
 
 function themeCount(count: number): string {
   return count === 1 ? "1 theme" : `${count} themes`
-}
-
-interface ThemeOptionsProps {
-  themes: readonly ThemeDefinition[]
-}
-
-function ThemeOptions({ themes }: ThemeOptionsProps) {
-  const bundled = bundledThemes(themes)
-  const custom = customThemes(themes)
-  return (
-    <>
-      <SelectGroup>
-        <SelectLabel>Bundled</SelectLabel>
-        {bundled.map((item) => (
-          <SelectItem key={item.id} value={item.id}>
-            {item.name}
-          </SelectItem>
-        ))}
-      </SelectGroup>
-      {custom.length > 0 && (
-        <SelectGroup>
-          <SelectLabel>Custom</SelectLabel>
-          {custom.map((item) => (
-            <SelectItem key={item.id} value={item.id}>
-              {item.name}
-            </SelectItem>
-          ))}
-        </SelectGroup>
-      )}
-    </>
-  )
 }

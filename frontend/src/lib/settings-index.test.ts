@@ -25,9 +25,9 @@ describe("searching the settings", () => {
   // One theme colors both surfaces, so there is one entry, and searching for
   // the terminal's colors has to reach it.
   it("answers the terminal's colors with the one Theme there is", () => {
-    const hits = find("theme").filter((entry) => entry.title === "Theme")
+    const themes = find("theme").filter((entry) => entry.title === "Theme")
 
-    expect(hits.map((entry) => entry.group)).toEqual(["Interface"])
+    expect(themes).toHaveLength(1)
     expect(find("palette").map((entry) => entry.title)).toContain("Theme")
   })
 
@@ -146,15 +146,16 @@ describe("the path over a result", () => {
 describe("the index against the panes it indexes", () => {
   const paneDir = fileURLToPath(new URL("../components/settings", import.meta.url))
 
-  // Every `<SettingBlock ... title=...>` in the settings components, whether the
-  // title is a plain string or a template with the project's name in it. Split
-  // rather than one regex: a block's other props hold JSX and arrow functions,
-  // so "everything up to the closing angle bracket" is not a thing to match.
+  // Every `<SettingBlock ... title=...>` and `<SettingRow ... title=...>` in the
+  // settings components, whether the title is a plain string or a template with
+  // the project's name in it. Split rather than one regex: a block's other props
+  // hold JSX and arrow functions, so "everything up to the closing angle
+  // bracket" is not a thing to match.
   function renderedTitles(): string[] {
     const titles: string[] = []
     for (const file of readdirSync(paneDir).filter((name) => name.endsWith(".tsx"))) {
       const source = readFileSync(`${paneDir}/${file}`, "utf8")
-      for (const block of source.split("<SettingBlock").slice(1)) {
+      for (const block of source.split(/<Setting(?:Block|Row)/).slice(1)) {
         const quoted = block.match(/^[\s\S]{0,400}?title="([^"]+)"/)
         const templated = block.match(/^[\s\S]{0,400}?title=\{`([^`$]+)/)
         const title = quoted?.[1] ?? templated?.[1]

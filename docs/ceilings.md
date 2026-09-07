@@ -850,7 +850,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   every control is listed there with the section and group it lives in, because the panes are React components
   whose blocks exist only once rendered and the suite runs in node. Two things follow. A block added without
   an entry is a control the search cannot find, which is why `settings-index.test.ts` reads the
-  `SettingBlock` literals back out of the source and fails on one nobody indexed; that guard is the only
+  `SettingBlock` and `SettingRow` literals back out of the source and fails on one nobody indexed; that guard is the only
   thing standing between this file and silent rot, so deleting it costs more than it looks. And the search
   matches titles plus a few hand-picked keywords, never a description, a stored value or a theme's name: a
   user hunting for `emerald` or a port number finds nothing, and the empty state says as much rather than
@@ -872,6 +872,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   gives the terminal its own theme again: an install that used one before this version still holds the id it
   had, so that feature must write a fresh key rather than adopting this one, which would silently restore a
   choice the user made under different rules.
+- **The footer editor's sides wrap, and stop lining up when they do**
+  (`FooterLayoutEditor.tsx`): each side is a tray of chips laid out with `flex-wrap`, so a user who turns on
+  most of the twelve items gets two rows in one column and one in the other, and the two stop reading as the
+  two ends of the footer. Chosen with the drag: the alternatives that never wrap are lists, one item per
+  line, and moving an item then stops being a drag between the sides. Both sides stretch to the taller of the
+  two so the block still reads as one thing. Whoever adds a thirteenth footer item is making that worse, and
+  the answer is not a narrower chip: it is deciding the drag is worth less than the alignment.
 - **A release's highlight is read from the binary, so fixing it after the tag fixes nothing a user sees**
   (`internal/patchnotes`): the What's new dialog parses the `CHANGELOG.md` embedded at build time — the alert
   blocks under the version heading included. Editing that release on GitHub, or the changelog on `main`,

@@ -12,7 +12,7 @@ import {
 import { errorText } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { SettingBlock, SettingGroup } from "./SettingBlock"
+import { SettingRow } from "./SettingBlock"
 import { FooterLayoutEditor, FooterLayoutPreview } from "./FooterLayoutEditor"
 
 export function FooterSettings() {
@@ -35,37 +35,37 @@ export function FooterSettings() {
     }
   }
   return (
-    <SettingGroup label="Footer">
-      <SettingBlock
-        title="Footer layout"
-        description="Drag items between the rows to show, hide or reorder them, or use an item's menu. Applies to every project and provider."
+    <>
+      {/* The row names the setting and holds the one control that is not a
+          drag; the editor below it is always open, because it is the thing the
+          row is about and hiding it behind a click buys nothing. */}
+      <SettingRow
+        title="Footer"
+        description={
+          !ready
+            ? "Loading saved choices…"
+            : saving
+              ? "Saving…"
+              : "Drag an item between the sides, or out to hide it. Applies to every project."
+        }
       >
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <span className="text-xs text-muted-foreground">
-            {!ready
-              ? "Loading saved choices…"
-              : saving
-                ? "Saving…"
-                : "Readings appear when the provider reports them."}
-          </span>
-          <Button
-            variant="ghost"
-            size="xs"
-            disabled={!ready || saving}
-            onClick={() => void change(DEFAULT_FOOTER_LAYOUT)}
-          >
-            Restore default
-          </Button>
-        </div>
-        <FooterLayoutEditor
-          layout={layout}
+        <Button
+          variant="ghost"
+          size="xs"
           disabled={!ready || saving}
-          onChange={(next) => void change(next)}
-        />
-        <FooterLayoutPreview layout={layout} />
-      </SettingBlock>
+          onClick={() => void change(DEFAULT_FOOTER_LAYOUT)}
+        >
+          Restore default
+        </Button>
+      </SettingRow>
+      <FooterLayoutEditor
+        layout={layout}
+        disabled={!ready || saving}
+        onChange={(next) => void change(next)}
+      />
+      <FooterLayoutPreview layout={layout} />
       {hasFooterItem(layout, "cost") && <SpendCeiling />}
-    </SettingGroup>
+    </>
   )
 }
 
@@ -74,9 +74,9 @@ function SpendCeiling() {
   // Preserve a half-typed decimal while the stored amount stays numeric.
   const [budget, setBudget] = useState(() => (costBudget > 0 ? String(costBudget) : ""))
   return (
-    <SettingBlock
+    <SettingRow
       title="Spend ceiling"
-      description="Warn as the session's API cost approaches this amount: amber at 80%, red at 95%. This does not stop the session or represent subscription charges. Leave empty for none."
+      description="Warn as the session's API cost nears this amount: amber at 80%, red at 95%. Empty for none."
     >
       <Input
         type="number"
@@ -91,6 +91,6 @@ function SpendCeiling() {
         aria-label="Session spend ceiling in dollars"
         className="w-40 font-mono"
       />
-    </SettingBlock>
+    </SettingRow>
   )
 }

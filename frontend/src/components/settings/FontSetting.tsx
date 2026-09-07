@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { SettingBlock } from "./SettingBlock"
+import { SettingRow } from "./SettingBlock"
 
 // A module-level constant, as every array `empty` has to be: a fresh one per
 // render would notify subscribers on every failed read.
@@ -35,9 +35,16 @@ export function FontSetting() {
   )
 
   return (
-    <SettingBlock title="Font" description="Font family used to render the terminal.">
+    <SettingRow
+      title="Terminal font"
+      description={
+        // The sample renders in the family itself: the answer to "which one is
+        // this" is the shape of the glyphs, not the name.
+        <span style={{ fontFamily: font }}>the quick brown fox 0O1lI</span>
+      }
+    >
       <Select value={font} onValueChange={(value) => value && setFont(value)}>
-        <SelectTrigger className="w-64">
+        <SelectTrigger className="w-56">
           <SelectValue placeholder="Select a font" />
         </SelectTrigger>
         <SelectContent>
@@ -50,6 +57,6 @@ export function FontSetting() {
           </SelectGroup>
         </SelectContent>
       </Select>
-    </SettingBlock>
+    </SettingRow>
   )
 }

@@ -58,3 +58,36 @@ export function SettingBlock({
     </section>
   )
 }
+
+// A setting that fits on one line: the name on the left, the control on the
+// right, hairline between rows. What Sandbox and Hotkeys already draw by hand,
+// and what Appearance moved to when its controls stopped needing a paragraph
+// each. A block is still the right shape for a control that carries an editor
+// or a long explanation; this is for the rest.
+export function SettingRow({
+  title,
+  description,
+  children,
+}: {
+  title: string
+  description?: ReactNode
+  children: ReactNode
+}) {
+  const { lit, ref } = useHighlight<HTMLElement>(title)
+
+  return (
+    <section
+      ref={ref}
+      className={cn(
+        "flex items-center justify-between gap-6 border-t border-border py-3 transition-colors duration-700 first:border-t-0",
+        lit && "-mx-3 rounded-lg bg-accent/60 px-3",
+      )}
+    >
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-foreground">{title}</div>
+        {description && <div className="mt-0.5 text-xs text-muted-foreground">{description}</div>}
+      </div>
+      <div className="flex shrink-0 items-center gap-2">{children}</div>
+    </section>
+  )
+}

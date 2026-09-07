@@ -30,7 +30,6 @@ import {
   Gauge,
   GitBranch,
   GitPullRequestArrow,
-  GripVertical,
   MoreHorizontal,
   Paperclip,
   Timer,
@@ -73,10 +72,11 @@ const ICONS: Record<FooterItem, LucideIcon> = {
   clock: Clock,
 }
 const LABELS: Record<FooterZone, string> = {
-  available: "Available items",
-  left: "Left side",
-  right: "Right side",
+  available: "Available",
+  left: "Left",
+  right: "Right",
 }
+const exampleOf = (id: FooterItem) => FOOTER_ITEMS.find((item) => item.id === id)?.example ?? id
 const labelOf = (id: FooterItem) => FOOTER_ITEMS.find((item) => item.id === id)?.label ?? id
 
 // Only a pointer inside a drop area may commit; inside it, items take precedence.
@@ -140,7 +140,26 @@ export function FooterLayoutEditor({ layout, disabled, onChange }: FooterLayoutE
       onDragEnd={drop}
       onDragCancel={() => setDragging(null)}
     >
-      <div className="flex min-w-0 flex-col gap-5">
+      <div className="flex min-w-0 flex-col gap-4">
+        {/* Two columns, one per end of the real footer, so an item sits on the
+            side it will show on. Available lands below them: what is in the
+            footer is what the pane is about. */}
+        <div className="grid min-w-0 grid-cols-2 gap-3">
+          <FooterZoneView
+            zone="left"
+            items={layout.left}
+            layout={layout}
+            disabled={disabled}
+            onMove={move}
+          />
+          <FooterZoneView
+            zone="right"
+            items={layout.right}
+            layout={layout}
+            disabled={disabled}
+            onMove={move}
+          />
+        </div>
         <FooterZoneView
           zone="available"
           items={available}
@@ -148,25 +167,11 @@ export function FooterLayoutEditor({ layout, disabled, onChange }: FooterLayoutE
           disabled={disabled}
           onMove={move}
         />
-        <FooterZoneView
-          zone="left"
-          items={layout.left}
-          layout={layout}
-          disabled={disabled}
-          onMove={move}
-        />
-        <FooterZoneView
-          zone="right"
-          items={layout.right}
-          layout={layout}
-          disabled={disabled}
-          onMove={move}
-        />
       </div>
       <DragOverlay>
         {dragging && (
-          <span className="rounded-md bg-popover px-3 py-2 text-xs shadow-md">
-            {labelOf(dragging)}
+          <span className="rounded-md bg-popover px-2.5 py-1.5 text-xs shadow-md">
+            {exampleOf(dragging)}
           </span>
         )}
       </DragOverlay>
@@ -188,15 +193,20 @@ function FooterZoneView({ zone, items, layout, disabled, onMove }: FooterZoneVie
     disabled,
     data: { empty: items.length === 0 },
   })
+  const side = zone !== "available"
   return (
-    <section className="min-w-0" aria-label={LABELS[zone]}>
-      <h3 className="mb-2 text-sm font-medium">{LABELS[zone]}</h3>
+    <section className="flex min-w-0 flex-col" aria-label={LABELS[zone]}>
+      <h3 className="mb-1.5 text-xs text-muted-foreground">{LABELS[zone]}</h3>
       <div
         ref={setNodeRef}
         data-footer-zone={zone}
         className={cn(
-          "flex min-h-12 flex-wrap items-center gap-1.5 border-y border-border px-1 py-3",
-          isOver && "bg-accent/50",
+          "flex flex-1 flex-wrap content-start items-center gap-1.5 rounded-lg p-2",
+          side ? "min-h-18 bg-sidebar" : "min-h-11",
+          // The outline is the answer to "does it land here", so it only exists
+          // while something is in the air; a permanent one reads as a border.
+          isOver && "ring-2 ring-ring",
+          zone === "right" && "justify-end",
         )}
       >
         <SortableContext items={items} strategy={rectSortingStrategy}>
@@ -211,8 +221,8 @@ function FooterZoneView({ zone, items, layout, disabled, onMove }: FooterZoneVie
           ))}
         </SortableContext>
         {items.length === 0 && (
-          <p className="px-2 py-3 text-xs text-muted-foreground">
-            {zone === "available" ? "Drag here to hide an item" : "Drag items here"}
+          <p className="px-1 text-xs text-muted-foreground">
+            {zone === "available" ? "Every item is in the footer" : "Drag items here"}
           </p>
         )}
       </div>
@@ -238,13 +248,17 @@ function FooterEditorItem({ id, layout, disabled, onMove }: FooterEditorItemProp
     isDragging,
   } = useSortable({ id, disabled })
   const Icon = ICONS[id]
+  const inFooter = hasFooterItem(layout, id)
   return (
     <div
       ref={setNodeRef}
       style={dragStyle(transform, transition)}
       data-footer-item={id}
       className={cn(
-        "flex shrink-0 items-center rounded-md bg-accent/30",
+        // The chip carries the reading the footer will show, not the setting's
+        // name: an item is recognised by what it puts on screen.
+        "group flex shrink-0 items-center rounded-md ring-1 ring-inset ring-border",
+        inFooter ? "bg-background" : "bg-transparent text-muted-foreground",
         isDragging && "opacity-30",
       )}
     >
@@ -256,24 +270,28 @@ function FooterEditorItem({ id, layout, disabled, onMove }: FooterEditorItemProp
         {...attributes}
         {...listeners}
         aria-label={`Move ${labelOf(id)}`}
-        className="touch-none cursor-grab active:cursor-grabbing"
+        className="touch-none cursor-grab tabular-nums active:cursor-grabbing"
       >
-        <GripVertical data-icon="inline-start" />
         <Icon />
-        {labelOf(id)}
+        {exampleOf(id)}
       </Button>
-      <FooterItemMenu id={id} layout={layout} disabled={disabled} onMove={onMove} />
-      {hasFooterItem(layout, id) && (
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          disabled={disabled}
-          aria-label={`Remove ${labelOf(id)}`}
-          onClick={() => onMove(id, "available")}
-        >
-          <X />
-        </Button>
-      )}
+      {/* Kept out of the resting chip: the menu and the remove are one hover
+          away, and a row of them across every chip was the loudest thing on the
+          pane. focus-within keeps them reachable without a pointer. */}
+      <span className="hidden items-center group-hover:flex group-focus-within:flex">
+        <FooterItemMenu id={id} layout={layout} disabled={disabled} onMove={onMove} />
+        {inFooter && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            disabled={disabled}
+            aria-label={`Remove ${labelOf(id)}`}
+            onClick={() => onMove(id, "available")}
+          >
+            <X />
+          </Button>
+        )}
+      </span>
     </div>
   )
 }

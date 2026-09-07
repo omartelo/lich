@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { FileJson } from "lucide-react"
+import { Download, FileJson } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -19,6 +19,8 @@ interface ImportThemeDialogProps {
   onInstallRepository: (url: string) => Promise<void>
   /** Open the native picker for a single theme file. */
   onChooseFile: () => Promise<void>
+  /** Save the theme template, the starting point for writing one. */
+  onDownloadTemplate: () => void
   /** True while a clone or a file import is in flight. */
   busy: boolean
 }
@@ -30,6 +32,7 @@ export function ImportThemeDialog({
   onOpenChange,
   onInstallRepository,
   onChooseFile,
+  onDownloadTemplate,
   busy,
 }: ImportThemeDialogProps) {
   const [url, setUrl] = useState("")
@@ -96,7 +99,14 @@ export function ImportThemeDialog({
             A single theme file. No version, no updates.
           </span>
         </div>
-        <DialogFooter>
+        <DialogFooter className="sm:justify-between">
+          {/* Writing a theme starts here, so the template belongs to this
+              dialog. On the pane it was an unlabelled download glyph beside
+              Import, which named neither the file nor what it was for. */}
+          <Button type="button" variant="ghost" disabled={busy} onClick={onDownloadTemplate}>
+            <Download />
+            Download template
+          </Button>
           <Button variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
