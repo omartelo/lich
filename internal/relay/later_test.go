@@ -180,3 +180,30 @@ func TestDeliverDueSurvivesAnUnreadableWorkspace(t *testing.T) {
 	svc := newRelay(fakeSessions{err: errors.New("no database")}, newFakeTerminal("s1"), nil)
 	svc.deliverDue()
 }
+
+// A resume re-keys the session under a fresh id and carries the parked prompt
+// with it (internal/store, reopen). What that leaves for this end is a prompt
+// that came due while nobody could type it: it lands on the resumed card's
+// first free prompt, and the row cleared is the resumed one: the id it was
+// scheduled under is gone.
+func TestDeliverDueTypesAPromptParkedThroughAResume(t *testing.T) {
+	writer := &scheduleWriter{}
+	sessions := fakeSessions{
+		projects: []store.Project{{ID: "p1", Name: "lich", Sessions: []store.Session{
+			{ID: "s2", Label: "worker", Kind: "claude", ScheduledAt: 1000, ScheduledPrompt: "pick it back up"},
+		}}},
+		schedule: writer.set,
+	}
+	term := newFakeTerminal("s2")
+	svc := newRelay(sessions, term, nil)
+	svc.now = at(1000 + 2*60*60)
+
+	svc.deliverDue()
+
+	if got := term.written("s2"); !strings.Contains(got, "pick it back up") {
+		t.Fatalf("typed at s2 = %q, want the prompt parked before the resume", got)
+	}
+	if got := writer.clearedRows(); len(got) != 1 || got[0] != "s2" {
+		t.Fatalf("cleared = %v, want the resumed row [s2]", got)
+	}
+}
