@@ -6,7 +6,6 @@ import {
   Minus,
   Plus,
   RefreshCw,
-  SquareTerminal,
   Trash2,
   Upload,
   ZoomIn,
@@ -25,7 +24,7 @@ import {
   ZOOM_STEP,
   useSettings,
 } from "@/providers/settings"
-import type { TerminalTheme, Theme } from "@/providers/settings"
+import type { Theme } from "@/providers/settings"
 import type { ThemeDefinition } from "@/lib/api-types"
 import { ProjectService, Themes } from "@/lib/rpc"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
@@ -48,7 +47,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import {
   bundledThemes,
   customThemes,
-  MATCH_TERMINAL_THEME,
   repoLabel,
   SYSTEM_THEME,
   THEME_TEMPLATE_FILENAME,
@@ -57,9 +55,9 @@ import {
 import { errorText } from "@/lib/utils"
 
 // Appearance holds every look-and-feel control, split into an Interface group
-// (theme, zoom) and a Terminal group (background, text size, font) so the two
-// concerns read apart instead of as one flat list. The group label supplies the
-// context, so the block titles drop their "Interface"/"Terminal" prefix.
+// (theme, zoom) and a Terminal group (text size, font) so the two concerns read
+// apart instead of as one flat list. The group label supplies the context, so
+// the block titles drop their "Interface"/"Terminal" prefix.
 export function AppearanceSettings() {
   const [themePendingRemoval, setThemePendingRemoval] = useState<ThemeDefinition | null>(null)
   const [themePendingOverwrite, setThemePendingOverwrite] = useState<{
@@ -86,8 +84,6 @@ export function AppearanceSettings() {
     setZoom,
     terminalFontSize,
     setTerminalFontSize,
-    terminalTheme,
-    setTerminalTheme,
   } = useSettings()
   const importedThemes = customThemes(themes)
   const hasCustomThemes = importedThemes.length > 0
@@ -188,7 +184,7 @@ export function AppearanceSettings() {
       <SettingGroup label="Interface">
         <SettingBlock
           title="Theme"
-          description="Controls the app color tokens. System follows your OS and uses the bundled light or dark theme."
+          description="Colors the interface and the terminal. System follows your OS and uses the bundled light or dark theme."
         >
           <div className="flex flex-wrap items-center gap-2">
             <Select
@@ -399,29 +395,6 @@ export function AppearanceSettings() {
       </SettingGroup>
 
       <SettingGroup label="Terminal">
-        <SettingBlock
-          icon={<SquareTerminal className="size-4" />}
-          title="Theme"
-          description="Match app keeps the terminal in sync with the interface theme so text stays legible."
-        >
-          <Select
-            value={terminalTheme}
-            items={themeSelectItems(themes, MATCH_TERMINAL_THEME, "Match app")}
-            onValueChange={(value) => value && setTerminalTheme(value as TerminalTheme)}
-          >
-            <SelectTrigger className="w-64">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectLabel>Automatic</SelectLabel>
-                <SelectItem value={MATCH_TERMINAL_THEME}>Match app</SelectItem>
-              </SelectGroup>
-              <ThemeOptions themes={themes} />
-            </SelectContent>
-          </Select>
-        </SettingBlock>
-
         <SettingBlock
           icon={<CaseSensitive className="size-4" />}
           title="Text size"

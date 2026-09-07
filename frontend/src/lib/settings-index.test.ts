@@ -22,12 +22,13 @@ describe("searching the settings", () => {
     expect(titles).toContain("SSH agent")
   })
 
-  it("finds both Themes, and the path is what tells them apart", () => {
-    const groups = find("theme")
-      .filter((entry) => entry.title === "Theme")
-      .map((entry) => entry.group)
+  // One theme colors both surfaces, so there is one entry, and searching for
+  // the terminal's colors has to reach it.
+  it("answers the terminal's colors with the one Theme there is", () => {
+    const hits = find("theme").filter((entry) => entry.title === "Theme")
 
-    expect(groups).toEqual(["Interface", "Terminal"])
+    expect(hits.map((entry) => entry.group)).toEqual(["Interface"])
+    expect(find("palette").map((entry) => entry.title)).toContain("Theme")
   })
 
   // The words nobody would guess from the title are the point of `also`: the

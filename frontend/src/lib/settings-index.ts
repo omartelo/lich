@@ -1,5 +1,5 @@
 // What the settings search looks through. The nav has eight labels; the things
-// people actually look for are the twenty-five controls under them, and until
+// people actually look for are the two dozen controls under them, and until
 // this existed a search for "theme" or "ssh" answered that nothing matched.
 //
 // The index is written out rather than derived from the rendered tree: the
@@ -13,7 +13,7 @@ export interface SettingEntry {
   /** The nav section that opens it, by the id Settings.tsx gives it. */
   section: string
   /** The group inside the pane, where the pane has groups. Part of the path a
-   * result shows, and the only thing that tells the two Themes apart. */
+   * result shows. */
   group?: string
   /** The block's own title, verbatim from its SettingBlock. */
   title: string
@@ -27,9 +27,13 @@ export interface SettingEntry {
 
 // Every SettingBlock in the app, in the order its pane renders it.
 export const SETTING_ENTRIES: readonly SettingEntry[] = [
-  { section: "appearance", group: "Interface", title: "Theme", also: "colors dark light" },
+  {
+    section: "appearance",
+    group: "Interface",
+    title: "Theme",
+    also: "colors dark light terminal palette",
+  },
   { section: "appearance", group: "Interface", title: "Zoom" },
-  { section: "appearance", group: "Terminal", title: "Theme", also: "colors palette" },
   { section: "appearance", group: "Terminal", title: "Text size" },
   { section: "appearance", group: "Terminal", title: "Font", also: "typeface monospace" },
   { section: "appearance", group: "Footer", title: "Footer layout", also: "status bar arrange" },

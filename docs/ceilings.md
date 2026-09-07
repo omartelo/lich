@@ -865,6 +865,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   the pane they were on is gone. The same holds for the provider a Providers pane had open
   (`lich.settings.provider`), which is genuinely unknowable at build time: it resolves back to the list while
   that provider is disabled, and comes back when it is turned on again.
+- **The old terminal-theme selection is left where it was written** (`appearance.terminalTheme` in the
+  workspace database, `lich.appearance.terminalTheme` in localStorage): one theme now colors both surfaces,
+  and nothing reads either key any more. They are not deleted on upgrade, because a migration that runs on
+  every launch to clear a value nobody reads costs more than the row it removes. The trap is for whoever
+  gives the terminal its own theme again: an install that used one before this version still holds the id it
+  had, so that feature must write a fresh key rather than adopting this one, which would silently restore a
+  choice the user made under different rules.
 - **A release's highlight is read from the binary, so fixing it after the tag fixes nothing a user sees**
   (`internal/patchnotes`): the What's new dialog parses the `CHANGELOG.md` embedded at build time — the alert
   blocks under the version heading included. Editing that release on GitHub, or the changelog on `main`,

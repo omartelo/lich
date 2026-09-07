@@ -147,8 +147,8 @@ export function TerminalView({
   onClose,
   stillInWorkspace,
 }: TerminalViewProps) {
-  const { font, terminalFontSize, resolvedTerminalTheme } = useSettings()
-  const terminalColors = resolvedTerminalTheme.terminal
+  const { font, terminalFontSize, resolvedTheme } = useSettings()
+  const terminalColors = resolvedTheme.terminal
   const { activateSession } = useProjects()
   const navigate = useNavigate()
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -742,9 +742,9 @@ export function TerminalView({
   useEffect(() => {
     const live = liveRef.current
     if (live) {
-      live.term.options.theme = resolvedTerminalTheme.terminal
+      live.term.options.theme = resolvedTheme.terminal
     }
-  }, [resolvedTerminalTheme])
+  }, [resolvedTheme])
 
   // The container carries the terminal's own background: the sub-cell
   // remainder of the grid fit and the ruler gutter then blend into the

@@ -45,6 +45,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **One theme now colors the app and the terminal.** Settings > Appearance had
+  a second picker for the terminal, defaulting to "Match app", and every theme
+  lich can install already carries both palettes: the interface tokens and the
+  terminal's sixteen colors. The terminal now always paints the palette of the
+  theme you picked, and the extra picker is gone. A terminal you had pointed at
+  a different theme follows the app one from this version on.
+
 - **The app icon sits on a dark plate.** The launcher, dock, taskbar and Start
   Menu icon was the bare white mark on a transparent background, invisible on
   a light taskbar or launcher, and no desktop swaps an app icon with its
