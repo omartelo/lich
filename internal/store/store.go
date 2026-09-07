@@ -120,6 +120,16 @@ CREATE TABLE IF NOT EXISTS session_hands_on (
     -- only ever hands whole seconds down (internal/terminal.handsOn).
     seconds    INTEGER NOT NULL DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS session_last_turn (
+    session_id  TEXT NOT NULL PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+    -- The trees a session's last finished turn ran between, and when its window
+    -- shut in unix milliseconds. One row per session, replaced by each turn:
+    -- the panel answers for the LAST turn and there is no history behind it.
+    before_tree TEXT    NOT NULL,
+    after_tree  TEXT    NOT NULL,
+    ended_at    INTEGER NOT NULL DEFAULT 0
+);
 `
 
 // busyTimeoutMS is how long a write waits on SQLite's lock before failing.

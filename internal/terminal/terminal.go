@@ -18,6 +18,7 @@ import (
 	"github.com/omartelo/lich/internal/awake"
 	"github.com/omartelo/lich/internal/events"
 	"github.com/omartelo/lich/internal/pricing"
+	"github.com/omartelo/lich/internal/store"
 )
 
 // Event names. A terminal I/O event carries the session ID as a suffix (e.g.
@@ -206,6 +207,8 @@ type Store interface {
 	SessionCost(sessionID string) (float64, error)
 	AddHandsOn(sessionID string, seconds int64) error
 	HandsOn(sessionID string) (int64, error)
+	SaveTurnRecord(sessionID string, rec store.TurnRecord) error
+	TurnRecord(sessionID string) (store.TurnRecord, bool, error)
 }
 
 // Service manages PTY-backed shell sessions keyed by session ID.
@@ -347,6 +350,10 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 	s.snaps.filed = func(id string) {
 		hub.Emit(turnEventName, turnEvent{ID: id})
 	}
+	// What a turn recorded outlives the process that recorded it: a session
+	// restored at launch answers for its last turn straight away, instead of
+	// reading as unrecorded until its next one ends.
+	s.snaps.store = store
 	// While any turn is open the machine is kept from idling into sleep, the
 	// way a playing media player keeps it: a locked screen no longer pauses
 	// the agents (internal/awake).

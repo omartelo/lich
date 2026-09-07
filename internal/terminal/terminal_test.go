@@ -21,6 +21,7 @@ import (
 	"github.com/omartelo/lich/internal/events"
 	"github.com/omartelo/lich/internal/providers"
 	"github.com/omartelo/lich/internal/shquote"
+	"github.com/omartelo/lich/internal/store"
 )
 
 // stubBins is a Store returning a fixed binary path and project directory,
@@ -53,6 +54,10 @@ type stubBins struct {
 	// Nil until a test cares: the flush only ever writes for a session the
 	// accumulator actually counted something for.
 	handsOn map[string]int64
+	// The last finished turn per session, the shape store.SaveTurnRecord files.
+	// Nil until a test cares, and then it stands in for the workspace database
+	// across a restart.
+	turns map[string]store.TurnRecord
 	// One field per cost method, because the three failures are three different
 	// stories: a ledger that cannot be read, one that cannot be written, and a
 	// total that cannot be summed. A single error field would let a test claim
@@ -165,6 +170,18 @@ func (s stubBins) AddHandsOn(sessionID string, seconds int64) error {
 }
 
 func (s stubBins) HandsOn(sessionID string) (int64, error) { return s.handsOn[sessionID], nil }
+
+func (s stubBins) SaveTurnRecord(sessionID string, rec store.TurnRecord) error {
+	if s.turns != nil {
+		s.turns[sessionID] = rec
+	}
+	return nil
+}
+
+func (s stubBins) TurnRecord(sessionID string) (store.TurnRecord, bool, error) {
+	rec, ok := s.turns[sessionID]
+	return rec, ok, nil
+}
 
 // TestChildEnvStripsAppImageVars proves the AppImage runtime variables that break
 // mise/asdf shims are dropped while the real user environment is passed through.

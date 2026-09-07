@@ -198,24 +198,25 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   whose detail carries no commits. And there is no expanding *past the last hunk*: a unified diff carries
   no file length, so nothing here knows whether anything follows it, and an affordance drawn there would
   be a no-op on every file whose change reaches the end.
-- **The Review panel's "Last turn" is a window of wall-clock time, and it lives in memory**
+- **The Review panel's "Last turn" is a window of wall-clock time**
   (`internal/terminal/turnsnap.go`, `internal/project/turnsnap.go`): the panel brackets a turn with two
   `git write-tree` snapshots taken against an index of lich's own, so what it shows is everything that
   touched the checkout between the `busy` and the `done` — a formatter, an editor open beside lich, the
   user's own hands. Nothing in it can attribute a line, which is why the copy names the window and never
-  the agent. Four traps follow. The pair is held in Go memory alone: a lich restart empties it, so every
-  live session reads "No last turn recorded" until its next turn ends, and that wording is the same one a
-  session whose first turn is still running gets — the panel cannot say which. `add -A` obeys `.gitignore`
-  (deliberately, so this and `DiffText` never disagree about which files exist), so a turn that only
-  touched ignored files reports itself as having changed nothing. Every snapshot in the app runs on one
-  FIFO worker, because git refuses a second `add` against an index another holds — so one session's first
-  snapshot of a large checkout delays the next session's, and a queue past `snapQueueDepth` drops a job,
-  costing that turn its record with only the log saying so. A checkout whose *first* snapshot fails is
-  dropped outright and never asked again — the ordinary reason is a session opened outside a repository,
-  but a transient failure at spawn reads the same and leaves that card with no last turn until it respawns. And the boundary is the session-state contract,
-  so **Crush and Cursor CLI have no last turn at all**: neither reports a state (`docs/hooks/session-state.md`),
-  so nothing ever opens or closes a window there and the switch is never drawn — a rule read off the
-  session's own reports, not a list of providers, so it corrects itself the day either one starts reporting.
+  the agent. Four traps follow. `add -A` obeys `.gitignore` (deliberately, so this and `DiffText` never
+  disagree about which files exist), so a turn that only touched ignored files reports itself as having
+  changed nothing. Every snapshot in the app runs on one FIFO worker, because git refuses a second `add`
+  against an index another holds — so one session's first snapshot of a large checkout delays the next
+  session's, and a queue past `snapQueueDepth` drops a job, costing that turn its record with only the log
+  saying so. A checkout whose *first* snapshot fails is dropped outright and never asked again — the
+  ordinary reason is a session opened outside a repository, but a transient failure at spawn reads the same
+  and leaves that card with no last turn until it respawns. A pair read back at launch names loose objects
+  no ref reaches, so a `git gc --prune` in that checkout between one run and the next leaves the panel
+  reporting a failure rather than an absent turn. And the boundary is the session-state contract, so
+  **Crush and Cursor CLI have no last turn at all**: neither reports a state
+  (`docs/hooks/session-state.md`), so nothing ever opens or closes a window there and the switch is never
+  drawn — a rule read off the session's own reports, not a list of providers, so it corrects itself the day
+  either one starts reporting.
 - **The recap beside that diff answers to a different clock, and to a different set of providers**
   (`internal/terminal/said.go`): the band reads the last thing the agent *said* out of the provider's own
   transcript, where the diff beside it brackets the window a turn ran in. The two agree once a turn has

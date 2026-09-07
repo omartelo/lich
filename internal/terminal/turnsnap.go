@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/omartelo/lich/internal/project"
+	"github.com/omartelo/lich/internal/store"
 )
 
 // snapQueueDepth bounds the work waiting on the snapshot worker. A full queue
@@ -85,6 +86,17 @@ type turnSnaps struct {
 	// the only moment the panel can act on: a turn is filed on the worker, well
 	// after the `done` that closed it. Nil in a test that does not care.
 	filed func(id string)
+	// store keeps the filed pair across runs of lich, so a session restored at
+	// launch can answer for its last turn without waiting for its next one to
+	// end. Nil in a test that does not care, and then a record lives only as
+	// long as the process.
+	store turnStore
+}
+
+// turnStore is the workspace database as this file uses it.
+type turnStore interface {
+	SaveTurnRecord(sessionID string, rec store.TurnRecord) error
+	TurnRecord(sessionID string) (store.TurnRecord, bool, error)
 }
 
 // track binds a session to the checkout its PTY was spawned at and warms the
@@ -92,6 +104,11 @@ type turnSnaps struct {
 // the whole worktree. Any previous accounting under this id belongs to the
 // provider that left: a respawn is a new session's turns, and the last one it
 // recorded is not this one's.
+//
+// The exception is the spawn of a session this run has not tracked at all —
+// the card being restored at launch — which reads its last turn back from the
+// workspace database. That is the only reload: a session already tracked keeps
+// what this run gave it, so the rule above still holds for every respawn.
 func (t *turnSnaps) track(id, dir string) {
 	if id == "" || dir == "" {
 		return
@@ -101,11 +118,12 @@ func (t *turnSnaps) track(id, dir string) {
 		slog.Warn("turnsnap: no place to keep the index", "session", id, "err", err)
 		return
 	}
+	last := t.reload(id)
 	t.mu.Lock()
 	if t.sessions == nil {
 		t.sessions = make(map[string]*snapState)
 	}
-	t.sessions[id] = &snapState{dir: dir, index: index}
+	t.sessions[id] = &snapState{dir: dir, index: index, last: last}
 	t.mu.Unlock()
 	// Warming discards the tree it computes: what is being bought is git's stat
 	// cache in the index file, not the oid.
@@ -120,6 +138,30 @@ func (t *turnSnaps) track(id, dir string) {
 			t.forget(id)
 		}
 	})
+}
+
+// reload reads a session's last finished turn back out of the workspace
+// database, and answers nil for every session that is not being restored: one
+// this run is already tracking, or one nothing has ever filed a turn for. A
+// read that fails is a session without a last turn, which the panel already has
+// words for — never a spawn that refuses to happen.
+func (t *turnSnaps) reload(id string) *turnPair {
+	t.mu.Lock()
+	_, tracked := t.sessions[id]
+	db := t.store
+	t.mu.Unlock()
+	if tracked || db == nil {
+		return nil
+	}
+	rec, ok, err := db.TurnRecord(id)
+	if err != nil {
+		slog.Warn("turnsnap: reading back the last turn failed", "session", id, "err", err)
+		return nil
+	}
+	if !ok {
+		return nil
+	}
+	return &turnPair{before: rec.Before, after: rec.After, endedAt: time.UnixMilli(rec.EndedAt)}
 }
 
 // note reads one session-state report as a turn boundary. Repeat `busy` reports
@@ -196,8 +238,29 @@ func (t *turnSnaps) closeTurn(id string) {
 		if ok && state.seq == seq && err == nil && state.before != "" {
 			state.last = &turnPair{before: state.before, after: oid, endedAt: time.Now()}
 		}
-		filed := t.filed
+		// The same seq guard the record itself answers to: a session re-tracked
+		// while this job was queued is no longer the one that asked for it, and
+		// writing here would file its turn — or, worse, clear it.
+		mine := ok && state.seq == seq
+		var rec store.TurnRecord
+		if mine && state.last != nil {
+			rec = store.TurnRecord{
+				Before:  state.last.before,
+				After:   state.last.after,
+				EndedAt: state.last.endedAt.UnixMilli(),
+			}
+		}
+		filed, db := t.filed, t.store
 		t.mu.Unlock()
+		// Written whatever the outcome, and off the lock: a turn that lost its
+		// snapshot clears the row too, or the next launch would answer with a
+		// turn this lich has already retracted. Only a closed turn reaches
+		// here — an open one has no pair to write.
+		if db != nil && mine {
+			if err := db.SaveTurnRecord(id, rec); err != nil {
+				slog.Warn("turnsnap: saving the last turn failed", "session", id, "err", err)
+			}
+		}
 		// Outside the lock, and whatever the outcome: a turn that lost its
 		// snapshot changed the answer too, from "the turn before" to "none".
 		if filed != nil {

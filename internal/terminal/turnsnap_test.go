@@ -5,8 +5,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/omartelo/lich/internal/store"
 )
 
 // snapRepo creates a git repository with one commit and a Service wired to keep
@@ -319,6 +322,7 @@ func TestRespawnDropsThePreviousProvidersTurn(t *testing.T) {
 	openAndWait(t, svc, "s1")
 	writeIn(t, repo, "a.txt", "the last provider's work\n")
 	closeAndWait(t, svc, "s1", turnDiffOK)
+	drainSnaps(t, svc)
 
 	svc.snaps.track("s1", repo)
 	turn, err := svc.LastTurnDiff("s1")
@@ -463,5 +467,143 @@ func TestACheckoutGitCannotSnapshotIsDropped(t *testing.T) {
 	if turn.State != turnDiffUnavailable {
 		t.Errorf("a directory outside a repository reads as %q, want %q",
 			turn.State, turnDiffUnavailable)
+	}
+}
+
+// memTurns is the workspace database as turnSnaps uses it, held in memory so a
+// test can hand the same one to two services and read the second as the lich
+// that launched after the first was closed.
+type memTurns struct {
+	mu      sync.Mutex
+	records map[string]store.TurnRecord
+}
+
+func (m *memTurns) SaveTurnRecord(sessionID string, rec store.TurnRecord) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if rec.Before == "" || rec.After == "" {
+		delete(m.records, sessionID)
+		return nil
+	}
+	m.records[sessionID] = rec
+	return nil
+}
+
+func (m *memTurns) TurnRecord(sessionID string) (store.TurnRecord, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	rec, ok := m.records[sessionID]
+	return rec, ok, nil
+}
+
+// relaunch is the lich that starts after the one holding svc has exited: a new
+// service over the same workspace database and the same checkout, with indexes
+// of its own the way a fresh process finds them.
+func relaunch(t *testing.T, db *memTurns) *Service {
+	t.Helper()
+	svc := &Service{}
+	svc.snaps.root = t.TempDir()
+	svc.snaps.store = db
+	t.Cleanup(func() { drainSnaps(t, svc) })
+	return svc
+}
+
+// The trap this closes: the pair lived in Go memory alone, so every restored
+// session read as unrecorded until its next turn ended — which, for a session
+// nobody is typing at, is never.
+func TestARestoredSessionAnswersItsLastTurn(t *testing.T) {
+	svc, repo := snapRepo(t)
+	db := &memTurns{records: map[string]store.TurnRecord{}}
+	svc.snaps.store = db
+	svc.snaps.track("s1", repo)
+
+	openAndWait(t, svc, "s1")
+	writeIn(t, repo, "a.txt", "one\ntwo\n")
+	filed := closeAndWait(t, svc, "s1", turnDiffOK)
+	// The panel can read the record before the worker has written it: the save
+	// runs in the same job, after the lock the answer came from is released.
+	drainSnaps(t, svc)
+
+	// The spawn that restores the card, in a lich that recorded nothing itself.
+	next := relaunch(t, db)
+	next.snaps.track("s1", repo)
+	turn, err := next.LastTurnDiff("s1")
+
+	if err != nil {
+		t.Fatalf("LastTurnDiff: %v", err)
+	}
+	if turn.State != turnDiffOK {
+		t.Fatalf("a restored session reads as %q, want %q", turn.State, turnDiffOK)
+	}
+	if !strings.Contains(turn.Diff, "+two") {
+		t.Errorf("the restored turn lost its diff:\n%s", turn.Diff)
+	}
+	if turn.After != filed.After {
+		t.Errorf("the restored turn stands at %q, want %q", turn.After, filed.After)
+	}
+	if turn.EndedAt != filed.EndedAt {
+		t.Errorf("the restored turn is dated %d, want %d", turn.EndedAt, filed.EndedAt)
+	}
+}
+
+// A turn that lost its closing snapshot retracts the record, and the retraction
+// has to reach the database too — otherwise the next launch would answer with a
+// turn this lich had already taken back.
+func TestARetractedTurnIsNotRestored(t *testing.T) {
+	svc, repo := snapRepo(t)
+	db := &memTurns{records: map[string]store.TurnRecord{}}
+	svc.snaps.store = db
+	svc.snaps.track("s1", repo)
+
+	openAndWait(t, svc, "s1")
+	writeIn(t, repo, "a.txt", "recorded\n")
+	closeAndWait(t, svc, "s1", turnDiffOK)
+
+	// The state a dropped opening snapshot leaves behind: a turn is open and
+	// nothing recorded where it started.
+	svc.snaps.mu.Lock()
+	svc.snaps.sessions["s1"].open = true
+	svc.snaps.sessions["s1"].seq++
+	svc.snaps.sessions["s1"].before = ""
+	svc.snaps.mu.Unlock()
+	closeAndWait(t, svc, "s1", turnDiffUnavailable)
+	drainSnaps(t, svc)
+
+	next := relaunch(t, db)
+	next.snaps.track("s1", repo)
+	turn, err := next.LastTurnDiff("s1")
+
+	if err != nil {
+		t.Fatalf("LastTurnDiff: %v", err)
+	}
+	if turn.State != turnDiffUnavailable {
+		t.Errorf("a retracted turn came back as %q, want %q", turn.State, turnDiffUnavailable)
+	}
+}
+
+// The read-back is for the card being restored, and only for it. A respawn
+// under an id this run is already tracking is a new session's turns, so the one
+// the provider that left recorded stays where it is: on disk, not on screen.
+func TestARespawnDoesNotReadTheStoredTurnBack(t *testing.T) {
+	svc, repo := snapRepo(t)
+	db := &memTurns{records: map[string]store.TurnRecord{}}
+	svc.snaps.store = db
+	svc.snaps.track("s1", repo)
+
+	openAndWait(t, svc, "s1")
+	writeIn(t, repo, "a.txt", "the last provider's work\n")
+	closeAndWait(t, svc, "s1", turnDiffOK)
+
+	svc.snaps.track("s1", repo)
+	turn, err := svc.LastTurnDiff("s1")
+
+	if err != nil {
+		t.Fatalf("LastTurnDiff: %v", err)
+	}
+	if turn.State != turnDiffUnavailable {
+		t.Errorf("a respawned session inherited a turn: %q", turn.State)
+	}
+	if _, ok, _ := db.TurnRecord("s1"); !ok {
+		t.Error("the respawn dropped the record the next launch restores from")
 	}
 }
