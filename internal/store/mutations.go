@@ -89,6 +89,7 @@ func (s *Service) DeleteProject(id string) error {
 	if id == globalScope {
 		return fmt.Errorf("delete project: empty id")
 	}
+	s.noteForfeitedSchedules(`project_id = ?`, id)
 	return s.tx(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(`DELETE FROM settings WHERE project_id = ?`, id); err != nil {
 			return fmt.Errorf("delete project settings %q: %w", id, err)
@@ -166,9 +167,42 @@ func (s *Service) addSession(
 	})
 }
 
+// noteForfeitedSchedules logs every prompt still parked on a session about to be
+// deleted for good. A close parks the row and the schedule comes back with the
+// card (see reopen); a delete is the one exit where the prompt is lost rather
+// than delayed, and the row is the only copy of what the user wrote, so this
+// line is the last place it exists. Read before the delete, because after it
+// there is nothing left to read.
+//
+// A failed read costs the log, never the delete: nothing here is allowed to
+// stand between the user and removing a session.
+func (s *Service) noteForfeitedSchedules(where string, args ...any) {
+	rows, err := s.db.Query(
+		`SELECT label, scheduled_at, scheduled_prompt
+		   FROM sessions WHERE scheduled_at != 0 AND `+where,
+		args...,
+	)
+	if err != nil {
+		slog.Warn("read schedules of deleted sessions", "err", err)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var label, prompt string
+		var at int64
+		if err := rows.Scan(&label, &at, &prompt); err != nil {
+			slog.Warn("scan schedule of deleted session", "err", err)
+			return
+		}
+		slog.Warn("scheduled prompt forfeited with deleted session",
+			"session", label, "due", time.Unix(at, 0).Format(time.RFC3339), "prompt", prompt)
+	}
+}
+
 // DeleteSession removes a session for good and sets the project's active session
 // to activeID (the neighbor the frontend picked, or "" when none remain).
 func (s *Service) DeleteSession(projectID, sessionID, activeID string) error {
+	s.noteForfeitedSchedules(`id = ?`, sessionID)
 	if err := s.tx(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(`DELETE FROM sessions WHERE id = ?`, sessionID); err != nil {
 			return fmt.Errorf("delete session %q: %w", sessionID, err)
@@ -214,6 +248,7 @@ func (s *Service) CloseSession(projectID, sessionID, activeID string) error {
 // was already gone is not an error, and only a delete that actually removed one
 // reports the session gone.
 func (s *Service) ForgetSession(sessionID string) error {
+	s.noteForfeitedSchedules(`id = ? AND is_open = 0`, sessionID)
 	res, err := s.db.Exec(`DELETE FROM sessions WHERE id = ? AND is_open = 0`, sessionID)
 	if err != nil {
 		return fmt.Errorf("forget session %q: %w", sessionID, err)
@@ -260,10 +295,10 @@ func (s *Service) ReopenSession(sessionID, newSessionID string) (*Session, error
 // reopen is the resume behind both doors: it finds one parked session with the
 // given WHERE clause and re-adds it to the workspace under a fresh id
 // (newSessionID), carrying over the old label, kind, path, provider session id,
-// label_auto flag, model, entrypoint, sandbox, pin and origin. The fresh id is
-// deliberate: it makes the frontend treat the card as never-spawned, so its
-// resume prompt fires and the provider conversation continues instead of
-// starting cold.
+// label_auto flag, model, entrypoint, sandbox, pin, origin and scheduled prompt.
+// The fresh id is deliberate: it makes the frontend treat the card as
+// never-spawned, so its resume prompt fires and the provider conversation
+// continues instead of starting cold.
 func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, error) {
 	var restored *Session
 	err := s.tx(func(tx *sql.Tx) error {
@@ -279,19 +314,28 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		// shell — silently, on the one path where the card keeps its identity but
 		// not its id.
 		//
+		// The scheduled prompt rides along because the row is the only copy of
+		// what the user parked there: parking a session is not cancelling its
+		// reminder, and a resume that dropped it forfeited the prompt with
+		// nothing anywhere saying so. One that came due while the session was
+		// parked is typed on the resumed card's first free prompt, exactly like
+		// one that came due while lich was closed (internal/relay, deliverDue).
+		//
 		// project_id is read rather than passed: reopening by id knows only the
 		// session, and the row is what says where it belongs.
 		var labelAuto int
 		var projectID, model, entrypoint, sandbox string
 		row := tx.QueryRow(
 			`SELECT id, project_id, label, kind, path, provider_session_id, label_auto,
-			        model, entrypoint, sandbox, pinned, origin_session_id, origin_label
+			        model, entrypoint, sandbox, pinned, origin_session_id, origin_label,
+			        scheduled_at, scheduled_prompt
 			   FROM sessions `+where,
 			args...,
 		)
 		if err := row.Scan(
 			&old.ID, &projectID, &old.Label, &old.Kind, &old.Path, &old.ProviderSessionID,
 			&labelAuto, &model, &entrypoint, &sandbox, &old.Pinned, &old.OriginSessionID, &old.OriginLabel,
+			&old.ScheduledAt, &old.ScheduledPrompt,
 		); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil // nothing parked; caller creates a new session
@@ -325,10 +369,12 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		if _, err := tx.Exec(
 			`INSERT INTO sessions
 			   (id, project_id, label, kind, path, provider_session_id, label_auto,
-			    model, entrypoint, sandbox, pinned, origin_session_id, origin_label, position)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
+			    model, entrypoint, sandbox, pinned, origin_session_id, origin_label,
+			    scheduled_at, scheduled_prompt, position)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
 			newSessionID, projectID, old.Label, old.Kind, old.Path, old.ProviderSessionID, labelAuto,
-			model, entrypoint, sandbox, old.Pinned, old.OriginSessionID, old.OriginLabel, projectID,
+			model, entrypoint, sandbox, old.Pinned, old.OriginSessionID, old.OriginLabel,
+			old.ScheduledAt, old.ScheduledPrompt, projectID,
 		); err != nil {
 			return fmt.Errorf("reinsert session %q: %w", newSessionID, err)
 		}
@@ -352,6 +398,8 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 			Pinned:            old.Pinned,
 			OriginSessionID:   old.OriginSessionID,
 			OriginLabel:       old.OriginLabel,
+			ScheduledAt:       old.ScheduledAt,
+			ScheduledPrompt:   old.ScheduledPrompt,
 		}
 		return nil
 	})
@@ -371,6 +419,7 @@ func (s *Service) PurgeWorktreeSessions(projectID, path string) error {
 	if path == "" {
 		return nil
 	}
+	s.noteForfeitedSchedules(`project_id = ? AND path = ?`, projectID, path)
 	// Read before the delete, because what hangs off a session outside the
 	// database is keyed by id and the rows are about to be gone.
 	gone := s.sessionIDsAt(projectID, path)

@@ -433,13 +433,12 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 
 - **A scheduled prompt is late or gone, never on time** (`internal/relay/later.go`, `deliverDue`): due prompts
   are looked for every `scheduleTick`, and one whose session is not at a prompt — mid-setup, a draft on the
-  line, no terminal opened — is left parked for the next pass, so it lands whenever that session next has
-  somewhere to type, hours later if that is when. That covers lich having been closed at the time: the first
-  pass after launch types a prompt that came due days ago, unannounced. The other end of it is a session that
-  is closed rather than busy — a parked worktree card, a card closed for good. Its row leaves the roster
-  (`LoadState` reads open sessions only) and the resume reinserts it under a fresh id without the schedule, so
-  the prompt never fires and never comes back with the card, with nothing on screen having said it was
-  forfeited.
+  line, no terminal opened, a card parked and not yet resumed, is left for the next pass, so it lands
+  whenever that session next has somewhere to type, hours later if that is when. That covers lich having been
+  closed at the time: the first pass after launch types a prompt that came due days ago, unannounced. Gone is
+  the session removed for good rather than parked (deleted, forgotten, purged with its worktree, or taken by
+  a deleted project): the row is the only copy of the prompt, so it goes with the row, and all that says so is
+  one Warn in a log nobody is watching (`internal/store`, `noteForfeitedSchedules`).
 
 - **An answer that names no ticket is matched by delivery order** (`internal/relay/answer.go`,
   `errandOfLocked`): `lich reply "<answer>"` and `reply_to_session` without a ticket close the oldest message

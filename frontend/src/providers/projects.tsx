@@ -94,6 +94,9 @@ const cardFromStored = (restored: StoredSession): Session => ({
   ...(restored.originSessionId
     ? { originSessionId: restored.originSessionId, originLabel: restored.originLabel }
     : {}),
+  ...(restored.scheduledAt
+    ? { scheduledAt: restored.scheduledAt, scheduledPrompt: restored.scheduledPrompt }
+    : {}),
 })
 
 // The first session of any project is always "Session 1"; the counter then

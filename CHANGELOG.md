@@ -23,6 +23,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   confines itself; installing the release over the previous one is enough.
   Installs from the bare tarball are unchanged: a file unpacked as you cannot
   be owned by root, so those keep the unsandboxed window.
+- **A scheduled prompt survives parking its session.** Keeping a worktree, or
+  closing a card and resuming it later, re-inserted the session under a fresh id
+  and left the prompt parked on it behind, so it never fired and never came back
+  with the card, with nothing anywhere saying it had been forfeited. The resume
+  now carries the schedule over, alongside the rename, model, entrypoint and
+  cost ledgers it already carried: the card comes back with its countdown, and a
+  prompt that came due while the session was parked is typed at its first free
+  prompt, like one that came due while lich was closed. Deleting a session for
+  good still drops its prompt (the row is the only copy), but now logs which
+  session lost what.
 - **Scoop installs the current release.** The manifest 0.46.0 introduced pinned
   0.45.0 with no checksums, and nothing bumped it on a tag, so `scoop install`
   and `scoop update lich` handed out the previous release. Every release now
