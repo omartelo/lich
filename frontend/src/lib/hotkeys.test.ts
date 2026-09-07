@@ -1,35 +1,20 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it } from "vitest"
 import {
   comboFromEvent,
   DEFAULT_HOTKEYS,
   formatCombo,
   hotkeyConflicts,
+  adoptStoredHotkeys,
   hotkeyLabel,
-  loadHotkeys,
   matchesCombo,
   mergeHotkeys,
+  parseHotkeys,
   sameCombo,
-  saveHotkeys,
   UNASSIGNED,
   UNASSIGNED_LABEL,
   type Combo,
   type KeyState,
 } from "./hotkeys"
-
-// The suite runs in node, which has no localStorage; the stored half of the
-// hotkeys is the point of the two functions below, so the storage is stubbed and
-// the round-trip through it is what is checked.
-const stored = new Map<string, string>()
-
-vi.stubGlobal("localStorage", {
-  getItem: (key: string) => stored.get(key) ?? null,
-  setItem: (key: string, value: string) => {
-    stored.set(key, value)
-  },
-  removeItem: (key: string) => {
-    stored.delete(key)
-  },
-})
 
 const key = (over: Partial<KeyState>): KeyState => ({
   ctrlKey: false,
@@ -234,63 +219,97 @@ describe("sameCombo", () => {
   })
 })
 
-describe("loadHotkeys", () => {
-  beforeEach(() => {
-    stored.clear()
+describe("parseHotkeys", () => {
+  it("answers the defaults for a value nobody has set", () => {
+    expect(parseHotkeys("")).toEqual(DEFAULT_HOTKEYS)
   })
 
-  it("answers the defaults with nothing stored", () => {
-    expect(loadHotkeys()).toEqual(DEFAULT_HOTKEYS)
-  })
-
-  it("round-trips what saveHotkeys wrote", () => {
+  it("round-trips what the provider stores", () => {
     const mine: Combo = { mod: true, shift: true, alt: false, key: "j" }
-    saveHotkeys({ ...DEFAULT_HOTKEYS, newSession: mine })
+    const raw = JSON.stringify({ ...DEFAULT_HOTKEYS, newSession: mine })
 
-    expect(loadHotkeys().newSession).toEqual(mine)
+    expect(parseHotkeys(raw).newSession).toEqual(mine)
   })
 
   it("round-trips an unassigned action, and takes its default back on reset", () => {
-    saveHotkeys({ ...DEFAULT_HOTKEYS, newSession: UNASSIGNED })
-    const cleared = loadHotkeys()
+    const cleared = parseHotkeys(JSON.stringify({ ...DEFAULT_HOTKEYS, newSession: UNASSIGNED }))
     expect(cleared.newSession).toEqual(UNASSIGNED)
     expect(matchesCombo(key({ ctrlKey: true, shiftKey: true, key: "T" }), cleared.newSession)).toBe(
       false,
     )
 
     // What resetHotkey writes back (settings.tsx): the default for that id.
-    saveHotkeys({ ...cleared, newSession: DEFAULT_HOTKEYS.newSession })
-    expect(loadHotkeys()).toEqual(DEFAULT_HOTKEYS)
+    const reset = { ...cleared, newSession: DEFAULT_HOTKEYS.newSession }
+    expect(parseHotkeys(JSON.stringify(reset))).toEqual(DEFAULT_HOTKEYS)
   })
 
-  // A pref must never be able to break a launch: the value is a string somebody
-  // can hand-edit, and half of one is what an interrupted write leaves.
+  // A stored setting must never be able to break a launch: the value is a string
+  // somebody can hand-edit, and half of one is what an interrupted write leaves.
   it("falls back to the defaults for a value that is not JSON", () => {
-    stored.set("lich.hotkeys", '{"newSession":')
-
-    expect(loadHotkeys()).toEqual(DEFAULT_HOTKEYS)
+    expect(parseHotkeys('{"newSession":')).toEqual(DEFAULT_HOTKEYS)
   })
 
   it("falls back for JSON that is not an object at all", () => {
-    stored.set("lich.hotkeys", '"ctrl+shift+t"')
-
-    expect(loadHotkeys()).toEqual(DEFAULT_HOTKEYS)
+    expect(parseHotkeys('"ctrl+shift+t"')).toEqual(DEFAULT_HOTKEYS)
   })
 
   // Stored under a key the build no longer has, beside one it does: the known
   // override stands and the stranger is dropped.
   it("keeps a valid override and ignores what is not an action", () => {
-    stored.set(
-      "lich.hotkeys",
+    const parsed = parseHotkeys(
       JSON.stringify({
         newSession: { mod: true, shift: true, alt: false, key: "J" },
         zoomIn: { mod: true, shift: false, alt: false, key: "+" },
       }),
     )
 
-    const loaded = loadHotkeys()
-    expect(loaded.newSession.key).toBe("j")
-    expect(loaded).not.toHaveProperty("zoomIn")
+    expect(parsed.newSession.key).toBe("j")
+    expect(parsed).not.toHaveProperty("zoomIn")
+  })
+})
+
+describe("adoptStoredHotkeys", () => {
+  const mine: Combo = { mod: true, shift: true, alt: false, key: "j" }
+  const raw = (combo: Combo) => JSON.stringify({ ...DEFAULT_HOTKEYS, newSession: combo })
+
+  it("reads the workspace copy, and asks for no migration", () => {
+    const { hotkeys, migrate } = adoptStoredHotkeys(raw(mine), null)
+
+    expect(hotkeys.newSession).toEqual(mine)
+    expect(migrate).toBe(false)
+  })
+
+  // The install that predates the move: the page's entry is the only record, so
+  // it is adopted and handed to the caller to write back once.
+  it("adopts the page copy and asks to migrate it", () => {
+    const { hotkeys, migrate } = adoptStoredHotkeys("", raw(mine))
+
+    expect(hotkeys.newSession).toEqual(mine)
+    expect(migrate).toBe(true)
+  })
+
+  // Both stores answering is the launch after the migration wrote but before the
+  // page entry was dropped, and a stale page copy must never win.
+  it("lets the workspace copy beat the page copy", () => {
+    const theirs: Combo = { mod: true, shift: true, alt: false, key: "y" }
+    const { hotkeys, migrate } = adoptStoredHotkeys(raw(theirs), raw(mine))
+
+    expect(hotkeys.newSession).toEqual(theirs)
+    expect(migrate).toBe(false)
+  })
+
+  it("answers the defaults, and no migration, for an install with neither", () => {
+    const { hotkeys, migrate } = adoptStoredHotkeys("", null)
+
+    expect(hotkeys).toEqual(DEFAULT_HOTKEYS)
+    expect(migrate).toBe(false)
+  })
+
+  // A page entry nobody ever rebound still migrates: writing the defaults is
+  // what makes the database the record, and re-reading the entry after this
+  // would take the migration for one still pending.
+  it("migrates an empty page entry rather than leaving it behind", () => {
+    expect(adoptStoredHotkeys("", "{}")).toEqual({ hotkeys: DEFAULT_HOTKEYS, migrate: true })
   })
 })
 
