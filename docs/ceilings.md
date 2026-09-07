@@ -365,13 +365,10 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   no confirmation on the way. It is not a new privilege — the agent already runs as you, in a shell that can read
   the same disk — but it is new visibility, and a card it opens there is a card with a PTY in it.
 
-- **A hotkey is taken from the agent, and its rebind lives only in the page** (`frontend/src/lib/use-hotkey.ts`,
+- **A hotkey is taken from the agent, and a rebind is checked against nothing** (`frontend/src/lib/use-hotkey.ts`,
   `hotkeys.ts`): every bound combo is caught in the window capture phase and stopped there, so the chord never
-  reaches the PTY — the defaults spend chords no TUI can bind, but a rebind is checked against nothing, and
-  recording `Ctrl+R` silently costs the shell its history search with nothing on screen connecting the two. The
-  bindings are a `lich.hotkeys` entry in localStorage, which the theme left for the workspace database precisely
-  because a recreated Chromium profile drops it: the combos revert to the defaults, and both the overlay and
-  Settings then show those defaults as if nothing had ever been rebound.
+  reaches the PTY. The defaults spend chords no TUI can bind, but nothing holds a rebind to that, and recording
+  `Ctrl+R` silently costs the shell its history search with nothing on screen connecting the two.
 - **lich's own window offers the page every primary-modifier chord before Chromium runs it**
   (`shell/src/main.rs`): a CEF keyboard handler marks each Ctrl chord (Cmd on macOS) a keyboard shortcut, which
   is the only way a page can claim one of Chromium's *reserved* accelerators. Ctrl+T, Ctrl+W, Ctrl+Shift+T and
@@ -385,9 +382,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   (`frontend/src/lib/terminal/replay-buffer.ts` page-side, `internal/terminal/replay.go` backend-side — the latter
   survives a full page reload). Scrollback past the ring is gone, not paged. The snapshot carries only the modes
   xterm's SerializeAddon reads off `term.modes`; the ones an app relies on and it does not record are restored by
-  hand in `frontend/src/lib/terminal/term-modes.ts` — today the mouse encoding and cursor visibility. Cursor
-  *shape* (DECSCUSR) is not among them: a TUI that chose a bar or underline cursor gets lich's block back after a
-  card switch.
+  hand in `frontend/src/lib/terminal/term-modes.ts`.
 - **One socket carries every session's output** (`internal/terminal/writequeue.go`): the per-session outbox
   decouples the *producers*, never the wire. A window that stops reading stalls the connection's single writer,
   so after `wsWriteTimeout` (5s) every session's output switches to the `/events` bridge at once. That is a

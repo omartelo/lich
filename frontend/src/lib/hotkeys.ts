@@ -1,9 +1,7 @@
-import { readPref, writePref } from "@/lib/prefs"
-
-// Global keyboard shortcuts. Combos are user-configurable and persisted to
-// localStorage, matching every other setting (see settings.tsx). `mod` is the
-// platform primary modifier — Ctrl on Windows/Linux, Cmd on macOS — so a single
-// stored combo works on both.
+// Global keyboard shortcuts. Combos are user-configurable and persisted to the
+// workspace database, the way the theme selection is (see settings.tsx). `mod`
+// is the platform primary modifier — Ctrl on Windows/Linux, Cmd on macOS — so a
+// single stored combo works on both.
 
 // Zoom is deliberately absent: those chords shadow Chromium's own accelerators,
 // which are bound to physical keys, so they are matched on event.code in
@@ -238,7 +236,16 @@ export type KeyState = Pick<
 >
 
 const MODIFIER_KEYS = new Set(["Control", "Meta", "Shift", "Alt", "AltGraph"])
-const STORAGE_KEY = "lich.hotkeys"
+
+// The workspace key the bindings live under, global scope: a rebind answers for
+// this install rather than for one project, exactly like the theme selection.
+export const HOTKEYS_SETTING_KEY = "hotkeys.bindings"
+
+// Where the bindings lived before that: an entry in the page's own storage,
+// which sits in the Chromium profile. A profile Chromium recreates from scratch
+// (#209) comes back without it, and every rebind was gone with no sign on screen
+// that anything had been lost. Read once, migrated, and dropped.
+export const LEGACY_HOTKEYS_KEY = "lich.hotkeys"
 
 // normalizeKey folds "=" into "+" (same physical key) and lowercases single
 // characters so casing from Shift does not change the identity of the combo.
@@ -380,15 +387,32 @@ export function mergeHotkeys(overrides: unknown): Hotkeys {
   return result
 }
 
-export function loadHotkeys(): Hotkeys {
+// parseHotkeys reads one stored value, from either store. A persisted binding
+// must never be able to break a launch: the value is a string somebody can
+// hand-edit, and half of one is what an interrupted write leaves, so anything
+// that does not parse reads as the defaults.
+export function parseHotkeys(raw: string): Hotkeys {
   try {
-    const raw = readPref(STORAGE_KEY)
     return raw ? mergeHotkeys(JSON.parse(raw)) : DEFAULT_HOTKEYS
   } catch {
     return DEFAULT_HOTKEYS
   }
 }
 
-export function saveHotkeys(hotkeys: Hotkeys): void {
-  writePref(STORAGE_KEY, JSON.stringify(hotkeys))
+// adoptStoredHotkeys resolves the bindings a launch starts from against the two
+// stores, mirroring adoptStoredTheme: the workspace copy is the durable one and
+// wins, and the page copy is what an install that predates the move still has.
+// `migrate` reports that copy still being the only record — it is written to the
+// database once and then removed, so the profile no longer owns the answer.
+export function adoptStoredHotkeys(
+  stored: string,
+  legacy: string | null,
+): { hotkeys: Hotkeys; migrate: boolean } {
+  if (stored) {
+    return { hotkeys: parseHotkeys(stored), migrate: false }
+  }
+  if (legacy === null) {
+    return { hotkeys: DEFAULT_HOTKEYS, migrate: false }
+  }
+  return { hotkeys: parseHotkeys(legacy), migrate: true }
 }

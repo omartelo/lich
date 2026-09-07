@@ -3,8 +3,11 @@ import { ChevronDown, ChevronRight, Plus, X } from "lucide-react"
 import { ProviderIcon } from "@/components/ProviderIcon"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
+import { winningScope } from "@/lib/binary-layers"
 import { planSummary } from "@/lib/provider-summary"
 import {
+  binKey,
+  binOffKey,
   enabledProviders,
   setProjectProviderDefault,
   setProviderDefault,
@@ -17,7 +20,7 @@ import {
   type ProviderState,
 } from "@/lib/providers-store"
 import { usePlanQuotaFor } from "@/lib/quota/use-plan-quota"
-import { useStoredFlag } from "@/lib/use-stored-setting"
+import { useStoredFlag, useStoredSetting } from "@/lib/use-stored-setting"
 import { useProjects } from "@/providers/projects"
 import { cn } from "@/lib/utils"
 import { ProviderDetail } from "./ProviderDetail"
@@ -224,6 +227,15 @@ function ProviderRow({
   const [skipInWorktrees] = useStoredFlag(skipPermissionsKey(provider.id, true), GLOBAL_SCOPE)
   const projectDefault = useStoredProjectDefaultProvider(projectId ?? "")
   const level = skipLevel(skipHere, skipInWorktrees)
+  const [globalBin] = useStoredSetting(binKey(provider.id), GLOBAL_SCOPE)
+  const [projectBin] = useStoredSetting(binKey(provider.id), projectId)
+  const [globalBinOff] = useStoredFlag(binOffKey(provider.id), GLOBAL_SCOPE)
+  const [projectBinOff] = useStoredFlag(binOffKey(provider.id), projectId)
+  const binScope = winningScope(
+    { bin: projectBin, off: projectBinOff },
+    { bin: globalBin, off: globalBinOff },
+  )
+  const customPath = binScope !== "path"
   // The plan is what a row is usually opened to check; without one, the binary
   // is the fact that distinguishes this row from the next.
   const summary = planSummary(plan) || provider.binary
@@ -250,6 +262,7 @@ function ProviderRow({
       </span>
       <span className="pointer-events-none flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
         {projectDefault === provider.id && <span className="whitespace-nowrap">default here</span>}
+        {customPath && <span className="whitespace-nowrap">custom path</span>}
         {level !== "never" && (
           <span className="whitespace-nowrap">
             {level === "worktrees" ? "worktrees" : "no prompts"}

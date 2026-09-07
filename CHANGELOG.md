@@ -23,6 +23,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   confines itself; installing the release over the previous one is enough.
   Installs from the bare tarball are unchanged: a file unpacked as you cannot
   be owned by root, so those keep the unsandboxed window.
+- **Rebound keyboard shortcuts survive a recreated browser profile.** The
+  bindings lived in the page's own storage, which sits in the Chromium profile
+  lich recreates when its storage comes back damaged: every rebind was lost, and
+  Settings and the shortcuts overlay went on showing the defaults as though
+  nothing had been changed. They are stored in the workspace database now, beside
+  the theme, and an existing set is moved there once on the next launch.
+- **The cursor keeps its shape across a card switch.** Hiding a session
+  serializes its terminal and destroys it, and the snapshot never carried the
+  cursor shape a program had chosen, so a shell or editor drawing a bar or an
+  underline came back with lich's block. The shape is now carried across the
+  cycle beside the mouse encoding and cursor visibility, and follows the
+  program's own reset back to the default.
 - **A scheduled prompt survives parking its session.** Keeping a worktree, or
   closing a card and resuming it later, re-inserted the session under a fresh id
   and left the prompt parked on it behind, so it never fired and never came back

@@ -23,6 +23,7 @@ import { copyToastMessage, COPY_TOAST_DURATION_MS } from "@/lib/terminal/copy-to
 import { decodeBase64 } from "@/lib/terminal/term-frame"
 import {
   cursorHidden,
+  cursorShape,
   ensureFontLoaded,
   fitTerminal,
   mouseEncoding,
@@ -34,6 +35,7 @@ import { TerminalDropHint } from "./TerminalDropHint"
 import { TerminalSearchBar, type SearchResults } from "./TerminalSearchBar"
 import { useTerminalDrop } from "./useTerminalDrop"
 import {
+  cursorShapeSequence,
   cursorVisibilitySequence,
   linkClickIsOurs,
   mouseEncodingSequence,
@@ -452,7 +454,8 @@ export function TerminalView({
     serializedRef.current = live.serialize.serialize()
     carriedModesRef.current =
       mouseEncodingSequence(mouseEncoding(live.term)) +
-      cursorVisibilitySequence(cursorHidden(live.term))
+      cursorVisibilitySequence(cursorHidden(live.term)) +
+      cursorShapeSequence(cursorShape(live.term))
     live.dispose()
     liveRef.current = null
   }
