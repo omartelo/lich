@@ -52,7 +52,8 @@ components, which are PascalCase after their export. Tests sit next to what they
 ```bash
 pnpm build        # tsc typecheck + vite build (the real gate)
 pnpm test         # vitest run
-pnpm check        # biome format + lint check (CI runs this; errors fail)
+pnpm check        # biome format + lint, human-readable
+pnpm exec biome ci .   # the gate: read its exit code, not its last lines
 pnpm format       # biome, writing the fixes
 ```
 
@@ -70,6 +71,9 @@ run the binaries directly: `./node_modules/.bin/vitest run` or `pnpm exec vitest
   one back on. Import order is deliberately not enforced.
 - Warnings do not fail the gate; errors do. The standing warning backlog is the a11y one: `role="button"`
   spans that take a click but no key, and the `role="separator"` resize handles.
+- **Check the exit code.** `pnpm check` prints the same "Some errors were emitted" banner with one error or
+  none, directly under the 17 standing warnings, so reading the tail says nothing. `pnpm exec biome ci .`
+  answers 0 or 1, and that is what CI is asking. One unformatted file has reached `main` behind that banner.
 
 ## State — no state library
 

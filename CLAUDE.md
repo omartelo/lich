@@ -36,7 +36,10 @@ lives in the code, `docs/` and `CHANGELOG.md` — never restate any of it here.
 ## Local Gate (before every commit / PR)
 
 - `gofmt -l .` clean (fix with `gofmt -w .`) and `go vet ./...` clean.
-- `cd frontend && pnpm check` clean — biome is the frontend's gofmt + vet (fix with `pnpm format`).
+- `cd frontend && pnpm exec biome ci .` **exit 0** — biome is the frontend's gofmt + vet (fix with
+  `pnpm format`). Read the exit code, never the last lines: `pnpm check` ends on the same
+  "Some errors were emitted" banner whether the count is one error or none, and the standing 17 a11y
+  warnings sit right above it. A single unformatted file has reached `main` this way.
 - `go test ./...` (backend) and `cd frontend && pnpm test` (frontend) green — or `task test` for both.
 - Touched `shell/`? `cd shell && cargo fmt --check && cargo clippy --release --all-targets -- -D warnings &&
   cargo test --release` clean (`--release` shares the CEF build with `task build:shell`).
