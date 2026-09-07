@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   confines itself; installing the release over the previous one is enough.
   Installs from the bare tarball are unchanged: a file unpacked as you cannot
   be owned by root, so those keep the unsandboxed window.
+- **Rebound keyboard shortcuts survive a recreated browser profile.** The
+  bindings lived in the page's own storage, which sits in the Chromium profile
+  lich recreates when its storage comes back damaged: every rebind was lost, and
+  Settings and the shortcuts overlay went on showing the defaults as though
+  nothing had been changed. They are stored in the workspace database now, beside
+  the theme, and an existing set is moved there once on the next launch.
 - **Scoop installs the current release.** The manifest 0.46.0 introduced pinned
   0.45.0 with no checksums, and nothing bumped it on a tag, so `scoop install`
   and `scoop update lich` handed out the previous release. Every release now

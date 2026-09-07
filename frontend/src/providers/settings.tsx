@@ -1,10 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
 import type { ReactNode } from "react"
 import {
+  adoptStoredHotkeys,
   DEFAULT_HOTKEYS,
+  HOTKEYS_SETTING_KEY,
   isRecordingTarget,
-  loadHotkeys,
-  saveHotkeys,
+  LEGACY_HOTKEYS_KEY,
   type Combo,
   type HotkeyId,
   type Hotkeys,
@@ -15,6 +16,7 @@ import {
   parseNumberPref,
   parseOptionalBoolPref,
   readPref,
+  removePref,
   writePref,
 } from "@/lib/prefs"
 import { Store, Themes as ThemeRPC } from "@/lib/rpc"
@@ -194,7 +196,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(readTheme)
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(BUNDLED_THEMES[0])
   const [zoom, setZoomState] = useState<number>(readZoom)
-  const [hotkeys, setHotkeys] = useState<Hotkeys>(loadHotkeys)
+  // The defaults until the stored bindings land: unlike the theme there is no
+  // page-side cache to paint from, and a chord pressed in that first moment is
+  // one the window has not claimed yet — it reaches the terminal, which is the
+  // harmless way round.
+  const [hotkeys, setHotkeys] = useState<Hotkeys>(DEFAULT_HOTKEYS)
   const [showContextUsage] = useState<boolean>(readContextUsage)
   const [footerLayout, setFooterLayoutState] = useState(readFooterLayout)
   const [footerVisibility] = useState(() => readFooterVisibility(readContextUsage()))
@@ -210,6 +216,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   // overwritten by the stored one still in flight, so the load below stands down
   // once anything has been persisted.
   const selectionTouched = useRef(false)
+
+  // The same guard for the bindings: a rebind made before the stored ones land
+  // must not be overwritten by the read still in flight.
+  const hotkeysTouched = useRef(false)
 
   const persistTheme = useCallback((next: Theme) => {
     selectionTouched.current = true
@@ -244,6 +254,44 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       cancelled = true
     }
   }, [persistTheme])
+
+  const persistHotkeys = useCallback((next: Hotkeys) => {
+    hotkeysTouched.current = true
+    // Loud, unlike the theme's write: there is no page-side copy standing behind
+    // this one, so a write that fails is a rebind the next launch will not have.
+    void Store.SetSetting(HOTKEYS_SETTING_KEY, GLOBAL_SCOPE, JSON.stringify(next)).catch(
+      (error) => {
+        console.warn("[settings] failed to persist the hotkey bindings", error)
+      },
+    )
+  }, [])
+
+  // The stored bindings, and the one migration off the page's own storage. The
+  // state is only replaced when the answer differs from what is already on
+  // screen — the common case is an install with no rebinds, and handing every
+  // consumer a fresh (identical) map would repaint the window for nothing.
+  useEffect(() => {
+    let cancelled = false
+    Store.GetSetting(HOTKEYS_SETTING_KEY, GLOBAL_SCOPE)
+      .then((stored) => {
+        if (cancelled || hotkeysTouched.current) return
+        const { hotkeys: adopted, migrate } = adoptStoredHotkeys(
+          stored,
+          readPref(LEGACY_HOTKEYS_KEY),
+        )
+        setHotkeys((prev) => (adopted === prev ? prev : adopted))
+        if (migrate) {
+          persistHotkeys(adopted)
+          removePref(LEGACY_HOTKEYS_KEY)
+        }
+      })
+      .catch((error) => {
+        console.warn("[settings] failed to load the stored hotkey bindings", error)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [persistHotkeys])
 
   useEffect(() => {
     let cancelled = false
@@ -361,21 +409,27 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     [theme, persistTheme],
   )
 
-  const setHotkey = useCallback((id: HotkeyId, combo: Combo) => {
-    setHotkeys((prev) => {
-      const next = { ...prev, [id]: combo }
-      saveHotkeys(next)
-      return next
-    })
-  }, [])
+  const setHotkey = useCallback(
+    (id: HotkeyId, combo: Combo) => {
+      setHotkeys((prev) => {
+        const next = { ...prev, [id]: combo }
+        persistHotkeys(next)
+        return next
+      })
+    },
+    [persistHotkeys],
+  )
 
-  const resetHotkey = useCallback((id: HotkeyId) => {
-    setHotkeys((prev) => {
-      const next = { ...prev, [id]: DEFAULT_HOTKEYS[id] }
-      saveHotkeys(next)
-      return next
-    })
-  }, [])
+  const resetHotkey = useCallback(
+    (id: HotkeyId) => {
+      setHotkeys((prev) => {
+        const next = { ...prev, [id]: DEFAULT_HOTKEYS[id] }
+        persistHotkeys(next)
+        return next
+      })
+    },
+    [persistHotkeys],
+  )
 
   const setCostBudget = useCallback((next: number) => {
     const clamped = clampCostBudget(next)
