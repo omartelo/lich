@@ -58,11 +58,14 @@ export function Stepper({
             <Button
               variant="outline"
               // Not an icon button: the box is as wide as its longest reading,
-              // so stepping never shifts the controls around it.
+              // so stepping never shifts the controls around it. Never
+              // disabled either — the reading is what this box is for, and a
+              // disabled button greys the number out for as long as the value
+              // is the default, which is most of the time. At the default the
+              // click is simply a no-op.
               className="min-w-16 tabular-nums"
-              disabled={!custom}
-              aria-label={`Reset ${name}`}
-              onClick={() => onChange(fallback)}
+              aria-label={custom ? `Reset ${name}` : display}
+              onClick={() => custom && onChange(fallback)}
             />
           }
         >
