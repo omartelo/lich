@@ -65,7 +65,10 @@ function PlanBody({ plan, now }: { plan: QuotaPlan; now: Date }) {
       {/* The plan doubles as the table's left header, which is what keeps it from
           floating above the rows as a line of its own. */}
       <div
-        className={cn(gaugeGrid, "text-[11px] uppercase tracking-wide text-muted-foreground/80")}
+        className={cn(
+          gaugeGrid,
+          "text-[0.6875rem] uppercase tracking-wide text-muted-foreground/80",
+        )}
       >
         <span className="truncate normal-case tracking-normal text-muted-foreground">
           {plan.plan}
@@ -80,7 +83,7 @@ function PlanBody({ plan, now }: { plan: QuotaPlan; now: Date }) {
       {/* The login this reading was taken against. Settings asks the machine-wide
           question, so this is lich's own — never a session's wrapper binary. */}
       {plan.account && (
-        <span className="break-all font-mono text-[11px] text-muted-foreground">
+        <span className="break-all font-mono text-[0.6875rem] text-muted-foreground">
           {plan.account}
         </span>
       )}

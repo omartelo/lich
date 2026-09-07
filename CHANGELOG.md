@@ -116,6 +116,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Zooming the app now grows every label with it.** A handful of small labels
+  were sized in absolute pixels rather than in the units the zoom control
+  moves, so they stayed put while the chrome around them grew: the sandbox
+  explanation lines, the plan usage numbers and quota path, the settings
+  search-result headings, and the inset of the segmented controls. At 150 per
+  cent they rendered at their original size beside text half again as large.
+
 - **Ctrl+Shift+T starts a session again in lich's own window.** Chromium runs
   its tab accelerators before the page is given the key, so in the bundled
   window the chord reopened a closed tab instead of opening a session, and

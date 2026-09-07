@@ -215,7 +215,7 @@ function Rung({
         onValueChange={(next) => next[0] && choose(next[0] as SandboxLevel)}
         spacing={1}
         aria-label={`Which ${providerName} sessions run confined`}
-        className="shrink-0 border border-border p-[3px]"
+        className="shrink-0 border border-border p-[0.1875rem]"
       >
         {RUNGS.map((rung) => (
           <ToggleGroupItem key={rung.level} value={rung.level} size="sm">
@@ -254,7 +254,7 @@ function StatusStrip({ backend }: { backend: string }) {
     <div className="flex items-center gap-2.5 rounded-md border border-border px-3 py-2.5 text-xs">
       <span
         aria-hidden
-        className={`size-[7px] shrink-0 rounded-full ${
+        className={`size-[0.4375rem] shrink-0 rounded-full ${
           backend ? "bg-emerald-600 dark:bg-emerald-400" : "bg-muted-foreground"
         }`}
       />
@@ -288,7 +288,9 @@ function Grant({
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium text-foreground">{title}</div>
         <p className="mt-0.5 max-w-prose text-xs text-muted-foreground">{description}</p>
-        <p className="mt-1 font-mono text-[11px] leading-relaxed text-muted-foreground">{detail}</p>
+        <p className="mt-1 font-mono text-[0.6875rem] leading-relaxed text-muted-foreground">
+          {detail}
+        </p>
       </div>
       <Switch checked={checked} onCheckedChange={onChange} aria-label={title} />
     </div>

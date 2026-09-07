@@ -270,7 +270,7 @@ function SourceRow({ source, onSource, endedAt }: SourceRowProps) {
         onValueChange={(next) => next[0] && onSource(next[0] as DiffSource)}
         spacing={1}
         aria-label="Which changes to show"
-        className="border border-border p-[3px]"
+        className="border border-border p-[0.1875rem]"
       >
         <ToggleGroupItem value="worktree" size="sm" className="h-6 px-2.5 text-xs">
           Working tree

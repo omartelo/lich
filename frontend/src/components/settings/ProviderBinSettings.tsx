@@ -117,7 +117,7 @@ export function ProviderBinSettings({
             onValueChange={(next) => next[0] && chooseLevel(next[0] as SkipLevel)}
             spacing={1}
             aria-label={`How far ${providerName} runs without asking`}
-            className="border border-border p-[3px]"
+            className="border border-border p-[0.1875rem]"
           >
             {SKIP_LEVELS.map((rung) => (
               <ToggleGroupItem key={rung.level} value={rung.level} size="sm">

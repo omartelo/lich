@@ -244,7 +244,7 @@ export function Settings() {
         {searching ? (
           <>
             {hits.length > 0 && (
-              <p className="px-5 pb-1.5 font-mono text-[10.5px] uppercase tracking-wider text-muted-foreground">
+              <p className="px-5 pb-1.5 font-mono text-[0.65625rem] uppercase tracking-wider text-muted-foreground">
                 {hits.length} {hits.length === 1 ? "setting" : "settings"}
               </p>
             )}
@@ -265,7 +265,7 @@ export function Settings() {
                   {hitPath(hit, sectionLabel(hit.section)) !== hit.title && (
                     <span
                       className={cn(
-                        "font-mono text-[10.5px] tracking-wide text-muted-foreground",
+                        "font-mono text-[0.65625rem] tracking-wide text-muted-foreground",
                         index === cursor && "text-accent-foreground/75",
                       )}
                     >

@@ -44,7 +44,7 @@ function PlanDetails({ plan }: PlanQuotaProps) {
         </div>
       ))}
       {plan.account && (
-        <span className="break-all border-t border-border pt-2 font-mono text-[11px] text-muted-foreground">
+        <span className="break-all border-t border-border pt-2 font-mono text-[0.6875rem] text-muted-foreground">
           {plan.account}
         </span>
       )}
