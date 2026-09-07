@@ -118,7 +118,7 @@ export function PickerGroup({
     // biome-ignore lint/a11y/useSemanticElements: the rule offers <fieldset>, which groups form controls and is not a valid child of a listbox.
     <div role="group" aria-label={label}>
       {showLabel && (
-        <div className="flex items-baseline justify-between gap-2 px-3 pb-1 pt-3 text-[0.65625rem] font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="flex items-baseline justify-between gap-2 px-3 pb-1 pt-3 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
           <span>{label}</span>
           {trailing && (
             <span className="font-mono font-normal normal-case tracking-normal">{trailing}</span>

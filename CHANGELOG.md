@@ -154,10 +154,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Uppercase section labels are all one size.** The small label that heads a
   group of rows had drifted to four sizes across the session sidebar, the
   command palette and picker, the worktree dialog, the review panel, the
-  shortcuts overlay and the file preview's read-only tag. They now render at the
-  single size the palette and the shortcuts overlay already used. The diff
-  file's language badge keeps its own smaller size, which is what fits two or
-  three letters into its box.
+  shortcuts overlay, the plan usage table's header and the file preview's
+  read-only tag. They now render at the single size the palette and the
+  shortcuts overlay already used. The diff file's language badge keeps its own
+  smaller size, which is what fits two or three letters into its box.
 
 ### Fixed
 

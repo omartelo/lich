@@ -35,7 +35,7 @@ export function ShortcutsOverlay() {
           <div className="flex-1 overflow-y-auto p-1.5">
             {groups.map((group) => (
               <div key={group.title}>
-                <div className="px-3 pb-1 pt-3 text-[0.65625rem] font-semibold uppercase tracking-wider text-muted-foreground">
+                <div className="px-3 pb-1 pt-3 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                   {group.title}
                 </div>
                 {group.rows.map((row) => (

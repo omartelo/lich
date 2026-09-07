@@ -201,7 +201,7 @@ jobs:
           "$app/lich.exe" || { echo "::error::the duplicate launch exited $?"; cat "$APPDATA/lich/lich.log"; exit 1; }
           sleep 5
           curl -sf http://127.0.0.1:9334/json > "$RUNNER_TEMP/pages.json"
-          pages=$(grep -c '"type": *"page"' "$RUNNER_TEMP/pages.json")
+          pages=$(grep -c '"type": *"page"' "$RUNNER_TEMP/pages.json" || true)
           [ "$pages" = 1 ] || { echo "::error::the forwarded launch left $pages pages in the window, expected one"; cat "$RUNNER_TEMP/pages.json"; cat "$APPDATA/lich/lich.log"; exit 1; }
           # A close request, not a kill: the same WM_CLOSE the restart flow posts.
           taskkill /IM lich-shell.exe > /dev/null

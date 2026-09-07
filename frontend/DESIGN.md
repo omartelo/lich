@@ -72,12 +72,16 @@ finished turn is still unread, `emerald-500/30` once the user has watched that c
 - **FiraCode Nerd Font Mono** — the terminal, and every monospace context: file paths, code/diff, palette
   subtitles, dense meta. Bundled woff2; the terminal awaits `document.fonts` before opening.
 - Scale is small and tight. Titles `text-sm`/`text-2xl` for screen headers; body `text-sm`; meta/paths
-  `text-xs`. Exactly one rung sits below `text-xs`: `text-[0.65625rem]`, the uppercase section label
-  (`tracking-wide`, `text-muted-foreground`) that heads a group of rows. Sidebar groups, palette and picker
-  groups, dialog groups, the shortcuts overlay, the settings search count, the review panel's Said band and
-  the file preview's read-only tag all wear it, and nothing invents a size between the two.
-- Two sizes stay off that rung deliberately: `text-[0.5625rem]`, the diff language badge, which crams two or
-  three letters into a 20px box, and `text-[0.8125rem]`, a compact body size rather than a label.
+  `text-xs`. One named rung sits below `text-xs`: `text-2xs` (`--text-2xs` in `index.css`, 0.65625rem), the
+  uppercase section label (`tracking-wide`, `text-muted-foreground`) that heads a group of rows. Sidebar
+  groups, palette and picker groups, dialog groups, the shortcuts overlay, the settings search count, the
+  plan usage table's header, the review panel's Said band and the file preview's read-only tag all wear it.
+  A label never invents a size of its own.
+- Four sizes stay off that rung deliberately, none of them a label: `text-[0.625rem]` for monospace meta
+  (`<kbd>`, palette counts, the tab's "relocate" tag), `text-[0.6875rem]` for a compact detail line
+  (the account under the plan gauges, "ended … ago", a sandbox probe's detail, a theme card's caption),
+  `text-[0.5625rem]` for the diff language badge, which crams two or three letters into a 20px box, and
+  `text-[0.8125rem]`, a compact body size rather than a label.
 - **Every size is written in rem, never px.** The zoom control moves the root font size, so a rem-based
   utility follows it while a `px` arbitrary value stays frozen. xterm and CodeMirror size their own text and
   are the measured exceptions. `frontend/lint/no-px-sizes.grit` fails the biome gate on the arbitrary-value

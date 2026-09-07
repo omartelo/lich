@@ -971,7 +971,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   `no_sandbox`): Chromium confines the window's subprocesses in a user namespace, or through the setuid
   helper beside `lich-shell`, and needs nothing of the binary for either. Where it has neither, the browser
   process would abort at its zygote, so the shell asks first, the way Chromium does (a fork trying
-  `CLONE_NEWUSER`, the helper checked for root and 4755, never as root) and opens with `--no-sandbox`: that
+  `CLONE_NEWUSER`, the helper checked for root and 4755, never as root; the `CHROME_DEVEL_SANDBOX` helper
+  Chromium also accepts for a binary the user owns is not asked) and opens with `--no-sandbox`: that
   is Ubuntu's desktop, whose AppArmor policy denies unprivileged user namespaces to unconfined binaries, and
   the packages do not ship the helper setuid (`cef/chrome-sandbox`, mode 755, not beside the executable),
   so every Ubuntu window runs unsandboxed and carries Chrome's "stability and security will suffer" bar,

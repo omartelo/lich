@@ -64,12 +64,7 @@ function PlanBody({ plan, now }: { plan: QuotaPlan; now: Date }) {
     <div className="flex max-w-prose flex-col gap-2">
       {/* The plan doubles as the table's left header, which is what keeps it from
           floating above the rows as a line of its own. */}
-      <div
-        className={cn(
-          gaugeGrid,
-          "text-[0.6875rem] uppercase tracking-wide text-muted-foreground/80",
-        )}
-      >
+      <div className={cn(gaugeGrid, "text-2xs uppercase tracking-wide text-muted-foreground/80")}>
         <span className="truncate normal-case tracking-normal text-muted-foreground">
           {plan.plan}
         </span>
