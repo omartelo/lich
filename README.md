@@ -9,15 +9,15 @@
   <p>
     Open your projects, run agents like Claude Code, Codex and opencode in real
     terminals, and keep git — worktrees, diffs and pull requests — in view
-    without leaving the window. One static Go binary, no Electron: on Linux and
-    Windows the UI opens in lich's own embedded Chromium; on macOS in your
-    system's Chromium-family browser, in <code>--app</code> mode.
+    without leaving the window. One static Go binary, no Electron: on Linux,
+    Windows and Apple Silicon the UI opens in lich's own embedded Chromium; on
+    an Intel Mac in your system's Chromium-family browser.
   </p>
   <p><a href="https://omartelo.github.io/lich/"><strong>omartelo.github.io/lich</strong></a></p>
   <p>
     <a href="https://github.com/omartelo/lich/releases"><img alt="Release" src="https://img.shields.io/github/v/release/omartelo/lich?color=4285F4&label=release" /></a>
     <img alt="Go" src="https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white" />
-    <img alt="Shell" src="https://img.shields.io/badge/shell-Chromium%20--app-4285F4?logo=googlechrome&logoColor=white" />
+    <img alt="Shell" src="https://img.shields.io/badge/shell-embedded%20Chromium%20(CEF)-4285F4?logo=googlechrome&logoColor=white" />
     <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-333" />
     <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-blue" /></a>
     <a href="https://github.com/sponsors/omartelo"><img alt="Sponsor" src="https://img.shields.io/github/sponsors/omartelo?color=ea4aaa&logo=githubsponsors&label=sponsors" /></a>

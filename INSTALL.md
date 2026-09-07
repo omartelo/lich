@@ -27,15 +27,17 @@ lich's own class and title, so the launcher icon, window rules by class and
 `StartupWMClass` all match it. `--browser` or `LICH_BROWSER` still pins a
 browser of your choice above it ([docs/chromium-shell.md](docs/chromium-shell.md)).
 
-On macOS, lich opens its window in a Chromium-family browser on the machine;
-none is bundled there yet. It looks for one in this order: the browser you
-pinned with `--browser` or `LICH_BROWSER`, your desktop's default browser when
-it is Chromium-family, the browsers installed on the machine. Chrome, Chromium,
-Edge, Brave and Vivaldi are looked up as `.app` bundles under `/Applications`
-(and `~/Applications`), and the folder picker is native. A browser installed
-somewhere else entirely is what `--browser` is for. The same ladder is what a
-Windows install falls back to when its own window fails: Chrome, Edge, Brave
-and Vivaldi via their conventional install paths (Edge ships with Windows).
+On macOS, `Lich.app` on Apple Silicon carries the same window; an Intel Mac
+opens it in a Chromium-family browser on the machine, looked for in this
+order: the browser you pinned with `--browser` or `LICH_BROWSER`, your
+desktop's default browser when it is Chromium-family, the browsers installed
+on the machine. Chrome, Chromium, Edge, Brave and Vivaldi are looked up as
+`.app` bundles under `/Applications` (and `~/Applications`), and the folder
+picker is native. A browser installed somewhere else entirely is what
+`--browser` is for. The same ladder is what an Apple Silicon or Windows
+install falls back to when its own window fails: on Windows, Chrome, Edge,
+Brave and Vivaldi via their conventional install paths (Edge ships with
+Windows).
 
 With **no** Chromium-family browser there, lich does not fail: it opens
 a plain tab in whatever browser you do have, tells you so in a desktop

@@ -10,14 +10,14 @@
   <p>
     打开你的项目，在真实终端里运行 Claude Code、Codex、opencode 这样的智能体，
     并把 git —— worktree、diff 和 Pull Request —— 一并留在视野里，无需离开窗口。
-    单个静态 Go 二进制文件，没有 Electron：在 Linux 上，界面在 lich 自带的内嵌
-    Chromium 里打开；在 macOS 和 Windows 上，则在你系统的 Chromium 系浏览器中以
-    <code>--app</code> 模式打开。
+    单个静态 Go 二进制文件，没有 Electron：在 Linux、Windows 和 Apple Silicon 上，
+    界面在 lich 自带的内嵌 Chromium 里打开；在 Intel Mac 上，则在你系统的
+    Chromium 系浏览器中打开。
   </p>
   <p>
     <a href="https://github.com/omartelo/lich/releases"><img alt="Release" src="https://img.shields.io/github/v/release/omartelo/lich?color=4285F4&label=release" /></a>
     <img alt="Go" src="https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white" />
-    <img alt="Shell" src="https://img.shields.io/badge/shell-Chromium%20--app-4285F4?logo=googlechrome&logoColor=white" />
+    <img alt="Shell" src="https://img.shields.io/badge/shell-embedded%20Chromium%20(CEF)-4285F4?logo=googlechrome&logoColor=white" />
     <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-333" />
     <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-blue" /></a>
     <a href="https://github.com/sponsors/omartelo"><img alt="Sponsor" src="https://img.shields.io/github/sponsors/omartelo?color=ea4aaa&logo=githubsponsors&label=sponsors" /></a>
@@ -85,19 +85,20 @@ curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh
 | 平台 | 安装方式 | 运行时依赖 |
 | --- | --- | --- |
 | **Linux** | 上面的 `install.sh`，或 AUR 的 [`lich-bin`](https://aur.archlinux.org/packages/lich-bin)（`yay -S lich-bin`） | `zenity` —— 窗口随软件包一起附带 |
-| **macOS** *(实验性)* | `brew install --cask omartelo/tap/lich` | `/Applications` 里有一个 Chromium 系浏览器 |
-| **Windows** *(实验性)* | 从 [Releases](https://github.com/omartelo/lich/releases) 下载安装程序 | 一个 Chromium 系浏览器 |
+| **macOS** *(实验性)* | `brew install --cask omartelo/tap/lich` | Apple Silicon 上无需任何东西 —— 窗口随应用一起附带；Intel 上需要 `/Applications` 里有一个 Chromium 系浏览器 |
+| **Windows** *(实验性)* | 从 [Releases](https://github.com/omartelo/lich/releases) 下载安装程序 | 无需任何东西 —— 窗口随安装程序一起附带 |
 
-在 macOS 和 Windows 上，Chromium、Chrome、Brave、Vivaldi 和 Edge 都算数；`--browser`
-或 `LICH_BROWSER` 可以直接指定一个，Linux 上也可以。这些一个都没有时，lich 会开在你确实
+在 Intel Mac 上，Chromium、Chrome、Brave、Vivaldi 和 Edge 都算数；`--browser`
+或 `LICH_BROWSER` 可以直接指定一个，任何平台上都可以。这些一个都没有时，lich 会开在你确实
 装了的那个浏览器里 —— 丢掉的是它自己那扇窗，而不是这个应用。
 
 手动的分发版软件包和静态二进制文件见 [INSTALL.md](INSTALL.md)。macOS 和 Windows 的
 二进制文件未签名 —— 在公证/签名做好之前，Gatekeeper 和 SmartScreen 会发出警告。用
 Homebrew 安装可以绕开 Gatekeeper 的提示；从 Releases 页面下载的二进制文件则需要手动
 清除隔离标记。在 macOS 上，cask 会把 `Lich.app` 装进 `/Applications`，lich 因此有了
-自己的图标；而它运行期间，Dock 里显示的仍是持有那个窗口的浏览器。从旧的 formula 升级
-需要先 `brew uninstall lich`，[INSTALL.md](INSTALL.md) 里写了这一点。
+自己的图标；在 Apple Silicon 上，运行期间 Dock 里显示的也是它；在 Intel 上，Dock 里
+显示的是持有那个窗口的浏览器。从旧的 formula 升级需要先 `brew uninstall lich`，
+[INSTALL.md](INSTALL.md) 里写了这一点。
 
 ## 快速上手
 
