@@ -263,3 +263,41 @@ func sendInput(t *testing.T, svc *Service, id string, data []byte) {
 	waitFor(t, func() bool { return !svc.turns.report(id, statusWaiting) },
 		"the keystroke to end the turn")
 }
+
+// onOpen hears the open count after every report, interrupt and forget,
+// whether or not it changed: the consumer reads a level, and a `waiting` or
+// a repeated interrupt repeats the count rather than going silent.
+func TestTurnLogReportsOpenCount(t *testing.T) {
+	var got []int
+	l := &turnLog{onOpen: func(n int) { got = append(got, n) }}
+	l.report("a", statusBusy)
+	l.report("b", statusBusy)
+	l.report("a", statusWaiting)
+	l.report("a", statusDone)
+	l.interrupt("b")
+	l.interrupt("b")
+	l.report("c", statusBusy)
+	l.forget("c")
+	want := []int{1, 2, 2, 1, 0, 0, 1, 0}
+	if !slices.Equal(got, want) {
+		t.Fatalf("open counts %v, want %v", got, want)
+	}
+}
+
+// A closed card takes its turn with it: the count that keeps the machine
+// awake must not remember a session that no longer exists.
+func TestCloseForgetsOpenTurn(t *testing.T) {
+	s := &Service{sessions: map[string]*session{}, hub: events.New()}
+	var last int
+	s.turns.onOpen = func(n int) { last = n }
+	s.turns.report("gone", statusBusy)
+	if last != 1 {
+		t.Fatalf("open=%d before close, want 1", last)
+	}
+	if err := s.Close("gone"); err != nil {
+		t.Fatal(err)
+	}
+	if last != 0 {
+		t.Fatalf("open=%d after close, want 0", last)
+	}
+}

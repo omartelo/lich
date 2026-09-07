@@ -69,7 +69,10 @@ export interface HotkeyAction {
 //   (Ctrl+R search, Ctrl+U kill, Ctrl+W erase word) — never take one.
 // - Ctrl+Shift+letter reaches the PTY as *nothing at all*: xterm's control-code
 //   mapping requires Shift to be up, so no TUI can bind it and the chord is free.
-//   It is the family to reach for, minus the letters Chromium keeps for itself.
+//   It is the family to reach for, minus the letters Chromium keeps for itself:
+//   lich's own window hands the page every Ctrl chord before Chromium acts on
+//   it (shell/src/main.rs), but a system browser, which is what `--no-window`
+//   and the fallback open, never does.
 // - Ctrl+Shift+arrow arrives as a real sequence (CSI 1;6A…D), so it does cost
 //   the TUI something. It is spent only where the direction *is* the meaning.
 // - Ctrl+Alt+arrow is the desktop's workspace switch on Linux and would never
@@ -86,7 +89,7 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
   },
   // B for branch: the dialog's whole subject is which branch the checkout is
   // cut from. Ctrl+Shift+W would have read better and is Chromium's close
-  // window, which a page cannot take back.
+  // window, which a page opened in a browser cannot take back.
   {
     id: "newWorktree",
     label: "New worktree session",

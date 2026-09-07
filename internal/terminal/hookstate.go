@@ -21,6 +21,11 @@ import "sync"
 type turnLog struct {
 	mu   sync.Mutex
 	open map[string]bool
+	// onOpen, when set, hears how many turns are open after every report, the
+	// count that keeps the machine awake (internal/awake). Called outside the
+	// lock, so what it does (spawn an inhibitor) never holds a report up. It
+	// may hear the same count twice: the consumer is a level, not an edge.
+	onOpen func(n int)
 }
 
 // report takes one session-state report and answers whether the window should
@@ -30,7 +35,7 @@ type turnLog struct {
 // session nobody is blocked on should show.
 func (l *turnLog) report(id, state string) bool {
 	l.mu.Lock()
-	defer l.mu.Unlock()
+	defer l.changed()
 	switch state {
 	case statusWaiting:
 		// Recorded neither way: `waiting` interrupts a turn rather than replacing
@@ -51,6 +56,17 @@ func (l *turnLog) report(id, state string) bool {
 	return true
 }
 
+// changed releases the lock and hands the open count to onOpen. Deferred
+// right after the Lock by every method that may change the count, so the
+// unlock and the callback cannot drift apart.
+func (l *turnLog) changed() {
+	n, cb := len(l.open), l.onOpen
+	l.mu.Unlock()
+	if cb != nil {
+		cb(n)
+	}
+}
+
 // busy reports whether a turn is open in this session right now — the provider's
 // own word for "the agent is working", which is what qualifies its output as
 // work rather than as a program repainting (see Service.noteOutput).
@@ -64,7 +80,7 @@ func (l *turnLog) busy(id string) bool {
 // against its own reports rather than against those of the provider that left.
 func (l *turnLog) forget(id string) {
 	l.mu.Lock()
-	defer l.mu.Unlock()
+	defer l.changed()
 	delete(l.open, id)
 }
 
@@ -75,7 +91,7 @@ func (l *turnLog) forget(id string) {
 // changes nothing.
 func (l *turnLog) interrupt(id string) bool {
 	l.mu.Lock()
-	defer l.mu.Unlock()
+	defer l.changed()
 	if !l.open[id] {
 		return false
 	}

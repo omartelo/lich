@@ -374,6 +374,15 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   bindings are a `lich.hotkeys` entry in localStorage, which the theme left for the workspace database precisely
   because a recreated Chromium profile drops it: the combos revert to the defaults, and both the overlay and
   Settings then show those defaults as if nothing had ever been rebound.
+- **lich's own window offers the page every primary-modifier chord before Chromium runs it**
+  (`shell/src/main.rs`): a CEF keyboard handler marks each Ctrl chord (Cmd on macOS) a keyboard shortcut, which
+  is the only way a page can claim one of Chromium's *reserved* accelerators. Ctrl+T, Ctrl+W, Ctrl+Shift+T and
+  the tab selectors otherwise run in the browser before the renderer is given the key, and no command handler
+  sees them either: that is how Ctrl+Shift+T came to reopen a closed tab in a window with no tabs. What the page
+  consumes is now gone from the browser, and a focused session consumes a lot, since xterm.js claims every
+  Ctrl+letter: while you type in a session, Ctrl+W no longer closes the window and Ctrl+T no longer opens a tab.
+  It also holds in the bundled window alone. Opened in a system browser (`--no-window`, or the fallback when the
+  window fails), the browser keeps its accelerators and a chord it reserves never reaches lich at all.
 - **Hidden sessions are serialized and destroyed**: 2MB replay rings on both sides
   (`frontend/src/lib/terminal/replay-buffer.ts` page-side, `internal/terminal/replay.go` backend-side — the latter
   survives a full page reload). Scrollback past the ring is gone, not paged. The snapshot carries only the modes
@@ -968,3 +977,11 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   hand off to. A desktop with a URL handler installed but no browser behind it therefore looks like success:
   lich stays up with a notification and nothing on screen. Only a machine missing the opener itself reaches
   the dialog that carries the URL.
+- **Keep-awake follows the session-state report, and only that** (`internal/awake`, `turnLog.onOpen`): the
+  machine is held out of idle sleep while a hook says a turn is open. Crush reports no state at all, so a
+  Crush session left working behind a locked screen sleeps as it always did, and no card says so. Kiro's
+  permission prompt reads as `busy` (docs/hooks/session-state.md), so a Kiro session blocked on a human keeps
+  the machine awake until someone answers. Linux holds it through `systemd-inhibit --what=idle`: a distro
+  without systemd logs one warning per burst of work and sleeps, and a desktop that ignores logind idle
+  inhibitors sleeps silently. The hold was measured on Linux only; on Windows and macOS CI proves the request
+  is registered (`powercfg /requests`, `pmset -g assertions`), not that the machine stays up.

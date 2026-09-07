@@ -695,7 +695,7 @@ dependencies = [
 [[package]]
 name = "kurogane"
 version = "0.0.4"
-source = "git+https://github.com/omartelo/kurogane?rev=acc12a2f3ff4e8f06aab2da03532dbc50890e676#acc12a2f3ff4e8f06aab2da03532dbc50890e676"
+source = "git+https://github.com/omartelo/kurogane?rev=12be327b0a47b9f16474ffcd7fa6700d7cf2af7f#12be327b0a47b9f16474ffcd7fa6700d7cf2af7f"
 dependencies = [
  "cef",
  "ctrlc",
@@ -712,7 +712,7 @@ dependencies = [
 [[package]]
 name = "kurogane-layout"
 version = "0.0.4"
-source = "git+https://github.com/omartelo/kurogane?rev=acc12a2f3ff4e8f06aab2da03532dbc50890e676#acc12a2f3ff4e8f06aab2da03532dbc50890e676"
+source = "git+https://github.com/omartelo/kurogane?rev=12be327b0a47b9f16474ffcd7fa6700d7cf2af7f#12be327b0a47b9f16474ffcd7fa6700d7cf2af7f"
 dependencies = [
  "dirs",
  "serde",
@@ -756,6 +756,7 @@ dependencies = [
 name = "lich-shell"
 version = "0.0.0"
 dependencies = [
+ "cef",
  "kurogane",
  "windows-sys 0.61.2",
  "winresource",

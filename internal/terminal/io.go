@@ -58,6 +58,12 @@ func (s *Service) stream(id string, sess *session) {
 	// registered with.
 	if reaped {
 		s.spawns.Delete(id)
+		// Under mu for the same reason: a respawn that lands after the unlock
+		// forgets the turn itself before it spawns (spawnSession), and a reap
+		// running behind it would otherwise delete the new session's own turn.
+		// The awake release this may run waits milliseconds for a child to
+		// exit, well under what the spawn itself holds mu for.
+		s.turns.forget(id)
 	}
 	s.mu.Unlock()
 
