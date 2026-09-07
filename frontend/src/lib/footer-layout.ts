@@ -8,7 +8,9 @@ export const FOOTER_ITEMS = [
   { id: "pr", label: "Pull request", example: "PR #123" },
   { id: "checkout", label: "Branch", example: "feature/toolbar" },
   { id: "path", label: "Working directory", example: "~/project" },
-  { id: "model", label: "Model", example: "Codex · GPT-6" },
+  // No example of its own: the editor shows the model the active session is
+  // running, and this is what it falls back to when no session has reported one.
+  { id: "model", label: "Model", example: "Model" },
   { id: "context", label: "Context window", example: "42%" },
   { id: "plan", label: "Plan usage", example: "5h 28%" },
   { id: "cost", label: "Cost", example: "$1.25" },

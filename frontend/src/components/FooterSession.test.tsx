@@ -23,6 +23,19 @@ const state = vi.hoisted(() => ({
   ready: true,
 }))
 vi.mock("@/lib/session/use-session-usage", () => ({ useSessionUsage: () => state.usage }))
+// The footer editor reads the active session to show the model that session is
+// actually running, which needs the project context and the router the footer
+// itself already has.
+vi.mock("@/lib/session/use-active-session", () => ({
+  useActiveSession: () => ({
+    projectId: "p1",
+    sessionId: "s1",
+    path: "/repo",
+    checkout: "/repo",
+    kind: state.agent ?? "",
+    sandboxed: false,
+  }),
+}))
 vi.mock("@/lib/session/use-session-agent", () => ({ useSessionAgent: () => state.agent }))
 vi.mock("@/lib/quota/use-plan-quota", () => ({ usePlanQuotaFor: vi.fn(() => state.plan) }))
 vi.mock("@/providers/settings", () => ({
@@ -274,6 +287,23 @@ test("restoring the default writes the layout and turns off the reading it drops
   expect(setCostReadout).toHaveBeenCalledWith(false)
   expect(state.cost).toBe(false)
   expect(state.context).toBe(true)
+})
+
+// The model chip is the one whose reading is a fact rather than a shape: an
+// invented "Codex · GPT-6" named a provider the footer never writes.
+test("the editor shows the model the active session is running", async () => {
+  state.agent = "claude"
+  state.usage = { ...reading(1000, 1), model: "claude-opus-5", effort: "xhigh" }
+  await act(async () => root.render(createElement(FooterSettings)))
+  expect(container.querySelector('[data-footer-item="model"]')?.textContent).toContain(
+    "opus 5 · xhigh",
+  )
+})
+
+test("the model chip falls back to its name when no session has reported one", async () => {
+  state.usage = null
+  await act(async () => root.render(createElement(FooterSettings)))
+  expect(container.querySelector('[data-footer-item="model"]')?.textContent).toBe("Model")
 })
 
 test("the editor waits for the old cost setting before allowing a layout migration", async () => {

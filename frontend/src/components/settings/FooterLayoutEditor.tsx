@@ -31,6 +31,11 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { dragStyle, useDragSensors } from "@/lib/use-sortable-list"
+import { formatModel } from "@/lib/model-name"
+import { useActiveSession } from "@/lib/session/use-active-session"
+import { useSessionAgent } from "@/lib/session/use-session-agent"
+import { useSessionUsage } from "@/lib/session/use-session-usage"
+import { ProviderIcon } from "@/components/ProviderIcon"
 import {
   FOOTER_ITEMS,
   hasFooterItem,
@@ -64,6 +69,54 @@ const LABELS: Record<FooterZone, string> = {
 }
 const exampleOf = (id: FooterItem) => FOOTER_ITEMS.find((item) => item.id === id)?.example ?? id
 const labelOf = (id: FooterItem) => FOOTER_ITEMS.find((item) => item.id === id)?.label ?? id
+
+interface ItemReadingProps {
+  id: FooterItem
+  /** The preview bar sets its own smaller glyph. */
+  small?: boolean
+}
+
+// What the item puts in the footer: its glyph and its reading. One component
+// for the chip, the drag overlay and the preview bar, so the thing under the
+// cursor is the thing that was picked up.
+function ItemReading({ id, small }: ItemReadingProps) {
+  if (id === "model") {
+    return <ModelReading small={small} />
+  }
+  const Icon = ICONS[id]
+  return (
+    <>
+      <Icon className={small ? "size-3" : undefined} aria-hidden="true" />
+      {exampleOf(id)}
+    </>
+  )
+}
+
+// The model slot is the one item whose footer reading is not a shape but a
+// fact: the provider's own mark and the model the active session is running,
+// which is what SessionModel draws. A made-up "Codex · GPT-6" named a provider
+// the footer never writes and pinned a model nobody chose.
+function ModelReading({ small }: { small?: boolean }) {
+  const { sessionId, kind } = useActiveSession()
+  const usage = useSessionUsage(sessionId)
+  const provider = useSessionAgent(sessionId) ?? kind
+  if (!usage?.model || !provider) {
+    const Icon = ICONS.model
+    return (
+      <>
+        <Icon className={small ? "size-3" : undefined} aria-hidden="true" />
+        {exampleOf("model")}
+      </>
+    )
+  }
+  return (
+    <>
+      <ProviderIcon kind={provider} size={small ? 12 : 14} />
+      {formatModel(usage.model)}
+      {usage.effort ? ` · ${usage.effort}` : ""}
+    </>
+  )
+}
 
 // Only a pointer inside a drop area may commit; inside it, items take precedence.
 const collisionDetection: CollisionDetection = (args) => {
@@ -138,8 +191,8 @@ export function FooterLayoutEditor({ layout, disabled, onChange }: FooterLayoutE
       </div>
       <DragOverlay>
         {dragging && (
-          <span className="rounded-md bg-popover px-2.5 py-1.5 text-xs shadow-md">
-            {exampleOf(dragging)}
+          <span className="flex items-center gap-1.5 rounded-md bg-popover px-2.5 py-1.5 text-xs shadow-md">
+            <ItemReading id={dragging} />
           </span>
         )}
       </DragOverlay>
@@ -207,7 +260,6 @@ function FooterEditorItem({ id, layout, disabled }: FooterEditorItemProps) {
     transition,
     isDragging,
   } = useSortable({ id, disabled })
-  const Icon = ICONS[id]
   const inFooter = hasFooterItem(layout, id)
   return (
     <div
@@ -234,8 +286,7 @@ function FooterEditorItem({ id, layout, disabled }: FooterEditorItemProps) {
         aria-label={`Move ${labelOf(id)}`}
         className="touch-none cursor-grab tabular-nums active:cursor-grabbing"
       >
-        <Icon />
-        {exampleOf(id)}
+        <ItemReading id={id} />
       </Button>
     </div>
   )
@@ -267,15 +318,11 @@ export function FooterLayoutPreview({ layout }: FooterLayoutPreviewProps) {
                 side === "right" && "ml-auto justify-end",
               )}
             >
-              {layout[side].map((id) => {
-                const Icon = ICONS[id]
-                return (
-                  <span key={id} className="flex items-center gap-1 tabular-nums">
-                    <Icon className="size-3" aria-hidden="true" />
-                    {FOOTER_ITEMS.find((item) => item.id === id)?.example}
-                  </span>
-                )
-              })}
+              {layout[side].map((id) => (
+                <span key={id} className="flex items-center gap-1 tabular-nums">
+                  <ItemReading id={id} small />
+                </span>
+              ))}
             </div>
           ))}
           {layout.left.length + layout.right.length === 0 && (
