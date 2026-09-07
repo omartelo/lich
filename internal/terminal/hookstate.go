@@ -21,6 +21,10 @@ import "sync"
 type turnLog struct {
 	mu   sync.Mutex
 	open map[string]bool
+	// onOpen, when set, hears how many turns are open after every change —
+	// the count that keeps the machine awake (internal/awake). Called outside
+	// the lock, so what it does (spawn an inhibitor) never holds a report up.
+	onOpen func(n int)
 }
 
 // report takes one session-state report and answers whether the window should
@@ -30,13 +34,14 @@ type turnLog struct {
 // session nobody is blocked on should show.
 func (l *turnLog) report(id, state string) bool {
 	l.mu.Lock()
-	defer l.mu.Unlock()
+	open := l.open[id]
 	switch state {
 	case statusWaiting:
 		// Recorded neither way: `waiting` interrupts a turn rather than replacing
 		// it, so the report after it still has to be read against the turn it
 		// interrupted. Two permission prompts in one turn are two blocks.
-		return l.open[id]
+		l.mu.Unlock()
+		return open
 	case statusBusy:
 		if l.open == nil {
 			l.open = make(map[string]bool)
@@ -48,7 +53,18 @@ func (l *turnLog) report(id, state string) bool {
 		// as "no turn open", which is what both of them mean here.
 		delete(l.open, id)
 	}
+	l.changed()
 	return true
+}
+
+// changed hands the open count to onOpen. Called with the lock held; it is
+// the one that releases it, so the callback runs outside.
+func (l *turnLog) changed() {
+	n, cb := len(l.open), l.onOpen
+	l.mu.Unlock()
+	if cb != nil {
+		cb(n)
+	}
 }
 
 // busy reports whether a turn is open in this session right now — the provider's
@@ -64,8 +80,8 @@ func (l *turnLog) busy(id string) bool {
 // against its own reports rather than against those of the provider that left.
 func (l *turnLog) forget(id string) {
 	l.mu.Lock()
-	defer l.mu.Unlock()
 	delete(l.open, id)
+	l.changed()
 }
 
 // interrupt closes an open turn the user ended themselves at the PTY, and
@@ -75,10 +91,11 @@ func (l *turnLog) forget(id string) {
 // changes nothing.
 func (l *turnLog) interrupt(id string) bool {
 	l.mu.Lock()
-	defer l.mu.Unlock()
 	if !l.open[id] {
+		l.mu.Unlock()
 		return false
 	}
 	delete(l.open, id)
+	l.changed()
 	return true
 }

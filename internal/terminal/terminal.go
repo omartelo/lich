@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/omartelo/lich/internal/awake"
 	"github.com/omartelo/lich/internal/events"
 	"github.com/omartelo/lich/internal/pricing"
 )
@@ -346,6 +347,10 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 	s.snaps.filed = func(id string) {
 		hub.Emit(turnEventName, turnEvent{ID: id})
 	}
+	// While any turn is open the machine is kept from idling into sleep, the
+	// way a playing media player keeps it: a locked screen no longer pauses
+	// the agents (internal/awake).
+	s.turns.onOpen = awake.New().Set
 	ws, err := newTransport(s.onInput, s.onHookState, s.onSessionStart, s.onTitle, s.onTouched)
 	s.ws, s.wsErr = ws, err
 	if ws != nil {
@@ -612,6 +617,9 @@ func (s *Service) Close(id string) error {
 	}
 	s.mu.Unlock()
 	s.spawns.Delete(id)
+	// A turn dies with its session, and an open one left behind would keep the
+	// machine awake for a card that no longer exists.
+	s.turns.forget(id)
 
 	// Before the bail below, because a card is closed far more often than it is
 	// running: its row is deleted either way, so nothing will ever ask what its

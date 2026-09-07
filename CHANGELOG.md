@@ -7,8 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+> [!IMPORTANT]
+> **Lock your screen and walk away: the agents keep working.** While any
+> session has a turn open, lich holds the machine out of idle sleep the way a
+> playing media player does, on Windows, macOS and Linux alike. An idle prompt
+> lets it sleep again.
+
 ### Added
 
+- **Sessions no longer pause behind a locked screen.** While an agent is
+  working, lich holds the same idle-sleep assertion a media player holds
+  while it plays, so a machine left locked keeps running its sessions and
+  only sleeps once every session is back at its prompt. On Windows that also
+  covers Modern Standby laptops, whose "screen off" used to freeze every
+  desktop app, lich included; `powercfg /requests` names lich as the holder.
+  On macOS it is `caffeinate` (`pmset -g assertions`), on Linux a logind idle
+  inhibitor (`systemd-inhibit --list`). The screen still turns off, and a
+  closed lid or a Sleep you choose still sleeps.
 - **On Windows, lich now brings its own window too.** The installer ships the
   same embedded Chromium (CEF) the Linux packages do, beside `lich.exe` as
   `shell\`, and lich opens in it instead of looking for Chrome, Edge, Brave or

@@ -60,6 +60,11 @@ func (s *Service) stream(id string, sess *session) {
 		s.spawns.Delete(id)
 	}
 	s.mu.Unlock()
+	// Outside mu: closing the turn may spawn the awake inhibitor's release, and
+	// nothing that runs a process belongs under the spawn lock.
+	if reaped {
+		s.turns.forget(id)
+	}
 
 	// Only the goroutine that actually evicted its own PTY owes an exit event:
 	// a reap that lost the race to a respawn under the same id would otherwise
