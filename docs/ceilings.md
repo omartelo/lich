@@ -855,14 +855,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   pretending the setting is absent. Shortcuts and the panes themselves are indexed off `HOTKEY_ACTIONS` and
   `SETTING_SECTIONS`, so those two never fall behind.
 
-- **A remembered section id is never validated, and a dead one resolves to Providers** (`Settings.tsx`):
-  the pref is stored raw rather than parsed against a list, because the sections belong to the screen and
-  `settings-prefs` is not where they live. An id this build cannot place (one of the `provider-<id>` panes
-  that existed before Providers became a single section, say) resolves to `DEFAULT_SECTION` and is never
-  rewritten. That is a landing, not a fix: the stale pref stays in storage forever, and the user is never told
-  the pane they were on is gone. The same holds for the provider a Providers pane had open
-  (`lich.settings.provider`), which is genuinely unknowable at build time: it resolves back to the list while
-  that provider is disabled, and comes back when it is turned on again.
 - **The old terminal-theme selection is left where it was written** (`appearance.terminalTheme` in the
   workspace database, `lich.appearance.terminalTheme` in localStorage): one theme now colors both surfaces,
   and nothing reads either key any more. They are not deleted on upgrade, because a migration that runs on

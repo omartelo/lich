@@ -1,4 +1,4 @@
-import { readPref, writePref } from "@/lib/prefs"
+import { parseEnumPref, readPref, writePref } from "@/lib/prefs"
 
 // Everything the settings screen remembers about how it was left. Like the pull
 // request screen it is an `<Outlet>` route, so stepping into a session or
@@ -23,19 +23,25 @@ const QUERY_KEY = "lich.settings.query"
 const PROVIDER_KEY = "lich.settings.provider"
 
 // The pane a screen with nothing remembered opens on: the one almost every
-// visit is for. Exported because it is also where a section id from another
-// build lands, and a pane that no longer exists must not strand its readers.
+// visit is for. Also where a section id this build cannot place lands, and a
+// pane that no longer exists must not strand its readers.
 export const DEFAULT_SECTION = "providers"
 
-/** The pane the nav had open.
+/** The pane the nav had open, parsed against the sections the screen has.
  *
- * Not checked against a known set the way a sort is. A provider's section id
- * only exists while that provider is enabled, so the set is not knowable here —
- * and the screen already resolves an id it cannot find to its first section,
- * which means a pane belonging to a provider turned off for now is waited out
- * rather than forgotten. */
-export function readSettingsSection(): string {
-  return readPref(SECTION_KEY) ?? DEFAULT_SECTION
+ * The panes belong to the screen, so it passes its own ids in — but they are a
+ * known set at the moment of the read, which is what makes this a parse like
+ * any other sort or theme. An id from a build that shaped the nav differently
+ * (a `provider-<id>` pane, from before Providers became one section) opens the
+ * default and is rewritten, rather than being resolved again on every launch
+ * for the life of the install. */
+export function readSettingsSection(sections: readonly string[]): string {
+  const stored = readPref(SECTION_KEY)
+  const section = parseEnumPref(stored, sections, DEFAULT_SECTION)
+  if (stored !== null && stored !== section) {
+    writePref(SECTION_KEY, section)
+  }
+  return section
 }
 
 export function writeSettingsSection(section: string): void {
@@ -54,9 +60,11 @@ export function writeSettingsQuery(query: string): void {
 }
 
 /** The provider whose own screen was open inside the Providers pane, "" for the
- * list. Unparsed for the same reason the section is: the id is only meaningful
- * while that provider is enabled, and the pane resolves one it cannot place
- * back to the list rather than forgetting it. */
+ * list. Unparsed, unlike the section: the roster is the backend's answer and is
+ * not in yet when this is read, and an id is only meaningful while that
+ * provider is enabled anyway. So the pane resolves it — back to the list while
+ * the provider is off, to its screen again when it is turned on — and the
+ * stored id is kept on purpose, which is what makes it come back. */
 export function readSettingsProvider(): string {
   return readPref(PROVIDER_KEY) ?? ""
 }

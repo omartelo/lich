@@ -22,7 +22,6 @@ import { UpdatesSettings } from "./UpdatesSettings"
 import { HelpSettings } from "./HelpSettings"
 import { SearchInput } from "@/components/common/SearchInput"
 import {
-  DEFAULT_SECTION,
   readSettingsProvider,
   readSettingsQuery,
   readSettingsSection,
@@ -102,6 +101,11 @@ const FOOTER_SECTIONS: Section[] = [
 
 const ALL_SECTIONS = [...SECTIONS, ...FOOTER_SECTIONS]
 
+// What the remembered pane is parsed against: the ids belong to this list, and
+// a stored one that is not in it is from a build whose nav was shaped
+// differently (settings-prefs).
+const SECTION_IDS = ALL_SECTIONS.map((section) => section.id)
+
 // Settings is the per-project settings screen (not a modal): it fills the main
 // area and sits on top of the persistent terminals, with the session sidebar
 // kept beside it. The route carries the project id, which the provider and
@@ -112,7 +116,7 @@ export function Settings() {
   // Seeded from the store and written through, so leaving the screen — a
   // session next door, another project — brings back the pane that was open
   // rather than the default one (settings-prefs).
-  const [active, setActive] = useState(readSettingsSection)
+  const [active, setActive] = useState(() => readSettingsSection(SECTION_IDS))
   const [query, setQuery] = useState(readSettingsQuery)
   const [openProvider, setOpenProvider] = useState(readSettingsProvider)
   // The result the arrow keys are on, and the control a chosen result lit up.
@@ -195,14 +199,10 @@ export function Settings() {
   const searching = query.trim() !== ""
   const sections = SECTIONS
   const footerSections = FOOTER_SECTIONS
-  // A section id this build cannot place resolves to the default pane, not to
-  // the first one: the ids a provider used to get its own section are still in
-  // people's storage, and landing them on Appearance forever is the trap
-  // docs/ceilings.md names.
-  const current =
-    ALL_SECTIONS.find((section) => section.id === active) ??
-    ALL_SECTIONS.find((section) => section.id === DEFAULT_SECTION) ??
-    ALL_SECTIONS[0]
+  // The remembered id was parsed against this list on the way in, and every
+  // other way `active` is set names a row of it, so this fallback answers the
+  // type rather than a pane anyone can land on.
+  const current = ALL_SECTIONS.find((section) => section.id === active) ?? ALL_SECTIONS[0]
   const providerName = providers.find((provider) => provider.id === openProvider)?.name ?? ""
 
   const navButton = (section: Section) => (

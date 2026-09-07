@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { enabledProviders, type ProviderState } from "./providers-store"
 import {
   readSettingsProvider,
   readSettingsQuery,
@@ -27,26 +28,43 @@ beforeEach(() => {
   stored.clear()
 })
 
+// The screen's own nav, which is what the section is parsed against.
+const SECTIONS = ["appearance", "hotkeys", "providers", "sandbox"]
+
 describe("the stored section", () => {
   it("opens on the providers pane with nothing stored", () => {
-    expect(readSettingsSection()).toBe("providers")
+    expect(readSettingsSection(SECTIONS)).toBe("providers")
   })
 
   it("round-trips the pane that was open", () => {
     writeSettingsSection("sandbox")
 
-    expect(readSettingsSection()).toBe("sandbox")
+    expect(readSettingsSection(SECTIONS)).toBe("sandbox")
   })
 
-  // The opposite of the sort pref, and the reason this one is not parsed
-  // against a known set: a provider's section id only exists while that
-  // provider is enabled, so an id this build cannot place has to come back
-  // whole. The screen resolves it to its first section for as long as the
-  // provider is off, and the pane is there again when it is turned back on.
-  it("keeps a section id it cannot place, for the screen to resolve", () => {
+  // The `provider-<id>` panes are still in the storage of anyone who used a
+  // build from before Providers became one section, and a pane this one cannot
+  // draw must not be where the screen tries to land.
+  it("opens the default pane for a section id it cannot place", () => {
     writeSettingsSection("provider-crush")
 
-    expect(readSettingsSection()).toBe("provider-crush")
+    expect(readSettingsSection(SECTIONS)).toBe("providers")
+  })
+
+  // And the value goes with it: resolving the same dead id at every launch for
+  // the life of the install is a landing, not a fix.
+  it("rewrites the stored id it could not place", () => {
+    writeSettingsSection("provider-crush")
+    readSettingsSection(SECTIONS)
+
+    expect(stored.get("lich.settings.section")).toBe("providers")
+  })
+
+  it("leaves a section it can place in storage untouched", () => {
+    writeSettingsSection("hotkeys")
+    readSettingsSection(SECTIONS)
+
+    expect(stored.get("lich.settings.section")).toBe("hotkeys")
   })
 })
 
@@ -71,6 +89,20 @@ describe("the stored search box", () => {
   })
 })
 
+const provider = (id: string, enabled: boolean): ProviderState => ({
+  id: id as ProviderState["id"],
+  name: id,
+  binary: id,
+  installed: true,
+  enabled,
+  docs: `https://example.test/${id}`,
+})
+
+// What ProvidersPane does with the stored id: the enabled roster decides
+// whether the screen it names is still reachable.
+const open = (list: ProviderState[]) =>
+  enabledProviders(list).find((p) => p.id === readSettingsProvider())
+
 describe("the stored provider screen", () => {
   it("reads as the list with nothing stored", () => {
     expect(readSettingsProvider()).toBe("")
@@ -82,12 +114,17 @@ describe("the stored provider screen", () => {
     expect(readSettingsProvider()).toBe("codex")
   })
 
-  // Same reason the section is not parsed against a known set: the id is only
-  // meaningful while that provider is enabled, and the pane resolves one it
-  // cannot place back to the list rather than forgetting it was open.
-  it("keeps a provider id it cannot place, for the pane to resolve", () => {
+  // Unlike the section, this one is not parsed on the way out: the roster is
+  // the backend's answer, and the id is only meaningful while that provider is
+  // enabled. So a disabled provider's screen resolves to the list — the pane's
+  // own rule, composed here out of the two pieces it composes — and the stored
+  // id is kept, which is what puts the screen back when it is turned on again.
+  it("resolves a disabled provider to the list, and back to its screen when it returns", () => {
     writeSettingsProvider("crush")
+    const off = [provider("claude", true), provider("crush", false)]
 
+    expect(open(off)).toBeUndefined()
+    expect(open([provider("claude", true), provider("crush", true)])?.id).toBe("crush")
     expect(readSettingsProvider()).toBe("crush")
   })
 
