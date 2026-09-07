@@ -385,9 +385,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   (`frontend/src/lib/terminal/replay-buffer.ts` page-side, `internal/terminal/replay.go` backend-side — the latter
   survives a full page reload). Scrollback past the ring is gone, not paged. The snapshot carries only the modes
   xterm's SerializeAddon reads off `term.modes`; the ones an app relies on and it does not record are restored by
-  hand in `frontend/src/lib/terminal/term-modes.ts` — today the mouse encoding and cursor visibility. Cursor
-  *shape* (DECSCUSR) is not among them: a TUI that chose a bar or underline cursor gets lich's block back after a
-  card switch.
+  hand in `frontend/src/lib/terminal/term-modes.ts`.
 - **One socket carries every session's output** (`internal/terminal/writequeue.go`): the per-session outbox
   decouples the *producers*, never the wire. A window that stops reading stalls the connection's single writer,
   so after `wsWriteTimeout` (5s) every session's output switches to the `/events` bridge at once. That is a

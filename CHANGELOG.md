@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   confines itself; installing the release over the previous one is enough.
   Installs from the bare tarball are unchanged: a file unpacked as you cannot
   be owned by root, so those keep the unsandboxed window.
+- **The cursor keeps its shape across a card switch.** Hiding a session
+  serializes its terminal and destroys it, and the snapshot never carried the
+  cursor shape a program had chosen, so a shell or editor drawing a bar or an
+  underline came back with lich's block. The shape is now carried across the
+  cycle beside the mouse encoding and cursor visibility, and follows the
+  program's own reset back to the default.
 - **Scoop installs the current release.** The manifest 0.46.0 introduced pinned
   0.45.0 with no checksums, and nothing bumped it on a tag, so `scoop install`
   and `scoop update lich` handed out the previous release. Every release now

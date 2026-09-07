@@ -3,7 +3,7 @@
  *
  * Hiding a session serializes the terminal and destroys it; showing it writes
  * the snapshot into a fresh one. xterm's SerializeAddon replays the modes it
- * can read off `term.modes`, and two an app depends on are not among them:
+ * can read off `term.modes`, and three an app depends on are not among them:
  *
  * - The mouse *encoding*. The addon restores the mouse *protocol*
  *   (`?1000`/`?1002`/`?1003`) but never the encoding the app turned on with it,
@@ -14,6 +14,9 @@
  * - Cursor visibility (`?25`). A fresh terminal shows its cursor, so an app
  *   that hid it — every full-screen TUI does, drawing its own — gets lich's
  *   blinking block back, parked wherever the snapshot left the real cursor.
+ * - Cursor shape (DECSCUSR, `CSI Ps SP q`). xterm parses it into a private the
+ *   addon never reads, so a shell or editor that asked for a bar or an
+ *   underline gets lich's block back on the next card switch.
  */
 
 // Keyed by xterm's CoreMouseEncoding names; DEFAULT (X10) needs no sequence.
@@ -38,6 +41,24 @@ export function mouseEncodingSequence(encoding: string | undefined): string {
  */
 export function cursorVisibilitySequence(hidden: boolean): string {
   return hidden ? "\x1b[?25l" : ""
+}
+
+// Keyed by xterm's cursorStyle names; each pair is the DECSCUSR Ps for that
+// shape, blinking first. A style xterm never set means the app never chose one
+// (or reset it with Ps 0 / RIS), which is the fresh terminal's own default.
+const CURSOR_SHAPE_PS: Record<string, [blinking: number, steady: number]> = {
+  block: [1, 2],
+  underline: [3, 4],
+  bar: [5, 6],
+}
+
+/**
+ * The DECSCUSR sequence that re-selects the cursor shape the app asked for, or
+ * "" when it never asked, reset it, or picked a name xterm added since.
+ */
+export function cursorShapeSequence(shape: { style?: string; blink?: boolean }): string {
+  const ps = shape.style ? CURSOR_SHAPE_PS[shape.style] : undefined
+  return ps ? `\x1b[${shape.blink === false ? ps[1] : ps[0]} q` : ""
 }
 
 /**

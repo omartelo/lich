@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { cursorVisibilitySequence, linkClickIsOurs, mouseEncodingSequence } from "./term-modes"
+import {
+  cursorShapeSequence,
+  cursorVisibilitySequence,
+  linkClickIsOurs,
+  mouseEncodingSequence,
+} from "./term-modes"
 
 describe("mouseEncodingSequence", () => {
   it("restores SGR, the encoding every modern TUI selects", () => {
@@ -30,6 +35,29 @@ describe("cursorVisibilitySequence", () => {
 
   it("writes nothing when it was visible, which a fresh terminal already is", () => {
     expect(cursorVisibilitySequence(false)).toBe("")
+  })
+})
+
+describe("cursorShapeSequence", () => {
+  it("carries a bar cursor across the serialize/restore cycle", () => {
+    expect(cursorShapeSequence({ style: "bar", blink: false })).toBe("\x1b[6 q")
+    expect(cursorShapeSequence({ style: "bar", blink: true })).toBe("\x1b[5 q")
+  })
+
+  it("restores the other shapes DECSCUSR can select", () => {
+    expect(cursorShapeSequence({ style: "block", blink: true })).toBe("\x1b[1 q")
+    expect(cursorShapeSequence({ style: "block", blink: false })).toBe("\x1b[2 q")
+    expect(cursorShapeSequence({ style: "underline", blink: true })).toBe("\x1b[3 q")
+    expect(cursorShapeSequence({ style: "underline", blink: false })).toBe("\x1b[4 q")
+  })
+
+  it("writes nothing once the app resets the cursor (Ps 0, or a full reset)", () => {
+    expect(cursorShapeSequence({})).toBe("")
+    expect(cursorShapeSequence({ style: undefined, blink: undefined })).toBe("")
+  })
+
+  it("writes nothing for a shape name xterm added since", () => {
+    expect(cursorShapeSequence({ style: "SOMETHING_NEW", blink: true })).toBe("")
   })
 })
 

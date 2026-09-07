@@ -1,6 +1,6 @@
 // The xterm and document side of a live terminal: the cell metrics the grid fit
-// needs, the mouse encoding a snapshot cannot carry, and the font the renderer
-// measures against. Two of the four reach into xterm privates, and every one of
+// needs, the modes a snapshot cannot carry, and the font the renderer
+// measures against. Three of the five reach into xterm privates, and every one of
 // them needs a real Terminal or a real document — which is why this file is the
 // boundary invariant #1 exempts and is excluded from the coverage denominator
 // beside term-transport and term-perf. The arithmetic under the fit is
@@ -46,7 +46,7 @@ export function mouseEncoding(term: Terminal): string | undefined {
 }
 
 // cursorHidden reads whether the app turned the cursor off (DECRST 25) — a
-// third private, and the third mode a snapshot cannot carry (term-modes.ts).
+// third private, and the second mode a snapshot cannot carry (term-modes.ts).
 // False if xterm ever moves it, which restores nothing and matches a fresh
 // terminal's own default.
 export function cursorHidden(term: Terminal): boolean {
@@ -54,6 +54,22 @@ export function cursorHidden(term: Terminal): boolean {
     (term as unknown as { _core?: { coreService?: { isCursorHidden?: boolean } } })._core
       ?.coreService?.isCursorHidden === true
   )
+}
+
+// cursorShape reads the shape the app selected with DECSCUSR — the fourth
+// private, and the third mode a snapshot cannot carry (term-modes.ts). xterm
+// parses the sequence into decPrivateModes, which `term.modes` does not expose
+// and the renderer falls back from to the terminal's own options. Empty if
+// xterm ever moves it, which restores nothing and leaves lich's block.
+export function cursorShape(term: Terminal): { style?: string; blink?: boolean } {
+  const modes = (
+    term as unknown as {
+      _core?: {
+        coreService?: { decPrivateModes?: { cursorStyle?: string; cursorBlink?: boolean } }
+      }
+    }
+  )._core?.coreService?.decPrivateModes
+  return { style: modes?.cursorStyle, blink: modes?.cursorBlink }
 }
 
 // fitTerminal resizes the grid to fill the container edge to edge on the
