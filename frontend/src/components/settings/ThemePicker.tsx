@@ -254,10 +254,7 @@ function ThemeCard({ name, caption, selected, preview, onSelect, actions }: Them
             which is most of them. The padding is always there, so selecting a
             card never resizes it. */}
         <span
-          className={cn(
-            "block rounded-lg p-1",
-            selected && "ring-2 ring-inset ring-foreground/70",
-          )}
+          className={cn("block rounded-lg p-1", selected && "ring-2 ring-inset ring-foreground/70")}
         >
           <span className="block overflow-hidden rounded-md">{preview}</span>
         </span>
