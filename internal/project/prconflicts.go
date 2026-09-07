@@ -20,7 +20,7 @@ const prConflictBudget = 60 * time.Second
 // opening github.com or a session to find out which files it meant. This
 // computes it instead — both commits are fetched into refs lich owns and merged
 // in the object database alone (mergeConflicts), never in a worktree, an index
-// or HEAD.
+// or HEAD. The refs live no longer than the answer (dropPRRefs).
 //
 // nil means the merge is clean, so this is asked only once GitHub has said it
 // is not: the fetch is a network round trip, not something to poll.
@@ -34,6 +34,9 @@ func (s *Service) PullRequestConflicts(path string, number int, base, prURL stri
 	}
 	head := fmt.Sprintf("refs/lich/pr/%d/head", number)
 	baseRef := fmt.Sprintf("refs/lich/pr/%d/base", number)
+	// Deferred past the fetch's own failure too: two refspecs update
+	// independently, so a fetch that fails may still have written one of them.
+	defer dropPRRefs(path, head, baseRef)
 	if err := fetchPRPair(path, number, base, head, baseRef, prRemote(path, prURL)); err != nil {
 		return nil, err
 	}
@@ -115,8 +118,8 @@ func remoteRepo(remoteURL string) string {
 // Named destinations rather than FETCH_HEAD: that file is shared by every
 // worktree of the repository and the base-status fetch (basestatus.go) writes it
 // from a background goroutine, so two answers would mix into one. They are
-// forced because the refs are scratch space holding the previous answer, which
-// the new tip is routinely not a fast-forward of.
+// forced because a ref left over by a run killed before its cleanup is
+// routinely not an ancestor of the tip now being fetched.
 func fetchPRPair(path string, number int, base, head, baseRef, remote string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), prConflictBudget)
 	defer cancel()
@@ -135,4 +138,16 @@ func fetchPRPair(path string, number int, base, head, baseRef, remote string) er
 		return errors.New(gitMessage(stderr.String(), err))
 	}
 	return nil
+}
+
+// dropPRRefs deletes the scratch refs the fetch wrote. They exist to hold the
+// two commits for as long as merge-tree reads them and no longer: left behind
+// they outlive the answer, and a `git push --mirror` would carry lich's
+// bookkeeping to the remote. Deleting a ref that was never written is a silent
+// no-op, and a delete that fails is nothing to report — the next fetch forces
+// the ref over anyway.
+func dropPRRefs(path string, refs ...string) {
+	for _, ref := range refs {
+		gitQuiet(path, "update-ref", "-d", ref)
+	}
 }

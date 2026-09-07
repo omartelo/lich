@@ -133,3 +133,28 @@ func TestRepoFromPRURLRefusesWhatItCannotRead(t *testing.T) {
 		}
 	}
 }
+
+// The scratch refs are lich's own bookkeeping, not something the user asked
+// their repository to carry: left behind they outlive the answer, and a
+// `git push --mirror` would publish them.
+func TestPullRequestConflictsLeavesNoRefsBehind(t *testing.T) {
+	clone, origin, originGit := pullRequestOrigin(t, 7)
+	commitFile(t, origin, originGit, "a.txt", "the base branch's line\n", "base edits a")
+	lichRefs := func() string {
+		return gitIn(t, clone)("for-each-ref", "--format=%(refname)", "refs/lich/")
+	}
+
+	if _, err := New(nil).PullRequestConflicts(clone, 7, "main", ""); err != nil {
+		t.Fatalf("PullRequestConflicts: %v", err)
+	}
+	if got := lichRefs(); got != "" {
+		t.Errorf("refs left behind by the answer: %q", got)
+	}
+
+	if _, err := New(nil).PullRequestConflicts(clone, 404, "main", ""); err == nil {
+		t.Fatal("want an error for a pull request origin does not have")
+	}
+	if got := lichRefs(); got != "" {
+		t.Errorf("refs left behind by a fetch that failed: %q", got)
+	}
+}

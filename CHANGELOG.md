@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The Pulls screen no longer leaves refs in your repository.** Naming a
+  conflicting pull request's files fetched its head and its base branch into
+  `refs/lich/pr/<n>/head` and `refs/lich/pr/<n>/base` and left them there, so
+  lich's bookkeeping piled up per pull request opened and a `git push --mirror`
+  would publish it. Both refs are now deleted once the merge has been read.
 - **Scoop installs the current release.** The manifest 0.46.0 introduced pinned
   0.45.0 with no checksums, and nothing bumped it on a tag, so `scoop install`
   and `scoop update lich` handed out the previous release. Every release now

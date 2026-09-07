@@ -340,11 +340,9 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   git writes lich makes outside the worktree flows: the base-branch readout moves remote refs in the user's own
   repository, unannounced, for as long as a card is on screen. Naming a conflicting pull request's files is the
   second, made when that pull request is opened on the Pulls screen: it fetches GitHub's `refs/pull/<n>/head`
-  and the base branch into `refs/lich/pr/<n>/head` and `refs/lich/pr/<n>/base`, and never deletes them — they
-  outlive the answer, and a `git push --mirror` carries them to the remote. The remote fetched from is the one
-  whose URL matches the pull request's own, origin when none does — lich reads gh's base repository off that URL
-  rather than asking gh again, so a clone whose remotes all name a different repository than the pull request
-  lives on falls back to origin and fails there.
+  and the base branch. The remote fetched from is the one whose URL matches the pull request's own, origin when
+  none does — lich reads gh's base repository off that URL rather than asking gh again, so a clone whose remotes
+  all name a different repository than the pull request lives on falls back to origin and fails there.
 - **Persistence is hybrid**: UI prefs in the page's localStorage (`lich.*` keys — the reason the listener port is
   pinned at 47821; `LICH_LISTEN_PORT` overrides it, `LICH_PORT` is the distinct per-session hook variable), the
   workspace in SQLite (`<config-dir>/lich/lich.db`, `internal/store`). Closing a session deletes its row; keeping a
