@@ -20,6 +20,16 @@
 // The harness has to be imported before anything that reaches react-dom, which
 // is why it is first here (see @/test/render-budget).
 import { mountBudget } from "@/test/render-budget"
+// Loading these pulls in most of the app's module graph. Left to a dynamic
+// import inside the first test, that load was billed to that test: it cost 4.4s
+// of the 5s a test is given on a busy machine and timed out, while every test
+// after it, handed a warm registry, mounted in 40ms. Imported here the cost is
+// the file's, which is whose it always was.
+import { SessionSidebar } from "./sidebar/SessionSidebar"
+import { FooterBar } from "./FooterBar"
+import { TerminalHost } from "./TerminalHost"
+import { SettingsProvider } from "@/providers/settings"
+import { writeGroups } from "@/lib/session/panes-store"
 import { createElement, useEffect } from "react"
 import { HashRouter } from "react-router-dom"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
@@ -204,9 +214,6 @@ afterEach(() => {
 
 async function mountSidebar() {
   window.location.hash = "#/projects/p1"
-  const { SessionSidebar } = await import("./sidebar/SessionSidebar")
-  const { FooterBar } = await import("./FooterBar")
-  const { SettingsProvider } = await import("@/providers/settings")
   const budget = await mountBudget(
     createElement(
       HashRouter,
@@ -308,7 +315,6 @@ test("a usage event with no context window draws no ring", async () => {
 
 test("switching project re-renders the mounted terminals but never remounts one", async () => {
   window.location.hash = "#/projects/p1"
-  const { TerminalHost } = await import("./TerminalHost")
   const budget = await mountBudget(
     createElement(
       HashRouter,
@@ -372,8 +378,6 @@ test("switching project re-renders the mounted terminals but never remounts one"
 
 test("adding a pane mounts its terminal and never remounts the ones already up", async () => {
   window.location.hash = "#/projects/p1"
-  const { TerminalHost } = await import("./TerminalHost")
-  const { writeGroups } = await import("@/lib/session/panes-store")
   const budget = await mountBudget(
     createElement(
       HashRouter,

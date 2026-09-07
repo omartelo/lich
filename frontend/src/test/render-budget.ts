@@ -1,4 +1,5 @@
 import type { ReactElement } from "react"
+import { afterEach } from "vitest"
 
 // A render budget: how many times each component's body ran for one action.
 //
@@ -124,6 +125,22 @@ export interface RenderBudget {
   unmount(): Promise<void>
 }
 
+// Every root still standing. A test that fails, or that vitest abandons on a
+// timeout, never reaches its own unmount(), and both halves of what it leaves
+// behind are shared: the container stays in the document, and the abandoned body
+// goes on holding React's act scope, which is global. Every later act() is then
+// taken for a nested one and flushes nothing, so the tests after it measure an
+// empty tree and report it as a budget. That is how one timeout used to print as
+// five budget regressions, which is the failure a real one prints too.
+const live = new Set<() => Promise<void>>()
+
+afterEach(async () => {
+  for (const teardown of [...live]) {
+    // One root that cannot come down must not strand the roots behind it.
+    await teardown().catch(() => {})
+  }
+})
+
 export async function mountBudget(element: ReactElement): Promise<RenderBudget> {
   const { act } = await import("react")
   const { createRoot } = await import("react-dom/client")
@@ -175,18 +192,30 @@ export async function mountBudget(element: ReactElement): Promise<RenderBudget> 
     await act(async () => {})
   }
 
+  const before = commits.length
   await settle(() => {
     root.render(element)
   })
+  // A render always commits, so no growth here means act() flushed nothing at
+  // all: there is no tree, and every budget read against it would be {}. Saying
+  // that outright beats reporting it as a component that stopped repainting.
+  if (commits.length === before) {
+    throw new Error(
+      "render-budget: the tree never committed. An earlier test in this file was most likely abandoned on a timeout and still holds React's act scope open.",
+    )
+  }
 
-  return {
-    take,
-    act: settle,
-    unmount: async () => {
+  const unmount = async (): Promise<void> => {
+    live.delete(unmount)
+    try {
       await act(async () => {
         root.unmount()
       })
+    } finally {
       container.remove()
-    },
+    }
   }
+  live.add(unmount)
+
+  return { take, act: settle, unmount }
 }
