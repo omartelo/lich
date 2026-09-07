@@ -989,10 +989,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **The window opens at CEF's default size** (`shell/src/main.rs`): a system browser remembered the
   window's last size and position in its profile; the CEF Views window does not, so each launch is the
   default rectangle until the window manager places it. Tiling compositors never notice.
-- **The window's sandbox is Chromium's namespace sandbox** (`shell/`): kurogane passes
-  `--disable-setuid-sandbox`, so a kernel that forbids unprivileged user namespaces (a hardened distro, an
-  AppArmor profile that restricts them) has no sandbox to give, and Chromium refuses to start. The escape
-  is the same passthrough: `lich -- --no-sandbox`. Nothing here is measured on such a kernel.
 - **Without a Chromium `--app` window there is no window lifecycle** (`main.go`, `openWithoutWindow`) —
   reached with no Chromium-family browser installed, or on purpose with `--no-window`/`LICH_NO_WINDOW`. lich
   opens a plain tab and then runs until it is signalled, because a tab it did not spawn cannot be waited on.
