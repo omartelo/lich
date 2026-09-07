@@ -6,7 +6,7 @@ import type { LastSaid, LastTurn } from "@/lib/api-types"
 import { onAppEvent } from "@/lib/app-events"
 import { readDiffSource, writeDiffSource, type DiffSource } from "@/lib/dock-prefs"
 import { discardTargets, parseDiff, type DiffFile } from "@/lib/git/diff"
-import { lastTurnNotice } from "@/lib/git/last-turn"
+import { lastTurnNotice, turnSwitchable } from "@/lib/git/last-turn"
 import { addReviewComment } from "@/lib/review-comments"
 import { ProjectService, Terminal } from "@/lib/rpc"
 import { useActiveSession } from "@/lib/session/use-active-session"
@@ -45,12 +45,14 @@ const LAST_TURN_HINT =
 // the project root. The dock (RightDock) owns the surrounding chrome: width,
 // full screen, the tab bar and the close button.
 export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
-  const { sessionId, path } = useActiveSession()
+  const { sessionId, path, hasLastTurn } = useActiveSession()
   const inject = useInject(sessionId)
   const status = useGitStatus(path)
   // The source switch is earned, not assumed: a provider that never reports its
-  // state has no turn to bracket, so it is offered the working tree alone.
-  const switchable = useSessionEverReported(sessionId)
+  // state and holds no record has no turn to bracket, so it is offered the
+  // working tree alone (turnSwitchable).
+  const reported = useSessionEverReported(sessionId)
+  const switchable = turnSwitchable(reported, hasLastTurn)
   // The source the reviewer picked, read back on every mount because the dock
   // has no shortage of them: it is a ternary between two component types, so
   // each flip to the Code tab unmounts this panel whole (dock-prefs).
@@ -58,9 +60,9 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
   // A source the session cannot answer for must never be the one on screen: it
   // would sit on an empty panel with no control anywhere to leave it by. So the
   // guard makes what is *shown*, and nothing writes "worktree" back over the
-  // choice — `switchable` starts false after a reload and turns true only when
-  // the session next reports, so a reset would fire first and throw the
-  // remembered choice away before the switch ever appeared.
+  // choice — a session that holds no record starts unswitchable after a reload
+  // and turns true only when it next reports, so a reset would fire first and
+  // throw the remembered choice away before the switch ever appeared.
   const source: DiffSource = switchable ? wanted : "worktree"
   const changeSource = (next: DiffSource) => {
     writeDiffSource(next)

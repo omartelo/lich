@@ -764,6 +764,7 @@ describe("activeTarget", () => {
       path: root,
       kind: "claude",
       sandboxed: false,
+      hasLastTurn: false,
     })
   })
 
@@ -779,6 +780,7 @@ describe("activeTarget", () => {
       path: "/repo/.worktrees/swift-rabbit",
       kind: "shell",
       sandboxed: false,
+      hasLastTurn: false,
     })
   })
 
@@ -796,12 +798,26 @@ describe("activeTarget", () => {
     expect(activeTarget(state, P, root).sandboxed).toBe(true)
   })
 
+  // What the Review panel's source switch is seeded from: the record travels
+  // with the session, so a card restored quiet is offered its last turn instead
+  // of the working tree alone.
+  it("reports a session that holds a last turn", () => {
+    const state = restoreSession(buildState(1), P, {
+      id: "wt1",
+      label: "swift-rabbit",
+      kind: "claude",
+      hasLastTurn: true,
+    })
+    expect(activeTarget(state, P, root).hasLastTurn).toBe(true)
+  })
+
   it("keeps the project root when there is no session at all", () => {
     expect(activeTarget({}, P, root)).toEqual({
       sessionId: "",
       path: root,
       kind: "",
       sandboxed: false,
+      hasLastTurn: false,
     })
   })
 
@@ -811,6 +827,7 @@ describe("activeTarget", () => {
       path: "",
       kind: "",
       sandboxed: false,
+      hasLastTurn: false,
     })
   })
 })

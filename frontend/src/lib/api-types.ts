@@ -328,6 +328,11 @@ export interface StoredSession {
   /** The prompt to type at this session when that time comes, as the user
    * wrote it. Empty when nothing is scheduled. */
   scheduledPrompt: string
+  /** Whether a last-turn record survives for this session. It rides the
+   * hydration so the Review panel can offer the "Last turn" source to a
+   * restored card, instead of withholding the switch until that session
+   * next reports (internal/store.SaveTurnRecord). */
+  hasLastTurn: boolean
 }
 
 /** internal/store.ClosedSession — one parked session offered for resuming. What

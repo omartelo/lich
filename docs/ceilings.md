@@ -198,24 +198,25 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   whose detail carries no commits. And there is no expanding *past the last hunk*: a unified diff carries
   no file length, so nothing here knows whether anything follows it, and an affordance drawn there would
   be a no-op on every file whose change reaches the end.
-- **The Review panel's "Last turn" is a window of wall-clock time, and it lives in memory**
+- **The Review panel's "Last turn" is a window of wall-clock time**
   (`internal/terminal/turnsnap.go`, `internal/project/turnsnap.go`): the panel brackets a turn with two
   `git write-tree` snapshots taken against an index of lich's own, so what it shows is everything that
   touched the checkout between the `busy` and the `done` — a formatter, an editor open beside lich, the
   user's own hands. Nothing in it can attribute a line, which is why the copy names the window and never
-  the agent. Four traps follow. The pair is held in Go memory alone: a lich restart empties it, so every
-  live session reads "No last turn recorded" until its next turn ends, and that wording is the same one a
-  session whose first turn is still running gets — the panel cannot say which. `add -A` obeys `.gitignore`
-  (deliberately, so this and `DiffText` never disagree about which files exist), so a turn that only
-  touched ignored files reports itself as having changed nothing. Every snapshot in the app runs on one
-  FIFO worker, because git refuses a second `add` against an index another holds — so one session's first
-  snapshot of a large checkout delays the next session's, and a queue past `snapQueueDepth` drops a job,
-  costing that turn its record with only the log saying so. A checkout whose *first* snapshot fails is
-  dropped outright and never asked again — the ordinary reason is a session opened outside a repository,
-  but a transient failure at spawn reads the same and leaves that card with no last turn until it respawns. And the boundary is the session-state contract,
-  so **Crush and Cursor CLI have no last turn at all**: neither reports a state (`docs/hooks/session-state.md`),
-  so nothing ever opens or closes a window there and the switch is never drawn — a rule read off the
-  session's own reports, not a list of providers, so it corrects itself the day either one starts reporting.
+  the agent. Four traps follow. `add -A` obeys `.gitignore` (deliberately, so this and `DiffText` never
+  disagree about which files exist), so a turn that only touched ignored files reports itself as having
+  changed nothing. Every snapshot in the app runs on one FIFO worker, because git refuses a second `add`
+  against an index another holds — so one session's first snapshot of a large checkout delays the next
+  session's, and a queue past `snapQueueDepth` drops a job, costing that turn its record with only the log
+  saying so. A checkout whose *first* snapshot fails is dropped outright and never asked again — the
+  ordinary reason is a session opened outside a repository, but a transient failure at spawn reads the same
+  and leaves that card with no last turn until it respawns. A pair read back at launch names loose objects
+  no ref reaches, so a `git gc --prune` in that checkout between one run and the next leaves the panel
+  reporting a failure rather than an absent turn. And the boundary is the session-state contract, so
+  **Crush and Cursor CLI have no last turn at all**: neither reports a state
+  (`docs/hooks/session-state.md`), so nothing ever opens or closes a window there and the switch is never
+  drawn — a rule read off the session's own reports, not a list of providers, so it corrects itself the day
+  either one starts reporting.
 - **The recap beside that diff answers to a different clock, and to a different set of providers**
   (`internal/terminal/said.go`): the band reads the last thing the agent *said* out of the provider's own
   transcript, where the diff beside it brackets the window a turn ran in. The two agree once a turn has
@@ -428,13 +429,12 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 
 - **A scheduled prompt is late or gone, never on time** (`internal/relay/later.go`, `deliverDue`): due prompts
   are looked for every `scheduleTick`, and one whose session is not at a prompt — mid-setup, a draft on the
-  line, no terminal opened — is left parked for the next pass, so it lands whenever that session next has
-  somewhere to type, hours later if that is when. That covers lich having been closed at the time: the first
-  pass after launch types a prompt that came due days ago, unannounced. The other end of it is a session that
-  is closed rather than busy — a parked worktree card, a card closed for good. Its row leaves the roster
-  (`LoadState` reads open sessions only) and the resume reinserts it under a fresh id without the schedule, so
-  the prompt never fires and never comes back with the card, with nothing on screen having said it was
-  forfeited.
+  line, no terminal opened, a card parked and not yet resumed, is left for the next pass, so it lands
+  whenever that session next has somewhere to type, hours later if that is when. That covers lich having been
+  closed at the time: the first pass after launch types a prompt that came due days ago, unannounced. Gone is
+  the session removed for good rather than parked (deleted, forgotten, purged with its worktree, or taken by
+  a deleted project): the row is the only copy of the prompt, so it goes with the row, and all that says so is
+  one Warn in a log nobody is watching (`internal/store`, `noteForfeitedSchedules`).
 
 - **An answer that names no ticket is matched by delivery order** (`internal/relay/answer.go`,
   `errandOfLocked`): `lich reply "<answer>"` and `reply_to_session` without a ticket close the oldest message
@@ -825,13 +825,14 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   back to them.
 - **The Review tab's remembered source is a wish, not what is on screen** (`ReviewPanel`,
   `frontend/src/lib/dock-prefs.ts`): the pref is global and holds what the user picked, while what the
-  panel shows is that choice put through `useSessionEverReported` — a session whose provider never
-  reports has no turn to bracket, so it is shown the working tree and offered no switch. Nothing writes
-  the guard's answer back, and that is the whole design: `switchable` is false after every reload until
-  the session next reports, so a panel that reset the pref instead of overriding it would erase the
-  choice before the switch had a chance to appear. The visible cost is that "Last turn" cannot be
-  restored on a session that has been quiet since the reload — it comes back the moment that session
-  reports again.
+  panel shows is that choice put through `turnSwitchable` — a session whose provider never reports and
+  holds no last-turn record has no turn to bracket, so it is shown the working tree and offered no
+  switch. Nothing writes the guard's answer back, and that is the whole design: a session with neither is
+  unswitchable after a reload until it next reports, so a panel that reset the pref instead of overriding
+  it would erase the choice before the switch had a chance to appear. The two halves of that guard read
+  different sources — the record rides the session's hydration, the diff behind it is seeded when the
+  PTY is spawned — so a panel that reaches a restored card before its spawn has been tracked is offered
+  the switch and told nothing is recorded, until the next read.
 - **The pull request screen's remembered state is read once, at mount** (`frontend/src/lib/pulls/pulls-prefs.ts`):
   the filter box, the quick filter and the selected pull request are keyed per project but seeded from
   `useState`, which holds because every route into the screen carries its own project and leaving one unmounts

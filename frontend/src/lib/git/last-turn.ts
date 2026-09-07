@@ -20,3 +20,16 @@ export function lastTurnNotice(state: LastTurn["state"] | null, fileCount: numbe
   }
   return "unrecorded"
 }
+
+// turnSwitchable is whether the Review panel offers the "Last turn" source at
+// all. Either half is enough. A session that has reported its state has a turn
+// boundary, so the switch is earned even before the first turn closes; a
+// session holding a record has one on file already, which is the case a
+// restored card lands in — it may not report again for hours, and withholding
+// the switch until it does would hide a turn the backend is already holding.
+//
+// A provider that reports nothing and has never recorded a turn is still
+// offered the working tree alone, which is the whole point of the gate.
+export function turnSwitchable(everReported: boolean, hasLastTurn: boolean): boolean {
+  return everReported || hasLastTurn
+}

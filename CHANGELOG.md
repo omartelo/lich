@@ -35,6 +35,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   underline came back with lich's block. The shape is now carried across the
   cycle beside the mouse encoding and cursor visibility, and follows the
   program's own reset back to the default.
+- **A scheduled prompt survives parking its session.** Keeping a worktree, or
+  closing a card and resuming it later, re-inserted the session under a fresh id
+  and left the prompt parked on it behind, so it never fired and never came back
+  with the card, with nothing anywhere saying it had been forfeited. The resume
+  now carries the schedule over, alongside the rename, model, entrypoint and
+  cost ledgers it already carried: the card comes back with its countdown, and a
+  prompt that came due while the session was parked is typed at its first free
+  prompt, like one that came due while lich was closed. Deleting a session for
+  good still drops its prompt (the row is the only copy), but now logs which
+  session lost what.
+- **The Review panel's "Last turn" survives a restart.** The pair of snapshots
+  bracketing a session's last finished turn lived in memory alone, so relaunching
+  lich emptied it and every restored session read "No last turn recorded" until
+  its next turn ended. The record now rides the workspace database, keyed to the
+  session, and is read back when the card is restored. The card says so on its
+  hydration too, so the panel offers the "Last turn" switch to a session that has
+  been quiet since the launch instead of withholding it until that session next
+  reports. A turn still running is never written, and a turn that loses a
+  snapshot clears what was there instead of leaving the turn before it standing.
 - **The command palette's History tab finds every session you ever closed.** It
   was handed the hundred most recently parked sessions and filtered those in the
   window, so anything closed further back could not be reached by typing its
