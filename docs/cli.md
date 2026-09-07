@@ -551,7 +551,7 @@ collects say where the process is stuck.
 
 | Entry | What it holds |
 |-------|---------------|
-| `report.md` | Version and build, platform, instance state, browser, providers on PATH, plugin state per provider, and the config directory one level deep. |
+| `report.md` | Version and build, platform, instance state, browser, whether a confined session would actually be confined here, providers on PATH, plugin state per provider, and the config directory one level deep. |
 | `env.txt` | Every `LICH_*` variable plus a fixed allowlist (`SHELL`, `PATH`, `EDITOR`, the desktop ones). Anything named like a token, key, secret or password is `<SET>` / `<UNSET>`, never a value. |
 | `logs/` | `lich.log` and the rotated `lich.log.old`, each carrying at most its last 4 MiB. |
 | `goroutines.txt` | Every stack in the running instance, blocked ones included — only when one is running. A lich that holds its port but will not answer within 5s leaves that sentence here instead, which is the finding. |
@@ -575,7 +575,8 @@ lich v0.25.0 — linux/amd64
   skip  store        <1ms  held by the running lich (pid 4242)
   ok    browser       2ms  /usr/bin/chromium
   ok    providers     3ms  4 of 8 on PATH: claude, codex, opencode, crush
-        total         6ms
+  ok    sandbox      11ms  bubblewrap confines a session here
+        total        17ms
 
 lich starts here — nothing is in the way.
 ```
@@ -590,6 +591,7 @@ The checks are in boot order, and each carries its own verdict:
 | `store` | The workspace database will not open or migrate. Skipped while an instance is running — a second process migrating the store is not a price a diagnosis may charge. | It will not close cleanly. |
 | `browser` | No Chromium-family browser resolves. lich would run and show nothing. | — |
 | `providers` | — | None on PATH: the window opens, but no session can spawn. |
+| `sandbox` | — | The backend will not start (an AppArmor policy denying user namespaces, say), so a session opened with the sandbox on will not start either; or it starts and confines nothing, so a session marked confined runs on the machine. Skipped where the platform has no backend at all. |
 
 A `fail` exits 1 and a clean run exits 0, which is the automation surface here —
 there is no `--json`. It needs no TTY, no running instance and no network.
@@ -598,6 +600,17 @@ Two things it does on purpose, because a launch does them too: it creates
 `<config-dir>/lich` and an empty log file if they are missing, and — only when
 no instance is running — it opens the workspace database, creating it on a
 first run.
+
+The `sandbox` check is the one that cannot be answered by a lookup, so it opens
+a confined child and reads two files through it: one in the checkout, which
+must come back, and one in the private home the backend replaces, which must
+not. Both halves are needed. A backend whose ruleset silently applied nothing
+would start perfectly and confine nothing, and on Ubuntu and Debian an AppArmor
+policy denies unprivileged user namespaces, so bubblewrap is installed, resolves
+on `PATH`, and every confined session dies on its error. The spawn is bounded at
+two seconds and killed, so a kernel that blocks the request cannot hang the
+report. It never turns a session confined or unconfined: `internal/sandbox`
+answers that at spawn time, and this only says what the answer would be worth.
 
 ## Registration
 

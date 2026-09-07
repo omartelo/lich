@@ -22,6 +22,7 @@ import (
 	"github.com/omartelo/lich/internal/chromium"
 	"github.com/omartelo/lich/internal/logging"
 	"github.com/omartelo/lich/internal/providers"
+	"github.com/omartelo/lich/internal/sandbox"
 	"github.com/omartelo/lich/internal/singleton"
 	"github.com/omartelo/lich/internal/store"
 )
@@ -71,6 +72,7 @@ type Doctor struct {
 	browser  func() (string, error)
 	detect   func() []providers.Detected
 	store    func() (io.Closer, error)
+	sandbox  func() (string, error)
 	lookPath func(string) (string, error)
 	getenv   func(string) string
 }
@@ -86,6 +88,7 @@ func New(configDir string, getenv func(string) string) *Doctor {
 		browser:   Browser,
 		detect:    Providers,
 		store:     func() (io.Closer, error) { return store.New() },
+		sandbox:   sandbox.Probe,
 		lookPath:  exec.LookPath,
 		getenv:    getenv,
 	}
@@ -108,6 +111,7 @@ func (d *Doctor) Run() []Check {
 		{"store", func() (Status, string) { return d.checkStore(info, running) }},
 		{"browser", d.checkBrowser},
 		{"providers", d.checkProviders},
+		{"sandbox", d.checkSandbox},
 		{"git", func() (Status, string) { return d.checkTool("git", gitWithout) }},
 		{"gh", func() (Status, string) { return d.checkTool("gh", ghWithout) }},
 	}
@@ -217,6 +221,29 @@ func (d *Doctor) checkProviders() (Status, string) {
 	}
 	return OK, fmt.Sprintf("%d of %d on PATH: %s",
 		len(installed), len(found), strings.Join(installed, ", "))
+}
+
+// checkSandbox proves the sandbox instead of trusting the launcher being on
+// PATH, which is all a spawn-time Available can afford to ask. It opens one
+// confined child and reads two files through it: one in the checkout, which
+// proves the child ran, and one in the home the backend replaces, which must
+// not come back.
+//
+// Never a Fail: lich starts and every unconfined session spawns. What breaks is
+// a project with the sandbox turned on, where the backend's own error arrives
+// in a card that then has no session in it, which is the failure worth naming
+// before it happens rather than after.
+func (d *Doctor) checkSandbox() (Status, string) {
+	backend, err := d.sandbox()
+	switch {
+	case backend == "":
+		return Skip, "no sandbox backend on this platform, so sessions run unconfined"
+	case err != nil:
+		// The probe's own sentence, whole: the two ways to fail cost different
+		// things, and only it knows which one this was.
+		return Warn, err.Error()
+	}
+	return OK, backend + " confines a session here"
 }
 
 // What a machine loses with each version control tool missing. The same two

@@ -32,6 +32,7 @@ func healthy(t *testing.T) *Doctor {
 		}
 	}
 	d.store = func() (io.Closer, error) { return io.NopCloser(nil), nil }
+	d.sandbox = func() (string, error) { return "bubblewrap", nil }
 	d.lookPath = func(name string) (string, error) { return "/usr/bin/" + name, nil }
 	return d
 }
@@ -51,7 +52,7 @@ func TestAHealthyMachineWalksTheWholeBoot(t *testing.T) {
 	for _, c := range checks {
 		names = append(names, c.Name)
 	}
-	want := []string{"home", "log", "listener", "store", "browser", "providers", "git", "gh"}
+	want := []string{"home", "log", "listener", "store", "browser", "providers", "sandbox", "git", "gh"}
 	if strings.Join(names, ",") != strings.Join(want, ",") {
 		t.Errorf("checks ran as %v, want the boot order %v", names, want)
 	}
@@ -327,5 +328,65 @@ func TestThePortComesFromTheEnvironmentTheLaunchWouldRead(t *testing.T) {
 	}
 	if nonsense := New(t.TempDir(), func(string) string { return "not-a-port" }); nonsense.port != singleton.DefaultPort {
 		t.Errorf("port = %d, want the default when the override is not a number", nonsense.port)
+	}
+}
+
+// The sandbox check is the one that cannot be answered by a lookup: bubblewrap
+// is installed on every Ubuntu and Debian machine whose kernel then refuses the
+// namespace, and a session opened with the sandbox on dies on that error. It
+// warns rather than fails, because lich itself starts and every unconfined
+// session spawns.
+func TestASandboxThatConfinesNothingWarnsWithoutStoppingTheLaunch(t *testing.T) {
+	// The probe's own sentence, whole: a backend that will not start and one
+	// that starts and confines nothing cost different things, and the check may
+	// not flatten them into one consequence of its own.
+	const reason = "bwrap: Creating new namespace failed: Operation not permitted, " +
+		"so a session opened with the sandbox on will not start"
+	d := healthy(t)
+	d.sandbox = func() (string, error) { return "bubblewrap", errors.New(reason) }
+
+	checks := d.Run()
+	got := statuses(checks)["sandbox"]
+
+	if got.Status != Warn {
+		t.Errorf("sandbox = %s (%s), want warn", got.Status, got.Detail)
+	}
+	if got.Detail != reason {
+		t.Errorf("detail = %q, want the probe's reason unchanged", got.Detail)
+	}
+	if Failed(checks) {
+		t.Error("a sandbox that will not start is reported as launch-stopping")
+	}
+}
+
+// Windows has no backend to probe, and a platform that never offered the
+// feature has not failed at it: the check is skipped and says so, the way the
+// store is when a running instance holds it.
+func TestAPlatformWithNoBackendSkipsTheSandboxCheck(t *testing.T) {
+	d := healthy(t)
+	d.sandbox = func() (string, error) { return "", nil }
+
+	checks := d.Run()
+	got := statuses(checks)["sandbox"]
+
+	if got.Status != Skip {
+		t.Errorf("sandbox = %s (%s), want skip", got.Status, got.Detail)
+	}
+	if !strings.Contains(got.Detail, "unconfined") {
+		t.Errorf("detail does not say what a session gets instead: %q", got.Detail)
+	}
+	if Failed(checks) {
+		t.Error("a platform with no sandbox backend is reported as launch-stopping")
+	}
+}
+
+// A machine that confines names the backend it confined with: a confined
+// session behaves differently on each, and "yes" alone sends the reader to read
+// the source to find out which.
+func TestAWorkingSandboxNamesItsBackend(t *testing.T) {
+	got := statuses(healthy(t).Run())["sandbox"]
+
+	if got.Status != OK || !strings.Contains(got.Detail, "bubblewrap") {
+		t.Errorf("sandbox = %s (%s), want ok naming the backend", got.Status, got.Detail)
 	}
 }

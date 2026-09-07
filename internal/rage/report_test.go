@@ -2,6 +2,7 @@ package rage
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -142,5 +143,32 @@ func TestNewProbesTheConfigDirItWasGiven(t *testing.T) {
 	}
 	if len(c.detect()) == 0 {
 		t.Error("provider detection returned no rows at all — every known provider should be listed")
+	}
+}
+
+// The sandbox row carries the failure, not a yes or no: a bug report where the
+// session never opened is answered by the backend's own sentence, and a report
+// saying only "no" sends the maintainer asking for it.
+func TestTheSandboxRowCarriesWhyItDoesNotConfine(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		backend string
+		err     error
+		want    string
+	}{
+		{"confined", "bubblewrap", nil, "bubblewrap (confined)"},
+		{"no backend", "", nil, "no backend on this platform"},
+		{
+			"the kernel refused",
+			"bubblewrap",
+			errors.New("bwrap: Creating new namespace failed: Operation not permitted"),
+			"bwrap: Creating new namespace failed: Operation not permitted",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := sandboxLine(tc.backend, tc.err); got != tc.want {
+				t.Errorf("sandboxLine = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }

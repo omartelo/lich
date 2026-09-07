@@ -662,7 +662,11 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   loopback: a method that reads a host path it was *handed* would copy anything into reach of the sandbox,
   which is why the attach flow opens the picker inside the backend (`drop.Attach`) instead of taking a path. The private home is writable and vanishes with the session, so a dotfile an agent writes is gone
   next spawn with nothing saying so. On Ubuntu and Debian the kernel may refuse the user namespace outright
-  (an AppArmor policy), which surfaces as bubblewrap's own error in the card and no session. `~/.ssh` is not
+  (an AppArmor policy), which surfaces as bubblewrap's own error in the card and no session: `Available` is
+  `exec.LookPath` and stays that way, because only a spawn can ask the kernel, so nothing before the card
+  can refuse the rung. What answers ahead of time is `lich doctor`, whose `sandbox` check opens one confined
+  child and reads a file in the checkout and a file in the home the backend replaces: it is a diagnosis, not
+  a gate, and a machine where the probe fails still lets the user turn the sandbox on and watch it fail. `~/.ssh` is not
   mounted at all: a push over ssh from inside a confined session fails unless the project hands over the ssh
   agent (below), and lich's own PR flows run outside the sandbox and are unaffected either way. The distribution's `/etc/ssh/ssh_config.d` drop-ins are replaced by an empty
   directory, because inside the namespace they belong to nobody and ssh refuses to read a config file it

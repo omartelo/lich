@@ -16,6 +16,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`lich doctor` now proves the sandbox instead of assuming it.** A new
+  `sandbox` line opens one confined child and reads two files through it: one in
+  the checkout, which has to come back, and one in the private home the sandbox
+  replaces, which must not. Both halves are checked, so a backend that starts
+  and confines nothing is caught alongside one the kernel refuses. On Ubuntu and
+  Debian, where an AppArmor policy denies unprivileged user namespaces,
+  bubblewrap is installed and every confined session dies on its error; that now
+  shows up as a warning naming bubblewrap's own reason instead of as a card with
+  no session in it. The check is bounded at two seconds, warns rather than fails
+  (lich starts either way), and is skipped on Windows, which has no sandbox
+  backend. `lich rage` reports the same line.
 - **Sessions no longer pause behind a locked screen.** While an agent is
   working, lich holds the same idle-sleep assertion a media player holds
   while it plays, so a machine left locked keeps running its sessions and
