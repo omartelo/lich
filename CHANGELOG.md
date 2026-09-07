@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Scoop installs the current release.** The manifest 0.46.0 introduced pinned
+  0.45.0 with no checksums, and nothing bumped it on a tag, so `scoop install`
+  and `scoop update lich` handed out the previous release. Every release now
+  renders the manifest with its own version and the sha256 of its two Windows
+  assets and publishes it beside them; the install URL moves with it to
+  `scoop install https://github.com/omartelo/lich/releases/latest/download/lich.json`,
+  which always names the latest release. A lich installed from the old
+  raw-file URL needs a one-time `scoop uninstall lich` and install from the new
+  one.
+
 ## [0.46.0] - 2026-09-07
 
 > [!IMPORTANT]

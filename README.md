@@ -98,7 +98,7 @@ curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh
 | --- | --- | --- |
 | **Linux** | `install.sh` above, or AUR [`lich-bin`](https://aur.archlinux.org/packages/lich-bin) (`yay -S lich-bin`) | `zenity` — the window ships in the package |
 | **macOS** *(experimental)* | `brew install --cask omartelo/tap/lich` | nothing on Apple Silicon — the window ships in the app; a Chromium-family browser in `/Applications` on Intel |
-| **Windows** *(experimental)* | installer from [Releases](https://github.com/omartelo/lich/releases), or Scoop: `scoop install https://raw.githubusercontent.com/omartelo/lich/main/build/windows/scoop/lich.json` | nothing — the window ships with both |
+| **Windows** *(experimental)* | installer from [Releases](https://github.com/omartelo/lich/releases), or Scoop: `scoop install https://github.com/omartelo/lich/releases/latest/download/lich.json` | nothing — the window ships with both |
 
 On an Intel Mac, Chrome, Chromium, Brave, Vivaldi and Edge all qualify;
 `--browser` or `LICH_BROWSER` pins one outright, on every platform. With none

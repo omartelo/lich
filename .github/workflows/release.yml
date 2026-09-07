@@ -341,6 +341,31 @@ jobs:
           sha256sum lich-* > checksums.txt
           cat checksums.txt
 
+      # Rendered here rather than in a job of its own like the cask: the
+      # checksums are already in hand, and the manifest ships in the same
+      # `gh release create` as the assets it hashes, so a release never exists
+      # without it. The install URL is releases/latest/download/lich.json, so
+      # nothing on a branch has to move for Scoop to see a new tag.
+      - name: Render Scoop manifest
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          sum() {
+            awk -v file="$1" '$2 == file { print $1 }' bin/checksums.txt
+          }
+          exe="$(sum "lich-v${version}-windows-amd64.exe")"
+          shell="$(sum "lich-v${version}-windows-amd64-shell.zip")"
+          # An empty hash would publish a manifest that fails every install.
+          if [ -z "$exe" ] || [ -z "$shell" ]; then
+            echo "missing windows checksums in checksums.txt" >&2
+            cat bin/checksums.txt >&2
+            exit 1
+          fi
+          sed -e "s/@VERSION@/${version}/g" \
+              -e "s/@SHA_EXE@/${exe}/" \
+              -e "s/@SHA_SHELL@/${shell}/" \
+              build/windows/scoop/lich.json.tpl > bin/lich.json
+          jq . bin/lich.json
+
       # The notes open with the same banner the site and the social cards use.
       # It is addressed at this tag's tree, not at a branch, so a release keeps
       # the banner it shipped with however the file changes later.
@@ -376,7 +401,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            bin/lich-* bin/checksums.txt \
+            bin/lich-* bin/checksums.txt bin/lich.json \
             --title "$GITHUB_REF_NAME" \
             --notes-file notes.md
 
