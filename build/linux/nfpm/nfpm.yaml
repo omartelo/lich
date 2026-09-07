@@ -25,6 +25,18 @@ contents:
   - src: "./bin/shell"
     dst: "/usr/local/lib/lich/shell"
     type: tree
+  # Chromium's setuid sandbox helper, at the only path its zygote reads —
+  # beside the executable, root-owned and 4755 (shell/src/main.rs). Without it
+  # a desktop that denies unprivileged user namespaces, which is Ubuntu's
+  # AppArmor policy, opens the window with --no-sandbox. Copied rather than
+  # moved: the tree above carries the same binary under cef/, where the
+  # tarball keeps it and nothing reads it.
+  - src: "./bin/shell/cef/chrome-sandbox"
+    dst: "/usr/local/lib/lich/shell/chrome-sandbox"
+    file_info:
+      mode: 0o4755
+      owner: root
+      group: root
   - src: "./build/appicon.png"
     dst: "/usr/share/icons/hicolor/128x128/apps/lich.png"
   - src: "./build/linux/lich.desktop"

@@ -33,6 +33,11 @@ package() {
   # /usr/bin/lich looks for it: /usr/lib/lich/shell.
   install -d "${pkgdir}/usr/lib/lich"
   cp -a shell "${pkgdir}/usr/lib/lich/shell"
+  # Chromium's setuid sandbox helper, at the only path its zygote reads:
+  # beside lich-shell, root-owned (install under fakeroot) and 4755. Without
+  # it a desktop that denies unprivileged user namespaces opens the window
+  # with --no-sandbox. The tarball's own copy under cef/ is read by nothing.
+  install -m4755 shell/cef/chrome-sandbox "${pkgdir}/usr/lib/lich/shell/chrome-sandbox"
   install -Dm644 "lich-${pkgver}.desktop" "${pkgdir}/usr/share/applications/lich.desktop"
   install -Dm644 "lich-${pkgver}.png" "${pkgdir}/usr/share/icons/hicolor/128x128/apps/lich.png"
 }

@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `refs/lich/pr/<n>/head` and `refs/lich/pr/<n>/base` and left them there, so
   lich's bookkeeping piled up per pull request opened and a `git push --mirror`
   would publish it. Both refs are now deleted once the merge has been read.
+- **The window is sandboxed on Ubuntu again.** Chromium confines the window's
+  subprocesses through a user namespace, and Ubuntu's AppArmor policy denies
+  those to unconfined binaries, so the window opened with `--no-sandbox` and
+  Chrome drew its "stability and security will suffer" bar over it. The deb,
+  rpm and AUR packages now install Chromium's setuid helper root-owned and
+  mode 4755 beside the window's binary, which is the other way Chromium
+  confines itself; installing the release over the previous one is enough.
+  Installs from the bare tarball are unchanged: a file unpacked as you cannot
+  be owned by root, so those keep the unsandboxed window.
 - **Scoop installs the current release.** The manifest 0.46.0 introduced pinned
   0.45.0 with no checksums, and nothing bumped it on a tag, so `scoop install`
   and `scoop update lich` handed out the previous release. Every release now

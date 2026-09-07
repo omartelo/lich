@@ -174,7 +174,10 @@ AppUserModelID the Start Menu shortcut declares, which is what makes the
 taskbar group the running window under the pinned icon. The sandbox stays
 off there, as kurogane runs it, so the binary is a plain exe rather than CEF's
 `bootstrap.exe` loading a DLL; Linux is the one platform whose window runs
-sandboxed (`docs/ceilings.md`). Built and smoke-tested on the CI runner only.
+sandboxed — from a package, where the deb, rpm and AUR install Chromium's
+setuid helper root-owned 4755 beside `lich-shell` for the desktops that deny
+unprivileged user namespaces (`docs/ceilings.md`). Built and smoke-tested on
+the CI runner only.
 
 macOS ships the same window inside `Lich.app`, Apple Silicon only: the
 release runner is arm64 and builds the window for itself, and the Intel
