@@ -86,7 +86,7 @@ curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh
 | --- | --- | --- |
 | **Linux** | 上面的 `install.sh`，或 AUR 的 [`lich-bin`](https://aur.archlinux.org/packages/lich-bin)（`yay -S lich-bin`） | `zenity` —— 窗口随软件包一起附带 |
 | **macOS** *(实验性)* | `brew install --cask omartelo/tap/lich` | Apple Silicon 上无需任何东西 —— 窗口随应用一起附带；Intel 上需要 `/Applications` 里有一个 Chromium 系浏览器 |
-| **Windows** *(实验性)* | 从 [Releases](https://github.com/omartelo/lich/releases) 下载安装程序 | 无需任何东西 —— 窗口随安装程序一起附带 |
+| **Windows** *(实验性)* | 从 [Releases](https://github.com/omartelo/lich/releases) 下载安装程序，或使用 Scoop：`scoop install https://raw.githubusercontent.com/omartelo/lich/main/build/windows/scoop/lich.json` | 无需任何东西 —— 两种方式都自带窗口 |
 
 在 Intel Mac 上，Chromium、Chrome、Brave、Vivaldi 和 Edge 都算数；`--browser`
 或 `LICH_BROWSER` 可以直接指定一个，任何平台上都可以。这些一个都没有时，lich 会开在你确实

@@ -202,6 +202,18 @@ The installer is not code-signed, so SmartScreen will warn on first run —
 
 lich runs windowless on Windows; diagnostics live in `%AppData%\lich\lich.log`.
 
+Scoop installs the same two assets straight from the manifest in this
+repository, no bucket to add:
+
+```powershell
+scoop install https://raw.githubusercontent.com/omartelo/lich/main/build/windows/scoop/lich.json
+```
+
+It puts `lich.exe` in the app directory with the window beside it as `shell\`,
+keeps `lich` on PATH and adds a Start Menu entry; `scoop update lich` re-reads
+the manifest from that URL. The workspace stays in `%AppData%\lich`, so
+`scoop uninstall lich` leaves your projects and sessions alone.
+
 The bare `lich-*-windows-amd64.exe` is also published for a portable,
 no-install run — same binary the installer ships. Unzip
 `lich-*-windows-amd64-shell.zip` beside it to get the window as `shell\`;

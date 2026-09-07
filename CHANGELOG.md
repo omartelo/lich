@@ -35,6 +35,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unzipped beside it. An installed lich now updates by running the next
   installer rather than through the update button, which opens the release
   page instead.
+- **`scoop install` reaches lich on Windows.** The repository now carries a
+  Scoop manifest, so a Windows machine can install lich from the command line
+  with no bucket to add:
+  `scoop install https://raw.githubusercontent.com/omartelo/lich/main/build/windows/scoop/lich.json`.
+  It lays out the portable exe and its window the way the installer does, keeps
+  `lich` on PATH, adds a Start Menu entry, and leaves your workspace in
+  `%AppData%\lich` when you uninstall. `scoop update lich` re-reads the
+  manifest and picks up the next release.
 - **On Apple Silicon, `Lich.app` brings its own window.** The same embedded
   Chromium sits inside the app, and lich opens in it instead of looking for
   Chrome, Chromium, Brave, Vivaldi or Edge in `/Applications`; the Dock,
