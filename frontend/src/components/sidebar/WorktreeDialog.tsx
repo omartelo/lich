@@ -103,7 +103,7 @@ function Group({ title, items, base, onSelect }: GroupProps) {
   }
   return (
     <div>
-      <div className="px-2 pb-1 pt-2 text-[0.625rem] font-semibold tracking-wider text-muted-foreground uppercase">
+      <div className="px-2 pb-1 pt-2 text-[0.65625rem] font-semibold tracking-wider text-muted-foreground uppercase">
         {title} <span className="font-normal">({items.length})</span>
       </div>
       {items.map((item) => (

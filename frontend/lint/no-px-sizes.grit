@@ -1,0 +1,19 @@
+// The zoom control moves the root font size, so a size written in rem follows
+// it and one written in px does not. Catches the Tailwind arbitrary-value form
+// (text-[11px], h-[88px], p-[3px]) in any string literal, which is where every
+// regression has landed so far. Suppress with `// biome-ignore lint/plugin:`
+// when a value really is device pixels rather than type.
+//
+// Matching whole string literals is what keeps one violation from reporting
+// once per enclosing node; it also means the rule sees strings that are not
+// class lists, which so far has cost nothing.
+language js
+
+`$literal` where {
+  $literal <: r"\"[^\"]*\[[0-9.]+px\][^\"]*\"",
+  register_diagnostic(
+    span = $literal,
+    message = "px is frozen against the zoom control, which moves the root font size. Write the size in rem.",
+    severity = "error"
+  )
+}

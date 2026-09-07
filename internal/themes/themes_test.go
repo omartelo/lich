@@ -539,7 +539,6 @@ func TestBootCSSMatchesBundledThemes(t *testing.T) {
 	for i, theme := range bundledThemes {
 		t.Run(theme.ID, func(t *testing.T) {
 			got := cssVariables(t, css, selectors[i])
-			delete(got, "radius")
 			if !reflect.DeepEqual(got, theme.App) {
 				t.Fatalf("%s boot variables differ from bundled JSON\nCSS: %#v\nJSON: %#v", selectors[i], got, theme.App)
 			}

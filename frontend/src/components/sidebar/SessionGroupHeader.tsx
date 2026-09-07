@@ -72,7 +72,7 @@ function SessionGroupTitleButton({
           !collapsed && "rotate-90",
         )}
       />
-      <span className="min-w-0 truncate text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground/70 transition-colors group-hover/collapse:text-muted-foreground">
+      <span className="min-w-0 truncate text-[0.65625rem] font-semibold uppercase tracking-wider text-muted-foreground/70 transition-colors group-hover/collapse:text-muted-foreground">
         {name}
       </span>
       <span className="h-px flex-1 bg-border" />
@@ -130,7 +130,7 @@ export function SessionGroupHeader({
           onFocus={(event) => event.currentTarget.select()}
           onKeyDown={onEditKeyDown}
           onBlur={(event) => commit(event.currentTarget.value)}
-          className="min-w-0 flex-1 rounded-sm bg-transparent px-1 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider text-foreground outline-none ring-1 ring-accent-foreground/30"
+          className="min-w-0 flex-1 rounded-sm bg-transparent px-1 py-0.5 text-[0.65625rem] font-semibold uppercase tracking-wider text-foreground outline-none ring-1 ring-accent-foreground/30"
         />
       ) : (
         <SessionGroupTitleButton

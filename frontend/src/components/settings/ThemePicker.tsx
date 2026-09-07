@@ -150,7 +150,7 @@ export function ThemePicker({
               caption="follows the OS"
               selected={system}
               onSelect={() => onSelect(SYSTEM_THEME)}
-              preview={<SystemMiniature themes={themes} className="h-[88px] w-full" />}
+              preview={<SystemMiniature themes={themes} className="h-22 w-full" />}
             />
             {themes.map((theme) => (
               <ThemeCard
@@ -165,7 +165,7 @@ export function ThemePicker({
                 }
                 selected={value === theme.id}
                 onSelect={() => onSelect(theme.id)}
-                preview={<ThemeMiniature theme={theme} className="h-[88px] w-full" />}
+                preview={<ThemeMiniature theme={theme} className="h-22 w-full" />}
                 actions={
                   theme.origin === "custom" && (
                     <>
@@ -260,7 +260,7 @@ function ThemeCard({ name, caption, selected, preview, onSelect, actions }: Them
         </span>
         <span className="mt-1.5 flex items-baseline gap-1.5">
           <span className="truncate text-xs font-medium text-foreground">{name}</span>
-          <span className="truncate text-[11px] text-muted-foreground">{caption}</span>
+          <span className="truncate text-[0.6875rem] text-muted-foreground">{caption}</span>
         </span>
       </button>
       {/* Update and remove ride the card rather than a row of their own: they

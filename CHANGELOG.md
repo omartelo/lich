@@ -151,6 +151,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Footer tooltips have a theme-colored border to separate them from the footer.
 - **Settings use the available window width** instead of a narrow centered
   column. Descriptions retain a readable line length.
+- **Uppercase section labels are all one size.** The small label that heads a
+  group of rows had drifted to four sizes across the session sidebar, the
+  command palette and picker, the worktree dialog, the review panel, the
+  shortcuts overlay and the file preview's read-only tag. They now render at the
+  single size the palette and the shortcuts overlay already used. The diff
+  file's language badge keeps its own smaller size, which is what fits two or
+  three letters into its box.
 
 ### Fixed
 
@@ -158,8 +165,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   were sized in absolute pixels rather than in the units the zoom control
   moves, so they stayed put while the chrome around them grew: the sandbox
   explanation lines, the plan usage numbers and quota path, the settings
-  search-result headings, and the inset of the segmented controls. At 150 per
-  cent they rendered at their original size beside text half again as large.
+  search-result headings, the theme card captions and previews, and the inset of
+  the segmented controls. At 150 per cent they rendered at their original size
+  beside text half again as large.
 
 - **Ctrl+Shift+T starts a session again in lich's own window.** Chromium runs
   its tab accelerators before the page is given the key, so in the bundled

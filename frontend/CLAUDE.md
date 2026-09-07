@@ -127,8 +127,8 @@ Bring it into the idiom:
    Chromatic color only if it is semantic (state / language).
 4. **Buttons.** Default to `ghost` in chrome; reserve one `primary` per surface. Keep the `Button` variant
    scale (primary / secondary / outline / ghost / destructive) — don't invent new ones.
-5. **Radius from the token.** Lean on `--radius`; small controls `rounded-md`. Don't paper `rounded-lg` over
-   everything.
+5. **Radius from Tailwind's scale.** `rounded-sm`/`md`/`lg`/`xl` are the whole ladder and lich adds no token
+   of its own; small controls `rounded-md`. Don't paper `rounded-lg` over everything.
 6. **Tokens only.** No raw hex/oklch; route through the `--*` variables and Tailwind opacity steps.
 
 ### base-ui gotchas

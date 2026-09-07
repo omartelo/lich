@@ -243,7 +243,7 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
 function SaidBand({ text }: { text: string }) {
   return (
     <div className="flex shrink-0 flex-col gap-1 border-b border-border bg-muted px-2.5 pt-2 pb-2.5">
-      <span className="text-[0.625rem] font-medium tracking-wider text-muted-foreground uppercase">
+      <span className="text-[0.65625rem] font-medium tracking-wider text-muted-foreground uppercase">
         Said
       </span>
       <p className="max-h-32 overflow-y-auto whitespace-pre-wrap text-xs">{text}</p>
