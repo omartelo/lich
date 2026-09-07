@@ -1,6 +1,8 @@
 package store
 
 import (
+	"fmt"
+	"slices"
 	"testing"
 	"time"
 )
@@ -30,7 +32,7 @@ func TestClosedSessionsOrdersByCloseNotByInsert(t *testing.T) {
 	atClock(t, time.Unix(1_700_000_100, 0), func() { _ = svc.CloseSession("p1", "second", "keep") })
 	atClock(t, time.Unix(1_700_000_200, 0), func() { _ = svc.CloseSession("p1", "first", "keep") })
 
-	closed, err := svc.ClosedSessions()
+	closed, err := svc.ClosedSessions("")
 	if err != nil {
 		t.Fatalf("ClosedSessions: %v", err)
 	}
@@ -55,7 +57,7 @@ func TestClosedSessionsIdentifiesEachRow(t *testing.T) {
 	_ = svc.AddSession("p1", "gone", "Wire the relay inbox", "shell", "/wt/relay", 3, "")
 	atClock(t, time.Unix(1_700_000_000, 0), func() { _ = svc.CloseSession("p1", "gone", "keep") })
 
-	closed, _ := svc.ClosedSessions()
+	closed, _ := svc.ClosedSessions("")
 	if len(closed) != 1 {
 		t.Fatalf("got %d closed sessions, want 1", len(closed))
 	}
@@ -78,7 +80,7 @@ func TestClosedSessionsSkipsOpenOnes(t *testing.T) {
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
 	_ = svc.AddSession("p1", "live", "Session 1", "claude", "", 2, "")
 
-	closed, err := svc.ClosedSessions()
+	closed, err := svc.ClosedSessions("")
 	if err != nil {
 		t.Fatalf("ClosedSessions: %v", err)
 	}
@@ -98,15 +100,15 @@ func TestClosedSessionsIncludesClosedProjects(t *testing.T) {
 	_ = svc.CloseSession("p1", "old", "keep")
 	_ = svc.CloseProject("p1")
 
-	closed, _ := svc.ClosedSessions()
+	closed, _ := svc.ClosedSessions("")
 	if len(closed) != 1 || closed[0].ProjectName != "alpha" {
 		t.Errorf("closed = %+v, want the session of the closed project, named", closed)
 	}
 }
 
 // TestClosedSessionsCapsTheList pins the bound rather than deriving it from the
-// constant: the cap is how far back a search can reach, so a change to it has to
-// be a deliberate edit here too.
+// constant: the cap is how many rows one call answers with, so a change to it
+// has to be a deliberate edit here too.
 func TestClosedSessionsCapsTheList(t *testing.T) {
 	svc := newTestStore(t)
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
@@ -119,7 +121,7 @@ func TestClosedSessionsCapsTheList(t *testing.T) {
 		})
 	}
 
-	closed, _ := svc.ClosedSessions()
+	closed, _ := svc.ClosedSessions("")
 	if len(closed) != 100 {
 		t.Errorf("got %d closed sessions, want the list capped at 100", len(closed))
 	}
@@ -160,7 +162,7 @@ func TestReopenSessionRestoresByID(t *testing.T) {
 	if len(projects) != 1 || len(projects[0].Sessions) != 2 {
 		t.Fatalf("sessions after resume = %+v, want the kept one and the resumed one", projects)
 	}
-	closed, _ := svc.ClosedSessions()
+	closed, _ := svc.ClosedSessions("")
 	if len(closed) != 0 {
 		t.Errorf("closed = %+v, want the resumed row out of the history", closed)
 	}
@@ -253,7 +255,7 @@ func TestReopenWorktreeSessionRefusesTheEmptyPath(t *testing.T) {
 		t.Errorf("ReopenWorktreeSession(path: \"\") = %+v, want nil", restored)
 	}
 	// And the parked root session is still there for its own door.
-	closed, _ := svc.ClosedSessions()
+	closed, _ := svc.ClosedSessions("")
 	if len(closed) != 1 || closed[0].ID != "root" {
 		t.Errorf("closed = %+v, want the root session still parked", closed)
 	}
@@ -273,7 +275,7 @@ func TestForgetSessionRemovesOneParkedRow(t *testing.T) {
 	if err := svc.ForgetSession("dead"); err != nil {
 		t.Fatalf("ForgetSession: %v", err)
 	}
-	closed, _ := svc.ClosedSessions()
+	closed, _ := svc.ClosedSessions("")
 	if len(closed) != 0 {
 		t.Errorf("closed = %+v, want the forgotten row gone", closed)
 	}
@@ -311,4 +313,168 @@ func TestForgetSessionOnAMissingRowIsNotAnError(t *testing.T) {
 	if err := svc.ForgetSession("never-existed"); err != nil {
 		t.Errorf("ForgetSession on a missing row = %v, want nil", err)
 	}
+}
+
+// park closes one session of project p1 at a fixed clock, so a search test can
+// name what it is looking for and when it was parked in one line.
+func park(t *testing.T, svc *Service, id, label string, at int64) {
+	t.Helper()
+	_ = svc.AddSession("p1", id, label, "claude", "/wt/"+id, 0, "")
+	atClock(t, time.Unix(at, 0), func() { _ = svc.CloseSession("p1", id, "keep") })
+}
+
+// searchStore is a store with a keep-open session and three parked ones, closed
+// oldest first.
+func searchStore(t *testing.T) *Service {
+	t.Helper()
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "keep", "Session 1", "claude", "", 1, "")
+	park(t, svc, "s1", "Wire the relay inbox", 1_700_000_100)
+	park(t, svc, "s2", "relay ticket lifecycle", 1_700_000_200)
+	park(t, svc, "s3", "Split groups design", 1_700_000_300)
+	return svc
+}
+
+func ids(closed []ClosedSession) []string {
+	got := make([]string, len(closed))
+	for i, c := range closed {
+		got[i] = c.ID
+	}
+	return got
+}
+
+// TestClosedSessionsSearchesByName is the search itself: a term narrows the list
+// to the rows whose name contains it, whatever their case.
+func TestClosedSessionsSearchesByName(t *testing.T) {
+	svc := searchStore(t)
+
+	for _, term := range []string{"relay", "RELAY", "ReLaY"} {
+		closed, err := svc.ClosedSessions(term)
+		if err != nil {
+			t.Fatalf("ClosedSessions(%q): %v", term, err)
+		}
+		// Newest first, the same order the unfiltered list is in.
+		if got := ids(closed); len(got) != 2 || got[0] != "s2" || got[1] != "s1" {
+			t.Errorf("ClosedSessions(%q) = %v, want [s2 s1]", term, got)
+		}
+	}
+}
+
+// TestClosedSessionsSearchesEveryWord pins the term's reading against the
+// palette's own filter, which requires every word and not the phrase.
+func TestClosedSessionsSearchesEveryWord(t *testing.T) {
+	svc := searchStore(t)
+
+	if got := ids(mustClosed(t, svc, "inbox relay")); len(got) != 1 || got[0] != "s1" {
+		t.Errorf(`ClosedSessions("inbox relay") = %v, want [s1] whatever the word order`, got)
+	}
+	if got := ids(mustClosed(t, svc, "relay split")); len(got) != 0 {
+		t.Errorf(`ClosedSessions("relay split") = %v, want none: no row carries both`, got)
+	}
+	// The project's name and the checkout path are part of the haystack, so a
+	// term the window would have matched is not dropped before it gets there.
+	if got := ids(mustClosed(t, svc, "alpha s3")); len(got) != 1 || got[0] != "s3" {
+		t.Errorf(`ClosedSessions("alpha s3") = %v, want [s3] by project and path`, got)
+	}
+}
+
+// TestClosedSessionsSearchEscapesWildcards is why the term is escaped: LIKE
+// reads % and _ as patterns, so an unescaped name containing either would match
+// rows that have nothing to do with it.
+func TestClosedSessionsSearchEscapesWildcards(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "keep", "Session 1", "claude", "", 1, "")
+	park(t, svc, "pct", "100% done", 1_700_000_100)
+	park(t, svc, "und", "hand_off", 1_700_000_200)
+	park(t, svc, "esc", `back\slash`, 1_700_000_300)
+	// The decoys are what an unescaped term matches: % swallows the trailing
+	// zero, _ stands in for the X, and a bare backslash is an escape sequence
+	// SQLite refuses outright.
+	park(t, svc, "wide", "1000 lines", 1_700_000_400)
+	park(t, svc, "any", "handXoff", 1_700_000_500)
+
+	cases := []struct {
+		term string
+		want string
+	}{
+		{"100%", "pct"},
+		{"hand_off", "und"},
+		{`back\slash`, "esc"},
+	}
+	for _, tc := range cases {
+		got := ids(mustClosed(t, svc, tc.term))
+		if len(got) != 1 || got[0] != tc.want {
+			t.Errorf("ClosedSessions(%q) = %v, want [%s] only", tc.term, got, tc.want)
+		}
+	}
+}
+
+// TestClosedSessionsSearchReachesPastTheCap is the ceiling this search closed: a
+// session parked further back than one page of history is still findable by
+// name, which is the whole point of matching in the query.
+func TestClosedSessionsSearchReachesPastTheCap(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "keep", "Session 1", "claude", "", 1, "")
+	park(t, svc, "needle", "the oldest work", 1_700_000_000)
+	for i := range closedSessionLimit + 5 {
+		park(t, svc, fmt.Sprintf("s%d", i), "newer work", int64(1_700_001_000+i))
+	}
+
+	if got := ids(mustClosed(t, svc, "")); len(got) != closedSessionLimit {
+		t.Fatalf("unfiltered list = %d rows, want %d", len(got), closedSessionLimit)
+	} else if slices.Contains(got, "needle") {
+		t.Fatal("the oldest row is inside the unfiltered page; the test proves nothing")
+	}
+	if got := ids(mustClosed(t, svc, "oldest")); len(got) != 1 || got[0] != "needle" {
+		t.Errorf(`ClosedSessions("oldest") = %v, want [needle] from past the cap`, got)
+	}
+}
+
+// TestClosedSessionsSearchCapsMatches pins that the cap outlives the search: a
+// term matching everything is still one page of rows.
+func TestClosedSessionsSearchCapsMatches(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "keep", "Session 1", "claude", "", 1, "")
+	for i := range closedSessionLimit + 5 {
+		park(t, svc, fmt.Sprintf("s%d", i), "work", int64(1_700_000_000+i))
+	}
+
+	closed := mustClosed(t, svc, "work")
+	if len(closed) != closedSessionLimit {
+		t.Fatalf("got %d matches, want the list capped at %d", len(closed), closedSessionLimit)
+	}
+	if closed[0].ClosedAt != int64(1_700_000_000+closedSessionLimit+4) {
+		t.Errorf("newest match = %d, want the last close of the run", closed[0].ClosedAt)
+	}
+}
+
+// TestEscapeLike covers the escape on its own, since the backslash has to be
+// doubled before the wildcards are escaped with it.
+func TestEscapeLike(t *testing.T) {
+	cases := map[string]string{
+		"plain": "plain",
+		"50%":   `50\%`,
+		"a_b":   `a\_b`,
+		`c\d`:   `c\\d`,
+		`\%_`:   `\\\%\_`,
+		"":      "",
+	}
+	for in, want := range cases {
+		if got := escapeLike(in); got != want {
+			t.Errorf("escapeLike(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func mustClosed(t *testing.T, svc *Service, term string) []ClosedSession {
+	t.Helper()
+	closed, err := svc.ClosedSessions(term)
+	if err != nil {
+		t.Fatalf("ClosedSessions(%q): %v", term, err)
+	}
+	return closed
 }

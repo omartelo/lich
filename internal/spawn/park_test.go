@@ -82,7 +82,7 @@ func listed(t *testing.T, rows *store.Service, id string) (open, history bool) {
 			}
 		}
 	}
-	closed, err := rows.ClosedSessions()
+	closed, err := rows.ClosedSessions("")
 	if err != nil {
 		t.Fatalf("ClosedSessions: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestAParkedSessionIsFoundInTheHistoryWithItsName(t *testing.T) {
 		t.Fatalf("Close alone: %v", err)
 	}
 
-	closed, err := rows.ClosedSessions()
+	closed, err := rows.ClosedSessions("")
 	if err != nil {
 		t.Fatalf("ClosedSessions: %v", err)
 	}

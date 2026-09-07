@@ -35,6 +35,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   underline came back with lich's block. The shape is now carried across the
   cycle beside the mouse encoding and cursor visibility, and follows the
   program's own reset back to the default.
+- **The command palette's History tab finds every session you ever closed.** It
+  was handed the hundred most recently parked sessions and filtered those in the
+  window, so anything closed further back could not be reached by typing its
+  name. The term now goes to the store, which searches every parked session by
+  its name, its project's name and its path, and answers with the hundred most
+  recently closed matches. The branch shown on a row is still read from git
+  afterwards, so it narrows the results but cannot be searched for on its own.
 - **Scoop installs the current release.** The manifest 0.46.0 introduced pinned
   0.45.0 with no checksums, and nothing bumped it on a tag, so `scoop install`
   and `scoop update lich` handed out the previous release. Every release now

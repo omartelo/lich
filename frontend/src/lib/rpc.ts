@@ -396,9 +396,11 @@ export const Store = {
   /** Resume a parked worktree session under a fresh id, or null when none. */
   ReopenWorktreeSession: (projectID: string, path: string, newSessionID: string) =>
     call<StoredSession | null>("store.ReopenWorktreeSession", [projectID, path, newSessionID]),
-  /** The parked sessions, last closed first — the history the palette browses.
-   * Capped store-side, so this is also how far back a search can reach. */
-  ClosedSessions: () => call<ClosedSession[] | null>("store.ClosedSessions", []),
+  /** The parked sessions matching `term`, last closed first — the history the
+   * palette browses. Every word of the term must appear in the session's name,
+   * its project's name or its path; an empty term is the plain history. The
+   * search runs in the query, so it reaches past the page this answers with. */
+  ClosedSessions: (term: string) => call<ClosedSession[] | null>("store.ClosedSessions", [term]),
   /** Resume one parked session by its own id, or null when it is no longer
    * parked — another window resumed it, or its worktree was removed. */
   ReopenSession: (sessionID: string, newSessionID: string) =>

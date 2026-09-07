@@ -13,7 +13,6 @@ import { SessionStatusIcon } from "@/components/sidebar/SessionStatusIcon"
 import {
   filterPalette,
   historyAction,
-  historyRows,
   nextTab,
   paletteGroups,
   paletteSessions,
@@ -27,13 +26,14 @@ import {
   type PaletteSession,
   type PaletteTab,
 } from "@/lib/session/command-palette"
+import { useHistorySearch } from "@/lib/session/use-history-search"
 import { useTranscriptSearch } from "@/lib/session/use-transcript-search"
 import { toast } from "sonner"
 import { PickerDialog, PickerEmpty, PickerGroup, PickerRow } from "@/components/common/PickerDialog"
 import { agoLabel } from "@/lib/ago"
 import { displayPath } from "@/lib/paths"
 import { isSessionKind } from "@/lib/session/sessions"
-import type { ClosedSession, Project, RecentProject } from "@/lib/api-types"
+import type { Project, RecentProject } from "@/lib/api-types"
 import { ProjectService, Store } from "@/lib/rpc"
 import { cn, errorText } from "@/lib/utils"
 
@@ -55,8 +55,6 @@ export function CommandPalette() {
   const [tab, setTab] = useState<PaletteTab>("All")
   const [selected, setSelected] = useState(0)
   const [closed, setClosed] = useState<RecentProject[]>([])
-  const [parked, setParked] = useState<ClosedSession[]>([])
-  const [branches, setBranches] = useState<Readonly<Record<string, string>>>({})
   const [running, setRunning] = useState<ReadonlySet<string>>(new Set())
   const [missing, setMissing] = useState<ReadonlySet<string>>(new Set())
 
@@ -67,55 +65,41 @@ export function CommandPalette() {
     setSelected(0)
   })
 
-  // The closed projects and the parked sessions both live in the store, not in
-  // the workspace state, so they are fetched per opening — anything closed or
-  // reopened since the last one moves in or out of these lists. Their
-  // directories are read with them: a project whose folder moved is relocated
-  // rather than reopened, and a session whose checkout is gone says so.
-  //
-  // The branches are asked for in one batch rather than by subscribing each row
-  // to the git poller a live card uses: that poll is three calls per path per
-  // second, and this list is long and on screen for as long as it takes to type.
+  // The closed projects live in the store, not in the workspace state, so they
+  // are fetched per opening — anything closed or reopened since the last one
+  // moves in or out of the list. Their directories are read with them: a project
+  // whose folder moved is relocated rather than reopened.
   useEffect(() => {
     if (!open) {
       return
     }
     let live = true
-    void Promise.all([Store.RecentProjects(), Store.ClosedSessions()]).then(
-      ([recentRows, parkedRows]) => {
-        const recents = recentRows ?? []
-        const history = parkedRows ?? []
-        if (!live) {
-          return
+    void Store.RecentProjects().then((recentRows) => {
+      const recents = recentRows ?? []
+      if (!live) {
+        return
+      }
+      setClosed(recents)
+      void ProjectService.Missing(recents.map((row) => row.path)).then((gone) => {
+        if (live) {
+          setMissing(new Set(gone ?? []))
         }
-        setClosed(recents)
-        setParked(history)
-        // Asked for after the rows are up: what git and the filesystem say is
-        // what a row says about itself, and a failed check must not cost the
-        // palette its entries.
-        const paths = history.map((row) => row.path).filter(Boolean)
-        void ProjectService.Missing([...recents.map((row) => row.path), ...paths]).then((gone) => {
-          if (live) {
-            setMissing(new Set(gone ?? []))
-          }
-        })
-        void ProjectService.BranchesOf(paths).then((named) => {
-          if (live) {
-            setBranches(named ?? {})
-          }
-        })
-      },
-    )
+      })
+    })
     return () => {
       live = false
     }
   }, [open])
 
+  // The parked sessions are searched in the store rather than filtered here, so
+  // the History tab reaches a session parked further back than one page of it.
+  const { rows: history, forget: dropParked } = useHistorySearch(query, open)
+
   // Forgetting drops the row from the list in place rather than closing the
   // palette: the whole point of the action is that there are usually several of
   // them, left by worktrees removed outside lich.
   const forget = (session: PaletteHistory) => {
-    setParked((rows) => rows.filter((row) => row.id !== session.id))
+    dropParked(session.id)
     void Store.ForgetSession(session.id).catch((error: unknown) => {
       toast.error(`Could not forget ${session.label}: ${errorText(error)}`)
     })
@@ -134,7 +118,6 @@ export function CommandPalette() {
     }
   }, [open])
   const all = useMemo(() => rankSessions(flat, running), [flat, running])
-  const history = useMemo(() => historyRows(parked, branches, missing), [parked, branches, missing])
   const results = useMemo(
     () => filterPalette(query, all, projects, closed, history),
     [query, all, projects, closed, history],
@@ -266,7 +249,11 @@ export function CommandPalette() {
         // the query found nothing, the other says nothing has ever been closed.
         // The second is the only place the retention rule is stated, which is
         // where it belongs — the moment somebody wonders what this remembers.
-        tab === "History" && parked.length === 0 ? (
+        //
+        // Only an empty query can tell the two apart: the history is searched in
+        // the store, so once a term is typed an empty list is a search that
+        // missed, never an empty workspace.
+        tab === "History" && query.trim() === "" && history.length === 0 ? (
           <PickerEmpty>
             <span className="block text-foreground">Nothing closed yet</span>
             <span className="mx-auto mt-2 block max-w-[44ch] leading-relaxed">

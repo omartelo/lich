@@ -734,18 +734,18 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   cask's `depends_on` and the bundle's `LSMinimumSystemVersion` say 13.0 because the compiler does —
   both move with the next Go bump, and a machine below the floor is refused by Homebrew rather than
   by a crash.
-- **A closed session's history reaches back a hundred rows, and the search never goes deeper**
-  (`internal/store/store.go`, `frontend/src/lib/session/command-palette.ts`): the History tab is handed the
-  hundred most recently closed sessions when it opens and filters those in the window, the bargain the closed
-  projects list already makes. So a session closed further back than that is in the database, counts against
-  nothing, and cannot be found — typing its name narrows a list it was never in. The fix when it bites is a
-  `LIKE` in the query, not a bigger number; nothing warns that the list was cut, because a cut that is always
-  in force is not news.
+- **The History tab searches names, and the branch on every row is not one** (`internal/store/store.go`,
+  `frontend/src/lib/session/use-history-search.ts`): the search runs in the store, which holds a parked
+  session's name, its project's and its path — the branch is read out of git afterwards, for the rows the
+  search already kept. So a row that shows `feat/relay-inbox` cannot be found by typing that, and the tab
+  answers a branch the user is reading off the screen with nothing at all. A term that matches more than a
+  hundred parked sessions is cut to the hundred closed most recently, and nothing says the list was cut.
 - **The history's branch is read live, so a row whose checkout is gone has none** (`internal/project.BranchesOf`):
   the branch is not stored — a worktree keeps the name it was created with while an agent moves the branch
-  inside it, so the directory cannot answer and only git can. The batch runs once per opening, which also means
-  a branch that moved while the palette is up is stale until it is reopened. A checkout removed behind lich's
-  back has no branch to read and no session to resume: that row says `checkout gone` and offers to forget
+  inside it, so the directory cannot answer and only git can. The batch runs once per settled search, which
+  also means a branch that moved while the palette is up is stale until the query changes or the palette is
+  reopened. A checkout removed behind lich's back has no branch to read and no session to resume: that row
+  says `checkout gone` and offers to forget
   itself, which is the only way such a row is ever collected — `PurgeWorktreeSessions` never ran for it,
   because the removal never went through the app.
 - **A worktree lich did not create can never be removed through lich** (`internal/project.WorktreeAdopted`):

@@ -448,30 +448,58 @@ type ClosedSession struct {
 	ClosedAt int64 `json:"closedAt"`
 }
 
-// closedSessionLimit caps the history handed to the window. The palette filters
-// what it was given rather than asking again per keystroke (the same bargain
-// RecentProjects makes), so this number is how far back a search can reach:
-// deep enough to cover the sessions a workspace churns through in months, and
-// still a bound — the alternative is reading every session ever closed to draw
-// a list nobody scrolls to the end of.
+// closedSessionLimit caps the history handed to the window — how many rows one
+// call answers with, not how far back it looks: the search runs in the query,
+// so a match older than the newest hundred is still found. The alternative is
+// handing over every session ever closed to draw a list nobody scrolls to the
+// end of.
 const closedSessionLimit = 100
 
-// ClosedSessions returns the parked sessions (is_open = 0), the last one closed
-// first, up to closedSessionLimit of them. Sessions of closed projects answer
-// too: a project hidden from the tab strip still owns the work done in it, and
-// resuming one of its sessions is what reopens it.
+// likeEscape is the ESCAPE character the history search declares, so a name
+// containing % or _ searches for those characters instead of matching anything.
+const likeEscape = `\`
+
+// escapeLike neutralises the LIKE wildcards in a user's search term. The escape
+// character goes first, or escaping the wildcards would re-escape it.
+func escapeLike(term string) string {
+	term = strings.ReplaceAll(term, likeEscape, likeEscape+likeEscape)
+	term = strings.ReplaceAll(term, "%", likeEscape+"%")
+	return strings.ReplaceAll(term, "_", likeEscape+"_")
+}
+
+// ClosedSessions returns the parked sessions (is_open = 0) matching term, the
+// last one closed first, up to closedSessionLimit of them. An empty term is the
+// plain history: the most recently closed, whatever they are named. Sessions of
+// closed projects answer too: a project hidden from the tab strip still owns the
+// work done in it, and resuming one of its sessions is what reopens it.
+//
+// The term is matched here rather than in the window because the window only
+// ever sees one page of rows, and a session parked further back than that page
+// would be unfindable by name. Every whitespace-separated word must appear
+// somewhere in the name, the project's name or the path — the same reading the
+// palette's own filter gives a query, so narrowing here never drops a row that
+// filter would have kept. LIKE is case-insensitive for ASCII in SQLite, which
+// is what makes this a search and not a prefix test.
 //
 // rowid is the tiebreak, not the order, for RecentProjects' reason twice over:
 // it dates the insert, and a resumed session is reinserted — so rows parked
 // before closed_at existed all carry 0 and fall back to it together.
-func (s *Service) ClosedSessions() ([]ClosedSession, error) {
+func (s *Service) ClosedSessions(term string) ([]ClosedSession, error) {
+	where := "WHERE s.is_open = 0"
+	args := []any{}
+	for _, word := range strings.Fields(term) {
+		where += " AND (s.label || ' ' || p.name || ' ' || s.path) LIKE ? ESCAPE '" + likeEscape + "'"
+		args = append(args, "%"+escapeLike(word)+"%")
+	}
+	args = append(args, closedSessionLimit)
+
 	rows, err := s.db.Query(
 		`SELECT s.id, s.project_id, p.name, p.path, s.label, s.kind, s.path, s.closed_at
 		   FROM sessions s JOIN projects p ON p.id = s.project_id
-		  WHERE s.is_open = 0
+		   `+where+`
 		  ORDER BY s.closed_at DESC, s.rowid DESC
 		  LIMIT ?`,
-		closedSessionLimit,
+		args...,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query closed sessions: %w", err)
