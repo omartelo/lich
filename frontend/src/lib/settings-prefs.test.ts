@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import {
+  readSettingsProvider,
   readSettingsQuery,
   readSettingsSection,
+  writeSettingsProvider,
   writeSettingsQuery,
   writeSettingsSection,
 } from "./settings-prefs"
@@ -69,13 +71,46 @@ describe("the stored search box", () => {
   })
 })
 
-// Both are global on purpose (see the file's docblock): the nav is the same
+describe("the stored provider screen", () => {
+  it("reads as the list with nothing stored", () => {
+    expect(readSettingsProvider()).toBe("")
+  })
+
+  it("round-trips the provider that was open", () => {
+    writeSettingsProvider("codex")
+
+    expect(readSettingsProvider()).toBe("codex")
+  })
+
+  // Same reason the section is not parsed against a known set: the id is only
+  // meaningful while that provider is enabled, and the pane resolves one it
+  // cannot place back to the list rather than forgetting it was open.
+  it("keeps a provider id it cannot place, for the pane to resolve", () => {
+    writeSettingsProvider("crush")
+
+    expect(readSettingsProvider()).toBe("crush")
+  })
+
+  it("round-trips a step back out to the list", () => {
+    writeSettingsProvider("codex")
+    writeSettingsProvider("")
+
+    expect(readSettingsProvider()).toBe("")
+  })
+})
+
+// All three are global on purpose (see the file's docblock): the nav is the same
 // list of panes in every project, so nothing on this screen is keyed by one.
 describe("the scope of these prefs", () => {
-  it("answers with the same section and box whichever project asks", () => {
+  it("answers with the same section, box and provider whichever project asks", () => {
     writeSettingsSection("hotkeys")
     writeSettingsQuery("hot")
+    writeSettingsProvider("claude")
 
-    expect([...stored.keys()].sort()).toEqual(["lich.settings.query", "lich.settings.section"])
+    expect([...stored.keys()].sort()).toEqual([
+      "lich.settings.provider",
+      "lich.settings.query",
+      "lich.settings.section",
+    ])
   })
 })

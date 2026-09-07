@@ -51,7 +51,7 @@ export function ProviderSetupDialog({ hasInstalled, known, onDone }: ProviderSet
             whole answer that shape owes — each one linking to its own install
             page, which is what makes the screen a way out rather than a wall. */}
         {hasInstalled ? (
-          <ProvidersSettings installedOnly />
+          <ProvidersSettings />
         ) : (
           <div className="grid grid-cols-2 gap-x-4">
             {known.map((provider) => (

@@ -35,6 +35,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of the pane and named no session, so with split panes nothing said which one
   would take the file.
 
+- **Settings is one list of six, and every provider lives on its own screen.**
+  The sidebar grew a line for every provider you turned on, under three
+  headings, with two entries both called "Providers": twelve rows of plain
+  text before the first agent was configured. It is now Appearance,
+  Notifications, Hotkeys, Providers, Sandbox and Version Control, each with its
+  own glyph, and Providers holds the lot: which provider new sessions spawn
+  here and everywhere, the ones you have enabled, and one click in, a
+  provider's plan, binary, permission rung and open sessions. Providers you
+  have not enabled sit behind "Add provider" instead of filling the list, and a
+  search that matches nothing now says so.
+
 - **A session card's right-click menu is grouped, and names its shortcuts.**
   Every action sat in one flat list of up to fourteen items with no order to
   it. They now fall in three blocks a hairline apart: what the session is

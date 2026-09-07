@@ -20,10 +20,12 @@ import { readPref, writePref } from "@/lib/prefs"
 // database under the project's own id.
 const SECTION_KEY = "lich.settings.section"
 const QUERY_KEY = "lich.settings.query"
+const PROVIDER_KEY = "lich.settings.provider"
 
 // The pane a screen with nothing remembered opens on: the one almost every
-// visit is for.
-const DEFAULT_SECTION = "providers"
+// visit is for. Exported because it is also where a section id from another
+// build lands, and a pane that no longer exists must not strand its readers.
+export const DEFAULT_SECTION = "providers"
 
 /** The pane the nav had open.
  *
@@ -49,4 +51,16 @@ export function readSettingsQuery(): string {
 
 export function writeSettingsQuery(query: string): void {
   writePref(QUERY_KEY, query)
+}
+
+/** The provider whose own screen was open inside the Providers pane, "" for the
+ * list. Unparsed for the same reason the section is: the id is only meaningful
+ * while that provider is enabled, and the pane resolves one it cannot place
+ * back to the list rather than forgetting it. */
+export function readSettingsProvider(): string {
+  return readPref(PROVIDER_KEY) ?? ""
+}
+
+export function writeSettingsProvider(provider: string): void {
+  writePref(PROVIDER_KEY, provider)
 }

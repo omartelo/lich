@@ -837,13 +837,14 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   workspace database under the project's own id. The trap is for whoever adds a pane that is genuinely about
   one repository's content. Its remembered state belongs on the per-project side, which means a new key with
   the project id in it, not another global one beside these two.
-- **A remembered section id is never validated, and a dead one is simply waited out** (`Settings.tsx`):
-  section ids include `provider-<id>` for every enabled provider, so the set is not knowable at build time and
-  the pref is stored raw rather than parsed against a list. `Settings` resolves an id it cannot place to its
-  first section, which is what makes a provider disabled for an afternoon come back to its own pane rather
-  than being forgotten — but it also means a pane removed from the app for good leaves a pref that resolves
-  silently, forever, and nothing rewrites it. Deleting a section means the users who were on it open on
-  Appearance with no explanation.
+- **A remembered section id is never validated, and a dead one resolves to Providers** (`Settings.tsx`):
+  the pref is stored raw rather than parsed against a list, because the sections belong to the screen and
+  `settings-prefs` is not where they live. An id this build cannot place (one of the `provider-<id>` panes
+  that existed before Providers became a single section, say) resolves to `DEFAULT_SECTION` and is never
+  rewritten. That is a landing, not a fix: the stale pref stays in storage forever, and the user is never told
+  the pane they were on is gone. The same holds for the provider a Providers pane had open
+  (`lich.settings.provider`), which is genuinely unknowable at build time: it resolves back to the list while
+  that provider is disabled, and comes back when it is turned on again.
 - **A release's highlight is read from the binary, so fixing it after the tag fixes nothing a user sees**
   (`internal/patchnotes`): the What's new dialog parses the `CHANGELOG.md` embedded at build time — the alert
   blocks under the version heading included. Editing that release on GitHub, or the changelog on `main`,
