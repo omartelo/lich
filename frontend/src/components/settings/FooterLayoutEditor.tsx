@@ -277,8 +277,11 @@ function FooterEditorItem({ id, layout, disabled, onMove }: FooterEditorItemProp
       </Button>
       {/* Kept out of the resting chip: the menu and the remove are one hover
           away, and a row of them across every chip was the loudest thing on the
-          pane. focus-within keeps them reachable without a pointer. */}
-      <span className="hidden items-center group-hover:flex group-focus-within:flex">
+          pane. Collapsed to nothing rather than hidden, because `display: none`
+          takes them out of the tab order, and then focus-within can never fire
+          to bring them back — the keyboard would lose the only path to moving
+          an item without dragging it. */}
+      <span className="flex w-0 items-center overflow-hidden opacity-0 group-hover:w-auto group-hover:opacity-100 group-focus-within:w-auto group-focus-within:opacity-100">
         <FooterItemMenu id={id} layout={layout} disabled={disabled} onMove={onMove} />
         {inFooter && (
           <Button
