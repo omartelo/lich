@@ -247,16 +247,19 @@ function ThemeCard({ name, caption, selected, preview, onSelect, actions }: Them
           "focus-visible:ring-2 focus-visible:ring-ring",
         )}
       >
-        {/* The ring sits inside the card: ring-offset draws outside the
-            element, and the strip scrolls, so the offset was clipped off
-            whichever card sat against an edge. */}
+        {/* The ring belongs to the interface, not to the theme being previewed,
+            so it is drawn on the padding around the miniature and in the
+            interface's own foreground. Over the miniature and in --ring it
+            vanished on any theme whose ring is close to its own background,
+            which is most of them. The padding is always there, so selecting a
+            card never resizes it. */}
         <span
           className={cn(
-            "block overflow-hidden rounded-md",
-            selected && "ring-2 ring-inset ring-ring",
+            "block rounded-lg p-1",
+            selected && "ring-2 ring-inset ring-foreground/70",
           )}
         >
-          {preview}
+          <span className="block overflow-hidden rounded-md">{preview}</span>
         </span>
         <span className="mt-1.5 flex items-baseline gap-1.5">
           <span className="truncate text-xs font-medium text-foreground">{name}</span>
