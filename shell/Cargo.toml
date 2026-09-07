@@ -13,14 +13,20 @@ license = "AGPL-3.0-only"
 # (kurogane#14), and the macOS bundle layout (framework in Contents/Frameworks,
 # subprocesses as the bundle's helper app) that upstream carries on its
 # seal-of-approval/distribution branch (53d51ba), and a relaunch on the
-# profile raising the window it already has (451bd7c); move back to
-# 0x48piraj/kurogane once they land (build/linux/shell/README.md).
-kurogane = { git = "https://github.com/omartelo/kurogane", rev = "451bd7c90ceb66447fa222f45402b7d1d794c74f" }
+# profile raising the window it already has (451bd7c) and the Linux sandbox
+# left on (bb27484); move back to 0x48piraj/kurogane once they land
+# (build/linux/shell/README.md).
+kurogane = { git = "https://github.com/omartelo/kurogane", rev = "bb274847fc3bd517358f1bd41cc56ab69bfd7dd9" }
 
 # The CEF handler types a delegate returns (main.rs). Pinned to the revision
 # kurogane's own workspace pins: two cef crates in one binary are two different
 # KeyboardHandler types, and the delegate would not compile against ours.
 cef = { git = "https://github.com/tauri-apps/cef-rs", rev = "c73f792f245d71ac1716448cdb7c165c8009e20c" }
+
+# Whether this machine can confine Chromium's subprocesses is asked the way
+# Chromium asks it (main.rs): a fork that tries a user namespace.
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
 
 # The taskbar groups windows by AppUserModelID (main.rs); nothing else of the
 # Win32 API is used.

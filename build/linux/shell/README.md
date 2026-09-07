@@ -26,7 +26,12 @@ fix is the fork's alone so far: a second launch on the profile makes CEF
 ask the running browser what to do with it, and kurogane answered nothing,
 so CEF opened a Chrome-style browser no window of ours owned and the app
 outlived its last window (lich#470); the fork raises the window it already
-has. All of it is carried meanwhile on the fork `shell/Cargo.toml` pins:
+has. And kurogane disabled the sandbox on every platform, which put Chrome's
+"unsupported command-line flag" bar on every window; the fork leaves it on
+for Linux, where Chromium needs nothing of the binary to confine its
+subprocesses, and `shell/src/main.rs` passes `--no-sandbox` on the machines
+that cannot (Ubuntu's AppArmor policy, root). All of it is carried meanwhile
+on the fork `shell/Cargo.toml` pins:
 `omartelo/kurogane`, branch `lich`, on top of upstream `eedaedc`.
 One wrinkle the patch works around: cef-rs hands CEF a *borrowed* string when
 it writes an out-parameter struct back, so a `wm_class_class` built from `&str`

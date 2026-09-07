@@ -967,6 +967,18 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   with no browser at all the crash lands on the tab path, where the log has the story and the
   notification does not. `lich doctor` names the rung that answered; `task dev` pins the window it built
   (`LICH_BROWSER`), since `go run` never has one beside it.
+- **The window's own sandbox is on for Linux alone** (`shell/src/main.rs`, the kurogane fork's
+  `no_sandbox`): Chromium confines the window's subprocesses in a user namespace, or through the setuid
+  helper beside `lich-shell`, and needs nothing of the binary for either. Where it has neither, the browser
+  process would abort at its zygote, so the shell asks first, the way Chromium does (a fork trying
+  `CLONE_NEWUSER`, the helper checked for root and 4755, never as root) and opens with `--no-sandbox`: that
+  is Ubuntu's desktop, whose AppArmor policy denies unprivileged user namespaces to unconfined binaries, and
+  the packages do not ship the helper setuid (`cef/chrome-sandbox`, mode 755, not beside the executable),
+  so every Ubuntu window runs unsandboxed and carries Chrome's "stability and security will suffer" bar,
+  which is the truth about it. The upgrade is the deb, rpm and AUR installing `chrome-sandbox` root-owned
+  4755 beside `lich-shell`; the AppImage never can, its squashfs mounts nosuid. Windows and macOS run with
+  `no_sandbox` and the same bar: the Windows sandbox needs `cef_sandbox` linked into the executable and the
+  macOS one a helper app initialising it, and neither is wired.
 - **The bundled window and a pinned browser share one profile directory** (`shell/src/main.rs`,
   `internal/chromium.Run`): the shell is told `cache_dir` = the `--user-data-dir` lich hands every browser,
   so CEF writes `<config>/lich/chromium-profile` as its own Chromium profile. Pin a browser with `--browser`

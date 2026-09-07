@@ -36,6 +36,15 @@ struct Launch {
     switches: Vec<(String, Option<String>)>,
 }
 
+impl Launch {
+    /// CEF re-executes the binary for its renderer, GPU and utility roles,
+    /// each with a --type of its own; the browser process has none.
+    #[cfg(target_os = "linux")]
+    fn is_subprocess(&self) -> bool {
+        self.switches.iter().any(|(name, _)| name == "type")
+    }
+}
+
 fn parse<I: IntoIterator<Item = String>>(args: I) -> Launch {
     let mut launch = Launch::default();
     for arg in args {
@@ -157,6 +166,10 @@ fn main() {
     if let Some(class) = &launch.class {
         claim_taskbar_identity(class);
     }
+    // Only the browser process decides; CEF's subprocesses carry --type and
+    // inherit the switch from it.
+    #[cfg(target_os = "linux")]
+    let unsandboxed = !launch.is_subprocess() && !sandbox_available();
     let mut app = App::url(launch.url.unwrap_or_else(|| "about:blank".into()))
         // Only reached without --user-data-dir, which lich always passes: a
         // shell launched by hand gets a profile under its own name rather than
@@ -193,6 +206,13 @@ fn main() {
     if let Some((name, value)) = display_switch(wayland.as_deref()) {
         app = app.chromium_flag_with_value(name, value);
     }
+    #[cfg(target_os = "linux")]
+    if unsandboxed {
+        eprintln!(
+            "lich-shell: this machine cannot confine Chromium's subprocesses; opening the window unsandboxed"
+        );
+        app = app.chromium_flag("no-sandbox");
+    }
     // The user's switches go through kurogane rather than staying in argv, so
     // they land after its own policy and win: --ozone-platform=x11 beats the
     // Wayland chosen above.
@@ -203,6 +223,64 @@ fn main() {
         };
     }
     app.run_or_exit();
+}
+
+/// Whether Chromium can confine its subprocesses here, decided the way
+/// Chromium decides it at its zygote (content/browser/zygote_host): never as
+/// root; otherwise a user namespace, or the setuid helper beside the executable.
+/// With neither the browser process aborts at startup, and Chromium's own
+/// advice is --no-sandbox; Ubuntu denies unprivileged user namespaces through
+/// AppArmor, and the packages do not ship the helper setuid, so that is every
+/// Ubuntu desktop. The "stability and security will suffer" bar Chrome draws
+/// over the switch is then the truth about that machine.
+#[cfg(target_os = "linux")]
+fn sandbox_available() -> bool {
+    // SAFETY: geteuid has no preconditions.
+    if unsafe { libc::geteuid() } == 0 {
+        return false;
+    }
+    if can_create_user_namespace() {
+        return true;
+    }
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.with_file_name("chrome-sandbox").metadata().ok())
+        .is_some_and(|meta| {
+            use std::os::unix::fs::MetadataExt;
+            helper_usable(meta.uid(), meta.mode())
+        })
+}
+
+/// What Chromium requires of the setuid helper: owned by root, setuid, and
+/// executable by everyone (sandbox/linux/suid/client/setuid_sandbox_host.cc).
+#[cfg(target_os = "linux")]
+fn helper_usable(uid: u32, mode: u32) -> bool {
+    uid == 0 && mode & libc::S_ISUID != 0 && mode & libc::S_IXOTH != 0
+}
+
+/// Chromium's own probe (sandbox::Credentials::CanCreateProcessInNewUserNS):
+/// a child tries to enter a new user namespace, and its exit status is the
+/// answer. Asked from a process, not read from a sysctl, because what denies
+/// the namespace on Ubuntu is an AppArmor policy on unconfined processes, which
+/// is what lich-shell is and a probe binary with a profile of its own is not.
+#[cfg(target_os = "linux")]
+fn can_create_user_namespace() -> bool {
+    // SAFETY: called before CEF starts, while this is the only thread, so the
+    // child is a clean copy; it calls nothing but unshare and _exit.
+    unsafe {
+        let pid = libc::fork();
+        if pid < 0 {
+            return false;
+        }
+        if pid == 0 {
+            let entered = libc::unshare(libc::CLONE_NEWUSER) == 0;
+            libc::_exit(if entered { 0 } else { 1 });
+        }
+        let mut status = 0;
+        libc::waitpid(pid, &mut status, 0) == pid
+            && libc::WIFEXITED(status)
+            && libc::WEXITSTATUS(status) == 0
+    }
 }
 
 /// The AppUserModelID is Windows's WM_CLASS: the taskbar groups a process's
@@ -297,6 +375,22 @@ mod tests {
         );
         assert_eq!(display_switch(Some("")), None);
         assert_eq!(display_switch(None), None);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn tells_the_browser_process_from_its_subprocesses() {
+        assert!(!parse(args(&["--app=http://h/", "--class=lich"])).is_subprocess());
+        assert!(parse(args(&["--type=zygote", "--no-zygote-sandbox"])).is_subprocess());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn requires_the_helper_root_owned_setuid_and_world_executable() {
+        assert!(helper_usable(0, 0o104755), "root, 4755");
+        assert!(!helper_usable(1000, 0o104755), "not root");
+        assert!(!helper_usable(0, 0o100755), "no setuid bit");
+        assert!(!helper_usable(0, 0o104750), "not executable by others");
     }
 
     #[test]

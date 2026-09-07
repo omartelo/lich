@@ -695,7 +695,7 @@ dependencies = [
 [[package]]
 name = "kurogane"
 version = "0.0.4"
-source = "git+https://github.com/omartelo/kurogane?rev=451bd7c90ceb66447fa222f45402b7d1d794c74f#451bd7c90ceb66447fa222f45402b7d1d794c74f"
+source = "git+https://github.com/omartelo/kurogane?rev=bb274847fc3bd517358f1bd41cc56ab69bfd7dd9#bb274847fc3bd517358f1bd41cc56ab69bfd7dd9"
 dependencies = [
  "cef",
  "ctrlc",
@@ -712,7 +712,7 @@ dependencies = [
 [[package]]
 name = "kurogane-layout"
 version = "0.0.4"
-source = "git+https://github.com/omartelo/kurogane?rev=451bd7c90ceb66447fa222f45402b7d1d794c74f#451bd7c90ceb66447fa222f45402b7d1d794c74f"
+source = "git+https://github.com/omartelo/kurogane?rev=bb274847fc3bd517358f1bd41cc56ab69bfd7dd9#bb274847fc3bd517358f1bd41cc56ab69bfd7dd9"
 dependencies = [
  "dirs",
  "serde",
@@ -758,6 +758,7 @@ version = "0.0.0"
 dependencies = [
  "cef",
  "kurogane",
+ "libc",
  "windows-sys 0.61.2",
  "winresource",
 ]

@@ -172,8 +172,9 @@ its WM_CLASS come from elsewhere on Windows: the executable carries lich's
 icon and manifest as resources (`shell/build.rs`), and the process claims the
 AppUserModelID the Start Menu shortcut declares, which is what makes the
 taskbar group the running window under the pinned icon. The sandbox stays
-off, as kurogane runs it, so the binary is a plain exe rather than CEF's
-`bootstrap.exe` loading a DLL. Built and smoke-tested on the CI runner only.
+off there, as kurogane runs it, so the binary is a plain exe rather than CEF's
+`bootstrap.exe` loading a DLL; Linux is the one platform whose window runs
+sandboxed (`docs/ceilings.md`). Built and smoke-tested on the CI runner only.
 
 macOS ships the same window inside `Lich.app`, Apple Silicon only: the
 release runner is arm64 and builds the window for itself, and the Intel

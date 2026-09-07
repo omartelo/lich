@@ -161,6 +161,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The window no longer opens with Chrome's "unsupported command-line flag"
+  bar across its top.** Every launch on Linux, Windows and macOS drew the
+  "--disable-setuid-sandbox. Stability and security will suffer" warning under
+  the title bar, because the window ran with Chromium's sandbox switched off
+  everywhere. On Linux the sandbox is now on: Chromium confines the window's
+  subprocesses in a user namespace, as it does in any Chromium you install, and
+  the bar is gone. A machine that denies user namespaces to unconfined programs
+  (Ubuntu's AppArmor policy) or a lich run as root cannot have it, and the window
+  says so in the log and opens unsandboxed with the bar, as before. Windows and
+  macOS still run unsandboxed and keep the bar for now.
+
 - **Closing the window ends lich even after a second launch.** Starting lich
   while it was already running raised its window, as it should, but the window
   had been handed a whole second browser to do it, one with no window of its
