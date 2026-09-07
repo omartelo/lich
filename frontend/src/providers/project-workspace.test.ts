@@ -18,6 +18,7 @@ const storedSession = (overrides: Partial<StoredSession> = {}): StoredSession =>
   originSessionId: "",
   originLabel: "",
   hasLastTurn: false,
+  unread: false,
   ...overrides,
 })
 

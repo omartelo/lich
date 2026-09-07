@@ -333,6 +333,9 @@ export interface StoredSession {
    * restored card, instead of withholding the switch until that session
    * next reports (internal/store.SaveTurnRecord). */
   hasLastTurn: boolean
+  /** Whether this session's last finished turn is still waiting to be read: the
+   * card's solid ring, restored from here after a reload. */
+  unread: boolean
 }
 
 /** internal/store.ClosedSession — one parked session offered for resuming. What

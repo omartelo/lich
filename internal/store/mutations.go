@@ -486,6 +486,24 @@ func (s *Service) SetSessionPinned(sessionID string, pinned bool) error {
 	return nil
 }
 
+// SetSessionUnread records whether a session's last finished turn is still
+// waiting to be read: the mark behind the card's solid ring. Two writers, one
+// edge each. The terminal service sets it on a turn's own boundaries, so a turn
+// that ends with no window attached is still news when one opens; the window
+// clears it when the card is read, which is the only side that knows what the
+// user looked at.
+//
+// A session whose row is gone matches nothing, which is not an error: a card
+// closed between a turn ending and this write has no mark left to carry.
+func (s *Service) SetSessionUnread(sessionID string, unread bool) error {
+	if _, err := s.db.Exec(
+		`UPDATE sessions SET unread = ? WHERE id = ?`, unread, sessionID,
+	); err != nil {
+		return fmt.Errorf("set session %q unread: %w", sessionID, err)
+	}
+	return nil
+}
+
 // SetSessionTitle sets a session's label from the provider's ai-title reported
 // by the Stop hook, but only while the label is still automatic: a prior
 // RenameSession clears label_auto and makes this a no-op, so a user's own name

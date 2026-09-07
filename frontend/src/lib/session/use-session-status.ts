@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react"
 import { onAppEvent } from "@/lib/app-events"
+import { Store } from "@/lib/rpc"
 import { STATUS_EVENT, type SessionStatus } from "./session-events"
 import { createSessionStatusStore, type PendingStatus } from "./session-status-store"
 import { formatAge, subscribeAge } from "./session-age"
@@ -7,7 +8,14 @@ import { useKeyedStore } from "@/lib/use-keyed-store"
 
 // Subscribed at import rather than on first use: that opens the /events socket
 // at page load, so a status reported before any card mounts still lands.
-const store = createSessionStatusStore((handler) => onAppEvent(STATUS_EVENT, handler))
+const store = createSessionStatusStore(
+  (handler) => onAppEvent(STATUS_EVENT, handler),
+  // Reading a finished turn is persisted, so the ring does not come back as news
+  // after a reload. Fire and forget: the mark is already down in the page, and a
+  // write that fails costs one stale ring on the next launch, never a card that
+  // stops answering now.
+  (id) => void Store.SetSessionUnread(id, false).catch(() => undefined),
+)
 
 // useSessionStatus reads a session's last reported Claude Code processing state
 // from the shared store (see session-status-store), which retains it across the
@@ -93,6 +101,14 @@ export function useSessionStatusAge(sessionId: string): string {
 // lets its ring fade. Called from the provider, outside React's render.
 export function markSessionSeen(sessionId: string): void {
   store.markSeen(sessionId)
+}
+
+// restoreSessionUnread seeds the sessions the workspace came back with a finished
+// turn nobody has read, from the hydration call (store.Session.Unread). Called
+// from the provider with every session it just loaded, so a ring read before the
+// reload stays down and one earned while the page was gone is there to be found.
+export function restoreSessionUnread(sessionIds: readonly string[]): void {
+  store.restoreUnread(sessionIds)
 }
 
 // useProjectStatus reduces a project's sessions to the single status its tab

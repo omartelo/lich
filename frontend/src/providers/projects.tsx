@@ -68,7 +68,7 @@ import {
 } from "@/lib/session/session-events"
 import { NotificationsOptIn } from "@/components/NotificationsOptIn"
 import { refreshGitStatus } from "@/lib/git/use-git-status"
-import { markSessionSeen } from "@/lib/session/use-session-status"
+import { markSessionSeen, restoreSessionUnread } from "@/lib/session/use-session-status"
 import { useHotkey } from "@/lib/use-hotkey"
 import { neighborProjectId } from "@/lib/project-order"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
@@ -169,6 +169,12 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const applyLoaded = useCallback((loaded: StoreProject[]) => {
     setProjects(loaded.map(toProject))
     commit(buildSessionState(loaded))
+    // The rings the workspace was left with. Seeded before the effect below
+    // runs, so the card the user lands on is marked read from there and the
+    // sessions beside it keep the turn nobody has collected.
+    restoreSessionUnread(
+      loaded.flatMap((p) => (p.sessions ?? []).filter((s) => s.unread).map((s) => s.id)),
+    )
   }, [])
 
   // Restore the workspace once on launch, and seed the always-present Home tab:

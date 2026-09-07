@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -112,14 +113,101 @@ func TestHookPublishesOnlyABlockingWait(t *testing.T) {
 	}
 }
 
-// hookStore answers the one question a status report asks of the store: every
+// The unread mark the card's ring is restored from after a page reload, written
+// at the turn's own edges: set when a turn ends, cleared when the next one
+// opens. The repeated `busy` is the point of the dedupe: a report per tool call
+// must not take the workspace database's write lock to change nothing.
+func TestHookRecordsTheUnreadMarkAtTurnEdges(t *testing.T) {
+	hub, _ := newProbeHub(t)
+	marks := &unreadStore{}
+	svc := New(marks, nil, hub)
+	if svc.wsErr != nil {
+		t.Fatalf("transport: %v", svc.wsErr)
+	}
+
+	for _, state := range []string{statusBusy, statusBusy, statusDone, statusBusy, statusDone} {
+		postHook(t, svc, "s1", state)
+	}
+
+	want := []bool{false, true, false, true}
+	if got := marks.written(); !slices.Equal(got, want) {
+		t.Fatalf("marks written = %v, want %v", got, want)
+	}
+}
+
+// The window clears the same column when the card is read, out of this process's
+// sight, so a finished turn is written every time it happens: a memo of the mark
+// would hand back a card with no ring for the turn after the one that was read.
+func TestHookWritesEveryFinishedTurn(t *testing.T) {
+	hub, _ := newProbeHub(t)
+	marks := &unreadStore{}
+	svc := New(marks, nil, hub)
+	if svc.wsErr != nil {
+		t.Fatalf("transport: %v", svc.wsErr)
+	}
+
+	for _, state := range []string{statusBusy, statusDone, statusDone} {
+		postHook(t, svc, "s1", state)
+	}
+
+	want := []bool{false, true, true}
+	if got := marks.written(); !slices.Equal(got, want) {
+		t.Fatalf("marks written = %v, want %v", got, want)
+	}
+}
+
+// A session end clears the mark, the way it clears the ring: a card with no
+// provider left in it has nothing to come back to.
+func TestHookClearsTheUnreadMarkOnSessionEnd(t *testing.T) {
+	hub, _ := newProbeHub(t)
+	marks := &unreadStore{}
+	svc := New(marks, nil, hub)
+	if svc.wsErr != nil {
+		t.Fatalf("transport: %v", svc.wsErr)
+	}
+
+	for _, state := range []string{statusBusy, statusDone, statusIdle} {
+		postHook(t, svc, "s1", state)
+	}
+
+	want := []bool{false, true, false}
+	if got := marks.written(); !slices.Equal(got, want) {
+		t.Fatalf("marks written = %v, want %v", got, want)
+	}
+}
+
+// unreadStore is hookStore that also records every unread mark written, in
+// order: the dedupe is half of what the writer promises, so the sequence is the
+// assertion and not the last value.
+type unreadStore struct {
+	hookStore
+	mu    sync.Mutex
+	marks []bool
+}
+
+func (s *unreadStore) SetSessionUnread(_ string, unread bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.marks = append(s.marks, unread)
+	return nil
+}
+
+func (s *unreadStore) written() []bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.marks)
+}
+
+// hookStore answers the two questions a status report asks of the store. Every
 // non-idle report refreshes the context readout, which looks up the session's
-// provider conversation. An empty one ends that lookup there. The rest of the
-// interface is embedded and nil, so a path that starts using it panics loudly
-// rather than being quietly stubbed out here.
+// provider conversation, and an empty one ends that lookup there; every
+// published report records whether the card is holding an unread turn. The rest
+// of the interface is embedded and nil, so a path that starts using it panics
+// loudly rather than being quietly stubbed out here.
 type hookStore struct{ Store }
 
 func (hookStore) ProviderSession(string) (string, error) { return "", nil }
+func (hookStore) SetSessionUnread(string, bool) error    { return nil }
 
 // postHook reports one state the way the companion plugin does, and fails the
 // test unless lich accepted it (docs/hooks/session-state.md).

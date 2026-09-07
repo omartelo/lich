@@ -61,6 +61,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its name, its project's name and its path, and answers with the hundred most
   recently closed matches. The branch shown on a row is still read from git
   afterwards, so it narrows the results but cannot be searched for on its own.
+- **A finished turn stays read across a reload.** The mark behind a session's
+  solid emerald ring lived in the page, so reloading the window handed back
+  every finished turn as news, including the ones read twenty minutes ago. It is
+  workspace state now, written where the turn actually ends: a turn that
+  finishes while the page is gone is waiting to be found when it comes back, and
+  one already read comes back read.
 - **Scoop installs the current release.** The manifest 0.46.0 introduced pinned
   0.45.0 with no checksums, and nothing bumped it on a tag, so `scoop install`
   and `scoop update lich` handed out the previous release. Every release now

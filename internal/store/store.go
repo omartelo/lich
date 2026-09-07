@@ -81,7 +81,15 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- is what keeps the card able to say the whole of it in a line and this
     -- feature a reminder rather than a job runner. 0 means nothing is waiting.
     scheduled_at        INTEGER NOT NULL DEFAULT 0,
-    scheduled_prompt    TEXT    NOT NULL DEFAULT ''
+    scheduled_prompt    TEXT    NOT NULL DEFAULT '',
+    -- Whether this session's last finished turn is still waiting to be read:
+    -- the mark behind the card's solid ring. It is workspace state rather than a
+    -- UI preference because the window is not always there to hold it. A turn
+    -- that ends while the page reloads, or with lich running without a window at
+    -- all, is still news when somebody comes back. Two writers own one edge each
+    -- (SetSessionUnread): the terminal service, on the turn's own boundaries,
+    -- and the window, when the card is read.
+    unread              INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
 
@@ -210,6 +218,11 @@ type Session struct {
 	// without it the panel would have to wait for the session to report before
 	// it could offer a record it is already holding.
 	HasLastTurn bool `json:"hasLastTurn"`
+	// Unread is whether this session's last finished turn is still waiting to be
+	// read. It rides the hydration call because the mark has to survive a page
+	// reload: the window holds it while it is up, and this row is what it comes
+	// back to (see SetSessionUnread).
+	Unread bool `json:"unread"`
 }
 
 // Project is a persisted project together with its restorable session state.
@@ -281,6 +294,7 @@ func open(path string) (*Service, error) {
 		`ALTER TABLE sessions ADD COLUMN closed_at INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE sessions ADD COLUMN scheduled_at INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE sessions ADD COLUMN scheduled_prompt TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE sessions ADD COLUMN unread INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE projects ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE projects ADD COLUMN closed_seq INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE session_costs ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0`,
@@ -575,7 +589,7 @@ func (s *Service) ProjectAt(path string) (string, string) {
 func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	rows, err := s.db.Query(
 		`SELECT id, label, kind, path, provider_session_id, entrypoint, sandbox, pinned,
-		        origin_session_id, origin_label, scheduled_at, scheduled_prompt,
+		        origin_session_id, origin_label, scheduled_at, scheduled_prompt, unread,
 		        EXISTS (SELECT 1 FROM session_last_turn WHERE session_id = sessions.id)
 		   FROM sessions WHERE project_id = ? AND is_open = 1 ORDER BY position, rowid`,
 		projectID,
@@ -591,7 +605,7 @@ func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 		if err := rows.Scan(
 			&sess.ID, &sess.Label, &sess.Kind, &sess.Path, &sess.ProviderSessionID,
 			&sess.Entrypoint, &sess.Sandbox, &sess.Pinned, &sess.OriginSessionID, &sess.OriginLabel,
-			&sess.ScheduledAt, &sess.ScheduledPrompt, &sess.HasLastTurn,
+			&sess.ScheduledAt, &sess.ScheduledPrompt, &sess.Unread, &sess.HasLastTurn,
 		); err != nil {
 			return nil, fmt.Errorf("scan session: %w", err)
 		}

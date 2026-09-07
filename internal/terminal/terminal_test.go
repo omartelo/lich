@@ -128,6 +128,7 @@ func (s stubBins) ProviderSession(_ string) (string, error) {
 	return s.providerSession, s.providerErr
 }
 func (s stubBins) SetSessionTitle(_, _ string) (bool, error) { return false, nil }
+func (s stubBins) SetSessionUnread(_ string, _ bool) error   { return nil }
 
 func (s stubBins) CostReadout() bool { return s.costOn }
 

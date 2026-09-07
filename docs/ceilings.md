@@ -235,11 +235,9 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   blobs ordered by a protobuf index, with a `blobEncryptionKey` sitting in its own metadata.
 - **A finished turn is unread until its own card is watched** (`frontend/src/lib/session/session-status-store.ts`,
   `frontend/src/providers/projects.tsx`): the solid emerald ring means "back from the agent, not read yet", and it
-  fades only for the session whose terminal is on screen **while the window has focus**. Two things follow. A card
-  left focused in a background window keeps its ring solid until the window is touched again, which is the point
-  — but it also means a browser that reports focus oddly never fades one. And the mark lives in the page like the
-  rest of the session state, so a reload starts every session unread again: a turn read twenty minutes ago comes
-  back looking like news, and nothing on screen says the page forgot.
+  fades only for the session whose terminal is on screen **while the window has focus**. A card left focused in a
+  background window keeps its ring solid until the window is touched again, which is the point, but it also means
+  a browser that reports focus oddly never fades one.
 - **A session close is a hang-up on Unix and a kill on Windows** (`internal/terminal/pty_unix.go`,
   `pty_windows.go`): closing a card signals the agent and gives it `closeGrace` to leave, so its exit path runs —
   hooks, transcripts, whatever it writes on the way out. A ConPTY has no signal to deliver, so the same close on

@@ -437,6 +437,11 @@ export const Store = {
   /** Re-attach a provider conversation id to a session row. */
   SetProviderSession: (sessionID: string, providerSessionID: string) =>
     call<null>("store.SetProviderSession", [sessionID, providerSessionID]),
+  /** Record whether a session's last finished turn is still waiting to be read.
+   * The window only ever clears it: the backend sets it at the turn's own end,
+   * where a session with no window attached can still earn one. */
+  SetSessionUnread: (sessionID: string, unread: boolean) =>
+    call<null>("store.SetSessionUnread", [sessionID, unread]),
   /** Pin (or unpin) a session: it sorts to the head of its project's list and
    * refuses to close until unpinned. */
   SetSessionPinned: (sessionID: string, pinned: boolean) =>

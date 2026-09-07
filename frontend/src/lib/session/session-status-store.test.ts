@@ -243,6 +243,115 @@ describe("unread", () => {
   })
 })
 
+// The ring outlives the page it was drawn in: what is on disk is the read mark,
+// and hydration is the only thing that puts a status back into an empty store.
+describe("restoreUnread", () => {
+  it("brings back a turn that finished while the page was away", () => {
+    const { source } = fakeSource()
+    const store = createSessionStatusStore(source)
+    store.restoreUnread(["s1"])
+    expect(store.get("s1")).toBe("done")
+    expect(store.unread("s1")).toBe(true)
+    expect(store.reported("s1")).toBe(true)
+    expect(store.pendingOf(["s1"])).toBe("done")
+  })
+
+  it("leaves a session it was not given alone", () => {
+    const { source } = fakeSource()
+    const store = createSessionStatusStore(source)
+    store.restoreUnread(["s1"])
+    expect(store.get("s2")).toBeNull()
+    expect(store.unread("s2")).toBe(false)
+  })
+
+  // A card focused before hydration landed is marked seen with nothing reported
+  // for it yet. The row says the turn was never read, and it outranks a mark
+  // taken against no status at all.
+  it("outranks a seen mark taken before anything was reported", () => {
+    const { source } = fakeSource()
+    const store = createSessionStatusStore(source)
+    store.subscribe("s1", () => {})
+    store.markSeen("s1")
+    store.restoreUnread(["s1"])
+    expect(store.unread("s1")).toBe(true)
+  })
+
+  // Hydration resolves after the events socket is open, so a report that landed
+  // in between is newer than the row it would overwrite.
+  it("never overwrites a status a report already gave", () => {
+    const { source, emit } = fakeSource()
+    const store = createSessionStatusStore(source)
+    emit(report("s1", "busy"))
+    store.restoreUnread(["s1"])
+    expect(store.get("s1")).toBe("busy")
+    expect(store.unread("s1")).toBe(false)
+  })
+
+  it("notifies the subscribers of the sessions it restored", () => {
+    const { source } = fakeSource()
+    const store = createSessionStatusStore(source)
+    const notify = vi.fn()
+    store.subscribe("s1", notify)
+    const other = vi.fn()
+    store.subscribe("s2", other)
+    store.restoreUnread(["s1"])
+    expect(notify).toHaveBeenCalledTimes(1)
+    expect(other).not.toHaveBeenCalled()
+  })
+
+  // The queue the bell reads is recomputed once for the whole batch, and a
+  // restored turn belongs in it: nobody has collected that result either.
+  it("puts what it restored in the notification queue", () => {
+    const { source } = fakeSource()
+    const store = createSessionStatusStore(source)
+    const notify = vi.fn()
+    store.subscribeAll(notify)
+    store.restoreUnread(["s1", "s2"])
+    expect(store.pendingAll()).toEqual([
+      { id: "s1", status: "done" },
+      { id: "s2", status: "done" },
+    ])
+    expect(notify).toHaveBeenCalledTimes(1)
+  })
+
+  // Reading a restored turn is what takes the mark off disk: without the write
+  // the next reload hands the same ring back as news.
+  it("persists the read of a turn it restored", () => {
+    const { source } = fakeSource()
+    const markRead = vi.fn()
+    const store = createSessionStatusStore(source, markRead)
+    store.restoreUnread(["s1"])
+    store.markSeen("s1")
+    expect(markRead).toHaveBeenCalledWith("s1")
+  })
+})
+
+// Persisting the read is the half of the mark only the window can see: the
+// backend writes the turn's own edges.
+describe("markRead", () => {
+  it("is called once for a finished turn that was read", () => {
+    const { source, emit } = fakeSource()
+    const markRead = vi.fn()
+    const store = createSessionStatusStore(source, markRead)
+    emit(report("s1", "done"))
+    store.markSeen("s1")
+    store.markSeen("s1")
+    expect(markRead).toHaveBeenCalledTimes(1)
+    expect(markRead).toHaveBeenCalledWith("s1")
+  })
+
+  it("is not called for a live state, which has no mark on disk", () => {
+    const { source, emit } = fakeSource()
+    const markRead = vi.fn()
+    const store = createSessionStatusStore(source, markRead)
+    emit(report("s1", "busy"))
+    store.markSeen("s1")
+    emit(report("s2", "waiting"))
+    store.markSeen("s2")
+    expect(markRead).not.toHaveBeenCalled()
+  })
+})
+
 describe("runningOf", () => {
   it("returns nothing when no session of the project is mid-turn", () => {
     const { source, emit } = fakeSource()

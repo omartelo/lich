@@ -180,9 +180,9 @@ type session struct {
 // whether that spawn drops the provider's permission prompts and whether it runs
 // confined, that project's own directory, the dev-server port reserved for each
 // checkout, where to record the provider session id a PTY reports through its
-// session-start hook, and the running cost accounting behind the footer readout
-// (CostReadout gates it — off, none of the rest is called). The store implements
-// them all.
+// session-start hook, where to record a finished turn nobody has read yet, and
+// the running cost accounting behind the footer readout (CostReadout gates it —
+// off, none of the rest is called). The store implements them all.
 type Store interface {
 	ProviderBin(providerID, projectID string) string
 	SessionCustomBin(sessionID string) bool
@@ -201,6 +201,7 @@ type Store interface {
 	SandboxGHToken(projectID string) bool
 	GHAccountForPath(path string) string
 	SetSessionTitle(sessionID, title string) (bool, error)
+	SetSessionUnread(sessionID string, unread bool) error
 	CostReadout() bool
 	CostLedger(sessionID, transcriptID string) (int64, string, float64, error)
 	SaveCostLedger(sessionID, transcriptID string, offset int64, lastMessage string, cost float64) error
@@ -257,6 +258,11 @@ type Service struct {
 	// nothing else about a report needs mu, and a hook must never queue behind a
 	// PTY spawn.
 	turns turnLog
+	// unread is the last unread mark written for each session, so the `busy`
+	// reported per tool call never reaches the database (see noteUnread). Not
+	// under mu for the reason spawns is not: it is read on every hook report,
+	// which must never queue behind a PTY spawn.
+	unread sync.Map
 	// hands is how long each session has been worked on, measured off the same
 	// three signals the card is already drawing — a state report, a keystroke,
 	// output while the agent is busy (see handsOn). It carries its own lock for
@@ -404,6 +410,7 @@ func (s *Service) onHookState(req hookRequest) {
 	// `waiting` outside a turn is a session idle at its prompt, and the
 	// card would draw it as a human being blocked (see turnLog).
 	if s.turns.report(req.SessionID, req.State) {
+		s.noteUnread(req.SessionID, req.State == statusDone)
 		s.hub.Emit(statusEventName, statusEvent{
 			ID:     req.SessionID,
 			State:  req.State,
@@ -429,6 +436,28 @@ func (s *Service) onHookState(req hookRequest) {
 	// idle (SessionEnd): the session is ending, nothing new to read.
 	if req.State != statusIdle {
 		go s.emitUsage(req.SessionID)
+	}
+}
+
+// noteUnread persists whether this session's card is holding a finished turn
+// nobody has read, so the mark survives a page reload (docs/ceilings.md). It is
+// written from here rather than from the window because a turn can end with no
+// window attached at all: during a reload, or under --no-window.
+//
+// Only the clear is deduped, and it is the whole hot path: `busy` is reported
+// once per tool call, and without this every one of them would take the
+// workspace database's write lock to change nothing. The mark itself is written
+// on every finished turn, because the window clears that same column when the
+// card is read and this process never sees it: a memo of the mark would swallow
+// the next turn to end.
+func (s *Service) noteUnread(id string, unread bool) {
+	last, written := s.unread.Load(id)
+	if !unread && written && last == unread {
+		return
+	}
+	s.unread.Store(id, unread)
+	if err := s.store.SetSessionUnread(id, unread); err != nil {
+		slog.Warn("terminal: record unread", "session", id, "err", err)
 	}
 }
 

@@ -71,7 +71,10 @@ const BADGE_PRIORITY = ["waiting", "busy", "done"] as const
 // back to the project showed no spinner for a session Claude was still working
 // on. Entries therefore outlive their listeners: unsubscribing on unmount drops
 // the listener, never the status.
-export function createSessionStatusStore(source: SessionEventSource) {
+export function createSessionStatusStore(
+  source: SessionEventSource,
+  markRead: (id: string) => void = () => {},
+) {
   const entries = new Map<string, Entry>()
 
   const entryOf = (id: string): Entry => {
@@ -177,6 +180,35 @@ export function createSessionStatusStore(source: SessionEventSource) {
     entry.seen = true
     if (entry.status === "done") {
       notify(entry)
+      // Only a finished turn has a mark on disk to take down: the backend writes
+      // one when a turn ends and clears it when the next one opens, and reading
+      // it is the one edge only the window can see (see restoreUnread).
+      markRead(id)
+    }
+    refreshPending()
+  }
+
+  // restoreUnread seeds the sessions the workspace database says came back
+  // holding a finished turn nobody has read (store.Session.Unread), which is how
+  // the ring outlives the page it was drawn in. The mark is enough to restore
+  // the status with it: what is unread is a turn that ended, and no other state
+  // is ever kept on disk.
+  //
+  // A session a report has already spoken for is left alone. Hydration lands
+  // after the events socket is open, so a turn that ended in between has already
+  // said something newer than the row.
+  const restoreUnread = (ids: readonly string[]): void => {
+    for (const id of ids) {
+      const entry = entryOf(id)
+      if (entry.status !== null) {
+        continue
+      }
+      entry.status = "done"
+      // A restored turn is proof the provider reports at all, which is what a
+      // turn-shaped control asks before drawing itself (see Entry.reported).
+      entry.reported = true
+      entry.seen = false
+      notify(entry)
     }
     refreshPending()
   }
@@ -266,6 +298,7 @@ export function createSessionStatusStore(source: SessionEventSource) {
     reason,
     since,
     markSeen,
+    restoreUnread,
     pendingOf,
     runningOf,
     subscribeAll,

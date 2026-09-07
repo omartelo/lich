@@ -1366,3 +1366,53 @@ func TestSessionGoneReportsEveryRowOfARemovedWorktree(t *testing.T) {
 		t.Fatalf("reported %v, want %v", gone, want)
 	}
 }
+
+// The mark behind a card's solid ring is workspace state: a finished turn
+// nobody has read has to come back unread after a page reload, and a turn the
+// user already read has to come back read.
+func TestSessionUnreadSurvivesHydration(t *testing.T) {
+	svc := newTestStore(t)
+	if err := svc.AddProject("p1", "alpha", "/tmp/alpha"); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if err := svc.AddSession("p1", "s1", "Session 1", "", "", 2, ""); err != nil {
+		t.Fatalf("AddSession: %v", err)
+	}
+
+	unreadOf := func(t *testing.T) bool {
+		t.Helper()
+		projects, err := svc.LoadState()
+		if err != nil {
+			t.Fatalf("LoadState: %v", err)
+		}
+		if len(projects) != 1 || len(projects[0].Sessions) != 1 {
+			t.Fatalf("LoadState = %+v, want one project with one session", projects)
+		}
+		return projects[0].Sessions[0].Unread
+	}
+
+	if unreadOf(t) {
+		t.Error("a session that has never finished a turn hydrated unread")
+	}
+	if err := svc.SetSessionUnread("s1", true); err != nil {
+		t.Fatalf("SetSessionUnread(true): %v", err)
+	}
+	if !unreadOf(t) {
+		t.Error("a finished turn nobody read hydrated read")
+	}
+	if err := svc.SetSessionUnread("s1", false); err != nil {
+		t.Fatalf("SetSessionUnread(false): %v", err)
+	}
+	if unreadOf(t) {
+		t.Error("a turn the user read hydrated unread")
+	}
+}
+
+// A card closed between its turn ending and the write has no mark left to
+// carry, and the writer must not turn that into an error the caller logs.
+func TestSetSessionUnreadIgnoresAMissingSession(t *testing.T) {
+	svc := newTestStore(t)
+	if err := svc.SetSessionUnread("ghost", true); err != nil {
+		t.Fatalf("SetSessionUnread on a missing session: %v", err)
+	}
+}
