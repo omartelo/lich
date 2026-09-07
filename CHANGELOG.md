@@ -39,9 +39,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bracketing a session's last finished turn lived in memory alone, so relaunching
   lich emptied it and every restored session read "No last turn recorded" until
   its next turn ended. The record now rides the workspace database, keyed to the
-  session, and is read back when the card is restored. A turn still running is
-  never written, and a turn that loses a snapshot clears what was there instead
-  of leaving the turn before it standing.
+  session, and is read back when the card is restored. The card says so on its
+  hydration too, so the panel offers the "Last turn" switch to a session that has
+  been quiet since the launch instead of withholding it until that session next
+  reports. A turn still running is never written, and a turn that loses a
+  snapshot clears what was there instead of leaving the turn before it standing.
 - **Scoop installs the current release.** The manifest 0.46.0 introduced pinned
   0.45.0 with no checksums, and nothing bumped it on a tag, so `scoop install`
   and `scoop update lich` handed out the previous release. Every release now

@@ -23,6 +23,7 @@ export function buildSessionState(loaded: StoredProject[]): SessionState {
       ...(session.scheduledAt
         ? { scheduledAt: session.scheduledAt, scheduledPrompt: session.scheduledPrompt }
         : {}),
+      ...(session.hasLastTurn ? { hasLastTurn: true } : {}),
     }))
     state[project.id] = {
       sessions,

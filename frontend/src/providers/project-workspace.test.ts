@@ -17,6 +17,7 @@ const storedSession = (overrides: Partial<StoredSession> = {}): StoredSession =>
   pinned: false,
   originSessionId: "",
   originLabel: "",
+  hasLastTurn: false,
   ...overrides,
 })
 
@@ -49,6 +50,22 @@ describe("buildSessionState", () => {
   it("reads a null session list as a project with no sessions", () => {
     const state = buildSessionState([storedProject({ sessions: null })])
     expect(state.p1).toEqual({ sessions: [], activeId: "", nextSeq: 2 })
+  })
+
+  // The seed the Review panel's source switch is drawn from: without it a card
+  // restored quiet is offered the working tree alone, and the turn the backend
+  // read back has no control to reach it by.
+  it("carries which sessions hold a last turn, and leaves the field off the rest", () => {
+    const state = buildSessionState([
+      storedProject({
+        sessions: [
+          storedSession({ id: "s1", hasLastTurn: true }),
+          storedSession({ id: "s2", hasLastTurn: false }),
+        ],
+      }),
+    ])
+    expect(state.p1.sessions[0].hasLastTurn).toBe(true)
+    expect(state.p1.sessions[1]).not.toHaveProperty("hasLastTurn")
   })
 
   it("restores a terminal's entrypoint, and leaves the field off a plain shell", () => {

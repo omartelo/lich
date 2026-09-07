@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { lastTurnNotice } from "./last-turn"
+import { lastTurnNotice, turnSwitchable } from "./last-turn"
 
 describe("lastTurnNotice", () => {
   it("draws the diff only when there is one to draw", () => {
@@ -24,5 +24,26 @@ describe("lastTurnNotice", () => {
   // the backend never made.
   it("does not promote an unrenderable diff to an empty turn", () => {
     expect(lastTurnNotice("ok", 0)).toBe("unrecorded")
+  })
+})
+
+describe("turnSwitchable", () => {
+  // The state a card is restored in: quiet since the launch, with a turn the
+  // backend read back off the workspace database. Withholding the switch here
+  // is what used to hide it.
+  it("offers the switch to a restored session that has not reported yet", () => {
+    expect(turnSwitchable(false, true)).toBe(true)
+  })
+
+  // The other half, unchanged: a session that has reported has a turn boundary,
+  // so the switch is earned before its first turn has finished.
+  it("offers the switch to a session that has reported", () => {
+    expect(turnSwitchable(true, false)).toBe(true)
+  })
+
+  // A provider that reports no state has no turn to bracket, and with nothing
+  // on record there is none to show: the working tree alone.
+  it("withholds the switch from a session with neither", () => {
+    expect(turnSwitchable(false, false)).toBe(false)
   })
 })

@@ -204,6 +204,12 @@ type Session struct {
 	// call, and neither needs a channel of its own.
 	ScheduledAt     int64  `json:"scheduledAt"`
 	ScheduledPrompt string `json:"scheduledPrompt"`
+	// HasLastTurn is whether a last-turn record survives for this session
+	// (SaveTurnRecord). It rides the hydration because the Review panel's
+	// source switch is drawn before anything has asked what the turn changed:
+	// without it the panel would have to wait for the session to report before
+	// it could offer a record it is already holding.
+	HasLastTurn bool `json:"hasLastTurn"`
 }
 
 // Project is a persisted project together with its restorable session state.
@@ -541,7 +547,8 @@ func (s *Service) ProjectAt(path string) (string, string) {
 func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	rows, err := s.db.Query(
 		`SELECT id, label, kind, path, provider_session_id, entrypoint, sandbox, pinned,
-		        origin_session_id, origin_label, scheduled_at, scheduled_prompt
+		        origin_session_id, origin_label, scheduled_at, scheduled_prompt,
+		        EXISTS (SELECT 1 FROM session_last_turn WHERE session_id = sessions.id)
 		   FROM sessions WHERE project_id = ? AND is_open = 1 ORDER BY position, rowid`,
 		projectID,
 	)
@@ -556,7 +563,7 @@ func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 		if err := rows.Scan(
 			&sess.ID, &sess.Label, &sess.Kind, &sess.Path, &sess.ProviderSessionID,
 			&sess.Entrypoint, &sess.Sandbox, &sess.Pinned, &sess.OriginSessionID, &sess.OriginLabel,
-			&sess.ScheduledAt, &sess.ScheduledPrompt,
+			&sess.ScheduledAt, &sess.ScheduledPrompt, &sess.HasLastTurn,
 		); err != nil {
 			return nil, fmt.Errorf("scan session: %w", err)
 		}

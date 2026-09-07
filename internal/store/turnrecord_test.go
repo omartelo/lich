@@ -115,3 +115,32 @@ func TestDeletingTheSessionDropsItsTurn(t *testing.T) {
 		t.Errorf("the turn outlived its session (ok=%v, err=%v)", ok, err)
 	}
 }
+
+// The Review panel draws its source switch off the hydration, long before
+// anything asks what the turn changed: a restored session has to say it holds a
+// record, or the switch that reaches it is withheld until it next reports.
+func TestHydrationSaysWhichSessionsHoldATurn(t *testing.T) {
+	svc := newCostSession(t)
+	if err := svc.AddSession("p1", "s2", "Session 2", "", "", 2, ""); err != nil {
+		t.Fatalf("AddSession: %v", err)
+	}
+	if err := svc.SaveTurnRecord("s1", TurnRecord{Before: "aaa", After: "bbb", EndedAt: 1}); err != nil {
+		t.Fatalf("SaveTurnRecord: %v", err)
+	}
+
+	sessions, err := svc.sessionsOf("p1")
+	if err != nil {
+		t.Fatalf("sessionsOf: %v", err)
+	}
+
+	held := map[string]bool{}
+	for _, sess := range sessions {
+		held[sess.ID] = sess.HasLastTurn
+	}
+	if !held["s1"] {
+		t.Error("the session holding a turn hydrated without it")
+	}
+	if held["s2"] {
+		t.Error("a session with no turn on record claimed one")
+	}
+}

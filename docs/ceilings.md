@@ -826,13 +826,14 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   back to them.
 - **The Review tab's remembered source is a wish, not what is on screen** (`ReviewPanel`,
   `frontend/src/lib/dock-prefs.ts`): the pref is global and holds what the user picked, while what the
-  panel shows is that choice put through `useSessionEverReported` — a session whose provider never
-  reports has no turn to bracket, so it is shown the working tree and offered no switch. Nothing writes
-  the guard's answer back, and that is the whole design: `switchable` is false after every reload until
-  the session next reports, so a panel that reset the pref instead of overriding it would erase the
-  choice before the switch had a chance to appear. The visible cost is that "Last turn" cannot be
-  restored on a session that has been quiet since the reload — it comes back the moment that session
-  reports again.
+  panel shows is that choice put through `turnSwitchable` — a session whose provider never reports and
+  holds no last-turn record has no turn to bracket, so it is shown the working tree and offered no
+  switch. Nothing writes the guard's answer back, and that is the whole design: a session with neither is
+  unswitchable after a reload until it next reports, so a panel that reset the pref instead of overriding
+  it would erase the choice before the switch had a chance to appear. The two halves of that guard read
+  different sources — the record rides the session's hydration, the diff behind it is seeded when the
+  PTY is spawned — so a panel that reaches a restored card before its spawn has been tracked is offered
+  the switch and told nothing is recorded, until the next read.
 - **The pull request screen's remembered state is read once, at mount** (`frontend/src/lib/pulls/pulls-prefs.ts`):
   the filter box, the quick filter and the selected pull request are keyed per project but seeded from
   `useState`, which holds because every route into the screen carries its own project and leaving one unmounts

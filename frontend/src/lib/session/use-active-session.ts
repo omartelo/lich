@@ -30,6 +30,9 @@ export function useActiveSession(): {
   kind: SessionKind | ""
   /** Whether the active session's PTY runs confined (internal/sandbox). */
   sandboxed: boolean
+  /** Whether the backend holds a record of this session's last finished turn,
+   * read off the hydration so a restored card can be offered it. */
+  hasLastTurn: boolean
 } {
   const { projects, sessions } = useProjects()
   const match = useMatch({ path: "/projects/:projectId", end: false })
@@ -44,5 +47,6 @@ export function useActiveSession(): {
     checkout: target.path,
     kind: target.kind,
     sandboxed: target.sandboxed,
+    hasLastTurn: target.hasLastTurn,
   }
 }

@@ -70,6 +70,12 @@ export interface Session {
   // card as SCHEDULE_EVENT.
   scheduledAt?: number
   scheduledPrompt?: string
+  // Whether the backend holds a record of this session's last finished turn.
+  // Absent means none — a session that has never finished a turn, or one whose
+  // record was retracted. Only ever set on hydration: a turn closing in this
+  // run reaches the panel through the session's own state reports, which is the
+  // other half of what draws the switch (ReviewPanel).
+  hasLastTurn?: boolean
 }
 
 export interface ProjectSessions {
@@ -638,9 +644,15 @@ export function activeTarget(
   state: SessionState,
   projectId: string | null,
   projectPath: string,
-): { sessionId: string; path: string; kind: SessionKind | ""; sandboxed: boolean } {
+): {
+  sessionId: string
+  path: string
+  kind: SessionKind | ""
+  sandboxed: boolean
+  hasLastTurn: boolean
+} {
   if (!projectId) {
-    return { sessionId: "", path: projectPath, kind: "", sandboxed: false }
+    return { sessionId: "", path: projectPath, kind: "", sandboxed: false, hasLastTurn: false }
   }
   const sessionId = activeSessionId(state, projectId)
   const session = sessionsOf(state, projectId).find((s) => s.id === sessionId)
@@ -649,6 +661,7 @@ export function activeTarget(
     path: session?.path || projectPath,
     kind: session?.kind ?? "",
     sandboxed: session?.sandboxed ?? false,
+    hasLastTurn: session?.hasLastTurn ?? false,
   }
 }
 
