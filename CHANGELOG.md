@@ -108,6 +108,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Ctrl+Shift+T starts a session again in lich's own window.** Chromium runs
+  its tab accelerators before the page is given the key, so in the bundled
+  window the chord reopened a closed tab instead of opening a session, and
+  Ctrl+T at a prompt opened a browser tab rather than reaching the shell. The
+  window now offers every Ctrl chord (Cmd on macOS) to the page first: a chord
+  lich binds runs its own action, and one it does not still falls through to
+  Chromium. Opened in a system browser (`--no-window`), the browser keeps its
+  own shortcuts as before.
+
 - **Dropping a file on a session works again under Wayland.** The 0.45.0
   window opened on XWayland when the GPU is NVIDIA, and a file dragged from a
   Wayland file manager onto an XWayland window never arrives on Hyprland: the
