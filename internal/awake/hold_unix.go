@@ -4,6 +4,7 @@ package awake
 
 import (
 	"fmt"
+	"log/slog"
 	"os/exec"
 )
 
@@ -25,6 +26,11 @@ func hold() (func(), error) {
 	}
 	return func() {
 		_ = stdin.Close()
-		_ = cmd.Wait()
+		// The one place an inhibitor that never took its lock shows: it exits
+		// non-zero at once without running cat (systemd-inhibit with no logind
+		// does), Start still succeeds, and only Wait carries the verdict.
+		if err := cmd.Wait(); err != nil {
+			slog.Warn("keep awake ended", "cmd", argv[0], "err", err)
+		}
 	}, nil
 }

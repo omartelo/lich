@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -184,4 +185,28 @@ func replayOf(t *testing.T, svc *Service, id string) string {
 		t.Fatalf("decode replay: %v", err)
 	}
 	return string(raw)
+}
+
+// A PTY that dies with its turn open, the agent crashing or the shell exiting
+// under it, takes the turn with it: the count that keeps the machine awake
+// must fall on the reap, not wait for someone to close the card.
+func TestReapForgetsOpenTurn(t *testing.T) {
+	svc := New(stubBins{bin: echoBin(t)}, nil, events.New())
+	var open atomic.Int64
+	svc.turns.onOpen = func(n int) { open.Store(int64(n)) }
+	id := "reaped"
+	if err := svc.Start(id, "p1", t.TempDir(), "claude", "", "", false, false, 80, 24); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	svc.turns.report(id, statusBusy)
+	if open.Load() != 1 {
+		t.Fatalf("open=%d with a turn reported, want 1", open.Load())
+	}
+	svc.mu.Lock()
+	sess := svc.sessions[id]
+	svc.mu.Unlock()
+	if err := sess.pty.Close(); err != nil {
+		t.Fatalf("kill pty: %v", err)
+	}
+	waitFor(t, func() bool { return open.Load() == 0 }, "the reap to close the turn")
 }

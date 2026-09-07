@@ -30,6 +30,9 @@ type reasonContext struct {
 	reason  *uint16
 }
 
+// powerRequestKinds is every request type set on the handle, and cleared from it.
+var powerRequestKinds = []uintptr{powerRequestSystemRequired, powerRequestExecutionRequired}
+
 var (
 	kernel32          = windows.NewLazySystemDLL("kernel32.dll")
 	powerCreateReq    = kernel32.NewProc("PowerCreateRequest")
@@ -48,14 +51,14 @@ func hold() (func(), error) {
 		return nil, fmt.Errorf("PowerCreateRequest: %w", callErr)
 	}
 	handle := windows.Handle(h)
-	for _, kind := range []uintptr{powerRequestSystemRequired, powerRequestExecutionRequired} {
+	for _, kind := range powerRequestKinds {
 		if ok, _, callErr := powerSetRequest.Call(uintptr(handle), kind); ok == 0 {
 			_ = windows.CloseHandle(handle)
 			return nil, fmt.Errorf("PowerSetRequest(%d): %w", kind, callErr)
 		}
 	}
 	return func() {
-		for _, kind := range []uintptr{powerRequestSystemRequired, powerRequestExecutionRequired} {
+		for _, kind := range powerRequestKinds {
 			_, _, _ = powerClearRequest.Call(uintptr(handle), kind)
 		}
 		_ = windows.CloseHandle(handle)
