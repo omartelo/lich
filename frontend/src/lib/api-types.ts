@@ -522,6 +522,9 @@ export interface DetectedProvider {
   binary: string
   installed: boolean
   path: string
+  /** Which layer `path` came from: `"path"` for a $PATH hit, `"setting"` for the
+   * binary configured in Settings › Providers. Empty when nothing was found. */
+  source: "path" | "setting" | ""
   /** The page documenting how to install this CLI. Carried on every entry: the
    * row with somewhere to send the user is the one that found nothing. */
   docs: string

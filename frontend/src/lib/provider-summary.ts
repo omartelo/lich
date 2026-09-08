@@ -6,6 +6,14 @@ import type { QuotaPlan } from "@/lib/api-types"
 import { hottestWindow, formatWindow } from "@/lib/quota/quota-format"
 import type { SessionState } from "@/lib/session/sessions"
 
+/** What an installed provider's row says about where its binary came from. A
+ * configured path is worth naming: it is the one that answers when `which` does
+ * not, so a row reading a plain "Installed" on a machine with nothing on PATH
+ * would look like a detection lich cannot explain. */
+export function installSummary(provider: { source: string }): string {
+  return provider.source === "setting" ? "Installed · custom path" : "Installed"
+}
+
 /** How many open sessions across every project this provider is running. The
  * answer to "can I turn this off?", which is the question the switch beside it
  * raises. Counts the sessions on screen; a parked row is not one. */

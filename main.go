@@ -191,6 +191,11 @@ func main() {
 		sys.SetEnv(next)
 		return nil
 	})
+	// Detection resolves a provider the way the spawn does, so an agent reached
+	// only through the binary setting counts as installed — otherwise a machine
+	// with one configured agent and nothing on PATH reads as bare, and every
+	// implicit new session opens a terminal instead.
+	providerSvc.SetConfiguredBin(func(id string) string { return db.ProviderBin(id, "") })
 	dispatcher.Register("providers", providerSvc)
 	// The quota reading is per session, not per machine: a session spawned from
 	// a binary the user configured can spend another account entirely, and the

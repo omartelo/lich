@@ -203,6 +203,9 @@ export interface ProviderState {
   /** The executable a session spawns — a provider id is not its command. */
   binary: string
   installed: boolean
+  /** Which layer the binary was found at: "path" or "setting" (the binary
+   * configured in Settings › Providers). Empty when nothing was found. */
+  source: DetectedProvider["source"]
   enabled: boolean
   /** The page documenting how to install this CLI — offered on the rows that
    * found nothing, which are the only rows that need it. */
@@ -210,8 +213,9 @@ export interface ProviderState {
 }
 
 // enabledProviders are the ones offered in New Session. Not filtered by install
-// state on purpose: a Claude with a custom bin path (so "claude" is not on PATH)
-// must still appear — a genuinely missing binary surfaces as a PTY error.
+// state on purpose: a provider whose binary is configured in a single project's
+// scope is not one detection can see, and a genuinely missing binary surfaces as
+// a PTY error.
 export function enabledProviders(list: ProviderState[]): ProviderState[] {
   return list.filter((p) => p.enabled)
 }
@@ -242,11 +246,18 @@ export function resolveProjectDefaultProvider(
 
 // noProviderInstalled reports the one machine state in which spawning the
 // resolved default is guaranteed to fail: detection has answered and found no
-// binary at all. An empty list is detection not having answered yet — never
-// this, exactly as in decideProviderSetup.
+// binary at all, at any layer. An empty list is detection not having answered
+// yet — never this, exactly as in decideProviderSetup.
 export function noProviderInstalled(list: ProviderState[]): boolean {
   return list.length > 0 && !list.some((provider) => provider.installed)
 }
+
+// NO_AGENT_REASON is what the empty screen says when its own button will open a
+// terminal rather than an agent. A shell nobody asked for is the surprise this
+// sentence exists to remove, so it names both the reason and where the machine
+// is told about an agent lich could not find on its own.
+export const NO_AGENT_REASON =
+  "No agent found on PATH, so this opens a terminal — set one in Settings › Providers."
 
 // resolveImplicitSessionKind is what a session nobody picked a kind for spawns:
 // the empty screen's button, the new-session hotkey, a new worktree. It is
@@ -254,7 +265,9 @@ export function noProviderInstalled(list: ProviderState[]): boolean {
 // with no agent installed every fallback below still lands on Claude — readEnabled
 // leaves Claude enabled by default, so the card opens on `claude: command not
 // found`. A shell spawns with zero providers, and it is where the install command
-// from the provider's docs link gets pasted.
+// from the provider's docs link gets pasted. Detection resolves the binary
+// setting too (providers.Detect), so an agent lich only knows about because the
+// user typed its path is an agent this gate lets through.
 export function resolveImplicitSessionKind(
   list: ProviderState[],
   globalDefaultId: string,
@@ -353,6 +366,7 @@ class ProviderStoreImpl implements ProvidersStore {
       name: provider.name,
       binary: provider.binary,
       installed: provider.installed,
+      source: provider.source,
       docs: provider.docs,
       enabled: enabled.get(provider.id as ProviderKind) ?? readEnabled(provider.id, ""),
     }))
@@ -419,6 +433,7 @@ class ProviderStoreImpl implements ProvidersStore {
         name: provider.name,
         binary: provider.binary,
         installed: provider.installed,
+        source: provider.source,
         docs: provider.docs,
         enabled: readEnabled(provider.id, await this.deps.getEnabled(provider.id)),
       })),

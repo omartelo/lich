@@ -35,6 +35,7 @@ const claude: ProviderState = {
   name: "Claude Code",
   binary: "claude",
   installed: true,
+  source: "path",
   enabled: true,
   docs: "",
 }

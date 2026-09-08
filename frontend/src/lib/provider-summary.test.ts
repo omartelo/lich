@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { QuotaPlan } from "@/lib/api-types"
-import { countOpenSessions, planSummary } from "./provider-summary"
+import { countOpenSessions, installSummary, planSummary } from "./provider-summary"
 import type { SessionState } from "@/lib/session/sessions"
 
 function state(kinds: Record<string, string[]>): SessionState {
@@ -80,5 +80,14 @@ describe("the plan reading a row shows", () => {
     expect(planSummary(null)).toBe("")
     expect(planSummary(plan({ status: "error" }))).toBe("")
     expect(planSummary(plan({ windows: [] }))).toBe("")
+  })
+})
+
+describe("installSummary", () => {
+  // The row that says "Installed" on a machine with nothing on $PATH is the one
+  // that has to say where the binary came from, or the reading looks invented.
+  it("names the configured path, and leaves a $PATH hit plain", () => {
+    expect(installSummary({ source: "setting" })).toBe("Installed · custom path")
+    expect(installSummary({ source: "path" })).toBe("Installed")
   })
 })

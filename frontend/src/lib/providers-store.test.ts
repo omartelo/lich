@@ -9,6 +9,7 @@ import {
   enabledProviders,
   readEnabled,
   noProviderInstalled,
+  NO_AGENT_REASON,
   resolveDefaultProvider,
   resolveImplicitSessionKind,
   resolveProjectDefaultProvider,
@@ -163,6 +164,7 @@ describe("enabledProviders", () => {
     name: id,
     binary: id,
     installed,
+    source: installed ? "path" : "",
     enabled,
     docs: `https://example.test/${id}`,
   })
@@ -180,6 +182,7 @@ describe("resolveDefaultProvider", () => {
     name: id,
     binary: id,
     installed: true,
+    source: "path",
     enabled,
     docs: `https://example.test/${id}`,
   })
@@ -206,6 +209,7 @@ describe("resolveProjectDefaultProvider", () => {
     name: id,
     binary: id,
     installed: true,
+    source: "path",
     enabled,
     docs: `https://example.test/${id}`,
   })
@@ -230,11 +234,17 @@ describe("resolveProjectDefaultProvider", () => {
 // gate in front of them is what stops an implicit session opening on
 // `claude: command not found`.
 describe("noProviderInstalled / resolveImplicitSessionKind", () => {
-  const p = (id: string, installed: boolean, enabled: boolean): ProviderState => ({
+  const p = (
+    id: string,
+    installed: boolean,
+    enabled: boolean,
+    source: ProviderState["source"] = installed ? "path" : "",
+  ): ProviderState => ({
     id: id as ProviderState["id"],
     name: id,
     binary: id,
     installed,
+    source,
     enabled,
     docs: `https://example.test/${id}`,
   })
@@ -263,11 +273,31 @@ describe("noProviderInstalled / resolveImplicitSessionKind", () => {
     expect(resolveImplicitSessionKind(list, "codex", "")).toBe("codex")
   })
 
-  // A custom binary path leaves installed=false on every row, so this machine
-  // gets a terminal it did not need. Deliberate, and in docs/ceilings.md.
   it("still resolves the enabled provider once anything else is on PATH", () => {
     const list = [p("claude", false, true), p("crush", true, false)]
     expect(resolveImplicitSessionKind(list, "claude", "")).toBe("claude")
+  })
+
+  // The trap this gate used to set: nothing on PATH, one agent reached through
+  // the binary setting. Detection resolves that setting now (providers.Detect),
+  // so the row arrives installed and the implicit session is the agent — the
+  // terminal was the whole surprise.
+  it("spawns the agent a machine only knows about from its binary setting", () => {
+    const configured = [p("claude", true, true, "setting"), p("codex", false, false)]
+    expect(noProviderInstalled(configured)).toBe(false)
+    expect(resolveImplicitSessionKind(configured, "", "")).toBe("claude")
+    expect(resolveImplicitSessionKind(configured, "claude", "")).toBe("claude")
+  })
+})
+
+describe("NO_AGENT_REASON", () => {
+  // Pinned as a literal rather than read back off the export: this is the one
+  // sentence that explains a terminal the user did not ask for, and a test that
+  // compares the constant to itself would pass through any rewrite of it.
+  it("names both the reason and where the machine is told about an agent", () => {
+    expect(NO_AGENT_REASON).toBe(
+      "No agent found on PATH, so this opens a terminal — set one in Settings › Providers.",
+    )
   })
 })
 
@@ -279,6 +309,7 @@ describe("createProvidersStore", () => {
       binary: "claude",
       installed: true,
       path: "/usr/bin/claude",
+      source: "path",
       docs: "https://code.claude.com/docs/en/setup",
     },
     // A binary that is not the id, which is what antigravity ships as.
@@ -288,10 +319,19 @@ describe("createProvidersStore", () => {
       binary: "cdx",
       installed: false,
       path: "",
+      source: "",
       docs: "https://d/codex",
     },
     // unknown id
-    { id: "mystery", name: "Mystery", binary: "mystery", installed: true, path: "/x", docs: "" },
+    {
+      id: "mystery",
+      name: "Mystery",
+      binary: "mystery",
+      installed: true,
+      path: "/x",
+      source: "path",
+      docs: "",
+    },
   ]
 
   function build(enabledValues: Record<string, string> = {}, defaultValue = "") {
@@ -380,6 +420,7 @@ describe("createProvidersStore", () => {
         binary: "claude",
         installed: false,
         path: "",
+        source: "",
         docs: "d",
       },
     ]
@@ -403,6 +444,7 @@ describe("createProvidersStore", () => {
         binary: "claude",
         installed: true,
         path: "/usr/bin/claude",
+        source: "path",
         docs: "d",
       },
     ]

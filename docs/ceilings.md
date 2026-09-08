@@ -276,13 +276,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   it was branched from, so the pair reports roughly twice what one conversation spent. It is the same
   arithmetic as the `(session, transcript)` bullet above, arrived at deliberately rather than by accident —
   a lich-driven fork makes that path ordinary.
-- **A machine with no agent on PATH opens terminals, and a custom binary path looks like one**
-  (`frontend/src/lib/providers-store.ts`, `resolveImplicitSessionKind`): with nothing installed, every implicit
-  new session — the empty screen's button, the hotkey, a new worktree — spawns a shell, because the provider
-  fallback still resolves to Claude and that card would die on `claude: command not found`. Detection only ever
-  scans `PATH`, so a user whose only agent is reached through a `provider.<id>.bin` override reads as that same
-  bare machine and gets a terminal they did not want. Their agent is still one click away in the New Session
-  menu, which is filtered by the enabled flag and not by install state.
 - **git status is polled** — one shared poller per repository path (`frontend/src/lib/git/git-status-store.ts`); the
   lich plugin's `session-touched` hook nudges an immediate refresh.
 - **The status badge has a single source** (`internal/project/status.go`): the branch, the HEAD commit and the

@@ -2,8 +2,8 @@
 // a session (Claude Code, Codex, Antigravity, opencode, oh-my-pi, Crush, Cursor
 // CLI, Kiro CLI). A provider id doubles as the session kind that spawns it; the terminal
 // resolves the id to a binary, and the settings store keys per-provider
-// overrides on it. Detection is a PATH scan, mirroring internal/chromium's
-// browser detection.
+// overrides on it. Detection reads that override and then scans PATH, mirroring
+// internal/chromium's browser detection.
 package providers
 
 import (
@@ -141,18 +141,33 @@ func DefaultBinary(id string) string {
 	return ""
 }
 
-// Detected reports a provider and whether one of its binaries was found on PATH.
+// Where the binary a session would spawn was resolved from. A machine with an
+// agent only lich knows about — reached through the binary setting rather than
+// $PATH — is installed just as much as one that answers `which`, and the two are
+// told apart so Settings can caption the row with which layer won.
+const (
+	// SourcePath: one of the provider's own binaries answered on $PATH.
+	SourcePath = "path"
+	// SourceSetting: the binary configured in Settings › Providers, which is the
+	// one the spawn resolves first.
+	SourceSetting = "setting"
+)
+
+// Detected reports a provider and whether a binary a session could spawn was
+// found — on PATH, or at the path the user configured.
 // Binary is the executable name a session spawns (DefaultBinary), which the
 // settings screen needs even when nothing was found: a provider id is not its
 // command — Antigravity's is `agy`.
 // Docs is carried on every entry, installed or not: the row that has somewhere
 // to send the user is exactly the one that found nothing.
+// Source is SourcePath or SourceSetting, empty when nothing was found.
 type Detected struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	Binary    string `json:"binary"`
 	Installed bool   `json:"installed"`
 	Path      string `json:"path"`
+	Source    string `json:"source"`
 	Docs      string `json:"docs"`
 }
 
@@ -169,6 +184,10 @@ type Service struct {
 	// change it — and RefreshPath is then the no-op that scans the same PATH
 	// again.
 	refreshPath func() error
+	// configuredBin answers a provider's binary setting, the global one. Also
+	// guarded by mu, and also nil outside the app: a Service built to read the
+	// machine has no workspace database behind it, so it scans PATH alone.
+	configuredBin func(id string) string
 }
 
 // New returns a Service that scans the real PATH.
@@ -184,6 +203,28 @@ func (s *Service) SetPathRefresh(fn func() error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.refreshPath = fn
+}
+
+// SetConfiguredBin wires where Detect reads a provider's binary setting from.
+// The settings store cannot be reached from here — it imports this package to
+// key those settings — so main.go hands the reader in, exactly as it does the
+// PATH refresh.
+func (s *Service) SetConfiguredBin(fn func(id string) string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.configuredBin = fn
+}
+
+// binSetting reads the configured binary for a provider, "" when nothing is
+// wired or nothing is set.
+func (s *Service) binSetting(id string) string {
+	s.mu.Lock()
+	read := s.configuredBin
+	s.mu.Unlock()
+	if read == nil {
+		return ""
+	}
+	return read(id)
 }
 
 // RefreshPath re-reads the login shell's environment and re-pins what it
@@ -207,21 +248,39 @@ func (s *Service) RefreshPath() error {
 }
 
 // Detect returns every known provider with its install state, resolving the
-// first candidate binary found on PATH. The list order matches Registry.
+// binary exactly as a spawn would: the configured one first, then the first
+// candidate found on PATH. The list order matches Registry.
+//
+// Reading the setting is what keeps a machine whose only agent lives at a path
+// the user typed from reading as a bare machine — the state the empty screen
+// answers with a terminal.
 func (s *Service) Detect() ([]Detected, error) {
 	out := make([]Detected, 0, len(Registry))
 	for _, p := range Registry {
 		d := Detected{ID: p.ID, Name: p.Name, Binary: DefaultBinary(p.ID), Docs: p.Docs}
-		for _, name := range p.Binaries {
-			if path, err := s.lookPath(name); err == nil {
-				d.Installed = true
-				d.Path = path
-				break
-			}
-		}
-		out = append(out, d)
+		out = append(out, s.resolve(d, p.Binaries))
 	}
 	return out, nil
+}
+
+// resolve fills in where the provider's binary was found. A configured binary
+// answers alone, whether or not it resolves: it is what the spawn will run, so
+// falling through to PATH would report a binary no session of this provider
+// would ever start.
+func (s *Service) resolve(d Detected, binaries []string) Detected {
+	if bin := s.binSetting(d.ID); bin != "" {
+		if check := s.Verify(bin); check.Status == CheckOK {
+			d.Installed, d.Path, d.Source = true, check.Path, SourceSetting
+		}
+		return d
+	}
+	for _, name := range binaries {
+		if path, err := s.lookPath(name); err == nil {
+			d.Installed, d.Path, d.Source = true, path, SourcePath
+			break
+		}
+	}
+	return d
 }
 
 // CostSource is whose arithmetic a session's dollars in the cost ledger are.

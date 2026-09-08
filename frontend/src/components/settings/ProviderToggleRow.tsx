@@ -1,5 +1,6 @@
 import { ProviderIcon } from "@/components/ProviderIcon"
 import { Switch } from "@/components/ui/switch"
+import { installSummary } from "@/lib/provider-summary"
 import { setProviderEnabled, type ProviderState } from "@/lib/providers-store"
 import { ProviderDocsLink } from "./ProviderDocsLink"
 
@@ -19,7 +20,7 @@ export function ProviderToggleRow({ provider }: { provider: ProviderState }) {
           <div className="text-sm font-medium text-foreground">{provider.name}</div>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             {provider.installed ? (
-              "Installed"
+              installSummary(provider)
             ) : (
               <>
                 <span>Not found on PATH</span>

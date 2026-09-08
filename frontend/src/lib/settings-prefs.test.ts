@@ -94,6 +94,7 @@ const provider = (id: string, enabled: boolean): ProviderState => ({
   name: id,
   binary: id,
   installed: true,
+  source: "path",
   enabled,
   docs: `https://example.test/${id}`,
 })

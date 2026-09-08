@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom"
 import { EmptyScreen } from "@/components/common/EmptyScreen"
 import { Button } from "@/components/ui/button"
 import { useProjects } from "@/providers/projects"
-import { useNoProviderInstalled } from "@/lib/providers-store"
+import { NO_AGENT_REASON, useNoProviderInstalled } from "@/lib/providers-store"
 import { sessionsOf } from "@/lib/session/sessions"
 
 // A sessionless project is a legal state: the user is asked for a session rather
@@ -26,11 +26,7 @@ export function EmptySessions() {
     <EmptyScreen
       icon={SquareTerminal}
       title="No session open"
-      description={
-        noAgent
-          ? "No coding agent is installed, so this opens a terminal — install one from Settings › Providers."
-          : "Open a session to start working in this project."
-      }
+      description={noAgent ? NO_AGENT_REASON : "Open a session to start working in this project."}
     >
       <Button onClick={() => newSession(projectId)}>
         {noAgent ? <SquareTerminal data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
