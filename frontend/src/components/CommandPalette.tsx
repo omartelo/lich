@@ -93,7 +93,7 @@ export function CommandPalette() {
 
   // The parked sessions are searched in the store rather than filtered here, so
   // the History tab reaches a session parked further back than one page of it.
-  const { rows: history, forget: dropParked } = useHistorySearch(query, open)
+  const { rows: history, total: historyTotal, forget: dropParked } = useHistorySearch(query, open)
 
   // Forgetting drops the row from the list in place rather than closing the
   // palette: the whole point of the action is that there are usually several of
@@ -126,7 +126,10 @@ export function CommandPalette() {
   // the name-matched groups (it is a disk read behind a debounce), so it is
   // listed last and never moves a row the user is already aiming at.
   const messages = useTranscriptSearch(query, all, open)
-  const groups = useMemo(() => paletteGroups(tab, results, messages), [tab, results, messages])
+  const groups = useMemo(
+    () => paletteGroups(tab, results, messages, historyTotal),
+    [tab, results, messages, historyTotal],
+  )
   const counts = useMemo(
     () => PALETTE_TABS.map((t) => paletteTabCount(t, results, messages)),
     [results, messages],

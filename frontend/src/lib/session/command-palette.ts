@@ -57,9 +57,11 @@ export function matchesQuery(haystack: string, query: string): boolean {
 }
 
 // PaletteHistory is one parked session as the History tab lists it: the store's
-// row plus the branch its checkout is on, which lives in git and not in the row
-// (internal/store.ClosedSession). Both are "" for a checkout that is gone —
-// which is also the row that cannot be resumed, so one absence explains both.
+// row plus the branch its checkout is on *now*, read from git. That is not the
+// row's `parkedBranch`, which is the snapshot the close recorded for the search
+// to match — a branch moves inside a checkout, so only git can say what the row
+// shows. `branch` is "" for a checkout that is gone, which is also the row that
+// cannot be resumed, so one absence explains both.
 export interface PaletteHistory extends ClosedSession {
   branch: string
   /** The checkout is no longer on disk: this row forgets rather than resumes. */
@@ -106,12 +108,12 @@ export function filterPalette(
     ),
     projects: projects.filter((p) => matchesQuery(`${p.name} ${p.path}`, query)),
     closed: closed.filter((p) => matchesQuery(`${p.name} ${p.path}`, query)),
-    // The branch is in the haystack because it is what a user remembers a piece
-    // of work by, and it is the one part of the row the path cannot stand in
-    // for: a worktree keeps the name it was created with while the branch moves
-    // on (lib/git/checkout-label.ts).
+    // Both branches are in the haystack because they can disagree: the store
+    // matched the one it recorded at the close, and the row shows the one git
+    // reads now. Filtering on either alone would drop a row the other half of
+    // the search kept.
     history: history.filter((h) =>
-      matchesQuery(`${h.label} ${h.projectName} ${h.branch} ${h.path}`, query),
+      matchesQuery(`${h.label} ${h.projectName} ${h.branch} ${h.parkedBranch} ${h.path}`, query),
     ),
   }
 }
@@ -232,10 +234,15 @@ function group(label: string, rows: PaletteRow[], cap: number): PaletteGroup {
   return { label, rows: cap > 0 ? rows.slice(0, cap) : rows, total: rows.length }
 }
 
+// historyTotal is how many parked sessions matched the query in the store, which
+// is more than `results.history` holds whenever the store's page cut it. It
+// defaults to 0 for the callers that do not ask the store at all — the tests and
+// the tabs that list nothing parked — and the group falls back to its own rows.
 export function paletteGroups(
   tab: PaletteTab,
   results: PaletteResults,
   messages: readonly PaletteMessage[],
+  historyTotal = 0,
 ): PaletteGroup[] {
   const sessions = results.sessions.map((session): PaletteRow => ({ kind: "session", session }))
   const open = results.projects.map((project): PaletteRow => ({ kind: "project", project }))
@@ -252,7 +259,14 @@ export function paletteGroups(
       case "Messages":
         return [group("Messages", said, 0)]
       case "History":
-        return [group("Closed sessions", history, 0)]
+        // The cut this header reports happened in the store, not in the slice
+        // above: the query matched more parked sessions than one page carries.
+        return [
+          {
+            ...group("Closed sessions", history, 0),
+            total: Math.max(historyTotal, history.length),
+          },
+        ]
       // No closed projects or closed sessions here: bringing one back is not
       // what the palette is reached for mid-work, and the rows it costs are
       // rows the sessions and the open projects are cut to make room for. Their

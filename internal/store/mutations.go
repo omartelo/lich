@@ -226,17 +226,49 @@ func (s *Service) DeleteSession(projectID, sessionID, activeID string) error {
 //
 // closed_at is stamped in the same statement rather than after it: it is what
 // orders the history the parked row exists to appear in, and a row parked
-// without one sorts as if it had been closed before everything else.
+// without one sorts as if it had been closed before everything else. The branch
+// is stamped with it, and this is the only place it ever is — the history search
+// runs in SQL, so a branch nothing wrote down cannot be typed to find the row
+// showing it.
+//
+// git is asked before the transaction opens: the store holds a single
+// connection, and a subprocess run under the write lock stalls every other
+// caller for as long as git takes.
 func (s *Service) CloseSession(projectID, sessionID, activeID string) error {
+	branch := s.parkedBranch(sessionID)
 	return s.tx(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(
-			`UPDATE sessions SET is_open = 0, closed_at = ? WHERE id = ?`,
-			now().Unix(), sessionID,
+			`UPDATE sessions SET is_open = 0, closed_at = ?, parked_branch = ? WHERE id = ?`,
+			now().Unix(), branch, sessionID,
 		); err != nil {
 			return fmt.Errorf("close session %q: %w", sessionID, err)
 		}
 		return setActiveSession(tx, projectID, activeID)
 	})
+}
+
+// parkedBranch names the branch of the checkout a session is running in, for the
+// row about to be parked. A session with no path of its own runs in its
+// project's directory, which is then the checkout to ask about.
+//
+// Every failure answers "": a store without the wiring, a session id nothing
+// matches, a directory git cannot name a branch for. None of them is worth
+// refusing a close over — the row loses the branch as a search term and keeps
+// everything else.
+func (s *Service) parkedBranch(sessionID string) string {
+	if s.branchOf == nil {
+		return ""
+	}
+	var path string
+	if err := s.db.QueryRow(
+		`SELECT CASE WHEN s.path <> '' THEN s.path ELSE p.path END
+		   FROM sessions s JOIN projects p ON p.id = s.project_id
+		  WHERE s.id = ?`,
+		sessionID,
+	).Scan(&path); err != nil || path == "" {
+		return ""
+	}
+	return s.branchOf(path)
 }
 
 // ForgetSession deletes one parked session for good. It is the way out for the

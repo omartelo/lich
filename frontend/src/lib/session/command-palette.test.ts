@@ -277,6 +277,7 @@ const parked: ClosedSession[] = [
     label: "Wire the relay inbox",
     kind: "claude",
     path: "/home/u/wt/lich/relay-inbox",
+    parkedBranch: "feat/relay-inbox",
     closedAt: 1_700_000_200,
   },
   {
@@ -287,6 +288,9 @@ const parked: ClosedSession[] = [
     label: "Conpty handle recycling",
     kind: "claude",
     path: "/home/u/wt/lich/conpty",
+    // Parked on one branch, sitting on another now: the checkout moved on after
+    // the close, which is the disagreement the two fields exist to hold.
+    parkedBranch: "fix/conpty-first-try",
     closedAt: 1_700_000_100,
   },
   {
@@ -297,6 +301,7 @@ const parked: ClosedSession[] = [
     label: "vitest --ui",
     kind: "shell",
     path: "/home/u/wt/revu/gone",
+    parkedBranch: "chore/vitest-ui",
     closedAt: 1_700_000_000,
   },
 ]
@@ -334,6 +339,16 @@ describe("history search", () => {
   it("narrows on the branch, which the path cannot stand in for", () => {
     const hit = filterPalette("conpty-handle", [], [], [], rows).history
     expect(hit.map((h) => h.id)).toEqual(["h2"])
+  })
+
+  it("narrows on the parked branch too, which is the one the store matched", () => {
+    // h2's checkout has moved since it was parked, so the term the store found
+    // it by is not the branch on screen — and the filter must not drop the row
+    // the store just answered with.
+    expect(filterPalette("first-try", [], [], [], rows).history.map((h) => h.id)).toEqual(["h2"])
+    // h3's checkout is gone, so git names no branch at all and the snapshot is
+    // the only branch that row has.
+    expect(filterPalette("vitest-ui", [], [], [], rows).history.map((h) => h.id)).toEqual(["h3"])
   })
 
   it("narrows on the label, the project and the path too", () => {
@@ -378,6 +393,21 @@ describe("the History tab", () => {
   it("draws no group at all when nothing has ever been closed", () => {
     const none = filterPalette("", [], projects, closed, [])
     expect(paletteGroups("History", none, [])).toEqual([])
+  })
+
+  it("says how many matched when the store cut the page", () => {
+    // The rows in hand are one page; the number beside them is the whole match,
+    // which is what the header turns into "3 of 143".
+    const group = paletteGroups("History", results, [], 143)[0]
+    expect(group?.rows).toHaveLength(3)
+    expect(group?.total).toBe(143)
+  })
+
+  it("reports its own rows when nothing was cut", () => {
+    // total === rows.length is what the header reads as "not cut" — and a count
+    // that arrived stale, behind the rows, must never claim less than is drawn.
+    expect(paletteGroups("History", results, [], 3)[0]?.total).toBe(3)
+    expect(paletteGroups("History", results, [], 0)[0]?.total).toBe(3)
   })
 })
 

@@ -11,7 +11,7 @@ import type {
   BaseStatus,
   BinaryCheck,
   BranchRules,
-  ClosedSession,
+  ClosedHistory,
   LastSaid,
   LastTurn,
   Branches,
@@ -403,10 +403,12 @@ export const Store = {
   ReopenWorktreeSession: (projectID: string, path: string, newSessionID: string) =>
     call<StoredSession | null>("store.ReopenWorktreeSession", [projectID, path, newSessionID]),
   /** The parked sessions matching `term`, last closed first — the history the
-   * palette browses. Every word of the term must appear in the session's name,
-   * its project's name or its path; an empty term is the plain history. The
-   * search runs in the query, so it reaches past the page this answers with. */
-  ClosedSessions: (term: string) => call<ClosedSession[] | null>("store.ClosedSessions", [term]),
+   * palette browses — with how many matched in all, so a page cut at the store's
+   * cap can say so. Every word of the term must appear in the session's name,
+   * its project's name, its path or the branch it was parked on; an empty term
+   * is the plain history. The search runs in the query, so it reaches past the
+   * page this answers with. */
+  ClosedSessions: (term: string) => call<ClosedHistory | null>("store.ClosedSessions", [term]),
   /** Resume one parked session by its own id, or null when it is no longer
    * parked — another window resumed it, or its worktree was removed. */
   ReopenSession: (sessionID: string, newSessionID: string) =>

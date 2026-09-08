@@ -26,21 +26,27 @@ function row(id: string, label: string): ClosedSession {
     label,
     kind: "claude",
     path: `/wt/${id}`,
+    parkedBranch: `parked/${id}`,
     closedAt: 1_700_000_000,
   }
 }
 
 // The fake store searches by name so the test can tell a backend search from a
 // window filter: only "old" is answered for a term, and it is never in the list
-// the empty term returns.
+// the empty term returns. Its totals are larger than its pages, which is the
+// shape the real store answers a term matching more than one page in.
 vi.mock("@/lib/rpc", () => ({
   Store: {
     ClosedSessions: (term: string) => {
       terms.push(term)
       if (term === "") {
-        return Promise.resolve([row("s1", "recent work")])
+        return Promise.resolve({ sessions: [row("s1", "recent work")], total: 7 })
       }
-      return Promise.resolve(term.includes("old") ? [row("old", "the oldest work")] : [])
+      const hit = term.includes("old")
+      return Promise.resolve({
+        sessions: hit ? [row("old", "the oldest work")] : [],
+        total: hit ? 42 : 0,
+      })
     },
   },
   ProjectService: {
@@ -64,11 +70,16 @@ function last<T>(frames: T[]): T | undefined {
   return frames[frames.length - 1]
 }
 
-function probe(frames: PaletteHistory[][], forgets: ((id: string) => void)[]) {
+function probe(
+  frames: PaletteHistory[][],
+  forgets: ((id: string) => void)[],
+  totals: number[] = [],
+) {
   return function Probe({ query, enabled }: { query: string; enabled: boolean }) {
-    const { rows, forget } = useHistorySearch(query, enabled)
+    const { rows, total, forget } = useHistorySearch(query, enabled)
     useLayoutEffect(() => {
       frames.push(rows)
+      totals.push(total)
       forgets.push(forget)
     })
     return null
@@ -154,17 +165,64 @@ describe("useHistorySearch", () => {
   it("drops a forgotten row without asking the store again", async () => {
     const frames: PaletteHistory[][] = []
     const forgets: ((id: string) => void)[] = []
-    const Probe = probe(frames, forgets)
+    const totals: number[] = []
+    const Probe = probe(frames, forgets, totals)
     const budget = await mountBudget(
       createElement(StrictMode, null, createElement(Probe, { query: "", enabled: true })),
     )
     await budget.act(settled)
+    expect(last(totals)).toBe(7)
 
     await budget.act(() => {
       last(forgets)?.("s1")
     })
     expect(last(frames)).toEqual([])
     expect(terms).toEqual([""])
+    // The count comes down with the row, so a page that was never cut does not
+    // start claiming it was.
+    expect(last(totals)).toBe(6)
+    await budget.unmount()
+  })
+
+  it("carries the whole match count beside the page it got", async () => {
+    const frames: PaletteHistory[][] = []
+    const totals: number[] = []
+    const Probe = probe(frames, [], totals)
+    const budget = await mountBudget(
+      createElement(StrictMode, null, createElement(Probe, { query: "old", enabled: true })),
+    )
+    await budget.act(settled)
+
+    // One row in hand, 42 matched: without the second number the list would
+    // present its page as the whole answer.
+    expect((last(frames) ?? []).map((r) => r.id)).toEqual(["old"])
+    expect(last(totals)).toBe(42)
+    await budget.unmount()
+  })
+
+  it("counts nothing while the palette is closed", async () => {
+    const totals: number[] = []
+    const Probe = probe([], [], totals)
+    const budget = await mountBudget(
+      createElement(StrictMode, null, createElement(Probe, { query: "old", enabled: false })),
+    )
+    await budget.act(settled)
+
+    expect(last(totals)).toBe(0)
+    await budget.unmount()
+  })
+
+  it("keeps the branch the store matched on the row, beside the one git named", async () => {
+    const frames: PaletteHistory[][] = []
+    const Probe = probe(frames, [])
+    const budget = await mountBudget(
+      createElement(StrictMode, null, createElement(Probe, { query: "", enabled: true })),
+    )
+    await budget.act(settled)
+
+    const rows = last(frames) ?? []
+    expect(rows[0].branch).toBe("branch/wt/s1")
+    expect(rows[0].parkedBranch).toBe("parked/s1")
     await budget.unmount()
   })
 })

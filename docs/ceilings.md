@@ -626,15 +626,10 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   cask's `depends_on` and the bundle's `LSMinimumSystemVersion` say 13.0 because the compiler does —
   both move with the next Go bump, and a machine below the floor is refused by Homebrew rather than
   by a crash.
-- **The History tab searches names, and the branch on every row is not one** (`internal/store/store.go`,
-  `frontend/src/lib/session/use-history-search.ts`): the search runs in the store, which holds a parked
-  session's name, its project's and its path — the branch is read out of git afterwards, for the rows the
-  search already kept. So a row that shows `feat/relay-inbox` cannot be found by typing that, and the tab
-  answers a branch the user is reading off the screen with nothing at all. A term that matches more than a
-  hundred parked sessions is cut to the hundred closed most recently, and nothing says the list was cut.
 - **The history's branch is read live, so a row whose checkout is gone has none** (`internal/project.BranchesOf`):
-  the branch is not stored — a worktree keeps the name it was created with while an agent moves the branch
-  inside it, so the directory cannot answer and only git can. The batch runs once per settled search, which
+  the branch a row shows is not the one it stores — a worktree keeps the name it was created with while an
+  agent moves the branch inside it, so the stored snapshot dates the close and only git can say what the
+  checkout is on now, which is what the row draws. The batch runs once per settled search, which
   also means a branch that moved while the palette is up is stale until the query changes or the palette is
   reopened. A checkout removed behind lich's back has no branch to read and no session to resume: that row
   says `checkout gone` and offers to forget

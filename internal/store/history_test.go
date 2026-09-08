@@ -32,10 +32,7 @@ func TestClosedSessionsOrdersByCloseNotByInsert(t *testing.T) {
 	atClock(t, time.Unix(1_700_000_100, 0), func() { _ = svc.CloseSession("p1", "second", "keep") })
 	atClock(t, time.Unix(1_700_000_200, 0), func() { _ = svc.CloseSession("p1", "first", "keep") })
 
-	closed, err := svc.ClosedSessions("")
-	if err != nil {
-		t.Fatalf("ClosedSessions: %v", err)
-	}
+	closed := mustClosed(t, svc, "")
 	if len(closed) != 2 {
 		t.Fatalf("got %d closed sessions, want 2", len(closed))
 	}
@@ -57,7 +54,7 @@ func TestClosedSessionsIdentifiesEachRow(t *testing.T) {
 	_ = svc.AddSession("p1", "gone", "Wire the relay inbox", "shell", "/wt/relay", 3, "")
 	atClock(t, time.Unix(1_700_000_000, 0), func() { _ = svc.CloseSession("p1", "gone", "keep") })
 
-	closed, _ := svc.ClosedSessions("")
+	closed := mustClosed(t, svc, "")
 	if len(closed) != 1 {
 		t.Fatalf("got %d closed sessions, want 1", len(closed))
 	}
@@ -80,10 +77,7 @@ func TestClosedSessionsSkipsOpenOnes(t *testing.T) {
 	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
 	_ = svc.AddSession("p1", "live", "Session 1", "claude", "", 2, "")
 
-	closed, err := svc.ClosedSessions("")
-	if err != nil {
-		t.Fatalf("ClosedSessions: %v", err)
-	}
+	closed := mustClosed(t, svc, "")
 	if len(closed) != 0 {
 		t.Errorf("closed = %+v, want none while the only session is open", closed)
 	}
@@ -100,7 +94,7 @@ func TestClosedSessionsIncludesClosedProjects(t *testing.T) {
 	_ = svc.CloseSession("p1", "old", "keep")
 	_ = svc.CloseProject("p1")
 
-	closed, _ := svc.ClosedSessions("")
+	closed := mustClosed(t, svc, "")
 	if len(closed) != 1 || closed[0].ProjectName != "alpha" {
 		t.Errorf("closed = %+v, want the session of the closed project, named", closed)
 	}
@@ -121,7 +115,7 @@ func TestClosedSessionsCapsTheList(t *testing.T) {
 		})
 	}
 
-	closed, _ := svc.ClosedSessions("")
+	closed := mustClosed(t, svc, "")
 	if len(closed) != 100 {
 		t.Errorf("got %d closed sessions, want the list capped at 100", len(closed))
 	}
@@ -162,7 +156,7 @@ func TestReopenSessionRestoresByID(t *testing.T) {
 	if len(projects) != 1 || len(projects[0].Sessions) != 2 {
 		t.Fatalf("sessions after resume = %+v, want the kept one and the resumed one", projects)
 	}
-	closed, _ := svc.ClosedSessions("")
+	closed := mustClosed(t, svc, "")
 	if len(closed) != 0 {
 		t.Errorf("closed = %+v, want the resumed row out of the history", closed)
 	}
@@ -255,7 +249,7 @@ func TestReopenWorktreeSessionRefusesTheEmptyPath(t *testing.T) {
 		t.Errorf("ReopenWorktreeSession(path: \"\") = %+v, want nil", restored)
 	}
 	// And the parked root session is still there for its own door.
-	closed, _ := svc.ClosedSessions("")
+	closed := mustClosed(t, svc, "")
 	if len(closed) != 1 || closed[0].ID != "root" {
 		t.Errorf("closed = %+v, want the root session still parked", closed)
 	}
@@ -275,7 +269,7 @@ func TestForgetSessionRemovesOneParkedRow(t *testing.T) {
 	if err := svc.ForgetSession("dead"); err != nil {
 		t.Fatalf("ForgetSession: %v", err)
 	}
-	closed, _ := svc.ClosedSessions("")
+	closed := mustClosed(t, svc, "")
 	if len(closed) != 0 {
 		t.Errorf("closed = %+v, want the forgotten row gone", closed)
 	}
@@ -350,12 +344,8 @@ func TestClosedSessionsSearchesByName(t *testing.T) {
 	svc := searchStore(t)
 
 	for _, term := range []string{"relay", "RELAY", "ReLaY"} {
-		closed, err := svc.ClosedSessions(term)
-		if err != nil {
-			t.Fatalf("ClosedSessions(%q): %v", term, err)
-		}
 		// Newest first, the same order the unfiltered list is in.
-		if got := ids(closed); len(got) != 2 || got[0] != "s2" || got[1] != "s1" {
+		if got := ids(mustClosed(t, svc, term)); len(got) != 2 || got[0] != "s2" || got[1] != "s1" {
 			t.Errorf("ClosedSessions(%q) = %v, want [s2 s1]", term, got)
 		}
 	}
@@ -470,11 +460,121 @@ func TestEscapeLike(t *testing.T) {
 	}
 }
 
+// mustClosed is the history's rows alone, for the tests that are about the rows
+// and not about the count beside them.
 func mustClosed(t *testing.T, svc *Service, term string) []ClosedSession {
 	t.Helper()
-	closed, err := svc.ClosedSessions(term)
+	history, err := svc.ClosedSessions(term)
 	if err != nil {
 		t.Fatalf("ClosedSessions(%q): %v", term, err)
 	}
-	return closed
+	return history.Sessions
+}
+
+// TestCloseSessionRecordsTheBranch is what makes a branch searchable at all: the
+// history query runs in SQL over the row, so a branch nothing wrote down at the
+// close cannot be typed to find the row showing it.
+func TestCloseSessionRecordsTheBranch(t *testing.T) {
+	svc := newTestStore(t)
+	svc.SetBranchOf(func(path string) string {
+		return map[string]string{
+			"/wt/relay":  "feat/relay-inbox",
+			"/tmp/alpha": "main",
+		}[path]
+	})
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "keep", "Session 1", "claude", "", 1, "")
+	_ = svc.AddSession("p1", "wt", "worktree work", "claude", "/wt/relay", 2, "")
+	// No path of its own: this one runs in the project's directory, which is the
+	// checkout whose branch it is parked on.
+	_ = svc.AddSession("p1", "root", "root work", "claude", "", 3, "")
+	_ = svc.CloseSession("p1", "wt", "keep")
+	_ = svc.CloseSession("p1", "root", "keep")
+
+	branches := map[string]string{}
+	for _, row := range mustClosed(t, svc, "") {
+		branches[row.ID] = row.ParkedBranch
+	}
+	if branches["wt"] != "feat/relay-inbox" {
+		t.Errorf("worktree row branch = %q, want the checkout's own", branches["wt"])
+	}
+	if branches["root"] != "main" {
+		t.Errorf("project-root row branch = %q, want the project's", branches["root"])
+	}
+}
+
+// TestCloseSessionWithoutBranchWiringStillParks: reading the branch is a
+// convenience for the search, never a condition of parking. A store with no
+// seam — every test but the one above, and a lich whose wiring has not run —
+// parks the row with an empty branch and loses nothing else.
+func TestCloseSessionWithoutBranchWiringStillParks(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "keep", "Session 1", "claude", "", 1, "")
+	_ = svc.AddSession("p1", "wt", "work", "claude", "/wt/relay", 2, "")
+	if err := svc.CloseSession("p1", "wt", "keep"); err != nil {
+		t.Fatalf("CloseSession: %v", err)
+	}
+
+	closed := mustClosed(t, svc, "")
+	if len(closed) != 1 || closed[0].ParkedBranch != "" {
+		t.Errorf("closed = %+v, want the row parked with no branch", closed)
+	}
+}
+
+// TestClosedSessionsSearchesByBranch is the ceiling this column closed: the
+// branch is on screen and was the one part of a row no term could reach.
+func TestClosedSessionsSearchesByBranch(t *testing.T) {
+	svc := newTestStore(t)
+	svc.SetBranchOf(func(path string) string {
+		return map[string]string{"/wt/s1": "feat/relay-inbox", "/wt/s2": "fix/split-groups"}[path]
+	})
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "keep", "Session 1", "claude", "", 1, "")
+	park(t, svc, "s1", "one", 1_700_000_100)
+	park(t, svc, "s2", "two", 1_700_000_200)
+
+	// Nothing but the branch says "relay" — not the label, not the path.
+	if got := ids(mustClosed(t, svc, "relay-inbox")); len(got) != 1 || got[0] != "s1" {
+		t.Errorf(`ClosedSessions("relay-inbox") = %v, want [s1] by branch`, got)
+	}
+	// And the branch joins the rest of the haystack rather than replacing it.
+	if got := ids(mustClosed(t, svc, "split two")); len(got) != 1 || got[0] != "s2" {
+		t.Errorf(`ClosedSessions("split two") = %v, want [s2] by branch and label`, got)
+	}
+}
+
+// TestClosedSessionsCountsTheWholeMatch is what lets the list say it was cut: a
+// page of closedSessionLimit rows is otherwise indistinguishable from a match
+// that happened to be exactly that big.
+func TestClosedSessionsCountsTheWholeMatch(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "keep", "Session 1", "claude", "", 1, "")
+	for i := range closedSessionLimit + 5 {
+		park(t, svc, fmt.Sprintf("s%d", i), "work", int64(1_700_000_000+i))
+	}
+	park(t, svc, "odd", "something else", 1_700_100_000)
+
+	history, err := svc.ClosedSessions("work")
+	if err != nil {
+		t.Fatalf("ClosedSessions: %v", err)
+	}
+	if len(history.Sessions) != closedSessionLimit {
+		t.Errorf("rows = %d, want the page capped at %d", len(history.Sessions), closedSessionLimit)
+	}
+	if history.Total != closedSessionLimit+5 {
+		t.Errorf("Total = %d, want the whole match behind the page", history.Total)
+	}
+
+	// A match that fits reports itself, so the list has nothing to say was cut.
+	fits, _ := svc.ClosedSessions("something")
+	if len(fits.Sessions) != 1 || fits.Total != 1 {
+		t.Errorf("small match = %d rows, Total %d; want 1 and 1", len(fits.Sessions), fits.Total)
+	}
+	// And an empty history counts nothing rather than the page it did not fill.
+	none, _ := svc.ClosedSessions("nothing-matches-this")
+	if len(none.Sessions) != 0 || none.Total != 0 {
+		t.Errorf("empty match = %d rows, Total %d; want 0 and 0", len(none.Sessions), none.Total)
+	}
 }

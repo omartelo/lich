@@ -142,6 +142,9 @@ func main() {
 	// Relocating a project is the one flow that can point two rows at the same
 	// directory, so it validates the picked one against the workspace.
 	proj.SetProjects(db.ProjectAt)
+	// Parking a session records the branch its checkout was on, so the history
+	// search can match a branch the row is showing (store.SetBranchOf).
+	db.SetBranchOf(proj.Branch)
 
 	// Every service the frontend uses goes through the loopback RPC
 	// (internal/rpc). store.Close manages the DB lifecycle and stays Go-only.
@@ -267,16 +270,18 @@ func main() {
 //     life of the process and starts a second loop racing the first for every
 //     due prompt.
 //   - relay.SetPlugins, project.SetAccounts, project.SetProjects,
-//     quota.SetSessions, store.SetSessionGone and terminal.SetDropDir are
-//     startup wiring. Called with [null] they silently nil what they wired
-//     (encoding/json leaves a func or pointer alone on null), and the write
-//     races the readers already serving — nilling SetProjects also disarms the
-//     guard that keeps two projects off the same directory, and SetDropDir
-//     points the sandbox's read-only bind wherever the caller likes.
+//     quota.SetSessions, store.SetSessionGone, store.SetBranchOf and
+//     terminal.SetDropDir are startup wiring. Called with [null] they silently
+//     nil what they wired (encoding/json leaves a func or pointer alone on
+//     null), and the write races the readers already serving — nilling
+//     SetProjects also disarms the guard that keeps two projects off the same
+//     directory, and SetDropDir points the sandbox's read-only bind wherever
+//     the caller likes.
 func denyInternal(d *rpc.Handler) {
 	for _, method := range []string{
 		"store.Close",
 		"store.SetSessionGone",
+		"store.SetBranchOf",
 		"drop.Upload",
 		"drop.Save",
 		"drop.Purge",

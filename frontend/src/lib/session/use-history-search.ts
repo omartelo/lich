@@ -12,11 +12,14 @@ const DEBOUNCE_MS = 200
 // joins them to what git and the filesystem say about their checkouts. Idle —
 // no rows, no calls — while the palette is closed.
 //
-// The term goes to the backend rather than filtering rows already in hand: the
-// store answers with one page, so a session parked further back than that page
-// is only reachable if the match happens in the query. The palette's own filter
-// still runs over what comes back, which is what narrows by branch — the one
-// part of a row that is not in the database.
+// `total` is how many sessions matched in all, which is not how many came back:
+// the store answers with one page, and the list needs the number to say it was
+// cut rather than present the page as the whole answer.
+//
+// The term goes to the backend rather than filtering rows already in hand, for
+// that same page: a session parked further back than it is only reachable if the
+// match happens in the query. The palette's own filter still runs over what
+// comes back.
 //
 // An empty query skips the debounce: it is the list the palette opens with, and
 // nothing was typed to wait out. Every effect run supersedes the one before it,
@@ -25,25 +28,28 @@ const DEBOUNCE_MS = 200
 export function useHistorySearch(
   query: string,
   enabled: boolean,
-): { rows: PaletteHistory[]; forget: (sessionID: string) => void } {
+): { rows: PaletteHistory[]; total: number; forget: (sessionID: string) => void } {
   const [parked, setParked] = useState<readonly ClosedSession[]>([])
+  const [total, setTotal] = useState(0)
   const [branches, setBranches] = useState<Readonly<Record<string, string>>>({})
   const [missing, setMissing] = useState<ReadonlySet<string>>(new Set())
 
   useEffect(() => {
     if (!enabled) {
       setParked([])
+      setTotal(0)
       return
     }
     let live = true
     const timer = window.setTimeout(
       () => {
-        void Store.ClosedSessions(query).then((parkedRows) => {
-          const history = parkedRows ?? []
+        void Store.ClosedSessions(query).then((answer) => {
+          const history = answer?.sessions ?? []
           if (!live) {
             return
           }
           setParked(history)
+          setTotal(answer?.total ?? 0)
           // Asked for after the rows are up: what git and the filesystem say is
           // what a row says about itself, and a failed check must not cost the
           // palette its entries.
@@ -75,12 +81,15 @@ export function useHistorySearch(
 
   // Forgetting drops the row in place rather than refetching: the list stays up
   // while several stale rows are cleared, which is how they are usually left.
+  // The match count comes down with it, or a page that was never cut would start
+  // claiming it was after a few rows were dropped from it.
   const forget = useCallback((sessionID: string) => {
     setParked((rows) => rows.filter((row) => row.id !== sessionID))
+    setTotal((matched) => Math.max(0, matched - 1))
   }, [])
 
   // Memoised because the rows are a dependency of the palette's own filter:
   // a fresh array every render would re-filter every group on every keystroke.
   const rows = useMemo(() => historyRows(parked, branches, missing), [parked, branches, missing])
-  return { rows, forget }
+  return { rows, total, forget }
 }

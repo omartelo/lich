@@ -57,6 +57,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The palette's History tab now finds a parked session by its branch, and says
+  when it held back rows.** The search ran over a session's name, its project and
+  its path while the branch was read from git afterwards, so a row showing
+  `feat/relay-inbox` could not be found by typing that - the one thing on the row
+  most people go looking by. The branch is now recorded when a session is parked
+  and searched with the rest, and a term matching more parked sessions than one
+  page holds says `100 of 143` over the group instead of presenting the page as
+  the whole answer. Sessions parked before this version carry no branch until
+  they are parked again.
 - **A split's dragged pane sizes now come back when the grid does.** How many
   panes sit across follows the window, so collapsing the sidebar, opening the
   dock or moving to another monitor reshapes the wall - and the sizes you had
