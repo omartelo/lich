@@ -44,6 +44,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A split's dragged pane sizes now come back when the grid does.** How many
+  panes sit across follows the window, so collapsing the sidebar, opening the
+  dock or moving to another monitor reshapes the wall - and the sizes you had
+  dragged were kept for one shape only, which read as a resize being forgotten.
+  A wall now remembers what it was dragged to on each shape, so the layout you
+  made at four columns is waiting the next time four columns come back.
 - **An Antigravity card now names the MCP tool it is running.** Every MCP call
   there is the same internal step, so a card that opened a session read
   `call_mcp_tool` followed by `lich/open_session`, spending the line on the step

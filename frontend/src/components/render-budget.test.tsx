@@ -395,7 +395,7 @@ test("adding a pane mounts its terminal and never remounts the ones already up",
   const before = { ...terminalMounts.counts }
 
   await budget.act(() =>
-    writeGroups("p1", [{ id: "g1", name: "wall", cells: ["s1", "s2"], cols: [], rows: [] }]),
+    writeGroups("p1", [{ id: "g1", name: "wall", cells: ["s1", "s2"], tracks: {} }]),
   )
 
   // The second pane's terminal is born once, and the first pane's is not thrown

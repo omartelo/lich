@@ -28,8 +28,20 @@
 // its cell is wherever that id sits in the group, so focus is read rather than
 // stored and a stale one cannot outlive the cell it named.
 import { applyOrder } from "@/lib/reorder"
-import { fits } from "./pane-grid"
+import { fits, type Grid, tracks } from "./pane-grid"
 import type { Session } from "./sessions"
+
+/** The shares of each axis a wall was dragged to, on one grid shape. */
+export interface TrackSizes {
+  cols: number[]
+  rows: number[]
+}
+
+// How many shapes one wall remembers having been dragged on. A window reshapes
+// a wall a handful of ways (the sidebar collapsing, the dock opening, a second
+// monitor), and past that the shape dragged longest ago is one the user is not
+// coming back to.
+export const MAX_TRACK_SHAPES = 6
 
 export interface PaneGroup {
   /** Stable across renames and reorders: the sidebar keys its block, its fold
@@ -38,16 +50,29 @@ export interface PaneGroup {
   name: string
   /** Session ids, in the order they are laid out. */
   cells: string[]
-  /** Column and row shares, belonging to the group rather than to the window:
-   * arranging one wall 60/40 must not carry into the next one. */
-  cols: number[]
-  rows: number[]
+  /** Column and row shares per grid shape, belonging to the group rather than
+   * to the window: arranging one wall 60/40 must not carry into the next one.
+   * Keyed by shape because the grid reshapes under the user: a wall dragged at
+   * four columns has to come back the next time four columns do. */
+  tracks: Record<string, TrackSizes>
 }
 
 export const groupsKey = (projectId: string): string => `lich.panes.${projectId}`
 
 function numbers(value: unknown): number[] {
   return Array.isArray(value) ? value.filter((n): n is number => typeof n === "number") : []
+}
+
+function trackMap(value: unknown): Record<string, TrackSizes> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {}
+  }
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([shape, sizes]) => {
+      const stored = sizes as Partial<TrackSizes> | undefined
+      return [shape, { cols: numbers(stored?.cols), rows: numbers(stored?.rows) }]
+    }),
+  )
 }
 
 // parseGroups reads the stored value, and answers "no groups" for anything it
@@ -73,8 +98,7 @@ export function parseGroups(raw: string | null): PaneGroup[] {
           id: group.id,
           name: typeof group.name === "string" ? group.name : "",
           cells: group.cells.filter((id): id is string => typeof id === "string"),
-          cols: numbers(group.cols),
-          rows: numbers(group.rows),
+          tracks: trackMap(group.tracks),
         },
       ]
     })
@@ -191,6 +215,43 @@ export function updateGroup(
   change: Partial<Omit<PaneGroup, "id">>,
 ): PaneGroup[] {
   return groups.map((group) => (group.id === groupId ? { ...group, ...change } : group))
+}
+
+/** The key a grid shape's dragged shares are stored under. */
+export function shapeKey({ cols, rows }: Grid): string {
+  return `${cols}x${rows}`
+}
+
+// paneTracks is what the stage draws: the shares dragged on this shape, or equal
+// ones for a shape never dragged, which is a first layout, not a forgotten one.
+export function paneTracks(group: PaneGroup | null, shape: Grid): TrackSizes {
+  const stored = group?.tracks[shapeKey(shape)]
+  return {
+    cols: tracks(stored?.cols ?? [], shape.cols),
+    rows: tracks(stored?.rows ?? [], shape.rows),
+  }
+}
+
+// setTracks writes a drag against the shape it was dragged on, so the wall the
+// user arranged at four columns is still that wall when four columns come back.
+// The map is capped: shapes are minted by the window, not by the user, and a
+// pref that grows with every width the stage has ever had is one nobody prunes.
+export function setTracks(
+  groups: readonly PaneGroup[],
+  groupId: string,
+  shape: Grid,
+  change: Partial<TrackSizes>,
+): PaneGroup[] {
+  const group = groups.find((candidate) => candidate.id === groupId)
+  if (!group) {
+    return [...groups]
+  }
+  const key = shapeKey(shape)
+  const sizes = { ...(group.tracks[key] ?? { cols: [], rows: [] }), ...change }
+  const others = Object.entries(group.tracks).filter(([at]) => at !== key)
+  // Most recently dragged last, so what the slice drops is the oldest shape.
+  const kept = [...others.slice(-(MAX_TRACK_SHAPES - 1)), [key, sizes] as const]
+  return updateGroup(groups, groupId, { tracks: Object.fromEntries(kept) })
 }
 
 export function dissolveGroup(groups: readonly PaneGroup[], groupId: string): PaneGroup[] {

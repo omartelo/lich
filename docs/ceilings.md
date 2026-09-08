@@ -146,13 +146,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   the whole tree going, and the only way back is a reload, while the sessions keep running behind it.
   The trap is reading "lich has error boundaries" as "a render bug can no longer blank the window": the
   one subtree that owns the most state is the one nothing catches.
-- **The grid follows the window, so the layout you dragged is not always the one you get back**
-  (`frontend/src/lib/session/panes.ts`, `tracks`): how many panes sit across is computed from the
-  stage's measured width, so collapsing the sidebar, opening the dock or moving the window to another
-  monitor can reshape the wall under you. Track sizes are stored for the grid they were dragged on and
-  fall back to equal shares whenever the shape no longer matches — which reads as a resize being
-  silently forgotten, and is the alternative to restoring a four-column layout onto three columns. The
-  cells themselves and their order always survive; only the sizes do not.
 - **A dropped file has no path, so lich guesses it** (`internal/drop`): a file under neither the session directory
   nor home is *copied*, so an agent told to edit it edits the copy — and that copy is deleted 3 days on, so a path
   pasted into a prompt eventually stops resolving.

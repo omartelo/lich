@@ -11,10 +11,12 @@ import {
   removeFromGroups,
   reorderCells,
   resolveGroups,
+  setTracks as setGroupTracks,
   swapCells,
+  type TrackSizes,
   updateGroup,
 } from "./panes"
-import { fits } from "./pane-grid"
+import { fits, type Grid } from "./pane-grid"
 import { stageSize, useStoredGroups, writeGroups } from "./panes-store"
 
 export interface Panes {
@@ -55,8 +57,10 @@ export interface Panes {
   groupWith: (sessionId: string, delegateIds: readonly string[]) => number
   rename: (groupId: string, name: string) => void
   dissolve: (groupId: string) => void
-  /** Persist a wall's dragged column or row shares. */
-  setTracks: (groupId: string, change: { cols?: number[]; rows?: number[] }) => void
+  /** Persist a wall's dragged column or row shares, against the grid shape they
+   * were dragged on: the same wall gets its own layout at four columns and at
+   * three, and a shape never dragged still opens on equal shares. */
+  setTracks: (groupId: string, shape: Grid, change: Partial<TrackSizes>) => void
 }
 
 // The one definition of what the walls do, shared by the terminals that draw one
@@ -139,8 +143,7 @@ export function usePanes(projectId: string): Panes {
         id: newGroupId(),
         name: defaultName(list, plan.around),
         cells: [plan.around, plan.sessionId],
-        cols: [],
-        rows: [],
+        tracks: {},
       }
       commit([...removeFromGroups(groups, plan.sessionId), born])
       return true
@@ -169,8 +172,7 @@ export function usePanes(projectId: string): Panes {
         id: newGroupId(),
         name: defaultName(list, sessionId),
         cells: [sessionId, ...shown],
-        cols: [],
-        rows: [],
+        tracks: {},
       }
       // The session this was asked of leaves whatever wall it was on: it is the
       // subject of the action, not a bystander moved by it.
@@ -188,8 +190,8 @@ export function usePanes(projectId: string): Panes {
     dissolve(groupId) {
       commit(dissolveGroup(groups, groupId))
     },
-    setTracks(groupId, change) {
-      commit(updateGroup(groups, groupId, change))
+    setTracks(groupId, shape, change) {
+      commit(setGroupTracks(groups, groupId, shape, change))
     },
   }
 }

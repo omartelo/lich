@@ -6,14 +6,18 @@ import {
   focusAfterRemove,
   formatGroups,
   groupOf,
+  MAX_TRACK_SHAPES,
   movingFrom,
   nextCandidate,
   type PaneGroup,
+  paneTracks,
   parseGroups,
   planAdd,
   removeFromGroups,
   reorderCells,
   resolveGroups,
+  setTracks,
+  shapeKey,
   stageAction,
   swapCells,
   updateGroup,
@@ -27,13 +31,24 @@ const group = (id: string, cells: string[], name = id): PaneGroup => ({
   id,
   name,
   cells,
-  cols: [],
-  rows: [],
+  tracks: {},
 })
 
 describe("parseGroups", () => {
   it("reads what formatGroups wrote", () => {
     const groups = [group("g1", ["a", "b"], "orchestrator"), group("g2", ["c"])]
+    expect(parseGroups(formatGroups(groups))).toEqual(groups)
+  })
+
+  it("reads a wall's dragged sizes back for every shape it holds", () => {
+    const groups = setTracks(
+      [group("g1", ["a", "b"])],
+      "g1",
+      { cols: 2, rows: 1 },
+      {
+        cols: [0.6, 0.4],
+      },
+    )
     expect(parseGroups(formatGroups(groups))).toEqual(groups)
   })
 
@@ -48,7 +63,7 @@ describe("parseGroups", () => {
 
   it("drops entries that are not groups and keeps the ones that are", () => {
     expect(parseGroups('[{"nope":1},{"id":"g1","cells":["a"]}]')).toEqual([
-      { id: "g1", name: "", cells: ["a"], cols: [], rows: [] },
+      { id: "g1", name: "", cells: ["a"], tracks: {} },
     ])
   })
 })
@@ -168,6 +183,75 @@ describe("updateGroup / dissolveGroup", () => {
     expect(dissolveGroup([group("g1", ["a"]), group("g2", ["b"])], "g1").map((g) => g.id)).toEqual([
       "g2",
     ])
+  })
+})
+
+// A wall is reshaped by the window, not by the user: the sidebar collapsing,
+// the dock opening, a second monitor. So the same wall is dragged at four
+// columns and met again at three. Both layouts are the user's, and a shape they
+// have never dragged is a first layout rather than a forgotten one.
+describe("setTracks / paneTracks", () => {
+  const wall = group("g1", ["a", "b", "c", "d"])
+  const wide = { cols: 4, rows: 1 }
+  const narrow = { cols: 3, rows: 2 }
+  const wideCols = [0.4, 0.2, 0.2, 0.2]
+  const narrowCols = [0.5, 0.25, 0.25]
+
+  it("gives a shape never dragged equal shares", () => {
+    expect(paneTracks(wall, wide).cols).toEqual([0.25, 0.25, 0.25, 0.25])
+    expect(paneTracks(null, narrow).rows).toEqual([0.5, 0.5])
+  })
+
+  it("restores a drag when its shape comes back", () => {
+    const groups = setTracks([wall], "g1", wide, { cols: wideCols })
+    expect(paneTracks(groups[0], wide).cols).toEqual(wideCols)
+    expect(paneTracks(groups[0], narrow).cols).toEqual([1 / 3, 1 / 3, 1 / 3])
+    expect(paneTracks(groups[0], wide).cols).toEqual(wideCols)
+  })
+
+  it("keeps one wall's layout for every shape it was dragged on", () => {
+    let groups = setTracks([wall], "g1", wide, { cols: wideCols })
+    groups = setTracks(groups, "g1", narrow, { cols: narrowCols, rows: [0.7, 0.3] })
+    expect(paneTracks(groups[0], wide).cols).toEqual(wideCols)
+    expect(paneTracks(groups[0], wide).rows).toEqual([1])
+    expect(paneTracks(groups[0], narrow).cols).toEqual(narrowCols)
+    expect(paneTracks(groups[0], narrow).rows).toEqual([0.7, 0.3])
+  })
+
+  it("leaves the other walls alone, and a group that is gone", () => {
+    const groups = setTracks([wall, group("g2", ["e", "f"])], "g1", wide, { cols: wideCols })
+    expect(groups[1].tracks).toEqual({})
+    expect(setTracks(groups, "gone", wide, { cols: wideCols })).toEqual(groups)
+  })
+
+  // Shapes are minted by the window, so a map that grew with every width the
+  // stage has ever had is one nobody prunes.
+  it("forgets the shape dragged longest ago once there are too many", () => {
+    const shapes = Array.from({ length: MAX_TRACK_SHAPES + 1 }, (_, i) => ({
+      cols: i + 2,
+      rows: 1,
+    }))
+    let groups = [wall]
+    for (const shape of shapes) {
+      groups = setTracks(groups, "g1", shape, {
+        cols: Array.from({ length: shape.cols }, () => 1 / shape.cols),
+      })
+    }
+    expect(Object.keys(groups[0].tracks)).toHaveLength(MAX_TRACK_SHAPES)
+    expect(groups[0].tracks[shapeKey(shapes[0])]).toBeUndefined()
+    expect(groups[0].tracks[shapeKey(shapes[shapes.length - 1])]).toBeDefined()
+  })
+
+  it("counts a re-drag as use, so a shape in daily rotation is never the one dropped", () => {
+    let groups = [wall]
+    const shapes = Array.from({ length: MAX_TRACK_SHAPES }, (_, i) => ({ cols: i + 2, rows: 1 }))
+    for (const shape of shapes) {
+      groups = setTracks(groups, "g1", shape, { cols: [] })
+    }
+    groups = setTracks(groups, "g1", shapes[0], { cols: wideCols })
+    groups = setTracks(groups, "g1", { cols: 20, rows: 1 }, { cols: [] })
+    expect(groups[0].tracks[shapeKey(shapes[0])]).toEqual({ cols: wideCols, rows: [] })
+    expect(groups[0].tracks[shapeKey(shapes[1])]).toBeUndefined()
   })
 })
 

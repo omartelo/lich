@@ -367,7 +367,7 @@ describe("delegatesOf", () => {
 describe("sidebarGroups", () => {
   const ids = (groups: ReturnType<typeof sidebarGroups>) =>
     groups.map((group) => [group.key, group.sessions.map((s) => s.id)])
-  const wall = (id: string, cells: string[]) => ({ id, name: id, cells, cols: [], rows: [] })
+  const wall = (id: string, cells: string[]) => ({ id, name: id, cells, tracks: {} })
 
   it("draws one block per worktree when nothing is pinned", () => {
     let state = addSession({}, P, "s1")
@@ -954,7 +954,7 @@ describe("dragOrder", () => {
     kind: "shell",
     ...extra,
   })
-  const wall = (id: string, cells: string[]) => ({ id, name: id, cells, cols: [], rows: [] })
+  const wall = (id: string, cells: string[]) => ({ id, name: id, cells, tracks: {} })
 
   it("moves a wall past a checkout's block, carrying its cards", () => {
     const stored = [s("a1", { path: "/wt/a" }), s("r1"), s("r2")]

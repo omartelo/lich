@@ -13,7 +13,8 @@ import { activeSessionId, hasSession, resumableSession, sessionsOf } from "@/lib
 import { paletteSessions } from "@/lib/session/command-palette"
 import { spawnDecision, type SpawnProbe } from "@/lib/session/spawn-gate"
 import { PaneSeams } from "./PaneSeams"
-import { cellAt, grid, offsetOf, rowLength, rowTracks, tracks } from "@/lib/session/pane-grid"
+import { cellAt, grid, offsetOf, rowLength, rowTracks } from "@/lib/session/pane-grid"
+import { paneTracks } from "@/lib/session/panes"
 import { usePanes } from "@/lib/session/use-panes"
 import { useStageSize } from "@/lib/session/use-stage-size"
 import { cn } from "@/lib/utils"
@@ -155,8 +156,9 @@ export function TerminalHost() {
   const [liveRows, setLiveRows] = useState<number[] | null>(null)
   // The shares belong to the wall being drawn, not to the window: arranging one
   // group 60/40 must not carry into the next one the user opens.
-  const cols = liveCols ?? tracks(stage.current?.cols ?? [], layout.cols)
-  const rows = liveRows ?? tracks(stage.current?.rows ?? [], layout.rows)
+  const shares = paneTracks(stage.current, layout)
+  const cols = liveCols ?? shares.cols
+  const rows = liveRows ?? shares.rows
 
   // The pane a dragged one is hovering over, for the drop hint. The drag itself
   // is a pointer gesture on the label rather than HTML5 drag-and-drop, which the
@@ -366,7 +368,7 @@ export function TerminalHost() {
               onCommit={(next) => {
                 setLiveCols(null)
                 if (stage.current) {
-                  stage.setTracks(stage.current.id, { cols: next })
+                  stage.setTracks(stage.current.id, layout, { cols: next })
                 }
               }}
             />
@@ -381,7 +383,7 @@ export function TerminalHost() {
           onCommit={(next) => {
             setLiveRows(null)
             if (stage.current) {
-              stage.setTracks(stage.current.id, { rows: next })
+              stage.setTracks(stage.current.id, layout, { rows: next })
             }
           }}
         />

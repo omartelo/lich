@@ -19,7 +19,7 @@ beforeEach(() => {
   stored.clear()
 })
 
-const group = { id: "g1", name: "wall", cells: ["s1", "s2"], cols: [], rows: [] }
+const group = { id: "g1", name: "wall", cells: ["s1", "s2"], tracks: {} }
 
 describe("storedGroups", () => {
   it("answers an identity-stable empty array for a project with nothing stored", () => {
