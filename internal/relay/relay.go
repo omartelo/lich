@@ -196,6 +196,10 @@ type Terminal interface {
 	// how a delivery knows the target has finished taking the paste in before
 	// it presses Enter behind it (see awaitSettled).
 	QuietFor(id string) time.Duration
+	// AgentName is the name that session's agent answers to in its provider's
+	// peer roster, read out of the provider's own record. Empty when there is
+	// none, which is what leaves the roster on the derived name.
+	AgentName(id string) string
 }
 
 // Peer is one session a caller may address: the label it is addressed by, the

@@ -244,6 +244,29 @@ func TestCloseResolvesALabelBeforeAnotherSessionsRosterName(t *testing.T) {
 	}
 }
 
+// TestCloseFindsASessionByItsRenamedName proves `lich close` reads the roster
+// name back the way `lich send` does. An agent holding the name a session
+// answers to should not discover that only one of the two commands knows it.
+func TestCloseFindsASessionByItsRenamedName(t *testing.T) {
+	sessions := &fakeSessions{projects: []store.Project{{
+		ID: "p1", Name: "lich", Path: "/src/lich",
+		Sessions: []store.Session{
+			{ID: "s5", Label: "Session 5", Kind: "claude"},
+			{ID: "s6", Label: "Session 6", Kind: "claude"},
+		},
+	}}}
+	term := &fakeTerminal{names: map[string]string{"s6": "reviewer"}}
+	svc := New(sessions, &fakeWorktrees{}, term, &fakeEvents{})
+
+	closed, err := svc.Close("s1", "reviewer", "", "", false)
+	if err != nil {
+		t.Fatalf("Close by the renamed roster name: %v", err)
+	}
+	if closed.ID != "s6" {
+		t.Errorf("closed %q, want s6 — the session that answers to \"reviewer\"", closed.ID)
+	}
+}
+
 func TestCloseRefusesAnUnknownSession(t *testing.T) {
 	svc, _, _, _, _ := closer(t)
 

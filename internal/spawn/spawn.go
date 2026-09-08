@@ -109,6 +109,10 @@ type Worktrees interface {
 type Terminal interface {
 	Start(id, projectID, cwd, kind, resume, name string, fork, setup bool, cols, rows int) error
 	Close(id string) error
+	// AgentName is the name that session's agent answers to in its provider's
+	// peer roster, read out of the provider's own record. Empty when there is
+	// none, which is what leaves `lich close` matching the derived name.
+	AgentName(id string) string
 }
 
 // Events is where an opened session is announced to the window. A nil one leaves

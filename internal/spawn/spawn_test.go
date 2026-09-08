@@ -254,7 +254,12 @@ type fakeTerminal struct {
 	err      error
 	closed   []string
 	closeErr error
+	// names is what each session's agent has on record, standing in for the
+	// transcript the terminal service reads. Empty for a session nobody renamed.
+	names map[string]string
 }
+
+func (f *fakeTerminal) AgentName(id string) string { return f.names[id] }
 
 func (f *fakeTerminal) Close(id string) error {
 	f.closed = append(f.closed, id)

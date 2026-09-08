@@ -12,24 +12,37 @@ import (
 // one of them reached for whichever tool it had and, on the first real run,
 // used both channels at once.
 //
-// The relay therefore answers to either. It can: lich is what mints the roster
-// name, so it can derive it again here. This is the Go half of
-// frontend/src/lib/session/peer-name.ts, and the two have to agree — a name
-// derived differently would address a session that is not the one on the card.
+// The relay therefore answers to either. Deriving the roster name is how lich
+// mints one, and RosterNameOf is how it reads one back: a session that renamed
+// itself answers to the new name and to nothing lich could have derived, so the
+// derivation is the fallback rather than the answer.
 
 // rosterIDChars is how much of the session id trails the directory name. Four
 // separates the handful of sessions one checkout holds and stays readable in a
 // roster row.
 const rosterIDChars = 4
 
-// RosterName builds the name a session answers to in the peer roster: the last
-// element of its working directory, then four characters of its id. cwd is the
-// session's own directory when it has one (a worktree) and its project's
-// otherwise, matching what the frontend passes at spawn.
+// RosterNameOf is the name a session answers to in the peer roster now.
+// recorded is what its agent has on record (terminal.AgentName) and wins
+// outright: a `/rename` typed inside a session changes the name the harness
+// answers to, and no derivation can see that. Falling back to the derived one
+// covers everything with nothing recorded — a provider that is never handed a
+// roster name, a conversation lich cannot read, a session whose first turn has
+// not been written yet.
+func RosterNameOf(recorded, cwd, id string) string {
+	if recorded = strings.TrimSpace(recorded); recorded != "" {
+		return recorded
+	}
+	return RosterName(cwd, id)
+}
+
+// RosterName builds the name lich gives a session at birth: the last element of
+// its working directory, then four characters of its id. cwd is the session's
+// own directory when it has one (a worktree) and its project's otherwise.
 //
 // Exported for the one caller outside this package that mints a session rather
-// than resolving one: internal/spawn, which passes the name at spawn the way
-// the window does.
+// than resolving one: internal/spawn, which reports the name it opened a
+// session under.
 func RosterName(cwd, id string) string {
 	dir := filepath.Base(strings.TrimRight(strings.ReplaceAll(cwd, "\\", "/"), "/"))
 	// filepath.Base answers "." for an empty path and "/" for a bare root;

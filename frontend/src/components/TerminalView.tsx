@@ -15,7 +15,6 @@ import { makeReplayBuffer } from "@/lib/terminal/replay-buffer"
 import { takePaste } from "@/lib/terminal/paste-queue"
 import { takeFork } from "@/lib/terminal/fork-queue"
 import { takeSetup } from "@/lib/terminal/setup-queue"
-import { peerName } from "@/lib/session/peer-name"
 import type { PaletteSession } from "@/lib/session/command-palette"
 import { onTerminalFocusRequest } from "@/lib/terminal/focus-request"
 import { recordChunk } from "@/lib/terminal/term-perf"
@@ -258,7 +257,6 @@ export function TerminalView({
       cwd,
       kind,
       "",
-      peerName(cwd, sessionId),
       false,
       false,
       live.term.cols,
@@ -612,7 +610,6 @@ export function TerminalView({
           cwd,
           kind,
           fork || resume,
-          peerName(cwd, sessionId),
           fork !== "",
           takeSetup(sessionId),
           live.term.cols,

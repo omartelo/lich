@@ -276,14 +276,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   it was branched from, so the pair reports roughly twice what one conversation spent. It is the same
   arithmetic as the `(session, transcript)` bullet above, arrived at deliberately rather than by accident —
   a lich-driven fork makes that path ordinary.
-- **A session is named at birth, and a fork is a birth** (`internal/terminal/command.go`, `nameArgs`): a
-  resume never renames — Claude Code restores the name from the transcript, including a `/rename` typed inside
-  the session — but a fork does, because the conversation it opens is new and inherits the parent's name
-  otherwise (measured on 2.1.261). The trap is that
-  lich still *derives* that name (`internal/relay/rostername.go`, its page-side half
-  `frontend/src/lib/session/peer-name.ts`) for the relay to resolve against, and the derived string goes stale the
-  moment anyone renames — it then addresses a session that no longer answers to it. Nothing reads the real name
-  back, so `/list-agents` inside the session is the only place it is true.
 - **The file tree outside a repository is unfiltered and capped**
   (`internal/project/tree.go`, `walkFiles`): a plain folder has no `.gitignore`
   for lich to obey, so the Files tab lists dependency and build directories like

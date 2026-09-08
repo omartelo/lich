@@ -2,11 +2,35 @@ package relay
 
 import "testing"
 
-// These cases are the Go half of frontend/src/lib/session/peer-name.test.ts,
-// deliberately the same inputs and the same expected strings. The two
-// implementations address the same sessions, so a divergence here is a message
-// delivered to the wrong terminal — the one failure this feature must not have.
-func TestRosterNameOfMatchesTheFrontend(t *testing.T) {
+// TestRosterNameOf pins the choice between the two names a session can be
+// addressed by: what its agent has on record beats what lich can derive, every
+// time. The derivation is only ever the answer when there is nothing to read —
+// and a name that is only whitespace is nothing to read.
+func TestRosterNameOf(t *testing.T) {
+	tests := []struct {
+		name     string
+		recorded string
+		want     string
+	}{
+		{name: "the recorded name wins", recorded: "reviewer", want: "reviewer"},
+		{name: "trimmed on the way through", recorded: "  reviewer\n", want: "reviewer"},
+		{name: "nothing recorded falls back", recorded: "", want: "lich-4f2a"},
+		{name: "whitespace is nothing recorded", recorded: "   ", want: "lich-4f2a"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := RosterNameOf(tt.recorded, "/home/me/code/lich", "4f2a1b3c")
+			if got != tt.want {
+				t.Errorf("RosterNameOf(%q, …) = %q, want %q", tt.recorded, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestRosterNameDerivesTheBirthName pins the string lich gives a session that
+// has nothing on record yet — the one it is spawned under, and the one the
+// roster falls back to.
+func TestRosterNameDerivesTheBirthName(t *testing.T) {
 	tests := []struct {
 		name string
 		cwd  string

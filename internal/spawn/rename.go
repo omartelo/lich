@@ -55,7 +55,7 @@ func (s *Service) Rename(fromID, target, projectName, label string) (Renamed, er
 	if err != nil {
 		return Renamed{}, fmt.Errorf("read the workspace: %w", err)
 	}
-	found, err := renameTarget(projects, fromID, target, projectName)
+	found, err := renameTarget(projects, s.term.AgentName, fromID, target, projectName)
 	if err != nil {
 		return Renamed{}, err
 	}
@@ -85,9 +85,11 @@ func (s *Service) Rename(fromID, target, projectName, label string) (Renamed, er
 // or the caller's own when the rename named none. A command line run outside a
 // session has no own to fall back on, and is told so rather than handed the
 // resolver's "no session named """.
-func renameTarget(projects []store.Project, fromID, target, projectName string) (located, error) {
+func renameTarget(
+	projects []store.Project, nameOf func(id string) string, fromID, target, projectName string,
+) (located, error) {
 	if strings.TrimSpace(target) != "" {
-		return findSession(projects, target, projectName)
+		return findSession(projects, nameOf, target, projectName)
 	}
 	if fromID == "" {
 		return located{}, errors.New(

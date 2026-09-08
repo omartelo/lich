@@ -51,6 +51,10 @@ type fakeTerminal struct {
 	// onWrite runs after a write is recorded, outside the fake's own lock, so a
 	// test can make the target report state from inside a delivery.
 	onWrite func(id, data string)
+	// names is what each session's agent has on record, standing in for the
+	// transcript the terminal service reads. Empty for a session nobody renamed,
+	// which is what puts the roster back on the derived name.
+	names map[string]string
 }
 
 func newFakeTerminal(live ...string) *fakeTerminal {
@@ -58,11 +62,26 @@ func newFakeTerminal(live ...string) *fakeTerminal {
 		live: map[string]bool{}, writes: map[string][]string{},
 		settingUp: map[string]bool{}, typing: map[string]bool{},
 		noisy: map[string]int{}, drained: map[string]int{},
+		names: map[string]string{},
 	}
 	for _, id := range live {
 		t.live[id] = true
 	}
 	return t
+}
+
+// AgentName answers with whatever renamed() recorded for that session.
+func (f *fakeTerminal) AgentName(id string) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.names[id]
+}
+
+// renamed makes a session answer to name the way a /rename inside it would.
+func (f *fakeTerminal) renamed(id, name string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.names[id] = name
 }
 
 func (f *fakeTerminal) Live(id string) bool {
@@ -596,6 +615,46 @@ func TestARosterNameReachesTheSameSession(t *testing.T) {
 	}
 	if term.written("s2") == "" {
 		t.Error("the session the roster name points at was never typed at")
+	}
+}
+
+// TestARenamedSessionAnswersToItsNewName proves the read-back the roster rests
+// on: a session renamed from the inside answers to the name it now carries, and
+// no longer to the one lich derived — which is the string an agent reads out of
+// /list-agents and writes back at a prompt.
+func TestARenamedSessionAnswersToItsNewName(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	term.renamed("s2", "reviewer")
+	svc := newRelay(workspace(), term, nil)
+
+	go func() { _ = svc.Reply("", waitForTicket(svc), "ok") }()
+	got, err := svc.Send("s1", "reviewer", "", "hello", 30)
+	if err != nil {
+		t.Fatalf("Send by the renamed roster name: %v", err)
+	}
+	if got.Target != "docs" {
+		t.Errorf("target = %q, want the card label", got.Target)
+	}
+	if term.written("s2") == "" {
+		t.Error("the session the renamed name points at was never typed at")
+	}
+}
+
+// TestADerivedNameIsGoneOnceTheSessionRenames proves the other half of the same
+// read: the derived string stops addressing a session that renamed itself,
+// rather than reaching it under two names at once. Answering to both would put
+// the roster back where it was — an address lich mints and nothing keeps true.
+func TestADerivedNameIsGoneOnceTheSessionRenames(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	term.renamed("s2", "reviewer")
+	svc := newRelay(workspace(), term, nil)
+
+	_, err := svc.Send("s1", RosterName("/src/lich", "s2"), "", "hello", 30)
+	if err == nil {
+		t.Fatal("Send by the derived name = nil, want no session under it")
+	}
+	if !strings.Contains(err.Error(), "reviewer") {
+		t.Errorf("the error does not name what is reachable instead: %v", err)
 	}
 }
 

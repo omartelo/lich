@@ -48,6 +48,10 @@ func (*wiredTerminal) Ready(string) bool { return true }
 
 func (*wiredTerminal) QuietFor(string) time.Duration { return time.Hour }
 
+// Nothing renamed itself in these tests, so the roster stays on the name lich
+// derives — which is the one the wiring under test addresses.
+func (*wiredTerminal) AgentName(string) string { return "" }
+
 func (w *wiredTerminal) Write(_, data string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -251,6 +255,10 @@ func (s *spawnTerminal) Start(_, _, cwd, kind, _, _ string, _, _ bool, _, _ int)
 	s.cwd, s.kind = cwd, kind
 	return nil
 }
+
+// Nothing renamed itself here either, so a session is addressed by the name
+// lich derives for it.
+func (*spawnTerminal) AgentName(string) string { return "" }
 
 func (s *spawnTerminal) Close(id string) error {
 	s.mu.Lock()

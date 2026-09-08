@@ -222,6 +222,11 @@ func resolveBin(kind, bin string) string {
 // resumes into Claude Code's own fallback, the working directory, and that is
 // the same string for every session in one checkout.
 //
+// A birth is not always a first birth: the name reaching here is the one the
+// card already answers to when there is one (Start, AgentName), so a restart —
+// a conversation of its own, with no name to restore — is born under the name
+// the last one ended with rather than back under lich's derivation.
+//
 // A fork is a birth, which is why it names one despite carrying a resume id.
 // The conversation the provider is about to write is new, so there is no
 // /rename inside it to undo — and the copy inherits the parent's name (measured

@@ -476,7 +476,10 @@ func TestStartForksIntoItsOwnConversation(t *testing.T) {
 	got := spawnedArgs(t, svc, "s1")
 	svc.mu.Unlock()
 
-	want := []string{bin, "--name", "lich-9c1b", "--resume", "abc-123", "--fork-session", "--mcp-config"}
+	if name := spawnName(got); name != "lich-9c1b" {
+		t.Errorf("fork spawned under %q, want the name the caller gave it", name)
+	}
+	want := []string{bin, "--resume", "abc-123", "--fork-session", "--mcp-config"}
 	spawnPins(t, got, want...)
 }
 
@@ -886,24 +889,63 @@ func TestStartPassesSkipPermissionsToTheProcess(t *testing.T) {
 	spawnPins(t, got, want...)
 }
 
-// TestStartPassesNameToTheProcess proves the peer name reaches the spawned
-// binary's argv when a session is born, in the order claude parses.
-func TestStartPassesNameToTheProcess(t *testing.T) {
-	bin := stayAliveBin(t)
-	svc := New(stubBins{bin: bin}, nil, events.New())
-	t.Cleanup(func() { _ = svc.Close("s1") })
-
-	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "lich-4f2a", false, false, 80, 24); err != nil {
-		t.Fatalf("Start = %v, want nil", err)
+// TestStartNamesASessionByWhatItAnswersTo proves the three rungs Start picks a
+// peer name off, and that the winner reaches the spawned binary's argv in the
+// order claude parses. The recorded name is the one that matters: a card whose
+// conversation was renamed from the inside is respawned under that name rather
+// than back under lich's derivation, which is the whole reason the read exists.
+func TestStartNamesASessionByWhatItAnswersTo(t *testing.T) {
+	const recorded = `{"type":"agent-name","agentName":"reviewer"}` + "\n"
+	tests := []struct {
+		name       string
+		asked      string
+		transcript string
+		want       string
+	}{
+		{name: "the caller's own name", asked: "lich-4f2a", want: "lich-4f2a"},
+		{name: "derived when the caller named none", want: "-s1"},
+		{name: "the recorded name beats both", asked: "lich-4f2a", transcript: recorded, want: "reviewer"},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bin := stayAliveBin(t)
+			store := stubBins{bin: bin}
+			if tt.transcript != "" {
+				writeTranscript(t, "uuid-abc", tt.transcript)
+				store.providerSession = "uuid-abc"
+			}
+			svc := New(store, nil, events.New())
+			t.Cleanup(func() { _ = svc.Close("s1") })
 
-	svc.mu.Lock()
-	got := spawnedArgs(t, svc, "s1")
-	svc.mu.Unlock()
+			err := svc.Start("s1", "p1", t.TempDir(), "claude", "", tt.asked, false, false, 80, 24)
+			if err != nil {
+				t.Fatalf("Start = %v, want nil", err)
+			}
 
-	// As above: the registration follows, pinned by its own test.
-	want := []string{bin, "--name", "lich-4f2a", "--mcp-config"}
-	spawnPins(t, got, want...)
+			svc.mu.Lock()
+			got := spawnedArgs(t, svc, "s1")
+			svc.mu.Unlock()
+
+			// The derived name ends in the session id, and starts with a temporary
+			// directory nothing here can spell — a suffix is the whole of what that
+			// case owns. RosterName's own suite pins the rest.
+			if name := spawnName(got); !strings.HasSuffix(name, tt.want) {
+				t.Errorf("spawned under %q, want %q", name, tt.want)
+			}
+			// As above: the registration follows, pinned by its own test.
+			spawnPins(t, got, bin, "--mcp-config")
+		})
+	}
+}
+
+// spawnName is the roster name in a spawn's argv, empty when it carries none.
+// spawnPins drops the pair, so a test that owns the name reads it back here.
+func spawnName(got []string) string {
+	at := slices.Index(got, claudeNameFlag)
+	if at < 0 || at+1 >= len(got) {
+		return ""
+	}
+	return got[at+1]
 }
 
 // TestModelArgs pins each provider's own flag, and the two kinds that must never
@@ -1096,16 +1138,18 @@ func TestSessionEnvInjectsCoordinates(t *testing.T) {
 // flags in this order, and ends with the MCP registration plus its one config
 // value.
 //
-// lich's own briefing is dropped before the comparison. Every Claude Code spawn
-// carries it, and each of these tests owns one flag of its own — pinning the
-// briefing's presence six more times would only mean six failures the day its
-// wording moves. What it says is pinned once, by
-// TestTheBriefingGoesToTheProvidersThatTakeOne.
+// lich's own briefing and the session's roster name are dropped before the
+// comparison. Every Claude Code spawn carries both — the name because Start now
+// resolves one for every session rather than taking whatever the caller passed
+// — and each of these tests owns one flag of its own; pinning those two here as
+// well would only mean a failure per test the day either moves. What the
+// briefing says is pinned by TestTheBriefingGoesToTheProvidersThatTakeOne, and
+// what the name resolves to by TestStartNamesASessionByWhatItAnswersTo.
 func spawnPins(t *testing.T, got []string, want ...string) {
 	t.Helper()
 	trimmed := make([]string, 0, len(got))
 	for i := 0; i < len(got); i++ {
-		if got[i] == "--append-system-prompt" {
+		if got[i] == "--append-system-prompt" || got[i] == claudeNameFlag {
 			i++ // and the text it carries
 			continue
 		}

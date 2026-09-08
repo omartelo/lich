@@ -65,7 +65,7 @@ func (s *Service) Close(fromID, target, projectName, worktree string, force bool
 	if err != nil {
 		return Closed{}, fmt.Errorf("read the workspace: %w", err)
 	}
-	found, err := findSession(projects, target, projectName)
+	found, err := findSession(projects, s.term.AgentName, target, projectName)
 	if err != nil {
 		return Closed{}, err
 	}
@@ -197,7 +197,13 @@ type located struct {
 //
 // Whether the caller's own session is a legal answer is the caller's rule, not
 // this one's: a close refuses it, a rename is the main thing it is asked for.
-func findSession(projects []store.Project, target, projectName string) (located, error) {
+//
+// nameOf is the roster name read back off the provider's own record
+// (terminal.AgentName), for the same reason the relay reads it: a session that
+// renamed itself answers to the new name and to nothing lich could derive.
+func findSession(
+	projects []store.Project, nameOf func(id string) string, target, projectName string,
+) (located, error) {
 	target = strings.TrimSpace(target)
 	if target == "" {
 		return located{}, fmt.Errorf("no session given to close")
@@ -223,7 +229,7 @@ func findSession(projects []store.Project, target, projectName string) (located,
 			switch {
 			case strings.EqualFold(sess.Label, target):
 				byLabel = append(byLabel, located{project: p, session: sess})
-			case strings.EqualFold(relay.RosterName(cwd, sess.ID), target):
+			case strings.EqualFold(relay.RosterNameOf(nameOf(sess.ID), cwd, sess.ID), target):
 				byName = append(byName, located{project: p, session: sess})
 			}
 		}

@@ -10,6 +10,7 @@ import (
 	"github.com/omartelo/lich/internal/agentplugin"
 	"github.com/omartelo/lich/internal/project"
 	"github.com/omartelo/lich/internal/providers"
+	"github.com/omartelo/lich/internal/relay"
 )
 
 // Start spawns the binary for session id under project projectID — the user's
@@ -35,9 +36,12 @@ import (
 // is the provider's to assign, and reaches lich through this session's
 // session-start report like any other.
 //
-// name is what the session answers to in its provider's peer roster (Claude
-// Code's `/list-agents`), passed by the frontend so the roster names the card
-// the user sees. Only Claude Code has a roster; every other kind ignores it.
+// name is what the caller asks the session to answer to in its provider's peer
+// roster (Claude Code's `/list-agents`), and empty asks lich to name it. Only
+// Claude Code has a roster; every other kind ignores it. Whatever the caller
+// passes, a name already on record for this session wins (AgentName): a restart
+// opens a conversation of its own, and a `/rename` typed in the last one is a
+// decision the user made about this card rather than about that conversation.
 //
 // setup is passed once, by the flow that just created this session's worktree:
 // it runs the project's worktree setup script (.lich/setup-worktree.sh, see
@@ -57,6 +61,14 @@ func (s *Service) Start(
 	if fork && resume == "" {
 		return fmt.Errorf("a fork needs the conversation to branch, and no resume id was given")
 	}
+	// Resolved before the lock, because it reads a file: the conversation this
+	// spawn replaces is still on the row until its successor reports, so a name
+	// recorded there is the one this card answers to. Whatever is left is the
+	// caller's own suggestion, and lich's derivation when it had none.
+	if recorded := s.AgentName(id); recorded != "" {
+		name = recorded
+	}
+	name = relay.RosterNameOf(name, cwd, id)
 	sess, cwd, err := s.spawnSession(id, projectID, cwd, kind, resume, name, fork, setup, cols, rows)
 	if err != nil || sess == nil {
 		return err

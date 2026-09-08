@@ -38,9 +38,10 @@ interface SessionTooltipProps {
 // so this is where the text goes, and two versions of it would mean the rail
 // quietly telling you less.
 //
-// The peer-roster name is deliberately not among them: lich derives it at spawn
-// and never reads it back, so a /rename typed in the session leaves the derived
-// one naming nobody. `/list-agents` is where that name is true.
+// The peer-roster name is deliberately not among them: it addresses a session
+// from inside another one, which is not something the person reading this
+// tooltip is doing. `/list-agents` and lich's own list_sessions are where an
+// agent meets it.
 //
 // It resolves its own readouts instead of taking them as props. The stores
 // behind them are keyed by path and shared (one git poller per repository), so

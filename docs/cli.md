@@ -137,17 +137,16 @@ hook (`docs/hooks/session-state.md`), and it is the same thing its card shows:
 
 Types `<prompt>` at `<session>`'s prompt, submits it, and waits.
 
-- `<session>` is the label on the card, **or** the roster name lich derived for
-  it at spawn (`myrepo-a1b2`, the one passed as `--name` and written at a prompt
-  by a mention). Both name the same session and both are accepted, because an
-  agent holding one of them should never have to know which door it is standing
-  at — offering one name and accepting the other is what once made an agent
-  treat a single session as two and use both channels at once. The label wins a
-  tie. lich derives the roster name rather than reading it back, so a `/rename`
-  typed inside a Claude Code session moves the name *that* roster answers to and
-  not this one: the derived string keeps reaching the session here, and stops
-  reaching it through Claude Code's own messaging. `/list-agents`, in the
-  session, is what prints the name that side is using.
+- `<session>` is the label on the card, **or** the roster name that session
+  answers to (`myrepo-a1b2`, the one lich passes as `--name` and a mention
+  writes at a prompt). Both name the same session and both are accepted, because
+  an agent holding one of them should never have to know which door it is
+  standing at — offering one name and accepting the other is what once made an
+  agent treat a single session as two and use both channels at once. The label
+  wins a tie. A `/rename` typed inside a Claude Code session moves that name,
+  and lich reads it back off the session's own record, so both sides go on
+  naming it the same thing; the name lich derived at spawn stops addressing it,
+  exactly as it stops addressing it in `/list-agents`.
 - Labels are unique within a project, not across them: a label two live sessions
   answer to is an error naming both, and `--project` is what narrows it.
   Guessing which session a prompt lands in is the one mistake this must not
@@ -823,10 +822,11 @@ then waited on a lich ticket nobody would ever close.
 Three things keep that from repeating, and none of them asks the user to choose:
 
 1. **One address space.** The relay answers to the card label *and* to the peer
-   roster name (`internal/relay/rostername.go`, the Go half of
-   `frontend/src/lib/session/peer-name.ts` — a divergence there delivers a
-   message to the wrong terminal). A mention that slips into lich's tool works
-   instead of erroring.
+   roster name — the one the session's own record carries, read back per lookup
+   (`internal/terminal.AgentName`) and falling back to lich's derivation when
+   there is nothing to read (`internal/relay/rostername.go`). A mention that
+   slips into lich's tool works instead of erroring, and goes on working after a
+   `/rename`.
 2. **Both names travel.** `list_sessions` and every miss report the label and
    the roster name together, so an agent sees one session with two names.
 3. **One route home.** The relayed message says the ticket is the only way back
