@@ -180,7 +180,7 @@ func (s *spawnStore) SetSessionModel(_, model string) error {
 	return nil
 }
 
-func (s *spawnStore) SetSessionEntrypoint(_, _ string) error { return nil }
+func (s *spawnStore) SetRunEntrypoint(_, _ string) error { return nil }
 
 func (s *spawnStore) SandboxDefault(_, _, _ string) bool {
 	s.mu.Lock()

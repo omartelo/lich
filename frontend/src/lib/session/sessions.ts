@@ -50,6 +50,11 @@ export interface Session {
   // every provider session — the store refuses to record one against a card
   // whose PTY runs an agent.
   entrypoint?: string
+  // Whether this card is its checkout's Run card (internal/spawn.Run). Absent
+  // for every other session, including a terminal the user aimed at a command by
+  // hand: the mark is the backend's, and it is what holds the one Run card a
+  // checkout gets (runCardIn).
+  run?: boolean
   // Whether this session's PTY runs inside the sandbox (internal/sandbox).
   // Absent means it does not — the spawn decides it, from the provider's rung,
   // the checkout and any per-session override, and reports the verdict back;
@@ -513,6 +518,18 @@ export function sidebarGroups(
     }
   }
   return blocks
+}
+
+// runCardIn names the Run card of the checkout stored as `path` ("" for the
+// project's own directory), or undefined when it has none, which is what puts
+// the launch menu's item on "Run" rather than "Go to Run card".
+//
+// It reads the project's whole list rather than the block that checkout draws: a
+// Run card that has been pinned, or dragged onto a wall, is drawn in one of the
+// gathered blocks and still holds its checkout's slot, exactly as the backend
+// sees it (internal/spawn.runCardIn matches the row, not the block).
+export function runCardIn(sessions: Session[], path: string): Session | undefined {
+  return sessions.find((session) => session.run && (session.path ?? "") === path)
 }
 
 // reorderSubset returns the full id order that hands `ids` to the sessions the

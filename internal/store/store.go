@@ -68,6 +68,13 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- on a provider row the entrypoint is the provider, and a value parked there
     -- would be a setting nothing reads.
     entrypoint          TEXT NOT NULL DEFAULT '',
+    -- Whether this row is a checkout's Run card (internal/spawn.Run) rather than
+    -- a terminal somebody aimed at a command by hand. It is what holds the one
+    -- Run card a checkout gets: the menu finds the card by this flag and the
+    -- path beside it. Not derivable from entrypoint: the script on disk moves,
+    -- and a card renamed or re-aimed by hand is still the checkout's run seat
+    -- until it is closed.
+    run                 INTEGER NOT NULL DEFAULT 0,
     -- The session that asked for this one, when it was opened by delegation.
     -- Two columns rather than a foreign key: the id resolves to whatever the
     -- parent is called now, and the label is what it was called when the
@@ -308,6 +315,10 @@ type Session struct {
 	// a provider session. The window reads it to prefill its dialog and to say
 	// on the card what a renamed terminal actually runs.
 	Entrypoint string `json:"entrypoint"`
+	// Run marks the checkout's Run card (internal/spawn.Run): the one session per
+	// checkout that opens on .lich/run-worktree.sh. The window reads it to send
+	// the Run menu item to that card instead of opening a second one.
+	Run bool `json:"run"`
 	// Sandbox is whether this session runs confined: "on", "off", or empty for a
 	// row nothing has spawned yet. The spawn writes its own verdict here, so the
 	// window can mark a confined card without re-deriving a decision that took
@@ -421,6 +432,7 @@ func open(path string) (*Service, error) {
 		`ALTER TABLE sessions ADD COLUMN parked_branch TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE sessions ADD COLUMN fork_cost_offset REAL NOT NULL DEFAULT 0`,
 		`ALTER TABLE sessions ADD COLUMN sandbox_links TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE sessions ADD COLUMN run INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE projects ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE projects ADD COLUMN closed_seq INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE session_costs ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0`,
@@ -663,7 +675,7 @@ func (s *Service) ProjectAt(path string) (string, string) {
 // the frontend would have no order left to put an unpinned card back into.
 func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	rows, err := s.db.Query(
-		`SELECT id, label, kind, path, provider_session_id, entrypoint, sandbox, pinned,
+		`SELECT id, label, kind, path, provider_session_id, entrypoint, run, sandbox, pinned,
 		        origin_session_id, origin_label, scheduled_at, scheduled_prompt, unread,
 		        mcp_servers, sandbox_links,
 		        EXISTS (SELECT 1 FROM session_last_turn WHERE session_id = sessions.id)
@@ -681,7 +693,8 @@ func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 		var servers, links string
 		if err := rows.Scan(
 			&sess.ID, &sess.Label, &sess.Kind, &sess.Path, &sess.ProviderSessionID,
-			&sess.Entrypoint, &sess.Sandbox, &sess.Pinned, &sess.OriginSessionID, &sess.OriginLabel,
+			&sess.Entrypoint, &sess.Run, &sess.Sandbox, &sess.Pinned,
+			&sess.OriginSessionID, &sess.OriginLabel,
 			&sess.ScheduledAt, &sess.ScheduledPrompt, &sess.Unread, &servers, &links,
 			&sess.HasLastTurn,
 		); err != nil {

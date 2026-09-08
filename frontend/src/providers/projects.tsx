@@ -94,6 +94,7 @@ const cardFromStored = (restored: StoredSession): Session => ({
   path: restored.path,
   ...(restored.providerSessionId ? { providerSessionId: restored.providerSessionId } : {}),
   ...(restored.entrypoint ? { entrypoint: restored.entrypoint } : {}),
+  ...(restored.run ? { run: true } : {}),
   ...(restored.sandbox === "on" ? { sandboxed: true } : {}),
   ...(restored.originSessionId
     ? { originSessionId: restored.originSessionId, originLabel: restored.originLabel }
@@ -323,6 +324,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         label,
         kind,
         ...(path ? { path } : {}),
+        ...(opened.run ? { run: true } : {}),
         ...(originSessionId ? { originSessionId, originLabel } : {}),
       }
       const next = adoptSession(sessionsRef.current, projectId, session, nextSeq)

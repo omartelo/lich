@@ -47,7 +47,7 @@ beforeEach(() => {
 
 const text = () => document.body.textContent ?? ""
 
-function menu(onRun?: () => void) {
+function menu(run?: { open: boolean; onSelect: () => void }) {
   return createElement(
     DropdownMenu,
     { open: true },
@@ -60,11 +60,17 @@ function menu(onRun?: () => void) {
         terminalLabel: "New Terminal" as const,
         projectId: "p1",
         onNewSession: () => {},
-        onRun,
+        run,
       }),
     ),
   )
 }
+
+// The item to click, by the label it is wearing.
+const menuItem = (label: string) =>
+  [...document.querySelectorAll('[role="menuitem"]')].find(
+    (element) => element.textContent === label,
+  ) as HTMLElement | undefined
 
 test("the launch menu offers Run only when the project ships a run script", async () => {
   const without = await mountBudget(menu())
@@ -73,20 +79,37 @@ test("the launch menu offers Run only when the project ships a run script", asyn
   await without.unmount()
 
   const clicks: number[] = []
-  const with_ = await mountBudget(menu(() => clicks.push(1)))
+  const with_ = await mountBudget(menu({ open: false, onSelect: () => clicks.push(1) }))
   expect(text()).toContain("Run")
+  expect(text()).not.toContain("Go to Run card")
 
-  const item = [...document.querySelectorAll('[role="menuitem"]')].find(
-    (element) => element.textContent === "Run",
-  )
+  const item = menuItem("Run")
   if (!item) {
     throw new Error("Run item not rendered")
   }
   await with_.act(() => {
-    ;(item as HTMLElement).click()
+    item.click()
   })
   expect(clicks).toEqual([1])
   await with_.unmount()
+})
+
+// One Run card per checkout (internal/spawn.Run): once the checkout has one, the
+// same item goes to that card instead of asking for a second.
+test("the item reads Go to Run card once the checkout has one", async () => {
+  const focused: number[] = []
+  const open = await mountBudget(menu({ open: true, onSelect: () => focused.push(1) }))
+  expect(text()).toContain("Go to Run card")
+
+  const item = menuItem("Go to Run card")
+  if (!item) {
+    throw new Error("Go to Run card item not rendered")
+  }
+  await open.act(() => {
+    item.click()
+  })
+  expect(focused).toEqual([1])
+  await open.unmount()
 })
 
 test("the dialog offers a run command when the repository ships none", async () => {

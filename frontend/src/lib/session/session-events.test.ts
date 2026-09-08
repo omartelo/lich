@@ -343,9 +343,17 @@ describe("toOpenedSession", () => {
       kind: "claude",
       path: "/wt/auth-fix",
       nextSeq: 5,
+      run: false,
       originSessionId: "s1",
       originLabel: "planner",
     })
+  })
+
+  // The mark is what sends the next Run to this card instead of opening a second
+  // one, so it has to survive the narrowing (internal/spawn.Run).
+  it("keeps the run mark of a Run card", () => {
+    expect(toOpenedSession({ ...payload, run: true })?.run).toBe(true)
+    expect(toOpenedSession({ ...payload, run: "yes" })?.run).toBe(false)
   })
 
   // A session opened from the window, or by `lich open` from a plain shell, has

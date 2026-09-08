@@ -12,7 +12,7 @@ import type { ProviderState } from "@/lib/providers-store"
 import type { ProviderKind } from "@/lib/session/sessions"
 import type { SandboxAnswer } from "@/lib/use-sandbox-choice"
 import { cn } from "@/lib/utils"
-import { SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
+import { type RunMenuAction, SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
 
 interface SessionGroupHeaderProps {
   name: string
@@ -36,8 +36,9 @@ interface SessionGroupHeaderProps {
   activatorProps: ComponentPropsWithoutRef<"button">
   onToggle: () => void
   onNewSession: (kind: ProviderKind | "shell", sandbox: SandboxAnswer) => void
-  // Open this checkout's Run card. Absent when the project ships no run script.
-  onRun?: () => void
+  // The checkout's Run entry: open its Run card, or go to the one it has.
+  // Absent when the project ships no run script.
+  run?: RunMenuAction
 }
 
 interface SessionGroupTitleButtonProps {
@@ -98,7 +99,7 @@ export function SessionGroupHeader({
   activatorProps,
   onToggle,
   onNewSession,
-  onRun,
+  run,
 }: SessionGroupHeaderProps) {
   const [editing, setEditing] = useState(false)
 
@@ -162,7 +163,7 @@ export function SessionGroupHeader({
               terminalLabel="New Terminal"
               projectId={projectId}
               onNewSession={onNewSession}
-              onRun={onRun}
+              run={run}
             />
           </DropdownMenuContent>
         </DropdownMenu>

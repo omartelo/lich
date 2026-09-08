@@ -26,8 +26,12 @@ import (
 // same card, with the error still on screen (internal/terminal.wrapEntrypoint).
 //
 // cwd is any checkout of the project: a worktree, or the project's own
-// directory. Nothing here dedupes — asking twice opens two cards, and the
-// second one's own error is the honest report that the port is taken.
+// directory. One checkout gets one Run card: asking again hands back the card it
+// already has, since a second one could only report the port it cannot bind. A
+// card whose command has exited still holds that slot: the wrapper left the
+// user's shell in it and that shell is the retry, so only closing the card frees
+// it, which is what the loaded state already says by listing open rows alone
+// (store.sessionsOf).
 func (s *Service) Run(projectID, cwd string) (Session, error) {
 	if projectID == "" || cwd == "" {
 		return Session{}, fmt.Errorf("a run card needs a project and a checkout to open in")
@@ -46,6 +50,11 @@ func (s *Service) Run(projectID, cwd string) (Session, error) {
 	target, ok := projectByID(projects, projectID)
 	if !ok {
 		return Session{}, fmt.Errorf("no open project with id %q", projectID)
+	}
+	// Before the script is even read: the card this checkout already has is the
+	// answer whatever .lich/run-worktree.sh says now.
+	if live, ok := runCardIn(target, storedPath(target.Path, cwd)); ok {
+		return live, nil
 	}
 	script := project.RunScript(target.Path)
 	if script == "" {
@@ -70,6 +79,7 @@ func (s *Service) Run(projectID, cwd string) (Session, error) {
 		Kind:    terminal.KindShell,
 		Path:    storedPath(target.Path, cwd),
 		NextSeq: target.NextSeq + 1,
+		Run:     true,
 	}
 	if err := s.sessions.AddSessionFrom(
 		target.ID, id, opened.Label, opened.Kind, opened.Path, opened.NextSeq, "", "",
@@ -79,8 +89,9 @@ func (s *Service) Run(projectID, cwd string) (Session, error) {
 	// Before the spawn rather than after it: terminal.Start reads the entrypoint
 	// off the row, so a write that lands later opens a bare shell instead of the
 	// app. Both writes are this goroutine's, in order, which is what the window
-	// could not have promised had it made them over two RPC calls.
-	if err := s.sessions.SetSessionEntrypoint(id, script); err != nil {
+	// could not have promised had it made them over two RPC calls. It is also
+	// what marks the row a Run card, so the lookup above can find it.
+	if err := s.sessions.SetRunEntrypoint(id, script); err != nil {
 		return Session{}, fmt.Errorf("record the run command on session %q: %w", opened.Label, err)
 	}
 	// Announced before the spawn, and regardless of how it goes, for Open's
@@ -98,6 +109,33 @@ func (s *Service) Run(projectID, cwd string) (Session, error) {
 		return Session{}, fmt.Errorf("the run card was created but its terminal did not start: %w", err)
 	}
 	return opened, nil
+}
+
+// runCardIn finds a checkout's live Run card among a project's loaded sessions,
+// matched on the row's own mark rather than on its entrypoint: the script on
+// disk moves, and a card renamed or re-aimed by hand is still the run seat this
+// checkout spent.
+//
+// path is the store's spelling of the checkout (storedPath), which is what the
+// row holds and what the window groups by.
+func runCardIn(target store.Project, path string) (Session, bool) {
+	for _, sess := range target.Sessions {
+		if !sess.Run || sess.Path != path {
+			continue
+		}
+		return Session{
+			ID:        sess.ID,
+			ProjectID: target.ID,
+			Project:   target.Name,
+			Label:     sess.Label,
+			Kind:      sess.Kind,
+			Path:      sess.Path,
+			// The counter stands where it is: no label was taken this time.
+			NextSeq: target.NextSeq,
+			Run:     true,
+		}, true
+	}
+	return Session{}, false
 }
 
 // projectByID finds an open project by its id — what the window addresses a

@@ -15,6 +15,7 @@ import { SessionCard } from "./SessionCard"
 import { PullRequestCard } from "./PullRequestCard"
 import { isPullsOpen, subscribePullsCard } from "@/lib/pulls-card-store"
 import { SessionGroupHeader } from "./SessionGroupHeader"
+import type { RunMenuAction } from "./SessionLaunchMenuItems"
 
 interface SessionGroupProps {
   projectId: string
@@ -63,9 +64,10 @@ interface SessionGroupProps {
   // Closing stays the sidebar's: the last session of a worktree raises the
   // keep-or-remove dialog it owns (useWorktreeClose).
   onClose: (session: Session) => void
-  // Open this checkout's Run card. Absent when the project ships no run script,
-  // and on the gathered blocks, which are not checkouts.
-  onRun?: () => void
+  // The checkout's Run entry: open its Run card, or go to the one it has.
+  // Absent when the project ships no run script, and on the gathered blocks,
+  // which are not checkouts.
+  run?: RunMenuAction
   // The worktree's pull-request entry: opens the Pulls screen for this branch.
   // pullsActive marks it when that screen is showing this group's PR. Rendered
   // only for worktree groups (a truthy path).
@@ -110,7 +112,7 @@ export function SessionGroup({
   sortable,
   onReorder,
   onClose,
-  onRun,
+  run,
   pullsActive,
   onPulls,
   onClosePulls,
@@ -194,7 +196,7 @@ export function SessionGroup({
           activatorProps={fixed ? {} : { ...group.attributes, ...group.listeners }}
           onToggle={toggle}
           onNewSession={(kind, sandbox) => newSession(projectId, kind, path, sandbox)}
-          onRun={onRun}
+          run={run}
         />
       )}
       <div

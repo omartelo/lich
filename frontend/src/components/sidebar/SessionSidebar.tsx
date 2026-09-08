@@ -42,6 +42,7 @@ import {
   dragOrder,
   reorderSubset,
   type Session,
+  runCardIn,
   sessionsOf,
   sidebarGroups,
   type SidebarGroup,
@@ -54,7 +55,7 @@ import { useWorktreeClose } from "./useWorktreeClose"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { usePanelWidth } from "@/lib/use-panel-width"
 import { useWorktreeDialogIntent } from "@/lib/use-sidebar-intent"
-import { SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
+import { type RunMenuAction, SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
 
 // Named here like every other `lich.*` pref rather than spelled at the call
 // site. The bounds go with it: wide enough for a session label and its branch,
@@ -339,6 +340,33 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
     setWorktreeOpen(false)
   }
 
+  // The checkout's Run entry. One checkout gets one Run card, so once it has one
+  // the item goes to that card rather than asking for a second, which the
+  // backend would answer with the same card anyway (internal/spawn.Run). A card
+  // whose command has exited still counts: the shell the wrapper left in it is
+  // the retry, and only closing the card frees the slot.
+  //
+  // Asked of the unfiltered list: a Run card the query hid is still the one this
+  // checkout has.
+  const runAction = (group: SidebarGroup): RunMenuAction => {
+    const card = runCardIn(list, group.path)
+    if (card) {
+      return {
+        open: true,
+        onSelect: () => {
+          activateSession(projectId, card.id)
+          navigate(`/projects/${projectId}`)
+        },
+      }
+    }
+    return {
+      open: false,
+      onSelect: () => {
+        Spawn.Run(projectId, group.path || path).catch((error) => toast.error(errorText(error)))
+      },
+    }
+  }
+
   // One block, rendered the same whichever drag list it belongs to.
   const renderGroup = (group: SidebarGroup) => {
     const groupActive = group.sessions.some((s) => s.id === realActiveId)
@@ -380,15 +408,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
         onClose={worktreeClose.requestClose}
         // Offered on a checkout's block alone: a wall and the pinned block
         // gather cards from everywhere and have no directory to run one in.
-        onRun={
-          runnable && !group.pinned && !group.stage
-            ? () => {
-                Spawn.Run(projectId, group.path || path).catch((error) =>
-                  toast.error(errorText(error)),
-                )
-              }
-            : undefined
-        }
+        run={runnable && !group.pinned && !group.stage ? runAction(group) : undefined}
         pullsActive={onPullsRoute && groupActive}
         onPulls={() => {
           openPulls(group.path || path)

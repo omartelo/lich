@@ -24,6 +24,7 @@ import {
   reorderSubset,
   restoreSession,
   resumableSession,
+  runCardIn,
   sessionOrigin,
   sessionsOf,
   setActiveSession,
@@ -361,6 +362,41 @@ describe("delegatesOf", () => {
   it("answers nothing for a session nobody was delegated from", () => {
     expect(delegatesOf(buildState(2), P, "s1")).toEqual([])
     expect(delegatesOf(buildState(2), P, "")).toEqual([])
+  })
+})
+
+describe("runCardIn", () => {
+  const card = (id: string, extra: Partial<Session> = {}): Session => ({
+    id,
+    label: id,
+    kind: "shell",
+    ...extra,
+  })
+
+  it("names the checkout's Run card, and nothing for a checkout without one", () => {
+    const sessions = [card("s1"), card("run", { run: true, path: "/wt/a" })]
+    expect(runCardIn(sessions, "/wt/a")?.id).toBe("run")
+    expect(runCardIn(sessions, "")).toBeUndefined()
+    expect(runCardIn(sessions, "/wt/b")).toBeUndefined()
+  })
+
+  it("finds the project's own checkout under the empty path", () => {
+    expect(runCardIn([card("run", { run: true })], "")?.id).toBe("run")
+  })
+
+  // A Run card that has been pinned or dragged onto a wall is drawn in one of the
+  // gathered blocks, and still holds its checkout's one slot.
+  it("finds a Run card the sidebar draws in another block", () => {
+    const pinned = [card("run", { run: true, path: "/wt/a", pinned: true })]
+    expect(runCardIn(pinned, "/wt/a")?.id).toBe("run")
+  })
+
+  // The mark is the backend's; a terminal the user aimed at a command by hand is
+  // an ordinary card and holds no slot.
+  it("ignores a terminal that merely has an entrypoint", () => {
+    expect(
+      runCardIn([card("term", { entrypoint: "pnpm dev", path: "/wt/a" })], "/wt/a"),
+    ).toBeUndefined()
   })
 })
 

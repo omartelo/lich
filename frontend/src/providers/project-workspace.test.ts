@@ -13,6 +13,7 @@ const storedSession = (overrides: Partial<StoredSession> = {}): StoredSession =>
   path: "",
   providerSessionId: "",
   entrypoint: "",
+  run: false,
   sandbox: "",
   pinned: false,
   originSessionId: "",

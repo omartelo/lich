@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deleted with the session they were dropped into; the three-day sweep now only
   clears the ones an unclean exit orphaned, so a path pasted a week ago still
   resolves.
+- **A checkout gets one Run card, and the menu goes to it.** Asking to run a
+  checkout that is already running one opened a second card, whose only report
+  was the port it could not bind. The item now reads "Go to Run card" and takes
+  you to the card that is there, including one whose command has exited: the
+  shell left in it is the retry. Closing the card is what frees the slot.
 
 - **A sandboxed session's tooltip now names the dotfiles its private home did
   not get.** Every path lich binds into the sandbox is taken as it is on disk

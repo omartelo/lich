@@ -20,6 +20,14 @@ interface WorktreeMenuAction {
   onSelect: () => void
 }
 
+/** The checkout's Run entry. open is whether it already has a Run card (one per
+ * checkout, see internal/spawn.Run), which is what turns the item from opening
+ * one into going to the one that is there. */
+export interface RunMenuAction {
+  open: boolean
+  onSelect: () => void
+}
+
 interface SessionLaunchMenuItemsProps {
   providers: ProviderState[]
   terminalLabel: "Terminal" | "New Terminal"
@@ -29,9 +37,9 @@ interface SessionLaunchMenuItemsProps {
    * the rung asked for one, "" when it answered by itself. */
   onNewSession: (kind: ProviderKind | "shell", sandbox: SandboxAnswer) => void
   worktree?: WorktreeMenuAction
-  /** Open the checkout's Run card. Absent when the project ships no
+  /** The checkout's Run entry. Absent when the project ships no
    * .lich/run-worktree.sh — there would be no command to run. */
-  onRun?: () => void
+  run?: RunMenuAction
 }
 
 interface SandboxStepProps {
@@ -93,7 +101,7 @@ export function SessionLaunchMenuItems({
   projectId,
   onNewSession,
   worktree,
-  onRun,
+  run,
 }: SessionLaunchMenuItemsProps) {
   const asking = useSandboxAsk(
     providers.map((provider) => provider.id),
@@ -142,10 +150,10 @@ export function SessionLaunchMenuItems({
           <Terminal />
           {terminalLabel}
         </DropdownMenuItem>
-        {onRun && (
-          <DropdownMenuItem onClick={onRun}>
+        {run && (
+          <DropdownMenuItem onClick={run.onSelect}>
             <Play />
-            Run
+            {run.open ? "Go to Run card" : "Run"}
           </DropdownMenuItem>
         )}
         {worktree && (

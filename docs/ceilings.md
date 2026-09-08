@@ -14,12 +14,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   checkout owns, nothing binds it, and anything on the machine can take the port before the dev server starts. A
   Run card shortens that window rather than closing it — the process it starts is what binds the port, and
   whether the script even mentions the variable is the project's own business.
-- **A Run card is a terminal, not a supervisor** (`internal/spawn/run.go`, `.lich/run-worktree.sh`): lich starts
-  the command and stops caring. Nothing restarts it, nothing reports memory or CPU, and nothing dedupes — asking
-  twice opens two cards, and the second one's own `address already in use` is the whole of the report. When the
-  command exits the entrypoint wrapper leaves the user's shell in the same card with the error still on screen
-  (`internal/terminal/entrypoint.go`), which is the retry: ↑, Enter. The script is one command, so a project with
-  a web server and a worker beside it opens two cards or writes a script that backgrounds one of them.
 - **The Run card is never started for you, and never on Windows** (`frontend/src/components/sidebar/SessionSidebar.tsx`):
   a fresh worktree's setup script is still installing dependencies in the agent's card when the checkout appears,
   and lich has no "setup finished" signal to hang an automatic start on — `terminal.Ready` answers a different

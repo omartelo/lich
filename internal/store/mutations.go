@@ -354,6 +354,10 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		// shell — silently, on the one path where the card keeps its identity but
 		// not its id.
 		//
+		// The run mark rides along with the entrypoint it belongs to: a resumed
+		// Run card that came back unmarked would leave its checkout's slot free,
+		// and the next Run would open a second card onto the same port.
+		//
 		// The scheduled prompt rides along because the row is the only copy of
 		// what the user parked there: parking a session is not cancelling its
 		// reminder, and a resume that dropped it forfeited the prompt with
@@ -369,17 +373,19 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		// session, and the row is what says where it belongs.
 		var labelAuto int
 		var projectID, model, entrypoint, sandbox string
+		var run bool
 		var forkOffset float64
 		row := tx.QueryRow(
 			`SELECT id, project_id, label, kind, path, provider_session_id, label_auto,
-			        model, entrypoint, sandbox, pinned, origin_session_id, origin_label,
+			        model, entrypoint, run, sandbox, pinned, origin_session_id, origin_label,
 			        scheduled_at, scheduled_prompt, fork_cost_offset
 			   FROM sessions `+where,
 			args...,
 		)
 		if err := row.Scan(
 			&old.ID, &projectID, &old.Label, &old.Kind, &old.Path, &old.ProviderSessionID,
-			&labelAuto, &model, &entrypoint, &sandbox, &old.Pinned, &old.OriginSessionID, &old.OriginLabel,
+			&labelAuto, &model, &entrypoint, &run, &sandbox, &old.Pinned,
+			&old.OriginSessionID, &old.OriginLabel,
 			&old.ScheduledAt, &old.ScheduledPrompt, &forkOffset,
 		); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
@@ -414,11 +420,11 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		if _, err := tx.Exec(
 			`INSERT INTO sessions
 			   (id, project_id, label, kind, path, provider_session_id, label_auto,
-			    model, entrypoint, sandbox, pinned, origin_session_id, origin_label,
+			    model, entrypoint, run, sandbox, pinned, origin_session_id, origin_label,
 			    scheduled_at, scheduled_prompt, fork_cost_offset, position)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
 			newSessionID, projectID, old.Label, old.Kind, old.Path, old.ProviderSessionID, labelAuto,
-			model, entrypoint, sandbox, old.Pinned, old.OriginSessionID, old.OriginLabel,
+			model, entrypoint, run, sandbox, old.Pinned, old.OriginSessionID, old.OriginLabel,
 			old.ScheduledAt, old.ScheduledPrompt, forkOffset, projectID,
 		); err != nil {
 			return fmt.Errorf("reinsert session %q: %w", newSessionID, err)
@@ -439,6 +445,7 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 			Path:              old.Path,
 			ProviderSessionID: old.ProviderSessionID,
 			Entrypoint:        entrypoint,
+			Run:               run,
 			Sandbox:           sandbox,
 			Pinned:            old.Pinned,
 			OriginSessionID:   old.OriginSessionID,
@@ -622,6 +629,26 @@ func (s *Service) SetSessionEntrypoint(sessionID, entrypoint string) error {
 		strings.TrimSpace(entrypoint), sessionID,
 	); err != nil {
 		return fmt.Errorf("set entrypoint on %q: %w", sessionID, err)
+	}
+	return nil
+}
+
+// SetRunEntrypoint records the run script on a session row and marks that row as
+// the checkout's Run card, in one statement. The mark means "this card is what
+// .lich/run-worktree.sh opened into", and a row holding one half of that would
+// either be a run card nothing can find or a slot held by a bare shell.
+//
+// Only internal/spawn.Run calls it. A terminal the user aims at a command by
+// hand goes through SetSessionEntrypoint and stays an ordinary card, so it never
+// occupies the one Run card its checkout gets.
+//
+// The kind clause is SetSessionEntrypoint's, for the same reason.
+func (s *Service) SetRunEntrypoint(sessionID, entrypoint string) error {
+	if _, err := s.db.Exec(
+		`UPDATE sessions SET entrypoint = ?, run = 1 WHERE id = ? AND kind = 'shell'`,
+		strings.TrimSpace(entrypoint), sessionID,
+	); err != nil {
+		return fmt.Errorf("set run entrypoint on %q: %w", sessionID, err)
 	}
 	return nil
 }

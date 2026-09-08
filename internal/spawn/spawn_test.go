@@ -37,7 +37,8 @@ type fakeSessions struct {
 	models   map[string]string
 	modelErr error
 	// entrypoints records the run command written on each session row, keyed by
-	// session id.
+	// session id. Only a Run card gets one from this service, so a row in here is
+	// also a row marked as one.
 	entrypoints   map[string]string
 	entrypointErr error
 	// deleted/parked/purged record what a close asked the store to do, and
@@ -164,7 +165,7 @@ func (f *fakeSessions) SetSessionModel(sessionID, model string) error {
 	return nil
 }
 
-func (f *fakeSessions) SetSessionEntrypoint(sessionID, entrypoint string) error {
+func (f *fakeSessions) SetRunEntrypoint(sessionID, entrypoint string) error {
 	if f.entrypointErr != nil {
 		return f.entrypointErr
 	}

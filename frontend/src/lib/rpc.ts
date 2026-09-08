@@ -565,7 +565,11 @@ export const Spawn = {
    * whose entrypoint is .lich/run-worktree.sh, its PTY started by the backend
    * so the app is up whether or not the card is ever looked at. Rejects a
    * project that ships no run script. The card arrives through session-opened,
-   * like every other session opened outside the window. */
+   * like every other session opened outside the window.
+   *
+   * One card per checkout: a checkout that already has one gets nothing new,
+   * and the window sends the menu item to that card instead of calling this
+   * (runCardIn). */
   Run: (projectId: string, cwd: string) => call<null>("spawn.Run", [projectId, cwd]),
 }
 

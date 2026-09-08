@@ -85,7 +85,7 @@ type Sessions interface {
 	) error
 	SandboxDefault(providerID, projectID, cwd string) bool
 	SetSessionModel(sessionID, model string) error
-	SetSessionEntrypoint(sessionID, entrypoint string) error
+	SetRunEntrypoint(sessionID, entrypoint string) error
 	RenameSession(sessionID, label string) error
 	DeleteSession(projectID, sessionID, activeID string) error
 	CloseSession(projectID, sessionID, activeID string) error
@@ -149,6 +149,10 @@ type Session struct {
 	OriginSessionID string `json:"originSessionId"`
 	OriginLabel     string `json:"originLabel"`
 	Confined        bool   `json:"confined"`
+	// Run marks a checkout's Run card, so the window can find it again and send
+	// the menu item to it rather than opening a second one (Run). Only Run sets
+	// it; every session opened any other way is a card of its own.
+	Run bool `json:"run"`
 }
 
 // Service opens sessions on behalf of a caller outside the window.

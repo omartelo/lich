@@ -56,6 +56,11 @@ func TestRunOpensATerminalOnTheScript(t *testing.T) {
 	if got := sessions.entrypoints[opened.ID]; got != "pnpm dev --port $LICH_WORKTREE_PORT" {
 		t.Errorf("entrypoint = %q, want the script", got)
 	}
+	// The mark is what the window finds the card by, so a card opened without it
+	// is one the next Run would open a rival to.
+	if !opened.Run {
+		t.Error("opened card is not marked a run card")
+	}
 	// The PTY is started here rather than left to the window: that is the whole
 	// point — a run card nobody clicks still runs the app.
 	if len(term.spawns) != 1 {
@@ -140,5 +145,86 @@ func TestRunFailsWhenTheEntrypointCannotBeRecorded(t *testing.T) {
 	}
 	if len(term.spawns) != 0 {
 		t.Errorf("spawns = %d, want none — the shell would not run the app", len(term.spawns))
+	}
+}
+
+// One Run card per checkout: the second ask is answered with the first card,
+// because a rival could only report the port it cannot bind. Nothing is written,
+// nothing is spawned, and no session-opened is emitted: the card the window is
+// being sent to is one it already draws.
+func TestRunGoesToTheCheckoutsExistingCard(t *testing.T) {
+	svc, sessions, term, events, _ := runWorkspace(t, "task dev")
+	sessions.projects[0].Sessions = []store.Session{
+		{ID: "old", Label: "task dev", Kind: "shell", Path: "/wt/feature", Run: true},
+	}
+
+	opened, err := svc.Run("p1", "/wt/feature")
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if opened.ID != "old" {
+		t.Errorf("id = %q, want the card the checkout already has", opened.ID)
+	}
+	if !opened.Run || opened.Project != "lich" || opened.ProjectID != "p1" {
+		t.Errorf("opened = %+v, want the existing card named in full", opened)
+	}
+	// The label counter did not move: no card took a number.
+	if opened.NextSeq != 4 {
+		t.Errorf("nextSeq = %d, want the counter left where it was", opened.NextSeq)
+	}
+	if len(sessions.rows) != 0 || len(term.spawns) != 0 || len(events.events) != 0 {
+		t.Errorf("rows = %d, spawns = %d, events = %d, want none of them",
+			len(sessions.rows), len(term.spawns), len(events.events))
+	}
+}
+
+// A Run card whose command has exited still holds the slot: the wrapper left the
+// user's shell in that card and it is the retry (↑, Enter). The store says so by
+// listing open rows alone, so the guard needs no liveness question of its own:
+// what frees the slot is closing the card, which takes the row out of the list.
+func TestRunOnlyCountsTheCardsTheWorkspaceStillHolds(t *testing.T) {
+	svc, sessions, term, _, _ := runWorkspace(t, "task dev")
+	// The closed card is simply not in the loaded state, exactly as
+	// store.sessionsOf hands it over.
+	sessions.projects[0].Sessions = nil
+
+	opened, err := svc.Run("p1", "/wt/feature")
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if opened.ID == "" || len(term.spawns) != 1 {
+		t.Errorf("opened = %+v, spawns = %d, want a fresh card", opened, len(term.spawns))
+	}
+}
+
+// The slot is per checkout, and the mark is the backend's: a Run card in another
+// worktree, and a terminal the user aimed at a command by hand, both leave this
+// checkout's Run item opening a card.
+func TestRunIsDedupedPerCheckoutAndByTheMarkAlone(t *testing.T) {
+	svc, sessions, term, _, root := runWorkspace(t, "task dev")
+	sessions.projects[0].Sessions = []store.Session{
+		{ID: "other", Label: "task dev", Kind: "shell", Path: "/wt/other", Run: true},
+		{ID: "hand", Label: "lazygit", Kind: "shell", Path: "/wt/feature", Entrypoint: "lazygit"},
+		{ID: "main", Label: "task dev", Kind: "shell", Path: "", Run: true},
+	}
+
+	opened, err := svc.Run("p1", "/wt/feature")
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if opened.ID == "other" || opened.ID == "hand" || opened.ID == "main" {
+		t.Errorf("id = %q, want a card of this checkout's own", opened.ID)
+	}
+	if len(term.spawns) != 1 {
+		t.Errorf("spawns = %d, want one", len(term.spawns))
+	}
+	// The project's own directory is a checkout like any other, and its card is
+	// the one stored under the empty path.
+	reused, err := svc.Run("p1", root)
+	if err != nil {
+		t.Fatalf("Run in the project directory: %v", err)
+	}
+	if reused.ID != "main" {
+		t.Errorf("id = %q, want the main checkout's existing card", reused.ID)
 	}
 }

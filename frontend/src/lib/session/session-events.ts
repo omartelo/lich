@@ -324,6 +324,11 @@ export interface OpenedSession {
   kind: SessionKind
   path: string
   nextSeq: number
+  // Whether the card is its checkout's Run card (internal/spawn.Run). It rides
+  // the event because the mark is what sends the next Run to this card: a card
+  // adopted without it would leave the menu offering a second one until the next
+  // reload read the row.
+  run: boolean
   // The session that asked for this one, and what it was called at the time.
   // Both "" when the opener was not a session — `lich open` from a plain shell.
   originSessionId: string
@@ -339,12 +344,13 @@ export function toOpenedSession(data: unknown): OpenedSession | null {
   if (!isIdEvent(data)) {
     return null
   }
-  const { projectId, label, kind, path, nextSeq, originSessionId, originLabel } = data as {
+  const { projectId, label, kind, path, nextSeq, run, originSessionId, originLabel } = data as {
     projectId?: unknown
     label?: unknown
     kind?: unknown
     path?: unknown
     nextSeq?: unknown
+    run?: unknown
     originSessionId?: unknown
     originLabel?: unknown
   }
@@ -361,6 +367,7 @@ export function toOpenedSession(data: unknown): OpenedSession | null {
     kind,
     path: typeof path === "string" ? path : "",
     nextSeq: typeof nextSeq === "number" ? nextSeq : 1,
+    run: run === true,
     originSessionId: typeof originSessionId === "string" ? originSessionId : "",
     originLabel: typeof originLabel === "string" ? originLabel : "",
   }

@@ -328,6 +328,10 @@ export interface StoredSession {
   providerSessionId: string
   /** The command a terminal session opens into; always "" for a provider one. */
   entrypoint: string
+  /** Whether this row is its checkout's Run card (internal/spawn.Run). The one
+   * per checkout: the Run menu item goes to this card instead of opening a
+   * second one, and only closing the card frees the slot. */
+  run: boolean
   /** Whether this session runs confined: "on", "off", or "" for a row nothing
    * has spawned yet. Written by the spawn, which is what resolves the rung. */
   sandbox: string
