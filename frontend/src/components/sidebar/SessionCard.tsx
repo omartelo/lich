@@ -28,7 +28,7 @@ import { useSortable } from "@dnd-kit/sortable"
 import { toast } from "sonner"
 import { cn, errorText } from "@/lib/utils"
 import { dragStyle } from "@/lib/use-sortable-list"
-import { displayPath } from "@/lib/paths"
+import { displayPath, unknownCwd } from "@/lib/paths"
 import type { Session } from "@/lib/session/sessions"
 import {
   useSessionStatus,
@@ -226,7 +226,12 @@ export function SessionCard({
   // session's static start path — a worktree session lives in its own checkout,
   // so that path (not the project's) is the fallback. Git status and the PR
   // badge follow whatever is shown, so they reflect the directory's repo.
-  const liveCwd = useSessionCwd(session.id)
+  //
+  // cwdHost is the shell the watcher could not read into (tmux, ssh, a
+  // container). Only the path line answers to it: git and the PR still speak
+  // for the checkout, which is a repository whether or not the user is standing
+  // in it — the line is what would otherwise claim to know where they are.
+  const { cwd: liveCwd, host: cwdHost } = useSessionCwd(session.id)
   const shownPath = liveCwd || session.path || path
   const git = useGitStatus(shownPath)
   const pr = usePullRequest(shownPath, git?.branch ?? "", git?.head ?? "")
@@ -571,7 +576,7 @@ export function SessionCard({
                     "[mask-image:linear-gradient(to_right,transparent,black_1.25rem)]",
                 )}
               >
-                {`\u200e${displayPath(shownPath)}`}
+                {`\u200e${cwdHost ? unknownCwd(cwdHost) : displayPath(shownPath)}`}
               </span>
               {git?.branch && (
                 <span className="flex w-full items-center justify-between gap-2 text-xs text-muted-foreground">

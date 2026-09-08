@@ -31,6 +31,7 @@ vi.mock("@/lib/session/use-active-session", () => ({
     projectId: "p1",
     sessionId: "s1",
     path: "/repo",
+    cwdHost: "",
     checkout: "/repo",
     kind: state.agent ?? "",
     sandboxed: false,
@@ -233,6 +234,39 @@ test.each(["path", "branch"] as const)(
     )
   },
 )
+
+test("a hosted shell says the cwd is unknown instead of naming the checkout", async () => {
+  await act(async () =>
+    root.render(
+      createElement(FooterCheckout, {
+        path: "/project/.worktrees/a-long-worktree",
+        branch: "feature/footer",
+        display: "path",
+        host: "tmux",
+      }),
+    ),
+  )
+  expect(container.textContent).toBe("cwd unknown · inside tmux")
+  // The path must not survive as the tooltip either: it is a directory the user
+  // is not standing in, and a hover would hand it over as though it were.
+  expect(container.querySelector("[title]")?.getAttribute("title")).toBe(
+    "cwd unknown · inside tmux",
+  )
+})
+
+test("the branch readout keeps speaking for the checkout while the shell is hosted", async () => {
+  // The branch is a fact about the checkout, true wherever the shell went, so
+  // only the path readout is passed a host (FooterBar).
+  await act(async () =>
+    root.render(
+      createElement(FooterCheckout, {
+        path: "/project/.worktrees/a-long-worktree",
+        branch: "feature/footer",
+      }),
+    ),
+  )
+  expect(container.textContent).toBe("feature/footer")
+})
 
 test.each(["signed-out", "error", "unknown"] as const)(
   "%s never shows quota as zero",

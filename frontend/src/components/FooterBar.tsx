@@ -75,7 +75,7 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
   const { footerLayout, footerVisibility, showContextUsage } = useSettings()
   const showCost = useCostReadout()
   const layout = resolveFooterLayout(footerLayout, footerVisibility, showContextUsage, showCost)
-  const { projectId, sessionId, path, checkout, kind, sandboxed } = useActiveSession()
+  const { projectId, sessionId, path, cwdHost, checkout, kind, sandboxed } = useActiveSession()
   const status = useGitStatus(path)
   const pr = usePullRequest(path, status?.branch ?? "", status?.head ?? "")
   // The picker runs on the backend (DropService.Attach), not through
@@ -153,7 +153,9 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
       </FooterButton>
     ),
     checkout: path && <FooterCheckout path={path} branch={status?.branch ?? ""} />,
-    path: path && <FooterCheckout path={path} branch={status?.branch ?? ""} display="path" />,
+    path: path && (
+      <FooterCheckout path={path} branch={status?.branch ?? ""} display="path" host={cwdHost} />
+    ),
   }
   return (
     <footer className="flex min-h-9 min-w-0 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border bg-sidebar px-3 py-1 text-xs text-muted-foreground">

@@ -3,6 +3,7 @@
 package terminal
 
 import (
+	"bytes"
 	"os"
 	"strconv"
 )
@@ -33,4 +34,16 @@ func foregroundPgrp(pid int) int {
 		return 0
 	}
 	return parseTpgid(stat)
+}
+
+// readComm returns pid's command name — /proc/<pid>/comm, the executable's
+// basename truncated to 15 bytes — or "" when it cannot be read. Read rather
+// than /proc/<pid>/cmdline because a process is free to rewrite its own argv
+// (tmux does), while comm answers what was executed.
+func readComm(pid int) string {
+	comm, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/comm")
+	if err != nil {
+		return ""
+	}
+	return string(bytes.TrimSpace(comm))
 }

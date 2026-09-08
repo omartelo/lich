@@ -9,6 +9,7 @@ import {
   ShieldOff,
   TriangleAlert,
 } from "lucide-react"
+import { unknownCwd } from "@/lib/paths"
 import { sandboxDrift } from "@/lib/providers-store"
 import type { Session } from "@/lib/session/sessions"
 import { useSandboxRung } from "@/lib/use-sandbox-rung"
@@ -47,7 +48,7 @@ interface SessionTooltipProps {
 // behind them are keyed by path and shared (one git poller per repository), so
 // the second reader costs a subscription, not a second poll.
 export function SessionTooltip({ session, path, projectId }: SessionTooltipProps) {
-  const liveCwd = useSessionCwd(session.id)
+  const { cwd: liveCwd, host: cwdHost } = useSessionCwd(session.id)
   const relay = useSessionRelay(session.id)
   const shownPath = liveCwd || session.path || path
   const git = useGitStatus(shownPath)
@@ -60,7 +61,9 @@ export function SessionTooltip({ session, path, projectId }: SessionTooltipProps
     <TooltipContent side="right" className="max-w-xs border border-border bg-card text-foreground">
       <div className="flex flex-col gap-1.5">
         <span className="font-medium">{session.label}</span>
-        <span className="break-all font-mono text-muted-foreground">{shownPath}</span>
+        <span className="break-all font-mono text-muted-foreground">
+          {cwdHost ? unknownCwd(cwdHost) : shownPath}
+        </span>
         {/* The open request, and the ticket it runs on. The card already draws
             the arrow and the peer; the number is the part that exists nowhere
             else a person can read it — it is typed once, into the target's

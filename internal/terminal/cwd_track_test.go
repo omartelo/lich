@@ -26,15 +26,22 @@ func physical(t *testing.T, path string) string {
 	return resolved
 }
 
-// waitEmit receives one emitted cwd or fails the test after a grace period.
-func waitEmit(t *testing.T, emits <-chan string) string {
+// emitted is one pollCwd publish: the directory it read, and the host standing
+// in the way of reading one.
+type emitted struct {
+	cwd  string
+	host string
+}
+
+// waitEmit receives one publish or fails the test after a grace period.
+func waitEmit(t *testing.T, emits <-chan emitted) emitted {
 	t.Helper()
 	select {
-	case cwd := <-emits:
-		return cwd
+	case e := <-emits:
+		return e
 	case <-time.After(5 * time.Second):
 		t.Fatal("pollCwd emitted nothing")
-		return ""
+		return emitted{}
 	}
 }
 
@@ -92,8 +99,12 @@ func TestProcessCwdReadsSelf(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Getwd: %v", err)
 	}
-	if got := processCwd(os.Getpid()); physical(t, got) != physical(t, wd) {
+	got, host := processCwd(os.Getpid())
+	if physical(t, got) != physical(t, wd) {
 		t.Errorf("processCwd(self) = %q, want %q", got, wd)
+	}
+	if host != "" {
+		t.Errorf("processCwd(self) host = %q, want none for an ordinary process", host)
 	}
 }
 
@@ -102,8 +113,8 @@ func TestProcessCwdReadsSelf(t *testing.T) {
 func TestProcessCwdOfDeadPidIsEmpty(t *testing.T) {
 	// Far beyond any real PID space (Linux pid_max < 2^22, macOS ~1e5); Windows
 	// simply finds no such process to open.
-	if got := processCwd(1 << 30); got != "" {
-		t.Errorf("processCwd(dead) = %q, want empty", got)
+	if got, host := processCwd(1 << 30); got != "" || host != "" {
+		t.Errorf("processCwd(dead) = (%q, %q), want both empty", got, host)
 	}
 }
 
@@ -118,11 +129,14 @@ func TestPollCwdEmitsOnlyOnChange(t *testing.T) {
 
 	tick := make(chan time.Time)
 	done := make(chan struct{})
-	emits := make(chan string, 8)
+	emits := make(chan emitted, 8)
 	finished := make(chan struct{})
+	self := func() (string, string) { return processCwd(os.Getpid()) }
 	go func() {
 		defer close(finished)
-		pollCwd(os.Getpid(), start, tick, done, func(cwd string) { emits <- cwd })
+		pollCwd(start, tick, done, self, func(cwd, host string) {
+			emits <- emitted{cwd, host}
+		})
 	}()
 
 	// Unchanged directory: the tick is consumed without an emit. tick is
@@ -137,16 +151,16 @@ func TestPollCwdEmitsOnlyOnChange(t *testing.T) {
 		t.Fatalf("Getwd: %v", err)
 	}
 	tick <- time.Time{}
-	if got := waitEmit(t, emits); physical(t, got) != physical(t, moved) {
-		t.Errorf("emitted %q, want %q", got, moved)
+	if got := waitEmit(t, emits); physical(t, got.cwd) != physical(t, moved) {
+		t.Errorf("emitted %q, want %q", got.cwd, moved)
 	}
 
 	// Same directory again: accepting this tick proves the change above
 	// emitted exactly once.
 	tick <- time.Time{}
 	select {
-	case cwd := <-emits:
-		t.Errorf("unexpected emit %q for unchanged cwd", cwd)
+	case e := <-emits:
+		t.Errorf("unexpected emit %q for unchanged cwd", e.cwd)
 	default:
 	}
 
@@ -155,5 +169,84 @@ func TestPollCwdEmitsOnlyOnChange(t *testing.T) {
 	case <-finished:
 	case <-time.After(5 * time.Second):
 		t.Fatal("pollCwd did not stop after done closed")
+	}
+}
+
+// TestPollCwdPublishesTheHostInsteadOfAPath proves the readout goes unknown the
+// moment the shell moves somewhere no reader follows, and comes back when it
+// returns. The last local directory must not be published again on the way in:
+// it is a real path, and naming it is the whole failure this seam exists to
+// end. Driven off a hand-fed read, because the alternative is starting a tmux.
+func TestPollCwdPublishesTheHostInsteadOfAPath(t *testing.T) {
+	readings := make(chan emitted, 8)
+	tick := make(chan time.Time)
+	done := make(chan struct{})
+	emits := make(chan emitted, 8)
+	go pollCwd("/repo", tick, done,
+		func() (string, string) { r := <-readings; return r.cwd, r.host },
+		func(cwd, host string) { emits <- emitted{cwd, host} })
+	t.Cleanup(func() { close(done) })
+
+	// Entering tmux: no directory, a host, and a publish that overwrites /repo.
+	readings <- emitted{"", "tmux"}
+	tick <- time.Time{}
+	if got := waitEmit(t, emits); got != (emitted{"", "tmux"}) {
+		t.Errorf("entering tmux emitted %+v, want an empty cwd hosted by tmux", got)
+	}
+
+	// Still inside it: the host is not news twice over.
+	readings <- emitted{"", "tmux"}
+	tick <- time.Time{}
+	readings <- emitted{"", "tmux"}
+	tick <- time.Time{}
+	select {
+	case e := <-emits:
+		t.Errorf("unexpected emit %+v while the host had not changed", e)
+	default:
+	}
+
+	// Back at the shell's prompt, in the very directory tmux was started from:
+	// a change, because the readout was unknown a tick ago.
+	readings <- emitted{"/repo", ""}
+	tick <- time.Time{}
+	if got := waitEmit(t, emits); got != (emitted{"/repo", ""}) {
+		t.Errorf("leaving tmux emitted %+v, want /repo with no host", got)
+	}
+}
+
+// TestShellHostNamesOnlyKnownHosts pins the list itself: every name on it is
+// answered with, an ordinary foreground job is not, and tmux's own comm — which
+// carries its role after a colon — still matches.
+func TestShellHostNamesOnlyKnownHosts(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"tmux", "tmux"},
+		{"tmux: client", "tmux"},
+		{"tmux: server", "tmux"},
+		{"screen", "screen"},
+		{"ssh", "ssh"},
+		{"mosh-client", "mosh-client"},
+		{"docker", "docker"},
+		{"podman", "podman"},
+		{"nsenter", "nsenter"},
+		{"distrobox-enter", "distrobox-enter"},
+		{"toolbox", "toolbox"},
+		{"flatpak", "flatpak"},
+		// /proc/<pid>/comm comes back with its newline attached.
+		{"ssh\n", "ssh"},
+		{"zsh", ""},
+		{"", ""},
+		{"vim", ""},
+		// A prefix is not a match: these run right here.
+		{"sshd", ""},
+		{"dockerd", ""},
+		{"tmuxinator", ""},
+	}
+	for _, tc := range cases {
+		if got := shellHost(tc.in); got != tc.want {
+			t.Errorf("shellHost(%q) = %q, want %q", tc.in, got, tc.want)
+		}
 	}
 }

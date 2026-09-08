@@ -40,7 +40,9 @@ export const TURN_EVENT = "session-turn"
 
 // Global event the backend emits with a session's live working directory (see
 // terminal.cwdEventName): once with the directory the PTY starts in, then on
-// every change the cwd watcher observes. Payload: { id, cwd }.
+// every change the cwd watcher observes. Payload: { id, cwd, host } — a
+// non-empty host names the foreground process the directory cannot be read
+// through (tmux, ssh, a container) and arrives with an empty cwd.
 export const CWD_EVENT = "session-cwd"
 
 // Global event the backend emits when a provider CLI starts inside a session's
@@ -409,8 +411,12 @@ export function isTitleEvent(data: unknown): data is { id: string; label: string
   return isIdEvent(data) && typeof (data as { label?: unknown }).label === "string"
 }
 
-export function isCwdEvent(data: unknown): data is { id: string; cwd: string } {
-  return isIdEvent(data) && typeof (data as { cwd?: unknown }).cwd === "string"
+export function isCwdEvent(data: unknown): data is { id: string; cwd: string; host?: string } {
+  if (!isIdEvent(data) || typeof (data as { cwd?: unknown }).cwd !== "string") {
+    return false
+  }
+  const host = (data as { host?: unknown }).host
+  return host === undefined || typeof host === "string"
 }
 
 export function isAgentEvent(data: unknown): data is { id: string; agent: string } {

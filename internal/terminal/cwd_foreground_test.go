@@ -4,7 +4,10 @@ package terminal
 
 import (
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -52,12 +55,12 @@ func TestProcessCwdFollowsForegroundJob(t *testing.T) {
 	pid := cmd.Process.Pid
 	deadline := time.Now().Add(20 * time.Second)
 	for {
-		got := processCwd(pid)
-		if got == inner {
+		got, host := processCwd(pid)
+		if got == inner && host == "" {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("processCwd(%d) = %q, want the nested shell's %q", pid, got, inner)
+			t.Fatalf("processCwd(%d) = (%q, %q), want the nested shell's %q", pid, got, host, inner)
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
@@ -65,5 +68,33 @@ func TestProcessCwdFollowsForegroundJob(t *testing.T) {
 	// be a run where both reads happen to agree on the same directory.
 	if got := readCwd(pid); got != outer {
 		t.Fatalf("readCwd(%d) = %q, want the unmoved child's %q", pid, got, outer)
+	}
+}
+
+// TestReadCommNamesTheProcess proves the comm read this seam matches against
+// resolves a live process — exercised against the test binary itself, whose
+// name both platforms truncate (15 bytes on Linux, 16 on macOS) rather than
+// refuse. And that an ordinary command is not mistaken for a shell host, which
+// is the half of shellHost no list of names can assert on its own.
+func TestReadCommNamesTheProcess(t *testing.T) {
+	comm := readComm(os.Getpid())
+	if comm == "" {
+		t.Fatal(`readComm(self) = "", want the test binary's name`)
+	}
+	if base := filepath.Base(os.Args[0]); !strings.HasPrefix(base, comm) {
+		t.Errorf("readComm(self) = %q, want a prefix of %q", comm, base)
+	}
+	if host := shellHost(comm); host != "" {
+		t.Errorf("shellHost(%q) = %q, want no host for an ordinary process", comm, host)
+	}
+}
+
+// TestReadCommOfDeadPidIsEmpty proves an unresolvable process yields no name,
+// so processCwd falls through to the directory read rather than matching the
+// empty string against the host list.
+func TestReadCommOfDeadPidIsEmpty(t *testing.T) {
+	// Far beyond any real PID space (Linux pid_max < 2^22, macOS ~1e5).
+	if got := readComm(1 << 30); got != "" {
+		t.Errorf("readComm(dead) = %q, want empty", got)
 	}
 }

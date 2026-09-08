@@ -23,6 +23,9 @@ export function useActiveSession(): {
   projectId: string | null
   sessionId: string
   path: string
+  /** The foreground process hosting the session's shell out of reach — tmux,
+   * ssh, a container — "" whenever the path above is the real one. */
+  cwdHost: string
   /** The session's static checkout — what the sidebar keys a worktree's pull
    * request card on, so a `cd` cannot open a card no group can show. */
   checkout: string
@@ -39,11 +42,12 @@ export function useActiveSession(): {
   const projectId = match?.params.projectId ?? null
   const projectPath = projects.find((p) => p.id === projectId)?.path ?? ""
   const target = activeTarget(sessions, projectId, projectPath)
-  const cwd = useSessionCwd(target.sessionId)
+  const { cwd, host } = useSessionCwd(target.sessionId)
   return {
     projectId,
     sessionId: target.sessionId,
     path: cwd || target.path,
+    cwdHost: host,
     checkout: target.path,
     kind: target.kind,
     sandboxed: target.sandboxed,

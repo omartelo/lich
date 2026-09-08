@@ -136,12 +136,15 @@ describe("isTitleEvent", () => {
 describe("isCwdEvent", () => {
   it("accepts a payload carrying a string id and cwd", () => {
     expect(isCwdEvent({ id: "s1", cwd: "/home/user" })).toBe(true)
+    expect(isCwdEvent({ id: "s1", cwd: "/home/user", host: "" })).toBe(true)
+    expect(isCwdEvent({ id: "s1", cwd: "", host: "tmux" })).toBe(true)
   })
 
   it("rejects a payload missing either half", () => {
     expect(isCwdEvent({ id: "s1" })).toBe(false)
     expect(isCwdEvent({ cwd: "/home/user" })).toBe(false)
     expect(isCwdEvent({ id: "s1", cwd: 2 })).toBe(false)
+    expect(isCwdEvent({ id: "s1", cwd: "/home/user", host: 2 })).toBe(false)
     expect(isCwdEvent(null)).toBe(false)
   })
 })

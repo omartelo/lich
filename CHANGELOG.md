@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A session whose shell runs inside tmux, over ssh or in a container now says
+  its directory is unknown instead of naming a local one.** The card, its
+  tooltip and the footer read "cwd unknown · inside tmux": the directory those
+  hosts sit in is real and is not where the user is typing, which is the one
+  wrong answer that looks right. Linux and macOS; Windows has no foreground
+  process group to read it from.
+
 - **On Windows, lich's own window no longer opens a stray console window beside
   it, or gives up and reopens in Chrome.** The window was built for the console
   subsystem, so Windows allocated a console for it and for each of Chromium's

@@ -9,7 +9,19 @@ import (
 
 const cwdTracked = true
 
-// processCwd returns pid's current working directory, or "" when it cannot be
+// processCwd returns pid's current working directory, and a second value the
+// unix readers use to name a foreground process hosting a shell they cannot
+// follow (tmux, ssh, a container). Windows has no foreground process group to
+// read that from — a console hands its input to whatever holds it, and nothing
+// records which process that is — so this side never has a host to report and
+// the readout can still name a directory the user has left. Kept as is
+// deliberately: the whole detection would have to be rebuilt on a different
+// mechanism, and there is no Windows hardware here to build it against.
+func processCwd(pid int) (string, string) {
+	return readCwd(pid), ""
+}
+
+// readCwd returns pid's current working directory, or "" when it cannot be
 // read (the process exited, or was never ours to inspect). Windows keeps a
 // process's cwd in its PEB (ProcessParameters.CurrentDirectory), so the read
 // is a pointer walk through the child's memory: NtQueryInformationProcess for
@@ -17,7 +29,7 @@ const cwdTracked = true
 // and finally the path buffer. Assumes the child matches our architecture (a
 // 32-bit child's PEB has a different layout) — there the walk dereferences
 // garbage and fails, degrading to "" like any dead process.
-func processCwd(pid int) string {
+func readCwd(pid int) string {
 	h, err := windows.OpenProcess(
 		windows.PROCESS_QUERY_INFORMATION|windows.PROCESS_VM_READ,
 		false,

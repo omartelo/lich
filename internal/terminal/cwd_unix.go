@@ -17,17 +17,26 @@ import "golang.org/x/sys/unix"
 // through a `cd /tmp && …` the agent runs — which is why the foreground group
 // is read and not the deepest descendant of the process tree.
 //
-// Each OS brings foregroundPgrp and readCwd (see the cwd_* files). Both are
-// allowed to fail: an unreadable foreground group (a root shell under `sudo`,
-// a leader that just exited) falls back to the direct child, so the readout is
-// never worse than tracking the child alone.
-func processCwd(pid int) string {
+// A foreground job that is itself hosting the shell — tmux, ssh, a container
+// runtime (shellHosts) — answers with its own name and no directory instead.
+// Its cwd is readable and wrong: the shell the user types into lives in a pane,
+// on another machine or in another namespace, and none of them are on this
+// filesystem. Second return is that host's name, "" when there is none.
+//
+// Each OS brings foregroundPgrp, readCwd and readComm (see the cwd_* files).
+// All three are allowed to fail: an unreadable foreground group (a root shell
+// under `sudo`, a leader that just exited) falls back to the direct child, so
+// the readout is never worse than tracking the child alone.
+func processCwd(pid int) (string, string) {
 	if fg := foregroundPgrp(pid); fg > 0 && fg != pid && ownsTerminal(pid) {
+		if host := shellHost(readComm(fg)); host != "" {
+			return "", host
+		}
 		if cwd := readCwd(fg); cwd != "" {
-			return cwd
+			return cwd, ""
 		}
 	}
-	return readCwd(pid)
+	return readCwd(pid), ""
 }
 
 // ownsTerminal reports whether pid leads its own terminal session, which every
