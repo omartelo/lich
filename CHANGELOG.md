@@ -65,6 +65,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and its Closed group says how many matches it is showing of how many it found.
   The reopen menu still lists the newest five, with a line under them naming how
   many more the palette can reach.
+- **The palette's History tab now finds a parked session by its branch, and says
+  when it held back rows.** The search ran over a session's name, its project and
+  its path while the branch was read from git afterwards, so a row showing
+  `feat/relay-inbox` could not be found by typing that - the one thing on the row
+  most people go looking by. The branch is now recorded when a session is parked
+  and searched with the rest, and a term matching more parked sessions than one
+  page holds says `100 of 143` over the group instead of presenting the page as
+  the whole answer. Sessions parked before this version carry no branch until
+  they are parked again.
+- **A button on a pull request or plugin row now checks before it acts.** Both
+  screens paint from the answer of their last visit, so a checkout removed from
+  a terminal still offered "Go to session" for a directory that was gone, and a
+  plugin row offered an update for a plugin that was no longer installed. The
+  rows still paint at once from what was read last, but the click re-asks first
+  and acts on the answer: a missing checkout is created with the same gesture,
+  and a plugin that changed underneath gets the action it actually needs. The
+  "Remove worktree" a merge offers reads the same way, and now says the checkout
+  was already removed rather than reporting a failure to remove it.
 - **A split's dragged pane sizes now come back when the grid does.** How many
   panes sit across follows the window, so collapsing the sidebar, opening the
   dock or moving to another monitor reshapes the wall - and the sizes you had

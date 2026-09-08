@@ -8,12 +8,18 @@ export interface RemoteResource<T> {
   data: T
   loading: boolean
   error: string | null
-  /** Run the lookup again. The promise settles once the answer is in `data` or
-   * the failure in `error`, and never rejects — a caller that only wants the
-   * refetch ignores it, and one that reports an outcome ("Checked." against
-   * "Check failed") awaits it and then reads `error`, which is where the
-   * failure went. */
-  refresh: () => Promise<void>
+  /** Run the lookup again, answering with what it read. The promise settles
+   * once that answer is in `data` or the failure in `error`, and never rejects
+   * — a caller that only wants the refetch ignores it, and one that reports an
+   * outcome ("Checked." against "Check failed") awaits it and then reads
+   * `error`, which is where the failure went.
+   *
+   * The value is what makes a *click* safe on a screen painted from a filed
+   * answer: the render goes on drawing the cached one, and the action re-asks
+   * here and decides on what comes back rather than on what is on screen. A
+   * failed read answers with the same fallback it puts in `data`, so there is
+   * always something to act on. */
+  refresh: () => Promise<T>
 }
 
 export interface RemoteResourceOptions<T> {
@@ -87,13 +93,13 @@ export function useRemoteResource<T>(
   const emptyRef = useRef(empty)
   emptyRef.current = empty
 
-  const refresh = useCallback((): Promise<void> => {
+  const refresh = useCallback((): Promise<T> => {
     if (!key) {
       seq.current++
       setData(emptyRef.current)
       setError(null)
       setLoading(false)
-      return Promise.resolve()
+      return Promise.resolve(emptyRef.current)
     }
     const mine = ++seq.current
     // A request whose last answer is in hand revalidates underneath: the screen
@@ -113,20 +119,25 @@ export function useRemoteResource<T>(
         if (cache) {
           writeRemoteCache(cache, result)
         }
-        if (mine !== seq.current) return
+        if (mine !== seq.current) return result
         setData(result)
         setError(null)
+        return result
       })
-      .catch((err: unknown) => {
-        if (mine !== seq.current) return
+      .catch((err: unknown): T => {
         // The filed answer is left standing, on the screen as well as in the
         // cache: a lookup that failed says nothing about the last one that
         // worked, and a caller that keeps its answers would otherwise blank a
         // pane it is about to paint again on the next visit. Everyone else
         // falls back to empty, where a stale readout has nothing to stand on.
+        // It is also what the caller is handed back, superseded or not: an
+        // action that asked for this read still has to be given an answer.
         const filed = cache ? readRemoteCache<T>(cache) : undefined
-        setData(filed ?? emptyRef.current)
+        const fallback = filed ?? emptyRef.current
+        if (mine !== seq.current) return fallback
+        setData(fallback)
         setError(errorText(err))
+        return fallback
       })
       .finally(() => {
         if (mine === seq.current) setLoading(false)

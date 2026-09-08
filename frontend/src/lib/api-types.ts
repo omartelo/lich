@@ -358,8 +358,7 @@ export interface StoredSession {
 
 /** internal/store.ClosedSession — one parked session offered for resuming. What
  * identifies it in a list somebody is browsing: the project rides along because
- * history spans every project at once, closed ones included. No branch — it
- * lives in git and the window reads it off the checkout (ProjectService.Branches). */
+ * history spans every project at once, closed ones included. */
 export interface ClosedSession {
   id: string
   projectId: string
@@ -370,9 +369,23 @@ export interface ClosedSession {
   label: string
   kind: string
   path: string
+  /** The branch the checkout was on when the session was parked, "" for a row
+   * parked before lich recorded one. It is the searchable snapshot — the store
+   * matches it in SQL — and never what the row shows: the branch on screen is
+   * read live off the checkout (ProjectService.BranchesOf), because a branch
+   * moves inside a worktree while the directory keeps its name. */
+  parkedBranch: string
   /** Unix seconds; 0 for a row parked before lich recorded the close, which
    * sorts last and is drawn as no date rather than as 1970. */
   closedAt: number
+}
+
+/** internal/store.ClosedHistory — one page of parked sessions and the size of
+ * the match it was cut from, so a list holding the store's cap can say so
+ * instead of presenting it as the whole answer. */
+export interface ClosedHistory {
+  sessions: ClosedSession[]
+  total: number
 }
 
 /** internal/terminal.TranscriptMatch — a session whose conversation mentions a

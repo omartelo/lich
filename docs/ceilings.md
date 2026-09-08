@@ -619,15 +619,10 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   cask's `depends_on` and the bundle's `LSMinimumSystemVersion` say 13.0 because the compiler does —
   both move with the next Go bump, and a machine below the floor is refused by Homebrew rather than
   by a crash.
-- **The History tab searches names, and the branch on every row is not one** (`internal/store/store.go`,
-  `frontend/src/lib/session/use-history-search.ts`): the search runs in the store, which holds a parked
-  session's name, its project's and its path — the branch is read out of git afterwards, for the rows the
-  search already kept. So a row that shows `feat/relay-inbox` cannot be found by typing that, and the tab
-  answers a branch the user is reading off the screen with nothing at all. A term that matches more than a
-  hundred parked sessions is cut to the hundred closed most recently, and nothing says the list was cut.
 - **The history's branch is read live, so a row whose checkout is gone has none** (`internal/project.BranchesOf`):
-  the branch is not stored — a worktree keeps the name it was created with while an agent moves the branch
-  inside it, so the directory cannot answer and only git can. The batch runs once per settled search, which
+  the branch a row shows is not the one it stores — a worktree keeps the name it was created with while an
+  agent moves the branch inside it, so the stored snapshot dates the close and only git can say what the
+  checkout is on now, which is what the row draws. The batch runs once per settled search, which
   also means a branch that moved while the palette is up is stale until the query changes or the palette is
   reopened. A checkout removed behind lich's back has no branch to read and no session to resume: that row
   says `checkout gone` and offers to forget
@@ -665,17 +660,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   (a remount initialises the marker and never exercises the replay), and it must record frames from a layout
   effect rather than from the render body (the body sees passes that were never committed, which reads a
   correct hook as an oscillation). A probe missing either one calls the ref version green.
-- **One filed answer drives an action rather than a readout** (`frontend/src/lib/git/use-checkouts.ts`): every
-  other `cache` on this screen decides what is *shown*, and a value one round-trip old is only ever a stale
-  label. This one decides what a button *does* — `Pulls.tsx` asks it whether the pull request's head branch is
-  already checked out, and the answer picks between reusing a session and creating a worktree. A checkout
-  removed from a terminal while the user was on another screen therefore offers "Go to session" for a
-  directory that is gone. The window is one round-trip (it re-reads on mount, on focus, and after this screen
-  creates a checkout itself) and git refuses the wrong move anyway, which is why it is filed rather than left
-  cold — but it is the one to think twice about before the next `cache` is added to something a button reads.
-  The plugin rows on Settings › Updates (`PluginSetting`) are the second case: a plugin installed or removed
-  from a terminal while the user was elsewhere is painted as it was on the way back in, so the row offers an
-  Install that has already happened, or withholds one that has not, until that visit's read lands.
 - **The dock's remembered browse is module memory, keyed by a path and never swept**
   (`frontend/src/lib/file-browse.ts`): every checkout the Code tab has ever browsed keeps its filter,
   folds, preview and marked row until the page reloads — a few strings per checkout, deliberately not

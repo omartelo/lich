@@ -82,11 +82,11 @@ func listed(t *testing.T, rows *store.Service, id string) (open, history bool) {
 			}
 		}
 	}
-	closed, err := rows.ClosedSessions("")
+	parked, err := rows.ClosedSessions("")
 	if err != nil {
 		t.Fatalf("ClosedSessions: %v", err)
 	}
-	for _, sess := range closed {
+	for _, sess := range parked.Sessions {
 		if sess.ID == id {
 			history = true
 		}
@@ -171,10 +171,11 @@ func TestAParkedSessionIsFoundInTheHistoryWithItsName(t *testing.T) {
 		t.Fatalf("Close alone: %v", err)
 	}
 
-	closed, err := rows.ClosedSessions("")
+	history, err := rows.ClosedSessions("")
 	if err != nil {
 		t.Fatalf("ClosedSessions: %v", err)
 	}
+	closed := history.Sessions
 	found := map[string]store.ClosedSession{}
 	for _, sess := range closed {
 		found[sess.ID] = sess
