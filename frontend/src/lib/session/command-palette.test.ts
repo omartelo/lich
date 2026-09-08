@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   filterPalette,
   historyAction,
+  historyIndexNote,
   historyRows,
   matchesQuery,
   nextTab,
@@ -297,6 +298,8 @@ const parked: ClosedSession[] = [
     path: "/home/u/wt/lich/relay-inbox",
     parkedBranch: "feat/relay-inbox",
     closedAt: 1_700_000_200,
+    snippet: "",
+    truncated: false,
   },
   {
     id: "h2",
@@ -310,6 +313,8 @@ const parked: ClosedSession[] = [
     // the close, which is the disagreement the two fields exist to hold.
     parkedBranch: "fix/conpty-first-try",
     closedAt: 1_700_000_100,
+    snippet: "",
+    truncated: false,
   },
   {
     id: "h3",
@@ -321,6 +326,8 @@ const parked: ClosedSession[] = [
     path: "/home/u/wt/revu/gone",
     parkedBranch: "chore/vitest-ui",
     closedAt: 1_700_000_000,
+    snippet: "",
+    truncated: false,
   },
 ]
 
@@ -386,6 +393,23 @@ describe("history search", () => {
   it("is empty rather than everything when no history was loaded", () => {
     expect(filterPalette("relay", [], [], []).history).toEqual([])
   })
+
+  it("keeps a row the store matched on its conversation, whatever the row says", () => {
+    // The store found "handle recycling" a megabyte into a conversation and cut
+    // one window out of it. Nothing on the row carries the words, so re-testing
+    // the query here would drop the row the search just answered with.
+    const said = historyRows(
+      [{ ...(parked[1] as ClosedSession), snippet: "…the ConPTY handle was recycled…" }],
+      parkedBranches,
+      new Set(),
+    )
+    expect(filterPalette("recycled", [], [], [], said).history.map((h) => h.id)).toEqual(["h2"])
+    // Two words that matched paragraphs apart: only one of them is in the
+    // window, and the row is still the answer.
+    expect(filterPalette("recycled zombie", [], [], [], said).history.map((h) => h.id)).toEqual([
+      "h2",
+    ])
+  })
 })
 
 describe("the History tab", () => {
@@ -421,11 +445,35 @@ describe("the History tab", () => {
     expect(group?.total).toBe(143)
   })
 
+  it("says what it cannot see yet while the store is still indexing", () => {
+    // The note displaces the page count: a list that is missing sessions
+    // outright matters more than which slice of a match is on screen.
+    expect(paletteGroups("History", results, [], 143, 12)[0]?.note).toBe("indexing 12 sessions")
+    expect(paletteGroups("History", results, [], 143, 1)[0]?.note).toBe("indexing 1 session")
+    expect(paletteGroups("History", results, [], 143, 0)[0]?.note).toBeUndefined()
+  })
+
   it("reports its own rows when nothing was cut", () => {
     // total === rows.length is what the header reads as "not cut" — and a count
     // that arrived stale, behind the rows, must never claim less than is drawn.
     expect(paletteGroups("History", results, [], 3)[0]?.total).toBe(3)
     expect(paletteGroups("History", results, [], 0)[0]?.total).toBe(3)
+  })
+})
+
+describe("historyIndexNote", () => {
+  const rows = historyRows(parked, parkedBranches, new Set())
+
+  it("says nothing for a session indexed whole, which is nearly all of them", () => {
+    expect(historyIndexNote(rows[0] as PaletteHistory)).toBeUndefined()
+  })
+
+  it("names how much of a session was indexed when the cap cut it", () => {
+    // The size is spelled in the window and the fact in the backend, so this is
+    // the line that fails when terminal.indexTextBytes moves and the sentence
+    // does not.
+    const cut = { ...(rows[0] as PaletteHistory), truncated: true }
+    expect(historyIndexNote(cut)).toBe("indexed: newest 8 MB")
   })
 })
 

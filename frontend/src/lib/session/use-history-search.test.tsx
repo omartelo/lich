@@ -16,10 +16,15 @@ import type { PaletteHistory } from "@/lib/session/command-palette"
 
 const terms: string[] = []
 const branchPaths: string[][] = []
+// The store's backfill, as the hook sees it: a count that comes down by itself,
+// one session per answer, and never moves unless somebody asks again.
+const backlog = { left: 0 }
 
-function row(id: string, label: string): ClosedSession {
+function row(id: string, label: string, snippet = ""): ClosedSession {
   return {
     id,
+    snippet,
+    truncated: false,
     projectId: "p1",
     projectName: "alpha",
     projectPath: "/repo",
@@ -39,13 +44,16 @@ vi.mock("@/lib/rpc", () => ({
   Store: {
     ClosedSessions: (term: string) => {
       terms.push(term)
+      const indexing = backlog.left
+      backlog.left = Math.max(0, backlog.left - 1)
       if (term === "") {
-        return Promise.resolve({ sessions: [row("s1", "recent work")], total: 7 })
+        return Promise.resolve({ sessions: [row("s1", "recent work")], total: 7, indexing })
       }
       const hit = term.includes("old")
       return Promise.resolve({
         sessions: hit ? [row("old", "the oldest work")] : [],
         total: hit ? 42 : 0,
+        indexing,
       })
     },
   },
@@ -65,6 +73,12 @@ const DEBOUNCE_MS = 200
 
 const settled = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, DEBOUNCE_MS + 60))
 
+// The hook's own poll interval while the store reports a backfill running. The
+// polls are waited out rather than counted off the clock: the interval and the
+// debounce chain, so what is being asserted is where the sequence lands, never
+// how long one lap of it took.
+const POLL_MS = 1000
+
 // The newest frame, which is the one the palette would be painting.
 function last<T>(frames: T[]): T | undefined {
   return frames[frames.length - 1]
@@ -74,12 +88,14 @@ function probe(
   frames: PaletteHistory[][],
   forgets: ((id: string) => void)[],
   totals: number[] = [],
+  backlogs: number[] = [],
 ) {
   return function Probe({ query, enabled }: { query: string; enabled: boolean }) {
-    const { rows, total, forget } = useHistorySearch(query, enabled)
+    const { rows, total, indexing, forget } = useHistorySearch(query, enabled)
     useLayoutEffect(() => {
       frames.push(rows)
       totals.push(total)
+      backlogs.push(indexing)
       forgets.push(forget)
     })
     return null
@@ -101,6 +117,7 @@ function typing(frames: PaletteHistory[][], typers: ((q: string) => void)[]) {
 beforeEach(() => {
   terms.length = 0
   branchPaths.length = 0
+  backlog.left = 0
 })
 
 describe("useHistorySearch", () => {
@@ -209,6 +226,39 @@ describe("useHistorySearch", () => {
     await budget.act(settled)
 
     expect(last(totals)).toBe(0)
+    await budget.unmount()
+  })
+
+  it("asks again while the store is still indexing, until the backlog is gone", async () => {
+    // Two sessions left to index when the first search lands. Nothing else will
+    // ask on the user's behalf, so a hook that stopped here would leave the
+    // header reporting a count that only moves when somebody types.
+    backlog.left = 2
+    const backlogs: number[] = []
+    const Probe = probe([], [], [], backlogs)
+    const budget = await mountBudget(
+      createElement(StrictMode, null, createElement(Probe, { query: "old", enabled: true })),
+    )
+    await budget.act(settled)
+    expect(last(backlogs)).toBe(2)
+    expect(terms).toEqual(["old"])
+
+    // Two more rounds of the poll, which is what it takes to walk a backlog of
+    // two down to nothing: nobody typed in between, so every ask after the
+    // first is the hook's own. Each lap is its own act: a frame is only readable
+    // once React has been let commit it.
+    for (let lap = 0; lap < 12 && last(backlogs) !== 0; lap++) {
+      await budget.act(() => new Promise((resolve) => setTimeout(resolve, POLL_MS / 2)))
+    }
+    expect(last(backlogs)).toBe(0)
+    expect(terms).toEqual(["old", "old", "old"])
+
+    // And then it stops: the poll chains off the count it was told, so a
+    // backlog of zero is the end of it.
+    await budget.act(
+      () => new Promise((resolve) => setTimeout(resolve, POLL_MS + DEBOUNCE_MS + 60)),
+    )
+    expect(terms).toEqual(["old", "old", "old"])
     await budget.unmount()
   })
 

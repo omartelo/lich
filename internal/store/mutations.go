@@ -231,11 +231,18 @@ func (s *Service) DeleteSession(projectID, sessionID, activeID string) error {
 // runs in SQL, so a branch nothing wrote down cannot be typed to find the row
 // showing it.
 //
-// git is asked before the transaction opens: the store holds a single
-// connection, and a subprocess run under the write lock stalls every other
-// caller for as long as git takes.
+// The conversation is indexed here too, and this is the only place it ever is:
+// a parked session's transcript is read once, bounded, and written into the FTS
+// index the history search matches on (transcripts.go). Doing it at the close is
+// what keeps a search off the disk entirely: the alternative is reading every
+// parked session's transcript on every character typed.
+//
+// git and the transcript are both asked before the transaction opens: the store
+// holds a single connection, and a subprocess or a 32 MB read under the write
+// lock stalls every other caller for as long as it takes.
 func (s *Service) CloseSession(projectID, sessionID, activeID string) error {
 	branch := s.parkedBranch(sessionID)
+	s.indexTranscript(sessionID)
 	return s.tx(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(
 			`UPDATE sessions SET is_open = 0, closed_at = ?, parked_branch = ? WHERE id = ?`,

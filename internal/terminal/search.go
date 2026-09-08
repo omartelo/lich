@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"log/slog"
 	"strings"
-	"unicode"
 	"unicode/utf8"
+
+	"github.com/omartelo/lich/internal/snippet"
 )
 
 // minSearchQuery is the shortest query worth scanning transcripts for. One or
@@ -21,11 +22,6 @@ const minSearchQuery = 3
 // Ceiling: a mention old enough to have fallen out of the tail is not found.
 // Indexing is the fix if that ever bites — not a bigger number.
 const searchTailBytes = 4 << 20
-
-// snippetWidth is how many runes of the matched message the palette row shows.
-// Wide enough to recognise the sentence, short enough for one line at palette
-// width.
-const snippetWidth = 160
 
 // TranscriptMatch is one session whose conversation mentions the query: the
 // session id to jump to, the newest matching message trimmed to a line, and how
@@ -105,7 +101,7 @@ func searchSource(src usageSource, q string) (TranscriptMatch, bool) {
 func searchSessionRows(texts []string, q string) (TranscriptMatch, bool) {
 	var match TranscriptMatch
 	for _, text := range texts {
-		snippet, ok := snippetAround(text, q)
+		snippet, ok := snippet.Around(text, q)
 		if !ok {
 			continue
 		}
@@ -135,7 +131,7 @@ func searchTranscript(tail []byte, q string, read turnReader) (TranscriptMatch, 
 		if !ok {
 			continue
 		}
-		snippet, ok := snippetAround(t.text, q)
+		snippet, ok := snippet.Around(t.text, q)
 		if !ok {
 			// The query is somewhere in the JSON but not in what was said — a
 			// tool's arguments, a file path, an id. Not a message about it.
@@ -145,60 +141,4 @@ func searchTranscript(tail []byte, q string, read turnReader) (TranscriptMatch, 
 		match.Count++
 	}
 	return match, match.Count > 0
-}
-
-// snippetAround renders the stretch of text around the first mention of q as
-// one palette line: whitespace collapsed (a message is prose with newlines and
-// code in it), a window centred a little ahead of the match so the words
-// leading into it stay visible, and an ellipsis on each side that was cut.
-// false when the text does not mention q at all.
-func snippetAround(text, q string) (string, bool) {
-	flat := strings.Join(strings.Fields(text), " ")
-	at := matchRuneIndex(flat, q)
-	if at < 0 {
-		return "", false
-	}
-	runes := []rune(flat)
-	if len(runes) <= snippetWidth {
-		return flat, true
-	}
-	start := max(at-snippetWidth/3, 0)
-	end := start + snippetWidth
-	if end > len(runes) {
-		end = len(runes)
-		start = end - snippetWidth
-	}
-	snippet := string(runes[start:end])
-	if start > 0 {
-		snippet = "…" + snippet
-	}
-	if end < len(runes) {
-		snippet += "…"
-	}
-	return snippet, true
-}
-
-// matchRuneIndex is where text first mentions q (already lowercased), counted in
-// runes of text itself; -1 when it does not.
-//
-// Lowercasing is not length-preserving — "Ⱥ" lowers to a rune one byte longer,
-// "İ" to two runes — so an offset read off a lowered copy can point past the end
-// of the original. The lowered text is built here alongside the rune of text
-// each of its bytes came from, which is what keeps the offset addressing text.
-func matchRuneIndex(text, q string) int {
-	var lowered strings.Builder
-	lowered.Grow(len(text))
-	origin := make([]int, 0, len(text))
-	for index, r := range []rune(text) {
-		before := lowered.Len()
-		lowered.WriteRune(unicode.ToLower(r))
-		for range lowered.Len() - before {
-			origin = append(origin, index)
-		}
-	}
-	at := strings.Index(lowered.String(), q)
-	if at < 0 {
-		return -1
-	}
-	return origin[at]
 }

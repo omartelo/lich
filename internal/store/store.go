@@ -1,8 +1,11 @@
 // Package store is lich's persistence layer: a single SQLite database holding
 // open projects, their terminal sessions and the settings scoped globally or to
 // one project — provider binaries and defaults, the permission and sandbox
-// rungs, the gh account. It never stores chat or terminal content — only the
-// metadata needed to restore the workspace after a restart. The file is
+// rungs, the gh account. The one thing it holds that is not workspace metadata
+// is what a *parked* session said: a bounded copy of the conversation, indexed
+// for the history search (transcripts.go), written when the session is closed
+// and dropped when its row is. Nothing a live session says is ever stored; that
+// is read off the provider's own transcript. The file is
 // <config-dir>/lich/lich.db, or lich-dev.db under LICH_DEV so a rig never
 // touches an installed lich's workspace (databasePath).
 //
@@ -24,6 +27,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	_ "modernc.org/sqlite"
 )
@@ -157,6 +162,46 @@ CREATE TABLE IF NOT EXISTS session_hands_on (
     seconds    INTEGER NOT NULL DEFAULT 0
 );
 
+-- What a parked session talked about, for the History tab's search. One row per
+-- closed session, replaced by each close and deleted with the row, and written
+-- even when it is empty, because an empty row is what says the session was
+-- looked at and keeps the backfill from reading the same disk again on every
+-- search (transcripts.go).
+--
+-- The body is kept here, keyed, rather than inside the index: the row a search
+-- draws needs the words around its hit, and only a primary key can fetch one
+-- conversation out of hundreds without walking all of them.
+CREATE TABLE IF NOT EXISTS session_texts (
+    session_id TEXT NOT NULL PRIMARY KEY,
+    -- Whether the cap on what one session's index holds dropped the oldest of
+    -- this conversation (terminal.indexTextBytes). It sits before the body and
+    -- not after it because that is the only way to read it without walking a
+    -- blob of up to eight megabytes to reach the end of the row, and the history
+    -- list reads it for every row it draws.
+    truncated  INTEGER NOT NULL DEFAULT 0,
+    body       TEXT NOT NULL
+);
+
+-- The index over those bodies. An index is what makes the History search
+-- affordable at all: the alternative is reading every parked session's
+-- transcript on every keystroke, a hundred disk reads per character on a machine
+-- that can hold hundreds of conversations.
+--
+-- External content, so the text is stored once rather than twice, and the two
+-- triggers below are what keep the index answering for the table. Every write
+-- goes through transcripts.go as a delete and an insert, which is why there is
+-- no update trigger: there is no update.
+CREATE VIRTUAL TABLE IF NOT EXISTS session_texts_fts USING fts5(
+    body, content='session_texts', content_rowid='rowid'
+);
+CREATE TRIGGER IF NOT EXISTS session_texts_ai AFTER INSERT ON session_texts BEGIN
+    INSERT INTO session_texts_fts(rowid, body) VALUES (new.rowid, new.body);
+END;
+CREATE TRIGGER IF NOT EXISTS session_texts_ad AFTER DELETE ON session_texts BEGIN
+    INSERT INTO session_texts_fts(session_texts_fts, rowid, body)
+    VALUES ('delete', old.rowid, old.body);
+END;
+
 CREATE TABLE IF NOT EXISTS session_last_turn (
     session_id  TEXT NOT NULL PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
     -- The trees a session's last finished turn ran between, and when its window
@@ -179,6 +224,17 @@ type Service struct {
 	sessionGone func(sessionID string)
 	// branchOf, when set, names the git branch of a checkout. See SetBranchOf.
 	branchOf func(path string) string
+	// transcriptOf, when set, reads a conversation as searchable prose and says
+	// whether the cap dropped the oldest of it. See SetTranscriptOf.
+	transcriptOf func(providerSessionID, cwd string) (text string, cut bool)
+	// backfilling guards the lazy index backfill, so every search that arrives
+	// while one is running starts nothing. See backfill.
+	backfilling atomic.Bool
+	// backfillDone and stopped are how Close waits a running backfill out
+	// rather than pulling the database from under it.
+	backfillDone sync.WaitGroup
+	stopped      chan struct{}
+	stopOnce     sync.Once
 }
 
 // SetSessionGone registers what to run when a session's row is deleted for
@@ -197,11 +253,13 @@ func (s *Service) SetSessionGone(fn func(sessionID string)) {
 // and nothing at all when the store runs without it — every test, and a lich
 // whose wiring has not run yet.
 func (s *Service) sessionIsGone(sessionIDs ...string) {
-	if s.sessionGone == nil {
-		return
-	}
 	for _, id := range sessionIDs {
-		s.sessionGone(id)
+		// The one funnel every delete passes through, which is what keeps a
+		// forgotten session's conversation from outliving its row.
+		s.dropTranscript(id)
+		if s.sessionGone != nil {
+			s.sessionGone(id)
+		}
 	}
 }
 
@@ -347,6 +405,7 @@ func open(path string) (*Service, error) {
 		`ALTER TABLE projects ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE projects ADD COLUMN closed_seq INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE session_costs ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE session_texts ADD COLUMN truncated INTEGER NOT NULL DEFAULT 0`,
 		// The terminal's own theme selection, from before one theme coloured both
 		// surfaces. Nothing reads it, and a row left standing would hand whoever
 		// gives the terminal a theme again a choice its user made under other
@@ -361,7 +420,7 @@ func open(path string) (*Service, error) {
 			return nil, fmt.Errorf("migrate schema: %w", err)
 		}
 	}
-	return &Service{db: db}, nil
+	return &Service{db: db, stopped: make(chan struct{})}, nil
 }
 
 // migrationApplied reports whether an ALTER TABLE failed because the migration
@@ -386,8 +445,13 @@ func databasePath() (string, error) {
 	return filepath.Join(dir, "lich", name), nil
 }
 
-// Close releases the database connection.
+// Close releases the database connection, after waiting out a backfill still
+// indexing parked sessions (transcripts.go). Waiting rather than racing: the
+// goroutine writes through this same connection, and closing it under one is a
+// failed write logged as if the disk had gone.
 func (s *Service) Close() error {
+	s.stopOnce.Do(func() { close(s.stopped) })
+	s.backfillDone.Wait()
 	return s.db.Close()
 }
 
@@ -541,130 +605,6 @@ func (s *Service) ClosedProjectCount(term string) (int, error) {
 		return 0, fmt.Errorf("count closed projects: %w", err)
 	}
 	return count, nil
-}
-
-// ClosedSession is one parked session offered for resuming — what identifies it
-// in a list somebody is browsing rather than one they are already looking at.
-// The project rides along because history spans every project at once, closed
-// ones included, and the project name is what tells two sessions of the same
-// name apart.
-//
-// Two answers about the branch, and they are different questions: ParkedBranch
-// is the snapshot this row was closed on, which is what the search matches, and
-// what the window draws is read live off the checkout, because a worktree's
-// directory stops agreeing with its branch the moment an agent branches inside
-// it (frontend/src/lib/git/checkout-label.ts). A row whose checkout is gone has
-// nothing live to show — which is the same row that cannot be resumed anyway.
-type ClosedSession struct {
-	ID          string `json:"id"`
-	ProjectID   string `json:"projectId"`
-	ProjectName string `json:"projectName"`
-	// The project's own directory, so resuming a session of a closed project can
-	// reopen that project first without a second lookup — and can ask where it
-	// went when the directory has moved.
-	ProjectPath string `json:"projectPath"`
-	Label       string `json:"label"`
-	Kind        string `json:"kind"`
-	Path        string `json:"path"`
-	// The branch the checkout was on at the close, empty for a row parked before
-	// lich recorded one. Searchable, not drawn.
-	ParkedBranch string `json:"parkedBranch"`
-	// Unix seconds, 0 for a row parked before closed_at existed — which sorts
-	// last and is drawn as no date rather than as 1970.
-	ClosedAt int64 `json:"closedAt"`
-}
-
-// ClosedHistory is one page of the parked-session history and the size of the
-// match it was cut from. Total is what lets the list say it was cut instead of
-// presenting closedSessionLimit rows as the whole answer.
-type ClosedHistory struct {
-	Sessions []ClosedSession `json:"sessions"`
-	Total    int             `json:"total"`
-}
-
-// closedSessionLimit caps the history handed to the window — how many rows one
-// call answers with, not how far back it looks: the search runs in the query,
-// so a match older than the newest hundred is still found. The alternative is
-// handing over every session ever closed to draw a list nobody scrolls to the
-// end of.
-const closedSessionLimit = 100
-
-// likeEscape is the ESCAPE character the searches declare, so a name containing
-// % or _ searches for those characters instead of matching anything.
-const likeEscape = `\`
-
-// escapeLike neutralises the LIKE wildcards in a user's search term. The escape
-// character goes first, or escaping the wildcards would re-escape it.
-func escapeLike(term string) string {
-	term = strings.ReplaceAll(term, likeEscape, likeEscape+likeEscape)
-	term = strings.ReplaceAll(term, "%", likeEscape+"%")
-	return strings.ReplaceAll(term, "_", likeEscape+"_")
-}
-
-// ClosedSessions returns the parked sessions (is_open = 0) matching term, the
-// last one closed first, up to closedSessionLimit of them. An empty term is the
-// plain history: the most recently closed, whatever they are named. Sessions of
-// closed projects answer too: a project hidden from the tab strip still owns the
-// work done in it, and resuming one of its sessions is what reopens it.
-//
-// The term is matched here rather than in the window because the window only
-// ever sees one page of rows, and a session parked further back than that page
-// would be unfindable by name. Every whitespace-separated word must appear
-// somewhere in the name, the project's name, the path or the branch the session
-// was parked on — the same reading the palette's own filter gives a query, so
-// narrowing here never drops a row that filter would have kept. LIKE is
-// case-insensitive for ASCII in SQLite, which is what makes this a search and
-// not a prefix test.
-//
-// Total counts the whole match, not the page: without it a term matching more
-// parked sessions than fit would answer with closedSessionLimit rows and no way
-// for the list to say so.
-//
-// rowid is the tiebreak, not the order, for RecentProjects' reason twice over:
-// it dates the insert, and a resumed session is reinserted — so rows parked
-// before closed_at existed all carry 0 and fall back to it together.
-func (s *Service) ClosedSessions(term string) (ClosedHistory, error) {
-	where := "WHERE s.is_open = 0"
-	args := []any{}
-	for _, word := range strings.Fields(term) {
-		where += " AND (s.label || ' ' || p.name || ' ' || s.path || ' ' || s.parked_branch)" +
-			" LIKE ? ESCAPE '" + likeEscape + "'"
-		args = append(args, "%"+escapeLike(word)+"%")
-	}
-	args = append(args, closedSessionLimit)
-
-	// COUNT(*) OVER () rides along on every row rather than costing a second
-	// query: a window function is computed before LIMIT, so it counts the match
-	// and not the page.
-	rows, err := s.db.Query(
-		`SELECT s.id, s.project_id, p.name, p.path, s.label, s.kind, s.path,
-		        s.parked_branch, s.closed_at, COUNT(*) OVER ()
-		   FROM sessions s JOIN projects p ON p.id = s.project_id
-		   `+where+`
-		  ORDER BY s.closed_at DESC, s.rowid DESC
-		  LIMIT ?`,
-		args...,
-	)
-	if err != nil {
-		return ClosedHistory{}, fmt.Errorf("query closed sessions: %w", err)
-	}
-	defer rows.Close()
-
-	history := ClosedHistory{Sessions: []ClosedSession{}}
-	for rows.Next() {
-		var c ClosedSession
-		if err := rows.Scan(
-			&c.ID, &c.ProjectID, &c.ProjectName, &c.ProjectPath,
-			&c.Label, &c.Kind, &c.Path, &c.ParkedBranch, &c.ClosedAt, &history.Total,
-		); err != nil {
-			return ClosedHistory{}, fmt.Errorf("scan closed session: %w", err)
-		}
-		history.Sessions = append(history.Sessions, c)
-	}
-	if err := rows.Err(); err != nil {
-		return ClosedHistory{}, fmt.Errorf("iterate closed sessions: %w", err)
-	}
-	return history, nil
 }
 
 // ProjectPath returns the directory of the project with this id, or "" when

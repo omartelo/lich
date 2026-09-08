@@ -143,8 +143,11 @@ func main() {
 	// directory, so it validates the picked one against the workspace.
 	proj.SetProjects(db.ProjectAt)
 	// Parking a session records the branch its checkout was on, so the history
-	// search can match a branch the row is showing (store.SetBranchOf).
+	// search can match a branch the row is showing (store.SetBranchOf), and a
+	// copy of what was said in it, capped, so the same search reaches the
+	// conversation and not only the names around it.
 	db.SetBranchOf(proj.Branch)
+	db.SetTranscriptOf(terminal.TranscriptText)
 
 	// Every service the frontend uses goes through the loopback RPC
 	// (internal/rpc). store.Close manages the DB lifecycle and stays Go-only.
@@ -270,8 +273,8 @@ func main() {
 //     life of the process and starts a second loop racing the first for every
 //     due prompt.
 //   - relay.SetPlugins, project.SetAccounts, project.SetProjects,
-//     quota.SetSessions, store.SetSessionGone, store.SetBranchOf and
-//     terminal.SetDropDir are startup wiring. Called with [null] they silently
+//     quota.SetSessions, store.SetSessionGone, store.SetBranchOf,
+//     store.SetTranscriptOf and terminal.SetDropDir are startup wiring. Called with [null] they silently
 //     nil what they wired (encoding/json leaves a func or pointer alone on
 //     null), and the write races the readers already serving — nilling
 //     SetProjects also disarms the guard that keeps two projects off the same
@@ -282,6 +285,7 @@ func denyInternal(d *rpc.Handler) {
 		"store.Close",
 		"store.SetSessionGone",
 		"store.SetBranchOf",
+		"store.SetTranscriptOf",
 		"drop.Upload",
 		"drop.Save",
 		"drop.Purge",

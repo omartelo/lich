@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The palette's History tab now searches what closed sessions said, not just
+  what they were called.** Parking a session files a copy of its conversation
+  into a full-text index, so typing a phrase you remember finds the closed
+  session it was said in and shows the sentence under the row, however long ago
+  it was parked. The whole conversation is read, and the rare one too long to
+  index whole says "indexed: newest 8 MB" under its row, so a search that reaches
+  only part of a session reads as that rather than as an empty one. Sessions
+  closed before this release are indexed in the background the first time you
+  search, with the header counting them down; Cursor CLI stays out, as it does
+  everywhere, because its chat is stored as encrypted blobs.
+
 - **The palette's Messages tab now searches opencode and Crush sessions.** Both
   keep their conversation in a SQLite database rather than in a transcript file,
   so searching what was said skipped them in silence: a session that had talked

@@ -604,12 +604,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   says `checkout gone` and offers to forget
   itself, which is the only way such a row is ever collected — `PurgeWorktreeSessions` never ran for it,
   because the removal never went through the app.
-- **The History tab searches names, never what was said** (`internal/terminal/search.go`): the Messages tab
-  reads a 4 MB tail or a query per session per keystroke, and it is pointed at the sessions the palette can route to —
-  the open ones. History is the long list, so widening the transcript search to it would put a hundred disk
-  reads behind every character typed, on a machine that can hold hundreds of transcripts and a single one
-  of 169 MB. The parked row keeps its `provider_session_id`, so the transcript is still there to be searched
-  by whatever does it later; the fix when it bites is a query, not a bigger tail.
 - **A filed backend answer outlives the screen that asked, under a key its caller writes by hand**
   (`frontend/src/lib/remote-cache.ts`): a `useRemoteResource` caller that passes `cache` has its answers kept
   in module memory until the page reloads, under exactly the string it composed. Two callers that compose the

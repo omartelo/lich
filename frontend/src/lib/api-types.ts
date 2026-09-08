@@ -378,6 +378,14 @@ export interface ClosedSession {
   /** Unix seconds; 0 for a row parked before lich recorded the close, which
    * sorts last and is drawn as no date rather than as 1970. */
   closedAt: number
+  /** The stretch of the parked conversation that matched the search, out of the
+   * index the close wrote. "" for a row matched by name alone, and for every row
+   * of an empty query, which matched nothing in particular. */
+  snippet: string
+  /** The cap on one session's index dropped the oldest of this conversation, so
+   * a search over it reaches only the newer part. The row says so, because a
+   * search that cannot see the whole session must not read as an absence. */
+  truncated: boolean
 }
 
 /** internal/store.ClosedHistory — one page of parked sessions and the size of
@@ -386,6 +394,11 @@ export interface ClosedSession {
 export interface ClosedHistory {
   sessions: ClosedSession[]
   total: number
+  /** Parked sessions whose conversation is not indexed yet: a workspace that
+   * predates the index, catching up in the background. The History header reports
+   * it so a search that cannot see every session yet says so; 0 is the steady
+   * state. */
+  indexing: number
 }
 
 /** internal/terminal.TranscriptMatch — a session whose conversation mentions a
