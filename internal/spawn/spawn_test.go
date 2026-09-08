@@ -93,7 +93,7 @@ func (f *fakeSessions) LoadState() ([]store.Project, error) {
 	return f.projects, f.loadErr
 }
 
-func (f *fakeSessions) RecentProjects() ([]store.Recent, error) {
+func (f *fakeSessions) RecentProjects(string) ([]store.Recent, error) {
 	if f.recentErr != nil {
 		return nil, f.recentErr
 	}

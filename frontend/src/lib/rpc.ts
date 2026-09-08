@@ -354,8 +354,13 @@ export const Store = {
   AddProject: (id: string, name: string, path: string) =>
     call<null>("store.AddProject", [id, name, path]),
   CloseProject: (id: string) => call<null>("store.CloseProject", [id]),
-  /** The closed projects offered for reopening, newest first (capped backend-side). */
-  RecentProjects: () => call<RecentProject[] | null>("store.RecentProjects", []),
+  /** The closed projects matching `term` (every word in the name or the path),
+   * newest close first and capped backend-side. An empty term is the plain
+   * reopen list. */
+  RecentProjects: (term = "") => call<RecentProject[] | null>("store.RecentProjects", [term]),
+  /** How many closed projects `term` matches, page or no page: what a capped
+   * list says it is leaving out. */
+  ClosedProjectCount: (term = "") => call<number>("store.ClosedProjectCount", [term]),
   /** sandbox is whether this session runs confined ("on"/"off", "" to follow the
    * provider's rung). It rides the insert because the PTY reads it on the first
    * spawn — a second call would race the card this one puts on screen. */

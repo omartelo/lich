@@ -51,7 +51,7 @@ func (s *Service) ensureProject(
 // answers with whichever of the two rows the query reached first.
 func (s *Service) adoptProject(identity *project.Project) ([]store.Project, store.Project, error) {
 	id, name := identity.ID, identity.Name
-	recents, err := s.sessions.RecentProjects()
+	recents, err := s.sessions.RecentProjects("")
 	if err != nil {
 		return nil, store.Project{}, fmt.Errorf("read the closed projects: %w", err)
 	}

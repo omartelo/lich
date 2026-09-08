@@ -272,13 +272,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   and the base branch. The remote fetched from is the one whose URL matches the pull request's own, origin when
   none does — lich reads gh's base repository off that URL rather than asking gh again, so a clone whose remotes
   all name a different repository than the pull request lives on falls back to origin and fails there.
-- **Persistence is hybrid**: UI prefs in the page's localStorage (`lich.*` keys — the reason the listener port is
-  pinned at 47821; `LICH_LISTEN_PORT` overrides it, `LICH_PORT` is the distinct per-session hook variable), the
-  workspace in SQLite (`<config-dir>/lich/lich.db`, `internal/store`). Closing a session deletes its row; keeping a
-  worktree parks its session for a later resume; closing a project hides it, and reopening one whose directory is
-  gone relocates it instead, keeping the stored id its sessions and its worktree directory hang off. Only the 25
-  most recent closes are offered back (`recentLimit`, `internal/store/store.go`) — the row survives, but past that
-  a project is reachable only through the directory picker, and neither the menu nor the palette says so.
 - **A project opened from outside the window is matched by the spelling of its path**
   (`internal/project/project.go`, `Identify`; `internal/spawn/projects.go`): `lich open --project <dir>` normalizes
   what it is handed — `~` expanded, cleaned, refused unless absolute — and then matches that string against the

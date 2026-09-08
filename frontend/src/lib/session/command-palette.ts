@@ -85,9 +85,12 @@ export function historyRows(
 export interface PaletteResults {
   sessions: PaletteSession[]
   projects: Project[]
-  // The closed projects, which the reopen menu shows five of: past that the
-  // palette is the only way back to one.
+  // One page of the closed projects the store matched, which the reopen menu
+  // shows five of: past that the palette is the only way back to one.
   closed: Project[]
+  // Every closed project the term matched, so the group header can report a
+  // page that was cut instead of cutting it in silence.
+  closedTotal: number
   // The parked sessions — what the History tab lists, and the only group whose
   // rows are not in the workspace at all.
   history: PaletteHistory[]
@@ -99,8 +102,10 @@ export function filterPalette(
   projects: readonly Project[],
   closed: readonly Project[] = [],
   history: readonly PaletteHistory[] = [],
+  closedTotal = 0,
 ): PaletteResults {
   return {
+    closedTotal,
     sessions: allSessions.filter((s) =>
       matchesQuery(`${s.label} ${s.projectName} ${s.path}`, query),
     ),
@@ -227,9 +232,11 @@ export function historyAction(row: PaletteHistory): "resume" | "forget" {
   return row.gone ? "forget" : "resume"
 }
 
-// cap of 0 means no cap — the tab that names one kind lists all of it.
-function group(label: string, rows: PaletteRow[], cap: number): PaletteGroup {
-  return { label, rows: cap > 0 ? rows.slice(0, cap) : rows, total: rows.length }
+// cap of 0 means no cap: the tab that names one kind lists all of it. `total`
+// is how many rows the group stands for, which is the caller's to say when the
+// backend cut the list before it got here; never fewer than the rows on screen.
+function group(label: string, rows: PaletteRow[], cap: number, total = rows.length): PaletteGroup {
+  return { label, rows: cap > 0 ? rows.slice(0, cap) : rows, total: Math.max(total, rows.length) }
 }
 
 export function paletteGroups(
@@ -248,7 +255,7 @@ export function paletteGroups(
       case "Sessions":
         return [group("Sessions", sessions, 0)]
       case "Projects":
-        return [group("Open", open, 0), group("Closed", closed, 0)]
+        return [group("Open", open, 0), group("Closed", closed, 0, results.closedTotal)]
       case "Messages":
         return [group("Messages", said, 0)]
       case "History":

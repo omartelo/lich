@@ -2,14 +2,20 @@
 // open projects, their terminal sessions and the settings scoped globally or to
 // one project — provider binaries and defaults, the permission and sandbox
 // rungs, the gh account. It never stores chat or terminal content — only the
-// metadata needed to restore the workspace after a restart.
+// metadata needed to restore the workspace after a restart. The file is
+// <config-dir>/lich/lich.db, or lich-dev.db under LICH_DEV so a rig never
+// touches an installed lich's workspace (databasePath).
 //
 // A UI preference stays in the frontend's localStorage by default: it needs
 // synchronous access on first paint and the backend never reads it. It moves
 // here when losing it costs more than reading it a frame late — the theme
 // selections and the "what's new" mark did, because Chromium recreates a
 // damaged profile from scratch and takes every `lich.*` key with it (the why is
-// at the setting keys in frontend/src/providers/settings.tsx).
+// at the setting keys in frontend/src/providers/settings.tsx). Those `lich.*`
+// keys are also why the listener port is pinned rather than picked: localStorage
+// is keyed by the origin the port forms, so moving it wipes the store
+// (internal/singleton.DefaultPort, which LICH_LISTEN_PORT overrides; not
+// LICH_PORT, the per-session hook variable).
 package store
 
 import (
@@ -425,25 +431,47 @@ type Recent struct {
 	Path string `json:"path"`
 }
 
-// recentLimit caps the reopen list. The reopen menu shows five of them and the
-// command palette searches all of them, so the number answers to the palette:
-// far enough back to cover the projects a workspace actually cycles through,
-// and still a bound — the alternative is a list that only grows and a query
-// that reads every closed project ever.
+// recentLimit caps how many closed projects one call answers with, not how far
+// back it looks: the search runs in the query, so a project closed long before
+// the newest twenty-five is still found by name. The alternative is a list that
+// only grows and a menu that reads every closed project ever.
 const recentLimit = 25
 
-// RecentProjects returns the closed projects (is_open = 0) offered for
-// reopening, the last one closed first, up to recentLimit of them.
+// closedProjectMatch is the WHERE clause and its arguments for the closed
+// projects (is_open = 0) matching term: every whitespace-separated word has to
+// appear somewhere in the name or the path, which is the same reading the
+// palette's own filter gives a query. An empty term matches all of them. LIKE
+// is case-insensitive for ASCII in SQLite, which is what makes this a search
+// and not a prefix test.
+func closedProjectMatch(term string) (string, []any) {
+	where := "WHERE is_open = 0"
+	args := []any{}
+	for _, word := range strings.Fields(term) {
+		where += " AND (name || ' ' || path) LIKE ? ESCAPE '" + likeEscape + "'"
+		args = append(args, "%"+escapeLike(word)+"%")
+	}
+	return where, args
+}
+
+// RecentProjects returns the closed projects matching term, the last one closed
+// first, up to recentLimit of them. An empty term is the plain reopen list: the
+// most recently closed, whatever they are named.
+//
+// The term is matched here rather than in the window for the reason
+// ClosedSessions matches its own: the window only ever sees one page of rows, so
+// a project closed further back than that page would be unreachable by name.
 //
 // rowid is the tiebreaker, not the order: it dates a project's first open, so
 // on its own it hid a long-standing project behind newer ones the moment it was
 // closed. Rows closed before closed_seq existed carry 0 and keep falling back
 // to it.
-func (s *Service) RecentProjects() ([]Recent, error) {
+func (s *Service) RecentProjects(term string) ([]Recent, error) {
+	where, args := closedProjectMatch(term)
+	args = append(args, recentLimit)
 	rows, err := s.db.Query(
-		`SELECT id, name, path FROM projects WHERE is_open = 0
+		`SELECT id, name, path FROM projects `+where+`
 		  ORDER BY closed_seq DESC, rowid DESC LIMIT ?`,
-		recentLimit,
+		args...,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query recent projects: %w", err)
@@ -462,6 +490,20 @@ func (s *Service) RecentProjects() ([]Recent, error) {
 		return nil, fmt.Errorf("iterate recent projects: %w", err)
 	}
 	return recents, nil
+}
+
+// ClosedProjectCount counts the closed projects matching term, which is how a
+// list capped at recentLimit says what it is leaving out: the reopen menu points
+// at the palette when there are more, and the palette's own group header reports
+// the matches it could not fit. A COUNT over one indexed flag is cheap enough to
+// ask for beside the list itself.
+func (s *Service) ClosedProjectCount(term string) (int, error) {
+	where, args := closedProjectMatch(term)
+	var count int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM projects `+where, args...).Scan(&count); err != nil {
+		return 0, fmt.Errorf("count closed projects: %w", err)
+	}
+	return count, nil
 }
 
 // ClosedSession is one parked session offered for resuming — what identifies it
@@ -498,8 +540,8 @@ type ClosedSession struct {
 // end of.
 const closedSessionLimit = 100
 
-// likeEscape is the ESCAPE character the history search declares, so a name
-// containing % or _ searches for those characters instead of matching anything.
+// likeEscape is the ESCAPE character the searches declare, so a name containing
+// % or _ searches for those characters instead of matching anything.
 const likeEscape = `\`
 
 // escapeLike neutralises the LIKE wildcards in a user's search term. The escape

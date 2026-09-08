@@ -1109,7 +1109,7 @@ func TestRecentProjectsListsClosedOnesNewestFirst(t *testing.T) {
 		}
 	}
 
-	recents, err := svc.RecentProjects()
+	recents, err := svc.RecentProjects("")
 	if err != nil {
 		t.Fatalf("RecentProjects: %v", err)
 	}
@@ -1131,7 +1131,7 @@ func TestRecentProjectsListsClosedOnesNewestFirst(t *testing.T) {
 	}
 }
 
-// TestRecentProjectsStopAtTwentyFive pins the cap the palette searches within:
+// TestRecentProjectsStopAtTwentyFive pins the page the store answers with:
 // one project past it is closed, and the one that falls off is the oldest close,
 // never the newest. The number is written out rather than read from the constant
 // so moving the constant has to move this line too.
@@ -1169,7 +1169,7 @@ func TestRecentProjectsStopAtTwentyFive(t *testing.T) {
 // recentIDs is the reopen menu's list reduced to what its order is asserted on.
 func recentIDs(t *testing.T, svc *Service) []string {
 	t.Helper()
-	recents, err := svc.RecentProjects()
+	recents, err := svc.RecentProjects("")
 	if err != nil {
 		t.Fatalf("RecentProjects: %v", err)
 	}
@@ -1271,7 +1271,7 @@ func TestReopeningARecentProjectRestoresItsSessions(t *testing.T) {
 	if err := svc.AddProject("p1", "alpha", "/tmp/alpha"); err != nil {
 		t.Fatalf("AddProject (reopen): %v", err)
 	}
-	recents, err := svc.RecentProjects()
+	recents, err := svc.RecentProjects("")
 	if err != nil {
 		t.Fatalf("RecentProjects: %v", err)
 	}
@@ -1298,7 +1298,7 @@ func TestDeleteProjectRemovesItsSessions(t *testing.T) {
 	if err := svc.DeleteProject("p1"); err != nil {
 		t.Fatalf("DeleteProject: %v", err)
 	}
-	recents, err := svc.RecentProjects()
+	recents, err := svc.RecentProjects("")
 	if err != nil {
 		t.Fatalf("RecentProjects: %v", err)
 	}

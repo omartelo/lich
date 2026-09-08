@@ -149,6 +149,24 @@ describe("paletteGroups", () => {
     expect(paletteGroups("Sessions", results, messages)[0]?.rows).toHaveLength(3)
   })
 
+  it("says how many closed projects the store matched past the page it sent", () => {
+    const cut = filterPalette("", all, projects, closed, [], 63)
+    const groups = paletteGroups("Projects", cut, messages)
+    const closedGroup = groups.find((g) => g.label === "Closed")
+    // The header reads "4 of 63": the cut happened in the store, so the rows in
+    // hand cannot report it on their own.
+    expect(closedGroup?.rows).toHaveLength(4)
+    expect(closedGroup?.total).toBe(63)
+  })
+
+  it("never reports a total under the rows it is showing", () => {
+    // A stale total from the query before this one must not read as a group
+    // that shrank below its own rows.
+    const stale = filterPalette("", all, projects, closed, [], 1)
+    const closedGroup = paletteGroups("Projects", stale, messages).find((g) => g.label === "Closed")
+    expect(closedGroup?.total).toBe(4)
+  })
+
   it("drops a group with no rows", () => {
     const empty = filterPalette("nothing-matches-this", all, projects, closed)
     expect(paletteGroups("All", empty, [])).toEqual([])

@@ -26,6 +26,7 @@ import {
   type PaletteSession,
   type PaletteTab,
 } from "@/lib/session/command-palette"
+import { useClosedProjects } from "@/lib/session/use-closed-projects"
 import { useHistorySearch } from "@/lib/session/use-history-search"
 import { useTranscriptSearch } from "@/lib/session/use-transcript-search"
 import { toast } from "sonner"
@@ -33,8 +34,8 @@ import { PickerDialog, PickerEmpty, PickerGroup, PickerRow } from "@/components/
 import { agoLabel } from "@/lib/ago"
 import { displayPath } from "@/lib/paths"
 import { isSessionKind } from "@/lib/session/sessions"
-import type { Project, RecentProject } from "@/lib/api-types"
-import { ProjectService, Store } from "@/lib/rpc"
+import type { Project } from "@/lib/api-types"
+import { Store } from "@/lib/rpc"
 import { cn, errorText } from "@/lib/utils"
 
 // CommandPalette is the app-wide quick switcher: one shortcut (Ctrl/Cmd+K by
@@ -54,9 +55,7 @@ export function CommandPalette() {
   const [query, setQuery] = useState("")
   const [tab, setTab] = useState<PaletteTab>("All")
   const [selected, setSelected] = useState(0)
-  const [closed, setClosed] = useState<RecentProject[]>([])
   const [running, setRunning] = useState<ReadonlySet<string>>(new Set())
-  const [missing, setMissing] = useState<ReadonlySet<string>>(new Set())
 
   useHotkey(hotkeys.commandPalette, () => {
     setOpen((v) => !v)
@@ -65,31 +64,12 @@ export function CommandPalette() {
     setSelected(0)
   })
 
-  // The closed projects live in the store, not in the workspace state, so they
-  // are fetched per opening — anything closed or reopened since the last one
-  // moves in or out of the list. Their directories are read with them: a project
-  // whose folder moved is relocated rather than reopened.
-  useEffect(() => {
-    if (!open) {
-      return
-    }
-    let live = true
-    void Store.RecentProjects().then((recentRows) => {
-      const recents = recentRows ?? []
-      if (!live) {
-        return
-      }
-      setClosed(recents)
-      void ProjectService.Missing(recents.map((row) => row.path)).then((gone) => {
-        if (live) {
-          setMissing(new Set(gone ?? []))
-        }
-      })
-    })
-    return () => {
-      live = false
-    }
-  }, [open])
+  // The closed projects live in the store, not in the workspace state, and they
+  // are searched there rather than filtered here: past one page of the reopen
+  // list the palette is the only way back to one, so a term that only matches an
+  // older close still has to find it. Their directories come back with them, so
+  // a project whose folder moved is relocated rather than reopened.
+  const { rows: closed, total: closedTotal, missing } = useClosedProjects(query, open)
 
   // The parked sessions are searched in the store rather than filtered here, so
   // the History tab reaches a session parked further back than one page of it.
@@ -119,8 +99,8 @@ export function CommandPalette() {
   }, [open])
   const all = useMemo(() => rankSessions(flat, running), [flat, running])
   const results = useMemo(
-    () => filterPalette(query, all, projects, closed, history),
-    [query, all, projects, closed, history],
+    () => filterPalette(query, all, projects, closed, history, closedTotal),
+    [query, all, projects, closed, history, closedTotal],
   )
   // What was said inside the sessions, not just their names. It arrives after
   // the name-matched groups (it is a disk read behind a debounce), so it is

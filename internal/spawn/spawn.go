@@ -78,7 +78,7 @@ const (
 // a later resume. The store implements it.
 type Sessions interface {
 	LoadState() ([]store.Project, error)
-	RecentProjects() ([]store.Recent, error)
+	RecentProjects(term string) ([]store.Recent, error)
 	AddProject(id, name, path string) error
 	AddSessionFrom(
 		projectID, sessionID, label, kind, path string, nextSeq int, originID, originLabel string,

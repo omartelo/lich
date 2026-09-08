@@ -57,6 +57,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A closed project is now findable by name, however long ago it was closed.**
+  Only the twenty-five most recent closes were ever offered back, so an older
+  project was reachable only by hunting its directory in the folder picker, and
+  neither the reopen menu nor the palette said so. Typing in the command palette
+  now searches every closed project there has ever been, by name and by path,
+  and its Closed group says how many matches it is showing of how many it found.
+  The reopen menu still lists the newest five, with a line under them naming how
+  many more the palette can reach.
 - **A split's dragged pane sizes now come back when the grid does.** How many
   panes sit across follows the window, so collapsing the sidebar, opening the
   dock or moving to another monitor reshapes the wall - and the sizes you had
