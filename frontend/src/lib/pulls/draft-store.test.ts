@@ -20,6 +20,9 @@ const OTHER_PROJECT = "0f0f0f0f0f0f"
 const PR: DraftScope = { projectId: PROJECT, number: 389 }
 const OTHER: DraftScope = { projectId: PROJECT, number: 12 }
 const THREAD = "PRRT_kwDOabc"
+// The highest number a swept list carries: nothing above it can be judged
+// closed, so every sweep that means to collect something says it out loud.
+const NEWEST = 400
 
 // A page load: the module reads storage once as it evaluates, so a fresh copy
 // of it is the only honest way to ask what the next launch would restore.
@@ -182,7 +185,7 @@ describe("the sweep against the open pull requests", () => {
     setDraft(draftKey(PR, "comment"), "about a merged one")
     setDraft(draftKey(OTHER, "comment"), "about an open one")
 
-    sweepDrafts(PROJECT, [OTHER.number])
+    sweepDrafts(PROJECT, [OTHER.number, NEWEST])
 
     const next = await reload()
     expect(next.draftStore.get(next.draftKey(PR, "comment"))).toBeNull()
@@ -193,7 +196,7 @@ describe("the sweep against the open pull requests", () => {
     setDraft(draftKey(PR, "body"), "a description")
     setDraft(draftKey(PR, "reply", THREAD), "a reply")
 
-    sweepDrafts(PROJECT, [])
+    sweepDrafts(PROJECT, [NEWEST])
 
     expect(localStorage.getItem(draftKey(PR, "body"))).toBeNull()
     expect(localStorage.getItem(draftKey(PR, "reply", THREAD))).toBeNull()
@@ -206,7 +209,7 @@ describe("the sweep against the open pull requests", () => {
     const theirs = draftKey({ projectId: OTHER_PROJECT, number: 389 }, "comment")
     setDraft(theirs, "another project's")
 
-    sweepDrafts(PROJECT, [])
+    sweepDrafts(PROJECT, [NEWEST])
 
     expect(localStorage.getItem(theirs)).not.toBeNull()
   })
@@ -216,9 +219,35 @@ describe("the sweep against the open pull requests", () => {
   it("does not take what is still on screen", () => {
     setDraft(draftKey(PR, "comment"), "still being typed")
 
-    sweepDrafts(PROJECT, [])
+    sweepDrafts(PROJECT, [NEWEST])
 
     expect(draftStore.get(draftKey(PR, "comment"))).toBe("still being typed")
+  })
+})
+
+describe("the sweep against a list that is behind", () => {
+  // Numbers are monotonic, so a pull request opened after the list was read is
+  // above everything in it — and the screen can be painting from an answer
+  // minutes old. Its absence from the list is the list being stale, never the
+  // pull request having closed.
+  it("keeps a draft on a number the list could not have carried", () => {
+    const opened = draftKey({ projectId: PROJECT, number: NEWEST + 1 }, "comment")
+    setDraft(opened, "about one opened since")
+
+    sweepDrafts(PROJECT, [OTHER.number, NEWEST])
+
+    expect(localStorage.getItem(opened)).not.toBeNull()
+  })
+
+  // With no rows there is no ceiling, and so no evidence about any number: a
+  // stale empty answer must not read as "this repository has nothing open".
+  // Those drafts are the age cap's.
+  it("keeps everything when the list came back empty", () => {
+    setDraft(draftKey(PR, "comment"), "about something")
+
+    sweepDrafts(PROJECT, [])
+
+    expect(localStorage.getItem(draftKey(PR, "comment"))).not.toBeNull()
   })
 })
 

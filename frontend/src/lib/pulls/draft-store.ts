@@ -84,10 +84,21 @@ export function setDraft(key: string, text: string | null): void {
  * empty the box under the user. */
 export function sweepDrafts(projectId: string, open: readonly number[]): void {
   const keep = new Set(open)
+  // A list says nothing about a number above its own highest. Numbers are
+  // monotonic, so a pull request opened after the list was read — and the
+  // screen paints from an answer that can be minutes old (remote-cache) — sits
+  // above everything in it, and would otherwise read as one that had closed.
+  // A list that came back empty carries no such ceiling and so retires
+  // nothing; that repository's drafts are the age cap's.
+  const ceiling = Math.max(0, ...open)
   const now = Date.now()
   for (const key of prefKeys(KEY_PREFIX)) {
     const scope = scopeOf(key)
-    const closed = scope !== null && scope.projectId === projectId && !keep.has(scope.number)
+    const closed =
+      scope !== null &&
+      scope.projectId === projectId &&
+      scope.number <= ceiling &&
+      !keep.has(scope.number)
     if (closed || parseDraft(readPref(key), now) === null) {
       removePref(key)
     }
