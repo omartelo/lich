@@ -11,7 +11,6 @@ import {
   FolderCode,
   FolderOpen,
   GitBranch,
-  GitFork,
   GitPullRequestArrow,
   Inbox,
   Pencil,
@@ -29,7 +28,7 @@ import { toast } from "sonner"
 import { cn, errorText } from "@/lib/utils"
 import { dragStyle } from "@/lib/use-sortable-list"
 import { displayPath } from "@/lib/paths"
-import { forkableSession, type Session } from "@/lib/session/sessions"
+import type { Session } from "@/lib/session/sessions"
 import {
   useSessionStatus,
   useSessionStatusAge,
@@ -48,6 +47,7 @@ import { baseReadout } from "@/lib/git/base-status"
 import { usePullRequest } from "@/lib/pulls/use-pull-request"
 import { CloseButton } from "@/components/common/CloseButton"
 import { DiffStat } from "@/components/DiffStat"
+import { SessionForkItem } from "./SessionForkItem"
 import { SessionStatusIcon } from "./SessionStatusIcon"
 import { SessionTooltip } from "./SessionTooltip"
 import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip"
@@ -290,7 +290,6 @@ export function SessionCard({
   // as an agent is started and quit by hand offers no action the user can rely
   // on being there.
   const canDelegate = active && session.kind !== "shell"
-  const canFork = forkableSession(session) !== null
 
   // The picker is only rendered while the card can delegate, so losing that
   // unmounts it — and an open flag left behind would spring the dialog back up
@@ -684,12 +683,7 @@ export function SessionCard({
             <Clock />
             {scheduleItem}
           </ContextMenuItem>
-          {canFork && (
-            <ContextMenuItem onClick={onFork}>
-              <GitFork />
-              Fork to worktree…
-            </ContextMenuItem>
-          )}
+          <SessionForkItem session={session} onFork={onFork} />
           <ContextMenuItem onClick={copySendCommand}>
             <Copy />
             Copy send command

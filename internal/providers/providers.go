@@ -119,9 +119,12 @@ func AcceptsMCPServer(id string) bool {
 // subcommand for `fork`, and opencode's `--fork` rides its `--session`
 // (measured on 2.1.261, 0.151.0 and 1.18.23). The other five keep no such verb
 // — oh-my-pi, Crush, Cursor CLI, Kiro CLI and Antigravity offer resume alone —
-// and forging a fork for them would mean writing a copy of the conversation
-// into that harness's own private store, which docs/ceilings.md names along
-// with what it would cost.
+// and lich will not forge one: the copy would have to be written into that
+// harness's own private store (two SQLite schemas with triggers, a blob store
+// keyed on the md5 of the checkout, two JSONL formats carrying the id and cwd
+// inside them), none documented, each versioned by its own CLI, and the blast
+// radius of getting one wrong is the user's real history. The card says so at
+// the dead menu item rather than dropping it (SessionForkItem).
 func SupportsFork(id string) bool {
 	return id == Claude || id == Codex || id == OpenCode
 }

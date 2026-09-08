@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **A session card now says why it cannot be forked.** "Fork to worktree…" used
+  to be missing altogether on Antigravity, oh-my-pi, Crush, Cursor CLI and Kiro
+  CLI cards, so the offer looked lost rather than withheld. The item is there
+  now, disabled, under one line naming the provider — their CLIs keep no fork,
+  only resume.
+
 ### Fixed
 
 - **The Pulls screen no longer leaves refs in your repository.** Naming a

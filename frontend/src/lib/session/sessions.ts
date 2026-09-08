@@ -594,6 +594,28 @@ const RESUMABLE_KINDS: readonly SessionKind[] = [
 // is withheld where the CLI has no verb for it.
 const FORKABLE_KINDS: readonly SessionKind[] = ["claude", "codex", "opencode"]
 
+// The five whose CLI resumes but never forks, under the name a user reads in
+// Settings. Written out one by one rather than derived from the kind union, so
+// a provider added to lich has to answer this question on purpose instead of
+// inheriting a sentence about a limit nobody measured.
+const NO_FORK_PROVIDERS: Partial<Record<SessionKind, string>> = {
+  antigravity: "Antigravity",
+  omp: "oh-my-pi",
+  crush: "Crush",
+  cursor: "Cursor CLI",
+  kiro: "Kiro CLI",
+}
+
+// forkUnavailableReason is the sentence the Fork item wears on a card whose
+// provider cannot branch a conversation, and null wherever the item carries no
+// explanation: the three that fork, and a shell, which has no conversation to
+// begin with. A missing row answers nothing — a user who forks a Claude Code
+// card and looks for the same thing on a Crush one has to read why it is dead.
+export function forkUnavailableReason(session: Session): string | null {
+  const name = NO_FORK_PROVIDERS[session.kind]
+  return name === undefined ? null : `${name} keeps no fork; resume only.`
+}
+
 // forkableSession returns the session a "Fork to worktree" offer can be made
 // for: one running a provider that forks, carrying the conversation to branch.
 // Null for every other card, which is what keeps the menu item off it — a row

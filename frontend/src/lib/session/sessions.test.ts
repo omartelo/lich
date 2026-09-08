@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   forkableSession,
+  forkUnavailableReason,
   activeSessionId,
   dragOrder,
   activeTarget,
@@ -624,6 +625,31 @@ describe("forkableSession", () => {
   it("returns null without a provider session id", () => {
     expect(forkableSession(buildState(2)[P].sessions[0])).toBeNull()
   })
+})
+
+describe("forkUnavailableReason", () => {
+  // Spelled out rather than looped: the sentence is read at the menu item, so a
+  // provider renamed here is a provider misnamed on screen.
+  it.each([
+    ["antigravity", "Antigravity keeps no fork; resume only."],
+    ["omp", "oh-my-pi keeps no fork; resume only."],
+    ["crush", "Crush keeps no fork; resume only."],
+    ["cursor", "Cursor CLI keeps no fork; resume only."],
+    ["kiro", "Kiro CLI keeps no fork; resume only."],
+  ] as const)("names %s at the item", (kind, reason) => {
+    const state = withClaudeSession(buildState(2), "s1", "conv-1", kind)
+    expect(forkUnavailableReason(state[P].sessions[0])).toBe(reason)
+  })
+
+  // The three that fork have a working item, and a shell has no conversation of
+  // any kind — neither has a limit to explain.
+  it.each(["claude", "codex", "opencode", "shell"] as const)(
+    "has nothing to say about %s",
+    (kind) => {
+      const state = withClaudeSession(buildState(2), "s1", "conv-1", kind)
+      expect(forkUnavailableReason(state[P].sessions[0])).toBeNull()
+    },
+  )
 })
 
 describe("resumableSession", () => {
