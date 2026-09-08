@@ -65,7 +65,10 @@ Migration progress:
    (`~/.config/lich/chromium-profile/<name>-<digest>` — localStorage lives
    there, so the listener port is pinned to 47821, `LICH_LISTEN_PORT`
    overrides; NOT `LICH_PORT`, which is the per-session hook variable).
-   Window closed = app exit. Extra flags: `lich -- --ozone-platform=wayland`.
+   Window closed = app exit. Extra flags pass through after `--`. Under Wayland
+   the window is native Wayland whenever `WAYLAND_DISPLAY` is set, whatever the
+   GPU; `lich -- --ozone-platform=x11` forces XWayland if a driver's Wayland
+   path misbehaves (XWayland loses file drops on Hyprland, its issue #7800).
    Folder/file pickers go through zenity (`project.ZenityPicker`); clipboard
    paste prefers `navigator.clipboard` with the Wails clipboard as fallback.
    Known gap: no single-instance lock yet — run one at a time.

@@ -792,15 +792,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   Windows and macOS run with `no_sandbox` and the same bar everywhere: the Windows sandbox needs
   `cef_sandbox` linked into the executable and the macOS one a helper app initialising it, and neither is
   wired.
-- **Under Wayland the window is native Wayland, whatever the GPU** (`shell/src/main.rs`): kurogane forces
-  `--ozone-platform=x11` on NVIDIA, on its own reading of NVIDIA's EGL, and 0.45.0 shipped that default.
-  It cost file drops: a Wayland file manager dropping on an XWayland window goes through the compositor's
-  DnD bridge, and Hyprland's does not deliver (its issue #7800): the drop that worked in the system
-  Chromium, which opens native Wayland on its own, silently did nothing. The shell now asks for Wayland
-  whenever `WAYLAND_DISPLAY` is set, the way Chromium's own `auto` hint does, and the user's switches still
-  go through kurogane after it, so `lich -- --ozone-platform=x11` is the way back if NVIDIA's Wayland path
-  misbehaves on a machine (the reference one, RTX 3050 + Hyprland, ran the system Chromium on it for
-  months). A compositor with no XWayland (niri) gets the native window by default now.
 - **The window opens at CEF's default size** (`shell/src/main.rs`): a system browser remembered the
   window's last size and position in its profile; the CEF Views window does not, so each launch is the
   default rectangle until the window manager places it. Tiling compositors never notice.
