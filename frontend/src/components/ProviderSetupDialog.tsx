@@ -1,6 +1,6 @@
 import { ExternalLink } from "lucide-react"
 import { ProviderIcon } from "@/components/ProviderIcon"
-import { ProviderRefreshButton } from "@/components/settings/ProviderRefreshButton"
+import { CheckAgainButton } from "@/components/common/CheckAgainButton"
 import { ProvidersSettings } from "@/components/settings/ProvidersSettings"
 import { Button } from "@/components/ui/button"
 import {
@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import type { ProviderState } from "@/lib/providers-store"
+import { refreshProviders, type ProviderState } from "@/lib/providers-store"
 import { System } from "@/lib/rpc"
 
 interface ProviderSetupDialogProps {
@@ -74,7 +74,7 @@ export function ProviderSetupDialog({ hasInstalled, known, onDone }: ProviderSet
             : "Already have one installed? Point lich at its binary in Settings › Providers."}
         </DialogDescription>
         <DialogFooter>
-          {!hasInstalled && <ProviderRefreshButton size="default" />}
+          {!hasInstalled && <CheckAgainButton onCheck={refreshProviders} size="default" />}
           <Button onClick={onDone}>Continue</Button>
         </DialogFooter>
       </DialogContent>

@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"github.com/ncruces/zenity"
@@ -22,6 +23,9 @@ import (
 )
 
 type Service struct {
+	// mu guards env alone: a re-read of the login shell replaces it while the
+	// page is asking to open a file (SetEnv).
+	mu sync.RWMutex
 	// env is the resolved login-shell environment (see terminal.ResolveShellEnv),
 	// the source of $VISUAL/$EDITOR — a GUI launch never sourced the user's rc.
 	env []string
@@ -55,6 +59,16 @@ func New(env []string, logPath, version string, uncleanExit bool) *Service {
 	}
 	s.uncleanExit.Store(uncleanExit)
 	return s
+}
+
+// SetEnv replaces the resolved environment after a re-read of the login shell
+// (internal/providers.Service.RefreshPath): an $EDITOR exported by an rc file
+// the user edited while lich was open is found from the same re-check that
+// finds a newly installed agent, rather than from the next launch.
+func (s *Service) SetEnv(env []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.env = env
 }
 
 // TakeUncleanExit reports whether the run before this one ended without closing
@@ -274,6 +288,8 @@ func isTerminalEditor(editor string) bool {
 
 // getenv reads a key from the resolved shell env, "" when absent.
 func (s *Service) getenv(key string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	prefix := key + "="
 	for _, kv := range s.env {
 		if strings.HasPrefix(kv, prefix) {

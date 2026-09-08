@@ -182,3 +182,68 @@ func TestPinPathWithoutPATH(t *testing.T) {
 		t.Fatalf("PATH = %q, want it untouched", got)
 	}
 }
+
+// TestReresolveShellEnvRepinsPATH pins the re-check's whole point: a directory
+// the launch PATH did not carry is on the process PATH after a re-read, so
+// exec.LookPath — which is what provider detection and the git/gh checks run
+// through — finds what was installed while lich was open.
+func TestReresolveShellEnvRepinsPATH(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake POSIX $SHELL script is not runnable on Windows")
+	}
+	dir := t.TempDir()
+	fake := filepath.Join(dir, "fakeshell")
+	script := "#!/bin/sh\n" +
+		"echo " + shellEnvSentinel + "\n" +
+		"echo PATH=/late/install:/orig\n"
+	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SHELL", fake)
+	t.Setenv("PATH", "/orig")
+
+	got, err := ReresolveShellEnv([]string{"PATH=/orig"})
+	if err != nil {
+		t.Fatalf("ReresolveShellEnv: %v", err)
+	}
+	PinPath(got)
+	if got := os.Getenv("PATH"); got != "/late/install:/orig" {
+		t.Fatalf("PATH = %q, want the re-resolved one", got)
+	}
+}
+
+// TestReresolveShellEnvFailureKeepsPin pins the other half: a shell that will
+// not answer must leave the pinned PATH alone rather than hand back a re-scan
+// of it, because the surface has to be able to tell the two apart.
+func TestReresolveShellEnvFailureKeepsPin(t *testing.T) {
+	t.Setenv("SHELL", filepath.Join(t.TempDir(), "does-not-exist"))
+	t.Setenv("PATH", "/orig")
+
+	got, err := ReresolveShellEnv([]string{"PATH=/shell/bin"})
+	if err == nil {
+		t.Fatal("ReresolveShellEnv with a broken shell: want an error")
+	}
+	if got != nil {
+		t.Fatalf("ReresolveShellEnv = %v, want nothing to pin", got)
+	}
+	if path := os.Getenv("PATH"); path != "/orig" {
+		t.Fatalf("PATH = %q, want it untouched", path)
+	}
+}
+
+// TestReresolveShellEnvWithoutShellRepinsLaunchPATH covers Windows, where SHELL
+// is normally unset: nothing there was ever resolved from a login shell, so the
+// re-check answers from the launch environment and the scan that follows reads
+// the same process PATH it did before — the whole answer on that machine.
+func TestReresolveShellEnvWithoutShellRepinsLaunchPATH(t *testing.T) {
+	t.Setenv("SHELL", "")
+	base := []string{"PATH=/launch", "A=1"}
+
+	got, err := ReresolveShellEnv(base)
+	if err != nil {
+		t.Fatalf("ReresolveShellEnv without SHELL: %v", err)
+	}
+	if !slices.Equal(got, base) {
+		t.Fatalf("ReresolveShellEnv without SHELL = %v, want %v", got, base)
+	}
+}

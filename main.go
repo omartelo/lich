@@ -84,8 +84,11 @@ func main() {
 
 	// Snapshot before any env tweaks: spawned terminal sessions must inherit
 	// what the user launched lich with (see terminal.childEnv). ResolveShellEnv
-	// recovers the rc-exported vars a GUI launch misses (see its doc).
-	env := terminal.ResolveShellEnv(os.Environ())
+	// recovers the rc-exported vars a GUI launch misses (see its doc). The
+	// snapshot is kept because a re-check resolves from it again, exactly as
+	// this line does (providers.Service.RefreshPath).
+	launchEnv := os.Environ()
+	env := terminal.ResolveShellEnv(launchEnv)
 	// The slice above is what children inherit; exec.LookPath reads the process
 	// PATH instead, so the resolved one has to land there too (see PinPath).
 	terminal.PinPath(env)
@@ -171,8 +174,24 @@ func main() {
 	// run's: a file still there is the only trace a bad exit leaves, and the
 	// restored workspace looks exactly like one closed on purpose.
 	uncleanExit := singleton.UncleanExit(configDir, os.Getenv(restart.WaitEnv))
-	dispatcher.Register("system", system.New(env, logPath, version, uncleanExit))
-	dispatcher.Register("providers", providers.New())
+	sys := system.New(env, logPath, version, uncleanExit)
+	dispatcher.Register("system", sys)
+	providerSvc := providers.New()
+	// One resolution, three readers: the process PATH exec.LookPath resolves a
+	// binary through, what a new session inherits, and the editor lookup. They
+	// are replaced together or not at all — a failed re-read leaves every one of
+	// them on the pin lich booted with, which is what the surface reports.
+	providerSvc.SetPathRefresh(func() error {
+		next, err := terminal.ReresolveShellEnv(launchEnv)
+		if err != nil {
+			return err
+		}
+		terminal.PinPath(next)
+		term.SetEnv(next)
+		sys.SetEnv(next)
+		return nil
+	})
+	dispatcher.Register("providers", providerSvc)
 	// The quota reading is per session, not per machine: a session spawned from
 	// a binary the user configured can spend another account entirely, and the
 	// terminal is what knows the environment that binary set up.

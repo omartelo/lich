@@ -1714,3 +1714,23 @@ func TestClosableState(t *testing.T) {
 		}
 	}
 }
+
+// TestSetEnvMovesTheSpawnBase pins the third reader of a re-read PATH: a
+// session opened after the re-check is spawned with the resolved environment,
+// not the one lich booted with (providers.Service.RefreshPath).
+func TestSetEnvMovesTheSpawnBase(t *testing.T) {
+	s := &Service{env: sessionBaseEnv([]string{"PATH=/orig"}), store: stubBins{}}
+
+	s.SetEnv([]string{"PATH=/late/install:/orig"})
+
+	env := s.sessionEnv("sess", "p1", "")
+	if !slices.Contains(env, "PATH=/late/install:/orig") {
+		t.Fatalf("spawn env kept the boot PATH: %v", env)
+	}
+	if slices.Contains(env, "PATH=/orig") {
+		t.Fatalf("spawn env still carries the boot PATH: %v", env)
+	}
+	if !slices.Contains(env, "TERM=xterm-256color") {
+		t.Fatalf("spawn env lost TERM: %v", env)
+	}
+}

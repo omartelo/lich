@@ -2,6 +2,8 @@ package terminal
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"strings"
@@ -29,9 +31,31 @@ const shellEnvSentinel = "__LICH_SHELL_ENV__"
 // SHELL unset (normal Windows: cmd.exe has no rc) or any failure returns base
 // unchanged — the resolution is best-effort, never load-bearing.
 func ResolveShellEnv(base []string) []string {
+	env, err := ReresolveShellEnv(base)
+	if err != nil {
+		slog.Warn("terminal: shell env resolution yielded nothing, using launch env", "err", err)
+		return base
+	}
+	return env
+}
+
+// ReresolveShellEnv is ResolveShellEnv with the failure returned rather than
+// logged, and it is what a user-pressed re-check runs
+// (internal/providers.Service.RefreshPath). Boot has nowhere to show a failure
+// and carries on with the launch env; a re-check does, and must not hand back a
+// re-scan of the PATH lich booted with as if it were fresh.
+//
+// The bound is the same one boot pays — shellEnvTimeout and the quiet window in
+// runShellDump — so a login shell sitting on a prompt costs the button what it
+// costs a launch, and no more.
+func ReresolveShellEnv(base []string) ([]string, error) {
 	shell := os.Getenv("SHELL")
 	if shell == "" {
-		return base
+		// Normal on Windows: cmd.exe has no rc, so no PATH there was ever
+		// resolved from a login shell. Handing base back re-pins what lich
+		// launched with, which leaves a re-check re-scanning the process PATH —
+		// the whole answer on that machine, not a stale half of one.
+		return base, nil
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), shellEnvTimeout)
@@ -44,10 +68,12 @@ func ResolveShellEnv(base []string) []string {
 
 	extra := parseShellEnvDump(shellEnvSentinel, out)
 	if extra == nil {
-		slog.Warn("terminal: shell env resolution yielded nothing, using launch env", "shell", shell, "err", err)
-		return base
+		if err == nil {
+			err = errors.New("the shell printed no environment")
+		}
+		return nil, fmt.Errorf("%s: %w", shell, err)
 	}
-	return mergeEnv(base, extra)
+	return mergeEnv(base, extra), nil
 }
 
 // parseShellEnvDump returns the KEY=VALUE lines env printed after the last

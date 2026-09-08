@@ -2,7 +2,8 @@ import type { LucideIcon } from "lucide-react"
 import { ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { System } from "@/lib/rpc"
-import { RESTART_HINT, type VcsTool } from "@/lib/vcs-tools"
+import type { VcsTool } from "@/lib/vcs-tools"
+import { CheckAgainButton } from "./CheckAgainButton"
 
 interface ToolMissingProps {
   tool: VcsTool
@@ -28,7 +29,7 @@ export function ToolMissing({ tool, icon: Icon }: ToolMissingProps) {
         Install {tool.bin}
         <ExternalLink />
       </Button>
-      <p className="text-xs text-muted-foreground">{RESTART_HINT}</p>
+      <CheckAgainButton />
     </div>
   )
 }

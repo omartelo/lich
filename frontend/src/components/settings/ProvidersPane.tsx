@@ -9,6 +9,7 @@ import {
   binKey,
   binOffKey,
   enabledProviders,
+  refreshProviders,
   setProjectProviderDefault,
   setProviderDefault,
   setProviderEnabled,
@@ -24,7 +25,7 @@ import { useStoredFlag, useStoredSetting } from "@/lib/use-stored-setting"
 import { useProjects } from "@/providers/projects"
 import { cn } from "@/lib/utils"
 import { ProviderDetail } from "./ProviderDetail"
-import { ProviderRefreshButton } from "./ProviderRefreshButton"
+import { CheckAgainButton } from "@/components/common/CheckAgainButton"
 import { ProviderSelect } from "./ProviderSelect"
 import { ProviderToggleRow } from "./ProviderToggleRow"
 import { SettingBlock } from "./SettingBlock"
@@ -115,7 +116,7 @@ function ProvidersList({
               {adding && (
                 <div className="pl-2">
                   <div className="flex items-center justify-end pb-1 pr-9">
-                    <ProviderRefreshButton />
+                    <CheckAgainButton onCheck={refreshProviders} />
                   </div>
                   <div className="flex flex-col divide-y divide-border pr-9">
                     {available.map((provider) => (

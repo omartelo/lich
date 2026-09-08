@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react"
 import type { DetectedProvider } from "./api-types"
 import { Providers, Store } from "./rpc"
+import { errorText } from "./utils"
 import { PROVIDER_KINDS, type ProviderKind, type SessionKind } from "@/lib/session/sessions"
 
 const GLOBAL_SCOPE = ""
@@ -341,8 +342,9 @@ class ProviderStoreImpl implements ProvidersStore {
 
   // refresh re-probes PATH and nothing else: the enabled flags and the default
   // stay as they are in memory, so a toggle the user just made cannot be undone
-  // by a settings read racing its own write. What it cannot see is a provider
-  // installed outside the PATH lich resolved at boot (docs/ceilings.md).
+  // by a settings read racing its own write. Re-reading the PATH itself is a
+  // step in front of this one, run by whoever offers the re-check
+  // (lib/path-refresh).
   refresh = async (): Promise<void> => {
     const detected = (await this.deps.detect()) ?? []
     const enabled = new Map(this.providers.map((provider) => [provider.id, provider.enabled]))
@@ -467,8 +469,15 @@ export function loadProviders(): Promise<void> {
 // refreshProviders re-probes PATH for the surfaces that offer it: the first-run
 // dialog and Settings › Providers. It lives here rather than in either caller so
 // both get the same answer without either owning the scan.
-export function refreshProviders(): Promise<void> {
-  return store.refresh()
+//
+// The failure is named here rather than at the button: a bare transport error
+// under a control labelled "Check again" reads as "nothing was installed".
+export async function refreshProviders(): Promise<void> {
+  try {
+    await store.refresh()
+  } catch (error) {
+    throw new Error(`Couldn't check for providers: ${errorText(error)}`)
+  }
 }
 
 // hydrateProjectProviderDefaults accepts the overrides delivered with workspace

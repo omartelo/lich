@@ -35,6 +35,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **"Check again" now finds a tool installed after lich started.** lich read the
+  login shell's `$PATH` once, at launch, so an agent, git or gh installed into a
+  directory that `$PATH` did not already carry stayed missing on every surface
+  however many times you re-checked, and only a relaunch brought it in. The
+  re-check now re-reads the shell itself and replaces what lich resolves
+  binaries through, and the git and gh checks have gained the same button. A
+  shell that does not answer leaves the old value in place and says so instead
+  of reporting a stale absence as a fresh one.
 - **The Files tab is browsable in a plain folder.** A directory that is not a
   repository has no `.gitignore` for lich to obey, so the tree listed
   `node_modules`, `target`, `dist` and their kind like any other folder, stopped

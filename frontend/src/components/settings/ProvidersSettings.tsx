@@ -1,10 +1,11 @@
 import {
   enabledProviders,
+  refreshProviders,
   setProviderDefault,
   useDefaultProvider,
   useProviders,
 } from "@/lib/providers-store"
-import { ProviderRefreshButton } from "./ProviderRefreshButton"
+import { CheckAgainButton } from "@/components/common/CheckAgainButton"
 import { ProviderSelect } from "./ProviderSelect"
 import { ProviderToggleRow } from "./ProviderToggleRow"
 import { SettingBlock } from "./SettingBlock"
@@ -48,7 +49,7 @@ export function ProvidersSettings() {
         <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Detected on PATH
         </h2>
-        <ProviderRefreshButton />
+        <CheckAgainButton onCheck={refreshProviders} />
       </div>
       <div className="flex flex-col divide-y divide-border">
         {listed.map((provider) => (

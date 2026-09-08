@@ -436,3 +436,21 @@ func TestOpenFolderInEditorWithoutAnEditorShowsTheFolder(t *testing.T) {
 		t.Errorf("launched %q %v, want the folder %q", name, args, dir)
 	}
 }
+
+// TestSetEnvMovesTheEditorLookup: the editor comes out of the same resolution
+// the PATH does, so a re-read replaces it too rather than leaving one reader on
+// the environment lich booted with (providers.Service.RefreshPath).
+func TestSetEnvMovesTheEditorLookup(t *testing.T) {
+	var name string
+	var args []string
+	s := &Service{env: []string{"EDITOR=code"}, run: captureRun(&name, &args)}
+
+	s.SetEnv([]string{"EDITOR=zed"})
+
+	if _, err := s.OpenInEditor("/repo", "a.txt"); err != nil {
+		t.Fatalf("OpenInEditor: %v", err)
+	}
+	if name != "zed" {
+		t.Fatalf("launched %q, want the re-read editor", name)
+	}
+}

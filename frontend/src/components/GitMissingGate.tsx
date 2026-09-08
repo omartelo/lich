@@ -3,8 +3,9 @@ import { ExternalLink } from "lucide-react"
 import { failed } from "@/lib/binary-layers"
 import { System } from "@/lib/rpc"
 import { NO_SETTLE, useBinaryCheck } from "@/lib/use-binary-check"
-import { GIT, RESTART_HINT } from "@/lib/vcs-tools"
+import { GIT } from "@/lib/vcs-tools"
 import { Button } from "@/components/ui/button"
+import { CheckAgainButton } from "@/components/common/CheckAgainButton"
 import {
   Dialog,
   DialogContent,
@@ -45,11 +46,11 @@ export function GitMissingGate() {
             the version control surfaces stay empty.
           </DialogDescription>
         </DialogHeader>
-        <DialogDescription>{RESTART_HINT}</DialogDescription>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setDismissed(true)}>
             Not now
           </Button>
+          <CheckAgainButton />
           <Button
             onClick={() => {
               void System.OpenExternal(GIT.url)

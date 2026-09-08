@@ -4,8 +4,9 @@ import type { BinaryCheck } from "@/lib/api-types"
 import { failed } from "@/lib/binary-layers"
 import { System } from "@/lib/rpc"
 import { NO_SETTLE, useBinaryCheck } from "@/lib/use-binary-check"
-import { GH, GIT, RESTART_HINT, type VcsTool } from "@/lib/vcs-tools"
+import { GH, GIT, type VcsTool } from "@/lib/vcs-tools"
 import { Button } from "@/components/ui/button"
+import { CheckAgainButton } from "@/components/common/CheckAgainButton"
 import { SettingBlock } from "./SettingBlock"
 
 // VcsToolsSetting is the first thing the Version Control screen answers: whether
@@ -14,8 +15,8 @@ import { SettingBlock } from "./SettingBlock"
 // pollers swallow the failure and the screens simply stay empty.
 //
 // It reports the resolved path rather than a tick, because "is git installed" is
-// rarely the real question: lich pins the login shell's $PATH at launch, so
-// *which* git it found is what a machine with two of them needs to see.
+// rarely the real question: lich resolves the login shell's $PATH, so *which*
+// git it found is what a machine with two of them needs to see.
 export function VcsToolsSetting() {
   const git = useBinaryCheck(GIT.bin, NO_SETTLE)
   const gh = useBinaryCheck(GH.bin, NO_SETTLE)
@@ -29,7 +30,9 @@ export function VcsToolsSetting() {
         <ToolRow tool={GIT} icon={GitBranch} check={git} />
         <ToolRow tool={GH} icon={GitPullRequestArrow} check={gh} />
         {(failed(git) || failed(gh)) && (
-          <p className="pt-1 text-xs text-muted-foreground">{RESTART_HINT}</p>
+          <div className="pt-1">
+            <CheckAgainButton />
+          </div>
         )}
       </div>
     </SettingBlock>

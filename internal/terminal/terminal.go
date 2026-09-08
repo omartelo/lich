@@ -359,11 +359,8 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 		sessions: make(map[string]*session),
 		store:    store,
 		hub:      hub,
-		// Clipped before the append: outside an AppImage childEnv hands back the
-		// caller's own slice, and appending into its spare capacity would write
-		// TERM into the array main still holds.
-		env:    append(slices.Clip(childEnv(env)), "TERM=xterm-256color"),
-		prices: pricing.New(),
+		env:      sessionBaseEnv(env),
+		prices:   pricing.New(),
 	}
 	// Wired here rather than emitted from the hook's own goroutine: the record
 	// is filed on the snapshot worker, minutes-of-CPU later on a cold checkout,
@@ -607,6 +604,26 @@ func (s *Service) SetRestart(fn func() error) {
 		return
 	}
 	s.ws.setRestart(fn)
+}
+
+// sessionBaseEnv is what every session starts from: the process environment
+// cleaned of AppImage runtime leakage, plus TERM. Clipped before the append —
+// outside an AppImage childEnv hands back the caller's own slice, and appending
+// into its spare capacity would write TERM into the array the caller still
+// holds.
+func sessionBaseEnv(env []string) []string {
+	return append(slices.Clip(childEnv(env)), "TERM=xterm-256color")
+}
+
+// SetEnv replaces what a session spawned from now on inherits, after a re-read
+// of the login shell replaced the environment lich booted with
+// (internal/providers.Service.RefreshPath). A session already running keeps the
+// environment it was born with: its PTY was handed a copy at spawn, and there
+// is no way to reach into a live process's environment anyway.
+func (s *Service) SetEnv(env []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.env = sessionBaseEnv(env)
 }
 
 // sessionEnv is the environment for one PTY: the shared base, the project this

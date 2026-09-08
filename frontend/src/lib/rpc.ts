@@ -533,6 +533,11 @@ export const Providers = {
   /** Resolve a configured binary the way the spawn does, and report whether it
    * can be run. "" answers `empty` — the layer below is what will be used. */
   Verify: (bin: string) => call<BinaryCheck>("providers.Verify", [bin]),
+  /** Re-read the login shell's environment and replace the $PATH lich pinned at
+   * launch, so Detect and Verify answer from what is installed now. Rejects
+   * when the shell did not answer inside its bound, leaving the pin untouched —
+   * call it through lib/path-refresh, which owns that distinction. */
+  RefreshPath: () => call<null>("providers.RefreshPath", []),
 }
 
 export const Quota = {

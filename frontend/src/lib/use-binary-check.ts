@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useSyncExternalStore } from "react"
 import type { BinaryCheck } from "./api-types"
+import { pathVersion, subscribePathRefresh } from "./path-refresh"
 import { Providers } from "./rpc"
 
 // How long a field rests before its value is verified. Every keystroke of a path
@@ -16,8 +17,13 @@ export const NO_SETTLE = 0
 // whenever the value settles. Null while the first answer for a value is in
 // flight — the callers draw nothing rather than flashing a failure between
 // keystrokes.
+//
+// It re-checks on a re-read of the machine's $PATH too (lib/path-refresh): the
+// answer is resolved through the pin, so a moved pin makes every verdict on
+// screen stale at once, wherever the re-check was pressed.
 export function useBinaryCheck(bin: string, settleMs: number = SETTLE_MS): BinaryCheck | null {
   const [check, setCheck] = useState<BinaryCheck | null>(null)
+  const path = useSyncExternalStore(subscribePathRefresh, pathVersion)
 
   useEffect(() => {
     let live = true
@@ -37,7 +43,7 @@ export function useBinaryCheck(bin: string, settleMs: number = SETTLE_MS): Binar
       live = false
       clearTimeout(timer)
     }
-  }, [bin, settleMs])
+  }, [bin, settleMs, path])
 
   return check
 }

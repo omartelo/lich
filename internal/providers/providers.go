@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 )
 
 // Provider ids. Each id is also the session kind (store column + terminal.Start)
@@ -159,11 +160,50 @@ type Detected struct {
 // detection without touching the machine.
 type Service struct {
 	lookPath func(string) (string, error)
+	// mu guards refreshPath, wired after construction (SetPathRefresh) while the
+	// window may already be calling in.
+	mu sync.Mutex
+	// refreshPath re-reads the login shell's environment and replaces the PATH
+	// lich pinned at launch, everywhere lich resolves a binary from. Nil outside
+	// the app — `lich doctor` builds a Service to read the machine, not to
+	// change it — and RefreshPath is then the no-op that scans the same PATH
+	// again.
+	refreshPath func() error
 }
 
 // New returns a Service that scans the real PATH.
 func New() *Service {
 	return &Service{lookPath: exec.LookPath}
+}
+
+// SetPathRefresh wires what a re-check re-reads the machine's PATH with. It is
+// one resolution feeding several readers — the process PATH exec.LookPath goes
+// through, the environment a new session inherits, the editor lookup — so
+// main.go owns the applying and this package only asks for it.
+func (s *Service) SetPathRefresh(fn func() error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.refreshPath = fn
+}
+
+// RefreshPath re-reads the login shell's environment and re-pins what it
+// resolved, so the Detect and Verify below answer from what is installed now
+// rather than from what was installed when lich started. It is what lets a
+// re-check recover a machine that installed an agent, git or gh into a
+// directory the launch PATH did not carry, without a relaunch.
+//
+// It runs under the resolution's own bound (terminal.ReresolveShellEnv), and a
+// shell that does not answer inside it leaves the pin exactly as it is and says
+// so: re-scanning the old PATH would report the same absence as though it were
+// news.
+func (s *Service) RefreshPath() error {
+	s.mu.Lock()
+	refresh := s.refreshPath
+	s.mu.Unlock()
+	if refresh == nil {
+		return nil
+	}
+	return refresh()
 }
 
 // Detect returns every known provider with its install state, resolving the
