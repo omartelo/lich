@@ -184,8 +184,9 @@ Types `<prompt>` at `<session>`'s prompt, submits it, and waits.
   this about both — it finished a turn and answered neither here — so both
   senders are told it, which is what each would have been told alone. Which of
   the two that turn actually was is the part nothing outside that session can
-  say, so it is not decided: the worker is asked at its own prompt to name the
-  ticket, in the words `lich reply` refuses a ticketless answer with.
+  say, so it is not decided: a note at the worker's own prompt names the
+  requests that went home unanswered, and says the next one it answers has to
+  name its ticket.
 
 ```
 docs is still working. The errand is open — a message that session was not ready

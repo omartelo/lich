@@ -1,7 +1,6 @@
 package relay
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -122,16 +121,34 @@ func (s *Service) errandOfLocked(replierID string) (string, error) {
 	sort.Slice(open, func(i, j int) bool {
 		return s.tickets[open[i]].deliverySeq < s.tickets[open[j]].deliverySeq
 	})
-	return "", errors.New(pickTicketNotice(len(open), openErrands(s.tickets, open)))
+	return "", fmt.Errorf(
+		"%d requests are open against this session, and an answer that names no ticket "+
+			"would close the wrong one. Name the ticket the answer belongs to:\n%s",
+		len(open), openErrands(s.tickets, open),
+	)
 }
 
 // openErrands lists the errands a ticketless answer was refused with: the reply
 // command for each, and the line it asked for beside it, so the agent picks the
 // ticket by what the task was rather than by a number it cannot tell apart.
 func openErrands(tickets map[string]*ticket, ids []string) string {
+	return errandLines(tickets, ids, "  lich reply ", " \"<answer>\"")
+}
+
+// namedErrands lists the same errands as history rather than as somewhere to
+// reply: the ticket and what it asked, no command. It is what a session is
+// shown about errands that are already over — an invitation to answer one of
+// those is an invitation to run something that fails.
+func namedErrands(tickets map[string]*ticket, ids []string) string {
+	return errandLines(tickets, ids, "  ", "")
+}
+
+// errandLines renders one line per errand: the ticket between lead and tail,
+// and the opening of what it asked beside it.
+func errandLines(tickets map[string]*ticket, ids []string, lead, tail string) string {
 	var b strings.Builder
 	for _, id := range ids {
-		fmt.Fprintf(&b, "  lich reply %s \"<answer>\"", id)
+		b.WriteString(lead + id + tail)
 		if asked := tickets[id].asked; asked != "" {
 			fmt.Fprintf(&b, "   — %s", asked)
 		}

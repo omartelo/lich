@@ -92,27 +92,21 @@ func replyInstruction(hasTools bool, ticketID string) string {
 		"and the detail is in your commits and files anyway."
 }
 
-// pickTicketNotice is what a session with more than one errand open is told,
-// and it is one text because it answers one question from two sides: the
-// refusal a ticketless answer gets (errandOfLocked), and the note typed at a
-// worker whose turn ended without an answer to any of them. The agent reading
-// both is the same agent, and two spellings of one instruction is one more
-// thing to guess between. errands is the list openErrands renders.
-func pickTicketNotice(count int, errands string) string {
+// pickTicketNudge is what a worker is told at its own prompt after a turn that
+// ended with none of its errands answered. Those errands are over by the time it
+// reads this — every one the turn could have been went home unanswered, which is
+// the same true thing about each of them — so they are named as history and not
+// as somewhere to reply: a ticket the relay has closed answers "unknown ticket",
+// and a note that invites that is worse than no note. What it asks for is the
+// next answer, which is the one that can still name its ticket.
+func pickTicketNudge(count int, errands string) string {
 	return fmt.Sprintf(
-		"%d requests are open against this session, and an answer that names no ticket "+
-			"would close the wrong one. Name the ticket the answer belongs to:\n%s",
+		"[lich] Your turn ended with no answer sent, so %d requests went back to their senders "+
+			"unanswered:\n%s\nNothing outside this session can say which of them that turn was, "+
+			"which is why none of them could be answered for you. The next request you answer has "+
+			"to name its ticket: lich reply <ticket> \"<answer>\".",
 		count, errands,
 	)
-}
-
-// pickTicketNudge is that notice typed at the worker's own prompt, after a turn
-// that ended with none of its errands answered and nothing here able to say
-// which one it was. No sender is told anything on that path — a report picked
-// out of two is the wrong report half the time — so this note is the whole of
-// what happens, and an agent that never reads it leaves both senders waiting.
-func pickTicketNudge(count int, errands string) string {
-	return "[lich] Your turn ended with no answer sent. " + pickTicketNotice(count, errands)
 }
 
 // nudgeNotice is the one line typed at a sender's prompt when results are

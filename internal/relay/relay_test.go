@@ -1045,15 +1045,21 @@ func TestADoneWithTwoErrandsOpenStallsBothAndAsksForTheTicket(t *testing.T) {
 	notice := strings.Join(term.writesTo("s2")[delivery:], "")
 	for _, want := range []string{
 		"[lich]", "run the tests and report the failures", "build the docs",
-		"Name the ticket the answer belongs to",
+		"went back to their senders unanswered", "The next request you answer has to name its ticket",
 	} {
 		if !strings.Contains(notice, want) {
 			t.Errorf("the notice is missing %q:\n%s", want, notice)
 		}
 	}
+	// The tickets are named as what happened, never as somewhere to reply: the
+	// stall closed them, so a worker that ran a reply command out of this note
+	// would be told the ticket is unknown.
 	for _, id := range tickets {
 		if !strings.Contains(notice, id) {
 			t.Errorf("the notice does not name ticket %q:\n%s", id, notice)
+		}
+		if strings.Contains(notice, "lich reply "+id) {
+			t.Errorf("the notice invites a reply to closed ticket %q:\n%s", id, notice)
 		}
 	}
 }

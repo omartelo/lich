@@ -140,7 +140,7 @@ func (s *Service) endedErrands(sessionID, state string) ([]endedErrand, string) 
 		// where the turn could have been either: with one candidate there is
 		// nothing to pick between.
 		if len(candidates) > 1 {
-			notice = pickTicketNudge(len(candidates), openErrands(s.tickets, candidates))
+			notice = pickTicketNudge(len(candidates), namedErrands(s.tickets, candidates))
 		}
 		// What the ending says is the same thing about every errand it could
 		// have been — the target finished a turn and did not answer this one —
