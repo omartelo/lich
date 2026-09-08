@@ -82,24 +82,17 @@ func main() {
 		}
 	}
 
-	// Snapshot before any env tweaks: spawned terminal sessions must inherit
-	// what the user launched lich with (see terminal.childEnv). ResolveShellEnv
-	// recovers the rc-exported vars a GUI launch misses (see its doc). The
-	// snapshot is kept because a re-check resolves from it again, exactly as
-	// this line does (providers.Service.RefreshPath).
-	launchEnv := os.Environ()
-	env := terminal.ResolveShellEnv(launchEnv)
-	// The slice above is what children inherit; exec.LookPath reads the process
-	// PATH instead, so the resolved one has to land there too (see PinPath).
-	terminal.PinPath(env)
-
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		slog.Error("resolve config dir", "err", err)
 		os.Exit(1)
 	}
-	// File logging as early as possible: every startup failure below must be
-	// readable after the fact — on Windows the console may not exist at all.
+	// File logging before anything that can fail: every startup failure must be
+	// readable after the fact — on Windows the console may not exist at all, and
+	// a GUI launch (Finder, .desktop) has no stderr on any of them. The login
+	// shell resolution below is why the order matters: it is the one failure
+	// that leaves lich running on the launcher's bare PATH, and a warning about
+	// it written before this line goes nowhere anybody can read.
 	logDir := filepath.Join(configDir, "lich")
 	logPath := logging.Path(logDir)
 	if closer, err := logging.Init(logDir); err != nil {
@@ -110,6 +103,17 @@ func main() {
 	} else {
 		defer closer.Close()
 	}
+
+	// Snapshot before any env tweaks: spawned terminal sessions must inherit
+	// what the user launched lich with (see terminal.childEnv). ResolveShellEnv
+	// recovers the rc-exported vars a GUI launch misses (see its doc). The
+	// snapshot is kept because a re-check resolves from it again, exactly as
+	// this line does (providers.Service.RefreshPath).
+	launchEnv := os.Environ()
+	env := terminal.ResolveShellEnv(launchEnv)
+	// The slice above is what children inherit; exec.LookPath reads the process
+	// PATH instead, so the resolved one has to land there too (see PinPath).
+	terminal.PinPath(env)
 
 	// Pinned in the environment, not just resolved: the restart successor and
 	// every spawned session inherit it, so they all agree on the origin the

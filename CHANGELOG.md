@@ -57,6 +57,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Launching lich by name on macOS now opens lich's own window, not a system
+  browser.** The Homebrew cask puts `lich` on PATH as a symlink into Lich.app,
+  and the window is looked for beside the executable: the link was never
+  resolved, so the search ran in Homebrew's `bin` directory, found nothing and
+  fell through to Chrome. Every install that reaches its binary through a link
+  is fixed by the same resolution.
+- **A failure to read the login shell's environment now reaches the log.** File
+  logging started after the resolution ran, so the one startup failure that
+  leaves lich on the launcher's bare PATH, with no agent found and no session
+  able to start, was also the only one written to a stderr that a desktop launch
+  does not have. It is written to `lich.log` like every other startup failure
+  now.
 - **A closed project is now findable by name, however long ago it was closed.**
   Only the twenty-five most recent closes were ever offered back, so an older
   project was reachable only by hunting its directory in the folder picker, and
