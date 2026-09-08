@@ -1,4 +1,5 @@
 import type { QuotaPlan } from "@/lib/api-types"
+import { accountLine } from "@/lib/quota/quota-format"
 import { usePlanQuotaFor } from "@/lib/quota/use-plan-quota"
 import { useNow } from "@/lib/use-now"
 import { QuotaGauge, gaugeGrid } from "@/components/QuotaGauge"
@@ -77,9 +78,9 @@ function PlanBody({ plan, now }: { plan: QuotaPlan; now: Date }) {
       ))}
       {/* The login this reading was taken against. Settings asks the machine-wide
           question, so this is lich's own — never a session's wrapper binary. */}
-      {plan.account && (
+      {accountLine(plan) && (
         <span className="break-all font-mono text-[0.6875rem] text-muted-foreground">
-          {plan.account}
+          {accountLine(plan)}
         </span>
       )}
     </div>

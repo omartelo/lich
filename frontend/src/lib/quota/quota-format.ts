@@ -25,6 +25,18 @@ export function hottestWindow(plan: QuotaPlan): QuotaWindow | null {
   return hottest
 }
 
+// accountLine is what the gauge prints where the account's name goes. An
+// unnamed account is not one state but two, and the blank they used to share
+// said neither: a provider that names nobody has nothing to print, while a
+// `claude setup-token` login has a name lich is not allowed to ask for, which
+// is worth a word rather than a gap.
+export function accountLine(plan: QuotaPlan): string {
+  if (plan.account) {
+    return plan.account
+  }
+  return plan.noAccount === "token-login" ? "Token login" : ""
+}
+
 // shortWindow names a window's length in the width a status bar has: "5h",
 // "wk", "30d". Empty when the provider did not report a length.
 export function shortWindow(seconds: number): string {

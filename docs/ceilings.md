@@ -517,12 +517,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   the API rejects an OAuth token without it — the same coupling as the user agent, and it fails closed, as a
   failed reading. Headers carry the two account-wide windows and no plan name, so such a session shows no
   model-scoped weekly cap and no "Max 5x" badge.
-- **A token-only login has a gauge and no name** (`internal/quota/claude.go`): the same
-  `claude setup-token` scope that keeps the usage route out of reach keeps `/api/oauth/profile` out of reach —
-  it wants `user:profile`, and `user:inference` is all that token has — so the profile route is not asked at
-  all on that path rather than asked once per cache window for a 403. Such a session shows its windows under
-  the provider's name with no account line, which is the same thing a session on a provider that names nobody
-  shows, and nothing on screen tells the two apart.
 - **Only two providers name the account a session spends, and the reasons the other six do not are not one
   reason** (`internal/quota`, `Plan.Account`): Claude Code answers a profile route with the credentials token,
   and Codex carries an `email` claim in the OIDC id token beside its access token (read unverified, and

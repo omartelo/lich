@@ -94,6 +94,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `call_mcp_tool` followed by `lich/open_session`, spending the line on the step
   and crowding the tool worth reading off the end of it. It now draws the server
   and the tool the way every other provider's card does: `lich · open_session`.
+- **The plan gauge now says when a login has no name to show.** A
+  `claude setup-token` session drew its windows under the provider's name with
+  the account line blank, exactly like a provider that names nobody; it now
+  reads "Token login", and the blank is left to the providers that have nobody
+  to name.
 - **An agent reached through a custom binary path now counts as installed.**
   Detection only ever scanned `$PATH`, so a machine whose only agent is the one
   you pointed lich at in Settings › Providers read as a machine with nothing on

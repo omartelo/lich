@@ -161,8 +161,33 @@ func TestClaudeProbeAsksTheProfileRouteNothing(t *testing.T) {
 	if got.Account != "" {
 		t.Errorf("account = %q, want none", got.Account)
 	}
+	// The reason travels with the reading: without it the gauge cannot tell
+	// this blank from the one a provider that names nobody reports.
+	if got.NoAccount != NoAccountTokenLogin {
+		t.Errorf("noAccount = %q, want %q", got.NoAccount, NoAccountTokenLogin)
+	}
 	if len(got.Windows) != 2 {
 		t.Errorf("windows = %+v, want the two the headers carry", got.Windows)
+	}
+}
+
+// The credentials path names its account, so it has no reason to carry: only a
+// token login may not be asked, and a reading that names nobody for any other
+// cause must not borrow that label.
+func TestClaudeCredentialsLoginCarriesNoReasonForAnUnnamedAccount(t *testing.T) {
+	writeCreds(t, claudeCredsJSON, "")
+	usage := serveRoutes(t, map[string]string{"/usage": claudeLimitsBody})
+	profile := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer profile.Close()
+	svc := newService(usage.URL+"/usage", "", time.Now())
+	svc.profileURL = profile.URL
+
+	got := svc.claudePlan(lichEnv())
+
+	if got.NoAccount != "" {
+		t.Errorf("noAccount = %q, want none on the credentials path", got.NoAccount)
 	}
 }
 

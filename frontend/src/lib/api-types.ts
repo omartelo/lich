@@ -580,6 +580,10 @@ export interface QuotaPlan {
   /** The login the windows were read against, where the provider names one —
    * absent is an unnamed account, never a failed reading. */
   account?: string
+  /** Why `account` is absent, for the one absence that has a reason worth
+   * reading: the session's login is a long-lived OAuth token lich may not ask
+   * the profile route about. Absent for a provider that simply names nobody. */
+  noAccount?: "token-login"
   windows?: QuotaWindow[]
   status: "ok" | "signed-out" | "error" | "unknown"
 }

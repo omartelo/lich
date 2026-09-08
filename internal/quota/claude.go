@@ -180,7 +180,9 @@ func (s *Service) claudeAccount(token string) string {
 // claudeProbe measures a token that can only infer: it sends the probe request
 // and reads the windows off the response headers. The plan name and the account
 // both stay empty — the headers carry the spend, never the subscription it is
-// spent against nor whose it is.
+// spent against nor whose it is. The reading says which of those it is, so the
+// gauge can name the absence rather than draw the blank a provider that names
+// nobody draws.
 func (s *Service) claudeProbe(p Plan, token string) Plan {
 	resp, authOK, err := s.send(http.MethodPost, s.probeURL, token, claudeProbeBody, map[string]string{
 		"anthropic-beta":    claudeBetaHeader,
@@ -202,6 +204,7 @@ func (s *Service) claudeProbe(p Plan, token string) Plan {
 	if len(p.Windows) == 0 {
 		return failed(p)
 	}
+	p.NoAccount = NoAccountTokenLogin
 	return p
 }
 
