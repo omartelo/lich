@@ -16,6 +16,8 @@ interface RailSessionProps {
   // The project's own directory, the fallback for a session with no path of its
   // own and no cwd reported yet.
   projectPath: string
+  // The project this session sits in, the scope its sandbox rung is read in.
+  projectId: string
   active: boolean
   onSelect: () => void
 }
@@ -26,7 +28,7 @@ interface RailSessionProps {
 // drawn from the same component the card uses, not a second implementation.
 // Same for the tooltip: at this width it is the only place the card's words can
 // go, so it is the card's own tooltip, not a shortened one.
-function RailSession({ session, projectPath, active, onSelect }: RailSessionProps) {
+function RailSession({ session, projectPath, projectId, active, onSelect }: RailSessionProps) {
   const status = useSessionStatus(session.id)
   const unread = useSessionUnread(session.id)
   const agent = useSessionAgent(session.id)
@@ -47,7 +49,7 @@ function RailSession({ session, projectPath, active, onSelect }: RailSessionProp
       >
         <SessionStatusIcon kind={agent ?? session.kind} status={status} unread={unread} />
       </TooltipTrigger>
-      <SessionTooltip session={session} path={projectPath} />
+      <SessionTooltip session={session} path={projectPath} projectId={projectId} />
     </Tooltip>
   )
 }
@@ -140,6 +142,7 @@ export function SidebarRail({ onExpand }: SidebarRailProps) {
                 key={session.id}
                 session={session}
                 projectPath={path}
+                projectId={projectId}
                 active={session.id === activeId}
                 onSelect={() => select(session.id)}
               />

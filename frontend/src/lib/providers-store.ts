@@ -156,6 +156,33 @@ export function sandboxDefaultFor(level: SandboxLevel, worktree: boolean): boole
   return level === "worktrees" && worktree
 }
 
+// What a card's frozen answer reads as against the rung its project is on now.
+// "" is agreement — and the answer for everything that cannot be compared at
+// all, which is what keeps a mark off a card lich has nothing to say about.
+export type SandboxDrift = "" | "would-confine" | "would-release"
+
+// sandboxDrift compares the answer a session opened with against the one the
+// rung would give it today. The spawn freezes its answer on the row, so moving
+// the ladder never reaches a card already open (internal/terminal/sandbox.go) —
+// this is how the card says which side of that move it is on.
+//
+// "Ask" never drifts: it hands the decision to whoever opened the session, so
+// there is no rung answer to disagree with — only the box that was ticked.
+export function sandboxDrift(
+  level: SandboxLevel,
+  worktree: boolean,
+  confined: boolean,
+): SandboxDrift {
+  if (level === "ask") {
+    return ""
+  }
+  const now = sandboxDefaultFor(level, worktree)
+  if (now === confined) {
+    return ""
+  }
+  return now ? "would-confine" : "would-release"
+}
+
 // readEnabled interprets the stored flag: Claude is enabled by default (it was
 // always offered before the providers feature), every other provider is opt-in.
 // An explicit "1"/"0" overrides the default.

@@ -19,6 +19,7 @@ import {
   PinOff,
   Play,
   Shield,
+  ShieldOff,
   Terminal,
   TriangleAlert,
   X,
@@ -72,6 +73,8 @@ import { sendCommand } from "@/lib/session/send-command"
 import { bracketedPaste } from "@/lib/terminal/bracketed-paste"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
 import { useSessionIntent } from "@/lib/use-sidebar-intent"
+import { sandboxDrift } from "@/lib/providers-store"
+import { useSandboxRung } from "@/lib/use-sandbox-rung"
 import { useProjects } from "@/providers/projects"
 import { useSettings } from "@/providers/settings"
 import { timeUntil } from "@/lib/session/schedule"
@@ -82,6 +85,9 @@ import { SchedulePromptDialog } from "./SchedulePromptDialog"
 interface SessionCardProps {
   session: Session
   path: string
+  // The project this card sits in, which is the scope its provider's sandbox
+  // rung is read in — a project override wins over the global ladder.
+  projectId: string
   // The session this one was opened from, named as it is called now; "" for a
   // session nobody delegated, which is most of them (sessionOrigin).
   origin: string
@@ -133,6 +139,7 @@ interface SessionCardProps {
 export function SessionCard({
   session,
   path,
+  projectId,
   origin,
   active,
   showing,
@@ -190,6 +197,12 @@ export function SessionCard({
   // `codex` in a shell session puts that provider's mark on the card while it
   // runs; null falls back to the session's own kind.
   const agent = useSessionAgent(session.id)
+  // Whether the sandbox answer frozen on this row still matches the rung the
+  // project is on. The kind, not the live agent: what confined this PTY was
+  // decided against the provider it was spawned as.
+  const rung = useSandboxRung(session.kind, projectId)
+  const confined = session.sandboxed ?? false
+  const drift = rung === null ? "" : sandboxDrift(rung, !!session.path, confined)
   // The tool the turn is running right now, reported by the provider's pre-tool
   // hook: null outside a tool call, which is what keeps the card its usual size
   // whenever nothing is happening in it.
@@ -427,12 +440,25 @@ export function SessionCard({
                   {/* Permanent state, so it sits with the status and the age
                       rather than on the line below, which is a ladder where one
                       rung draws at a time and every rung is news. Muted and
-                      wordless: the tooltip carries what it means. */}
-                  {session.sandboxed && (
+                      wordless: the tooltip carries what it means.
+
+                      The crossed shield is the case that used to have no mark at
+                      all: a session the rung would confine today, opened before
+                      it moved. It is drawn dimmer than the shield and negated,
+                      because the one thing it must never be read as is a
+                      confined session. */}
+                  {confined ? (
                     <Shield
-                      aria-label="Sandboxed"
+                      aria-label={drift ? "Sandboxed, setting has moved" : "Sandboxed"}
                       className="size-3 shrink-0 text-muted-foreground"
                     />
+                  ) : (
+                    drift === "would-confine" && (
+                      <ShieldOff
+                        aria-label="Not sandboxed, setting has moved"
+                        className="size-3 shrink-0 text-muted-foreground/60"
+                      />
+                    )
                   )}
                   <span className="truncate text-sm font-medium text-foreground">
                     {session.label}
@@ -630,7 +656,7 @@ export function SessionCard({
               )}
             </span>
           </ContextMenuTrigger>
-          <SessionTooltip session={session} path={path} />
+          <SessionTooltip session={session} path={path} projectId={projectId} />
         </Tooltip>
         {/* Three blocks, hairline apart: what this card is, what its work is
             handed to, and where its checkout opens. The chords ride the items

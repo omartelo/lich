@@ -6,9 +6,12 @@ import {
   GitPullRequestArrow,
   Play,
   Shield,
+  ShieldOff,
   TriangleAlert,
 } from "lucide-react"
+import { sandboxDrift } from "@/lib/providers-store"
 import type { Session } from "@/lib/session/sessions"
+import { useSandboxRung } from "@/lib/use-sandbox-rung"
 import { useSessionCwd } from "@/lib/session/use-session-cwd"
 import { useSessionRelay } from "@/lib/session/use-session-relay"
 import { scheduledFor } from "@/lib/session/schedule"
@@ -23,6 +26,10 @@ interface SessionTooltipProps {
   // The project's own directory: the fallback for a session with neither a
   // checkout of its own nor a reported cwd.
   path: string
+  // The project this session sits in — the scope its provider's sandbox rung is
+  // read in. The rail is the reason it is a prop: collapsed, this tooltip is the
+  // only text a session has, so it cannot be the half that stops explaining.
+  projectId: string
 }
 
 // Everything a session card knows, in words — its directory, its branch and how
@@ -38,13 +45,16 @@ interface SessionTooltipProps {
 // It resolves its own readouts instead of taking them as props. The stores
 // behind them are keyed by path and shared (one git poller per repository), so
 // the second reader costs a subscription, not a second poll.
-export function SessionTooltip({ session, path }: SessionTooltipProps) {
+export function SessionTooltip({ session, path, projectId }: SessionTooltipProps) {
   const liveCwd = useSessionCwd(session.id)
   const relay = useSessionRelay(session.id)
   const shownPath = liveCwd || session.path || path
   const git = useGitStatus(shownPath)
   const pr = usePullRequest(shownPath, git?.branch ?? "", git?.head ?? "")
   const base = baseReadout(git?.base ?? null)
+  const rung = useSandboxRung(session.kind, projectId)
+  const confined = session.sandboxed ?? false
+  const drift = rung === null ? "" : sandboxDrift(rung, !!session.path, confined)
   return (
     <TooltipContent side="right" className="max-w-xs border border-border bg-card text-foreground">
       <div className="flex flex-col gap-1.5">
@@ -116,16 +126,27 @@ export function SessionTooltip({ session, path }: SessionTooltipProps) {
             between a session that can write anywhere and one that can write
             here. The last line is the part nothing else says — the answer was
             taken when the session opened, and moving the rung in Settings will
-            not move this card. */}
-        {session.sandboxed && (
+            not move this card.
+
+            An unconfined session is silent here unless the rung has since moved
+            past it, which is the one time its lack of a shield is news. */}
+        {(confined || drift) && (
           <span className="flex flex-col gap-0.5">
             <span className="flex items-center gap-1.5">
-              <Shield className="size-3 shrink-0" />
-              Sandboxed
+              {confined ? (
+                <Shield className="size-3 shrink-0" />
+              ) : (
+                <ShieldOff className="size-3 shrink-0" />
+              )}
+              {confined ? "Sandboxed" : "Not sandboxed"}
             </span>
             <span className="text-muted-foreground">
-              Empty home, machine read-only, writes only in this checkout. Set when the session
-              opened; reopen it to change.
+              {confined
+                ? "Empty home, machine read-only, writes only in this checkout. "
+                : "This session runs on the machine. "}
+              {drift
+                ? "Opened before the sandbox setting changed; reopen the session to apply it."
+                : "Set when the session opened; reopen it to change."}
             </span>
           </span>
         )}

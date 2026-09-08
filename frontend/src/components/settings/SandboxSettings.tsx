@@ -16,6 +16,7 @@ import { isMac, isWindows } from "@/lib/platform"
 import { cannotConfineCopy } from "@/lib/sandbox-copy"
 import { splitAccount } from "@/lib/gh-account"
 import { useRemoteResource } from "@/lib/use-remote-resource"
+import { refreshSandboxRungs } from "@/lib/use-sandbox-rung"
 import { useStoredSetting } from "@/lib/use-stored-setting"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Button } from "@/components/ui/button"
@@ -196,6 +197,11 @@ function Rung({
   const [pending, setPending] = useState<SandboxLevel | null>(null)
   const level = sandboxLevel(stored)
 
+  // The cards are the other reader of this setting, and they are on screen
+  // behind this pane: a session whose frozen answer this write disagrees with
+  // says so on its card, and only a re-read tells it the ladder moved.
+  const write = (next: SandboxLevel) => void setStored(next).then(refreshSandboxRungs)
+
   // Loosening confinement is confirmed once; tightening it is written straight
   // through, because putting a session back inside the sandbox must never be
   // the harder direction.
@@ -204,7 +210,7 @@ function Rung({
       setPending(next)
       return
     }
-    setStored(next)
+    write(next)
   }
 
   return (
@@ -234,7 +240,7 @@ function Rung({
           variant="destructive"
           onClick={() => {
             if (pending) {
-              setStored(pending)
+              write(pending)
             }
             setPending(null)
           }}

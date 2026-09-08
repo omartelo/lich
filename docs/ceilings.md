@@ -698,11 +698,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   has one place to put the question, so a session opened from the New Session menu, by a delegation, or
   through the MCP tool is not confined on that rung — it takes the answer closing the dialog would give.
   `Worktrees only` and `Everywhere` reach every caller; `Ask` reaches one.
-- **A confined session is frozen at the answer it opened with** (`internal/terminal/sandbox.go`): the row
-  wins over the rung in both directions, so moving the ladder afterwards changes nothing for the cards
-  already on screen — including a parked worktree session resumed months later. The card's shield is the only
-  thing that says so, and it says confined or not, never why: a card with no shield beside a rung set to
-  Everywhere is a session that opened before the rung moved, and reopening it is the only way to change it.
 - **A terminal session is never confined by a rung** (`internal/store/settings.go`): the rung is keyed by
   provider, and `shell` is not one — the sandbox exists to confine an agent working unattended, not the
   user's own prompt. A terminal opened in a project whose provider is on `Everywhere` still runs on the
