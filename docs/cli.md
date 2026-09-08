@@ -180,7 +180,11 @@ Types `<prompt>` at `<session>`'s prompt, submits it, and waits.
   there. The window raises a toast that opens the card. A sender that had
   already stopped waiting is told at its own prompt instead, the same way an
   answer would arrive — a pending result promises that prompt news, and a stall
-  is that news.
+  is that news. A turn ending only reports this way when it belongs to one
+  errand: a session working two at once ends a turn that says nothing about
+  which task it was, so neither sender is told anything and the worker is asked
+  at its own prompt to name the ticket, in the words `lich reply` refuses a
+  ticketless answer with.
 
 ```
 docs is still working. The errand is open — a message that session was not ready

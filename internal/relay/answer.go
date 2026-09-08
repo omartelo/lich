@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -121,11 +122,7 @@ func (s *Service) errandOfLocked(replierID string) (string, error) {
 	sort.Slice(open, func(i, j int) bool {
 		return s.tickets[open[i]].deliverySeq < s.tickets[open[j]].deliverySeq
 	})
-	return "", fmt.Errorf(
-		"%d requests are open against this session, and an answer that names no ticket "+
-			"would close the wrong one. Name the ticket the answer belongs to:\n%s",
-		len(open), openErrands(s.tickets, open),
-	)
+	return "", errors.New(pickTicketNotice(len(open), openErrands(s.tickets, open)))
 }
 
 // openErrands lists the errands a ticketless answer was refused with: the reply

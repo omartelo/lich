@@ -994,45 +994,115 @@ func awaitDelivered(t *testing.T, svc *Service, n int) {
 	t.Fatalf("never saw %d delivered tickets", n)
 }
 
-// TestADoneClosesOnlyTheTurnsOwnErrand proves a turn answers for one errand.
-// Two messages delivered back to back — inside the second or two before the
-// target's busy report lands — queue as two turns; the first turn's end must
-// not report the second errand as answered elsewhere while its message is
-// still queued, unread.
-func TestADoneClosesOnlyTheTurnsOwnErrand(t *testing.T) {
-	svc := newRelay(workspace(), newFakeTerminal("s1", "s2", "s3"), nil)
+// TestADoneWithTwoErrandsOpenClosesNeitherAndAsksForTheTicket proves a turn
+// nothing can attribute closes nothing. Two messages delivered back to back —
+// inside the second or two before the target's busy report lands — queue as two
+// turns, and the end of the first says only that a turn ended: the target's
+// screen is the only place that says which task it worked on. Closing the
+// oldest, which this used to do, reported a stranger's errand as over on a
+// guess. What happens instead is a note at the worker's own prompt naming both
+// tickets and what each asked, and nothing at all at either sender's.
+func TestADoneWithTwoErrandsOpenClosesNeitherAndAsksForTheTicket(t *testing.T) {
+	term := newFakeTerminal("s1", "s2", "s3")
+	events := &fakeEvents{}
+	svc := newRelay(workspace(), term, events)
 
 	first := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Send("s1", "docs", "", "task one", 5)
+		got, _ := svc.Send("s1", "docs", "", "run the tests and report the failures", 5)
 		first <- got
 	}()
 	awaitDelivered(t, svc, 1)
 	second := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Send("s3", "docs", "", "task two", 5)
+		got, _ := svc.Send("s3", "docs", "", "build the docs", 5)
 		second <- got
 	}()
 	awaitDelivered(t, svc, 2)
+	delivery := len(term.writesTo("s2"))
 
-	// The target picks the first task up and ends that turn without replying.
 	svc.Observe("s2", "busy")
 	svc.Observe("s2", "done")
-	if got := <-first; got.Status != StatusUnanswered {
-		t.Fatalf("first errand = %q, want %q", got.Status, StatusUnanswered)
-	}
+
 	select {
+	case got := <-first:
+		t.Fatalf("a turn nothing can attribute closed an errand: %+v", got)
 	case got := <-second:
-		t.Fatalf("the first turn's end closed the second errand too: %+v", got)
-	case <-time.After(50 * time.Millisecond):
+		t.Fatalf("a turn nothing can attribute closed an errand: %+v", got)
+	case <-time.After(100 * time.Millisecond):
+	}
+	if halts := events.stalled(); len(halts) != 0 {
+		t.Errorf("a sender was told its errand was over: %+v", halts)
+	}
+	svc.mu.Lock()
+	ids := make([]string, 0, len(svc.tickets))
+	for id := range svc.tickets {
+		ids = append(ids, id)
+	}
+	inbox := len(svc.ready)
+	svc.mu.Unlock()
+	if len(ids) != 2 || inbox != 0 {
+		t.Fatalf("open tickets = %v, inbox = %d, want both still open and nothing stashed", ids, inbox)
 	}
 
-	// The queued second task runs as its own turn.
+	if !awaitWrites(term, "s2", delivery+2) {
+		t.Fatal("the worker was never asked to name the ticket")
+	}
+	notice := strings.Join(term.writesTo("s2")[delivery:], "")
+	for _, want := range []string{
+		"[lich]", "run the tests and report the failures", "build the docs",
+		"Name the ticket the answer belongs to",
+	} {
+		if !strings.Contains(notice, want) {
+			t.Errorf("the notice is missing %q:\n%s", want, notice)
+		}
+	}
+	for _, id := range ids {
+		if !strings.Contains(notice, id) {
+			t.Errorf("the notice does not name ticket %q:\n%s", id, notice)
+		}
+	}
+
+	// One note per errand. The note is typed at that prompt and runs as a turn
+	// of its own, so a second ending must not produce a second one — that is a
+	// session nudged forever.
 	svc.Observe("s2", "busy")
 	svc.Observe("s2", "done")
-	if got := <-second; got.Status != StatusUnanswered {
-		t.Fatalf("second errand = %q, want %q", got.Status, StatusUnanswered)
+	time.Sleep(50 * time.Millisecond)
+	if got := len(term.writesTo("s2")); got != delivery+2 {
+		t.Errorf("writes = %d, want the one notice: a turn end nudged the worker again", got)
 	}
+
+	// Naming the ticket still works, and the errand left behind is unambiguous
+	// again: the next turn that ends without an answer is its own.
+	if err := svc.Reply("s2", ids[0], "answered by name"); err != nil {
+		t.Fatalf("Reply: %v", err)
+	}
+	svc.Observe("s2", "busy")
+	svc.Observe("s2", "done")
+	for i := 0; i < 2; i++ {
+		select {
+		case got := <-first:
+			assertClosed(t, got)
+		case got := <-second:
+			assertClosed(t, got)
+		case <-time.After(2 * time.Second):
+			t.Fatal("the one errand left was not closed by its own turn")
+		}
+	}
+}
+
+// assertClosed is either end of the pair above: the errand answered by name,
+// and the one the turn after it closed unanswered.
+func assertClosed(t *testing.T, got Result) {
+	t.Helper()
+	if got.Status == StatusAnswered && got.Answer == "answered by name" {
+		return
+	}
+	if got.Status == StatusUnanswered {
+		return
+	}
+	t.Fatalf("result = %+v, want the named answer or an unanswered errand", got)
 }
 
 // TestASecondErrandQueuedMidTurnSurvivesTheFirstsEnd is the same guarantee with
@@ -1586,8 +1656,10 @@ func TestAnErrandIsNamedByTheOpeningOfItsPrompt(t *testing.T) {
 //
 // The two tickets here share a delivered time exactly, which is the case the
 // runner hits by accident: any ordering that reads the clock has nothing left
-// to choose by, and only the hand-off counter still answers. A turn ending is
-// where that choice is still made — a ticketless answer refuses to make it.
+// to choose by, and only the hand-off counter still answers. Nothing picks one
+// of two candidates anymore, but the order they are listed in is what a worker
+// reads to tell them apart, and a list that shuffles between two runs is one it
+// cannot.
 func TestErrandOrderSurvivesAClockThatCannotTellThemApart(t *testing.T) {
 	svc := newRelay(workspace(), newFakeTerminal("s1", "s2", "s3"), &fakeEvents{})
 	tick := time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC)
@@ -1599,9 +1671,9 @@ func TestErrandOrderSurvivesAClockThatCannotTellThemApart(t *testing.T) {
 			"second": {fromID: "s3", targetID: "s2", delivered: tick, deliverySeq: 2, sawBusy: true},
 			"first":  {fromID: "s1", targetID: "s2", delivered: tick, deliverySeq: 1, sawBusy: true},
 		}
-		got, _ := svc.turnErrand("s2")
-		if got != "first" {
-			t.Fatalf("errand = %q, want the first delivered", got)
+		got := svc.turnCandidates("s2")
+		if len(got) != 2 || got[0] != "first" {
+			t.Fatalf("candidates = %v, want the first delivered at the front", got)
 		}
 	}
 }

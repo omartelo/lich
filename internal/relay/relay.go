@@ -286,6 +286,10 @@ type ticket struct {
 	// unread closes when the target never reacted to the task at all. See
 	// watchReceipt.
 	unread chan struct{}
+	// nudged is whether the worker has already been asked to name this errand's
+	// ticket, which is what bounds that notice at one per errand (see
+	// askTicketNoticeLocked).
+	nudged bool
 	// redelivered is whether the task was already typed in a second time, which
 	// is what bounds watchReceipt's retry at one.
 	redelivered bool
