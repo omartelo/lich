@@ -3,6 +3,7 @@ package providers
 import (
 	"errors"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -204,14 +205,15 @@ func TestCostSourceOfNamesEveryRung(t *testing.T) {
 // The three answers a setting can give are pinned together — accepted, rejected,
 // absent — because it is the same branch deciding all three.
 func TestDetectCountsAConfiguredBinary(t *testing.T) {
+	wrapper := configuredPath(t, "claude-wrapper")
 	configured := map[string]string{
-		Claude: "/opt/agents/claude-wrapper",
-		Codex:  "/opt/agents/gone",
+		Claude: wrapper,
+		Codex:  configuredPath(t, "gone"),
 	}
 	svc := &Service{
 		// Nothing at all on PATH: the bare machine the bullet described.
 		lookPath: func(name string) (string, error) {
-			if name == "/opt/agents/claude-wrapper" {
+			if name == wrapper {
 				return name, nil
 			}
 			return "", exec.ErrNotFound
@@ -223,7 +225,7 @@ func TestDetectCountsAConfiguredBinary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Detect: %v", err)
 	}
-	if !got[0].Installed || got[0].Path != "/opt/agents/claude-wrapper" {
+	if !got[0].Installed || got[0].Path != wrapper {
 		t.Errorf("claude = %+v, want installed at the configured path", got[0])
 	}
 	if got[0].Source != SourceSetting {
@@ -245,6 +247,7 @@ func TestDetectCountsAConfiguredBinary(t *testing.T) {
 // command, so a configured binary decides even when $PATH has one — reporting
 // the $PATH hit would name a binary no session of this provider would run.
 func TestDetectPrefersTheConfiguredBinary(t *testing.T) {
+	missing := configuredPath(t, "gone")
 	svc := &Service{
 		lookPath: func(name string) (string, error) {
 			if name == "claude" {
@@ -254,7 +257,7 @@ func TestDetectPrefersTheConfiguredBinary(t *testing.T) {
 		},
 		configuredBin: func(id string) string {
 			if id == Claude {
-				return "/nowhere/claude"
+				return missing
 			}
 			return ""
 		},
@@ -304,9 +307,10 @@ func TestSetConfiguredBinIsWhatDetectReads(t *testing.T) {
 		t.Fatal("claude installed before any binary was configured")
 	}
 
+	wrapper := configuredPath(t, "claude")
 	svc.SetConfiguredBin(func(id string) string {
 		if id == Claude {
-			return "/usr/bin/claude"
+			return wrapper
 		}
 		return ""
 	})
@@ -316,4 +320,14 @@ func TestSetConfiguredBinIsWhatDetectReads(t *testing.T) {
 	if !got[0].Installed || got[0].Source != SourceSetting {
 		t.Errorf("claude = %+v, want installed from the setting", got[0])
 	}
+}
+
+// configuredPath spells what a user types into the binary setting, absolute for
+// the OS the test is running on. It matters: Verify answers CheckRelative for a
+// path that names a location without naming it from the root, and a POSIX path
+// is exactly that on Windows — no drive letter, so filepath.IsAbs says no. The
+// file is never created; every test above resolves it through a fake lookPath.
+func configuredPath(t *testing.T, name string) string {
+	t.Helper()
+	return filepath.Join(t.TempDir(), name)
 }
