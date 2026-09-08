@@ -31,6 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   way — it is what each sender would have been told alone — and the worker is
   asked at its prompt to name the ticket. One open request behaves as before on
   both paths.
+- **The shortcut recorder now says what a chord costs the terminal.** A bound
+  chord is caught before the session sees it, so rebinding one to `Ctrl+R` took
+  the shell's history search with nothing on screen connecting the two. The row
+  now names what the chord already does down there — the shell's own control
+  codes, the terminal's search, the image paste the agent reads — and still
+  records it.
 - **The sandbox's "Ask each time" rung now reaches every session.** It only ever
   asked in the New worktree dialog, so a session started from the New session
   menu, by another session, or through the MCP tool quietly ran on the machine.

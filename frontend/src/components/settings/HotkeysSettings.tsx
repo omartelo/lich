@@ -10,6 +10,7 @@ import {
   HOTKEY_ACTIONS,
   HOTKEY_GROUPS,
   sameCombo,
+  terminalCost,
   UNASSIGNED,
   type HotkeyAction,
   type HotkeyId,
@@ -50,6 +51,10 @@ function HotkeyRow({ action, conflicts }: { action: HotkeyAction; conflicts?: Ho
   const combo = hotkeys[action.id]
   const isDefault = sameCombo(combo, DEFAULT_HOTKEYS[action.id])
   const isUnassigned = !combo.key
+  // What this binding costs the terminal underneath. Said rather than refused:
+  // the chord is the user's to spend, and until now nothing connected the
+  // rebind to the shell command that stopped working.
+  const cost = terminalCost(combo)
 
   const onKeyDown = (event: React.KeyboardEvent) => {
     if (!recording) return
@@ -84,6 +89,7 @@ function HotkeyRow({ action, conflicts }: { action: HotkeyAction; conflicts?: Ho
             Also bound to {conflicts.map(hotkeyLabel).join(", ")}
           </span>
         )}
+        {cost && <span className="mt-0.5 text-xs text-muted-foreground">{cost}</span>}
       </div>
       <button
         type="button"
