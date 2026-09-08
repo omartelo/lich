@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import type { DetectedProvider } from "./api-types"
+import type { BinaryCheck, DetectedProvider } from "./api-types"
 import {
   binKey,
   binOffKey,
@@ -288,6 +288,35 @@ describe("noProviderInstalled / resolveImplicitSessionKind", () => {
     expect(resolveImplicitSessionKind(configured, "", "")).toBe("claude")
     expect(resolveImplicitSessionKind(configured, "claude", "")).toBe("claude")
   })
+
+  // The other half of the same trap: the override is in one project's scope, so
+  // detection — which answers for the machine and takes no project — cannot see
+  // it. The page composes it in.
+  it("spawns the provider a project's own binary setting points at", () => {
+    const bare = [p("claude", false, true), p("crush", false, true)]
+    expect(resolveImplicitSessionKind(bare, "", "", new Set(["crush"]))).toBe("crush")
+    // …and not the enabled-flag fallback, which on this machine names a binary
+    // that is not there. Claude is the stored default and still loses.
+    expect(resolveImplicitSessionKind(bare, "claude", "", new Set(["crush"]))).toBe("crush")
+    // The project default wins among the ones it can actually run.
+    expect(resolveImplicitSessionKind(bare, "", "claude", new Set(["claude", "crush"]))).toBe(
+      "claude",
+    )
+  })
+
+  it("keeps the shell for a project whose override is disabled or absent", () => {
+    const bare = [p("claude", false, true), p("crush", false, false)]
+    expect(resolveImplicitSessionKind(bare, "", "", new Set())).toBe("shell")
+    // crush is turned off, so a binary configured for it is one nothing offers.
+    expect(resolveImplicitSessionKind(bare, "", "", new Set(["crush"]))).toBe("shell")
+  })
+
+  // A machine with an agent of its own resolves exactly as it always did: the
+  // project layer is consulted only where it can change the answer.
+  it("ignores the project layer once anything is installed machine-wide", () => {
+    const list = [p("claude", true, true), p("crush", false, true)]
+    expect(resolveImplicitSessionKind(list, "claude", "", new Set(["crush"]))).toBe("claude")
+  })
 })
 
 describe("NO_AGENT_REASON", () => {
@@ -334,19 +363,36 @@ describe("createProvidersStore", () => {
     },
   ]
 
-  function build(enabledValues: Record<string, string> = {}, defaultValue = "") {
+  function build(
+    enabledValues: Record<string, string> = {},
+    defaultValue = "",
+    options: {
+      detected?: DetectedProvider[]
+      projectSettings?: Record<string, string>
+      runnable?: string[]
+    } = {},
+  ) {
     const persistEnabled = vi.fn()
     const persistDefault = vi.fn()
     const persistProjectDefault = vi.fn()
+    const verifyBin = vi.fn(
+      async (bin: string): Promise<BinaryCheck> =>
+        options.runnable?.includes(bin)
+          ? { path: bin, status: "ok" }
+          : { path: "", status: "not-found" },
+    )
     const store = createProvidersStore({
-      detect: async () => detected,
+      detect: async () => options.detected ?? detected,
       getEnabled: async (id) => enabledValues[id] ?? "",
+      getProjectSetting: async (key, projectId) =>
+        options.projectSettings?.[`${key}\n${projectId}`] ?? "",
+      verifyBin,
       persistEnabled,
       getDefault: async () => defaultValue,
       persistDefault,
       persistProjectDefault,
     })
-    return { store, persistEnabled, persistDefault, persistProjectDefault }
+    return { store, persistEnabled, persistDefault, persistProjectDefault, verifyBin }
   }
 
   it("loads only known providers with their install + default enabled state", async () => {
@@ -392,6 +438,8 @@ describe("createProvidersStore", () => {
       detect,
       getEnabled: async () => "",
       persistEnabled: vi.fn(),
+      getProjectSetting: async () => "",
+      verifyBin: async () => ({ path: "", status: "not-found" }) as const,
       getDefault: async () => "",
       persistDefault: vi.fn(),
       persistProjectDefault: vi.fn(),
@@ -428,6 +476,8 @@ describe("createProvidersStore", () => {
       detect: async () => probe,
       getEnabled: async () => "",
       persistEnabled: vi.fn(),
+      getProjectSetting: async () => "",
+      verifyBin: async () => ({ path: "", status: "not-found" }) as const,
       getDefault: async () => "",
       persistDefault: vi.fn(),
       persistProjectDefault: vi.fn(),
@@ -461,6 +511,8 @@ describe("createProvidersStore", () => {
       detect: async () => detected,
       getEnabled,
       persistEnabled: vi.fn(),
+      getProjectSetting: async () => "",
+      verifyBin: async () => ({ path: "", status: "not-found" }) as const,
       getDefault: async () => "codex",
       persistDefault: vi.fn(),
       persistProjectDefault: vi.fn(),
@@ -487,6 +539,76 @@ describe("createProvidersStore", () => {
     // codex is the only not-installed row; claude is on PATH, so a project with
     // no override gets the provider.
     expect(store.getProjectSessionKind("proj")).toBe("claude")
+  })
+
+  // End to end through the store: nothing on the machine, one project pointing
+  // crush at a wrapper it can run. The project's implicit session is crush, and
+  // every other project still gets the shell.
+  it("reads a project's binary override and spawns that provider", async () => {
+    const bare: DetectedProvider[] = [
+      {
+        id: "claude",
+        name: "Claude Code",
+        binary: "claude",
+        installed: false,
+        path: "",
+        source: "",
+        docs: "",
+      },
+      {
+        id: "crush",
+        name: "Crush",
+        binary: "crush",
+        installed: false,
+        path: "",
+        source: "",
+        docs: "",
+      },
+    ]
+    const { store, verifyBin } = build({ crush: "1" }, "", {
+      detected: bare,
+      projectSettings: { "provider.crush.bin\nproj": "/opt/agents/crush" },
+      runnable: ["/opt/agents/crush"],
+    })
+    await store.load()
+    store.hydrateProjectDefaults([{ id: "proj", defaultProvider: "" }])
+    await vi.waitFor(() => expect(store.getProjectSessionKind("proj")).toBe("crush"))
+    expect(store.getProjectSessionKind("other")).toBe("shell")
+    expect(verifyBin).toHaveBeenCalledWith("/opt/agents/crush")
+  })
+
+  // Mirrors store.ProviderBin in Go: the switch beside the path parks the layer,
+  // and a parked project layer resolves as if it were unset.
+  it("skips a project override whose layer is parked", async () => {
+    const bare: DetectedProvider[] = [
+      {
+        id: "claude",
+        name: "Claude Code",
+        binary: "claude",
+        installed: false,
+        path: "",
+        source: "",
+        docs: "",
+      },
+    ]
+    const { store } = build({}, "", {
+      detected: bare,
+      projectSettings: { "claude.bin\nproj": "/opt/agents/claude", "claude.bin.off\nproj": "true" },
+      runnable: ["/opt/agents/claude"],
+    })
+    await store.load()
+    store.hydrateProjectDefaults([{ id: "proj", defaultProvider: "" }])
+    await vi.waitFor(() => expect(store.getProjectSessionKind("proj")).toBe("shell"))
+  })
+
+  // The read costs a request per provider per project, so it is spent only where
+  // it can change an answer: a machine with an agent of its own never asks.
+  it("does not read project settings while anything is installed machine-wide", async () => {
+    const { store, verifyBin } = build({ claude: "1" })
+    await store.load()
+    store.hydrateProjectDefaults([{ id: "proj", defaultProvider: "" }])
+    expect(store.getProjectSessionKind("proj")).toBe("claude")
+    expect(verifyBin).not.toHaveBeenCalled()
   })
 
   it("loads the stored default provider", async () => {
@@ -534,6 +656,8 @@ describe("createProvidersStore", () => {
       detect,
       getEnabled: async () => "",
       persistEnabled: vi.fn(),
+      getProjectSetting: async () => "",
+      verifyBin: async () => ({ path: "", status: "not-found" }) as const,
       getDefault: async () => "claude",
       persistDefault: vi.fn(),
       persistProjectDefault: vi.fn(),
@@ -552,6 +676,8 @@ describe("createProvidersStore", () => {
       detect,
       getEnabled: async () => "",
       persistEnabled: vi.fn(),
+      getProjectSetting: async () => "",
+      verifyBin: async () => ({ path: "", status: "not-found" }) as const,
       getDefault: async () => "claude",
       persistDefault: vi.fn(),
       persistProjectDefault: vi.fn(),

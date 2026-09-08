@@ -8,7 +8,7 @@
 // is testable without React or the network, mirroring git-status-store. A module
 // singleton wires it to the real RPC, and useProviders is the React wrapper.
 import { useCallback, useEffect, useSyncExternalStore } from "react"
-import type { DetectedProvider } from "./api-types"
+import type { BinaryCheck, DetectedProvider } from "./api-types"
 import { Providers, Store } from "./rpc"
 import { errorText } from "./utils"
 import { PROVIDER_KINDS, type ProviderKind, type SessionKind } from "@/lib/session/sessions"
@@ -259,24 +259,41 @@ export function noProviderInstalled(list: ProviderState[]): boolean {
 export const NO_AGENT_REASON =
   "No agent found on PATH, so this opens a terminal — set one in Settings › Providers."
 
+// No project binaries known — a project nothing was read for, and every caller
+// asking the machine-wide question. Frozen and shared so the default argument is
+// one allocation rather than one per call.
+const NO_PROJECT_BINARIES: ReadonlySet<string> = new Set<string>()
+
 // resolveImplicitSessionKind is what a session nobody picked a kind for spawns:
 // the empty screen's button, the new-session hotkey, a new worktree. It is
 // resolveProjectDefaultProvider with one gate in front, because on a machine
 // with no agent installed every fallback below still lands on Claude — readEnabled
 // leaves Claude enabled by default, so the card opens on `claude: command not
 // found`. A shell spawns with zero providers, and it is where the install command
-// from the provider's docs link gets pasted. Detection resolves the binary
+// from the provider's docs link gets pasted. Detection resolves the global binary
 // setting too (providers.Detect), so an agent lich only knows about because the
 // user typed its path is an agent this gate lets through.
+//
+// projectBinaries names the providers this project points a working binary at in
+// its own scope, which detection cannot see: Detect answers for the machine and
+// takes no project. It is consulted only on the bare machine — where nothing is
+// installed, the enabled-flag fallback would name a binary that is not there, so
+// the choice is made among the ones this project can actually run.
 export function resolveImplicitSessionKind(
   list: ProviderState[],
   globalDefaultId: string,
   projectDefaultId: string,
+  projectBinaries: ReadonlySet<string> = NO_PROJECT_BINARIES,
 ): SessionKind {
-  if (noProviderInstalled(list)) {
+  if (!noProviderInstalled(list)) {
+    return resolveProjectDefaultProvider(list, globalDefaultId, projectDefaultId)
+  }
+  const usable = enabledProviders(list).filter((provider) => projectBinaries.has(provider.id))
+  if (usable.length === 0) {
     return "shell"
   }
-  return resolveProjectDefaultProvider(list, globalDefaultId, projectDefaultId)
+  const resolved = resolveProjectDefaultProvider(list, globalDefaultId, projectDefaultId)
+  return usable.find((provider) => provider.id === resolved)?.id ?? usable[0].id
 }
 
 function isProviderKind(id: string): id is ProviderKind {
@@ -292,6 +309,12 @@ function isDetectedKind(provider: DetectedProvider): boolean {
 export interface ProvidersDeps {
   detect: () => Promise<DetectedProvider[] | null>
   getEnabled: (id: string) => Promise<string>
+  /** One stored setting in one project's scope — the binary override and the
+   * switch that parks it, which is all this store reads per project. */
+  getProjectSetting: (key: string, projectId: string) => Promise<string>
+  /** Resolve a binary the way the spawn does. The same providers.Verify the
+   * Settings binary block asks, so the two cannot disagree about a path. */
+  verifyBin: (bin: string) => Promise<BinaryCheck>
   persistEnabled: (id: string, value: string) => void
   getDefault: () => Promise<string>
   persistDefault: (id: string) => void
@@ -323,6 +346,15 @@ class ProviderStoreImpl implements ProvidersStore {
   private providers: ProviderState[] = []
   private defaultId = ""
   private projectDefaultIds = new Map<string, string>()
+  // Per project, the providers its own binary setting points at something
+  // runnable. Read lazily and only on the bare machine (ensureProjectBinaries),
+  // because that is the only state in which the answer changes anything.
+  private projectBinaries = new Map<string, ReadonlySet<string>>()
+  private projectBinaryLoads = new Map<string, Promise<void>>()
+  // One verdict per path, so eight providers pointed at one wrapper cost one
+  // round trip. Dropped whole on a refresh: a re-read of $PATH restates every
+  // verdict on screen, and a stale one here would survive it.
+  private verdicts = new Map<string, boolean>()
   private state: "idle" | "loading" | "ready" = "idle"
   private providerLoad: Promise<void> | null = null
   private listeners = new Set<() => void>()
@@ -360,6 +392,9 @@ class ProviderStoreImpl implements ProvidersStore {
   // (lib/path-refresh).
   refresh = async (): Promise<void> => {
     const detected = (await this.deps.detect()) ?? []
+    this.projectBinaries.clear()
+    this.projectBinaryLoads.clear()
+    this.verdicts.clear()
     const enabled = new Map(this.providers.map((provider) => [provider.id, provider.enabled]))
     this.providers = detected.filter(isDetectedKind).map((provider) => ({
       id: provider.id as ProviderKind,
@@ -370,6 +405,7 @@ class ProviderStoreImpl implements ProvidersStore {
       docs: provider.docs,
       enabled: enabled.get(provider.id as ProviderKind) ?? readEnabled(provider.id, ""),
     }))
+    this.sweepProjectBinaries()
     this.emit()
   }
 
@@ -389,6 +425,7 @@ class ProviderStoreImpl implements ProvidersStore {
     for (const project of projects) {
       this.projectDefaultIds.set(project.id, project.defaultProvider)
     }
+    this.sweepProjectBinaries()
     this.emit()
   }
 
@@ -415,12 +452,84 @@ class ProviderStoreImpl implements ProvidersStore {
       this.defaultId,
       this.getProjectDefaultSnapshot(projectId),
     )
-  getProjectSessionKind = (projectId: string): SessionKind =>
-    resolveImplicitSessionKind(
+  getProjectSessionKind = (projectId: string): SessionKind => {
+    // Asked from render and from the spawn itself, so the read it may start is
+    // fire-and-forget: the answer below is the machine-wide one until it lands,
+    // and landing emits.
+    this.ensureProjectBinaries(projectId)
+    return resolveImplicitSessionKind(
       this.providers,
       this.defaultId,
       this.getProjectDefaultSnapshot(projectId),
+      this.projectBinaries.get(projectId) ?? NO_PROJECT_BINARIES,
     )
+  }
+
+  // sweepProjectBinaries reads every project lich already knows about. Called
+  // wherever the answer could have changed — detection landing, a refresh, a
+  // project arriving — and cheap everywhere else, because ensureProjectBinaries
+  // declines on any machine that has an agent of its own.
+  private sweepProjectBinaries(): void {
+    for (const projectId of this.projectDefaultIds.keys()) {
+      this.ensureProjectBinaries(projectId)
+    }
+  }
+
+  // ensureProjectBinaries reads a project's own binary overrides, once. It is
+  // gated on the bare machine because that is the only state where a project
+  // override decides anything: with an agent on $PATH the implicit kind is
+  // resolved by the enabled flags alone, and asking would spend a request per
+  // provider per project to change no answer.
+  private ensureProjectBinaries(projectId: string): void {
+    if (projectId === "" || !noProviderInstalled(this.providers)) {
+      return
+    }
+    if (this.projectBinaries.has(projectId) || this.projectBinaryLoads.has(projectId)) {
+      return
+    }
+    const load = this.readProjectBinaries(projectId)
+      .then((found) => {
+        this.projectBinaries.set(projectId, found)
+        this.emit()
+      })
+      // A failed read leaves the project unanswered rather than answered "none":
+      // a later sweep retries, and until then the machine-wide reading stands.
+      .catch(() => undefined)
+      .finally(() => {
+        this.projectBinaryLoads.delete(projectId)
+      })
+    this.projectBinaryLoads.set(projectId, load)
+  }
+
+  // readProjectBinaries mirrors store.ProviderBin's project layer in Go: the
+  // override counts unless the switch beside it parks the layer, and it counts
+  // only if the backend can run what it names.
+  private async readProjectBinaries(projectId: string): Promise<ReadonlySet<string>> {
+    const answers = await Promise.all(
+      this.providers.map(async (provider) => {
+        const bin = (await this.deps.getProjectSetting(binKey(provider.id), projectId)).trim()
+        if (bin === "") {
+          return null
+        }
+        const parked = await this.deps.getProjectSetting(binOffKey(provider.id), projectId)
+        if (parked === "true") {
+          return null
+        }
+        return (await this.verify(bin)) ? provider.id : null
+      }),
+    )
+    return new Set(answers.filter((id): id is ProviderKind => id !== null))
+  }
+
+  private async verify(bin: string): Promise<boolean> {
+    const cached = this.verdicts.get(bin)
+    if (cached !== undefined) {
+      return cached
+    }
+    const ok = (await this.deps.verifyBin(bin)).status === "ok"
+    this.verdicts.set(bin, ok)
+    return ok
+  }
 
   private async performLoad(): Promise<void> {
     const [detected, storedDefault] = await Promise.all([
@@ -440,6 +549,7 @@ class ProviderStoreImpl implements ProvidersStore {
     )
     this.defaultId = storedDefault
     this.state = "ready"
+    this.sweepProjectBinaries()
     this.emit()
   }
 
@@ -457,6 +567,8 @@ export function createProvidersStore(deps: ProvidersDeps): ProvidersStore {
 const store = createProvidersStore({
   detect: () => Providers.Detect(),
   getEnabled: (id) => Store.GetSetting(enabledKey(id), GLOBAL_SCOPE),
+  getProjectSetting: (key, projectId) => Store.GetSetting(key, projectId),
+  verifyBin: (bin) => Providers.Verify(bin),
   persistEnabled: (id, value) => {
     void Store.SetSetting(enabledKey(id), GLOBAL_SCOPE, value)
   },
@@ -548,12 +660,15 @@ export function useDefaultProvider(): ProviderKind {
   return resolveDefaultProvider(providers, defaultId)
 }
 
-// useNoProviderInstalled reports the machine with no agent on PATH, which is
-// what a surface offering an implicit session shows a terminal for.
-export function useNoProviderInstalled(): boolean {
-  const providers = useSyncExternalStore(store.subscribe, store.getSnapshot)
+// useProjectSessionKind is what this project's implicit new session will spawn —
+// the same answer projectNewSessionKind gives the button, read reactively. A
+// surface that says what the button is about to do reads it here rather than
+// re-deriving it, so the label cannot promise an agent the spawn has not got.
+export function useProjectSessionKind(projectId: string): SessionKind {
+  const getSnapshot = useCallback(() => store.getProjectSessionKind(projectId), [projectId])
+  const kind = useSyncExternalStore(store.subscribe, getSnapshot)
   useEffect(store.ensureLoaded, [])
-  return noProviderInstalled(providers)
+  return kind
 }
 
 // useStoredProjectDefaultProvider returns the unresolved project value. Empty

@@ -40,7 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   you pointed lich at in Settings › Providers read as a machine with nothing on
   it: every implicit new session — the empty screen's button, the hotkey, a new
   worktree — opened a terminal instead. Detection now resolves that setting the
-  way the spawn does, the provider row says the binary came from a custom path,
+  way the spawn does, a binary set for one project alone counts for that
+  project's sessions, the provider row says the binary came from a custom path,
   and the empty screen that does still open a terminal says why.
 - **"Check again" now finds a tool installed after lich started.** lich read the
   login shell's `$PATH` once, at launch, so an agent, git or gh installed into a

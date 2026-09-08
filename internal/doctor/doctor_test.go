@@ -255,7 +255,10 @@ func TestAMissingBrowserStopsALaunchAndMissingProvidersDoNot(t *testing.T) {
 	if checks["providers"].Status != Warn {
 		t.Errorf("providers = %s, want warn — the window still opens", checks["providers"].Status)
 	}
-	if !strings.Contains(checks["providers"].Detail, "no session can spawn") {
+	// The contract moved: this scan is $PATH alone, and the app counts a binary
+	// configured in Settings as installed too. A warning that did not say so
+	// would read as a verdict on a machine that spawns agents fine.
+	if !strings.Contains(checks["providers"].Detail, "Settings overrides not read") {
 		t.Errorf("providers detail = %q", checks["providers"].Detail)
 	}
 }

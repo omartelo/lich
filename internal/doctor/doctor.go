@@ -208,6 +208,12 @@ func (d *Doctor) checkBrowser() (Status, string) {
 
 // checkProviders counts the harnesses a session could spawn. None is not a
 // launch failure — the window opens on an empty workspace — so it warns.
+//
+// The scan is $PATH alone: a diagnosis will not open the workspace database
+// while a lich is running (checkStore), so the binaries configured in Settings ›
+// Providers — which the app itself resolves and counts as installed — are not
+// read here. The warning says so, or an app that spawns agents fine would be
+// read as contradicting its own doctor.
 func (d *Doctor) checkProviders() (Status, string) {
 	found := d.detect()
 	var installed []string
@@ -217,7 +223,7 @@ func (d *Doctor) checkProviders() (Status, string) {
 		}
 	}
 	if len(installed) == 0 {
-		return Warn, "none on PATH — lich opens, but no session can spawn"
+		return Warn, "none on PATH; Settings overrides not read"
 	}
 	return OK, fmt.Sprintf("%d of %d on PATH: %s",
 		len(installed), len(found), strings.Join(installed, ", "))
