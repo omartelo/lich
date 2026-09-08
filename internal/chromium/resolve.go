@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -101,22 +100,6 @@ type Result struct {
 func (r Result) Describe() string {
 	command := strings.Join(append([]string{r.Path}, r.Prefix...), " ")
 	return fmt.Sprintf("%s (%s)", command, r.Step)
-}
-
-// ProfileDir is where this browser's profile goes, given the directory lich
-// would use. Only a sandboxed browser moves it, and it keeps the directory's
-// name so the dev shell still gets a profile of its own.
-//
-// Slashes, not filepath: a ProfileRoot is only ever set by the Flatpak rung,
-// and a Flatpak path is a Linux path whatever this binary was built for.
-// filepath here would follow the *build* OS and hand a Linux sandbox a
-// backslash-joined directory — the same trap the two candidate builders in
-// chromium.go join by hand to stay out of.
-func (r Result) ProfileDir(dir string) string {
-	if r.ProfileRoot == "" {
-		return dir
-	}
-	return r.ProfileRoot + "/" + path.Base(dir)
 }
 
 // chromiumNames are the Chromium-family executables lich knows, in preference

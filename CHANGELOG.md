@@ -35,6 +35,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Each browser now gets its own window profile.** lich kept one Chromium
+  profile for whichever browser it opened, so installing a second one, changing
+  the desktop default or pinning `--browser` handed one browser's profile to
+  another — silently on a small version gap, and on a wide one as a window that
+  never opened and a dialog that could only say `exit status 1`. The profile is
+  now keyed by the browser, under `<config>/lich/chromium-profile/`, and the one
+  you already have moves under its key on the first launch so your settings come
+  with it.
 - **oh-my-pi and opencode cards name the MCP tool, not the server that carries
   it.** Both harnesses spell an MCP tool with a single underscore between the
   server and the tool, which a card could not divide, so it spent its width on

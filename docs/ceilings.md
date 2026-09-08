@@ -873,16 +873,15 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   pull request's file on the next one's tree. The re-read is held in state and never in a ref, for the replay
   reason `use-remote-resource.ts` documents, and `use-active-file.test.tsx` pins it by moving the pull
   request on a live component — a probe that remounted instead would call the ref version green.
-- **One Chromium profile serves whichever browser resolution picked**
-  (`internal/chromium/resolve.go`): `<config>/lich/chromium-profile` is not keyed by browser, so the ladder's
-  answer moving — a second Chromium-family browser installed, a new desktop default — hands one browser's
-  profile to another. Only a machine with *several* of them can move at all: with one installed, the default
-  rung and the scan land on the same binary. Measured across a patch-level gap (a profile written by Chromium
-  151.0.7922.169, opened by Helium's 151.0.7922.137): the fork adopts it in silence, the window opens, the UI
-  preferences in its localStorage survive, and the profile's recorded version is rewritten *downwards* — the
-  benign case, and the common one. A wide version gap meets Chromium's own guard against a profile from a
-  newer build instead, which refuses to start; lich then dies on a browser exit code and its dialog can only
-  say `exit status 1`, naming nothing. `LICH_BROWSER` pins the answer; nothing else does.
+- **A profile belongs to one browser, so changing browsers opens lich at its defaults**
+  (`internal/chromium/profiledir.go`): each browser gets `<config>/lich/chromium-profile/<name>-<digest>/`,
+  keyed by the command the ladder resolved, and the page's localStorage — every `lich.*` UI setting — lives
+  inside one of them. Nothing copies between them. Pin a different browser with `--browser`, or watch the
+  bundled window die at startup and fall back to a system one, and lich comes up looking factory-fresh; the
+  settings are still there, under the other key, and going back reaches them. The key is the resolved path
+  and *not* what its symlinks point at, so a store-style install (Nix, snap) keeps one profile across
+  updates through its stable launcher — but a browser pinned at a path carrying its own version, an
+  AppImage among them, is a new browser to this and starts empty on each update.
 - **On Linux, Windows and Apple Silicon the window is lich's own; on an Intel Mac it is the system
   browser's** (`internal/chromium/shell.go`, `shell/`): the Linux packages, the Windows installer and the
   arm64 `Lich.app` ship an embedded Chromium (CEF through kurogane) beside the binary, and the ladder takes
@@ -927,12 +926,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   Windows and macOS run with `no_sandbox` and the same bar everywhere: the Windows sandbox needs
   `cef_sandbox` linked into the executable and the macOS one a helper app initialising it, and neither is
   wired.
-- **The bundled window and a pinned browser share one profile directory** (`shell/src/main.rs`,
-  `internal/chromium.Run`): the shell is told `cache_dir` = the `--user-data-dir` lich hands every browser,
-  so CEF writes `<config>/lich/chromium-profile` as its own Chromium profile. Pin a browser with `--browser`
-  and that profile is handed to a different Chromium — the bullet above, now with the window on one side
-  of it. The prefs write is skipped for the window: it has no account chooser or translate bubble to hold
-  down, and the file would be dead weight in a profile CEF owns.
 - **Under Wayland the window is native Wayland, whatever the GPU** (`shell/src/main.rs`): kurogane forces
   `--ozone-platform=x11` on NVIDIA, on its own reading of NVIDIA's EGL, and 0.45.0 shipped that default.
   It cost file drops: a Wayland file manager dropping on an XWayland window goes through the compositor's
