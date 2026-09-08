@@ -772,12 +772,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   The plugin rows on Settings › Updates (`PluginSetting`) are the second case: a plugin installed or removed
   from a terminal while the user was elsewhere is painted as it was on the way back in, so the row offers an
   Install that has already happened, or withholds one that has not, until that visit's read lands.
-- **Unsent prose on the pull request screen lives in memory, and nothing collects it**
-  (`frontend/src/lib/pulls/draft-store.ts`): a description, a comment and every thread reply survive each
-  unmount the screen can produce, and none of them survives a reload — unlike the pending review beside them,
-  which is mirrored to localStorage. Persisting these is the same argument that one already won, and the reason
-  it has not been taken is the other half: a filed review clears itself on submit, while an abandoned reply on
-  a thread nobody returns to would sit in storage forever with no one to collect it.
 - **The dock's remembered browse is module memory, keyed by a path and never swept**
   (`frontend/src/lib/file-browse.ts`): every checkout the Code tab has ever browsed keeps its filter,
   folds, preview and marked row until the page reloads — a few strings per checkout, deliberately not

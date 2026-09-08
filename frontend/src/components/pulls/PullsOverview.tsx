@@ -27,7 +27,10 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { commentFieldClass } from "./CommentBox"
 
-interface PullsOverviewProps {
+// What the tab and the reviewer row under it both read. Split because only the
+// description is written here, and only what is written needs a project to be
+// filed under.
+interface PullRequestPaneProps {
   path: string
   detail: PullRequestDetail
   /** Re-read the pull request: an edit here lands on GitHub, and GitHub's
@@ -35,15 +38,21 @@ interface PullsOverviewProps {
   onRefresh: () => void
 }
 
+interface PullsOverviewProps extends PullRequestPaneProps {
+  /** Which project's screen this is — what an unsent description is filed
+   * under, and what retires it once the pull request closes (draft-store). */
+  projectId: string
+}
+
 // PullsOverview is the "Overview" tab: who opened the pull request, who is
 // reviewing it, and what it says. The description and the reviewers are both
 // editable here — they were the last two things about a pull request that sent
 // the reader out to github.com.
-export function PullsOverview({ path, detail, onRefresh }: PullsOverviewProps) {
+export function PullsOverview({ path, projectId, detail, onRefresh }: PullsOverviewProps) {
   // null is "not editing"; an empty string is a description being cleared, which
   // is a legitimate edit and must not read as the same thing. Owned outside the
   // tree, because the tab above this one unmounts it (draft-store).
-  const [draft, setDraft] = useDraft("body", detail.url)
+  const [draft, setDraft] = useDraft({ projectId, number: detail.number }, "body")
   const [saving, setSaving] = useState(false)
 
   const save = async () => {
@@ -128,7 +137,7 @@ export function PullsOverview({ path, detail, onRefresh }: PullsOverviewProps) {
 // The roster, and the one control that changes it. The picker is the only way a
 // reviewer is added or dropped — a second affordance on the chips would be two
 // ways to say the same thing, and the tick already reads as "asked".
-function Reviewers({ path, detail, onRefresh }: PullsOverviewProps) {
+function Reviewers({ path, detail, onRefresh }: PullRequestPaneProps) {
   // Read on first open rather than with the pull request: most readings of a
   // pull request never touch the roster, and this is a gh round-trip.
   const [candidates, setCandidates] = useState<ReviewCandidate[] | null>(null)

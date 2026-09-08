@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button"
 import { IconAction } from "@/components/common/IconAction"
 import type { DraftReviewComment, ReviewThread as Thread } from "@/lib/api-types"
 import { formatLineRef } from "@/lib/git/diff"
+import type { DraftScope } from "@/lib/pulls/draft-store"
 import { cn, errorText } from "@/lib/utils"
 import { Byline } from "./Byline"
 import { CommentBox } from "./CommentBox"
@@ -29,6 +30,9 @@ export interface ThreadActions {
 }
 
 interface ReviewThreadProps {
+  /** The pull request the thread hangs off — what an unsent reply is filed
+   * under, and what retires it once that pull request closes (draft-store). */
+  pull: DraftScope
   thread: Thread
   actions: ThreadActions
   /** Show the file and GitHub's own hunk above the comments — for the
@@ -53,6 +57,7 @@ function lineRef(thread: Thread): string {
 // opens under the line, and again in the Conversation tab for the threads no
 // line can hold (an outdated one, or a file this diff does not show).
 export function ReviewThread({
+  pull,
   thread,
   actions,
   standalone,
@@ -64,7 +69,7 @@ export function ReviewThread({
   // draft is filed. Owned outside the tree because three separate things destroy
   // this component — the tab strip, folding the file, and a diff refetch
   // rebuilding the CodeMirror widget this lives in (draft-store).
-  const [draft, setDraft] = useDraft("reply", thread.id)
+  const [draft, setDraft] = useDraft(pull, "reply", thread.id)
   const replying = draft !== null
   const [busy, setBusy] = useState(false)
   // Any thread folds, because any of them can be one you have already read and

@@ -5,6 +5,7 @@ import { Markdown } from "@/components/Markdown"
 import { Notice } from "@/components/common/Notice"
 import type { PullRequestConversation, PullRequestReview } from "@/lib/api-types"
 import { conversationTimeline } from "@/lib/pulls/conversation-timeline"
+import type { DraftScope } from "@/lib/pulls/draft-store"
 import { useDraft } from "@/lib/pulls/use-draft"
 import { errorText } from "@/lib/utils"
 import { Byline } from "./Byline"
@@ -12,9 +13,10 @@ import { CommentBox } from "./CommentBox"
 import { ReviewThread, type ThreadActions } from "./ReviewThread"
 
 interface PullsConversationProps {
-  /** The pull request this is about, by URL — what its unsent comment is filed
-   * under, so the box survives the tab strip above it (draft-store). */
-  pullRequest: string
+  /** The pull request this is about — what its unsent comment and every unsent
+   * reply below are filed under, so a box survives the tab strip above it, and
+   * so a merged pull request's leftovers can be found again (draft-store). */
+  pull: DraftScope
   conversation: PullRequestConversation | null
   loading: boolean
   actions: ThreadActions
@@ -30,11 +32,11 @@ interface PullsConversationProps {
 export function PullsConversation({
   conversation,
   loading,
-  pullRequest,
+  pull,
   actions,
   onComment,
 }: PullsConversationProps) {
-  const [draft, setDraft] = useDraft("comment", pullRequest)
+  const [draft, setDraft] = useDraft(pull, "comment")
   const [sending, setSending] = useState(false)
   const [showResolved, setShowResolved] = useState(false)
   const timeline = conversationTimeline(conversation)
@@ -77,7 +79,13 @@ export function PullsConversation({
           )
         }
         return (
-          <ReviewThread key={item.thread.id} thread={item.thread} actions={actions} standalone />
+          <ReviewThread
+            key={item.thread.id}
+            pull={pull}
+            thread={item.thread}
+            actions={actions}
+            standalone
+          />
         )
       })}
 
@@ -102,6 +110,7 @@ export function PullsConversation({
             timeline.resolved.map((thread) => (
               <ReviewThread
                 key={thread.id}
+                pull={pull}
                 thread={thread}
                 actions={actions}
                 standalone

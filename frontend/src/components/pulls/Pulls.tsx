@@ -18,7 +18,8 @@ import { writeAtPrompt } from "@/lib/terminal/write-at-prompt"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { useCheckouts } from "@/lib/git/use-checkouts"
 import { invalidatePullRequests } from "@/lib/pulls/pull-request-lookup"
-import { parsePullsQuery } from "@/lib/pulls/pull-request-list"
+import { sweepDrafts } from "@/lib/pulls/draft-store"
+import { PULLS_PAGE_LIMIT, parsePullsQuery } from "@/lib/pulls/pull-request-list"
 import {
   readLastPull,
   readPullsQuery,
@@ -120,7 +121,8 @@ export function Pulls({ list = false }: PullsProps) {
   }
   // An empty path is the hook's own "nothing to look up", so the single pull
   // request screen never spends a gh call on a list it does not show.
-  const pulls = usePullRequests(list && hasGH ? projectPath || path : "", parsedQuery.state)
+  const listPath = list && hasGH ? projectPath || path : ""
+  const pulls = usePullRequests(listPath, parsedQuery.state)
   const { checkouts, refresh: refreshCheckouts } = useCheckouts(projectPath)
   // Where the pull request's own branch already lives, if anywhere. Every
   // "work on this PR" decision hangs off it: whether to create a checkout,
@@ -138,6 +140,31 @@ export function Pulls({ list = false }: PullsProps) {
       writeLastPull(projectId, selected)
     }
   }, [list, projectId, selected])
+
+  // Unsent prose outlives the screen it was typed on, so something has to
+  // retire it: this list is the only thing that knows a pull request has
+  // stopped being open (draft-store). An empty list is an answer like any
+  // other — a repository whose pull requests have all landed — which is why the
+  // guard is the path the lookup was given rather than the rows it came back
+  // with: no path is no answer at all, and sweeping against it would collect
+  // every draft in the project.
+  //
+  // Two more, each of which would otherwise take a draft that is still wanted:
+  // a query asking for merged or closed pull requests answers with a set that
+  // says nothing about the open ones, and an answer cut at the page limit is
+  // not the repository's whole list.
+  useEffect(() => {
+    if (!listPath || !projectId || pulls.loading || pulls.error) {
+      return
+    }
+    if (parsedQuery.state !== "open" || pulls.list.length >= PULLS_PAGE_LIMIT) {
+      return
+    }
+    sweepDrafts(
+      projectId,
+      pulls.list.map((pr) => pr.number),
+    )
+  }, [listPath, projectId, parsedQuery.state, pulls.list, pulls.loading, pulls.error])
 
   // This screen and the badges around it read the same pull request through two
   // separate lookups, so a change with HEAD standing still — a merge, a PR
@@ -318,6 +345,7 @@ export function Pulls({ list = false }: PullsProps) {
     body = (
       <PullRequestView
         path={path}
+        projectId={projectId ?? ""}
         head={head}
         detail={detail}
         session={session}

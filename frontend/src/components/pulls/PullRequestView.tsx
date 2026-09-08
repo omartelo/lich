@@ -86,6 +86,10 @@ function failingChecks(failed: number): string | undefined {
 
 interface PullRequestViewProps {
   path: string
+  /** Which project's screen this is. Only the unsent prose on it needs one —
+   * the drafts are filed per project, so the list column can retire the ones
+   * whose pull request has closed (draft-store). */
+  projectId: string
   /** The checkout's HEAD; changing it refetches the diff under the Files tab. */
   head: string
   detail: PullRequestDetail
@@ -112,6 +116,7 @@ interface PullRequestViewProps {
 // what a merge means for the worktree it lives in, stay the screen's.
 export function PullRequestView({
   path,
+  projectId,
   head,
   detail,
   session,
@@ -475,6 +480,7 @@ export function PullRequestView({
           <PullsFiles
             path={path}
             number={detail.number}
+            projectId={projectId}
             // The last commit is the head: gh lists them oldest first, and the
             // detail already carries them, so the expander costs no extra call.
             headOid={detail.commits?.[detail.commits.length - 1]?.oid ?? ""}
@@ -490,7 +496,7 @@ export function PullRequestView({
             {tab === "commits" && <PullsCommits commits={detail.commits} />}
             {tab === "conversation" && (
               <PullsConversation
-                pullRequest={detail.url}
+                pull={{ projectId, number: detail.number }}
                 conversation={conversation}
                 loading={conversationLoading}
                 actions={actions}
@@ -498,7 +504,12 @@ export function PullRequestView({
               />
             )}
             {tab === "overview" && (
-              <PullsOverview path={path} detail={detail} onRefresh={onRefresh} />
+              <PullsOverview
+                path={path}
+                projectId={projectId}
+                detail={detail}
+                onRefresh={onRefresh}
+              />
             )}
           </div>
         )}

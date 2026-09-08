@@ -20,6 +20,20 @@ export function removePref(key: string): void {
   localStorage.removeItem(key)
 }
 
+/** Every stored key under a prefix — what a family of keys nobody can name in
+ * advance is read and collected through (pulls/draft-store, one key per box of
+ * unsent prose). Snapshotted, so a caller may remove keys while walking it. */
+export function prefKeys(prefix: string): string[] {
+  const keys: string[] = []
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (key?.startsWith(prefix)) {
+      keys.push(key)
+    }
+  }
+  return keys
+}
+
 /** One of a known set — a theme, a sort. Anything else is a value from another
  * build (or a hand-edited store) and reads as the fallback. */
 export function parseEnumPref<T extends string>(

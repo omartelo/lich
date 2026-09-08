@@ -48,6 +48,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   returning to the pane showed an empty block for a moment while the rest of
   the screen was already painted. It now paints the last answer and re-reads
   underneath, and "Check for updates" still says whether the check got through.
+- **Unsent prose on the pull request screen now survives a reload.** A
+  description being rewritten, a comment being composed and every reply typed
+  into a review thread are kept the way a pending review already was, so an app
+  update or a closed window no longer costs what was written. They are retired
+  when they are sent, when the box is emptied, when their pull request stops
+  being open, and after 30 days, so nothing abandoned is kept forever.
 - **oh-my-pi and opencode cards name the MCP tool, not the server that carries
   it.** Both harnesses spell an MCP tool with a single underscore between the
   server and the tool, which a card could not divide, so it spent its width on

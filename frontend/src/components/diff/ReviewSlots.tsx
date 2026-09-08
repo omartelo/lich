@@ -1,5 +1,6 @@
 import type { DraftReviewComment, ReviewThread as Thread } from "@/lib/api-types"
 import type { NewLineRange } from "@/lib/git/diff"
+import type { DraftScope } from "@/lib/pulls/draft-store"
 import { COMPOSER_KEY, draftSlotKey, isThreadSlot, threadSlotKey } from "@/lib/pulls/review-slots"
 import { CommentBox } from "@/components/pulls/CommentBox"
 import { PendingComments, ReviewThread, type ThreadActions } from "@/components/pulls/ReviewThread"
@@ -8,6 +9,9 @@ import { PendingComments, ReviewThread, type ThreadActions } from "@/components/
 // working diff, which has no pull request behind it and therefore no threads,
 // no drafts and nothing to submit.
 export interface DiffReview {
+  /** The pull request being reviewed — what an unsent reply in one of these
+   * threads is filed under (draft-store). */
+  pull: DraftScope
   /** Threads anchored in this file. */
   threads: Thread[]
   /** Draft comments in this file, each with its index in the pending review —
@@ -104,7 +108,9 @@ export function ReviewSlot({
 
   if (isThreadSlot(slotKey)) {
     const thread = review.threads.find((held) => threadSlotKey(held) === slotKey)
-    return thread ? <ReviewThread thread={thread} actions={review.actions} /> : null
+    return thread ? (
+      <ReviewThread pull={review.pull} thread={thread} actions={review.actions} />
+    ) : null
   }
 
   const drafts = review.drafts.filter(({ comment }) => draftSlotKey(comment) === slotKey)

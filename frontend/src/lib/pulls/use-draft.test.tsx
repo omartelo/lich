@@ -11,18 +11,18 @@
 import { mountBudget } from "@/test/render-budget"
 import { StrictMode, createElement, useLayoutEffect } from "react"
 import { beforeEach, describe, expect, it } from "vitest"
-import { draftKey, draftStore } from "./draft-store"
+import { type DraftScope, draftKey, setDraft } from "./draft-store"
 import { useDraft } from "./use-draft"
 
-const PR = "https://github.com/omartelo/lich/pull/389"
+const PR: DraftScope = { projectId: "a1b2c3d4e5f6", number: 389 }
 
 // Records what each commit saw, from a layout effect rather than the render
 // body: the body sees passes React never committed (use-remote-resource.test).
-function box(seen: (string | null)[], id = PR, kind: "body" | "comment" | "reply" = "comment") {
+function box(seen: (string | null)[], kind: "body" | "comment" | "reply" = "comment", id = "") {
   let type: (next: string | null) => void = () => {}
   function Box() {
-    const [draft, setDraft] = useDraft(kind, id)
-    type = setDraft
+    const [draft, write] = useDraft(PR, kind, id)
+    type = write
     useLayoutEffect(() => {
       seen.push(draft)
     })
@@ -35,8 +35,13 @@ function box(seen: (string | null)[], id = PR, kind: "body" | "comment" | "reply
 }
 
 beforeEach(() => {
-  for (const kind of ["body", "comment", "reply"] as const) {
-    draftStore.set(draftKey(kind, PR), null)
+  for (const key of [
+    draftKey(PR, "body"),
+    draftKey(PR, "comment"),
+    draftKey(PR, "reply", "PRRT_one"),
+    draftKey(PR, "reply", "PRRT_two"),
+  ]) {
+    setDraft(key, null)
   }
 })
 
@@ -80,8 +85,8 @@ describe("a draft being typed", () => {
   it("does not reach a box with another id", async () => {
     const mine: (string | null)[] = []
     const theirs: (string | null)[] = []
-    const first = box(mine, "PRRT_one", "reply")
-    const other = box(theirs, "PRRT_two", "reply")
+    const first = box(mine, "reply", "PRRT_one")
+    const other = box(theirs, "reply", "PRRT_two")
 
     const a = await mountBudget(first.element)
     const b = await mountBudget(other.element)
@@ -91,6 +96,6 @@ describe("a draft being typed", () => {
     expect(theirs[theirs.length - 1]).toBeNull()
     await a.unmount()
     await b.unmount()
-    draftStore.set(draftKey("reply", "PRRT_one"), null)
+    setDraft(draftKey(PR, "reply", "PRRT_one"), null)
   })
 })
