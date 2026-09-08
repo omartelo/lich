@@ -80,6 +80,13 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- to say "nobody decided this one" — a session opened before the user picked
     -- a rung, or by a caller with nowhere to ask.
     sandbox             TEXT NOT NULL DEFAULT '',
+    -- The paths under the user's home this session's sandbox skipped for being
+    -- symlinks, home-relative, as a JSON array. Written by the spawn because
+    -- only the spawn resolves them, and read back so the card can go on naming
+    -- what a confined session will not find where it expects it — a ~/.gitconfig
+    -- symlinked out of a dotfiles repository, above all. Empty for an
+    -- unconfined session and for one that skipped nothing.
+    sandbox_links       TEXT NOT NULL DEFAULT '',
     -- When this session was parked, in unix seconds; 0 while it is open, and on
     -- a row parked before the column existed. rowid cannot stand in for it: it
     -- dates the insert, not the close, and a resume reinserts the row under a
@@ -332,6 +339,12 @@ type Session struct {
 	// session's directory — and a page reload has to come back to the same
 	// answer without re-deriving it. Nil for a row nothing has spawned yet.
 	MCPServers []string `json:"mcpServers"`
+	// SandboxSkippedLinks names the paths under the user's home this session's
+	// sandbox left out for being symlinks, relative to that home. It rides the
+	// row for the reason MCPServers does — the spawn is what resolved it, and a
+	// page reload has to come back to the same answer. Nil for an unconfined
+	// session and for one whose sandbox skipped nothing.
+	SandboxSkippedLinks []string `json:"sandboxSkippedLinks"`
 }
 
 // Project is a persisted project together with its restorable session state.
@@ -407,6 +420,7 @@ func open(path string) (*Service, error) {
 		`ALTER TABLE sessions ADD COLUMN mcp_servers TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE sessions ADD COLUMN parked_branch TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE sessions ADD COLUMN fork_cost_offset REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE sessions ADD COLUMN sandbox_links TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE projects ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE projects ADD COLUMN closed_seq INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE session_costs ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0`,
@@ -651,7 +665,7 @@ func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	rows, err := s.db.Query(
 		`SELECT id, label, kind, path, provider_session_id, entrypoint, sandbox, pinned,
 		        origin_session_id, origin_label, scheduled_at, scheduled_prompt, unread,
-		        mcp_servers,
+		        mcp_servers, sandbox_links,
 		        EXISTS (SELECT 1 FROM session_last_turn WHERE session_id = sessions.id)
 		   FROM sessions WHERE project_id = ? AND is_open = 1 ORDER BY position, rowid`,
 		projectID,
@@ -664,15 +678,17 @@ func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	sessions := []Session{}
 	for rows.Next() {
 		var sess Session
-		var servers string
+		var servers, links string
 		if err := rows.Scan(
 			&sess.ID, &sess.Label, &sess.Kind, &sess.Path, &sess.ProviderSessionID,
 			&sess.Entrypoint, &sess.Sandbox, &sess.Pinned, &sess.OriginSessionID, &sess.OriginLabel,
-			&sess.ScheduledAt, &sess.ScheduledPrompt, &sess.Unread, &servers, &sess.HasLastTurn,
+			&sess.ScheduledAt, &sess.ScheduledPrompt, &sess.Unread, &servers, &links,
+			&sess.HasLastTurn,
 		); err != nil {
 			return nil, fmt.Errorf("scan session: %w", err)
 		}
-		sess.MCPServers = decodeMCPServers(servers)
+		sess.MCPServers = decodeStrings(servers)
+		sess.SandboxSkippedLinks = decodeStrings(links)
 		sessions = append(sessions, sess)
 	}
 	if err := rows.Err(); err != nil {

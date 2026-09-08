@@ -837,31 +837,48 @@ func (s *Service) tx(fn func(*sql.Tx) error) error {
 // nothing and a session nobody has spawned read the same way, and both mean the
 // card shows a tool name whole.
 func (s *Service) SetSessionMCPServers(sessionID string, servers []string) error {
+	return s.setSessionList(sessionID, "mcp_servers", servers)
+}
+
+// SetSessionSandboxLinks records the home paths this session's sandbox skipped
+// for being symlinks, home-relative — what the card names as not mounted, so a
+// ~/.gitconfig symlinked out of a dotfiles repository is an absence the session
+// is told about rather than one it discovers by failing. Written by the spawn
+// that resolved them, and read back on hydration for the reason above: the PTY
+// outlives the page.
+func (s *Service) SetSessionSandboxLinks(sessionID string, links []string) error {
+	return s.setSessionList(sessionID, "sandbox_links", links)
+}
+
+// setSessionList writes a JSON array into one of the session's list columns.
+// column is a literal from the two callers above and never anything a caller
+// outside this file names.
+func (s *Service) setSessionList(sessionID, column string, values []string) error {
 	encoded := ""
-	if len(servers) > 0 {
-		body, err := json.Marshal(servers)
+	if len(values) > 0 {
+		body, err := json.Marshal(values)
 		if err != nil {
-			return fmt.Errorf("encode MCP servers for %q: %w", sessionID, err)
+			return fmt.Errorf("encode %s for %q: %w", column, sessionID, err)
 		}
 		encoded = string(body)
 	}
 	if _, err := s.db.Exec(
-		`UPDATE sessions SET mcp_servers = ? WHERE id = ?`, encoded, sessionID,
+		fmt.Sprintf(`UPDATE sessions SET %s = ? WHERE id = ?`, column), encoded, sessionID,
 	); err != nil {
-		return fmt.Errorf("set MCP servers on %q: %w", sessionID, err)
+		return fmt.Errorf("set %s on %q: %w", column, sessionID, err)
 	}
 	return nil
 }
 
-// decodeMCPServers reads back what SetSessionMCPServers wrote. A row lich cannot
-// parse answers nil, which is the same answer an unspawned row gives.
-func decodeMCPServers(encoded string) []string {
+// decodeStrings reads back what setSessionList wrote. A row lich cannot parse
+// answers nil, which is the same answer an unspawned row gives.
+func decodeStrings(encoded string) []string {
 	if encoded == "" {
 		return nil
 	}
-	var servers []string
-	if err := json.Unmarshal([]byte(encoded), &servers); err != nil {
+	var values []string
+	if err := json.Unmarshal([]byte(encoded), &values); err != nil {
 		return nil
 	}
-	return servers
+	return values
 }

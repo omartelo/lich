@@ -20,6 +20,7 @@ const storedSession = (overrides: Partial<StoredSession> = {}): StoredSession =>
   hasLastTurn: false,
   unread: false,
   mcpServers: null,
+  sandboxSkippedLinks: null,
   ...overrides,
 })
 
@@ -190,6 +191,31 @@ describe("MCP servers on hydration", () => {
       ])
       const session = state.p1?.sessions[0]
       expect(session && "mcpServers" in session).toBe(false)
+    }
+  })
+})
+
+// The same route, for the paths the sandbox skipped: the tooltip is redrawn on
+// every reload and the spawn that resolved them is long gone.
+describe("skipped sandbox links on hydration", () => {
+  it("carries the links the spawn recorded", () => {
+    const state = buildSessionState([
+      storedProject({
+        sessions: [storedSession({ id: "s1", sandboxSkippedLinks: [".gitconfig"] })],
+      }),
+    ])
+    expect(state.p1?.sessions[0]?.sandboxSkippedLinks).toEqual([".gitconfig"])
+  })
+
+  // An unconfined session and one whose sandbox skipped nothing both draw no
+  // line, so neither carries the key.
+  it("leaves no key for a row that skipped none", () => {
+    for (const sandboxSkippedLinks of [null, []]) {
+      const state = buildSessionState([
+        storedProject({ sessions: [storedSession({ id: "s1", sandboxSkippedLinks })] }),
+      ])
+      const session = state.p1?.sessions[0]
+      expect(session && "sandboxSkippedLinks" in session).toBe(false)
     }
   })
 })

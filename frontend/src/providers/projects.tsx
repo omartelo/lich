@@ -102,6 +102,9 @@ const cardFromStored = (restored: StoredSession): Session => ({
     ? { scheduledAt: restored.scheduledAt, scheduledPrompt: restored.scheduledPrompt }
     : {}),
   ...(restored.mcpServers?.length ? { mcpServers: restored.mcpServers } : {}),
+  ...(restored.sandboxSkippedLinks?.length
+    ? { sandboxSkippedLinks: restored.sandboxSkippedLinks }
+    : {}),
 })
 
 // The first session of any project is always "Session 1"; the counter then
@@ -236,7 +239,12 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       if (!isSandboxEvent(data)) {
         return
       }
-      const next = setSessionSandboxed(sessionsRef.current, data.id, data.confined)
+      const next = setSessionSandboxed(
+        sessionsRef.current,
+        data.id,
+        data.confined,
+        data.skippedLinks ?? [],
+      )
       if (next !== sessionsRef.current) {
         commit(next)
       }

@@ -81,7 +81,7 @@ func (s *Service) Start(
 	// overwrites whatever the previous PTY left in the frontend's stores.
 	s.hub.Emit(cwdEventName, cwdEvent{ID: id, Cwd: cwd})
 	s.hub.Emit(agentEventName, agentEvent{ID: id, Agent: ""})
-	s.hub.Emit(sandboxEventName, sandboxEvent{ID: id, Confined: sess.confined})
+	s.reportSandbox(id, sess.confined, sess.sandboxLinks)
 	s.reportMCPServers(id, kind, cwd)
 	// Bound to the effective cwd rather than the requested one, and outside
 	// s.mu: track queues a warm-up of this checkout's snapshot index, and the
@@ -150,7 +150,9 @@ func (s *Service) spawnSession(
 	// session they run in front of.
 	inSandbox := confined(s.store, id, kind, projectID, cwd)
 	creds := s.sandboxCredentials(projectID, cwd, inSandbox)
-	spec = wrapSandbox(spec, kind, userHome(), sessionDropDir(s.dropDir, id, inSandbox), inSandbox, creds)
+	spec, skippedLinks := wrapSandbox(
+		spec, kind, userHome(), sessionDropDir(s.dropDir, id, inSandbox), inSandbox, creds,
+	)
 	p, err := startPTY(spec)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to start pty for %q: %w", id, err)
@@ -173,8 +175,9 @@ func (s *Service) spawnSession(
 		// Timed from the spawn, so a program that never writes anything still
 		// becomes ready once: quiet is the signal, and silence from the start
 		// is quiet too.
-		lastOut:  time.Now(),
-		confined: inSandbox,
+		lastOut:      time.Now(),
+		confined:     inSandbox,
+		sandboxLinks: skippedLinks,
 	}
 	s.sessions[id] = sess
 	// Outside mu's protection by design (see Service.spawns), and stored with the
@@ -239,6 +242,22 @@ func closableState(kind, state string) bool {
 		return true
 	}
 	return state == statusIdle
+}
+
+// reportSandbox records and announces how this spawn was confined: the verdict,
+// and the home paths the sandbox skipped for being symlinks. The verdict is
+// already on the row (confined writes it); the skipped links are written here,
+// because only the spawn resolves them and the PTY outlives the page — a reload
+// has no second spawn to hear them from.
+//
+// A failed write is logged and nothing else, for the reason reportMCPServers
+// gives: it costs the card a line at the next reload, and refusing to spawn a
+// session over what its tooltip says would be the worse trade.
+func (s *Service) reportSandbox(id string, confined bool, links []string) {
+	if err := s.store.SetSessionSandboxLinks(id, links); err != nil {
+		slog.Warn("record sandbox skipped links", "session", id, "error", err)
+	}
+	s.hub.Emit(sandboxEventName, sandboxEvent{ID: id, Confined: confined, SkippedLinks: links})
 }
 
 // reportMCPServers records and announces the MCP servers this spawn's provider

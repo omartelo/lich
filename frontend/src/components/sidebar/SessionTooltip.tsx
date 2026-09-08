@@ -56,6 +56,7 @@ export function SessionTooltip({ session, path, projectId }: SessionTooltipProps
   const base = baseReadout(git?.base ?? null)
   const rung = useSandboxRung(session.kind, projectId)
   const confined = session.sandboxed ?? false
+  const skippedLinks = session.sandboxSkippedLinks ?? []
   const drift = rung === null ? "" : sandboxDrift(rung, !!session.path, confined)
   return (
     <TooltipContent side="right" className="max-w-xs border border-border bg-card text-foreground">
@@ -133,7 +134,14 @@ export function SessionTooltip({ session, path, projectId }: SessionTooltipProps
             not move this card.
 
             An unconfined session is silent here unless the rung has since moved
-            past it, which is the one time its lack of a shield is news. */}
+            past it, which is the one time its lack of a shield is news.
+
+            The last line names what the sandbox left out of the private home
+            for being a symlink. Every path it binds is taken as it is on disk
+            and a link is skipped, so a ~/.gitconfig kept in a dotfiles
+            repository is not in there — an absence the session would otherwise
+            only meet as a command that behaves differently inside the sandbox
+            than outside it. Nothing skipped draws nothing. */}
         {(confined || drift) && (
           <span className="flex flex-col gap-0.5">
             <span className="flex items-center gap-1.5">
@@ -152,6 +160,11 @@ export function SessionTooltip({ session, path, projectId }: SessionTooltipProps
                 ? "Opened before the sandbox setting changed; reopen the session to apply it."
                 : "Set when the session opened; reopen it to change."}
             </span>
+            {skippedLinks.length > 0 && (
+              <span className="text-muted-foreground">
+                Not mounted (symlinks): {skippedLinks.join(", ")}
+              </span>
+            )}
           </span>
         )}
         {git?.branch && (

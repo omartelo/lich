@@ -25,6 +25,9 @@ export function buildSessionState(loaded: StoredProject[]): SessionState {
         : {}),
       ...(session.hasLastTurn ? { hasLastTurn: true } : {}),
       ...(session.mcpServers?.length ? { mcpServers: session.mcpServers } : {}),
+      ...(session.sandboxSkippedLinks?.length
+        ? { sandboxSkippedLinks: session.sandboxSkippedLinks }
+        : {}),
     }))
     state[project.id] = {
       sessions,

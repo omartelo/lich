@@ -55,6 +55,11 @@ export interface Session {
   // the checkout and any per-session override, and reports the verdict back;
   // the card never re-derives it.
   sandboxed?: boolean
+  // The home paths that sandbox skipped for being symlinks, home-relative —
+  // what a confined session will not find where it expects it. Absent means
+  // none were skipped. Written by the same spawn report as sandboxed and read
+  // back on hydration.
+  sandboxSkippedLinks?: string[]
   // Kept at the head of the project's list and refused a close until unpinned.
   pinned?: boolean
   // The session that asked for this one, when it was opened by delegation:
@@ -274,19 +279,24 @@ export function renameSession(
   }
 }
 
-// setSessionSandboxed records whether a session's PTY runs confined, as the
-// spawn reported it. Unknown ids leave the state untouched, and a value that
+// setSessionSandboxed records whether a session's PTY runs confined and what
+// that sandbox left out of the private home for being a symlink, as the spawn
+// reported both. Unknown ids leave the state untouched, and a report that
 // already matches returns the same object — the event fires on every spawn, and
 // a re-render per respawn of an unchanged card is a card that flickers.
 export function setSessionSandboxed(
   state: SessionState,
   sessionId: string,
   sandboxed: boolean,
+  skippedLinks: string[] = [],
 ): SessionState {
   const projectId = projectOfSession(state, sessionId)
   const current = projectId ? state[projectId] : undefined
   const session = current?.sessions.find((s) => s.id === sessionId)
-  if (!projectId || !current || !session || (session.sandboxed ?? false) === sandboxed) {
+  const same =
+    (session?.sandboxed ?? false) === sandboxed &&
+    sameNames(session?.sandboxSkippedLinks, skippedLinks)
+  if (!projectId || !current || !session || same) {
     return state
   }
   return {
@@ -299,8 +309,9 @@ export function setSessionSandboxed(
         }
         // Dropped rather than set to undefined, so an unconfined session carries
         // no key at all — the shape the two hydration paths produce.
-        const { sandboxed: _was, ...rest } = s
-        return sandboxed ? { ...rest, sandboxed: true } : rest
+        const { sandboxed: _was, sandboxSkippedLinks: _links, ...rest } = s
+        const next = sandboxed ? { ...rest, sandboxed: true } : rest
+        return skippedLinks.length > 0 ? { ...next, sandboxSkippedLinks: skippedLinks } : next
       }),
     },
   }
@@ -318,7 +329,7 @@ export function setSessionMCPServers(
   const projectId = projectOfSession(state, sessionId)
   const current = projectId ? state[projectId] : undefined
   const session = current?.sessions.find((s) => s.id === sessionId)
-  if (!projectId || !current || !session || sameServers(session.mcpServers, servers)) {
+  if (!projectId || !current || !session || sameNames(session.mcpServers, servers)) {
     return state
   }
   return {
@@ -338,7 +349,10 @@ export function setSessionMCPServers(
   }
 }
 
-function sameServers(a: string[] | undefined, b: string[]): boolean {
+// Two spawn-reported lists read the same, in order. Shared by both reports that
+// carry one: an event fires on every spawn, and a list that has not moved must
+// not be a state change.
+function sameNames(a: string[] | undefined, b: string[]): boolean {
   return (a ?? []).length === b.length && (a ?? []).every((name, i) => name === b[i])
 }
 

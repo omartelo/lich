@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/omartelo/lich/internal/providers"
 )
@@ -50,6 +51,12 @@ type Spec struct {
 	// Read is every path bound read-only: configuration, installed toolchains,
 	// and the binaries the session runs.
 	Read []string
+	// SkippedLinks names the paths under Home that were dropped for being
+	// symlinks, relative to Home (".gitconfig", ".ssh/known_hosts"). It is not a
+	// mount list: it is what the session will not find where it expects it, so
+	// the window can say so rather than leave the absence to be discovered by a
+	// command that fails inside the sandbox and works outside it.
+	SkippedLinks []string
 }
 
 // stateDirs is where each provider keeps the state a confined session still
@@ -226,13 +233,55 @@ var readableToolchain = []string{
 // without Rust has no ~/.cargo, and that is not an error.
 func Describe(providerID, home, cwd, gitCommon string, extraRead []string, sshAgent bool) Spec {
 	spec := Spec{Home: home, Cwd: cwd, GitCommon: gitCommon}
-	spec.Write = existing(append(stateDirs(providerID, home), under(home, writableCaches)...))
+	write := append(stateDirs(providerID, home), under(home, writableCaches)...)
 	read := append(under(home, readableToolchain), displaySockets(home)...)
 	if sshAgent {
 		read = append(read, AgentSocket(), knownHosts(home))
 	}
+	// Over this package's own two lists and not extraRead: the binaries are the
+	// exception to the symlink rule (BinaryDirs walks their chains), so naming
+	// one would report a link that is in fact mounted.
+	spec.SkippedLinks = skippedLinks(home, write, read)
+	spec.Write = existing(write)
 	spec.Read = existing(append(read, extraRead...))
 	return spec
+}
+
+// skippedLinks names the paths existing is about to drop for being symlinks,
+// relative to home — the dotfiles a confined session will not find where it
+// expects them, so the card can say which ones rather than leave a
+// ~/.gitconfig quietly absent.
+//
+// Only paths under home are named. Everything else in a Spec is either not a
+// link by construction (the display socket and the ssh agent are checked as
+// sockets) or is one on purpose, and a path outside the home has no short name
+// a person reading a tooltip would recognise.
+//
+// A path that is not there at all says nothing: a machine without Rust has no
+// ~/.cargo, and its absence is not news. Duplicates are dropped and order is
+// kept, so the line reads in the order the profile lists them.
+func skippedLinks(home string, lists ...[]string) []string {
+	prefix := home + string(filepath.Separator)
+	seen := make(map[string]bool)
+	var out []string
+	for _, list := range lists {
+		for _, path := range list {
+			if !strings.HasPrefix(path, prefix) {
+				continue
+			}
+			name := path[len(prefix):]
+			if seen[name] {
+				continue
+			}
+			info, err := os.Lstat(path)
+			if err != nil || info.Mode()&os.ModeSymlink == 0 {
+				continue
+			}
+			seen[name] = true
+			out = append(out, name)
+		}
+	}
+	return out
 }
 
 // Backend names what confines a session on this machine, or "" when nothing can.
@@ -364,7 +413,8 @@ func under(base string, names []string) []string {
 // whatever the user's dotfile manager happens to point at.
 //
 // The cost is real and deliberate: a `~/.gitconfig` symlinked out of a dotfiles
-// repository is not in a confined session, and nothing on screen says so. The
+// repository is not in a confined session. What it is not is silent — the same
+// pass names them (skippedLinks) and the card says which ones are missing. The
 // binaries the session runs are the exception, and they are handled by mounting
 // directories instead (BinaryDirs).
 func existing(paths []string) []string {

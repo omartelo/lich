@@ -72,7 +72,7 @@ func TestWrapSandboxLeavesAnUnconfinedSpawnAlone(t *testing.T) {
 		{"not confined", "/home/u", false},
 		{"no home to empty", "", true},
 	} {
-		got := wrapSandbox(baseSpec(), providers.Claude, tt.home, "", tt.confined, sandboxCreds{})
+		got, _ := wrapSandbox(baseSpec(), providers.Claude, tt.home, "", tt.confined, sandboxCreds{})
 		if got.bin != original.bin || !slices.Equal(got.args, original.args) {
 			t.Errorf("%s: spawn rewritten to %q %v", tt.name, got.bin, got.args)
 		}
@@ -84,7 +84,7 @@ func TestWrapSandboxKeepsTheCommandAndItsArguments(t *testing.T) {
 		t.Skip("no sandbox backend on this machine")
 	}
 	original := baseSpec()
-	got := wrapSandbox(baseSpec(), providers.Claude, t.TempDir(), "", true, sandboxCreds{})
+	got, _ := wrapSandbox(baseSpec(), providers.Claude, t.TempDir(), "", true, sandboxCreds{})
 	if got.bin == original.bin {
 		t.Fatalf("the spawn was not confined: still %q", got.bin)
 	}
@@ -201,7 +201,7 @@ func TestWrapSandboxMountsTheSessionsCopies(t *testing.T) {
 	}
 	copies := sessionDropDir(t.TempDir(), "s1", true)
 
-	got := wrapSandbox(baseSpec(), providers.Claude, t.TempDir(), copies, true, sandboxCreds{})
+	got, _ := wrapSandbox(baseSpec(), providers.Claude, t.TempDir(), copies, true, sandboxCreds{})
 
 	// Substring, not an argv element: the two backends spell a mounted path in
 	// their own vocabulary — bubblewrap takes it as its own argument
@@ -221,7 +221,7 @@ func TestWrapSandboxKeepsTheTokenOutOfTheArguments(t *testing.T) {
 		t.Skip("bubblewrap is not installed")
 	}
 	const token = "gho_secret_probe_value"
-	got := wrapSandbox(baseSpec(), providers.Claude, t.TempDir(), "", true, sandboxCreds{ghToken: token})
+	got, _ := wrapSandbox(baseSpec(), providers.Claude, t.TempDir(), "", true, sandboxCreds{ghToken: token})
 
 	if !slices.Contains(got.env, "GH_TOKEN="+token) {
 		t.Errorf("GH_TOKEN missing from the child environment: %v", got.env)
@@ -237,7 +237,7 @@ func TestWrapSandboxAddsNoTokenWithoutOne(t *testing.T) {
 	if _, err := exec.LookPath("bwrap"); err != nil {
 		t.Skip("bubblewrap is not installed")
 	}
-	got := wrapSandbox(baseSpec(), providers.Claude, t.TempDir(), "", true, sandboxCreds{})
+	got, _ := wrapSandbox(baseSpec(), providers.Claude, t.TempDir(), "", true, sandboxCreds{})
 	if slices.ContainsFunc(got.env, func(kv string) bool { return strings.HasPrefix(kv, "GH_TOKEN=") }) {
 		t.Errorf("GH_TOKEN set without the flag: %v", got.env)
 	}

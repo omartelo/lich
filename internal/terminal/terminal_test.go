@@ -61,6 +61,10 @@ type stubBins struct {
 	// The MCP servers the spawn recorded per session, the shape
 	// store.SetSessionMCPServers writes. Nil until a test cares.
 	mcpServers map[string][]string
+	// The home paths the spawn's sandbox skipped for being symlinks, per
+	// session, the shape store.SetSessionSandboxLinks writes. Nil until a test
+	// cares.
+	sandboxLinks map[string][]string
 	// What each session inherited from the conversation it was forked from, the
 	// shape store.SaveForkCostOffset writes. Nil until a test cares.
 	forkOffsets map[string]float64
@@ -114,6 +118,13 @@ func (s stubBins) SetSessionSandbox(_, _ string) error { return nil }
 func (s stubBins) SetSessionMCPServers(id string, servers []string) error {
 	if s.mcpServers != nil {
 		s.mcpServers[id] = servers
+	}
+	return nil
+}
+
+func (s stubBins) SetSessionSandboxLinks(id string, links []string) error {
+	if s.sandboxLinks != nil {
+		s.sandboxLinks[id] = links
 	}
 	return nil
 }

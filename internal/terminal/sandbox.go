@@ -27,9 +27,16 @@ import (
 // dropDir is where this session's dropped-file copies live (sessionDropDir),
 // bound read-only so a file dragged onto a confined terminal is a file the
 // agent can actually open. Empty leaves it out.
-func wrapSandbox(spec ptySpec, kind, home, dropDir string, confined bool, creds sandboxCreds) ptySpec {
+//
+// The second return is what the sandbox skipped for being a symlink, home-
+// relative (sandbox.Spec's SkippedLinks). It rides back with the spawn because
+// this is the only moment anything resolves it, and a session that cannot find
+// its own ~/.gitconfig is owed the reason.
+func wrapSandbox(
+	spec ptySpec, kind, home, dropDir string, confined bool, creds sandboxCreds,
+) (ptySpec, []string) {
 	if !confined || home == "" || !sandbox.Available() {
-		return spec
+		return spec, nil
 	}
 	read := append(executables(spec.bin), dropDir)
 	sb := sandbox.Describe(kind, home, spec.dir, project.GitCommonDir(spec.dir), read, creds.sshAgent)
@@ -40,7 +47,7 @@ func wrapSandbox(spec ptySpec, kind, home, dropDir string, confined bool, creds 
 	if creds.ghToken != "" {
 		spec.env = append(spec.env, "GH_TOKEN="+creds.ghToken)
 	}
-	return spec
+	return spec, sb.SkippedLinks
 }
 
 // sandboxCreds is what a confined session is handed to act on the network as the

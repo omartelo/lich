@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   clears the ones an unclean exit orphaned, so a path pasted a week ago still
   resolves.
 
+- **A sandboxed session's tooltip now names the dotfiles its private home did
+  not get.** Every path lich binds into the sandbox is taken as it is on disk
+  and a symlink is skipped, so a `~/.gitconfig` or `~/.ssh/known_hosts` kept in
+  a dotfiles repository was simply absent inside a confined session, with
+  nothing saying so. The shield's tooltip lists them: "Not mounted (symlinks):
+  .gitconfig, .ssh/known_hosts". The policy has not changed — only the silence.
+
 ### Fixed
 
 - **A session whose shell runs inside tmux, over ssh or in a container now says

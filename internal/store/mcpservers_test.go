@@ -68,8 +68,38 @@ func TestSessionMCPServersClearsOnAnEmptyList(t *testing.T) {
 // and not a guess: it reads as no servers, which is what an unspawned row says.
 func TestDecodeMCPServersRefusesWhatItCannotRead(t *testing.T) {
 	for _, encoded := range []string{"", "not json", `{"lich":true}`} {
-		if got := decodeMCPServers(encoded); got != nil {
-			t.Errorf("decodeMCPServers(%q) = %v, want none", encoded, got)
+		if got := decodeStrings(encoded); got != nil {
+			t.Errorf("decodeStrings(%q) = %v, want none", encoded, got)
 		}
+	}
+}
+
+// The same round trip for the sandbox's skipped links, which ride the row for
+// the same reason: the spawn is the only thing that resolves them, and the
+// tooltip that names them is redrawn on every reload.
+func TestSessionSandboxLinksRoundTrip(t *testing.T) {
+	svc := sandboxProject(t, "/work/alpha")
+	if err := svc.AddSession("p1", "s1", "one", providers.Claude, "", 0, ""); err != nil {
+		t.Fatalf("AddSession: %v", err)
+	}
+	if got := sessionOf(t, svc, "s1").SandboxSkippedLinks; got != nil {
+		t.Errorf("an unspawned session = %v, want none", got)
+	}
+
+	want := []string{".gitconfig", ".ssh/known_hosts"}
+	if err := svc.SetSessionSandboxLinks("s1", want); err != nil {
+		t.Fatalf("SetSessionSandboxLinks: %v", err)
+	}
+	if got := sessionOf(t, svc, "s1").SandboxSkippedLinks; !slices.Equal(got, want) {
+		t.Errorf("SandboxSkippedLinks = %v, want %v", got, want)
+	}
+
+	// An unconfined respawn of the same card clears it, so the line does not
+	// outlive the sandbox that put it there.
+	if err := svc.SetSessionSandboxLinks("s1", nil); err != nil {
+		t.Fatalf("SetSessionSandboxLinks(nil): %v", err)
+	}
+	if got := sessionOf(t, svc, "s1").SandboxSkippedLinks; got != nil {
+		t.Errorf("SandboxSkippedLinks = %v, want none", got)
 	}
 }

@@ -51,10 +51,12 @@ export const CWD_EVENT = "session-cwd"
 export const AGENT_EVENT = "session-agent"
 
 // Global event the backend emits on every spawn with whether that PTY runs
-// inside the sandbox (see terminal.sandboxEventName). Payload: { id, confined }.
-// The verdict is the spawn's — it resolves the provider's rung, the checkout and
-// any per-session override — and it is persisted with the row too, which is what
-// a page reload hydrates from.
+// inside the sandbox (see terminal.sandboxEventName). Payload:
+// { id, confined, skippedLinks } — the last being the home paths that sandbox
+// left out for being symlinks, which is the one absence a confined session has
+// no other way of learning about. The verdict is the spawn's — it resolves the
+// provider's rung, the checkout and any per-session override — and both are
+// persisted with the row too, which is what a page reload hydrates from.
 export const SANDBOX_EVENT = "session-sandbox"
 
 // Global event the backend emits on every spawn with the MCP servers that
@@ -248,8 +250,20 @@ export function isScheduleEvent(data: unknown): data is { id: string; at: number
   return isIdEvent(data) && typeof (data as { at?: unknown }).at === "number"
 }
 
-export function isSandboxEvent(data: unknown): data is { id: string; confined: boolean } {
-  return isIdEvent(data) && typeof (data as { confined?: unknown }).confined === "boolean"
+// skippedLinks is optional rather than required: a nil list marshals as null,
+// and an event carrying no names must still land the confinement verdict.
+export function isSandboxEvent(
+  data: unknown,
+): data is { id: string; confined: boolean; skippedLinks?: string[] | null } {
+  if (!isIdEvent(data) || typeof (data as { confined?: unknown }).confined !== "boolean") {
+    return false
+  }
+  const links = (data as { skippedLinks?: unknown }).skippedLinks
+  return (
+    links === undefined ||
+    links === null ||
+    (Array.isArray(links) && links.every((name) => typeof name === "string"))
+  )
 }
 
 export function isMCPEvent(data: unknown): data is { id: string; servers: string[] } {

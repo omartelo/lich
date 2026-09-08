@@ -547,7 +547,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   machines the user connects to. Read-only, so a host the user has never connected to *outside* the sandbox
   still fails inside it and cannot be learned there — blind trust-on-first-use is not a thing to grant an
   unattended agent. And a `known_hosts` symlinked out of a dotfiles repository is dropped like every other
-  link in the home (below), which takes the whole grant down with it and says nothing. That is why Settings lists what is in the agent — and the list is read when the pane opens,
+  link in the home (`internal/sandbox`'s `existing`), which takes the whole grant down with it. That is why Settings lists what is in the agent — and the list is read when the pane opens,
   so a key added afterwards is handed over by a switch that never named it. The GitHub token is one account's,
   the project's own (`vcs.account`), and it rides in the session's environment: the agent can read it back out
   of its own environment and spend it on anything that account's scopes allow, this repository or not. Neither
@@ -559,14 +559,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   and gh's keyring live outside it, so a confined macOS session never lost either and the switches change
   nothing there — they are inert rather than hidden, and there is no macOS hardware here to prove it further.
   Windows has no sandbox backend, so neither switch exists.
-- **A symlink in the home is not mounted into the sandbox** (`internal/sandbox`): every path lich binds is
-  taken as it is on disk, and a link is skipped — following one would let a dotfile manager point the
-  private home at whatever it likes, and binding one fails the spawn outright when a parent directory is
-  already mounted (bubblewrap resolves a mount destination through symlinks). So a `~/.gitconfig` symlinked
-  out of a dotfiles repository is absent inside a confined session, with nothing on screen saying so. The
-  binaries are the exception: their symlink chains are walked and the *directory* of every hop is mounted
-  (`BinaryDirs`), which is what makes an agent installed the usual way — a link on `PATH` into a versioned
-  store — runnable at all.
 - **The macOS floor is the toolchain's, not lich's** (`build/darwin/Info.plist.tpl`,
   `build/darwin/homebrew/lich.rb.tpl`): nothing in lich needs macOS 13, but Go 1.27 dropped every
   release before Ventura, so a binary built from this module cannot run on Big Sur or Monterey. The

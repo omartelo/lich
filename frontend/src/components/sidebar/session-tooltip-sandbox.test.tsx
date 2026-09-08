@@ -100,3 +100,27 @@ test("a confined session the rung would now leave out says so too", async () => 
   expect(text()).toContain(MOVED)
   await mounted.unmount()
 })
+
+// What the whole change exists for: the dotfiles the private home did not get,
+// named on the card instead of discovered as a git that has forgotten who you
+// are.
+test("a confined session names what the sandbox skipped for being a symlink", async () => {
+  rungs.set("p-links", "everywhere")
+  const mounted = await mountBudget(
+    tooltip(
+      session({ sandboxed: true, sandboxSkippedLinks: [".gitconfig", ".ssh/known_hosts"] }),
+      "p-links",
+    ),
+  )
+  expect(text()).toContain("Not mounted (symlinks): .gitconfig, .ssh/known_hosts")
+  await mounted.unmount()
+})
+
+// Nothing skipped is nothing to say: the line is absent rather than empty.
+test("a confined session that skipped nothing draws no line", async () => {
+  rungs.set("p-no-links", "everywhere")
+  const mounted = await mountBudget(tooltip(session({ sandboxed: true }), "p-no-links"))
+  expect(text()).toContain("Sandboxed")
+  expect(text()).not.toContain("Not mounted")
+  await mounted.unmount()
+})

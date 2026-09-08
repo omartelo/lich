@@ -56,11 +56,14 @@ const (
 	// clear so a respawned session never wears a dead agent's icon.
 	agentEventName = "session-agent"
 	// sandboxEventName carries whether a session's PTY runs confined ({id,
-	// confined}), emitted by every spawn. The card marks a confined session, and
-	// the answer is the spawn's own — it takes the provider's rung, the checkout
-	// and a per-session override to reach, so the window is told rather than
-	// asked to work it out again. Persisted with the row too (store.Session's
-	// Sandbox), which is what a page reload hydrates from.
+	// confined, skippedLinks}), emitted by every spawn. The card marks a confined
+	// session, and the answer is the spawn's own — it takes the provider's rung,
+	// the checkout and a per-session override to reach, so the window is told
+	// rather than asked to work it out again. skippedLinks is what that sandbox
+	// left out of the private home for being a symlink, which is the one absence
+	// a session has no other way of learning about. Both persisted with the row
+	// (store.Session's Sandbox and SandboxSkippedLinks), which is what a page
+	// reload hydrates from.
 	sandboxEventName = "session-sandbox"
 	// mcpEventName carries the MCP servers a session's provider could reach at
 	// its spawn ({id, servers}), emitted by every spawn. The card divides a tool
@@ -129,11 +132,14 @@ type agentEvent struct {
 	Agent string `json:"agent"`
 }
 
-// sandboxEvent is the payload of sandboxEventName: the session and whether its
-// PTY is confined.
+// sandboxEvent is the payload of sandboxEventName: the session, whether its PTY
+// is confined, and the home paths that sandbox skipped for being symlinks,
+// relative to the home (nil for an unconfined spawn and for one that skipped
+// none).
 type sandboxEvent struct {
-	ID       string `json:"id"`
-	Confined bool   `json:"confined"`
+	ID           string   `json:"id"`
+	Confined     bool     `json:"confined"`
+	SkippedLinks []string `json:"skippedLinks"`
 }
 
 // mcpEvent is the payload of mcpEventName: the session and the MCP servers its
@@ -185,8 +191,11 @@ type session struct {
 	escPending []byte
 	pasting    bool
 	// confined records whether this PTY was spawned inside the sandbox, so Start
-	// can report it once the spawn is out of the lock.
-	confined bool
+	// can report it once the spawn is out of the lock. sandboxLinks rides with
+	// it: what that sandbox skipped for being a symlink, resolved by the same
+	// call and reported in the same event.
+	confined     bool
+	sandboxLinks []string
 }
 
 // Store is the persistence the terminal service depends on: the binary to spawn
@@ -212,6 +221,7 @@ type Store interface {
 	SessionSandbox(sessionID string) string
 	SetSessionSandbox(sessionID, sandbox string) error
 	SetSessionMCPServers(sessionID string, servers []string) error
+	SetSessionSandboxLinks(sessionID string, links []string) error
 	SandboxDefault(providerID, projectID, cwd string) bool
 	SandboxSSHAgent(projectID string) bool
 	SandboxGHToken(projectID string) bool

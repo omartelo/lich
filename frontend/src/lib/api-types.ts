@@ -354,6 +354,11 @@ export interface StoredSession {
    * what the card divides a tool name carrying no separator of its own against.
    * null for a row nothing has spawned yet. */
   mcpServers: string[] | null
+  /** The paths under the home this session's sandbox skipped for being
+   * symlinks, home-relative (".gitconfig", ".ssh/known_hosts") — what the
+   * tooltip names as not mounted. null for an unconfined session and for one
+   * whose sandbox skipped nothing. */
+  sandboxSkippedLinks: string[] | null
 }
 
 /** internal/store.ClosedSession — one parked session offered for resuming. What
