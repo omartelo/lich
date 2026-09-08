@@ -241,6 +241,32 @@ func (s *Service) sessionCost(id string, src usageSource) (float64, costMiss, bo
 	return total, costMissNone, true
 }
 
+// recordForkCost snapshots what the conversation being branched had already
+// cost, so the copy is not billed a second time for the history it inherits.
+// Called once, from the spawn that forks (Start): the offset is what was true at
+// the fork, and a stretch the ledger has already counted is never re-priced, so
+// it does not move again afterwards.
+//
+// Only the rung lich prices itself is offset, and that is the whole of the
+// difference between the three providers that fork. Claude Code's copy is a
+// transcript of its own carrying every assistant line of the parent's, and a
+// forked Codex rollout copies the parent's token_count records and carries its
+// running total forward — so lich's own scan counts that stretch twice (measured
+// on 2.1.263 and 0.153.4). opencode reports its own figure instead, and its fork
+// starts at zero: the copy inherits the parent's token counters but not its cost
+// (measured on 1.18.29), so subtracting there would hide what the fork spent.
+//
+// A failure is logged and dropped rather than failing the spawn: the user is
+// waiting on a session, and a readout that is too high is not worth losing it.
+func (s *Service) recordForkCost(id, kind, forkedFrom string) {
+	if providers.CostSourceOf(kind) != providers.CostSourcePriced {
+		return
+	}
+	if err := s.store.SaveForkCostOffset(id, forkedFrom); err != nil {
+		slog.Warn("terminal: save fork cost offset", "session", id, "err", err)
+	}
+}
+
 // wholeCost prices one conversation whole, for the providers that report a
 // running total rather than per-turn deltas: each reads its own store, and
 // the two database providers say only that the row could not be read.

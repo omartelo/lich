@@ -118,19 +118,54 @@ func restoreCostLedgers(tx *sql.Tx, sessionID string, ledgers []costRow) error {
 	return nil
 }
 
+// SaveForkCostOffset records, on a session just forked from the conversation
+// forkedFrom, what lich had counted that conversation to cost at this moment —
+// which is the stretch the fork's own transcript carries a copy of and the
+// ledger is about to count a second time. SessionCost and CostTotals take it
+// back off, so the pair adds up to what was actually spent.
+//
+// The offset is a snapshot in dollars, not in tokens, because the ledger it is
+// read out of is one: a counted stretch is never re-priced (scanTranscriptCost
+// resumes past it), so the parent's own figure does not move when a price
+// refresh lands either, and a token offset re-priced later would drift away from
+// the number the parent still shows.
+//
+// It is the raw ledger row rather than the parent's readout, which is what makes
+// a fork of a fork right: the parent's row holds the gross cost of its own
+// transcript, history included, and that whole stretch is what the copy repeats.
+// A conversation lich has counted nothing for offsets nothing.
+func (s *Service) SaveForkCostOffset(sessionID, forkedFrom string) error {
+	_, err := s.db.Exec(
+		`UPDATE sessions SET fork_cost_offset = COALESCE(
+		     (SELECT SUM(cost_usd) FROM session_costs WHERE transcript_id = ?), 0)
+		 WHERE id = ?`,
+		forkedFrom, sessionID,
+	)
+	if err != nil {
+		return fmt.Errorf("save fork cost offset for %q: %w", sessionID, err)
+	}
+	return nil
+}
+
 // SessionCost is what a session has cost so far: the sum of every transcript it
-// has run through. Zero for a session that has counted nothing yet — whether
-// that zero is worth showing is the caller's call, since an unpriced model must
-// read as "no number", never as free.
+// has run through, less what a fork inherited from the conversation it was
+// branched from (SaveForkCostOffset). Zero for a session that has counted
+// nothing yet — whether that zero is worth showing is the caller's call, since
+// an unpriced model must read as "no number", never as free.
+//
+// The subtraction is floored at zero: a fork whose ledger has not caught up with
+// its inherited history yet would otherwise report money back.
 func (s *Service) SessionCost(sessionID string) (float64, error) {
-	var cost sql.NullFloat64
+	var cost, offset sql.NullFloat64
 	err := s.db.QueryRow(
-		`SELECT SUM(cost_usd) FROM session_costs WHERE session_id = ?`, sessionID,
-	).Scan(&cost)
+		`SELECT (SELECT SUM(cost_usd) FROM session_costs WHERE session_id = ?),
+		        (SELECT fork_cost_offset FROM sessions WHERE id = ?)`,
+		sessionID, sessionID,
+	).Scan(&cost, &offset)
 	if err != nil {
 		return 0, fmt.Errorf("read session cost for %q: %w", sessionID, err)
 	}
-	return cost.Float64, nil
+	return max(0, cost.Float64-offset.Float64), nil
 }
 
 // CostSourceMixed labels a total whose money came off both rungs — some of it
@@ -282,13 +317,18 @@ func (s *Service) CostTotals(project, provider string, since int64) (CostReport,
 // one row per project. The kind is in the grouping because whose arithmetic a
 // session's dollars are is a fact of the provider that spent them
 // (providers.CostSourceOf) and the ledger itself records nothing about it.
+//
+// A forked session's money is netted the same way the live readout nets it
+// (SessionCost), per session and floored at zero — MAX over a NULL cost is NULL,
+// so a session with nothing counted stays uncounted rather than becoming a zero
+// the sum would swallow.
 func (s *Service) costRows(project, provider string, since int64) ([]*projectRow, error) {
 	rows, err := s.db.Query(
 		`SELECT p.name,
 		        s.kind,
 		        COUNT(*),
 		        SUM(CASE WHEN c.cost IS NULL THEN 1 ELSE 0 END),
-		        COALESCE(SUM(c.cost), 0)
+		        COALESCE(SUM(MAX(c.cost - s.fork_cost_offset, 0)), 0)
 		   FROM sessions s
 		   JOIN projects p ON p.id = s.project_id
 		   LEFT JOIN (SELECT session_id, SUM(cost_usd) AS cost, MAX(updated_at) AS seen

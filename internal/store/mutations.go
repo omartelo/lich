@@ -354,21 +354,26 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		// parked is typed on the resumed card's first free prompt, exactly like
 		// one that came due while lich was closed (internal/relay, deliverDue).
 		//
+		// The fork cost offset rides along with the ledgers it nets: the copied
+		// history is still in this session's transcript after a resume, so a row
+		// that came back without it would bill the fork for its parent again.
+		//
 		// project_id is read rather than passed: reopening by id knows only the
 		// session, and the row is what says where it belongs.
 		var labelAuto int
 		var projectID, model, entrypoint, sandbox string
+		var forkOffset float64
 		row := tx.QueryRow(
 			`SELECT id, project_id, label, kind, path, provider_session_id, label_auto,
 			        model, entrypoint, sandbox, pinned, origin_session_id, origin_label,
-			        scheduled_at, scheduled_prompt
+			        scheduled_at, scheduled_prompt, fork_cost_offset
 			   FROM sessions `+where,
 			args...,
 		)
 		if err := row.Scan(
 			&old.ID, &projectID, &old.Label, &old.Kind, &old.Path, &old.ProviderSessionID,
 			&labelAuto, &model, &entrypoint, &sandbox, &old.Pinned, &old.OriginSessionID, &old.OriginLabel,
-			&old.ScheduledAt, &old.ScheduledPrompt,
+			&old.ScheduledAt, &old.ScheduledPrompt, &forkOffset,
 		); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil // nothing parked; caller creates a new session
@@ -403,11 +408,11 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 			`INSERT INTO sessions
 			   (id, project_id, label, kind, path, provider_session_id, label_auto,
 			    model, entrypoint, sandbox, pinned, origin_session_id, origin_label,
-			    scheduled_at, scheduled_prompt, position)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
+			    scheduled_at, scheduled_prompt, fork_cost_offset, position)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
 			newSessionID, projectID, old.Label, old.Kind, old.Path, old.ProviderSessionID, labelAuto,
 			model, entrypoint, sandbox, old.Pinned, old.OriginSessionID, old.OriginLabel,
-			old.ScheduledAt, old.ScheduledPrompt, projectID,
+			old.ScheduledAt, old.ScheduledPrompt, forkOffset, projectID,
 		); err != nil {
 			return fmt.Errorf("reinsert session %q: %w", newSessionID, err)
 		}

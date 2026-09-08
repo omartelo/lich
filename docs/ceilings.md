@@ -254,11 +254,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   opencode's own session list places a fork in the checkout it came from and records no lineage. lich's own
   card is right — it carries the worktree it was opened in, and `origin_session_id` names the parent — but the
   two disagree, and only lich's side is visible in lich.
-- **A fork is billed as a second conversation from its first turn** (`internal/pricing`,
-  `internal/terminal/usage_cost.go`): the copy is a transcript of its own carrying every token of the history
-  it was branched from, so the pair reports roughly twice what one conversation spent. It is the same
-  arithmetic as the `(session, transcript)` bullet above, arrived at deliberately rather than by accident —
-  a lich-driven fork makes that path ordinary.
 - **git status is polled** — one shared poller per repository path (`frontend/src/lib/git/git-status-store.ts`); the
   lich plugin's `session-touched` hook nudges an immediate refresh.
 - **The status badge has a single source** (`internal/project/status.go`): the branch, the HEAD commit and the

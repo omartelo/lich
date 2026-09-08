@@ -63,6 +63,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A forked session is no longer billed for the history it was branched from.**
+  The copy is a conversation of its own carrying every token of the original, so
+  the two cards together reported roughly twice what one conversation had spent,
+  in the footer readout and in `lich cost` alike. A fork now records what the
+  conversation it branched had cost at that moment and nets it back off its own
+  number, so the pair adds up to what was actually spent. Forks of forks count
+  the same way, and opencode is unchanged: it starts a forked session's cost at
+  zero on its own.
+
 - **A closed project is now findable by name, however long ago it was closed.**
   Only the twenty-five most recent closes were ever offered back, so an older
   project was reachable only by hunting its directory in the folder picker, and

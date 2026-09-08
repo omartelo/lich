@@ -109,7 +109,15 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- close and never a reading of now — the window still draws git's answer,
     -- because a branch moves inside a checkout while the worktree keeps the name
     -- it was created with.
-    parked_branch       TEXT NOT NULL DEFAULT ''
+    parked_branch       TEXT NOT NULL DEFAULT '',
+    -- What the conversation this session was forked from had already cost when
+    -- the fork was spawned, in USD, and 0 for every session that is not one. A
+    -- fork's own transcript carries the history it was branched from, so the
+    -- ledger counts that stretch a second time; this is what is taken back off
+    -- (SaveForkCostOffset). It stays out of session_costs because it belongs to
+    -- the session, not to any one transcript it has run: the fork keeps owing it
+    -- after a /clear starts a second conversation under the same card.
+    fork_cost_offset    REAL NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
 
@@ -335,6 +343,7 @@ func open(path string) (*Service, error) {
 		`ALTER TABLE sessions ADD COLUMN unread INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE sessions ADD COLUMN mcp_servers TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE sessions ADD COLUMN parked_branch TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE sessions ADD COLUMN fork_cost_offset REAL NOT NULL DEFAULT 0`,
 		`ALTER TABLE projects ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE projects ADD COLUMN closed_seq INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE session_costs ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0`,
