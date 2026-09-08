@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { lastTurnNotice, turnSwitchable } from "./last-turn"
+import { lastTurnNotice, saidNote, turnSwitchable } from "./last-turn"
 
 describe("lastTurnNotice", () => {
   it("draws the diff only when there is one to draw", () => {
@@ -45,5 +45,26 @@ describe("turnSwitchable", () => {
   // on record there is none to show: the working tree alone.
   it("withholds the switch from a session with neither", () => {
     expect(turnSwitchable(false, false)).toBe(false)
+  })
+})
+
+describe("saidNote", () => {
+  // Mid-turn the band is the only thing on the panel that can say which turn is
+  // speaking: the diff beside it has no window to draw yet.
+  it("names the previous turn while the agent is running", () => {
+    expect(saidNote("busy")).toBe("from the previous turn")
+  })
+
+  // Once the turn closes the words and the diff are the same turn's, and a
+  // label repeating that would sit on every card at rest.
+  it("drops the label once the turn is over", () => {
+    expect(saidNote("done")).toBe("")
+    expect(saidNote(null)).toBe("")
+  })
+
+  // "waiting" is reported both mid-turn and at an idle prompt, so it cannot
+  // name a turn without being wrong half the time.
+  it("says nothing for a state that could be either turn", () => {
+    expect(saidNote("waiting")).toBe("")
   })
 })

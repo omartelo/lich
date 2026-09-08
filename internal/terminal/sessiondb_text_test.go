@@ -84,14 +84,14 @@ func crushMessageDB(t *testing.T) string {
 	)
 }
 
-// TestSaidForReadsTheCrushDatabase covers the second provider whose conversation
+// TestSaidReadsTheCrushDatabase covers the second provider whose conversation
 // is a database rather than a file. The answer is the newest text part of the
 // newest assistant message: the thinking that preceded it is not something the
 // agent said, and another conversation's closing words are not this one's.
-func TestSaidForReadsTheCrushDatabase(t *testing.T) {
+func TestSaidReadsTheCrushDatabase(t *testing.T) {
 	src := usageSource{kind: providers.Crush, path: crushMessageDB(t), id: "crush-1"}
-	if got := saidFor(src); got != "The worktree port is a hash." {
-		t.Errorf("saidFor = %q, want the newest assistant text part", got)
+	if got := new(saidCursors).said("s1", src); got != "The worktree port is a hash." {
+		t.Errorf("said = %q, want the newest assistant text part", got)
 	}
 }
 
@@ -146,8 +146,8 @@ func TestSessionDBTextsIsSilentForASchemaThatMoved(t *testing.T) {
 		`INSERT INTO messages_v2 VALUES ('m1','a worktree line nothing here can reach')`)
 	for _, kind := range []string{providers.OpenCode, providers.Crush} {
 		src := usageSource{kind: kind, path: path, id: "any"}
-		if got := saidFor(src); got != "" {
-			t.Errorf("saidFor(%s) = %q, want empty for a schema that moved", kind, got)
+		if got := new(saidCursors).said("s1", src); got != "" {
+			t.Errorf("said(%s) = %q, want empty for a schema that moved", kind, got)
 		}
 		if got, ok := searchSource(src, "worktree"); ok {
 			t.Errorf("searchSource(%s) = %+v, want no match for a schema that moved", kind, got)

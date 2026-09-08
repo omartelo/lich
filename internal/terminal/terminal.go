@@ -295,6 +295,10 @@ type Service struct {
 	// output while the agent is busy (see handsOn). It carries its own lock for
 	// the reason turns does: a hook must never queue behind a PTY spawn.
 	hands handsOn
+	// recap is where each session's provider transcript was last read to, so
+	// the Review panel's band walks what has been appended since rather than
+	// re-reading a bounded tail every poll (see saidCursors).
+	recap saidCursors
 	// snaps brackets each session's turn with a tree snapshot of its checkout,
 	// which is what the Review panel's "Last turn" mode diffs (see turnSnaps).
 	// It reads the same boundary turns does and carries its own lock for the
@@ -706,6 +710,7 @@ func (s *Service) Close(id string) error {
 	// last turn changed — and its snapshot index would otherwise outlive it on
 	// disk for the rest of the machine's life.
 	s.snaps.forget(id)
+	s.recap.forget(id)
 	// Synchronously, and before the row that the window is about to delete goes:
 	// a write that loses that race is dropped silently (store.AddHandsOn), and
 	// this is the last chance a closed card gets to keep what it was worked.

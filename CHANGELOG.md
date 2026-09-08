@@ -35,6 +35,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   wrong answer that looks right. Linux and macOS; Windows has no foreground
   process group to read it from.
 
+- **The Review panel's recap band no longer goes blank behind a large tool
+  result, and says when its words are the previous turn's.** The band read a
+  bounded tail of the conversation, so a turn whose closing words ended up
+  behind more than 4 MB of tool output showed nothing at all, exactly like a
+  turn that ended on a tool call. It now reads each session's transcript from
+  where the last read stopped, so a turn is read whole however large it is;
+  while a turn is running the band is labelled "from the previous turn", which
+  is whose words they are beside a diff that has no window to draw yet.
 - **On Windows, lich's own window no longer opens a stray console window beside
   it, or gives up and reopens in Chrome.** The window was built for the console
   subsystem, so Windows allocated a console for it and for each of Chromium's

@@ -47,7 +47,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   | Crush | cost only | `sessions.cost` per conversation; no window recorded with it |
   | Kiro CLI | context only | a window and a per-request percentage; spend is metered in credits, not dollars |
   | Antigravity | nothing | conversation filed as SQLite lich has no reader for |
-  | Cursor CLI | nothing | chat filed as SQLite lich has no reader for, search included |
+  | Cursor CLI | nothing | chat filed as SQLite lich has no reader for, search and recap included |
 
   **Kiro CLI is the mirror image of the cost-only rung, and the only provider on its own one.** It records
   `context_usage_percentage` against a `context_window_tokens` (`internal/terminal/usage_kiro.go`), so the ring
@@ -175,24 +175,9 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   no ref reaches, so a `git gc --prune` in that checkout between one run and the next leaves the panel
   reporting a failure rather than an absent turn. And the boundary is the session-state contract, so
   **Crush and Cursor CLI have no last turn at all**: neither reports a state
-  (`docs/hooks/session-state.md`), so nothing ever opens or closes a window there and the switch is never
-  drawn — a rule read off the session's own reports, not a list of providers, so it corrects itself the day
-  either one starts reporting.
-- **The recap beside that diff answers to a different clock, and to a different set of providers**
-  (`internal/terminal/said.go`): the band reads the last thing the agent *said* out of the provider's own
-  transcript, where the diff beside it brackets the window a turn ran in. The two agree once a turn has
-  finished — which is the only time a diff is offered — but mid-turn the band still shows the previous
-  turn's words with no date on them, beside a diff that reads "unavailable"; nothing in the panel says
-  which turn is speaking, and only the card's spinner does. The read is a bounded tail for the reason the
-  transcript search's is (`searchTailBytes`), so a turn whose closing words sit behind more than 4 MB of
-  tool output shows none — the band simply does not appear, which is also what a turn that ended on a tool
-  call looks like. And its provider list is *not* the one the switch above it is drawn from: seven of the
-  eight are read, and the one that is not — Cursor CLI — is also one of the two with no last turn to begin
-  with, so that gap is invisible today. Crush is the other, and its gap is not: its words are read and never
-  drawn, because nothing above it ever opens a window to draw them in. Both would surface the moment either
-  started reporting a state. Kiro CLI was on that list and silent in practice until the palette's search
-  reused the same reader: its block payloads are typed per block kind, and declaring one as a string failed
-  every line where the agent thought before it spoke — which is nearly all of them.
+  (`docs/hooks/session-state.md`), so nothing ever opens or closes a window there, and neither the switch nor
+  the recap band beside it is ever drawn — a rule read off the session's own reports, not a list of providers,
+  so it corrects itself the day either one starts reporting.
 - **A finished turn is unread until its own card is watched** (`frontend/src/lib/session/session-status-store.ts`,
   `frontend/src/providers/projects.tsx`): the solid emerald ring means "back from the agent, not read yet", and it
   fades only for the session whose terminal is on screen **while the window has focus**. A card left focused in a

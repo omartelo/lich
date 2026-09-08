@@ -1,4 +1,5 @@
 import type { LastTurn } from "@/lib/api-types"
+import type { SessionStatus } from "@/lib/session/session-events"
 
 // What the Review panel draws for the session's last finished turn. The three
 // answers are kept apart because conflating them is the one mistake this
@@ -32,4 +33,16 @@ export function lastTurnNotice(state: LastTurn["state"] | null, fileCount: numbe
 // offered the working tree alone, which is the whole point of the gate.
 export function turnSwitchable(everReported: boolean, hasLastTurn: boolean): boolean {
   return everReported || hasLastTurn
+}
+
+// saidNote is what the recap band says about whose words it is showing. The
+// band reads the last thing the agent said, which is not always the turn the
+// diff beside it brackets: while a turn is running those are still the previous
+// turn's words, next to a diff that reads "unavailable" until the window closes.
+//
+// "" for every other state, and deliberately including "waiting": that report
+// covers both a session blocked mid-turn and one sitting at its prompt with the
+// turn already over, and a label naming the wrong turn is worse than none.
+export function saidNote(status: SessionStatus | null): string {
+  return status === "busy" ? "from the previous turn" : ""
 }

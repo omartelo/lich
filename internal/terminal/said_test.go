@@ -132,32 +132,32 @@ func TestSaidReadersPickTheLastProse(t *testing.T) {
 			if err := os.WriteFile(path, []byte(strings.Join(tc.body, "\n")+"\n"), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			if got := lastSaidInTail(path, tc.read); got != tc.want {
-				t.Errorf("lastSaidInTail = %q, want %q", got, tc.want)
+			if got := new(saidCursors).walk("s1", path, tc.read); got != tc.want {
+				t.Errorf("walk = %q, want %q", got, tc.want)
 			}
 		})
 	}
 }
 
-// TestLastSaidInTailSkipsAHalfLine pins that a tail cut mid-line — the ordinary
-// state of a bounded read — costs the cut line and nothing else.
-func TestLastSaidInTailSkipsAHalfLine(t *testing.T) {
+// TestSaidWalkSkipsAHalfLine pins that a line the seed tail cut in half costs
+// the cut line and nothing else.
+func TestSaidWalkSkipsAHalfLine(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "transcript.jsonl")
 	body := `ontent":[{"type":"text","text":"cut in half"}]}}` + "\n" +
 		`{"type":"assistant","message":{"content":[{"type":"text","text":"whole line"}]}}` + "\n"
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := lastSaidInTail(path, claudeTurn); got != "whole line" {
-		t.Errorf("lastSaidInTail = %q, want the whole line", got)
+	if got := new(saidCursors).walk("s1", path, claudeTurn); got != "whole line" {
+		t.Errorf("walk = %q, want the whole line", got)
 	}
 }
 
-// TestSaidForRoutesByProvider walks the dispatch itself: the same source struct
+// TestSaidRoutesByProvider walks the dispatch itself: the same source struct
 // with a different kind must reach a reader that understands that provider's
 // format, and Kiro must reach the `.jsonl` rather than the `.json` its source
 // carries — the one arm that transforms the path it is given.
-func TestSaidForRoutesByProvider(t *testing.T) {
+func TestSaidRoutesByProvider(t *testing.T) {
 	tests := []struct {
 		kind string
 		// name of the file to plant; the source's path is `file` unless the
@@ -197,18 +197,18 @@ func TestSaidForRoutesByProvider(t *testing.T) {
 			}
 			src := usageSource{kind: tc.kind, path: filepath.Join(dir, tc.path), id: "x"}
 			want := tc.kind + " here"
-			if got := saidFor(src); got != want {
-				t.Errorf("saidFor(%s) = %q, want %q", tc.kind, got, want)
+			if got := new(saidCursors).said("s1", src); got != want {
+				t.Errorf("said(%s) = %q, want %q", tc.kind, got, want)
 			}
 		})
 	}
 }
 
-// TestSaidForReadsTheOpenCodeDatabase covers the one provider whose conversation
+// TestSaidReadsTheOpenCodeDatabase covers the one provider whose conversation
 // is a database rather than a file, against the schema opencode writes: the role
 // lives on the message row and the text on a part row beside it, so the join is
 // what keeps a tool result from being read as the agent's own words.
-func TestSaidForReadsTheOpenCodeDatabase(t *testing.T) {
+func TestSaidReadsTheOpenCodeDatabase(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "opencode.db")
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
@@ -235,17 +235,18 @@ func TestSaidForReadsTheOpenCodeDatabase(t *testing.T) {
 	}
 
 	src := usageSource{kind: providers.OpenCode, path: path, id: "ses_1"}
-	if got := saidFor(src); got != "Shipped." {
-		t.Errorf("saidFor = %q, want the newest assistant text part", got)
+	if got := new(saidCursors).said("s1", src); got != "Shipped." {
+		t.Errorf("said = %q, want the newest assistant text part", got)
 	}
 }
 
-// TestSaidForIsEmptyForCursor pins the one provider neither mechanism reaches:
+// TestSaidIsEmptyForCursor pins the one provider neither mechanism reaches:
 // a chat filed as content-addressed blobs is not a transcript to walk and not a
 // query to run, so the read is empty rather than wrong (docs/ceilings.md).
-func TestSaidForIsEmptyForCursor(t *testing.T) {
-	if got := saidFor(usageSource{kind: providers.Cursor, path: "/nope", id: "x"}); got != "" {
-		t.Errorf("saidFor(cursor) = %q, want empty", got)
+func TestSaidIsEmptyForCursor(t *testing.T) {
+	src := usageSource{kind: providers.Cursor, path: "/nope", id: "x"}
+	if got := new(saidCursors).said("s1", src); got != "" {
+		t.Errorf("said(cursor) = %q, want empty", got)
 	}
 }
 
@@ -279,5 +280,117 @@ func TestCapRunesKeepsBothEnds(t *testing.T) {
 	}
 	if short := capRunes("short", 30); short != "short" {
 		t.Errorf("capRunes cut a text under the cap: %q", short)
+	}
+}
+
+// TestSaidCursorContinuesWhereItStopped is the read the band rides on once a
+// session is open: the first walk seeds itself, and every walk after it covers
+// only what was appended. So the answer stands while a turn buries it under
+// tool output (the band used to go empty there, which is what a turn that
+// ended on a tool call looks like), and a new turn's words replace it.
+func TestSaidCursorContinuesWhereItStopped(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "t.jsonl")
+	writeLines(t, path, saidLine("First turn."))
+	var cursors saidCursors
+
+	if got := cursors.walk("s1", path, claudeTurn); got != "First turn." {
+		t.Fatalf("first walk = %q, want the seeded answer", got)
+	}
+	appendLines(t, path, saidPad(64<<10))
+	if got := cursors.walk("s1", path, claudeTurn); got != "First turn." {
+		t.Errorf("walk over tool output = %q, want the answer to stand", got)
+	}
+	appendLines(t, path, saidLine("Second turn."))
+	if got := cursors.walk("s1", path, claudeTurn); got != "Second turn." {
+		t.Errorf("walk = %q, want the newest turn's words", got)
+	}
+}
+
+// TestSaidCursorKeepsWordsBehindTheTailBound is the bound itself gone. A turn
+// whose closing words end up behind more tool output than a tail read holds
+// (one tool result is enough) used to leave the band empty, which is what a turn
+// that ended on a tool call looks like. The cursor walks what was appended and
+// keeps the words it already read.
+func TestSaidCursorKeepsWordsBehindTheTailBound(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "t.jsonl")
+	writeLines(t, path, saidLine("Three failures."))
+	var cursors saidCursors
+	if got := cursors.walk("s1", path, claudeTurn); got != "Three failures." {
+		t.Fatalf("first walk = %q", got)
+	}
+
+	appendLines(t, path, saidPad(searchTailBytes+(1<<20)))
+	if got := cursors.walk("s1", path, claudeTurn); got != "Three failures." {
+		t.Errorf("walk = %q, want the words the tool output buried", got)
+	}
+}
+
+// TestSaidCursorSeedsPastAHugeToolResult covers the same bound on the one read
+// that has no cursor to continue from. A first walk starts at the tail, and a
+// tail holding no prose at all (one tool result larger than it) is walked
+// again from the start rather than answered empty.
+func TestSaidCursorSeedsPastAHugeToolResult(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "t.jsonl")
+	writeLines(t, path, saidLine("Behind the wall."), saidPad(searchTailBytes+(1<<20)))
+
+	if got := new(saidCursors).walk("s1", path, claudeTurn); got != "Behind the wall." {
+		t.Errorf("walk = %q, want the words behind the tool output", got)
+	}
+}
+
+// TestSaidCursorResetsOnANewTranscript pins the two states an offset must never
+// be trusted in: a file that shrank under it, and a file it was never counted
+// against: a conversation forked or rewritten (see saidCursor).
+func TestSaidCursorResetsOnANewTranscript(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "t.jsonl")
+	writeLines(t, path, saidLine("Long conversation."), saidPad(16<<10))
+	var cursors saidCursors
+	if got := cursors.walk("s1", path, claudeTurn); got != "Long conversation." {
+		t.Fatalf("first walk = %q", got)
+	}
+
+	writeLines(t, path, saidLine("Rewritten."))
+	if got := cursors.walk("s1", path, claudeTurn); got != "Rewritten." {
+		t.Errorf("walk after a shrink = %q, want the rewritten file's words", got)
+	}
+
+	forked := filepath.Join(dir, "fork.jsonl")
+	writeLines(t, forked, saidLine("Forked."))
+	if got := cursors.walk("s1", forked, claudeTurn); got != "Forked." {
+		t.Errorf("walk after a fork = %q, want the new transcript's words", got)
+	}
+}
+
+// saidLine is one Claude assistant turn saying text.
+func saidLine(text string) string {
+	return `{"type":"assistant","message":{"content":[{"type":"text","text":"` + text + `"}]}}`
+}
+
+// saidPad is at least n bytes of the lines every reader rejects: the tool
+// output a real conversation buries its prose under.
+func saidPad(n int) string {
+	line := `{"type":"progress","data":"` + strings.Repeat("x", 1024) + `"}`
+	return strings.TrimSuffix(strings.Repeat(line+"\n", n/len(line)+1), "\n")
+}
+
+func writeLines(t *testing.T, path string, lines ...string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func appendLines(t *testing.T, path string, lines ...string) {
+	t.Helper()
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString(strings.Join(lines, "\n") + "\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
 	}
 }

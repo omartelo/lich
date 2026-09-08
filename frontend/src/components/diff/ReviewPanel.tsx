@@ -6,13 +6,13 @@ import type { LastSaid, LastTurn } from "@/lib/api-types"
 import { onAppEvent } from "@/lib/app-events"
 import { readDiffSource, writeDiffSource, type DiffSource } from "@/lib/dock-prefs"
 import { discardTargets, parseDiff, type DiffFile } from "@/lib/git/diff"
-import { lastTurnNotice, turnSwitchable } from "@/lib/git/last-turn"
+import { lastTurnNotice, saidNote, turnSwitchable } from "@/lib/git/last-turn"
 import { addReviewComment } from "@/lib/review-comments"
 import { ProjectService, Terminal } from "@/lib/rpc"
 import { useActiveSession } from "@/lib/session/use-active-session"
 import { formatAge, subscribeAge } from "@/lib/session/session-age"
 import { isIdEvent, TURN_EVENT } from "@/lib/session/session-events"
-import { useSessionEverReported } from "@/lib/session/use-session-status"
+import { useSessionEverReported, useSessionStatus } from "@/lib/session/use-session-status"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { useInject } from "@/lib/use-inject"
 import { errorText } from "@/lib/utils"
@@ -52,6 +52,10 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
   // state and holds no record has no turn to bracket, so it is offered the
   // working tree alone (turnSwitchable).
   const reported = useSessionEverReported(sessionId)
+  // The recap band reads the last thing the agent said, which mid-turn is the
+  // previous turn's, and the band says so rather than leaving the reader to the
+  // card's spinner (saidNote).
+  const sessionStatus = useSessionStatus(sessionId)
   const switchable = turnSwitchable(reported, hasLastTurn)
   // The source the reviewer picked, read back on every mount because the dock
   // has no shortage of them: it is a ternary between two component types, so
@@ -206,7 +210,7 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
   return (
     <div className="flex h-full flex-col">
       {switchable && <SourceRow source={source} onSource={changeSource} endedAt={endedAt} />}
-      {source === "turn" && said !== "" && <SaidBand text={said} />}
+      {source === "turn" && said !== "" && <SaidBand text={said} note={saidNote(sessionStatus)} />}
       <div className="flex-1 overflow-y-auto">
         <PanelBody
           source={source}
@@ -234,19 +238,25 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
 }
 
 // SaidBand is the agent's own closing words for the shown turn, above the files
-// it changed. A band rather than a card: it shares the panel's edges and is set
-// apart by its ground alone, because the diff below is the object that carries
-// the hierarchy.
+// it changed, under a label naming which turn spoke them whenever that is not
+// the turn below (see saidNote). A band rather than a card: it shares the
+// panel's edges and is set apart by its ground alone, because the diff below is
+// the object that carries the hierarchy.
 //
 // It sits outside the scrolling body and scrolls in its own right, so a turn
 // that ended in a long report cannot push the file list off screen. The text is
 // rendered as text — the agent writes markdown, and a panel that parsed it would
 // be claiming to know which provider's flavour this is.
-function SaidBand({ text }: { text: string }) {
+function SaidBand({ text, note }: { text: string; note: string }) {
   return (
     <div className="flex shrink-0 flex-col gap-1 border-b border-border bg-muted px-2.5 pt-2 pb-2.5">
-      <span className="text-2xs font-medium tracking-wider text-muted-foreground uppercase">
-        Said
+      <span className="flex items-baseline gap-1.5">
+        <span className="text-2xs font-medium tracking-wider text-muted-foreground uppercase">
+          Said
+        </span>
+        {/* Which turn is speaking: the one thing the words themselves cannot
+            say, and the diff beside them has no window to date while it runs. */}
+        {note !== "" && <span className="text-2xs text-muted-foreground">{note}</span>}
       </span>
       <p className="max-h-32 overflow-y-auto whitespace-pre-wrap text-xs">{text}</p>
     </div>
