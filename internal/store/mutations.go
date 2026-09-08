@@ -716,6 +716,25 @@ func (s *Service) SessionSandbox(sessionID string) string {
 	return sandbox.String
 }
 
+// SessionExists reports whether a session's row is still there, open or
+// parked, the two states a row can be in; only a delete removes it. It is what
+// tells lich's dropped-file copies apart from the ones an unclean exit
+// orphaned (internal/drop): the copies of a session that still exists are
+// still worth keeping, whatever their age.
+//
+// A read that failed answers true: the row not being readable is not the row
+// being gone, and the caller deletes on a false.
+func (s *Service) SessionExists(sessionID string) bool {
+	var exists bool
+	if err := s.db.QueryRow(
+		`SELECT EXISTS (SELECT 1 FROM sessions WHERE id = ?)`, sessionID,
+	).Scan(&exists); err != nil {
+		slog.Warn("session exists", "session", sessionID, "err", err)
+		return true
+	}
+	return exists
+}
+
 // SetProviderSession records the provider conversation id running inside a lich
 // session's PTY, reported by the provider's session-start hook. A session whose
 // row does not exist yet (the hook racing session persistence) matches nothing

@@ -12,7 +12,8 @@
 //     on the user's file.
 //   - Upload: for anything neither tree holds, keep a copy under the config dir
 //     and paste the copy's path. Reading it works; editing it edits the copy —
-//     which is why Resolve is tried first. The copies expire (see Prune).
+//     which is why Resolve is tried first, and why the copy's path never lands
+//     at a prompt without the line that says so (copyNotice).
 //
 // A confined session takes the second way far more often, and has to: its home
 // is an empty private one (internal/sandbox), so a path found under the real
@@ -24,7 +25,8 @@
 // The copies are kept one directory per session, and that is the unit they are
 // deleted in: a confined session sees its own directory mounted and not the one
 // beside it, and every copy a session was dropped goes when its row does
-// (Purge).
+// (Purge): a copy lives exactly as long as the session it was dropped into,
+// and the clock only ever collects the orphans (Prune).
 //
 // A dropped directory only ever takes the first path: the page can walk one,
 // but copying a tree to paste a path to the copy is not what the drop meant.
@@ -80,10 +82,11 @@ const mtimeSlackMs = 2_000
 // than collisions, and the drop is refused rather than overwriting.
 const maxCopies = 999
 
-// keepDropped is how long a copy outlives its drop. Long enough that a path
-// pasted into a prompt still resolves after a weekend of it sitting unsent,
-// and short enough that the directory cannot grow without bound, which is the
-// only reason it is deleted at all.
+// keepDropped is how long an orphaned copy outlives its drop: one whose
+// session row is already gone, which only a lich that died without deleting it
+// leaves behind. A copy whose session still exists is not aged out at all
+// (prune), so this is the bound on what a crash leaks, not on what a drop
+// lasts.
 const keepDropped = 3 * 24 * time.Hour
 
 // skipDirs are trees a dropped file is never meaningfully found in, and the
@@ -110,6 +113,9 @@ type Service struct {
 	dir string
 	// pick opens the host's file chooser. See SetPicker.
 	pick func(title string) (string, error)
+	// live reports whether a session's row is still there, open or parked. See
+	// New.
+	live func(sessionID string) bool
 }
 
 // SetPicker wires the host's file picker (internal/project), which is what the
@@ -133,12 +139,17 @@ func Dir(configDir string) string {
 // whose source is not there yet is skipped: the first file dropped into a
 // session that opened before the directory existed would land where that
 // session cannot read it.
-func New(configDir string) *Service {
+//
+// live answers whether a session's row still exists, open or parked
+// (store.SessionExists): it is what keeps the age rule off the copies of a
+// session that is still around. A nil one makes every copy an orphan, which is
+// what the tests want and never what a running lich does.
+func New(configDir string, live func(sessionID string) bool) *Service {
 	dir := Dir(configDir)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		slog.Warn("drop: could not create the copies dir", "dir", dir, "err", err)
 	}
-	return &Service{dir: dir}
+	return &Service{dir: dir, live: live}
 }
 
 // Resolve maps each item to its absolute path, or "" when neither the
@@ -330,9 +341,23 @@ func (s *Service) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(map[string]string{"path": path}); err != nil {
+	body := map[string]string{"path": path, "notice": copyNotice(name)}
+	if err := json.NewEncoder(w).Encode(body); err != nil {
 		slog.Warn("drop: encode response", "path", path, "err", err)
 	}
+}
+
+// copyNotice is the line that lands at the prompt under a copy's path, for a
+// drag and for the attach button alike. Nothing about the path itself says it
+// is a copy, so without it an agent told to edit the file edits the copy and
+// reports back as if it had edited the original, and the user reads a path
+// they cannot tell from their own. It is one line of plain text because both
+// of them read the same prompt.
+func copyNotice(name string) string {
+	return fmt.Sprintf(
+		"[lich] copy of %s; the original is not reachable from this session, edits stay in the copy.",
+		name,
+	)
 }
 
 // attachTitle is the file chooser's own title, which is all the dialog says
@@ -340,11 +365,12 @@ func (s *Service) Upload(w http.ResponseWriter, r *http.Request) {
 const attachTitle = "Attach File"
 
 // Attachment is what the picker produced: the path to write at the prompt, and
-// whether that path is a copy's — the caller says so, because nothing about the
-// path itself does. Both empty for a cancelled dialog.
+// the line that goes under it when that path is a copy's (copyNotice), empty
+// when the session opens the file where it lies. Both empty for a cancelled
+// dialog.
 type Attachment struct {
 	Path   string `json:"path"`
-	Copied bool   `json:"copied"`
+	Notice string `json:"notice"`
 }
 
 // Attach opens the file chooser and answers with a path the session can
@@ -383,7 +409,7 @@ func (s *Service) Attach(sessionID, root string, confined bool) (Attachment, err
 	if err != nil {
 		return Attachment{}, err
 	}
-	return Attachment{Path: copied, Copied: true}, nil
+	return Attachment{Path: copied, Notice: copyNotice(filepath.Base(path))}, nil
 }
 
 // under reports whether path is inside root. Both are cleaned but neither is
@@ -493,9 +519,10 @@ func (s *Service) Purge(sessionID string) {
 	}
 }
 
-// Prune deletes copies older than keepDropped. Called after each new copy —
-// which is the only thing that grows the directory — so a lich left running
-// for weeks still clears what earlier drops left behind.
+// Prune deletes the copies of sessions that are gone and older than
+// keepDropped. Called after each new copy, the only thing that grows the
+// directory, so a lich left running for weeks still clears what earlier drops
+// left behind.
 //
 // Age is the backstop, not the rule: a session that ends takes its copies with
 // it (Purge), and what this catches is the session lich never saw end — a
@@ -531,6 +558,13 @@ func (s *Service) prune(empty bool) {
 		path := filepath.Join(s.dir, entry.Name())
 		if !entry.IsDir() {
 			pruneExpired(path, entry, deadline)
+			continue
+		}
+		// A copy is deleted by its session's row, not by the clock: the row
+		// still being there (open or parked) means its paths can still be
+		// pasted, however long ago the file was dropped. Only an orphan ages
+		// out.
+		if s.live != nil && s.live(entry.Name()) {
 			continue
 		}
 		s.pruneSession(path, deadline, empty)

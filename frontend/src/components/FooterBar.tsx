@@ -6,7 +6,6 @@ import { Code, FileText, Paperclip, Diff, GitPullRequestArrow } from "lucide-rea
 import { DropService, Terminal as TerminalService } from "@/lib/rpc"
 import type { DockTab } from "@/components/dock/RightDock"
 import { useActiveSession } from "@/lib/session/use-active-session"
-import { baseName } from "@/lib/paths"
 import { isWindows } from "@/lib/platform"
 import { composeDroppedPaths } from "@/lib/terminal/drop-files"
 import { useGitStatus } from "@/lib/git/use-git-status"
@@ -88,19 +87,15 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
       return
     }
     try {
-      const { path: file, copied } = await DropService.Attach(sessionId, checkout, sandboxed)
+      const { path: file, notice } = await DropService.Attach(sessionId, checkout, sandboxed)
       if (!file) {
         return
       }
       // Composed the way a drop is: quoted, so a path with a space stays one
-      // argument, and bracketed, so the prompt takes it unsent.
-      void TerminalService.Write(sessionId, composeDroppedPaths([file], isWindows))
-      if (copied) {
-        toast.info(`Attached as a copy: ${baseName(file)}`, {
-          description:
-            "This session is sandboxed, so a file outside its checkout is attached as a copy: edits land on the copy, not on your file, and the copy is deleted when the session closes.",
-        })
-      }
+      // argument, bracketed, so the prompt takes it unsent, and carrying the
+      // backend's line when the path is a copy's.
+      const paste = composeDroppedPaths([file], isWindows, notice ? [notice] : [])
+      void TerminalService.Write(sessionId, paste)
     } catch (err) {
       // The backend's own sentence when it has one — it names the ceiling a
       // file was refused for, which nothing here could reconstruct.

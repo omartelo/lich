@@ -23,6 +23,39 @@ func newTestStore(t *testing.T) *Service {
 	return svc
 }
 
+// TestSessionExistsSpansParkedRows: the answer is what internal/drop asks
+// before ageing a dropped-file copy out, and a parked session is one a resume
+// walks straight back into, so its copies are still worth keeping and parking
+// must not read as gone. Only the delete does.
+func TestSessionExistsSpansParkedRows(t *testing.T) {
+	svc := newTestStore(t)
+	if err := svc.AddProject("p1", "alpha", "/tmp/alpha"); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if err := svc.AddSession("p1", "s1", "one", providers.Claude, "", 0, ""); err != nil {
+		t.Fatalf("AddSession: %v", err)
+	}
+
+	if !svc.SessionExists("s1") {
+		t.Error("an open session reads as gone")
+	}
+	if err := svc.CloseSession("p1", "s1", ""); err != nil {
+		t.Fatalf("CloseSession: %v", err)
+	}
+	if !svc.SessionExists("s1") {
+		t.Error("a parked session reads as gone")
+	}
+	if err := svc.DeleteSession("p1", "s1", ""); err != nil {
+		t.Fatalf("DeleteSession: %v", err)
+	}
+	if svc.SessionExists("s1") {
+		t.Error("a deleted session still reads as there")
+	}
+	if svc.SessionExists("never-existed") {
+		t.Error("an unknown id reads as there")
+	}
+}
+
 func TestLoadStateRestoresOpenProjectsAndSessions(t *testing.T) {
 	svc := newTestStore(t)
 

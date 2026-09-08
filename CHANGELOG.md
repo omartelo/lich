@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **A file lich had to copy now says so at the prompt, and the copy lives as
+  long as its session.** A path pasted for a file the session cannot reach
+  (dragged onto the terminal or chosen with the attach button) is followed by
+  one line naming the original, so the agent reads what the user reads instead
+  of editing a copy and reporting the file as changed. Dropping a folder the
+  session cannot reach says so too, rather than doing nothing. The copies are
+  deleted with the session they were dropped into; the three-day sweep now only
+  clears the ones an unclean exit orphaned, so a path pasted a week ago still
+  resolves.
+
 ### Fixed
 
 - **On Windows, lich's own window no longer opens a stray console window beside

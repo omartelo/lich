@@ -137,9 +137,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   for one terminal. The budget suite pins that adding a pane mounts one terminal and remounts none
   (`frontend/src/components/render-budget.test.tsx`); it cannot measure the cadence, because jsdom has
   no canvas to paint.
-- **A dropped file has no path, so lich guesses it** (`internal/drop`): a file under neither the session directory
-  nor home is *copied*, so an agent told to edit it edits the copy — and that copy is deleted 3 days on, so a path
-  pasted into a prompt eventually stops resolving.
 - **An interrupted turn is read off the keystrokes, not from the provider** (`internal/terminal/draft.go`,
   `hookstate.go`, `Service.noteInterrupt`): Claude Code, Codex and oh-my-pi all skip the hook that ends a turn
   when the user stops one, so lich publishes `interrupted` itself when a lone Ctrl+C or Escape reaches a session
@@ -571,16 +568,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   and gh's keyring live outside it, so a confined macOS session never lost either and the switches change
   nothing there — they are inert rather than hidden, and there is no macOS hardware here to prove it further.
   Windows has no sandbox backend, so neither switch exists.
-- **A file handed to a confined session arrives as a copy** (`internal/drop`): the session's home is empty,
-  so lich does not look there for a dropped file at all — anything outside its checkout is copied and the
-  copy's path is what lands at the prompt, for a drag and for the footer's attach button alike. The agent may read it and not write back: an edit lands on the
-  copy, the user's own file is untouched, and nothing on screen distinguishes the two paths afterwards. A
-  dropped *folder* from outside the checkout yields nothing, there being no copy to make of a tree. The
-  copies live one directory per session and only that session's directory is mounted, so one confined
-  session cannot read what was dropped into the one beside it; the directory goes when the session's row is
-  deleted (parking a worktree session keeps it, as a resume still wants those paths). A lich that dies
-  without deleting a row leaves copies behind, and the three-day age rule is what clears them — which also
-  means a copy is the one part of a confined session that outlives the sandbox.
 - **A symlink in the home is not mounted into the sandbox** (`internal/sandbox`): every path lich binds is
   taken as it is on disk, and a link is skipped — following one would let a dotfile manager point the
   private home at whatever it likes, and binding one fails the spawn outright when a parent directory is

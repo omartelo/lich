@@ -29,7 +29,7 @@ func homeAt(t *testing.T, home string) *Service {
 	previous := homeDir
 	homeDir = func() (string, error) { return home, nil }
 	t.Cleanup(func() { homeDir = previous })
-	return New(t.TempDir())
+	return New(t.TempDir(), nil)
 }
 
 // writeFile creates path with size bytes and a known modification time,
@@ -349,7 +349,7 @@ func TestResolveSearchesHomeWhereNothingConfines(t *testing.T) {
 func TestUploadAnswersPreflight(t *testing.T) {
 	recorder := httptest.NewRecorder()
 
-	New(t.TempDir()).Upload(recorder, httptest.NewRequest(http.MethodOptions, "/drop", nil))
+	New(t.TempDir(), nil).Upload(recorder, httptest.NewRequest(http.MethodOptions, "/drop", nil))
 
 	if recorder.Code != http.StatusNoContent {
 		t.Fatalf("preflight = %d, want %d", recorder.Code, http.StatusNoContent)
@@ -367,7 +367,7 @@ func TestUploadRefusesOtherMethods(t *testing.T) {
 			recorder := httptest.NewRecorder()
 
 			target := "/drop?name=shot.png&session=s1"
-			New(t.TempDir()).Upload(recorder, httptest.NewRequest(method, target, nil))
+			New(t.TempDir(), nil).Upload(recorder, httptest.NewRequest(method, target, nil))
 
 			if recorder.Code != http.StatusMethodNotAllowed {
 				t.Fatalf("%s = %d, want %d", method, recorder.Code, http.StatusMethodNotAllowed)
@@ -386,7 +386,7 @@ func TestUploadStoresBytes(t *testing.T) {
 	target := "/drop?name=shot.png&session=s1"
 	request := httptest.NewRequest(http.MethodPost, target, strings.NewReader("bytes"))
 
-	New(dir).Upload(recorder, request)
+	New(dir, nil).Upload(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("upload = %d (%s), want %d", recorder.Code, recorder.Body, http.StatusOK)
@@ -408,6 +408,41 @@ func TestUploadStoresBytes(t *testing.T) {
 	}
 }
 
+// TestCopyNoticeAnnouncesTheCopy pins the line itself, word for word: it is
+// the only thing at the prompt that tells a copy's path from the user's own,
+// and both readers act on it: the agent decides whether an edit is worth
+// making, the user whether the path is the file they meant. Derived from
+// nothing, so rewording it is a decision and not a passing test.
+func TestCopyNoticeAnnouncesTheCopy(t *testing.T) {
+	want := "[lich] copy of shot.png; the original is not reachable from this session, " +
+		"edits stay in the copy."
+
+	if got := copyNotice("shot.png"); got != want {
+		t.Fatalf("copyNotice = %q, want %q", got, want)
+	}
+}
+
+// TestUploadAnswersWithTheNotice: a dropped file is uploaded by the page, so
+// the line has to come back with the path or the drag would paste a bare copy's
+// path while the attach button announces its own.
+func TestUploadAnswersWithTheNotice(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	target := "/drop?name=shot.png&session=s1"
+	request := httptest.NewRequest(http.MethodPost, target, strings.NewReader("bytes"))
+
+	New(t.TempDir(), nil).Upload(recorder, request)
+
+	var answer struct {
+		Notice string `json:"notice"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &answer); err != nil {
+		t.Fatalf("decode %s: %v", recorder.Body, err)
+	}
+	if want := copyNotice("shot.png"); answer.Notice != want {
+		t.Fatalf("notice = %q, want %q", answer.Notice, want)
+	}
+}
+
 // TestUploadRejectsBadName keeps a dropped name from steering the write out of
 // the copies directory — the name is attacker-shaped input in the sense that
 // nothing about a drop guarantees its shape.
@@ -419,7 +454,7 @@ func TestUploadRejectsBadName(t *testing.T) {
 			target := "/drop?session=s1&name=" + url.QueryEscape(name)
 			request := httptest.NewRequest(http.MethodPost, target, strings.NewReader("x"))
 
-			New(dir).Upload(recorder, request)
+			New(dir, nil).Upload(recorder, request)
 
 			if name == "../../etc/passwd" || name == "/etc/passwd" {
 				// Base() reduces a traversal to its last element, which is a
@@ -469,7 +504,7 @@ func agedCopy(t *testing.T, service *Service, session, name string, age time.Dur
 // the constant moves with it, and would stay green for a window widened to a
 // week or a month.
 func TestPruneDeletesOnlyExpiredCopies(t *testing.T) {
-	service := New(t.TempDir())
+	service := New(t.TempDir(), nil)
 	expired := agedCopy(t, service, "s1", "old.png", 4*24*time.Hour)
 	kept := agedCopy(t, service, "s1", "recent.png", 2*24*time.Hour)
 
@@ -483,11 +518,47 @@ func TestPruneDeletesOnlyExpiredCopies(t *testing.T) {
 	}
 }
 
+// TestPruneKeepsTheCopiesOfALiveSession: the row is what deletes a copy
+// (Purge), so the clock may only ever collect what no row owns. A copy older
+// than any deadline still resolves while its session is there to paste it
+// into, parked included, since a resume wants those paths back.
+func TestPruneKeepsTheCopiesOfALiveSession(t *testing.T) {
+	service := New(t.TempDir(), func(sessionID string) bool { return sessionID == "live" })
+	kept := agedCopy(t, service, "live", "old.png", 30*24*time.Hour)
+	orphan := agedCopy(t, service, "gone", "old.png", 4*24*time.Hour)
+
+	service.Prune()
+	// Startup's pass is the other caller, and it may remove a session directory
+	// outright: a live row's must survive that too.
+	service.PruneStale()
+
+	if _, err := os.Stat(kept); err != nil {
+		t.Fatalf("a live session's copy was aged out: %v", err)
+	}
+	if _, err := os.Stat(orphan); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("the orphaned copy is still there (%v)", err)
+	}
+}
+
+// TestPruneKeepsAnOrphanInsideTheWindow: a row that is gone is what puts a copy
+// on the clock, and the clock is still a window: a lich that died a minute ago
+// leaves paths that were pasted a minute before that.
+func TestPruneKeepsAnOrphanInsideTheWindow(t *testing.T) {
+	service := New(t.TempDir(), func(string) bool { return false })
+	kept := agedCopy(t, service, "gone", "recent.png", 2*24*time.Hour)
+
+	service.Prune()
+
+	if _, err := os.Stat(kept); err != nil {
+		t.Fatalf("an orphan inside the window was deleted: %v", err)
+	}
+}
+
 // TestSavePrunes is the trigger that matters most: a lich left running for
 // weeks never restarts, so the copy that grows the directory is what has to
 // clear the ones before it.
 func TestSavePrunes(t *testing.T) {
-	service := New(t.TempDir())
+	service := New(t.TempDir(), nil)
 	expired := agedCopy(t, service, "s1", "old.png", 4*24*time.Hour)
 
 	fresh, err := service.Save("s1", "new.png", strings.NewReader("bytes"))
@@ -519,7 +590,7 @@ func (r *failingReader) Read(p []byte) (int, error) {
 // no path was ever pasted — a truncated file under that name would be waste
 // the next drop of the same file has to route around.
 func TestSaveLeavesNothingBehindOnFailure(t *testing.T) {
-	service := New(t.TempDir())
+	service := New(t.TempDir(), nil)
 
 	if _, err := service.Save("s1", "shot.png", &failingReader{}); err == nil {
 		t.Fatal("Save reported success on a body that failed")
@@ -538,7 +609,7 @@ func TestSaveLeavesNothingBehindOnFailure(t *testing.T) {
 // user cleared it, or the config directory is on a volume that went away. Not
 // a fault, and not something a prune may report as one.
 func TestPruneWithoutCopiesDir(t *testing.T) {
-	service := New(t.TempDir())
+	service := New(t.TempDir(), nil)
 	if err := os.RemoveAll(service.dir); err != nil {
 		t.Fatalf("remove copies dir: %v", err)
 	}
@@ -550,7 +621,7 @@ func TestPruneWithoutCopiesDir(t *testing.T) {
 // TestSaveKeepsEarlierDrops pins the no-overwrite rule: the first copy's path
 // may still be sitting unsent in a prompt when the second file lands.
 func TestSaveKeepsEarlierDrops(t *testing.T) {
-	service := New(t.TempDir())
+	service := New(t.TempDir(), nil)
 
 	first, err := service.Save("s1", "shot.png", strings.NewReader("one"))
 	if err != nil {
@@ -581,7 +652,7 @@ func TestSaveKeepsEarlierDrops(t *testing.T) {
 // written as literals — deriving them from maxCopies would follow the constant
 // wherever it moved and never fail.
 func TestSaveRefusesAnExhaustedName(t *testing.T) {
-	service := New(t.TempDir())
+	service := New(t.TempDir(), nil)
 	dir := filepath.Join(service.dir, "s1")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -612,7 +683,7 @@ func TestSaveRefusesAnExhaustedName(t *testing.T) {
 func TestNewCreatesTheCopiesDir(t *testing.T) {
 	config := t.TempDir()
 
-	service := New(config)
+	service := New(config, nil)
 
 	info, err := os.Stat(service.dir)
 	if err != nil || !info.IsDir() {
@@ -630,7 +701,7 @@ func TestUploadRejectsAMissingSession(t *testing.T) {
 			target := "/drop?name=shot.png&session=" + url.QueryEscape(session)
 			request := httptest.NewRequest(http.MethodPost, target, strings.NewReader("x"))
 
-			New(t.TempDir()).Upload(recorder, request)
+			New(t.TempDir(), nil).Upload(recorder, request)
 
 			if recorder.Code != http.StatusBadRequest {
 				t.Fatalf("upload = %d, want %d", recorder.Code, http.StatusBadRequest)
@@ -648,7 +719,7 @@ func TestUploadKeepsATraversingSessionInside(t *testing.T) {
 	target := "/drop?name=shot.png&session=" + url.QueryEscape("../../evil")
 	request := httptest.NewRequest(http.MethodPost, target, strings.NewReader("x"))
 
-	New(config).Upload(recorder, request)
+	New(config, nil).Upload(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("upload = %d (%s), want %d", recorder.Code, recorder.Body, http.StatusOK)
@@ -668,7 +739,7 @@ func TestUploadKeepsATraversingSessionInside(t *testing.T) {
 // copies exist for the conversation they were dropped into, and the session
 // closing is what ends them — with the copies of every other session untouched.
 func TestPurgeDeletesOneSessionsCopies(t *testing.T) {
-	service := New(t.TempDir())
+	service := New(t.TempDir(), nil)
 	gone := agedCopy(t, service, "s1", "shot.png", time.Minute)
 	kept := agedCopy(t, service, "s2", "shot.png", time.Minute)
 
@@ -685,7 +756,7 @@ func TestPurgeDeletesOneSessionsCopies(t *testing.T) {
 // TestPurgeRefusesToLeaveTheCopiesDir: Purge is handed a session id, and the
 // one thing it may never do is take a path out of the tree it owns.
 func TestPurgeRefusesToLeaveTheCopiesDir(t *testing.T) {
-	service := New(t.TempDir())
+	service := New(t.TempDir(), nil)
 	kept := agedCopy(t, service, "s1", "shot.png", time.Minute)
 
 	for _, session := range []string{"", ".", "..", "../"} {
@@ -705,7 +776,7 @@ func TestPurgeRefusesToLeaveTheCopiesDir(t *testing.T) {
 // under a live session would leave every later copy of that session invisible
 // inside the sandbox. A drop by another session must not do that.
 func TestPruneKeepsAnEmptySessionDir(t *testing.T) {
-	service := New(t.TempDir())
+	service := New(t.TempDir(), nil)
 	expired := agedCopy(t, service, "s1", "old.png", 4*24*time.Hour)
 	dir := filepath.Dir(expired)
 
@@ -723,7 +794,7 @@ func TestPruneKeepsAnEmptySessionDir(t *testing.T) {
 // spawned yet, so a directory with nothing left in it belongs to a session that
 // is over — the crash that never reported one gone.
 func TestPruneStaleRemovesEmptySessionDirs(t *testing.T) {
-	service := New(t.TempDir())
+	service := New(t.TempDir(), nil)
 	expired := agedCopy(t, service, "s1", "old.png", 4*24*time.Hour)
 	kept := agedCopy(t, service, "s2", "recent.png", time.Minute)
 
@@ -758,7 +829,7 @@ func TestAttachKeepsAPathTheSessionCanOpen(t *testing.T) {
 	root := t.TempDir()
 	want := filepath.Join(root, "src", "app.ts")
 	writeFile(t, want, 12, time.Now())
-	service := New(t.TempDir())
+	service := New(t.TempDir(), nil)
 	pick, _ := pickerAt(want, nil)
 	service.SetPicker(pick)
 
@@ -767,8 +838,8 @@ func TestAttachKeepsAPathTheSessionCanOpen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Attach: %v", err)
 	}
-	if got.Path != want || got.Copied {
-		t.Fatalf("Attach = %+v, want the file's own path", got)
+	if got.Path != want || got.Notice != "" {
+		t.Fatalf("Attach = %+v, want the file's own path and nothing to announce", got)
 	}
 }
 
@@ -781,7 +852,7 @@ func TestAttachCopiesForAConfinedSession(t *testing.T) {
 	if err := os.WriteFile(elsewhere, []byte("bytes"), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	service := New(t.TempDir())
+	service := New(t.TempDir(), nil)
 	pick, _ := pickerAt(elsewhere, nil)
 	service.SetPicker(pick)
 
@@ -790,8 +861,14 @@ func TestAttachCopiesForAConfinedSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Attach: %v", err)
 	}
-	if want := filepath.Join(service.dir, "s1", "spec.pdf"); got.Path != want || !got.Copied {
+	if want := filepath.Join(service.dir, "s1", "spec.pdf"); got.Path != want {
 		t.Fatalf("Attach = %+v, want a copy at %s", got, want)
+	}
+	// The copy is announced by the name the user picked, not by the copy's own:
+	// a second attachment of the same name lands as spec-2.pdf, which says
+	// nothing to whoever chose spec.pdf in the dialog.
+	if want := copyNotice("spec.pdf"); got.Notice != want {
+		t.Fatalf("Attach notice = %q, want %q", got.Notice, want)
 	}
 	if bytes, err := os.ReadFile(got.Path); err != nil || string(bytes) != "bytes" {
 		t.Fatalf("copy = %q (%v), want %q", bytes, err, "bytes")
@@ -815,7 +892,7 @@ func TestAttachLeavesAnUnconfinedSessionAlone(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			canConfine(t, tt.backend)
-			service := New(t.TempDir())
+			service := New(t.TempDir(), nil)
 			pick, _ := pickerAt(elsewhere, nil)
 			service.SetPicker(pick)
 
@@ -824,7 +901,7 @@ func TestAttachLeavesAnUnconfinedSessionAlone(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Attach: %v", err)
 			}
-			if got.Path != elsewhere || got.Copied {
+			if got.Path != elsewhere || got.Notice != "" {
 				t.Fatalf("Attach = %+v, want %q uncopied", got, elsewhere)
 			}
 		})
@@ -834,13 +911,13 @@ func TestAttachLeavesAnUnconfinedSessionAlone(t *testing.T) {
 // A cancelled dialog is the user changing their mind, not a failure to report.
 func TestAttachAnswersACancelledDialog(t *testing.T) {
 	canConfine(t, true)
-	service := New(t.TempDir())
+	service := New(t.TempDir(), nil)
 	pick, _ := pickerAt("", nil)
 	service.SetPicker(pick)
 
 	got, err := service.Attach("s1", t.TempDir(), true)
 
-	if err != nil || got.Path != "" || got.Copied {
+	if err != nil || got.Path != "" || got.Notice != "" {
 		t.Fatalf("Attach = %+v (%v), want an empty answer", got, err)
 	}
 }
@@ -866,7 +943,7 @@ func TestAttachRefusesWhatItCannotCopy(t *testing.T) {
 		{"no session to keep it under", huge, ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			service := New(t.TempDir())
+			service := New(t.TempDir(), nil)
 			pick, _ := pickerAt(tt.path, nil)
 			service.SetPicker(pick)
 
@@ -880,7 +957,7 @@ func TestAttachRefusesWhatItCannotCopy(t *testing.T) {
 // TestAttachWithoutAPicker: the wiring is startup's, and a service without it
 // has no dialog to open — which must not read as a cancelled one.
 func TestAttachWithoutAPicker(t *testing.T) {
-	if _, err := New(t.TempDir()).Attach("s1", t.TempDir(), true); err == nil {
+	if _, err := New(t.TempDir(), nil).Attach("s1", t.TempDir(), true); err == nil {
 		t.Fatal("Attach reported success with no picker wired")
 	}
 }
@@ -888,7 +965,7 @@ func TestAttachWithoutAPicker(t *testing.T) {
 // TestAttachReportsAFailedDialog keeps the picker's own failure from arriving as
 // a path nobody chose.
 func TestAttachReportsAFailedDialog(t *testing.T) {
-	service := New(t.TempDir())
+	service := New(t.TempDir(), nil)
 	pick, calls := pickerAt("/some/file", errors.New("no display"))
 	service.SetPicker(pick)
 

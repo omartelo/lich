@@ -12,6 +12,10 @@
 // it at all, and everything outside its checkout arrives as a copy — which is
 // the one thing lich writes where such a session can still read it.
 //
+// A copy's path never lands at the prompt alone: the backend writes the line
+// that goes under it (internal/drop.copyNotice), and it is pasted with the
+// path, where the agent and the user read the same sentence.
+//
 // The provider on the other end does the rest — a pasted image path is
 // attached as an image, any other path is read as a path.
 
@@ -22,10 +26,6 @@ import { bracketedPaste } from "./bracketed-paste"
 // Matches internal/drop's maxUpload: bigger than a screenshot or a log is a
 // mis-drag, and the backend refuses it anyway.
 const MAX_UPLOAD_BYTES = 32 << 20
-
-// Matches internal/drop's keepDropped: how long a copy outlives its drop, which
-// is the half of the notice the user cannot find out any other way.
-export const KEEP_DROPPED_DAYS = 3
 
 /** One dropped entry: what the page can say about it, plus its bytes. */
 export interface DroppedFile extends DropItem {
@@ -78,11 +78,11 @@ export interface DropResult {
   /** Names of entries that yielded no path, with why. */
   skipped: string[]
   /**
-   * Names of entries neither tree held, whose path is a copy's — an edit there
-   * never reaches the user's file, and the copy expires. Nothing else in the UI
-   * distinguishes those paths from the real ones.
+   * One line per entry neither tree held, as the backend wrote it: the path
+   * pasted for it is a copy's, and nothing about the path itself says so.
+   * Pasted under the paths (composeDroppedPaths).
    */
-  copied: string[]
+  notices: string[]
 }
 
 /**
@@ -95,9 +95,9 @@ export async function resolveDroppedFiles(
 ): Promise<DropResult> {
   const paths: string[] = []
   const skipped: string[] = []
-  const copied: string[] = []
+  const notices: string[] = []
   if (dropped.length === 0) {
-    return { paths, skipped, copied }
+    return { paths, skipped, notices }
   }
   const items = dropped.map(({ name, size, mtime, dir }) => ({ name, size, mtime, dir }))
   const found = await DropService.Resolve(target.cwd, items, target.confined)
@@ -108,9 +108,10 @@ export async function resolveDroppedFiles(
       continue
     }
     // Nothing to fall back to: a directory cannot be uploaded, and copying one
-    // to paste the copy's path is not the drop the user made.
+    // to paste the copy's path is not the drop the user made. Saying so is the
+    // whole answer for a folder: it is the one drop that yields no path at all.
     if (entry.dir || !entry.blob) {
-      skipped.push(`${entry.name} (${missingFolder(target.confined)})`)
+      skipped.push(`${entry.name} (${FOLDER_REFUSED})`)
       continue
     }
     if (entry.blob.size > MAX_UPLOAD_BYTES) {
@@ -118,28 +119,31 @@ export async function resolveDroppedFiles(
       continue
     }
     try {
-      paths.push(await uploadDroppedFile(target.sessionId, entry.name, entry.blob))
-      copied.push(entry.name)
+      const copy = await uploadDroppedFile(target.sessionId, entry.name, entry.blob)
+      paths.push(copy.path)
+      notices.push(copy.notice)
     } catch {
       skipped.push(entry.name)
     }
   }
-  return { paths, skipped, copied }
+  return { paths, skipped, notices }
 }
 
-// missingFolder is why a dropped folder yielded no path, which is a different
-// sentence for a confined session: its home was never searched, so "not found
-// under your home" would name a search that did not happen.
-function missingFolder(confined: boolean): string {
-  return confined
-    ? "folder outside this sandboxed session's checkout"
-    : "folder not found under this session or your home"
-}
+// FOLDER_REFUSED is why a dropped folder yields no path. Copying a tree to
+// paste the copy's path is not the drop the user made, and a folder the session
+// cannot reach is the one drop lich has no answer for, so it says so instead
+// of dropping the entry on the floor.
+const FOLDER_REFUSED = "folders outside the checkout cannot be handed over; drop files"
 
 // uploadDroppedFile stores one file's bytes on the backend and answers with the
-// path of the copy. Its own endpoint, not the RPC: the body is the file. The
-// session id rides along because the copy is kept under it and deleted with it.
-async function uploadDroppedFile(sessionId: string, name: string, blob: Blob): Promise<string> {
+// path of the copy and the line that goes under it. Its own endpoint, not the
+// RPC: the body is the file. The session id rides along because the copy is
+// kept under it and deleted with it.
+async function uploadDroppedFile(
+  sessionId: string,
+  name: string,
+  blob: Blob,
+): Promise<{ path: string; notice: string }> {
   const { base, token } = endpoint()
   const query = `token=${token}&session=${encodeURIComponent(sessionId)}`
   const url = `${base}/drop?${query}&name=${encodeURIComponent(name)}`
@@ -147,11 +151,11 @@ async function uploadDroppedFile(sessionId: string, name: string, blob: Blob): P
   if (!response.ok) {
     throw new Error(`drop upload: HTTP ${response.status}`)
   }
-  const body = (await response.json()) as { path?: string }
+  const body = (await response.json()) as { path?: string; notice?: string }
   if (!body.path) {
     throw new Error("drop upload: no path in response")
   }
-  return body.path
+  return { path: body.path, notice: body.notice ?? "" }
 }
 
 /**
@@ -159,12 +163,26 @@ async function uploadDroppedFile(sessionId: string, name: string, blob: Blob): P
  * terminal emulator pastes a drop — with a trailing space, so what the user
  * types next does not run into the last path. Empty for an empty drop, which
  * the caller must not write.
+ *
+ * `notices` is what the backend said about the paths that are copies': they go
+ * on their own lines under the paths, inside the same paste, so the prompt
+ * carries them unsent for the agent and the user to read together. The trailing
+ * space gives way to a newline there: what is typed next belongs under the
+ * notice, not on it.
  */
-export function composeDroppedPaths(paths: readonly string[], isWindows = false): string {
+export function composeDroppedPaths(
+  paths: readonly string[],
+  isWindows = false,
+  notices: readonly string[] = [],
+): string {
   if (paths.length === 0) {
     return ""
   }
-  return bracketedPaste(`${paths.map((path) => quotePath(path, isWindows)).join(" ")} `)
+  const line = paths.map((path) => quotePath(path, isWindows)).join(" ")
+  if (notices.length === 0) {
+    return bracketedPaste(`${line} `)
+  }
+  return bracketedPaste(`${line}\n${notices.join("\n")}\n`)
 }
 
 // quotePath keeps a path with spaces — or anything else a shell would act on —

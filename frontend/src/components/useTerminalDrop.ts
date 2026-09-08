@@ -5,21 +5,9 @@ import { isWindows } from "@/lib/platform"
 import {
   composeDroppedPaths,
   type DropTarget,
-  KEEP_DROPPED_DAYS,
   readDroppedFiles,
   resolveDroppedFiles,
 } from "@/lib/terminal/drop-files"
-
-// copyNotice is what a pasted copy costs. A confined session cannot see the
-// user's file at all (internal/sandbox), so the copy is the normal outcome
-// there rather than a fallback, and it dies with the session instead of ageing
-// out.
-function copyNotice(confined: boolean): string {
-  if (confined) {
-    return "This session is sandboxed, so a file outside its checkout is attached as a copy: edits land on the copy, not on your file, and the copy is deleted when the session closes."
-  }
-  return `Not found under this session or your home, so edits land on the copy, not on your file — and the copy is deleted after ${KEEP_DROPPED_DAYS} days.`
-}
 
 // carriesFiles tells a file drag from text dragged out of the app's own UI —
 // a selection, a link — which the terminal leaves alone.
@@ -62,21 +50,17 @@ export function useTerminalDrop(
       return
     }
     void (async () => {
-      const { paths, skipped, copied } = await resolveDroppedFiles(target, dropped)
-      const paste = composeDroppedPaths(paths, isWindows)
+      const { paths, skipped, notices } = await resolveDroppedFiles(target, dropped)
+      // The notices ride in the paste rather than in a toast: a copy's path is
+      // read by the agent, which never sees one, and a toast is gone by the
+      // time anyone acts on the path.
+      const paste = composeDroppedPaths(paths, isWindows, notices)
       if (paste !== "") {
         write(paste)
         focus()
       }
       if (skipped.length > 0) {
         toast.error(`Not attached: ${skipped.join(", ")}`)
-      }
-      // Nothing failed here — the path pasted is simply a copy's, and the two
-      // read alike at the prompt.
-      if (copied.length > 0) {
-        toast.info(`Pasted as a copy: ${copied.join(", ")}`, {
-          description: copyNotice(target.confined),
-        })
       }
     })()
   }

@@ -465,12 +465,13 @@ export interface DropItem {
   dir: boolean
 }
 
-/** internal/drop.Attachment — the path the picker produced, and whether it is a
- * copy's (a confined session cannot open a file outside its checkout). Both
- * empty for a cancelled dialog. */
+/** internal/drop.Attachment: the path the picker produced, and the line that
+ * goes under it when the path is a copy's (a confined session cannot open a
+ * file outside its checkout); the notice is empty otherwise, and both are for a
+ * cancelled dialog. */
 export interface Attachment {
   path: string
-  copied: boolean
+  notice: string
 }
 
 /** internal/themes.Theme — a color theme for the UI tokens and xterm. */

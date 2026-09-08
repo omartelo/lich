@@ -156,7 +156,9 @@ func main() {
 	// Every service the frontend uses goes through the loopback RPC
 	// (internal/rpc). store.Close manages the DB lifecycle and stays Go-only.
 	dispatcher := rpc.New()
-	drops := drop.New(configDir)
+	// db.SessionExists is what keeps the age rule off a live session's copies:
+	// they are deleted by the session's row going away, not by the clock.
+	drops := drop.New(configDir, db.SessionExists)
 	// The other prune runs after each new copy; this one is what clears the
 	// last of them for a lich that is never dropped on again — and the only one
 	// that may remove a session's directory outright, no session having spawned
