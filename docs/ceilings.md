@@ -137,15 +137,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   for one terminal. The budget suite pins that adding a pane mounts one terminal and remounts none
   (`frontend/src/components/render-budget.test.tsx`); it cannot measure the cadence, because jsdom has
   no canvas to paint.
-- **The terminals are outside every error boundary, so a throw in one still takes the window**
-  (`frontend/src/components/common/ErrorBoundary.tsx`, `App.tsx`): the boundaries wrap the screens over
-  the stage and the right dock's panels, and deliberately not `TerminalHost` — catching there means
-  unmounting it, which destroys every session's xterm instance and its DOM, and no remount brings those
-  scrollbacks back. Recovering the window would cost more than the blank one it replaced. So a render
-  throw anywhere under `TerminalHost` — a pane, a terminal's own chrome, the stage's grid — is still
-  the whole tree going, and the only way back is a reload, while the sessions keep running behind it.
-  The trap is reading "lich has error boundaries" as "a render bug can no longer blank the window": the
-  one subtree that owns the most state is the one nothing catches.
 - **A dropped file has no path, so lich guesses it** (`internal/drop`): a file under neither the session directory
   nor home is *copied*, so an agent told to edit it edits the copy — and that copy is deleted 3 days on, so a path
   pasted into a prompt eventually stops resolving.

@@ -10,6 +10,8 @@ interface ErrorBoundaryProps {
   children: ReactNode
   /** Clears the error when it changes: the subtree swapped in is not the one that threw. */
   resetKey?: string
+  /** What the retry offers to do, where "try again" undersells it. */
+  retry?: string
   /** Positioning for the fallback, whose default is to fill whatever it is handed. */
   className?: string
 }
@@ -24,7 +26,9 @@ interface ErrorBoundaryState {
 // while the sessions themselves keep running with nothing on screen saying so.
 // A class is not a style choice here — React offers no hook that catches.
 //
-// Deliberately never around TerminalHost; docs/ceilings.md says what that costs.
+// The stage is caught too. Unmounting it used to destroy every session's xterm;
+// the terminals now outlive their components (lib/terminal/terminal-registry.ts),
+// so the fallback costs a repaint and nothing else.
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { error: null }
 
@@ -63,7 +67,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         </Notice>
         <Button variant="ghost" size="sm" onClick={() => this.setState({ error: null })}>
           <RotateCcw data-icon="inline-start" />
-          Try again
+          {this.props.retry ?? "Try again"}
         </Button>
       </div>
     )

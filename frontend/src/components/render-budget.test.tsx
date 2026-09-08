@@ -331,12 +331,14 @@ test("switching project re-renders the mounted terminals but never remounts one"
 
   // Two commits: the route moves, then p2's session clears its spawn gate and
   // mounts. Three TerminalView renders across them — s1 in both, s4 in the
-  // second — because nothing under TerminalHost is memoized.
+  // second — because nothing under TerminalHost is memoized. Each pane wears an
+  // ErrorBoundary of its own, so it repaints alongside the view it wraps.
   await budget.act(() => navigate("/projects/p2"))
   expect(budget.take()).toEqual({
     HashRouter: 1,
     Router: 1,
     TerminalHost: 2,
+    ErrorBoundary: 3,
     TerminalView: 3,
     ResumeSessionDialog: 2,
     WorktreeCloseDialogs: 2,
@@ -358,6 +360,7 @@ test("switching project re-renders the mounted terminals but never remounts one"
     HashRouter: 1,
     Router: 1,
     TerminalHost: 1,
+    ErrorBoundary: 2,
     TerminalView: 2,
     ResumeSessionDialog: 1,
     WorktreeCloseDialogs: 1,

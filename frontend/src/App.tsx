@@ -120,12 +120,19 @@ function Layout() {
           {/* relative: RightDock overlays this area when in full screen. */}
           <div className="relative flex flex-1 overflow-hidden">
             <div className="relative flex-1 overflow-hidden">
-              {/* TerminalHost is outside on purpose — unmounting it destroys
-                  every session's xterm, and no remount brings those back
-                  (docs/ceilings.md). The screens over it are what is caught:
-                  the fallback takes the same overlay they do, and the route
-                  resets it, so navigating away from a blown screen is enough. */}
-              <TerminalHost />
+              {/* The stage's own chrome — the grid, the seams, the dialogs it
+                  owns. A pane's throw is caught closer, inside TerminalHost,
+                  so this fallback is for the layout around them. Retrying
+                  remounts the host, and every terminal re-attaches from the
+                  registry with its scrollback. A throw inside xterm's own
+                  render loop is not a React render, so nothing here sees it. */}
+              <ErrorBoundary
+                label="The stage"
+                retry="Reload the stage"
+                className="absolute inset-0"
+              >
+                <TerminalHost />
+              </ErrorBoundary>
               <ErrorBoundary
                 label="This screen"
                 resetKey={location.pathname}

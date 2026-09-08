@@ -63,6 +63,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A render bug in the terminal area no longer blanks the window.** The stage
+  and every pane in it are now caught: the pane that stopped rendering says so
+  by name, its neighbours keep painting, and a retry puts it back. The terminals
+  themselves survive it — the same xterm, the same scrollback, the same
+  selection and modes, and output that arrived meanwhile is still there — so
+  recovering no longer means reloading the window over sessions that never
+  stopped running.
 - **A closed project is now findable by name, however long ago it was closed.**
   Only the twenty-five most recent closes were ever offered back, so an older
   project was reachable only by hunting its directory in the folder picker, and
