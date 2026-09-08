@@ -13,6 +13,7 @@ import {
   resolveImplicitSessionKind,
   resolveProjectDefaultProvider,
   sandboxDefaultFor,
+  sandboxDrift,
   sandboxKey,
   sandboxLevel,
   skipLevel,
@@ -593,6 +594,36 @@ describe("sandbox rung", () => {
     ]
     for (const [level, worktree, want] of cases) {
       expect(sandboxDefaultFor(level, worktree)).toBe(want)
+    }
+  })
+
+  // The card compares the answer frozen on its row against the rung the project
+  // is on now. Agreement is silence in both directions; the two disagreements
+  // are what the shield never said.
+  it("names which way a card and its rung disagree", () => {
+    const cases: [SandboxLevel, boolean, boolean, string][] = [
+      ["everywhere", false, true, ""],
+      ["off", false, false, ""],
+      ["worktrees", true, true, ""],
+      ["worktrees", false, false, ""],
+      ["everywhere", false, false, "would-confine"],
+      ["worktrees", true, false, "would-confine"],
+      ["off", false, true, "would-release"],
+      ["worktrees", false, true, "would-release"],
+    ]
+    for (const [level, worktree, confined, want] of cases) {
+      expect(sandboxDrift(level, worktree, confined)).toBe(want)
+    }
+  })
+
+  // "Ask" hands the decision to whoever opened the session, so a ticked box is
+  // not a card out of step with the ladder — there is no ladder answer to be
+  // out of step with.
+  it("never claims drift on the rung that asks", () => {
+    for (const worktree of [false, true]) {
+      for (const confined of [false, true]) {
+        expect(sandboxDrift("ask", worktree, confined)).toBe("")
+      }
     }
   })
 })

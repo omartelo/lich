@@ -222,6 +222,7 @@ export function SessionGroup({
                       key={session.id}
                       session={session}
                       path={projectPath}
+                      projectId={projectId}
                       // Resolved here rather than in the card: the parent can be a
                       // session in another project, which only the workspace-wide
                       // state knows about.

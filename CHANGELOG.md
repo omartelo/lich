@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A session card now says when the sandbox setting moved past it.** A session
+  is confined by the answer it opened with, so changing the rung in Settings
+  never reaches a card already open, and the card's shield said confined or not
+  without ever saying why. A session the rung would confine today now carries a
+  crossed shield, and the tooltip on either side of the disagreement says to
+  reopen the session to apply the setting.
 - **`lich cost` now says whose arithmetic each dollar is.** A new `source`
   column, carried in `--json` and `--csv` too, marks a row `priced` where lich
   derived the money from Claude Code's and Codex's token counts and `reported`
