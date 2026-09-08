@@ -680,15 +680,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   checkout is parked, never collected, and removing it is a `git worktree remove` the user runs themselves.
   The test is the path and only the path — a worktree lich created and the user then moved out of the data dir
   reads as adopted, and one made by hand inside it reads as lich's own.
-- **Parked rows are never swept, and their dropped-file copies expire on the clock instead of at the close**
-  (`internal/store/mutations.go`, `internal/drop`): every close now parks a row, so the sessions table grows
-  monotonically with the sessions a workspace has ever opened — a few hundred bytes each, which is a megabyte
-  or so a year and deliberately not worth a retention timer. Nothing deletes history on a schedule; a row goes
-  when its worktree is removed through lich, when the user forgets it, or when its project is deleted. The one
-  thing that changed underneath is `internal/drop`: `SetSessionGone` still does not fire on a park, so a plain
-  close no longer takes that session's dropped-file copies with it and they fall to the three-day prune. They
-  are unreachable either way — a resume comes back under a fresh id, so the old copies directory can never be
-  addressed again — but they now sit on disk for up to three days rather than going at the close.
 - **The History tab searches names, never what was said** (`internal/terminal/search.go`): the Messages tab
   reads a 4 MB tail or a query per session per keystroke, and it is pointed at the sessions the palette can route to —
   the open ones. History is the long list, so widening the transcript search to it would put a hundred disk
