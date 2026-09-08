@@ -79,13 +79,42 @@ func (c *client) printCost(report store.CostReport) error {
 		fmt.Fprintln(c.stdout, "No sessions matched.")
 		return nil
 	}
-	fmt.Fprintln(c.stdout, "project\tsessions\tunpriced\tcost")
+	fmt.Fprintln(c.stdout, "project\tsessions\tunpriced\tsource\tcost")
 	for _, row := range report.Projects {
-		fmt.Fprintf(c.stdout, "%s\t%d\t%d\t%s\n", row.Project, row.Sessions, row.Unpriced, money(row.CostUSD))
+		fmt.Fprintf(c.stdout, "%s\t%d\t%d\t%s\t%s\n",
+			row.Project, row.Sessions, row.Unpriced, source(row.Source), money(row.CostUSD))
 	}
-	fmt.Fprintf(c.stdout, "total\t%d\t%d\t%s\n", report.Sessions, report.Unpriced, money(report.CostUSD))
+	fmt.Fprintf(c.stdout, "total\t%d\t%d\t%s\t%s\n",
+		report.Sessions, report.Unpriced, source(report.Source), money(report.CostUSD))
+	if line := arithmetic(report); line != "" {
+		fmt.Fprintln(c.stdout, line)
+	}
 	fmt.Fprintln(c.stdout, exclusion(report))
 	return nil
+}
+
+// source is a row's rung as a table cell. A row with nothing to attribute — no
+// money counted in it at all — reads as the absence it is rather than as a gap
+// in the column.
+func source(rung string) string {
+	if rung == "" {
+		return "—"
+	}
+	return rung
+}
+
+// arithmetic names the split when a total spans both rungs. A dollar lich
+// derived from token counts and a dollar the provider reported are the same
+// figure in the money column, and the sum is the one place that difference
+// disappears — the source column has already said which is which per row, so a
+// total on a single rung needs no line at all.
+func arithmetic(report store.CostReport) string {
+	if report.Priced == 0 || report.Reported == 0 {
+		return ""
+	}
+	return fmt.Sprintf(
+		"%d priced by lich, %d reported by their provider.", report.Priced, report.Reported,
+	)
 }
 
 // exclusion words what the total does not cover. Off readout gets its own
@@ -115,15 +144,19 @@ func money(usd float64) string {
 }
 
 // emitCSV writes the per-project rows and no total: a total is the sum of the
-// columns, and the unpriced column travels beside the money, so what the number
-// leaves out survives the export rather than staying behind in lich.
+// columns, and the unpriced and source columns travel beside the money, so what
+// the number leaves out and whose arithmetic it is survive the export rather
+// than staying behind in lich.
 func (c *client) emitCSV(report store.CostReport) error {
-	rows := [][]string{{"project", "sessions", "unpriced", "cost_usd"}}
+	rows := [][]string{{"project", "sessions", "unpriced", "source", "cost_usd"}}
 	for _, row := range report.Projects {
 		rows = append(rows, []string{
 			row.Project,
 			strconv.Itoa(row.Sessions),
 			strconv.Itoa(row.Unpriced),
+			// Empty rather than the table's dash: a script reads a blank cell as
+			// "no rung", and the dash is a thing to print, not a value.
+			row.Source,
 			strconv.FormatFloat(row.CostUSD, 'f', 6, 64),
 		})
 	}

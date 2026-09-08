@@ -89,7 +89,8 @@ var commands = []command{
 		about: "What the sessions lich remembers have cost, per project, at API prices.\n" +
 			"--since keeps the ones active in a window (7d, 24h, 90m). The total\n" +
 			"always says how many sessions it could not price: with any of those,\n" +
-			"it is a lower bound.",
+			"it is a lower bound. The source column says whose arithmetic a row's\n" +
+			"money is — priced here, or reported by the provider that spent it.",
 	},
 	{
 		name: "mcp",

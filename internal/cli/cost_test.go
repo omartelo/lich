@@ -7,11 +7,12 @@ import (
 )
 
 // costBody is a report the fake lich hands back: two projects, one session in
-// them that lich could not price.
+// them that lich could not price, and money off both rungs.
 const costBody = `{"projects":[` +
-	`{"project":"lich","sessions":3,"unpriced":1,"costUsd":4.3125},` +
-	`{"project":"revu","sessions":1,"unpriced":0,"costUsd":0.5}],` +
-	`"sessions":4,"unpriced":1,"costUsd":4.8125,"readout":true}`
+	`{"project":"lich","sessions":3,"unpriced":1,"source":"mixed","costUsd":4.3125},` +
+	`{"project":"revu","sessions":1,"unpriced":0,"source":"reported","costUsd":0.5}],` +
+	`"sessions":4,"unpriced":1,"priced":1,"reported":2,"source":"mixed",` +
+	`"costUsd":4.8125,"readout":true}`
 
 // TestCostPrintsTheTableAndWhatItLeavesOut is the contract of the whole
 // command: the money never appears without the count of what is missing from
@@ -26,10 +27,11 @@ func TestCostPrintsTheTableAndWhatItLeavesOut(t *testing.T) {
 		t.Fatalf("exit = %d (%s)", code, stderr)
 	}
 	for _, want := range []string{
-		"project\tsessions\tunpriced\tcost",
-		"lich\t3\t1\t$4.31",
-		"revu\t1\t0\t$0.50",
-		"total\t4\t1\t$4.81",
+		"project\tsessions\tunpriced\tsource\tcost",
+		"lich\t3\t1\tmixed\t$4.31",
+		"revu\t1\t0\treported\t$0.50",
+		"total\t4\t1\tmixed\t$4.81",
+		"1 priced by lich, 2 reported by their provider.",
 		"Lower bound: 1 unpriced of 4 sessions",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -44,8 +46,8 @@ func TestCostPrintsTheTableAndWhatItLeavesOut(t *testing.T) {
 // A total with nothing missing says so rather than staying silent: "no warning"
 // and "nothing to warn about" are the two readings an empty line leaves open.
 func TestACompleteTotalSaysItIsComplete(t *testing.T) {
-	f := newFakeLich(t, `{"projects":[{"project":"lich","sessions":2,"unpriced":0,"costUsd":1}],`+
-		`"sessions":2,"unpriced":0,"costUsd":1,"readout":true}`)
+	f := newFakeLich(t, `{"projects":[{"project":"lich","sessions":2,"unpriced":0,"source":"priced","costUsd":1}],`+
+		`"sessions":2,"unpriced":0,"priced":2,"source":"priced","costUsd":1,"readout":true}`)
 
 	_, stdout, _ := run(t, f, "cost")
 
@@ -124,8 +126,9 @@ func TestCostRefusesAWindowItCannotRead(t *testing.T) {
 	}
 }
 
-// --json is the whole report, totals and readout flag included, so a script
-// piping this anywhere gets the exclusion with the money.
+// --json is the whole report — totals, the two rung tallies and the readout
+// flag included — so a script piping this anywhere gets the exclusion and the
+// arithmetic behind the money along with it.
 func TestCostEmitsJSON(t *testing.T) {
 	f := newFakeLich(t, costBody)
 
@@ -134,16 +137,19 @@ func TestCostEmitsJSON(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit = %d", code)
 	}
-	for _, want := range []string{`"unpriced":1`, `"costUsd":4.8125`, `"readout":true`} {
+	for _, want := range []string{
+		`"unpriced":1`, `"priced":1`, `"reported":2`, `"source":"mixed"`,
+		`"costUsd":4.8125`, `"readout":true`,
+	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stdout = %q, want it to carry %q", stdout, want)
 		}
 	}
 }
 
-// --csv carries the unpriced column beside the money, which is how the bound
-// survives leaving lich. The exact figure goes out, not the two places the
-// table rounds to.
+// --csv carries the unpriced and source columns beside the money, which is how
+// the bound and whose arithmetic it is survive leaving lich. The exact figure
+// goes out, not the two places the table rounds to.
 func TestCostEmitsCSV(t *testing.T) {
 	f := newFakeLich(t, costBody)
 
@@ -152,7 +158,8 @@ func TestCostEmitsCSV(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit = %d", code)
 	}
-	want := "project,sessions,unpriced,cost_usd\nlich,3,1,4.312500\nrevu,1,0,0.500000\n"
+	want := "project,sessions,unpriced,source,cost_usd\n" +
+		"lich,3,1,mixed,4.312500\nrevu,1,0,reported,0.500000\n"
 	if stdout != want {
 		t.Errorf("stdout = %q, want %q", stdout, want)
 	}
@@ -167,5 +174,35 @@ func TestCostRefusesTwoFormatsAtOnce(t *testing.T) {
 
 	if code != 1 || !strings.Contains(stderr, "usage: lich cost") {
 		t.Errorf("cost --json --csv = %d %q, want the usage line", code, stderr)
+	}
+}
+
+// A total on one rung says so in the source column and adds no line under the
+// table: the split line exists to warn that two kinds of arithmetic were summed,
+// and here they were not.
+func TestCostSplitsTheArithmeticOnlyWhenItIsMixed(t *testing.T) {
+	f := newFakeLich(t, `{"projects":[{"project":"lich","sessions":2,"unpriced":0,"source":"priced","costUsd":1}],`+
+		`"sessions":2,"unpriced":0,"priced":2,"source":"priced","costUsd":1,"readout":true}`)
+
+	_, stdout, _ := run(t, f, "cost")
+
+	if !strings.Contains(stdout, "lich\t2\t0\tpriced\t$1.00") {
+		t.Errorf("stdout = %q, want the row on the priced rung", stdout)
+	}
+	if strings.Contains(stdout, "reported by their provider") {
+		t.Errorf("stdout = %q, want no split line for a total on one rung", stdout)
+	}
+}
+
+// A row with no money to attribute reads as an absence, not as a blank cell a
+// reader has to guess at — and no rung is claimed for it.
+func TestCostMarksARowWithNoRung(t *testing.T) {
+	f := newFakeLich(t, `{"projects":[{"project":"lich","sessions":2,"unpriced":2,"costUsd":0}],`+
+		`"sessions":2,"unpriced":2,"costUsd":0,"readout":true}`)
+
+	_, stdout, _ := run(t, f, "cost")
+
+	if !strings.Contains(stdout, "lich\t2\t2\t—\t$0.00") {
+		t.Errorf("stdout = %q, want the row to mark its missing rung", stdout)
 	}
 }

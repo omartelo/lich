@@ -425,10 +425,11 @@ What the sessions lich still remembers have cost, at API prices, one row per
 project and a total under them:
 
 ```
-project	sessions	unpriced	cost
-lich	12	2	$4.31
-revu	3	0	$0.88
-total	15	2	$5.19
+project	sessions	unpriced	source	cost
+lich	12	2	mixed	$4.31
+revu	3	0	priced	$0.88
+total	15	2	mixed	$5.19
+9 priced by lich, 4 reported by their provider.
 Lower bound: 2 unpriced of 15 sessions — their spend is not in this total.
 ```
 
@@ -446,12 +447,16 @@ unreadable transcript, an unpriced model, a provider lich has no reader for
 (Antigravity and Cursor CLI), or a session that ran while the readout was off
 all land in the same count.
 
-The money it *does* carry comes from two kinds of accounting, and the report
-does not separate them: lich prices Claude Code and Codex itself from their
-token counts, while oh-my-pi, opencode and Crush each report a figure they
-computed themselves, with the omission their own accounting has. How close a
-project's total is therefore depends on which providers ran under it —
-`docs/ceilings.md` has the rung each is on and what each one leaves out.
+**The `source` column is the other half of that contract.** The money comes
+from two kinds of accounting and reads identically either way: `priced` is
+lich's own arithmetic over the token counts Claude Code and Codex write down,
+`reported` is the figure oh-my-pi, opencode or Crush computed themselves and
+handed over, with the omission their own accounting has. A row that ran both
+reads `mixed`, and a total that mixes them adds the line above the last one,
+splitting the counted sessions between the two. A row with no money to
+attribute — every session in it unpriced, or its spend earned by a provider CLI
+started by hand inside a shell session — reads `—` and claims no rung.
+`docs/ceilings.md` has what each rung's own figure leaves out.
 
 With the cost readout switched off, no transcript is ever summed and every
 session is unpriced, so the total can only be `$0.00`. That case adds a second
@@ -479,14 +484,19 @@ The filters:
 columns, `unpriced` included, so the bound survives the export:
 
 ```
-project,sessions,unpriced,cost_usd
-lich,12,2,4.312500
-revu,3,0,0.880000
+project,sessions,unpriced,source,cost_usd
+lich,12,2,mixed,4.312500
+revu,3,0,priced,0.880000
 ```
 
+A row with no rung leaves the `source` cell empty rather than carrying the
+table's dash: to a script a blank is the absence, and the dash is a thing to
+print.
+
 `--json` is the whole report on one line — `projects`, the summed `sessions`,
-`unpriced` and `costUsd`, and `readout` for whether anything is being counted
-at all.
+`unpriced` and `costUsd`, the total's own `source` with the `priced` and
+`reported` session counts behind it, and `readout` for whether anything is
+being counted at all.
 
 It is not registered as an MCP tool. Every tool definition is in the prompt of
 every session lich spawns whether or not it is used (see the ceiling below), and

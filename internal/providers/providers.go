@@ -183,3 +183,39 @@ func (s *Service) Detect() ([]Detected, error) {
 	}
 	return out, nil
 }
+
+// CostSource is whose arithmetic a session's dollars in the cost ledger are.
+// Five providers file a figure there and they reach it two ways, which any
+// report summing them has to be able to say: a dollar lich derived and a dollar
+// Crush reported are the same number on screen and not the same claim.
+type CostSource string
+
+const (
+	// CostSourceNone: no dollars at all. Antigravity and Cursor CLI file their
+	// conversations where lich has no reader, and Kiro CLI meters spend in
+	// credits, not money — and a session running the user's shell was never
+	// spawned as a provider, so whatever it ran by hand is on neither rung.
+	CostSourceNone CostSource = ""
+	// CostSourcePriced: lich prices the conversation itself, from the token
+	// counts the provider writes down (internal/pricing).
+	CostSourcePriced CostSource = "priced"
+	// CostSourceReported: the provider priced its own turns and lich files that
+	// figure unchanged — each bills models no table here knows, so a second
+	// opinion would only be a second, disagreeing number.
+	CostSourceReported CostSource = "reported"
+)
+
+// CostSourceOf says which of the two a provider's spend is, and it is the one
+// answer both the live readout and `lich cost` rely on. The rung is a fact of
+// the provider — what it writes down decides who can price it — so it is
+// answered from the id alone and never recorded per ledger row.
+// docs/ceilings.md carries what each rung's figure leaves out.
+func CostSourceOf(id string) CostSource {
+	switch id {
+	case Claude, Codex:
+		return CostSourcePriced
+	case OMP, OpenCode, Crush:
+		return CostSourceReported
+	}
+	return CostSourceNone
+}

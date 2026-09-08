@@ -3,6 +3,8 @@ package store
 import (
 	"testing"
 	"time"
+
+	"github.com/omartelo/lich/internal/providers"
 )
 
 // costWorkspace opens a store with two projects and the sessions named, so a
@@ -234,5 +236,82 @@ func TestSavingALedgerStampsIt(t *testing.T) {
 	}
 	if stamped < before || stamped > time.Now().Unix()+1 {
 		t.Errorf("stamp = %d, want it inside [%d, now]", stamped, before)
+	}
+}
+
+// TestCostTotalsNamesWhoseArithmeticEachRowIs: the money column reads the same
+// whether lich derived a dollar from token counts or a provider handed its own
+// figure over, so every row says which — and a project that ran both says so
+// too, rather than picking one of the two names.
+func TestCostTotalsNamesWhoseArithmeticEachRowIs(t *testing.T) {
+	svc := costWorkspace(t)
+	bill(t, svc, "p1", "s1", providers.Claude, 2.00)
+	bill(t, svc, "p1", "s2", providers.Crush, 1.00)
+	bill(t, svc, "p2", "s3", providers.OpenCode, 0.50)
+
+	report, err := svc.CostTotals("", "", 0)
+	if err != nil {
+		t.Fatalf("CostTotals: %v", err)
+	}
+	if got := report.Projects[0]; got.Project != "alpha" || got.Source != CostSourceMixed {
+		t.Errorf("alpha = %+v, want its two rungs named as %q", got, CostSourceMixed)
+	}
+	if got := report.Projects[1]; got.Source != string(providers.CostSourceReported) {
+		t.Errorf("beta = %+v, want the opencode row reported by its provider", got)
+	}
+	if report.Priced != 1 || report.Reported != 2 || report.Source != CostSourceMixed {
+		t.Errorf("total = %d priced, %d reported, %q, want 1, 2 and mixed",
+			report.Priced, report.Reported, report.Source)
+	}
+}
+
+// A row on one rung says that rung and nothing else: "mixed" on a project that
+// only ever ran Claude Code would be a warning about a difference that is not
+// there.
+func TestCostTotalsNamesASingleRungPlainly(t *testing.T) {
+	svc := costWorkspace(t)
+	bill(t, svc, "p1", "s1", providers.Claude, 1.00)
+	bill(t, svc, "p1", "s2", providers.Codex, 1.00)
+
+	report, err := svc.CostTotals("", "", 0)
+	if err != nil {
+		t.Fatalf("CostTotals: %v", err)
+	}
+	if got := report.Projects[0].Source; got != string(providers.CostSourcePriced) {
+		t.Errorf("source = %q, want both sessions priced here", got)
+	}
+	if report.Priced != 2 || report.Reported != 0 {
+		t.Errorf("tallies = %d priced, %d reported, want 2 and 0", report.Priced, report.Reported)
+	}
+}
+
+// Money with no rung under it is not attributed to one. A session with nothing
+// counted is on no rung because it carries no dollars; a provider CLI run by
+// hand inside a shell session carries them under a kind lich never spawned as a
+// provider, and guessing which arithmetic priced it is the one thing the column
+// must not do.
+func TestCostTotalsAttributesNoRungItCannotName(t *testing.T) {
+	svc := costWorkspace(t)
+	if err := svc.AddSession("p1", "s1", "unpriced", providers.Antigravity, "", 2, ""); err != nil {
+		t.Fatalf("AddSession: %v", err)
+	}
+	bill(t, svc, "p2", "s2", "shell", 3.00)
+
+	report, err := svc.CostTotals("", "", 0)
+	if err != nil {
+		t.Fatalf("CostTotals: %v", err)
+	}
+	for _, row := range report.Projects {
+		if row.Source != "" {
+			t.Errorf("%s = %+v, want no rung named", row.Project, row)
+		}
+	}
+	if report.Priced != 0 || report.Reported != 0 || report.Source != "" {
+		t.Errorf("total = %d priced, %d reported, %q, want nothing attributed",
+			report.Priced, report.Reported, report.Source)
+	}
+	// The money is still in the total: unattributed is not uncounted.
+	if report.CostUSD != 3.00 {
+		t.Errorf("total = %v, want the shell session's 3.00 counted", report.CostUSD)
 	}
 }

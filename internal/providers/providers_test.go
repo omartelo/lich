@@ -166,3 +166,34 @@ func TestSupportsFork(t *testing.T) {
 		}
 	}
 }
+
+// TestCostSourceOfNamesEveryRung is the table `lich cost` and the footer both
+// read the split off. Every registered provider is in it: a new one lands on a
+// rung the moment lich can read its spend, and until somebody says which, the
+// report would silently file its dollars as nobody's arithmetic.
+func TestCostSourceOfNamesEveryRung(t *testing.T) {
+	want := map[string]CostSource{
+		Claude:      CostSourcePriced,
+		Codex:       CostSourcePriced,
+		OMP:         CostSourceReported,
+		OpenCode:    CostSourceReported,
+		Crush:       CostSourceReported,
+		Antigravity: CostSourceNone,
+		Cursor:      CostSourceNone,
+		Kiro:        CostSourceNone,
+	}
+	for _, p := range Registry {
+		rung, named := want[p.ID]
+		if !named {
+			t.Fatalf("%s is on no rung: name one for it, or the report files its money as nobody's", p.ID)
+		}
+		if got := CostSourceOf(p.ID); got != rung {
+			t.Errorf("CostSourceOf(%q) = %q, want %q", p.ID, got, rung)
+		}
+	}
+	// A session running the user's shell was spawned as no provider at all,
+	// whatever CLI the user started inside it.
+	if got := CostSourceOf("shell"); got != CostSourceNone {
+		t.Errorf("CostSourceOf(shell) = %q, want no rung", got)
+	}
+}

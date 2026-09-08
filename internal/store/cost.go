@@ -4,6 +4,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
+
+	"github.com/omartelo/lich/internal/providers"
 )
 
 // CostLedger returns how far a session's cost accounting has read into one of
@@ -130,18 +133,32 @@ func (s *Service) SessionCost(sessionID string) (float64, error) {
 	return cost.Float64, nil
 }
 
+// CostSourceMixed labels a total whose money came off both rungs — some of it
+// priced here, some of it reported by the provider that spent it. It is a fact
+// of the sum rather than of any provider, which is why it is not one of
+// providers.CostSource's answers.
+const CostSourceMixed = "mixed"
+
 // CostTotal is what one project's sessions have cost. Sessions is every session
 // in the unit; Unpriced is how many of them carry no price at all, so the money
 // covers Sessions-Unpriced of them.
+//
+// Source is whose arithmetic that money is: providers.CostSourcePriced when
+// lich derived every dollar of it from token counts, providers.CostSourceReported
+// when the providers that spent it handed their own figures over, and
+// CostSourceMixed when the row spans both. Empty is a row with nothing to
+// attribute — every session in it unpriced, or its spend earned by a provider
+// CLI run by hand inside a shell session, which lich never spawned a rung for.
 type CostTotal struct {
 	Project  string  `json:"project"`
 	Sessions int     `json:"sessions"`
 	Unpriced int     `json:"unpriced"`
+	Source   string  `json:"source"`
 	CostUSD  float64 `json:"costUsd"`
 }
 
-// CostReport is CostTotals' answer: a row per project, and the same three
-// numbers summed across every row.
+// CostReport is CostTotals' answer: a row per project, and the same numbers
+// summed across every row.
 //
 // The money is a **lower bound** whenever Unpriced is not zero. A session lich
 // never priced holds no ledger row at all — its provider files its conversation
@@ -157,6 +174,10 @@ type CostTotal struct {
 // never persisted, so the ledger can only say that a session has no price —
 // not which of the reasons it was.
 //
+// Priced and Reported are how many counted sessions each rung contributed, and
+// they are what lets a reader weigh the total: the sum is the one place the
+// difference between the two is invisible, since both arrive as dollars.
+//
 // Readout is whether the cost readout is on at all. Off, no transcript is ever
 // summed, so every session is unpriced and the total can only be zero — which a
 // caller has to be able to say instead of printing a $0.00 that reads as free.
@@ -164,8 +185,48 @@ type CostReport struct {
 	Projects []CostTotal `json:"projects"`
 	Sessions int         `json:"sessions"`
 	Unpriced int         `json:"unpriced"`
+	Priced   int         `json:"priced"`
+	Reported int         `json:"reported"`
+	Source   string      `json:"source"`
 	CostUSD  float64     `json:"costUsd"`
 	Readout  bool        `json:"readout"`
+}
+
+// projectRow accumulates one project's groups while the query is walked. The
+// two tallies are session counts per rung, kept out of CostTotal because the
+// report publishes them summed once rather than per row.
+type projectRow struct {
+	CostTotal
+	priced   int
+	reported int
+}
+
+// count folds one (project, kind) group in. Only counted sessions land on a
+// rung: an unpriced one carries no money to attribute to anybody's arithmetic.
+func (r *projectRow) count(kind string, sessions, unpriced int, cost float64) {
+	r.Sessions += sessions
+	r.Unpriced += unpriced
+	r.CostUSD += cost
+	switch providers.CostSourceOf(kind) {
+	case providers.CostSourcePriced:
+		r.priced += sessions - unpriced
+	case providers.CostSourceReported:
+		r.reported += sessions - unpriced
+	}
+}
+
+// costSource labels a unit's money by the rungs that reached it. See CostTotal
+// for what each answer means, empty included.
+func costSource(priced, reported int) string {
+	switch {
+	case priced > 0 && reported > 0:
+		return CostSourceMixed
+	case priced > 0:
+		return string(providers.CostSourcePriced)
+	case reported > 0:
+		return string(providers.CostSourceReported)
+	}
+	return string(providers.CostSourceNone)
 }
 
 // CostTotals sums the ledger by project. project narrows it to one by name,
@@ -189,8 +250,42 @@ func (s *Service) CostTotals(project, provider string, since int64) (CostReport,
 	// second query while one is being walked waits on a connection its own
 	// caller is holding.
 	report := CostReport{Projects: []CostTotal{}, Readout: s.CostReadout()}
+	rows, err := s.costRows(project, provider, since)
+	if err != nil {
+		return CostReport{}, err
+	}
+	for _, row := range rows {
+		row.Source = costSource(row.priced, row.reported)
+		report.Projects = append(report.Projects, row.CostTotal)
+		report.Sessions += row.Sessions
+		report.Unpriced += row.Unpriced
+		report.CostUSD += row.CostUSD
+		report.Priced += row.priced
+		report.Reported += row.reported
+	}
+	report.Source = costSource(report.Priced, report.Reported)
+	// The expensive project reads first. A stable sort over rows the query
+	// ordered by name keeps the name as the tiebreak between equal spends.
+	sort.SliceStable(report.Projects, func(i, j int) bool {
+		return report.Projects[i].CostUSD > report.Projects[j].CostUSD
+	})
+	// A name that matched nothing is refused rather than answered with a zero:
+	// this is money, and a typo that reads as "that project cost nothing" is
+	// worse than no answer at all.
+	if project != "" && len(report.Projects) == 0 {
+		return CostReport{}, fmt.Errorf("no sessions in a project named %q", project)
+	}
+	return report, nil
+}
+
+// costRows reads the ledger grouped by project *and session kind*, folded into
+// one row per project. The kind is in the grouping because whose arithmetic a
+// session's dollars are is a fact of the provider that spent them
+// (providers.CostSourceOf) and the ledger itself records nothing about it.
+func (s *Service) costRows(project, provider string, since int64) ([]*projectRow, error) {
 	rows, err := s.db.Query(
 		`SELECT p.name,
+		        s.kind,
 		        COUNT(*),
 		        SUM(CASE WHEN c.cost IS NULL THEN 1 ELSE 0 END),
 		        COALESCE(SUM(c.cost), 0)
@@ -205,33 +300,36 @@ func (s *Service) CostTotals(project, provider string, since int64) (CostReport,
 		                    CASE WHEN s.is_open = 1
 		                         THEN CAST(strftime('%s', 'now') AS INTEGER)
 		                         ELSE s.closed_at END) >= ?)
-		  GROUP BY p.id, p.name
-		  ORDER BY COALESCE(SUM(c.cost), 0) DESC, p.name`,
+		  GROUP BY p.id, p.name, s.kind
+		  ORDER BY p.name`,
 		project, project, provider, provider, since, since,
 	)
 	if err != nil {
-		return CostReport{}, fmt.Errorf("read cost totals: %w", err)
+		return nil, fmt.Errorf("read cost totals: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
+	var order []*projectRow
+	byName := map[string]*projectRow{}
 	for rows.Next() {
-		var row CostTotal
-		if err := rows.Scan(&row.Project, &row.Sessions, &row.Unpriced, &row.CostUSD); err != nil {
-			return CostReport{}, fmt.Errorf("scan cost total: %w", err)
+		var (
+			name, kind         string
+			sessions, unpriced int
+			cost               float64
+		)
+		if err := rows.Scan(&name, &kind, &sessions, &unpriced, &cost); err != nil {
+			return nil, fmt.Errorf("scan cost total: %w", err)
 		}
-		report.Projects = append(report.Projects, row)
-		report.Sessions += row.Sessions
-		report.Unpriced += row.Unpriced
-		report.CostUSD += row.CostUSD
+		row := byName[name]
+		if row == nil {
+			row = &projectRow{CostTotal: CostTotal{Project: name}}
+			byName[name] = row
+			order = append(order, row)
+		}
+		row.count(kind, sessions, unpriced, cost)
 	}
 	if err := rows.Err(); err != nil {
-		return CostReport{}, fmt.Errorf("iterate cost totals: %w", err)
+		return nil, fmt.Errorf("iterate cost totals: %w", err)
 	}
-	// A name that matched nothing is refused rather than answered with a zero:
-	// this is money, and a typo that reads as "that project cost nothing" is
-	// worse than no answer at all.
-	if project != "" && len(report.Projects) == 0 {
-		return CostReport{}, fmt.Errorf("no sessions in a project named %q", project)
-	}
-	return report, nil
+	return order, nil
 }
