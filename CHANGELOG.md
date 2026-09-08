@@ -35,6 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Settings › Updates no longer blanks its plugin rows on the way in.** The
+  per-provider list waited on a fresh read of every CLI on every visit, so
+  returning to the pane showed an empty block for a moment while the rest of
+  the screen was already painted. It now paints the last answer and re-reads
+  underneath, and "Check for updates" still says whether the check got through.
 - **oh-my-pi and opencode cards name the MCP tool, not the server that carries
   it.** Both harnesses spell an MCP tool with a single underscore between the
   server and the tool, which a card could not divide, so it spent its width on

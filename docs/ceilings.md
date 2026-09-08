@@ -844,12 +844,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   seen, and the ones who have not will read the binary they install. A wrong headline is a patch release. The
   update toast reads nothing from the release but its tag, on purpose: the toast says a release exists, and
   the dialog is where it speaks.
-- **`agentplugin.Status` is the one settings read that is not remembered** (`UpdatesSettings.tsx`): it costs
-  ~180 ms and its rows blank on every visit to Updates, while every other read on the screen paints from the
-  last answer. It is not an oversight — `PluginSetting` awaits that read for its *outcome*, telling "Checked."
-  from "Check failed — are you online?", and `useRemoteResource`'s `refresh` is fire-and-forget with the
-  failure folded into state, so there is nothing to await. Caching it means rewiring both of that pane's flows
-  around a resource's `loading` and `error`, and that is the price, not a line of config.
 - **`useBinaryCheck` is deliberately not a `useRemoteResource` caller** (`frontend/src/lib/use-binary-check.ts`):
   it answers `null` until a verdict is in and debounces its input, because the value it checks arrives one
   keystroke at a time — and `useRemoteResource` has no debounce seam to hang that on. So the path verdicts on

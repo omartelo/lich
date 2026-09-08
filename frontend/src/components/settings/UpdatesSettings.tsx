@@ -1,13 +1,13 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { LoaderCircle, RefreshCw, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SettingBlock } from "./SettingBlock"
 import { PatchNotesDialog } from "@/components/PatchNotesDialog"
 import { PluginSetting } from "./PluginSetting"
-import { AgentPlugin, PatchNotes } from "@/lib/rpc"
+import { PatchNotes } from "@/lib/rpc"
 import { runUpdateCheck } from "@/lib/update/update-check"
 import { useRemoteResource } from "@/lib/use-remote-resource"
-import type { PatchNotes as PatchNotesData, PluginStatus } from "@/lib/api-types"
+import type { PatchNotes as PatchNotesData } from "@/lib/api-types"
 
 export function UpdatesSettings() {
   const [notesOpen, setNotesOpen] = useState(false)
@@ -18,22 +18,6 @@ export function UpdatesSettings() {
     () => PatchNotes.Current(),
     { empty: null, cache: "settings.patchNotes" },
   )
-  // Deliberately not a remembered lookup, unlike the patch notes above it.
-  // PluginSetting awaits this for its *outcome* — "Checked." against "Check
-  // failed — are you online?" — and useRemoteResource's refresh is
-  // fire-and-forget with the failure folded into state, so there is nothing to
-  // await. The rows blank for one read on the way back in; the alternative was
-  // rewiring both of that pane's flows around a resource's loading and error.
-  const [plugin, setPlugin] = useState<PluginStatus[] | null>(null)
-
-  const refreshPlugin = async () => {
-    setPlugin(await AgentPlugin.Status())
-  }
-
-  useEffect(() => {
-    void refreshPlugin()
-  }, [])
-
   const checkApp = async () => {
     setChecking(true)
     setCheckResult("")
@@ -89,7 +73,7 @@ export function UpdatesSettings() {
         )}
       </SettingBlock>
 
-      <PluginSetting statuses={plugin} onRefresh={refreshPlugin} />
+      <PluginSetting />
     </>
   )
 }

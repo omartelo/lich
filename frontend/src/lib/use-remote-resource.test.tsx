@@ -238,3 +238,51 @@ describe("a remembered lookup", () => {
     await third.unmount()
   })
 })
+
+// The promise refresh hands back, which is what lets a caller report an outcome
+// — "Checked." against "Check failed — are you online?" — from `error` once the
+// call is done, instead of from a rejection it is never given.
+describe("refresh", () => {
+  it("settles on the answer, and on a failure without rejecting", async () => {
+    const frames: Frame[] = []
+    let land: (value: string) => void = () => {}
+    let failing = false
+    let again: () => Promise<void> = () => Promise.resolve()
+
+    function Probe() {
+      const load = () =>
+        failing
+          ? Promise.reject(new Error("offline"))
+          : new Promise<string>((resolve) => {
+              land = resolve
+            })
+      const r = useRemoteResource(KEY, load, { empty: "" })
+      again = r.refresh
+      useLayoutEffect(() => {
+        frames.push({ data: r.data, loading: r.loading, error: r.error })
+      })
+      return null
+    }
+
+    const mounted = await mountBudget(createElement(StrictMode, null, createElement(Probe)))
+
+    let settled = false
+    const asked = again().then(() => {
+      settled = true
+    })
+    await mounted.act(() => {})
+    // Still out: the promise stands for the round trip, not for the call.
+    expect(settled).toBe(false)
+    await mounted.act(() => land("answer"))
+    await asked
+    expect(settled).toBe(true)
+
+    failing = true
+    // Deliberately not caught. A refresh that rejected would fail the run here,
+    // and the caller waiting to read `error` would never run at all.
+    await mounted.act(async () => await again())
+
+    expect(frames[frames.length - 1]?.error).toContain("offline")
+    await mounted.unmount()
+  })
+})

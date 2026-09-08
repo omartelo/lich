@@ -12,42 +12,51 @@ import {
   RESTART_HINT,
 } from "@/lib/update/plugin-gate"
 import { runWithToast } from "@/lib/toast-async"
+import { useRemoteResource } from "@/lib/use-remote-resource"
 import type { PluginStatus } from "@/lib/api-types"
-
-interface PluginSettingProps {
-  /** One entry per provider that can run the plugin; null until Status answers. */
-  statuses: PluginStatus[] | null
-  /** Re-read Status after a mutation, so the rows show what just changed. */
-  onRefresh: () => Promise<void>
-}
 
 // PluginSetting is the plugin's row per provider CLI: its installed version, the
 // action that closes the gap, and — for a CLI the machine does not have — the
 // plain reason there is nothing to do.
-export function PluginSetting({ statuses, onRefresh }: PluginSettingProps) {
+export function PluginSetting() {
   const [busy, setBusy] = useState(false)
-  const [result, setResult] = useState("")
+  // Whether the user has asked for a check since this pane was mounted. The
+  // outcome itself is not stored: it is whatever the refresh left in `error`,
+  // read at render, so a later failure cannot sit under an older "Checked.".
+  const [checked, setChecked] = useState(false)
+  // One entry per provider that can run the plugin; null until Status answers.
+  // That read costs ~180 ms and every row here is drawn from it, so it is filed
+  // like the reads above it: coming back to Updates paints the last answer and
+  // revalidates underneath. The call takes no arguments, so the caller's own
+  // name is the whole of what identifies the answer it files.
+  const {
+    data: statuses,
+    error,
+    refresh,
+  } = useRemoteResource<PluginStatus[] | null>("agent-plugin-status", () => AgentPlugin.Status(), {
+    empty: null,
+    cache: "settings.pluginStatus",
+  })
 
   const run = async (call: () => Promise<null>, progress: string, done: string, failed: string) => {
     setBusy(true)
     if (await runWithToast(progress, call, done, failed)) {
-      await onRefresh()
+      // The filed answer is replaced by this read, so the next visit shows what
+      // the install just changed rather than the rows it changed away from.
+      await refresh()
     }
     setBusy(false)
   }
 
   const check = async () => {
     setBusy(true)
-    setResult("")
-    try {
-      await onRefresh()
-      setResult("Checked.")
-    } catch {
-      setResult("Check failed — are you online?")
-    } finally {
-      setBusy(false)
-    }
+    setChecked(false)
+    await refresh()
+    setChecked(true)
+    setBusy(false)
   }
+
+  const outcome = checked && (error ? "Check failed — are you online?" : "Checked.")
 
   const spinner = <LoaderCircle className="size-4 animate-spin" />
   const showTrustHint = statuses?.some((s) => s.provider === "codex" && s.installed)
@@ -130,7 +139,7 @@ export function PluginSetting({ statuses, onRefresh }: PluginSettingProps) {
           <Button size="sm" variant="outline" onClick={() => void check()} disabled={busy}>
             Check for updates
           </Button>
-          {result && <span className="text-xs text-muted-foreground">{result}</span>}
+          {outcome && <span className="text-xs text-muted-foreground">{outcome}</span>}
         </div>
       </div>
     </SettingBlock>
