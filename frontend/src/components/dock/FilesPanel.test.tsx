@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 //
 // The two halves of the plain-folder tree the gate's node environment cannot
-// see: the line a cut listing owes the reader, and the tick that re-reads a
-// folder git has no status for. Both are render paths — the panel's other
-// suites are pure logic — so this one opts into jsdom the way the render
-// budgets do.
+// see: the footnote a partial listing owes the reader, and the tick that
+// re-reads a folder git has no status for. Both are render paths (the panel's
+// other suites are pure logic), so this one opts into jsdom the way the render
+// budgets do. The footnote's own wording is pinned next to treeFootnote.
 //
 // The harness has to be imported before anything that reaches react-dom (see
 // @/test/render-budget), which is why it is first.
@@ -18,7 +18,13 @@ import { TreeBody, usePlainFolderTick } from "./FilesPanel"
 
 const NO_STATS = new Map<string, DiffFile>()
 
-function body(cut: boolean, files: string[] = ["a.txt", "src/main.go"]) {
+interface BodyOptions {
+  cut?: boolean
+  hidden?: string[]
+  files?: string[]
+}
+
+function body({ cut = false, hidden = [], files = ["a.txt", "src/main.go"] }: BodyOptions) {
   return createElement(TreeBody, {
     tree: buildTree(files),
     query: "",
@@ -27,6 +33,7 @@ function body(cut: boolean, files: string[] = ["a.txt", "src/main.go"]) {
     onToggled: () => {},
     stats: NO_STATS,
     cut,
+    hidden,
     loading: false,
     failed: false,
     onOpen: () => {},
@@ -35,9 +42,10 @@ function body(cut: boolean, files: string[] = ["a.txt", "src/main.go"]) {
 }
 
 const CUT_LINE = "This folder has more files than the tree can list."
+const HIDDEN_LINE = "Hidden: build, node_modules."
 
 test("a cut listing says so under the rows", async () => {
-  const budget = await mountBudget(body(true))
+  const budget = await mountBudget(body({ cut: true }))
   const text = document.body.textContent ?? ""
   expect(text).toContain(CUT_LINE)
   // Under the tree, not instead of it: the rows the walk did reach still show.
@@ -45,19 +53,33 @@ test("a cut listing says so under the rows", async () => {
   await budget.unmount()
 })
 
-test("a listing that reached the end says nothing", async () => {
-  const budget = await mountBudget(body(false))
-  expect(document.body.textContent ?? "").not.toContain(CUT_LINE)
+// The judgement call the ignore set makes is answered on screen: a folder that
+// keeps its own source under build/ is one line away from the reason.
+test("a filtered listing names the directories it stepped over", async () => {
+  const budget = await mountBudget(body({ hidden: ["build", "node_modules"] }))
+  const text = document.body.textContent ?? ""
+  expect(text).toContain(HIDDEN_LINE)
+  expect(text).not.toContain(CUT_LINE)
+  expect(text.indexOf("a.txt")).toBeLessThan(text.indexOf(HIDDEN_LINE))
+  await budget.unmount()
+})
+
+test("a listing that reached the end and hid nothing says nothing", async () => {
+  const budget = await mountBudget(body({}))
+  const text = document.body.textContent ?? ""
+  expect(text).not.toContain(CUT_LINE)
+  expect(text).not.toContain("Hidden:")
   await budget.unmount()
 })
 
 // The empty branch is where the line matters most: a filter that matched
 // nothing in a listing that was cut has not searched the folder, and saying only
 // "No file matches" would report that as a finished answer.
-test("an empty tree still admits the listing was cut", async () => {
-  const budget = await mountBudget(body(true, []))
+test("an empty tree still admits what it left out", async () => {
+  const budget = await mountBudget(body({ cut: true, hidden: ["build"], files: [] }))
   const text = document.body.textContent ?? ""
   expect(text).toContain("No files here")
+  expect(text).toContain("Hidden: build.")
   expect(text).toContain(CUT_LINE)
   await budget.unmount()
 })

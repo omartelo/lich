@@ -75,6 +75,9 @@ func TestTreeWalksNonRepo(t *testing.T) {
 	if tree.Cut {
 		t.Error("Tree.Cut = true on a walk that reached the end, want false")
 	}
+	if got := strings.Join(tree.Hidden, ","); got != ".git" {
+		t.Errorf("Tree.Hidden = %q, want %q", got, ".git")
+	}
 }
 
 // TestTreeReportsBrokenRepo proves the gate only routes a path away from git
@@ -150,6 +153,40 @@ func TestWalkIgnoresDependencyDirs(t *testing.T) {
 	want := "build-tools/run.sh,dist.txt,main.go"
 	if got := strings.Join(tree.Files, ","); got != want {
 		t.Errorf("walkFiles = %q, want %q", got, want)
+	}
+	// Every ignored name this folder actually had, once each: node_modules sat
+	// at two depths, and .git was not here at all.
+	wantHidden := ".cache,.venv,__pycache__,build,dist,node_modules,target,vendor,venv"
+	if got := strings.Join(tree.Hidden, ","); got != wantHidden {
+		t.Errorf("walkFiles.Hidden = %q, want %q", got, wantHidden)
+	}
+}
+
+// TestWalkHiddenNamesOnlyWhatIsThere proves Hidden is the folder's own answer
+// and not the ignore set recited back: it is what the panel prints, so a name
+// in it that is not on disk sends the reader looking for a directory that was
+// never there.
+func TestWalkHiddenNamesOnlyWhatIsThere(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "main.go", "package main\n")
+	write(t, dir, "dist/out.js", "x")
+
+	tree, err := walkFiles(dir, walkLimit)
+	if err != nil {
+		t.Fatalf("walkFiles: %v", err)
+	}
+	if got := strings.Join(tree.Hidden, ","); got != "dist" {
+		t.Errorf("walkFiles.Hidden = %q, want %q", got, "dist")
+	}
+
+	clean := t.TempDir()
+	write(t, clean, "main.go", "package main\n")
+	bare, err := walkFiles(clean, walkLimit)
+	if err != nil {
+		t.Fatalf("walkFiles: %v", err)
+	}
+	if len(bare.Hidden) != 0 {
+		t.Errorf("walkFiles.Hidden = %v on a folder with nothing to skip, want empty", bare.Hidden)
 	}
 }
 

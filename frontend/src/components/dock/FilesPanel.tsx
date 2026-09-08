@@ -9,7 +9,7 @@ import { type Composer, ReviewSlot } from "@/components/diff/ReviewSlots"
 import { FileTree } from "@/components/FileTree"
 import { threadSlots, type SlotElements } from "@/lib/codemirror-threads"
 import { formatLineRef, parseDiff, type DiffFile } from "@/lib/git/diff"
-import { buildTree, type TreeNode } from "@/lib/git/file-tree"
+import { buildTree, treeFootnote, type TreeNode } from "@/lib/git/file-tree"
 import { updateFileBrowse, useFileBrowse } from "@/lib/file-browse"
 import { COMPOSER_KEY } from "@/lib/pulls/review-slots"
 import { matchesQuery } from "@/lib/session/command-palette"
@@ -66,6 +66,7 @@ export function FilesPanel() {
       return {
         files: listing.files ?? [],
         cut: listing.cut,
+        hidden: listing.hidden ?? [],
         stats: diffStatsByPath(parseDiff(diffText)),
       }
     },
@@ -131,6 +132,7 @@ export function FilesPanel() {
             onToggled={(toggled) => updateFileBrowse(path, { toggled })}
             stats={data.stats}
             cut={data.cut}
+            hidden={data.hidden}
             loading={loading}
             failed={error !== null}
             onOpen={(rel) => updateFileBrowse(path, { open: rel, selected: rel })}
@@ -158,9 +160,15 @@ export function FilesPanel() {
 
 // What the tree holds before its first answer, and after a failed lookup. A
 // module-level constant because useRemoteResource compares it by identity.
-const NO_TREE: { files: string[]; cut: boolean; stats: Map<string, DiffFile> } = {
+const NO_TREE: {
+  files: string[]
+  cut: boolean
+  hidden: string[]
+  stats: Map<string, DiffFile>
+} = {
   files: [],
   cut: false,
+  hidden: [],
   stats: new Map(),
 }
 
@@ -208,6 +216,9 @@ interface TreeBodyProps {
   /** The listing stopped at the walk's cap, so the tree is only part of the
    * folder. Only a plain folder can set it: git's listing is never cut. */
   cut: boolean
+  /** Directory names the walk stepped over, for the same reason. Empty in a
+   * repository, where .gitignore filters and lich names nothing. */
+  hidden: string[]
   /** A read with nothing on screen yet. False through a refetch that has last
    * time's tree to stand on, which is what keeps a poll tick from flashing. */
   loading: boolean
@@ -227,12 +238,14 @@ export function TreeBody({
   onToggled,
   stats,
   cut,
+  hidden,
   loading,
   failed,
   onOpen,
   onEditor,
 }: TreeBodyProps) {
   const filtering = query.trim() !== ""
+  const footnote = treeFootnote(cut, hidden)
   if (failed) {
     return <Notice>Could not read this folder</Notice>
   }
@@ -258,14 +271,12 @@ export function TreeBody({
           onSelect={onOpen}
         />
       )}
-      {/* A cut listing has to say so, and it says so under the rows rather than
-          over them: it is a footnote to the tree, not a state of the panel. It
-          outlives the empty branch on purpose: "No file matches" is a lie when
-          the listing the filter ran over was only part of the folder. */}
-      {cut && (
-        <Notice className="shrink-0 border-t border-border py-2">
-          This folder has more files than the tree can list.
-        </Notice>
+      {/* A listing that left something out has to say so, under the rows rather
+          than over them: it is a footnote to the tree, not a state of the panel.
+          It outlives the empty branch on purpose: "No file matches" is a lie
+          when the listing the filter ran over was only part of the folder. */}
+      {footnote !== "" && (
+        <Notice className="shrink-0 border-t border-border py-2">{footnote}</Notice>
       )}
     </>
   )
