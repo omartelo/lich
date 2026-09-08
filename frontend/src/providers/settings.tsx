@@ -45,6 +45,12 @@ const FONT_STORAGE_KEY = "lich.terminal.font"
 const TERMINAL_FONT_SIZE_STORAGE_KEY = "lich.terminal.fontSize"
 const THEME_STORAGE_KEY = "lich.appearance.theme"
 const ZOOM_STORAGE_KEY = "lich.appearance.zoom"
+// The terminal's own theme selection, from before one theme coloured both
+// surfaces. Nothing reads it, and it is dropped on every load rather than once:
+// a terminal theme that ever comes back needs a key of its own, because this one
+// would be cleared under it. Restoring a choice its user made when the two were
+// separate is what dropping it prevents.
+const LEGACY_TERMINAL_THEME_KEY = "lich.appearance.terminalTheme"
 const CONTEXT_USAGE_STORAGE_KEY = "lich.footer.contextUsage"
 const COST_BUDGET_STORAGE_KEY = "lich.footer.costBudget"
 const DESKTOP_NOTIFICATIONS_STORAGE_KEY = "lich.notifications.desktop"
@@ -254,6 +260,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       cancelled = true
     }
   }, [persistTheme])
+
+  useEffect(() => {
+    removePref(LEGACY_TERMINAL_THEME_KEY)
+  }, [])
 
   const persistHotkeys = useCallback((next: Hotkeys) => {
     hotkeysTouched.current = true

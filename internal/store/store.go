@@ -311,6 +311,13 @@ func open(path string) (*Service, error) {
 		`ALTER TABLE projects ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE projects ADD COLUMN closed_seq INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE session_costs ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0`,
+		// The terminal's own theme selection, from before one theme coloured both
+		// surfaces. Nothing reads it, and a row left standing would hand whoever
+		// gives the terminal a theme again a choice its user made under other
+		// rules. Unlike the ALTERs above this runs on every launch, so a terminal
+		// theme that ever comes back needs a key of its own: this one is cleared
+		// under it.
+		`DELETE FROM settings WHERE key = 'appearance.terminalTheme'`,
 	}
 	for _, stmt := range migrations {
 		if _, err := db.Exec(stmt); err != nil && !migrationApplied(err) {

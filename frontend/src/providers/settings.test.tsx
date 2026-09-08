@@ -57,6 +57,19 @@ beforeEach(() => {
   localStorage.clear()
 })
 
+// The terminal kept its own theme until one theme took over both surfaces. The
+// key is pinned by hand here rather than imported: the point is the exact
+// string an old install still holds.
+describe("the terminal-theme leftover", () => {
+  it("drops the page's copy on load", async () => {
+    localStorage.setItem("lich.appearance.terminalTheme", "emerald")
+
+    await mountSettings()
+
+    expect(localStorage.getItem("lich.appearance.terminalTheme")).toBeNull()
+  })
+})
+
 describe("the hotkey bindings", () => {
   it("reads them from the workspace, without writing anything back", async () => {
     settings.set(`${HOTKEYS_SETTING_KEY}@`, rebound(MINE))

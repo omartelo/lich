@@ -788,13 +788,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   pretending the setting is absent. Shortcuts and the panes themselves are indexed off `HOTKEY_ACTIONS` and
   `SETTING_SECTIONS`, so those two never fall behind.
 
-- **The old terminal-theme selection is left where it was written** (`appearance.terminalTheme` in the
-  workspace database, `lich.appearance.terminalTheme` in localStorage): one theme now colors both surfaces,
-  and nothing reads either key any more. They are not deleted on upgrade, because a migration that runs on
-  every launch to clear a value nobody reads costs more than the row it removes. The trap is for whoever
-  gives the terminal its own theme again: an install that used one before this version still holds the id it
-  had, so that feature must write a fresh key rather than adopting this one, which would silently restore a
-  choice the user made under different rules.
 - **The footer editor's sides wrap, and stop lining up when they do**
   (`FooterLayoutEditor.tsx`): each side is a tray of chips laid out with `flex-wrap`, so a user who turns on
   most of the twelve items gets two rows in one column and one in the other, and the two stop reading as the

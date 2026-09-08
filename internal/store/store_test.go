@@ -829,6 +829,45 @@ CREATE TABLE sessions (
 	}
 }
 
+// TestOpenDropsTheTerminalThemeSetting: one theme colours both the app and the
+// terminal now, and the selection the terminal used to keep is read by nothing.
+// It is deleted on the way past so that whoever gives the terminal its own
+// theme again starts from the default, rather than silently restoring a choice
+// its user made when the two were separate.
+func TestOpenDropsTheTerminalThemeSetting(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "themed.db")
+	before, err := open(path)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	if err := before.SetSetting("appearance.terminalTheme", "", "emerald"); err != nil {
+		t.Fatalf("SetSetting: %v", err)
+	}
+	// The same leftover under a project scope, and the live selection beside it.
+	_ = before.SetSetting("appearance.terminalTheme", "p1", "emerald")
+	_ = before.SetSetting("appearance.theme", "", "rose-pine")
+	_ = before.Close()
+
+	after, err := open(path)
+	if err != nil {
+		t.Fatalf("reopen store: %v", err)
+	}
+	defer after.Close()
+
+	for _, scope := range []string{"", "p1"} {
+		got, err := after.GetSetting("appearance.terminalTheme", scope)
+		if err != nil {
+			t.Fatalf("GetSetting(scope %q): %v", scope, err)
+		}
+		if got != "" {
+			t.Errorf("terminal theme in scope %q = %q, want it gone", scope, got)
+		}
+	}
+	if got, _ := after.GetSetting("appearance.theme", ""); got != "rose-pine" {
+		t.Errorf("app theme = %q, want it untouched", got)
+	}
+}
+
 // TestOpenRenamesClaudeSessionColumn proves the multi-provider rename carries
 // stored ids over instead of stranding them: a database still on the
 // claude_session_id column comes back with its values readable under
