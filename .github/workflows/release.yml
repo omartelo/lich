@@ -177,6 +177,15 @@ jobs:
           if grep -qi 'VCRUNTIME\|MSVCP' "$RUNNER_TEMP/deps.txt"; then
             echo "::error::lich-shell.exe depends on the Visual C++ runtime"; cat "$RUNNER_TEMP/deps.txt"; exit 1
           fi
+          # GUI subsystem, not console: a console-subsystem window gets its own
+          # console window allocated (lich.exe is -H=windowsgui and has none to
+          # lend), and closing that console kills the window. Invisible to the
+          # run below, which inherits this shell's console.
+          dumpbin /HEADERS "$app/shell/lich-shell.exe" > "$RUNNER_TEMP/headers.txt"
+          grep -q 'subsystem (Windows GUI)' "$RUNNER_TEMP/headers.txt" || {
+            echo "::error::lich-shell.exe is not a GUI-subsystem binary; it will pop a console window"
+            grep -i subsystem "$RUNNER_TEMP/headers.txt"; exit 1
+          }
           export APPDATA="$RUNNER_TEMP/appdata" LICH_LISTEN_PORT=47899
           mkdir -p "$APPDATA"
           "$app/lich.exe" -- --remote-debugging-port=9334 &

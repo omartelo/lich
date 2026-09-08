@@ -4,6 +4,12 @@
 //! `--class=<name>` names the window for the window manager,
 //! `--user-data-dir=<dir>` is where the profile lives, and every other
 //! `--switch[=value]` is a Chromium switch to honour (`lich -- --ozone-platform=wayland`).
+// Rust defaults to the console subsystem and lich.exe is built for the GUI one
+// (-H=windowsgui), so there is no console to inherit: Windows allocated a fresh
+// one per process, for the window and for every CEF subprocess. Closing it sent
+// CTRL_CLOSE_EVENT to the group and killed the window with 0xc000013a inside the
+// startup grace, which lich reads as a window that could not open.
+#![windows_subsystem = "windows"]
 use cef::rc::Rc as _;
 use cef::sys::cef_event_flags_t;
 use cef::{

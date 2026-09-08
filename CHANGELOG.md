@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **On Windows, lich's own window no longer opens a stray console window beside
+  it, or gives up and reopens in Chrome.** The window was built for the console
+  subsystem, so Windows allocated a console for it and for each of Chromium's
+  subprocesses; closing that console killed the window, and lich read the death
+  as a window that could not open and fell back to the system browser after a
+  long wait. It is a GUI binary now, like Chrome's own.
+
 ## [0.47.1] - 2026-09-08
 
 ### Fixed
