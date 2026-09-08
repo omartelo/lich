@@ -124,14 +124,17 @@ func (s *Service) Close(fromID, target, projectName, worktree string, force bool
 // the checkout does — one left behind would offer a resume into a directory that
 // no longer exists.
 func (s *Service) removeCheckout(found located, active string, force bool) error {
+	// The window offers this removal behind a confirmation naming the directory;
+	// here there is nobody to show it to, so an adopted checkout stays the user's.
 	// Asked before anything is taken apart, not after: the removal itself is
-	// refused for an adopted checkout (project.RemoveWorktree), but by then the
-	// terminal is closed and the rows are gone, and the session would be lost to
-	// keep a directory that was never at risk.
+	// refused too (project.RemoveWorktree), but by then the terminal is closed
+	// and the rows are gone, and the session would be lost to keep a directory
+	// that was never at risk.
 	if s.worktrees.WorktreeAdopted(found.session.Path) {
 		return fmt.Errorf(
 			"the worktree %s was not created by lich, so closing this session cannot delete it: "+
-				"say %q instead, which parks the session and leaves the checkout where it is",
+				"say %q instead, which parks the session and leaves the checkout where it is, "+
+				"or remove it from the window, which asks first",
 			found.session.Path, KeepWorktree,
 		)
 	}
@@ -156,7 +159,7 @@ func (s *Service) removeCheckout(found located, active string, force bool) error
 	if err := s.sessions.PurgeWorktreeSessions(found.project.ID, found.session.Path); err != nil {
 		return err
 	}
-	return s.worktrees.RemoveWorktree(found.project.Path, found.session.Path, force)
+	return s.worktrees.RemoveWorktree(found.project.Path, found.session.Path, force, false)
 }
 
 // finish takes down the PTY and the card. The terminal close is repeated for

@@ -18,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A worktree you made by hand can now be removed through lich.** Closing the
+  last session in one only ever parked it, so cleaning up meant walking to a
+  terminal for `git worktree remove`. The close dialog now offers the removal
+  behind a confirmation naming the checkout's absolute path and saying lich did
+  not create it; uncommitted work still takes the same second confirmation it
+  always did. Agents are the exception — `close_session` has nobody to ask, so
+  it still refuses and says why.
+
 - **A relayed answer is no longer matched to a task by guesswork.** Nothing in
   an answer says which request it belongs to, so `lich reply "<answer>"` and
   `reply_to_session` without a ticket closed the oldest request delivered to

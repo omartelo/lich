@@ -618,14 +618,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   says `checkout gone` and offers to forget
   itself, which is the only way such a row is ever collected — `PurgeWorktreeSessions` never ran for it,
   because the removal never went through the app.
-- **A worktree lich did not create can never be removed through lich** (`internal/project.WorktreeAdopted`):
-  `git worktree list` hands back every checkout of a repository, so one the user made by hand appears in the
-  picker and hosts a session like any other — and nothing but its path tells the two apart. Everything lich
-  creates lives under the worktrees root (`reserveWorktreePath`); a canonical path outside it is adopted, and
-  `RemoveWorktree` refuses it whether or not force was asked for. What that costs is the cleanup: a hand-made
-  checkout is parked, never collected, and removing it is a `git worktree remove` the user runs themselves.
-  The test is the path and only the path — a worktree lich created and the user then moved out of the data dir
-  reads as adopted, and one made by hand inside it reads as lich's own.
 - **The History tab searches names, never what was said** (`internal/terminal/search.go`): the Messages tab
   reads a 4 MB tail or a query per session per keystroke, and it is pointed at the sessions the palette can route to —
   the open ones. History is the long list, so widening the transcript search to it would put a hundred disk
