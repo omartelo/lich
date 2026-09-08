@@ -122,6 +122,11 @@ func TestWrapEntrypointComposesWithSetup(t *testing.T) {
 // the command, so the shell they land in is the process lich spawned rather than
 // a second one exec'd over it. A regression that composed a chain instead would
 // leave the working-directory poll (cwd.go) watching a parent that never moves.
+//
+// -NoProfile is the other half, and the one a reader is likeliest to drop as
+// noise: it is what makes an entrypoint mean the same thing on both OSes, since
+// the POSIX branch loads no rc either. What that costs is proved on a real
+// shell by entrypoint_windows_test.go.
 func TestWrapEntrypointOnWindowsKeepsOneProcess(t *testing.T) {
 	spec := entrypointSpec()
 	spec.bin = `C:\Program Files\PowerShell\7\pwsh.exe`
@@ -131,10 +136,11 @@ func TestWrapEntrypointOnWindowsKeepsOneProcess(t *testing.T) {
 	if got.bin != spec.bin {
 		t.Errorf("bin = %q, want the session's own shell %q", got.bin, spec.bin)
 	}
-	if len(got.args) != 3 || got.args[0] != "-NoExit" || got.args[1] != "-EncodedCommand" {
-		t.Fatalf("args = %v, want -NoExit -EncodedCommand <script>", got.args)
+	if len(got.args) != 4 || got.args[0] != "-NoProfile" || got.args[1] != "-NoExit" ||
+		got.args[2] != "-EncodedCommand" {
+		t.Fatalf("args = %v, want -NoProfile -NoExit -EncodedCommand <script>", got.args)
 	}
-	if command := decodePwshCommand(t, got.args[2]); command != "lazygit" {
+	if command := decodePwshCommand(t, got.args[3]); command != "lazygit" {
 		t.Errorf("encoded command = %q, want the trimmed entrypoint", command)
 	}
 	if got.dir != spec.dir || got.cols != spec.cols || got.rows != spec.rows {

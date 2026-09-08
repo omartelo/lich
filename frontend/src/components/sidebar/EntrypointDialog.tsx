@@ -71,7 +71,8 @@ export function EntrypointDialog({
             className="font-mono"
           />
           <p className="text-xs text-muted-foreground">
-            Runs in <span className="font-mono">{cwd}</span>. Leave empty for a plain shell.
+            Runs in <span className="font-mono">{cwd}</span> without loading your shell&rsquo;s rc
+            file, so an alias is not a command. Leave empty for a plain shell.
           </p>
         </div>
         <DialogFooter>

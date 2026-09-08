@@ -17,7 +17,6 @@ import {
   Columns2,
   Pin,
   PinOff,
-  Play,
   Shield,
   ShieldOff,
   Terminal,
@@ -48,6 +47,7 @@ import { baseReadout } from "@/lib/git/base-status"
 import { usePullRequest } from "@/lib/pulls/use-pull-request"
 import { CloseButton } from "@/components/common/CloseButton"
 import { DiffStat } from "@/components/DiffStat"
+import { SessionEntrypointItem } from "./SessionEntrypointItem"
 import { SessionForkItem } from "./SessionForkItem"
 import { SessionStatusIcon } from "./SessionStatusIcon"
 import { SessionTooltip } from "./SessionTooltip"
@@ -117,8 +117,7 @@ interface SessionCardProps {
   // hand — but the id is what lets a terminal editor be launched in it.
   onOpenTerminal: (cwd: string) => string
   // Record the command this terminal opens into, "" to clear it back to a plain
-  // shell. Offered on shell sessions alone: on a provider card the entrypoint is
-  // the provider, and the store refuses one there anyway.
+  // shell. Only a terminal card can take one (SessionEntrypointItem).
   onSetEntrypoint: (entrypoint: string) => void
   // Open the Pulls screen for this session's worktree, parking its PR card.
   onPulls: () => void
@@ -659,12 +658,7 @@ export function SessionCard({
             {pinned ? <PinOff /> : <Pin />}
             {pinned ? "Unpin" : "Pin"}
           </ContextMenuItem>
-          {session.kind === "shell" && (
-            <ContextMenuItem onClick={() => setEntrypointOpen(true)}>
-              <Play />
-              Entrypoint…
-            </ContextMenuItem>
-          )}
+          <SessionEntrypointItem session={session} onOpen={() => setEntrypointOpen(true)} />
           {!active && (
             <ContextMenuItem onClick={onStageToggle}>
               <Columns2 />

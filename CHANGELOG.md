@@ -16,6 +16,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as a window that could not open and fell back to the system browser after a
   long wait. It is a GUI binary now, like Chrome's own.
 
+### Changed
+
+- **A terminal entrypoint now runs the same way on every OS, and agent cards say
+  why they cannot take one.** On Windows the command was run after your
+  PowerShell `$PROFILE`, which Linux and macOS never load, so an entrypoint that
+  leaned on an alias worked on one machine and silently did nothing on the next;
+  no profile or rc file is loaded now, on any OS. And *Entrypoint…* is no longer
+  missing from an agent card's menu — it is there, greyed, saying entrypoints run
+  in terminal sessions.
+
 ## [0.47.1] - 2026-09-08
 
 ### Fixed

@@ -228,12 +228,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   (Git Bash, a POSIX-ish shell reached through PATH), that path still runs over a pipe, so an rc guarded the
   same way is skipped there exactly as it was everywhere before this fix, with no ConPTY wired in to close the
   gap.
-- **A terminal entrypoint reaches shell sessions only, and reads a different rc on each OS**
-  (`internal/terminal/entrypoint.go`): the menu item is absent on a provider card. On Linux and macOS the command
-  runs through the shell's `-c`, which loads no interactive rc: an alias defined in `.zshrc` is not a command that
-  can be an entrypoint, though `$PATH` is intact (`internal/terminal/shellenv.go`). On Windows it runs through
-  PowerShell's `-EncodedCommand`, which *does* load `$PROFILE` first — so the same alias works there, and an
-  entrypoint one user shares is not necessarily one the next can run.
 - **The worktree setup script answers to the main checkout, never the new branch, and never runs on Windows**
   (`internal/project/setup.go`, `internal/terminal/setup.go`): improve `.lich/setup-worktree.sh` on a feature
   branch and fresh worktrees keep running the old one until the change reaches the checkout the project points

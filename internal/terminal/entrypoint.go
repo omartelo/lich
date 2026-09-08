@@ -45,11 +45,12 @@ func wrapEntrypoint(spec ptySpec, kind, entrypoint, goos string) ptySpec {
 		return spec
 	}
 	if goos == "windows" {
-		// No -NoProfile: the profile is the user's own rc, this is their own
-		// shell, and PowerShell loads it before running the command — so an
-		// alias defined in $PROFILE can be an entrypoint, the one thing the
-		// POSIX branch cannot offer.
-		spec.args = []string{"-NoExit", "-EncodedCommand", encodePwshCommand(entrypoint)}
+		// -NoProfile is what makes an entrypoint mean the same thing on both
+		// OSes: the POSIX branch's -c loads no interactive rc, and PowerShell
+		// would load $PROFILE before the command unless told not to. A command
+		// that only runs where its author's rc defined it is not one a user can
+		// share, and nothing on screen would say which half was missing.
+		spec.args = []string{"-NoProfile", "-NoExit", "-EncodedCommand", encodePwshCommand(entrypoint)}
 		return spec
 	}
 	// The newline is load-bearing: a command ending in a comment or an unclosed
