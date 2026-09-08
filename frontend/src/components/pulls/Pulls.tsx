@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom"
 import { GitPullRequestArrow } from "lucide-react"
 import { toast } from "sonner"
 import { ProjectService, Store } from "@/lib/rpc"
+import type { Worktree } from "@/lib/api-types"
 import { useProjects } from "@/providers/projects"
 import { baseName } from "@/lib/paths"
 import { Notice } from "@/components/common/Notice"
@@ -180,8 +181,17 @@ export function Pulls({ list = false }: PullsProps) {
   // otherwise walk back to the sidebar for. Refuse a dirty worktree: whatever
   // was never committed lives only there, and the sidebar's flow is the one that
   // knows how to confirm discarding it.
-  const removeWorktree = async (wtPath: string) => {
+  //
+  // The offer is drawn from the filed checkout list and the toast it rides
+  // outlives the merge by ten seconds, so the click re-reads too: a checkout
+  // already gone is what the offer was asking for, not a failure to report.
+  const removeWorktree = async (wt: Worktree) => {
     if (!projectId) {
+      return
+    }
+    const wtPath = wt.path
+    if (!(await refreshCheckouts()).some((c) => c.path === wtPath)) {
+      toast.success(`${baseName(wtPath)} was already removed`)
       return
     }
     const occupants = sessionsOf(sessions, projectId).filter((s) => s.path === wtPath)
@@ -239,7 +249,7 @@ export function Pulls({ list = false }: PullsProps) {
     }
     toast.success(merged, {
       duration: CLEANUP_TOAST_MS,
-      action: { label: "Remove worktree", onClick: () => void removeWorktree(wt.path) },
+      action: { label: "Remove worktree", onClick: () => void removeWorktree(wt) },
     })
   }
 

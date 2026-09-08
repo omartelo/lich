@@ -72,7 +72,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plugin row offered an update for a plugin that was no longer installed. The
   rows still paint at once from what was read last, but the click re-asks first
   and acts on the answer: a missing checkout is created with the same gesture,
-  and a plugin that changed underneath gets the action it actually needs.
+  and a plugin that changed underneath gets the action it actually needs. The
+  "Remove worktree" a merge offers reads the same way, and now says the checkout
+  was already removed rather than reporting a failure to remove it.
 - **A split's dragged pane sizes now come back when the grid does.** How many
   panes sit across follows the window, so collapsing the sidebar, opening the
   dock or moving to another monitor reshapes the wall - and the sizes you had

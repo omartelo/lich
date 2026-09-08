@@ -48,6 +48,20 @@ const calls = vi.hoisted(() => ({
   created: [] as number[],
   reopened: [] as string[],
   activated: [] as string[],
+  removed: [] as string[],
+  /** Every toast raised, newest last, with the action a cleanup offer carries. */
+  toasts: [] as Array<{ message: string; action?: () => void }>,
+}))
+
+vi.mock("sonner", () => ({
+  toast: {
+    success: (message: string, options?: { action?: { onClick: () => void } }) => {
+      calls.toasts.push({ message, action: options?.action?.onClick })
+    },
+    error: (message: string) => {
+      calls.toasts.push({ message })
+    },
+  },
 }))
 
 /** A read that never lands, so what is on screen came from the filed answer. */
@@ -62,6 +76,12 @@ vi.mock("@/lib/rpc", () => ({
     CreateWorktreeFromPR: (_path: string, _projectId: string, number: number) => {
       calls.created.push(number)
       return Promise.resolve(WORKTREE)
+    },
+    WorktreeAdopted: () => Promise.resolve(false),
+    WorktreeDirty: () => Promise.resolve(false),
+    RemoveWorktree: (_projectPath: string, wtPath: string) => {
+      calls.removed.push(wtPath)
+      return Promise.resolve(null)
     },
   },
   Store: { PurgeWorktreeSessions: () => Promise.resolve(null) },
@@ -112,16 +132,29 @@ vi.mock("@/lib/git/use-git-status", () => ({
   useGitStatus: () => ({ branch: "main", head: "abc123" }),
 }))
 
-// The pull request itself is not what this is about — only the button Pulls
-// hands it, with the label Pulls decided and the run Pulls wired.
+// The pull request itself is not what this is about — only what Pulls hands it:
+// the session button, with the label Pulls decided and the run Pulls wired, and
+// the merge that raises Pulls' own cleanup offer.
 vi.mock("./PullRequestView", () => ({
-  PullRequestView: ({ session }: { session: SessionAction }) =>
-    createElement("button", { type: "button", onClick: session.run }, session.label),
+  PullRequestView: ({ session, onMerged }: { session: SessionAction; onMerged: () => void }) => [
+    createElement("button", { key: "s", type: "button", onClick: session.run }, session.label),
+    createElement("button", { key: "m", type: "button", onClick: onMerged }, "Merge"),
+  ],
 }))
 
 const text = () => document.body.textContent ?? ""
 
-function clickSessionButton(): void {
+function click(label: string): void {
+  const button = [...document.querySelectorAll("button")].find(
+    (element) => element.textContent?.trim() === label,
+  )
+  if (!button) {
+    throw new Error(`no "${label}" button on screen: ${text()}`)
+  }
+  button.click()
+}
+
+const clickSessionButton = (): void => {
   const button = document.querySelector("button")
   if (!button) {
     throw new Error(`no session button on screen: ${text()}`)
@@ -129,12 +162,16 @@ function clickSessionButton(): void {
   button.click()
 }
 
+const lastToast = () => calls.toasts[calls.toasts.length - 1]
+
 beforeEach(() => {
   clearRemoteCache()
   calls.list = () => Promise.resolve([])
   calls.created = []
   calls.reopened = []
   calls.activated = []
+  calls.removed = []
+  calls.toasts = []
 })
 
 // The trap: the filed list still holds a checkout git no longer has, so the
@@ -161,6 +198,28 @@ it("creates a worktree when the filed checkout is gone by the time it is clicked
   expect(calls.activated).toEqual([])
   expect(calls.reopened).toEqual([])
   await second.unmount()
+})
+
+// The merge toast carries the same filed answer for ten seconds, which is long
+// enough for the checkout to go away under it — from the sidebar, or from a
+// terminal. A remove that has already happened is what the offer was asking
+// for, so it is said in the toast's own voice rather than reported as a failure.
+it("says the worktree was already removed instead of failing the cleanup", async () => {
+  calls.list = () => Promise.resolve([WORKTREE])
+  const mounted = await mountBudget(createElement(Pulls))
+  await mounted.act(() => {})
+
+  await mounted.act(() => click("Merge"))
+  const offer = lastToast()
+  expect(offer?.action).toBeDefined()
+
+  // Removed under the toast, answered to the offer's own read.
+  calls.list = () => Promise.resolve([])
+  await mounted.act(() => offer?.action?.())
+
+  expect(calls.removed).toEqual([])
+  expect(lastToast()?.message).toBe("feature was already removed")
+  await mounted.unmount()
 })
 
 // The other half of the same read: a checkout that is still there is reused,
