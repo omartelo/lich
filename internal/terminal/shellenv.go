@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -17,6 +18,49 @@ const shellEnvTimeout = 5 * time.Second
 // shellEnvSentinel fences the env dump off from rc chatter (greetings, MOTD,
 // job-control warnings). Matched by last occurrence so rc that echoes it loses.
 const shellEnvSentinel = "__LICH_SHELL_ENV__"
+
+var (
+	// resolving admits one login-shell resolution at a time, and refuses rather
+	// than queues: the caller is a button press, and a second one waiting out the
+	// first would pay the same shellEnvTimeout twice over for the same answer.
+	resolving sync.Mutex
+
+	parkedMu sync.Mutex
+	// parkedReader is the reader an earlier resolution abandoned, still blocked
+	// on its pty; it closes when that read finally returns. Nil once nothing is
+	// outstanding.
+	parkedReader <-chan struct{}
+)
+
+// shellDumpParked reports a reader an earlier resolution left behind, and
+// forgets one that has since been collected. A pty read already blocked in the
+// kernel cannot be interrupted (see runShellDump), so a second resolution
+// started over the first leaks a second fd, goroutine and zombie child — and
+// would be asking the same shell that did not answer the first time. Refusing
+// keeps that cost at one outstanding reader, whatever the button is pressed.
+//
+// Read lazily rather than tracked: nothing tells lich when whatever holds that
+// pty finally lets go, so the next attempt is the only place to look.
+func shellDumpParked() bool {
+	parkedMu.Lock()
+	defer parkedMu.Unlock()
+	if parkedReader == nil {
+		return false
+	}
+	select {
+	case <-parkedReader:
+		parkedReader = nil
+		return false
+	default:
+		return true
+	}
+}
+
+func noteParkedReader(collected <-chan struct{}) {
+	parkedMu.Lock()
+	defer parkedMu.Unlock()
+	parkedReader = collected
+}
 
 // ResolveShellEnv augments base with the variables a login+interactive shell
 // exports. lich is launched from a GUI, so its environment is the graphical
@@ -58,13 +102,24 @@ func ReresolveShellEnv(base []string) ([]string, error) {
 		return base, nil
 	}
 
+	if !resolving.TryLock() {
+		return nil, fmt.Errorf("%s: a resolution is already running", shell)
+	}
+	defer resolving.Unlock()
+	if shellDumpParked() {
+		return nil, fmt.Errorf("%s: the last resolution's reader is still parked on its pty", shell)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), shellEnvTimeout)
 	defer cancel()
 
 	// -l -i so both login profiles (bash/zsh) and interactive rc (fish's
 	// config.fish is interactive-only) run; `env` is external, so the command is
 	// identical across shells.
-	out, err := runShellDump(ctx, shell, "echo "+shellEnvSentinel+"; env", base)
+	out, parked, err := runShellDump(ctx, shell, "echo "+shellEnvSentinel+"; env", base)
+	if parked != nil {
+		noteParkedReader(parked)
+	}
 
 	extra := parseShellEnvDump(shellEnvSentinel, out)
 	if extra == nil {

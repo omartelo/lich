@@ -5,6 +5,8 @@ package terminal
 import (
 	"context"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -19,7 +21,7 @@ func TestRunShellDumpTimeoutDegrades(t *testing.T) {
 	defer cancel()
 
 	start := time.Now()
-	_, _ = runShellDump(ctx, "/bin/sh", "sleep 30", os.Environ())
+	_, _, _ = runShellDump(ctx, "/bin/sh", "sleep 30", os.Environ())
 	if elapsed := time.Since(start); elapsed > 2*time.Second {
 		t.Fatalf("runShellDump took %v, want it cut off near the 200ms ctx deadline", elapsed)
 	}
@@ -37,7 +39,7 @@ func TestRunShellDumpBackgroundJobDoesNotBlockDeadline(t *testing.T) {
 	defer cancel()
 
 	start := time.Now()
-	_, _ = runShellDump(ctx, "/bin/sh", "(sleep 30 &); exit 0", os.Environ())
+	_, _, _ = runShellDump(ctx, "/bin/sh", "(sleep 30 &); exit 0", os.Environ())
 	if elapsed := time.Since(start); elapsed > 2*time.Second {
 		t.Fatalf("runShellDump took %v, want it cut off near the 200ms ctx deadline despite the backgrounded job", elapsed)
 	}
@@ -53,7 +55,7 @@ func TestRunShellDumpBackgroundJobStillYieldsOutput(t *testing.T) {
 	defer cancel()
 
 	start := time.Now()
-	out, err := runShellDump(ctx, "/bin/sh", "echo REAL_OUTPUT=yes; (sleep 30 &); exit 0", os.Environ())
+	out, _, err := runShellDump(ctx, "/bin/sh", "echo REAL_OUTPUT=yes; (sleep 30 &); exit 0", os.Environ())
 	elapsed := time.Since(start)
 	if err != nil {
 		t.Fatalf("runShellDump error: %v", err)
@@ -70,7 +72,78 @@ func TestRunShellDumpSurfacesShellFailure(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if _, err := runShellDump(ctx, "/bin/sh", "exit 7", os.Environ()); err == nil {
+	if _, _, err := runShellDump(ctx, "/bin/sh", "exit 7", os.Environ()); err == nil {
 		t.Fatal("runShellDump: want the shell's exit error")
 	}
+}
+
+// TestReresolveShellEnvSingleFlightWhileReaderParked pins the bound on the
+// leak: an rc that backgrounds a job holds the pty open after the shell itself
+// has gone, so the reader stays parked and uninterruptible. A second press must
+// be refused there and then rather than spawn a second shell — one outstanding
+// reader is the ceiling, however many times the button is pressed.
+func TestReresolveShellEnvSingleFlightWhileReaderParked(t *testing.T) {
+	t.Cleanup(func() { noteParkedReader(nil) })
+	// Absolute paths throughout: the resolution hands the shell the base env,
+	// whose PATH is the one being replaced and resolves nothing.
+	sleep, err := exec.LookPath("sleep")
+	if err != nil {
+		t.Skip("sleep not installed")
+	}
+	dir := t.TempDir()
+	spawns := filepath.Join(dir, "spawns")
+	fake := filepath.Join(dir, "fakeshell")
+	// The dump is printed in full, then a backgrounded job keeps the pty open
+	// after the shell itself has gone — the shape an rc that evals an ssh-agent
+	// leaves behind. The quiet window ends the read with its reader still
+	// blocked on that pty. It re-execs an interactive shell because the guard is
+	// only reachable that way: a job backgrounded by a non-interactive one lets
+	// the pty go with it.
+	script := "#!/bin/sh\n" +
+		"echo x >> " + spawns + "\n" +
+		"exec /bin/sh -i -c 'echo " + shellEnvSentinel + "; echo PATH=/late/install; (" + sleep + " 30 &); exit 0'\n"
+	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SHELL", fake)
+
+	if _, err := ReresolveShellEnv([]string{"PATH=/orig"}); err != nil {
+		t.Fatalf("first resolution: %v", err)
+	}
+	if _, err := ReresolveShellEnv([]string{"PATH=/orig"}); err == nil {
+		t.Fatal("second resolution: want a refusal while the reader is parked")
+	}
+
+	if got := spawnCount(t, spawns); got != 1 {
+		t.Fatalf("the shell ran %d times, want 1", got)
+	}
+}
+
+// TestShellDumpParkedClearsWhenCollected: the refusal lasts exactly as long as
+// the read does. Whatever holds the pty letting go is the only thing that ends
+// one, and nothing reports it — so the next attempt is where it is noticed.
+func TestShellDumpParkedClearsWhenCollected(t *testing.T) {
+	t.Cleanup(func() { noteParkedReader(nil) })
+	collected := make(chan struct{})
+	noteParkedReader(collected)
+
+	if !shellDumpParked() {
+		t.Fatal("shellDumpParked() = false while the reader is still parked")
+	}
+	close(collected)
+	if shellDumpParked() {
+		t.Fatal("shellDumpParked() = true after the reader was collected")
+	}
+	if shellDumpParked() {
+		t.Fatal("shellDumpParked() = true on a second look, want the reader forgotten")
+	}
+}
+
+func spawnCount(t *testing.T, path string) int {
+	t.Helper()
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read spawn log: %v", err)
+	}
+	return strings.Count(string(body), "x")
 }

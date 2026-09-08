@@ -248,8 +248,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   instead of the 300ms one — the same outcome as a genuinely hung shell, and nothing distinguishes the two. A
   quiet-window or ctx timeout leaves the reader goroutine running for whatever still holds the pty, and it is
   never collected: the fd, the goroutine and the zombie child persist until that holder exits on its own or
-  lich itself does, whichever comes first — one leak per resolution that hits this edge, and a re-check button
-  (`internal/providers.Service.RefreshPath`) resolves again on every press, so it is no longer one per launch.
+  lich itself does, whichever comes first — one leak per lich launch that hits this edge, not a recurring one.
   And **Windows gets none of this**: `SHELL` is normally unset there, so `ResolveShellEnv` returns before
   `shellenv_windows.go`'s pipe-based `runShellDump` ever runs — but on a machine where the user sets it anyway
   (Git Bash, a POSIX-ish shell reached through PATH), that path still runs over a pipe, so an rc guarded the

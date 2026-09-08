@@ -42,12 +42,12 @@ const shellDumpQuiet = 300 * time.Millisecond
 // running for whatever still holds the pty — a single leaked goroutine (and
 // its fd, and its zombie child once it exits) is the cost of never blocking
 // boot past ctx.
-func runShellDump(ctx context.Context, shell, cmdStr string, env []string) (string, error) {
+func runShellDump(ctx context.Context, shell, cmdStr string, env []string) (string, <-chan struct{}, error) {
 	cmd := exec.Command(shell, "-l", "-i", "-c", cmdStr)
 	cmd.Env = env
 	ptmx, err := pty.Start(cmd)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	type result struct {
@@ -55,7 +55,14 @@ func runShellDump(ctx context.Context, shell, cmdStr string, env []string) (stri
 		err   error
 	}
 	results := make(chan result)
+	// abandoned frees the reader from a send nobody is receiving any more, so
+	// that the moment its parked read finally returns it can leave; collected
+	// closes when it does, and that is the only signal there is that the pty was
+	// let go (ReresolveShellEnv holds it to keep the leak at one outstanding).
+	abandoned := make(chan struct{})
+	collected := make(chan struct{})
 	go func() {
+		defer close(collected)
 		defer ptmx.Close()
 		buf := make([]byte, 4096)
 		for {
@@ -63,7 +70,11 @@ func runShellDump(ctx context.Context, shell, cmdStr string, env []string) (stri
 			if n > 0 {
 				cp := make([]byte, n)
 				copy(cp, buf[:n])
-				results <- result{chunk: cp}
+				select {
+				case results <- result{chunk: cp}:
+				case <-abandoned:
+					return
+				}
 			}
 			if readErr != nil {
 				waitErr := cmd.Wait()
@@ -72,7 +83,10 @@ func runShellDump(ctx context.Context, shell, cmdStr string, env []string) (stri
 				} else if errors.Is(readErr, io.EOF) || errors.Is(readErr, syscall.EIO) {
 					readErr = nil
 				}
-				results <- result{err: readErr}
+				select {
+				case results <- result{err: readErr}:
+				case <-abandoned:
+				}
 				return
 			}
 		}
@@ -84,15 +98,20 @@ func runShellDump(ctx context.Context, shell, cmdStr string, env []string) (stri
 		select {
 		case result := <-results:
 			if result.err != nil || result.chunk == nil {
-				return out.String(), result.err
+				// The reader sent its last result and is on its way out, so
+				// there is nothing left parked for the next resolution to wait
+				// on.
+				return out.String(), nil, result.err
 			}
 			out.Write(result.chunk)
 			quiet = time.After(shellDumpQuiet)
 		case <-quiet:
-			return out.String(), nil
+			close(abandoned)
+			return out.String(), collected, nil
 		case <-ctx.Done():
+			close(abandoned)
 			_ = cmd.Process.Kill()
-			return out.String(), ctx.Err()
+			return out.String(), collected, ctx.Err()
 		}
 	}
 }
