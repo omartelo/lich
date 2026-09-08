@@ -21,7 +21,7 @@ import (
 func (s *Service) Observe(sessionID, state string) {
 	s.mu.Lock()
 	s.recordState(sessionID, state)
-	ended, notice, nudged := s.endedErrands(sessionID, state)
+	ended, notice := s.endedErrands(sessionID, state)
 	// A waiter still holding the line carries the news out through its own
 	// select; an errand nobody is attending is stashed for the sender instead,
 	// the way an answer would be. Without it the promise a pending result makes
@@ -46,31 +46,14 @@ func (s *Service) Observe(sessionID, state string) {
 		s.stash(e.id, e.t, StatusUnanswered, "")
 	}
 	if notice != "" {
-		s.askForATicket(sessionID, notice, nudged)
+		if err := s.deliver(sessionID, notice); err != nil {
+			slog.Warn("relay: ticket request not delivered", "session", sessionID, "err", err)
+		}
 	}
 	// This session as a sender: its turn ending frees its prompt, which is what
 	// a nudge held back during the turn was waiting for.
 	if state == stateDone {
 		s.flushNudge(sessionID)
-	}
-}
-
-// askForATicket types the notice at the worker's own prompt and gives the marks
-// back if it never got there. The notice is the whole of what happens to an
-// ambiguous turn — no sender is told anything — so one that failed to arrive has
-// to be sendable again, the same bookkeeping flushNudge does for the inbox.
-func (s *Service) askForATicket(sessionID, notice string, nudged []string) {
-	err := s.deliver(sessionID, notice)
-	if err == nil {
-		return
-	}
-	slog.Warn("relay: ticket request not delivered", "session", sessionID, "err", err)
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, id := range nudged {
-		if t, ok := s.tickets[id]; ok {
-			t.nudged = false
-		}
 	}
 }
 
@@ -124,12 +107,12 @@ func (s *Service) recordState(sessionID, state string) {
 // stall channel, for Observe to announce outside the lock. Called with s.mu
 // held.
 //
-// It returns two more things for the turn nothing can attribute: the notice to
-// type at the worker's prompt, and the tickets it was marked against, so a
-// notice that never arrived can be sent again.
-func (s *Service) endedErrands(sessionID, state string) ([]endedErrand, string, []string) {
+// It returns one more thing for a turn that could have been either of two
+// errands: the notice asking the worker to name the ticket next time, for
+// Observe to type outside the lock.
+func (s *Service) endedErrands(sessionID, state string) ([]endedErrand, string) {
 	var ended []endedErrand
-	notice, nudged := "", []string(nil)
+	notice := ""
 	switch state {
 	case stateBusy:
 		for _, t := range s.tickets {
@@ -153,40 +136,27 @@ func (s *Service) endedErrands(sessionID, state string) ([]endedErrand, string, 
 		}
 	case stateDone:
 		candidates := s.turnCandidates(sessionID)
-		if len(candidates) == 1 {
-			id := candidates[0]
+		// Worded before the tickets go, because it is read off them — and only
+		// where the turn could have been either: with one candidate there is
+		// nothing to pick between.
+		if len(candidates) > 1 {
+			notice = pickTicketNudge(len(candidates), openErrands(s.tickets, candidates))
+		}
+		// What the ending says is the same thing about every errand it could
+		// have been — the target finished a turn and did not answer this one —
+		// and that is true of each of them whichever one it worked on. So they
+		// all take the path a single one takes: no sender hears anything the
+		// others could not also have been told. Naming which one that turn *was*
+		// is the part nothing here can do, and the notice above is what asks the
+		// worker for it.
+		for _, id := range candidates {
 			t := s.tickets[id]
 			delete(s.tickets, id)
 			close(t.stalled)
 			ended = append(ended, endedErrand{id, t})
-			break
-		}
-		if len(candidates) > 1 {
-			notice, nudged = s.askTicketNoticeLocked(candidates)
 		}
 	}
-	return ended, notice, nudged
-}
-
-// askTicketNoticeLocked words the notice for a turn that ended with more than
-// one errand it could have been, and marks the errands it names. Empty when
-// every one of them has been asked about already: the notice is typed at the
-// worker's prompt and starts a turn of its own, so nudging on every turn end
-// would nudge that session forever. A task that arrives later is unmarked and
-// asks again, which is the rule the inbox nudge follows for the same reason.
-// Called under s.mu.
-func (s *Service) askTicketNoticeLocked(candidates []string) (string, []string) {
-	var fresh []string
-	for _, id := range candidates {
-		if t := s.tickets[id]; !t.nudged {
-			t.nudged = true
-			fresh = append(fresh, id)
-		}
-	}
-	if len(fresh) == 0 {
-		return "", nil
-	}
-	return pickTicketNudge(len(candidates), openErrands(s.tickets, candidates)), fresh
+	return ended, notice
 }
 
 // turnCandidates is every errand of a target's the turn that just ended could

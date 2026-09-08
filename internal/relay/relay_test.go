@@ -994,15 +994,16 @@ func awaitDelivered(t *testing.T, svc *Service, n int) {
 	t.Fatalf("never saw %d delivered tickets", n)
 }
 
-// TestADoneWithTwoErrandsOpenClosesNeitherAndAsksForTheTicket proves a turn
-// nothing can attribute closes nothing. Two messages delivered back to back —
+// TestADoneWithTwoErrandsOpenStallsBothAndAsksForTheTicket proves what a turn
+// ending says, and what it does not. Two messages delivered back to back —
 // inside the second or two before the target's busy report lands — queue as two
-// turns, and the end of the first says only that a turn ended: the target's
-// screen is the only place that says which task it worked on. Closing the
-// oldest, which this used to do, reported a stranger's errand as over on a
-// guess. What happens instead is a note at the worker's own prompt naming both
-// tickets and what each asked, and nothing at all at either sender's.
-func TestADoneWithTwoErrandsOpenClosesNeitherAndAsksForTheTicket(t *testing.T) {
+// turns, and the end of the first says only that a turn ended without an answer
+// here. That is the same true thing about every errand it could have been, so
+// every one of them takes the stall path a single errand takes and every sender
+// hears what it would have heard alone. What nothing here can say is which of
+// them that turn was — so the answer is not put on one of them by delivery
+// order, and the worker is asked at its own prompt to name the ticket.
+func TestADoneWithTwoErrandsOpenStallsBothAndAsksForTheTicket(t *testing.T) {
 	term := newFakeTerminal("s1", "s2", "s3")
 	events := &fakeEvents{}
 	svc := newRelay(workspace(), term, events)
@@ -1020,29 +1021,22 @@ func TestADoneWithTwoErrandsOpenClosesNeitherAndAsksForTheTicket(t *testing.T) {
 	}()
 	awaitDelivered(t, svc, 2)
 	delivery := len(term.writesTo("s2"))
+	tickets := openTickets(svc)
 
 	svc.Observe("s2", "busy")
 	svc.Observe("s2", "done")
 
-	select {
-	case got := <-first:
-		t.Fatalf("a turn nothing can attribute closed an errand: %+v", got)
-	case got := <-second:
-		t.Fatalf("a turn nothing can attribute closed an errand: %+v", got)
-	case <-time.After(100 * time.Millisecond):
+	for _, got := range []Result{<-first, <-second} {
+		if got.Status != StatusUnanswered {
+			t.Errorf("status = %q, want %q for both errands the turn could have been",
+				got.Status, StatusUnanswered)
+		}
 	}
-	if halts := events.stalled(); len(halts) != 0 {
-		t.Errorf("a sender was told its errand was over: %+v", halts)
+	if halts := events.stalled(); len(halts) != 2 {
+		t.Errorf("stall events = %d, want one per sender", len(halts))
 	}
-	svc.mu.Lock()
-	ids := make([]string, 0, len(svc.tickets))
-	for id := range svc.tickets {
-		ids = append(ids, id)
-	}
-	inbox := len(svc.ready)
-	svc.mu.Unlock()
-	if len(ids) != 2 || inbox != 0 {
-		t.Fatalf("open tickets = %v, inbox = %d, want both still open and nothing stashed", ids, inbox)
+	if left := openTickets(svc); len(left) != 0 {
+		t.Errorf("open tickets = %v, want both closed by the turn that ended", left)
 	}
 
 	if !awaitWrites(term, "s2", delivery+2) {
@@ -1057,52 +1051,49 @@ func TestADoneWithTwoErrandsOpenClosesNeitherAndAsksForTheTicket(t *testing.T) {
 			t.Errorf("the notice is missing %q:\n%s", want, notice)
 		}
 	}
-	for _, id := range ids {
+	for _, id := range tickets {
 		if !strings.Contains(notice, id) {
 			t.Errorf("the notice does not name ticket %q:\n%s", id, notice)
 		}
 	}
+}
 
-	// One note per errand. The note is typed at that prompt and runs as a turn
-	// of its own, so a second ending must not produce a second one — that is a
-	// session nudged forever.
+// A single errand is the case there is nothing to pick between: it is stalled
+// on its own, and the worker is not asked to name anything.
+func TestADoneWithOneErrandOpenStallsItWithoutANotice(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := newRelay(workspace(), term, &fakeEvents{})
+
+	only := make(chan Result, 1)
+	go func() {
+		got, _ := svc.Send("s1", "docs", "", "run the tests", 5)
+		only <- got
+	}()
+	awaitDelivered(t, svc, 1)
+	delivery := len(term.writesTo("s2"))
+
 	svc.Observe("s2", "busy")
 	svc.Observe("s2", "done")
+
+	if got := <-only; got.Status != StatusUnanswered {
+		t.Fatalf("status = %q, want %q", got.Status, StatusUnanswered)
+	}
 	time.Sleep(50 * time.Millisecond)
-	if got := len(term.writesTo("s2")); got != delivery+2 {
-		t.Errorf("writes = %d, want the one notice: a turn end nudged the worker again", got)
-	}
-
-	// Naming the ticket still works, and the errand left behind is unambiguous
-	// again: the next turn that ends without an answer is its own.
-	if err := svc.Reply("s2", ids[0], "answered by name"); err != nil {
-		t.Fatalf("Reply: %v", err)
-	}
-	svc.Observe("s2", "busy")
-	svc.Observe("s2", "done")
-	for i := 0; i < 2; i++ {
-		select {
-		case got := <-first:
-			assertClosed(t, got)
-		case got := <-second:
-			assertClosed(t, got)
-		case <-time.After(2 * time.Second):
-			t.Fatal("the one errand left was not closed by its own turn")
-		}
+	if got := len(term.writesTo("s2")); got != delivery {
+		t.Errorf("writes = %d, want no notice: there was only one errand to be", got)
 	}
 }
 
-// assertClosed is either end of the pair above: the errand answered by name,
-// and the one the turn after it closed unanswered.
-func assertClosed(t *testing.T, got Result) {
-	t.Helper()
-	if got.Status == StatusAnswered && got.Answer == "answered by name" {
-		return
+// openTickets is every errand still on the table, for a test that has to know
+// what was closed and what the worker was told about.
+func openTickets(svc *Service) []string {
+	svc.mu.Lock()
+	defer svc.mu.Unlock()
+	ids := make([]string, 0, len(svc.tickets))
+	for id := range svc.tickets {
+		ids = append(ids, id)
 	}
-	if got.Status == StatusUnanswered {
-		return
-	}
-	t.Fatalf("result = %+v, want the named answer or an unanswered errand", got)
+	return ids
 }
 
 // TestASecondErrandQueuedMidTurnSurvivesTheFirstsEnd is the same guarantee with
@@ -1597,12 +1588,7 @@ func TestReplyWithoutATicketIsRefusedWithTwoErrandsOpen(t *testing.T) {
 	if err == nil {
 		t.Fatal("a ticketless answer was accepted with two errands open")
 	}
-	svc.mu.Lock()
-	ids := make([]string, 0, len(svc.tickets))
-	for id := range svc.tickets {
-		ids = append(ids, id)
-	}
-	svc.mu.Unlock()
+	ids := openTickets(svc)
 	if len(ids) != 2 {
 		t.Fatalf("open tickets = %v, want the two that were sent", ids)
 	}

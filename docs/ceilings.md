@@ -371,15 +371,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   a deleted project): the row is the only copy of the prompt, so it goes with the row, and all that says so is
   one Warn in a log nobody is watching (`internal/store`, `noteForfeitedSchedules`).
 
-- **A turn that ends with two errands open reports neither** (`internal/relay/observe.go`,
-  `turnCandidates`): a state report says a turn ended, never which task it was, and the target's screen is the
-  one thing lich does not read. With a single errand open that ending is its own and the sender is told the
-  target finished without answering; with two, no sender is told anything at all, and the worker is asked at
-  its prompt to name the ticket instead. That note is typed once per errand — it is itself a turn at that
-  prompt, so re-sending it on every turn end would nudge a session forever — which leaves an agent that
-  ignores it with two senders waiting out their full wait and then the ticket's hour. A message delivered
-  mid-turn is not part of the ambiguity: the turn was already running, so its ending is attributed as before.
-
 - **A lich-spawned Kiro session runs lich's agent, not the user's** (`internal/agentplugin/kiro.go`,
   `internal/terminal/command.go`, `agentArgs`): Kiro keeps its hooks inside an *agent config*, and its built-in
   `kiro_default` cannot be shadowed — a `kiro_default.json` in the agents directory is ignored outright (measured
