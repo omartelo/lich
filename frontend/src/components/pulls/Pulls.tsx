@@ -221,7 +221,7 @@ export function Pulls({ list = false }: PullsProps) {
     } catch (err: unknown) {
       toast.error(`Failed to remove worktree: ${errorText(err)}`)
     }
-    refreshCheckouts()
+    void refreshCheckouts()
   }
 
   const onMerged = () => {
@@ -248,32 +248,38 @@ export function Pulls({ list = false }: PullsProps) {
   // it is reused rather than recreated — and that includes the project's own
   // directory, which is where a branch usually is.
   //
+  // Which of the two it is comes from a fresh read, never from the filed answer
+  // the button was drawn from: a checkout removed from a terminal while the user
+  // was on another screen would otherwise send this to a directory that is gone.
+  // Verify before acting, never before showing — the label goes on painting from
+  // the cache, and only the click pays the round trip.
+  //
   // It answers with the session the work lands in, so a caller with something to
   // hand that session knows where to write; "" when nothing was opened.
   const openInSession = async (): Promise<string> => {
     if (!projectId || !detail) {
       return ""
     }
-    const existing = checkedOut
-    if (existing) {
-      const live = sessionsOf(sessions, projectId).find((s) => s.path === existing.path)
-      let target: string
-      if (live) {
-        activateSession(projectId, live.id)
-        target = live.id
-      } else if (existing.path === projectPath) {
-        // The project's own checkout is not a worktree: it has no parked
-        // session to resume and must never be handed to the worktree flows.
-        target = newSession(projectId)
-      } else {
-        target = await reopenWorktreeSession(projectId, existing)
-      }
-      openPulls(existing.path)
-      navigate(`/projects/${projectId}`)
-      return target
-    }
     setOpening(true)
     try {
+      const existing = (await refreshCheckouts()).find((c) => c.name === detail.headRefName)
+      if (existing) {
+        const live = sessionsOf(sessions, projectId).find((s) => s.path === existing.path)
+        let target: string
+        if (live) {
+          activateSession(projectId, live.id)
+          target = live.id
+        } else if (existing.path === projectPath) {
+          // The project's own checkout is not a worktree: it has no parked
+          // session to resume and must never be handed to the worktree flows.
+          target = newSession(projectId)
+        } else {
+          target = await reopenWorktreeSession(projectId, existing)
+        }
+        openPulls(existing.path)
+        navigate(`/projects/${projectId}`)
+        return target
+      }
       const wt = await ProjectService.CreateWorktreeFromPR(projectPath, projectId, detail.number)
       if (!wt) {
         return ""
@@ -283,7 +289,7 @@ export function Pulls({ list = false }: PullsProps) {
       const target = newWorktreeSession(projectId, wt)
       queueSetup(target)
       openPulls(wt.path)
-      refreshCheckouts()
+      void refreshCheckouts()
       navigate(`/projects/${projectId}`)
       return target
     } catch (err: unknown) {

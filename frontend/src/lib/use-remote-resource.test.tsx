@@ -249,7 +249,7 @@ describe("refresh", () => {
     const frames: Frame[] = []
     let land: (value: string) => void = () => {}
     let failing = false
-    let again: () => Promise<void> = () => Promise.resolve()
+    let again: () => Promise<string> = () => Promise.resolve("")
 
     function Probe() {
       const load = () =>
@@ -268,23 +268,31 @@ describe("refresh", () => {
 
     const mounted = await mountBudget(createElement(StrictMode, null, createElement(Probe)))
 
-    let settled = false
-    const asked = again().then(() => {
-      settled = true
+    let settled = ""
+    const asked = again().then((value) => {
+      settled = value
     })
     await mounted.act(() => {})
     // Still out: the promise stands for the round trip, not for the call.
-    expect(settled).toBe(false)
+    expect(settled).toBe("")
     await mounted.act(() => land("answer"))
     await asked
-    expect(settled).toBe(true)
+    // What it read, not just that it read: an action decides on this value
+    // rather than on the `data` its own render closed over.
+    expect(settled).toBe("answer")
 
     failing = true
     // Deliberately not caught. A refresh that rejected would fail the run here,
     // and the caller waiting to read `error` would never run at all.
-    await mounted.act(async () => await again())
+    let onFailure = "unset"
+    await mounted.act(async () => {
+      onFailure = await again()
+    })
 
     expect(frames[frames.length - 1]?.error).toContain("offline")
+    // The same fallback the failure put on screen, so a click still has
+    // something to act on rather than a thrown call it has to guard.
+    expect(onFailure).toBe("")
     await mounted.unmount()
   })
 })

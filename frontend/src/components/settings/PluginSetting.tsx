@@ -39,11 +39,37 @@ export function PluginSetting() {
   })
 
   const run = async (call: () => Promise<null>, progress: string, done: string, failed: string) => {
-    setBusy(true)
     if (await runWithToast(progress, call, done, failed)) {
       // The filed answer is replaced by this read, so the next visit shows what
-      // the install just changed rather than the rows it changed away from.
+      // the action just changed rather than the rows it changed away from.
       await refresh()
+    }
+  }
+
+  // What the button under the pointer is really for. The row is drawn from a
+  // filed answer, so a plugin installed or removed from a terminal while the
+  // user was elsewhere offers the wrong thing until this visit's read lands:
+  // the click re-asks first and acts on the row that comes back, so an Update
+  // on a plugin since removed installs it instead, and an Install of one that
+  // is already there only repaints. Verify before acting, never before showing
+  // — the rows go on painting from the cache, and only the click pays a read.
+  const act = async (provider: string, name: string) => {
+    setBusy(true)
+    const fresh = (await refresh())?.find((row) => row.provider === provider)
+    if (fresh?.available && !fresh.installed) {
+      await run(
+        () => AgentPlugin.Install(provider),
+        `Installing lich plugin for ${name}…`,
+        `Plugin installed — ${RESTART_HINT}`,
+        "Install failed",
+      )
+    } else if (fresh?.installed && fresh.updateAvailable) {
+      await run(
+        () => AgentPlugin.Update(provider),
+        `Updating lich plugin for ${name}…`,
+        `Plugin updated — ${RESTART_HINT}`,
+        "Update failed",
+      )
     }
     setBusy(false)
   }
@@ -86,14 +112,7 @@ export function PluginSetting() {
             {status.available && !status.installed && (
               <Button
                 size="sm"
-                onClick={() =>
-                  void run(
-                    () => AgentPlugin.Install(status.provider),
-                    `Installing lich plugin for ${status.name}…`,
-                    `Plugin installed — ${RESTART_HINT}`,
-                    "Install failed",
-                  )
-                }
+                onClick={() => void act(status.provider, status.name)}
                 disabled={busy}
               >
                 {busy ? spinner : null}
@@ -104,14 +123,7 @@ export function PluginSetting() {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() =>
-                  void run(
-                    () => AgentPlugin.Update(status.provider),
-                    `Updating lich plugin for ${status.name}…`,
-                    `Plugin updated — ${RESTART_HINT}`,
-                    "Update failed",
-                  )
-                }
+                onClick={() => void act(status.provider, status.name)}
                 disabled={busy}
               >
                 {busy ? spinner : null}
