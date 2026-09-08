@@ -84,8 +84,8 @@ func TestRunShellDumpSurfacesShellFailure(t *testing.T) {
 // reader is the ceiling, however many times the button is pressed.
 func TestReresolveShellEnvSingleFlightWhileReaderParked(t *testing.T) {
 	t.Cleanup(func() { noteParkedReader(nil) })
-	// Absolute paths throughout: the resolution hands the shell the base env,
-	// whose PATH is the one being replaced and resolves nothing.
+	// Absolute: the resolution hands the shell the base env, whose PATH is the
+	// one being replaced and resolves nothing.
 	sleep, err := exec.LookPath("sleep")
 	if err != nil {
 		t.Skip("sleep not installed")
@@ -93,15 +93,17 @@ func TestReresolveShellEnvSingleFlightWhileReaderParked(t *testing.T) {
 	dir := t.TempDir()
 	spawns := filepath.Join(dir, "spawns")
 	fake := filepath.Join(dir, "fakeshell")
-	// The dump is printed in full, then a backgrounded job keeps the pty open
-	// after the shell itself has gone — the shape an rc that evals an ssh-agent
-	// leaves behind. The quiet window ends the read with its reader still
-	// blocked on that pty. It re-execs an interactive shell because the guard is
-	// only reachable that way: a job backgrounded by a non-interactive one lets
-	// the pty go with it.
+	// The dump is printed in full and then the pty is held open — the shape a
+	// prompt tool or agent an rc hands off to leaves behind. The quiet window
+	// ends the read 300ms later with its reader still blocked on that pty.
+	// Held by the shell process itself rather than by a job it backgrounds:
+	// whether a background job keeps the slave open is the shell's and the
+	// platform's business, and this is the same edge either way.
 	script := "#!/bin/sh\n" +
 		"echo x >> " + spawns + "\n" +
-		"exec /bin/sh -i -c 'echo " + shellEnvSentinel + "; echo PATH=/late/install; (" + sleep + " 30 &); exit 0'\n"
+		"echo " + shellEnvSentinel + "\n" +
+		"echo PATH=/late/install\n" +
+		"exec " + sleep + " 30\n"
 	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
