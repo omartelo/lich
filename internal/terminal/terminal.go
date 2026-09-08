@@ -222,6 +222,7 @@ type Store interface {
 	CostLedger(sessionID, transcriptID string) (int64, string, float64, error)
 	SaveCostLedger(sessionID, transcriptID string, offset int64, lastMessage string, cost float64) error
 	SessionCost(sessionID string) (float64, error)
+	SaveForkCostOffset(sessionID, forkedFrom string) error
 	AddHandsOn(sessionID string, seconds int64) error
 	HandsOn(sessionID string) (int64, error)
 	SaveTurnRecord(sessionID string, rec store.TurnRecord) error

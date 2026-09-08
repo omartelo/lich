@@ -343,8 +343,13 @@ export const ProjectService = {
   /** Check a pull request's head branch out into its own worktree; rejects a fork PR. */
   CreateWorktreeFromPR: (projectPath: string, projectID: string, number: number) =>
     call<Worktree | null>("project.CreateWorktreeFromPR", [projectPath, projectID, number]),
-  RemoveWorktree: (projectPath: string, wtPath: string, force: boolean) =>
-    call<null>("project.RemoveWorktree", [projectPath, wtPath, force]),
+  /**
+   * Remove a worktree checkout. `adoptedAck` is the caller saying it has named
+   * the absolute path to the user and been told to go ahead, which is what one
+   * lich did not create needs on top of the usual answers.
+   */
+  RemoveWorktree: (projectPath: string, wtPath: string, force: boolean, adoptedAck: boolean) =>
+    call<null>("project.RemoveWorktree", [projectPath, wtPath, force, adoptedAck]),
   WorktreeDirty: (wtPath: string) => call<boolean>("project.WorktreeDirty", [wtPath]),
   WorktreeAdopted: (wtPath: string) => call<boolean>("project.WorktreeAdopted", [wtPath]),
 }

@@ -201,11 +201,13 @@ export function Pulls({ list = false }: PullsProps) {
       toast.error("Worktree has a pinned session — unpin it first.")
       return
     }
-    // A checkout the user made by hand is theirs: lich lists it and works in it,
-    // but it is not lich's to delete. Refused here rather than at the call,
-    // which is past the point where the sessions have already been discarded.
+    // A checkout the user made by hand is theirs, so deleting it takes a
+    // confirmation naming the directory — which this screen has nowhere to put.
+    // Routed to the sidebar's close dialog, the way a dirty one is. Refused here
+    // rather than at the call, which is past the point where the sessions have
+    // already been discarded.
     if (await ProjectService.WorktreeAdopted(wtPath).catch(() => true)) {
-      toast.error("lich did not create this worktree — remove the checkout yourself.")
+      toast.error("lich did not create this worktree — remove it from the sidebar.")
       return
     }
     if (await ProjectService.WorktreeDirty(wtPath).catch(() => false)) {
@@ -226,7 +228,7 @@ export function Pulls({ list = false }: PullsProps) {
       navigate(`/projects/${projectId}`)
     }
     try {
-      await ProjectService.RemoveWorktree(projectPath, wtPath, false)
+      await ProjectService.RemoveWorktree(projectPath, wtPath, false, false)
       toast.success(`Removed ${baseName(wtPath)}`)
     } catch (err: unknown) {
       toast.error(`Failed to remove worktree: ${errorText(err)}`)

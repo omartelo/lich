@@ -61,6 +61,9 @@ func (s *Service) Start(
 	if fork && resume == "" {
 		return fmt.Errorf("a fork needs the conversation to branch, and no resume id was given")
 	}
+	if fork {
+		s.recordForkCost(id, kind, resume)
+	}
 	// Resolved before the lock, because it reads a file: the conversation this
 	// spawn replaces is still on the row until its successor reports, so a name
 	// recorded there is the one this card answers to. Whatever is left is the

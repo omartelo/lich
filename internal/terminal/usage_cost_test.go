@@ -772,3 +772,68 @@ func TestAPricedSessionCarriesNoMissReason(t *testing.T) {
 		t.Errorf("CostMiss = %q, want empty beside a number", got.CostMiss)
 	}
 }
+
+// TestAForkRecordsWhatItsParentHadCost proves the offset is taken at the fork's
+// own spawn. The copy carries the history it was branched from, so the ledger is
+// about to count that stretch a second time, and what it had cost the first time
+// is what has to come back off.
+func TestAForkRecordsWhatItsParentHadCost(t *testing.T) {
+	store := newCostStore("")
+	store.bin = stayAliveBin(t)
+	store.forkOffsets = map[string]float64{}
+	store.ledgers["parent\x00abc-123"] = stubLedger{cost: 1.25}
+	svc := New(store, nil, events.New())
+	t.Cleanup(func() { _ = svc.Close("fork") })
+
+	err := svc.Start("fork", "p1", t.TempDir(), "claude", "abc-123", "", true, false, 80, 24)
+
+	if err != nil {
+		t.Fatalf("Start = %v, want nil", err)
+	}
+	if got := store.forkOffsets["fork"]; got != 1.25 {
+		t.Errorf("fork offset = %v, want the 1.25 its parent had counted", got)
+	}
+}
+
+// TestAForkOfAProviderThatPricesItselfOffsetsNothing: opencode hands lich its
+// own figure and starts a forked session's at zero, so netting anything off it
+// would hide what the fork itself spent.
+func TestAForkOfAProviderThatPricesItselfOffsetsNothing(t *testing.T) {
+	store := newCostStore("")
+	store.bin = stayAliveBin(t)
+	store.forkOffsets = map[string]float64{}
+	store.ledgers["parent\x00abc-123"] = stubLedger{cost: 1.25}
+	svc := New(store, nil, events.New())
+	t.Cleanup(func() { _ = svc.Close("fork") })
+
+	err := svc.Start("fork", "p1", t.TempDir(), "opencode", "abc-123", "", true, false, 80, 24)
+
+	if err != nil {
+		t.Fatalf("Start = %v, want nil", err)
+	}
+	if _, offset := store.forkOffsets["fork"]; offset {
+		t.Errorf("fork offset = %v, want none for a provider that prices its own turns",
+			store.forkOffsets["fork"])
+	}
+}
+
+// TestAResumeIsNotAFork: continuing a conversation counts it once, so a spawn
+// that only resumes must record no offset — one that did would bill the session
+// backwards for its own history.
+func TestAResumeIsNotAFork(t *testing.T) {
+	store := newCostStore("")
+	store.bin = stayAliveBin(t)
+	store.forkOffsets = map[string]float64{}
+	store.ledgers["parent\x00abc-123"] = stubLedger{cost: 1.25}
+	svc := New(store, nil, events.New())
+	t.Cleanup(func() { _ = svc.Close("s1") })
+
+	err := svc.Start("s1", "p1", t.TempDir(), "claude", "abc-123", "", false, false, 80, 24)
+
+	if err != nil {
+		t.Fatalf("Start = %v, want nil", err)
+	}
+	if _, offset := store.forkOffsets["s1"]; offset {
+		t.Errorf("resume recorded an offset of %v, want none", store.forkOffsets["s1"])
+	}
+}

@@ -192,3 +192,127 @@ func TestCostReadoutIsOffUntilAskedFor(t *testing.T) {
 		t.Error("CostReadout = false after it was turned on")
 	}
 }
+
+// TestAForkIsNotBilledForTheHistoryItInherits is the whole point of the offset:
+// the copy's own transcript carries the parent's turns, so the ledger counts
+// them again and the session readout takes them back off. The parent is left
+// alone — it spent that money once and still reports it.
+func TestAForkIsNotBilledForTheHistoryItInherits(t *testing.T) {
+	svc := newCostSession(t)
+	if err := svc.SaveCostLedger("s1", "uuid-a", 100, "m1", 1.25); err != nil {
+		t.Fatalf("SaveCostLedger: %v", err)
+	}
+	if err := svc.AddSession("p1", "s2", "Session 2", "", "", 3, ""); err != nil {
+		t.Fatalf("AddSession: %v", err)
+	}
+	if err := svc.SaveForkCostOffset("s2", "uuid-a"); err != nil {
+		t.Fatalf("SaveForkCostOffset: %v", err)
+	}
+	// The fork's own transcript: the parent's 1.25 of history, plus 0.5 of its
+	// own.
+	if err := svc.SaveCostLedger("s2", "uuid-b", 200, "m2", 1.75); err != nil {
+		t.Fatalf("SaveCostLedger: %v", err)
+	}
+
+	fork, err := svc.SessionCost("s2")
+	if err != nil {
+		t.Fatalf("SessionCost: %v", err)
+	}
+	parent, err := svc.SessionCost("s1")
+	if err != nil {
+		t.Fatalf("SessionCost: %v", err)
+	}
+
+	if fork != 0.5 {
+		t.Errorf("fork cost = %v, want the 0.5 it spent itself", fork)
+	}
+	if parent != 1.25 {
+		t.Errorf("parent cost = %v, want its own 1.25 untouched", parent)
+	}
+}
+
+// TestAForkOfAForkOffsetsItsOwnParent: the offset is the parent's raw ledger
+// row, history included, and never its netted readout — which is what keeps a
+// chain of forks adding up to one conversation's spend instead of subtracting
+// the same history twice.
+func TestAForkOfAForkOffsetsItsOwnParent(t *testing.T) {
+	svc := newCostSession(t)
+	if err := svc.SaveCostLedger("s1", "uuid-a", 100, "m1", 1.25); err != nil {
+		t.Fatalf("SaveCostLedger: %v", err)
+	}
+	for _, id := range []string{"s2", "s3"} {
+		if err := svc.AddSession("p1", id, id, "", "", 3, ""); err != nil {
+			t.Fatalf("AddSession: %v", err)
+		}
+	}
+	// s2 forks s1's conversation and spends 0.5 of its own on top of it.
+	if err := svc.SaveForkCostOffset("s2", "uuid-a"); err != nil {
+		t.Fatalf("SaveForkCostOffset: %v", err)
+	}
+	if err := svc.SaveCostLedger("s2", "uuid-b", 200, "m2", 1.75); err != nil {
+		t.Fatalf("SaveCostLedger: %v", err)
+	}
+	// s3 forks s2's, and spends 0.25.
+	if err := svc.SaveForkCostOffset("s3", "uuid-b"); err != nil {
+		t.Fatalf("SaveForkCostOffset: %v", err)
+	}
+	if err := svc.SaveCostLedger("s3", "uuid-c", 300, "m3", 2.0); err != nil {
+		t.Fatalf("SaveCostLedger: %v", err)
+	}
+
+	cost, err := svc.SessionCost("s3")
+
+	if err != nil {
+		t.Fatalf("SessionCost: %v", err)
+	}
+	if cost != 0.25 {
+		t.Errorf("fork of a fork = %v, want the 0.25 it spent itself", cost)
+	}
+}
+
+// TestAForkNeverReportsMoneyBack: the offset is a snapshot of a conversation the
+// fork's own ledger has not caught up with yet, and a negative dollar figure on
+// a card is worse than a low one.
+func TestAForkNeverReportsMoneyBack(t *testing.T) {
+	svc := newCostSession(t)
+	if err := svc.SaveCostLedger("s1", "uuid-a", 100, "m1", 1.25); err != nil {
+		t.Fatalf("SaveCostLedger: %v", err)
+	}
+	if err := svc.AddSession("p1", "s2", "Session 2", "", "", 3, ""); err != nil {
+		t.Fatalf("AddSession: %v", err)
+	}
+	if err := svc.SaveForkCostOffset("s2", "uuid-a"); err != nil {
+		t.Fatalf("SaveForkCostOffset: %v", err)
+	}
+
+	cost, err := svc.SessionCost("s2")
+
+	if err != nil {
+		t.Fatalf("SessionCost: %v", err)
+	}
+	if cost != 0 {
+		t.Errorf("SessionCost = %v, want 0 rather than a negative total", cost)
+	}
+}
+
+// TestForkingAnUncountedConversationOffsetsNothing: a conversation lich never
+// priced — the readout off while it ran, a model with no rate — has no money to
+// give back, and inventing one would bill the fork below what it spent.
+func TestForkingAnUncountedConversationOffsetsNothing(t *testing.T) {
+	svc := newCostSession(t)
+	if err := svc.SaveForkCostOffset("s1", "uuid-never-counted"); err != nil {
+		t.Fatalf("SaveForkCostOffset: %v", err)
+	}
+	if err := svc.SaveCostLedger("s1", "uuid-b", 200, "m2", 0.75); err != nil {
+		t.Fatalf("SaveCostLedger: %v", err)
+	}
+
+	cost, err := svc.SessionCost("s1")
+
+	if err != nil {
+		t.Fatalf("SessionCost: %v", err)
+	}
+	if cost != 0.75 {
+		t.Errorf("SessionCost = %v, want the whole 0.75 counted", cost)
+	}
+}

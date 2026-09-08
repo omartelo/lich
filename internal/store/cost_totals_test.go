@@ -315,3 +315,51 @@ func TestCostTotalsAttributesNoRungItCannotName(t *testing.T) {
 		t.Errorf("total = %v, want the shell session's 3.00 counted", report.CostUSD)
 	}
 }
+
+// TestCostTotalsNetsAForksInheritedHistory: the ledger the report sums holds the
+// fork's gross number, history included, so `lich cost` has to net it the same
+// way the live readout does — or the pair reads as twice what was spent.
+func TestCostTotalsNetsAForksInheritedHistory(t *testing.T) {
+	svc := costWorkspace(t)
+	bill(t, svc, "p1", "s1", "claude", 1.25)
+	// The fork's own transcript carries s1's 1.25 of history and 0.5 of its own.
+	bill(t, svc, "p1", "s2", "claude", 1.75)
+	if err := svc.SaveForkCostOffset("s2", "uuid-s1"); err != nil {
+		t.Fatalf("SaveForkCostOffset: %v", err)
+	}
+
+	report, err := svc.CostTotals("", "", 0)
+
+	if err != nil {
+		t.Fatalf("CostTotals: %v", err)
+	}
+	if report.CostUSD != 1.75 {
+		t.Errorf("total = %v, want the 1.75 the pair actually spent", report.CostUSD)
+	}
+	if report.Sessions != 2 || report.Unpriced != 0 {
+		t.Errorf("counts = %d sessions, %d unpriced, want both sessions counted",
+			report.Sessions, report.Unpriced)
+	}
+}
+
+// TestAForkedSessionUnderItsOffsetCountsAsZero, never as money back: a fork
+// whose ledger has not caught up with the history it inherited would otherwise
+// take a project's total below what its other sessions spent.
+func TestAForkedSessionUnderItsOffsetCountsAsZero(t *testing.T) {
+	svc := costWorkspace(t)
+	bill(t, svc, "p1", "s1", "claude", 1.25)
+	bill(t, svc, "p1", "s2", "claude", 0)
+	if err := svc.SaveForkCostOffset("s2", "uuid-s1"); err != nil {
+		t.Fatalf("SaveForkCostOffset: %v", err)
+	}
+
+	report, err := svc.CostTotals("", "", 0)
+
+	if err != nil {
+		t.Fatalf("CostTotals: %v", err)
+	}
+	if report.CostUSD != 1.25 {
+		t.Errorf("total = %v, want the parent's 1.25 with nothing subtracted from it",
+			report.CostUSD)
+	}
+}

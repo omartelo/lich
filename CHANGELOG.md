@@ -18,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A worktree you made by hand can now be removed through lich.** Closing the
+  last session in one only ever parked it, so cleaning up meant walking to a
+  terminal for `git worktree remove`. The close dialog now offers the removal
+  behind a confirmation naming the checkout's absolute path and saying lich did
+  not create it; uncommitted work still takes the same second confirmation it
+  always did. Agents are the exception — `close_session` has nobody to ask, so
+  it still refuses and says why.
+
 - **A relayed answer is no longer matched to a task by guesswork.** Nothing in
   an answer says which request it belongs to, so `lich reply "<answer>"` and
   `reply_to_session` without a ticket closed the oldest request delivered to
@@ -71,6 +79,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   selection and modes, and output that arrived meanwhile is still there — so
   recovering no longer means reloading the window over sessions that never
   stopped running.
+- **A forked session is no longer billed for the history it was branched from.**
+  The copy is a conversation of its own carrying every token of the original, so
+  the two cards together reported roughly twice what one conversation had spent,
+  in the footer readout and in `lich cost` alike. A fork now records what the
+  conversation it branched had cost at that moment and nets it back off its own
+  number, so the pair adds up to what was actually spent. Forks of forks count
+  the same way, and opencode is unchanged: it starts a forked session's cost at
+  zero on its own.
+
 - **A closed project is now findable by name, however long ago it was closed.**
   Only the twenty-five most recent closes were ever offered back, so an older
   project was reachable only by hunting its directory in the folder picker, and

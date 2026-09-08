@@ -18,8 +18,9 @@ export interface WorktreeClose {
   pendingClose: Session | null
   /**
    * Whether that checkout is one lich adopted rather than created, in which case
-   * it is the user's directory and removal is not on offer. True until the
-   * backend says otherwise, so the destructive answer never appears on a guess.
+   * the confirmation says whose directory it is before offering to delete it.
+   * True until the backend says otherwise, so the plainer wording never goes up
+   * on a guess.
    */
   pendingAdopted: boolean
   /** The dirty worktree waiting on a --force confirmation, or null. */
@@ -65,9 +66,13 @@ export function useWorktreeClose(
     // The checkout is going away, so no parked row for it may linger — one would
     // otherwise resurface a resume against a worktree that no longer exists.
     void Store.PurgeWorktreeSessions(projectId, session.path ?? "")
-    ProjectService.RemoveWorktree(projectPath, session.path ?? "", force).catch((err: unknown) => {
-      toast.error(`Failed to remove worktree: ${errorText(err)}`)
-    })
+    // Acknowledged: every path into here has gone through a dialog naming the
+    // directory, and for an adopted one that dialog says lich did not make it.
+    ProjectService.RemoveWorktree(projectPath, session.path ?? "", force, true).catch(
+      (err: unknown) => {
+        toast.error(`Failed to remove worktree: ${errorText(err)}`)
+      },
+    )
   }
 
   // Each step of the close, taken as closeIntent decides it. The card hides
@@ -81,10 +86,10 @@ export function useWorktreeClose(
         setPendingRunning(session)
         return
       case "ask-worktree": {
-        // Asked as the dialog opens rather than at the click on Remove: an
-        // adopted checkout has no removal to offer, and a button that only ever
-        // ends in a refusal is worse than the one that is not there. A failed
-        // check reads as adopted — the safe half of the answer.
+        // Asked as the dialog opens rather than at the click on Remove: what it
+        // decides is the wording, and a directory the user made by hand has to
+        // be named as theirs before the button that deletes it. A failed check
+        // reads as adopted — the half of the answer that says more.
         setPendingAdopted(true)
         setPendingClose(session)
         const sequence = ++adoptedProbe.current
