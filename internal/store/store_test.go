@@ -13,7 +13,7 @@ import (
 )
 
 // newTestStore opens a throwaway database under the test's temp directory.
-func newTestStore(t *testing.T) *Service {
+func newTestStore(t testing.TB) *Service {
 	t.Helper()
 	svc, err := open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {

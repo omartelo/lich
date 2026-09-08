@@ -43,6 +43,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   where the last read stopped, so a turn is read whole however large it is;
   while a turn is running the band is labelled "from the previous turn", which
   is whose words they are beside a diff that has no window to draw yet.
+
+- **Searching a large history no longer reads whole conversations to show one
+  sentence.** Every row a search matched on its conversation had its indexed
+  body read out whole: megabytes each, a page of a hundred rows, once per
+  settled keystroke. The stretch the snippet is cut from is now cut by the query
+  itself, so the page reads kilobytes whatever the conversations behind it hold.
+
 - **On Windows, lich's own window no longer opens a stray console window beside
   it, or gives up and reopens in Chrome.** The window was built for the console
   subsystem, so Windows allocated a console for it and for each of Chromium's

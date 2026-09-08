@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 	"unicode"
-	"unicode/utf8"
 
 	"github.com/omartelo/lich/internal/snippet"
 )
@@ -59,107 +58,108 @@ func (s *Service) indexTranscript(sessionID string) {
 
 // attachSnippets fills in the words that made each of these rows a hit, for the
 // ids the search matched on their conversation. It runs over the page and not
-// over the match: a snippet costs reading the conversation it is cut out of, and
-// a term can match more sessions than one page carries.
+// over the match: a snippet costs reading part of the conversation it is cut out
+// of, and a term can match more sessions than one page carries.
 //
-// The window is cut here rather than by the index's own snippet(): that function
-// walks every instance of the term in the document, which on a conversation that
-// says "session" three thousand times is a tenth of a second per row. A row
-// whose conversation cannot be read, or whose hit is a fold of the index's own
-// (accents are folded, so "ción" is indexed as "cion" and found by either),
-// keeps its place in the list with no snippet under it.
+// One query per word of the term, over the rows still without a snippet: a term
+// is almost always one word, and a session is windowed on the first of them its
+// conversation mentions, which is the word the snippet is then centred on. A row
+// whose conversation mentions none of them (a hit the index found by a fold of
+// its own, since accents are folded and "ción" is indexed as "cion") keeps its
+// place in the list with no snippet under it.
 func (s *Service) attachSnippets(sessions []ClosedSession, ids []string, term string) {
 	if len(ids) == 0 {
 		return
 	}
-	bodies := s.conversationBodies(ids)
+	row := make(map[string]int, len(sessions))
+	for i := range sessions {
+		row[sessions[i].ID] = i
+	}
 	// Split the way the index was asked (ftsQuery): "worktree/port" matched the
 	// conversation as two words, and is two words here or no snippet is found.
-	words := searchWords(strings.ToLower(term))
-	for i := range sessions {
-		body, ok := bodies[sessions[i].ID]
-		if !ok {
-			continue
+	pending := ids
+	for _, word := range searchWords(strings.ToLower(term)) {
+		if len(pending) == 0 {
+			return
 		}
-		for _, word := range words {
-			if cut, ok := snippet.Around(around(body, word), word); ok {
-				sessions[i].Snippet = cut
-				break
+		windows := s.conversationWindows(pending, word)
+		var missed []string
+		for _, id := range pending {
+			i, ok := row[id]
+			if !ok {
+				continue
 			}
+			cut, ok := snippet.Around(windows[id], word)
+			if !ok {
+				missed = append(missed, id)
+				continue
+			}
+			sessions[i].Snippet = cut
 		}
+		pending = missed
 	}
 }
 
-// windowBytes is how much of a conversation the snippet is cut out of, centred
-// on a first, approximate reading of where the word is. Wide enough that the
-// exact cut has the whole sentence around the hit to work with, and narrow
-// enough that a two-megabyte conversation is not walked rune by rune once per
-// row on screen.
-const windowBytes = 4096
+// windowChars is how much of a conversation the snippet is cut out of, centred
+// on the first mention of the word. Wide enough that the exact cut has the whole
+// sentence around the hit to work with even after collapsing the whitespace a
+// transcript is written with, and narrow enough that a page of a hundred rows is
+// hundreds of kilobytes rather than the hundreds of megabytes the conversations
+// behind it hold.
+const windowChars = 4096
 
-// around is that first reading: the stretch of body near the first mention of
-// word, found by one case-folded scan and sliced out of the original. The offset
-// is approximate, because folding is not length-preserving, and it does not need
-// to be exact: it only has to land the mention inside a window the real cut then
-// searches properly. Empty when the body does not mention the word at all, which
-// is a hit the index found by a fold the plain text does not have.
-func around(body, word string) string {
-	// The plain scan first: word is already lowercased and a conversation is
-	// mostly lowercase prose, so the copy the fold below needs is one this
-	// almost always avoids. On a page of megabyte conversations that copy is the
-	// larger half of the whole search.
-	at := strings.Index(body, word)
-	if at < 0 {
-		at = strings.Index(strings.ToLower(body), word)
-	}
-	if at < 0 {
-		return ""
-	}
-	start := max(at-windowBytes/2, 0)
-	end := min(at+windowBytes/2, len(body))
-	// Sliced off a byte offset, so either edge can fall inside a rune. A
-	// half rune left at one would be drawn as a replacement character.
-	for start < end && !utf8.RuneStart(body[start]) {
-		start++
-	}
-	for end > start {
-		if r, size := utf8.DecodeLastRuneInString(body[start:end]); r != utf8.RuneError || size > 1 {
-			break
-		}
-		end--
-	}
-	return body[start:end]
-}
+// firstMention is where a body first mentions the bound word, as SQL: one
+// position, or 0 for a body that does not mention it at all. Characters, not
+// bytes: instr and substr both count in characters, so a window cut off this
+// offset never opens or closes inside a rune.
+//
+// The plain scan first, because coalesce stops at the first argument that is not
+// null: a conversation is mostly lowercase prose and the word is already
+// lowercased, so the folded copy of a multi-megabyte body is one this almost
+// always avoids. The fold itself is SQLite's, which is ASCII: a body that shouts
+// an accented word in capitals is a hit with no snippet, the same answer the
+// index's own accent fold already gives.
+const firstMention = `coalesce(nullif(instr(body, ?), 0), instr(lower(body), ?))`
 
-// conversationBodies reads the indexed conversations of these sessions, keyed by
-// session id. A body that is not there is simply absent from the answer, which
-// is a row with no snippet rather than a search that failed.
-func (s *Service) conversationBodies(ids []string) map[string]string {
-	query := `SELECT session_id, body FROM session_texts WHERE session_id IN (?` +
-		strings.Repeat(",?", len(ids)-1) + `)`
-	args := make([]any, len(ids))
-	for i, id := range ids {
-		args[i] = id
+// conversationWindows cuts, in the query, the stretch of each of these
+// conversations around its first mention of word, keyed by session id. A body
+// that is not indexed or does not mention the word is simply absent from the
+// answer, which is a row with no snippet rather than a search that failed.
+//
+// The window is what keeps a search off the size of the conversations it
+// searches: the rows are matched on bodies of up to eight megabytes each and the
+// answer carries windowChars characters of each, so the page a settled keystroke
+// reads is bounded by the page's own length.
+func (s *Service) conversationWindows(ids []string, word string) map[string]string {
+	query := `SELECT session_id, substr(body, max(` + firstMention + ` - ?, 1), ?)
+	            FROM session_texts
+	           WHERE ` + firstMention + ` > 0
+	             AND session_id IN (?` + strings.Repeat(",?", len(ids)-1) + `)`
+	// Bound in the order the query names them: the window's own mention, its
+	// two bounds, the filter's mention, then the ids.
+	args := []any{word, word, windowChars / 2, windowChars, word, word}
+	for _, id := range ids {
+		args = append(args, id)
 	}
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
-		slog.Warn("store: read indexed conversations", "err", err)
+		slog.Warn("store: window indexed conversations", "err", err)
 		return nil
 	}
 	defer rows.Close()
-	bodies := make(map[string]string, len(ids))
+	windows := make(map[string]string, len(ids))
 	for rows.Next() {
-		var id, body string
-		if err := rows.Scan(&id, &body); err != nil {
-			slog.Warn("store: scan indexed conversation", "err", err)
-			return bodies
+		var id, window string
+		if err := rows.Scan(&id, &window); err != nil {
+			slog.Warn("store: scan conversation window", "err", err)
+			return windows
 		}
-		bodies[id] = body
+		windows[id] = window
 	}
 	if err := rows.Err(); err != nil {
-		slog.Warn("store: iterate indexed conversations", "err", err)
+		slog.Warn("store: iterate conversation windows", "err", err)
 	}
-	return bodies
+	return windows
 }
 
 // indexTarget is what reading one session's conversation takes: the id its
