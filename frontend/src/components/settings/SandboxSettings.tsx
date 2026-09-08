@@ -149,7 +149,7 @@ export function SandboxSettings({ projectId }: { projectId?: string }) {
         <p className="mt-2 max-w-prose text-xs text-muted-foreground">
           Ask puts the question in the New session menu and the New worktree dialog. A session
           opened where nobody can answer — by another session, or through the MCP tool — is
-          confined.
+          confined. Terminals are never confined; the sandbox is for agents working unattended.
         </p>
       </SettingBlock>
 

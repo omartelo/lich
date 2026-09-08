@@ -641,10 +641,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   binaries are the exception: their symlink chains are walked and the *directory* of every hop is mounted
   (`BinaryDirs`), which is what makes an agent installed the usual way — a link on `PATH` into a versioned
   store — runnable at all.
-- **A terminal session is never confined by a rung** (`internal/store/settings.go`): the rung is keyed by
-  provider, and `shell` is not one — the sandbox exists to confine an agent working unattended, not the
-  user's own prompt. A terminal opened in a project whose provider is on `Everywhere` still runs on the
-  machine, and nothing says so.
 - **The macOS floor is the toolchain's, not lich's** (`build/darwin/Info.plist.tpl`,
   `build/darwin/homebrew/lich.rb.tpl`): nothing in lich needs macOS 13, but Go 1.27 dropped every
   release before Ventura, so a binary built from this module cannot run on Big Sur or Monterey. The
