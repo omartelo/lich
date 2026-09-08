@@ -106,7 +106,8 @@ func TestDeliverDueLeavesAPromptThatIsNotDueYet(t *testing.T) {
 }
 
 // Overdue is delivered, not dropped: this is the prompt that came due while
-// lich was closed.
+// lich was closed. It arrives announced, because a reminder from three days ago
+// read as one written now is the trap being closed here.
 func TestDeliverDueTypesAnOverduePrompt(t *testing.T) {
 	term := newFakeTerminal("s1")
 	svc := newRelay(scheduled(1000, "the overdue one", &scheduleWriter{}), term, nil)
@@ -114,8 +115,62 @@ func TestDeliverDueTypesAnOverduePrompt(t *testing.T) {
 
 	svc.deliverDue()
 
-	if !strings.Contains(term.written("s1"), "the overdue one") {
-		t.Fatalf("typed at s1 = %q, want the overdue prompt", term.written("s1"))
+	written := term.written("s1")
+	if !strings.Contains(written, "the overdue one") {
+		t.Fatalf("typed at s1 = %q, want the overdue prompt", written)
+	}
+	if !strings.Contains(written, "delivered 3d late") {
+		t.Fatalf("typed at s1 = %q, want it announced as three days late", written)
+	}
+	if !strings.Contains(written, "Scheduled for "+time.Unix(1000, 0).Format(scheduleClock)) {
+		t.Fatalf("typed at s1 = %q, want the time it was scheduled for", written)
+	}
+}
+
+// A prompt found within one pass of its time is on time by every measure this
+// package can take, so it arrives as the user wrote it and nothing else.
+func TestDeliverDueTypesAnOnTimePromptBare(t *testing.T) {
+	for name, now := range map[string]int64{
+		"to the second": 1000,
+		"within a tick": 1000 + int64(scheduleTick/time.Second),
+	} {
+		t.Run(name, func(t *testing.T) {
+			term := newFakeTerminal("s1")
+			svc := newRelay(scheduled(1000, "ship it", &scheduleWriter{}), term, nil)
+			svc.now = at(now)
+
+			svc.deliverDue()
+
+			if got := term.written("s1"); strings.Contains(got, "[lich]") {
+				t.Fatalf("typed at s1 = %q, want the prompt with no notice on it", got)
+			}
+		})
+	}
+}
+
+// The notice says the scale the reader acts on, one unit at a time: minutes for
+// a prompt that just missed its pass, hours for one held over a working day,
+// days for one that waited out a closed lich.
+func TestLateNoticeWordsTheDelay(t *testing.T) {
+	cases := map[string]struct {
+		late int64
+		want string
+	}{
+		"a minute past the tick": {late: 91, want: "2m"},
+		"most of an hour":        {late: 45 * 60, want: "45m"},
+		"three hours":            {late: 3 * 60 * 60, want: "3h"},
+		"two days":               {late: 2 * 24 * 60 * 60, want: "2d"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got := lateNotice(1000, 1000+tc.late)
+			if !strings.Contains(got, "delivered "+tc.want+" late.") {
+				t.Fatalf("lateNotice = %q, want it %s late", got, tc.want)
+			}
+			if !strings.HasSuffix(got, "\n\n") {
+				t.Fatalf("lateNotice = %q, want the prompt on its own line under it", got)
+			}
+		})
 	}
 }
 

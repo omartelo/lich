@@ -29,6 +29,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -234,6 +235,9 @@ type Service struct {
 	// sessionGone, when set, is told the id of every session whose row is
 	// deleted for good. See SetSessionGone.
 	sessionGone func(sessionID string)
+	// scheduleForfeited, when set, is told about every scheduled prompt lost
+	// with the session it was parked on. See SetScheduleForfeited.
+	scheduleForfeited func(ForfeitedSchedule)
 	// branchOf, when set, names the git branch of a checkout. See SetBranchOf.
 	branchOf func(path string) string
 	// transcriptOf, when set, reads a conversation as searchable prose and says
@@ -273,6 +277,46 @@ func (s *Service) sessionIsGone(sessionIDs ...string) {
 	for _, id := range sessionIDs {
 		s.sessionGone(id)
 	}
+}
+
+// ScheduleForfeitEventName is emitted when a scheduled prompt was lost with the
+// session it was parked on, so the person who parked it is told rather than left
+// to find out at a time that never comes. Payload: ForfeitedSchedule.
+const ScheduleForfeitEventName = "session-schedule-forfeited"
+
+// ForfeitedSchedule is one scheduled prompt that went with a deleted session:
+// what that session was called, when the prompt was due, and the prompt itself.
+// It carries no session id — the row is gone, so there is nothing left to route
+// to, and the label is the only name the user ever knew it by.
+type ForfeitedSchedule struct {
+	Label  string `json:"label"`
+	At     int64  `json:"at"`
+	Prompt string `json:"prompt"`
+}
+
+// forfeitClock is how a forfeit notice spells the time the prompt was due:
+// local, to the minute, with the date. The log line beside it keeps RFC3339 —
+// that one is read by whoever is grepping, this one by whoever is at the desk.
+const forfeitClock = "2006-01-02 15:04"
+
+// Notice words one forfeit for a desktop notification: the headline names the
+// session, the second line what the prompt was going to say and when. Both are
+// bounded by the notifier itself (internal/system, notifyLimit), which is why
+// the prompt goes in whole rather than cut to some length chosen here.
+func (f ForfeitedSchedule) Notice() (summary, detail string) {
+	return fmt.Sprintf("Scheduled prompt lost with %q", f.Label),
+		fmt.Sprintf("Due %s: %s", time.Unix(f.At, 0).Format(forfeitClock), f.Prompt)
+}
+
+// SetScheduleForfeited registers what to run for each scheduled prompt lost to a
+// delete — DeleteSession, ForgetSession, PurgeWorktreeSessions and
+// DeleteProject, never CloseSession, which parks the row and brings the schedule
+// back with the card.
+//
+// It is startup wiring, called before anything serves. Without it a forfeit
+// costs nothing but the notice: the log line is written either way.
+func (s *Service) SetScheduleForfeited(fn func(ForfeitedSchedule)) {
+	s.scheduleForfeited = fn
 }
 
 // SetBranchOf registers how to read a checkout's git branch (project.Branch).

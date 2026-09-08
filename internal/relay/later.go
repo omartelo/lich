@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"fmt"
 	"log/slog"
 	"time"
 )
@@ -62,7 +63,8 @@ func (s *Service) RunSchedules() {
 //
 // A prompt that came due while lich was closed is delivered late, on the first
 // pass after launch. Late is what this feature promises; silently dropping the
-// only copy of what the user wrote is not.
+// only copy of what the user wrote is not — and one that lands late says so at
+// the prompt it lands on (lateNotice).
 func (s *Service) deliverDue() {
 	projects, err := s.sessions.LoadState()
 	if err != nil {
@@ -90,9 +92,49 @@ func (s *Service) deliverDue() {
 			if s.events != nil {
 				s.events.Emit(ScheduleEventName, ScheduleEvent{ID: sess.ID})
 			}
-			if err := s.deliver(sess.ID, sess.ScheduledPrompt); err != nil {
+			text := lateNotice(sess.ScheduledAt, now) + sess.ScheduledPrompt
+			if err := s.deliver(sess.ID, text); err != nil {
 				slog.Warn("relay: scheduled prompt not delivered", "session", sess.Label, "err", err)
 			}
 		}
+	}
+}
+
+// scheduleClock is how the notice spells the moment a prompt was parked for:
+// local time, to the minute, with the date — an overdue prompt is often days
+// old, and a clock alone would say nothing about which day it was meant for.
+const scheduleClock = "2006-01-02 15:04"
+
+// lateNotice is the line put in front of a prompt that missed its time, and ""
+// for one that did not. Everything reading the card reads it: the agent, which
+// would otherwise act on a reminder from three days ago as if it were now, and
+// the person, for whom a prompt typing itself at a session is otherwise
+// indistinguishable from one typed on time.
+//
+// The threshold is scheduleTick, because that is the resolution the whole
+// feature has: a prompt found on the very next pass is on time by every measure
+// this package can take, and announcing that second would put a notice in front
+// of every prompt lich ever delivers.
+func lateNotice(at, now int64) string {
+	late := time.Duration(now-at) * time.Second
+	if late <= scheduleTick {
+		return ""
+	}
+	return fmt.Sprintf("[lich] Scheduled for %s, delivered %s late.\n\n",
+		time.Unix(at, 0).Format(scheduleClock), lateBy(late))
+}
+
+// lateBy words how far past its time a prompt is, in one unit — "45m", "3h",
+// "2d". The same three rungs the card counts down on (frontend, timeUntil): the
+// reader wants the scale, and a prompt that is two days late is not helped by
+// the minutes on the end of it.
+func lateBy(d time.Duration) string {
+	switch {
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Round(time.Minute)/time.Minute))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh", int(d.Round(time.Hour)/time.Hour))
+	default:
+		return fmt.Sprintf("%dd", int(d.Round(24*time.Hour)/(24*time.Hour)))
 	}
 }

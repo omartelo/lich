@@ -25,6 +25,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a dotfiles repository was simply absent inside a confined session, with
   nothing saying so. The shield's tooltip lists them: "Not mounted (symlinks):
   .gitconfig, .ssh/known_hosts". The policy has not changed — only the silence.
+=======
+- **A scheduled prompt now says when it is late, and a lost one says so on
+  screen.** A prompt that could not be typed at its time — the session was
+  mid-setup, mid-sentence, without a terminal, or lich was closed — arrives with
+  one line in front of it naming the time it was scheduled for and how late it
+  is, so neither the agent nor you reads a reminder from three days ago as one
+  written now. A prompt on time still arrives exactly as you wrote it. And
+  deleting a session for good takes the only copy of the prompt parked on it,
+  which used to happen in silence: now a notice names the session and what it
+  was going to say — on screen, and as a desktop notification, so a session an
+  agent closed while you were away still reaches you.
 
 ### Fixed
 

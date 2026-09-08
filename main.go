@@ -188,6 +188,19 @@ func main() {
 	uncleanExit := singleton.UncleanExit(configDir, os.Getenv(restart.WaitEnv))
 	sys := system.New(env, logPath, version, uncleanExit)
 	dispatcher.Register("system", sys)
+	// Deleting a session for good takes any prompt parked on it, and the row is
+	// the only copy of what the user wrote. Both channels are used, and neither
+	// is the other's fallback: the toast is what the user reading the card sees,
+	// and the desktop notification is what reaches a forfeit nobody was at the
+	// window for — an agent closing a session under --no-window, where an event
+	// with no client connected is dropped.
+	db.SetScheduleForfeited(func(lost store.ForfeitedSchedule) {
+		hub.Emit(store.ScheduleForfeitEventName, lost)
+		summary, detail := lost.Notice()
+		if err := sys.Notify(summary, detail); err != nil {
+			slog.Warn("notify forfeited schedule", "session", lost.Label, "err", err)
+		}
+	})
 	providerSvc := providers.New()
 	// One resolution, three readers: the process PATH exec.LookPath resolves a
 	// binary through, what a new session inherits, and the editor lookup. They
@@ -279,8 +292,8 @@ func main() {
 //     life of the process and starts a second loop racing the first for every
 //     due prompt.
 //   - relay.SetPlugins, project.SetAccounts, project.SetProjects,
-//     quota.SetSessions, store.SetSessionGone, store.SetBranchOf,
-//     store.SetTranscriptOf and terminal.SetDropDir are startup wiring. Called with [null] they silently
+//     quota.SetSessions, store.SetSessionGone, store.SetScheduleForfeited,
+//     store.SetBranchOf, store.SetTranscriptOf and terminal.SetDropDir are startup wiring. Called with [null] they silently
 //     nil what they wired (encoding/json leaves a func or pointer alone on
 //     null), and the write races the readers already serving — nilling
 //     SetProjects also disarms the guard that keeps two projects off the same
@@ -290,6 +303,7 @@ func denyInternal(d *rpc.Handler) {
 	for _, method := range []string{
 		"store.Close",
 		"store.SetSessionGone",
+		"store.SetScheduleForfeited",
 		"store.SetBranchOf",
 		"store.SetTranscriptOf",
 		"drop.Upload",

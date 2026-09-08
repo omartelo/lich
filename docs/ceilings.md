@@ -302,16 +302,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   events rather than bytes, the bracketed paste markers do not survive, and every provider TUI then guesses at where
   a paste ends from timing alone. A target that repaints on a timer of its own never goes quiet and gets its Enter
   at `defaultSettleLimit` regardless, which is the case this cannot tell from a paste still arriving.
-
-- **A scheduled prompt is late or gone, never on time** (`internal/relay/later.go`, `deliverDue`): due prompts
-  are looked for every `scheduleTick`, and one whose session is not at a prompt — mid-setup, a draft on the
-  line, no terminal opened, a card parked and not yet resumed, is left for the next pass, so it lands
-  whenever that session next has somewhere to type, hours later if that is when. That covers lich having been
-  closed at the time: the first pass after launch types a prompt that came due days ago, unannounced. Gone is
-  the session removed for good rather than parked (deleted, forgotten, purged with its worktree, or taken by
-  a deleted project): the row is the only copy of the prompt, so it goes with the row, and all that says so is
-  one Warn in a log nobody is watching (`internal/store`, `noteForfeitedSchedules`).
-
 - **A lich-spawned Kiro session runs lich's agent, not the user's** (`internal/agentplugin/kiro.go`,
   `internal/terminal/command.go`, `agentArgs`): Kiro keeps its hooks inside an *agent config*, and its built-in
   `kiro_default` cannot be shadowed — a `kiro_default.json` in the agents directory is ignored outright (measured

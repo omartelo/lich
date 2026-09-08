@@ -168,14 +168,19 @@ func (s *Service) addSession(
 	})
 }
 
-// noteForfeitedSchedules logs every prompt still parked on a session about to be
-// deleted for good. A close parks the row and the schedule comes back with the
-// card (see reopen); a delete is the one exit where the prompt is lost rather
-// than delayed, and the row is the only copy of what the user wrote, so this
-// line is the last place it exists. Read before the delete, because after it
+// noteForfeitedSchedules reports every prompt still parked on a session about to
+// be deleted for good. A close parks the row and the schedule comes back with
+// the card (see reopen); a delete is the one exit where the prompt is lost
+// rather than delayed, and the row is the only copy of what the user wrote, so
+// this is the last place it exists. Read before the delete, because after it
 // there is nothing left to read.
 //
-// A failed read costs the log, never the delete: nothing here is allowed to
+// It reports twice, and neither is the other's fallback: the log line is the
+// record, and whatever SetScheduleForfeited wired is what puts it in front of
+// the person who parked the prompt — the card's menu is the only way to park
+// one, so that person is the user at the window.
+//
+// A failed read costs the report, never the delete: nothing here is allowed to
 // stand between the user and removing a session.
 func (s *Service) noteForfeitedSchedules(where string, args ...any) {
 	rows, err := s.db.Query(
@@ -197,6 +202,9 @@ func (s *Service) noteForfeitedSchedules(where string, args ...any) {
 		}
 		slog.Warn("scheduled prompt forfeited with deleted session",
 			"session", label, "due", time.Unix(at, 0).Format(time.RFC3339), "prompt", prompt)
+		if s.scheduleForfeited != nil {
+			s.scheduleForfeited(ForfeitedSchedule{Label: label, At: at, Prompt: prompt})
+		}
 	}
 }
 

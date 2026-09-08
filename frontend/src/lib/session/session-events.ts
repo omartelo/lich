@@ -90,6 +90,13 @@ export const USAGE_EVENT = "session-usage"
 // wrote; this is what the clock did.
 export const SCHEDULE_EVENT = "session-schedule"
 
+// Global event the backend emits when a scheduled prompt was lost with the
+// session it was parked on — deleted, forgotten, purged with its worktree, or
+// taken by a deleted project (see store.ScheduleForfeitEventName). Payload:
+// { label, at, prompt }. It carries no session id because there is no row left
+// to route to: the label is the only name that session ever had.
+export const SCHEDULE_FORFEIT_EVENT = "session-schedule-forfeited"
+
 // Global event the backend emits while one session has a request open with
 // another (see relay.RelayEventName). Payload: { id, peer, direction, ticket } —
 // the session whose card changes, the label at the other end, which way the
@@ -248,6 +255,22 @@ export function isIdEvent(data: unknown): data is { id: string } {
 
 export function isScheduleEvent(data: unknown): data is { id: string; at: number } {
   return isIdEvent(data) && typeof (data as { at?: unknown }).at === "number"
+}
+
+// session-schedule-forfeited names a session that is already gone, so the label
+// stands where every other event carries an id.
+export function isForfeitedScheduleEvent(
+  data: unknown,
+): data is { label: string; at: number; prompt: string } {
+  if (typeof data !== "object" || data === null) {
+    return false
+  }
+  const event = data as { label?: unknown; at?: unknown; prompt?: unknown }
+  return (
+    typeof event.label === "string" &&
+    typeof event.at === "number" &&
+    typeof event.prompt === "string"
+  )
 }
 
 // skippedLinks is optional rather than required: a nil list marshals as null,

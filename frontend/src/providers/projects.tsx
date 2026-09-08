@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { ReactNode } from "react"
 import { toast } from "sonner"
-import { Bell, Folder, MessageSquareDashed } from "lucide-react"
+import { AlarmClockOff, Bell, Folder, MessageSquareDashed } from "lucide-react"
 import { useMatch, useNavigate } from "react-router-dom"
 import type { ClosedSession, Project, RecentProject } from "@/lib/api-types"
 import type { StoredProject as StoreProject, StoredSession } from "@/lib/api-types"
@@ -50,10 +50,12 @@ import {
   MCP_EVENT,
   SANDBOX_EVENT,
   SCHEDULE_EVENT,
+  SCHEDULE_FORFEIT_EVENT,
   STATUS_EVENT,
   TITLE_EVENT,
   TOUCHED_EVENT,
   decideStatusNotice,
+  isForfeitedScheduleEvent,
   isIdEvent,
   isRelayStalledEvent,
   isMCPEvent,
@@ -113,6 +115,11 @@ const FIRST_LABEL = "Session 1"
 const FIRST_NEXT_SEQ = 2
 
 const ATTENTION_TOAST_MS = 10_000
+
+// How long the notice of a lost scheduled prompt stays up. Longer than the rest:
+// it carries the only remaining copy of what the user wrote, and once it goes
+// there is nowhere left to read it.
+const FORFEIT_TOAST_MS = 30_000
 
 // How long the undo stays on offer after a close. Long enough to notice the card
 // is gone and reach the button, short enough that it is not still there when the
@@ -281,6 +288,31 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       if (next !== sessionsRef.current) {
         commit(next)
       }
+    })
+    return () => off()
+  }, [])
+
+  // A prompt parked on a session that was deleted for good is gone with the row
+  // — the row was the only copy of it. The toast is the whole of the amends: it
+  // says which session it was parked on and what it said, so the words can be
+  // read off the screen and parked somewhere else. No route to open, because
+  // there is nothing left to open.
+  useEffect(() => {
+    const off = onAppEvent(SCHEDULE_FORFEIT_EVENT, (data) => {
+      if (!isForfeitedScheduleEvent(data)) {
+        return
+      }
+      toast(
+        <div className="flex min-w-0 flex-col">
+          <span>Scheduled prompt lost with {data.label}</span>
+          {/* Clamped rather than cut: a prompt is capped at 8 KB, and the
+              toast's job is to name it, not to hold the whole of it. */}
+          <span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+            Due {scheduledFor(data.at, new Date())}: {data.prompt}
+          </span>
+        </div>,
+        { duration: FORFEIT_TOAST_MS, icon: <AlarmClockOff className="size-4 text-amber-500" /> },
+      )
     })
     return () => off()
   }, [])

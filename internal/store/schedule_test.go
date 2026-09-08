@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestSetSessionScheduleParksOnePromptPerSession pins the shape the card is
@@ -142,6 +143,88 @@ func TestDeletingASessionLogsTheForfeitedSchedule(t *testing.T) {
 			if !strings.Contains(got, "forfeited") || !strings.Contains(got, "worker") ||
 				!strings.Contains(got, "run the release checklist") {
 				t.Fatalf("log = %q, want the forfeited prompt named with its session", got)
+			}
+		})
+	}
+}
+
+// The log is the record; this is the half the user sees. Every door that
+// removes a row for good has to reach the person who parked the prompt, because
+// the row was the only copy of it.
+func TestDeletingASessionReportsTheForfeitedSchedule(t *testing.T) {
+	for name, remove := range map[string]func(*Service) error{
+		"delete":  func(svc *Service) error { return svc.DeleteSession("p1", "wt1", "base") },
+		"forget":  func(svc *Service) error { _ = svc.CloseSession("p1", "wt1", "base"); return svc.ForgetSession("wt1") },
+		"purge":   func(svc *Service) error { return svc.PurgeWorktreeSessions("p1", "/wt/foo") },
+		"project": func(svc *Service) error { return svc.DeleteProject("p1") },
+	} {
+		t.Run(name, func(t *testing.T) {
+			svc := newTestStore(t)
+			var lost []ForfeitedSchedule
+			svc.SetScheduleForfeited(func(f ForfeitedSchedule) { lost = append(lost, f) })
+			_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+			_ = svc.AddSession("p1", "base", "Session 1", "claude", "", 2, "")
+			_ = svc.AddSession("p1", "wt1", "worker", "claude", "/wt/foo", 3, "")
+			_ = svc.SetSessionSchedule("wt1", 1700000000, "run the release checklist")
+
+			if err := remove(svc); err != nil {
+				t.Fatalf("remove: %v", err)
+			}
+			if len(lost) != 1 {
+				t.Fatalf("reported = %+v, want the one forfeited prompt", lost)
+			}
+			if lost[0].Label != "worker" || lost[0].At != 1700000000 ||
+				lost[0].Prompt != "run the release checklist" {
+				t.Fatalf("reported = %+v, want the session, its time and its prompt", lost[0])
+			}
+		})
+	}
+}
+
+// The desktop channel is what reaches a forfeit nobody was at the window for,
+// and it has two lines to say it in (internal/system, Notify): the session in
+// the headline, the prompt and its time under it.
+func TestForfeitedScheduleNotice(t *testing.T) {
+	summary, detail := ForfeitedSchedule{
+		Label: "worker", At: 1700000000, Prompt: "run the release checklist",
+	}.Notice()
+
+	if !strings.Contains(summary, `"worker"`) {
+		t.Fatalf("summary = %q, want the session named", summary)
+	}
+	if !strings.Contains(detail, "run the release checklist") {
+		t.Fatalf("detail = %q, want the prompt that was lost", detail)
+	}
+	if want := time.Unix(1700000000, 0).Format(forfeitClock); !strings.Contains(detail, want) {
+		t.Fatalf("detail = %q, want the time it was due (%s)", detail, want)
+	}
+}
+
+// A session with nothing parked on it is removed in silence, and so is a park:
+// the row comes back with the card, prompt and all.
+func TestClosingOrDeletingWithoutAScheduleReportsNothing(t *testing.T) {
+	for name, remove := range map[string]func(*Service) error{
+		"nothing parked": func(svc *Service) error {
+			return svc.DeleteSession("p1", "wt1", "base")
+		},
+		"parked, not deleted": func(svc *Service) error {
+			_ = svc.SetSessionSchedule("wt1", 1700000000, "run the release checklist")
+			return svc.CloseSession("p1", "wt1", "base")
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			svc := newTestStore(t)
+			reported := 0
+			svc.SetScheduleForfeited(func(ForfeitedSchedule) { reported++ })
+			_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+			_ = svc.AddSession("p1", "base", "Session 1", "claude", "", 2, "")
+			_ = svc.AddSession("p1", "wt1", "worker", "claude", "/wt/foo", 3, "")
+
+			if err := remove(svc); err != nil {
+				t.Fatalf("remove: %v", err)
+			}
+			if reported != 0 {
+				t.Fatalf("reported %d forfeits, want none", reported)
 			}
 		})
 	}
