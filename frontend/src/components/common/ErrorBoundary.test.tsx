@@ -131,6 +131,34 @@ test("a throwing child leaves its siblings alive, and retry re-renders it", asyn
   await mounted.unmount()
 })
 
+test("a retry that throws again offers the reload instead of another retry", async () => {
+  vi.spyOn(console, "error").mockImplementation(() => {})
+  const reload = vi.fn()
+  vi.spyOn(window, "location", "get").mockReturnValue({
+    ...window.location,
+    reload,
+  } as unknown as Location)
+
+  const mounted = await mountBudget(tree())
+  expect(retryButton().textContent).toContain("Try again")
+
+  // The retry lands on a subtree that is still broken, which is the loop this
+  // exists to end: the offer changes rather than repeating.
+  await mounted.act(() => {
+    retryButton().click()
+  })
+  expect(document.body.textContent).toContain("The panel stopped rendering")
+  expect(document.body.textContent).toContain(MESSAGE)
+  expect(() => retryButton()).toThrow()
+
+  await mounted.act(() => {
+    retryButton("Reload the window").click()
+  })
+  expect(reload).toHaveBeenCalledTimes(1)
+
+  await mounted.unmount()
+})
+
 test("a throw over the stage keeps the terminal it unmounts, and gives it back", async () => {
   vi.spyOn(console, "error").mockImplementation(() => {})
   crash = false
