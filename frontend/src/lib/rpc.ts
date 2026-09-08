@@ -22,6 +22,7 @@ import type {
   DraftReviewComment,
   Attachment,
   DropItem,
+  FileListing,
   Issue,
   MergeMethod,
   PatchNotes as PatchNotesData,
@@ -213,8 +214,10 @@ export const ProjectService = {
    * collide on. null when the repository has no origin to measure against. */
   BaseStatus: (path: string) => call<BaseStatus | null>("project.BaseStatus", [path]),
   DiffText: (path: string) => call<string>("project.DiffText", [path]),
-  /** Tracked files, repo-relative and slash-separated, sorted (git ls-files). */
-  Tree: (path: string) => call<string[] | null>("project.Tree", [path]),
+  /** The checkout's files, repo-relative and slash-separated, sorted: git
+   * ls-files in a repository, a bounded walk in a plain folder, where `cut`
+   * reports the walk stopped at its cap. */
+  Tree: (path: string) => call<FileListing>("project.Tree", [path]),
   ReadFile: (path: string, rel: string) => call<string>("project.ReadFile", [path, rel]),
   /** Lines from..to (1-based, inclusive) of one file for the diff's context
    * expander. ref is the revision the diff's new side stands at: "" for the

@@ -33,6 +33,17 @@ func isBinary(data []byte) bool {
 	return bytes.IndexByte(data[:min(len(data), binarySniffBytes)], 0) >= 0
 }
 
+// FileListing is one listing of a directory's files: the paths, and whether the
+// listing is the whole directory or only as much of it as the walk was allowed
+// to read. Cut is what the Files panel says out loud: a tree that silently
+// stops short reads as a folder with fewer files in it than it has.
+type FileListing struct {
+	Files []string `json:"files"`
+	// Cut reports a listing that stopped at walkLimit. Only a plain-folder walk
+	// can set it; git's own listing is never capped.
+	Cut bool `json:"cut"`
+}
+
 // Tree lists a directory's files as root-relative, slash-separated paths,
 // sorted. Inside a repository it merges tracked files with
 // untracked-but-not-ignored ones (`ls-files --cached --others
@@ -42,7 +53,7 @@ func isBinary(data []byte) bool {
 // build output leak in. Anywhere else — a plain folder, a machine without git —
 // it falls back to walking the directory: browsing a project's files is not a
 // git feature, and only the diff panel beside it is.
-func (s *Service) Tree(path string) ([]string, error) {
+func (s *Service) Tree(path string) (FileListing, error) {
 	// Asked before anything is listed, and quietly: a plain directory is not a
 	// failure to report, and routing its refreshes through runGit would file a
 	// warning per poll for a folder that is behaving exactly as it should. A
@@ -53,11 +64,11 @@ func (s *Service) Tree(path string) ([]string, error) {
 	}
 	present, err := lsFiles(path, "--cached", "--others", "--exclude-standard")
 	if err != nil {
-		return nil, err
+		return FileListing{}, err
 	}
 	deleted, err := lsFiles(path, "--deleted")
 	if err != nil {
-		return nil, err
+		return FileListing{}, err
 	}
 	gone := make(map[string]struct{}, len(deleted))
 	for _, rel := range deleted {
@@ -71,22 +82,44 @@ func (s *Service) Tree(path string) ([]string, error) {
 	}
 	// The --cached/--others merge is not globally sorted; the tree wants one order.
 	slices.Sort(files)
-	return files, nil
+	return FileListing{Files: files}, nil
 }
 
-// walkLimit caps a non-repository walk. Without git there is no .gitignore to
-// obey, so the walk has no way to leave a dependency or build directory out;
-// the cap is what keeps a home directory or a node_modules from arriving as one
-// RPC answer the tree then has to render.
+// walkLimit caps a non-repository walk. walkIgnore keeps the usual dependency
+// and build trees out, but it is a name list and not a .gitignore: a folder can
+// still hold more files than the tree has any business rendering, so the cap
+// stays as the backstop, and a walk that hits it says so (FileListing.Cut).
 const walkLimit = 20000
+
+// walkIgnore is the directory names a plain-folder walk skips at any depth.
+// Without git there is no .gitignore to obey, and these are the trees nobody
+// opens the Files panel to browse: a machine-written dependency, cache or
+// build directory. Deliberately a short list matched by name alone: the
+// alternative is a per-project ignore setting for a panel that is a file
+// browser, not a build tool.
+var walkIgnore = map[string]bool{
+	".cache":       true,
+	".git":         true,
+	".venv":        true,
+	"__pycache__":  true,
+	"build":        true,
+	"dist":         true,
+	"node_modules": true,
+	"target":       true,
+	"vendor":       true,
+	"venv":         true,
+}
 
 // walkFiles lists a plain directory's regular files, root-relative and
 // slash-separated, stopping at limit files (walkLimit; a parameter so the cap
-// is testable without laying down 20k files). Symlinks are skipped (nothing here resolves one, and a link
-// to a directory is a walk that may not terminate), .git is skipped whole, and
-// an unreadable subdirectory costs its own subtree rather than the answer.
-func walkFiles(root string, limit int) ([]string, error) {
+// is testable without laying down 20k files) and reporting whether it stopped
+// there. Symlinks are skipped (nothing here resolves one, and a link
+// to a directory is a walk that may not terminate), walkIgnore directories are
+// skipped whole, and an unreadable subdirectory costs its own subtree rather
+// than the answer.
+func walkFiles(root string, limit int) (FileListing, error) {
 	var files []string
+	cut := false
 	err := filepath.WalkDir(root, func(full string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			if full == root {
@@ -98,7 +131,7 @@ func walkFiles(root string, limit int) ([]string, error) {
 			return fs.SkipDir
 		}
 		if entry.IsDir() {
-			if full != root && entry.Name() == ".git" {
+			if full != root && walkIgnore[entry.Name()] {
 				return fs.SkipDir
 			}
 			return nil
@@ -112,15 +145,16 @@ func walkFiles(root string, limit int) ([]string, error) {
 		}
 		files = append(files, filepath.ToSlash(rel))
 		if len(files) >= limit {
+			cut = true
 			return fs.SkipAll
 		}
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("list %s: %w", root, err)
+		return FileListing{}, fmt.Errorf("list %s: %w", root, err)
 	}
 	slices.Sort(files)
-	return files, nil
+	return FileListing{Files: files, Cut: cut}, nil
 }
 
 // lsFiles runs `git ls-files -z` with the given selectors and splits its

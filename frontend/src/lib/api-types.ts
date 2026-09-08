@@ -259,6 +259,15 @@ export interface DraftReviewComment {
 /** The verdict a submitted review carries. */
 export type ReviewEvent = "approve" | "comment" | "request_changes"
 
+/** internal/project.FileListing: one listing of a checkout's files for the
+ * Files panel. In a repository it is git's own list and `cut` is never set;
+ * in a plain folder it is a bounded walk, and `cut` says the walk stopped at
+ * its cap with files still unread. */
+export interface FileListing {
+  files: string[] | null
+  cut: boolean
+}
+
 /** internal/project.Worktree — a git worktree checkout: branch and path. */
 export interface Worktree {
   name: string
