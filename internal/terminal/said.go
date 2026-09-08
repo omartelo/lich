@@ -1,10 +1,8 @@
 package terminal
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 
@@ -90,10 +88,10 @@ func (s *Service) LastTurnSaid(id string) (LastSaid, error) {
 // provider's conversation, and both readers of one go through it: the last-turn
 // recap below, and the palette's transcript search (search.go).
 //
-// false for the two providers with no JSONL to walk. opencode keeps its messages
-// in SQLite, which each caller queries for what it needs; Cursor CLI files a
-// chat as a content-addressed blob store whose order lives in a protobuf index,
-// so nothing here reaches it at all (docs/ceilings.md).
+// false for the three providers with no JSONL to walk. opencode and Crush keep
+// their messages in SQLite, read by query instead (sessiondb.go); Cursor CLI
+// files a chat as a content-addressed blob store whose order lives in a protobuf
+// index, so neither mechanism reaches it at all (docs/ceilings.md).
 func transcriptReaderFor(src usageSource) (string, turnReader, bool) {
 	switch src.kind {
 	case providers.Claude:
@@ -113,16 +111,17 @@ func transcriptReaderFor(src usageSource) (string, turnReader, bool) {
 }
 
 // saidFor reads one conversation's closing words out of whatever the provider
-// files them in. Empty for every miss, and for the two providers that reach here
-// with nothing to read — Cursor CLI files its chat as a content-addressed blob
-// store, and neither it nor Crush reports a turn boundary, so neither is ever
-// offered the panel this feeds (docs/ceilings.md).
+// files them in: a line reader for the transcripts, and a query for the two
+// providers that keep their messages in a database of their own instead
+// (sessiondb.go). Empty for every miss, and for Cursor CLI, which reaches here
+// with nothing either can read — a chat filed as a content-addressed blob store
+// (docs/ceilings.md).
 func saidFor(src usageSource) string {
 	if path, read, ok := transcriptReaderFor(src); ok {
 		return lastSaidInTail(path, read)
 	}
-	if src.kind == providers.OpenCode {
-		return sessionDBSaid(src.path, opencodeSaidQuery, src.id)
+	if texts := sessionDBTexts(src.path, queriesFor(src.kind).said, src.id); len(texts) > 0 {
+		return strings.TrimSpace(texts[0])
 	}
 	return ""
 }
@@ -322,49 +321,6 @@ func joinText(blocks []textBlock, want ...string) (string, bool) {
 		return "", false
 	}
 	return strings.Join(parts, "\n"), true
-}
-
-// opencodeSaidQuery is the newest text part of the newest assistant message in
-// one opencode conversation. opencode splits a message across `part` rows and
-// keeps the role on the `message` row, so the join is what tells an assistant's
-// own words from a tool result written beside them.
-//
-// Sub-agents are left out on purpose, where the cost query walks down into them:
-// opencode files each as a session of its own, and what a sub-agent said last is
-// not what the session said last.
-const opencodeSaidQuery = `SELECT p.data FROM part p JOIN message m ON m.id = p.message_id
-	WHERE p.session_id = ? AND json_extract(m.data, '$.role') = 'assistant'
-	AND json_extract(p.data, '$.type') = 'text'
-	ORDER BY p.time_created DESC LIMIT 1`
-
-// sessionDBSaid reads one conversation's closing words out of a provider's own
-// SQLite database. Read-only and opened per call, for the reasons sessionDBCost
-// gives: lich must never write into a database another tool owns.
-func sessionDBSaid(path, query, id string) string {
-	if id == "" {
-		return ""
-	}
-	if _, err := os.Stat(path); err != nil {
-		return ""
-	}
-	dsn := fmt.Sprintf("file:%s?mode=ro&_pragma=busy_timeout(%d)", path, sessionDBBusyMS)
-	db, err := sql.Open("sqlite", dsn)
-	if err != nil {
-		return ""
-	}
-	defer func() { _ = db.Close() }()
-
-	var data string
-	if err := db.QueryRow(query, id).Scan(&data); err != nil {
-		return ""
-	}
-	var part struct {
-		Text string `json:"text"`
-	}
-	if err := json.Unmarshal([]byte(data), &part); err != nil {
-		return ""
-	}
-	return strings.TrimSpace(part.Text)
 }
 
 // capRunes trims the middle out of an over-long answer, keeping two thirds of

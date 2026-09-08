@@ -64,6 +64,7 @@ tool.
 | `internal/terminal/resume.go` | whether a resume can be offered | a `ResumeAvailable` case answering from what that provider left on disk |
 | `internal/terminal/transcript.go`, `sessiondb.go` | where that state lives | the path resolver the case above calls |
 | `internal/terminal/usage.go` | the footer's session readout | a `usageSourceFor` arm, plus a `sessionCost` arm reading whatever that provider records about spend — and a `contextUsageFor` arm only if it also records the model's context window. Which rung that lands the provider on is a row in `docs/ceilings.md`, in the same PR |
+| `internal/terminal/said.go`, `search.go` | the recap beside a diff and the palette's Messages tab | an arm in `transcriptReaderFor` with a line reader for a provider that files its conversation as JSONL, or the `said` and `search` queries in `sessiondb.go` for one that keeps it in a database of its own — a provider in neither is simply never listed, which is what every other miss in that search looks like |
 | `internal/sandbox/sandbox.go` | what a confined session can still reach | a `stateDirs` case — a provider missing here confines to a home with no credentials, which is a session that opens and cannot log in |
 | `internal/agentplugin/` | the companion plugin | a `<provider>.go` with install / installed-version, plus the four switches and the `supported` list in `agentplugin.go` |
 | `internal/cli/mcp.go` | the `open_session` tool schema | the new id in the `kind` description |

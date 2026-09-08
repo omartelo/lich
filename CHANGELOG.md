@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The palette's Messages tab now searches opencode and Crush sessions.** Both
+  keep their conversation in a SQLite database rather than in a transcript file,
+  so searching what was said skipped them in silence: a session that had talked
+  about the thing you typed simply never appeared. They are queried directly now,
+  counted and quoted like every other provider, and Cursor CLI is the only one
+  still unsearchable — it files a chat as encrypted, content-addressed blobs.
+
 ### Changed
 
 - **The sandbox's "Ask each time" rung now reaches every session.** It only ever

@@ -285,7 +285,7 @@ func TestSessionDBCostMisses(t *testing.T) {
 		name, path, query, id string
 	}{
 		{"no conversation id", path, crushCostQuery, ""},
-		{"a provider with no such database", path, costQueryFor(providers.Claude), "crush-1"},
+		{"a provider with no such database", path, queriesFor(providers.Claude).cost, "crush-1"},
 		{"a database that is not there", filepath.Join(t.TempDir(), "crush.db"), crushCostQuery, "crush-1"},
 		{"a row that is not there", path, crushCostQuery, "crush-gone"},
 		{"a table that moved", path, `SELECT cost FROM nowhere WHERE id = ?`, "crush-1"},

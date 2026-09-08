@@ -240,15 +240,12 @@ func TestSaidForReadsTheOpenCodeDatabase(t *testing.T) {
 	}
 }
 
-// TestSaidForIsEmptyForProvidersWithNoLastTurn pins the deliberate gap: neither
-// Crush nor Cursor CLI reports a turn boundary, so neither is ever offered the
-// panel this feeds, and reading their stores would be answering a question
-// nobody can ask (docs/ceilings.md).
-func TestSaidForIsEmptyForProvidersWithNoLastTurn(t *testing.T) {
-	for _, kind := range []string{providers.Crush, providers.Cursor} {
-		if got := saidFor(usageSource{kind: kind, path: "/nope", id: "x"}); got != "" {
-			t.Errorf("saidFor(%s) = %q, want empty", kind, got)
-		}
+// TestSaidForIsEmptyForCursor pins the one provider neither mechanism reaches:
+// a chat filed as content-addressed blobs is not a transcript to walk and not a
+// query to run, so the read is empty rather than wrong (docs/ceilings.md).
+func TestSaidForIsEmptyForCursor(t *testing.T) {
+	if got := saidFor(usageSource{kind: providers.Cursor, path: "/nope", id: "x"}); got != "" {
+		t.Errorf("saidFor(cursor) = %q, want empty", got)
 	}
 }
 

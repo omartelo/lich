@@ -47,8 +47,8 @@ type TranscriptMatch struct {
 //
 // Every miss is silent and simply contributes no match — a session with no
 // provider id yet (a shell, or a provider that reports none), a provider whose
-// conversation lich cannot walk (transcriptReaderFor), a transcript that is
-// gone, a half-written line.
+// conversation lich can read by neither mechanism (searchSource), a transcript
+// that is gone, a half-written line.
 func (s *Service) SearchTranscripts(ids []string, query string) []TranscriptMatch {
 	q := strings.ToLower(strings.TrimSpace(query))
 	if utf8.RuneCountInString(q) < minSearchQuery {
@@ -68,15 +68,7 @@ func (s *Service) SearchTranscripts(ids []string, query string) []TranscriptMatc
 		if !ok {
 			continue
 		}
-		path, read, ok := transcriptReaderFor(src)
-		if !ok {
-			continue
-		}
-		tail, ok := readTail(path, searchTailBytes)
-		if !ok {
-			continue
-		}
-		match, ok := searchTranscript(tail, q, read)
+		match, ok := searchSource(src, q)
 		if !ok {
 			continue
 		}
@@ -84,6 +76,43 @@ func (s *Service) SearchTranscripts(ids []string, query string) []TranscriptMatc
 		matches = append(matches, match)
 	}
 	return matches
+}
+
+// searchSource asks one conversation about q, by whichever of the two mechanisms
+// its provider is read through: a bounded tail walked by the provider's own line
+// reader, or — for the two that keep their messages in a database of their own —
+// a query for the prose of that conversation (sessiondb.go). Both count the
+// messages that mention q and keep the newest as the snippet; false when neither
+// finds one, which is also what a provider read by neither answers.
+func searchSource(src usageSource, q string) (TranscriptMatch, bool) {
+	if path, read, ok := transcriptReaderFor(src); ok {
+		tail, ok := readTail(path, searchTailBytes)
+		if !ok {
+			return TranscriptMatch{}, false
+		}
+		return searchTranscript(tail, q, read)
+	}
+	return searchSessionRows(sessionDBTexts(src.path, queriesFor(src.kind).search, src.id), q)
+}
+
+// searchSessionRows is searchTranscript's other half: the same count and the
+// same newest-wins snippet, over messages a query already separated from the
+// tool calls around them, so there is no line to parse and nothing to reject.
+//
+// The rows are matched here rather than by a `LIKE` in the query: SQLite's is
+// case-insensitive over ASCII alone, and a palette that found "worktree" in one
+// provider and not "Wörter" in another would be answering two questions.
+func searchSessionRows(texts []string, q string) (TranscriptMatch, bool) {
+	var match TranscriptMatch
+	for _, text := range texts {
+		snippet, ok := snippetAround(text, q)
+		if !ok {
+			continue
+		}
+		match.Snippet = snippet
+		match.Count++
+	}
+	return match, match.Count > 0
 }
 
 // searchTranscript counts the messages in a transcript tail that mention q
