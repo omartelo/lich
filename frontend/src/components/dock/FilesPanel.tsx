@@ -9,7 +9,7 @@ import { type Composer, ReviewSlot } from "@/components/diff/ReviewSlots"
 import { FileTree } from "@/components/FileTree"
 import { threadSlots, type SlotElements } from "@/lib/codemirror-threads"
 import { formatLineRef, parseDiff, type DiffFile } from "@/lib/git/diff"
-import { buildTree, type TreeNode } from "@/lib/git/file-tree"
+import { buildTree, treeFootnote, type TreeNode } from "@/lib/git/file-tree"
 import { updateFileBrowse, useFileBrowse } from "@/lib/file-browse"
 import { COMPOSER_KEY } from "@/lib/pulls/review-slots"
 import { matchesQuery } from "@/lib/session/command-palette"
@@ -18,7 +18,7 @@ import { queuePaste } from "@/lib/terminal/paste-queue"
 import { useProjects } from "@/providers/projects"
 import { ProjectService, System } from "@/lib/rpc"
 import { useActiveSession } from "@/lib/session/use-active-session"
-import { useGitStatus } from "@/lib/git/use-git-status"
+import { GIT_POLL, useGitStatus } from "@/lib/git/use-git-status"
 import { useInject } from "@/lib/use-inject"
 import { useRemoteResource } from "@/lib/use-remote-resource"
 import { useFileEditor } from "./useFileEditor"
@@ -44,22 +44,31 @@ export function FilesPanel() {
   // one worktree's browse off another's tree, which the panel used to do by
   // clearing on a path change.
   const browse = useFileBrowse(path)
+  // A plain folder answers no git status, so the key below would never move and
+  // the tree would only ever re-read on a remount. This tick is what replaces
+  // the status for it, on the cadence an idle repository's poll settles at.
+  const tick = usePlainFolderTick(path !== "" && status === null)
   // Same invalidation as the diff panel: the git-status poll doubles as the
   // signal, so a new or removed file shows up without a watcher. It rides the
   // key rather than an effect, because the key is what stands for the request.
   const key = path
-    ? `${path} ${status?.files ?? 0} ${status?.added ?? 0} ${status?.deleted ?? 0}`
+    ? `${path} ${status?.files ?? 0} ${status?.added ?? 0} ${status?.deleted ?? 0} ${tick}`
     : ""
   const { data, loading, error } = useRemoteResource(
     key,
     async () => {
       // The diff feeds each row its +/- badge; a diff failure (nothing to diff)
       // just means no badges, never a broken tree — hence the swallowed catch.
-      const [files, diffText] = await Promise.all([
+      const [listing, diffText] = await Promise.all([
         ProjectService.Tree(path),
         ProjectService.DiffText(path).catch(() => ""),
       ])
-      return { files: files ?? [], stats: diffStatsByPath(parseDiff(diffText)) }
+      return {
+        files: listing.files ?? [],
+        cut: listing.cut,
+        hidden: listing.hidden ?? [],
+        stats: diffStatsByPath(parseDiff(diffText)),
+      }
     },
     // resetOn is the path and not the key: a moved file count refreshes the
     // tree in place, while a worktree switch with no answer on file must drop
@@ -122,6 +131,8 @@ export function FilesPanel() {
             toggled={browse.toggled}
             onToggled={(toggled) => updateFileBrowse(path, { toggled })}
             stats={data.stats}
+            cut={data.cut}
+            hidden={data.hidden}
             loading={loading}
             failed={error !== null}
             onOpen={(rel) => updateFileBrowse(path, { open: rel, selected: rel })}
@@ -149,9 +160,34 @@ export function FilesPanel() {
 
 // What the tree holds before its first answer, and after a failed lookup. A
 // module-level constant because useRemoteResource compares it by identity.
-const NO_TREE: { files: string[]; stats: Map<string, DiffFile> } = {
+const NO_TREE: {
+  files: string[]
+  cut: boolean
+  hidden: string[]
+  stats: Map<string, DiffFile>
+} = {
   files: [],
+  cut: false,
+  hidden: [],
   stats: new Map(),
+}
+
+// usePlainFolderTick advances a counter on the git poller's idle cadence while
+// `on`, so a caller keyed off it re-reads on the same rhythm a repository's
+// tree does. Only the plain-folder case turns it on: there is no git status
+// there to notice a file the agent just wrote, and a walk is cheap next to the
+// several git subprocesses the poller runs on the same path anyway. Exported
+// for tests.
+export function usePlainFolderTick(on: boolean): number {
+  const [tick, setTick] = useState(0)
+  useEffect(() => {
+    if (!on) {
+      return
+    }
+    const id = setInterval(() => setTick((n) => n + 1), GIT_POLL.slowMs)
+    return () => clearInterval(id)
+  }, [on])
+  return tick
 }
 
 // diffStatsByPath keys each changed file's +/- counts by its current path so a
@@ -177,6 +213,12 @@ interface TreeBodyProps {
   toggled: ReadonlySet<string>
   onToggled: (toggled: ReadonlySet<string>) => void
   stats: Map<string, DiffFile>
+  /** The listing stopped at the walk's cap, so the tree is only part of the
+   * folder. Only a plain folder can set it: git's listing is never cut. */
+  cut: boolean
+  /** Directory names the walk stepped over, for the same reason. Empty in a
+   * repository, where .gitignore filters and lich names nothing. */
+  hidden: string[]
   /** A read with nothing on screen yet. False through a refetch that has last
    * time's tree to stand on, which is what keeps a poll tick from flashing. */
   loading: boolean
@@ -185,42 +227,58 @@ interface TreeBodyProps {
   onEditor: (rel: string) => void
 }
 
-function TreeBody({
+// Exported for tests: the gate cannot stand FilesPanel up whole (it hangs off
+// the projects provider and a live session), and the tree's states are what the
+// panel is read on.
+export function TreeBody({
   tree,
   query,
   active,
   toggled,
   onToggled,
   stats,
+  cut,
+  hidden,
   loading,
   failed,
   onOpen,
   onEditor,
 }: TreeBodyProps) {
   const filtering = query.trim() !== ""
+  const footnote = treeFootnote(cut, hidden)
   if (failed) {
     return <Notice>Could not read this folder</Notice>
   }
   if (loading) {
     return <Notice>Loading…</Notice>
   }
-  if (tree.length === 0) {
-    return <Notice>{filtering ? "No file matches" : "No files here"}</Notice>
-  }
   return (
-    <FileTree
-      tree={tree}
-      active={active}
-      // Suspended, not replaced: clearing the filter gives back the folders the
-      // browse had open rather than a tree collapsed to the root.
-      expandAll={filtering}
-      toggled={toggled}
-      onToggled={onToggled}
-      stats={stats}
-      onEditor={onEditor}
-      className="h-full"
-      onSelect={onOpen}
-    />
+    <>
+      {tree.length === 0 ? (
+        <Notice>{filtering ? "No file matches" : "No files here"}</Notice>
+      ) : (
+        <FileTree
+          tree={tree}
+          active={active}
+          // Suspended, not replaced: clearing the filter gives back the folders
+          // the browse had open rather than a tree collapsed to the root.
+          expandAll={filtering}
+          toggled={toggled}
+          onToggled={onToggled}
+          stats={stats}
+          onEditor={onEditor}
+          className="min-h-0 flex-1"
+          onSelect={onOpen}
+        />
+      )}
+      {/* A listing that left something out has to say so, under the rows rather
+          than over them: it is a footnote to the tree, not a state of the panel.
+          It outlives the empty branch on purpose: "No file matches" is a lie
+          when the listing the filter ran over was only part of the folder. */}
+      {footnote !== "" && (
+        <Notice className="shrink-0 border-t border-border py-2">{footnote}</Notice>
+      )}
+    </>
   )
 }
 

@@ -259,6 +259,20 @@ export interface DraftReviewComment {
 /** The verdict a submitted review carries. */
 export type ReviewEvent = "approve" | "comment" | "request_changes"
 
+/** internal/project.FileListing: one listing of a checkout's files for the
+ * Files panel, plus what the panel owes the reader about how they were
+ * gathered. In a repository it is git's own list, and neither `cut` nor
+ * `hidden` is ever set; in a plain folder it is a bounded walk that says where
+ * it stopped and which directories it stepped over. */
+export interface FileListing {
+  files: string[] | null
+  cut: boolean
+  /** The ignored directory names this folder actually had (`node_modules`,
+   * `build`, …), sorted and deduped. Always empty in a repository, where
+   * .gitignore does the filtering and lich names nothing. */
+  hidden: string[] | null
+}
+
 /** internal/project.Worktree — a git worktree checkout: branch and path. */
 export interface Worktree {
   name: string

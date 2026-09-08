@@ -3,6 +3,7 @@ package project
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -28,11 +29,11 @@ func TestTree(t *testing.T) {
 	git("add", ".gitignore")
 	git("commit", "-m", "gitignore")
 
-	files, err := New(nil).Tree(repo)
+	tree, err := New(nil).Tree(repo)
 	if err != nil {
 		t.Fatalf("Tree: %v", err)
 	}
-	got := strings.Join(files, ",")
+	got := strings.Join(tree.Files, ",")
 	want := ".gitignore,a.txt,internal/rpc/rpc.go,untracked.txt,z.txt"
 	if got != want {
 		t.Errorf("Tree = %q, want %q", got, want)
@@ -46,12 +47,12 @@ func TestTreeDropsDeleted(t *testing.T) {
 	if err := os.Remove(filepath.Join(repo, "a.txt")); err != nil {
 		t.Fatal(err)
 	}
-	files, err := New(nil).Tree(repo)
+	tree, err := New(nil).Tree(repo)
 	if err != nil {
 		t.Fatalf("Tree: %v", err)
 	}
-	if slices.Contains(files, "a.txt") {
-		t.Errorf("Tree = %v, want a.txt dropped", files)
+	if slices.Contains(tree.Files, "a.txt") {
+		t.Errorf("Tree = %v, want a.txt dropped", tree.Files)
 	}
 }
 
@@ -64,12 +65,18 @@ func TestTreeWalksNonRepo(t *testing.T) {
 	write(t, dir, "b.txt", "b\n")
 	write(t, dir, "src/main.go", "package main\n")
 	write(t, dir, ".git/config", "[core]\n")
-	files, err := New(nil).Tree(dir)
+	tree, err := New(nil).Tree(dir)
 	if err != nil {
 		t.Fatalf("Tree: %v", err)
 	}
-	if got, want := strings.Join(files, ","), "b.txt,src/main.go"; got != want {
+	if got, want := strings.Join(tree.Files, ","), "b.txt,src/main.go"; got != want {
 		t.Errorf("Tree = %q, want %q", got, want)
+	}
+	if tree.Cut {
+		t.Error("Tree.Cut = true on a walk that reached the end, want false")
+	}
+	if got := strings.Join(tree.Hidden, ","); got != ".git" {
+		t.Errorf("Tree.Hidden = %q, want %q", got, ".git")
 	}
 }
 
@@ -80,9 +87,9 @@ func TestTreeWalksNonRepo(t *testing.T) {
 func TestTreeReportsBrokenRepo(t *testing.T) {
 	repo, _ := initRepo(t)
 	write(t, repo, ".git/index", "not an index")
-	files, err := New(nil).Tree(repo)
+	tree, err := New(nil).Tree(repo)
 	if err == nil {
-		t.Fatalf("Tree on a corrupt index = %v, want an error", files)
+		t.Fatalf("Tree on a corrupt index = %v, want an error", tree.Files)
 	}
 }
 
@@ -94,10 +101,11 @@ func TestTreeMissingDir(t *testing.T) {
 	}
 }
 
-// TestWalkFilesStopsAtLimit proves the walk is bounded: without .gitignore
-// nothing else keeps a dependency directory out of one RPC answer. walkLimit's
-// own value is pinned as a literal — deriving it would make the test follow the
-// constant instead of pinning it.
+// TestWalkFilesStopsAtLimit proves the walk is bounded and says so: walkIgnore
+// is a name list, not a .gitignore, so the cap is still what stands between a
+// huge folder and one RPC answer, and Cut is what lets the panel admit the
+// listing is partial. walkLimit's own value is pinned as a literal (deriving
+// it would make the test follow the constant instead of pinning it).
 func TestWalkFilesStopsAtLimit(t *testing.T) {
 	if walkLimit != 20000 {
 		t.Errorf("walkLimit = %d, want 20000", walkLimit)
@@ -106,12 +114,94 @@ func TestWalkFilesStopsAtLimit(t *testing.T) {
 	for i := range 12 {
 		write(t, dir, fmt.Sprintf("f%02d.txt", i), "x")
 	}
-	files, err := walkFiles(dir, 10)
+	tree, err := walkFiles(dir, 10)
 	if err != nil {
 		t.Fatalf("walkFiles: %v", err)
 	}
-	if len(files) != 10 {
-		t.Errorf("walkFiles = %d files, want 10", len(files))
+	if len(tree.Files) != 10 {
+		t.Errorf("walkFiles = %d files, want 10", len(tree.Files))
+	}
+	if !tree.Cut {
+		t.Error("walkFiles.Cut = false on a listing that stopped at the cap, want true")
+	}
+}
+
+// TestWalkIgnoresDependencyDirs proves the plain-folder walk leaves the
+// machine-written trees out at any depth, and only those: a file whose *own*
+// name matches an ignored directory is a file, and a directory whose name only
+// contains one is not the one being skipped.
+func TestWalkIgnoresDependencyDirs(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "main.go", "package main\n")
+	write(t, dir, "node_modules/left-pad/index.js", "x")
+	write(t, dir, "src/node_modules/dep/index.js", "x")
+	write(t, dir, "src/app/dist/bundle.js", "x")
+	write(t, dir, "api/__pycache__/mod.pyc", "x")
+	write(t, dir, "web/.venv/lib/site.py", "x")
+	write(t, dir, "go/vendor/dep/dep.go", "x")
+	write(t, dir, "rs/target/debug/bin", "x")
+	write(t, dir, "cc/build/out.o", "x")
+	write(t, dir, "py/venv/bin/python", "x")
+	write(t, dir, "app/.cache/blob", "x")
+	write(t, dir, "dist.txt", "not a directory")
+	write(t, dir, "build-tools/run.sh", "not build/")
+
+	tree, err := walkFiles(dir, walkLimit)
+	if err != nil {
+		t.Fatalf("walkFiles: %v", err)
+	}
+	want := "build-tools/run.sh,dist.txt,main.go"
+	if got := strings.Join(tree.Files, ","); got != want {
+		t.Errorf("walkFiles = %q, want %q", got, want)
+	}
+	// Every ignored name this folder actually had, once each: node_modules sat
+	// at two depths, and .git was not here at all.
+	wantHidden := ".cache,.venv,__pycache__,build,dist,node_modules,target,vendor,venv"
+	if got := strings.Join(tree.Hidden, ","); got != wantHidden {
+		t.Errorf("walkFiles.Hidden = %q, want %q", got, wantHidden)
+	}
+}
+
+// TestWalkHiddenNamesOnlyWhatIsThere proves Hidden is the folder's own answer
+// and not the ignore set recited back: it is what the panel prints, so a name
+// in it that is not on disk sends the reader looking for a directory that was
+// never there.
+func TestWalkHiddenNamesOnlyWhatIsThere(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "main.go", "package main\n")
+	write(t, dir, "dist/out.js", "x")
+
+	tree, err := walkFiles(dir, walkLimit)
+	if err != nil {
+		t.Fatalf("walkFiles: %v", err)
+	}
+	if got := strings.Join(tree.Hidden, ","); got != "dist" {
+		t.Errorf("walkFiles.Hidden = %q, want %q", got, "dist")
+	}
+
+	clean := t.TempDir()
+	write(t, clean, "main.go", "package main\n")
+	bare, err := walkFiles(clean, walkLimit)
+	if err != nil {
+		t.Fatalf("walkFiles: %v", err)
+	}
+	if len(bare.Hidden) != 0 {
+		t.Errorf("walkFiles.Hidden = %v on a folder with nothing to skip, want empty", bare.Hidden)
+	}
+}
+
+// TestWalkIgnoreNames pins the set itself. The walk is the only filter a plain
+// folder gets, so a name silently dropped from here is a dependency tree back
+// in the panel, and a name silently added is a directory of somebody's source
+// gone from it.
+func TestWalkIgnoreNames(t *testing.T) {
+	want := []string{
+		".cache", ".git", ".venv", "__pycache__", "build",
+		"dist", "node_modules", "target", "vendor", "venv",
+	}
+	got := slices.Sorted(maps.Keys(walkIgnore))
+	if !slices.Equal(got, want) {
+		t.Errorf("walkIgnore = %v, want %v", got, want)
 	}
 }
 

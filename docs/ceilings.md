@@ -276,13 +276,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   it was branched from, so the pair reports roughly twice what one conversation spent. It is the same
   arithmetic as the `(session, transcript)` bullet above, arrived at deliberately rather than by accident —
   a lich-driven fork makes that path ordinary.
-- **The file tree outside a repository is unfiltered and capped**
-  (`internal/project/tree.go`, `walkFiles`): a plain folder has no `.gitignore`
-  for lich to obey, so the Files tab lists dependency and build directories like
-  any other, and stops at `walkLimit` files with nothing on screen saying the
-  listing was cut. It also has no git status to poll, so the tree there refreshes
-  only when the panel is reopened — a file the agent just wrote shows up on the
-  next visit, not while you watch.
 - **A missing tool is answered from the launch's `PATH`** (`frontend/src/lib/vcs-tools.ts`): the git and gh
   checks resolve through the `PATH` lich pinned at startup (`terminal.PinPath`), so installing either one
   while lich is open leaves every surface still calling it missing until a restart. Each of them says so; a

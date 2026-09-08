@@ -8,7 +8,11 @@ export type { GitStatus }
 // up while the agent is still typing; after five quiet reads it falls back to
 // the old 3s, which is what an idle project costs today. The plugin's
 // session-touched hook still nudges an immediate read on top of this.
-const GIT_POLL: PollCadence = { fastMs: 1_000, slowMs: 3_000, idleTicks: 5 }
+//
+// Exported for the Files panel: a plain folder has no git status to key its
+// tree off, so it re-walks on this same cadence rather than inventing a second
+// one for the user to notice the difference in.
+export const GIT_POLL: PollCadence = { fastMs: 1_000, slowMs: 3_000, idleTicks: 5 }
 
 // Two calls, not three: Diff carries the branch, because the one git status it
 // runs already reports it alongside the head and the dirty entries.

@@ -70,3 +70,20 @@ function sortTree(nodes: TreeNode[]): void {
     sortTree(node.children)
   }
 }
+
+// treeFootnote is the one line a listing owes the reader when it is not the
+// whole folder: which directories the walk stepped over, and whether it ran out
+// of room before the end. The names come first because they are the actionable
+// half: somebody whose source lives under build/ reads why it is missing
+// instead of concluding the panel is broken. Empty string when there is nothing
+// to admit, which is every repository (git filters, and lich names nothing).
+export function treeFootnote(cut: boolean, hidden: string[]): string {
+  const parts: string[] = []
+  if (hidden.length > 0) {
+    parts.push(`Hidden: ${hidden.join(", ")}.`)
+  }
+  if (cut) {
+    parts.push("This folder has more files than the tree can list.")
+  }
+  return parts.join(" ")
+}
