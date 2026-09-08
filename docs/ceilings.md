@@ -137,15 +137,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   for one terminal. The budget suite pins that adding a pane mounts one terminal and remounts none
   (`frontend/src/components/render-budget.test.tsx`); it cannot measure the cadence, because jsdom has
   no canvas to paint.
-- **The terminals are outside every error boundary, so a throw in one still takes the window**
-  (`frontend/src/components/common/ErrorBoundary.tsx`, `App.tsx`): the boundaries wrap the screens over
-  the stage and the right dock's panels, and deliberately not `TerminalHost` — catching there means
-  unmounting it, which destroys every session's xterm instance and its DOM, and no remount brings those
-  scrollbacks back. Recovering the window would cost more than the blank one it replaced. So a render
-  throw anywhere under `TerminalHost` — a pane, a terminal's own chrome, the stage's grid — is still
-  the whole tree going, and the only way back is a reload, while the sessions keep running behind it.
-  The trap is reading "lich has error boundaries" as "a render bug can no longer blank the window": the
-  one subtree that owns the most state is the one nothing catches.
 - **A dropped file has no path, so lich guesses it** (`internal/drop`): a file under neither the session directory
   nor home is *copied*, so an agent told to edit it edits the copy — and that copy is deleted 3 days on, so a path
   pasted into a prompt eventually stops resolving.
@@ -254,11 +245,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   opencode's own session list places a fork in the checkout it came from and records no lineage. lich's own
   card is right — it carries the worktree it was opened in, and `origin_session_id` names the parent — but the
   two disagree, and only lich's side is visible in lich.
-- **A fork is billed as a second conversation from its first turn** (`internal/pricing`,
-  `internal/terminal/usage_cost.go`): the copy is a transcript of its own carrying every token of the history
-  it was branched from, so the pair reports roughly twice what one conversation spent. It is the same
-  arithmetic as the `(session, transcript)` bullet above, arrived at deliberately rather than by accident —
-  a lich-driven fork makes that path ordinary.
 - **git status is polled** — one shared poller per repository path (`frontend/src/lib/git/git-status-store.ts`); the
   lich plugin's `session-touched` hook nudges an immediate refresh.
 - **The status badge has a single source** (`internal/project/status.go`): the branch, the HEAD commit and the
@@ -287,10 +273,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   no confirmation on the way. It is not a new privilege — the agent already runs as you, in a shell that can read
   the same disk — but it is new visibility, and a card it opens there is a card with a PTY in it.
 
-- **A hotkey is taken from the agent, and a rebind is checked against nothing** (`frontend/src/lib/use-hotkey.ts`,
-  `hotkeys.ts`): every bound combo is caught in the window capture phase and stopped there, so the chord never
-  reaches the PTY. The defaults spend chords no TUI can bind, but nothing holds a rebind to that, and recording
-  `Ctrl+R` silently costs the shell its history search with nothing on screen connecting the two.
 - **lich's own window offers the page every primary-modifier chord before Chromium runs it**
   (`shell/src/main.rs`): a CEF keyboard handler marks each Ctrl chord (Cmd on macOS) a keyboard shortcut, which
   is the only way a page can claim one of Chromium's *reserved* accelerators. Ctrl+T, Ctrl+W, Ctrl+Shift+T and
@@ -517,12 +499,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   the API rejects an OAuth token without it — the same coupling as the user agent, and it fails closed, as a
   failed reading. Headers carry the two account-wide windows and no plan name, so such a session shows no
   model-scoped weekly cap and no "Max 5x" badge.
-- **A token-only login has a gauge and no name** (`internal/quota/claude.go`): the same
-  `claude setup-token` scope that keeps the usage route out of reach keeps `/api/oauth/profile` out of reach —
-  it wants `user:profile`, and `user:inference` is all that token has — so the profile route is not asked at
-  all on that path rather than asked once per cache window for a 403. Such a session shows its windows under
-  the provider's name with no account line, which is the same thing a session on a provider that names nobody
-  shows, and nothing on screen tells the two apart.
 - **Only two providers name the account a session spends, and the reasons the other six do not are not one
   reason** (`internal/quota`, `Plan.Account`): Claude Code answers a profile route with the credentials token,
   and Codex carries an `email` claim in the OIDC id token beside its access token (read unverified, and
@@ -628,20 +604,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   says `checkout gone` and offers to forget
   itself, which is the only way such a row is ever collected — `PurgeWorktreeSessions` never ran for it,
   because the removal never went through the app.
-- **A worktree lich did not create can never be removed through lich** (`internal/project.WorktreeAdopted`):
-  `git worktree list` hands back every checkout of a repository, so one the user made by hand appears in the
-  picker and hosts a session like any other — and nothing but its path tells the two apart. Everything lich
-  creates lives under the worktrees root (`reserveWorktreePath`); a canonical path outside it is adopted, and
-  `RemoveWorktree` refuses it whether or not force was asked for. What that costs is the cleanup: a hand-made
-  checkout is parked, never collected, and removing it is a `git worktree remove` the user runs themselves.
-  The test is the path and only the path — a worktree lich created and the user then moved out of the data dir
-  reads as adopted, and one made by hand inside it reads as lich's own.
-- **The History tab searches names, never what was said** (`internal/terminal/search.go`): the Messages tab
-  reads a 4 MB tail or a query per session per keystroke, and it is pointed at the sessions the palette can route to —
-  the open ones. History is the long list, so widening the transcript search to it would put a hundred disk
-  reads behind every character typed, on a machine that can hold hundreds of transcripts and a single one
-  of 169 MB. The parked row keeps its `provider_session_id`, so the transcript is still there to be searched
-  by whatever does it later; the fix when it bites is a query, not a bigger tail.
 - **A filed backend answer outlives the screen that asked, under a key its caller writes by hand**
   (`frontend/src/lib/remote-cache.ts`): a `useRemoteResource` caller that passes `cache` has its answers kept
   in module memory until the page reloads, under exactly the string it composed. Two callers that compose the
@@ -792,15 +754,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   Windows and macOS run with `no_sandbox` and the same bar everywhere: the Windows sandbox needs
   `cef_sandbox` linked into the executable and the macOS one a helper app initialising it, and neither is
   wired.
-- **Under Wayland the window is native Wayland, whatever the GPU** (`shell/src/main.rs`): kurogane forces
-  `--ozone-platform=x11` on NVIDIA, on its own reading of NVIDIA's EGL, and 0.45.0 shipped that default.
-  It cost file drops: a Wayland file manager dropping on an XWayland window goes through the compositor's
-  DnD bridge, and Hyprland's does not deliver (its issue #7800): the drop that worked in the system
-  Chromium, which opens native Wayland on its own, silently did nothing. The shell now asks for Wayland
-  whenever `WAYLAND_DISPLAY` is set, the way Chromium's own `auto` hint does, and the user's switches still
-  go through kurogane after it, so `lich -- --ozone-platform=x11` is the way back if NVIDIA's Wayland path
-  misbehaves on a machine (the reference one, RTX 3050 + Hyprland, ran the system Chromium on it for
-  months). A compositor with no XWayland (niri) gets the native window by default now.
 - **The window opens at CEF's default size** (`shell/src/main.rs`): a system browser remembered the
   window's last size and position in its profile; the CEF Views window does not, so each launch is the
   default rectangle until the window manager places it. Tiling compositors never notice.

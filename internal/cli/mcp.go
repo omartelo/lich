@@ -439,7 +439,9 @@ var mcpTools = []mcpTool{
 			"argument: keep it on disk (the session is parked, and opening a session on " +
 			"that branch again resumes its conversation) or remove it. A checkout with " +
 			"uncommitted work is only removed with force, because what that discards is in " +
-			"no commit and on no remote. You cannot close the session you are running in.",
+			"no commit and on no remote. A checkout lich did not create is removed from the " +
+			"window only, so \"remove\" on one is refused here. You cannot close the session " +
+			"you are running in.",
 		Schema: schema(map[string]any{
 			"session": property("string",
 				"The session to close, by the label on its card or the name it answers to."),

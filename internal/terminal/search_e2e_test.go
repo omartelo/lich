@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"errors"
+	"github.com/omartelo/lich/internal/snippet"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -129,9 +130,9 @@ func TestSnippetAroundSurvivesGrowingCaseFolding(t *testing.T) {
 		strings.Repeat("Ⱥ", 200) + " worktree",
 		strings.Repeat("İ", 200) + " worktree",
 	} {
-		got, ok := snippetAround(text, "worktree")
+		got, ok := snippet.Around(text, "worktree")
 		if !ok {
-			t.Fatalf("snippetAround(%.4q…) found no match", text)
+			t.Fatalf("snippet.Around(%.4q…) found no match", text)
 		}
 		if !strings.Contains(got, "worktree") {
 			t.Errorf("snippet %q lost the match", got)

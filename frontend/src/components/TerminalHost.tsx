@@ -5,6 +5,7 @@ import { TerminalView } from "./TerminalView"
 import { ResumeSessionDialog } from "./ResumeSessionDialog"
 import { ProviderIcon } from "./ProviderIcon"
 import { CloseButton } from "./common/CloseButton"
+import { ErrorBoundary } from "./common/ErrorBoundary"
 import { WorktreeCloseDialogs } from "./sidebar/WorktreeCloseDialogs"
 import { useWorktreeClose } from "./sidebar/useWorktreeClose"
 import { Terminal as TerminalService } from "@/lib/rpc"
@@ -17,6 +18,7 @@ import { cellAt, grid, offsetOf, rowLength, rowTracks } from "@/lib/session/pane
 import { paneTracks } from "@/lib/session/panes"
 import { usePanes } from "@/lib/session/use-panes"
 import { useStageSize } from "@/lib/session/use-stage-size"
+import { spawnedSessions } from "@/lib/terminal/terminal-registry"
 import { cn } from "@/lib/utils"
 import type { Session } from "@/lib/session/sessions"
 
@@ -178,8 +180,11 @@ export function TerminalHost() {
 
   // Session ids that have been viewed at least once, which keeps a terminal
   // mounted after the user navigates away. A session that leaves the workspace
-  // is pruned from it (see below), not left behind as a dead entry.
-  const [spawned, setSpawned] = useState<Set<string>>(() => new Set())
+  // is pruned from it (see below), not left behind as a dead entry. Seeded from
+  // the registry rather than empty: a host that remounted — the stage's error
+  // boundary retrying — must not walk sessions that never stopped running back
+  // through the gate and ask again about a conversation already resumed.
+  const [spawned, setSpawned] = useState<Set<string>>(() => new Set(spawnedSessions()))
   // The session whose resume prompt is on screen, if any; its spawn waits here.
   const [asking, setAsking] = useState<Session | null>(null)
   // The Claude session each spawned session was told to resume, keyed by session
@@ -315,34 +320,40 @@ export function TerminalHost() {
               // a selection: clicking a terminal is how you focus its pane.
               onPointerDownCapture={visible && !focused ? () => stage.focusCell(index) : undefined}
             >
-              {split && visible && (
-                <PaneHeader
-                  session={session}
-                  index={index}
-                  focused={focused}
-                  drag={paneDrag}
-                  onDrag={setPaneDrag}
-                  onFocus={stage.focusCell}
-                  onSwap={stage.swap}
-                  onDrop={stage.drop}
-                />
-              )}
-              <div className="relative min-h-0 flex-1">
-                <TerminalView
-                  sessionId={session.id}
-                  projectId={project.id}
-                  cwd={session.path || project.path}
-                  kind={session.kind}
-                  resume={resuming[session.id] ?? ""}
-                  roster={roster}
-                  visible={visible}
-                  focused={focused}
-                  sandboxed={session.sandboxed ?? false}
-                  label={session.label}
-                  onClose={() => worktreeClose.requestClose(session)}
-                  stillInWorkspace={() => hasSession(sessionsRef.current, session.id)}
-                />
-              </div>
+              {/* Per pane, so the fallback names the session that stopped
+                  rendering and the panes beside it carry on. The terminal
+                  detaches rather than dying with the subtree, so retrying
+                  re-attaches the very same one (lib/terminal/terminal-registry). */}
+              <ErrorBoundary label={`The ${session.label} pane`}>
+                {split && visible && (
+                  <PaneHeader
+                    session={session}
+                    index={index}
+                    focused={focused}
+                    drag={paneDrag}
+                    onDrag={setPaneDrag}
+                    onFocus={stage.focusCell}
+                    onSwap={stage.swap}
+                    onDrop={stage.drop}
+                  />
+                )}
+                <div className="relative min-h-0 flex-1">
+                  <TerminalView
+                    sessionId={session.id}
+                    projectId={project.id}
+                    cwd={session.path || project.path}
+                    kind={session.kind}
+                    resume={resuming[session.id] ?? ""}
+                    roster={roster}
+                    visible={visible}
+                    focused={focused}
+                    sandboxed={session.sandboxed ?? false}
+                    label={session.label}
+                    onClose={() => worktreeClose.requestClose(session)}
+                    stillInWorkspace={() => hasSession(sessionsRef.current, session.id)}
+                  />
+                </div>
+              </ErrorBoundary>
             </div>
           )
         })

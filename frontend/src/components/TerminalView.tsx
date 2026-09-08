@@ -11,34 +11,30 @@ import { errorText } from "@/lib/utils"
 import { onAppEvent } from "@/lib/app-events"
 import { ensureTransport, onSessionData, sendInput } from "@/lib/terminal/term-transport"
 import { chordSequence, isSearchOpenChord } from "@/lib/terminal/term-keys"
-import { makeReplayBuffer } from "@/lib/terminal/replay-buffer"
 import { takePaste } from "@/lib/terminal/paste-queue"
 import { takeFork } from "@/lib/terminal/fork-queue"
 import { takeSetup } from "@/lib/terminal/setup-queue"
 import type { PaletteSession } from "@/lib/session/command-palette"
 import { onTerminalFocusRequest } from "@/lib/terminal/focus-request"
-import { recordChunk } from "@/lib/terminal/term-perf"
 import { copyToastMessage, COPY_TOAST_DURATION_MS } from "@/lib/terminal/copy-toast"
 import { decodeBase64 } from "@/lib/terminal/term-frame"
 import {
-  cursorHidden,
-  cursorShape,
-  ensureFontLoaded,
-  fitTerminal,
-  mouseEncoding,
-  TERMINAL_PADDING_LEFT,
-} from "@/lib/terminal/term-view"
+  attachTerminal,
+  detachTerminal,
+  disposeTerminal,
+  feedEntry,
+  hideEntry,
+  type LiveTerminal,
+  showEntry,
+  terminalEntry,
+} from "@/lib/terminal/terminal-registry"
+import { ensureFontLoaded, fitTerminal, TERMINAL_PADDING_LEFT } from "@/lib/terminal/term-view"
 import { exitMarker, readSessionExit, type SessionExit } from "@/lib/terminal/session-exit"
 import { TerminalExitBanner } from "./TerminalExitBanner"
 import { TerminalDropHint } from "./TerminalDropHint"
 import { TerminalSearchBar, type SearchResults } from "./TerminalSearchBar"
 import { useTerminalDrop } from "./useTerminalDrop"
-import {
-  cursorShapeSequence,
-  cursorVisibilitySequence,
-  linkClickIsOurs,
-  mouseEncodingSequence,
-} from "@/lib/terminal/term-modes"
+import { linkClickIsOurs } from "@/lib/terminal/term-modes"
 import { createSessionLinkProvider } from "@/lib/terminal/session-link-provider"
 import { sessionLinkTargets } from "@/lib/terminal/session-links"
 import { useSettings } from "@/providers/settings"
@@ -53,8 +49,13 @@ import "@xterm/xterm/css/xterm.css"
 // Hidden sessions follow the waveterm model: the xterm instance is serialized
 // and destroyed (no buffer, no canvas, no renderer), PTY output queues in a
 // capped replay buffer, and showing the session recreates the terminal from
-// the serialized snapshot plus the queued tail. The component itself stays
-// mounted — its lifecycle is the PTY's (unmount closes the session).
+// the serialized snapshot plus the queued tail.
+//
+// The terminal itself is not this component's. It lives in the session's
+// registry entry (terminal-registry.ts), which this draws a container for and
+// attaches the host node into; unmounting detaches it and leaves everything
+// running, so an error boundary over the stage costs no scrollback. Only the
+// session leaving the workspace closes the PTY and disposes the terminal.
 
 // Event name prefixes mirror the backend (internal/terminal); the concrete
 // event carries the session ID as a suffix.
@@ -127,13 +128,6 @@ export interface TerminalViewProps {
   stillInWorkspace: () => boolean
 }
 
-interface LiveTerminal {
-  term: Terminal
-  serialize: SerializeAddon
-  search: SearchAddon
-  dispose(): void
-}
-
 export function TerminalView({
   sessionId,
   projectId,
@@ -153,21 +147,10 @@ export function TerminalView({
   const { activateSession } = useProjects()
   const navigate = useNavigate()
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const liveRef = useRef<LiveTerminal | null>(null)
-  // False until the mount effect's async setup builds the first terminal.
-  // The visibility effect must not create one before that: on first mount it
-  // runs while the font load is still in flight, and an unguarded show would
-  // plant an orphan, unwired terminal in the container — the real one then
-  // stacks below it (a black dead canvas on top, the prompt clipped at the
-  // bottom of the window).
-  const startedRef = useRef(false)
-  // Snapshot + queued output of a hidden (destroyed) terminal.
-  const serializedRef = useRef<string | null>(null)
-  // The modes the snapshot cannot carry (term-modes.ts). Kept apart from it
-  // because they survive the overflow path, where the snapshot is dropped:
-  // they describe the app, not the buffer.
-  const carriedModesRef = useRef("")
-  const replayRef = useRef(makeReplayBuffer())
+  // The session's terminal, its buffer and its PTY subscriptions. Looked up
+  // rather than held: this component is one of possibly several that will draw
+  // the same terminal over the session's life.
+  const entry = terminalEntry(sessionId)
   const visibleRef = useRef(visible)
   const focusedRef = useRef(focused)
   const stillInWorkspaceRef = useRef(stillInWorkspace)
@@ -185,26 +168,26 @@ export function TerminalView({
   // through a ref because xterm calls provideLinks straight from its own
   // render loop, well outside React's.
   const linkTargets = useMemo(() => sessionLinkTargets(roster, sessionId), [roster, sessionId])
-  const linkTargetsRef = useRef(linkTargets)
-  linkTargetsRef.current = linkTargets
+  entry.linkTargets.current = linkTargets
 
-  // In-terminal search (Ctrl+F). The open flag mirrors into a ref so the
-  // terminal's key handler — wired once at creation — reads the live value.
   // Set once this session's process is gone, and the whole of the card's
   // terminal state: the scrollback stays on screen, the banner below offers the
-  // two ways out of it.
-  const [exited, setExited] = useState<SessionExit | null>(null)
+  // two ways out of it. Seeded from the entry, because an exit can land while
+  // no view is mounted — the stage sitting in a boundary's fallback.
+  const [exited, setExited] = useState<SessionExit | null>(entry.exit)
 
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<SearchResults | null>(null)
+  // In-terminal search (Ctrl+F). The open flag mirrors into a ref so the
+  // terminal's key handler — wired once at creation — reads the live value.
   const searchOpenRef = useRef(searchOpen)
   searchOpenRef.current = searchOpen
 
   // runSearch jumps to the next/previous match; incremental keeps the current
   // match under the cursor while the query is still being typed.
   const runSearch = (query: string, direction: "next" | "prev", incremental = false) => {
-    const search = liveRef.current?.search
+    const search = entry.live?.search
     if (!search || query === "") {
       setSearchResults(null)
       return
@@ -222,7 +205,7 @@ export function TerminalView({
     setSearchOpen(false)
     setSearchQuery("")
     setSearchResults(null)
-    const live = liveRef.current
+    const live = entry.live
     if (live) {
       live.search.clearDecorations()
       live.term.clearSelection()
@@ -243,7 +226,7 @@ export function TerminalView({
   // would reopen whatever the provider last saved rather than what is on screen.
   // The scrollback is left alone — it is the evidence of what happened.
   const restart = () => {
-    const live = liveRef.current
+    const live = entry.live
     // The band raising this is inside a terminal that is on screen, so there is
     // always one to measure: a hidden layer is visibility:hidden and takes no
     // click at all. Guarded rather than asserted because the size is the only
@@ -263,8 +246,9 @@ export function TerminalView({
       live.term.rows,
     )
       .then(() => {
+        entry.exit = null
         setExited(null)
-        liveRef.current?.term.focus()
+        entry.live?.term.focus()
       })
       .catch((error: unknown) => {
         toast.error(`Session failed to restart: ${errorText(error)}`)
@@ -280,9 +264,23 @@ export function TerminalView({
     activateSession(target.projectId, target.sessionId)
   }
 
-  // createTerminal builds a live terminal in the container, wired for input,
-  // resize and copy-on-select. Shared by mount and every show-after-hide.
-  const createTerminal = (container: HTMLDivElement): LiveTerminal => {
+  // xterm's handlers are wired once, when the terminal is built, and that
+  // terminal outlives the component that built it — so they call the view that
+  // is mounted now through the entry, never the closure they were born in. No
+  // dependencies: every commit republishes them.
+  useEffect(() => {
+    entry.handlers = {
+      searchOpen: () => searchOpenRef.current,
+      closeSearch,
+      searchResults: (index, count) => setSearchResults({ index, count }),
+      activateLink,
+      exited: setExited,
+    }
+  })
+
+  // createTerminal builds a live terminal in the session's host node, wired for
+  // input, resize and copy-on-select. Shared by mount and every show-after-hide.
+  const createTerminal = (host: HTMLDivElement): LiveTerminal => {
     // Tracks the pointer sitting on a link, so the mousedown listener below only
     // swallows a click the link layer is about to serve.
     let linkHovered = false
@@ -320,9 +318,11 @@ export function TerminalView({
     // one already claimed the cells. A session called "docs" printed inside
     // https://docs.example.com must not swallow the URL.
     const sessionLinks = term.registerLinkProvider(
-      createSessionLinkProvider(term, linkTargetsRef, activateLink),
+      createSessionLinkProvider(term, entry.linkTargets, (target) =>
+        entry.handlers?.activateLink(target),
+      ),
     )
-    term.open(container)
+    term.open(host)
 
     // A link click must not also reach the PTY: an app that reads the mouse and
     // opens the links it prints (Claude Code does) would open the same URL a
@@ -345,7 +345,7 @@ export function TerminalView({
     const search = new SearchAddon()
     term.loadAddon(search)
     const searchResults = search.onDidChangeResults(({ resultIndex, resultCount }) =>
-      setSearchResults({ index: resultIndex, count: resultCount }),
+      entry.handlers?.searchResults(resultIndex, resultCount),
     )
 
     // WebGL is the renderer; context loss falls back to xterm's DOM renderer.
@@ -355,7 +355,11 @@ export function TerminalView({
       webgl.dispose()
     })
     term.loadAddon(webgl)
-    fitTerminal(term, container)
+    // Against the React container, not the host: the left gutter is padding on
+    // the container, and the fit subtracts it (term-view.ts). A terminal built
+    // while nothing is mounted has no container to measure and no size worth
+    // measuring — the next visibility pass refits it.
+    fitTerminal(term, containerRef.current ?? host)
 
     // Chords xterm encodes differently from what our TUIs expect go straight
     // to the PTY (see term-keys.ts). Returning false makes xterm skip the
@@ -369,9 +373,9 @@ export function TerminalView({
       // (Ctrl+F) is caught by a window capture-phase listener in the mount
       // effect — that is what beats Chromium's own Find accelerator in --app
       // mode; xterm's handler here is too late (the accelerator already fired).
-      if (searchOpenRef.current && event.key === "Escape") {
+      if (entry.handlers?.searchOpen() && event.key === "Escape") {
         event.preventDefault()
-        closeSearch()
+        entry.handlers.closeSearch()
         return false
       }
       // Platform-dependent because Claude Code's clipboard-image-paste chord is
@@ -398,7 +402,7 @@ export function TerminalView({
     // must not hijack the clipboard or raise a toast on every step.
     let copyTimer = 0
     const selection = term.onSelectionChange(() => {
-      if (searchOpenRef.current) {
+      if (entry.handlers?.searchOpen()) {
         return
       }
       window.clearTimeout(copyTimer)
@@ -433,7 +437,7 @@ export function TerminalView({
         // enough to start killing live renderers (a frozen terminal for the 3s
         // xterm waits for a restore, then a permanent fall back to the slower
         // DOM renderer). Hand the context back here instead.
-        const canvases = [...container.querySelectorAll("canvas")]
+        const canvases = [...host.querySelectorAll("canvas")]
         term.dispose()
         for (const canvas of canvases) {
           canvas.getContext("webgl2")?.getExtension("WEBGL_lose_context")?.loseContext()
@@ -442,70 +446,24 @@ export function TerminalView({
     }
   }
 
-  // hide serializes the live terminal and destroys it; output then queues in
-  // the replay buffer until show.
-  const hideTerminal = () => {
-    const live = liveRef.current
-    if (!live) {
-      return
-    }
-    serializedRef.current = live.serialize.serialize()
-    carriedModesRef.current =
-      mouseEncodingSequence(mouseEncoding(live.term)) +
-      cursorVisibilitySequence(cursorHidden(live.term)) +
-      cursorShapeSequence(cursorShape(live.term))
-    live.dispose()
-    liveRef.current = null
-  }
-
-  // show rebuilds the terminal from the snapshot plus the queued tail.
-  const showTerminal = () => {
-    const container = containerRef.current
-    if (liveRef.current || !container) {
-      return
-    }
-    const live = createTerminal(container)
-    if (replayRef.current.truncated()) {
-      // The queue overflowed while hidden; the head of what remains may be a
-      // partial ANSI sequence. The snapshot is stale relative to it either
-      // way, so start clean from the tail.
-      serializedRef.current = null
-      live.term.clear()
-    }
-    if (serializedRef.current) {
-      live.term.write(serializedRef.current)
-    }
-    // Between the snapshot and the queued tail: the tail is newer output, so
-    // anything the app changed there still wins.
-    if (carriedModesRef.current) {
-      live.term.write(carriedModesRef.current)
-    }
-    for (const chunk of replayRef.current.drain()) {
-      live.term.write(chunk)
-    }
-    serializedRef.current = null
-    carriedModesRef.current = ""
-    liveRef.current = live
-  }
-
   // Files dropped on the terminal land at the prompt as paths (useTerminalDrop).
   const { dropping, onDrop, onDragEnter, onDragOver, onDragLeave } = useTerminalDrop(
     { cwd, sessionId, confined: sandboxed },
     writeInput,
-    () => liveRef.current?.term.focus(),
+    () => entry.live?.term.focus(),
   )
 
-  // Create the terminal and its PTY session once per session id. The session
-  // runs in the background regardless of visibility and is only torn down
-  // when it is closed (this component unmounts) — never on navigation.
+  // Attach the session's terminal, and build it and its PTY on the first mount
+  // that ever draws the session. The session runs in the background regardless
+  // of visibility and is only torn down when it is closed — never on
+  // navigation, and never because this component went away.
   useEffect(() => {
     const container = containerRef.current
     if (!container) {
       return
     }
 
-    let disposed = false
-    const cleanups: Array<() => void> = []
+    attachTerminal(entry, container)
 
     // Ctrl+F must be caught in the window capture phase to beat Chromium's Find
     // accelerator in --app mode (the same pattern the zoom hotkeys use in
@@ -526,29 +484,59 @@ export function TerminalView({
       setSearchOpen(true)
     }
     window.addEventListener("keydown", onSearchKey, true)
-    cleanups.push(() => window.removeEventListener("keydown", onSearchKey, true))
 
-    // Output sink: the live terminal when one exists, the replay buffer
-    // while the session is hidden and the terminal destroyed.
-    const feed = (bytes: Uint8Array, decodeMs: number) => {
-      const live = liveRef.current
-      if (live) {
-        const t0 = performance.now()
-        live.term.write(bytes, () => recordChunk(decodeMs, performance.now() - t0, bytes.length))
-        return
+    // The refit follows the container, which is this component's: the pane it
+    // sits in is what changes size.
+    let refitTimer = 0
+    const resizeObserver = new ResizeObserver(() => {
+      window.clearTimeout(refitTimer)
+      refitTimer = window.setTimeout(() => {
+        if (visibleRef.current && entry.live) {
+          fitTerminal(entry.live.term, container)
+        }
+      }, REFIT_DEBOUNCE_MS)
+    })
+    resizeObserver.observe(container)
+
+    const teardown = () => {
+      window.removeEventListener("keydown", onSearchKey, true)
+      window.clearTimeout(refitTimer)
+      resizeObserver.disconnect()
+      detachTerminal(entry)
+      // The PTY and the terminal die with the session, never with this
+      // component. React unmounts for reasons that are not a close — StrictMode
+      // mounts every component twice in dev, a hot reload tears the tree down,
+      // an error boundary over the stage catches a throw — and a terminal
+      // closed for one of those takes the running agent and its scrollback with
+      // it. That was invisible while every session's PTY was born on this very
+      // mount; a session opened through the CLI or its MCP tools is already
+      // running when the card is first viewed, and the double mount killed the
+      // conversation the user came to read.
+      if (!stillInWorkspaceRef.current()) {
+        void Service.Close(sessionId)
+        disposeTerminal(sessionId)
       }
-      replayRef.current.push(bytes)
     }
+
+    if (entry.setup) {
+      // Remounted onto a terminal that outlived us: its buffer, its modes and
+      // its PTY subscriptions all belong to the entry, so re-attaching the node
+      // was the whole of the work — the visibility effect below refits it.
+      return teardown
+    }
+    entry.setup = true
 
     void (async () => {
       await ensureFontLoaded(fontRef.current)
-      if (disposed) {
+      if (entry.disposed) {
         return
       }
 
-      const live = createTerminal(container)
-      liveRef.current = live
-      startedRef.current = true
+      showEntry(entry, createTerminal)
+      const live = entry.live
+      if (!live) {
+        return
+      }
       ensureTransport()
 
       // Reseed scrollback from the backend tail. A full page reload discards the
@@ -561,43 +549,34 @@ export function TerminalView({
       // brand-new session.
       try {
         const tail = await Service.Replay(sessionId)
-        if (disposed) {
+        if (entry.disposed) {
           return
         }
-        if (tail && liveRef.current === live) {
+        if (tail && entry.live === live) {
           live.term.write(decodeBase64(tail))
         }
       } catch {
         // No tail is fine — the terminal just starts from live output.
       }
 
-      const offData = onAppEvent(DATA_EVENT_PREFIX + sessionId, (data) => {
-        const t0 = performance.now()
-        const bytes = decodeBase64(data as string)
-        feed(bytes, performance.now() - t0)
-      })
-      const offWsData = onSessionData(sessionId, (payload) => feed(payload, 0))
-      const offExit = onAppEvent(EXIT_EVENT_PREFIX + sessionId, (data) => {
-        const exit = readSessionExit(data)
-        feed(new TextEncoder().encode(exitMarker(exit)), 0)
-        setExited(exit)
-      })
-      cleanups.push(offData, offWsData, offExit)
-
-      let refitTimer = 0
-      const resizeObserver = new ResizeObserver(() => {
-        window.clearTimeout(refitTimer)
-        refitTimer = window.setTimeout(() => {
-          if (visibleRef.current && liveRef.current) {
-            fitTerminal(liveRef.current.term, container)
-          }
-        }, REFIT_DEBOUNCE_MS)
-      })
-      resizeObserver.observe(container)
-      cleanups.push(() => {
-        window.clearTimeout(refitTimer)
-        resizeObserver.disconnect()
-      })
+      // The session's subscriptions, not this component's: they feed the entry,
+      // so output that arrives while no view is mounted — the stage sitting in
+      // a boundary's fallback — still lands in the terminal instead of leaving
+      // a hole in the scrollback. They come off with the session (dispose).
+      entry.subscriptions.push(
+        onAppEvent(DATA_EVENT_PREFIX + sessionId, (data) => {
+          const t0 = performance.now()
+          const bytes = decodeBase64(data as string)
+          feedEntry(entry, bytes, performance.now() - t0)
+        }),
+        onSessionData(sessionId, (payload) => feedEntry(entry, payload, 0)),
+        onAppEvent(EXIT_EVENT_PREFIX + sessionId, (data) => {
+          const exit = readSessionExit(data)
+          feedEntry(entry, new TextEncoder().encode(exitMarker(exit)), 0)
+          entry.exit = exit
+          entry.handlers?.exited(exit)
+        }),
+      )
 
       // A queued fork carries the conversation to branch, which stands in for
       // the resume id this spawn would otherwise have had: a card born of a
@@ -624,15 +603,14 @@ export function TerminalView({
         toast.error(`Session failed to start: ${errorText(error)}`)
         return
       }
-      if (disposed) {
-        // Unmounted during the Start round-trip. If the session went with it,
-        // the cleanup's Close raced ahead of the spawn, so close again now
-        // that the PTY exists; if the session is still in the workspace this
-        // was React remounting us and the PTY is the one the next mount
-        // attaches to. The queued paste stays put either way.
-        if (!stillInWorkspaceRef.current()) {
-          void Service.Close(sessionId)
-        }
+      if (!stillInWorkspaceRef.current()) {
+        // The session was closed during the Start round-trip, so the teardown's
+        // Close raced ahead of the spawn: close the PTY that now exists. An
+        // unmount that was not a close needs none of this — the terminal is
+        // still the entry's, and the next mount attaches to it. The queued
+        // paste stays put either way.
+        void Service.Close(sessionId)
+        disposeTerminal(sessionId)
         return
       }
       // Start is a no-op for a session that was already running — one an agent
@@ -656,53 +634,38 @@ export function TerminalView({
       } else {
         // Navigated away while the font load was in flight: enter the hidden
         // state (serialize + destroy) and demote the backend session.
-        hideTerminal()
+        hideEntry(entry)
         void Service.SetVisible(sessionId, false)
       }
     })()
 
-    return () => {
-      disposed = true
-      for (const cleanup of cleanups) {
-        cleanup()
-      }
-      // The PTY dies with the session, never with this component. React
-      // unmounts for reasons that are not a close — StrictMode mounts every
-      // component twice in dev, a hot reload tears the tree down — and a PTY
-      // closed for one of those takes the running agent and its scrollback
-      // with it. That was invisible while every session's PTY was born on
-      // this very mount; a session opened through the CLI or its MCP tools is
-      // already running when the card is first viewed, and the double mount
-      // killed the conversation the user came to read.
-      if (!stillInWorkspaceRef.current()) {
-        void Service.Close(sessionId)
-      }
-      liveRef.current?.dispose()
-      liveRef.current = null
-    }
-  }, [sessionId, projectId, cwd, kind])
+    return teardown
+  }, [sessionId, projectId, cwd, kind, entry])
 
   // Visibility is the terminal's lifecycle: hidden destroys it (state lives
   // in the snapshot + replay buffer + backend), visible rebuilds it, refits,
   // syncs the PTY size and focuses.
   useEffect(() => {
-    if (!startedRef.current) {
-      // First mount: the async setup owns terminal creation and reads
-      // visibleRef when it finishes.
+    if (!entry.opened) {
+      // First mount: the async setup owns terminal creation, because xterm
+      // measures its cell against whatever face is loaded when it opens and the
+      // font is still in flight. An unguarded show here would plant an orphan,
+      // unwired terminal in the host — the real one then stacks below it (a
+      // black dead canvas on top, the prompt clipped at the bottom).
       return
     }
     if (!visible) {
-      if (liveRef.current) {
+      if (entry.live) {
         if (searchOpenRef.current) {
           closeSearch()
         }
-        hideTerminal()
+        hideEntry(entry)
         void Service.SetVisible(sessionId, false)
       }
       return
     }
-    showTerminal()
-    const live = liveRef.current
+    showEntry(entry, createTerminal)
+    const live = entry.live
     if (!live) {
       return
     }
@@ -714,7 +677,7 @@ export function TerminalView({
     if (focusedRef.current) {
       live.term.focus()
     }
-  }, [visible, sessionId])
+  }, [visible, sessionId, entry])
 
   // Focus on its own, because it now moves without visibility: switching panes
   // leaves both terminals painting and only changes which one has the cursor.
@@ -723,16 +686,16 @@ export function TerminalView({
   // terminal nobody can see.
   useEffect(() => {
     if (focused && visible) {
-      liveRef.current?.term.focus()
+      entry.live?.term.focus()
     }
-  }, [focused, visible])
+  }, [focused, visible, entry])
 
   // The sidebar writes a delegate request at this session's prompt and then
   // asks for the cursor back, so the user carries on typing where they already
   // were.
   useEffect(
-    () => onTerminalFocusRequest(sessionId, () => liveRef.current?.term.focus()),
-    [sessionId],
+    () => onTerminalFocusRequest(sessionId, () => entry.live?.term.focus()),
+    [sessionId, entry],
   )
 
   // Font family and size need no live-update path: changing them means being
@@ -740,11 +703,11 @@ export function TerminalView({
   // recreation reads the refs. The theme can flip with a terminal on screen
   // (OS scheme under "system").
   useEffect(() => {
-    const live = liveRef.current
+    const live = entry.live
     if (live) {
       live.term.options.theme = resolvedTheme.terminal
     }
-  }, [resolvedTheme])
+  }, [resolvedTheme, entry])
 
   // The container carries the terminal's own background: the sub-cell
   // remainder of the grid fit and the ruler gutter then blend into the

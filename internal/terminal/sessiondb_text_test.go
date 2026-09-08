@@ -64,6 +64,10 @@ func opencodeMessageDB(t *testing.T) string {
 func crushMessageDB(t *testing.T) string {
 	t.Helper()
 	return writeMessageDB(t,
+		// The conversations themselves, which is what proves an id is one this
+		// database has heard of (usageSourceFor).
+		`CREATE TABLE sessions (id TEXT PRIMARY KEY, cost REAL NOT NULL DEFAULT 0)`,
+		`INSERT INTO sessions (id) VALUES ('crush-1'), ('crush-other')`,
 		`CREATE TABLE messages (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, role TEXT NOT NULL,
 			parts TEXT NOT NULL DEFAULT '[]', created_at INTEGER NOT NULL)`,
 		`INSERT INTO messages VALUES ('m1','crush-1','user',

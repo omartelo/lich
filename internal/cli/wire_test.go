@@ -233,7 +233,7 @@ func (*spawnGit) CreateWorktree(_, _, _, _ string, _ bool) (*project.Worktree, e
 
 func (g *spawnGit) ListCheckouts(string) ([]project.Worktree, error) { return g.checkouts, nil }
 
-func (g *spawnGit) RemoveWorktree(_, path string, force bool) error {
+func (g *spawnGit) RemoveWorktree(_, path string, force, _ bool) error {
 	g.removed, g.forced = path, force
 	return nil
 }

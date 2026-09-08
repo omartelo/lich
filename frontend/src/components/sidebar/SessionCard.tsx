@@ -57,7 +57,6 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
-  ContextMenuShortcut,
   ContextMenuSub,
   ContextMenuSubContent,
   ContextMenuSubTrigger,
@@ -67,8 +66,7 @@ import { System, Terminal as TerminalService } from "@/lib/rpc"
 import { queuePaste } from "@/lib/terminal/paste-queue"
 import type { DelegateGroup } from "@/lib/session/delegate-targets"
 import { delegatePrompt, delegateWorktreePrompt } from "@/lib/session/delegate-prompt"
-import { isMac, isWindows } from "@/lib/platform"
-import { formatCombo, type HotkeyId } from "@/lib/hotkeys"
+import { isWindows } from "@/lib/platform"
 import { sendCommand } from "@/lib/session/send-command"
 import { bracketedPaste } from "@/lib/terminal/bracketed-paste"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
@@ -76,7 +74,6 @@ import { useSessionIntent } from "@/lib/use-sidebar-intent"
 import { sandboxDrift } from "@/lib/providers-store"
 import { useSandboxRung } from "@/lib/use-sandbox-rung"
 import { useProjects } from "@/providers/projects"
-import { useSettings } from "@/providers/settings"
 import { timeUntil } from "@/lib/session/schedule"
 import { SessionTargetPicker } from "./SessionTargetPicker"
 import { EntrypointDialog } from "./EntrypointDialog"
@@ -161,13 +158,6 @@ export function SessionCard({
   // the project only when another session shares this card's label, and that is
   // a question about every open project — not about the one this card sits in.
   const { projects, sessions, scheduleSession } = useProjects()
-  const { hotkeys } = useSettings()
-  // The card chords act on whichever session is active (App.tsx cardAction), so
-  // they are true of this card only while it is that one. On any other card the
-  // menu says nothing: naming a chord that renames somewhere else is worse than
-  // naming none.
-  const chord = (id: HotkeyId) =>
-    active ? <ContextMenuShortcut>{formatCombo(hotkeys[id], isMac)}</ContextMenuShortcut> : null
   const pinned = !!session.pinned
   const pathRef = useRef<HTMLSpanElement>(null)
   const [pathOverflow, setPathOverflow] = useState(false)
@@ -253,11 +243,17 @@ export function SessionCard({
   // Write the request at this session's own prompt and hand the cursor back.
   // lich stops here: what it types is a request, and the agent reading it
   // decides whether to reach for the tool or the command (delegatePrompt).
+  //
+  // The card takes the screen first: the request is typed but not sent, so a
+  // delegation from a card that was not the one in view would leave a line
+  // waiting in a terminal the user cannot see.
   const delegate = (label: string) => {
+    onSelect()
     void TerminalService.Write(session.id, bracketedPaste(delegatePrompt(session.kind, label)))
     requestTerminalFocus(session.id)
   }
   const delegateWorktree = () => {
+    onSelect()
     void TerminalService.Write(session.id, bracketedPaste(delegateWorktreePrompt(session.kind)))
     requestTerminalFocus(session.id)
   }
@@ -306,19 +302,7 @@ export function SessionCard({
   // decides, never the live agent readout — a menu that appears and disappears
   // as an agent is started and quit by hand offers no action the user can rely
   // on being there.
-  const canDelegate = active && session.kind !== "shell"
-
-  // The picker is only rendered while the card can delegate, so losing that
-  // unmounts it — and an open flag left behind would spring the dialog back up
-  // unasked the moment the card qualifies again. The card can stop being the
-  // active one without a click on it (the palette hotkey is caught in the
-  // window's capture phase, and a session link jumps straight to another card),
-  // so this is reachable with the picker on screen.
-  useEffect(() => {
-    if (!canDelegate) {
-      setDelegatePickerOpen(false)
-    }
-  }, [canDelegate])
+  const canDelegate = session.kind !== "shell"
 
   // The shortcuts for this card's own actions. They aim at the active session,
   // which is this card, and they call the same handlers its context menu items
@@ -663,18 +647,17 @@ export function SessionCard({
           <SessionTooltip session={session} path={path} projectId={projectId} />
         </Tooltip>
         {/* Three blocks, hairline apart: what this card is, what its work is
-            handed to, and where its checkout opens. The chords ride the items
-            that have one, since the menu is where a user meets them. */}
+            handed to, and where its checkout opens. No chords on the items: they
+            act on whichever session is in view (App.tsx cardAction), so on any
+            other card the menu would name a shortcut that fires elsewhere. */}
         <ContextMenuContent>
           <ContextMenuItem onClick={() => setEditing(true)}>
             <Pencil />
             Rename
-            {chord("renameSession")}
           </ContextMenuItem>
           <ContextMenuItem onClick={() => onPin(!pinned)}>
             {pinned ? <PinOff /> : <Pin />}
             {pinned ? "Unpin" : "Pin"}
-            {chord("togglePin")}
           </ContextMenuItem>
           {session.kind === "shell" && (
             <ContextMenuItem onClick={() => setEntrypointOpen(true)}>
@@ -701,7 +684,6 @@ export function SessionCard({
             <ContextMenuItem onClick={() => setDelegatePickerOpen(true)}>
               <ArrowRight />
               Delegate to session…
-              {chord("delegate")}
             </ContextMenuItem>
           )}
           {/* Under delegation, because the two are the same move a beat apart:
@@ -729,7 +711,6 @@ export function SessionCard({
                 <ContextMenuItem onClick={() => onOpenTerminal(shownPath)}>
                   <Terminal />
                   Terminal
-                  {chord("openTerminal")}
                 </ContextMenuItem>
               )}
               <ContextMenuItem onClick={openFolderInEditor}>
@@ -752,15 +733,14 @@ export function SessionCard({
               <ContextMenuItem variant="destructive" onClick={onClose}>
                 <X />
                 Close session
-                {chord("closeSession")}
               </ContextMenuItem>
             </>
           )}
         </ContextMenuContent>
       </ContextMenu>
-      {canDelegate && (
+      {delegatePickerOpen && (
         <SessionTargetPicker
-          open={delegatePickerOpen}
+          open
           onOpenChange={setDelegatePickerOpen}
           groups={delegateGroups}
           onPick={(target) => delegate(target.label)}

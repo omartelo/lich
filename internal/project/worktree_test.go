@@ -401,7 +401,7 @@ func TestRemoveWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateWorktree: %v", err)
 	}
-	if err := svc.RemoveWorktree(repo, wt.Path, false); err != nil {
+	if err := svc.RemoveWorktree(repo, wt.Path, false, false); err != nil {
 		t.Fatalf("RemoveWorktree(clean): %v", err)
 	}
 	if _, err := os.Stat(wt.Path); !os.IsNotExist(err) {
@@ -415,13 +415,13 @@ func TestRemoveWorktree(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dirty.Path, "a.txt"), []byte("changed\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.RemoveWorktree(repo, dirty.Path, false); err == nil {
+	if err := svc.RemoveWorktree(repo, dirty.Path, false, false); err == nil {
 		t.Error("RemoveWorktree(dirty) = nil error, want refusal")
 	}
 	if _, err := os.Stat(dirty.Path); err != nil {
 		t.Errorf("dirty worktree should remain on disk: %v", err)
 	}
-	if err := svc.RemoveWorktree(repo, dirty.Path, true); err != nil {
+	if err := svc.RemoveWorktree(repo, dirty.Path, true, false); err != nil {
 		t.Fatalf("RemoveWorktree(dirty, force): %v", err)
 	}
 	if _, err := os.Stat(dirty.Path); !os.IsNotExist(err) {
@@ -457,11 +457,12 @@ func TestWorktreeAdopted(t *testing.T) {
 	}
 }
 
-// TestRemoveWorktreeRefusesAnAdoptedCheckout proves a worktree the user made by
-// hand is never handed to `git worktree remove` — not even with force, which is
+// TestRemoveWorktreeRefusesAnAdoptedCheckoutUnacknowledged proves a worktree the
+// user made by hand is never handed to `git worktree remove` on the say-so of a
+// caller that has not shown its path to anyone — not even with force, which is
 // the call that would take uncommitted work with it. git lists it like any
-// other, so nothing but its path outside the data dir tells lich to keep away.
-func TestRemoveWorktreeRefusesAnAdoptedCheckout(t *testing.T) {
+// other, so nothing but its path outside the data dir tells lich to ask first.
+func TestRemoveWorktreeRefusesAnAdoptedCheckoutUnacknowledged(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	repo, git := initRepo(t)
 	adopted := filepath.Join(t.TempDir(), "by-hand")
@@ -469,7 +470,7 @@ func TestRemoveWorktreeRefusesAnAdoptedCheckout(t *testing.T) {
 
 	svc := New(nil)
 	for _, force := range []bool{false, true} {
-		if err := svc.RemoveWorktree(repo, adopted, force); err == nil {
+		if err := svc.RemoveWorktree(repo, adopted, force, false); err == nil {
 			t.Fatalf("RemoveWorktree(force=%v) = nil, want a refusal", force)
 		}
 	}
@@ -477,13 +478,59 @@ func TestRemoveWorktreeRefusesAnAdoptedCheckout(t *testing.T) {
 		t.Errorf("the user's checkout is gone: %v", err)
 	}
 	// Still registered: no `git worktree remove` ran, so the picker keeps
-	// offering it — adoption costs the removal, never the session.
+	// offering it — the refusal costs the removal, never the session.
 	branches, err := svc.ListBranches(repo)
 	if err != nil {
 		t.Fatalf("ListBranches: %v", err)
 	}
 	if !slices.ContainsFunc(branches.Worktrees, func(w Worktree) bool { return w.Name == "by-hand" }) {
 		t.Errorf("worktrees = %+v, want the adopted checkout still listed", branches.Worktrees)
+	}
+}
+
+// TestRemoveWorktreeAcknowledgedAdoptedCheckout proves the acknowledgement is
+// the whole difference: a caller that has named the absolute path to the user
+// gets the same removal any other checkout gets — and the uncommitted-work rule
+// is untouched by it, so a dirty one still needs force on top.
+func TestRemoveWorktreeAcknowledgedAdoptedCheckout(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	repo, git := initRepo(t)
+	svc := New(nil)
+
+	dirty := filepath.Join(t.TempDir(), "by-hand-dirty")
+	git("worktree", "add", "-b", "by-hand-dirty", dirty, "main")
+	if err := os.WriteFile(filepath.Join(dirty, "a.txt"), []byte("changed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.RemoveWorktree(repo, dirty, false, true); err == nil {
+		t.Error("RemoveWorktree(adopted, dirty) = nil error, want git's refusal")
+	}
+	if _, err := os.Stat(dirty); err != nil {
+		t.Errorf("dirty checkout should remain on disk: %v", err)
+	}
+	if err := svc.RemoveWorktree(repo, dirty, true, true); err != nil {
+		t.Fatalf("RemoveWorktree(adopted, dirty, force): %v", err)
+	}
+	if _, err := os.Stat(dirty); !os.IsNotExist(err) {
+		t.Error("dirty adopted checkout still exists after a forced remove")
+	}
+
+	clean := filepath.Join(t.TempDir(), "by-hand")
+	git("worktree", "add", "-b", "by-hand", clean, "main")
+	if err := svc.RemoveWorktree(repo, clean, false, true); err != nil {
+		t.Fatalf("RemoveWorktree(adopted, clean): %v", err)
+	}
+	if _, err := os.Stat(clean); !os.IsNotExist(err) {
+		t.Error("adopted checkout still exists after an acknowledged remove")
+	}
+	// Collected, not just deleted: the picker stops offering a checkout that is
+	// gone, which is the point of removing it through lich at all.
+	branches, err := svc.ListBranches(repo)
+	if err != nil {
+		t.Fatalf("ListBranches: %v", err)
+	}
+	if slices.ContainsFunc(branches.Worktrees, func(w Worktree) bool { return w.Name == "by-hand" }) {
+		t.Errorf("worktrees = %+v, want the removed checkout gone", branches.Worktrees)
 	}
 }
 

@@ -216,7 +216,7 @@ func (f *fakeWorktrees) WorktreeDirty(path string) (bool, error) {
 
 func (f *fakeWorktrees) WorktreeAdopted(path string) bool { return f.adopted[path] }
 
-func (f *fakeWorktrees) RemoveWorktree(_, path string, force bool) error {
+func (f *fakeWorktrees) RemoveWorktree(_, path string, force, _ bool) error {
 	f.removed = append(f.removed, removedWorktree{path, force})
 	return f.removeErr
 }

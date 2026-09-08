@@ -98,7 +98,7 @@ type Worktrees interface {
 	ListBranches(path string) (project.Branches, error)
 	ListCheckouts(path string) ([]project.Worktree, error)
 	CreateWorktree(projectPath, projectID, name, base string, baseIsRemote bool) (*project.Worktree, error)
-	RemoveWorktree(projectPath, wtPath string, force bool) error
+	RemoveWorktree(projectPath, wtPath string, force, adoptedAck bool) error
 	WorktreeDirty(wtPath string) (bool, error)
 	WorktreeAdopted(wtPath string) bool
 }

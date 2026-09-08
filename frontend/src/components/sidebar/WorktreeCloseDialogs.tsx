@@ -50,10 +50,11 @@ interface CloseWorktreeDialogProps {
 // in: keep it on disk (it reappears in the new-worktree picker) or remove the
 // checkout via git. The branch is never deleted either way.
 //
-// A checkout lich adopted has only the one answer. The directory is the user's,
-// made outside lich and only listed by it, so the removal is refused by the
-// backend whatever this offers — and the description says so, or the missing
-// button reads as a bug rather than as the rule it is.
+// A checkout lich adopted is removable too, but the directory is the user's own
+// — made outside lich and only listed by it — so the wording names the absolute
+// path and says lich did not make it. That sentence is the acknowledgement the
+// backend asks for (project.RemoveWorktree): without it a caller that never
+// showed the path is refused.
 function CloseWorktreeDialog({
   session,
   adopted,
@@ -70,8 +71,8 @@ function CloseWorktreeDialog({
       description={
         adopted ? (
           <>
-            lich did not create the worktree at {path}, so it will not delete it. Closing parks the
-            session — the checkout stays exactly where it is.
+            lich did not create the worktree at {path}. Keep it, or remove the checkout? Removing
+            deletes that directory but keeps its branch.
           </>
         ) : (
           <>
@@ -82,13 +83,11 @@ function CloseWorktreeDialog({
       }
     >
       <Button variant="outline" onClick={onKeep}>
-        {adopted ? "Close session" : "Keep worktree"}
+        Keep worktree
       </Button>
-      {!adopted && (
-        <Button variant="destructive" onClick={onRemove}>
-          Remove worktree
-        </Button>
-      )}
+      <Button variant="destructive" onClick={onRemove}>
+        Remove worktree
+      </Button>
     </ConfirmDialog>
   )
 }

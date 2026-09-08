@@ -231,11 +231,18 @@ func (s *Service) DeleteSession(projectID, sessionID, activeID string) error {
 // runs in SQL, so a branch nothing wrote down cannot be typed to find the row
 // showing it.
 //
-// git is asked before the transaction opens: the store holds a single
-// connection, and a subprocess run under the write lock stalls every other
-// caller for as long as git takes.
+// The conversation is indexed here too, and this is the only place it ever is:
+// a parked session's transcript is read once, bounded, and written into the FTS
+// index the history search matches on (transcripts.go). Doing it at the close is
+// what keeps a search off the disk entirely: the alternative is reading every
+// parked session's transcript on every character typed.
+//
+// git and the transcript are both asked before the transaction opens: the store
+// holds a single connection, and a subprocess or a 32 MB read under the write
+// lock stalls every other caller for as long as it takes.
 func (s *Service) CloseSession(projectID, sessionID, activeID string) error {
 	branch := s.parkedBranch(sessionID)
+	s.indexTranscript(sessionID)
 	return s.tx(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(
 			`UPDATE sessions SET is_open = 0, closed_at = ?, parked_branch = ? WHERE id = ?`,
@@ -354,21 +361,26 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		// parked is typed on the resumed card's first free prompt, exactly like
 		// one that came due while lich was closed (internal/relay, deliverDue).
 		//
+		// The fork cost offset rides along with the ledgers it nets: the copied
+		// history is still in this session's transcript after a resume, so a row
+		// that came back without it would bill the fork for its parent again.
+		//
 		// project_id is read rather than passed: reopening by id knows only the
 		// session, and the row is what says where it belongs.
 		var labelAuto int
 		var projectID, model, entrypoint, sandbox string
+		var forkOffset float64
 		row := tx.QueryRow(
 			`SELECT id, project_id, label, kind, path, provider_session_id, label_auto,
 			        model, entrypoint, sandbox, pinned, origin_session_id, origin_label,
-			        scheduled_at, scheduled_prompt
+			        scheduled_at, scheduled_prompt, fork_cost_offset
 			   FROM sessions `+where,
 			args...,
 		)
 		if err := row.Scan(
 			&old.ID, &projectID, &old.Label, &old.Kind, &old.Path, &old.ProviderSessionID,
 			&labelAuto, &model, &entrypoint, &sandbox, &old.Pinned, &old.OriginSessionID, &old.OriginLabel,
-			&old.ScheduledAt, &old.ScheduledPrompt,
+			&old.ScheduledAt, &old.ScheduledPrompt, &forkOffset,
 		); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil // nothing parked; caller creates a new session
@@ -403,11 +415,11 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 			`INSERT INTO sessions
 			   (id, project_id, label, kind, path, provider_session_id, label_auto,
 			    model, entrypoint, sandbox, pinned, origin_session_id, origin_label,
-			    scheduled_at, scheduled_prompt, position)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
+			    scheduled_at, scheduled_prompt, fork_cost_offset, position)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
 			newSessionID, projectID, old.Label, old.Kind, old.Path, old.ProviderSessionID, labelAuto,
 			model, entrypoint, sandbox, old.Pinned, old.OriginSessionID, old.OriginLabel,
-			old.ScheduledAt, old.ScheduledPrompt, projectID,
+			old.ScheduledAt, old.ScheduledPrompt, forkOffset, projectID,
 		); err != nil {
 			return fmt.Errorf("reinsert session %q: %w", newSessionID, err)
 		}

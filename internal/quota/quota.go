@@ -130,14 +130,26 @@ type Window struct {
 // environment does not name. It is empty whenever the provider will not say
 // which, which is a reading without a name and never an error: a gauge that
 // cannot name its account is exactly what lich drew before this field existed.
+//
+// NoAccount carries why it is empty, for the one absence a reader can act on.
+// Left empty, an unnamed account is drawn the same whether the provider names
+// nobody or the session's own login is one lich may not ask about, and nothing
+// on the gauge told the two apart.
 type Plan struct {
-	Provider string   `json:"provider"`
-	Name     string   `json:"name"`
-	Plan     string   `json:"plan,omitempty"`
-	Account  string   `json:"account,omitempty"`
-	Windows  []Window `json:"windows,omitempty"`
-	Status   string   `json:"status"`
+	Provider  string   `json:"provider"`
+	Name      string   `json:"name"`
+	Plan      string   `json:"plan,omitempty"`
+	Account   string   `json:"account,omitempty"`
+	NoAccount string   `json:"noAccount,omitempty"`
+	Windows   []Window `json:"windows,omitempty"`
+	Status    string   `json:"status"`
 }
+
+// NoAccountTokenLogin is the one reason an empty Account has a name: the
+// session's login is a long-lived OAuth token, whose scope keeps the profile
+// route out of reach, so lich never asks who it belongs to. Every other unnamed
+// account is a provider that names nobody, which needs no reason of its own.
+const NoAccountTokenLogin = "token-login"
 
 // Account is what a lich session's own process says about the account it
 // spends. Env is that process's environment — where a wrapper binary puts a

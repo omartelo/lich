@@ -57,7 +57,8 @@ export function matchesQuery(haystack: string, query: string): boolean {
 }
 
 // PaletteHistory is one parked session as the History tab lists it: the store's
-// row plus the branch its checkout is on *now*, read from git. That is not the
+// row (its `snippet` carrying the words that matched, when the conversation is
+// what matched) plus the branch its checkout is on *now*, read from git. That is not the
 // row's `parkedBranch`, which is the snapshot the close recorded for the search
 // to match — a branch moves inside a checkout, so only git can say what the row
 // shows. `branch` is "" for a checkout that is gone, which is also the row that
@@ -117,8 +118,14 @@ export function filterPalette(
     // matched the one it recorded at the close, and the row shows the one git
     // reads now. Filtering on either alone would drop a row the other half of
     // the search kept.
-    history: history.filter((h) =>
-      matchesQuery(`${h.label} ${h.projectName} ${h.branch} ${h.parkedBranch} ${h.path}`, query),
+    // A row carrying a snippet was matched on its conversation in the store, and
+    // is kept without asking again: the snippet is one window onto a hit that
+    // may be a megabyte of prose, so re-testing the query against it would drop
+    // rows whose two words matched paragraphs apart.
+    history: history.filter(
+      (h) =>
+        h.snippet !== "" ||
+        matchesQuery(`${h.label} ${h.projectName} ${h.branch} ${h.parkedBranch} ${h.path}`, query),
     ),
   }
 }
@@ -209,6 +216,9 @@ export interface PaletteGroup {
   // Rows the group holds before the All tab's cut, so its header can say what
   // it is leaving out. Equal to rows.length when nothing was cut.
   total: number
+  // What the header says instead of that page count, when there is something
+  // more urgent to say than which slice of a match is on screen.
+  note?: string
 }
 
 // rowKey identifies a row inside the list it is rendered in. A session and a
@@ -224,6 +234,21 @@ export function rowKey(row: PaletteRow): string {
     default:
       return row.project.id
   }
+}
+
+// INDEX_CAP_LABEL is terminal.indexTextBytes spelled the way a reader reads it,
+// and it is spelled here rather than sent with the row: the backend answers
+// whether the cap cut, which is the fact, and how big the cap is belongs to the
+// sentence the window writes. `command-palette.test.ts` pins the string, so the
+// two move together the way every other hand-owned mirror in this file does.
+export const INDEX_CAP_LABEL = "8 MB"
+
+// historyIndexNote is the line a parked session shows when its conversation was
+// indexed only in part: the cap kept the newest of it and dropped the oldest, so
+// a search that found nothing in this session found nothing in the part that was
+// kept. Undefined for every row indexed whole, which is nearly all of them.
+export function historyIndexNote(row: PaletteHistory): string | undefined {
+  return row.truncated ? `indexed: newest ${INDEX_CAP_LABEL}` : undefined
 }
 
 // historyAction is what Enter does with one history row, and what its hint bar
@@ -245,11 +270,16 @@ function group(label: string, rows: PaletteRow[], cap: number, total = rows.leng
 // is more than `results.history` holds whenever the store's page cut it. It
 // defaults to 0 for the callers that do not ask the store at all — the tests and
 // the tabs that list nothing parked — and the group falls back to its own rows.
+//
+// indexing is how many parked sessions the store has not read a conversation out
+// of yet, which is the other way the History list can be short, and the one the
+// user can do nothing about but wait, so the header says it.
 export function paletteGroups(
   tab: PaletteTab,
   results: PaletteResults,
   messages: readonly PaletteMessage[],
   historyTotal = 0,
+  indexing = 0,
 ): PaletteGroup[] {
   const sessions = results.sessions.map((session): PaletteRow => ({ kind: "session", session }))
   const open = results.projects.map((project): PaletteRow => ({ kind: "project", project }))
@@ -268,10 +298,15 @@ export function paletteGroups(
       case "History":
         // The cut this header reports happened in the store, not in the slice
         // above: the query matched more parked sessions than one page carries.
+        // A backfill still reading parked conversations displaces it: a list
+        // that cannot see every session yet is worth saying before a page
+        // boundary is.
         return [
           {
             ...group("Closed sessions", history, 0),
             total: Math.max(historyTotal, history.length),
+            note:
+              indexing > 0 ? `indexing ${indexing} session${indexing === 1 ? "" : "s"}` : undefined,
           },
         ]
       // No closed projects or closed sessions here: bringing one back is not

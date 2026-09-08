@@ -61,6 +61,9 @@ type stubBins struct {
 	// The MCP servers the spawn recorded per session, the shape
 	// store.SetSessionMCPServers writes. Nil until a test cares.
 	mcpServers map[string][]string
+	// What each session inherited from the conversation it was forked from, the
+	// shape store.SaveForkCostOffset writes. Nil until a test cares.
+	forkOffsets map[string]float64
 	// One field per cost method, because the three failures are three different
 	// stories: a ledger that cannot be read, one that cannot be written, and a
 	// total that cannot be summed. A single error field would let a test claim
@@ -161,6 +164,22 @@ func (s stubBins) SaveCostLedger(
 	return nil
 }
 
+// SaveForkCostOffset mirrors the store's own arithmetic: the offset is the raw
+// ledger cost of the conversation being forked, whichever session ran it.
+func (s stubBins) SaveForkCostOffset(sessionID, forkedFrom string) error {
+	if s.forkOffsets == nil {
+		return nil
+	}
+	offset := 0.0
+	for key, ledger := range s.ledgers {
+		if strings.HasSuffix(key, "\x00"+forkedFrom) {
+			offset += ledger.cost
+		}
+	}
+	s.forkOffsets[sessionID] = offset
+	return nil
+}
+
 func (s stubBins) SessionCost(sessionID string) (float64, error) {
 	if s.sessionCostErr != nil {
 		return 0, s.sessionCostErr
@@ -171,7 +190,7 @@ func (s stubBins) SessionCost(sessionID string) (float64, error) {
 			total += ledger.cost
 		}
 	}
-	return total, nil
+	return max(0, total-s.forkOffsets[sessionID]), nil
 }
 
 func (s stubBins) AddHandsOn(sessionID string, seconds int64) error {

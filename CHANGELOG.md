@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The palette's History tab now searches what closed sessions said, not just
+  what they were called.** Parking a session files a copy of its conversation
+  into a full-text index, so typing a phrase you remember finds the closed
+  session it was said in and shows the sentence under the row, however long ago
+  it was parked. The whole conversation is read, and the rare one too long to
+  index whole says "indexed: newest 8 MB" under its row, so a search that reaches
+  only part of a session reads as that rather than as an empty one. Sessions
+  closed before this release are indexed in the background the first time you
+  search, with the header counting them down; Cursor CLI stays out, as it does
+  everywhere, because its chat is stored as encrypted blobs.
+
 - **The palette's Messages tab now searches opencode and Crush sessions.** Both
   keep their conversation in a SQLite database rather than in a transcript file,
   so searching what was said skipped them in silence: a session that had talked
@@ -17,6 +28,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still unsearchable — it files a chat as encrypted, content-addressed blobs.
 
 ### Changed
+
+- **A worktree you made by hand can now be removed through lich.** Closing the
+  last session in one only ever parked it, so cleaning up meant walking to a
+  terminal for `git worktree remove`. The close dialog now offers the removal
+  behind a confirmation naming the checkout's absolute path and saying lich did
+  not create it; uncommitted work still takes the same second confirmation it
+  always did. Agents are the exception — `close_session` has nobody to ask, so
+  it still refuses and says why.
 
 - **A relayed answer is no longer matched to a task by guesswork.** Nothing in
   an answer says which request it belongs to, so `lich reply "<answer>"` and
@@ -31,6 +50,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   way — it is what each sender would have been told alone — and the worker is
   asked at its prompt to name the ticket. One open request behaves as before on
   both paths.
+- **The shortcut recorder now says what a chord costs the terminal.** A bound
+  chord is caught before the session sees it, so rebinding one to `Ctrl+R` took
+  the shell's history search with nothing on screen connecting the two. The row
+  now names what the chord already does down there — the shell's own control
+  codes, the terminal's search, the image paste the agent reads — and still
+  records it.
 - **The sandbox's "Ask each time" rung now reaches every session.** It only ever
   asked in the New worktree dialog, so a session started from the New session
   menu, by another session, or through the MCP tool quietly ran on the machine.
@@ -54,6 +79,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CLI cards, so the offer looked lost rather than withheld. The item is there
   now, disabled, under one line naming the provider — their CLIs keep no fork,
   only resume.
+- **A session card's right-click menu now reads the same on every card.** The
+  shortcuts printed beside Rename, Pin, Delegate, Terminal and Close session
+  were only ever true of the card in view, since that is the card a chord acts
+  on, so every other card opened a visibly different menu with the whole column
+  missing. They are out of the menu, and Settings › Hotkeys is where a chord is
+  read and changed. "Delegate to session…" no longer waits for a card to be the
+  one on screen either: picking a target from a background card brings that
+  session up and writes the request at its prompt.
 
 ### Fixed
 
@@ -69,6 +102,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   able to start, was also the only one written to a stderr that a desktop launch
   does not have. It is written to `lich.log` like every other startup failure
   now.
+- **A render bug in the terminal area no longer blanks the window.** The stage
+  and every pane in it are now caught: the pane that stopped rendering says so
+  by name, its neighbours keep painting, and a retry puts it back — or, when a
+  second try throws too, offers the reload rather than the same button. The terminals
+  themselves survive it — the same xterm, the same scrollback, the same
+  selection and modes, and output that arrived meanwhile is still there — so
+  recovering no longer means reloading the window over sessions that never
+  stopped running.
+- **A forked session is no longer billed for the history it was branched from.**
+  The copy is a conversation of its own carrying every token of the original, so
+  the two cards together reported roughly twice what one conversation had spent,
+  in the footer readout and in `lich cost` alike. A fork now records what the
+  conversation it branched had cost at that moment and nets it back off its own
+  number, so the pair adds up to what was actually spent. Forks of forks count
+  the same way, and opencode is unchanged: it starts a forked session's cost at
+  zero on its own.
+
 - **A closed project is now findable by name, however long ago it was closed.**
   Only the twenty-five most recent closes were ever offered back, so an older
   project was reachable only by hunting its directory in the folder picker, and
@@ -106,6 +156,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `call_mcp_tool` followed by `lich/open_session`, spending the line on the step
   and crowding the tool worth reading off the end of it. It now draws the server
   and the tool the way every other provider's card does: `lich · open_session`.
+- **The plan gauge now says when a login has no name to show.** A
+  `claude setup-token` session drew its windows under the provider's name with
+  the account line blank, exactly like a provider that names nobody; it now
+  reads "Token login", and the blank is left to the providers that have nobody
+  to name.
 - **An agent reached through a custom binary path now counts as installed.**
   Detection only ever scanned `$PATH`, so a machine whose only agent is the one
   you pointed lich at in Settings › Providers read as a machine with nothing on

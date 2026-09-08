@@ -337,6 +337,51 @@ export function hotkeyConflicts(hotkeys: Hotkeys): Partial<Record<HotkeyId, Hotk
   return conflicts
 }
 
+// What the terminal side already spends a chord on, keyed by the combo's key.
+// The list is Ctrl+letter and nothing else on purpose: xterm's control-code
+// mapping needs Shift up, so Ctrl+Shift+anything reaches no TUI at all and
+// costs nothing (measured in a live session against `cat -v`, and the reason
+// every default above is in that family).
+//
+// It is what the defaults' own note has always known and no rebind was ever
+// held to: a bound chord is caught in the window capture phase and stopped
+// there, so it never reaches the PTY. lich does not veto the user's choice —
+// the recorder only has to say what the choice costs.
+const TERMINAL_CHORDS: Record<string, string> = {
+  a: "the shell's move to the start of the line",
+  c: "the shell's interrupt",
+  d: "the shell's end of input",
+  e: "the shell's move to the end of the line",
+  k: "the shell's kill to the end of the line",
+  l: "the shell's clear screen",
+  q: "the shell's resume output",
+  r: "the shell's history search",
+  s: "the shell's stop output",
+  u: "the shell's kill to the start of the line",
+  w: "the shell's erase word",
+  z: "the shell's suspend",
+  // Not the shell's: the two the session terminal spends for itself, and the
+  // one a provider binds inside it (shortcuts.ts, terminal/term-keys.ts).
+  f: "the session terminal's own search",
+  v: "the image paste lich sends the agent",
+  Backspace: "the erase word lich sends the agent",
+}
+
+// terminalCost is the one line the recorder shows for a chord the terminal side
+// already spends, and "" for one the PTY never sees anyway.
+//
+// The chord is spelled Ctrl even on macOS, where formatCombo prints ⌘: what a
+// TUI reads is the control code, and matchesCombo folds Cmd and Ctrl into one
+// `mod`, so binding ⌘R there swallows ^R too. Naming ⌘ would point at the wrong
+// key — the same reason shortcuts.ts spells its rows out by hand.
+export function terminalCost(combo: Combo): string {
+  if (!combo.mod || combo.shift || combo.alt) {
+    return ""
+  }
+  const spent = TERMINAL_CHORDS[combo.key]
+  return spent ? `Ctrl+${formatKey(combo.key)} is ${spent}; sessions will no longer see it.` : ""
+}
+
 function formatKey(key: string): string {
   if (key === " ") return "Space"
   if (key.startsWith("Arrow")) return key.slice("Arrow".length)

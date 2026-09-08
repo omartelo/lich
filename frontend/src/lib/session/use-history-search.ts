@@ -8,6 +8,13 @@ import { historyRows, type PaletteHistory } from "./command-palette"
 // firing on the keystroke — the same bargain the transcript search makes.
 const DEBOUNCE_MS = 200
 
+// How long the list waits before asking again while the store is still indexing
+// parked conversations. The backfill reads one session every tenth of a second,
+// so a second between polls is a handful of new rows per ask: often enough that
+// the header counts down while somebody reads the list, rare enough that it is
+// not a query per keystroke of thinking time.
+const BACKFILL_POLL_MS = 1000
+
 // useHistorySearch asks the store for the parked sessions matching `query` and
 // joins them to what git and the filesystem say about their checkouts. Idle —
 // no rows, no calls — while the palette is closed.
@@ -15,6 +22,11 @@ const DEBOUNCE_MS = 200
 // `total` is how many sessions matched in all, which is not how many came back:
 // the store answers with one page, and the list needs the number to say it was
 // cut rather than present the page as the whole answer.
+//
+// `indexing` is how many parked sessions have no searchable conversation yet, on
+// a workspace that predates the index. Asking with a term is what starts that
+// backfill, so this hook polls itself while the number is above zero. Otherwise
+// the header would report a count that only moves when somebody types.
 //
 // The term goes to the backend rather than filtering rows already in hand, for
 // that same page: a session parked further back than it is only reachable if the
@@ -28,9 +40,16 @@ const DEBOUNCE_MS = 200
 export function useHistorySearch(
   query: string,
   enabled: boolean,
-): { rows: PaletteHistory[]; total: number; forget: (sessionID: string) => void } {
+): {
+  rows: PaletteHistory[]
+  total: number
+  indexing: number
+  forget: (sessionID: string) => void
+} {
   const [parked, setParked] = useState<readonly ClosedSession[]>([])
   const [total, setTotal] = useState(0)
+  const [indexing, setIndexing] = useState(0)
+  const [poll, setPoll] = useState(0)
   const [branches, setBranches] = useState<Readonly<Record<string, string>>>({})
   const [missing, setMissing] = useState<ReadonlySet<string>>(new Set())
 
@@ -38,6 +57,7 @@ export function useHistorySearch(
     if (!enabled) {
       setParked([])
       setTotal(0)
+      setIndexing(0)
       return
     }
     let live = true
@@ -50,6 +70,7 @@ export function useHistorySearch(
           }
           setParked(history)
           setTotal(answer?.total ?? 0)
+          setIndexing(answer?.indexing ?? 0)
           // Asked for after the rows are up: what git and the filesystem say is
           // what a row says about itself, and a failed check must not cost the
           // palette its entries.
@@ -77,7 +98,18 @@ export function useHistorySearch(
       live = false
       window.clearTimeout(timer)
     }
-  }, [query, enabled])
+  }, [query, enabled, poll])
+
+  // Ask again while the backfill is working. The tick is state rather than an
+  // interval so it chains off the answer that reported the count: a slow reply
+  // never stacks a second request behind the first.
+  useEffect(() => {
+    if (!enabled || indexing === 0) {
+      return
+    }
+    const timer = window.setTimeout(() => setPoll((n) => n + 1), BACKFILL_POLL_MS)
+    return () => window.clearTimeout(timer)
+  }, [enabled, indexing, poll])
 
   // Forgetting drops the row in place rather than refetching: the list stays up
   // while several stale rows are cleared, which is how they are usually left.
@@ -91,5 +123,5 @@ export function useHistorySearch(
   // Memoised because the rows are a dependency of the palette's own filter:
   // a fresh array every render would re-filter every group on every keystroke.
   const rows = useMemo(() => historyRows(parked, branches, missing), [parked, branches, missing])
-  return { rows, total, forget }
+  return { rows, total, indexing, forget }
 }

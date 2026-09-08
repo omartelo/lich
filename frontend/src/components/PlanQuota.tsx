@@ -1,6 +1,6 @@
 import type { QuotaPlan } from "@/lib/api-types"
 import { Gauge } from "lucide-react"
-import { hottestWindow, shortWindow } from "@/lib/quota/quota-format"
+import { accountLine, hottestWindow, shortWindow } from "@/lib/quota/quota-format"
 import { useNow } from "@/lib/use-now"
 import { QuotaGauge } from "./QuotaGauge"
 import { usageColor } from "./ContextRing"
@@ -35,6 +35,7 @@ export function PlanQuota({ plan }: PlanQuotaProps) {
 
 function PlanDetails({ plan }: PlanQuotaProps) {
   const now = useNow()
+  const account = accountLine(plan)
   return (
     <div className="flex min-w-52 flex-col gap-2.5">
       {(plan.windows ?? []).map((window) => (
@@ -43,9 +44,9 @@ function PlanDetails({ plan }: PlanQuotaProps) {
           {window.lockedReason && <p className="text-xs text-destructive">{window.lockedReason}</p>}
         </div>
       ))}
-      {plan.account && (
+      {account && (
         <span className="break-all border-t border-border pt-2 font-mono text-[0.6875rem] text-muted-foreground">
-          {plan.account}
+          {account}
         </span>
       )}
     </div>

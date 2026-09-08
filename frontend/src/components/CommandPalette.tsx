@@ -20,6 +20,7 @@ import {
   PALETTE_TABS,
   rankSessions,
   rowKey,
+  historyIndexNote,
   type PaletteHistory,
   type PaletteMessage,
   type PaletteRow,
@@ -73,7 +74,12 @@ export function CommandPalette() {
 
   // The parked sessions are searched in the store rather than filtered here, so
   // the History tab reaches a session parked further back than one page of it.
-  const { rows: history, total: historyTotal, forget: dropParked } = useHistorySearch(query, open)
+  const {
+    rows: history,
+    total: historyTotal,
+    indexing,
+    forget: dropParked,
+  } = useHistorySearch(query, open)
 
   // Forgetting drops the row from the list in place rather than closing the
   // palette: the whole point of the action is that there are usually several of
@@ -106,9 +112,13 @@ export function CommandPalette() {
   // the name-matched groups (it is a disk read behind a debounce), so it is
   // listed last and never moves a row the user is already aiming at.
   const messages = useTranscriptSearch(query, all, open)
+  // The indexing note is held back until something is typed: with no term there
+  // is no search for it to be incomplete, and the backfill it reports is not
+  // running either: asking with a term is what starts one.
+  const backlog = query.trim() === "" ? 0 : indexing
   const groups = useMemo(
-    () => paletteGroups(tab, results, messages, historyTotal),
-    [tab, results, messages, historyTotal],
+    () => paletteGroups(tab, results, messages, historyTotal, backlog),
+    [tab, results, messages, historyTotal, backlog],
   )
   const counts = useMemo(
     () => PALETTE_TABS.map((t) => paletteTabCount(t, results, messages)),
@@ -256,7 +266,10 @@ export function CommandPalette() {
             key={group.label}
             label={group.label}
             trailing={
-              group.total > group.rows.length ? `${group.rows.length} of ${group.total}` : undefined
+              group.note ??
+              (group.total > group.rows.length
+                ? `${group.rows.length} of ${group.total}`
+                : undefined)
             }
           >
             {group.rows.map((row, i) => (
@@ -383,6 +396,15 @@ function ListRow({
 // branch moves on, and when it was closed, because that is what turns a list of
 // old work into one somebody can find something in.
 //
+// A row the search reached through the conversation rather than the name carries
+// the sentence that made it a hit, under the rest. It is the same thing a
+// Messages row leads with, and it sits last here because it is why this row is on
+// screen and not what identifies it.
+//
+// Under that again, for the rare session whose conversation was too long to
+// index whole, the part of it that was: a search that reached only the newer end
+// of a session has to be readable as that rather than as nothing being there.
+//
 // The provider mark carries no status ring: nothing is running in a closed
 // session, so the ring has nothing to report, and its absence is what tells a
 // history row from a live one at a glance. That is also why the unread flag is
@@ -400,6 +422,7 @@ function HistoryRow({
   onRun: () => void
 }) {
   const closedAt = agoLabel(session.closedAt)
+  const note = historyIndexNote(session)
   return (
     <PickerRow selected={selected} onSelect={onSelect} onRun={onRun}>
       <SessionStatusIcon
@@ -433,6 +456,14 @@ function HistoryRow({
             {displayPath(session.path)}
           </span>
         </span>
+        {session.snippet && (
+          <span className="truncate text-xs text-muted-foreground/80">{session.snippet}</span>
+        )}
+        {note && (
+          <span className="truncate font-mono text-[0.625rem] text-muted-foreground/70">
+            {note}
+          </span>
+        )}
       </span>
       {closedAt && (
         <span className="shrink-0 font-mono text-[0.625rem] tabular-nums text-muted-foreground">
