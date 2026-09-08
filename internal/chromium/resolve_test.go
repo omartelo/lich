@@ -194,10 +194,11 @@ func TestResolveFlatpak(t *testing.T) {
 		t.Fatalf("Resolve = %q %v, want a flatpak run of the installed browser", got.Path, got.Prefix)
 	}
 	// The profile has to land inside the sandbox's own directory, and keep the
-	// name it had so the dev shell still gets a profile of its own.
+	// name it had so the dev shell still gets a profile of its own. The
+	// per-browser subdirectory under it is profiledir_test.go's.
 	want := "/home/u/.var/app/com.vivaldi.Vivaldi/config/chromium-profile-dev"
-	if dir := got.ProfileDir("/home/u/.config/lich/chromium-profile-dev"); dir != want {
-		t.Fatalf("ProfileDir = %q, want %q", dir, want)
+	if dir := got.relocate("/home/u/.config/lich/chromium-profile-dev"); dir != want {
+		t.Fatalf("relocate = %q, want %q", dir, want)
 	}
 }
 
@@ -222,12 +223,12 @@ func TestResolveNoBrowser(t *testing.T) {
 	}
 }
 
-// TestProfileDirUnchanged proves the relocation is Flatpak's alone: every other
+// TestRelocateUnchanged proves the relocation is Flatpak's alone: every other
 // browser reads the directory lich chose.
-func TestProfileDirUnchanged(t *testing.T) {
+func TestRelocateUnchanged(t *testing.T) {
 	dir := "/home/u/.config/lich/chromium-profile"
-	if got := (Result{Path: "/usr/bin/chromium"}).ProfileDir(dir); got != dir {
-		t.Fatalf("ProfileDir = %q, want %q", got, dir)
+	if got := (Result{Path: "/usr/bin/chromium"}).relocate(dir); got != dir {
+		t.Fatalf("relocate = %q, want %q", got, dir)
 	}
 }
 

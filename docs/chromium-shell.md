@@ -61,7 +61,8 @@ Migration progress:
 2. **Chromium shell** — DONE (phase 2): `LICH_SHELL=chromium ./lich` serves
    the embedded frontend on the loopback listener (public mount; RPC/WS stay
    token-gated) and opens the system Chromium via `internal/chromium` on a
-   persistent profile (`~/.config/lich/chromium-profile` — localStorage lives
+   persistent profile, one per browser
+   (`~/.config/lich/chromium-profile/<name>-<digest>` — localStorage lives
    there, so the listener port is pinned to 47821, `LICH_LISTEN_PORT`
    overrides; NOT `LICH_PORT`, which is the per-session hook variable).
    Window closed = app exit. Extra flags: `lich -- --ozone-platform=wayland`.

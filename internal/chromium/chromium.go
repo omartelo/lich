@@ -126,6 +126,14 @@ const startupGrace = 30 * time.Second
 // system browser, or ErrNoBrowser and the tab that answers it.
 func Run(url, dataDir, class string, extra []string, onStart func(*os.Process)) error {
 	start := func(browser Result) error {
+		// Here and not in launch: Focus resolves the same directory against a
+		// lich that has already done this, and renaming a profile a running
+		// browser holds open is not a migration.
+		if err := migrateProfile(browser.relocate(dataDir), browser.profileKey()); err != nil {
+			// The profile is only the user's settings; a launch that could not
+			// carry them over still opens a window.
+			slog.Warn("chromium profile migration", "err", err)
+		}
 		return launch(browser, url, dataDir, class, extra, onStart)
 	}
 	return run(RealEnv(), start, notifyDesktop)
