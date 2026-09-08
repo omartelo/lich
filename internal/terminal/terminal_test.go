@@ -58,6 +58,9 @@ type stubBins struct {
 	// Nil until a test cares, and then it stands in for the workspace database
 	// across a restart.
 	turns map[string]store.TurnRecord
+	// The MCP servers the spawn recorded per session, the shape
+	// store.SetSessionMCPServers writes. Nil until a test cares.
+	mcpServers map[string][]string
 	// One field per cost method, because the three failures are three different
 	// stories: a ledger that cannot be read, one that cannot be written, and a
 	// total that cannot be summed. A single error field would let a test claim
@@ -96,14 +99,22 @@ func newCostStore(providerSession string) stubBins {
 	}
 }
 
-func (s stubBins) ProviderBin(_, _ string) string       { return s.bin }
-func (s stubBins) SessionCustomBin(_ string) bool       { return s.bin != "" }
-func (s stubBins) SkipPermissions(_, _, _ string) bool  { return s.skipPerms }
-func (s stubBins) ProjectPath(_ string) string          { return s.projectPath }
-func (s stubBins) SessionModel(_ string) string         { return s.model }
-func (s stubBins) SessionEntrypoint(_ string) string    { return s.entrypoint }
-func (s stubBins) SessionSandbox(_ string) string       { return s.sandbox }
-func (s stubBins) SetSessionSandbox(_, _ string) error  { return nil }
+func (s stubBins) ProviderBin(_, _ string) string      { return s.bin }
+func (s stubBins) SessionCustomBin(_ string) bool      { return s.bin != "" }
+func (s stubBins) SkipPermissions(_, _, _ string) bool { return s.skipPerms }
+func (s stubBins) ProjectPath(_ string) string         { return s.projectPath }
+func (s stubBins) SessionModel(_ string) string        { return s.model }
+func (s stubBins) SessionEntrypoint(_ string) string   { return s.entrypoint }
+func (s stubBins) SessionSandbox(_ string) string      { return s.sandbox }
+func (s stubBins) SetSessionSandbox(_, _ string) error { return nil }
+
+func (s stubBins) SetSessionMCPServers(id string, servers []string) error {
+	if s.mcpServers != nil {
+		s.mcpServers[id] = servers
+	}
+	return nil
+}
+
 func (s stubBins) SandboxDefault(_, _, _ string) bool   { return s.sandboxOn }
 func (s stubBins) SandboxSSHAgent(_ string) bool        { return s.sshAgent }
 func (s stubBins) SandboxGHToken(_ string) bool         { return s.ghToken }

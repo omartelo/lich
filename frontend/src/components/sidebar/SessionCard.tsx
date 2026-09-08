@@ -508,7 +508,7 @@ export function SessionCard({
                       The separator travels inside the detail so it leaves with it,
                       instead of dangling after a truncated name. */}
                   <span className="min-w-0 truncate font-medium text-foreground">
-                    {toolLabel(tool.name)}
+                    {toolLabel(tool.name, session.mcpServers)}
                   </span>
                   {tool.detail && (
                     <span className="min-w-0 shrink-[9999] truncate font-mono">

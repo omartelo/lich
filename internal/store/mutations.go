@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -761,4 +762,43 @@ func (s *Service) tx(fn func(*sql.Tx) error) error {
 		return fmt.Errorf("commit transaction: %w", err)
 	}
 	return nil
+}
+
+// SetSessionMCPServers records the MCP servers a session's provider could reach
+// at the spawn that just happened. The window divides a tool name against them
+// (frontend/src/lib/session/tool-label.ts), and the row is what a page reload
+// comes back to — the PTY is still running by then, so there is no second spawn
+// to report it again.
+//
+// An empty list clears the row rather than parking "[]": a session that reached
+// nothing and a session nobody has spawned read the same way, and both mean the
+// card shows a tool name whole.
+func (s *Service) SetSessionMCPServers(sessionID string, servers []string) error {
+	encoded := ""
+	if len(servers) > 0 {
+		body, err := json.Marshal(servers)
+		if err != nil {
+			return fmt.Errorf("encode MCP servers for %q: %w", sessionID, err)
+		}
+		encoded = string(body)
+	}
+	if _, err := s.db.Exec(
+		`UPDATE sessions SET mcp_servers = ? WHERE id = ?`, encoded, sessionID,
+	); err != nil {
+		return fmt.Errorf("set MCP servers on %q: %w", sessionID, err)
+	}
+	return nil
+}
+
+// decodeMCPServers reads back what SetSessionMCPServers wrote. A row lich cannot
+// parse answers nil, which is the same answer an unspawned row gives.
+func decodeMCPServers(encoded string) []string {
+	if encoded == "" {
+		return nil
+	}
+	var servers []string
+	if err := json.Unmarshal([]byte(encoded), &servers); err != nil {
+		return nil
+	}
+	return servers
 }

@@ -25,6 +25,7 @@ import {
   setActiveSession,
   setSessionEntrypoint as recordEntrypoint,
   setSessionPinned,
+  setSessionMCPServers,
   setSessionSandboxed,
   setSessionSchedule,
   type Session,
@@ -46,6 +47,7 @@ import {
   OPENED_EVENT,
   PROJECT_OPENED_EVENT,
   RELAY_STALLED_EVENT,
+  MCP_EVENT,
   SANDBOX_EVENT,
   SCHEDULE_EVENT,
   STATUS_EVENT,
@@ -54,6 +56,7 @@ import {
   decideStatusNotice,
   isIdEvent,
   isRelayStalledEvent,
+  isMCPEvent,
   isSandboxEvent,
   isScheduleEvent,
   isStatusEvent,
@@ -97,6 +100,7 @@ const cardFromStored = (restored: StoredSession): Session => ({
   ...(restored.scheduledAt
     ? { scheduledAt: restored.scheduledAt, scheduledPrompt: restored.scheduledPrompt }
     : {}),
+  ...(restored.mcpServers?.length ? { mcpServers: restored.mcpServers } : {}),
 })
 
 // The first session of any project is always "Session 1"; the counter then
@@ -232,6 +236,23 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         return
       }
       const next = setSessionSandboxed(sessionsRef.current, data.id, data.confined)
+      if (next !== sessionsRef.current) {
+        commit(next)
+      }
+    })
+    return () => off()
+  }, [])
+
+  // Every spawn reports the MCP servers its provider could reach, so a card
+  // divides a tool name against the list that spawn resolved rather than one
+  // read when lich started. The row is already written, so this never writes
+  // back.
+  useEffect(() => {
+    const off = onAppEvent(MCP_EVENT, (data) => {
+      if (!isMCPEvent(data)) {
+        return
+      }
+      const next = setSessionMCPServers(sessionsRef.current, data.id, data.servers)
       if (next !== sessionsRef.current) {
         commit(next)
       }

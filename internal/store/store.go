@@ -89,7 +89,13 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- all, is still news when somebody comes back. Two writers own one edge each
     -- (SetSessionUnread): the terminal service, on the turn's own boundaries,
     -- and the window, when the card is read.
-    unread              INTEGER NOT NULL DEFAULT 0
+    unread              INTEGER NOT NULL DEFAULT 0,
+    -- The MCP servers this session's provider could reach when it was spawned,
+    -- as a JSON array. Written by the spawn because the answer took that
+    -- provider's own config documents and this session's directory to reach, and
+    -- the window needs it to divide a tool name two harnesses spell with a single
+    -- underscore. Empty for a row nothing has spawned yet.
+    mcp_servers         TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
 
@@ -223,6 +229,12 @@ type Session struct {
 	// reload: the window holds it while it is up, and this row is what it comes
 	// back to (see SetSessionUnread).
 	Unread bool `json:"unread"`
+	// MCPServers names the MCP servers this session's provider could reach when
+	// it was spawned. It rides the row for the reason Sandbox does: the spawn is
+	// what resolved it — from the provider's own config documents and this
+	// session's directory — and a page reload has to come back to the same
+	// answer without re-deriving it. Nil for a row nothing has spawned yet.
+	MCPServers []string `json:"mcpServers"`
 }
 
 // Project is a persisted project together with its restorable session state.
@@ -295,6 +307,7 @@ func open(path string) (*Service, error) {
 		`ALTER TABLE sessions ADD COLUMN scheduled_at INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE sessions ADD COLUMN scheduled_prompt TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE sessions ADD COLUMN unread INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE sessions ADD COLUMN mcp_servers TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE projects ADD COLUMN position INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE projects ADD COLUMN closed_seq INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE session_costs ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0`,
@@ -590,6 +603,7 @@ func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	rows, err := s.db.Query(
 		`SELECT id, label, kind, path, provider_session_id, entrypoint, sandbox, pinned,
 		        origin_session_id, origin_label, scheduled_at, scheduled_prompt, unread,
+		        mcp_servers,
 		        EXISTS (SELECT 1 FROM session_last_turn WHERE session_id = sessions.id)
 		   FROM sessions WHERE project_id = ? AND is_open = 1 ORDER BY position, rowid`,
 		projectID,
@@ -602,13 +616,15 @@ func (s *Service) sessionsOf(projectID string) ([]Session, error) {
 	sessions := []Session{}
 	for rows.Next() {
 		var sess Session
+		var servers string
 		if err := rows.Scan(
 			&sess.ID, &sess.Label, &sess.Kind, &sess.Path, &sess.ProviderSessionID,
 			&sess.Entrypoint, &sess.Sandbox, &sess.Pinned, &sess.OriginSessionID, &sess.OriginLabel,
-			&sess.ScheduledAt, &sess.ScheduledPrompt, &sess.Unread, &sess.HasLastTurn,
+			&sess.ScheduledAt, &sess.ScheduledPrompt, &sess.Unread, &servers, &sess.HasLastTurn,
 		); err != nil {
 			return nil, fmt.Errorf("scan session: %w", err)
 		}
+		sess.MCPServers = decodeMCPServers(servers)
 		sessions = append(sessions, sess)
 	}
 	if err := rows.Err(); err != nil {

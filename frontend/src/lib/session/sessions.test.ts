@@ -28,6 +28,7 @@ import {
   setActiveSession,
   setSessionEntrypoint,
   setSessionPinned,
+  setSessionMCPServers,
   setSessionSandboxed,
   setSessionSchedule,
   delegatesOf,
@@ -1142,6 +1143,47 @@ describe("setSessionSandboxed", () => {
   it("ignores a session it does not know", () => {
     const current = state()
     expect(setSessionSandboxed(current, "gone", true)).toBe(current)
+  })
+})
+
+describe("setSessionMCPServers", () => {
+  const state = () => buildState(2)
+
+  it("records the servers the spawn reported, on that session alone", () => {
+    const next = setSessionMCPServers(state(), "s1", ["ai-memory", "lich"])
+    expect(next[P]?.sessions[0]?.mcpServers).toEqual(["ai-memory", "lich"])
+    expect(next[P]?.sessions[1]?.mcpServers).toBeUndefined()
+  })
+
+  it("clears them when a respawn reaches none", () => {
+    const listed = setSessionMCPServers(state(), "s1", ["lich"])
+    const next = setSessionMCPServers(listed, "s1", [])
+    expect(next[P]?.sessions[0]?.mcpServers).toBeUndefined()
+  })
+
+  // The event fires on every spawn, so an unchanged list has to return the same
+  // object: a new one re-renders every card in the project for nothing.
+  it("returns the same state when the list did not change", () => {
+    const current = state()
+    expect(setSessionMCPServers(current, "s1", [])).toBe(current)
+    const listed = setSessionMCPServers(current, "s1", ["lich"])
+    expect(setSessionMCPServers(listed, "s1", ["lich"])).toBe(listed)
+    // Same length, different names — a comparison on length alone would miss it.
+    expect(setSessionMCPServers(listed, "s1", ["other"])).not.toBe(listed)
+  })
+
+  it("ignores a session it does not know", () => {
+    const current = state()
+    expect(setSessionMCPServers(current, "gone", ["lich"])).toBe(current)
+  })
+
+  // Dropped rather than set to an empty array, for the reason the sandbox mark
+  // is: hydration omits the key entirely.
+  it("leaves no mcpServers key on a session that reached none", () => {
+    const listed = setSessionMCPServers(buildState(1), "s1", ["lich"])
+    const cleared = setSessionMCPServers(listed, "s1", [])
+    const session = cleared[P]?.sessions[0]
+    expect(session && "mcpServers" in session).toBe(false)
   })
 })
 

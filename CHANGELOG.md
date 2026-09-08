@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **oh-my-pi and opencode cards name the MCP tool, not the server that carries
+  it.** Both harnesses spell an MCP tool with a single underscore between the
+  server and the tool, which a card could not divide, so it spent its width on
+  `lich_open_session` where a Claude Code card already read `lich ·
+  open_session`. Every session now records the servers its harness could reach
+  when it was spawned — opencode's project config included — and those cards
+  divide the name the same way.
 - **The Pulls screen no longer leaves refs in your repository.** Naming a
   conflicting pull request's files fetched its head and its base branch into
   `refs/lich/pr/<n>/head` and `refs/lich/pr/<n>/base` and left them there, so

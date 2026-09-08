@@ -55,6 +55,13 @@ export const AGENT_EVENT = "session-agent"
 // a page reload hydrates from.
 export const SANDBOX_EVENT = "session-sandbox"
 
+// Global event the backend emits on every spawn with the MCP servers that
+// session's provider could reach (see terminal.mcpEventName). Payload:
+// { id, servers }. The spawn is what resolves them — from the harness's own
+// config documents and the session's directory — and they are persisted with the
+// row too, which is what a page reload hydrates from.
+export const MCP_EVENT = "session-mcp"
+
 // Global event the backend emits after a turn ends with the session's
 // context-window usage (see terminal.usageEventName). Payload: { id, percent,
 // tokens, window, model, effort } — percent is 0–100 of the window, tokens the
@@ -241,6 +248,14 @@ export function isScheduleEvent(data: unknown): data is { id: string; at: number
 
 export function isSandboxEvent(data: unknown): data is { id: string; confined: boolean } {
   return isIdEvent(data) && typeof (data as { confined?: unknown }).confined === "boolean"
+}
+
+export function isMCPEvent(data: unknown): data is { id: string; servers: string[] } {
+  if (!isIdEvent(data)) {
+    return false
+  }
+  const servers = (data as { servers?: unknown }).servers
+  return Array.isArray(servers) && servers.every((name) => typeof name === "string")
 }
 
 export function isStatusEvent(data: unknown): data is { id: string; state: string } {

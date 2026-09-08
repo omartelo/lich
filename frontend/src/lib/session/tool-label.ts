@@ -11,20 +11,39 @@
 const MCP_DOUBLE = /^mcp__(.+?)__(.+)$/
 const MCP_PREFIX = "mcp__"
 
-// toolLabel shortens what it can prove and leaves the rest alone.
+// toolLabel shortens what it can prove and leaves the rest alone, drawing an MCP
+// tool as "<server> · <tool>".
 //
-// The doubled form splits cleanly, so it draws as "<server> · <tool>" —
-// non-greedy on the server, so a tool whose own name contains `__` keeps it.
-// omp's single underscore cannot be split at all: `mcp__lich_list_sessions`
-// divides into "lich" + "list_sessions" or "lich_list" + "sessions" and nothing
-// in the string says which, so only the prefix comes off. opencode's form has no
-// marker to key on — a server name is not distinguishable from the first word of
-// a tool name — so it is shown as it arrived, which is also what any name that is
-// not an MCP tool's gets.
-export function toolLabel(name: string): string {
+// The doubled form splits on the string alone — non-greedy on the server, so a
+// tool whose own name contains `__` keeps it. The single-underscore forms cannot:
+// `mcp__lich_list_sessions` divides into "lich" + "list_sessions" or "lich_list"
+// + "sessions" and nothing in the string says which. What says which is servers,
+// the names that session's own spawn found registered with its provider —
+// matched longest first, so a `lich_relay` server wins over a `lich` one on a
+// name both could claim.
+//
+// A name matching no server keeps whatever survives the prefix, which is also
+// what any name that is not an MCP tool's gets, and what every name got before
+// a session had a list.
+export function toolLabel(name: string, servers: readonly string[] = []): string {
   const parts = MCP_DOUBLE.exec(name)
   if (parts) {
     return `${parts[1]} · ${parts[2]}`
   }
-  return name.startsWith(MCP_PREFIX) ? name.slice(MCP_PREFIX.length) : name
+  const rest = name.startsWith(MCP_PREFIX) ? name.slice(MCP_PREFIX.length) : name
+  const server = longestServer(rest, servers)
+  return server ? `${server} · ${rest.slice(server.length + 1)}` : rest
+}
+
+// longestServer is the longest name in servers that rest spells as `<name>_`,
+// or "" when none does — and never one with nothing after it, which would draw a
+// separator with an empty tool beside it.
+function longestServer(rest: string, servers: readonly string[]): string {
+  let found = ""
+  for (const server of servers) {
+    if (server.length > found.length && rest.length > server.length + 1) {
+      if (rest.startsWith(`${server}_`)) found = server
+    }
+  }
+  return found
 }

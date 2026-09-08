@@ -62,6 +62,14 @@ const (
 	// asked to work it out again. Persisted with the row too (store.Session's
 	// Sandbox), which is what a page reload hydrates from.
 	sandboxEventName = "session-sandbox"
+	// mcpEventName carries the MCP servers a session's provider could reach at
+	// its spawn ({id, servers}), emitted by every spawn. The card divides a tool
+	// name against them — two harnesses spell an MCP tool with a single
+	// underscore between the server and the tool, which nothing in the string
+	// divides (docs/hooks/session-state.md). Persisted with the row too
+	// (store.Session's MCPServers), which is what a page reload hydrates from:
+	// the PTY outlives the page, so there is no second spawn to report it again.
+	mcpEventName = "session-mcp"
 	// turnEventName carries the id of a session whose last finished turn has
 	// just been filed ({id}) — emitted when the closing snapshot lands, not when
 	// the turn's `done` is reported. The two are not the same moment: the
@@ -126,6 +134,13 @@ type agentEvent struct {
 type sandboxEvent struct {
 	ID       string `json:"id"`
 	Confined bool   `json:"confined"`
+}
+
+// mcpEvent is the payload of mcpEventName: the session and the MCP servers its
+// provider could reach when it was spawned.
+type mcpEvent struct {
+	ID      string   `json:"id"`
+	Servers []string `json:"servers"`
 }
 
 // turnEvent is the payload of turnEventName: the session whose last-turn record
@@ -196,6 +211,7 @@ type Store interface {
 	SessionEntrypoint(sessionID string) string
 	SessionSandbox(sessionID string) string
 	SetSessionSandbox(sessionID, sandbox string) error
+	SetSessionMCPServers(sessionID string, servers []string) error
 	SandboxDefault(providerID, projectID, cwd string) bool
 	SandboxSSHAgent(projectID string) bool
 	SandboxGHToken(projectID string) bool

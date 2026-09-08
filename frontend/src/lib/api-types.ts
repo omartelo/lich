@@ -336,6 +336,10 @@ export interface StoredSession {
   /** Whether this session's last finished turn is still waiting to be read: the
    * card's solid ring, restored from here after a reload. */
   unread: boolean
+  /** The MCP servers this session's provider could reach when it was spawned —
+   * what the card divides a tool name carrying no separator of its own against.
+   * null for a row nothing has spawned yet. */
+  mcpServers: string[] | null
 }
 
 /** internal/store.ClosedSession — one parked session offered for resuming. What

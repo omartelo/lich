@@ -19,6 +19,7 @@ const storedSession = (overrides: Partial<StoredSession> = {}): StoredSession =>
   originLabel: "",
   hasLastTurn: false,
   unread: false,
+  mcpServers: null,
   ...overrides,
 })
 
@@ -166,6 +167,29 @@ describe("confined sessions", () => {
         storedProject({ sessions: [storedSession({ id: "s1", sandbox })] }),
       ])
       expect(state.p1?.sessions[0]?.sandboxed).toBeUndefined()
+    }
+  })
+})
+
+// A page reload finds the PTY already running, so the row is the only route
+// these names take back to the card.
+describe("MCP servers on hydration", () => {
+  it("carries the servers the spawn recorded", () => {
+    const state = buildSessionState([
+      storedProject({ sessions: [storedSession({ id: "s1", mcpServers: ["lich", "srv"] })] }),
+    ])
+    expect(state.p1?.sessions[0]?.mcpServers).toEqual(["lich", "srv"])
+  })
+
+  // null is a row nothing has spawned yet, and [] a session that reached
+  // nothing. The card does the same thing with both, so both drop the key.
+  it("leaves no key for a row that names none", () => {
+    for (const mcpServers of [null, []]) {
+      const state = buildSessionState([
+        storedProject({ sessions: [storedSession({ id: "s1", mcpServers })] }),
+      ])
+      const session = state.p1?.sessions[0]
+      expect(session && "mcpServers" in session).toBe(false)
     }
   })
 })

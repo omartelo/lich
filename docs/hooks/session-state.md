@@ -166,8 +166,8 @@ part worth reading starts:
 | Claude Code       | `mcp__lich__open_session` | `lich · open_session`             |
 | Codex             | `mcp__srv__tool`          | `srv · tool`                      |
 | Antigravity       | `call_mcp_tool`           | `call_mcp_tool · lich/open_session` |
-| oh-my-pi          | `mcp__lich_list_sessions` | `lich_list_sessions`              |
-| opencode          | `lichprobe_list_sessions` | unchanged                         |
+| oh-my-pi          | `mcp__lich_list_sessions` | `lich · list_sessions`            |
+| opencode          | `lichprobe_list_sessions` | `lichprobe · list_sessions`       |
 
 Measured against opencode 1.18.18, omp 17.3.7 and Antigravity 1.1.19 by running
 each CLI against a `lich mcp` server and reading the name off the handler the
@@ -180,11 +180,15 @@ are two of its arguments (`args.ServerName`, `args.ToolName`) — so the client
 reads them and sends them as `detail`, which is why that row is the only one
 whose card line is made of both fields.
 
-Of the names that *are* the tool, only the doubled underscore can be split:
-omp's single one divides `mcp__lich_list_sessions` into `lich` + `list_sessions`
-or `lich_list` + `sessions` with nothing in the string to say which, so only its
-prefix comes off, and opencode's form carries no marker at all. Crush is absent
-because it reports no tool (see above).
+Of the names that *are* the tool, only the doubled underscore divides on the
+string alone: `mcp__lich_list_sessions` reads as `lich` + `list_sessions` or
+`lich_list` + `sessions`, and opencode's form carries no marker at all. What says
+which is the list of servers that session's own spawn found registered with its
+provider — read from the harness's own config documents and the session's
+directory, recorded on its row (`store.Session`'s `mcpServers`) and announced as
+`session-mcp`. The card takes the longest server name the tool name spells, and
+leaves a name no server claims whole. Crush is absent because it reports no tool
+(see above).
 
 `detail` is whatever identifies the call at a glance — the command line, the
 file path, the pattern, and on Antigravity the MCP tool its step name does not

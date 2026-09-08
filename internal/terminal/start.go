@@ -2,10 +2,12 @@ package terminal
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"runtime"
 	"time"
 
+	"github.com/omartelo/lich/internal/agentplugin"
 	"github.com/omartelo/lich/internal/project"
 	"github.com/omartelo/lich/internal/providers"
 )
@@ -65,6 +67,7 @@ func (s *Service) Start(
 	s.hub.Emit(cwdEventName, cwdEvent{ID: id, Cwd: cwd})
 	s.hub.Emit(agentEventName, agentEvent{ID: id, Agent: ""})
 	s.hub.Emit(sandboxEventName, sandboxEvent{ID: id, Confined: sess.confined})
+	s.reportMCPServers(id, kind, cwd)
 	// Bound to the effective cwd rather than the requested one, and outside
 	// s.mu: track queues a warm-up of this checkout's snapshot index, and the
 	// first one on a large repository is measured in seconds.
@@ -221,4 +224,21 @@ func closableState(kind, state string) bool {
 		return true
 	}
 	return state == statusIdle
+}
+
+// reportMCPServers records and announces the MCP servers this spawn's provider
+// could reach. Resolved here rather than once at startup because the answer
+// takes the harness's own config documents and this session's directory to
+// reach, and both move while lich is open: a server registered after launch is
+// divided on the next card to spawn.
+//
+// A failed write is logged and nothing else. It costs a card the split on the
+// next page reload — the event has already gone out — and refusing to spawn a
+// session over the way its tool names draw would be the worse trade.
+func (s *Service) reportMCPServers(id, kind, cwd string) {
+	servers := agentplugin.MCPServers(kind, cwd)
+	if err := s.store.SetSessionMCPServers(id, servers); err != nil {
+		slog.Warn("record MCP servers", "session", id, "error", err)
+	}
+	s.hub.Emit(mcpEventName, mcpEvent{ID: id, Servers: servers})
 }

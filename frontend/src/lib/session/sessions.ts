@@ -76,6 +76,11 @@ export interface Session {
   // run reaches the panel through the session's own state reports, which is the
   // other half of what draws the switch (ReviewPanel).
   hasLastTurn?: boolean
+  // The MCP servers this session's provider could reach when it was spawned,
+  // which is what toolLabel divides a tool name against. Absent means none were
+  // reported — the same answer as a name no server claims, so the card shows it
+  // whole. Written by the spawn (MCP_EVENT) and read back on hydration.
+  mcpServers?: string[]
 }
 
 export interface ProjectSessions {
@@ -299,6 +304,42 @@ export function setSessionSandboxed(
       }),
     },
   }
+}
+
+// setSessionMCPServers records the MCP servers a spawn reported for a session.
+// Unknown ids leave the state untouched, and a list that already matches returns
+// the same object — the event fires on every spawn, and a re-render per respawn
+// of an unchanged card is a card that flickers.
+export function setSessionMCPServers(
+  state: SessionState,
+  sessionId: string,
+  servers: string[],
+): SessionState {
+  const projectId = projectOfSession(state, sessionId)
+  const current = projectId ? state[projectId] : undefined
+  const session = current?.sessions.find((s) => s.id === sessionId)
+  if (!projectId || !current || !session || sameServers(session.mcpServers, servers)) {
+    return state
+  }
+  return {
+    ...state,
+    [projectId]: {
+      ...current,
+      sessions: current.sessions.map((s) => {
+        if (s.id !== sessionId) {
+          return s
+        }
+        // Dropped rather than set to an empty array, so a session that reached
+        // nothing carries no key at all — the shape hydration produces.
+        const { mcpServers: _was, ...rest } = s
+        return servers.length > 0 ? { ...rest, mcpServers: servers } : rest
+      }),
+    },
+  }
+}
+
+function sameServers(a: string[] | undefined, b: string[]): boolean {
+  return (a ?? []).length === b.length && (a ?? []).every((name, i) => name === b[i])
 }
 
 // setSessionSchedule parks a prompt on a session, or takes one off it: at 0

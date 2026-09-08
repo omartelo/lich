@@ -35,7 +35,7 @@ func (s *Service) opencodeInstall() error {
 	if err != nil {
 		return err
 	}
-	dir, err := s.opencodePluginDir()
+	dir, err := opencodePluginDir()
 	if err != nil {
 		return err
 	}
@@ -52,7 +52,7 @@ func (s *Service) opencodeInstall() error {
 // — a hand-installed copy carries no marker, and reporting a version for it
 // would claim an install lich cannot update.
 func (s *Service) opencodeInstalledVersion() (string, bool) {
-	dir, err := s.opencodePluginDir()
+	dir, err := opencodePluginDir()
 	if err != nil {
 		return "", false
 	}
@@ -68,7 +68,7 @@ func (s *Service) opencodeInstalledVersion() (string, bool) {
 // which it applies on every platform rather than deferring to the OS-native
 // config location, so os.UserConfigDir would point elsewhere on macOS and
 // Windows and the module would land where nothing loads it.
-func (s *Service) opencodePluginDir() (string, error) {
+func opencodePluginDir() (string, error) {
 	base := os.Getenv("XDG_CONFIG_HOME")
 	if base == "" {
 		home, err := os.UserHomeDir()

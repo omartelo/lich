@@ -4,6 +4,7 @@ import {
   decideStatusNotice,
   isAgentEvent,
   isCwdEvent,
+  isMCPEvent,
   isIdEvent,
   isIdleEvent,
   isStatusEvent,
@@ -142,6 +143,23 @@ describe("isCwdEvent", () => {
     expect(isCwdEvent({ cwd: "/home/user" })).toBe(false)
     expect(isCwdEvent({ id: "s1", cwd: 2 })).toBe(false)
     expect(isCwdEvent(null)).toBe(false)
+  })
+})
+
+describe("isMCPEvent", () => {
+  it("accepts a payload carrying a string id and a list of names", () => {
+    expect(isMCPEvent({ id: "s1", servers: ["lich"] })).toBe(true)
+    // A session that reached nothing still reports, and the empty list is the
+    // report — the card has to clear whatever the last spawn left it.
+    expect(isMCPEvent({ id: "s1", servers: [] })).toBe(true)
+  })
+
+  it("rejects a payload that is not one", () => {
+    expect(isMCPEvent({ id: "s1" })).toBe(false)
+    expect(isMCPEvent({ servers: ["lich"] })).toBe(false)
+    expect(isMCPEvent({ id: "s1", servers: "lich" })).toBe(false)
+    expect(isMCPEvent({ id: "s1", servers: ["lich", 2] })).toBe(false)
+    expect(isMCPEvent(null)).toBe(false)
   })
 })
 
