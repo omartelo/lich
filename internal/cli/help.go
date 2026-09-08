@@ -46,8 +46,10 @@ var commands = []command{
 		args: "[<ticket>] <answer>",
 		about: "Send <answer> back to whoever is waiting on <ticket>. This is what a\n" +
 			"relayed message asks you to run when you are done. Without a ticket it\n" +
-			"answers the request open against this session, for when the message\n" +
-			"carrying the number is no longer in reach.",
+			"answers the one request open against this session, for when the message\n" +
+			"carrying the number is no longer in reach; with two open it is refused,\n" +
+			"naming each ticket and what it asked, because nothing in an answer says\n" +
+			"which request it belongs to.",
 	},
 	{
 		name: "open",

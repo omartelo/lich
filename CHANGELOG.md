@@ -18,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **An answer that names no ticket no longer guesses which task it belongs to.**
+  `lich reply "<answer>"` and `reply_to_session` without a ticket used to close
+  the oldest request delivered to that session, so a session working two relayed
+  tasks that answered the second one first sent it home as the answer to the
+  first — and both senders read a confident report of work nobody did. With two
+  or more requests open the answer is now refused, listing every open ticket
+  with the opening of what it asked, so the retry names the right one. One open
+  request is answered as before.
 - **The sandbox's "Ask each time" rung now reaches every session.** It only ever
   asked in the New worktree dialog, so a session started from the New session
   menu, by another session, or through the MCP tool quietly ran on the machine.

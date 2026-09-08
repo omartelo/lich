@@ -371,13 +371,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   a deleted project): the row is the only copy of the prompt, so it goes with the row, and all that says so is
   one Warn in a log nobody is watching (`internal/store`, `noteForfeitedSchedules`).
 
-- **An answer that names no ticket is matched by delivery order** (`internal/relay/answer.go`,
-  `errandOfLocked`): `lich reply "<answer>"` and `reply_to_session` without a ticket close the oldest message
-  delivered to that session and still open, because nothing in an answer itself says which request it belongs to.
-  A session working two relayed tasks at once that answers the second one first sends it home as the answer to the
-  first, and both senders read a confident wrong report — nothing anywhere reports the mismatch. Naming the ticket
-  is still the only exact route, which is why every relayed message spells it and why the card's tooltip shows it.
-
 - **A lich-spawned Kiro session runs lich's agent, not the user's** (`internal/agentplugin/kiro.go`,
   `internal/terminal/command.go`, `agentArgs`): Kiro keeps its hooks inside an *agent config*, and its built-in
   `kiro_default` cannot be shadowed — a `kiro_default.json` in the agents directory is ignored outright (measured

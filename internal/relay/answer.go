@@ -2,6 +2,7 @@ package relay
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -33,12 +34,12 @@ func (s *Service) Wait(ticketID string, waitSeconds int) (Result, error) {
 // Reply hands an answer back to whoever is waiting on ticketID. It is what the
 // message composed by Send asks the receiving agent to run.
 //
-// An empty ticketID answers the errand open against replierID instead, the way
-// an empty ticket collects everything waiting for a sender (see Collect). The
+// An empty ticketID answers the one errand open against replierID, the way an
+// empty ticket collects everything waiting for a sender (see Collect). The
 // ticket is written down in one place only — the message typed at the target's
 // prompt — so an agent whose context no longer reaches that message would
 // otherwise be holding an answer with no route home, and the sender blocked on
-// a ticket nobody can name.
+// a ticket nobody can name. With two open it is refused: see errandOfLocked.
 func (s *Service) Reply(replierID, ticketID, answer string) error {
 	answer = sanitize(answer)
 	if len(answer) > answerLimit {
@@ -85,36 +86,77 @@ func (s *Service) Reply(replierID, ticketID, answer string) error {
 }
 
 // errandOfLocked is the errand an answer that named no ticket belongs to: the
-// first message actually delivered to this session that is still open — first
-// by hand-off order (deliverySeq), which is the order itself and not a clock
-// reading of it. Called under s.mu.
+// single message delivered to this session and still open. Called under s.mu.
 //
-// Oldest-delivered is the same rule turnErrand closes a turn by, and for the
-// same reason: every provider queues typed input, so a session handed several
-// tasks works through them in the order they arrived. It is a guess all the
-// same — an agent that answers its second task first pays it back on the third
-// — which is why the ticket is still named everywhere it is known, and why the
-// window now shows it. A queued task nobody has read yet is never picked: it is
-// not at that prompt, so no answer at that prompt can be about it.
+// Nothing in an answer itself says which request it belongs to, so with two
+// errands open there is no way to tell them apart — and the guess this used to
+// make (the oldest delivery) sent a session's answer to its second task home as
+// the answer to its first, which both senders then read as a confident report of
+// work they never asked for. So it is refused instead, naming every open ticket
+// with the line it asked for, and the agent retries with the one it means. One
+// open errand needs no guess, and none is still the error it always was.
+//
+// A queued task nobody has read yet is never listed: it is not at that prompt,
+// so no answer at that prompt can be about it.
 func (s *Service) errandOfLocked(replierID string) (string, error) {
 	if replierID == "" {
 		return "", fmt.Errorf(
 			"answering without a ticket needs a session of your own — name it instead: lich reply <ticket> \"<answer>\"")
 	}
-	var oldestID string
-	var oldest *ticket
+	open := make([]string, 0, len(s.tickets))
 	for id, t := range s.tickets {
 		if t.targetID != replierID || t.delivered.IsZero() {
 			continue
 		}
-		if oldest == nil || t.deliverySeq < oldest.deliverySeq {
-			oldestID, oldest = id, t
-		}
+		open = append(open, id)
 	}
-	if oldest == nil {
+	switch len(open) {
+	case 0:
 		return "", fmt.Errorf("no open request to answer — nobody is waiting on this session")
+	case 1:
+		return open[0], nil
 	}
-	return oldestID, nil
+	// Hand-off order, so the list reads the way the tasks arrived rather than the
+	// way Go happened to walk the map.
+	sort.Slice(open, func(i, j int) bool {
+		return s.tickets[open[i]].deliverySeq < s.tickets[open[j]].deliverySeq
+	})
+	return "", fmt.Errorf(
+		"%d requests are open against this session, and an answer that names no ticket "+
+			"would close the wrong one. Name the ticket the answer belongs to:\n%s",
+		len(open), openErrands(s.tickets, open),
+	)
+}
+
+// openErrands lists the errands a ticketless answer was refused with: the reply
+// command for each, and the line it asked for beside it, so the agent picks the
+// ticket by what the task was rather than by a number it cannot tell apart.
+func openErrands(tickets map[string]*ticket, ids []string) string {
+	var b strings.Builder
+	for _, id := range ids {
+		fmt.Fprintf(&b, "  lich reply %s \"<answer>\"", id)
+		if asked := tickets[id].asked; asked != "" {
+			fmt.Fprintf(&b, "   — %s", asked)
+		}
+		b.WriteString("\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// askedLimit is how much of a prompt an errand is named by. Long enough to tell
+// two tasks apart, short enough that a session holding several still reads as a
+// list rather than as the prompts all over again.
+const askedLimit = 72
+
+// askedExcerpt is the opening of a prompt on one line. The cut is in bytes and
+// can land inside a rune, which is a replacement character in the middle of the
+// one line that identifies an errand.
+func askedExcerpt(prompt string) string {
+	line := strings.Join(strings.Fields(prompt), " ")
+	if len(line) <= askedLimit {
+		return line
+	}
+	return strings.ToValidUTF8(line[:askedLimit], "") + "…"
 }
 
 // await blocks on one ticket until it is answered or the wait runs out. It only

@@ -260,8 +260,14 @@ type ticket struct {
 	// wrong errand about one time in ten. A counter is the order itself rather
 	// than a reading of it, so no clock's resolution can flatten it.
 	deliverySeq uint64
-	done        chan struct{}
-	answer      string
+	// asked is the opening of the prompt this errand carried, on one line. It is
+	// what names an errand to the agent working it: a session with more than one
+	// open request has to be shown which is which before it can pick the ticket
+	// its answer belongs to (see errandOfLocked). The whole prompt is not kept —
+	// it runs to promptLimit, and what a reader needs is the line they recognise.
+	asked  string
+	done   chan struct{}
+	answer string
 
 	// attended is how many callers are blocked on this ticket right now. An
 	// answer that lands while nobody is waiting has nowhere to be returned, so
@@ -456,6 +462,7 @@ func (s *Service) Send(fromID, target, project, prompt string, waitSeconds int) 
 		targetID:    dest.ID,
 		target:      dest.Peer.Label,
 		created:     s.now(),
+		asked:       askedExcerpt(prompt),
 		done:        make(chan struct{}),
 		stalled:     make(chan struct{}),
 		unread:      make(chan struct{}),

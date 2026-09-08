@@ -412,6 +412,35 @@ func TestMCPReplyToSession(t *testing.T) {
 	}
 }
 
+// The same refusal on the tool surface: an agent that left the ticket out is
+// told which requests are open and what each asked, or it has nothing to retry
+// with.
+func TestMCPReplyWithoutATicketCarriesTheRefusal(t *testing.T) {
+	refusal := "2 requests are open against this session, and an answer that names no ticket " +
+		"would close the wrong one. Name the ticket the answer belongs to:\n" +
+		"  lich reply a1b2c3d4 \"<answer>\"   — run the tests\n" +
+		"  lich reply 5e6f7a8b \"<answer>\"   — build the docs"
+	body, err := json.Marshal(map[string]string{"error": refusal})
+	if err != nil {
+		t.Fatalf("encode the refusal: %v", err)
+	}
+	f := newFakeLich(t, string(body))
+	f.status = 500
+
+	replies := speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
+		{"name":"reply_to_session","arguments":{"answer":"docs are built"}}}`)
+
+	text, failed := textOf(t, replies[0])
+	if !failed {
+		t.Error("the refused answer was not marked isError")
+	}
+	for _, want := range []string{"a1b2c3d4", "5e6f7a8b", "run the tests", "build the docs"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("text is missing %q:\n%s", want, text)
+		}
+	}
+}
+
 func TestMCPAFailedCallIsAToolErrorNotAProtocolError(t *testing.T) {
 	f := newFakeLich(t, `{"error":"no live session named \"ghost\""}`)
 	f.status = 500

@@ -228,15 +228,26 @@ This is what a relayed message asks the receiving agent to run. An answer is
 capped at 64 KiB. Replying twice to one ticket is an error — the first answer
 already went home.
 
-Called with the answer alone it hands it to the request open against the
-calling session: the oldest message actually delivered there and still
-unanswered. The ticket is written down in one place only — the message typed at
-the target's prompt — so an agent whose context was compacted past that message
-would otherwise be holding an answer with no route home. With several requests
-open the oldest delivery is closed first, the order every provider hands queued
-tasks to its agent in; a task still queued for a prompt that has not received it
-is never picked. Outside a session, or with nothing open, it is an error rather
-than a guess, and the ticket is still the way to name a specific errand.
+Called with the answer alone it hands it to the one request open against the
+calling session: a message actually delivered there and still unanswered. The
+ticket is written down in one place only — the message typed at the target's
+prompt — so an agent whose context was compacted past that message would
+otherwise be holding an answer with no route home. A task still queued for a
+prompt that has not received it is never picked.
+
+With two or more open it is refused, because nothing in an answer says which
+request it belongs to and closing the wrong one sends both senders a confident
+report of work they never asked for. The refusal lists every open ticket with
+the opening of what it asked, so the retry names the right one:
+
+```
+lich: 2 requests are open against this session, and an answer that names no ticket would close the wrong one. Name the ticket the answer belongs to:
+  lich reply 1a2b3c4d "<answer>"   — run the tests and report the failures
+  lich reply 5e6f7a8b "<answer>"   — build the docs
+```
+
+Outside a session, or with nothing open, it is an error rather than a guess, and
+the ticket is still the way to name a specific errand.
 
 ### `lich open [--project <name-or-path>] [--kind <provider>] [--worktree <branch>] [--base <branch>] [--model <model>] [--prompt <task>]`
 
@@ -530,7 +541,7 @@ at lich.
 | `list_sessions` | The live sessions that can be given work, as JSON — each with the state it last reported, `waiting` among them. |
 | `send_to_session` | `session`, `prompt`, optional `project` and `timeout_seconds`. |
 | `wait_for_answer` | optional `ticket` and `timeout_seconds` — with a ticket, `lich wait <ticket>`; without one, the collect: everything ready at once. |
-| `reply_to_session` | `answer`, optional `ticket` — what a relayed message asks for; without a ticket, the request open against the calling session. |
+| `reply_to_session` | `answer`, optional `ticket` — what a relayed message asks for; without a ticket, the one request open against the calling session, and a refusal naming each open ticket when there are two. |
 | `open_session` | optional `project` (a name, or an absolute directory path, which is opened as a project first), `kind`, `worktree`, `base`, `model` — `lich open` — plus optional `prompt` — `lich open --prompt`, the same hand-off in the same call. |
 | `close_session` | `session`, optional `project`, `worktree` (`keep`/`remove`), `force`. |
 | `rename_session` | `label`, optional `session` (omitted renames the caller's own) and `project` — `lich rename`. |

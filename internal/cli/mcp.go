@@ -522,8 +522,10 @@ var mcpTools = []mcpTool{
 			"waiting on the ticket and reading nothing else.",
 		Schema: schema(map[string]any{
 			"ticket": property("string", "The ticket from the message you were given. "+
-				"Leave it out only if that message is no longer in your context — then the "+
-				"request open against this session is answered."),
+				"Leave it out only if that message is no longer in your context — then the one "+
+				"request open against this session is answered. With two open the call is "+
+				"refused, naming each ticket and what it asked, because nothing in an answer "+
+				"says which request it belongs to: retry with the ticket you mean."),
 			"answer": property("string", "Your answer, in full — nothing else is sent back."),
 		}, "answer"),
 		Run: func(c *client, args mcpArgs) (string, error) {
