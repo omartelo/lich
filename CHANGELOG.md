@@ -68,6 +68,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CLI cards, so the offer looked lost rather than withheld. The item is there
   now, disabled, under one line naming the provider — their CLIs keep no fork,
   only resume.
+- **A session card's right-click menu now reads the same on every card.** The
+  shortcuts printed beside Rename, Pin, Delegate, Terminal and Close session
+  were only ever true of the card in view, since that is the card a chord acts
+  on, so every other card opened a visibly different menu with the whole column
+  missing. They are out of the menu, and Settings › Hotkeys is where a chord is
+  read and changed. "Delegate to session…" no longer waits for a card to be the
+  one on screen either: picking a target from a background card brings that
+  session up and writes the request at its prompt.
 
 ### Fixed
 
