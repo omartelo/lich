@@ -165,7 +165,7 @@ part worth reading starts:
 |-------------------|---------------------------|-----------------------------------|
 | Claude Code       | `mcp__lich__open_session` | `lich · open_session`             |
 | Codex             | `mcp__srv__tool`          | `srv · tool`                      |
-| Antigravity       | `call_mcp_tool`           | `call_mcp_tool · lich/open_session` |
+| Antigravity       | `call_mcp_tool`           | `lich · open_session`             |
 | oh-my-pi          | `mcp__lich_list_sessions` | `lich · list_sessions`            |
 | opencode          | `lichprobe_list_sessions` | `lichprobe · list_sessions`       |
 
@@ -177,8 +177,11 @@ hook payload.
 **Antigravity is the one harness whose tool name is not the tool.** Every MCP
 call there is the single step `call_mcp_tool`, and which server and which tool
 are two of its arguments (`args.ServerName`, `args.ToolName`) — so the client
-reads them and sends them as `detail`, which is why that row is the only one
-whose card line is made of both fields.
+reads them and sends them as `detail`, spelled `<server>/<tool>`. That row is
+the only one whose card line is split out of the *other* field: the label takes
+the detail whole and nothing is drawn beside it. A `detail` shaped any other
+way, and a plugin too old to send one at all, leaves the step name on the card
+the way any name that cannot be split is left.
 
 Of the names that *are* the tool, only the doubled underscore divides on the
 string alone: `mcp__lich_list_sessions` reads as `lich` + `list_sessions` or

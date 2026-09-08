@@ -42,7 +42,7 @@ import { useSessionRelay } from "@/lib/session/use-session-relay"
 import { useSessionInbox } from "@/lib/session/use-session-inbox"
 import { useSessionTool } from "@/lib/session/use-session-tool"
 import { toolGlyph } from "@/lib/session/tool-glyph"
-import { toolLabel } from "@/lib/session/tool-label"
+import { toolLine } from "@/lib/session/tool-label"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { baseReadout } from "@/lib/git/base-status"
 import { usePullRequest } from "@/lib/pulls/use-pull-request"
@@ -215,6 +215,10 @@ export function SessionCard({
   // tasks it delegated, uncollected. Zero — the usual case — draws nothing.
   const inbox = useSessionInbox(session.id)
   const ToolGlyph = tool && toolGlyph(tool.name)
+  // The two halves of the line, which are not always the two fields the report
+  // sent: on Antigravity the tool's identity arrives in the detail, and drawing
+  // it takes the whole line (tool-label.ts).
+  const line = tool && toolLine(tool, session.mcpServers)
   // The prompt parked on this card, and how far off it is. Read at render
   // rather than counted down on a timer of its own: a card redraws often enough
   // that "in 3h" is never wrong by anything a person reads, and a clock ticking
@@ -533,11 +537,11 @@ export function SessionCard({
                       The separator travels inside the detail so it leaves with it,
                       instead of dangling after a truncated name. */}
                   <span className="min-w-0 truncate font-medium text-foreground">
-                    {toolLabel(tool.name, session.mcpServers)}
+                    {line?.label}
                   </span>
-                  {tool.detail && (
+                  {line?.detail && (
                     <span className="min-w-0 shrink-[9999] truncate font-mono">
-                      <span className="opacity-50">·</span> {tool.detail}
+                      <span className="opacity-50">·</span> {line.detail}
                     </span>
                   )}
                 </span>

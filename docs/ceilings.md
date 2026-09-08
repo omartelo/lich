@@ -474,13 +474,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   arrives there only once that repo cuts a release and the user reinstalls the plugin, and until they do it is
   missing from that session's list while it is in every other. `lich rename` works there like anywhere else; it is
   discovery that lags, which is the whole reason the tools exist.
-- **An Antigravity card names the step, not the MCP tool** (`frontend/src/lib/session/tool-label.ts`): every MCP
-  call there is the one step `call_mcp_tool`, with the server and the tool in `args.ServerName` / `args.ToolName`
-  (measured on 1.1.19). Nothing in that name can be split, so the fix was never here — the plugin reads those two
-  arguments and sends them as the report's `detail`, and the card draws `call_mcp_tool · lich/open_session` where a
-  Claude Code card draws `lich · open_session`. The trap is reaching for `tool-label.ts` when that line looks
-  wrong: the tool's identity arrives in a different field on this provider, and a plugin older than the release
-  that added it sends `call_mcp_tool` with no detail at all.
 - **Only Claude Code says what a session is waiting for; the others say less or nothing**
   (`frontend/src/components/sidebar/SessionCard.tsx`, table in `docs/hooks/session-state.md`): its
   `Notification` carries a `message` written for a human, so the card reads "Claude needs your permission to
