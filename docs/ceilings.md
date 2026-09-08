@@ -103,15 +103,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   moving an unrelated item. The editor waits for that setting before migrating old visibility choices.
   Hiding a reading hides its warning too. An item without data can occupy an editor slot while drawing
   nothing in the live footer — a PR on a branch without one, or an unsupported provider reading.
-- **`lich cost --since` windows on sessions, never on days** (`store.CostTotals`): the ledger is a running
-  total per `(session, transcript)` with no per-turn history behind it, so the only date a session's spend
-  carries is when it was last counted. A window therefore selects *sessions active in it* and counts each one
-  whole — a session that ran through the boundary brings every dollar of its life into the window, and one
-  idle since before it brings none. Reading a windowed total as "what was spent that week" overstates a
-  long-lived card by however long it has been running. A session with nothing counted has no ledger to date
-  it at all and falls back on its own life: parked, it is dated by the close; open, it is dated *now*, so it
-  is unpriced in every window ending today. Slicing money by day would need a second ledger keyed by day, and
-  there is none.
 - **Hands-on time is read off three signals, and one of them is not universal**
   (`internal/terminal/handson.go`, `noteOutput`, `closableState`): the figure beside the cost
   counts the gap between consecutive signs of life in a session — any hook report naming it, a

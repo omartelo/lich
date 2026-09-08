@@ -14,7 +14,7 @@ func (c *client) cost(args []string) error {
 	flags := newFlagSet("cost")
 	project := flags.String("project", "", "only this project, by name")
 	provider := flags.String("provider", "", "only sessions running this provider")
-	since := flags.String("since", "", "only sessions active within this window, e.g. 7d or 12h")
+	since := flags.String("since", "", "only sessions active within this window, counted whole, e.g. 7d or 12h")
 	asJSON := flags.Bool("json", false, "print the whole report as JSON")
 	asCSV := flags.Bool("csv", false, "print the per-project rows as CSV")
 	if err := c.parse(flags, args); err != nil {
