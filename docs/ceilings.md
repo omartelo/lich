@@ -804,12 +804,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   seen, and the ones who have not will read the binary they install. A wrong headline is a patch release. The
   update toast reads nothing from the release but its tag, on purpose: the toast says a release exists, and
   the dialog is where it speaks.
-- **`useBinaryCheck` is deliberately not a `useRemoteResource` caller** (`frontend/src/lib/use-binary-check.ts`):
-  it answers `null` until a verdict is in and debounces its input, because the value it checks arrives one
-  keystroke at a time — and `useRemoteResource` has no debounce seam to hang that on. So the path verdicts on
-  Settings › Version Control and every provider's binary block still blink through "unknown" on the way back
-  to the screen. Measured at 1–3 ms per check (`providers.Verify` is a `LookPath`), which is why closing it
-  was not worth widening a hook the whole app reads through.
 - **The Files changed tab remembers which file, never where in it**
   (`frontend/src/lib/pulls/use-active-file.ts`): the changed-files tree's mark comes back with the tab, but
   the diff pane reopens at the top. Nothing in this codebase restores a scroll offset, and the one that would

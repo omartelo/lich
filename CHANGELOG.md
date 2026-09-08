@@ -152,6 +152,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which always names the latest release. A lich installed from the old
   raw-file URL needs a one-time `scoop uninstall lich` and install from the new
   one.
+- **A binary check no longer blinks through "unknown" on the way back.** The
+  path verdicts on Settings › Version Control and under every provider's binary
+  field answered nothing at all until a fresh check came back, so reopening the
+  pane, or switching to a provider you had already looked at, painted a blank
+  where the verdict had been and filled it in a moment later. The last verdict
+  for a value is kept and shown while the check runs again behind it; a value
+  never checked still says nothing, and re-reading `$PATH` with "Check again"
+  still asks every question over.
 
 ## [0.46.0] - 2026-09-07
 

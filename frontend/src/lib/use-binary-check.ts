@@ -13,24 +13,39 @@ const SETTLE_MS = 400
 // the tool it is about to shell out to exists.
 export const NO_SETTLE = 0
 
+// The last verdict for each input, filed the way remote-cache.ts files a backend
+// answer: module-level, never persisted, and never a source of truth. It is what
+// a surface paints while its own check is in flight, so a settings pane reopened
+// or a provider block remounted comes back with the verdict it had instead of
+// blinking through "unknown".
+//
+// The key carries the whole input, the $PATH pin included: a verdict is resolved
+// through the pin (path-refresh), so the same value asked before and after a
+// re-read are two different questions, and a key of the value alone would paint
+// the pre-move answer as if it still held.
+const verdicts = new Map<string, BinaryCheck>()
+
+const verdictKey = (bin: string, path: number): string => `${path} ${bin}`
+
 // useBinaryCheck resolves a configured binary through the backend, re-checking
-// whenever the value settles. Null while the first answer for a value is in
-// flight — the callers draw nothing rather than flashing a failure between
-// keystrokes.
+// whenever the value settles. Null for an input never checked, so the callers
+// draw nothing rather than flashing a failure between keystrokes.
 //
 // It re-checks on a re-read of the machine's $PATH too (lib/path-refresh): the
 // answer is resolved through the pin, so a moved pin makes every verdict on
 // screen stale at once, wherever the re-check was pressed.
 export function useBinaryCheck(bin: string, settleMs: number = SETTLE_MS): BinaryCheck | null {
-  const [check, setCheck] = useState<BinaryCheck | null>(null)
   const path = useSyncExternalStore(subscribePathRefresh, pathVersion)
+  const key = verdictKey(bin, path)
+  const [check, setCheck] = useState<BinaryCheck | null>(() => verdicts.get(key) ?? null)
 
   useEffect(() => {
     let live = true
-    setCheck(null)
+    setCheck(verdicts.get(key) ?? null)
     const timer = setTimeout(() => {
       Providers.Verify(bin)
         .then((next) => {
+          verdicts.set(key, next)
           if (live) {
             setCheck(next)
           }
@@ -43,7 +58,7 @@ export function useBinaryCheck(bin: string, settleMs: number = SETTLE_MS): Binar
       live = false
       clearTimeout(timer)
     }
-  }, [bin, settleMs, path])
+  }, [bin, settleMs, key])
 
   return check
 }
