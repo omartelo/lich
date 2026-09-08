@@ -6,6 +6,7 @@
 package terminal
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -835,5 +836,27 @@ func TestAResumeIsNotAFork(t *testing.T) {
 	}
 	if _, offset := store.forkOffsets["s1"]; offset {
 		t.Errorf("resume recorded an offset of %v, want none", store.forkOffsets["s1"])
+	}
+}
+
+// TestAForkWhoseOffsetCannotBeSavedStillStarts: the user is waiting on a
+// session, and a readout that is too high is not worth losing it, so the
+// failure is logged and the spawn goes ahead with no offset recorded.
+func TestAForkWhoseOffsetCannotBeSavedStillStarts(t *testing.T) {
+	store := newCostStore("")
+	store.bin = stayAliveBin(t)
+	store.forkOffsets = map[string]float64{}
+	store.forkOffsetErr = errors.New("disk full")
+	store.ledgers["parent\x00abc-123"] = stubLedger{cost: 1.25}
+	svc := New(store, nil, events.New())
+	t.Cleanup(func() { _ = svc.Close("fork") })
+
+	err := svc.Start("fork", "p1", t.TempDir(), "claude", "abc-123", "", true, false, 80, 24)
+
+	if err != nil {
+		t.Fatalf("Start = %v, want the spawn to survive a failed offset", err)
+	}
+	if _, offset := store.forkOffsets["fork"]; offset {
+		t.Errorf("an offset of %v was recorded through a store that refused it", store.forkOffsets["fork"])
 	}
 }

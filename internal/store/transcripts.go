@@ -73,7 +73,9 @@ func (s *Service) attachSnippets(sessions []ClosedSession, ids []string, term st
 		return
 	}
 	bodies := s.conversationBodies(ids)
-	words := strings.Fields(strings.ToLower(term))
+	// Split the way the index was asked (ftsQuery): "worktree/port" matched the
+	// conversation as two words, and is two words here or no snippet is found.
+	words := searchWords(strings.ToLower(term))
 	for i := range sessions {
 		body, ok := bodies[sessions[i].ID]
 		if !ok {
@@ -178,15 +180,6 @@ func (s *Service) indexTarget(sessionID string) (providerSessionID, cwd string) 
 	return providerSessionID, cwd
 }
 
-// dropTranscript forgets one session's index. It rides on sessionIsGone, so
-// every path that deletes a row for good takes its conversation with it, while a
-// close, which parks the row for a later resume, keeps it.
-func (s *Service) dropTranscript(sessionID string) {
-	if _, err := s.db.Exec(`DELETE FROM session_texts WHERE session_id = ?`, sessionID); err != nil {
-		slog.Warn("store: drop transcript index", "session", sessionID, "err", err)
-	}
-}
-
 // unindexed counts the parked sessions with no index row: the ones parked before
 // lich wrote one, which is every row in a workspace meeting this version for the
 // first time. It is what the History tab's header reports while the
@@ -211,8 +204,23 @@ func (s *Service) unindexed() int {
 //
 // Only one runs at a time, and it stops when the store closes: every search
 // while it is working starts it again and the guard turns that into nothing.
+//
+// The start is taken under the same lock Close closes the store under, so a
+// backfill never begins after Close has started waiting: a WaitGroup added to
+// while it is being waited on at zero is the one thing the type forbids, and
+// the goroutine it would let through writes into a closed database.
 func (s *Service) backfill() {
-	if s.transcriptOf == nil || !s.backfilling.CompareAndSwap(false, true) {
+	if s.transcriptOf == nil {
+		return
+	}
+	s.backfillMu.Lock()
+	defer s.backfillMu.Unlock()
+	select {
+	case <-s.stopped:
+		return
+	default:
+	}
+	if !s.backfilling.CompareAndSwap(false, true) {
 		return
 	}
 	s.backfillDone.Add(1)
@@ -266,12 +274,20 @@ func (s *Service) nextUnindexed() (string, bool) {
 // substrings: a query that found "worktree" by name and not by conversation
 // would be answering two questions.
 func ftsQuery(term string) string {
-	words := strings.FieldsFunc(term, func(r rune) bool {
-		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
-	})
+	words := searchWords(term)
 	phrases := make([]string, 0, len(words))
 	for _, word := range words {
 		phrases = append(phrases, `"`+word+`"*`)
 	}
 	return strings.Join(phrases, " ")
+}
+
+// searchWords is a term cut the way FTS5's own tokenizer cuts the text it
+// indexes: on everything that is not a letter or a digit. Both halves of the
+// conversation search read the term through it, the query that asks the index
+// and the snippet that shows the hit, so they agree on what a word is.
+func searchWords(term string) []string {
+	return strings.FieldsFunc(term, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	})
 }

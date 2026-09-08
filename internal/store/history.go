@@ -34,9 +34,14 @@ type ClosedSession struct {
 	// Unix seconds, 0 for a row parked before closed_at existed — which sorts
 	// last and is drawn as no date rather than as 1970.
 	ClosedAt int64 `json:"closedAt"`
+	// Whether the search reached this row through its conversation. It is what
+	// the window keeps the row on, apart from the snippet: a hit the index found
+	// by a fold the plain text does not have ("cion" against "ción"), or a term
+	// the index split on punctuation, has a snippet of nothing to show.
+	MatchedConversation bool `json:"matchedConversation"`
 	// The stretch of conversation that matched the search, empty for a row the
-	// search matched by name, and for every row of an empty query, which
-	// matched nothing in particular.
+	// search matched by name, for one matched by a fold (see above), and for
+	// every row of an empty query, which matched nothing in particular.
 	Snippet string `json:"snippet"`
 	// Whether the cap on one session's index dropped the oldest of this
 	// conversation. The row says so on screen: a search that reaches only part
@@ -104,16 +109,6 @@ func escapeLike(term string) string {
 // it dates the insert, and a resumed session is reinserted — so rows parked
 // before closed_at existed all carry 0 and fall back to it together.
 func (s *Service) ClosedSessions(term string) (ClosedHistory, error) {
-	where := "WHERE s.is_open = 0"
-	with, join, args := "", "", []any{}
-
-	// The match is MATERIALIZED, and not a subquery inlined into the join:
-	// without it SQLite runs the full-text search again for every parked row it
-	// walks, which on a workspace of two hundred sessions costs tens of seconds
-	// instead of tens of milliseconds.
-	//
-	// It is also written before the WHERE it feeds, so its argument is bound
-	// first: the one place the order of these two halves matters.
 	if strings.TrimSpace(term) != "" {
 		// Started on any term, not only one the index can be asked about: the
 		// count of what is still unindexed goes back with every answer, and a
@@ -121,29 +116,7 @@ func (s *Service) ClosedSessions(term string) (ClosedHistory, error) {
 		// reporting a backfill nothing had started.
 		s.backfill()
 	}
-	if match := ftsQuery(term); match != "" {
-		with = `WITH said AS MATERIALIZED (
-		          SELECT t.session_id FROM session_texts t
-		            JOIN session_texts_fts f ON f.rowid = t.rowid
-		           WHERE session_texts_fts MATCH ?)`
-		join = "LEFT JOIN said m ON m.session_id = s.id"
-		args = append(args, match)
-	}
-	if names := strings.Fields(term); len(names) > 0 {
-		clauses := make([]string, 0, len(names))
-		for _, word := range names {
-			clauses = append(clauses,
-				"(s.label || ' ' || p.name || ' ' || s.path || ' ' || s.parked_branch)"+
-					" LIKE ? ESCAPE '"+likeEscape+"'")
-			args = append(args, "%"+escapeLike(word)+"%")
-		}
-		matched := "(" + strings.Join(clauses, " AND ") + ")"
-		if join != "" {
-			matched += " OR m.session_id IS NOT NULL"
-		}
-		where += " AND (" + matched + ")"
-	}
-	args = append(args, closedSessionLimit)
+	match := closedSessionsMatch(term)
 
 	// Counted before the rows are asked for, never while they are being walked:
 	// the store holds a single connection, and a second query opened inside the
@@ -154,17 +127,17 @@ func (s *Service) ClosedSessions(term string) (ClosedHistory, error) {
 	// query: a window function is computed before LIMIT, so it counts the match
 	// and not the page.
 	rows, err := s.db.Query(
-		with+`
+		match.with+`
 		 SELECT s.id, s.project_id, p.name, p.path, s.label, s.kind, s.path,
-		        s.parked_branch, s.closed_at, `+saidColumn(join)+`,
+		        s.parked_branch, s.closed_at, `+match.said+`,
 		        COALESCE(x.truncated, 0), COUNT(*) OVER ()
 		   FROM sessions s JOIN projects p ON p.id = s.project_id
 		   LEFT JOIN session_texts x ON x.session_id = s.id
-		   `+join+`
-		   `+where+`
+		   `+match.join+`
+		   `+match.where+`
 		  ORDER BY s.closed_at DESC, s.rowid DESC
 		  LIMIT ?`,
-		args...,
+		append(match.args, closedSessionLimit)...,
 	)
 	if err != nil {
 		return ClosedHistory{}, fmt.Errorf("query closed sessions: %w", err)
@@ -175,15 +148,14 @@ func (s *Service) ClosedSessions(term string) (ClosedHistory, error) {
 	var said []string
 	for rows.Next() {
 		var c ClosedSession
-		var matchedConversation bool
 		if err := rows.Scan(
 			&c.ID, &c.ProjectID, &c.ProjectName, &c.ProjectPath,
 			&c.Label, &c.Kind, &c.Path, &c.ParkedBranch, &c.ClosedAt,
-			&matchedConversation, &c.Truncated, &history.Total,
+			&c.MatchedConversation, &c.Truncated, &history.Total,
 		); err != nil {
 			return ClosedHistory{}, fmt.Errorf("scan closed session: %w", err)
 		}
-		if matchedConversation {
+		if c.MatchedConversation {
 			said = append(said, c.ID)
 		}
 		history.Sessions = append(history.Sessions, c)
@@ -198,13 +170,52 @@ func (s *Service) ClosedSessions(term string) (ClosedHistory, error) {
 	return history, nil
 }
 
-// saidColumn is what the query reports into the snippet pass: whether this row
-// was matched on its conversation. A query with no match has no m to read, and a
-// term nothing could be searched for never gets one, so every row answers false
-// and no conversation is read at all.
-func saidColumn(join string) string {
-	if join == "" {
-		return "0"
+// sessionMatch is the SQL a term turns into, in the pieces ClosedSessions
+// splices around its SELECT. args are bound in the order the pieces name them:
+// the CTE's MATCH first, then one LIKE per word.
+type sessionMatch struct {
+	with, join, where string
+	// said is the column reporting whether a row was matched on its
+	// conversation. A term nothing could be searched for has no m to read, so
+	// it reads 0 and no conversation is opened for a snippet.
+	said string
+	args []any
+}
+
+// closedSessionsMatch is the OR the search is built around, as SQL: every word
+// in the name half, or the conversation in the index. An empty term is no
+// condition at all beyond the row being parked.
+//
+// The match is MATERIALIZED, and not a subquery inlined into the join: without
+// it SQLite runs the full-text search again for every parked row it walks,
+// which on a workspace of two hundred sessions costs tens of seconds instead of
+// tens of milliseconds.
+func closedSessionsMatch(term string) sessionMatch {
+	m := sessionMatch{where: "WHERE s.is_open = 0", said: "0", args: []any{}}
+	if fts := ftsQuery(term); fts != "" {
+		m.with = `WITH said AS MATERIALIZED (
+		          SELECT t.session_id FROM session_texts t
+		            JOIN session_texts_fts f ON f.rowid = t.rowid
+		           WHERE session_texts_fts MATCH ?)`
+		m.join = "LEFT JOIN said m ON m.session_id = s.id"
+		m.said = "m.session_id IS NOT NULL"
+		m.args = append(m.args, fts)
 	}
-	return "m.session_id IS NOT NULL"
+	names := strings.Fields(term)
+	if len(names) == 0 {
+		return m
+	}
+	clauses := make([]string, 0, len(names))
+	for _, word := range names {
+		clauses = append(clauses,
+			"(s.label || ' ' || p.name || ' ' || s.path || ' ' || s.parked_branch)"+
+				" LIKE ? ESCAPE '"+likeEscape+"'")
+		m.args = append(m.args, "%"+escapeLike(word)+"%")
+	}
+	matched := "(" + strings.Join(clauses, " AND ") + ")"
+	if m.join != "" {
+		matched += " OR m.session_id IS NOT NULL"
+	}
+	m.where += " AND (" + matched + ")"
+	return m
 }

@@ -64,11 +64,11 @@ type stubBins struct {
 	// What each session inherited from the conversation it was forked from, the
 	// shape store.SaveForkCostOffset writes. Nil until a test cares.
 	forkOffsets map[string]float64
-	// One field per cost method, because the three failures are three different
-	// stories: a ledger that cannot be read, one that cannot be written, and a
-	// total that cannot be summed. A single error field would let a test claim
-	// the path it never reached.
-	ledgerErr, saveLedgerErr, sessionCostErr error
+	// One field per cost method, because the four failures are four different
+	// stories: a ledger that cannot be read, one that cannot be written, a
+	// total that cannot be summed, and a fork's offset that cannot be recorded.
+	// A single error field would let a test claim the path it never reached.
+	ledgerErr, saveLedgerErr, sessionCostErr, forkOffsetErr error
 }
 
 // projectWithSetup is a project checkout shipping .lich/setup-worktree.sh —
@@ -167,6 +167,9 @@ func (s stubBins) SaveCostLedger(
 // SaveForkCostOffset mirrors the store's own arithmetic: the offset is the raw
 // ledger cost of the conversation being forked, whichever session ran it.
 func (s stubBins) SaveForkCostOffset(sessionID, forkedFrom string) error {
+	if s.forkOffsetErr != nil {
+		return s.forkOffsetErr
+	}
 	if s.forkOffsets == nil {
 		return nil
 	}

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // TestTranscriptTextReadsWhatWasSaid pins the extraction the history index is
@@ -130,7 +131,7 @@ func TestNewestBytesNeverCutsARune(t *testing.T) {
 	text := strings.Repeat("é", 40)
 	for max := 1; max <= len(text); max++ {
 		got, _ := newestBytes(text, max)
-		if !isValidUTF8(got) {
+		if !utf8.ValidString(got) {
 			t.Fatalf("newestBytes(%d) = %q, which is not valid UTF-8", max, got)
 		}
 		if !strings.HasSuffix(text, got) {
@@ -166,15 +167,6 @@ func copyFile(t *testing.T, from, to string) {
 	if err := os.WriteFile(to, body, 0o644); err != nil {
 		t.Fatal(err)
 	}
-}
-
-func isValidUTF8(s string) bool {
-	for _, r := range s {
-		if r == '�' {
-			return false
-		}
-	}
-	return true
 }
 
 // TestTranscriptTextReportsTheCapCutting is the flag a history row draws: a

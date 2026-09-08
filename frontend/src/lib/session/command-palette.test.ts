@@ -298,6 +298,7 @@ const parked: ClosedSession[] = [
     path: "/home/u/wt/lich/relay-inbox",
     parkedBranch: "feat/relay-inbox",
     closedAt: 1_700_000_200,
+    matchedConversation: false,
     snippet: "",
     truncated: false,
   },
@@ -313,6 +314,7 @@ const parked: ClosedSession[] = [
     // the close, which is the disagreement the two fields exist to hold.
     parkedBranch: "fix/conpty-first-try",
     closedAt: 1_700_000_100,
+    matchedConversation: false,
     snippet: "",
     truncated: false,
   },
@@ -326,6 +328,7 @@ const parked: ClosedSession[] = [
     path: "/home/u/wt/revu/gone",
     parkedBranch: "chore/vitest-ui",
     closedAt: 1_700_000_000,
+    matchedConversation: false,
     snippet: "",
     truncated: false,
   },
@@ -399,7 +402,13 @@ describe("history search", () => {
     // one window out of it. Nothing on the row carries the words, so re-testing
     // the query here would drop the row the search just answered with.
     const said = historyRows(
-      [{ ...(parked[1] as ClosedSession), snippet: "…the ConPTY handle was recycled…" }],
+      [
+        {
+          ...(parked[1] as ClosedSession),
+          matchedConversation: true,
+          snippet: "…the ConPTY handle was recycled…",
+        },
+      ],
       parkedBranches,
       new Set(),
     )
@@ -409,6 +418,18 @@ describe("history search", () => {
     expect(filterPalette("recycled zombie", [], [], [], said).history.map((h) => h.id)).toEqual([
       "h2",
     ])
+  })
+
+  it("keeps a conversation match that has no snippet to show", () => {
+    // The index folds accents, so "decision" found a session that said
+    // "decisión" and the plain text had nothing to cut. The flag is what the
+    // row is kept on; an empty snippet must not read as "matched by name".
+    const folded = historyRows(
+      [{ ...(parked[1] as ClosedSession), matchedConversation: true, snippet: "" }],
+      parkedBranches,
+      new Set(),
+    )
+    expect(filterPalette("decision", [], [], [], folded).history.map((h) => h.id)).toEqual(["h2"])
   })
 })
 

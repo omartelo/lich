@@ -502,20 +502,17 @@ export function TerminalView({
       window.removeEventListener("keydown", onSearchKey, true)
       window.clearTimeout(refitTimer)
       resizeObserver.disconnect()
+      // Detached, never closed: the PTY and the terminal die with the session
+      // (App.tsx, reapTerminals), never with this component. React unmounts for
+      // reasons that are not a close — StrictMode mounts every component twice
+      // in dev, a hot reload tears the tree down, an error boundary over the
+      // stage catches a throw — and a terminal closed for one of those takes
+      // the running agent and its scrollback with it. That was invisible while
+      // every session's PTY was born on this very mount; a session opened
+      // through the CLI or its MCP tools is already running when the card is
+      // first viewed, and the double mount killed the conversation the user
+      // came to read.
       detachTerminal(entry)
-      // The PTY and the terminal die with the session, never with this
-      // component. React unmounts for reasons that are not a close — StrictMode
-      // mounts every component twice in dev, a hot reload tears the tree down,
-      // an error boundary over the stage catches a throw — and a terminal
-      // closed for one of those takes the running agent and its scrollback with
-      // it. That was invisible while every session's PTY was born on this very
-      // mount; a session opened through the CLI or its MCP tools is already
-      // running when the card is first viewed, and the double mount killed the
-      // conversation the user came to read.
-      if (!stillInWorkspaceRef.current()) {
-        void Service.Close(sessionId)
-        disposeTerminal(sessionId)
-      }
     }
 
     if (entry.setup) {
@@ -604,7 +601,7 @@ export function TerminalView({
         return
       }
       if (!stillInWorkspaceRef.current()) {
-        // The session was closed during the Start round-trip, so the teardown's
+        // The session was closed during the Start round-trip, so the reaper's
         // Close raced ahead of the spawn: close the PTY that now exists. An
         // unmount that was not a close needs none of this — the terminal is
         // still the entry's, and the next mount attaches to it. The queued

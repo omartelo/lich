@@ -129,6 +129,22 @@ export function detachTerminal(entry: TerminalEntry): void {
   entry.host.remove()
 }
 
+/**
+ * Ends the terminals of every session no longer in the workspace: closes its
+ * PTY through `close` and disposes the terminal. Run from above every error
+ * boundary, on each change to the workspace, because the view that drew a
+ * session is not there to notice its close while the stage sits in a fallback
+ * — and a terminal left here is an agent running with nothing on screen.
+ */
+export function reapTerminals(live: ReadonlySet<string>, close: (sessionId: string) => void): void {
+  for (const sessionId of [...entries.keys()]) {
+    if (!live.has(sessionId)) {
+      close(sessionId)
+      disposeTerminal(sessionId)
+    }
+  }
+}
+
 /** Ends the session's terminal for good. Only a closed session gets here. */
 export function disposeTerminal(sessionId: string): void {
   const entry = entries.get(sessionId)

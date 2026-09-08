@@ -103,13 +103,18 @@ export function useHistorySearch(
   // Ask again while the backfill is working. The tick is state rather than an
   // interval so it chains off the answer that reported the count: a slow reply
   // never stacks a second request behind the first.
+  //
+  // Only behind a term: the store starts its backfill on a term and on nothing
+  // else, so with the palette open on the plain list the count never moves, and
+  // polling it is a query and a git read per row every second for as long as
+  // the palette stays up, reporting nothing.
   useEffect(() => {
-    if (!enabled || indexing === 0) {
+    if (!enabled || indexing === 0 || query.trim() === "") {
       return
     }
     const timer = window.setTimeout(() => setPoll((n) => n + 1), BACKFILL_POLL_MS)
     return () => window.clearTimeout(timer)
-  }, [enabled, indexing, poll])
+  }, [enabled, indexing, poll, query])
 
   // Forgetting drops the row in place rather than refetching: the list stays up
   // while several stale rows are cleared, which is how they are usually left.

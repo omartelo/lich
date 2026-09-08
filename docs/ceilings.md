@@ -604,6 +604,13 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   says `checkout gone` and offers to forget
   itself, which is the only way such a row is ever collected — `PurgeWorktreeSessions` never ran for it,
   because the removal never went through the app.
+- **A history snippet costs the whole conversation it is cut from** (`internal/store/transcripts.go`,
+  `conversationBodies`): the rows a search matched on their conversation have their indexed body read out of
+  the store whole — up to 8 MB each, one page of up to a hundred rows, once per settled keystroke — and the
+  window is cut in Go rather than in the query, because FTS5's own `snippet()` walks every instance of the
+  term and a conversation that says "session" three thousand times costs a tenth of a second per row. Prose
+  is a low single-digit percentage of a transcript, so the page a real workspace hands back is tens of
+  megabytes at the very worst; the fix when it bites is an `instr`/`substr` window in SQL, not a smaller cap.
 - **A filed backend answer outlives the screen that asked, under a key its caller writes by hand**
   (`frontend/src/lib/remote-cache.ts`): a `useRemoteResource` caller that passes `cache` has its answers kept
   in module memory until the page reloads, under exactly the string it composed. Two callers that compose the

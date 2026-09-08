@@ -6,6 +6,8 @@ import { parseBoolPref, readPref, writePref } from "@/lib/prefs"
 import { ProjectsProvider, useProjects } from "@/providers/projects"
 import { activeSessionId, sessionsOf } from "@/lib/session/sessions"
 import { usePanes } from "@/lib/session/use-panes"
+import { Terminal as TerminalService } from "@/lib/rpc"
+import { reapTerminals } from "@/lib/terminal/terminal-registry"
 import {
   requestSessionIntent,
   requestWorktreeDialog,
@@ -54,6 +56,14 @@ function Layout() {
   }
   const toggleSidebar = () => showSidebar(!sidebar)
   useHotkey(hotkeys.toggleSidebar, toggleSidebar)
+  // A session's PTY and terminal end when the session leaves the workspace,
+  // decided here and not in the view that drew it: that view is gone while
+  // the stage sits in an error boundary's fallback, and a close made from the
+  // sidebar meanwhile would otherwise leave the agent running unseen.
+  useEffect(() => {
+    const live = new Set(Object.values(sessions).flatMap((p) => p.sessions.map((s) => s.id)))
+    reapTerminals(live, (id) => void TerminalService.Close(id))
+  }, [sessions])
   // Both of these act on sidebar chrome — the worktree dialog, a card's rename
   // field — and the rail carries neither, so a collapsed sidebar is opened
   // first rather than letting the chord quietly do nothing. The request is a

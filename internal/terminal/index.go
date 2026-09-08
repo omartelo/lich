@@ -91,16 +91,16 @@ func transcriptProse(path string, read turnReader) string {
 	}
 }
 
-// newestBytes keeps at most max bytes from the end of text, cut at a line break
+// newestBytes keeps at most limit bytes from the end of text, cut at a line break
 // so the index never holds half a sentence, and never inside a rune. The newest
 // end is the one kept: a search is asked about work somebody remembers doing,
 // and the closer to the close of a session it happened the likelier that is.
 // cut is whether anything was dropped at all.
-func newestBytes(text string, max int) (string, bool) {
-	if len(text) <= max {
+func newestBytes(text string, limit int) (string, bool) {
+	if len(text) <= limit {
 		return text, false
 	}
-	cut := text[len(text)-max:]
+	cut := text[len(text)-limit:]
 	if at := strings.IndexByte(cut, '\n'); at >= 0 {
 		cut = cut[at+1:]
 	}

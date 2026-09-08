@@ -2,7 +2,9 @@ package store
 
 import (
 	"fmt"
+	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -576,5 +578,45 @@ func TestClosedSessionsCountsTheWholeMatch(t *testing.T) {
 	none, _ := svc.ClosedSessions("nothing-matches-this")
 	if len(none.Sessions) != 0 || none.Total != 0 {
 		t.Errorf("empty match = %d rows, Total %d; want 0 and 0", len(none.Sessions), none.Total)
+	}
+}
+
+// TestClosedSessionsMatch pins the SQL a term turns into, and above all the
+// order its arguments are bound in: the CTE's MATCH is written before the WHERE
+// it feeds, so its argument has to come first, and a term with nothing for the
+// index binds no MATCH at all.
+func TestClosedSessionsMatch(t *testing.T) {
+	tests := []struct {
+		name     string
+		term     string
+		wantWith bool
+		wantArgs []any
+	}{
+		{name: "an empty term is the plain history", term: "", wantArgs: []any{}},
+		{
+			name: "a word asks the index first and the names second",
+			term: "adopt", wantWith: true, wantArgs: []any{`"adopt"*`, "%adopt%"},
+		},
+		{
+			name: "punctuation alone searches names alone",
+			term: "%_", wantArgs: []any{`%\%\_%`},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := closedSessionsMatch(tt.term)
+			if got := m.with != ""; got != tt.wantWith {
+				t.Errorf("with = %q, want a CTE: %v", m.with, tt.wantWith)
+			}
+			if (m.join != "") != tt.wantWith || (m.said != "0") != tt.wantWith {
+				t.Errorf("join = %q, said = %q: the CTE and what reads it disagree", m.join, m.said)
+			}
+			if !reflect.DeepEqual(m.args, tt.wantArgs) {
+				t.Errorf("args = %#v, want %#v", m.args, tt.wantArgs)
+			}
+			if !strings.HasPrefix(m.where, "WHERE s.is_open = 0") {
+				t.Errorf("where = %q does not start from the parked rows", m.where)
+			}
+		})
 	}
 }

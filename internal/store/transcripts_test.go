@@ -1,6 +1,7 @@
 package store
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -348,4 +349,167 @@ func mustClosedRow(t *testing.T, svc *Service, term, sessionID string) ClosedSes
 	}
 	t.Fatalf("ClosedSessions(%q) returned no row %q", term, sessionID)
 	return ClosedSession{}
+}
+
+// TestClosedSessionsKeepsARowMatchedByAFold: the index folds accents, so
+// "decision" finds a conversation that says "decisión", and the plain text has
+// no snippet to cut for it. The row still answers, and says which half of the
+// search it answered on — that flag, not the snippet, is what the window keeps
+// it on.
+func TestClosedSessionsKeepsARowMatchedByAFold(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	indexed(t, svc, map[string]string{"uuid-a": "una decisión importante"})
+	parkWithConversation(t, svc, "s-a", "Session 4", "uuid-a")
+
+	row := mustClosedRow(t, svc, "decision", "s-a")
+
+	if !row.MatchedConversation {
+		t.Error("a row the index matched does not say so")
+	}
+	if row.Snippet != "" {
+		t.Errorf("Snippet = %q, want none for a hit the plain text does not hold", row.Snippet)
+	}
+	if named := mustClosedRow(t, svc, "Session", "s-a"); named.MatchedConversation {
+		t.Error("a row matched by name alone claims its conversation matched")
+	}
+}
+
+// TestClosedSessionsSnippetsATermSplitOnPunctuation pins the two halves of the
+// conversation search reading a term the same way: the index is asked for
+// "worktree/port" as two words, so the snippet has to look for two words too, or
+// the hit the index found shows nothing under it.
+func TestClosedSessionsSnippetsATermSplitOnPunctuation(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	indexed(t, svc, map[string]string{"uuid-a": "we traced the worktree port hash"})
+	parkWithConversation(t, svc, "s-a", "Session 4", "uuid-a")
+
+	row := mustClosedRow(t, svc, "worktree/port", "s-a")
+
+	if !strings.Contains(row.Snippet, "worktree") {
+		t.Errorf("Snippet = %q, want the matched stretch of the conversation", row.Snippet)
+	}
+}
+
+// TestResumingASessionDropsItsIndexRow: a resume reinserts the row under a new
+// id and deletes the old one, and the conversation has to go with it — a body
+// of up to eight megabytes left under an id nothing refers to is a leak that
+// grows by one on every resume, and a search still walks it.
+func TestResumingASessionDropsItsIndexRow(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	indexed(t, svc, map[string]string{"uuid-a": "we traced the worktree adoption guard"})
+	parkWithConversation(t, svc, "s-a", "Session 4", "uuid-a")
+
+	if _, err := svc.ReopenSession("s-a", "s-a2"); err != nil {
+		t.Fatalf("ReopenSession: %v", err)
+	}
+
+	if n := indexRows(t, svc); n != 0 {
+		t.Errorf("%d index rows for a session that is open again, want 0", n)
+	}
+	if n := ftsHits(t, svc, "adoption"); n != 0 {
+		t.Errorf("the index still answers %d hits for a conversation whose row is gone", n)
+	}
+	if err := svc.CloseSession("p1", "s-a2", ""); err != nil {
+		t.Fatalf("CloseSession: %v", err)
+	}
+	if n := indexRows(t, svc); n != 1 {
+		t.Errorf("%d index rows after the second park, want 1", n)
+	}
+}
+
+// TestForgettingAProjectForgetsItsConversations: the project's sessions go
+// through the schema's cascade and never through a code path, so the
+// conversations have to ride the same clause.
+func TestForgettingAProjectForgetsItsConversations(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	indexed(t, svc, map[string]string{"uuid-a": "we traced the worktree adoption guard"})
+	parkWithConversation(t, svc, "s-a", "Session 4", "uuid-a")
+
+	if err := svc.DeleteProject("p1"); err != nil {
+		t.Fatalf("DeleteProject: %v", err)
+	}
+
+	if n := indexRows(t, svc); n != 0 {
+		t.Errorf("%d index rows survived the project, want 0", n)
+	}
+	if n := ftsHits(t, svc, "adoption"); n != 0 {
+		t.Errorf("the index still answers %d hits for a project that is gone", n)
+	}
+}
+
+// TestCloseWaitsOutTheBackfill: the backfill writes through the store's one
+// connection, so Close has to wait for the session it is on rather than pull
+// the database from under it — and a backfill asked for after Close has begun
+// must start nothing at all.
+func TestCloseWaitsOutTheBackfill(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "test.db")
+	svc, err := open(path)
+	if err != nil {
+		t.Fatalf("open test store: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.Close() })
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	parkWithConversation(t, svc, "s-a", "Session 4", "uuid-a")
+	reading, release := make(chan struct{}), make(chan struct{})
+	svc.SetTranscriptOf(func(string, string) (string, bool) {
+		close(reading)
+		<-release
+		return "we traced the worktree adoption guard", false
+	})
+	if _, err := svc.ClosedSessions("adoption"); err != nil {
+		t.Fatalf("ClosedSessions: %v", err)
+	}
+	<-reading
+
+	closed := make(chan error, 1)
+	go func() { closed <- svc.Close() }()
+	select {
+	case err := <-closed:
+		t.Fatalf("Close returned %v with a backfill mid-read", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(release)
+	select {
+	case err := <-closed:
+		if err != nil {
+			t.Fatalf("Close: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Close never returned after the backfill let go")
+	}
+	// Read back through a second handle: the first is closed, and the write
+	// it waited for has to be on disk.
+	reopened, err := open(path)
+	if err != nil {
+		t.Fatalf("reopen test store: %v", err)
+	}
+	defer func() { _ = reopened.Close() }()
+	if n := indexRows(t, reopened); n != 1 {
+		t.Errorf("%d index rows after the store closed under a backfill, want the 1 it was writing", n)
+	}
+	// Started after Close: the guard has to turn it into nothing, or the
+	// WaitGroup is added to under a Wait that already returned.
+	svc.backfill()
+	if svc.backfilling.Load() {
+		t.Error("a backfill started after the store closed")
+	}
+}
+
+// ftsHits asks the index directly, past the join to sessions that hides an
+// orphan from the history list: it is the only way to see a body the triggers
+// left in the index after its row was gone.
+func ftsHits(t *testing.T, svc *Service, term string) int {
+	t.Helper()
+	var n int
+	if err := svc.db.QueryRow(
+		`SELECT COUNT(*) FROM session_texts_fts WHERE session_texts_fts MATCH ?`, ftsQuery(term),
+	).Scan(&n); err != nil {
+		t.Fatalf("count index hits: %v", err)
+	}
+	return n
 }

@@ -378,9 +378,14 @@ export interface ClosedSession {
   /** Unix seconds; 0 for a row parked before lich recorded the close, which
    * sorts last and is drawn as no date rather than as 1970. */
   closedAt: number
-  /** The stretch of the parked conversation that matched the search, out of the
-   * index the close wrote. "" for a row matched by name alone, and for every row
-   * of an empty query, which matched nothing in particular. */
+  /** The search reached this row through its conversation, out of the index the
+   * close wrote. What keeps the row in the list, apart from the snippet: a hit
+   * the index found by folding an accent, or a term it split on punctuation, has
+   * nothing to show under the row and is still the answer. */
+  matchedConversation: boolean
+  /** The stretch of the parked conversation that matched the search. "" for a
+   * row matched by name alone, for one matched by a fold (above), and for every
+   * row of an empty query, which matched nothing in particular. */
   snippet: string
   /** The cap on one session's index dropped the oldest of this conversation, so
    * a search over it reaches only the newer part. The row says so, because a

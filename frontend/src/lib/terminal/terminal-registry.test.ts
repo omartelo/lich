@@ -13,6 +13,7 @@ import {
   feedEntry,
   hideEntry,
   type LiveTerminal,
+  reapTerminals,
   showEntry,
   spawnedSessions,
   terminalEntry,
@@ -103,6 +104,22 @@ test("a session whose terminal is running is reported as already spawned", () =>
   expect(spawnedSessions()).toContain(SESSION)
   disposeTerminal(SESSION)
   expect(spawnedSessions()).not.toContain(SESSION)
+})
+
+test("reaping closes the sessions that left the workspace and keeps the rest", () => {
+  const gone = terminalEntry("s-gone")
+  const { live, dispose } = fakeLive()
+  gone.live = live
+  const kept = terminalEntry(SESSION)
+  const closed: string[] = []
+
+  reapTerminals(new Set([SESSION]), (id) => closed.push(id))
+
+  expect(closed).toEqual(["s-gone"])
+  expect(dispose).toHaveBeenCalled()
+  expect(gone.disposed).toBe(true)
+  expect(terminalEntry(SESSION)).toBe(kept)
+  expect(kept.disposed).toBe(false)
 })
 
 test("disposing ends the terminal and forgets the session", () => {

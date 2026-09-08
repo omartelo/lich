@@ -246,7 +246,8 @@ export function TerminalHost() {
 
   // A session that left the workspace leaves both maps with it. Its id can come
   // back — an undone close restores the very same one — and its terminal did
-  // not: the unmount closed the PTY. A leftover "spawned" entry would mount the
+  // not: leaving closed the PTY (App.tsx, reapTerminals). A leftover "spawned"
+  // entry would mount the
   // card straight into a fresh PTY, past the gate that asks about the
   // conversation, and a leftover resume id would then be answered for the user.
   useEffect(() => {

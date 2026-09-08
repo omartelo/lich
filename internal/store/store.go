@@ -163,16 +163,21 @@ CREATE TABLE IF NOT EXISTS session_hands_on (
 );
 
 -- What a parked session talked about, for the History tab's search. One row per
--- closed session, replaced by each close and deleted with the row, and written
--- even when it is empty, because an empty row is what says the session was
--- looked at and keeps the backfill from reading the same disk again on every
--- search (transcripts.go).
+-- closed session, replaced by each close and written even when it is empty,
+-- because an empty row is what says the session was looked at and keeps the
+-- backfill from reading the same disk again on every search (transcripts.go).
+--
+-- The CASCADE is the whole of its deletion: a resume reinserts the session under
+-- a new id and deletes the old row, and a forgotten project takes its sessions
+-- with it through the same clause above — neither passes through a code path
+-- that could drop the text by hand, and a body of up to eight megabytes left
+-- behind on every resume is the leak that clause closes.
 --
 -- The body is kept here, keyed, rather than inside the index: the row a search
 -- draws needs the words around its hit, and only a primary key can fetch one
 -- conversation out of hundreds without walking all of them.
 CREATE TABLE IF NOT EXISTS session_texts (
-    session_id TEXT NOT NULL PRIMARY KEY,
+    session_id TEXT NOT NULL PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
     -- Whether the cap on what one session's index holds dropped the oldest of
     -- this conversation (terminal.indexTextBytes). It sits before the body and
     -- not after it because that is the only way to read it without walking a
@@ -231,7 +236,9 @@ type Service struct {
 	// while one is running starts nothing. See backfill.
 	backfilling atomic.Bool
 	// backfillDone and stopped are how Close waits a running backfill out
-	// rather than pulling the database from under it.
+	// rather than pulling the database from under it; backfillMu orders a
+	// backfill's start against that Close (backfill).
+	backfillMu   sync.Mutex
 	backfillDone sync.WaitGroup
 	stopped      chan struct{}
 	stopOnce     sync.Once
@@ -253,13 +260,11 @@ func (s *Service) SetSessionGone(fn func(sessionID string)) {
 // and nothing at all when the store runs without it — every test, and a lich
 // whose wiring has not run yet.
 func (s *Service) sessionIsGone(sessionIDs ...string) {
+	if s.sessionGone == nil {
+		return
+	}
 	for _, id := range sessionIDs {
-		// The one funnel every delete passes through, which is what keeps a
-		// forgotten session's conversation from outliving its row.
-		s.dropTranscript(id)
-		if s.sessionGone != nil {
-			s.sessionGone(id)
-		}
+		s.sessionGone(id)
 	}
 }
 
@@ -450,7 +455,9 @@ func databasePath() (string, error) {
 // goroutine writes through this same connection, and closing it under one is a
 // failed write logged as if the disk had gone.
 func (s *Service) Close() error {
+	s.backfillMu.Lock()
 	s.stopOnce.Do(func() { close(s.stopped) })
+	s.backfillMu.Unlock()
 	s.backfillDone.Wait()
 	return s.db.Close()
 }

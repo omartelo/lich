@@ -57,8 +57,8 @@ export function matchesQuery(haystack: string, query: string): boolean {
 }
 
 // PaletteHistory is one parked session as the History tab lists it: the store's
-// row (its `snippet` carrying the words that matched, when the conversation is
-// what matched) plus the branch its checkout is on *now*, read from git. That is not the
+// row (`matchedConversation` and its `snippet` saying when and where the
+// conversation is what matched) plus the branch its checkout is on *now*, read from git. That is not the
 // row's `parkedBranch`, which is the snapshot the close recorded for the search
 // to match — a branch moves inside a checkout, so only git can say what the row
 // shows. `branch` is "" for a checkout that is gone, which is also the row that
@@ -118,13 +118,14 @@ export function filterPalette(
     // matched the one it recorded at the close, and the row shows the one git
     // reads now. Filtering on either alone would drop a row the other half of
     // the search kept.
-    // A row carrying a snippet was matched on its conversation in the store, and
-    // is kept without asking again: the snippet is one window onto a hit that
-    // may be a megabyte of prose, so re-testing the query against it would drop
-    // rows whose two words matched paragraphs apart.
+    // A row the store matched on its conversation is kept without asking again:
+    // the snippet is one window onto a hit that may be a megabyte of prose — or
+    // no window at all, for a hit the index found by folding an accent — so
+    // re-testing the query against the row would drop the answer the search
+    // just gave.
     history: history.filter(
       (h) =>
-        h.snippet !== "" ||
+        h.matchedConversation ||
         matchesQuery(`${h.label} ${h.projectName} ${h.branch} ${h.parkedBranch} ${h.path}`, query),
     ),
   }

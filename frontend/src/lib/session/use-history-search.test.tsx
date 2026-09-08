@@ -23,6 +23,7 @@ const backlog = { left: 0 }
 function row(id: string, label: string, snippet = ""): ClosedSession {
   return {
     id,
+    matchedConversation: snippet !== "",
     snippet,
     truncated: false,
     projectId: "p1",
@@ -259,6 +260,26 @@ describe("useHistorySearch", () => {
       () => new Promise((resolve) => setTimeout(resolve, POLL_MS + DEBOUNCE_MS + 60)),
     )
     expect(terms).toEqual(["old", "old", "old"])
+    await budget.unmount()
+  })
+
+  it("never polls behind an empty query, where nothing is being indexed", async () => {
+    // The store starts its backfill on a term alone, so the count it reports
+    // for the plain list never moves: a poll here is a query and a git read per
+    // row every second for as long as the palette stays open.
+    backlog.left = 2
+    const backlogs: number[] = []
+    const Probe = probe([], [], [], backlogs)
+    const budget = await mountBudget(
+      createElement(StrictMode, null, createElement(Probe, { query: "", enabled: true })),
+    )
+    await budget.act(settled)
+    expect(last(backlogs)).toBe(2)
+
+    await budget.act(
+      () => new Promise((resolve) => setTimeout(resolve, POLL_MS + DEBOUNCE_MS + 60)),
+    )
+    expect(terms).toEqual([""])
     await budget.unmount()
   })
 
