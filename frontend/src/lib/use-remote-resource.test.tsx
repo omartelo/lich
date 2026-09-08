@@ -227,7 +227,9 @@ describe("a remembered lookup", () => {
     frames.length = 0
     const second = await mountBudget(probe(frames, fail, CACHE))
     await second.act(() => {})
-    expect(frames[frames.length - 1]?.error).toContain("not found")
+    // On the screen too, not only in the cache: the failure is reported beside
+    // the rows the last answer painted, never in place of them.
+    expect(states(frames)).toEqual([ANSWERED, '"answer" loading=false error=gh: not found'])
     await second.unmount()
 
     frames.length = 0

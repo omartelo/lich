@@ -769,6 +769,9 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   directory that is gone. The window is one round-trip (it re-reads on mount, on focus, and after this screen
   creates a checkout itself) and git refuses the wrong move anyway, which is why it is filed rather than left
   cold — but it is the one to think twice about before the next `cache` is added to something a button reads.
+  The plugin rows on Settings › Updates (`PluginSetting`) are the second case: a plugin installed or removed
+  from a terminal while the user was elsewhere is painted as it was on the way back in, so the row offers an
+  Install that has already happened, or withholds one that has not, until that visit's read lands.
 - **Unsent prose on the pull request screen lives in memory, and nothing collects it**
   (`frontend/src/lib/pulls/draft-store.ts`): a description, a comment and every thread reply survive each
   unmount the screen can produce, and none of them survives a reload — unlike the pending review beside them,

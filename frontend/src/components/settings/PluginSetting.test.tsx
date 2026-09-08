@@ -105,6 +105,9 @@ describe("the plugin pane", () => {
 
     expect(text()).toContain("Check failed — are you online?")
     expect(text()).not.toContain("Checked.")
+    // Beside the rows, not in place of them: a check that could not be made
+    // says nothing about the answer already on the pane.
+    expect(text()).toContain("Claude Code")
     await mounted.unmount()
   })
 

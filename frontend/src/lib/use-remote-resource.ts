@@ -119,9 +119,13 @@ export function useRemoteResource<T>(
       })
       .catch((err: unknown) => {
         if (mine !== seq.current) return
-        // The filed answer is left standing: a lookup that failed says nothing
-        // about the last one that worked, and the next success replaces it.
-        setData(emptyRef.current)
+        // The filed answer is left standing, on the screen as well as in the
+        // cache: a lookup that failed says nothing about the last one that
+        // worked, and a caller that keeps its answers would otherwise blank a
+        // pane it is about to paint again on the next visit. Everyone else
+        // falls back to empty, where a stale readout has nothing to stand on.
+        const filed = cache ? readRemoteCache<T>(cache) : undefined
+        setData(filed ?? emptyRef.current)
         setError(errorText(err))
       })
       .finally(() => {
