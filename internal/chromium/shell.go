@@ -33,7 +33,17 @@ func shellPaths(exe string) []string {
 
 // findShell returns the first of shellPaths that is a file, or "" when this
 // install carries no window of its own.
+//
+// The executable is resolved through its symlinks first: the Homebrew cask puts
+// `lich` on PATH as a link into Lich.app and os.Executable hands back the link,
+// not its target, so the window would be looked for beside /opt/homebrew/bin and
+// never found — a bundled install launched by name would open a system browser
+// while the one launched by its icon opened lich's own window. Left as written
+// when it resolves to nothing, which is every path a test names.
 func findShell(exe string, stat func(string) (os.FileInfo, error)) string {
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
 	for _, path := range shellPaths(exe) {
 		if info, err := stat(path); err == nil && !info.IsDir() {
 			return path

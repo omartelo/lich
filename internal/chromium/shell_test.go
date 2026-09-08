@@ -189,3 +189,38 @@ func TestRunLadder(t *testing.T) {
 		})
 	}
 }
+
+// The Homebrew cask's `lich` on PATH is a symlink into Lich.app, and
+// os.Executable reports the link. Resolving it is what keeps a launch by name
+// on lich's own window instead of dropping it to a system browser.
+func TestFindShellResolvesASymlinkedBinary(t *testing.T) {
+	// Resolved up front: macOS hands out temp dirs under /var, itself a link to
+	// /private/var, so the paths this asserts on have to be the ones findShell
+	// resolves to.
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	macOS := filepath.Join(root, "Lich.app", "Contents", "MacOS")
+	if err := os.MkdirAll(macOS, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	window := filepath.Join(macOS, shellName)
+	for _, f := range []string{filepath.Join(macOS, "lich"), window} {
+		if err := os.WriteFile(f, nil, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bin := filepath.Join(root, "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(bin, "lich")
+	if err := os.Symlink(filepath.Join(macOS, "lich"), link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err) // unprivileged Windows
+	}
+
+	if got := findShell(link, os.Stat); got != window {
+		t.Fatalf("findShell = %q, want %q", got, window)
+	}
+}
