@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A failure to read the login shell's environment now says what the shell
+  printed.** The dump was discarded on a failed parse, so the log could only
+  report that no environment came back, never why the shell stopped before the
+  sentinel. The rc file's own words go to the log now, bounded to three lines,
+  with any assignment among them reported by its key alone: a dump that failed
+  to parse was never recognised as an environment, so its values are not ours to
+  log.
+
 ## [0.47.0] - 2026-09-08
 
 > [!IMPORTANT]

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -245,5 +246,36 @@ func TestReresolveShellEnvWithoutShellRepinsLaunchPATH(t *testing.T) {
 	}
 	if !slices.Equal(got, base) {
 		t.Fatalf("ReresolveShellEnv without SHELL = %v, want %v", got, base)
+	}
+}
+
+func TestShellDumpDigestRedactsAssignments(t *testing.T) {
+	got := shellDumpDigest("zsh: no such file\nAWS_SECRET_ACCESS_KEY=hunter2\n")
+	if strings.Contains(got, "hunter2") {
+		t.Fatalf("digest leaked a value: %q", got)
+	}
+	if !strings.Contains(got, "AWS_SECRET_ACCESS_KEY=...") {
+		t.Errorf("digest dropped the key: %q", got)
+	}
+	// The rc file's own words are the whole point: they say where it stopped.
+	if !strings.Contains(got, "zsh: no such file") {
+		t.Errorf("digest dropped the shell's message: %q", got)
+	}
+}
+
+func TestShellDumpDigestBounds(t *testing.T) {
+	if got := shellDumpDigest(""); got != "printed nothing" {
+		t.Errorf("empty dump = %q", got)
+	}
+	if got := shellDumpDigest("\n \r\n"); got != "printed nothing" {
+		t.Errorf("blank dump = %q", got)
+	}
+	many := shellDumpDigest(strings.Repeat("line\n", 10))
+	if strings.Count(many, "line") != shellDumpDigestLines {
+		t.Errorf("digest kept more than %d lines: %q", shellDumpDigestLines, many)
+	}
+	long := shellDumpDigest(strings.Repeat("x", shellDumpDigestWidth+50))
+	if !strings.Contains(long, "...") || len(long) > shellDumpDigestWidth+80 {
+		t.Errorf("digest did not truncate a long line: %q", long)
 	}
 }

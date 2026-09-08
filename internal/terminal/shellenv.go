@@ -126,9 +126,46 @@ func ReresolveShellEnv(base []string) ([]string, error) {
 		if err == nil {
 			err = errors.New("the shell printed no environment")
 		}
-		return nil, fmt.Errorf("%s: %w", shell, err)
+		return nil, fmt.Errorf("%s: %w (%s)", shell, err, shellDumpDigest(out))
 	}
 	return mergeEnv(base, extra), nil
+}
+
+// shellDumpDigestLines and shellDumpDigestWidth bound what a failed dump puts in
+// the log: enough of the shell's own words to say why it never reached the
+// sentinel, never the whole rc chatter.
+const (
+	shellDumpDigestLines = 3
+	shellDumpDigestWidth = 120
+)
+
+// shellDumpDigest describes a dump the parse did not recognise, and is the only
+// place its content is ever read for a human. A dump that failed to parse was
+// never recognised as an environment, so a line that assigns one is reported by
+// its key alone — its value was never ours to log. What is left is the rc file's
+// own output: the error, greeting or prompt that says where the shell stopped.
+func shellDumpDigest(out string) string {
+	var lines []string
+	for line := range strings.SplitSeq(out, "\n") {
+		line = strings.TrimSpace(strings.TrimSuffix(line, "\r"))
+		if line == "" {
+			continue
+		}
+		if key, _, ok := strings.Cut(line, "="); ok && validEnvKey(key) {
+			line = key + "=..."
+		}
+		if len(line) > shellDumpDigestWidth {
+			line = line[:shellDumpDigestWidth] + "..."
+		}
+		lines = append(lines, line)
+		if len(lines) == shellDumpDigestLines {
+			break
+		}
+	}
+	if len(lines) == 0 {
+		return "printed nothing"
+	}
+	return fmt.Sprintf("%d bytes, starting: %s", len(out), strings.Join(lines, " | "))
 }
 
 // parseShellEnvDump returns the KEY=VALUE lines env printed after the last
