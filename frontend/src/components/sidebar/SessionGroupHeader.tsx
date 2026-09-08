@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import type { ProviderState } from "@/lib/providers-store"
 import type { ProviderKind } from "@/lib/session/sessions"
+import type { SandboxAnswer } from "@/lib/use-sandbox-choice"
 import { cn } from "@/lib/utils"
 import { SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
 
@@ -28,10 +29,13 @@ interface SessionGroupHeaderProps {
   collapsed: boolean
   isDragging: boolean
   providers: ProviderState[]
+  // The project the launch menu opens into: it scopes the sandbox rung the menu
+  // reads before it puts the confinement question.
+  projectId: string
   activatorRef: (element: HTMLElement | null) => void
   activatorProps: ComponentPropsWithoutRef<"button">
   onToggle: () => void
-  onNewSession: (kind: ProviderKind | "shell") => void
+  onNewSession: (kind: ProviderKind | "shell", sandbox: SandboxAnswer) => void
   // Open this checkout's Run card. Absent when the project ships no run script.
   onRun?: () => void
 }
@@ -89,6 +93,7 @@ export function SessionGroupHeader({
   collapsed,
   isDragging,
   providers,
+  projectId,
   activatorRef,
   activatorProps,
   onToggle,
@@ -155,6 +160,7 @@ export function SessionGroupHeader({
             <SessionLaunchMenuItems
               providers={providers}
               terminalLabel="New Terminal"
+              projectId={projectId}
               onNewSession={onNewSession}
               onRun={onRun}
             />

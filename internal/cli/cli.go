@@ -415,17 +415,27 @@ func (c *client) deliver(opened spawn.Session, prompt string) (relay.Result, err
 // minutes, and no instruction to "give it a moment" survives that. Sending is
 // what waits now (relay.awaitReady), so the honest thing to say is that the
 // message will be held.
+//
+// The confinement clause is only there when the session is confined: it changes
+// what the session can do — an empty home, no credentials it was not granted,
+// writes only inside its checkout — and a caller that discovers that from a
+// failure inside the session has to diagnose it from the far end.
 func openedText(opened spawn.Session) string {
 	where := fmt.Sprintf("project %q", opened.Project)
 	if opened.Path != "" {
 		where = fmt.Sprintf("%s, in worktree %s", where, opened.Path)
 	}
+	confined := ""
+	if opened.Confined {
+		confined = " It runs confined: an empty home holding only its agent's own state, the " +
+			"machine read-only, and writes only inside its checkout."
+	}
 	return fmt.Sprintf(
-		"Opened session %q (%s) in %s.\n"+
+		"Opened session %q (%s) in %s.%s\n"+
 			"It answers to %q and to %q. Its agent may still be starting — a fresh "+
 			"worktree runs the project's setup script first — so a task you send it "+
 			"is held until the agent is up rather than lost.\n",
-		opened.Label, opened.Kind, where, opened.Label, opened.Name,
+		opened.Label, opened.Kind, where, confined, opened.Label, opened.Name,
 	)
 }
 

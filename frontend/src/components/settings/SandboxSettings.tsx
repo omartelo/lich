@@ -49,7 +49,7 @@ const RUNGS: { level: SandboxLevel; label: string }[] = [
 // ever reads.
 const EXPOSES: Partial<Record<SandboxLevel, string>> = {
   off: "Every session runs on the machine.",
-  ask: "Nothing is confined unless you tick the box in the New worktree dialog.",
+  ask: "A session whose box you untick runs on the machine.",
   worktrees: "Sessions in the project directory run on the machine.",
 }
 
@@ -147,7 +147,9 @@ export function SandboxSettings({ projectId }: { projectId?: string }) {
           />
         ))}
         <p className="mt-2 max-w-prose text-xs text-muted-foreground">
-          Ask reaches the New worktree dialog only.
+          Ask puts the question in the New session menu and the New worktree dialog. A session
+          opened where nobody can answer — by another session, or through the MCP tool — is
+          confined.
         </p>
       </SettingBlock>
 

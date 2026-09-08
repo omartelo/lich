@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react"
 import { createKeyedStore } from "@/lib/keyed-store"
 import { sandboxKey, sandboxLevel, type SandboxLevel } from "@/lib/providers-store"
 import { Store, System } from "@/lib/rpc"
@@ -62,4 +62,60 @@ export function useSandboxRung(providerId: string, projectId: string): SandboxLe
     load(key)
   }, [key])
   return useKeyedStore(rungs, key)
+}
+
+/** The providers in this project whose rung is "Ask each time": the ones a menu
+ * has to put the confinement question to before it opens a card, since that
+ * rung has no answer of its own. Every other rung, and a machine that cannot
+ * confine, is absent — the menu opens the card on the click as it always has.
+ *
+ * Reads the same store useSandboxRung does, so a card comparing a provider's
+ * rung and a menu asking about it cost one round trip between them, and the
+ * pane that writes a rung refreshes both. */
+export function useSandboxAsk(
+  providerIds: readonly string[],
+  projectId: string,
+): ReadonlySet<string> {
+  // The array is rebuilt on every render of the menu; its contents are not.
+  const ids = providerIds.join(" ")
+  const keys = useMemo(
+    () =>
+      ids
+        .split(" ")
+        .filter(Boolean)
+        .map((id) => rungKey(id, projectId))
+        .filter(Boolean),
+    [ids, projectId],
+  )
+
+  useEffect(() => {
+    for (const key of keys) {
+      if (!asked.has(key)) {
+        asked.add(key)
+        load(key)
+      }
+    }
+  }, [keys])
+
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const offs = keys.map((key) => rungs.subscribe(key, onChange))
+      return () => {
+        for (const off of offs) {
+          off()
+        }
+      }
+    },
+    [keys],
+  )
+  // Snapshotted as a joined string rather than a Set: useSyncExternalStore
+  // compares snapshots by identity, and a collection rebuilt on every read is a
+  // new one every render.
+  const asking = useSyncExternalStore(subscribe, () =>
+    keys
+      .filter((key) => rungs.get(key) === "ask")
+      .map((key) => key.split("\n")[0])
+      .join(" "),
+  )
+  return useMemo(() => new Set(asking.split(" ").filter(Boolean)), [asking])
 }

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The sandbox's "Ask each time" rung now reaches every session.** It only ever
+  asked in the New worktree dialog, so a session started from the New session
+  menu, by another session, or through the MCP tool quietly ran on the machine.
+  The New session menu now puts the question before the card opens, and a
+  session nobody can be asked about — one opened by an agent through
+  `open_session` or `lich open` — is confined, which that call now says.
 - **A session card now says when the sandbox setting moved past it.** A session
   is confined by the answer it opened with, so changing the rung in Settings
   never reaches a card already open, and the card's shield said confined or not

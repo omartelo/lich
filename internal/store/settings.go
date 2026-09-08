@@ -155,8 +155,9 @@ func (s *Service) SkipPermissions(providerID, projectID, cwd string) bool {
 const (
 	// SandboxOff runs sessions straight on the machine. The default.
 	SandboxOff = "off"
-	// SandboxAsk leaves the answer to the session about to open: the dialog
-	// carries the choice, and a session opened any other way is not confined.
+	// SandboxAsk leaves the answer to whoever opens the session — the New
+	// worktree dialog and the New session menu both put the question — and
+	// confines the session where there is nobody to put it to.
 	SandboxAsk = "ask"
 	// SandboxWorktrees confines sessions in a worktree and leaves the project's
 	// own checkout alone — a worktree is the throwaway one, which is the split
@@ -244,13 +245,16 @@ func (s *Service) SandboxGHToken(projectID string) bool {
 // SkipPermissions does: anything but the project's own directory is a worktree,
 // and a project whose path cannot be read falls back to the main checkout.
 //
-// SandboxAsk answers false here on purpose. It is the rung that hands the
-// decision to whoever opens the session, and every caller that cannot ask —
-// a respawn, an MCP tool, a delegation — has to be left with the answer the
-// user would get by closing the dialog rather than with one nobody chose.
+// SandboxAsk answers true here, and does so whichever checkout the session
+// starts in. It is the rung that hands the decision to whoever opens the
+// session, so this function is only reached for it when there was nobody to
+// hand it to — an MCP open_session, `lich open`, a respawn of a row nothing
+// ever recorded an answer on. The rung exists to confine agents working
+// unattended, and a session no human is opening is the unattended case exactly,
+// so the answer nobody chose is the confined one.
 func (s *Service) SandboxDefault(providerID, projectID, cwd string) bool {
 	switch s.SandboxLevel(providerID, projectID) {
-	case SandboxEverywhere:
+	case SandboxEverywhere, SandboxAsk:
 		return true
 	case SandboxWorktrees:
 		root := s.ProjectPath(projectID)

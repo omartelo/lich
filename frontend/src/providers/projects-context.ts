@@ -1,6 +1,7 @@
 import { createContext, useContext } from "react"
 import type { ClosedSession, Project, RecentProject } from "@/lib/api-types"
 import type { Session, SessionKind, SessionState } from "@/lib/session/sessions"
+import type { SandboxAnswer } from "@/lib/use-sandbox-choice"
 
 export interface ProjectsValue {
   projects: Project[]
@@ -21,7 +22,12 @@ export interface ProjectsValue {
   closeProject: (id: string) => void
   /** Open a new session in a project and focus it, returning its id. Kind
    * defaults to the project's provider choice; path to its own directory. */
-  newSession: (projectId: string, kind?: SessionKind, path?: string) => string
+  newSession: (
+    projectId: string,
+    kind?: SessionKind,
+    path?: string,
+    sandbox?: SandboxAnswer,
+  ) => string
   /** Open a project-default session rooted at a git worktree, labeled after it,
    * returning its id. sandbox is the dialog's confinement answer ("on"/"off"),
    * "" to follow the provider's rung. from is the session being forked into this

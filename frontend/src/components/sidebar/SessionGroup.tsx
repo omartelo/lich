@@ -186,13 +186,14 @@ export function SessionGroup({
           collapsed={collapsed}
           isDragging={group.isDragging}
           providers={providers}
+          projectId={projectId}
           activatorRef={group.setActivatorNodeRef}
           // A fixed block is never dragged, and dnd-kit answers a disabled
           // sortable with aria-disabled + aria-roledescription="draggable" —
           // which would announce a working collapse button as a dead handle.
           activatorProps={fixed ? {} : { ...group.attributes, ...group.listeners }}
           onToggle={toggle}
-          onNewSession={(kind) => newSession(projectId, kind, path)}
+          onNewSession={(kind, sandbox) => newSession(projectId, kind, path, sandbox)}
           onRun={onRun}
         />
       )}

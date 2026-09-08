@@ -1,12 +1,19 @@
-import { GitBranch, Play, Terminal } from "lucide-react"
+import { useState } from "react"
+import { ChevronLeft, GitBranch, Play, Terminal } from "lucide-react"
 import { ProviderIcon } from "@/components/ProviderIcon"
 import {
+  DropdownMenuCheckboxItem,
   DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 import type { ProviderState } from "@/lib/providers-store"
+import { sandboxDefaultFor } from "@/lib/providers-store"
+import { CONFINED_MEANS } from "@/lib/sandbox-copy"
 import type { ProviderKind } from "@/lib/session/sessions"
+import type { SandboxAnswer } from "@/lib/use-sandbox-choice"
+import { useSandboxAsk } from "@/lib/use-sandbox-rung"
 
 interface WorktreeMenuAction {
   disabled: boolean
@@ -16,25 +23,114 @@ interface WorktreeMenuAction {
 interface SessionLaunchMenuItemsProps {
   providers: ProviderState[]
   terminalLabel: "Terminal" | "New Terminal"
-  onNewSession: (kind: ProviderKind | "shell") => void
+  /** The project whose sandbox rung the confinement question is read from. */
+  projectId: string
+  /** sandbox is the confinement answer for the new session — "on"/"off" when
+   * the rung asked for one, "" when it answered by itself. */
+  onNewSession: (kind: ProviderKind | "shell", sandbox: SandboxAnswer) => void
   worktree?: WorktreeMenuAction
   /** Open the checkout's Run card. Absent when the project ships no
    * .lich/run-worktree.sh — there would be no command to run. */
   onRun?: () => void
 }
 
+interface SandboxStepProps {
+  provider: ProviderState
+  onOpen: (sandbox: SandboxAnswer) => void
+  onBack: () => void
+}
+
+// SandboxStep is the "Ask each time" rung's question, put where the session is
+// being opened from rather than in a dialog over it: the menu that was going to
+// open the card holds the choice instead, and the item that opens it is one row
+// below the box.
+//
+// A menu-native checkbox rather than the dialog's — the same question, the same
+// wording — because a plain input inside a base-ui popup takes no part in the
+// menu's roving focus, and a question only a mouse can answer is not one.
+//
+// It stands per provider because the rung does (store.sandboxKey): a menu
+// listing Claude on Ask beside Codex on Everywhere cannot carry one box that
+// means both.
+function SandboxStep({ provider, onOpen, onBack }: SandboxStepProps) {
+  // The rung's own answer, which for "ask" is the confined side and does not
+  // depend on the checkout — so the side this session lands on is not asked
+  // here (store.SandboxDefault).
+  const [confined, setConfined] = useState(() => sandboxDefaultFor("ask", false))
+  return (
+    <>
+      <DropdownMenuGroup>
+        <DropdownMenuLabel className="flex items-center gap-2">
+          <ProviderIcon kind={provider.id} />
+          {provider.name}
+        </DropdownMenuLabel>
+        <DropdownMenuCheckboxItem checked={confined} onCheckedChange={setConfined}>
+          Run confined
+        </DropdownMenuCheckboxItem>
+        <p className="px-2 pt-0.5 pb-1.5 text-xs text-muted-foreground">{CONFINED_MEANS}</p>
+      </DropdownMenuGroup>
+      <DropdownMenuSeparator />
+      <DropdownMenuGroup>
+        <DropdownMenuItem onClick={() => onOpen(confined ? "on" : "off")}>
+          <ProviderIcon kind={provider.id} />
+          Open session
+        </DropdownMenuItem>
+        {/* Back stays in the menu — closing it is what Escape and the trigger
+            already do, and a "Back" that dismisses the whole thing is a click
+            nobody gets a second try at. */}
+        <DropdownMenuItem closeOnClick={false} onClick={onBack}>
+          <ChevronLeft />
+          Back
+        </DropdownMenuItem>
+      </DropdownMenuGroup>
+    </>
+  )
+}
+
 export function SessionLaunchMenuItems({
   providers,
   terminalLabel,
+  projectId,
   onNewSession,
   worktree,
   onRun,
 }: SessionLaunchMenuItemsProps) {
+  const asking = useSandboxAsk(
+    providers.map((provider) => provider.id),
+    projectId,
+  )
+  // The provider whose confinement is being asked about, null while the menu is
+  // its usual list. Every other rung answers for itself, so its item opens the
+  // card on the click as it always has.
+  const [pending, setPending] = useState<ProviderState | null>(null)
+
+  if (pending) {
+    return (
+      <SandboxStep
+        provider={pending}
+        // Put back before the card opens, rather than left to the popup
+        // unmounting with the menu: the next click on this menu has to be a
+        // provider list, never last time's half-answered question.
+        onOpen={(sandbox) => {
+          setPending(null)
+          onNewSession(pending.id, sandbox)
+        }}
+        onBack={() => setPending(null)}
+      />
+    )
+  }
+
   return (
     <>
       <DropdownMenuGroup>
         {providers.map((provider) => (
-          <DropdownMenuItem key={provider.id} onClick={() => onNewSession(provider.id)}>
+          <DropdownMenuItem
+            key={provider.id}
+            closeOnClick={!asking.has(provider.id)}
+            onClick={() =>
+              asking.has(provider.id) ? setPending(provider) : onNewSession(provider.id, "")
+            }
+          >
             <ProviderIcon kind={provider.id} />
             {provider.name}
           </DropdownMenuItem>
@@ -42,7 +138,7 @@ export function SessionLaunchMenuItems({
       </DropdownMenuGroup>
       <DropdownMenuSeparator />
       <DropdownMenuGroup>
-        <DropdownMenuItem onClick={() => onNewSession("shell")}>
+        <DropdownMenuItem onClick={() => onNewSession("shell", "")}>
           <Terminal />
           {terminalLabel}
         </DropdownMenuItem>

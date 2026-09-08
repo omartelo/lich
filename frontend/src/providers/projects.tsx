@@ -73,6 +73,7 @@ import { NotificationsOptIn } from "@/components/NotificationsOptIn"
 import { refreshGitStatus } from "@/lib/git/use-git-status"
 import { markSessionSeen, restoreSessionUnread } from "@/lib/session/use-session-status"
 import { useHotkey } from "@/lib/use-hotkey"
+import type { SandboxAnswer } from "@/lib/use-sandbox-choice"
 import { neighborProjectId } from "@/lib/project-order"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
 import { useSettings } from "./settings"
@@ -436,16 +437,31 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     [projects, activeProjectId, navigate],
   )
 
-  const newSession = useCallback((projectId: string, kind?: SessionKind, path = "") => {
-    const sessionId = newSessionId()
-    const resolvedKind = resolveNewSessionKind(kind, projectNewSessionKind(projectId))
-    const next = addSession(sessionsRef.current, projectId, sessionId, resolvedKind, path)
-    const project = next[projectId]
-    const created = project.sessions[project.sessions.length - 1]
-    commit(next)
-    void Store.AddSession(projectId, sessionId, created.label, resolvedKind, path, project.nextSeq)
-    return sessionId
-  }, [])
+  // sandbox is the confinement answer the launch menu collected on the "Ask
+  // each time" rung — "" from every caller with nowhere to put the question,
+  // which hands the session to the rung's own answer at spawn time
+  // (store.SandboxDefault).
+  const newSession = useCallback(
+    (projectId: string, kind?: SessionKind, path = "", sandbox: SandboxAnswer = "") => {
+      const sessionId = newSessionId()
+      const resolvedKind = resolveNewSessionKind(kind, projectNewSessionKind(projectId))
+      const next = addSession(sessionsRef.current, projectId, sessionId, resolvedKind, path)
+      const project = next[projectId]
+      const created = project.sessions[project.sessions.length - 1]
+      commit(next)
+      void Store.AddSession(
+        projectId,
+        sessionId,
+        created.label,
+        resolvedKind,
+        path,
+        project.nextSeq,
+        sandbox,
+      )
+      return sessionId
+    },
+    [],
+  )
 
   // sandbox is the answer the new-worktree dialog collected: "on", "off", or ""
   // when the machine cannot confine anything and nothing was asked.

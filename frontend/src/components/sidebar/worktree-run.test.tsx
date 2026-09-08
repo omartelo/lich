@@ -58,6 +58,7 @@ function menu(onRun?: () => void) {
       createElement(SessionLaunchMenuItems, {
         providers: [],
         terminalLabel: "New Terminal" as const,
+        projectId: "p1",
         onNewSession: () => {},
         onRun,
       }),

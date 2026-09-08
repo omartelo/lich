@@ -125,8 +125,8 @@ export const SSH_AGENT_KEY = "sandbox.ssh-agent"
 export const GH_TOKEN_KEY = "sandbox.gh-token"
 
 // Which sessions of a provider run confined, as one ladder ordered by how much
-// of the machine a session can reach. "ask" sits second because a session
-// nobody answered for runs unconfined, exactly like "off" — it moves who
+// of the machine a session can reach. "ask" sits second because it is the rung
+// a user can answer their way to "off" on, one session at a time — it moves who
 // decides, not what the sandbox is. Mirrors the Sandbox* constants in Go.
 export type SandboxLevel = "off" | "ask" | "worktrees" | "everywhere"
 
@@ -146,13 +146,17 @@ export function sandboxLevel(value: string): SandboxLevel {
 // the gate already knows the risk of.
 export const SANDBOX_RISK_ORDER: readonly SandboxLevel[] = [...SANDBOX_LEVELS].reverse()
 
-// sandboxDefaultFor is what the new-session dialog arrives showing: the rung
-// applied to the checkout the session will start in. It is the frontend's copy
-// of store.SandboxDefault in Go — the dialog has to show the same answer the
-// spawn would reach on its own, or the box the user leaves untouched means
-// something other than what it shows.
+// sandboxDefaultFor is what a confinement box arrives showing: the rung applied
+// to the checkout the session will start in. It is the frontend's copy of
+// store.SandboxDefault in Go — the box has to show the same answer the spawn
+// would reach on its own, or the one the user leaves untouched means something
+// other than what it shows.
+//
+// "ask" answers true on either checkout, as the Go side does: it is the rung
+// where nobody being asked confines the session, so the box that is asking
+// opens on that side.
 export function sandboxDefaultFor(level: SandboxLevel, worktree: boolean): boolean {
-  if (level === "everywhere") return true
+  if (level === "everywhere" || level === "ask") return true
   return level === "worktrees" && worktree
 }
 

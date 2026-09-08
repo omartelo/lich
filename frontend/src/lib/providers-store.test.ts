@@ -585,8 +585,11 @@ describe("sandbox rung", () => {
     const cases: [SandboxLevel, boolean, boolean][] = [
       ["off", false, false],
       ["off", true, false],
-      ["ask", false, false],
-      ["ask", true, false],
+      // Contract change: "ask" confines on either checkout, matching the Go
+      // side. It is the rung where nobody being asked confines the session, so
+      // the box that does the asking opens on that side.
+      ["ask", false, true],
+      ["ask", true, true],
       ["worktrees", false, false],
       ["worktrees", true, true],
       ["everywhere", false, true],

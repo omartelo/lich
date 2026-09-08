@@ -49,6 +49,11 @@ type fakeSessions struct {
 	// renameErr is the write refusing.
 	renamed   map[string]string
 	renameErr error
+	// confines is the rung's own answer for a caller with nobody to ask, and
+	// sandboxAsked records the (provider, project, cwd) each Open resolved it
+	// for — the trio the real store scopes the rung by.
+	confines     bool
+	sandboxAsked [][3]string
 }
 
 // closedRow is one session the store was asked to take out of the workspace.
@@ -141,6 +146,11 @@ func (f *fakeSessions) AddSessionFrom(
 		}
 	}
 	return nil
+}
+
+func (f *fakeSessions) SandboxDefault(providerID, projectID, cwd string) bool {
+	f.sandboxAsked = append(f.sandboxAsked, [3]string{providerID, projectID, cwd})
+	return f.confines
 }
 
 func (f *fakeSessions) SetSessionModel(sessionID, model string) error {
@@ -842,5 +852,47 @@ func TestSessionIDsDoNotRepeat(t *testing.T) {
 	}
 	if sessions.rows[0].sessionID == sessions.rows[1].sessionID {
 		t.Fatal("two sessions took the same id — the second would overwrite the first's row")
+	}
+}
+
+// Nobody is at this end of an open_session or a `lich open` to answer the
+// sandbox's "ask each time" rung, so the store resolves it and the caller is
+// told which side it landed on — the empty home and the read-only machine are
+// not something to discover from a failure inside the session.
+func TestOpenReportsTheConfinementTheRungResolvedTo(t *testing.T) {
+	svc, sessions, _, _, events := newService(t)
+	sessions.confines = true
+
+	opened, err := svc.Open("s1", "", "", "auth-fix", "", "")
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	if !opened.Confined {
+		t.Error("the rung confined the session and the caller was not told")
+	}
+	// Scoped by the trio the rung is keyed on, and by the checkout the session
+	// actually starts in rather than the project's own directory: a worktree is
+	// the side "Worktrees only" confines.
+	if got := sessions.sandboxAsked; len(got) != 1 || got[0] != [3]string{"codex", "p1", "/wt/auth-fix"} {
+		t.Errorf("resolved the rung for %v, want the new session's provider, project and checkout", got)
+	}
+	// The window draws the card from this payload, so a confinement the caller
+	// was told about has to be in it too.
+	if len(events.events) != 1 || events.events[0].data != any(opened) {
+		t.Errorf("the window was told %+v, the caller %+v", events.events, opened)
+	}
+}
+
+func TestOpenReportsNoConfinementWhenTheRungLeavesTheSessionOut(t *testing.T) {
+	svc, sessions, _, _, _ := newService(t)
+	sessions.confines = false
+
+	opened, err := svc.Open("s1", "", "", "", "", "")
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if opened.Confined {
+		t.Error("reported a confinement no rung asked for")
 	}
 }

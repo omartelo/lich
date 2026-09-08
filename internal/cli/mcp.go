@@ -385,9 +385,11 @@ var mcpTools = []mcpTool{
 			"first and roots the new session in it, which is how you give a task its own " +
 			"checkout instead of sharing yours — and optionally hands it the task in the same " +
 			"call, so fanning work out costs one call per worker instead of two. Returns the " +
-			"names the new session is addressed by, and, when a task came with it, that task's " +
-			"outcome: the answer if it was quick, otherwise a ticket to carry on from, exactly " +
-			"as send_to_session returns one.",
+			"names the new session is addressed by, whether it runs confined — nobody is here " +
+			"to answer the sandbox's \"ask each time\" rung, so a session opened this way takes " +
+			"the confined side of it — and, when a task came with it, that task's outcome: the " +
+			"answer if it was quick, otherwise a ticket to carry on from, exactly as " +
+			"send_to_session returns one.",
 		Schema: schema(map[string]any{
 			"project": property("string",
 				"Project to open the session in: the name of one already open, or the "+

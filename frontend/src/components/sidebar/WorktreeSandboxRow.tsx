@@ -1,5 +1,6 @@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
+import { CONFINED_MEANS } from "@/lib/sandbox-copy"
 import type { SandboxChoice } from "@/lib/use-sandbox-choice"
 
 // WorktreeSandboxRow is the New-worktree dialog's confinement line: whether the
@@ -26,10 +27,7 @@ export function WorktreeSandboxRow({ choice }: { choice: SandboxChoice }) {
         <Label htmlFor="worktree-sandbox" className="text-sm font-medium">
           Run confined
         </Label>
-        <span className="text-xs text-muted-foreground">
-          An empty home holding only the agent's own state, the machine read-only, and writes only
-          inside this worktree. The network stays on.
-        </span>
+        <span className="text-xs text-muted-foreground">{CONFINED_MEANS}</span>
       </div>
     </div>
   )

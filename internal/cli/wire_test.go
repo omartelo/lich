@@ -151,6 +151,8 @@ type spawnStore struct {
 	model string
 	// renamed is the session id and label the last rename wrote.
 	renamed [2]string
+	// confines is what the sandbox rung answers a caller with nobody to ask.
+	confines bool
 }
 
 func (*spawnStore) LoadState() ([]store.Project, error) {
@@ -175,6 +177,12 @@ func (s *spawnStore) SetSessionModel(_, model string) error {
 }
 
 func (s *spawnStore) SetSessionEntrypoint(_, _ string) error { return nil }
+
+func (s *spawnStore) SandboxDefault(_, _, _ string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.confines
+}
 
 func (s *spawnStore) DeleteSession(_, _, _ string) error {
 	s.mu.Lock()

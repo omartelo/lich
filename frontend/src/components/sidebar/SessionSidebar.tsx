@@ -434,7 +434,8 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
             <SessionLaunchMenuItems
               providers={enabled}
               terminalLabel="Terminal"
-              onNewSession={(kind) => newSession(projectId, kind)}
+              projectId={projectId}
+              onNewSession={(kind, sandbox) => newSession(projectId, kind, "", sandbox)}
               worktree={{
                 disabled: !git?.branch,
                 onSelect: () => {

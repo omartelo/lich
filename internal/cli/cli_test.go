@@ -1071,3 +1071,27 @@ func TestWorktreesSaysWhenThereAreNone(t *testing.T) {
 		t.Errorf("json = %q, want [] — a script should not have to handle null", jsonOut)
 	}
 }
+
+// The session's confinement is only in the text when there is one: an unconfined
+// session is what lich did before the sandbox existed, and a line about it on
+// every open is a line nobody reads by the third one.
+func TestOpenSaysWhenTheSessionRunsConfined(t *testing.T) {
+	unconfined := newFakeLich(t, openedBody)
+	_, plain, _ := run(t, unconfined, "open", "--worktree", "auth-fix")
+	if strings.Contains(plain, "confined") {
+		t.Errorf("an unconfined session was described as one:\n%s", plain)
+	}
+
+	f := newFakeLich(t, strings.TrimSuffix(openedBody, "}")+`,"confined":true}`)
+	code, stdout, stderr := run(t, f, "open", "--worktree", "auth-fix")
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+	// What the confinement costs the caller, not the word alone: nobody was here
+	// to answer the rung, so the session's limits have to arrive with it.
+	for _, phrase := range []string{"runs confined", "empty home", "read-only", "its checkout"} {
+		if !strings.Contains(stdout, phrase) {
+			t.Errorf("output is missing %q:\n%s", phrase, stdout)
+		}
+	}
+}

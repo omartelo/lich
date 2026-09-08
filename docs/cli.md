@@ -289,6 +289,13 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
   branch off a typo that names a revision, leaving a checkout nobody asked for.
   It is **ignored when `--worktree` names a branch that already exists**: a base
   says where a branch starts, and that one already started.
+- **Confinement is the rung's own answer**, and the output says so when the
+  answer is yes. Nobody is at this end to answer `Ask each time` — the rung that
+  puts the question in the New session menu and the New worktree dialog — so a
+  session opened here takes its confined side, the same as `Everywhere` and as
+  `Worktrees only` on a worktree. What that costs the session is in
+  Settings › Sandbox; there is no flag to override it, because the rung is the
+  user's answer and this end is the agent's.
 - `--model` is the model the session's provider starts on. The value is whatever
   that provider's own `--model` takes — an alias, a full name, a
   `provider/model` pair — and lich passes it through unchecked: the accepted

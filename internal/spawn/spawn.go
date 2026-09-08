@@ -83,6 +83,7 @@ type Sessions interface {
 	AddSessionFrom(
 		projectID, sessionID, label, kind, path string, nextSeq int, originID, originLabel string,
 	) error
+	SandboxDefault(providerID, projectID, cwd string) bool
 	SetSessionModel(sessionID, model string) error
 	SetSessionEntrypoint(sessionID, entrypoint string) error
 	RenameSession(sessionID, label string) error
@@ -128,6 +129,10 @@ type Events interface {
 // the store's own spelling. NextSeq is the project's label counter after this
 // session took its number. OriginSessionID and OriginLabel name the session that
 // asked for this one — empty when the caller was not a session at all.
+// Confined is whether the session opened inside the sandbox. Nobody is at this
+// end to be asked, so it is the rung's own answer (store.SandboxDefault), and
+// saying it is what keeps a caller from discovering the empty home and the
+// read-only machine by running into them.
 type Session struct {
 	ID              string `json:"id"`
 	ProjectID       string `json:"projectId"`
@@ -139,6 +144,7 @@ type Session struct {
 	NextSeq         int    `json:"nextSeq"`
 	OriginSessionID string `json:"originSessionId"`
 	OriginLabel     string `json:"originLabel"`
+	Confined        bool   `json:"confined"`
 }
 
 // Service opens sessions on behalf of a caller outside the window.
@@ -248,6 +254,7 @@ func (s *Service) Open(fromID, projectName, kind, worktree, base, model string) 
 		NextSeq:         target.NextSeq + 1,
 		OriginSessionID: originID,
 		OriginLabel:     originLabel,
+		Confined:        s.sessions.SandboxDefault(kind, target.ID, cwd),
 	}
 	if err := s.sessions.AddSessionFrom(
 		target.ID, id, label, kind, stored, opened.NextSeq, originID, originLabel,
