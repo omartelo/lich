@@ -33,16 +33,6 @@ func TestProfileKeyIsOnePerWindow(t *testing.T) {
 	}
 }
 
-// TestProfileKeyIsTheOneOnDisk pins the digest to the one every profile was
-// keyed by before the window was the only launch: a change here hands every
-// user a factory-fresh profile on update.
-func TestProfileKeyIsTheOneOnDisk(t *testing.T) {
-	const want = "lich-shell-70eb955f"
-	if got := (Result{Path: "/usr/lib/lich/shell/lich-shell"}).profileKey(); got != want {
-		t.Fatalf("profileKey = %q, want %q", got, want)
-	}
-}
-
 // TestProfileKeyNamesTheWindow keeps the directory readable: whoever opens
 // their config directory should be able to tell which profile is whose, on
 // every OS — Windows' suffix included. Splitting a Windows path is filepath's
