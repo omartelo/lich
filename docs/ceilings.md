@@ -441,13 +441,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   default, not a gap to close. Codex's `wham` usage route carries no equivalent to any of this — no per-window
   active flag, no lock reason, no credit block — so this ceiling is Claude-only by the shape of the payload,
   not a choice.
-- **Which account a session spends is read from its process, and only Linux answers**
-  (`internal/quota`, `internal/terminal/account.go`): the reading follows `/proc/<pid>/environ` of the process in
-  the session's PTY, so a wrapper binary that exports a login of its own is seen only there. macOS could answer
-  the same question through `KERN_PROCARGS2` and does not yet; Windows cannot at all. On both, a session running
-  a user-configured binary reports `unknown` and its gauge disappears from the footer — the alternative was the
-  default account's numbers under a session spending another plan, and silence is the failure that does not lie.
-  A card with no live process is in the same position until its PTY is up.
 - **Measuring a token-only login costs a request against the very plan it measures** (`internal/quota/claude.go`):
   a long-lived OAuth token (`claude setup-token`) carries `user:inference` alone, so the usage route answers it
   403 and the account is read the way Claude Code reads it for itself — one `max_tokens: 1` message, for the
@@ -470,16 +463,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   is a row in `~/.local/share/kiro-cli/data.sqlite3` holding an opaque `aoa…` token, a `github` provider label
   and an AWS profile ARN — nothing a person recognises as their account. Naming either would take a network
   call against an unmeasured route, for a provider that has no gauge to hang the name under.
-- **`CLAUDE_SECURESTORAGE_CONFIG_DIR` decides which Keychain item a Claude login is, and lich reads it
-  nowhere** (`internal/quota/claude.go`, confirmed by grep — the variable appears in no file here): Claude Code
-  looks for its secure storage under that variable whenever it is *defined*, empty string included, and only
-  falls back to `CLAUDE_CONFIG_DIR`; the value is NFC-normalised and hashed into the Keychain service name, so
-  two values that differ by a combining accent are two different logins. Today this changes nothing: on Linux
-  the credential is the plaintext file under the config dir, and on macOS no session's environment is readable
-  at all (`envReadable`), so the question never arises. The trap is the day somebody writes the macOS
-  `KERN_PROCARGS2` reading promised above and resolves the credential from `CLAUDE_CONFIG_DIR` alone — that
-  reads the wrong Keychain item and reports, with a gauge and an account name under it, a login the session is
-  not spending. Resolve the pair in that order, or report `unknown`.
 - **The sandbox confines a working agent, not hostile code** (`internal/sandbox`): namespaces and mounts on
   Linux, a path policy on macOS, and nothing else — no seccomp filter, no Landlock ruleset. The network is
   never cut (the agent needs its API and the plugin's hooks report over loopback), so anything readable

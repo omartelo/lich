@@ -190,12 +190,12 @@ func TestARejectedProbeTokenReadsAsSignedOut(t *testing.T) {
 	}
 }
 
-func TestACustomBinaryWithNoReadableEnvironmentIsUnknown(t *testing.T) {
+func TestASessionWithNoReadableEnvironmentIsUnknown(t *testing.T) {
 	writeCreds(t, claudeCredsJSON, codexCredsJSON)
 	claudeURL, claudeCalls := serve(t, http.StatusOK, claudeLimitsBody)
 	codexURL, codexCalls := serve(t, http.StatusOK, `{"plan_type":"pro"}`)
 	s := newService(claudeURL, codexURL, time.Now())
-	s.SetSessions(func(string) Account { return Account{Custom: true} })
+	s.SetSessions(func(string) Account { return Account{} })
 
 	for _, got := range s.Plans("session-1") {
 		if got.Status != StatusUnknown {
@@ -215,9 +215,10 @@ func TestAReadableSessionWithoutOverridesReadsTheDefaultLogin(t *testing.T) {
 	url, calls := serve(t, http.StatusOK, claudeLimitsBody)
 	s := newService(url, "", time.Now())
 	// A wrapper that changes nothing about the login — a PATH tweak, a
-	// profiler — leaves the session spending exactly what lich reads.
+	// profiler — inherits the config dir and spends exactly what lich reads.
+	// The fixture now includes that inheritance, as a real process does.
 	s.SetSessions(func(string) Account {
-		return Account{Env: map[string]string{"PATH": "/opt/bin"}, Custom: true, Read: true}
+		return Account{Env: map[string]string{"PATH": "/opt/bin", claudeDirVar: os.Getenv(claudeDirVar)}, Read: true}
 	})
 
 	got := s.Plans("session-1")[0]
@@ -311,8 +312,7 @@ func TestASessionWithNoEnvironmentOfItsOwnSharesTheMachineReading(t *testing.T) 
 	writeCreds(t, claudeCredsJSON, "")
 	url, calls := serve(t, http.StatusOK, claudeLimitsBody)
 	s := newService(url, "", time.Now())
-	// macOS and Windows read no session environment at all, so every session
-	// there arrives shaped like this one — and spends what Settings reads.
+	// A nil environment explicitly requests the machine-wide login.
 	s.SetSessions(func(string) Account { return Account{Read: true} })
 
 	s.Plans("")

@@ -32,8 +32,9 @@ const (
 // with: a long-lived OAuth token, which wins over everything on disk, and the
 // config directory holding the credentials file when there is no token.
 const (
-	claudeTokenVar = "CLAUDE_CODE_OAUTH_TOKEN"
-	claudeDirVar   = "CLAUDE_CONFIG_DIR"
+	claudeTokenVar     = "CLAUDE_CODE_OAUTH_TOKEN"
+	claudeDirVar       = "CLAUDE_CONFIG_DIR"
+	claudeSecureDirVar = "CLAUDE_SECURESTORAGE_CONFIG_DIR"
 )
 
 // The quota probe: what lich sends when a session's login is a long-lived
@@ -125,16 +126,17 @@ func (s *Service) claudePlan(a Account) Plan {
 	if a.hidden() || a.elsewhere() {
 		return unknown(p)
 	}
-	if token := a.Env[claudeTokenVar]; token != "" {
+	if token := a.lookup(claudeTokenVar); token != "" {
 		return s.claudeProbe(p, token)
 	}
-	path, ok := harnessFile(a, claudeDirVar, ".claude", ".credentials.json")
-	if !ok {
-		return failed(p)
+	readLogin := s.claudeLogin
+	if readLogin == nil {
+		readLogin = readClaudeCredentials
 	}
-	var creds claudeCredentials
-	if !readCredentials(path, &creds) || creds.OAuth.AccessToken == "" {
-		return signedOut(p)
+	creds, status := readLogin(a)
+	if status != StatusOK {
+		p.Status = status
+		return p
 	}
 	p.Plan = creds.planLabel()
 

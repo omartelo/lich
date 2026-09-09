@@ -40,26 +40,8 @@ func readCwd(pid int) string {
 	}
 	defer func() { _ = windows.CloseHandle(h) }()
 
-	var pbi windows.PROCESS_BASIC_INFORMATION
-	var retLen uint32
-	err = windows.NtQueryInformationProcess(h, windows.ProcessBasicInformation,
-		unsafe.Pointer(&pbi), uint32(unsafe.Sizeof(pbi)), &retLen)
-	if err != nil || pbi.PebBaseAddress == nil {
-		return ""
-	}
-
-	var peb windows.PEB
-	if err := readMemory(h, uintptr(unsafe.Pointer(pbi.PebBaseAddress)),
-		unsafe.Pointer(&peb), unsafe.Sizeof(peb)); err != nil {
-		return ""
-	}
-	if peb.ProcessParameters == nil {
-		return ""
-	}
-
-	var params windows.RTL_USER_PROCESS_PARAMETERS
-	if err := readMemory(h, uintptr(unsafe.Pointer(peb.ProcessParameters)),
-		unsafe.Pointer(&params), unsafe.Sizeof(params)); err != nil {
+	params := readProcessParameters(h)
+	if params == nil {
 		return ""
 	}
 
@@ -81,4 +63,32 @@ func readCwd(pid int) string {
 // readMemory reads size bytes of the process behind h at base into out.
 func readMemory(h windows.Handle, base uintptr, out unsafe.Pointer, size uintptr) error {
 	return windows.ReadProcessMemory(h, base, (*byte)(out), size, nil)
+}
+
+// Shared by cwd and account reads: both must inspect the child's current PEB.
+func readProcessParameters(h windows.Handle) *windows.RTL_USER_PROCESS_PARAMETERS {
+	var pbi windows.PROCESS_BASIC_INFORMATION
+	var retLen uint32
+	err := windows.NtQueryInformationProcess(h, windows.ProcessBasicInformation,
+		unsafe.Pointer(&pbi), uint32(unsafe.Sizeof(pbi)), &retLen)
+	if err != nil || pbi.PebBaseAddress == nil {
+		return nil
+	}
+
+	var peb windows.PEB
+	if err := readMemory(h, uintptr(unsafe.Pointer(pbi.PebBaseAddress)),
+		unsafe.Pointer(&peb), unsafe.Sizeof(peb)); err != nil {
+		return nil
+	}
+	if peb.ProcessParameters == nil {
+		return nil
+	}
+
+	var params windows.RTL_USER_PROCESS_PARAMETERS
+	if err := readMemory(h, uintptr(unsafe.Pointer(peb.ProcessParameters)),
+		unsafe.Pointer(&params), unsafe.Sizeof(params)); err != nil {
+		return nil
+	}
+
+	return &params
 }

@@ -33,7 +33,7 @@ func TestSessionAccountReadsWhatTheWrapperExecsInto(t *testing.T) {
 	var env map[string]string
 	var read bool
 	for range 200 {
-		env, _, read = svc.SessionAccount("s1")
+		env, read = svc.SessionAccount("s1")
 		if read && env["CLAUDE_CONFIG_DIR"] == dir {
 			break
 		}

@@ -227,8 +227,8 @@ func main() {
 	// terminal is what knows the environment that binary set up.
 	plans := quota.New()
 	plans.SetSessions(func(sessionID string) quota.Account {
-		env, custom, read := term.SessionAccount(sessionID)
-		return quota.Account{Env: env, Custom: custom, Read: read}
+		env, read := term.SessionAccount(sessionID)
+		return quota.Account{Env: env, Read: read}
 	})
 	dispatcher.Register("quota", plans)
 	// The relay is the only service whose caller is not the window: the `lich`

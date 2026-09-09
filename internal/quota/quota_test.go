@@ -42,6 +42,8 @@ func writeCreds(t *testing.T, claude, codex string) {
 	}
 	t.Setenv("CLAUDE_CONFIG_DIR", claudeDir)
 	t.Setenv("CODEX_HOME", codexDir)
+	unsetTestEnv(t, claudeSecureDirVar)
+	t.Setenv(claudeTokenVar, "")
 	// A developer machine that exports one of these bills an API key, and every
 	// reading below would correctly come back unknown. Clear them so the suite
 	// answers to the credentials written here and not to whoever runs it.
@@ -70,12 +72,13 @@ func serve(t *testing.T, status int, body string) (url string, calls *int) {
 // about windows counting the requests it meant to.
 func newService(claudeURL, codexURL string, now time.Time) *Service {
 	return &Service{
-		http:      &http.Client{Timeout: httpTimeout},
-		claudeURL: claudeURL,
-		codexURL:  codexURL,
-		probeURL:  claudeURL,
-		now:       func() time.Time { return now },
-		cache:     make(map[string]reading),
+		http:        &http.Client{Timeout: httpTimeout},
+		claudeURL:   claudeURL,
+		codexURL:    codexURL,
+		probeURL:    claudeURL,
+		claudeLogin: readClaudeFile,
+		now:         func() time.Time { return now },
+		cache:       make(map[string]reading),
 	}
 }
 

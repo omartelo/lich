@@ -44,6 +44,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A session's quota gauge now follows that session's own login on macOS and
+  Windows.** Which account a card spends was read from its process, and only
+  Linux answered, so a session running a binary you configured lost its gauge
+  from the footer on the other two. Both read it now, and macOS resolves the
+  Keychain item the way Claude Code does — `CLAUDE_SECURESTORAGE_CONFIG_DIR`
+  before `CLAUDE_CONFIG_DIR` — so a session pointed at a second login is
+  measured against that login instead of the one lich is signed in to. A session
+  whose environment cannot be read at all shows no gauge on any platform now,
+  which is what a card whose terminal is not yet up looks like until it is.
+
 - **A session whose shell runs inside tmux, over ssh or in a container now says
   its directory is unknown instead of naming a local one.** The card, its
   tooltip and the footer read "cwd unknown · inside tmux": the directory those
