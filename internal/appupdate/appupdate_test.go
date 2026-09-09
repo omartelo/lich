@@ -266,7 +266,7 @@ func TestInstallCommand(t *testing.T) {
 }
 
 func TestApplyRejectedWhenNotSelfApply(t *testing.T) {
-	s := New("0.7.0", nil)
+	s := New("0.7.0", nil, nil)
 	s.exePath = "" // forces canSelfApply false regardless of platform
 	if err := s.Apply(); err == nil {
 		t.Fatal("Apply() = nil, want an error when self-apply is unsupported")
@@ -300,6 +300,28 @@ func applyServer(t *testing.T, assetStatus int) *httptest.Server {
 
 // applyService is a Service pinned to darwin/arm64 — the self-apply path driven
 // off whatever host runs the suite.
+func TestApplyReportsProgress(t *testing.T) {
+	body := "verified release asset"
+	srv := windowsReleaseFixture(t, "lich-v0.8.0-darwin-arm64", body)
+	defer srv.Close()
+	s := applyService(t, srv, func(r io.Reader, _ []byte) error { _, err := io.ReadAll(r); return err })
+	s.downloadBase = srv.URL + "/"
+	var steps []Progress
+	s.emit = func(_ string, data any) { steps = append(steps, data.(Progress)) }
+	if err := s.Apply(); err != nil {
+		t.Fatal(err)
+	}
+	if len(steps) < 3 {
+		t.Fatalf("steps = %+v", steps)
+	}
+	if first := steps[0]; first != (Progress{Phase: phaseDownload, Received: 0, Total: int64(len(body))}) {
+		t.Errorf("first = %+v", first)
+	}
+	if last := steps[len(steps)-1]; last != (Progress{Phase: phaseInstall}) {
+		t.Errorf("last = %+v", last)
+	}
+}
+
 func applyService(t *testing.T, srv *httptest.Server, apply func(io.Reader, []byte) error) *Service {
 	t.Helper()
 	return &Service{
@@ -433,7 +455,7 @@ func TestFetchChecksum(t *testing.T) {
 }
 
 func TestNewResolvesExe(t *testing.T) {
-	s := New("0.7.0", nil)
+	s := New("0.7.0", nil, nil)
 	if s.version != "0.7.0" {
 		t.Fatalf("version = %q", s.version)
 	}

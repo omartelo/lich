@@ -462,6 +462,18 @@ export interface AppUpdateStatus {
 }
 
 /**
+ * internal/appupdate.Progress — one step of Apply, on the "appupdate-progress"
+ * event: bytes of the download (total -1 without a Content-Length), then the
+ * phase with no percentage — install swaps the binary in place, installer
+ * hands over to the Windows installer and closes lich.
+ */
+export interface AppUpdateProgress {
+  phase: "download" | "install" | "installer"
+  received: number
+  total: number
+}
+
+/**
  * internal/drop.Item — one entry of a terminal file drop, described by the
  * only thing Chromium tells the page about a local file. mtime is
  * File.lastModified (milliseconds); size is 0 for a directory, whose reported

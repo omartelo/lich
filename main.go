@@ -189,7 +189,7 @@ func main() {
 		exe = ""
 	}
 	coord := restart.New(exe, os.Environ())
-	dispatcher.Register("appupdate", appupdate.New(version, coord.Install))
+	dispatcher.Register("appupdate", appupdate.New(version, coord.Install, hub.Emit))
 	dispatcher.Register("patchnotes", patchnotes.New(version, changelog))
 	dispatcher.Register("store", db)
 	// Read before runChromium writes this run's runtime file over the previous

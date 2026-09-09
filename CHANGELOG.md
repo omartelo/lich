@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The update toast shows the download.** Pressing Update & install used to
+  leave one spinner turning until the whole thing was over, a minute or more
+  where the Windows installer is the asset. The toast now draws a bar with the
+  percent and the megabytes received of the total while the release downloads,
+  then a spinner naming the install, and says on Windows that lich closes and
+  reopens on its own. A failure says which of the two it died in and how far
+  the download got, and offers Retry.
+
 ### Fixed
 
 - **Two settings surfaces that were a pixel out.** The dialog a machine without

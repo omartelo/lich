@@ -64,6 +64,9 @@ const (
 type Service struct {
 	mu      sync.Mutex
 	install func(string) error
+	// emit publishes Apply's progress to the app's event hub (ProgressEventName);
+	// nil leaves the update working and silent.
+	emit func(name string, data any)
 
 	http *http.Client
 	// download carries the release-asset GET; separate from http so the short
@@ -92,11 +95,13 @@ type Service struct {
 }
 
 // New returns a service that reports version as the running build and polls
-// GitHub for the latest release.
-func New(version string, install func(string) error) *Service {
+// GitHub for the latest release. install runs a downloaded Windows installer;
+// emit is the app's event hub.
+func New(version string, install func(string) error, emit func(name string, data any)) *Service {
 	exe, _ := os.Executable() // "" if unresolved — canSelfApply then stays false.
 	return &Service{
 		install:       install,
+		emit:          emit,
 		http:          &http.Client{Timeout: httpTimeout},
 		download:      &http.Client{Timeout: downloadTimeout},
 		version:       version,
@@ -180,9 +185,10 @@ func (s *Service) Apply() error {
 		return fmt.Errorf("download %s: status %d", asset, resp.StatusCode)
 	}
 	if s.installerUpdate() {
-		return s.applyInstaller(resp.Body, sum)
+		return s.applyInstaller(s.progressReader(resp.Body, resp.ContentLength, phaseInstaller), sum)
 	}
-	if err := s.applyBinary(io.LimitReader(resp.Body, assetLimit), sum); err != nil {
+	body := s.progressReader(resp.Body, resp.ContentLength, phaseInstall)
+	if err := s.applyBinary(io.LimitReader(body, assetLimit), sum); err != nil {
 		return fmt.Errorf("apply update: %w", err)
 	}
 	return nil

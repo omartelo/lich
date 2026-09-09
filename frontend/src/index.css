@@ -27,6 +27,13 @@
     /* The one text rung below text-xs: the uppercase label that heads a group
        of rows (DESIGN.md). Font size only, as the arbitrary value it replaced. */
     --text-2xs: 0.65625rem;
+    /* The update toast's bar while the download has no total: a third of the
+       track sliding across, the way an indeterminate bar reads everywhere. */
+    --animate-update-indeterminate: update-indeterminate 1.4s ease-in-out infinite;
+    @keyframes update-indeterminate {
+        from { transform: translateX(-100%); }
+        to { transform: translateX(300%); }
+    }
     --font-heading: var(--font-sans);
     --font-sans: 'Geist Variable', sans-serif;
     --color-sidebar-ring: var(--sidebar-ring);
