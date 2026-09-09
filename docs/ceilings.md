@@ -507,7 +507,10 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   runner only (`release.yml` opens the window and reads a page over CDP), never on a desk, so the taskbar
   icon and AppUserModelID grouping on Windows, the Dock tile, Cmd-Tab and menu bar name on macOS, and the
   graceful close on restart on both are designed, not seen; what the macOS runner did measure is that the
-  subprocesses hold no Dock tile of their own and the page renders (`release.yml`, the `mac` job).
+  subprocesses hold no Dock tile of their own and the page renders (`release.yml`, the `mac` job). A page
+  read over CDP is not a pixel either: a window that renders every frame and presents none reads as green, and
+  that is exactly what an Intel UHD driver did on Windows until `shell/src/main.rs` turned DirectComposition
+  off there. No runner here can look at its own screen, so presentation is only ever proven on a desk.
 - **A Linux install whose window is missing or dies at startup opens a system browser instead**
   (`internal/chromium.Run`): `go run`, a bare binary copied out of the tarball, a package missing
   `lib/lich/shell` — each falls through to the ladder below with one `Warn` line; a window that exits with

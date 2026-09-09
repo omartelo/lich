@@ -202,6 +202,17 @@ fn main() {
     {
         app = app.credential_storage(kurogane::CredentialStorage::Basic);
     }
+    // Chromium presents its frames through DirectComposition on Windows, and
+    // an Intel UHD driver that cannot (31.0.101.2141, measured) leaves every
+    // frame rendered and never shown: five live processes, the page loaded on
+    // CDP, a white window. The classic swap chain costs the video overlays a
+    // window with no video has no use for; --use-angle=gl and
+    // --disable-gpu-compositing also clear it, but each swaps a whole backend
+    // out, and the terminal's WebGL renderer rides on this one.
+    #[cfg(windows)]
+    {
+        app = app.chromium_flag("disable-direct-composition");
+    }
     if let Some(class) = launch.class {
         app = app.window_class(class);
     }

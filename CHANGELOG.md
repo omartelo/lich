@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The window no longer opens white on some Windows machines.** Chromium presents
+  its frames through DirectComposition on Windows, and a graphics driver that
+  cannot leaves lich rendering into a window that never shows anything: the page
+  loads, the processes live, the screen stays blank (measured on Intel UHD,
+  driver 31.0.101.2141). lich's own window now presents through the classic swap
+  chain there, which costs it the video overlays a window with no video never
+  used, and keeps GPU rasterisation and the terminal's WebGL renderer.
+
 ## [0.48.0] - 2026-09-09
 
 ### Changed
