@@ -55,7 +55,7 @@ Both sides test against the payloads in
 permission event, so a Kiro session waiting on a confirmation reads as `busy`
 rather than `waiting` — the card says it is working, which is true, and does not
 say what it is waiting for. It has no session-end event either, so the card keeps
-the provider's mark until the PTY itself goes (docs/ceilings.md).
+the provider's mark until the PTY itself goes (docs/providers/kiro.md).
 
 Kiro is also the one harness that reads a hook's **stdout back into the
 conversation as context** — that is what its hooks are for. Every report script

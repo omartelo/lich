@@ -6,8 +6,8 @@ about a dozen files across two repositories. This is the map — written after
 Antigravity, so it names what that change actually touched rather than what it
 should have. Cursor CLI came later and needed no plugin install at all — it runs
 every Claude Code hook on the machine, which is a shape the plugin table below
-does not have; [`ceilings.md`](ceilings.md) carries what that buys and what it
-costs.
+does not have; [`providers/cursor.md`](providers/cursor.md) carries what that
+buys and what it costs.
 
 Two rules govern the whole exercise, and both are in
 [`../CLAUDE.md`](../CLAUDE.md):
@@ -147,6 +147,10 @@ Not optional, and all in the same PR:
 - **`docs/hooks/fixtures/session-start.jsonl`** — the accepted-provider line
   above, which is what unblocks the plugin's own suite.
 - **`docs/ceilings.md`** — a bullet per gap, naming the mechanism and the file.
+- **`docs/providers/<id>.md`** — the reference page for the new harness: what it
+  is, its binary, its config directory and transcript, then a section per
+  subject in the order every other page uses. [`providers/`](providers/) is one
+  page per registry id, and a missing one is a provider nobody wrote down.
 - **`docs/cli.md`** — the `--kind` list, the MCP registration table, and the
   `doctor` sample output.
 - **`CHANGELOG.md`** — under `[Unreleased]`, written for someone who runs the

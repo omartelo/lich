@@ -2,7 +2,8 @@
 
 Deliberate limits and shortcuts, and the traps they set. A bullet earns its place by naming something that breaks
 work when nobody knows it and that the call site never shows. The mechanism and the history stay in the code and
-`CHANGELOG.md`; this file is the trap alone.
+`CHANGELOG.md`; this file is the trap alone. Provider-specific behaviour is reference, not a trap, and lives in
+[`providers/`](providers/).
 
 - **A project's gh account governs gh, not git**: `vcs.account` (`internal/project/ghaccount.go`) puts one
   account's token in `GH_TOKEN` for every gh call lich makes for that project. A push still rides the remote's
@@ -205,11 +206,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **The worktree setup script answers to the main checkout, never the new branch**
   (`internal/project/setup.go`): improve `.lich/setup-worktree.sh` on a feature branch and fresh worktrees keep
   running the old one until the change reaches the checkout the project points at.
-- **opencode files a fork under the parent's directory, not the new checkout's** (measured on 1.18.23): the
-  copied session's `directory` column is the one the original ran in, and its `parent_id` is left empty, so
-  opencode's own session list places a fork in the checkout it came from and records no lineage. lich's own
-  card is right — it carries the worktree it was opened in, and `origin_session_id` names the parent — but the
-  two disagree, and only lich's side is visible in lich.
 - **git status is polled** — one shared poller per repository path (`frontend/src/lib/git/git-status-store.ts`); the
   lich plugin's `session-touched` hook nudges an immediate refresh.
 - **The status badge has a single source** (`internal/project/status.go`): the branch, the HEAD commit and the
@@ -264,12 +260,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   fallback there would open lich a second time, in a system browser, on the profile the window owns — so a
   lich already running in the fallback browser is not focused by it either, and what a system browser does
   with the forwarded command line is its own.
-- **lich appends to the agent's system prompt, for two providers only**
-  (`internal/terminal/command.go`, `briefingFlags` → `relay.SpawnBriefing`): Claude Code and oh-my-pi are spawned
-  with `--append-system-prompt` carrying lich's own briefing, so text the user never wrote is in every session's
-  prompt and in `/proc/<pid>/cmdline`. Codex, Antigravity, opencode, Crush and Cursor CLI get nothing there — none
-  has a per-spawn append flag, so for those five the point exists only in lich's MCP instructions, and behaviour
-  between providers differs by that much.
 - **A prompt in use is recognised from the bytes going in, never from the line itself**
   (`internal/terminal/draft.go`): a relayed message pastes at the prompt and sends an Enter behind it, so lich
   holds the delivery back while the user has unsent input there. What it counts is printable input since the last
@@ -288,65 +278,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   events rather than bytes, the bracketed paste markers do not survive, and every provider TUI then guesses at where
   a paste ends from timing alone. A target that repaints on a timer of its own never goes quiet and gets its Enter
   at `defaultSettleLimit` regardless, which is the case this cannot tell from a paste still arriving.
-- **A lich-spawned Kiro session runs lich's agent, not the user's** (`internal/agentplugin/kiro.go`,
-  `internal/terminal/command.go`, `agentArgs`): Kiro keeps its hooks inside an *agent config*, and its built-in
-  `kiro_default` cannot be shadowed — a `kiro_default.json` in the agents directory is ignored outright (measured
-  on 2.21.0). So the only place a hook can be registered is an agent lich writes itself, which the spawn then
-  names with `--agent lich`. Two things follow, and neither is visible on the card. The agent lich writes carries
-  no `prompt`, so a session loses the paragraph `kiro_default` adds about subagents, the planner and LSP — the
-  model still has every tool, it is just not told about those. And a default the user set with
-  `kiro-cli agent set-default` is **not** what a lich session runs; their own agent applies to Kiro started from a
-  terminal and not to Kiro started from a card. Deleting `~/.kiro/agents/lich.json` puts the session back on
-  `kiro_default` and silently ends every report with it: the spawn stops naming an agent it cannot find, which is
-  the one case where that costs a warning line rather than the reports.
-- **Kiro enforces no hook timeout, and blocks the turn behind one**
-  (`internal/agentplugin/kiro.go`): its TUI draws "0 of 1 hooks finished" while a report runs, and a hook that
-  slept four seconds ran to completion under both `timeout_ms: 1000` and `timeout: 1` (2.21.0). So lich writes no
-  timeout into the agent — a field that bounds nothing is a promise the file does not keep — and what actually
-  bounds a report is the request timeout inside the script itself. A lich whose listener has gone away costs a
-  Kiro turn that wait on every hook it fires, where the other harnesses cut it off themselves.
-- **Kiro's skip-permissions flag still stops once** (`internal/terminal/command.go`, `skipPermissionFlags`): with
-  the switch on, lich passes `--trust-all-tools`, and Kiro's TUI opens on a full-screen confirmation
-  ("No, exit / Yes, I accept / Yes, and don't ask again") that has to be answered before the session starts. The
-  flag is real and every tool afterwards runs unconfirmed; it is the *first* screen that is not skipped, which is
-  the one thing a user who ticked the box does not expect. Kiro's own `chat.disableTrustAllConfirmation` setting
-  turns it off for good, and lich does not write it — that setting disables a safety confirmation for every Kiro
-  on the machine, including the ones lich never spawned.
-- **A Kiro session never reports `waiting` or `idle`** (`docs/hooks/`): its five events are
-  `agentSpawn`, `userPromptSubmit`, `preToolUse`, `postToolUse` and `stop`, so lich closes session-start,
-  session-state's busy/tool/done rows and session-touched, and nothing else. A Kiro session sitting on a
-  permission prompt reads as `busy` — true, but it does not say what it is waiting for — and the card keeps the
-  provider's mark until the PTY itself goes, because there is no session-end event to clear it.
-- **A Cursor CLI session reports through Claude Code's plugin, or not at all** (`internal/agentplugin`,
-  `internal/terminal/start.go`, `providerKind`): lich installs no plugin into Cursor, and it does not have to —
-  the CLI executes every Claude Code hook on the machine, the user's own and each installed plugin's (measured on
-  2026.08.11: `hookSource: claude-user` and `claude-plugin`, with `${CLAUDE_PLUGIN_ROOT}` expanded). So on a
-  machine where the lich plugin is installed in Claude Code, a Cursor session reports the chat id it is running
-  and the files it touches, with nothing installed there — and on a machine without it, that session reports
-  nothing at all. Nothing on the card says which of the two it is.
-  **What never arrives is the turn.** Of the nine events the plugin registers, Cursor delivers four —
-  `SessionStart`, `PreToolUse`, `PostToolUse`, `SessionEnd` — and no `UserPromptSubmit` or `Stop`, measured
-  against hooks in Cursor's own format and in Claude Code's alike. So a turn that calls no tool never begins and
-  one that does never ends, which is why `terminal.closableState` drops every state but `idle` from a Cursor
-  session rather than pinning a spinner to the card for the rest of it: no spinner, no bell, no auto-title, and
-  no `waiting` either (`Notification` maps to nothing there). That is the Crush row of the table below, arrived
-  at from the other direction — lich does not own the registration here, so it filters what it cannot close.
-  The reports are also all that route carries: Cursor takes no MCP server on its command line and reads none from
-  a Claude Code plugin, so lich's own tools come from an `mcpServers` document its install writes under
-  `~/.cursor` — which is why installing for Cursor refuses while Claude Code has no plugin, why its version is
-  Claude Code's, and why its row offers no update of its own: the update is the Claude Code row's, one line up
-  the same screen. A Cursor session gets no briefing either — the CLI has no append flag — so what it knows about
-  lich is its tool list. One last edge: the plugin's script reports `claude`, the argument Claude Code's own
-  registration passes it, and lich drops that name for a card whose provider it chose itself — but a **shell**
-  session running `cursor-agent` by hand has only the report to go on and wears Claude's mark.
-- **Cursor keeps its state in two directories and its chats per checkout** (`internal/sandbox/sandbox.go`,
-  `internal/terminal/transcript.go`): its config dir is `$CURSOR_CONFIG_DIR` ‖ `$XDG_CONFIG_HOME/cursor` ‖
-  `~/.cursor` — not xdg-basedir, the fallback is the home directly — and it holds the credentials and the chats.
-  But `~/.cursor` is resolved off the home with no variable in the way at all, and that is where `mcp.json`, the
-  per-project transcripts and the CLI state live. On a machine with `XDG_CONFIG_HOME` set the two are different
-  directories and a sandbox binding only one is a session that cannot see its own MCP servers. The chat itself is
-  at `chats/<md5 of the resolved cwd>/<chatId>/store.db`, so a resume asked without the session's own working
-  directory answers "conversation gone" — the same shape as Crush.
 - **An install started from `go run` registers the lich on PATH, not itself** (`internal/agentplugin/crush.go`,
   `resolveLichBinary`): Crush's, oh-my-pi's and Cursor's registrations name the absolute path of the lich that
   wrote them, and under `go run` — `task dev` — that path is the binary the toolchain built into its cache and
@@ -357,45 +288,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   session reaches the lich its PTY's coordinates name, but not what the file appears to say. With no lich on
   PATH at all, a dev install registers nothing: Crush and oh-my-pi still get their hooks, and Cursor's install
   refuses outright.
-- **Installing the plugin writes into four harnesses' own directories** (`internal/agentplugin`): Claude Code and
-  Codex are driven through their plugin CLI, but opencode, oh-my-pi and Crush have none, so lich writes the
-  released files itself. None of them records what is installed, so the version lives in a marker line lich wrote —
-  edit the file by hand and lich reads it as not installed. Crush below 0.88.0 ignores those lines in silence,
-  which is why the install asks its version first. Crush's block and omp's `mcp.json` register lich's MCP server by
-  the absolute path of the binary that installed it, and omp's is a JSON document lich rewrites rather than appends
-  to: every key survives, the user's formatting does not.
-- **Antigravity has a plugin CLI and lich installs around it** (`internal/agentplugin/antigravity.go`): `agy
-  plugin install` takes a directory, and its only remote form clones that repository's default branch — while lich
-  installs a *release*, whose version is what a card reports and what the next update compares against. So lich
-  writes the customization directory itself (`~/.gemini/config/plugins/lich/`), with three consequences. The
-  installed version lives in the manifest lich writes rather than in a marker line, since the directory is lich's
-  outright — and a copy the user installed through `agy plugin install` carries no version, so it reads as not
-  installed. The registration's commands are relative, resolved against the directory holding `hooks.json`
-  (Antigravity runs a hook through `sh -c` from there and sets no plugin-root variable of its own, both measured on
-  1.1.19), so moving that directory by hand breaks every report until the next install. And lich writes the hooks
-  and their scripts only: the plugin's skills come with `agy plugin install`, not with this, which is the same
-  thing already true of opencode, oh-my-pi and Crush.
-- **A new MCP tool reaches opencode a release later than everyone else** (`internal/cli/mcp.go`, `mcpTools`; the
-  registration table in `docs/cli.md`): every other harness is handed lich's own server, so a tool added here is in
-  that session's list on the next spawn. opencode cannot register an MCP server from a plugin, so its plugin
-  defines each tool itself in the companion repo (`omartelo/lich-plugin`, `opencode/lich.js`) — which means a tool
-  arrives there only once that repo cuts a release and the user reinstalls the plugin, and until they do it is
-  missing from that session's list while it is in every other. `lich rename` works there like anywhere else; it is
-  discovery that lags, which is the whole reason the tools exist.
-- **Only Claude Code says what a session is waiting for; the others say less or nothing**
-  (`frontend/src/components/sidebar/SessionCard.tsx`, table in `docs/hooks/session-state.md`): its
-  `Notification` carries a `message` written for a human, so the card reads "Claude needs your permission to
-  use Bash". Codex's `PermissionRequest` and opencode's `.asked` events carry only the thing being asked
-  about — `tool_name`, `permission`, `action` — so those cards read a bare `Bash` or `edit`, which says which
-  card to open and not what it will ask. **Antigravity, oh-my-pi, Crush and Cursor CLI send no reason at all** and keep the
-  generic "Waiting on you": none of the four reports `waiting` in the first place (Antigravity's permission
-  prompt raises no lifecycle event that has been measured; omp declares an approval event no run was ever seen
-  emitting; Crush reports no state), so there is nothing to hang a reason on. The trap is reading a bare card as
-  "nothing to say" — on those three it means the harness never spoke, not that the block is trivial.
-- **omp's state directory answers to two variables, and the profile wins** (`internal/agentplugin/omp.go`,
-  `internal/terminal/transcript.go`, resolving it independently as the Claude Code pair do): `OMP_PROFILE` moves
-  the whole directory and beats an explicit `PI_CODING_AGENT_DIR`. Get it backwards and the install lands where omp
-  is not reading and every restored card silently starts fresh.
 - **The plan gauge answers to two undocumented endpoints, and only two providers have one**
   (`internal/quota`): Claude Code's and Codex's usage routes are what their own CLIs poll, not published API. A
   field renamed upstream drops the window it fed rather than raising anything — an entry lich has no name for is
@@ -439,20 +331,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   the API rejects an OAuth token without it — the same coupling as the user agent, and it fails closed, as a
   failed reading. Headers carry the two account-wide windows and no plan name, so such a session shows no
   model-scoped weekly cap and no "Max 5x" badge.
-- **Only two providers name the account a session spends, and the reasons the other six do not are not one
-  reason** (`internal/quota`, `Plan.Account`): Claude Code answers a profile route with the credentials token,
-  and Codex carries an `email` claim in the OIDC id token beside its access token (read unverified, and
-  discarded once its `exp` has passed — the CLI can rotate the access token without rewriting the id one, and a
-  gauge under a login the user has left is worse than one under no name). opencode, Crush and oh-my-pi run on
-  the user's own API keys: there is no plan account to name, which is the same reason they have no gauge.
-  Antigravity's `~/.gemini/oauth_creds.json` *does* carry the same `email` claim and it is deliberately not
-  read: there is no `antigravityPlan`, so a `Plan` naming an account with no window in it renders nothing at
-  all (`PlanQuota` draws only a reading with a window) — the name arrives with the gauge or not at all. Cursor
-  CLI and Kiro CLI were measured on 2026-09-04 and carry no such claim: Cursor's `~/.config/cursor/auth.json`
-  token is a JWT whose `sub` is an opaque `github|user_…` and whose claims contain no email, and Kiro's login
-  is a row in `~/.local/share/kiro-cli/data.sqlite3` holding an opaque `aoa…` token, a `github` provider label
-  and an AWS profile ARN — nothing a person recognises as their account. Naming either would take a network
-  call against an unmeasured route, for a provider that has no gauge to hang the name under.
 - **The sandbox confines a working agent, not hostile code** (`internal/sandbox`): namespaces and mounts on
   Linux, a path policy on macOS, and nothing else — no seccomp filter, no Landlock ruleset. The network is
   never cut (the agent needs its API and the plugin's hooks report over loopback), so anything readable
@@ -670,10 +548,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   lich stays up with a notification and nothing on screen. Only a machine missing the opener itself reaches
   the dialog that carries the URL.
 - **Keep-awake follows the session-state report, and only that** (`internal/awake`, `turnLog.onOpen`): the
-  machine is held out of idle sleep while a hook says a turn is open. Crush reports no state at all, so a
-  Crush session left working behind a locked screen sleeps as it always did, and no card says so. Kiro's
-  permission prompt reads as `busy` (docs/hooks/session-state.md), so a Kiro session blocked on a human keeps
-  the machine awake until someone answers. Linux holds it through `systemd-inhibit --what=idle`: a distro
+  machine is held out of idle sleep while a hook says a turn is open, so what a provider reports decides whether
+  the machine stays up at all (`docs/providers/`). Linux holds it through `systemd-inhibit --what=idle`: a distro
   without systemd logs one warning per burst of work and sleeps, and a desktop that ignores logind idle
   inhibitors sleeps silently. The hold was measured on Linux only; on Windows and macOS CI proves the request
   is registered (`powercfg /requests`, `pmset -g assertions`), not that the machine stays up.

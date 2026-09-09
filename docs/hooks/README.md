@@ -23,7 +23,9 @@ way to end: without `Stop` a `busy` never becomes `done`, so
 `terminal.closableState` keeps everything but `idle` off a Cursor card. Reports
 also arrive naming `claude`, the argument Claude Code's own registration passes;
 lich answers from the kind it spawned instead (`terminal.providerKind`).
-`../ceilings.md` carries what all of that costs.
+[`../providers/cursor.md`](../providers/cursor.md) carries what all of that
+costs, and [`../providers/`](../providers/) holds the same page for every other
+harness.
 
 This directory is the **canonical, contract-first source** for those hooks:
 
