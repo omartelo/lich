@@ -143,8 +143,11 @@ func (s *Service) spawnSession(
 	// project's setup script first, then the entrypoint, then the shell.
 	spec = wrapEntrypoint(spec, kind, s.store.SessionEntrypoint(id), runtime.GOOS)
 	settingUp := false
+	skipped := ""
 	if setup {
-		spec, settingUp = wrapSetup(spec, project.SetupScript(s.store.ProjectPath(projectID)), runtime.GOOS)
+		script := project.SetupScript(s.store.ProjectPath(projectID))
+		spec, settingUp = wrapSetup(spec, script, runtime.GOOS)
+		skipped = setupSkippedNotice(script, runtime.GOOS)
 	}
 	// Outermost, so the setup script and the entrypoint are confined with the
 	// session they run in front of.
@@ -183,6 +186,13 @@ func (s *Service) spawnSession(
 	// Outside mu's protection by design (see Service.spawns), and stored with the
 	// registration so no report can arrive for a session whose kind is unknown.
 	s.spawns.Store(id, spawn{kind: kind, cwd: cwd})
+	// Written the way stream writes the PTY's own bytes, and before the reader
+	// that would race it: into the replay so a reload still finds the line, and
+	// through the coalescer so an attached window has it now.
+	if skipped != "" {
+		sess.replay.append([]byte(skipped))
+		sess.out.Write([]byte(skipped))
+	}
 	go s.stream(id, sess)
 	return sess, cwd, nil
 }

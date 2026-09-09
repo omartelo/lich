@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Windows now says what it skipped instead of skipping it in silence.** Both
+  worktree scripts are sh, and a session there runs PowerShell. A fresh worktree
+  whose project ships `.lich/setup-worktree.sh` now opens with one line in the
+  card naming the setup it did not run, rather than a checkout whose
+  dependencies are quietly missing; and the Run item stays in the menu, dead
+  under the same reason, so it can no longer be mistaken for an offer the
+  project never made.
 - **A file lich had to copy now says so at the prompt, and the copy lives as
   long as its session.** A path pasted for a file the session cannot reach
   (dragged onto the terminal or chosen with the attach button) is followed by

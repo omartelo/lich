@@ -8,6 +8,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
+import { isWindows } from "@/lib/platform"
 import type { ProviderState } from "@/lib/providers-store"
 import { sandboxDefaultFor } from "@/lib/providers-store"
 import { CONFINED_MEANS } from "@/lib/sandbox-copy"
@@ -40,6 +41,35 @@ interface SessionLaunchMenuItemsProps {
   /** The checkout's Run entry. Absent when the project ships no
    * .lich/run-worktree.sh — there would be no command to run. */
   run?: RunMenuAction
+}
+
+/** Why the Run item is dead on Windows: .lich/run-worktree.sh holds sh and a
+ * session there runs PowerShell, which would take its lines as commands of its
+ * own and expand $LICH_WORKTREE_PORT to nothing. */
+export const RUN_NOT_ON_WINDOWS = "Run scripts are sh; not run on Windows."
+
+// The checkout's Run row: live where the script can run, dead under the
+// sentence naming why on Windows — SessionForkItem's idiom. The row stays
+// either way, because a user who runs a card on Linux and finds nothing on
+// Windows has no way to learn that the offer was withheld rather than missing.
+function RunMenuItem({ run }: { run: RunMenuAction }) {
+  if (isWindows) {
+    return (
+      <DropdownMenuItem disabled>
+        <Play />
+        <span className="flex flex-col items-start">
+          Run
+          <span className="text-xs">{RUN_NOT_ON_WINDOWS}</span>
+        </span>
+      </DropdownMenuItem>
+    )
+  }
+  return (
+    <DropdownMenuItem onClick={run.onSelect}>
+      <Play />
+      {run.open ? "Go to Run card" : "Run"}
+    </DropdownMenuItem>
+  )
 }
 
 interface SandboxStepProps {
@@ -150,12 +180,7 @@ export function SessionLaunchMenuItems({
           <Terminal />
           {terminalLabel}
         </DropdownMenuItem>
-        {run && (
-          <DropdownMenuItem onClick={run.onSelect}>
-            <Play />
-            {run.open ? "Go to Run card" : "Run"}
-          </DropdownMenuItem>
-        )}
+        {run && <RunMenuItem run={run} />}
         {worktree && (
           <DropdownMenuItem disabled={worktree.disabled} onClick={worktree.onSelect}>
             <GitBranch />

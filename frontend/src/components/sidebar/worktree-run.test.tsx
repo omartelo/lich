@@ -14,8 +14,22 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
+import { RUN_NOT_ON_WINDOWS, SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
 import { WorktreeScriptRows } from "./WorktreeScriptRows"
+
+// The OS the menu reads, behind a getter so one file can mount both sides: the
+// component reads it per render, and vi.mock replaces the module for the whole
+// file.
+const os = vi.hoisted(() => ({ windows: false }))
+
+vi.mock("@/lib/platform", () => ({
+  get isWindows() {
+    return os.windows
+  },
+  get isMac() {
+    return false
+  },
+}))
 
 const setup = vi.hoisted(() => ({
   run: "",
@@ -40,6 +54,7 @@ vi.mock("@/lib/rpc", () => ({
 }))
 
 beforeEach(() => {
+  os.windows = false
   setup.run = ""
   setup.script = ""
   setup.saved = []
@@ -144,4 +159,44 @@ test("a configured run command is shown beside the setup script", async () => {
   expect(text()).toContain(".lich/setup-worktree.sh")
   expect(text()).toContain(".lich/run-worktree.sh")
   await rows.unmount()
+})
+
+// The run script is one file, versioned and shared by every checkout, and it
+// holds sh — so on Windows the row stays and says so, rather than going missing
+// with no way to tell a withheld offer from an absent one.
+test("the Run item is dead on Windows, naming why", async () => {
+  os.windows = true
+  const clicks: number[] = []
+  const mounted = await mountBudget(menu({ open: false, onSelect: () => clicks.push(1) }))
+
+  const row = [...document.querySelectorAll('[role="menuitem"]')].find((element) =>
+    element.textContent?.startsWith("Run"),
+  ) as HTMLElement | undefined
+  if (!row) {
+    throw new Error("Run row not rendered")
+  }
+  expect(row.getAttribute("data-disabled")).not.toBeNull()
+  expect(row.textContent).toContain(RUN_NOT_ON_WINDOWS)
+
+  await mounted.act(() => {
+    row.click()
+  })
+  expect(clicks).toEqual([])
+  await mounted.unmount()
+})
+
+test("the Run item is live everywhere else, with no reason to give", async () => {
+  const clicks: number[] = []
+  const mounted = await mountBudget(menu({ open: false, onSelect: () => clicks.push(1) }))
+
+  const row = menuItem("Run")
+  if (!row) {
+    throw new Error("Run row not rendered")
+  }
+  expect(row.getAttribute("data-disabled")).toBeNull()
+  await mounted.act(() => {
+    row.click()
+  })
+  expect(clicks).toEqual([1])
+  await mounted.unmount()
 })

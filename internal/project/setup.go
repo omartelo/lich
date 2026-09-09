@@ -11,11 +11,13 @@ import (
 // the repository rather than lich's store so both are versioned and shared like
 // the code they bootstrap; an untracked copy works too.
 //
-// setupScriptPath runs once in a new worktree's terminal before its provider
-// starts. runScriptPath is the project's own app — the command a run card opens
-// into, in a checkout that already has its dependencies.
+// SetupScriptPath runs once in a new worktree's terminal before its provider
+// starts, and is exported because a session that skips it names the file on
+// screen (internal/terminal.setupSkippedNotice). runScriptPath is the project's
+// own app — the command a run card opens into, in a checkout that already has
+// its dependencies.
 const (
-	setupScriptPath = ".lich/setup-worktree.sh"
+	SetupScriptPath = ".lich/setup-worktree.sh"
 	runScriptPath   = ".lich/run-worktree.sh"
 )
 
@@ -24,7 +26,7 @@ const (
 // worktree being created: a worktree opened on somebody else's branch (the PR
 // flow) must not execute that branch's script.
 func SetupScript(projectPath string) string {
-	return readScript(projectPath, setupScriptPath)
+	return readScript(projectPath, SetupScriptPath)
 }
 
 // RunScript returns the project's run script, or "" when the repository ships
@@ -77,7 +79,7 @@ func (s *Service) WorktreeSetup(path string) WorktreeSetup {
 // user's call. Saving an empty script removes the file instead, returning the
 // dialog to the suggestion state rather than pinning an empty setup.
 func (s *Service) SaveWorktreeSetup(path, script string) error {
-	return writeScript(path, setupScriptPath, script)
+	return writeScript(path, SetupScriptPath, script)
 }
 
 // SaveWorktreeRun writes the run script into the project checkout, the same way

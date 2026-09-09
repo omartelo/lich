@@ -3,6 +3,7 @@ package terminal
 import (
 	"strings"
 
+	"github.com/omartelo/lich/internal/project"
 	"github.com/omartelo/lich/internal/shquote"
 )
 
@@ -15,7 +16,7 @@ import (
 // decision stays pure and testable off-Windows (wrapArgv's pattern): Windows is
 // skipped, and not for the shell's sake — a Windows session runs PowerShell now
 // (windowsShells), which wrapEntrypoint composes for. What is skipped is the
-// script: setupScriptPath is `.lich/setup-worktree.sh`, one file, versioned in
+// script: project.SetupScriptPath is `.lich/setup-worktree.sh`, one file, versioned in
 // the repository and shared by everyone who checks it out, and its contents are
 // sh. Running that through PowerShell would not fail cleanly — it would run the
 // leading words of every line as commands.
@@ -60,3 +61,27 @@ const (
 	setupDone        = "\x1b]6969;lich-setup-done\x07"
 	setupDoneEscaped = "\\033]6969;lich-setup-done\\007"
 )
+
+// setupSkippedNotice is the line a Windows session prints in its card, and ""
+// wherever there is nothing to say. It answers the silence wrapSetup used to
+// leave: the checkout opens with its dependencies not installed, and the first
+// thing that fails is the agent's own command, for a reason only this file
+// knows.
+//
+// goos is wrapSetup's seam, and the two decide from the same pair — a script
+// wrapSetup refuses is exactly a script this announces.
+//
+// It is written into the session's output (Service.spawnSession) rather than
+// composed into the spawn, because there is no exec on Windows: printing the
+// line from PowerShell would leave PowerShell between lich and the provider for
+// the life of the session, and the pid the cwd poller reads is the one lich
+// spawned.
+func setupSkippedNotice(script, goos string) string {
+	if script == "" || goos != "windows" {
+		return ""
+	}
+	// CRLF because a PTY's own newline is one: the card would otherwise keep
+	// the column the line ended in and let the provider draw from there.
+	return "[lich] setup skipped: " + project.SetupScriptPath +
+		" is sh and this session runs PowerShell.\r\n"
+}

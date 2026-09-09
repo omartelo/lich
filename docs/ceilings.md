@@ -14,13 +14,11 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   checkout owns, nothing binds it, and anything on the machine can take the port before the dev server starts. A
   Run card shortens that window rather than closing it — the process it starts is what binds the port, and
   whether the script even mentions the variable is the project's own business.
-- **The Run card is never started for you, and never on Windows** (`frontend/src/components/sidebar/SessionSidebar.tsx`):
-  a fresh worktree's setup script is still installing dependencies in the agent's card when the checkout appears,
-  and lich has no "setup finished" signal to hang an automatic start on — `terminal.Ready` answers a different
+- **The Run card is never started for you** (`frontend/src/components/sidebar/SessionSidebar.tsx`): a fresh
+  worktree's setup script is still installing dependencies in the agent's card when the checkout appears, and
+  lich has no "setup finished" signal to hang an automatic start on — `terminal.Ready` answers a different
   question, going false again for every turn the agent takes. So the card is one gesture, which is also what
-  keeps eight worktrees from meaning eight dev servers. On Windows the menu item is absent for the setup script's
-  reason: `.lich/run-worktree.sh` holds sh, and a session there runs PowerShell, where `$LICH_WORKTREE_PORT`
-  expands to nothing in silence.
+  keeps eight worktrees from meaning eight dev servers.
 - **The cost readout bills per `(session, transcript)`** (`internal/pricing`, `internal/terminal/usage_cost.go`): a
   conversation forked inside the PTY bills its copied history twice — lich's own resume continues the same
   transcript and is unaffected — and each sub-agent's own transcript is counted in, so one unreadable or
@@ -205,12 +203,9 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   (Git Bash, a POSIX-ish shell reached through PATH), that path still runs over a pipe, so an rc guarded the
   same way is skipped there exactly as it was everywhere before this fix, with no ConPTY wired in to close the
   gap.
-- **The worktree setup script answers to the main checkout, never the new branch, and never runs on Windows**
-  (`internal/project/setup.go`, `internal/terminal/setup.go`): improve `.lich/setup-worktree.sh` on a feature
-  branch and fresh worktrees keep running the old one until the change reaches the checkout the project points
-  at. And `.lich/setup-worktree.sh` is one file, versioned and shared by every checkout, holding sh — so a
-  Windows session skips it rather than feeding it to PowerShell, which would run the leading words of every line
-  as commands. A worktree opens there with its setup silently not done.
+- **The worktree setup script answers to the main checkout, never the new branch**
+  (`internal/project/setup.go`): improve `.lich/setup-worktree.sh` on a feature branch and fresh worktrees keep
+  running the old one until the change reaches the checkout the project points at.
 - **opencode files a fork under the parent's directory, not the new checkout's** (measured on 1.18.23): the
   copied session's `directory` column is the one the original ran in, and its `parent_id` is left empty, so
   opencode's own session list places a fork in the checkout it came from and records no lineage. lich's own

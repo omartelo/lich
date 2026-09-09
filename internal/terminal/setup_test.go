@@ -3,6 +3,8 @@ package terminal
 import (
 	"strings"
 	"testing"
+
+	"github.com/omartelo/lich/internal/project"
 )
 
 // TestWrapSetup proves the wrap decision table: no script or Windows leaves
@@ -74,5 +76,45 @@ func TestSetupMarkerSpellingsAgree(t *testing.T) {
 	unescaped = strings.ReplaceAll(unescaped, `\007`, "\x07")
 	if unescaped != setupDone {
 		t.Errorf("printf writes %q, the service watches for %q", unescaped, setupDone)
+	}
+}
+
+// TestSetupSkippedNotice pins the line a Windows session gets in place of the
+// setup it will not run, and the pairing that makes it honest: the script
+// wrapSetup refuses is exactly the script this announces, so neither OS can end
+// up both skipping the setup and saying nothing about it.
+func TestSetupSkippedNotice(t *testing.T) {
+	for _, tt := range []struct{ script, goos string }{
+		{"pnpm i", "linux"},
+		{"pnpm i", "darwin"},
+		{"", "windows"},
+		{"", "linux"},
+	} {
+		if got := setupSkippedNotice(tt.script, tt.goos); got != "" {
+			t.Errorf("setupSkippedNotice(%q, %q) = %q, want silence", tt.script, tt.goos, got)
+		}
+	}
+
+	got := setupSkippedNotice("pnpm i", "windows")
+	for _, want := range []string{
+		"[lich] setup skipped:",
+		project.SetupScriptPath,
+		"PowerShell",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("notice %q is missing %q", got, want)
+		}
+	}
+	// A PTY's newline: without the carriage return the provider draws from the
+	// column the notice ended in.
+	if !strings.HasSuffix(got, "\r\n") {
+		t.Errorf("notice %q does not end a PTY line", got)
+	}
+
+	for _, goos := range []string{"linux", "darwin", "windows"} {
+		_, wrapped := wrapSetup(ptySpec{bin: "claude"}, "pnpm i", goos)
+		if wrapped == (setupSkippedNotice("pnpm i", goos) != "") {
+			t.Errorf("goos %q: wrapped=%v and the notice disagree about who speaks", goos, wrapped)
+		}
 	}
 }

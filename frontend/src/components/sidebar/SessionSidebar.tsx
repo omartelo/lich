@@ -6,7 +6,6 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { GitPullRequestArrow, PanelLeftClose, Plus, Search } from "lucide-react"
 import { toast } from "sonner"
 import { ProjectService, Spawn, Terminal as TerminalService } from "@/lib/rpc"
-import { isWindows } from "@/lib/platform"
 import { errorText } from "@/lib/utils"
 import { closeSettings, isSettingsOpen, subscribeSettingsCard } from "@/lib/settings-card-store"
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
@@ -119,12 +118,12 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   // inside lich that writes the file; edited on disk it goes stale until the
   // project is reopened, exactly as the dialog's own reading of it does.
   //
-  // Never on Windows, for the setup script's reason: the file holds sh and a
-  // session there runs PowerShell, which would take its lines as commands of
-  // its own and expand $LICH_WORKTREE_PORT to nothing.
+  // Asked on Windows too, where the item is rendered dead under its reason
+  // (SessionLaunchMenuItems): whether the row can be clicked is that menu's
+  // call, and this one only knows whether there is a command at all.
   const [runnable, setRunnable] = useState(false)
   useEffect(() => {
-    if (!path || worktreeOpen || isWindows) {
+    if (!path || worktreeOpen) {
       return
     }
     let stale = false
