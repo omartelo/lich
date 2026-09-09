@@ -30,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a dotfiles repository was simply absent inside a confined session, with
   nothing saying so. The shield's tooltip lists them: "Not mounted (symlinks):
   .gitconfig, .ssh/known_hosts". The policy has not changed — only the silence.
-=======
+
 - **A scheduled prompt now says when it is late, and a lost one says so on
   screen.** A prompt that could not be typed at its time — the session was
   mid-setup, mid-sentence, without a terminal, or lich was closed — arrives with
@@ -53,6 +53,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   measured against that login instead of the one lich is signed in to. A session
   whose environment cannot be read at all shows no gauge on any platform now,
   which is what a card whose terminal is not yet up looks like until it is.
+
+- **Closing a session on Windows now asks the agent to leave before
+  terminating it.** The close sends the terminal's Ctrl+C and gives the agent a
+  moment to run its own exit path — hooks, transcripts, whatever it writes on
+  the way out — where it used to be killed outright. An agent whose TUI wants a
+  second Ctrl+C to quit is still terminated when that moment runs out.
 
 - **A session whose shell runs inside tmux, over ssh or in a container now says
   its directory is unknown instead of naming a local one.** The card, its

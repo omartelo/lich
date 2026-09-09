@@ -177,10 +177,14 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   fades only for the session whose terminal is on screen **while the window has focus**. A card left focused in a
   background window keeps its ring solid until the window is touched again, which is the point, but it also means
   a browser that reports focus oddly never fades one.
-- **A session close is a hang-up on Unix and a kill on Windows** (`internal/terminal/pty_unix.go`,
+- **A session close is a hang-up on Unix and a Ctrl+C on Windows** (`internal/terminal/pty_unix.go`,
   `pty_windows.go`): closing a card signals the agent and gives it `closeGrace` to leave, so its exit path runs —
-  hooks, transcripts, whatever it writes on the way out. A ConPTY has no signal to deliver, so the same close on
-  Windows is still abrupt: an agent that saves state on exit loses it there, and nothing on screen says so.
+  hooks, transcripts, whatever it writes on the way out. A ConPTY has no signal to deliver, so Windows sends the
+  terminal's own Ctrl+C instead, and that is a weaker ask: an agent whose TUI reads one Ctrl+C as "interrupt the
+  turn" and wants a second one to quit — Claude Code does — is still killed when the grace runs out, and nothing
+  on screen says so. That the byte arrives at all depends on `heedCtrlC`: a lich started by a service passes an
+  inherited "ignore Ctrl+C" to every agent it spawns, and clearing it before the first spawn is what the Windows
+  close rests on.
 - **The shell-env pty read is bounded by silence, not by the child's exit, and Windows never gets one**
   (`internal/terminal/shellenv_unix.go`, `runShellDump`): resolving PATH and friends runs the login shell on a
   pty rather than a pipe so an rc guarded on `[ -t 0 ]`/`tty -s` (nvm's and fnm's own init, among others) loads —

@@ -5,6 +5,7 @@ package terminal
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"sync"
 
@@ -12,8 +13,27 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+// setConsoleCtrlHandler is not in x/sys/windows; the call below is the only
+// use lich has for it.
+var setConsoleCtrlHandler = windows.NewLazySystemDLL("kernel32.dll").NewProc("SetConsoleCtrlHandler")
+
+// heedCtrlC clears the "ignore Ctrl+C" attribute this process may carry, once.
+// A process started by a service — a scheduler, a CI runner — inherits that
+// attribute and hands it to every process it starts, and a child that ignores
+// Ctrl+C never sees the one a close sends: the close waits out closeGrace and
+// kills it anyway. A child inherits the attribute as it stands when it is
+// created, so clearing it before the first spawn covers every session after.
+// It is the process default otherwise, so this changes nothing for a lich
+// started from a desktop.
+var heedCtrlC = sync.OnceFunc(func() {
+	if ok, _, err := setConsoleCtrlHandler.Call(0, 0); ok == 0 {
+		slog.Warn("clear the inherited Ctrl+C ignore", "error", err)
+	}
+})
+
 // startPTY starts spec's child attached to a fresh ConPTY sized cols x rows.
 func startPTY(spec ptySpec) (ptyHandle, error) {
+	heedCtrlC()
 	line, err := commandLine(spec.bin, spec.args)
 	if err != nil {
 		return nil, err
@@ -83,10 +103,9 @@ func (p *windowsPTY) Wait() (int, error) {
 	return int(code), nil
 }
 
-// Close hangs up and terminates the child, once. The pending Wait is cancelled
-// before the lock is taken because it only returns when the child exits, and
-// the child exits because of this very call — conpty polls the process handle
-// on a one-second tick, so that is the longest a close waits for it.
+// Close sends Ctrl+C and kills the child only if it outstays closeGrace, once.
+// Cancel the pending Wait before taking its lock: conpty polls the process
+// handle on a one-second tick, so acquiring the lock can take another second.
 func (p *windowsPTY) Close() error {
 	p.cancelWait()
 	p.mu.Lock()
@@ -95,5 +114,14 @@ func (p *windowsPTY) Close() error {
 		return nil
 	}
 	p.closed = true
+	// Send the terminal's Ctrl+C key through ConPTY so the child's console
+	// handles it without attaching the backend to another session's console.
+	if _, err := p.Write([]byte{ctrlC}); err == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), closeGrace)
+		defer cancel()
+		if _, err := p.ConPty.Wait(ctx); err != nil && ctx.Err() == nil {
+			slog.Warn("wait for Ctrl+C exit", "pid", p.Pid(), "error", err)
+		}
+	}
 	return p.ConPty.Close()
 }
