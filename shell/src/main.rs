@@ -17,6 +17,7 @@ use cef::{
     wrap_keyboard_handler,
 };
 use kurogane::{App, ClientAppBrowserDelegate};
+use std::io::Read;
 use std::os::raw::c_int;
 
 /// The title the window carries. The page title is never used for it.
@@ -39,6 +40,8 @@ struct Launch {
     url: Option<String>,
     class: Option<String>,
     profile_dir: Option<String>,
+    /// lich's own switch (internal/chromium/launch): end when stdin does.
+    exit_on_stdin_eof: bool,
     switches: Vec<(String, Option<String>)>,
 }
 
@@ -67,6 +70,7 @@ fn parse<I: IntoIterator<Item = String>>(args: I) -> Launch {
             "app" => launch.url = value,
             "class" => launch.class = value,
             "user-data-dir" => launch.profile_dir = value,
+            "exit-on-stdin-eof" => launch.exit_on_stdin_eof = true,
             // Feature lists stay in argv, where CEF reads them and unions them
             // with the features it disables itself. Pushed through kurogane
             // they would land as a plain switch write after that union and
@@ -228,7 +232,27 @@ fn main() {
             None => app.chromium_flag(name),
         };
     }
+    // Last, after the fork in sandbox_available: that one must be the only
+    // thread. Reached only from lich, whose end is what ends this window; a
+    // shell launched by hand keeps whatever stdin it was given.
+    if launch.exit_on_stdin_eof {
+        std::thread::spawn(|| {
+            wait_for_eof(std::io::stdin());
+            std::process::exit(0);
+        });
+    }
     app.run_or_exit();
+}
+
+/// Blocks until stdin ends. lich holds the write end of the pipe it hands the
+/// window for as long as it lives and never writes to it, so EOF here is lich
+/// gone — killed, crashed, out of memory — and the window it opened goes with
+/// it. Left running, the window was the orphan the next launch's window was
+/// forwarded to by CEF's process singleton; that duplicate's exit read as the
+/// window failing to open, and lich opened a system browser beside it.
+fn wait_for_eof(mut stdin: impl Read) {
+    let mut byte = [0u8; 1];
+    while matches!(stdin.read(&mut byte), Ok(1..)) {}
 }
 
 /// Whether Chromium can confine its subprocesses here, decided the way
@@ -339,6 +363,7 @@ mod tests {
             "--class=lich",
             "--no-first-run",
             "--disable-features=Translate",
+            "--exit-on-stdin-eof",
         ]));
         assert_eq!(
             launch,
@@ -346,6 +371,7 @@ mod tests {
                 url: Some("http://127.0.0.1:47821/?token=x".into()),
                 class: Some("lich".into()),
                 profile_dir: Some("/home/u/.config/lich/chromium-profile".into()),
+                exit_on_stdin_eof: true,
                 switches: vec![
                     ("profile-directory".into(), Some("Default".into())),
                     ("no-first-run".into(), None),
@@ -365,6 +391,12 @@ mod tests {
             launch.switches,
             vec![("ozone-platform".into(), Some("wayland".into()))]
         );
+    }
+
+    #[test]
+    fn returns_once_stdin_ends_whatever_was_written() {
+        wait_for_eof(std::io::Cursor::new(b"noise"));
+        wait_for_eof(std::io::empty());
     }
 
     #[test]

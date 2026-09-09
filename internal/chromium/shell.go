@@ -7,13 +7,18 @@ import (
 
 // shellName is the window binary `task build:shell` produces out of shell/, a
 // Rust crate on CEF: lich's own Chromium, launched with the same arguments as
-// any browser on the ladder (Args), so nothing about the launch knows which
-// one it got. The executable suffix is the only thing about it Windows changes
+// any browser on the ladder (Args) plus exitOnStdinEOF, the one switch that is
+// its own. The executable suffix is the only thing about it Windows changes
 // (shell_name_windows.go).
 const shellName = "lich-shell" + shellExt
 
 // stepShell names the rung the bundled window answers on.
 const stepShell = "the bundled window"
+
+// exitOnStdinEOF is the switch that tells the bundled window to end when its
+// stdin does (shell/src/main.rs). Passed to it alone: a system browser has no
+// such switch, and lich holds no pipe to one.
+const exitOnStdinEOF = "--exit-on-stdin-eof"
 
 // shellPaths lists where the bundled window sits relative to the lich
 // executable: under shell/ beside it (a tarball, bin/ after `task build`),

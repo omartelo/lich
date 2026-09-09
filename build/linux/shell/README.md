@@ -2,8 +2,10 @@
 
 `shell/` is the window lich opens on Linux: an embedded Chromium (CEF), a thin
 Rust crate over [kurogane](https://github.com/0x48piraj/kurogane). The Go
-backend launches it exactly the way it launches a system browser — same
-`internal/chromium.Args` argv — so nothing about it reaches the pure-Go build.
+backend launches it the way it launches a system browser — the same
+`internal/chromium.Args` argv, plus `--exit-on-stdin-eof` and the pipe behind
+it that ends the window with the lich that opened it — so nothing about it
+reaches the pure-Go build.
 
 ## The kurogane fork
 

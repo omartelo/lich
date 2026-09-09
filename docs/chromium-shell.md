@@ -149,8 +149,12 @@ CGO) was never taken. The window is a **separate binary**, `shell/`, a Rust
 crate on [kurogane](https://github.com/0x48piraj/kurogane) (cef-rs
 underneath), and the Go binary launches it exactly the way it launches a
 system browser — the same `internal/chromium.Args` argv, `--app=<url>`,
-`--class`, `--user-data-dir`, the user's `--` switches. Nothing in the Go
-side knows which one it got; `CGO_ENABLED=0` and the static binary stand.
+`--class`, `--user-data-dir`, the user's `--` switches — plus one switch of
+its own, `--exit-on-stdin-eof`: lich holds the write end of a pipe on the
+window's stdin for as long as it lives, and the window ends on the EOF, so a
+lich killed outright takes its window with it instead of leaving an orphan
+for the next launch to be forwarded to. `CGO_ENABLED=0` and the static binary
+stand.
 The migration path really was "swap who provides the window": one new rung
 in the resolution ladder, above the desktop's default and below the pin.
 

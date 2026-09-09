@@ -44,6 +44,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Relaunching after a killed lich opens one window, not two.** A lich that
+  died without closing its window (a kill, an out-of-memory, a crash) left the
+  window running, and the next launch found it: the new window was handed to
+  the old one and exited, which lich read as its own window failing to open, so
+  it opened a system browser beside it. The window now ends with the lich that
+  opened it, and the relaunch opens its own. The notice that the previous run
+  ended unexpectedly still shows, once, in that window.
 - **A session's quota gauge now follows that session's own login on macOS and
   Windows.** Which account a card spends was read from its process, and only
   Linux answered, so a session running a binary you configured lost its gauge

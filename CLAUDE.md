@@ -27,7 +27,7 @@ lives in the code, `docs/` and `CHANGELOG.md` — never restate any of it here.
 
 - Go 1.27, pure Go: `CGO_ENABLED=0` and a fully static binary are a constraint, not a default. The Linux
   window is a *separate* binary, `shell/` (Rust on CEF via a kurogane fork), launched with the same argv as a
-  system browser — nothing about it reaches the Go build (`docs/chromium-shell.md`).
+  system browser plus one switch of its own — nothing about it reaches the Go build (`docs/chromium-shell.md`).
 - OS-specific code is selected by build tags behind small seams, never by runtime checks — the PTY is the model
   (`internal/terminal`).
 - Service shapes are hand-owned in `frontend/src/lib/api-types.ts`: touch a Go struct's JSON tags and that mirror

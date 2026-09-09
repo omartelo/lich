@@ -228,9 +228,29 @@ func launch(browser Result, url, dataDir, class string, extra []string, onStart 
 		}
 	}
 	argv := append(append([]string{}, browser.Prefix...), Args(url, dataDir, class, extra)...)
+	if browser.Step == stepShell {
+		argv = append(argv, exitOnStdinEOF)
+	}
 	cmd := exec.Command(browser.Path, argv...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	if browser.Step == stepShell {
+		// The bundled window's life is tied to this process by a pipe it reads
+		// for EOF: a lich that dies without closing its window (a kill, an
+		// out-of-memory, a crash) closes the write end with it, and the window
+		// goes. Left running, it was the orphan the next launch's window was
+		// forwarded to by CEF's process singleton, and that duplicate's exit 1
+		// read as the bundled window failing to open — a system browser opened
+		// beside the raised orphan. Only the write end is held here; Go marks
+		// both ends close-on-exec, so no session inherits it.
+		r, w, err := os.Pipe()
+		if err != nil {
+			return fmt.Errorf("launch %s: %w", browser.Path, err)
+		}
+		defer w.Close()
+		defer r.Close()
+		cmd.Stdin = r
+	}
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("launch %s: %w", browser.Path, err)
 	}
