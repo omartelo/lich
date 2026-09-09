@@ -883,7 +883,7 @@ func TestSkipPermissionArgs(t *testing.T) {
 		{"cursor on", "cursor", true, []string{"--force"}},
 		// Kiro's is the only one that is not a "dangerous"/"yolo"/"force" word,
 		// and it does not fully deliver: with it on, Kiro's TUI still opens on a
-		// confirmation the user has to accept once (docs/ceilings.md).
+		// confirmation the user has to accept once (docs/providers/kiro.md).
 		{"kiro off", "kiro", false, nil},
 		{"kiro on", "kiro", true, []string{"--trust-all-tools"}},
 		{"shell is never wired", KindShell, true, nil},

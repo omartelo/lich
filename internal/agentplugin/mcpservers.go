@@ -21,7 +21,7 @@ import (
 //
 // Every other provider is answered with lich's own name alone: their tool names
 // either carry the doubled underscore the card splits without help, or are not a
-// tool name at all (Antigravity's, docs/ceilings.md).
+// tool name at all (Antigravity's, docs/hooks/session-state.md).
 
 // opencodeMCPKey is the key opencode holds its servers under.
 const opencodeMCPKey = "mcp"

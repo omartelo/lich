@@ -25,9 +25,9 @@ import (
 //
 // Three of the four reports are registered. The title report is not: it reads an
 // `ai-title` out of a transcript path the harness hands it on stdin, and Kiro
-// passes no transcript path at all — see docs/ceilings.md, which also carries
-// what a lich-spawned Kiro session gives up by running this agent instead of
-// `kiro_default`.
+// passes no transcript path at all — see docs/providers/kiro.md, which also
+// carries what a lich-spawned Kiro session gives up by running this agent
+// instead of `kiro_default`.
 
 // kiroWriteTools are the tools whose use means a file may have changed, so the
 // touched report fires for them and not for a read. They are registered as one
@@ -71,7 +71,8 @@ var kiroHooks = []struct {
 // `timeout_ms: 1000` and `timeout: 1` (2.21.0, on `agentSpawn`). Neither
 // spelling bounds anything, and a field lich writes that does nothing is the
 // silent no-op this package exists to avoid. What actually bounds a report is
-// the script's own request timeout, which is where docs/ceilings.md points.
+// the script's own request timeout, which is where docs/providers/kiro.md
+// points.
 
 func (s *Service) kiroInstall() error {
 	version, err := s.releaseVersion()
@@ -141,7 +142,8 @@ func kiroScripts() []string {
 // `kiro_default` adds about subagents, the planner and LSP, and costs nothing
 // else. Copying that paragraph instead would freeze a snapshot of Kiro's own
 // default into a file lich never updates, which is a session drifting further
-// from stock Kiro with every release and saying nothing (docs/ceilings.md).
+// from stock Kiro with every release and saying nothing
+// (docs/providers/kiro.md).
 //
 // `resources` is the one thing worth carrying over from `kiro_default`, because
 // dropping it would silently stop a project's own context from loading.
