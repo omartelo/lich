@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.48.0] - 2026-09-09
+
 ### Changed
 
 - **Windows now says what it skipped instead of skipping it in silence.** Both
@@ -59,8 +61,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Windows installs with the bundled window now update lich and Chromium together through the installer and reopen automatically.
-
+- **A Windows install with the bundled window now updates itself.** The update
+  button used to send that install to the release page, because swapping the
+  bare exe would have left Chromium at the installer's version. lich now
+  downloads and verifies the release installer, closes cleanly, lets it update
+  lich and Chromium together, and reopens on the same port. Portable installs
+  keep swapping the exe as before.
 - **A Kiro session now names its own card.** Kiro hands its hooks no transcript
   to read a title from, so a Kiro card kept the name lich gave it (`Session 3`)
   however long the conversation ran. lich now reads the title Kiro writes for
@@ -4614,7 +4620,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.47.1...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.48.0...HEAD
+[0.48.0]: https://github.com/omartelo/lich/compare/v0.47.1...v0.48.0
 [0.47.1]: https://github.com/omartelo/lich/compare/v0.47.0...v0.47.1
 [0.47.0]: https://github.com/omartelo/lich/compare/v0.46.0...v0.47.0
 [0.46.0]: https://github.com/omartelo/lich/compare/v0.45.0...v0.46.0
