@@ -165,3 +165,9 @@ jobs:
 
       - name: Backend tests
         run: bash .github/scripts/go-test-summary.sh ${{ matrix.os }}
+
+      - name: Windows installer self-update end to end
+        if: runner.os == 'Windows'
+        env:
+          CGO_ENABLED: "0"
+        run: go test -tags installer_e2e -run '^TestWindowsInstallerE2E$' -v -timeout 10m ./internal/appupdate

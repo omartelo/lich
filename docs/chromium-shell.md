@@ -175,7 +175,16 @@ through CEF itself). The patch is upstream as
 
 Windows ships the same window, flat beside `lich.exe` as `shell\` the way
 CEF lays itself out there, inside the installer (`build/windows/lich.iss`)
-and as a zip beside the portable exe. Two things the Linux window gets from
+and as a zip beside the portable exe. The update button downloads the release's
+installer when this window is present, checks its SHA-256 against the release
+checksums, and runs it silently after closing lich. The per-user installer updates
+the same directory without elevation and reopens lich on its previous port. A
+failed installation shows its error; `.lich-update-setup.log` beside `lich.exe`
+records the install. The last downloaded installer is retained there as
+`.lich-update-setup.exe` for retry and replaced on the next update. The portable
+exe without `shell\lich-shell.exe` still swaps only itself and offers Restart.
+
+Two things the Linux window gets from
 its WM_CLASS come from elsewhere on Windows: the executable carries lich's
 icon and manifest as resources (`shell/build.rs`), and the process claims the
 AppUserModelID the Start Menu shortcut declares, which is what makes the

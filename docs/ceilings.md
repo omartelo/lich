@@ -648,11 +648,6 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   icon and AppUserModelID grouping on Windows, the Dock tile, Cmd-Tab and menu bar name on macOS, and the
   graceful close on restart on both are designed, not seen; what the macOS runner did measure is that the
   subprocesses hold no Dock tile of their own and the page renders (`release.yml`, the `mac` job).
-- **A Windows install with the window beside it does not self-update** (`internal/appupdate.windowed`):
-  the self-apply asset is the bare exe, and swapping it under a `shell\` directory would leave a third of
-  a gigabyte of Chromium at the installer's version. The update button sends that install to the release
-  page for the installer instead; the portable exe with no `shell\` beside it keeps self-applying, and
-  keeps opening a system browser.
 - **A Linux install whose window is missing or dies at startup opens a system browser instead**
   (`internal/chromium.Run`): `go run`, a bare binary copied out of the tarball, a package missing
   `lib/lich/shell` — each falls through to the ladder below with one `Warn` line; a window that exits with
@@ -686,10 +681,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **Without a Chromium `--app` window there is no window lifecycle** (`main.go`, `openWithoutWindow`) —
   reached with no Chromium-family browser installed, or on purpose with `--no-window`/`LICH_NO_WINDOW`. lich
   opens a plain tab and then runs until it is signalled, because a tab it did not spawn cannot be waited on.
-  Closing the tab leaves lich serving, and `/restart` — which frees the pinned port by terminating "the
-  window" — is handed this process instead. On Windows that terminate is a `taskkill` WM_CLOSE against a
-  process that has no window, so an in-place update leaves the successor racing a port that never frees:
-  a `--no-window` launch now buys that trap on a machine that could have had a window.
+  Closing the tab leaves lich serving.
 - **The tab fallback cannot tell "opened" from "nothing happened"** (`internal/system.OpenURL`): `xdg-open`,
   `open` and `rundll32` are started and never waited on — waiting would block for the life of the browser they
   hand off to. A desktop with a URL handler installed but no browser behind it therefore looks like success:

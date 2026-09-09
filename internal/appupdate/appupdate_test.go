@@ -68,7 +68,7 @@ func TestCanSelfApply(t *testing.T) {
 		{"unwritable dir", "darwin", filepath.Join("/nonexistent-abc123", "lich"), false},
 		{"homebrew cellar is brew's", "darwin", cellarExe(t), false},
 		{"app bundle keeps its signature", "darwin", bundleExe(t), false},
-		{"installer layout carries the window", "windows", windowedExe(t), false},
+		{"installer layout carries the window", "windows", windowedExe(t), true},
 	}
 	for _, tc := range tests {
 		if got := canSelfApply(tc.goos, tc.exePath); got != tc.want {
@@ -266,7 +266,7 @@ func TestInstallCommand(t *testing.T) {
 }
 
 func TestApplyRejectedWhenNotSelfApply(t *testing.T) {
-	s := New("0.7.0")
+	s := New("0.7.0", nil)
 	s.exePath = "" // forces canSelfApply false regardless of platform
 	if err := s.Apply(); err == nil {
 		t.Fatal("Apply() = nil, want an error when self-apply is unsupported")
@@ -433,7 +433,7 @@ func TestFetchChecksum(t *testing.T) {
 }
 
 func TestNewResolvesExe(t *testing.T) {
-	s := New("0.7.0")
+	s := New("0.7.0", nil)
 	if s.version != "0.7.0" {
 		t.Fatalf("version = %q", s.version)
 	}

@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/minio/selfupdate"
@@ -61,6 +62,9 @@ const (
 // Service reports lich's own update state and applies self-updates where the
 // binary is writable.
 type Service struct {
+	mu      sync.Mutex
+	install func(string) error
+
 	http *http.Client
 	// download carries the release-asset GET; separate from http so the short
 	// metadata timeout never applies to the body. Nil falls back to http
@@ -89,9 +93,10 @@ type Service struct {
 
 // New returns a service that reports version as the running build and polls
 // GitHub for the latest release.
-func New(version string) *Service {
+func New(version string, install func(string) error) *Service {
 	exe, _ := os.Executable() // "" if unresolved — canSelfApply then stays false.
 	return &Service{
+		install:       install,
 		http:          &http.Client{Timeout: httpTimeout},
 		download:      &http.Client{Timeout: downloadTimeout},
 		version:       version,
@@ -143,10 +148,12 @@ func (s *Service) Status() Status {
 	return st
 }
 
-// Apply downloads the latest release binary for this platform, verifies its
-// SHA-256 against the release checksums, and atomically swaps it over the
-// running executable. Only valid where CanSelfApply is true.
+// Apply verifies the latest release against its SHA-256 checksum, then swaps
+// the portable executable or hands a windowed Windows install to its installer.
+// The installer closes and relaunches lich. Only valid where CanSelfApply is true.
 func (s *Service) Apply() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if !canSelfApply(s.goos, s.exePath) {
 		return fmt.Errorf("self-apply not supported on this install")
 	}
@@ -154,7 +161,7 @@ func (s *Service) Apply() error {
 	if latest == "" {
 		return fmt.Errorf("could not resolve the latest release")
 	}
-	asset := assetName(s.goos, s.goarch, latest)
+	asset := s.assetName(latest)
 	if asset == "" {
 		return fmt.Errorf("no release asset for %s/%s", s.goos, s.goarch)
 	}
@@ -171,6 +178,9 @@ func (s *Service) Apply() error {
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download %s: status %d", asset, resp.StatusCode)
+	}
+	if s.installerUpdate() {
+		return s.applyInstaller(resp.Body, sum)
 	}
 	if err := s.applyBinary(io.LimitReader(resp.Body, assetLimit), sum); err != nil {
 		return fmt.Errorf("apply update: %w", err)
@@ -207,17 +217,13 @@ func canSelfApply(goos, exePath string) bool {
 	if exePath == "" {
 		return false
 	}
-	if brewOwned(exePath) || bundled(exePath) || windowed(exePath) {
+	if brewOwned(exePath) || bundled(exePath) {
 		return false
 	}
 	return dirWritable(filepath.Dir(exePath))
 }
 
-// windowed reports whether exePath has lich's own window installed beside it,
-// the Windows installer's layout (build/windows/lich.iss). The self-apply
-// asset is the bare exe, so swapping it would leave the window, a third of a
-// gigabyte of Chromium, at the version the installer put there; that install
-// updates through the installer.
+// windowed recognizes the Windows installer layout.
 func windowed(exePath string) bool {
 	_, err := os.Stat(filepath.Join(filepath.Dir(exePath), "shell", "lich-shell.exe"))
 	return err == nil

@@ -35,6 +35,9 @@ UninstallDisplayIcon={app}\{#AppExe}
 WizardStyle=modern
 Compression=lzma2
 SolidCompression=yes
+CloseApplications=yes
+CloseApplicationsFilter=*
+RestartApplications=no
 
 [Files]
 Source: "..\..\bin\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
@@ -50,3 +53,50 @@ Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"; AppUserModelID: 
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "Launch {#AppName}"; Flags: nowait postinstall skipifsilent
+; Explicit update mode inherits lich's pinned port and restart marker. Ordinary
+; silent installs still do not launch an application on the user's desktop.
+Filename: "{app}\{#AppExe}"; Flags: nowait runascurrentuser; Check: IsUpdate
+
+[Code]
+const
+  SynchronizeAccess = $00100000;
+  WaitObject0 = 0;
+  ShutdownTimeout = 60000;
+
+function OpenProcess(Access: LongWord; Inherit: Boolean; PID: LongWord): THandle;
+  external 'OpenProcess@kernel32.dll stdcall';
+function WaitForSingleObject(Handle: THandle; Milliseconds: LongWord): LongWord;
+  external 'WaitForSingleObject@kernel32.dll stdcall';
+function CloseHandle(Handle: THandle): Boolean;
+  external 'CloseHandle@kernel32.dll stdcall';
+
+function IsUpdate: Boolean;
+begin
+  Result := ExpandConstant('{param:UPDATEPID|0}') <> '0';
+end;
+
+function InitializeSetup: Boolean;
+var
+  Process: THandle;
+  PID: Integer;
+begin
+  Result := True;
+  if not IsUpdate then Exit;
+  PID := StrToIntDef(ExpandConstant('{param:UPDATEPID|0}'), 0);
+  if PID <= 0 then begin
+    Result := False;
+    Exit;
+  end;
+  { lich closes its window and flushes its database before releasing its exe.
+    Restart Manager then handles any remaining Chromium file holders. }
+  Process := OpenProcess(SynchronizeAccess, False, PID);
+  if Process <> 0 then begin
+    Result := WaitForSingleObject(Process, ShutdownTimeout) = WaitObject0;
+    CloseHandle(Process);
+  end else
+    Result := DLLGetLastError = 87; { ERROR_INVALID_PARAMETER: already exited }
+  if Result then
+    Log('lich update: outgoing process exited before file replacement')
+  else
+    MsgBox('lich did not exit. Close lich and run the update again.', mbError, MB_OK);
+end;

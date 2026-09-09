@@ -52,6 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Windows installs with the bundled window now update lich and Chromium together through the installer and reopen automatically.
+
 - **Relaunching after a killed lich opens one window, not two.** A lich that
   died without closing its window (a kill, an out-of-memory, a crash) left the
   window running, and the next launch found it: the new window was handed to

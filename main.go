@@ -179,7 +179,17 @@ func main() {
 	dispatcher.Register("project", proj)
 	plugins := agentplugin.New(db)
 	dispatcher.Register("agentplugin", plugins)
-	dispatcher.Register("appupdate", appupdate.New(version))
+	// In-place restart: the update flow (install.sh) POSTs /restart after
+	// replacing the binary. os.Environ() here carries the pinned LICH_LISTEN_PORT
+	// so the successor rebinds the same port. A missing executable path only
+	// disables restart; the app still runs.
+	exe, err := os.Executable()
+	if err != nil {
+		slog.Warn("resolve executable — restart disabled", "err", err)
+		exe = ""
+	}
+	coord := restart.New(exe, os.Environ())
+	dispatcher.Register("appupdate", appupdate.New(version, coord.Install))
 	dispatcher.Register("patchnotes", patchnotes.New(version, changelog))
 	dispatcher.Register("store", db)
 	// Read before runChromium writes this run's runtime file over the previous
@@ -254,16 +264,6 @@ func main() {
 	term.Mount("/drop", http.HandlerFunc(drops.Upload))
 	term.Mount("/events", hub)
 
-	// In-place restart: the update flow (install.sh) POSTs /restart after
-	// replacing the binary. os.Environ() here carries the pinned LICH_LISTEN_PORT
-	// so the successor rebinds the same port. A missing executable path only
-	// disables restart; the app still runs.
-	exe, err := os.Executable()
-	if err != nil {
-		slog.Warn("resolve executable — restart disabled", "err", err)
-		exe = ""
-	}
-	coord := restart.New(exe, os.Environ())
 	term.SetRestart(coord.Do)
 
 	runChromium(term, configDir, chromiumArgs, coord)
@@ -445,15 +445,10 @@ func openWithoutWindow(url, addr, configDir string, coord *restart.Coordinator, 
 			lost+": closing the tab leaves lich running.",
 		zenity.Title("lich"))
 
-	// The window's exit is the app lifecycle everywhere else, and /restart
-	// terminates that window to free the pinned port for its successor. With no
-	// window, this process is what has to go — so it is what the coordinator is
-	// handed, and the signal it sends is the one waited on here.
-	if self, err := os.FindProcess(os.Getpid()); err == nil {
-		coord.SetWindow(self)
-	}
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(stop)
+	coord.SetStop(func() { stop <- os.Interrupt })
 	slog.Info("serving without a window", "addr", addr)
 	<-stop
 	slog.Info("signal received, exiting")

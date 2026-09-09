@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 )
@@ -22,11 +23,12 @@ const WaitEnv = "LICH_RESTART_WAIT"
 type Coordinator struct {
 	mu      sync.Mutex
 	window  *os.Process
+	stop    func()
 	started bool
 	exePath string
 	env     []string
 	// seams for tests; default to the build-tagged process primitives.
-	spawn     func(exe string, env []string) error
+	spawn     func(exe string, env, args []string) error
 	terminate func(p *os.Process) error
 }
 
@@ -50,11 +52,35 @@ func (c *Coordinator) SetWindow(p *os.Process) {
 	c.mu.Unlock()
 }
 
+// SetStop supplies a clean exit when lich serves without a window. A Windows
+// WM_CLOSE cannot signal a backend with no GUI of its own.
+func (c *Coordinator) SetStop(stop func()) {
+	c.mu.Lock()
+	c.stop = stop
+	c.mu.Unlock()
+}
+
 // Do launches the successor and closes the window. Order matters: the successor
 // starts first and blocks retrying the pinned port; then the window dies, this
 // process exits, and the freed port lets the successor bind and open a fresh
 // window.
 func (c *Coordinator) Do() error {
+	return c.launch(c.exePath, nil)
+}
+
+// Install hands replacement and relaunch to Inno Setup. It waits for this PID
+// to exit before touching files, so the window and main's defers finish first.
+func (c *Coordinator) Install(installer string) error {
+	return c.launch(installer, installerArgs(filepath.Dir(c.exePath), os.Getpid()))
+}
+
+func installerArgs(dir string, pid int) []string {
+	return []string{"/SILENT", "/NORESTART", "/CLOSEAPPLICATIONS", "/NORESTARTAPPLICATIONS",
+		"/DIR=" + dir, "/UPDATEPID=" + strconv.Itoa(pid),
+		"/LOG=" + filepath.Join(dir, ".lich-update-setup.log")}
+}
+
+func (c *Coordinator) launch(exe string, args []string) error {
 	if c.exePath == "" {
 		return errors.New("restart: executable path unknown")
 	}
@@ -69,11 +95,13 @@ func (c *Coordinator) Do() error {
 	if c.started {
 		return nil
 	}
-	if err := c.spawn(c.exePath, successorEnv(c.env)); err != nil {
+	if err := c.spawn(exe, successorEnv(c.env), args); err != nil {
 		return fmt.Errorf("restart: launch successor: %w", err)
 	}
 	c.started = true
-	if c.window != nil {
+	if c.stop != nil {
+		c.stop()
+	} else if c.window != nil {
 		if err := c.terminate(c.window); err != nil {
 			return fmt.Errorf("restart: close window: %w", err)
 		}
