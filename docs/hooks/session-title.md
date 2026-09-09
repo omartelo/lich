@@ -30,15 +30,21 @@ Both sides test against the payloads in
 
 | Claude Code hook          | Codex hook                | Antigravity hook          | opencode event    | oh-my-pi event                | Crush hook | Cursor CLI hook | Kiro CLI hook | action                                           |
 |---------------------------|---------------------------|---------------------------|-------------------|-------------------------------|------------|-----------------|---------------|--------------------------------------------------|
-| `PostToolUse` + `Stop`    | `PostToolUse` + `Stop`    | `PreInvocation` + `Stop`  | `session.updated` | `session_stop` + `turn_start` | —          | —               | —             | set the session label to `title` (if still auto) |
+| `PostToolUse` + `Stop`    | `PostToolUse` + `Stop`    | `PreInvocation` + `Stop`  | `session.updated` | `session_stop` + `turn_start` | —          | —               | `stop`†        | set the session label to `title` (if still auto) |
 
-**Kiro registers no title report**, and the reason is not that it has no title:
-it writes one into its session metadata (`title`, derived from the first
-prompt). The report is a *script that reads a transcript path off the hook's own
-stdin*, and Kiro passes no path on any of its five events — its payloads carry
-`cwd`, `session_id` and the event's own fields and nothing else (measured on
-2.21.0). Closing it would mean lich resolving that file itself, which is a
-different mechanism from this contract rather than another column in it.
+† **Kiro registers no title report, and lich reads its title instead.** The
+report is a *script that reads a transcript path off the hook's own stdin*, and
+Kiro passes no path on any of its five events: its payloads carry `cwd`,
+`session_id` and the event's own fields and nothing else (measured on 2.21.0).
+But it does write a `title`, derived from the first prompt, into its session
+metadata, so lich resolves that file itself: on the `stop` report a Kiro session
+does send (the `done` row of [session-state.md](session-state.md)), it reads
+`title` out of `~/.kiro/sessions/cli/<session_id>.json`, the same file the
+context readout is taken from, and applies it through the guarded write below
+(`internal/terminal/title_kiro.go`). A missing file, one caught mid-write and a
+metadata carrying no title are all silence: the card keeps the name lich gave
+it. No hook client is involved, which is why the column is marked rather than
+filled: nothing is POSTed to this endpoint from a Kiro session.
 
 The `ai-title` is an internal Haiku summary of the first prompt. It does not
 exist at `SessionStart`, but it lands long before the turn it belongs to ends:
@@ -137,6 +143,9 @@ being debugged.
   `UPDATE sessions SET label = ? WHERE id = ? AND label_auto = 1`. A user
   `RenameSession` clears `label_auto`, so a manual name is never stomped.
   Returns whether the label actually changed.
+- **Kiro's own read**: `internal/terminal/title_kiro.go`, `Service.kiroTitle`,
+  the one title lich reads rather than receives (see the footnote above), taken
+  off the `done` report and handed to the same guarded write.
 - **Live update** — `internal/terminal/terminal.go`: when the label changed,
   emits the global app event `session-title` (`{id, label}`);
   `frontend/src/providers/projects.tsx` mirrors it into session state so the card
@@ -157,6 +166,13 @@ being debugged.
   was `1+1 is?` keeps the name lich gave it, correctly, since the prompt would
   fit on the card anyway. Absence there is the CLI's behaviour, not a broken
   hook, and it is the first thing to rule out before debugging one.
+- **A Kiro card is named at the turn's end, never during it.** Every other
+  harness reports in-turn, which is what stops a ten-minute first turn showing
+  `Session 3` for all ten minutes; Kiro's title is read off the `stop` report,
+  because reading it on each `busy` would cost a file read per tool call to
+  learn the same name. So a Kiro card wears the name lich gave it for the whole
+  of its first turn, where the other harnesses rename it seconds in, and a first
+  turn that never reaches a `stop` never renames it at all.
 - **Reacts to the first prompt, not later pivots reliably.** Claude Code may or
   may not refresh the `ai-title` mid-session; lich applies whatever the hook
   last sent while the label is still auto.

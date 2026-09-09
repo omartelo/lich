@@ -324,13 +324,11 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   the one thing a user who ticked the box does not expect. Kiro's own `chat.disableTrustAllConfirmation` setting
   turns it off for good, and lich does not write it — that setting disables a safety confirmation for every Kiro
   on the machine, including the ones lich never spawned.
-- **A Kiro session never reports `waiting`, `idle`, or a title** (`docs/hooks/`): its five events are
+- **A Kiro session never reports `waiting` or `idle`** (`docs/hooks/`): its five events are
   `agentSpawn`, `userPromptSubmit`, `preToolUse`, `postToolUse` and `stop`, so lich closes session-start,
   session-state's busy/tool/done rows and session-touched, and nothing else. A Kiro session sitting on a
   permission prompt reads as `busy` — true, but it does not say what it is waiting for — and the card keeps the
-  provider's mark until the PTY itself goes, because there is no session-end event to clear it. The title report
-  needs a transcript path off the hook payload, which Kiro passes on none of the five; it does write a `title`
-  into its session metadata, so closing that gap later means lich reading the file rather than another hook.
+  provider's mark until the PTY itself goes, because there is no session-end event to clear it.
 - **A Cursor CLI session reports through Claude Code's plugin, or not at all** (`internal/agentplugin`,
   `internal/terminal/start.go`, `providerKind`): lich installs no plugin into Cursor, and it does not have to —
   the CLI executes every Claude Code hook on the machine, the user's own and each installed plugin's (measured on
