@@ -50,7 +50,7 @@ export function GitMissingGate() {
           <Button variant="ghost" onClick={() => setDismissed(true)}>
             Not now
           </Button>
-          <CheckAgainButton />
+          <CheckAgainButton size="default" />
           <Button
             onClick={() => {
               void System.OpenExternal(GIT.url)

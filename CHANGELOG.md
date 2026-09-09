@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Two settings surfaces that were a pixel out.** The dialog a machine without
+  git opens sized its Check again button one step smaller than the two beside
+  it, and Appearance drew a hairline between the Footer row and its layout
+  editor, leaving the Left and Right headings pressed against a line that
+  belonged to the setting above.
+
 ## [0.48.1] - 2026-09-09
 
 ### Fixed
