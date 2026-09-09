@@ -42,6 +42,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   was going to say — on screen, and as a desktop notification, so a session an
   agent closed while you were away still reaches you.
 
+- **A terminal entrypoint now runs the same way on every OS, and agent cards say
+  why they cannot take one.** On Windows the command was run after your
+  PowerShell `$PROFILE`, which Linux and macOS never load, so an entrypoint that
+  leaned on an alias worked on one machine and silently did nothing on the next;
+  no profile or rc file is loaded now, on any OS. And *Entrypoint…* is no longer
+  missing from an agent card's menu — it is there, greyed, saying entrypoints run
+  in terminal sessions.
+
 ### Fixed
 
 - **Relaunching after a killed lich opens one window, not two.** A lich that
@@ -95,16 +103,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   subprocesses; closing that console killed the window, and lich read the death
   as a window that could not open and fell back to the system browser after a
   long wait. It is a GUI binary now, like Chrome's own.
-
-### Changed
-
-- **A terminal entrypoint now runs the same way on every OS, and agent cards say
-  why they cannot take one.** On Windows the command was run after your
-  PowerShell `$PROFILE`, which Linux and macOS never load, so an entrypoint that
-  leaned on an alias worked on one machine and silently did nothing on the next;
-  no profile or rc file is loaded now, on any OS. And *Entrypoint…* is no longer
-  missing from an agent card's menu — it is there, greyed, saying entrypoints run
-  in terminal sessions.
 
 ## [0.47.1] - 2026-09-08
 
@@ -2371,10 +2369,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Delegate types a delegation, not a question.** Picking a session in
-  "Delegate to session…" used to put `Ask the "docs" session to ` at the
+  "Delegate to session…" used to put `Ask the "docs" session to` at the
   prompt, and whatever you typed next had to bend into "to <verb>" — a
   question or pasted context read wrong, and "Ask" was not even the button's
-  word. It now types `Delegate to the "docs" session: `, and anything can
+  word. It now types `Delegate to the "docs" session:`, and anything can
   follow the colon: an order, a question, a dump of context.
 
 - **A worker's answer no longer floods the orchestrator's prompt — it is
