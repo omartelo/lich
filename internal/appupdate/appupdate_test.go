@@ -69,6 +69,7 @@ func TestCanSelfApply(t *testing.T) {
 		{"homebrew cellar is brew's", "darwin", cellarExe(t), false},
 		{"app bundle keeps its signature", "darwin", bundleExe(t), false},
 		{"installer layout carries the window", "windows", windowedExe(t), true},
+		{"scoop install is scoop's", "windows", scoopExe(t), false},
 	}
 	for _, tc := range tests {
 		if got := canSelfApply(tc.goos, tc.exePath); got != tc.want {
@@ -87,6 +88,21 @@ func windowedExe(t *testing.T) string {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(shell, "lich-shell.exe"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return filepath.Join(dir, "lich.exe")
+}
+
+// scoopExe returns a writable path shaped like a Scoop install
+// (<root>\apps\lich\current\lich.exe) with the window beside it, the way the
+// manifest lays it out.
+func scoopExe(t *testing.T) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "Scoop", "apps", "lich", "current")
+	if err := os.MkdirAll(filepath.Join(dir, "shell"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "shell", "lich-shell.exe"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return filepath.Join(dir, "lich.exe")
@@ -241,6 +257,8 @@ func TestInstallCommand(t *testing.T) {
 		{"darwin self-apply", "darwin", "", "", ""},
 		{"homebrew install", "darwin", cellarExe(t), "", brew},
 		{"cask install", "darwin", bundleExe(t), "", cask},
+		{"scoop install", "windows", scoopExe(t), "", "scoop update lich" + restartChainPwsh},
+		{"scoop version dir", "windows", filepath.Join("C:", "scoop", "apps", "lich", "0.47.0", "lich.exe"), "", "scoop update lich" + restartChainPwsh},
 		{"arch by ID", "linux", "", "ID=arch\n", arch},
 		{"arch quoted ID", "linux", "", "ID=\"arch\"\n", arch},
 		{"arch derivative via ID_LIKE", "linux", "", "ID=manjaro\nID_LIKE=arch\n", arch},

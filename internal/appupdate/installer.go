@@ -13,7 +13,7 @@ import (
 const installerLimit = 1 << 30
 
 func (s *Service) installerUpdate() bool {
-	return s.goos == "windows" && windowed(s.exePath)
+	return s.goos == "windows" && installerOwned(s.exePath) && !scoopOwned(s.exePath)
 }
 
 func (s *Service) assetName(version string) string {

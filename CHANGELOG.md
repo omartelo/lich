@@ -14,6 +14,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it, and Appearance drew a hairline between the Footer row and its layout
   editor, leaving the Left and Right headings pressed against a line that
   belonged to the setting above.
+- **A Windows install from before the window now gets the window when it
+  updates.** lich only recognised an installed lich by the window beside it,
+  so an install made by the installer of 0.45 or earlier updated the way a
+  portable exe does: the exe was swapped, the Start Menu shortcut and the
+  "Installed apps" entry stayed at the old version, and lich kept opening in a
+  system browser. Such an install is now recognised by its uninstaller and
+  updates by running the release installer, which upgrades it in place and
+  brings the window, the shortcut and the entry up with it.
+- **A Scoop install no longer updates through the installer.** Since 0.46 the
+  Scoop layout carries the window, which is what lich took as the mark of an
+  installer install, so the update button would have run the release installer
+  into Scoop's directory and registered a second lich in "Installed apps". A
+  Scoop install is now Scoop's, like a Homebrew one: the button opens a shell
+  with `scoop update lich` and a restart pasted, never run.
 
 ## [0.48.1] - 2026-09-09
 

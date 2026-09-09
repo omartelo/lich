@@ -176,8 +176,15 @@ through CEF itself). The patch is upstream as
 Windows ships the same window, flat beside `lich.exe` as `shell\` the way
 CEF lays itself out there, inside the installer (`build/windows/lich.iss`)
 and as a zip beside the portable exe. The update button downloads the release's
-installer when this window is present, checks its SHA-256 against the release
-checksums, and runs it silently after closing lich. The per-user installer updates
+installer when this window is present or when Inno Setup's `unins000.exe` sits
+beside `lich.exe` (an installer install from before the window, v0.10.0 to
+v0.45.x, carries only that mark), checks its SHA-256 against the release
+checksums, and runs it silently after closing lich; the same AppId means the
+setup upgrades that install in place, bringing the window, the Start Menu
+shortcut and the "Installed apps" entry up with the exe. A Scoop install
+(`apps\lich\current`) carries the window too, but Scoop owns it: the button
+offers `scoop update lich` followed by a `/restart` spelled for PowerShell,
+and never runs the installer into Scoop's directory. The per-user installer updates
 the same directory without elevation and reopens lich on its previous port. A
 failed installation shows its error; `.lich-update-setup.log` beside `lich.exe`
 records the install. The last downloaded installer is retained there as
