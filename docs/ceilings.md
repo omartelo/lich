@@ -88,8 +88,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **Footer choices cannot add readings a provider never reports** (`frontend/src/components/FooterSession.tsx`):
   Appearance's global toggles preserve the gaps above — Claude Code and Codex full usage,
   oh-my-pi/opencode/Crush cost only, Kiro context only, and Antigravity/Cursor no transcript usage.
-  Selecting a missing reading renders nothing, never a zero. The two ordered sides live in localStorage and
-  disappear with a cleared browser profile. Cost still uses the backend setting because it controls whether
+  Selecting a missing reading renders nothing, never a zero. Cost still uses the backend setting because it controls whether
   transcripts are priced: when another profile disables it, an old layout cannot enable pricing just by
   moving an unrelated item. The editor waits for that setting before migrating old visibility choices.
   Hiding a reading hides its warning too. An item without data can occupy an editor slot while drawing
@@ -222,13 +221,7 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   dirty count all come out of one `git status --porcelain=v2 --branch` parse. A git release that changes those
   records breaks all three together rather than one at a time, and there is no second call left to disagree with
   the first — `Branch` still asks `symbolic-ref`, but nothing on the polled path calls it.
-- **lich fetches on its own** (`internal/project/basestatus.go`, `internal/project/prconflicts.go`) — the only
-  git writes lich makes outside the worktree flows: the base-branch readout moves remote refs in the user's own
-  repository, unannounced, for as long as a card is on screen. Naming a conflicting pull request's files is the
-  second, made when that pull request is opened on the Pulls screen: it fetches GitHub's `refs/pull/<n>/head`
-  and the base branch. The remote fetched from is the one whose URL matches the pull request's own, origin when
-  none does — lich reads gh's base repository off that URL rather than asking gh again, so a clone whose remotes
-  all name a different repository than the pull request lives on falls back to origin and fails there.
+
 - **A project opened from outside the window is matched by the spelling of its path**
   (`internal/project/project.go`, `Identify`; `internal/spawn/projects.go`): `lich open --project <dir>` normalizes
   what it is handed — `~` expanded, cleaned, refused unless absolute — and then matches that string against the
@@ -628,14 +621,10 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   reason `use-remote-resource.ts` documents, and `use-active-file.test.tsx` pins it by moving the pull
   request on a live component — a probe that remounted instead would call the ref version green.
 - **A profile belongs to one browser, so changing browsers opens lich at its defaults**
-  (`internal/chromium/profiledir.go`): each browser gets `<config>/lich/chromium-profile/<name>-<digest>/`,
-  keyed by the command the ladder resolved, and the page's localStorage — every `lich.*` UI setting — lives
-  inside one of them. Nothing copies between them. Pin a different browser with `--browser`, or watch the
-  bundled window die at startup and fall back to a system one, and lich comes up looking factory-fresh; the
-  settings are still there, under the other key, and going back reaches them. The key is the resolved path
-  and *not* what its symlinks point at, so a store-style install (Nix, snap) keeps one profile across
-  updates through its stable launcher — but a browser pinned at a path carrying its own version, an
-  AppImage among them, is a new browser to this and starts empty on each update.
+  (`internal/chromium/profiledir.go`): every `lich.*` UI setting lives in the localStorage of the profile keyed
+  by the browser that opened it, and nothing copies between profiles. Pin a different browser, or fall back to
+  a system one when the bundled window dies, and lich comes up factory-fresh; the settings are still under the
+  other key. A browser pinned at a path carrying its own version (an AppImage) is a new browser on every update.
 - **On Linux, Windows and Apple Silicon the window is lich's own; on an Intel Mac it is the system
   browser's** (`internal/chromium/shell.go`, `shell/`): the Linux packages, the Windows installer and the
   arm64 `Lich.app` ship an embedded Chromium (CEF through kurogane) beside the binary, and the ladder takes
