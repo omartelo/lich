@@ -463,6 +463,13 @@ func (s *Service) onHookState(req hookRequest) {
 	if req.State != statusIdle {
 		go s.emitUsage(req.SessionID)
 	}
+	// A Kiro session's name is read here rather than reported, because Kiro
+	// hands its hooks no transcript path to read one from while it does file
+	// a title of its own (title_kiro.go). `done` is the turn end it raises,
+	// and the read is off-thread for the same reason the usage one is.
+	if req.State == statusDone {
+		go s.applyKiroTitle(req.SessionID)
+	}
 }
 
 // noteUnread persists whether this session's card is holding a finished turn

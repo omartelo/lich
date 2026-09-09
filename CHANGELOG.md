@@ -52,6 +52,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A Kiro session now names its own card.** Kiro hands its hooks no transcript
+  to read a title from, so a Kiro card kept the name lich gave it (`Session 3`)
+  however long the conversation ran. lich now reads the title Kiro writes for
+  itself and applies it when the turn ends, like every other provider's. A
+  session you renamed keeps your name, as before.
 - **Relaunching after a killed lich opens one window, not two.** A lich that
   died without closing its window (a kill, an out-of-memory, a crash) left the
   window running, and the next launch found it: the new window was handed to
