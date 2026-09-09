@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.48.1] - 2026-09-09
+
 ### Fixed
 
 - **The window no longer opens white on some Windows machines.** Chromium presents
@@ -4630,7 +4632,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.48.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.48.1...HEAD
+[0.48.1]: https://github.com/omartelo/lich/compare/v0.48.0...v0.48.1
 [0.48.0]: https://github.com/omartelo/lich/compare/v0.47.1...v0.48.0
 [0.47.1]: https://github.com/omartelo/lich/compare/v0.47.0...v0.47.1
 [0.47.0]: https://github.com/omartelo/lich/compare/v0.46.0...v0.47.0
