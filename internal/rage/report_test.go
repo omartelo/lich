@@ -138,7 +138,7 @@ func TestNewProbesTheConfigDirItWasGiven(t *testing.T) {
 	if alive {
 		t.Error("probe called a recorded instance alive with nothing listening on its port")
 	}
-	if _, err := c.browser(); err != nil && !strings.Contains(err.Error(), "no chromium-family browser") {
+	if _, err := c.browser(); err != nil && !strings.Contains(err.Error(), "lich-shell is missing") {
 		t.Errorf("browser probe failed for an unexpected reason: %v", err)
 	}
 	if len(c.detect()) == 0 {

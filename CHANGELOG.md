@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **An Intel Mac opens lich as a tab in the default browser.** It is the one
+  build with no window of its own, and it no longer looks for Chrome, Chromium,
+  Edge, Brave or Vivaldi to open a window in: lich serves itself, hands the URL
+  to whatever browser is the default, and keeps running after the tab is closed.
+  An Apple Silicon window that fails to open falls back to the same tab.
+
+### Removed
+
+- **The system-browser fallback on Linux and Windows.** The window ships in
+  every package there, so a lich without one is a broken install, and it now
+  says so in a dialog instead of opening a browser on the machine — with none of
+  the browser's own prompts, extensions or window rules in a window that was
+  never the browser's. `--browser` and `LICH_BROWSER` went with it: `--shell`
+  and `LICH_SHELL` point lich at a window build of your own.
+- **`lich --no-window` and `LICH_NO_WINDOW`.** The tab was a choice for a
+  machine whose owner would rather not run a Chromium-family browser; with lich's
+  own window there is no browser to avoid.
+
 ### Added
 
 - **The update toast shows the download.** Pressing Update & install used to

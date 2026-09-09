@@ -45,13 +45,13 @@ func TestDoctorPrintsTheReportAndExitsZeroWhenNothingStopsALaunch(t *testing.T) 
 
 func TestDoctorExitsNonZeroOnACheckThatStopsALaunch(t *testing.T) {
 	c, stdout, stderr := doctorClient(t, []doctor.Check{
-		{Name: "browser", Status: doctor.Fail, Detail: "no chromium-family browser found"},
+		{Name: "browser", Status: doctor.Fail, Detail: "no window beside the lich binary"},
 	}, nil)
 
 	if code := dispatch([]string{"doctor"}, c); code != 1 {
 		t.Fatalf("exit = %d, want 1 — a script reads this", code)
 	}
-	if !strings.Contains(stdout.String(), "no chromium-family browser found") {
+	if !strings.Contains(stdout.String(), "no window beside the lich binary") {
 		t.Errorf("stdout = %q", stdout.String())
 	}
 	// The report already said it. Saying it again on stderr, worse, is the

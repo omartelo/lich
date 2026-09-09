@@ -1,8 +1,7 @@
 //! lich's window: an embedded Chromium (CEF, through kurogane) that the Go
-//! backend launches exactly the way it launches a system browser. The argv is
-//! the contract of `internal/chromium.Args`: `--app=<url>` is the page,
-//! `--class=<name>` names the window for the window manager,
-//! `--user-data-dir=<dir>` is where the profile lives, and every other
+//! backend launches. The argv is the contract of `internal/chromium.Args`:
+//! `--url=<url>` is the page, `--class=<name>` names the window for the window
+//! manager, `--user-data-dir=<dir>` is where the profile lives, and every other
 //! `--switch[=value]` is a Chromium switch to honour (`lich -- --ozone-platform=wayland`).
 // Rust defaults to the console subsystem and lich.exe is built for the GUI one
 // (-H=windowsgui), so there is no console to inherit: Windows allocated a fresh
@@ -67,7 +66,7 @@ fn parse<I: IntoIterator<Item = String>>(args: I) -> Launch {
         match name {
             // A bare `--` is a separator, not a switch.
             "" => {}
-            "app" => launch.url = value,
+            "url" => launch.url = value,
             "class" => launch.class = value,
             "user-data-dir" => launch.profile_dir = value,
             "exit-on-stdin-eof" => launch.exit_on_stdin_eof = true,
@@ -85,8 +84,7 @@ fn parse<I: IntoIterator<Item = String>>(args: I) -> Launch {
 }
 
 /// The display the window opens on. Chromium's own default is the hint `auto`,
-/// Wayland whenever WAYLAND_DISPLAY is set, and the system browser lich
-/// launched before the window followed it. kurogane instead forces X11 on
+/// Wayland whenever WAYLAND_DISPLAY is set. kurogane instead forces X11 on
 /// NVIDIA, and an XWayland window under a Wayland file manager loses every
 /// file drop to the compositor's DnD bridge (Hyprland, measured; its issue
 /// #7800). Set before the user's switches, so `lich -- --ozone-platform=x11`
@@ -163,7 +161,7 @@ impl ClientAppBrowserDelegate for Window {
 fn main() {
     // CEF re-executes this binary for the renderer, GPU and utility roles with
     // an argv of its own. Those roles exit inside run_or_exit before any window
-    // exists, so a missing --app= is a subprocess, not an error.
+    // exists, so a missing --url= is a subprocess, not an error.
     // kurogane takes the runtime from CEF_PATH before the one beside the
     // executable, a developer's override that a CEF developer's shell would
     // carry into lich (the CI runner's did: "invalid CEF runtime at .cef").
@@ -368,13 +366,13 @@ mod tests {
     #[test]
     fn splits_lich_switches_from_chromium_switches() {
         let launch = parse(args(&[
-            "--app=http://127.0.0.1:47821/?token=x",
+            "--url=http://127.0.0.1:47821/?token=x",
             "--user-data-dir=/home/u/.config/lich/chromium-profile",
-            "--profile-directory=Default",
             "--class=lich",
             "--no-first-run",
             "--disable-features=Translate",
             "--exit-on-stdin-eof",
+            "--ozone-platform=wayland",
         ]));
         assert_eq!(
             launch,
@@ -384,8 +382,8 @@ mod tests {
                 profile_dir: Some("/home/u/.config/lich/chromium-profile".into()),
                 exit_on_stdin_eof: true,
                 switches: vec![
-                    ("profile-directory".into(), Some("Default".into())),
                     ("no-first-run".into(), None),
+                    ("ozone-platform".into(), Some("wayland".into())),
                 ],
             }
         );
@@ -412,7 +410,7 @@ mod tests {
 
     #[test]
     fn keeps_the_first_equals_inside_a_value() {
-        let launch = parse(args(&["--app=http://h/?a=1&b=2"]));
+        let launch = parse(args(&["--url=http://h/?a=1&b=2"]));
         assert_eq!(launch.url.as_deref(), Some("http://h/?a=1&b=2"));
     }
 
@@ -429,7 +427,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn tells_the_browser_process_from_its_subprocesses() {
-        assert!(!parse(args(&["--app=http://h/", "--class=lich"])).is_subprocess());
+        assert!(!parse(args(&["--url=http://h/", "--class=lich"])).is_subprocess());
         assert!(parse(args(&["--type=zygote", "--no-zygote-sandbox"])).is_subprocess());
     }
 

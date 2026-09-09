@@ -1,102 +1,36 @@
-// Package chromium launches the app window: a Chromium in --app mode — lich's
-// own on Linux (shell.go), a system browser elsewhere — pointed at the loopback
-// listener that serves the frontend and the RPC/terminal transports
-// (docs/chromium-shell.md).
+// Package chromium launches the app window: lich's own Chromium (CEF, built
+// out of shell/), pointed at the loopback listener that serves the frontend
+// and the RPC/terminal transports (docs/chromium-shell.md).
 package chromium
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"time"
-
-	"github.com/ncruces/zenity"
 )
 
-// windowsBrowserCandidates builds the Windows candidate list: chrome, then
-// edge (present on every Windows), then brave and vivaldi, each under the
-// install roots Windows exposes as environment variables, with bare PATH names
-// last. Paths are joined with a literal backslash so the pure logic tests the
-// same on any OS. Kept out of the build-tagged file for exactly that reason.
-//
-// No registry read behind it: StartMenuInternet would name a browser installed
-// somewhere else entirely, and reaching for it costs a dependency for the
-// install nobody has. LICH_BROWSER covers that machine in one variable.
-func windowsBrowserCandidates(getenv func(string) string) []string {
-	roots := []struct{ env, rel string }{
-		{"ProgramFiles", `Google\Chrome\Application\chrome.exe`},
-		{"ProgramFiles(x86)", `Google\Chrome\Application\chrome.exe`},
-		{"LocalAppData", `Google\Chrome\Application\chrome.exe`},
-		{"ProgramFiles(x86)", `Microsoft\Edge\Application\msedge.exe`},
-		{"ProgramFiles", `Microsoft\Edge\Application\msedge.exe`},
-		{"ProgramFiles", `BraveSoftware\Brave-Browser\Application\brave.exe`},
-		{"LocalAppData", `BraveSoftware\Brave-Browser\Application\brave.exe`},
-		{"ProgramFiles", `Vivaldi\Application\vivaldi.exe`},
-		{"LocalAppData", `Vivaldi\Application\vivaldi.exe`},
-	}
-	var out []string
-	for _, r := range roots {
-		if root := getenv(r.env); root != "" {
-			out = append(out, root+`\`+r.rel)
-		}
-	}
-	return append(out, "chrome", "msedge")
-}
-
-// darwinBrowserCandidates builds the macOS candidate list: chrome, then
-// chromium, then edge, then brave, then vivaldi, each as its .app executable under the
-// system (/Applications) and per-user (~/Applications) install roots, with
-// bare PATH names last for a Homebrew-formula install. Paths are joined with a
-// literal slash so the pure logic tests the same on any OS. Kept out of the
-// build-tagged file for exactly that reason.
-func darwinBrowserCandidates(getenv func(string) string) []string {
-	apps := []string{
-		"Google Chrome.app/Contents/MacOS/Google Chrome",
-		"Chromium.app/Contents/MacOS/Chromium",
-		"Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
-		"Brave Browser.app/Contents/MacOS/Brave Browser",
-		"Vivaldi.app/Contents/MacOS/Vivaldi",
-	}
-	roots := []string{"/Applications"}
-	if home := getenv("HOME"); home != "" {
-		roots = append(roots, home+"/Applications")
-	}
-	var out []string
-	for _, app := range apps {
-		for _, root := range roots {
-			out = append(out, root+"/"+app)
-		}
-	}
-	return append(out, "chromium", "google-chrome")
-}
-
-// Args builds the --app invocation. The dedicated user-data-dir is
-// load-bearing twice over: without it Chromium adopts the window into an
-// already-running instance (the spawned process exits immediately, breaking
-// the window-closed-means-quit lifecycle), and the profile holds the
+// Args builds the window's argv; shell/src/main.rs is the other side of the
+// contract. The dedicated user-data-dir is load-bearing: the profile holds the
 // frontend's localStorage (lich.* settings), so it must persist across runs.
 // class is the WM_CLASS: the dev shell passes its own so compositor window
 // rules targeting the daily driver never capture the dev window.
 func Args(url, dataDir, class string, extra []string) []string {
 	args := []string{
-		"--app=" + url,
+		"--url=" + url,
 		"--user-data-dir=" + dataDir,
-		// Naming the profile is also what keeps the profile picker shut:
-		// Chromium documents the picker as suppressed whenever the command line
-		// names a profile directory. Without it, a Chrome that knows several
-		// Google accounts can open the app on an account chooser.
-		"--profile-directory=" + profileName,
 		"--class=" + class,
+		// CEF's Chrome runtime still carries Chrome's first-run and
+		// default-browser prompts; these are the switches Chrome documents
+		// to hold them down.
 		"--no-first-run",
 		"--no-default-browser-check",
-		// The translate bubble compares the page's language against the browser
-		// locale and offers to translate lich's own UI — a browser prompt in a
-		// window that is not a browser. The profile pref of the same name
-		// (profile.go) is what actually holds it down; this only asks.
+		// The translate bubble compares the page's language against the
+		// locale and offers to translate lich's own UI. CEF reads feature
+		// lists straight off argv (shell/src/main.rs).
 		"--disable-features=Translate",
+		exitOnStdinEOF,
 	}
 	return append(args, extra...)
 }
@@ -111,148 +45,91 @@ func Args(url, dataDir, class string, extra []string) []string {
 // crash one second in reached Wait at nineteen and was read as a closed window.
 const startupGrace = 30 * time.Second
 
-// Run opens the window and blocks until the user closes it — the browser
-// process exiting is the app lifecycle. The browser is whatever Resolve found;
-// ErrNoBrowser comes back untouched, because the answer to a machine with no
-// Chromium-family browser on it is not this function's to give. Extra args pass
-// through to Chromium (e.g. --ozone-platform=wayland). onStart, when non-nil,
-// receives the browser process once launched, so the caller can close the window
-// itself (the restart flow terminates it to relaunch lich); it is called before
-// the blocking wait, and again if the window is relaunched in a fallback.
-//
-// The bundled window failing to open is the one launch that is retried: an
-// update that shipped a window this machine cannot run must not leave the user
-// with a dialog and no lich, so the ladder is climbed again without it — a
-// system browser, or ErrNoBrowser and the tab that answers it.
+// Run opens the window and blocks until the user closes it — the window
+// process exiting is the app lifecycle. ErrNoShell comes back untouched,
+// because the answer to an install with no window is not this function's to
+// give. Extra args pass through to Chromium (e.g. --ozone-platform=wayland).
+// onStart, when non-nil, receives the window process once launched, so the
+// caller can close the window itself (the restart flow terminates it to
+// relaunch lich); it is called before the blocking wait.
 func Run(url, dataDir, class string, extra []string, onStart func(*os.Process)) error {
-	start := func(browser Result) error {
+	start := func(window Result) error {
 		// Here and not in launch: Focus resolves the same directory against a
 		// lich that has already done this, and renaming a profile a running
-		// browser holds open is not a migration.
-		if err := migrateProfile(browser.relocate(dataDir), browser.profileKey()); err != nil {
+		// window holds open is not a migration.
+		if err := migrateProfile(dataDir, window.profileKey()); err != nil {
 			// The profile is only the user's settings; a launch that could not
 			// carry them over still opens a window.
 			slog.Warn("chromium profile migration", "err", err)
 		}
-		return launch(browser, url, dataDir, class, extra, onStart)
+		return launch(window, url, dataDir, class, extra, onStart)
 	}
-	return run(RealEnv(), start, notifyDesktop)
+	return run(RealEnv(), start, TabFallback)
 }
 
-// Focus hands url to the browser a running lich has its window in and waits
-// for the hand-off to end. It is Run without the ladder: the process is a
-// second instance that Chromium's profile lock forwards to the first, and its
-// exit is not a window failing to open — CEF reports the forward as a failed
-// initialise, so the bundled window's duplicate exits 1 by design. Falling
-// back on that would open lich a second time, in a system browser, on a
-// profile the window owns.
+// Focus hands url to the window a running lich has open and waits for the
+// hand-off to end. The process is a second instance that Chromium's profile
+// lock forwards to the first, and its exit is not a window failing to open —
+// CEF reports the forward as a failed initialise, so the duplicate exits 1 by
+// design.
 func Focus(url, dataDir, class string) error {
-	browser, err := Resolve(RealEnv())
+	window, err := Resolve(RealEnv())
 	if err != nil {
 		return err
 	}
-	return launch(browser, url, dataDir, class, nil, nil)
+	return launch(window, url, dataDir, class, nil, nil)
 }
 
-// notifyDesktop is the fallback's desktop notification. Best effort: a window
-// that quietly opened in Chrome instead of as lich's own would otherwise read
-// as lich having changed its mind.
-func notifyDesktop(text string) {
-	_ = zenity.Notify(text, zenity.Title("lich"))
-}
-
-// run is Run's walk of the ladder, with the launch and the notification as
-// seams so the fallback is testable without a browser.
-func run(env Env, start func(Result) error, notify func(string)) error {
-	browser, err := Resolve(env)
+// run is Run with the launch and the platform's fallback as seams, so the
+// startup fallback is testable without a window, on every OS.
+func run(env Env, start func(Result) error, tabFallback bool) error {
+	window, err := Resolve(env)
 	if err != nil {
 		return err
 	}
-	slog.Info("browser resolved", "browser", browser.Describe())
-	if shellExpected && browser.Step != stepShell && browser.Step != stepPinned {
-		// A Linux install without its window is a broken package or a bare
-		// binary, and the browser it falls back to is not what shipped.
-		slog.Warn("bundled window not found beside the binary, opening a system browser instead",
-			"browser", browser.Path)
-	}
+	slog.Info("window resolved", "window", window.Describe())
 	started := time.Now()
-	err = start(browser)
-	if !fallsBack(browser.Step, err, time.Since(started)) {
-		return err
+	err = start(window)
+	if tabFallback && fallsBack(window.Step, err, time.Since(started)) {
+		// The crash itself is here, in the log; ErrNoShell reaches main.go's
+		// tab path, which keeps lich reachable.
+		slog.Error("bundled window died at startup, opening a tab instead", "err", err)
+		return ErrNoShell
 	}
-	env.Shell = func() string { return "" }
-	fallback, rerr := Resolve(env)
-	if rerr != nil {
-		// No browser either. ErrNoBrowser reaches main.go's tab path, which
-		// keeps lich reachable; the crash itself is here, in the log.
-		slog.Error("bundled window died at startup and no system browser found", "err", err)
-		return rerr
-	}
-	slog.Warn("bundled window died at startup, opening a system browser instead",
-		"err", err, "browser", fallback.Describe())
-	notify("lich's own window failed to open, so this one is " + filepath.Base(fallback.Path) +
-		". `lich rage` has the log.")
-	return start(fallback)
+	return err
 }
 
 // fallsBack is whether a launch that has ended is the bundled window failing to
-// open: only the bundled window (a pin is the user's word, a system browser has
-// nothing below it to fall to), only an error exit, and only within startupGrace.
-// A profile directory that could not be made is no exit at all — the window
-// never ran, and the next rung would fail on the same directory.
+// open: only the bundled window (a pin is the user's word), only an error exit,
+// and only within startupGrace.
 func fallsBack(step string, err error, elapsed time.Duration) bool {
-	return step == stepShell && err != nil && !errors.Is(err, errProfileDir) && elapsed < startupGrace
+	return step == stepShell && err != nil && elapsed < startupGrace
 }
 
-// errProfileDir marks a launch that ended before the browser ran: its profile
-// directory could not be created.
-var errProfileDir = errors.New("chromium profile dir")
-
-// launch starts one resolved browser on the profile and waits for it to exit.
-func launch(browser Result, url, dataDir, class string, extra []string, onStart func(*os.Process)) error {
-	dataDir = browser.ProfileDir(dataDir)
-	// The data dir is required to launch at all; the prefs inside it only
-	// decide how quiet the window is.
+// launch starts the resolved window on the profile and waits for it to exit.
+func launch(window Result, url, dataDir, class string, extra []string, onStart func(*os.Process)) error {
+	dataDir = window.ProfileDir(dataDir)
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
-		return fmt.Errorf("%w: %w", errProfileDir, err)
+		return fmt.Errorf("chromium profile dir: %w", err)
 	}
-	// The bundled window keeps its own profile under this directory and has
-	// no Google account or translate bubble to silence; the prefs are for a
-	// browser.
-	if browser.Step != stepShell {
-		if err := writePrefs(dataDir); err != nil {
-			// A profile lich could not pre-configure is a browser that may
-			// ask about translation or Google accounts. Annoying; not a
-			// reason to refuse to open the window.
-			slog.Warn("chromium profile prefs", "err", err)
-		}
-	}
-	argv := append(append([]string{}, browser.Prefix...), Args(url, dataDir, class, extra)...)
-	if browser.Step == stepShell {
-		argv = append(argv, exitOnStdinEOF)
-	}
-	cmd := exec.Command(browser.Path, argv...)
+	cmd := exec.Command(window.Path, Args(url, dataDir, class, extra)...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	if browser.Step == stepShell {
-		// The bundled window's life is tied to this process by a pipe it reads
-		// for EOF: a lich that dies without closing its window (a kill, an
-		// out-of-memory, a crash) closes the write end with it, and the window
-		// goes. Left running, it was the orphan the next launch's window was
-		// forwarded to by CEF's process singleton, and that duplicate's exit 1
-		// read as the bundled window failing to open — a system browser opened
-		// beside the raised orphan. Only the write end is held here; Go marks
-		// both ends close-on-exec, so no session inherits it.
-		r, w, err := os.Pipe()
-		if err != nil {
-			return fmt.Errorf("launch %s: %w", browser.Path, err)
-		}
-		defer w.Close()
-		defer r.Close()
-		cmd.Stdin = r
+	// The window's life is tied to this process by a pipe it reads for EOF: a
+	// lich that dies without closing its window (a kill, an out-of-memory, a
+	// crash) closes the write end with it, and the window goes. Left running,
+	// it was the orphan the next launch's window was forwarded to by CEF's
+	// process singleton. Only the write end is held here; Go marks both ends
+	// close-on-exec, so no session inherits it.
+	r, w, err := os.Pipe()
+	if err != nil {
+		return fmt.Errorf("launch %s: %w", window.Path, err)
 	}
+	defer w.Close()
+	defer r.Close()
+	cmd.Stdin = r
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("launch %s: %w", browser.Path, err)
+		return fmt.Errorf("launch %s: %w", window.Path, err)
 	}
 	if onStart != nil {
 		onStart(cmd.Process)

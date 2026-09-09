@@ -105,8 +105,7 @@ func runInstalledUpdate(t *testing.T, install, bin, work string) {
 	t.Setenv("APPDATA", filepath.Join(work, "config"))
 	t.Setenv("LICH_LISTEN_PORT", "47983")
 	t.Setenv("LICH_UPDATE_EVENTS", filepath.Join(work, "events.txt"))
-	t.Setenv("LICH_BROWSER", "")
-	t.Setenv("LICH_NO_WINDOW", "")
+	t.Setenv("LICH_SHELL", "")
 	t.Setenv("CGO_ENABLED", "0")
 	cmd := exec.Command(filepath.Join(install, "lich.exe"))
 	if err := cmd.Start(); err != nil {

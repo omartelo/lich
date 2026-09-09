@@ -119,7 +119,7 @@ func successorEnv(env []string) []string {
 // where it stands. It is resolved under SystemRoot instead of through PATH —
 // what this command reaches decides whether somebody's window is closed or
 // killed, and PATH is the user's to rearrange. Kept out of the build-tagged
-// file so the pure logic tests on any OS, like chromium.windowsBrowserCandidates.
+// file so the pure logic tests on any OS.
 func closeWindowCommand(getenv func(string) string, pid int) (string, []string) {
 	exe := "taskkill.exe"
 	if root := getenv("SystemRoot"); root != "" {

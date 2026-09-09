@@ -434,14 +434,7 @@ jobs:
         with:
           pkgname: lich-bin
           pkgbuild: ./PKGBUILD
-          assets: build/linux/aur/lich-bin.install
           updpkgsums: true
-          # updpkgsums downloads the sources into the AUR checkout, and passing
-          # `assets` switches the action from `git add PKGBUILD .SRCINFO` to
-          # `git add --all` — which commits the 20MB binary (and now the 100MB
-          # window) and trips the AUR's 488.28KiB blob limit. post_process runs
-          # after .SRCINFO, before the commit.
-          post_process: rm -f lich-v*-linux-amd64 lich-v*-linux-amd64-shell.tar.zst lich-*.desktop lich-*.png
           commit_username: omartelo
           commit_email: meopedevts@proton.me
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}

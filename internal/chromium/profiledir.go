@@ -4,16 +4,20 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 )
 
+// profileName is the profile directory Chromium keeps inside its user-data-dir
+// when none is named on the command line. It is what an unkeyed profile from
+// an older lich holds (unkeyedProfile).
+const profileName = "Default"
+
 // keyLen is how many hex characters of the digest name a profile directory. The
-// set being keyed is the Chromium-family browsers installed on one machine — a
-// handful — so 32 bits is already far more than the collision needs, and the
-// rest of the digest would only lengthen a name a human has to read in their
-// config directory.
+// set being keyed is the window builds one machine launches — the package's and
+// a `task dev` pin — so 32 bits is already far more than the collision needs,
+// and the rest of the digest would only lengthen a name a human has to read in
+// their config directory.
 const keyLen = 8
 
 // migratingSuffix names the old profile while it is being moved. The move
@@ -22,29 +26,27 @@ const keyLen = 8
 // finishes the move instead of opening on an empty profile.
 const migratingSuffix = ".moving"
 
-// profileKey names the profile directory this resolution owns: the browser's
-// own name, so the config directory still reads, and a short digest of the
-// exact command behind it, so no two browsers ever share a profile. The whole
-// command and not the path alone, because every Chromium-family Flatpak runs
-// through the same `flatpak` binary.
+// profileKey names the profile directory this resolution owns: the window's
+// own name, so the config directory still reads, and a short digest of its
+// path, so a pinned dev window never shares a profile with the installed one.
+// The digest is of the path alone, which is what every profile on disk today
+// was keyed by when a system browser could still be the window.
 //
 // The path is cleaned and deliberately *not* resolved through its symlinks. On
 // Nix, and on any store-style install, the real executable sits under a path
 // carrying its version, so keying on that would hand the user a brand new
-// profile — an empty UI, every `lich.*` setting gone — on each browser update.
-// The launcher the ladder resolved is the stable name for the same browser.
+// profile — an empty UI, every `lich.*` setting gone — on each update. The
+// path the ladder resolved is the stable name for the same window.
 func (r Result) profileKey() string {
 	exe := filepath.Clean(r.Path)
-	command := strings.Join(append([]string{exe}, r.Prefix...), " ")
-	sum := sha256.Sum256([]byte(command))
-	return browserName(exe) + "-" + hex.EncodeToString(sum[:])[:keyLen]
+	sum := sha256.Sum256([]byte(exe))
+	return exeName(exe) + "-" + hex.EncodeToString(sum[:])[:keyLen]
 }
 
-// browserName reduces the executable's name to what is a directory name
-// everywhere lich runs: lowercased, without Windows' suffix, everything outside
-// [a-z0-9] folded to a dash ("Google Chrome.app/Contents/MacOS/Google Chrome"
-// is a macOS candidate, spaces and all).
-func browserName(exe string) string {
+// exeName reduces the executable's name to what is a directory name everywhere
+// lich runs: lowercased, without Windows' suffix, everything outside [a-z0-9]
+// folded to a dash.
+func exeName(exe string) string {
 	base := strings.ToLower(strings.TrimSuffix(filepath.Base(exe), ".exe"))
 	return strings.Trim(strings.Map(func(r rune) rune {
 		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
@@ -54,36 +56,17 @@ func browserName(exe string) string {
 	}, base), "-")
 }
 
-// relocate is dir where this browser can actually write: only a sandboxed one
-// moves, and it keeps the directory's name so the dev shell still gets a tree
-// of its own.
-//
-// Slashes, not filepath: a ProfileRoot is only ever set by the Flatpak rung,
-// and a Flatpak path is a Linux path whatever this binary was built for.
-// filepath here would follow the *build* OS and hand a Linux sandbox a
-// backslash-joined directory — the same trap the two candidate builders in
-// chromium.go join by hand to stay out of.
-func (r Result) relocate(dir string) string {
-	if r.ProfileRoot == "" {
-		return dir
-	}
-	return r.ProfileRoot + "/" + path.Base(dir)
-}
-
-// ProfileDir is where this browser's profile goes, given the directory lich
-// would use: one keyed subdirectory per browser. A Chromium profile is a
-// particular build's own state, so handing one browser's to another is a silent
-// adoption at best, and at worst a browser that refuses to start on a profile a
+// ProfileDir is where this window's profile goes, given the directory lich
+// would use: one keyed subdirectory per window. A Chromium profile is a
+// particular build's own state, so handing one build's to another is a silent
+// adoption at best, and at worst a window that refuses to start on a profile a
 // newer one wrote.
 func (r Result) ProfileDir(dir string) string {
-	if r.ProfileRoot != "" {
-		return r.relocate(dir) + "/" + r.profileKey()
-	}
 	return filepath.Join(dir, r.profileKey())
 }
 
 // migrateProfile moves the single unkeyed profile older lich versions kept
-// directly under root into the subdirectory the browser resolved at this launch
+// directly under root into the subdirectory the window resolved at this launch
 // now owns. It happens once: afterwards root holds keyed directories alone and
 // the check below finds nothing to move. What is being carried over is the
 // page's localStorage — every `lich.*` UI setting lives in that profile — so

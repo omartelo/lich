@@ -11,9 +11,8 @@ import (
 // They live here, exported, because a probe that drifted between the two tools
 // would have them describe two different machines.
 
-// Browser resolves the browser the window is launched as, and says which rung
-// of the resolution ladder produced it — a machine where lich opens the "wrong"
-// browser is diagnosed by that step and by nothing else.
+// Browser resolves the window lich launches, and says which rung produced it —
+// the bundled one or a LICH_SHELL pin.
 func Browser() (string, error) {
 	found, err := chromium.Resolve(chromium.RealEnv())
 	if err != nil {

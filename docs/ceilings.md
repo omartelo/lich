@@ -235,8 +235,8 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   sees them either: that is how Ctrl+Shift+T came to reopen a closed tab in a window with no tabs. What the page
   consumes is now gone from the browser, and a focused session consumes a lot, since xterm.js claims every
   Ctrl+letter: while you type in a session, Ctrl+W no longer closes the window and Ctrl+T no longer opens a tab.
-  It also holds in the bundled window alone. Opened in a system browser (`--no-window`, or the fallback when the
-  window fails), the browser keeps its accelerators and a chord it reserves never reaches lich at all.
+  It also holds in the bundled window alone. Opened as a tab (an Intel Mac), the browser keeps its accelerators
+  and a chord it reserves never reaches lich at all.
 - **Hidden sessions are serialized and destroyed**: 2MB replay rings on both sides
   (`frontend/src/lib/terminal/replay-buffer.ts` page-side, `internal/terminal/replay.go` backend-side — the latter
   survives a full page reload). Scrollback past the ring is gone, not paged. The snapshot carries only the modes
@@ -511,21 +511,14 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   read over CDP is not a pixel either: a window that renders every frame and presents none reads as green, and
   that is exactly what an Intel UHD driver did on Windows until `shell/src/main.rs` turned DirectComposition
   off there. No runner here can look at its own screen, so presentation is only ever proven on a desk.
-- **A Linux install whose window is missing or dies at startup opens a system browser instead**
-  (`internal/chromium.Run`): `go run`, a bare binary copied out of the tarball, a package missing
-  `lib/lich/shell` — each falls through to the ladder below with one `Warn` line; a window that exits with
-  an error inside `startupGrace` (30 s: a segfault on first paint, a system library `libcef.so` cannot find
-  on this distribution — the packages declare Chromium's own list, so that is a bare binary on a slim
-  install, or a glibc older than 2.34, Debian 11 and RHEL 8, which `lich-shell` will not load on) is
-  relaunched the same way, with a desktop notification naming the browser. Refusing
-  to open would turn a packaging slip or a bad update into a lich that does nothing. The grace is the trap:
-  a crash at 30.1 s is the window's lifecycle ending, as it always was, and a window closed by hand inside
-  it exits 0 and never falls back. Thirty seconds and not ten because a segfault is reported only after
-  its core dump is written, and systemd-coredump takes ~18 s over the window's process tree (measured): a
-  crash one second in reaches `Wait` at nineteen. A pinned browser never falls back either — it is the user's word — and
-  with no browser at all the crash lands on the tab path, where the log has the story and the
-  notification does not. `lich doctor` names the rung that answered; `task dev` pins the window it built
-  (`LICH_BROWSER`), since `go run` never has one beside it.
+- **A Linux or Windows install whose window is missing or dies is a lich that shows nothing but a dialog**
+  (`internal/chromium.Run`): `go run` with no `LICH_SHELL` pin, a bare binary copied out of the tarball, a
+  package missing `lib/lich/shell`, a window that exits on a missing system library or a glibc older than 2.34
+  (Debian 11, RHEL 8, which `lich-shell` will not load on) — each ends in the error dialog with the log path,
+  never in a browser on the machine. Only macOS keeps a fallback, and only to a plain tab: an Intel bundle has
+  no window, and an Apple Silicon window that exits with an error inside `startupGrace` (30 s, because a
+  segfault is reported only after its core dump is written) hands the URL to the default browser instead.
+  `lich doctor` names the window a launch would open.
 - **The window's own sandbox needs an install a package manager made** (`shell/src/main.rs`, the kurogane
   fork's `no_sandbox`): Chromium confines the window's subprocesses in a user namespace, or through the
   setuid helper beside `lich-shell`. Where it has neither, the browser process would abort at its zygote, so
@@ -541,10 +534,9 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **The window opens at CEF's default size** (`shell/src/main.rs`): a system browser remembered the
   window's last size and position in its profile; the CEF Views window does not, so each launch is the
   default rectangle until the window manager places it. Tiling compositors never notice.
-- **Without a Chromium `--app` window there is no window lifecycle** (`main.go`, `openWithoutWindow`) —
-  reached with no Chromium-family browser installed, or on purpose with `--no-window`/`LICH_NO_WINDOW`. lich
-  opens a plain tab and then runs until it is signalled, because a tab it did not spawn cannot be waited on.
-  Closing the tab leaves lich serving.
+- **Opened as a tab there is no window lifecycle** (`main.go`, `openWithoutWindow`, macOS only): lich opens a
+  plain tab and then runs until it is signalled, because a tab it did not spawn cannot be waited on. Closing
+  the tab leaves lich serving.
 - **The tab fallback cannot tell "opened" from "nothing happened"** (`internal/system.OpenURL`): `xdg-open`,
   `open` and `rundll32` are started and never waited on — waiting would block for the life of the browser they
   hand off to. A desktop with a URL handler installed but no browser behind it therefore looks like success:

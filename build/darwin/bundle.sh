@@ -13,7 +13,7 @@
 # CEF's subprocesses run as ("Lich Helper", plus the Renderer, GPU, Plugin
 # and Alerts variants Chromium derives from it: without them a bundled
 # browser never launches a renderer, measured). Without one the bundle opens
-# a system browser (the Intel build).
+# lich as a tab in the default browser (the Intel build).
 #
 # macOS host only: sips and iconutil are Apple's, so the icon is generated at
 # build time from build/appicon-mac.png instead of committing an .icns — one

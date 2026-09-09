@@ -161,7 +161,7 @@ tasks:
           # The build reports "dev" unless VERSION is set: `VERSION=Unreleased
           # task dev` is how the What's new dialog is smoked against the
           # [Unreleased] changelog section, `VERSION=v0.44.0` against a release.
-          LICH_DEV=1 LICH_DEV_URL="http://127.0.0.1:{{.VITE_PORT}}" LICH_LISTEN_PORT=47822 LICH_BROWSER="{{.ROOT_DIR}}/{{.BIN_DIR}}/shell/lich-shell{{exeExt}}" go run {{if env "VERSION"}}-ldflags "-X main.version={{.VERSION}}" {{end}}.
+          LICH_DEV=1 LICH_DEV_URL="http://127.0.0.1:{{.VITE_PORT}}" LICH_LISTEN_PORT=47822 LICH_SHELL="{{.ROOT_DIR}}/{{.BIN_DIR}}/shell/lich-shell{{exeExt}}" go run {{if env "VERSION"}}-ldflags "-X main.version={{.VERSION}}" {{end}}.
 
   test:shell:
     desc: Run the window crate's suite (Linux, macOS)

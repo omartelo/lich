@@ -11,7 +11,7 @@
     terminals, and keep git — worktrees, diffs and pull requests — in view
     without leaving the window. One static Go binary, no Electron: on Linux,
     Windows and Apple Silicon the UI opens in lich's own embedded Chromium; on
-    an Intel Mac in your system's Chromium-family browser.
+    an Intel Mac as a tab in your default browser.
   </p>
   <p><a href="https://omartelo.github.io/lich/"><strong>omartelo.github.io/lich</strong></a></p>
   <p>
@@ -99,13 +99,8 @@ curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh
 | Platform | Get it | Needs at runtime |
 | --- | --- | --- |
 | **Linux** | `install.sh` above, or AUR [`lich-bin`](https://aur.archlinux.org/packages/lich-bin) (`yay -S lich-bin`) | `zenity` — the window ships in the package |
-| **macOS** *(experimental)* | `brew install --cask omartelo/tap/lich` | nothing on Apple Silicon — the window ships in the app; a Chromium-family browser in `/Applications` on Intel |
+| **macOS** *(experimental)* | `brew install --cask omartelo/tap/lich` | nothing on Apple Silicon — the window ships in the app; Intel opens lich as a tab in your default browser |
 | **Windows** *(experimental)* | installer from [Releases](https://github.com/omartelo/lich/releases), or Scoop: `scoop install https://github.com/omartelo/lich/releases/latest/download/lich.json` | nothing — the window ships with both |
-
-On an Intel Mac, Chrome, Chromium, Brave, Vivaldi and Edge all qualify;
-`--browser` or `LICH_BROWSER` pins one outright, on every platform. With none
-of them on the machine lich opens in whatever browser you do have — what is
-lost is the window of its own, not the app.
 
 Manual per-distro packages and the static binary: [INSTALL.md](INSTALL.md). The
 macOS and Windows binaries are unsigned — Gatekeeper and SmartScreen warn until

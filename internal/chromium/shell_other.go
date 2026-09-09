@@ -2,9 +2,7 @@
 
 package chromium
 
-// An Intel Mac still opens the system browser: the window is built on the
-// Apple Silicon runner alone (docs/ceilings.md). It answers as if no window
-// were bundled, and the ladder below carries on unchanged.
-const shellExpected = false
-
+// An Intel Mac ships no window: it is built on the Apple Silicon runner alone
+// (docs/ceilings.md). It answers as if none were bundled, and lich opens as a
+// tab instead (TabFallback).
 func bundledShell() string { return "" }

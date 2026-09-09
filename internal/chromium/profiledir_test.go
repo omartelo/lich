@@ -7,17 +7,16 @@ import (
 	"testing"
 )
 
-// TestProfileKeyIsOnePerBrowser is the whole point of the key: two browsers on
-// one machine never land on the same profile, and one browser lands on the same
-// profile every time — including across an update, which is why the path is not
-// resolved through its symlinks.
-func TestProfileKeyIsOnePerBrowser(t *testing.T) {
+// TestProfileKeyIsOnePerWindow is the whole point of the key: the installed
+// window and a pinned dev build never land on the same profile, and one window
+// lands on the same profile every time — including across an update, which is
+// why the path is not resolved through its symlinks.
+func TestProfileKeyIsOnePerWindow(t *testing.T) {
 	keys := map[string]string{}
 	for _, exe := range []string{
-		"/usr/bin/chromium",
-		"/usr/bin/helium-browser",
 		"/usr/lib/lich/shell/lich-shell",
-		"/run/current-system/sw/bin/chromium",
+		"/home/u/lich/bin/shell/lich-shell",
+		"/nix/store/abc-lich-0.48.0/lib/lich/shell/lich-shell",
 	} {
 		key := (Result{Path: exe}).profileKey()
 		if other, clash := keys[key]; clash {
@@ -25,38 +24,35 @@ func TestProfileKeyIsOnePerBrowser(t *testing.T) {
 		}
 		keys[key] = exe
 	}
-	first := (Result{Path: "/usr/bin/chromium"}).profileKey()
-	if again := (Result{Path: "/usr/bin/chromium"}).profileKey(); again != first {
-		t.Fatalf("profileKey = %q then %q for the same browser", first, again)
+	first := (Result{Path: "/usr/lib/lich/shell/lich-shell"}).profileKey()
+	if again := (Result{Path: "/usr/lib/lich/shell/lich-shell"}).profileKey(); again != first {
+		t.Fatalf("profileKey = %q then %q for the same window", first, again)
 	}
-	if cleaned := (Result{Path: "/usr/bin//chromium"}).profileKey(); cleaned != first {
+	if cleaned := (Result{Path: "/usr/lib/lich/shell//lich-shell"}).profileKey(); cleaned != first {
 		t.Fatalf("profileKey = %q for an uncleaned path, want %q", cleaned, first)
 	}
 }
 
-// TestProfileKeyDividesFlatpaks pins the reason the key is the whole command
-// and not the executable: every Chromium-family Flatpak is launched through the
-// same `flatpak` binary, so keying on the path alone would put all of them back
-// on one profile.
-func TestProfileKeyDividesFlatpaks(t *testing.T) {
-	chromium := Result{Path: "/usr/bin/flatpak", Prefix: []string{"run", "org.chromium.Chromium"}}
-	brave := Result{Path: "/usr/bin/flatpak", Prefix: []string{"run", "com.brave.Browser"}}
-	if chromium.profileKey() == brave.profileKey() {
-		t.Fatalf("two Flatpak browsers share the profile key %q", chromium.profileKey())
+// TestProfileKeyIsTheOneOnDisk pins the digest to the one every profile was
+// keyed by before the window was the only launch: a change here hands every
+// user a factory-fresh profile on update.
+func TestProfileKeyIsTheOneOnDisk(t *testing.T) {
+	const want = "lich-shell-70eb955f"
+	if got := (Result{Path: "/usr/lib/lich/shell/lich-shell"}).profileKey(); got != want {
+		t.Fatalf("profileKey = %q, want %q", got, want)
 	}
 }
 
-// TestProfileKeyNamesTheBrowser keeps the directory readable: whoever opens
-// their config directory should be able to tell which profile is whose, in
-// every spelling of an executable the candidate lists hold — Windows' suffix
-// and the spaces in a macOS bundle among them. Splitting a Windows path is
-// filepath's own job and only its Windows build does it, so the case here is
-// the suffix alone.
-func TestProfileKeyNamesTheBrowser(t *testing.T) {
+// TestProfileKeyNamesTheWindow keeps the directory readable: whoever opens
+// their config directory should be able to tell which profile is whose, on
+// every OS — Windows' suffix included. Splitting a Windows path is filepath's
+// own job and only its Windows build does it, so the case here is the suffix
+// alone.
+func TestProfileKeyNamesTheWindow(t *testing.T) {
 	cases := map[string]string{
-		"/usr/bin/chromium": "chromium-",
-		filepath.FromSlash("/Google/Chrome/Application/chrome.exe"):                        "chrome-",
-		filepath.FromSlash("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"): "google-chrome-",
+		"/usr/lib/lich/shell/lich-shell":                          "lich-shell-",
+		filepath.FromSlash("/lich/shell/lich-shell.exe"):          "lich-shell-",
+		filepath.FromSlash("/Lich.app/Contents/MacOS/lich-shell"): "lich-shell-",
 	}
 	for exe, want := range cases {
 		if key := (Result{Path: exe}).profileKey(); !strings.HasPrefix(key, want) {
@@ -65,26 +61,12 @@ func TestProfileKeyNamesTheBrowser(t *testing.T) {
 	}
 }
 
-// TestProfileDirKeysTheDirectory covers both shapes: the directory lich chose,
-// and the one a Flatpak's sandbox can actually write.
 func TestProfileDirKeysTheDirectory(t *testing.T) {
 	dir := filepath.FromSlash("/home/u/.config/lich/chromium-profile")
-	browser := Result{Path: "/usr/bin/chromium"}
-	want := filepath.Join(dir, browser.profileKey())
-	if got := browser.ProfileDir(dir); got != want {
+	window := Result{Path: "/usr/lib/lich/shell/lich-shell"}
+	want := filepath.Join(dir, window.profileKey())
+	if got := window.ProfileDir(dir); got != want {
 		t.Fatalf("ProfileDir = %q, want %q", got, want)
-	}
-
-	flatpak := Result{
-		Path:        "/usr/bin/flatpak",
-		Prefix:      []string{"run", "com.vivaldi.Vivaldi"},
-		ProfileRoot: "/home/u/.var/app/com.vivaldi.Vivaldi/config",
-	}
-	// Slashes even when this test runs on Windows: a Flatpak path is a Linux
-	// path whatever the binary was built for.
-	wantFlatpak := "/home/u/.var/app/com.vivaldi.Vivaldi/config/chromium-profile-dev/" + flatpak.profileKey()
-	if got := flatpak.ProfileDir("/home/u/.config/lich/chromium-profile-dev"); got != wantFlatpak {
-		t.Fatalf("ProfileDir = %q, want %q", got, wantFlatpak)
 	}
 }
 
@@ -116,7 +98,7 @@ func settings(root string) string {
 // the `lich.*` settings in it intact.
 func TestMigrateProfileCarriesTheSettingsOver(t *testing.T) {
 	root := unkeyed(t)
-	key := (Result{Path: "/usr/bin/chromium"}).profileKey()
+	key := (Result{Path: "/usr/lib/lich/shell/lich-shell"}).profileKey()
 	if err := migrateProfile(root, key); err != nil {
 		t.Fatalf("migrateProfile: %v", err)
 	}
@@ -136,7 +118,7 @@ func TestMigrateProfileCarriesTheSettingsOver(t *testing.T) {
 // is a live profile.
 func TestMigrateProfileRunsOnce(t *testing.T) {
 	root := unkeyed(t)
-	key := (Result{Path: "/usr/bin/chromium"}).profileKey()
+	key := (Result{Path: "/usr/lib/lich/shell/lich-shell"}).profileKey()
 	if err := migrateProfile(root, key); err != nil {
 		t.Fatalf("first migrateProfile: %v", err)
 	}
@@ -156,7 +138,7 @@ func TestMigrateProfileRunsOnce(t *testing.T) {
 // using is never overwritten by an older one somebody left at the root.
 func TestMigrateProfileSkipsWhenTheTargetExists(t *testing.T) {
 	root := unkeyed(t)
-	key := (Result{Path: "/usr/bin/chromium"}).profileKey()
+	key := (Result{Path: "/usr/lib/lich/shell/lich-shell"}).profileKey()
 	target := filepath.Join(root, key)
 	if err := os.MkdirAll(target, 0o700); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -177,7 +159,7 @@ func TestMigrateProfileSkipsWhenTheTargetExists(t *testing.T) {
 // opening on an empty profile and orphaning the settings.
 func TestMigrateProfileFinishesAnInterruptedMove(t *testing.T) {
 	root := unkeyed(t)
-	key := (Result{Path: "/usr/bin/chromium"}).profileKey()
+	key := (Result{Path: "/usr/lib/lich/shell/lich-shell"}).profileKey()
 	if err := os.Rename(root, root+migratingSuffix); err != nil {
 		t.Fatalf("park: %v", err)
 	}
@@ -194,7 +176,7 @@ func TestMigrateProfileFinishesAnInterruptedMove(t *testing.T) {
 // for it.
 func TestMigrateProfileIgnoresAFreshInstall(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "chromium-profile")
-	if err := migrateProfile(root, "chromium-0badc0de"); err != nil {
+	if err := migrateProfile(root, "lich-shell-0badc0de"); err != nil {
 		t.Fatalf("migrateProfile: %v", err)
 	}
 	if _, err := os.Stat(root); err == nil {
@@ -203,14 +185,14 @@ func TestMigrateProfileIgnoresAFreshInstall(t *testing.T) {
 }
 
 // TestFocusFindsTheDirectoryRunUsed is the duplicate-launch path: focusing a
-// running lich hands the URL to a second browser process that Chromium's
+// running lich hands the URL to a second window process that Chromium's
 // profile lock forwards to the first, which only works if both processes
 // resolved the same profile directory. Two halves: resolution is a pure
 // function of the machine, and the directory Run migrates into is the one
 // launch opens.
 func TestFocusFindsTheDirectoryRunUsed(t *testing.T) {
 	dir := filepath.FromSlash("/home/u/.config/lich/chromium-profile")
-	machine := fakeEnv{installed: map[string]bool{"chromium": true, "vivaldi": true}}
+	machine := fakeEnv{shell: "/usr/lib/lich/shell/lich-shell"}
 
 	run, err := Resolve(machine.env())
 	if err != nil {
@@ -224,7 +206,7 @@ func TestFocusFindsTheDirectoryRunUsed(t *testing.T) {
 		t.Fatalf("Focus would open %q, Run opened %q", focus.ProfileDir(dir), run.ProfileDir(dir))
 	}
 	// What Run migrates into (chromium.go) against what launch opens.
-	if got := filepath.Join(run.relocate(dir), run.profileKey()); got != run.ProfileDir(dir) {
+	if got := filepath.Join(dir, run.profileKey()); got != run.ProfileDir(dir) {
 		t.Fatalf("migration target %q is not the profile directory %q", got, run.ProfileDir(dir))
 	}
 }

@@ -475,7 +475,7 @@ func (s *Service) onHookState(req hookRequest) {
 // noteUnread persists whether this session's card is holding a finished turn
 // nobody has read, so the mark survives a page reload (docs/ceilings.md). It is
 // written from here rather than from the window because a turn can end with no
-// window attached at all: during a reload, or under --no-window.
+// window attached at all: during a reload, or served as a tab.
 //
 // Only the clear is deduped, and it is the whole hot path: `busy` is reported
 // once per tool call, and without this every one of them would take the

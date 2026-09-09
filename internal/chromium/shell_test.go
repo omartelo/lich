@@ -2,7 +2,6 @@ package chromium
 
 import (
 	"errors"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -82,14 +81,12 @@ func TestFindShellSkipsDirectoriesAndMissing(t *testing.T) {
 }
 
 // TestFallsBack pins the conditions: only the bundled window, only an error
-// exit, only inside the startup grace, and only once the window ran. A close
-// (nil error) never falls back, a pinned browser never does, a crash after the
-// grace is the window lifecycle ending, and a profile directory that could not
-// be made is the next rung's failure too. The grace is the literal half-minute
-// the CHANGELOG promises, not the constant: a change to one must fail here.
+// exit, only inside the startup grace. A close (nil error) never falls back, a
+// pinned window never does, and a crash after the grace is the window lifecycle
+// ending. The grace is the literal half-minute the CHANGELOG promises, not the
+// constant: a change to one must fail here.
 func TestFallsBack(t *testing.T) {
 	crashed := errors.New("signal: segmentation fault")
-	noDir := fmt.Errorf("%w: %w", errProfileDir, fs.ErrPermission)
 	cases := []struct {
 		name    string
 		step    string
@@ -102,9 +99,7 @@ func TestFallsBack(t *testing.T) {
 		{"shell crashes just inside the grace", stepShell, crashed, 30*time.Second - time.Millisecond, true},
 		{"shell closed by the user", stepShell, nil, 2 * time.Second, false},
 		{"shell crashes after the grace", stepShell, crashed, 30 * time.Second, false},
-		{"shell profile dir cannot be made", stepShell, noDir, time.Second, false},
-		{"pinned browser crashes", stepPinned, crashed, time.Second, false},
-		{"system browser crashes", stepDefault, crashed, time.Second, false},
+		{"pinned window crashes", stepPinned, crashed, time.Second, false},
 	}
 	for _, c := range cases {
 		if got := fallsBack(c.step, c.err, c.elapsed); got != c.want {
@@ -113,78 +108,47 @@ func TestFallsBack(t *testing.T) {
 	}
 }
 
-// TestRunLadder walks Run's ladder with the launch faked: which browsers get
-// started, in what order, what comes back, and whether the desktop is told.
-func TestRunLadder(t *testing.T) {
+// TestRunFallback walks run with the launch faked, on both platforms' answers
+// to a window dying at startup: macOS degrades to the tab (ErrNoShell reaches
+// main.go), everywhere else the crash is the error the user sees.
+func TestRunFallback(t *testing.T) {
 	const shell = "/usr/local/lib/lich/shell/lich-shell"
 	crashed := errors.New("exit status 1")
-	noDir := fmt.Errorf("%w: %w", errProfileDir, fs.ErrPermission)
-	withChromium := map[string]bool{"chromium": true}
 	cases := []struct {
-		name     string
-		machine  fakeEnv
-		exits    map[string]error
-		wantErr  error
-		wantRuns []string
-		wantNote bool
+		name        string
+		machine     fakeEnv
+		exit        error
+		tabFallback bool
+		wantErr     error
 	}{
+		{name: "bundled window dies, macOS opens a tab", machine: fakeEnv{shell: shell}, exit: crashed, tabFallback: true, wantErr: ErrNoShell},
+		{name: "bundled window dies elsewhere", machine: fakeEnv{shell: shell}, exit: crashed, wantErr: crashed},
+		{name: "bundled window closed by the user", machine: fakeEnv{shell: shell}, tabFallback: true},
+		{name: "no window at all", machine: fakeEnv{}, tabFallback: true, wantErr: ErrNoShell},
 		{
-			name:     "bundled window dies, the machine's browser answers",
-			machine:  fakeEnv{installed: withChromium, shell: shell},
-			exits:    map[string]error{shell: crashed},
-			wantRuns: []string{shell, "/usr/bin/chromium"},
-			wantNote: true,
-		},
-		{
-			name:     "bundled window dies, no browser at all",
-			machine:  fakeEnv{shell: shell},
-			exits:    map[string]error{shell: crashed},
-			wantErr:  ErrNoBrowser,
-			wantRuns: []string{shell},
-		},
-		{
-			name:     "bundled window closed by the user",
-			machine:  fakeEnv{installed: withChromium, shell: shell},
-			wantRuns: []string{shell},
-		},
-		{
-			name: "pinned browser dies",
+			name: "pinned window dies",
 			machine: fakeEnv{
-				installed: map[string]bool{"vivaldi": true},
-				vars:      map[string]string{OverrideEnv: "vivaldi"},
+				installed: map[string]bool{"/opt/x/lich-shell": true},
+				vars:      map[string]string{OverrideEnv: "/opt/x/lich-shell"},
 				shell:     shell,
 			},
-			exits:    map[string]error{"/usr/bin/vivaldi": crashed},
-			wantErr:  crashed,
-			wantRuns: []string{"/usr/bin/vivaldi"},
-		},
-		{
-			name:     "profile directory cannot be made",
-			machine:  fakeEnv{installed: withChromium, shell: shell},
-			exits:    map[string]error{shell: noDir},
-			wantErr:  errProfileDir,
-			wantRuns: []string{shell},
+			exit:        crashed,
+			tabFallback: true,
+			wantErr:     crashed,
 		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			var runs []string
-			var note string
-			err := run(c.machine.env(), func(b Result) error {
-				runs = append(runs, b.Path)
-				return c.exits[b.Path]
-			}, func(text string) { note = text })
+			err := run(c.machine.env(), func(w Result) error {
+				runs = append(runs, w.Path)
+				return c.exit
+			}, c.tabFallback)
 			if !errors.Is(err, c.wantErr) {
 				t.Fatalf("run = %v, want %v", err, c.wantErr)
 			}
-			if !slices.Equal(runs, c.wantRuns) {
-				t.Fatalf("launched %v, want %v", runs, c.wantRuns)
-			}
-			if (note != "") != c.wantNote {
-				t.Fatalf("notification %q, want one: %v", note, c.wantNote)
-			}
-			if c.wantNote && !strings.Contains(note, "chromium") {
-				t.Fatalf("notification %q does not name the browser", note)
+			if len(runs) > 1 {
+				t.Fatalf("launched %v, want at most one window", runs)
 			}
 		})
 	}

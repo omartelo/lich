@@ -15,42 +15,24 @@ Pick your system:
 - [Verifying checksums](#verifying-checksums)
 - [If it does not start](#if-it-does-not-start)
 
-**Runtime dependencies** — on Linux and Windows, lich ships its own window: an
-embedded Chromium (CEF) inside the package, so no browser is required. On
-Linux `zenity` is the one thing left to install, for the folder picker; on
-Windows nothing is. The Linux window needs glibc
-2.34 or newer — Debian 12, Ubuntu 22.04, RHEL 9, or anything current — and
-the libraries Chromium itself links against, which the deb, rpm and AUR
-packages declare; on an older glibc lich falls back to a browser on the
-machine. The window carries
-lich's own class and title, so the launcher icon, window rules by class and
-`StartupWMClass` all match it. `--browser` or `LICH_BROWSER` still pins a
-browser of your choice above it ([docs/chromium-shell.md](docs/chromium-shell.md)).
+**Runtime dependencies** — lich ships its own window: an embedded Chromium
+(CEF) inside the package, so no browser is required. On Linux `zenity` is the
+one thing left to install, for the folder picker; on Windows nothing is. The
+Linux window needs glibc 2.34 or newer — Debian 12, Ubuntu 22.04, RHEL 9, or
+anything current — and the libraries Chromium itself links against, which the
+deb, rpm and AUR packages declare. The window carries lich's own class and
+title, so the launcher icon, window rules by class and `StartupWMClass` all
+match it. A package missing its window, or a bare binary copied out of the
+tarball, does not start: `lich doctor` says so, and `--shell` or `LICH_SHELL`
+points lich at a window build of your own
+([docs/chromium-shell.md](docs/chromium-shell.md)).
 
-On macOS, `Lich.app` on Apple Silicon carries the same window; an Intel Mac
-opens it in a Chromium-family browser on the machine, looked for in this
-order: the browser you pinned with `--browser` or `LICH_BROWSER`, your
-desktop's default browser when it is Chromium-family, the browsers installed
-on the machine. Chrome, Chromium, Edge, Brave and Vivaldi are looked up as
-`.app` bundles under `/Applications` (and `~/Applications`), and the folder
-picker is native. A browser installed somewhere else entirely is what
-`--browser` is for. The same ladder is what an Apple Silicon or Windows
-install falls back to when its own window fails: on Windows, Chrome, Edge,
-Brave and Vivaldi via their conventional install paths (Edge ships with
-Windows).
-
-With **no** Chromium-family browser there, lich does not fail: it opens
-a plain tab in whatever browser you do have, tells you so in a desktop
-notification, and goes on running until you stop it. What is lost is the
-window of its own — Firefox has no equivalent of Chromium's `--app` mode, so a
-tab is the honest best. `lich doctor` reports which window was resolved and
-which of the steps above found it.
-
-That tab is also a choice, not only a fallback: `lich --no-window` (or
-`LICH_NO_WINDOW=1`, which a `.desktop` launcher can carry) skips the window on
-a machine that *has* a Chromium-family browser but whose owner would rather not
-run one. lich serves itself and hands the URL to your default browser; closing
-the tab leaves it running, so stop it with Ctrl-C or by signalling the process.
+On macOS, `Lich.app` on Apple Silicon carries the same window. An Intel Mac
+gets none: lich serves itself, opens a plain tab in your default browser, tells
+you so in a desktop notification, and goes on running until you stop it —
+closing the tab leaves it running, so stop it with Ctrl-C or by signalling the
+process. The folder picker is native either way. The same tab is what an Apple
+Silicon install falls back to when its own window fails to open.
 
 **git and the GitHub CLI** — every version control surface shells out to
 `git`, and lich does not bundle it: without `git` on your `PATH`, branches,
@@ -131,9 +113,8 @@ tar --zstd -xf lich-*-linux-amd64-shell.tar.zst -C ~/.local/bin
 
 The second line unpacks the window beside the binary, as `~/.local/bin/shell/`
 — lich looks for it there, and under `../lib/lich/shell` relative to its bin.
-Without it — or if it fails to start on your machine — lich falls back to a
-Chromium-family browser you have installed, and says so in a notification and
-its log. `zenity` still comes from your package manager.
+Without it — or if it fails to start on your machine — lich does not open:
+a dialog and the log say why. `zenity` still comes from your package manager.
 
 ## macOS (experimental)
 
@@ -152,10 +133,10 @@ steps aside on a Homebrew install.
 
 On Apple Silicon the app carries its own window, the same embedded Chromium
 the Linux packages ship, and the Dock shows the lich icon while it runs. On
-Intel the window is a Chromium-family browser from `/Applications`, and the
-Dock, while lich runs, shows that browser's icon: the window belongs to it,
-and macOS has no equivalent of the window class Linux matches against the
-lich launcher. There the lich icon is the one you launch from, not the one
+Intel lich is a tab in your default browser, and the Dock, while lich runs,
+shows that browser's icon: the tab belongs to it, and macOS has no equivalent
+of the window class Linux matches against the lich launcher. There the lich
+icon is the one you launch from, not the one
 you switch to.
 
 **Upgrading from the old formula** — releases up to v0.32.0 shipped a bare CLI
@@ -178,8 +159,8 @@ xattr -dr com.apple.quarantine /Applications/Lich.app
 ```
 
 The bare `lich-*-darwin-arm64` and `lich-*-darwin-amd64` binaries are still
-published for a CLI-only install by hand; they carry no window and open a
-Chromium-family browser:
+published for a CLI-only install by hand; they carry no window and open lich
+as a tab in the default browser:
 
 ```bash
 install -m755 lich-*-darwin-arm64 ~/.local/bin/lich
@@ -217,8 +198,7 @@ the manifest from that URL, which is always the latest release's. The workspace 
 The bare `lich-*-windows-amd64.exe` is also published for a portable,
 no-install run — same binary the installer ships. Unzip
 `lich-*-windows-amd64-shell.zip` beside it to get the window as `shell\`;
-without it, lich opens in a Chromium-family browser on the machine, and says
-so in a notification.
+without it, lich does not open, and a dialog says so.
 
 ## Verifying checksums
 
@@ -245,8 +225,8 @@ It walks the same boot a launch walks — the config directory, the log file, th
 pinned loopback port, the workspace database, the browser, the provider CLIs on
 PATH — and says which step would stop it, exiting non-zero when one does. A port
 already held by the lich you have open is not a failure; a port held by
-something else is, and so is a missing window: on Linux the one lich ships,
-on macOS and Windows a Chromium-family browser.
+something else is, and so is a missing window — the one lich ships, or the
+build `LICH_SHELL` points at.
 
 When you file the issue, attach the bundle:
 

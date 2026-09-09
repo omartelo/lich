@@ -19,7 +19,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/omartelo/lich/internal/chromium"
 	"github.com/omartelo/lich/internal/logging"
 	"github.com/omartelo/lich/internal/providers"
 	"github.com/omartelo/lich/internal/sandbox"
@@ -191,16 +190,12 @@ func (d *Doctor) checkStore(info *singleton.Info, running bool) (Status, string)
 	return OK, "the workspace database opens and its schema is current"
 }
 
-// checkBrowser resolves the Chromium-family binary the window is. Its absence
-// is the one failure where lich runs perfectly and shows nothing — unless the
-// launch asked for no window, which is the one case where there is nothing to
-// resolve and nothing wrong.
+// checkBrowser resolves the window lich would open. Its absence is the one
+// failure where lich runs perfectly and shows nothing — a package missing its
+// window, or a bare binary with no LICH_SHELL pin.
 func (d *Doctor) checkBrowser() (Status, string) {
 	path, err := d.browser()
-	switch {
-	case err != nil && d.getenv(chromium.NoWindowEnv) != "":
-		return OK, "not used — " + chromium.NoWindowEnv + " opens a plain tab in the default browser"
-	case err != nil:
+	if err != nil {
 		return Fail, err.Error()
 	}
 	return OK, path

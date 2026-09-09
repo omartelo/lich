@@ -69,8 +69,8 @@ export interface HotkeyAction {
 //   mapping requires Shift to be up, so no TUI can bind it and the chord is free.
 //   It is the family to reach for, minus the letters Chromium keeps for itself:
 //   lich's own window hands the page every Ctrl chord before Chromium acts on
-//   it (shell/src/main.rs), but a system browser, which is what `--no-window`
-//   and the fallback open, never does.
+//   it (shell/src/main.rs), but a browser tab, which is what an Intel Mac
+//   opens, never does.
 // - Ctrl+Shift+arrow arrives as a real sequence (CSI 1;6A…D), so it does cost
 //   the TUI something. It is spent only where the direction *is* the meaning.
 // - Ctrl+Alt+arrow is the desktop's workspace switch on Linux and would never

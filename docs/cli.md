@@ -622,7 +622,7 @@ The checks are in boot order, and each carries its own verdict:
 | `log` | — | The log file will not open; lich would run on stderr only. |
 | `listener` | The pinned port (`LICH_LISTEN_PORT`, else 47821) cannot be bound and no live lich holds it. | — |
 | `store` | The workspace database will not open or migrate. Skipped while an instance is running — a second process migrating the store is not a price a diagnosis may charge. | It will not close cleanly. |
-| `browser` | No Chromium-family browser resolves. lich would run and show nothing. | — |
+| `browser` | No window resolves — neither one beside the binary nor a `LICH_SHELL` pin. lich would run and show nothing. | — |
 | `providers` | — | None on PATH: the window opens, but no session can spawn. |
 | `sandbox` | — | The backend will not start (an AppArmor policy denying user namespaces, say), so a session opened with the sandbox on will not start either; or it starts and confines nothing, so a session marked confined runs on the machine. Skipped where the platform has no backend at all. |
 

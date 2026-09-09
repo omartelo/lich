@@ -1,9 +1,11 @@
 # Decision: move the shell from WebKitGTK to Chromium
 
-**Status: option 1 shipped in v0.4.0 (2026-07-15) and is still how an Intel
-Mac opens the window. Option 2 shipped on Linux on 2026-09-05, then on
-Windows and Apple Silicon: lich bundles its own Chromium (CEF, through
-kurogane) and no browser is required — see the section at the end.**
+**Status: option 1 shipped in v0.4.0 (2026-07-15). Option 2 shipped on Linux
+on 2026-09-05, then on Windows and Apple Silicon: lich bundles its own
+Chromium (CEF, through kurogane) and no browser is required — see the section
+at the end. The system-browser ladder option 1 built was removed once the
+window shipped everywhere it could: an Intel Mac, the one build with no
+window, opens lich as a plain tab in the default browser.**
 
 ## Why
 
@@ -147,16 +149,20 @@ paid: +100 MB per package download (~300 MB on disk), and a Rust toolchain
 with CMake in CI. What changed is the route. `energye/energy` (Go bindings,
 CGO) was never taken. The window is a **separate binary**, `shell/`, a Rust
 crate on [kurogane](https://github.com/0x48piraj/kurogane) (cef-rs
-underneath), and the Go binary launches it exactly the way it launches a
-system browser — the same `internal/chromium.Args` argv, `--app=<url>`,
-`--class`, `--user-data-dir`, the user's `--` switches — plus one switch of
-its own, `--exit-on-stdin-eof`: lich holds the write end of a pipe on the
+underneath), and the Go binary launches it with the `internal/chromium.Args`
+argv — `--url=<url>`, `--class`, `--user-data-dir`, the user's `--` switches
+— plus `--exit-on-stdin-eof`: lich holds the write end of a pipe on the
 window's stdin for as long as it lives, and the window ends on the EOF, so a
 lich killed outright takes its window with it instead of leaving an orphan
 for the next launch to be forwarded to. `CGO_ENABLED=0` and the static binary
 stand.
-The migration path really was "swap who provides the window": one new rung
-in the resolution ladder, above the desktop's default and below the pin.
+The migration path really was "swap who provides the window": the window
+first landed as one more rung in option 1's resolution ladder, above the
+desktop's default and below the pin, and once it shipped on every platform
+that can build it the ladder below it was removed. What resolves now is the
+`LICH_SHELL` pin (`task dev`, since `go run` has no window beside it) or the
+window beside the binary, and nothing else: a Linux or Windows install
+without one is reported, not worked around.
 
 Measured on the reference machine (RTX 3050, Hyprland, Chromium 150 in CEF
 against Helium 151 as the system browser): no perceptible difference, which
@@ -205,7 +211,9 @@ the CI runner only.
 
 macOS ships the same window inside `Lich.app`, Apple Silicon only: the
 release runner is arm64 and builds the window for itself, and the Intel
-bundle keeps opening a system browser. `lich-shell` sits beside `lich` in
+bundle opens lich as a plain tab in the default browser instead
+(`main.go`, `openWithoutWindow`) — the same tab an Apple Silicon window that
+dies at startup falls back to. `lich-shell` sits beside `lich` in
 `Contents/MacOS`, because macOS reads a process's bundle off its executable's
 path and only a process inside the bundle is `Lich.app` to the Dock, to
 Cmd-Tab and to the menu bar; the framework goes to `Contents/Frameworks`,
