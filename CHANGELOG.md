@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A session can open a real browser the agent drives.** Right-click a session
+  card and pick **Browser tab** to open a Chromium window of that session's
+  own — the same page `lich browser` and the `browser_*` MCP tools inspect,
+  click, type and screenshot. It is a second Chromium on the machine (never
+  lich-shell / the UI window), and closing it does not quit lich. `file:` and
+  `javascript:` URLs are refused, and form values never enter the transcript.
+
 - **The Commits tab says which GitHub account each commit actually landed
   under.** A project's GitHub account governs what lich asks `gh`; it has never
   governed the push, which still signs with your global `user.email`. So a pull
@@ -47,6 +54,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   switch appears as soon as it says anything.
 
 ### Fixed
+
+- **Browser tab no longer flashes shut with "invalid context".** CDP actions
+  now run on the Chromium they just launched, so the window stays open.
 
 - **What you type while a message is being relayed into your session no longer
   goes out with it.** A relayed message is pasted at the prompt and an Enter is
@@ -1557,20 +1567,525 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.40.0] - 2026-08-23
 
-
 ### Added
 
-- **A session can open a real browser the agent drives.** Right-click a session
-  card and pick **Browser tab** to open a Chromium window of that session's
-  own — the same page `lich browser` and the `browser_*` MCP tools inspect,
-  click, type and screenshot. It is the browser already on the machine, not
-  an in-app tab, and closing it does not quit lich. `file:` and `javascript:`
-  URLs are refused, and form values never enter the transcript.
+- **Antigravity CLI runs as a session, like every other provider.** Google's
+  `agy` joins Claude Code, Codex, opencode, oh-my-pi and Crush in Settings ›
+  Providers: a session of its own, resumed by `--conversation` when a card comes
+  back from a restart, run without permission prompts if you turn that rung on,
+  confined by the sandbox with its `~/.gemini` credentials still reachable, and
+  told which model to run. The companion plugin installs there too — reporting
+  the session id, the spinner, the title and the git-status refresh — and the
+  same install registers lich's own tools, so an Antigravity session can drive
+  the sessions beside it. Two things it does not have, both by its own design:
+  no lich briefing in its system prompt (it takes no append flag at spawn) and
+  no context ring in the footer (it files a conversation as a database rather
+  than as a transcript lich can read).
+- **A session's card hands out the command that reaches it.** Naming a session
+  is what makes `lich send` usable from another terminal, but the name lived on a
+  card in the window and the line had to be retyped from memory, quoting
+  included. Copy send command puts the whole invocation on the clipboard, with
+  the label quoted for the shell — so a card called `the $PATH bug` pastes as one
+  argument rather than as three words and an empty variable. The project is named
+  in the line only when another session holds the same label, which is the one
+  case `lich send` cannot resolve without it.
+- **A waiting card now says what it is waiting for.** A session blocked on you
+  wore the same amber bell and the same "Waiting on you" whether it wanted
+  permission to delete a directory or an answer about which file to touch — the
+  only way to tell was to open it. The card and the toast now carry the question
+  itself, in the words the agent used. Claude Code sessions say it in a sentence;
+  Codex and opencode name the tool or permission being asked about, which is
+  coarser and still enough to pick the card; oh-my-pi and Crush report no block at
+  all, so their cards keep the line they had.
+- **Closing a session no longer throws it away, and the palette has a History
+  tab to find it in.** A closed session used to be gone for good unless it lived
+  in a worktree you chose to keep; now every close parks it, and `Ctrl+K` →
+  History lists what you have closed, newest first, across every project — the
+  closed ones included. Each row names the session, the agent that ran it, the
+  project, the branch its checkout is on and when you closed it, and the search
+  narrows on all of those, so "the conpty thing, three weeks ago" is a query and
+  not an archaeology dig. Enter resumes: the card comes back where it was and
+  picks the conversation up rather than starting cold. A row whose checkout was
+  removed behind lich's back says so and offers to forget it instead.
+- **Sessions can be renamed from the command line and from an agent's own
+  tools.** Renaming a card was a thing only the window could do; `lich rename
+  "the login bug"` now renames the session the command runs in, `lich rename
+  auth-fix "the login bug"` renames another one, and the `rename_session` tool is
+  the same for an agent — which is what lets a worker's card say what the work in
+  it is rather than the number it was born with. The name becomes the user's
+  either way: the provider's auto-title never overwrites it again. A name another
+  session in that project already holds is refused, because two sessions under
+  one label is the one thing `lich send` cannot resolve.
+- **The session sidebar filters.** With a dozen cards open across three
+  checkouts, finding the two you are actually shepherding was a scan. A
+  magnifier beside New Session opens a field that narrows the list as you type,
+  matching a card's name or the checkout it runs in — so typing a worktree name
+  keeps that whole block. Unlike the command palette, which jumps once and
+  closes, this one is held while you work: the surviving cards stay live, with
+  their status rings, their close buttons and everything else. A group with
+  nothing left drops out entirely, the session you are looking at stays visible
+  whether it matches or not, and the filter is never narrowing the list out of
+  sight — it clears when you close it, when you collapse the sidebar and when
+  you switch project, and it is never restored on a restart.
+- **A session's card now shows the ticket it is answering.** Hover a card with an
+  open request and the tooltip names the other end and the ticket number, and on
+  the side that owes the answer it spells the command that sends it home. Until
+  now the number was written down in exactly one place — the message typed at the
+  prompt — so a session whose context was compacted past it left nobody, agent or
+  person, able to close the errand.
+- **A confined session can push and use `gh` again, if you let it.** The sandbox
+  gives a session an empty home, which takes the ssh agent and gh's keyring with
+  it: `git push` has nothing to sign with and `gh` opens on a login prompt. Two
+  switches hand each one back, separately and off by default — the ssh agent, so
+  a push authenticates without any key entering the sandbox, and a GitHub token,
+  so `gh` works as the account the project already answers as. They are separate
+  because they open different doors: wanting `gh` to work is not wanting to hand
+  over your ssh keys. The agent switch lists the identities loaded in your agent
+  right beside it, because a session holding that socket can sign with every one
+  of them, against any host — not only the key you had in mind.
+- **Settings has a Sandbox pane.** Everything about confining sessions now lives
+  in one place: whether this machine can confine at all and what it uses to do
+  it, the rung for each provider you have enabled, and the two grants above. The
+  rung used to be repeated inside every provider's own section, so a machine with
+  several enabled drew the same ladder several times — and on a machine with no
+  bubblewrap the control simply vanished, leaving the question unanswered instead
+  of answered.
+- **A keyboard shortcut can now be left unassigned.** Settings › Hotkeys gained a
+  clear button beside each binding's reset, because every chord the window claims
+  is a chord the agent's TUI in the terminal never sees, and rebinding lich's
+  action onto some key you will never press was the closest thing to giving one
+  back. Cleared, the action holds no chord at all: it fires on nothing, collides
+  with nothing, and the keypress falls through to the session underneath. The
+  shortcuts sheet reads it as unassigned rather than naming a default it no
+  longer answers to, and reset still puts that default back.
+- **A card can open its own checkout.** Right-click a session and *Open in
+  editor* opens its folder in `$VISUAL`/`$EDITOR` — a terminal editor lands in a
+  new shell session at the checkout, the same as opening a single file from the
+  files panel — while *Open folder* shows it in the system file manager. Getting
+  to a worktree from outside lich meant reading the path off the card and typing
+  it somewhere else, and a worktree path is exactly the kind nobody types twice.
+  A card whose checkout was removed behind lich's back says so instead of
+  launching at nothing.
+
+### Changed
+
+- **A card's git readout costs half of what it did.** Every second, each checkout
+  on screen spawned six `git` children to answer one status badge — and on a
+  normal repository most of that was process startup rather than work. One
+  `git status --porcelain=v2` reports the branch, the HEAD commit and every dirty
+  file in a single call, so a tick is three children now: measured here on git
+  2.55, a small worktree fell from 21.2 ms to 13.4 ms per read (20.1 ms to 12.6 ms
+  of CPU), and a 50,000-file checkout with 200 dirty files from 101.8 ms to
+  66.4 ms (202.7 ms to 168.2 ms of CPU). Nothing about the badge changes.
+- **`lich reply` no longer needs the ticket.** Called with the answer alone —
+  `lich reply "<your answer>"`, or `reply_to_session` with no ticket — it answers
+  the request open against the calling session, so an agent that has lost the
+  message naming the number can still get its answer home. With several requests
+  open the oldest delivered is the one closed, and naming the ticket is still the
+  way to pick a specific errand.
+- **Building lich from source now needs Go 1.27.0.** The pin stays exact so that
+  every release binary carries the current toolchain's own security fixes, and
+  the module is what CI reads its Go version from. `GOTOOLCHAIN=auto` — the
+  default — fetches 1.27.0 on its own; a build pinned to `local` on anything
+  older will refuse the module.
+- **The cost readout scans a transcript about three times faster.** Nothing in
+  lich changed: Go 1.27 rebuilt `encoding/json` on top of its v2 implementation,
+  and the per-line decode that prices a session went from ~90µs to ~27µs on a
+  full assistant turn, allocating 2 objects where it used to allocate 13. A
+  project whose sessions carry long transcripts feels it on every refresh.
+- **A `lich rage` bundle now names the goroutines that leaked.** `goroutines.txt`
+  carried every stack in the process, leaving whoever read it to work out which
+  of a few hundred was the one still waiting on something nobody will ever send.
+  The dump now ends with a second section holding only the goroutines blocked on
+  a channel, mutex or WaitGroup that no runnable goroutine can still reach —
+  which is the shape of a window that stopped updating while the process stayed
+  alive. An empty section is the answer too: the hang is somewhere else.
+- **A finished turn now says whether you have read it.** A session that came back
+  while you were away wears the same solid green ring as one you dealt with
+  twenty minutes ago, which is the one question that ring exists to answer. It
+  now fades once you have actually watched that session's card — and only that
+  card, so a sidebar of finished agents shows at a glance which results nobody
+  has collected. The project tab badge and the notifications list read the same
+  mark, so a session cannot be news in one place and read in another.
+
+### Removed
+
+- **macOS builds no longer run on Big Sur or Monterey.** Go 1.27 dropped every
+  macOS before 13 Ventura, so the cask now declares that floor and Homebrew
+  refuses the install on an older machine rather than handing it a binary that
+  cannot start. Nothing in lich itself needs 13 — the floor is the compiler's,
+  and it moves with the next Go bump.
 
 ### Fixed
 
-- **Browser tab no longer flashes shut with "invalid context".** CDP actions
-  now run on the Chromium they just launched, so the window stays open.
+- **A Claude Code session's context readout now follows a `/compact`.** The
+  percentage came from the newest assistant message in the transcript, and a
+  compaction writes none — so a card that had just been emptied from 236k to 13k
+  went on reporting 24% full until the next reply landed, which is exactly the
+  moment the number is read. The compaction boundary is now what the readout
+  takes its count from when it is the newer of the two, for an automatic
+  compaction as much as a manual one; the model, which that line does not record,
+  still comes from the last message that named one. The cost readout is unchanged
+  — it sums assistant messages and never saw the boundary.
+
+- **One session's output can no longer freeze every other session's.** Each session
+  already had its own queue, so a card producing faster than the window could draw
+  it backed up alone. One socket carries them all, though, and a session's turn to
+  write held a lock the others queued on — so whenever a write to the window
+  stalled, every card in the workspace stopped updating with it, for up to five
+  seconds at a time, however quiet those sessions were. The socket now belongs to a
+  writer of its own: a session hands over its output and goes back to work, and a
+  stalled window costs the connection rather than the workspace. Nothing is
+  dropped — output the socket refuses still crosses on the event bridge, in order.
+- **The plan gauge now reads the account the session in front of you actually
+  spends.** A project pointed at a binary of your own — a wrapper exporting
+  another `CLAUDE_CONFIG_DIR`, or an OAuth token for a second account — still had
+  its footer showing what lich's own login had left, which is a number about
+  somebody else's plan and no way to tell. The reading is now taken against the
+  environment the session's own process runs with, so each card reports the
+  subscription it is spending, and two accounts on one machine no longer read as
+  one. A session whose login is a long-lived token (`claude setup-token`) is
+  measured through a one-token request, since the usage route refuses a token
+  that can only infer; a session pointed at another API host or running on an API
+  key shows no gauge, having no plan to report — and that now counts a machine
+  whose *own* environment carries one, which used to be read as a subscription
+  and drawn as a full gauge for a plan nothing on that machine was spending. On
+  macOS and Windows, where the environment of another process is out of reach, a
+  session running a configured binary shows nothing rather than the wrong
+  account's numbers. Codex sessions follow the same rule through `CODEX_HOME`.
+- **A keystroke no longer waits on a batching window that has nothing to batch.**
+  A session's output is collected into short windows so a burst — a full-screen
+  redraw, a build log — reaches the window as a couple of frames instead of
+  dozens. That window was charged to every write, the echo of a single keypress
+  on an otherwise silent terminal included, where there is no burst to collapse:
+  the character sat for the full 8 ms before it appeared. The first write after a
+  quiet window now goes out at once, and the window still batches everything the
+  burst piles up behind it — a lone write's echo went from 8034 µs to under 2 µs.
+  A hidden session is deliberately unchanged: it does not paint, so it has no
+  latency to protect and batches as hard as before.
+- **Removing a worktree no longer fails when the agent in it has just exited.** A
+  session's terminal is released twice — once by the close you asked for, once by
+  the reap of the process that ended — and whichever of the two arrived second
+  reported the handle as already closed. Closing a card ignored that, but removing
+  a checkout reads it as a failed close and stops before it touches git: the
+  worktree stayed on disk, its row stayed on screen, and the only account of why
+  was an error naming `/dev/ptmx`. The hang-up now happens once, and both callers
+  are told what it did. Windows already closed once, where a second one costs more
+  than a message.
+- **A turn you interrupt no longer spins forever.** Pressing Esc or Ctrl+C to stop
+  an agent mid-turn left its card spinning until some later turn happened to
+  finish — Claude Code, Codex and oh-my-pi all say nothing at all when a turn is
+  stopped, so the last thing lich ever heard was "working". lich now reads the
+  interrupt from the keystroke itself: a lone Esc or Ctrl+C at a session that is
+  mid-turn ends that turn and the card goes quiet. It never reads as a *finished*
+  turn — stopping is not finishing, so no check, no notification, no tab badge —
+  and it never fires for a key pressed at an idle prompt, arriving inside a paste,
+  or belonging to an arrow key or a mouse report. Whatever the agent reports next
+  still wins.
+- **Closing a session hangs up on the agent instead of killing it outright.** A
+  card's close sent the process `SIGKILL`, which leaves an agent no chance to run
+  its own exit path. Claude Code reads that as a crash: a session killed within
+  ten seconds of its first frame counts as a fullscreen renderer that failed to
+  start, and two of those turn fullscreen off for every session on the machine —
+  the `tui` setting still says `fullscreen`, every session comes up on the classic
+  renderer anyway, and only `/tui fullscreen` clears it. A close now sends
+  `SIGTERM` and kills only a child that outstays a one-second grace, so exit
+  hooks, transcripts and renderer state are written the way they are in any
+  terminal. Windows keeps the abrupt close — a ConPTY has no signal to send.
+- **A deep file tree is readable again.** A pull request whose paths run
+  `src/main/java/br/com/acme/...` spent the panel's whole width on indentation,
+  and every file name arrived as an ellipsis with no way to reach the rest of
+  it. Directories with nothing in them but the next directory now collapse into
+  one row, the tree scrolls sideways when a name still overruns, and the Files
+  changed tree drags wider by its right edge like every other side panel — the
+  width is remembered. The dock's file browser gets the same three.
+
+## [0.39.0] - 2026-08-21
+
+### Added
+
+- **lich says when git or the GitHub CLI is missing, instead of going quiet.**
+  Every branch, diff and worktree on screen is read through `git`, and pull
+  requests, checks and PR checkouts through `gh` — but a machine without either
+  was told nothing: the readers swallow their failures by design, so the sidebar
+  simply showed no branch and the Pull Requests screen no pull requests, with
+  nothing anywhere saying why. A launch without `git` now opens with a dialog
+  that says what stays empty and offers the download page; the Pull Requests
+  screen without `gh` says the same in place of the list. Settings › Version
+  Control opens on both tools, each with the path it resolved to — which
+  answers the question a machine with two `git` installs actually has — or an
+  install button. All three warn that the `PATH` is read at launch, so a tool
+  installed with lich open needs a restart. `lich doctor` reports both as well,
+  as warnings: lich starts and every session spawns without them.
+- **A custom binary can be switched off without being deleted.** Settings ›
+  Providers › Binary gives each layer — the project's own override and the
+  global one — a switch beside its path. Off, the layer resolves as if it were
+  unset and falls through to the layer below, while the path stays written: going
+  back to the default and back again is two clicks rather than deleting a path
+  and typing it in from memory. A switched-off layer is also no longer checked,
+  so a custom binary that has gone missing stops holding the block open and
+  colouring it red. Nothing was migrated: a layer with no switch stored is on,
+  which is every override configured before this release.
+
+### Fixed
+
+- **A worktree opens on a branch that already exists, instead of refusing it.**
+  Every worktree lich made was handed to git as `worktree add -b`, which creates
+  the branch — so naming a branch that was already there failed with "A branch or
+  worktree with that name already exists", and the only way through was to delete
+  the branch first. That is exactly what a prepared branch cannot afford: cut
+  from a freshly fetched remote, pushed, linked to a GitHub issue. An existing
+  branch is now checked out as it stands, on the New worktree dialog, on
+  `lich open --worktree` and on the `open_session` tool alike — naming a branch
+  is naming the work on it, which is already how a branch holding a worktree is
+  read. The base goes unused in that case: it says where a branch starts, and
+  that one already started. A branch checked out somewhere else is still refused,
+  and now says so on modern git too, which reworded that refusal and had been
+  falling through to "git could not complete the operation".
+- **The Files tab browses a folder that is not a git repository.** The tree was
+  built from `git ls-files`, so a project opened on a plain directory — notes, a
+  scratch folder, a checkout of something that is not git — answered "Not a git
+  repository" and offered nothing to read, though every file beside it was
+  perfectly readable. Outside a repository lich now walks the directory itself:
+  `.git` is skipped, symlinks are left alone, and the listing stops at 20,000
+  files, since there is no `.gitignore` out there to keep a `node_modules` out.
+  Inside a repository nothing changes — git still answers, ignored files stay
+  invisible, and a broken repository still reports its error rather than
+  flooding the tree.
+- **The Version Control screen no longer answers a missing `gh` with `gh auth
+  login`.** Every failure to list your GitHub accounts had that sentence
+  appended to it, including the one where `gh` is not installed at all — which
+  sent you to authenticate a command that does not exist. The advice gh's own
+  failure carries is now the only advice shown, and a `gh` that is installed but
+  signed in to nothing says so before it becomes an error.
+- **A provider installed by Homebrew is found again when lich is opened from
+  its icon.** lich already recovers the environment your shell's rc files
+  export, but a bare command name is resolved against the process's own `PATH`,
+  which a launch from Finder or a desktop entry inherits from the session
+  manager — without Homebrew's prefix, or any other directory an rc file adds.
+  Codex installed with `brew install` was reported missing, and a session
+  configured to run it could not start; the same launch from a terminal worked.
+  The recovered `PATH` is now pinned into lich itself, so detection, the spawn
+  and the Chromium search all read it.
+
+## [0.38.0] - 2026-08-19
+
+### Added
+
+- **Six more keyboard shortcuts, all aimed at the session sidebar.**
+  `Ctrl+Shift+B` opens the worktree dialog — the New session menu's **Worktree**
+  item, reached without the menu — and the active session's own card actions get
+  the rest: `Ctrl+Shift+E` renames it in place, `Ctrl+Shift+X` closes it,
+  `Ctrl+Shift+K` pins or unpins it, `Ctrl+Shift+L` opens a terminal in its
+  directory, and `Ctrl+Shift+H` opens the delegate picker. A collapsed sidebar
+  opens first, since none of that chrome lives in the rail, and a shortcut the
+  card does not offer — closing a pinned session, delegating from a terminal —
+  is declined rather than silently doing nothing. All are listed in the
+  shortcuts overlay (`Ctrl+/`) and rebindable in Settings › Hotkeys.
+- **The terminal search chord is documented.** `Ctrl+F` has always opened the
+  session's search bar; the shortcuts overlay and Settings › Hotkeys now say so,
+  under a **Terminal** heading beside the chords passed through to the agent.
+
+### Changed
+
+- **The command palette leads with the sessions worth interrupting.** Its `All`
+  view now lists the sessions holding a turn first and the plain shells last,
+  so a project of parked terminals no longer fills the list ahead of the agent
+  that is actually running. It shows five rows per group instead of three, and
+  closed projects moved out of `All` into the `Projects` tab, which lists them
+  whole.
+
+### Fixed
+
+- **A long tool name stays inside its session card.** While an agent ran an MCP
+  tool, the card drew the harness's own spelling of it — `mcp__<server>__<tool>`
+  and three other forms, one per harness — at full length, and a name that did
+  not fit ran out past the card's right edge into the sidebar. The line now
+  drops the machinery in the name and keeps the parts worth reading, and both it
+  and the detail beside it give way with an ellipsis rather than overflowing.
+  The card keeps its height either way: this never wraps.
+
+- **A pull request that will not check out says why.** Opening a session on a
+  pull request runs `gh pr checkout`, which shells out to git — and when git's
+  ssh key was refused, all the screen said was that gh had failed and the log
+  had the rest. The reason now reaches the screen the same way it already did
+  for lich's own git calls, including the case behind most of them: a key whose
+  passphrase nothing can be typed into, because lich runs from a desktop
+  launcher and has no terminal to ask in. Load it with `ssh-add` and the
+  checkout goes through.
+
+- **Handing a file to a confined session works again, dropped or attached.** A
+  file dragged onto a sandboxed terminal — or chosen through the footer's attach
+  button — pasted the path it has on your machine, and that session's home is an
+  empty private one, so the agent opened nothing and said the file did not
+  exist. lich now attaches a copy instead for anything outside the session's
+  checkout, and mounts it read-only where the agent can read it. The copy is the
+  agent's to read, not to edit: changes land on the copy, not on your file. It is
+  deleted when the session closes, and a *folder* from outside the checkout is
+  still refused — there is nothing to copy a directory into. An attached path is
+  now quoted too, so a file whose name has a space in it stops arriving at the
+  prompt as two.
+
+- **Removing a worktree takes every session in it off the sidebar.** With more
+  than one session open in the same checkout — after merging its pull request,
+  say — only one card went away and the others stayed behind on a directory
+  that no longer existed. Closing such a leftover card asked again whether to
+  keep or remove the worktree, and removing it failed.
+
+- **The clipboard works in a confined session again.** Copying out of an
+  agent's TUI and attaching an image to it are the agent's own work — Claude
+  Code shells out to `wl-copy`, `wl-paste`, `xclip` and `xsel` for both — and a
+  sandboxed session had no display socket left to reach, so every copy and every
+  paste of a screenshot failed with nothing on screen saying why. The sandbox
+  now hands the session the display server's socket: Wayland where the host has
+  it, X11 with its cookie otherwise. A confined session can read the clipboard
+  as well as write it, which is the trade the clipboard is.
+
+- **ssh no longer fails outright inside a confined session.** Every remote git
+  command in a sandboxed session died on `Bad owner or permissions on
+  /etc/ssh/ssh_config.d/...`: inside the sandbox's user namespace the
+  distribution's ssh drop-in configs belong to nobody, and ssh refuses to read
+  them. The sandbox now hands ssh an empty drop-in directory, so `git fetch`
+  works again. Pushing still needs the credentials a confined session
+  deliberately does not have.
+
+- **Codex context usage now follows the session's configured window.** A default
+  272k session no longer appears to use the model catalog's optional 872k
+  maximum; sessions configured for either size report their own effective
+  window from the rollout.
+
+## [0.37.0] - 2026-08-18
+
+### Added
+
+- **Codex sessions now carry their model and context usage in the footer.** The
+  model-and-context readout is available for Codex, backed by the active context
+  count, model and reasoning effort in its rollout transcript and the maximum
+  effective window advertised by its model cache.
+
+## [0.36.0] - 2026-08-18
+
+### Added
+
+- **Sessions can run confined.** Settings › Providers gains a **Sandbox** ladder
+  beside the permission one — Off, Ask each time, Worktrees only, Everywhere —
+  and a session on a confined rung opens inside an OS sandbox: a fresh empty
+  home holding only that provider's own state, the rest of the machine
+  read-only, and write access to the checkout it was opened for. Your ssh keys,
+  your cloud credentials and every other repository on the disk are simply not
+  there. The network stays on, so the agent still reaches its API and lich still
+  hears its hooks, and the plan gauge, the cost readout and resume all keep
+  working — the provider writes its transcript to the same place it always did.
+
+  It is the counterweight to skipping permission prompts: the two rungs are read
+  together, and an agent turned loose in a worktree can be turned loose inside a
+  sandbox. The rung is per provider and can be set for one project alone, and
+  the New worktree dialog carries a **Run confined** box that starts on whatever
+  the rung would do and overrides it for that session alone — including every
+  later spawn of it, so a reload or a resume opens the way you opened it.
+
+  A confined card wears a shield beside its status dot, and its tooltip says
+  what that means and that the answer was taken when the session opened.
+
+  Linux runs bubblewrap and macOS `sandbox-exec`; the control is absent on a
+  machine with neither, and on Windows. It is not a boundary against hostile
+  code — see `docs/ceilings.md` for what it does not stop.
+
+- **How much of your plan is left, without leaving lich.** Claude Code and Codex
+  both report what a subscription has spent of its rolling windows, and lich now
+  reads it: the footer carries the window closest to running out beside the
+  context ring — `5h 2%`, `wk 84%` — with every window, its share and its reset
+  time behind the tooltip. Each provider's own settings section opens with the
+  same reading in full, including the weekly caps Anthropic scopes to a single
+  model. Windows are named by the length the provider reports, so a Codex free
+  plan's 30-day window is labelled as one rather than mistaken for the five-hour
+  one a paid plan reports in its place.
+
+  lich reads the login its provider's CLI already wrote and never refreshes or
+  rewrites it — token rotation stays with the CLI that owns it. A rejected token
+  reads as signed out, with the command that fixes it. opencode, oh-my-pi and
+  Crush run on your own API keys, where there is no plan to meter, so they are
+  absent from the block rather than shown empty.
+
+- **A terminal can open straight into a tool.** Right-click a terminal card and
+  set its **Entrypoint** — `lazygit`, `lazydocker`, `k9s`, `pnpm dev` — and that
+  command runs every time the terminal starts: the card's first view, a reload,
+  a respawn, the resume of a parked worktree. Quit the tool and you are back at
+  the prompt in the same card, so a crashed dev server leaves its error on
+  screen with a shell under it. The card takes the command as its name until you
+  rename it yourself, and then says what it runs in its tooltip. Emptying the
+  field puts the terminal back on a plain shell.
+
+  It belongs to that one terminal card and nothing else: a session running an
+  agent has no entrypoint to set, and it is not the project-wide
+  `.lich/setup-worktree.sh`, which still runs once when a worktree is born.
+
+### Changed
+
+- **Terminals no longer offer to delegate.** *Delegate to session…* was on every
+  card, terminals included, where the thing reading the prompt it writes is a
+  shell — so the request landed as a command line rather than as a request. The
+  action now belongs to sessions running an agent, which are the ones that can
+  act on it.
+
+- **The binary setting says which binary, and whether it is there.** *Custom
+  path* and *Override for <project>* were two fields and a sentence about
+  inheritance, and neither said what a session would actually spawn — a typo sat
+  there until a terminal refused to start. A provider's section now opens with
+  the answer: the executable a session here would run, where it came from, and a
+  tick that it exists and can be executed. **Use a different binary** unfolds the
+  whole resolution — this project, all projects, `$PATH` — in the order lich
+  reads it, with the layer that wins marked and the others shown as overridden.
+  Paths can be picked from a file dialog rather than typed.
+
+  It also names the two mistakes a shell would have hidden, because lich spawns
+  the binary directly: a leading `~` is never expanded, and a relative path means
+  a different binary in every session. A layer that resolves to nothing runnable
+  unfolds the block by itself.
+
+- **The two footer switches are one ladder.** *Model & context in the footer* and
+  *Session cost in the footer* asked the same question twice and left you to
+  assemble the answer; Claude Code's settings now offer **Nothing · Model &
+  context · And cost**, in the same shape as the permission ladder above it, with
+  a line under it saying what each rung puts on screen. The spend ceiling still
+  appears with the rung that shows a cost. Nothing needs setting again: an
+  install already showing both reads as the top rung, one showing neither as the
+  bottom.
+
+### Fixed
+
+- **Resuming a parked worktree session no longer forgets how it was started.** A
+  session opened with `lich open --model` came back on the provider's default
+  model after the worktree was kept and reopened, with nothing on screen saying
+  the model had changed.
+
+## [0.35.1] - 2026-08-17
+
+### Fixed
+
+- **A full-screen TUI no longer gets a stray blinking cursor back.** Switching
+  away from a card and back rebuilt its terminal from a snapshot, and that
+  snapshot does not record whether the app had hidden the cursor — so every TUI
+  that draws its own (bubbletea, and anything else that hides the real one) came
+  back with lich's blinking block parked in the middle of its output. Cursor
+  visibility now rides along with the mouse encoding as state the snapshot is
+  known not to carry.
+
+- **A relayed message no longer sends the sentence you were typing with it.** A
+  peer's answer or task arriving while you had a half-written prompt was pasted
+  onto your line and submitted with it, and your half was gone. lich now waits
+  for the prompt to be free — you send your line, or you leave it alone for a
+  minute — before typing anything into it. Same for every provider: it is the
+  session's terminal that is watched, not the agent running in it.
+
+- **A session card being dragged stays visible, and stays a card.** Dragged past
+  the end of its group the card slid under the edge that clips the group and
+  disappeared; short of that it read as if it were dissolving into its
+  neighbour, because a card in flight had no background of its own and the
+  labels underneath showed straight through it. A dragged card now carries a
+  raised surface and stops at the ends of the list it is being reordered in —
+  the same for checkout groups and project tabs.
+
 
 ## [0.35.0] - 2026-08-16
 

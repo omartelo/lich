@@ -14,9 +14,9 @@ import (
 )
 
 // chromeLaunch starts a Chromium-family browser via CDP. ExecPath is
-// chromium.FindBrowser — the same binary as the lich window — but UserDataDir
-// is this ephemeral dir, never lich/chromium-profile. Attaching to the --app
-// window would expose the UI and the session token; this process must stay
+// chromium.FindBrowser (system Chrome/Edge/… — never lich-shell); UserDataDir
+// is this ephemeral dir, never lich/chromium-profile. Attaching to the UI
+// window would expose the page and the session token; this process must stay
 // a sidecar.
 func chromeLaunch(dir string, headed bool) (Page, error) {
 	exe, err := chromium.FindBrowser(exec.LookPath)

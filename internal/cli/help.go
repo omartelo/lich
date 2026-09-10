@@ -101,8 +101,6 @@ var commands = []command{
 			"it is a lower bound. The source column says whose arithmetic a row's\n" +
 			"money is — priced here, or reported by the provider that spent it.",
 	},
-
-	},
 	{
 		name: "mcp",
 		args: "",

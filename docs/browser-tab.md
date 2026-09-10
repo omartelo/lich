@@ -12,9 +12,10 @@ An iframe of arbitrary `https://` is unsafe (X-Frame-Options, and the RPC
 token in the page URL). Attaching CDP to the `--app` process would expose the
 UI and the session token.
 
-So the product is a **second Chromium process** on `chromium.FindBrowser`, with
-a **different** `user-data-dir` than `lich/chromium-profile`. Closing that
-window does not quit lich. Closing the session card kills the sidecar.
+So the product is a **second Chromium process** on `chromium.FindBrowser`
+(system Chrome/Edge/Chromium/… — never `lich-shell`), with a **different**
+`user-data-dir` than `lich/chromium-profile`. Closing that window does not
+quit lich. Closing the session card kills the sidecar.
 
 ## One browser per card
 

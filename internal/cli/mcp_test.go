@@ -224,7 +224,7 @@ func TestMCPListsEveryTool(t *testing.T) {
 		"list_worktrees":     {},
 		"send_to_session":    {"session", "prompt"},
 		"wait_for_answer":    {},
-		"reply_to_session":   {"ticket", "answer"},
+		"reply_to_session":   {"answer"},
 		"browser_open":       {},
 		"browser_info":       {},
 		"browser_click":      {},

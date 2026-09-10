@@ -579,8 +579,6 @@ export const Spawn = {
   Run: (projectId: string, cwd: string) => call<null>("spawn.Run", [projectId, cwd]),
 }
 
-}
-
 export const Themes = {
   /** Bundled themes plus user-imported themes from the config dir. */
   List: () => call<ThemeDefinition[] | null>("themes.List", []),

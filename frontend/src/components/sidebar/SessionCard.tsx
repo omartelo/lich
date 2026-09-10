@@ -12,15 +12,8 @@ import {
   FolderOpen,
   GitBranch,
   GitPullRequestArrow,
-  FolderOpen,
-  GitBranch,
-  GitPullRequestArrow,
   Globe,
   Hourglass,
-  Inbox,
-  ListChecks,
-  Pencil,
-
   Inbox,
   ListChecks,
   Pencil,
@@ -709,6 +702,16 @@ export function SessionCard({
             {pinned ? <PinOff /> : <Pin />}
             {pinned ? "Unpin" : "Pin"}
           </ContextMenuItem>
+          <ContextMenuItem
+            onClick={() => {
+              void Browser.OpenVisible(session.id).catch((err) => {
+                toast.error(`Browser: ${errorText(err)}`)
+              })
+            }}
+          >
+            <Globe />
+            Browser tab
+          </ContextMenuItem>
           <SessionEntrypointItem session={session} onOpen={() => setEntrypointOpen(true)} />
           {!active && (
             <ContextMenuItem onClick={onStageToggle}>
@@ -745,30 +748,6 @@ export function SessionCard({
             <Copy />
             Copy send command
           </ContextMenuItem>
-          <ContextMenuItem onClick={() => setEditing(true)}>
-            <Pencil />
-            Rename
-          </ContextMenuItem>
-          {session.kind === "shell" && (
-            <ContextMenuItem onClick={() => setEntrypointOpen(true)}>
-              <Play />
-              Entrypoint…
-            </ContextMenuItem>
-          )}
-          <ContextMenuItem onClick={() => onPin(!pinned)}>
-            {pinned ? <PinOff /> : <Pin />}
-            {pinned ? "Unpin" : "Pin"}
-          </ContextMenuItem>
-          <ContextMenuItem
-            onClick={() => {
-              void Browser.OpenVisible(session.id).catch((err) => {
-                toast.error(`Browser: ${errorText(err)}`)
-              })
-            }}
-          >
-            <Globe />
-            Browser tab
-          </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuSub>
             <ContextMenuSubTrigger>
@@ -792,21 +771,6 @@ export function SessionCard({
               </ContextMenuItem>
             </ContextMenuSubContent>
           </ContextMenuSub>
-          {session.kind !== "shell" && (
-            <ContextMenuItem onClick={() => onOpenTerminal(shownPath)}>
-              <Terminal />
-              Open Terminal
-            </ContextMenuItem>
-          )}
-          <ContextMenuItem onClick={openFolderInEditor}>
-            <FolderCode />
-            Open in editor
-          </ContextMenuItem>
-          <ContextMenuItem onClick={openFolder}>
-            <FolderOpen />
-            Open folder
-          </ContextMenuItem>
-
           <ContextMenuItem onClick={onPulls}>
             <GitPullRequestArrow />
             Pull request
