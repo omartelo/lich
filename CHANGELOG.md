@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A session name that wrapped, or followed a wide character, stopped being a
+  link.** The terminal looked for other sessions' names one screen row at a
+  time and counted one character per column, so a long name broken across two
+  rows was found on neither of them, and a name printed after CJK text or a
+  combining accent underlined the wrong columns. The match now runs over the
+  whole logical line and maps back to the cells the characters really occupy.
+
 ## [0.49.0] - 2026-09-09
 
 > [!WARNING]
