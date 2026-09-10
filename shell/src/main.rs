@@ -16,7 +16,7 @@ use cef::{
     wrap_keyboard_handler,
 };
 use kurogane::{App, ClientAppBrowserDelegate};
-use std::io::Read;
+use std::io::{ErrorKind, Read};
 use std::os::raw::c_int;
 
 /// The title the window carries. The page title is never used for it.
@@ -246,22 +246,35 @@ fn main() {
     // shell launched by hand keeps whatever stdin it was given.
     if launch.exit_on_stdin_eof {
         std::thread::spawn(|| {
-            wait_for_eof(std::io::stdin());
-            std::process::exit(0);
+            if wait_for_eof(std::io::stdin()) {
+                std::process::exit(0);
+            }
         });
     }
     app.run_or_exit();
 }
 
-/// Blocks until stdin ends. lich holds the write end of the pipe it hands the
-/// window for as long as it lives and never writes to it, so EOF here is lich
-/// gone — killed, crashed, out of memory — and the window it opened goes with
-/// it. Left running, the window was the orphan the next launch's window was
-/// forwarded to by CEF's process singleton; that duplicate's exit read as the
-/// window failing to open, and lich opened a system browser beside it.
-fn wait_for_eof(mut stdin: impl Read) {
+/// Blocks until stdin ends, and reports whether it really did. lich holds the
+/// write end of the pipe it hands the window for as long as it lives and never
+/// writes to it, so a true here is lich gone and the window it opened goes with
+/// it. What that buys is written where the pipe is made
+/// (internal/chromium/chromium.go, launch).
+///
+/// A failed read is not that news and answers false, leaving the window open:
+/// only a real end-of-file says lich died. A signal landing on this thread
+/// mid-read surfaces as Interrupted, which plain Read does not retry, and on
+/// Windows a lich-shell.exe started by hand has no stdin handle to read at all
+/// (#![windows_subsystem = "windows"]), so the very first read fails.
+fn wait_for_eof(mut stdin: impl Read) -> bool {
     let mut byte = [0u8; 1];
-    while matches!(stdin.read(&mut byte), Ok(1..)) {}
+    loop {
+        match stdin.read(&mut byte) {
+            Ok(0) => return true,
+            Ok(_) => {}
+            Err(err) if err.kind() == ErrorKind::Interrupted => {}
+            Err(_) => return false,
+        }
+    }
 }
 
 /// Whether Chromium can confine its subprocesses here, decided the way
@@ -404,8 +417,44 @@ mod tests {
 
     #[test]
     fn returns_once_stdin_ends_whatever_was_written() {
-        wait_for_eof(std::io::Cursor::new(b"noise"));
-        wait_for_eof(std::io::empty());
+        assert!(wait_for_eof(std::io::Cursor::new(b"noise")));
+        assert!(wait_for_eof(std::io::empty()));
+    }
+
+    #[test]
+    fn reads_on_past_a_signal() {
+        assert!(wait_for_eof(Reads::new(vec![
+            Err(ErrorKind::Interrupted.into()),
+            Ok(1),
+            Err(ErrorKind::Interrupted.into()),
+            Ok(0),
+        ])));
+    }
+
+    #[test]
+    fn keeps_the_window_open_when_the_read_itself_fails() {
+        assert!(!wait_for_eof(Reads::new(vec![Err(
+            ErrorKind::BrokenPipe.into()
+        )])));
+        assert!(!wait_for_eof(Reads::new(vec![
+            Ok(1),
+            Err(ErrorKind::Other.into())
+        ])));
+    }
+
+    /// A stdin whose reads are scripted, so the error paths are reachable.
+    struct Reads(std::collections::VecDeque<std::io::Result<usize>>);
+
+    impl Reads {
+        fn new(reads: Vec<std::io::Result<usize>>) -> Self {
+            Self(reads.into())
+        }
+    }
+
+    impl Read for Reads {
+        fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<usize> {
+            self.0.pop_front().unwrap_or(Ok(0))
+        }
     }
 
     #[test]
