@@ -35,8 +35,10 @@ lich lets you:
   [opencode](https://github.com/sst/opencode), oh-my-pi,
   [Crush](https://github.com/charmbracelet/crush), the
   [Cursor CLI](https://cursor.com/docs/cli) and the
-  [Kiro CLI](https://kiro.dev/docs/cli/) are all first-class. Point lich at
-  each binary once, then pick the default or choose per session.
+  [Kiro CLI](https://kiro.dev/docs/cli/) all run here the same way. Point lich
+  at each binary once, then pick the default or choose per session. What lich
+  can read back *out* of a session differs by provider, and
+  [Provider support](#provider-support) is the table.
 - **Keep a real terminal.** PTY-backed shells, several per project, rendered on
   the GPU — searchable scrollback that survives a full page reload. Give one an
   entrypoint — `lazygit`, `k9s`, `pnpm dev` — and it opens straight into that
@@ -86,6 +88,36 @@ the conversation, a desktop notification when a session is waiting on you, and
 Development is active: bugs and feature requests belong in
 [Issues](https://github.com/omartelo/lich/issues), and what changed in each
 version is in [CHANGELOG.md](CHANGELOG.md).
+
+## Provider support
+
+Every provider is spawned in a real terminal, resumed by conversation id,
+confined by the same sandbox and handed the same way of reaching your other
+sessions. What differs is what lich can *read* back out of a session, because it
+reads what each CLI writes down and no two of them write down the same things.
+
+| What you get | Claude Code | Codex | Antigravity | opencode | oh-my-pi | Crush | Cursor CLI | Kiro CLI |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
+| Context window in the footer | yes | yes | no | no | no | no | no | yes |
+| Cost in the footer | yes | yes | no | yes | yes | yes | no | credits |
+| How much of your plan is left | yes | yes | no | no | no | no | no | no |
+| Spinner while a turn runs, ring when it ends | yes | yes | yes | yes | yes | no | no | yes |
+| Bell when the agent is blocked on you | yes | yes | no | yes | no | no | no | no |
+| Machine kept out of idle sleep while a turn runs | yes | yes | yes | yes | yes | no | no | yes |
+| Review tab's **Last turn**, with the agent's recap | yes | yes | yes | yes | yes | no | no | yes |
+| Search the conversation from the palette | yes | yes | yes | yes | yes | yes | no | yes |
+| Fork a conversation into a new worktree | yes | yes | no | yes | no | no | no | no |
+
+Crush and Cursor CLI report neither the start nor the end of a turn, and that is
+where four of those rows go at once: nothing opens a window for the card's
+spinner, for the bell, for the Review tab's last turn, or for the hold that keeps
+the machine awake. The Review tab says so on the session itself rather than
+leaving you to notice the switch never appeared. Kiro CLI meters spend in credits
+rather than dollars, so its own footer is the only place that figure can be read.
+
+Every gap is deliberate, none of them is lich withholding something the CLI
+reports, and [`docs/ceilings.md`](docs/ceilings.md) says what was measured behind
+each one.
 
 ## Install
 
@@ -181,7 +213,7 @@ Package a Linux release locally (needs
 task package   # .deb + .rpm + Arch .pkg.tar.zst in bin/
 ```
 
-Adding another agent CLI to the seven lich runs is the one change that lands in a
+Adding another agent CLI to the eight lich runs is the one change that lands in a
 dozen files across two repositories:
 [`docs/adding-a-provider.md`](docs/adding-a-provider.md) is the map.
 

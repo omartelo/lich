@@ -73,8 +73,10 @@ Non-negotiable rules. A violation means the work is not done.
    Claude Code, Codex, Antigravity, opencode, oh-my-pi, Crush, Cursor CLI, Kiro CLI. Anything a session
    touches (spawn flags, hooks, resume, transcripts, plugin install, MCP) is designed against all eight, and
    `docs/adding-a-provider.md` is the map of every file one lands in. Equal behaviour is not always possible —
-   but the gap must be deliberate and written down in the same PR: a `docs/ceilings.md` bullet naming which
-   providers are out and why. A feature that silently works on a single provider is not done.
+   but the gap must be deliberate and written down in the same PR, in both places: a `docs/ceilings.md` bullet
+   naming which providers are out and why, and a row in the Provider support table of `README.md` and
+   `README.zh-CN.md`, written in what the user sees. A feature that silently works on a single provider is not
+   done, and neither is one whose gap only a contributor can find.
 
 ## Releases
 
