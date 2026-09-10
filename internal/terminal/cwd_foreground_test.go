@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -106,17 +107,20 @@ func TestReadCommOfDeadPidIsEmpty(t *testing.T) {
 // process rather than the PTY child — the two agree on every ordinary job, and
 // the child is never named tmux.
 //
-// A copy of /bin/sh under the name is what makes it testable: comm answers what
-// was executed, so the copy reads as "tmux" to the very seam a real tmux would,
-// without a multiplexer, a socket or a server process in the test.
+// A link to /bin/sh under the name is what makes it testable: comm answers the
+// basename that was executed, so the link reads as "tmux" to the very seam a
+// real tmux would, without a multiplexer, a socket or a server in the test.
 func TestProcessCwdNamesAShellHostInTheForeground(t *testing.T) {
+	// A symlink, never a copy: comm is taken from the basename handed to execve
+	// on both OSes, so the link answers "tmux" while the binary that actually
+	// runs is the untouched /bin/sh. A copy is what this used to do, and macOS
+	// kills one at exec — /bin/sh is a platform binary whose signature is
+	// anchored to the system trust cache, and a copy of it outside that cache
+	// fails validation. The outer shell then stayed foreground and the readout
+	// went on answering with the shell's own directory.
 	fake := filepath.Join(t.TempDir(), "tmux")
-	sh, err := os.ReadFile("/bin/sh")
-	if err != nil {
-		t.Skipf("no /bin/sh to copy: %v", err)
-	}
-	if err := os.WriteFile(fake, sh, 0o755); err != nil {
-		t.Fatalf("write %s: %v", fake, err)
+	if err := os.Symlink("/bin/sh", fake); err != nil {
+		t.Skipf("cannot link /bin/sh: %v", err)
 	}
 
 	cmd := exec.Command("/bin/sh", "-i")
@@ -133,9 +137,25 @@ func TestProcessCwdNamesAShellHostInTheForeground(t *testing.T) {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
 	})
-	go func() { _, _ = io.Copy(io.Discard, ptmx) }()
+	// Kept rather than discarded: when the linked shell does not take the
+	// terminal, the reason is a line the shell printed and nothing else says
+	// it. The read runs on its own goroutine, so the transcript is guarded.
+	var mu sync.Mutex
+	var transcript strings.Builder
+	go func() {
+		buf := make([]byte, 512)
+		for {
+			n, err := ptmx.Read(buf)
+			mu.Lock()
+			transcript.Write(buf[:n])
+			mu.Unlock()
+			if err != nil {
+				return
+			}
+		}
+	}()
 
-	// Typed, so the outer shell's job control hands the terminal to the copy.
+	// Typed, so the outer shell's job control hands the terminal to the link.
 	if _, err := ptmx.WriteString(fake + " -i\n"); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -148,7 +168,11 @@ func TestProcessCwdNamesAShellHostInTheForeground(t *testing.T) {
 			return
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("processCwd(%d) = (%q, %q), want no path and the host \"tmux\"", pid, got, host)
+			mu.Lock()
+			said := transcript.String()
+			mu.Unlock()
+			t.Fatalf("processCwd(%d) = (%q, %q), want no path and the host %q; the shell said:\n%s",
+				pid, got, host, "tmux", said)
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
