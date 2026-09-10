@@ -399,6 +399,33 @@ func TestSetSessionTitleRespectsManualRename(t *testing.T) {
 	}
 }
 
+// The Stop hook re-reports the same derived title on every turn for providers
+// that never change it. An unchanged label is not applied, so the caller does
+// not take the write lock and push a UI update per turn.
+func TestSetSessionTitleReportsAnUnchangedLabelUnapplied(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2, "")
+
+	applied, err := svc.SetSessionTitle("s1", "Fixing the auth bug")
+	if err != nil {
+		t.Fatalf("SetSessionTitle: %v", err)
+	}
+	if !applied {
+		t.Fatal("the first title = false, want true")
+	}
+	applied, err = svc.SetSessionTitle("s1", "Fixing the auth bug")
+	if err != nil {
+		t.Fatalf("SetSessionTitle again: %v", err)
+	}
+	if applied {
+		t.Fatal("the same title again = true, want false")
+	}
+	if got := mustLoadSessions(t, svc)[0].Label; got != "Fixing the auth bug" {
+		t.Errorf("label = %q, want the title still on the row", got)
+	}
+}
+
 func TestDatabasePath(t *testing.T) {
 	t.Setenv("LICH_DEV", "")
 	path, err := databasePath()

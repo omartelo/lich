@@ -529,10 +529,15 @@ func (s *Service) SetSessionUnread(sessionID string, unread bool) error {
 // RenameSession clears label_auto and makes this a no-op, so a user's own name
 // is never overwritten. Reports whether the label actually changed, so the
 // caller only pushes a UI update when it did.
+//
+// The label it already carries is excluded in SQL rather than compared here:
+// SQLite counts a row it processed even when the write changes nothing, and a
+// provider whose title is derived once and re-reported on every turn would
+// otherwise take the write lock and emit a title event per turn.
 func (s *Service) SetSessionTitle(sessionID, title string) (bool, error) {
 	res, err := s.db.Exec(
-		`UPDATE sessions SET label = ? WHERE id = ? AND label_auto = 1`,
-		title, sessionID,
+		`UPDATE sessions SET label = ? WHERE id = ? AND label_auto = 1 AND label != ?`,
+		title, sessionID, title,
 	)
 	if err != nil {
 		return false, fmt.Errorf("set session %q title: %w", sessionID, err)
