@@ -70,10 +70,14 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   neither schema is a contract anybody promised to keep.
   The Codex window in that table is 95% of the rollout's default or configured `model_context_window`, and
   Codex is the one rung lich prices itself. `internal/pricing/prices.json` bakes a fixed slice of OpenAI rates
-  beside the Claude ones, copied by hand from the same LiteLLM table the refresh reads, so an offline Codex
+  beside the Claude ones, read from the same LiteLLM table the refresh reads, so an offline Codex
   session shows a cost at the rate that shipped — **stale by however long it has been since the release**,
-  until the refresh (`internal/pricing/pricing.go`) lands and overrides it. Nothing regenerates that slice, so
-  what is left
+  until the refresh (`internal/pricing/pricing.go`) lands and overrides it. `task pricing:refresh` reprices
+  the slice from that table, and a monthly job (`.github/workflows/pricing.yml`) runs it and opens a pull
+  request when a rate moved — deliberately not a gate, since an upstream price change is nobody's pull
+  request to fix. A hand-copied `cacheWrite1h` sat 12x over Anthropic's rate until the first run of that
+  task found it. What the job cannot notice is a model the floor never carried: that list is hand-picked,
+  so what is left
   with no price at all is a model newer than the build, or one LiteLLM never priced — and with no network
   the refresh that would settle it never runs. A Codex conversation that ran `/model` has no cost from that
   turn on (`codexCostScan.mixed`): the one running total spans both models and the rollout never splits it,
