@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { toast } from "sonner"
 import { ProjectService, Store } from "@/lib/rpc"
 import { closeIntent } from "@/lib/session/close-intent"
@@ -16,6 +16,13 @@ export interface WorktreeClose {
   closeAnyway: () => void
   /** The session whose keep-or-remove dialog is open, or null. */
   pendingClose: Session | null
+  /**
+   * Whether that checkout is one lich adopted rather than created, in which case
+   * the confirmation says whose directory it is before offering to delete it.
+   * True until the backend says otherwise, so the plainer wording never goes up
+   * on a guess.
+   */
+  pendingAdopted: boolean
   /** The dirty worktree waiting on a --force confirmation, or null. */
   pendingForce: Session | null
   /** Dismiss whichever dialog is open, changing nothing. */
@@ -43,7 +50,9 @@ export function useWorktreeClose(
   const { closeSession, discardSession, keepSession } = useProjects()
   const [pendingRunning, setPendingRunning] = useState<Session | null>(null)
   const [pendingClose, setPendingClose] = useState<Session | null>(null)
+  const [pendingAdopted, setPendingAdopted] = useState(true)
   const [pendingForce, setPendingForce] = useState<Session | null>(null)
+  const adoptedProbe = useRef(0)
 
   // Close first so the PTY running inside the worktree dies before git tries
   // to remove it. A refused removal surfaces as a toast; the checkout stays on
@@ -57,9 +66,13 @@ export function useWorktreeClose(
     // The checkout is going away, so no parked row for it may linger — one would
     // otherwise resurface a resume against a worktree that no longer exists.
     void Store.PurgeWorktreeSessions(projectId, session.path ?? "")
-    ProjectService.RemoveWorktree(projectPath, session.path ?? "", force).catch((err: unknown) => {
-      toast.error(`Failed to remove worktree: ${errorText(err)}`)
-    })
+    // Acknowledged: every path into here has gone through a dialog naming the
+    // directory, and for an adopted one that dialog says lich did not make it.
+    ProjectService.RemoveWorktree(projectPath, session.path ?? "", force, true).catch(
+      (err: unknown) => {
+        toast.error(`Failed to remove worktree: ${errorText(err)}`)
+      },
+    )
   }
 
   // Each step of the close, taken as closeIntent decides it. The card hides
@@ -72,9 +85,23 @@ export function useWorktreeClose(
       case "confirm-running":
         setPendingRunning(session)
         return
-      case "ask-worktree":
+      case "ask-worktree": {
+        // Asked as the dialog opens rather than at the click on Remove: what it
+        // decides is the wording, and a directory the user made by hand has to
+        // be named as theirs before the button that deletes it. A failed check
+        // reads as adopted — the half of the answer that says more.
+        setPendingAdopted(true)
         setPendingClose(session)
+        const sequence = ++adoptedProbe.current
+        void ProjectService.WorktreeAdopted(session.path ?? "")
+          .catch(() => true)
+          .then((adopted) => {
+            if (sequence === adoptedProbe.current) {
+              setPendingAdopted(adopted)
+            }
+          })
         return
+      }
       case "close":
         closeSession(projectId, session.id)
     }
@@ -83,6 +110,7 @@ export function useWorktreeClose(
   return {
     pendingRunning,
     pendingClose,
+    pendingAdopted,
     pendingForce,
 
     requestClose(session) {
@@ -100,6 +128,7 @@ export function useWorktreeClose(
     },
 
     cancel() {
+      adoptedProbe.current++
       setPendingRunning(null)
       setPendingClose(null)
       setPendingForce(null)

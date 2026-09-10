@@ -9,8 +9,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { cn } from "@/lib/utils"
+import { commentFieldClass } from "./CommentBox"
 
 // MergeEdit carries a pending "edit commit message" merge: which method to run
 // and the message the dialog is editing. The screen holds it as null while the
@@ -61,9 +62,15 @@ export function MergeMessageDialog({
   onCancel,
   onConfirm,
 }: MergeMessageDialogProps) {
+  const canMerge = !merging && edit.subject.trim() !== ""
   return (
     <Dialog open onOpenChange={(next) => !next && onCancel()}>
-      <DialogContent className="sm:max-w-lg">
+      {/* Wider than the app's other dialogs, and bounded by the window rather
+          than by the message: what is being edited here is a commit message
+          written elsewhere — a conventional-commit subject and a body of
+          several bullets — and a dialog sized for a sentence hides most of it
+          behind a scrollbar. */}
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{edit.title}</DialogTitle>
           <DialogDescription>Edit the commit message, then merge.</DialogDescription>
@@ -71,11 +78,22 @@ export function MergeMessageDialog({
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="merge-subject">Commit message</Label>
-            <Input
+            {/* A subject is one line, but a one-line *field* scrolls the end of
+                it out of sight — the part that carries the PR number. This one
+                wraps to show the whole thing (up to three lines) while keeping
+                the value single-line: ⏎ merges instead of breaking, and a
+                pasted newline collapses to a space. */}
+            <textarea
               id="merge-subject"
               value={edit.subject}
-              onChange={(e) => onChange({ ...edit, subject: e.target.value })}
+              onChange={(e) => onChange({ ...edit, subject: e.target.value.replace(/\n/g, " ") })}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter") return
+                e.preventDefault()
+                if (canMerge) onConfirm()
+              }}
               autoFocus
+              className={cn(commentFieldClass, "max-h-18 min-h-0 resize-none")}
             />
           </div>
           <div className="flex flex-col gap-1.5">
@@ -84,9 +102,12 @@ export function MergeMessageDialog({
               id="merge-body"
               value={edit.body}
               onChange={(e) => onChange({ ...edit, body: e.target.value })}
-              rows={6}
               placeholder="Optional"
-              className="min-h-24 w-full resize-y rounded-md border border-input bg-transparent px-2.5 py-1.5 text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+              // The shared field grows with what it holds; the bounds are the
+              // window's, as they are for a pull request's description — tall
+              // enough to read the body without scrolling, short enough to
+              // leave the merge button in sight.
+              className={cn(commentFieldClass, "max-h-[50vh] min-h-[30vh]")}
             />
           </div>
         </div>
@@ -94,7 +115,7 @@ export function MergeMessageDialog({
           <Button variant="ghost" onClick={onCancel}>
             Cancel
           </Button>
-          <Button onClick={onConfirm} disabled={merging || edit.subject.trim() === ""}>
+          <Button onClick={onConfirm} disabled={!canMerge}>
             <GitMerge />
             {merging ? "Merging…" : edit.method === "squash" ? "Squash and merge" : "Merge"}
           </Button>

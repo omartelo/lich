@@ -65,10 +65,13 @@ func TestSandboxDefaultPerRungAndCheckout(t *testing.T) {
 	}{
 		{SandboxOff, root, false},
 		{SandboxOff, "/work/wt", false},
-		{SandboxAsk, root, false},
-		// Ask hands the decision to whoever opens the session. A caller with
-		// nowhere to ask gets the answer closing the dialog would give.
-		{SandboxAsk, "/work/wt", false},
+		// Contract change: Ask hands the decision to whoever opens the session,
+		// and this function is only reached for it by a caller with nobody to
+		// ask — an MCP open_session, `lich open`, a respawn. That caller is the
+		// unattended agent the rung exists for, so it takes the confined side,
+		// on either checkout.
+		{SandboxAsk, root, true},
+		{SandboxAsk, "/work/wt", true},
 		{SandboxWorktrees, root, false},
 		{SandboxWorktrees, root + "/", false},
 		{SandboxWorktrees, "/work/wt", true},

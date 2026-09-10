@@ -8,7 +8,7 @@ import {
 
 // The backend is the boundary: the lookup is an RPC and the upload its own
 // endpoint, so both are stubbed and the test asserts which branch each entry
-// took — the whole point of the copied list.
+// took, which is the whole point of the notices.
 const resolve = vi.fn()
 vi.mock("@/lib/rpc", () => ({
   DropService: {
@@ -49,6 +49,30 @@ describe("composeDroppedPaths", () => {
     expect(paste).toBe(`${PASTE_START}/home/u/a.ts /home/u/b.ts ${PASTE_END}`)
   })
 
+  // The notice is what tells a copy's path from the user's own, and it belongs
+  // in the prompt rather than in a toast: the agent reads the prompt. The
+  // trailing space gives way to a newline, so what is typed next lands under
+  // the line instead of on it.
+  it("writes the copy's line under the path, in the same paste", () => {
+    const paste = composeDroppedPaths(["/cfg/dropped/b.png"], false, ["[lich] copy of b.png; …"])
+
+    expect(paste).toBe(`${PASTE_START}/cfg/dropped/b.png\n[lich] copy of b.png; …\n${PASTE_END}`)
+  })
+
+  // The attach button has an empty notice whenever the session opens the file
+  // where it lies, and a blank line under the path is not what that means.
+  it("writes no line for a path that is the session's own", () => {
+    expect(composeDroppedPaths(["/home/u/a.ts"], false, [""])).toBe(
+      `${PASTE_START}/home/u/a.ts ${PASTE_END}`,
+    )
+  })
+
+  it("keeps one line per copy in a mixed drop", () => {
+    const paste = composeDroppedPaths(["/home/u/a.ts", "/cfg/dropped/b.png"], false, ["copy of b"])
+
+    expect(paste).toBe(`${PASTE_START}/home/u/a.ts /cfg/dropped/b.png\ncopy of b\n${PASTE_END}`)
+  })
+
   // A path with a space is one argument or it is two files that do not exist.
   it("quotes a path a shell would split", () => {
     expect(composeDroppedPaths(["/home/u/my notes.md"])).toBe(
@@ -70,11 +94,15 @@ describe("composeDroppedPaths", () => {
     )
   })
 
-  // cmd.exe has no single quotes: quoting a Windows path with them hands the
-  // prompt a path that does not exist, quotes and all.
-  it("quotes a Windows path with a space the way cmd.exe reads it", () => {
+  // PowerShell is the shell a Windows session runs, and it doubles an embedded
+  // single quote rather than escaping it the POSIX way — a path under
+  // C:\\Users\\O'Brien has to come out as one argument on both hosts.
+  it("quotes a Windows path the way PowerShell reads it", () => {
     expect(composeDroppedPaths(["C:\\Program Files\\a.ts"], true)).toBe(
-      `${PASTE_START}"C:\\Program Files\\a.ts" ${PASTE_END}`,
+      `${PASTE_START}'C:\\Program Files\\a.ts' ${PASTE_END}`,
+    )
+    expect(composeDroppedPaths(["C:\\Users\\O'Brien\\a b.ts"], true)).toBe(
+      `${PASTE_START}'C:\\Users\\O''Brien\\a b.ts' ${PASTE_END}`,
     )
   })
 })
@@ -87,7 +115,7 @@ describe("resolveDroppedFiles", () => {
     upload.mockReset()
     upload.mockResolvedValue({
       ok: true,
-      json: async () => ({ path: "/cfg/lich/dropped/b.png" }),
+      json: async () => ({ path: "/cfg/lich/dropped/b.png", notice: "[lich] copy of b.png; …" }),
     })
     vi.stubGlobal("fetch", upload)
   })
@@ -101,12 +129,13 @@ describe("resolveDroppedFiles", () => {
 
     const result = await resolveDroppedFiles(target(), [file("a.ts")])
 
-    expect(result).toEqual({ paths: ["/home/u/a.ts"], skipped: [], copied: [] })
+    expect(result).toEqual({ paths: ["/home/u/a.ts"], skipped: [], notices: [] })
     expect(upload).not.toHaveBeenCalled()
   })
 
-  // The path pasted for b.png is a copy's, and only this list says so.
-  it("names the entries pasted as a copy", async () => {
+  // The path pasted for b.png is a copy's, and the backend's line is what says
+  // so at the prompt; the file found in the tree brings none.
+  it("carries the backend's line for the entries pasted as a copy", async () => {
     resolve.mockResolvedValue(["/home/u/a.ts", ""])
 
     const result = await resolveDroppedFiles(target(), [file("a.ts"), file("b.png")])
@@ -114,7 +143,7 @@ describe("resolveDroppedFiles", () => {
     expect(result).toEqual({
       paths: ["/home/u/a.ts", "/cfg/lich/dropped/b.png"],
       skipped: [],
-      copied: ["b.png"],
+      notices: ["[lich] copy of b.png; …"],
     })
   })
 
@@ -125,7 +154,7 @@ describe("resolveDroppedFiles", () => {
 
     const result = await resolveDroppedFiles(target(), [file("b.png")])
 
-    expect(result).toEqual({ paths: [], skipped: ["b.png"], copied: [] })
+    expect(result).toEqual({ paths: [], skipped: ["b.png"], notices: [] })
   })
 
   // A directory has no bytes to copy, so it is skipped, never listed as one.
@@ -135,7 +164,7 @@ describe("resolveDroppedFiles", () => {
 
     const result = await resolveDroppedFiles(target(), [folder])
 
-    expect(result.copied).toEqual([])
+    expect(result.notices).toEqual([])
     expect(result.skipped).toHaveLength(1)
     expect(upload).not.toHaveBeenCalled()
   })
@@ -155,7 +184,7 @@ describe("resolveDroppedFiles", () => {
     const result = await resolveDroppedFiles(target(), [huge])
 
     expect(result.paths).toEqual([])
-    expect(result.copied).toEqual([])
+    expect(result.notices).toEqual([])
     expect(result.skipped).toEqual(["core.dump (over 32MB)"])
     expect(upload).not.toHaveBeenCalled()
   })
@@ -180,25 +209,33 @@ describe("resolveDroppedFiles", () => {
     const result = await resolveDroppedFiles(target(true), [file("b.png")])
 
     expect(resolve).toHaveBeenCalledWith("/home/u", expect.anything(), true)
-    expect(result.copied).toEqual(["b.png"])
+    expect(result.notices).toEqual(["[lich] copy of b.png; …"])
   })
 
-  // The reason a folder yielded no path names the search that ran: a confined
-  // session's home was never looked at.
-  it("does not blame a home a confined session never searched", async () => {
+  // A folder is the one drop with no answer: no path, and no copy to make of a
+  // tree, so the refusal has to be said out loud rather than left as a drop
+  // that did nothing. One sentence per search: an unconfined session's home is
+  // searched too, and a folder under it does come back with a path, so the
+  // refusal there is that nothing was found and not that the checkout is the
+  // limit.
+  it.each([
+    [false, "folder not found under this session or your home; drop files"],
+    [true, "folders outside this sandboxed session's checkout cannot be handed over; drop files"],
+  ])("says why a folder yields no path (confined: %s)", async (confined, why) => {
     resolve.mockResolvedValue([""])
     const folder: DroppedFile = { name: "docs", size: 0, mtime: 1, dir: true, blob: null }
 
-    const result = await resolveDroppedFiles(target(true), [folder])
+    const result = await resolveDroppedFiles(target(confined as boolean), [folder])
 
-    expect(result.skipped).toEqual(["docs (folder outside this sandboxed session's checkout)"])
+    expect(result.skipped).toEqual([`docs (${why})`])
+    expect(result.paths).toEqual([])
   })
 
   it("answers an empty drop without touching the backend", async () => {
     expect(await resolveDroppedFiles(target(), [])).toEqual({
       paths: [],
       skipped: [],
-      copied: [],
+      notices: [],
     })
     expect(resolve).not.toHaveBeenCalled()
   })

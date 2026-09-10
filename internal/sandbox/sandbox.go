@@ -23,6 +23,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/omartelo/lich/internal/providers"
 )
@@ -50,6 +52,12 @@ type Spec struct {
 	// Read is every path bound read-only: configuration, installed toolchains,
 	// and the binaries the session runs.
 	Read []string
+	// SkippedLinks names the paths under Home that were dropped for being
+	// symlinks, relative to Home (".gitconfig", ".ssh/known_hosts"). It is not a
+	// mount list: it is what the session will not find where it expects it, so
+	// the window can say so rather than leave the absence to be discovered by a
+	// command that fails inside the sandbox and works outside it.
+	SkippedLinks []string
 }
 
 // stateDirs is where each provider keeps the state a confined session still
@@ -65,7 +73,7 @@ type Spec struct {
 //
 // A provider missing from here confines to a home with no credentials in it,
 // which is a session that opens and cannot log in. The registry is the
-// checklist, so all six are listed.
+// checklist, so all eight are listed.
 func stateDirs(providerID, home string) []string {
 	switch providerID {
 	case providers.Claude:
@@ -97,6 +105,31 @@ func stateDirs(providerID, home string) []string {
 		return []string{
 			filepath.Join(configHome(home), "crush"),
 			filepath.Join(dataHome(home), "crush"),
+		}
+	case providers.Cursor:
+		// Two, because Cursor splits its state and reaches the second half
+		// through the home directly rather than through its config dir: the
+		// credentials (`auth.json`, `cli-config.json`) and the chats are under
+		// the config dir (providers.CursorConfigDir, which is not xdg-basedir
+		// and says why), while `~/.cursor` holds the `mcp.json` it reads, its
+		// per-project transcripts and its CLI state. With no XDG_CONFIG_HOME
+		// the two are the same directory, which is the usual case.
+		dirs := []string{providers.CursorConfigDir(home)}
+		if underHome := filepath.Join(home, ".cursor"); underHome != dirs[0] {
+			dirs = append(dirs, underHome)
+		}
+		return dirs
+	case providers.Kiro:
+		// Two, because Kiro splits credentials from everything else and only the
+		// first half is xdg-basedir: the login token lives in the SQLite store
+		// under the data home (`kiro-cli/data.sqlite3`, key
+		// `kirocli:social:token`, and XDG_DATA_HOME is honoured — both measured
+		// on 2.21.0), while `~/.kiro` holds the agents lich installs into, the
+		// settings and the conversations usage.go reads. A session with only the
+		// second opens at the login prompt.
+		return []string{
+			filepath.Join(dataHome(home), "kiro-cli"),
+			filepath.Join(home, ".kiro"),
 		}
 	}
 	return nil
@@ -201,12 +234,15 @@ var readableToolchain = []string{
 // without Rust has no ~/.cargo, and that is not an error.
 func Describe(providerID, home, cwd, gitCommon string, extraRead []string, sshAgent bool) Spec {
 	spec := Spec{Home: home, Cwd: cwd, GitCommon: gitCommon}
-	spec.Write = existing(append(stateDirs(providerID, home), under(home, writableCaches)...))
+	write := append(stateDirs(providerID, home), under(home, writableCaches)...)
 	read := append(under(home, readableToolchain), displaySockets(home)...)
 	if sshAgent {
 		read = append(read, AgentSocket(), knownHosts(home))
 	}
-	spec.Read = existing(append(read, extraRead...))
+	m := mounts{home: home}
+	spec.Write = m.keep(write)
+	spec.Read = m.keep(read, extraRead)
+	spec.SkippedLinks = m.links
 	return spec
 }
 
@@ -326,8 +362,11 @@ func under(base string, names []string) []string {
 	return out
 }
 
-// existing drops duplicates, paths that are not on disk, and symlinks. Order is
-// kept: a backend that mounts in order needs the parent before the child.
+// mounts is the single pass over the paths a Spec mounts. Both of its answers
+// come out of the one Lstat: what a backend binds, and the names of the links
+// that Lstat refused. Two passes over the same lists would be two copies of one
+// decision, free to drift the day the rule takes in something other than
+// symlinks.
 //
 // Symlinks are refused rather than followed, for two reasons that point the same
 // way. A link under a directory this list already mounts is a mount destination
@@ -339,22 +378,66 @@ func under(base string, names []string) []string {
 // whatever the user's dotfile manager happens to point at.
 //
 // The cost is real and deliberate: a `~/.gitconfig` symlinked out of a dotfiles
-// repository is not in a confined session, and nothing on screen says so. The
-// binaries the session runs are the exception, and they are handled by mounting
-// directories instead (BinaryDirs).
-func existing(paths []string) []string {
-	seen := make(map[string]bool, len(paths))
-	out := make([]string, 0, len(paths))
-	for _, path := range paths {
-		if path == "" || seen[path] {
-			continue
+// repository is not in a confined session. What it is not is silent — links is
+// what the card reads to say which ones are missing.
+type mounts struct {
+	home string
+	// links names the refused paths relative to home, in the order the profile
+	// lists them, without duplicates.
+	links []string
+}
+
+// keep filters one of the Spec's lists, dropping duplicates, paths that are not
+// on disk and symlinks. Order is kept: a backend that mounts in order needs the
+// parent before the child.
+//
+// exempt lists are filtered the same way but never reach links. That is the
+// binaries: their symlink chains are walked and every hop's directory is mounted
+// (BinaryDirs), so naming one would report a link that is in fact mounted. They
+// go through this call rather than one of their own because deduplication has to
+// span them and the list they extend.
+func (m *mounts) keep(named []string, exempt ...[]string) []string {
+	seen := make(map[string]bool, len(named))
+	out := make([]string, 0, len(named))
+	filter := func(paths []string, name bool) {
+		for _, path := range paths {
+			if path == "" || seen[path] {
+				continue
+			}
+			seen[path] = true
+			info, err := os.Lstat(path)
+			if err != nil {
+				continue
+			}
+			if info.Mode()&os.ModeSymlink != 0 {
+				if name {
+					m.nameLink(path)
+				}
+				continue
+			}
+			out = append(out, path)
 		}
-		seen[path] = true
-		info, err := os.Lstat(path)
-		if err != nil || info.Mode()&os.ModeSymlink != 0 {
-			continue
-		}
-		out = append(out, path)
+	}
+	filter(named, true)
+	for _, list := range exempt {
+		filter(list, false)
 	}
 	return out
+}
+
+// nameLink records a refused path for the card, under the short name a person
+// reading a tooltip would recognise.
+//
+// Only paths under home get one. Everything else in a Spec is either not a link
+// by construction (the display socket and the ssh agent are checked as sockets)
+// or is one on purpose, and a path outside the home has no such name.
+func (m *mounts) nameLink(path string) {
+	prefix := m.home + string(filepath.Separator)
+	if !strings.HasPrefix(path, prefix) {
+		return
+	}
+	name := path[len(prefix):]
+	if !slices.Contains(m.links, name) {
+		m.links = append(m.links, name)
+	}
 }

@@ -1,5 +1,6 @@
 import { Code, FileDiff, Maximize2, Minimize2, X } from "lucide-react"
 import { useState } from "react"
+import { ErrorBoundary } from "@/components/common/ErrorBoundary"
 import { IconAction } from "@/components/common/IconAction"
 import { ResizeHandle } from "@/components/common/ResizeHandle"
 import { CollapseAllAction, useDiffBulk } from "@/components/diff/diff-bulk"
@@ -100,7 +101,15 @@ export function RightDock({ tab, onTab, onClose }: RightDockProps) {
         </span>
       </div>
       <div className="flex flex-1 flex-col overflow-hidden">
-        {tab === "files" ? <FilesPanel /> : <ReviewPanel bulk={bulk} />}
+        {/* Below the header, so a panel that throws leaves the tab bar, the
+            full-screen toggle and the close button reachable — and switching
+            tab is itself a way out, which is what the reset key buys. */}
+        <ErrorBoundary
+          label={tab === "files" ? "The file tree" : "The review panel"}
+          resetKey={tab}
+        >
+          {tab === "files" ? <FilesPanel /> : <ReviewPanel bulk={bulk} />}
+        </ErrorBoundary>
       </div>
       {!fullscreen && <ResizeHandle edge="left" label="Resize panel" handleProps={handleProps} />}
     </aside>

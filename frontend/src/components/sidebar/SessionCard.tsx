@@ -5,19 +5,30 @@ import {
   ArrowLeft,
   ArrowRight,
   CircleQuestionMark,
+  Clock,
   Copy,
   CornerDownLeft,
   FolderCode,
   FolderOpen,
   GitBranch,
   GitPullRequestArrow,
+  FolderOpen,
+  GitBranch,
+  GitPullRequestArrow,
   Globe,
+  Hourglass,
   Inbox,
+  ListChecks,
   Pencil,
+
+  Inbox,
+  ListChecks,
+  Pencil,
+  Columns2,
   Pin,
   PinOff,
-  Play,
   Shield,
+  ShieldOff,
   Terminal,
   TriangleAlert,
   X,
@@ -26,7 +37,7 @@ import { useSortable } from "@dnd-kit/sortable"
 import { toast } from "sonner"
 import { cn, errorText } from "@/lib/utils"
 import { dragStyle } from "@/lib/use-sortable-list"
-import { displayPath } from "@/lib/paths"
+import { displayPath, unknownCwd } from "@/lib/paths"
 import type { Session } from "@/lib/session/sessions"
 import {
   useSessionStatus,
@@ -39,13 +50,17 @@ import { useSessionAgent } from "@/lib/session/use-session-agent"
 import { useSessionRelay } from "@/lib/session/use-session-relay"
 import { useSessionInbox } from "@/lib/session/use-session-inbox"
 import { useSessionTool } from "@/lib/session/use-session-tool"
+import { useSessionTodo } from "@/lib/session/use-session-todo"
+import { useHandoffHeld } from "@/lib/terminal/handoff-store"
 import { toolGlyph } from "@/lib/session/tool-glyph"
-import { toolLabel } from "@/lib/session/tool-label"
+import { toolLine } from "@/lib/session/tool-label"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { baseReadout } from "@/lib/git/base-status"
 import { usePullRequest } from "@/lib/pulls/use-pull-request"
 import { CloseButton } from "@/components/common/CloseButton"
 import { DiffStat } from "@/components/DiffStat"
+import { SessionEntrypointItem } from "./SessionEntrypointItem"
+import { SessionForkItem } from "./SessionForkItem"
 import { SessionStatusIcon } from "./SessionStatusIcon"
 import { SessionTooltip } from "./SessionTooltip"
 import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip"
@@ -54,27 +69,54 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
 import { Browser, System, Terminal as TerminalService } from "@/lib/rpc"
 import { queuePaste } from "@/lib/terminal/paste-queue"
 import type { DelegateGroup } from "@/lib/session/delegate-targets"
 import { delegatePrompt, delegateWorktreePrompt } from "@/lib/session/delegate-prompt"
+import { isWindows } from "@/lib/platform"
 import { sendCommand } from "@/lib/session/send-command"
 import { bracketedPaste } from "@/lib/terminal/bracketed-paste"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
 import { useSessionIntent } from "@/lib/use-sidebar-intent"
+import { sandboxDrift } from "@/lib/providers-store"
+import { useSandboxRung } from "@/lib/use-sandbox-rung"
 import { useProjects } from "@/providers/projects"
+import { timeUntil } from "@/lib/session/schedule"
 import { SessionTargetPicker } from "./SessionTargetPicker"
 import { EntrypointDialog } from "./EntrypointDialog"
+import { SchedulePromptDialog } from "./SchedulePromptDialog"
 
 interface SessionCardProps {
   session: Session
   path: string
+  // The project this card sits in, which is the scope its provider's sandbox
+  // rung is read in — a project override wins over the global ladder.
+  projectId: string
   // The session this one was opened from, named as it is called now; "" for a
   // session nobody delegated, which is most of them (sessionOrigin).
   origin: string
   active: boolean
+  // Whether it is drawing in a pane *right now*. Never true for a member of a
+  // parked wall, which the block this card sits in shows instead. It is also
+  // what the stage entry answers to: only a card on screen can be taken off it,
+  // and one on a parked wall is put on the stage like any other.
+  showing: boolean
+  // Put this card on the stage, or take it off when it is already there.
+  onStageToggle: () => void
+  // How many sessions this one delegated work to, and the action that gathers
+  // them into a wall around it. Zero is the usual case and offers nothing.
+  delegateCount: number
+  onGroupDelegates: () => void
+  // Branch this session's conversation into a checkout of its own. Offered only
+  // where the provider can fork one (forkableSession) — the card does not ask
+  // whether the conversation is still on disk, which is the fork flow's own
+  // first question.
+  onFork: () => void
   onSelect: () => void
   onClose: () => void
   onRename: (label: string) => void
@@ -87,8 +129,7 @@ interface SessionCardProps {
   // hand — but the id is what lets a terminal editor be launched in it.
   onOpenTerminal: (cwd: string) => string
   // Record the command this terminal opens into, "" to clear it back to a plain
-  // shell. Offered on shell sessions alone: on a provider card the entrypoint is
-  // the provider, and the store refuses one there anyway.
+  // shell. Only a terminal card can take one (SessionEntrypointItem).
   onSetEntrypoint: (entrypoint: string) => void
   // Open the Pulls screen for this session's worktree, parking its PR card.
   onPulls: () => void
@@ -106,8 +147,14 @@ interface SessionCardProps {
 export function SessionCard({
   session,
   path,
+  projectId,
   origin,
   active,
+  showing,
+  onStageToggle,
+  delegateCount,
+  onGroupDelegates,
+  onFork,
   onSelect,
   onClose,
   onRename,
@@ -121,12 +168,13 @@ export function SessionCard({
   // Read here rather than threaded down as a prop: the `lich send` line names
   // the project only when another session shares this card's label, and that is
   // a question about every open project — not about the one this card sits in.
-  const { projects, sessions } = useProjects()
+  const { projects, sessions, scheduleSession } = useProjects()
   const pinned = !!session.pinned
   const pathRef = useRef<HTMLSpanElement>(null)
   const [pathOverflow, setPathOverflow] = useState(false)
   const [editing, setEditing] = useState(false)
   const [delegatePickerOpen, setDelegatePickerOpen] = useState(false)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
   const [entrypointOpen, setEntrypointOpen] = useState(false)
   // Processing state reported by the lich Claude Code hook, drawn as a ring
   // around the provider icon: a spinning ring while Claude produces output,
@@ -150,6 +198,12 @@ export function SessionCard({
   // `codex` in a shell session puts that provider's mark on the card while it
   // runs; null falls back to the session's own kind.
   const agent = useSessionAgent(session.id)
+  // Whether the sandbox answer frozen on this row still matches the rung the
+  // project is on. The kind, not the live agent: what confined this PTY was
+  // decided against the provider it was spawned as.
+  const rung = useSandboxRung(session.kind, projectId)
+  const confined = session.sandboxed ?? false
+  const drift = rung === null ? "" : sandboxDrift(rung, !!session.path, confined)
   // The tool the turn is running right now, reported by the provider's pre-tool
   // hook: null outside a tool call, which is what keeps the card its usual size
   // whenever nothing is happening in it.
@@ -158,16 +212,46 @@ export function SessionCard({
   // a message lands in a PTY and cleared when it is answered. null the rest of
   // the time, which is nearly always.
   const relay = useSessionRelay(session.id)
+  // Text handed to this session — a pull request's conflict, the issue a
+  // worktree was named after — still waiting for a prompt free enough to take
+  // it. The wait can be minutes, and until it ends the card looks exactly like
+  // one nothing was handed to (write-at-prompt.ts).
+  const handoffHeld = useHandoffHeld(session.id)
   // How many results this session has waiting in the relay's inbox: results of
   // tasks it delegated, uncollected. Zero — the usual case — draws nothing.
   const inbox = useSessionInbox(session.id)
+  // How far the agent got through the task list it wrote for itself. null for
+  // most sessions: no list, a finished one, or a provider whose list lich
+  // cannot read (terminal.todoReaderFor).
+  const todo = useSessionTodo(session.id)
   const ToolGlyph = tool && toolGlyph(tool.name)
+  // The two halves of the line, which are not always the two fields the report
+  // sent: on Antigravity the tool's identity arrives in the detail, and drawing
+  // it takes the whole line (tool-label.ts).
+  const line = tool && toolLine(tool, session.mcpServers)
+  // The prompt parked on this card, and how far off it is. Read at render
+  // rather than counted down on a timer of its own: a card redraws often enough
+  // that "in 3h" is never wrong by anything a person reads, and a clock ticking
+  // per card would cost the sidebar a render a second to say the same thing.
+  // null once it is due, which is the state the rung words differently.
+  const scheduledAt = session.scheduledAt ?? 0
+  const scheduledIn = scheduledAt ? timeUntil(scheduledAt, new Date()) : null
+  const scheduleItem = !scheduledAt
+    ? "Schedule a prompt…"
+    : scheduledIn
+      ? `Scheduled ${scheduledIn}…`
+      : "Scheduled…"
   // The live working directory the backend's cwd watcher reports ("" until it
   // does): a `cd` in the terminal moves the card with it. Falls back to the
   // session's static start path — a worktree session lives in its own checkout,
   // so that path (not the project's) is the fallback. Git status and the PR
   // badge follow whatever is shown, so they reflect the directory's repo.
-  const liveCwd = useSessionCwd(session.id)
+  //
+  // cwdHost is the shell the watcher could not read into (tmux, ssh, a
+  // container). Only the path line answers to it: git and the PR still speak
+  // for the checkout, which is a repository whether or not the user is standing
+  // in it — the line is what would otherwise claim to know where they are.
+  const { cwd: liveCwd, host: cwdHost } = useSessionCwd(session.id)
   const shownPath = liveCwd || session.path || path
   const git = useGitStatus(shownPath)
   const pr = usePullRequest(shownPath, git?.branch ?? "", git?.head ?? "")
@@ -184,11 +268,17 @@ export function SessionCard({
   // Write the request at this session's own prompt and hand the cursor back.
   // lich stops here: what it types is a request, and the agent reading it
   // decides whether to reach for the tool or the command (delegatePrompt).
+  //
+  // The card takes the screen first: the request is typed but not sent, so a
+  // delegation from a card that was not the one in view would leave a line
+  // waiting in a terminal the user cannot see.
   const delegate = (label: string) => {
+    onSelect()
     void TerminalService.Write(session.id, bracketedPaste(delegatePrompt(session.kind, label)))
     requestTerminalFocus(session.id)
   }
   const delegateWorktree = () => {
+    onSelect()
     void TerminalService.Write(session.id, bracketedPaste(delegateWorktreePrompt(session.kind)))
     requestTerminalFocus(session.id)
   }
@@ -208,10 +298,11 @@ export function SessionCard({
   }
 
   // The line another terminal — or another agent — hands this session work
-  // with. The label is quoted for a shell on the way out (sendCommand): getting
-  // that right from memory is exactly what goes wrong when the line is retyped.
+  // with. The label is quoted for a shell on the way out (sendCommand), in the
+  // spelling this machine's own shell reads: getting that right from memory is
+  // exactly what goes wrong when the line is retyped.
   const copySendCommand = () => {
-    const command = sendCommand(projects, sessions, session)
+    const command = sendCommand(projects, sessions, session, isWindows)
     void navigator.clipboard.writeText(command).then(
       () => toast(`Copied: ${command}`),
       (error) => toast.error(`Could not copy the command: ${errorText(error)}`),
@@ -236,19 +327,7 @@ export function SessionCard({
   // decides, never the live agent readout — a menu that appears and disappears
   // as an agent is started and quit by hand offers no action the user can rely
   // on being there.
-  const canDelegate = active && session.kind !== "shell"
-
-  // The picker is only rendered while the card can delegate, so losing that
-  // unmounts it — and an open flag left behind would spring the dialog back up
-  // unasked the moment the card qualifies again. The card can stop being the
-  // active one without a click on it (the palette hotkey is caught in the
-  // window's capture phase, and a session link jumps straight to another card),
-  // so this is reachable with the picker on screen.
-  useEffect(() => {
-    if (!canDelegate) {
-      setDelegatePickerOpen(false)
-    }
-  }, [canDelegate])
+  const canDelegate = session.kind !== "shell"
 
   // The shortcuts for this card's own actions. They aim at the active session,
   // which is this card, and they call the same handlers its context menu items
@@ -334,6 +413,9 @@ export function SessionCard({
                     className={cn(
                       "group relative flex w-full flex-col items-start gap-0.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-accent/60",
                       active && "bg-accent text-accent-foreground",
+                      // On screen, but not the pane the keyboard is in: one step
+                      // down the same fill, never a second kind of mark.
+                      showing && !active && "bg-accent/55",
                     )}
                   />
                 }
@@ -371,34 +453,62 @@ export function SessionCard({
                   {/* Permanent state, so it sits with the status and the age
                       rather than on the line below, which is a ladder where one
                       rung draws at a time and every rung is news. Muted and
-                      wordless: the tooltip carries what it means. */}
-                  {session.sandboxed && (
+                      wordless: the tooltip carries what it means.
+
+                      The crossed shield is the case that used to have no mark at
+                      all: a session the rung would confine today, opened before
+                      it moved. It is drawn dimmer than the shield and negated,
+                      because the one thing it must never be read as is a
+                      confined session. */}
+                  {confined ? (
                     <Shield
-                      aria-label="Sandboxed"
+                      aria-label={drift ? "Sandboxed, setting has moved" : "Sandboxed"}
                       className="size-3 shrink-0 text-muted-foreground"
                     />
+                  ) : (
+                    drift === "would-confine" && (
+                      <ShieldOff
+                        aria-label="Not sandboxed, setting has moved"
+                        className="size-3 shrink-0 text-muted-foreground/60"
+                      />
+                    )
                   )}
                   <span className="truncate text-sm font-medium text-foreground">
                     {session.label}
                   </span>
                 </span>
               )}
-              {/* One line, five rungs: an open request, then a session blocked
-                  on the user, then results waiting to be collected, then the
-                  tool, then where the session came from. A request in flight
+              {/* One line, eight rungs: an open request, then a session blocked
+                  on the user, then a handoff waiting for this prompt, then
+                  results waiting to be collected, then how far
+                  a quiet card got through its task list, then the
+                  tool, then a prompt scheduled for later, then where the session
+                  came from. A request in flight
                   explains the whole turn — a card working because another
                   session asked it to, or one stalled waiting on a card
                   elsewhere in the list. A block outranks the rest for the
                   reason it needs words at all: the amber ring differs from the
                   emerald one by hue alone, so nothing else on the card says the
-                  session wants an answer. The inbox sits under those and over
+                  session wants an answer. A held handoff sits under the block
+                  and over the rest: text was handed to this session and is not
+                  at its prompt, which without a rung is indistinguishable from a
+                  click that did nothing. The inbox sits under those and over
                   the tool: mid-turn the live tool is the news, and the count
                   takes the rung when the card goes quiet — the same rule the
-                  relay's own nudge follows. The origin is last precisely
+                  relay's own nudge follows. Task-list progress answers to that
+                  rule for a reason of its own: the tool changes at every step
+                  and is how a card proves it is moving, while a count can sit
+                  still for minutes, so it waits for the turn to end and then
+                  answers the question a finished card leaves open, which is how
+                  much the agent stopped short of. The origin is last precisely
                   because it is never news: it says something that has been true
                   since the card was created, so it surfaces only once the card
                   is quiet, which is when somebody scanning the sidebar is
-                  working out where a card came from. Only one rung ever draws,
+                  working out where a card came from. A scheduled prompt sits
+                  just above it for half that reason: it is not what this session
+                  is doing, so it never takes the line from the turn — but it is
+                  the one rung about something that has not happened yet, and a
+                  quiet card is exactly where that is worth reading. Only one rung ever draws,
                   so the card grows by one row at most. */}
               {relay ? (
                 <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
@@ -429,11 +539,26 @@ export function SessionCard({
                     {waitingReason || "Waiting on you"}
                   </span>
                 </span>
+              ) : handoffHeld ? (
+                <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                  <Hourglass className="size-3 shrink-0" />
+                  <span className="truncate">Something is waiting for this prompt</span>
+                </span>
               ) : status !== "busy" && inbox > 0 ? (
                 <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
                   <Inbox className="size-3 shrink-0" />
                   <span className="truncate font-medium text-foreground">
                     {inbox === 1 ? "1 result ready" : `${inbox} results ready`}
+                  </span>
+                </span>
+              ) : status !== "busy" && todo ? (
+                <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                  <ListChecks className="size-3 shrink-0" />
+                  <span className="truncate">
+                    <span className="font-medium tabular-nums text-foreground">
+                      {`${todo.done} of ${todo.total}`}
+                    </span>
+                    {" done"}
                   </span>
                 </span>
               ) : tool ? (
@@ -446,12 +571,27 @@ export function SessionCard({
                       The separator travels inside the detail so it leaves with it,
                       instead of dangling after a truncated name. */}
                   <span className="min-w-0 truncate font-medium text-foreground">
-                    {toolLabel(tool.name)}
+                    {line?.label}
                   </span>
-                  {tool.detail && (
+                  {line?.detail && (
                     <span className="min-w-0 shrink-[9999] truncate font-mono">
-                      <span className="opacity-50">·</span> {tool.detail}
+                      <span className="opacity-50">·</span> {line.detail}
                     </span>
+                  )}
+                </span>
+              ) : scheduledAt ? (
+                <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                  <Clock className="size-3 shrink-0" />
+                  {scheduledIn ? (
+                    <span className="truncate">
+                      Scheduled <span className="font-medium text-foreground">{scheduledIn}</span>
+                    </span>
+                  ) : (
+                    // Due and still here: the prompt is waiting on somewhere to
+                    // be typed — a setup script still running, a half-written
+                    // line at that prompt, a card whose terminal was never
+                    // opened — and it goes in the moment there is one.
+                    <span className="truncate">Waiting for a prompt</span>
                   )}
                 </span>
               ) : (
@@ -481,7 +621,7 @@ export function SessionCard({
                     "[mask-image:linear-gradient(to_right,transparent,black_1.25rem)]",
                 )}
               >
-                {`\u200e${displayPath(shownPath)}`}
+                {`\u200e${cwdHost ? unknownCwd(cwdHost) : displayPath(shownPath)}`}
               </span>
               {git?.branch && (
                 <span className="flex w-full items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -554,15 +694,53 @@ export function SessionCard({
               )}
             </span>
           </ContextMenuTrigger>
-          <SessionTooltip session={session} path={path} />
+          <SessionTooltip session={session} path={path} projectId={projectId} />
         </Tooltip>
+        {/* Three blocks, hairline apart: what this card is, what its work is
+            handed to, and where its checkout opens. No chords on the items: they
+            act on whichever session is in view (App.tsx cardAction), so on any
+            other card the menu would name a shortcut that fires elsewhere. */}
         <ContextMenuContent>
+          <ContextMenuItem onClick={() => setEditing(true)}>
+            <Pencil />
+            Rename
+          </ContextMenuItem>
+          <ContextMenuItem onClick={() => onPin(!pinned)}>
+            {pinned ? <PinOff /> : <Pin />}
+            {pinned ? "Unpin" : "Pin"}
+          </ContextMenuItem>
+          <SessionEntrypointItem session={session} onOpen={() => setEntrypointOpen(true)} />
+          {!active && (
+            <ContextMenuItem onClick={onStageToggle}>
+              <Columns2 />
+              {showing ? "Stop showing" : "Show beside"}
+            </ContextMenuItem>
+          )}
+          {delegateCount > 0 && (
+            <ContextMenuItem onClick={onGroupDelegates}>
+              <Columns2 />
+              {delegateCount === 1
+                ? "Show beside its 1 delegate"
+                : `Show beside its ${delegateCount} delegates`}
+            </ContextMenuItem>
+          )}
+          <ContextMenuSeparator />
           {canDelegate && (
             <ContextMenuItem onClick={() => setDelegatePickerOpen(true)}>
               <ArrowRight />
               Delegate to session…
             </ContextMenuItem>
           )}
+          {/* Under delegation, because the two are the same move a beat apart:
+              hand this work to somebody else, or hand it to this session later.
+              One item either way — it names what is already parked rather than
+              growing a second one to cancel with, which is what the dialog is
+              for. */}
+          <ContextMenuItem onClick={() => setScheduleOpen(true)}>
+            <Clock />
+            {scheduleItem}
+          </ContextMenuItem>
+          <SessionForkItem session={session} onFork={onFork} />
           <ContextMenuItem onClick={copySendCommand}>
             <Copy />
             Copy send command
@@ -591,6 +769,29 @@ export function SessionCard({
             <Globe />
             Browser tab
           </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <FolderOpen />
+              Open in
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent>
+              {session.kind !== "shell" && (
+                <ContextMenuItem onClick={() => onOpenTerminal(shownPath)}>
+                  <Terminal />
+                  Terminal
+                </ContextMenuItem>
+              )}
+              <ContextMenuItem onClick={openFolderInEditor}>
+                <FolderCode />
+                Editor
+              </ContextMenuItem>
+              <ContextMenuItem onClick={openFolder}>
+                <FolderOpen />
+                File manager
+              </ContextMenuItem>
+            </ContextMenuSubContent>
+          </ContextMenuSub>
           {session.kind !== "shell" && (
             <ContextMenuItem onClick={() => onOpenTerminal(shownPath)}>
               <Terminal />
@@ -605,6 +806,7 @@ export function SessionCard({
             <FolderOpen />
             Open folder
           </ContextMenuItem>
+
           <ContextMenuItem onClick={onPulls}>
             <GitPullRequestArrow />
             Pull request
@@ -620,13 +822,26 @@ export function SessionCard({
           )}
         </ContextMenuContent>
       </ContextMenu>
-      {canDelegate && (
+      {delegatePickerOpen && (
         <SessionTargetPicker
-          open={delegatePickerOpen}
+          open
           onOpenChange={setDelegatePickerOpen}
           groups={delegateGroups}
           onPick={(target) => delegate(target.label)}
           onPickWorktree={delegateWorktree}
+        />
+      )}
+      {/* Mounted only while it is open, unlike the entrypoint dialog beside it:
+          this one is offered on every card, and a dialog per card is a render
+          per card the sidebar was not paying before (render-budget.test.tsx). */}
+      {scheduleOpen && (
+        <SchedulePromptDialog
+          open
+          onOpenChange={setScheduleOpen}
+          label={session.label}
+          prompt={session.scheduledPrompt ?? ""}
+          at={scheduledAt}
+          onSchedule={(at, prompt) => scheduleSession(session.id, at, prompt)}
         />
       )}
       {session.kind === "shell" && (

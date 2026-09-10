@@ -3,9 +3,7 @@ import darkTheme from "../../../themes/dark.json"
 import lightTheme from "../../../themes/light.json"
 
 export const SYSTEM_THEME = "system"
-export const MATCH_TERMINAL_THEME = "match"
 export const DEFAULT_THEME = SYSTEM_THEME
-export const DEFAULT_TERMINAL_THEME = MATCH_TERMINAL_THEME
 const LIGHT_THEME_ID = "light"
 const DARK_THEME_ID = "dark"
 const BUNDLED_THEME_ORIGIN = "bundled"
@@ -14,7 +12,6 @@ export const DARK_THEME_SCHEME = "dark"
 export const THEME_TEMPLATE_FILENAME = "lich-theme-template.json"
 
 export type Theme = typeof SYSTEM_THEME | string
-export type TerminalTheme = typeof MATCH_TERMINAL_THEME | string
 export type ResolvedTheme = ThemeDefinition
 
 const BUNDLED = [lightTheme, darkTheme].map((theme) =>
@@ -60,17 +57,6 @@ export function resolveTheme(
     return systemTheme
   }
   return themes.find((theme) => theme.id === selected) ?? systemTheme
-}
-
-export function resolveTerminalTheme(
-  selected: TerminalTheme,
-  appTheme: ThemeDefinition,
-  themes: readonly ThemeDefinition[],
-): ThemeDefinition {
-  if (selected === MATCH_TERMINAL_THEME) {
-    return appTheme
-  }
-  return themes.find((theme) => theme.id === selected) ?? appTheme
 }
 
 export function applyAppTheme(theme: ThemeDefinition, root: HTMLElement): void {
@@ -120,56 +106,23 @@ export function repoLabel(url: string): string {
   return segments.slice(-2).join("/") || trimmed
 }
 
-export interface ThemeSelections {
-  theme: Theme
-  terminalTheme: TerminalTheme
-}
-
-export function reconcileThemeSelections(
-  selections: ThemeSelections,
-  themes: readonly ThemeDefinition[],
-): ThemeSelections {
+export function reconcileTheme(selected: Theme, themes: readonly ThemeDefinition[]): Theme {
   const ids = new Set(themes.map((item) => item.id))
-  return {
-    theme:
-      selections.theme === SYSTEM_THEME || ids.has(selections.theme)
-        ? selections.theme
-        : DEFAULT_THEME,
-    terminalTheme:
-      selections.terminalTheme === MATCH_TERMINAL_THEME || ids.has(selections.terminalTheme)
-        ? selections.terminalTheme
-        : DEFAULT_TERMINAL_THEME,
-  }
+  return selected === SYSTEM_THEME || ids.has(selected) ? selected : DEFAULT_THEME
 }
 
-// adoptStoredSelections resolves the selections a launch starts from against
-// the workspace copy, which is the durable one: the boot cache lives in the
+// adoptStoredTheme resolves the selection a launch starts from against the
+// workspace copy, which is the durable one: the boot cache lives in the
 // Chromium profile, and a profile Chromium recreates comes back empty while the
 // workspace database survives. A setting that was never written reads as "" —
 // an install whose cache is still the only record — so the cache is adopted and
 // written back once, which is what `persist` reports.
-export function adoptStoredSelections(
-  stored: ThemeSelections,
-  cached: ThemeSelections,
-): { selections: ThemeSelections; persist: boolean } {
-  return {
-    selections: {
-      theme: stored.theme || cached.theme,
-      terminalTheme: stored.terminalTheme || cached.terminalTheme,
-    },
-    persist: !stored.theme || !stored.terminalTheme,
-  }
+export function adoptStoredTheme(stored: Theme, cached: Theme): { theme: Theme; persist: boolean } {
+  return { theme: stored || cached, persist: !stored }
 }
 
-export function selectionsAfterThemeRemoval(
-  removedID: string,
-  selections: ThemeSelections,
-): ThemeSelections {
-  return {
-    theme: selections.theme === removedID ? DEFAULT_THEME : selections.theme,
-    terminalTheme:
-      selections.terminalTheme === removedID ? DEFAULT_TERMINAL_THEME : selections.terminalTheme,
-  }
+export function themeAfterRemoval(removedID: string, selected: Theme): Theme {
+  return selected === removedID ? DEFAULT_THEME : selected
 }
 
 function normalizeTheme(theme: ThemeDefinition): ThemeDefinition {

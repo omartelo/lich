@@ -1,10 +1,13 @@
 # Adding a provider
 
 A **provider** is an agent CLI lich can run inside a session's PTY. There are
-six (`internal/providers.Registry`), and adding a seventh means landing in about
-a dozen files across two repositories. This is the map — written after
-Antigravity, the last one added, so it names what that change actually touched
-rather than what it should have.
+eight (`internal/providers.Registry`), and adding a ninth means landing in
+about a dozen files across two repositories. This is the map — written after
+Antigravity, so it names what that change actually touched rather than what it
+should have. Cursor CLI came later and needed no plugin install at all — it runs
+every Claude Code hook on the machine, which is a shape the plugin table below
+does not have; [`providers/cursor.md`](providers/cursor.md) carries what that
+buys and what it costs.
 
 Two rules govern the whole exercise, and both are in
 [`../CLAUDE.md`](../CLAUDE.md):
@@ -12,7 +15,12 @@ Two rules govern the whole exercise, and both are in
 - **Every table here is read off that CLI's own `--help` or a real run.** A flag
   guessed from a sibling is a spawn that dies before the session exists, and an
   event name copied from another harness is a report that silently never fires.
-  Nothing below is inferred from a provider's documentation alone.
+  Nothing below is inferred from a provider's documentation alone. Read the
+  `--help` of the command lich actually spawns: a CLI with subcommands has one
+  parser per level, and a flag that exists under one is rejected by the other.
+  Kiro CLI is the worked example — `--agent` and `--resume-id` are its root's,
+  `--model` and `--trust-all-tools` its `chat` subcommand's, so lich spawns
+  `kiro-cli chat` and `subcommandArgs` puts that word first.
 - **A gap is allowed; a silent one is not.** Equal behaviour across providers is
   often impossible. Where the new provider cannot do something the others can,
   the same PR adds a [`ceilings.md`](ceilings.md) bullet naming what is out and
@@ -27,6 +35,7 @@ hits it.
 | Question | How it was answered for Antigravity |
 |---|---|
 | What is the binary called? | `agy` — the name on `PATH`, not the product's |
+| Which page documents installing that CLI? | The install instructions, not the product's front door — and `curl -sI` it before it lands |
 | How does it resume a conversation by id? | `--conversation <id>` (`--help`) |
 | How does it skip permission prompts? | `--dangerously-skip-permissions` (`--help`) |
 | How is it told which model to run? | `--model <name>` (`--help`) |
@@ -50,10 +59,12 @@ tool.
 
 | File | What it holds | What a new provider adds |
 |---|---|---|
-| `internal/providers/providers.go` | the registry | an id constant, a `Registry` entry (id, display name, binary names), and a line in `AcceptsMCPServer` if it takes an MCP server on its command line |
-| `internal/terminal/command.go` | what a spawn runs | entries in `skipPermissionFlags`, `modelFlags`, `briefingFlags` and `resumeArgs` — each one optional, and absent means "no flag rather than somebody else's" |
+| `internal/providers/providers.go` | the registry | an id constant, a `Registry` entry (id, display name, binary names, install-docs URL), a line in `AcceptsMCPServer` if it takes an MCP server on its command line, and one in `SupportsFork` — that one is a table every provider must appear in, so a new id fails its test until it is answered |
+| `internal/terminal/command.go` | what a spawn runs | entries in `skipPermissionFlags`, `modelFlags`, `briefingFlags` and `resumeArgs` (with a fork arm there if the CLI branches a conversation) — each one optional, and absent means "no flag rather than somebody else's" — plus a `subcommandArgs` arm if the session is a subcommand rather than the bare binary |
 | `internal/terminal/resume.go` | whether a resume can be offered | a `ResumeAvailable` case answering from what that provider left on disk |
 | `internal/terminal/transcript.go`, `sessiondb.go` | where that state lives | the path resolver the case above calls |
+| `internal/terminal/usage.go` | the footer's session readout | a `usageSourceFor` arm, plus a `sessionCost` arm reading whatever that provider records about spend — and a `contextUsageFor` arm only if it also records the model's context window. Which rung that lands the provider on is a row in `docs/ceilings.md`, in the same PR |
+| `internal/terminal/said.go`, `search.go`, `index.go` | the recap beside a diff, the palette's Messages tab and the conversation a parked session is indexed with | an arm in `transcriptReaderFor` with a line reader for a provider that files its conversation as JSONL, or the `said` and `search` queries in `sessiondb.go` for one that keeps it in a database of its own — a provider in neither is simply never listed, which is what every other miss in those searches looks like. All three readers go through the same two arms, so a provider that lands here is searchable in the History tab too |
 | `internal/sandbox/sandbox.go` | what a confined session can still reach | a `stateDirs` case — a provider missing here confines to a home with no credentials, which is a session that opens and cannot log in |
 | `internal/agentplugin/` | the companion plugin | a `<provider>.go` with install / installed-version, plus the four switches and the `supported` list in `agentplugin.go` |
 | `internal/cli/mcp.go` | the `open_session` tool schema | the new id in the `kind` description |
@@ -66,11 +77,22 @@ everything on the id (`provider.<id>.bin`, `.enabled`, `.sandbox`,
 
 | File | What a new provider adds |
 |---|---|
-| `frontend/src/lib/session/sessions.ts` | the id in `PROVIDER_KINDS`, and in `RESUMABLE_KINDS` if its CLI reopens a conversation |
+| `frontend/src/lib/session/sessions.ts` | the id in `PROVIDER_KINDS`, in `RESUMABLE_KINDS` if its CLI reopens a conversation, and in `FORKABLE_KINDS` if it branches one |
 | `frontend/src/lib/providers-store.ts` | its `skipPermissionFlags` spelling — the switch in Settings is hidden for a provider absent here, which is what stops the UI promising a flag the spawn has none for |
 | `frontend/src/components/ProviderIcon.tsx` | a brand path, or a lucide fallback |
 | `frontend/src/lib/session/delegate-prompt.ts` | `TOOL_KINDS` only if it is handed lich's tools at spawn |
 | `frontend/src/lib/session/tool-label.ts` | a rule only if it spells MCP tool names in a shape not already handled |
+| `frontend/src/lib/session/hands-on.ts` | a rung in `RUNG`: whether the hands-on clock hears that provider through a turn its hooks open, or only through its tool calls. The record is exhaustive over `ProviderKind`, so `tsc` refuses a provider that has not picked a side |
+| `frontend/src/lib/api-types.ts` | nothing, unless the change moves a JSON tag — the `DetectedProvider` mirror is hand-owned and moves in the same commit |
+
+`Registry.Docs` is the one field with a check outside the compiler: it is what the
+"Not found on PATH" row and the no-agents dialog link to, so a blank or dead one
+turns the screen a user without that agent meets back into the dead end the field
+exists to close. Verify it against the live web before landing it —
+`curl -sI -o /dev/null -w '%{http_code} %{redirect_url}\n' <url>` — follow every
+redirect to the final address, and record the date you checked in the commit body.
+`TestEveryProviderDocumentsItsInstall` fails on an empty one; nothing but that
+curl catches a page that has moved.
 
 The two `skipPermissionFlags` tables — Go and TypeScript — are the one place a
 provider is spelled twice on purpose. Both are pinned in tests as literals
@@ -125,12 +147,23 @@ Not optional, and all in the same PR:
 - **`docs/hooks/fixtures/session-start.jsonl`** — the accepted-provider line
   above, which is what unblocks the plugin's own suite.
 - **`docs/ceilings.md`** — a bullet per gap, naming the mechanism and the file.
+- **`docs/providers/<id>.md`** — the reference page for the new harness: what it
+  is, its binary, its config directory and transcript, then a section per
+  subject in the order every other page uses. [`providers/`](providers/) is one
+  page per registry id, and a missing one is a provider nobody wrote down.
 - **`docs/cli.md`** — the `--kind` list, the MCP registration table, and the
   `doctor` sample output.
 - **`CHANGELOG.md`** — under `[Unreleased]`, written for someone who runs the
   released build.
 - **`README.md`, `README.zh-CN.md`, `CLAUDE.md`** — the provider list, which is
   also the checklist rule 5 points at.
+- **The Provider support table in both READMEs** — a column, and an answer in
+  every row of it. That table is what a stranger reads before choosing a binary,
+  and nothing derives it from the code, so a column left out of it reads as a
+  provider that gives you nothing. `turnUnavailableReason`
+  (`frontend/src/lib/git/last-turn.ts`) is a hand-written list of the same shape:
+  a provider that reports no session state belongs in it, and one that starts
+  reporting has to leave.
 
 ## The gate
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildTree, type TreeNode } from "./file-tree"
+import { buildTree, treeFootnote, type TreeNode } from "./file-tree"
 
 // names flattens a node list to "type:path" strings in order, so a test reads
 // the whole shape and ordering in one assertion.
@@ -66,5 +66,26 @@ describe("buildTree", () => {
   it("ignores empty and malformed segments", () => {
     expect(buildTree([""])).toEqual([])
     expect(names(buildTree(["a//b"]))).toEqual(["dir:a", "file:a/b"])
+  })
+})
+
+describe("treeFootnote", () => {
+  it("a repository owes the reader nothing", () => {
+    expect(treeFootnote(false, [])).toBe("")
+  })
+
+  it("names the directories the walk stepped over", () => {
+    expect(treeFootnote(false, ["build", "node_modules"])).toBe("Hidden: build, node_modules.")
+  })
+
+  it("says a listing stopped short", () => {
+    expect(treeFootnote(true, [])).toBe("This folder has more files than the tree can list.")
+  })
+
+  // Both, and the names first: they are the half a reader can act on.
+  it("puts the names ahead of the cap", () => {
+    expect(treeFootnote(true, ["vendor"])).toBe(
+      "Hidden: vendor. This folder has more files than the tree can list.",
+    )
   })
 })

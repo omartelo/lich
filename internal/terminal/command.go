@@ -23,16 +23,60 @@ const defaultBin = providers.Claude
 const KindShell = "shell"
 
 // How each provider reopens an existing conversation by id: Claude Code,
-// Antigravity and oh-my-pi take a flag of their own, Codex a subcommand, and
-// opencode and Crush happen to agree on one spelling. Every one of them was read
-// off that CLI's own --help.
+// Antigravity, oh-my-pi, Cursor CLI and Kiro CLI take a flag of their own, Codex
+// a subcommand, and opencode and Crush happen to agree on one spelling. Every
+// one of them was read off that CLI's own --help.
+//
+// Kiro's is kept apart from the two `--resume` spellings for the same reason
+// they are kept apart from each other: its own `--resume` takes no id at all
+// (it reopens the most recent conversation in the current directory), so the
+// flag that carries one is a different flag with a different name.
+//
+// Cursor's spells the same word Claude Code's does and is kept apart from it on
+// purpose: its value is optional (`--resume [chatId]`, measured on 2026.08.11),
+// so the two flags are only the same string, not the same flag, and a shared
+// constant would hide the day one of them moves.
 const (
 	claudeResumeFlag      = "--resume"
 	codexResumeSubcmd     = "resume"
 	antigravityResumeFlag = "--conversation"
 	ompResumeFlag         = "-r"
 	sessionResumeFlag     = "--session"
+	cursorResumeFlag      = "--resume"
+	kiroResumeFlag        = "--resume-id"
 )
+
+// How the three providers that can branch a conversation spell it
+// (providers.SupportsFork). Two of them add a flag to the resume they already
+// take; Codex replaces the subcommand, because its `fork` and `resume` are
+// siblings with the same argument shape — `codex fork <SESSION_ID>` (0.151.0).
+//
+// A fork asks the provider to copy the conversation into a new one of its own,
+// so the id lich holds names the *parent* for exactly one spawn: the copy gets
+// an id the provider assigns, and lich learns it the way it learns every other
+// one, from that session's own session-start report.
+const (
+	claudeForkFlag   = "--fork-session"
+	codexForkSubcmd  = "fork"
+	opencodeForkFlag = "--fork"
+)
+
+// kiroChatSubcmd is the subcommand a Kiro session runs, and it is not optional.
+// Kiro splits the flags lich passes across two parsers: its root takes --agent
+// and --resume-id, but --model and --trust-all-tools belong to `chat` alone, and
+// either one at the root exits 2 with `unexpected argument` before the session
+// exists (measured on 2.21.0). `chat` takes every flag the root does, so lich
+// spawns it whether or not those two are set rather than assembling a different
+// command per setting.
+const kiroChatSubcmd = "chat"
+
+// kiroAgentFlag picks the agent profile a Kiro session runs. lich passes it only
+// to reach the hooks: Kiro keeps them inside an agent config and its built-in
+// `kiro_default` cannot be shadowed by a file (measured on 2.21.0 — a
+// `kiro_default.json` in the agents directory is ignored outright), so the only
+// way to register a hook is an agent of lich's own, which internal/agentplugin
+// writes and this flag selects.
+const kiroAgentFlag = "--agent"
 
 // claudeNameFlag sets the name a session answers to in Claude Code's peer
 // roster — the list its cross-session messaging addresses, and what
@@ -55,6 +99,8 @@ var skipPermissionFlags = map[string]string{
 	providers.OpenCode:    "--auto",
 	providers.OMP:         "--auto-approve",
 	providers.Crush:       "--yolo",
+	providers.Cursor:      "--force",
+	providers.Kiro:        "--trust-all-tools",
 }
 
 // modelFlags is how each provider is told which model to run, for a session
@@ -72,6 +118,8 @@ var modelFlags = map[string]string{
 	providers.Antigravity: "--model",
 	providers.OpenCode:    "--model",
 	providers.OMP:         "--model",
+	providers.Cursor:      "--model",
+	providers.Kiro:        "--model",
 }
 
 // SupportsModel reports whether a provider can be told which model to run when
@@ -104,7 +152,7 @@ func SupportsModel(kind string) bool {
 // takes the literal branch instead, which lands the same text; what must not
 // happen is a briefing short enough to name a real file.
 //
-// The other four are absent because none of them has an append flag. Codex
+// The other five are absent because none of them has an append flag. Codex
 // takes `model_instructions_file`, which *replaces* its base instructions —
 // swapping the whole system prompt of a provider for a file lich wrote is not a
 // thing lich does for one paragraph. opencode's `instructions` and Crush's
@@ -173,8 +221,20 @@ func resolveBin(kind, bin string) string {
 // carrying no name at all — a spawn whose name flagValue rejected — which
 // resumes into Claude Code's own fallback, the working directory, and that is
 // the same string for every session in one checkout.
-func nameArgs(kind, name, resume string) []string {
-	if kind != providers.Claude || resume != "" {
+//
+// A birth is not always a first birth: the name reaching here is the one the
+// card already answers to when there is one (Start, AgentName), so a restart —
+// a conversation of its own, with no name to restore — is born under the name
+// the last one ended with rather than back under lich's derivation.
+//
+// A fork is a birth, which is why it names one despite carrying a resume id.
+// The conversation the provider is about to write is new, so there is no
+// /rename inside it to undo — and the copy inherits the parent's name (measured
+// on 2.1.261: the forked transcript carries the parent's `agent-name` line), so
+// staying silent here is what would leave two cards answering to one string in
+// the roster the relay resolves against.
+func nameArgs(kind, name, resume string, fork bool) []string {
+	if kind != providers.Claude || (resume != "" && !fork) {
 		return nil
 	}
 	name, ok := flagValue(name)
@@ -198,15 +258,20 @@ func flagValue(value string) (string, bool) {
 }
 
 // providerArgs assembles the whole argument list for one spawn. Ordering is
-// decided here rather than by appending in call order, because the two
-// providers constrain it in opposite directions: Codex spells resume as a
-// subcommand, so its global options have to come first, while Claude Code's
-// --mcp-config is variadic and reads everything after it as another config
-// path, so it has to come last.
-func providerArgs(kind, name, resume, model, lichBin string, skipPermissions bool) []string {
+// decided here rather than by appending in call order, because the providers
+// constrain it in opposite directions: Codex spells resume as a subcommand, so
+// its global options have to come first, while Claude Code's --mcp-config is
+// variadic and reads everything after it as another config path, so it has to
+// come last. Kiro's subcommand opens the session rather than a conversation, so
+// it comes before every flag.
+func providerArgs(
+	kind, name, resume, model, lichBin, agent string, fork, skipPermissions bool,
+) []string {
 	mcp := mcpArgs(kind, lichBin)
-	args := append([]string{}, nameArgs(kind, name, resume)...)
-	args = append(args, resumeArgs(kind, resume)...)
+	args := append([]string{}, subcommandArgs(kind)...)
+	args = append(args, nameArgs(kind, name, resume, fork)...)
+	args = append(args, agentArgs(kind, agent)...)
+	args = append(args, resumeArgs(kind, resume, fork)...)
 	args = append(args, skipPermissionArgs(kind, skipPermissions)...)
 	args = append(args, modelArgs(kind, model)...)
 	args = append(args, briefingArgs(kind)...)
@@ -214,6 +279,40 @@ func providerArgs(kind, name, resume, model, lichBin string, skipPermissions boo
 		return append(mcp, args...)
 	}
 	return append(args, mcp...)
+}
+
+// subcommandArgs returns the subcommand that opens a session, or nil when the
+// provider's root command is the session. Kiro CLI is the only one that needs
+// it, and it goes first: the flags after it are split across Kiro's two parsers
+// and only `chat` accepts them all (kiroChatSubcmd).
+//
+// Codex spells a subcommand too, but its is `resume` — a way of opening one
+// conversation rather than the session itself — so it rides resumeArgs.
+func subcommandArgs(kind string) []string {
+	if kind != providers.Kiro {
+		return nil
+	}
+	return []string{kiroChatSubcmd}
+}
+
+// agentArgs returns the arguments that pick the agent profile a provider runs,
+// or nil when there is none to name. Kiro CLI is the only provider with one,
+// and it is not a preference: the agent is where its hooks live, so a session
+// spawned without it reports nothing (docs/hooks/).
+//
+// Empty when the plugin is not installed, which is what keeps a warning off the
+// screen of a user who never asked for one: a `--agent` Kiro cannot find is not
+// fatal — it falls back to `kiro_default` and says so on the first line of the
+// session (measured on 2.21.0) — but that line would be there on every spawn.
+func agentArgs(kind, agent string) []string {
+	if kind != providers.Kiro {
+		return nil
+	}
+	agent, ok := flagValue(agent)
+	if !ok {
+		return nil
+	}
+	return []string{kiroAgentFlag, agent}
 }
 
 // modelArgs returns the arguments that pick the model a provider runs, or nil
@@ -314,21 +413,43 @@ func claudeMCPConfig(lichBin string) string {
 // and a provider with no spelling here never grows one — the frontend only
 // passes a resume id for a kind it knows resumes, but a stray one must not reach
 // a shell either.
-func resumeArgs(kind, resume string) []string {
+//
+// fork asks for the conversation to be branched rather than continued, and it
+// is honoured only where the provider has a verb for it: a fork flag invented
+// for one that has none would kill the spawn before the session exists, so the
+// three that do are spelled below and every other kind resumes as it always
+// did. Start refuses a fork for any other kind (providers.SupportsFork), so
+// the plain resume arms below are never reached with fork set.
+func resumeArgs(kind, resume string, fork bool) []string {
 	if resume == "" {
 		return nil
 	}
 	switch kind {
 	case providers.Claude:
+		if fork {
+			return []string{claudeResumeFlag, resume, claudeForkFlag}
+		}
 		return []string{claudeResumeFlag, resume}
 	case providers.Codex:
+		if fork {
+			return []string{codexForkSubcmd, resume}
+		}
 		return []string{codexResumeSubcmd, resume}
+	case providers.OpenCode:
+		if fork {
+			return []string{sessionResumeFlag, resume, opencodeForkFlag}
+		}
+		return []string{sessionResumeFlag, resume}
 	case providers.Antigravity:
 		return []string{antigravityResumeFlag, resume}
 	case providers.OMP:
 		return []string{ompResumeFlag, resume}
-	case providers.OpenCode, providers.Crush:
+	case providers.Crush:
 		return []string{sessionResumeFlag, resume}
+	case providers.Cursor:
+		return []string{cursorResumeFlag, resume}
+	case providers.Kiro:
+		return []string{kiroResumeFlag, resume}
 	}
 	return nil
 }

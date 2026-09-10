@@ -15,10 +15,19 @@ export function buildSessionState(loaded: StoredProject[]): SessionState {
       ...(session.path ? { path: session.path } : {}),
       ...(session.providerSessionId ? { providerSessionId: session.providerSessionId } : {}),
       ...(session.entrypoint ? { entrypoint: session.entrypoint } : {}),
+      ...(session.run ? { run: true } : {}),
       ...(session.sandbox === "on" ? { sandboxed: true } : {}),
       ...(session.pinned ? { pinned: true } : {}),
       ...(session.originSessionId
         ? { originSessionId: session.originSessionId, originLabel: session.originLabel }
+        : {}),
+      ...(session.scheduledAt
+        ? { scheduledAt: session.scheduledAt, scheduledPrompt: session.scheduledPrompt }
+        : {}),
+      ...(session.hasLastTurn ? { hasLastTurn: true } : {}),
+      ...(session.mcpServers?.length ? { mcpServers: session.mcpServers } : {}),
+      ...(session.sandboxSkippedLinks?.length
+        ? { sandboxSkippedLinks: session.sandboxSkippedLinks }
         : {}),
     }))
     state[project.id] = {

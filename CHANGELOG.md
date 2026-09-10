@@ -9,6 +9,1557 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The Commits tab says which GitHub account each commit actually landed
+  under.** A project's GitHub account governs what lich asks `gh`; it has never
+  governed the push, which still signs with your global `user.email`. So a pull
+  request could be read by one account and its commits land under another, or
+  under no account at all, and nothing said a word. Each commit row now shows
+  the account GitHub itself resolved the author's email to — GitHub checks it
+  against every account's verified addresses, so noreply forms, vanity domains
+  and organisation aliases all resolve correctly — and a commit belonging to no
+  account is marked as one. When the commits are not all the pull request
+  author's, a line above the list names the accounts they landed under and the
+  addresses no account owns, while the branch can still be fixed.
+
+- **The README says what each agent actually gives you.** All eight providers run
+  the same way, but what lich can read back out of a session depends on what that
+  CLI writes down, and until now the only record of the difference was a
+  contributor document. A Provider support table now sits beside the provider
+  list, in what you see: the footer's context window, cost and plan gauge, the
+  card's spinner and bell, whether the machine stays awake, the Review tab's last
+  turn, palette search, and forking a conversation into a worktree.
+
+### Changed
+
+- **The two sandbox grants say what they hand over.** In Settings › Sandbox, the
+  SSH agent switch now names the whole of it — every identity in your agent,
+  against any host, for as long as the session runs — and the GitHub token switch
+  says the agent can read the token out of its environment and spend it outside
+  this repository. The list of loaded keys is also re-read whenever the window
+  regains focus, so a key added with `ssh-add` after the pane was opened is no
+  longer handed over by a switch that never named it.
+
+- **The Review tab says when a provider has no last turn, instead of hiding the
+  switch.** On a Crush or Cursor CLI session the Working tree / Last turn control
+  simply never appeared, which reads the same as a bug. It is now drawn with
+  Last turn dead and a line saying that the provider reports neither the start
+  nor the end of a turn. A session whose provider does report is unchanged: its
+  switch appears as soon as it says anything.
+
+### Fixed
+
+- **What you type while a message is being relayed into your session no longer
+  goes out with it.** A relayed message is pasted at the prompt and an Enter is
+  sent behind it, and anything typed between the two was submitted as part of
+  it. Those keystrokes are now held for the length of that window and written at
+  the prompt the message leaves behind, where they were being typed.
+
+- **A handoff that is waiting for a prompt says so on the card it is waiting
+  for.** Handing a pull request's conflicts or an issue to a session writes at
+  its prompt once there is one, and a session still installing its dependencies
+  — or one you left half a sentence at — can hold that for minutes with nothing
+  on screen to show for it. The card now carries a line saying something is
+  waiting for that prompt until it lands.
+
+- **A turn whose snapshot lich dropped reads as a turn, not as a card that never
+  had one.** Every snapshot in the app runs on one worker, and a busy enough
+  queue drops a job, leaving the Review panel's "Last turn" with nothing to
+  show. It said "No last turn recorded", the same words a fresh session gets;
+  it now says the record was lost and that the next turn is recorded as usual.
+
+- **A session name that wrapped, or followed a wide character, stopped being a
+  link.** The terminal looked for other sessions' names one screen row at a
+  time and counted one character per column, so a long name broken across two
+  rows was found on neither of them, and a name printed after CJK text or a
+  combining accent underlined the wrong columns. The match now runs over the
+  whole logical line and maps back to the cells the characters really occupy.
+
+## [0.49.0] - 2026-09-09
+
+> [!WARNING]
+> **If you launch lich with `--no-window`, `--browser`, `LICH_NO_WINDOW` or
+> `LICH_BROWSER`, those are gone.** lich opens only its own window now, and an
+> install that has none says so in a dialog instead of falling back to a browser
+> on the machine; `--shell` and `LICH_SHELL` point it at a window build of your own.
+
+### Added
+
+- **The update toast shows the download.** Pressing Update & install used to
+  leave one spinner turning until the whole thing was over, a minute or more
+  where the Windows installer is the asset. The toast now draws a bar with the
+  percent and the megabytes received of the total while the release downloads,
+  then a spinner naming the install, and says on Windows that lich closes and
+  reopens on its own. A failure says which of the two it died in and how far
+  the download got, and offers Retry.
+
+- **A finished card says how much its agent stopped short of.** When a Claude
+  Code session ends a turn with an unfinished task list of its own, its card
+  reads "3 of 7 done" on the line that already carries what the session is up
+  to. It draws only while the card is quiet, so nothing takes the line from the
+  tool a running turn is in, and it goes away when the list is finished. No
+  other provider writes a list lich can read, so no other card grows a line.
+
+### Changed
+
+- **Two baked prices corrected.** An offline install billed Claude 3 Haiku's
+  hour-long cache writes at 12x Anthropic's rate, and had no price at all for
+  Claude 3 Opus's — which withheld that session's whole cost rather than
+  under-report it. The floor is now repriced from LiteLLM's table by
+  `task pricing:refresh` instead of by hand.
+
+- **An Intel Mac opens lich as a tab in the default browser.** It is the one
+  build with no window of its own, and it no longer looks for Chrome, Chromium,
+  Edge, Brave or Vivaldi to open a window in: lich serves itself, hands the URL
+  to whatever browser is the default, and keeps running after the tab is closed.
+  An Apple Silicon window that fails to open falls back to the same tab.
+
+### Removed
+
+- **The system-browser fallback on Linux and Windows.** The window ships in
+  every package there, so a lich without one is a broken install, and it now
+  says so in a dialog instead of opening a browser on the machine — with none of
+  the browser's own prompts, extensions or window rules in a window that was
+  never the browser's. `--browser` and `LICH_BROWSER` went with it: `--shell`
+  and `LICH_SHELL` point lich at a window build of your own.
+- **`lich --no-window` and `LICH_NO_WINDOW`.** The tab was a choice for a
+  machine whose owner would rather not run a Chromium-family browser; with lich's
+  own window there is no browser to avoid.
+
+### Fixed
+
+- **Two settings surfaces that were a pixel out.** The dialog a machine without
+  git opens sized its Check again button one step smaller than the two beside
+  it, and Appearance drew a hairline between the Footer row and its layout
+  editor, leaving the Left and Right headings pressed against a line that
+  belonged to the setting above.
+- **A Windows install from before the window now gets the window when it
+  updates.** lich only recognised an installed lich by the window beside it,
+  so an install made by the installer of 0.45 or earlier updated the way a
+  portable exe does: the exe was swapped, the Start Menu shortcut and the
+  "Installed apps" entry stayed at the old version, and lich kept opening in a
+  system browser. Such an install is now recognised by its uninstaller and
+  updates by running the release installer, which upgrades it in place and
+  brings the window, the shortcut and the entry up with it.
+- **A Scoop install no longer updates through the installer.** Since 0.46 the
+  Scoop layout carries the window, which is what lich took as the mark of an
+  installer install, so the update button would have run the release installer
+  into Scoop's directory and registered a second lich in "Installed apps". A
+  Scoop install is now Scoop's, like a Homebrew one: the button opens a shell
+  with `scoop update lich` and a restart pasted, never run.
+- **Deleting a session or a project no longer freezes lich while it says what was
+  lost.** A parked prompt is reported as it goes, and the report was raised while the
+  read that found it still held the workspace database's only connection: a desktop
+  notification takes about four tenths of a second, so a project with a handful of
+  parked prompts locked every other read behind it. The prompts are read first and
+  reported after, so the delete is as quick as the delete.
+- **A Claude login lich cannot make sense of says so again.** A `.credentials.json` that
+  is there but empty or malformed read as a session whose account could not be
+  identified, which draws an empty panel; it now reads as signed out, which is the state
+  the `claude login` it suggests actually fixes. A file lich cannot open at all is still
+  unknown, because that one really is unreadable rather than empty.
+- **A folder lich could not hand over says where it looked.** The refusal had been
+  shortened to one sentence about the checkout, but an unconfined session searches your
+  home as well, so the sentence named the wrong reason for every session that is not
+  sandboxed.
+- **A late scheduled prompt rounds into the next unit instead of past it.** One that
+  was 59 minutes and 40 seconds late read `60m`, and one 23 hours and 40 minutes late
+  read `24h`. They read `1h` and `1d`.
+- **The window no longer closes on a read that failed.** It ends with the lich that
+  opened it by watching a pipe for end of file, and any error on that pipe was taken for
+  the end: a signal arriving mid read was enough to close a window whose lich was fine.
+  Only a real end of file closes it now.
+
+### Security
+
+- **Text written by strangers can no longer type at your agent's prompt.** Everything
+  lich puts at a session's prompt goes in wrapped as a bracketed paste, which is what
+  leaves it unsent for you to read and send yourself. A body carrying the escape that
+  ends that wrapper closed it early, and every byte after it arrived as keys the agent
+  ran instead. Anyone who can file an issue on a public repository could write those
+  bytes, and so could a review comment, a CI log, or a file committed with a newline in
+  its name; quoting never helped, because the terminal consumes the sequence before a
+  shell sees it. Both ways into a session's terminal now drop the control characters a
+  terminal acts on and keep the ones a prompt legitimately holds, which is the rule the
+  backend already applied to relayed messages.
+
+## [0.48.1] - 2026-09-09
+
+### Fixed
+
+- **The window no longer opens white on some Windows machines.** Chromium presents
+  its frames through DirectComposition on Windows, and a graphics driver that
+  cannot leaves lich rendering into a window that never shows anything: the page
+  loads, the processes live, the screen stays blank (measured on Intel UHD,
+  driver 31.0.101.2141). lich's own window now presents through the classic swap
+  chain there, which costs it the video overlays a window with no video never
+  used, and keeps GPU rasterisation and the terminal's WebGL renderer.
+
+## [0.48.0] - 2026-09-09
+
+### Changed
+
+- **Windows now says what it skipped instead of skipping it in silence.** Both
+  worktree scripts are sh, and a session there runs PowerShell. A fresh worktree
+  whose project ships `.lich/setup-worktree.sh` now opens with one line in the
+  card naming the setup it did not run, rather than a checkout whose
+  dependencies are quietly missing; and the Run item stays in the menu, dead
+  under the same reason, so it can no longer be mistaken for an offer the
+  project never made.
+- **A file lich had to copy now says so at the prompt, and the copy lives as
+  long as its session.** A path pasted for a file the session cannot reach
+  (dragged onto the terminal or chosen with the attach button) is followed by
+  one line naming the original, so the agent reads what the user reads instead
+  of editing a copy and reporting the file as changed. Dropping a folder the
+  session cannot reach says so too, rather than doing nothing. The copies are
+  deleted with the session they were dropped into; the three-day sweep now only
+  clears the ones an unclean exit orphaned, so a path pasted a week ago still
+  resolves.
+- **A checkout gets one Run card, and the menu goes to it.** Asking to run a
+  checkout that is already running one opened a second card, whose only report
+  was the port it could not bind. The item now reads "Go to Run card" and takes
+  you to the card that is there, including one whose command has exited: the
+  shell left in it is the retry. Closing the card is what frees the slot.
+
+- **A sandboxed session's tooltip now names the dotfiles its private home did
+  not get.** Every path lich binds into the sandbox is taken as it is on disk
+  and a symlink is skipped, so a `~/.gitconfig` or `~/.ssh/known_hosts` kept in
+  a dotfiles repository was simply absent inside a confined session, with
+  nothing saying so. The shield's tooltip lists them: "Not mounted (symlinks):
+  .gitconfig, .ssh/known_hosts". The policy has not changed — only the silence.
+
+- **A scheduled prompt now says when it is late, and a lost one says so on
+  screen.** A prompt that could not be typed at its time — the session was
+  mid-setup, mid-sentence, without a terminal, or lich was closed — arrives with
+  one line in front of it naming the time it was scheduled for and how late it
+  is, so neither the agent nor you reads a reminder from three days ago as one
+  written now. A prompt on time still arrives exactly as you wrote it. And
+  deleting a session for good takes the only copy of the prompt parked on it,
+  which used to happen in silence: now a notice names the session and what it
+  was going to say — on screen, and as a desktop notification, so a session an
+  agent closed while you were away still reaches you.
+
+- **A terminal entrypoint now runs the same way on every OS, and agent cards say
+  why they cannot take one.** On Windows the command was run after your
+  PowerShell `$PROFILE`, which Linux and macOS never load, so an entrypoint that
+  leaned on an alias worked on one machine and silently did nothing on the next;
+  no profile or rc file is loaded now, on any OS. And *Entrypoint…* is no longer
+  missing from an agent card's menu — it is there, greyed, saying entrypoints run
+  in terminal sessions.
+
+### Fixed
+
+- **A Windows install with the bundled window now updates itself.** The update
+  button used to send that install to the release page, because swapping the
+  bare exe would have left Chromium at the installer's version. lich now
+  downloads and verifies the release installer, closes cleanly, lets it update
+  lich and Chromium together, and reopens on the same port. Portable installs
+  keep swapping the exe as before.
+- **A Kiro session now names its own card.** Kiro hands its hooks no transcript
+  to read a title from, so a Kiro card kept the name lich gave it (`Session 3`)
+  however long the conversation ran. lich now reads the title Kiro writes for
+  itself and applies it when the turn ends, like every other provider's. A
+  session you renamed keeps your name, as before.
+- **Relaunching after a killed lich opens one window, not two.** A lich that
+  died without closing its window (a kill, an out-of-memory, a crash) left the
+  window running, and the next launch found it: the new window was handed to
+  the old one and exited, which lich read as its own window failing to open, so
+  it opened a system browser beside it. The window now ends with the lich that
+  opened it, and the relaunch opens its own. The notice that the previous run
+  ended unexpectedly still shows, once, in that window.
+- **A session's quota gauge now follows that session's own login on macOS and
+  Windows.** Which account a card spends was read from its process, and only
+  Linux answered, so a session running a binary you configured lost its gauge
+  from the footer on the other two. Both read it now, and macOS resolves the
+  Keychain item the way Claude Code does — `CLAUDE_SECURESTORAGE_CONFIG_DIR`
+  before `CLAUDE_CONFIG_DIR` — so a session pointed at a second login is
+  measured against that login instead of the one lich is signed in to. A session
+  whose environment cannot be read at all shows no gauge on any platform now,
+  which is what a card whose terminal is not yet up looks like until it is.
+- **Closing a session on Windows now asks the agent to leave before
+  terminating it.** The close sends the terminal's Ctrl+C and gives the agent a
+  moment to run its own exit path — hooks, transcripts, whatever it writes on
+  the way out — where it used to be killed outright. An agent whose TUI wants a
+  second Ctrl+C to quit is still terminated when that moment runs out.
+- **A session whose shell runs inside tmux, over ssh or in a container now says
+  its directory is unknown instead of naming a local one.** The card, its
+  tooltip and the footer read "cwd unknown · inside tmux": the directory those
+  hosts sit in is real and is not where the user is typing, which is the one
+  wrong answer that looks right. Linux and macOS; Windows has no foreground
+  process group to read it from.
+- **The Review panel's recap band no longer goes blank behind a large tool
+  result, and says when its words are the previous turn's.** The band read a
+  bounded tail of the conversation, so a turn whose closing words ended up
+  behind more than 4 MB of tool output showed nothing at all, exactly like a
+  turn that ended on a tool call. It now reads each session's transcript from
+  where the last read stopped, so a turn is read whole however large it is;
+  while a turn is running the band is labelled "from the previous turn", which
+  is whose words they are beside a diff that has no window to draw yet.
+- **Searching a large history no longer reads whole conversations to show one
+  sentence.** Every row a search matched on its conversation had its indexed
+  body read out whole: megabytes each, a page of a hundred rows, once per
+  settled keystroke. The stretch the snippet is cut from is now cut by the query
+  itself, so the page reads kilobytes whatever the conversations behind it hold.
+- **On Windows, lich's own window no longer opens a stray console window beside
+  it, or gives up and reopens in Chrome.** The window was built for the console
+  subsystem, so Windows allocated a console for it and for each of Chromium's
+  subprocesses; closing that console killed the window, and lich read the death
+  as a window that could not open and fell back to the system browser after a
+  long wait. It is a GUI binary now, like Chrome's own.
+
+## [0.47.1] - 2026-09-08
+
+### Fixed
+
+- **A failure to read the login shell's environment now says what the shell
+  printed.** The dump was discarded on a failed parse, so the log could only
+  report that no environment came back, never why the shell stopped before the
+  sentinel. The rc file's own words go to the log now, bounded to three lines,
+  with any assignment among them reported by its key alone: a dump that failed
+  to parse was never recognised as an environment, so its values are not ours to
+  log.
+
+## [0.47.0] - 2026-09-08
+
+> [!IMPORTANT]
+> **Search what a closed session said, not only what it was called.** Parking
+> a session files its conversation into a full-text index, so a phrase you
+> remember typing finds the closed session it was said in and shows the
+> sentence under the row. Sessions closed before this release are indexed in
+> the background the first time you search.
+
+### Added
+
+- **The palette's History tab now searches what closed sessions said, not just
+  what they were called.** Parking a session files a copy of its conversation
+  into a full-text index, so typing a phrase you remember finds the closed
+  session it was said in and shows the sentence under the row, however long ago
+  it was parked. The whole conversation is read, and the rare one too long to
+  index whole says "indexed: newest 8 MB" under its row, so a search that reaches
+  only part of a session reads as that rather than as an empty one. Sessions
+  closed before this release are indexed in the background the first time you
+  search, with the header counting them down; Cursor CLI stays out, as it does
+  everywhere, because its chat is stored as encrypted blobs.
+
+- **The palette's Messages tab now searches opencode and Crush sessions.** Both
+  keep their conversation in a SQLite database rather than in a transcript file,
+  so searching what was said skipped them in silence: a session that had talked
+  about the thing you typed simply never appeared. They are queried directly now,
+  counted and quoted like every other provider, and Cursor CLI is the only one
+  still unsearchable — it files a chat as encrypted, content-addressed blobs.
+
+### Changed
+
+- **A worktree you made by hand can now be removed through lich.** Closing the
+  last session in one only ever parked it, so cleaning up meant walking to a
+  terminal for `git worktree remove`. The close dialog now offers the removal
+  behind a confirmation naming the checkout's absolute path and saying lich did
+  not create it; uncommitted work still takes the same second confirmation it
+  always did. Agents are the exception — `close_session` has nobody to ask, so
+  it still refuses and says why.
+
+- **A relayed answer is no longer matched to a task by guesswork.** Nothing in
+  an answer says which request it belongs to, so `lich reply "<answer>"` and
+  `reply_to_session` without a ticket closed the oldest request delivered to
+  that session: a session working two relayed tasks that answered the second one
+  first sent it home as the answer to the first, and both senders read a
+  confident report of work nobody did. With two or more requests open the answer
+  is now refused, listing every open ticket with the opening of what it asked so
+  the retry names the right one. The same guess ran one step later, when a turn
+  ended with no answer at all and the oldest request was reported as answered
+  somewhere else: every request that turn could have been is now reported that
+  way — it is what each sender would have been told alone — and the worker is
+  asked at its prompt to name the ticket. One open request behaves as before on
+  both paths.
+
+- **The shortcut recorder now says what a chord costs the terminal.** A bound
+  chord is caught before the session sees it, so rebinding one to `Ctrl+R` took
+  the shell's history search with nothing on screen connecting the two. The row
+  now names what the chord already does down there — the shell's own control
+  codes, the terminal's search, the image paste the agent reads — and still
+  records it.
+
+- **The sandbox's "Ask each time" rung now reaches every session.** It only ever
+  asked in the New worktree dialog, so a session started from the New session
+  menu, by another session, or through the MCP tool quietly ran on the machine.
+  The New session menu now puts the question before the card opens, and a
+  session nobody can be asked about — one opened by an agent through
+  `open_session` or `lich open` — is confined, which that call now says.
+
+- **A session card now says when the sandbox setting moved past it.** A session
+  is confined by the answer it opened with, so changing the rung in Settings
+  never reaches a card already open, and the card's shield said confined or not
+  without ever saying why. A session the rung would confine today now carries a
+  crossed shield, and the tooltip on either side of the disagreement says to
+  reopen the session to apply the setting.
+
+- **`lich cost` now says whose arithmetic each dollar is.** A new `source`
+  column, carried in `--json` and `--csv` too, marks a row `priced` where lich
+  derived the money from Claude Code's and Codex's token counts and `reported`
+  where oh-my-pi, opencode or Crush handed over the figure they computed
+  themselves. A project that ran both reads `mixed`, and a total that mixes them
+  gains a line splitting the sessions between the two.
+
+- **A session card now says why it cannot be forked.** "Fork to worktree…" used
+  to be missing altogether on Antigravity, oh-my-pi, Crush, Cursor CLI and Kiro
+  CLI cards, so the offer looked lost rather than withheld. The item is there
+  now, disabled, under one line naming the provider — their CLIs keep no fork,
+  only resume.
+
+- **A session card's right-click menu now reads the same on every card.** The
+  shortcuts printed beside Rename, Pin, Delegate, Terminal and Close session
+  were only ever true of the card in view, since that is the card a chord acts
+  on, so every other card opened a visibly different menu with the whole column
+  missing. They are out of the menu, and Settings › Hotkeys is where a chord is
+  read and changed. "Delegate to session…" no longer waits for a card to be the
+  one on screen either: picking a target from a background card brings that
+  session up and writes the request at its prompt.
+
+### Fixed
+
+- **Launching lich by name on macOS now opens lich's own window, not a system
+  browser.** The Homebrew cask puts `lich` on PATH as a symlink into Lich.app,
+  and the window is looked for beside the executable: the link was never
+  resolved, so the search ran in Homebrew's `bin` directory, found nothing and
+  fell through to Chrome. Every install that reaches its binary through a link
+  is fixed by the same resolution.
+- **A failure to read the login shell's environment now reaches the log.** File
+  logging started after the resolution ran, so the one startup failure that
+  leaves lich on the launcher's bare PATH, with no agent found and no session
+  able to start, was also the only one written to a stderr that a desktop launch
+  does not have. It is written to `lich.log` like every other startup failure
+  now.
+- **A render bug in the terminal area no longer blanks the window.** The stage
+  and every pane in it are now caught: the pane that stopped rendering says so
+  by name, its neighbours keep painting, and a retry puts it back — or, when a
+  second try throws too, offers the reload rather than the same button. The terminals
+  themselves survive it — the same xterm, the same scrollback, the same
+  selection and modes, and output that arrived meanwhile is still there — so
+  recovering no longer means reloading the window over sessions that never
+  stopped running.
+- **A forked session is no longer billed for the history it was branched from.**
+  The copy is a conversation of its own carrying every token of the original, so
+  the two cards together reported roughly twice what one conversation had spent,
+  in the footer readout and in `lich cost` alike. A fork now records what the
+  conversation it branched had cost at that moment and nets it back off its own
+  number, so the pair adds up to what was actually spent. Forks of forks count
+  the same way, and opencode is unchanged: it starts a forked session's cost at
+  zero on its own.
+
+- **A closed project is now findable by name, however long ago it was closed.**
+  Only the twenty-five most recent closes were ever offered back, so an older
+  project was reachable only by hunting its directory in the folder picker, and
+  neither the reopen menu nor the palette said so. Typing in the command palette
+  now searches every closed project there has ever been, by name and by path,
+  and its Closed group says how many matches it is showing of how many it found.
+  The reopen menu still lists the newest five, with a line under them naming how
+  many more the palette can reach.
+- **The palette's History tab now finds a parked session by its branch, and says
+  when it held back rows.** The search ran over a session's name, its project and
+  its path while the branch was read from git afterwards, so a row showing
+  `feat/relay-inbox` could not be found by typing that - the one thing on the row
+  most people go looking by. The branch is now recorded when a session is parked
+  and searched with the rest, and a term matching more parked sessions than one
+  page holds says `100 of 143` over the group instead of presenting the page as
+  the whole answer. Sessions parked before this version carry no branch until
+  they are parked again.
+- **A button on a pull request or plugin row now checks before it acts.** Both
+  screens paint from the answer of their last visit, so a checkout removed from
+  a terminal still offered "Go to session" for a directory that was gone, and a
+  plugin row offered an update for a plugin that was no longer installed. The
+  rows still paint at once from what was read last, but the click re-asks first
+  and acts on the answer: a missing checkout is created with the same gesture,
+  and a plugin that changed underneath gets the action it actually needs. The
+  "Remove worktree" a merge offers reads the same way, and now says the checkout
+  was already removed rather than reporting a failure to remove it.
+- **A split's dragged pane sizes now come back when the grid does.** How many
+  panes sit across follows the window, so collapsing the sidebar, opening the
+  dock or moving to another monitor reshapes the wall - and the sizes you had
+  dragged were kept for one shape only, which read as a resize being forgotten.
+  A wall now remembers what it was dragged to on each shape, so the layout you
+  made at four columns is waiting the next time four columns come back.
+- **An Antigravity card now names the MCP tool it is running.** Every MCP call
+  there is the same internal step, so a card that opened a session read
+  `call_mcp_tool` followed by `lich/open_session`, spending the line on the step
+  and crowding the tool worth reading off the end of it. It now draws the server
+  and the tool the way every other provider's card does: `lich · open_session`.
+- **The plan gauge now says when a login has no name to show.** A
+  `claude setup-token` session drew its windows under the provider's name with
+  the account line blank, exactly like a provider that names nobody; it now
+  reads "Token login", and the blank is left to the providers that have nobody
+  to name.
+- **An agent reached through a custom binary path now counts as installed.**
+  Detection only ever scanned `$PATH`, so a machine whose only agent is the one
+  you pointed lich at in Settings › Providers read as a machine with nothing on
+  it: every implicit new session — the empty screen's button, the hotkey, a new
+  worktree — opened a terminal instead. Detection now resolves that setting the
+  way the spawn does, a binary set for one project alone counts for that
+  project's sessions, the provider row says the binary came from a custom path,
+  and the empty screen that does still open a terminal says why.
+- **"Check again" now finds a tool installed after lich started.** lich read the
+  login shell's `$PATH` once, at launch, so an agent, git or gh installed into a
+  directory that `$PATH` did not already carry stayed missing on every surface
+  however many times you re-checked, and only a relaunch brought it in. The
+  re-check now re-reads the shell itself and replaces what lich resolves
+  binaries through, and the git and gh checks have gained the same button. A
+  shell that does not answer leaves the old value in place and says so instead
+  of reporting a stale absence as a fresh one.
+- **The Files tab is browsable in a plain folder.** A directory that is not a
+  repository has no `.gitignore` for lich to obey, so the tree listed
+  `node_modules`, `target`, `dist` and their kind like any other folder, stopped
+  at 20,000 files without saying so, and only re-read when you left the panel
+  and came back. Those directories are now skipped by name, and the line under
+  the rows says which ones this folder had ("Hidden: build, node_modules") and
+  whether the listing hit the cap, so a folder keeping its own source under one
+  of those names tells you why it is missing. The tree also re-reads on the same
+  cadence a repository's does, so a file the agent just wrote shows up while you
+  watch.
+- **A session renamed from the inside is now reachable under its new name.** A
+  `/rename` typed in a Claude Code session changed the name it answers to in the
+  peer roster, but lich kept addressing it by the name it had passed at spawn —
+  so `lich send`, `lich close` and the `list_sessions` tool all named a session
+  that no longer answered. lich now reads the name back out of the session's own
+  record, and a card restarted after a rename keeps the name it was given.
+- **Each browser now gets its own window profile.** lich kept one Chromium
+  profile for whichever browser it opened, so installing a second one, changing
+  the desktop default or pinning `--browser` handed one browser's profile to
+  another — silently on a small version gap, and on a wide one as a window that
+  never opened and a dialog that could only say `exit status 1`. The profile is
+  now keyed by the browser, under `<config>/lich/chromium-profile/`, and the one
+  you already have moves under its key on the first launch so your settings come
+  with it.
+- **Settings › Updates no longer blanks its plugin rows on the way in.** The
+  per-provider list waited on a fresh read of every CLI on every visit, so
+  returning to the pane showed an empty block for a moment while the rest of
+  the screen was already painted. It now paints the last answer and re-reads
+  underneath, and "Check for updates" still says whether the check got through.
+- **Unsent prose on the pull request screen now survives a reload.** A
+  description being rewritten, a comment being composed and every reply typed
+  into a review thread are kept the way a pending review already was, so an app
+  update or a closed window no longer costs what was written. They are retired
+  when they are sent, when the box is emptied, when their pull request stops
+  being open, and after 30 days, so nothing abandoned is kept forever.
+- **oh-my-pi and opencode cards name the MCP tool, not the server that carries
+  it.** Both harnesses spell an MCP tool with a single underscore between the
+  server and the tool, which a card could not divide, so it spent its width on
+  `lich_open_session` where a Claude Code card already read `lich ·
+  open_session`. Every session now records the servers its harness could reach
+  when it was spawned — opencode's project config included — and those cards
+  divide the name the same way.
+- **The Pulls screen no longer leaves refs in your repository.** Naming a
+  conflicting pull request's files fetched its head and its base branch into
+  `refs/lich/pr/<n>/head` and `refs/lich/pr/<n>/base` and left them there, so
+  lich's bookkeeping piled up per pull request opened and a `git push --mirror`
+  would publish it. Both refs are now deleted once the merge has been read.
+- **The window is sandboxed on Ubuntu again.** Chromium confines the window's
+  subprocesses through a user namespace, and Ubuntu's AppArmor policy denies
+  those to unconfined binaries, so the window opened with `--no-sandbox` and
+  Chrome drew its "stability and security will suffer" bar over it. The deb,
+  rpm and AUR packages now install Chromium's setuid helper root-owned and
+  mode 4755 beside the window's binary, which is the other way Chromium
+  confines itself; installing the release over the previous one is enough.
+  Installs from the bare tarball are unchanged: a file unpacked as you cannot
+  be owned by root, so those keep the unsandboxed window.
+- **Rebound keyboard shortcuts survive a recreated browser profile.** The
+  bindings lived in the page's own storage, which sits in the Chromium profile
+  lich recreates when its storage comes back damaged: every rebind was lost, and
+  Settings and the shortcuts overlay went on showing the defaults as though
+  nothing had been changed. They are stored in the workspace database now, beside
+  the theme, and an existing set is moved there once on the next launch.
+- **The cursor keeps its shape across a card switch.** Hiding a session
+  serializes its terminal and destroys it, and the snapshot never carried the
+  cursor shape a program had chosen, so a shell or editor drawing a bar or an
+  underline came back with lich's block. The shape is now carried across the
+  cycle beside the mouse encoding and cursor visibility, and follows the
+  program's own reset back to the default.
+- **A scheduled prompt survives parking its session.** Keeping a worktree, or
+  closing a card and resuming it later, re-inserted the session under a fresh id
+  and left the prompt parked on it behind, so it never fired and never came back
+  with the card, with nothing anywhere saying it had been forfeited. The resume
+  now carries the schedule over, alongside the rename, model, entrypoint and
+  cost ledgers it already carried: the card comes back with its countdown, and a
+  prompt that came due while the session was parked is typed at its first free
+  prompt, like one that came due while lich was closed. Deleting a session for
+  good still drops its prompt (the row is the only copy), but now logs which
+  session lost what.
+- **The Review panel's "Last turn" survives a restart.** The pair of snapshots
+  bracketing a session's last finished turn lived in memory alone, so relaunching
+  lich emptied it and every restored session read "No last turn recorded" until
+  its next turn ended. The record now rides the workspace database, keyed to the
+  session, and is read back when the card is restored. The card says so on its
+  hydration too, so the panel offers the "Last turn" switch to a session that has
+  been quiet since the launch instead of withholding it until that session next
+  reports. A turn still running is never written, and a turn that loses a
+  snapshot clears what was there instead of leaving the turn before it standing.
+- **The command palette's History tab finds every session you ever closed.** It
+  was handed the hundred most recently parked sessions and filtered those in the
+  window, so anything closed further back could not be reached by typing its
+  name. The term now goes to the store, which searches every parked session by
+  its name, its project's name and its path, and answers with the hundred most
+  recently closed matches. The branch shown on a row is still read from git
+  afterwards, so it narrows the results but cannot be searched for on its own.
+- **A finished turn stays read across a reload.** The mark behind a session's
+  solid emerald ring lived in the page, so reloading the window handed back
+  every finished turn as news, including the ones read twenty minutes ago. It is
+  workspace state now, written where the turn actually ends: a turn that
+  finishes while the page is gone is waiting to be found when it comes back, and
+  one already read comes back read.
+- **Scoop installs the current release.** The manifest 0.46.0 introduced pinned
+  0.45.0 with no checksums, and nothing bumped it on a tag, so `scoop install`
+  and `scoop update lich` handed out the previous release. Every release now
+  renders the manifest with its own version and the sha256 of its two Windows
+  assets and publishes it beside them; the install URL moves with it to
+  `scoop install https://github.com/omartelo/lich/releases/latest/download/lich.json`,
+  which always names the latest release. A lich installed from the old
+  raw-file URL needs a one-time `scoop uninstall lich` and install from the new
+  one.
+- **A binary check no longer blinks through "unknown" on the way back.** The
+  path verdicts on Settings › Version Control and under every provider's binary
+  field answered nothing at all until a fresh check came back, so reopening the
+  pane, or switching to a provider you had already looked at, painted a blank
+  where the verdict had been and filled it in a moment later. The last verdict
+  for a value is kept and shown while the check runs again behind it; a value
+  never checked still says nothing, and re-reading `$PATH` with "Check again"
+  still asks every question over.
+
+## [0.46.0] - 2026-09-07
+
+> [!IMPORTANT]
+> **Your own window on Windows and Apple Silicon, and agents that keep working
+> behind a locked screen.** The embedded Chromium the Linux packages ship now
+> sits inside the Windows installer and inside `Lich.app`, with lich's icon on
+> the taskbar and in the Dock. And while any session has a turn open, lich
+> holds the machine out of idle sleep the way a playing media player does.
+
+### Added
+
+- **`lich doctor` now proves the sandbox instead of assuming it.** A new
+  `sandbox` line opens one confined child and reads two files through it: one in
+  the checkout, which has to come back, and one in the private home the sandbox
+  replaces, which must not. Both halves are checked, so a backend that starts
+  and confines nothing is caught alongside one the kernel refuses. On Ubuntu and
+  Debian, where an AppArmor policy denies unprivileged user namespaces,
+  bubblewrap is installed and every confined session dies on its error; that now
+  shows up as a warning naming bubblewrap's own reason instead of as a card with
+  no session in it. The check is bounded at two seconds, warns rather than fails
+  (lich starts either way), and is skipped on Windows, which has no sandbox
+  backend. `lich rage` reports the same line.
+- **Sessions no longer pause behind a locked screen.** While an agent is
+  working, lich holds the same idle-sleep assertion a media player holds
+  while it plays, so a machine left locked keeps running its sessions and
+  only sleeps once every session is back at its prompt. On Windows that also
+  covers Modern Standby laptops, whose "screen off" used to freeze every
+  desktop app, lich included; `powercfg /requests` names lich as the holder.
+  On macOS it is `caffeinate` (`pmset -g assertions`), on Linux a logind idle
+  inhibitor (`systemd-inhibit --list`). The screen still turns off, and a
+  closed lid or a Sleep you choose still sleeps.
+- **On Windows, lich now brings its own window too.** The installer ships the
+  same embedded Chromium (CEF) the Linux packages do, beside `lich.exe` as
+  `shell\`, and lich opens in it instead of looking for Chrome, Edge, Brave or
+  Vivaldi; the window carries lich's icon in its title bar and on the taskbar,
+  and groups under the Start Menu shortcut, pinned or not. If the window fails
+  on your machine, lich falls back to a Chromium-family browser and says so.
+  The portable exe gets the window from `lich-*-windows-amd64-shell.zip`
+  unzipped beside it. An installed lich now updates by running the next
+  installer rather than through the update button, which opens the release
+  page instead.
+- **`scoop install` reaches lich on Windows.** The repository now carries a
+  Scoop manifest, so a Windows machine can install lich from the command line
+  with no bucket to add:
+  `scoop install https://raw.githubusercontent.com/omartelo/lich/main/build/windows/scoop/lich.json`.
+  It lays out the portable exe and its window the way the installer does, keeps
+  `lich` on PATH, adds a Start Menu entry, and leaves your workspace in
+  `%AppData%\lich` when you uninstall. `scoop update lich` re-reads the
+  manifest and picks up the next release.
+- **On Apple Silicon, `Lich.app` brings its own window.** The same embedded
+  Chromium sits inside the app, and lich opens in it instead of looking for
+  Chrome, Chromium, Brave, Vivaldi or Edge in `/Applications`; the Dock,
+  Cmd-Tab and the menu bar show lich while it runs, where they showed the
+  browser before. If the window fails on your machine, lich falls back to a
+  Chromium-family browser and says so. Intel Macs keep opening the system
+  browser: the window is built on the Apple Silicon runner alone.
+
+### Changed
+
+- **Appearance is a list now, and the theme shows its colors.** The pane put
+  every control under its own paragraph, so five settings filled a screen and a
+  256px dropdown sat in 600px of empty space. Each setting is one row: name on
+  the left, control on the right, the way Sandbox and Hotkeys already read.
+  Picking a theme opens a strip of previews under the row, two rows of
+  miniatures of the lich window in that theme, and choosing one closes it. The
+  terminal font row renders its sample in the font itself. Zoom and terminal
+  text size lost their permanent greyed-out Reset button: clicking the value
+  returns it to the default. The footer editor is always open at the foot of the
+  pane, its items carrying the reading they will show ("3 · +10 −2", "42%")
+  rather than their setting name, and the model item showing the model the
+  active session is actually running, provider mark included, the way the footer
+  draws it. Nothing else rides the item: the per-item menu and remove
+  button are gone, since dragging an item out to Available is what hides it. The
+  theme template moved into the
+  Import dialog, where writing a theme starts, and the "Imported themes" list is
+  gone: each theme's own card carries its repository, its version, and the
+  update and remove buttons.
+
+- **One theme now colors the app and the terminal.** Settings > Appearance had
+  a second picker for the terminal, defaulting to "Match app", and every theme
+  lich can install already carries both palettes: the interface tokens and the
+  terminal's sixteen colors. The terminal now always paints the palette of the
+  theme you picked, and the extra picker is gone. A terminal you had pointed at
+  a different theme follows the app one from this version on.
+
+- **The app icon sits on a dark plate.** The launcher, dock, taskbar and Start
+  Menu icon was the bare white mark on a transparent background, invisible on
+  a light taskbar or launcher, and no desktop swaps an app icon with its
+  theme. It is now the mark on a rounded dark plate, readable on either. The
+  favicon inside the window keeps following the color scheme as before.
+
+- **Dragging a file over a session now says where it will land.** The pane
+  under the cursor fills and reads "Attach to <session>", with the line under
+  it saying that the path is pasted at the prompt (or, for a sandboxed
+  session, that a file outside the checkout arrives as a copy). Before, a small "Drop to paste at the prompt" tag sat at the foot
+  of the pane and named no session, so with split panes nothing said which one
+  would take the file.
+
+- **The Settings search finds the setting, not just the section.**
+  The box read the eight names in the sidebar and nothing else, so looking for
+  "theme", "font", "ssh" or "cost" answered that nothing matched, with all four
+  sitting one pane away. It now searches every control by name: results replace
+  the nav while you type, each showing the path that tells two settings apart
+  ("Appearance > Terminal" against "Appearance > Interface"), and choosing one
+  opens its pane and briefly highlights the control. Keyboard shortcuts are in
+  there too, and a provider's own settings list once per provider you have
+  enabled. Arrows move, Enter opens, Esc clears. The search reads names, never
+  values: a theme's name or a port number still finds nothing, and the empty
+  state now says so.
+
+- **Settings is one list of six, and every provider lives on its own screen.**
+  The sidebar grew a line for every provider you turned on, under three
+  headings, with two entries both called "Providers": twelve rows of plain
+  text before the first agent was configured. It is now Appearance,
+  Notifications, Hotkeys, Providers, Sandbox and Version Control, each with its
+  own glyph, and Providers holds the lot: which provider new sessions spawn
+  here and everywhere, the ones you have enabled, and one click in, a
+  provider's plan, binary, permission rung and open sessions. Providers you
+  have not enabled sit behind "Add provider" instead of filling the list, and a
+  search that matches nothing now says so.
+
+- **A session card's right-click menu is grouped, and names its shortcuts.**
+  Every action sat in one flat list of up to fourteen items with no order to
+  it. They now fall in three blocks a hairline apart: what the session is
+  (rename, pin, show beside), who its work goes to (delegate, schedule, fork,
+  copy send command), and where its checkout opens, with Terminal, Editor
+  and File manager gathered under one "Open in". Rename, Pin, Delegate, Terminal
+  and Close session print their keyboard shortcut beside them on the active
+  session's card, which is the card those shortcuts act on.
+
+- **Arrange the footer in Settings › Appearance › Footer.**
+  Drag actions and readings between Available items, Left side and Right side,
+  reorder them, or use each item's menu from the keyboard. A preview follows
+  the layout, which persists across projects and restarts; Restore default
+  returns the original arrangement. Model, context, plan usage, cost, hands-on
+  time, date/time, branch, path, PR, files, changes and attachment can
+  each be placed independently. Session readings stay inline and wrap when
+  needed. These global controls replace the duplicated provider-page controls
+  and preserve existing visibility/cost choices. The editor uses compact
+  controls in full-width rows that wrap without horizontal scrolling; its
+  preview stays on one line. Branch and path are plain text without a checkout
+  popover. Plan usage retains its compact provider/plan heading and wide gauges,
+  without redundant labels, with more vertical space inside the tooltip.
+  Footer tooltips have a theme-colored border to separate them from the footer.
+- **Settings use the available window width** instead of a narrow centered
+  column. Descriptions retain a readable line length.
+- **Uppercase section labels are all one size.** The small label that heads a
+  group of rows had drifted to four sizes across the session sidebar, the
+  command palette and picker, the worktree dialog, the review panel, the
+  shortcuts overlay, the plan usage table's header and the file preview's
+  read-only tag. They now render at the single size the palette and the
+  shortcuts overlay already used. The diff file's language badge keeps its own
+  smaller size, which is what fits two or three letters into its box.
+
+### Fixed
+
+- **The window no longer opens with Chrome's "unsupported command-line flag"
+  bar across its top.** Every launch on Linux, Windows and macOS drew the
+  "--disable-setuid-sandbox. Stability and security will suffer" warning under
+  the title bar, because the window ran with Chromium's sandbox switched off
+  everywhere. On Linux the sandbox is now on: Chromium confines the window's
+  subprocesses in a user namespace, as it does in any Chromium you install, and
+  the bar is gone. A machine that denies user namespaces to unconfined programs
+  (Ubuntu's AppArmor policy) or a lich run as root cannot have it, and the window
+  says so in the log and opens unsandboxed with the bar, as before. Windows and
+  macOS still run unsandboxed and keep the bar for now.
+
+- **Closing the window ends lich even after a second launch.** Starting lich
+  while it was already running raised its window, as it should, but the window
+  had been handed a whole second browser to do it, one with no window of its
+  own; closing the window you could see then left lich running with its port
+  held and no way back in, until it was killed. The window now raises itself on
+  that second launch and opens nothing else, so it closes the way it did before,
+  on Linux, Windows and macOS alike.
+
+- **Zooming the app now grows every label with it.** A handful of small labels
+  were sized in absolute pixels rather than in the units the zoom control
+  moves, so they stayed put while the chrome around them grew: the sandbox
+  explanation lines, the plan usage numbers and quota path, the settings
+  search-result headings, the theme card captions and previews, and the inset of
+  the segmented controls. At 150 per cent they rendered at their original size
+  beside text half again as large.
+
+- **Ctrl+Shift+T starts a session again in lich's own window.** Chromium runs
+  its tab accelerators before the page is given the key, so in the bundled
+  window the chord reopened a closed tab instead of opening a session, and
+  Ctrl+T at a prompt opened a browser tab rather than reaching the shell. The
+  window now offers every Ctrl chord (Cmd on macOS) to the page first: a chord
+  lich binds runs its own action, and one it does not still falls through to
+  Chromium. Opened in a system browser (`--no-window`), the browser keeps its
+  own shortcuts as before.
+
+- **Dropping a file on a session works again under Wayland.** The 0.45.0
+  window opened on XWayland when the GPU is NVIDIA, and a file dragged from a
+  Wayland file manager onto an XWayland window never arrives on Hyprland: the
+  drop was silently lost. The window now opens native Wayland whenever a
+  Wayland display is present, as the system Chromium it replaced did;
+  `lich -- --ozone-platform=x11` brings the old behaviour back.
+
+## [0.45.0] - 2026-09-05
+
+> [!IMPORTANT]
+> **Linux users: lich now opens in its own window.** No browser needs to be
+> installed. If the window fails on your machine, lich falls back to a
+> Chromium-family browser and says so.
+
+> [!NOTE]
+> **NVIDIA under Wayland opens on XWayland by default.**
+> `lich -- --ozone-platform=wayland` opens it native.
+
+### Added
+
+- **On Linux, lich now brings its own window: no browser needs to be installed.**
+  The packages ship an embedded Chromium (CEF) beside the binary, and lich
+  opens in it instead of looking for Chromium, Chrome, Brave or another
+  Chromium-family browser on the machine. The window is lich's own, not a
+  browser's: it carries the `lich` window class and title, so the launcher
+  icon, `StartupWMClass` and per-app compositor rules all match it; no
+  profile picker, translate bubble, account chooser or system-wide browser
+  extension can appear in it; and the Chromium version is pinned per release
+  rather than being whatever the machine has. Native Wayland, XWayland and X11
+  all work. `--browser` / `LICH_BROWSER` still pin a browser of your choice
+  above it, and `lich -- <flags>` still reaches the window — on NVIDIA under
+  Wayland, `lich -- --ozone-platform=wayland` opens it native (the default
+  there is XWayland). If the bundled window is missing or dies within half a
+  minute of launch — an update this machine cannot run — lich opens in a
+  Chromium-family browser on the machine instead and says so in a
+  notification. macOS and Windows keep opening the system browser for now; the
+  shipped window is Linux-only.
+
+- **A session can now be forked into a worktree of its own.**
+  Right-click a card and pick *Fork to worktree…*: the New worktree dialog opens
+  saying which conversation it will carry, and the session it creates starts on a
+  copy of that conversation and keeps going from there. The card you forked is
+  untouched — same branch, same history, still running — so it is the way to try
+  a second direction without losing the first, or to hand a long conversation to
+  a clean checkout. The new card wears the *from …* line delegated sessions
+  already have, so which session it came out of stays on screen. It runs the
+  provider the conversation belongs to rather than the project's default, and it
+  is named at birth like any other session — a fork used to inherit the name of
+  the card it came from, which left two of them answering to one name.
+  Offered for Claude Code, Codex and opencode, the three whose CLI can branch a
+  conversation; the item is absent on the other five, which only reopen one. If
+  the provider has since pruned the conversation, lich says so instead of making
+  a checkout for a session that would fail to start.
+
+- **The palette searches what was said in Codex, oh-my-pi, Kiro CLI and
+  Antigravity sessions too.** The `Messages` group read Claude Code conversations
+  and nothing else, so on any other provider the one thing you actually remember
+  — a sentence from the conversation — found nothing, with no sign that the
+  search had skipped the session. It now reads every provider that files its
+  conversation as a transcript: five of the eight, your turns and the agent's,
+  the same as before. opencode and Crush keep their messages in a database
+  instead and are still searched by name only; Cursor CLI files a chat in a form
+  nothing here can read. A session on one of those three simply contributes no
+  rows, which is what a session with nothing to match has always looked like.
+
+- **A checkout can now run the project's own app.** lich has reserved a
+  dev-server port per checkout for a while — `LICH_WORKTREE_PORT`, a number the
+  worktree owns — and then left it to you to find a terminal and start something
+  on it. Write the command once in `.lich/run-worktree.sh`, versioned beside the
+  setup script and shared with everyone who clones the repository, and every
+  checkout's **+** menu carries a **Run** item that opens it in a card of its
+  own: a terminal named after the command, started by the backend, so the app is
+  up whether or not you ever look at it. The New worktree dialog is where the
+  file is written, on the line under the setup script. Nothing supervises what
+  it starts — when the command exits you are left in your own shell in the same
+  card with the error still on screen, and ↑ Enter is the retry. Absent on
+  Windows, where the file's `sh` would be read by PowerShell.
+
+- **A prompt can now be left on a session for later.**
+  **Schedule a prompt…** on a card's menu takes what you want that session to do
+  and one of four times — 15 minutes, an hour, four hours, or tomorrow morning —
+  and types it at that prompt when the time comes, exactly as if you had typed it
+  yourself. It is the reminder that arrives as work: the release checklist at
+  nine, the rebase after the build, the thing you will not remember to ask for at
+  four. Each time button carries the wall clock it resolves to, so *Tomorrow*
+  never has to be taken on trust. The card counts down on its own line and the
+  tooltip holds the prompt and the day, so a session with something coming says
+  so before you open anything. A session holds one at a time — scheduling again
+  replaces it, and the same dialog is where you cancel. It works the same on
+  every provider, because delivering it is typing at a prompt, and a prompt that
+  comes due while that session is mid-setup, mid-sentence or without a terminal
+  waits for one rather than being dropped — including one that came due while
+  lich was closed, which lands when lich is next up.
+
+- **A GitHub issue can now be the worktree.**
+  The New worktree dialog's name field takes an issue — `#128`, or the URL copied
+  out of the browser — beside the branch names and plain words it already took.
+  lich looks the issue up through `gh` on the project's own account, prints its
+  title and the exact branch it will create under the field before anything
+  exists, and hands the issue to the session that opens on it: the number, the
+  title, the link and the body, waiting unsent at the agent's prompt for you to
+  read, edit and send. Nothing is auto-generated on your behalf — a worktree
+  named `#128` used to be a branch called `128`, and typing the task in by hand
+  was the only way the agent learned what it was for. A bare number is still just
+  a branch name, because that is what git makes of it; a pull request's number is
+  refused with the screen that does open pull requests named, since GitHub counts
+  both in one sequence and `gh` will answer for either.
+
+- **`lich open` and its MCP tool now open a project, not only a session in one.**
+  `--project` took the name of a project already on screen, so an agent could
+  fan work out across the projects you had open and no further: putting a
+  directory on screen was yours to do, through the window's own picker. It takes
+  a directory path now — `lich open --project ~/src/revu` — and a path lich is
+  not holding open becomes a project first, with the session in it. A directory
+  it had open before comes back the way reopening it from the window does: same
+  id, same name, and the sessions it was closed with parked on their cards,
+  because the row is matched by path through the workspace's history rather than
+  created again. The tab appears without a reload and without stealing the view,
+  like a session opened beside you. The path must be absolute — there is no
+  shell at lich's end, and a relative one would resolve against the directory the
+  window was launched from rather than yours — and a leading `~` is expanded,
+  because an MCP tool call reaches lich through no shell at all. `close`,
+  `rename` and `worktrees` read `--project` the same way, but only narrow with
+  it: opening a project is something only `open` does.
+
+- **A theme file can now be checked before it is imported.**
+  `themes/lich-theme.schema.json` is a JSON Schema naming every app and terminal
+  token, which color spellings each of the two blocks accepts, and the id and
+  name rules — so a token left out or an `oklch()` where the terminal wanted hex
+  is a red squiggle in the editor rather than an import error after the fact.
+  A theme opts in with a `$schema` line at the top of the file, pointed at the
+  copy in this repository; the starter written by Settings › Appearance ›
+  **Save template** already carries one. The schema is generated from the same
+  token sets and patterns the importer validates against, and a test fails when
+  the checked-in copy no longer matches them — a schema that drifts rejects
+  valid themes, which is worse than shipping none.
+
+- **lich can now run without a window of its own, on purpose.** It opens its
+  window in a Chromium-family browser, and until now the plain-tab mode was
+  only what you got when the machine had none — so anyone who would rather not
+  run Chromium had no way to say so. `lich --no-window` (or `LICH_NO_WINDOW=1`,
+  which a desktop launcher can carry) now asks for it: lich serves itself and
+  hands the URL to your default browser, Firefox included. The trade is the one
+  it always was — a tab is not a window, so closing it leaves lich running, and
+  you stop it with Ctrl-C. `lich doctor` no longer reports a missing
+  Chromium-family browser as a failure when the launch never wanted one.
+
+- **A screen or panel that breaks no longer takes the window with it.** A single
+  rendering bug anywhere in the interface used to blank lich entirely — sidebar,
+  terminals, footer and all — while the agents kept running behind it with
+  nothing on screen saying so, and a reload was the only way back. The screens
+  over the terminals and the right dock's Code and Review panels are now caught
+  where they break: what failed says so in place, with the error and a "Try
+  again", and everything around it stays where it was. The terminals themselves
+  stay outside that net on purpose — catching there would mean throwing away
+  every session's scrollback to redraw a panel.
+
+- **The plan gauge now names the account it is measuring.** lich has always
+  drawn the gauge and never said whose plan it was drawing — which matters
+  precisely because a session can be spawned from a binary of your own that
+  points Claude Code or Codex at a second account. The gauge's tooltip carries
+  the account at its foot now, under the windows, and Settings shows it under
+  the plan it read: taken from Claude's own profile route, and from the id token
+  Codex writes beside its access token, both on the reading the gauge already
+  takes rather than a request of their own. A login that will not say which
+  account it is keeps the gauge and shows no name — a session signed in with
+  `claude setup-token` is one, and so is every provider lich reads no plan
+  from.
+
+- **A weekly quota window now says when it is being spent faster than its own
+  clock.** Forty percent of a week gone on day two and forty percent gone on day
+  six draw exactly the same bar, and only one of them runs out early. The gauge
+  marks the first: when spend runs at least fifteen points past the share of the
+  window that has elapsed, the window carries a marker, on the footer tooltip and
+  on the Settings screen alike. It is derived from the reading lich already takes
+  — no extra request, and no provider reports it — so it appears for every
+  provider that reports a weekly window, which today is Claude Code and Codex.
+  Only weekly windows are paced: a five-hour window turns over too fast for a
+  rate to mean anything. Nothing is marked in the first day after a reset, where
+  almost any use at all would read as far ahead of a share that is still near
+  zero.
+
+- **A conflicting pull request now names the files it conflicts on.** GitHub
+  publishes one word — the pull request conflicts with its base — and never
+  which files, so the way to find out was opening the PR on github.com or a
+  session on the branch. The screen answers it now: under the status line, the
+  conflicting paths, six of them with the rest a click away. lich computes the
+  answer rather than asking for it, merging the pull request's head and its base
+  in git's object database (`git merge-tree`), so nothing touches a worktree, an
+  index or HEAD — which takes git 2.38 or newer, and says so rather than
+  reporting a merge it could not compute as a clean one. The commits are fetched
+  from the remote the pull request itself names, so a clone of a fork reads the
+  repository the pull request was opened against rather than the fork. The list
+  is what your clone merges right now and the chip above it is GitHub's own
+  verdict, so the two disagree for a few seconds after a push — the row says
+  which one is the fresh reading.
+
+- **The Review panel's "Last turn" now shows what the agent said, not only what
+  it changed.** Coming back to a card told you it had news, what it cost and how
+  long you had been in it, and never what it did — catching up meant scrolling
+  the terminal. Above the turn's diff there is now the agent's own closing
+  sentence for that turn, read straight out of the provider's transcript.
+  Nothing is generated and no model is called: every agent already ends a turn
+  by saying what it did, and lich only finds that sentence. It earns its place
+  on the turn the diff cannot describe — the one that ran the suite, found three
+  failures and edited nothing, which used to read as "Nothing changed in this
+  window" and no more. The band appears only when there are words to show, and
+  scrolls in its own right, so a long report never pushes the file list off
+  screen. Read for Claude Code, Codex, Antigravity, opencode, oh-my-pi and Kiro
+  CLI; Crush and Cursor CLI report no turn boundary, so they are not offered the
+  "Last turn" mode this sits in at all.
+
+### Changed
+
+- **The What's new dialog opens on the release's headline and lists the rest
+  as rows.** A release can now carry its own announcement: an alert block
+  written under its heading in the changelog (`> [!IMPORTANT]`, the same
+  syntax GitHub renders as a callout on the release page) opens the dialog as
+  a headline, and a `> [!WARNING]` or `> [!NOTE]` follows it as a callout.
+  Below them every entry shows the bold sentence it opens with, and the
+  paragraph behind it opens on click, so a release with twenty entries is
+  scanned rather than scrolled. The header is one line — name, version and how
+  many entries were added, changed and fixed. The update toast is unchanged:
+  it says a release exists, and the dialog is where the release speaks.
+
+- **The Linux packages are ~100 MB to download and ~300 MB installed, up from
+  ~10 MB.** That is the embedded Chromium: `libcef.so` stripped, the
+  resources, the ANGLE GL libraries and the one locale pack the UI uses. The
+  `chromium` recommends is gone from the deb, rpm and Arch packages (which now
+  compress with xz), and the AUR package now fetches the window as a second
+  release asset; `zenity` is the only runtime dependency the installer still
+  checks for.
+
+- **"Resolve conflicts" and "Fix CI errors" now open the session they hand the
+  work to.** The button wrote its prompt into whichever session happened to be
+  active — the one you were last in, on another branch, with nothing on screen
+  to say it had happened — or refused outright when there was none, which read
+  as having to press "Open in Session" first. It works on the pull request's own
+  branch now: the session already there, the parked one resumed, or the worktree
+  created and a session opened on it, and that session is brought into view. The
+  prompt is written once its agent is at a prompt to take it, rather than into a
+  setup script still installing the checkout. The Enter stays yours.
+
+### Fixed
+
+- **A pinned session stays pinned across a park and resume.** Closing it from
+  the `lich` command line parked the row, and resuming it brought the card back
+  unpinned — in the drag order, close button restored — though nobody had taken
+  the pin off. The pin now rides the resume like the label and the model do.
+
+- **The Kiro CLI recap band was empty whenever the agent thought before it
+  spoke.** "Last turn" reads the closing words out of the provider's own
+  transcript, and Kiro types each block of a message differently — a `text` block
+  carries a string, a `thinking` block an object. Reading them all as strings
+  failed the whole line, so any turn that reasoned first — nearly every one —
+  read as a turn that said nothing, and the band did not appear.
+
+- **On Windows, an answer that named no ticket could close the wrong request.**
+  `lich reply "<answer>"` and `reply_to_session` without a ticket close the
+  oldest request delivered to that session — but "oldest" was read off the
+  clock, and Windows' only moves every ~15.6ms, so two requests handed to one
+  session inside a single tick carried the same timestamp and the tie was broken
+  at random. Roughly one time in ten, with two errands open, the answer went
+  home to the wrong sender, and both senders read a confident wrong report.
+  Delivery order is now counted rather than timed, so no clock's resolution can
+  flatten it. Linux and macOS have a fine enough clock that this was never
+  reachable there.
+
+## [0.44.0] - 2026-09-03
+
+### Added
+
+- **Kiro CLI is the eighth provider.** Point lich at `kiro-cli` and it runs in a
+  card like any other agent: resume by conversation id, the plugin's reports for
+  what a session is doing and which files it touched, its MCP tools for driving
+  the sessions beside it, and a sandbox that still reaches its login. The footer
+  draws a context ring for it — Kiro records the share of the window a
+  conversation occupies — but no cost: Kiro meters spend in credits rather than
+  dollars, and its own footer is the only place that figure can be read. Two
+  things a Kiro session does differently are in `docs/ceilings.md`: it runs an
+  agent lich installs rather than `kiro_default` or one you set yourself, and
+  with skip-permissions on it still opens on Kiro's own trust confirmation once.
+
+- **oh-my-pi, opencode and Crush sessions now show what they cost.** All three
+  price every turn as they run it, but none of them records the model's context
+  window, and the footer read that as nothing to show — so a session spending
+  real money showed an empty corner. The cost now stands on its own: the figure
+  is the provider's own, exactly as its own interface reports it, and the
+  context ring simply is not drawn. Six of the eight providers are now on the
+  readout, and `docs/ceilings.md` carries the table of which rung each one is on
+  and why.
+
+- **`lich cost` totals what a project or a window of time has spent.** The cost
+  figure was per session and nothing summed it, so the only way to ask what a
+  project cost this week was to read the cards one at a time and add them up.
+  The command reports a row per project with `--project`, `--provider` and
+  `--since 7d` narrowing it, and `--json` / `--csv` taking the number out of
+  lich. The total always says how many sessions it could **not** price: with
+  any of those it is a lower bound, and a sum that quietly omitted them would be
+  the one thing that makes the number not worth reading.
+
+- **A Codex session shows its cost on a machine with no network.** The price
+  table shipped in the binary carried Claude models only, so a Codex cost
+  appeared only once the remote refresh had landed — never, on a machine that
+  cannot reach it. OpenAI's rates now ship beside Claude's; the refresh still
+  overrides them when it runs, so the cost is at worst stale by a release
+  rather than missing entirely.
+
+- **lich opens in the browser you actually have.** The window used to be
+  launched from a short list of binary names, so a machine running Vivaldi —
+  Chromium-based, `--app` mode and all — got nothing at all. Resolution is now
+  a ladder: `--browser` / `LICH_BROWSER` pin one outright, then the desktop's
+  own default browser when it is Chromium-family, then a scan that knows
+  Vivaldi, Brave, Edge, Thorium and ungoogled-chromium alongside Chromium and
+  Chrome, then Flatpak (the profile moves inside the sandbox, where it can be
+  written). `lich doctor` and `lich rage` name the browser *and* the step that
+  found it, so a window in the wrong browser is one line to diagnose.
+
+- **No Chromium-family browser is no longer a dead end.** lich hands its URL
+  to whatever browser is installed, raises a desktop notification saying it is
+  running and where, prints the URL, and goes on serving until it is stopped.
+  The window of its own is what is lost — Firefox has no `--app` equivalent —
+  not the product. With no browser at all, the dialog carries the URL instead
+  of lich exiting in silence.
+
+### Changed
+
+- **The hands-on tooltip now says what the clock actually heard in that
+  session.** It described every session the same way — typed at, reporting, or
+  running a turn — but a Crush or Cursor CLI session never opens a turn, so on
+  those cards the sentence named something that does not happen there. Those
+  two now read "typed at, or reporting a tool call"; every other session keeps
+  the wording it had.
+
+### Fixed
+
+- **The merge dialog has room for the commit message it is editing.** Squashing
+  a pull request opened a dialog sized for a sentence: the subject ran off the
+  end of a one-line field — taking the PR number with it — and the body showed
+  four lines of a ten-line description. The dialog is wider now, the subject
+  wraps so the whole title is visible (⏎ still merges), and the description
+  grows with what it holds, up to half the window.
+
+- **A pinned session is at the top of the sidebar again.** Split groups were
+  drawn above the pinned block, so a project with a split pushed the pinned
+  card below every wall — the one thing a pin promises. Pinned is now the first
+  block, whatever else the project holds.
+
+- **A split with one session left ends instead of lingering.** Closing or
+  removing panes until a single session remained left it under a split header,
+  alone, with no way back to its checkout. A group now ends when fewer than two
+  sessions are left in it and the survivor drops back among its worktree's
+  cards; nothing is closed by it.
+
+- **Sidebar blocks reorder in one list.** Splits could only be dragged among
+  splits and checkouts among checkouts, so neither could ever pass the other.
+  Every block but the pinned one — which stays first — now drags freely among
+  the rest, and dragging cards inside a checkout works again when one of its
+  sessions is showing on a split.
+
+- **A Crush card's hands-on time now counts the work, not the typing.** The
+  clock beat on the session-state report, and Crush reports no state — so an
+  hour a Crush session worked while you watched read as the few seconds you
+  typed into it. Every hook a session sends now beats it, and Crush's one hook
+  event fires once per tool call, which puts its figure on the same rung as
+  Cursor CLI's. Nothing to reinstall: the reports were already arriving.
+
+- **A cost lich cannot work out now says so instead of vanishing.** The footer
+  used to simply drop the figure whenever a session could not be priced, which
+  reads as a session that has spent nothing. It now shows `$—` with a tooltip
+  naming the reason: a conversation that switched models carries one running
+  token total over both and no rate can attribute it, and a model with no known
+  price is one neither the rates in this build nor the refresh have reached.
+  Turning the readout off, and a subscription, still show nothing at all: that
+  is the design, not a failure.
+
+## [0.43.1] - 2026-09-01
+
+### Fixed
+
+- **A pane's × takes it off the wall again.** The pane header is also the handle
+  that drags a pane to another cell, and it took the pointer for that drag the
+  moment one went down anywhere on it — including on its own ×, whose click the
+  capture then swallowed. The button did nothing, said nothing. A gesture that
+  starts on the × is the ×'s now, and the drag begins only on the header itself.
+
+- **A missing browser now says so on screen.** lich opens its window in a
+  Chromium-family browser installed on the machine — a deliberate decision
+  (no Electron, no bundled runtime). Launched from a desktop launcher without
+  one, it used to die in silence, the explanation only in a terminal nobody
+  had open. That failure now raises an error dialog naming what is missing
+  and where the log is, the AUR package checks for a browser at install time,
+  and INSTALL.md spells the requirement out. (#409)
+
+## [0.43.0] - 2026-08-31
+
+### Added
+
+- **A review note that belongs to no line.** Comments collected while reading a
+  review anchor to the lines they were written on, and some of what you want to
+  say does not: that the four notes are one bug, that the approach is wrong
+  before any of the lines are. The batch's strip now takes a note about the
+  whole change, which travels in the same prompt as the rest, in the order you
+  wrote it. Offered once there is a batch to join — a remark with nothing else
+  pending is a sentence the session's own prompt already takes.
+
+- **Walls of sessions, as many as you keep.** Watching an agent used to mean
+  watching nothing else: the cards say what every session is *doing*, and only
+  one of them ever showed what it was *saying*. A card's menu now offers **Show
+  beside**, which puts that session on a wall next to the one you are in —
+  <kbd>Ctrl/Cmd+Shift+G</kbd> adds the next free card,
+  <kbd>Ctrl/Cmd+Shift+F</kbd> moves the cursor along, and clicking a pane
+  focuses it. lich lays the panes out itself, from how many there are and how
+  much room the window has: eight on a 34" ultrawide land four across and two
+  down, the same eight on a laptop come out two across, and lich declines the one
+  that would leave them all too small to read.
+  A wall is a group you made and named, and a project holds as many as you like —
+  an orchestrator with the three worktrees it spawned is one, the next
+  investigation with its own is another. That first one takes a single click:
+  a session that handed work to others offers **Show beside its 3 delegates**,
+  which builds the wall around it, named after it. A delegate you had already put
+  on another split stays where it is, and lich says how many did. Each gets a block of its own at the top
+  of the sidebar, so you read its membership instead of rediscovering it: fold
+  it, drag it above the others, rename it or take it apart from its header, and
+  drag a card inside it to rearrange the panes. Opening a session that is on no
+  wall shows it on its own and sets every wall aside, whole, until you go back to
+  one of their sessions. A session can be on one wall at a time, so putting one
+  on a second asks first, naming the group it would leave and whether that group
+  ends with it. A pane is a view of a card, never a session of its own: its ×
+  stops showing that session and closes nothing, and closing the session itself
+  hands its room back to the rest.
+
+- **The pull request screen hands its current problem to the session.** Red CI
+  meant reading the Checks tab, opening each failed job in the browser and
+  typing the names back into the terminal yourself; a branch that would not
+  merge meant saying so by hand. The header now carries one button for whatever
+  is actually in the way — **Resolve conflicts** while the branch conflicts with
+  its base, **Fix CI errors** while checks are red — and writes it at the
+  agent's prompt, naming each failed check and where to read its run (the first
+  eight, and how many were left out). It is written, never sent: the Enter is
+  yours, and lich neither re-runs the checks nor asks a second time. Nothing is
+  drawn when nothing is wrong — that state is the Merge button's.
+- **Read the lines a diff left out, without leaving the diff.** git prints three
+  lines of context either side of a change, so judging one usually meant opening
+  the file somewhere else. Every gap between two hunks — and the run above the
+  first one — now carries a row saying how many lines are hidden there, and one
+  click pulls them in where they belong, numbered and highlighted like the rest.
+  Nothing is fetched until you ask for it, one gap at a time, and the diff itself
+  is never cropped: the hunks stay whole, so nothing can be hidden by what you
+  chose to open. It works on the review dock's working tree and last turn, and on
+  a pull request's Files changed — including a pull request whose branch this
+  clone has never fetched.
+- **The footer says how long you have been at a session.** Beside the cost, each
+  session now carries the time it has actually been worked on — `$4.20 · 1h12m`,
+  or just `1h12m` where the cost readout is off. It is not how long the card has
+  been open: the count only moves while something is happening in the session —
+  you typing at it, the agent reporting in, or the agent's own output while a
+  turn is running — and any gap longer than fifteen minutes counts as time away
+  and adds nothing at all, so a session left open overnight reports the hour you
+  worked rather than the fourteen it sat there. The total is kept with the
+  session, so it survives a restart of lich and a parked worktree's resume, and
+  every provider that reports a state counts a turn you were not watching. Crush
+  reports none, so its sessions count what you typed and no more.
+- **Codex sessions get the same cost readout Claude Code has.** The footer's
+  "And cost" rung, and the spend-ceiling colour beside it, were Claude Code
+  only — Codex's Settings pane didn't even offer the option. A Codex rollout
+  reports its running token total on every turn, and lich now prices that the
+  same way it prices a Claude transcript: the number stays absent, never
+  guessed, until the model it ran is one lich's price table knows — and a
+  conversation you moved to a different model with `/model` keeps it absent,
+  because that one running total covers both and the rollout never says which
+  tokens are whose.
+
+### Changed
+
+- **Loosening a safety setting asks once; tightening one never does.** Both
+  standing safety ladders in Settings — how far a provider runs without asking,
+  and which of its sessions run confined — were written the moment you clicked a
+  rung, in either direction. Climbing to a riskier rung now confirms first, and
+  says what that rung actually leaves running on your machine. Coming back down
+  is written straight through, as is clicking the rung you are already on:
+  turning an automation off must never be the harder direction.
+- **Installing a coding agent no longer means restarting lich.** lich looked for
+  the agents on your machine once, at launch, so installing one while lich was
+  open changed nothing until you closed everything and started again — and the
+  first-run screen for a machine with none said as much. **Settings › Providers**
+  and that screen now both carry **Check again**, which re-runs the search on the
+  spot. One limit stays: the search covers the directories your shell's `PATH`
+  had when lich started, so an agent installed somewhere new to it still needs a
+  relaunch, or its path typed into Settings › Providers.
+- **An agent lich cannot find now links to its own install page.** Every "Not
+  found on PATH" row in Settings › Providers, and every name on the no-agents
+  screen, opens the page that documents installing that CLI.
+- **A machine with no agent installed opens a terminal instead of a dead card.**
+  **New session** used to fall back to Claude Code whatever was installed, so on a
+  machine with no agent it opened a card that died on
+  `claude: command not found`. It now opens a shell — where the install command
+  from those links can be pasted — and says so before you press it.
+- **The new worktree can be named in plain words.** The name field only ever
+  took a branch name: anything with a space in it was refused as invalid, so
+  naming the work meant inventing the hyphens yourself, and leaving the field
+  blank handed the branch a name like `calm-glacier` — which is fine until it
+  is the name on a pull request, and renaming a branch after the PR is open
+  closes the PR. Type what the work is instead — `fix the auth redirect` — and
+  the branch becomes `fix-the-auth-redirect`, shown under the field before
+  anything is created. A name git already accepts is still used exactly as
+  typed, and a blank field still auto-generates one.
+- **A project tab comes back to the screen you left it on.** Stepping over to
+  another project and back always dropped you onto the first project's
+  terminals, whatever you had been reading there: its Settings, the pull request
+  you had open, the list of them. Each tab now returns to the screen its project
+  was last showing, and to its terminals only when that is where you were.
+- **Claude's plan gauge reads the window your account is actually locked to,
+  and says so when spending is blocked.** The footer used to guess which window
+  to show by picking whichever one read fullest; it now defers to the account's
+  own verdict on which window is binding, falling back to the fullest only when
+  the account carries no such verdict. A window your plan has locked past its
+  reset used to read as a bare, misleadingly spendable percentage — it now says
+  **Locked**, with the reason in a tooltip.
+
+### Fixed
+
+- **A worktree on a remote base no longer hangs, misreports, or takes your
+  upstream.** Three faults in the one step that fetches the base before the
+  checkout. The fetch is the only part of creating a worktree that touches the
+  network, and it ran with no time limit and no way to refuse a prompt: a remote
+  that wanted a password or an ssh key passphrase left the dialog waiting for an
+  answer nobody could give it, for as long as lich stayed open. It now gives up
+  after a minute and says so, and never waits on a prompt in the first place.
+  The new branch was also made to track the base, so a plain `git pull` in the
+  session's terminal merged the base branch into the work and `git status` read
+  the work as "ahead of origin/main" — the branch is now left with no upstream,
+  which is the first push's to set. And a repository that only tracks some of
+  its remote's branches — anything cloned with `--single-branch`, or a remote
+  added with `-t` — lets that fetch report success while writing no branch ref
+  at all; the checkout then failed with "git could not complete the operation",
+  which named nothing you could act on. lich now checks the ref itself and says
+  which one the repository does not keep. A base is also resolved by its full
+  ref now, so a repository that happens to carry a local branch named
+  `origin/main` no longer makes every remote base ambiguous and unusable.
+- **A worktree you made yourself is never deleted by lich.** git lists every
+  worktree of a repository, so one you created by hand shows up in lich's picker
+  and hosts a session like any other — and closing that session used to offer to
+  remove the checkout, which deleted your directory, and with "force" the
+  uncommitted work in it. lich now only ever removes the worktrees it created
+  itself: closing the last session in one of your own parks the session for a
+  later resume and leaves the checkout exactly where it is, and the close dialog
+  says so instead of offering an answer that would take it away.
+- **A file preview stays inside the checkout it was opened from.** A repository
+  may ship a symlink pointing out of its own tree, and clicking one in the file
+  list quietly previewed whatever it landed on — a file from somewhere else on
+  the machine, shown as though it were the project's, and described by the diff
+  beside it as something else entirely, since git records such an entry as its
+  target text rather than the target's contents. The preview now says the path
+  leaves the checkout instead of following it. Links that stay inside the tree
+  read exactly as before.
+- **An agent installed under a version manager (nvm, fnm, …) is found again.**
+  lich reads your shell's rc file to learn the PATH it needs, but ran it with
+  its input piped rather than attached to a terminal — so an rc file that only
+  runs its body when it detects an interactive terminal (the common guard
+  around a version manager's setup) skipped straight past it, and the PATH lich
+  picked up never gained the version manager's Node or the CLIs installed under
+  it. Providers under a version manager now show up in Settings › Providers on
+  the first check.
+- **A git or gh call can no longer wait forever on a question nobody sees.**
+  Started from a terminal, lich hands that terminal to every git and gh it runs,
+  so a call that stops to ask for a username asks there — behind the window,
+  with nobody reading it — and the screen waiting on that read never gets an
+  answer. Neither is allowed to ask now: the call fails and says so. A
+  credential helper or an askpass program still answers as before, which is how
+  a machine set up for this answers with nobody typing.
+- **A call that runs out of time comes back.** The deadline on every call lich
+  makes to the network — eight seconds to read a pull request, ninety to check
+  one out — bounded the command and not the call: anything git or gh left
+  running behind it held the output pipe open, and lich went on waiting for as
+  long as that process lived, deadline or none. The deadline now ends the call
+  itself.
+
+- **The Linux launcher no longer says "lich" twice.** The packaged desktop entry
+  carried a name and nothing else, so an application menu with a second line to
+  print about an entry had nothing to put there and repeated the name as its own
+  description. It now carries both of the lines a menu may look for — what lich
+  is, and what it does — so it reads the way every other application on the
+  machine does.
+
+## [0.42.0] - 2026-08-27
+
+### Changed
+
+- **Settings comes back the way you left it.** Stepping out of Settings — into a
+  session, into another project — used to reset the whole screen: it reopened on
+  Providers with the search box emptied, however deep into a provider's
+  configuration you were, and every pane read the machine again from scratch
+  behind its own blank state. The Sandbox pane in particular drew nothing at all
+  until it had asked whether this machine can confine a session. Now the pane you
+  had open and what you typed to find it are remembered, and the answers each
+  pane is about — your gh accounts and this project's chosen one, the sandbox
+  backend and what your ssh agent holds, the installed fonts, every stored
+  setting behind a switch, path and rung — paint from the last one while a fresh
+  one is fetched underneath. Nothing is shown as newer than it is: every read
+  still runs on every visit, and a reload starts from nothing.
+- **The right dock comes back the way you left it.** Flipping between **Code**
+  and **Review** — or closing the dock and reopening it — used to throw the
+  panel away whole. The Code tab lost the filter you had typed, the folders you
+  had opened, the file you were previewing and the row you were on, and re-read
+  the whole tree from git to show you a collapsed root; the Review tab dropped
+  back to **Working tree** every time, so reviewing turn by turn meant picking
+  **Last turn** again all day. Now each checkout keeps its own browse — filter,
+  folds, preview and marked row — and paints from the last answer while a fresh
+  one is fetched underneath, and the source you picked is remembered across
+  sessions. A session whose provider never reports its state still has no turn
+  to bracket, so it is shown the working tree and never a switch it cannot use.
+  A reload still starts from an empty browse.
+
+- **The pull request screen comes back the way you left it.** A review
+  interrupted — another project, the terminal next door, a branch to check —
+  used to cost the whole screen: five gh round-trips behind a skeleton, the
+  filter box emptied, the quick filter and the tab reset, and the pull request
+  you were reading swapped for whatever the checkout's own branch had open.
+  Now the filter text, the quick filter and the tab you were on are remembered,
+  each project reopens on the pull request it was showing, and the list, the
+  detail, the conversation, the diff and the checkouts paint from the last
+  answer while a fresh one is fetched underneath. Nothing is shown as newer than
+  it is: the screen still re-reads on focus, the Refresh button still asks
+  again, and a reload starts from nothing.
+- **The sidebar remembers which session groups you folded.** Folding a worktree
+  block used to last only as long as the list it was drawn in: collapsing the
+  sidebar to its rail, or switching to another project and back, unfolded every
+  block again — so somebody working across several worktrees refolded the ones
+  they were not in on every trip. A fold is now remembered per project and per
+  checkout, and the two blocks every project has in common — its root sessions
+  and its pinned ones — no longer share a fold across projects.
+- **The Files changed tab keeps the file you jumped to.** Every other tab of a
+  pull request replaces that one outright, so a walk to Conversation and back
+  used to clear the changed-files tree's mark and leave a long review with
+  nothing saying which file it had reached. The mark is now remembered per pull
+  request, and comes back with the tab. Where the diff was scrolled to is not
+  remembered — the tab reopens at the top, as it always has.
+
+### Fixed
+
+- **A task sent to another session on Windows is sent, not left sitting at its
+  prompt.** Handing work to a Codex or Claude Code session on Windows pasted the
+  message and then failed to press Enter behind it: the request sat unsent on the
+  target's screen, and the sender waited out a ticket nobody had been asked
+  anything. Windows terminals hand a program key presses rather than the bytes
+  written to them, so the message arrives there as a burst of typing rather than
+  as a paste, and every agent's prompt has a rule for that — an Enter arriving
+  inside the burst is a new line in the message, not "send it". lich now waits for
+  the target to finish taking the message in before it presses Enter, however long
+  that takes, instead of counting a fixed moment from its own side.
+- **What you were typing on a pull request stays typed.** A description being
+  rewritten, a comment being composed and a reply to a review thread all used to
+  be destroyed by a click on another tab — go and check a line in Files changed,
+  come back, and the box was empty with nothing said about it. The same went for
+  folding the file a thread was on, and for a new commit landing while you wrote:
+  the diff redraws, and the reply went with it. All three now survive every one
+  of those, and leaving the screen entirely. They are still held in the page, so
+  a reload starts fresh — what is gone is losing them to a tab you clicked on
+  purpose.
+
+- **Opening Settings › Sandbox no longer blanks the whole lich window on a
+  machine with no ssh agent.** That pane lists what your agent holds beside the
+  switch that hands it to a confined session. Asked on a machine with no agent
+  running, lich answered with nothing at all rather than an empty list, and the
+  pane threw reading a length off it — which takes the entire window with it,
+  not just the pane: the sidebar, your open terminals and the screen you were
+  on all vanish, and navigating does not bring them back. Only reloading the
+  window does. It hit any machine that *can* confine a session but has no
+  `SSH_AUTH_SOCK` — a plain Linux desktop without an agent started for the
+  login — and it was reachable from v0.41.0. The list now reads "Nothing
+  loaded.", which is what it always said for an agent holding no keys.
+
+## [0.41.0] - 2026-08-25
+
+### Added
+
+- **The Review panel can narrow to the last turn.** A session that reports its
+  state gains a switch above the file list: **Working tree** is the panel you
+  already had — everything uncommitted — and **Last turn** shows only what
+  changed on disk while that session's last finished turn ran, with the diff,
+  the comment batch and the file actions all working as before. It is a window
+  of time and not an attribution: a formatter, an editor open beside lich and
+  your own hands all land inside it, which is what the panel says. A turn that
+  changed nothing says so in as many words, and a turn nobody recorded says
+  something different — the two are never shown as each other. Sessions whose
+  provider reports no state at all (Crush today, Cursor CLI until its plugin
+  lands) have no turn to bracket, so the switch is simply absent there.
+- **Cursor CLI runs as a session.** Cursor's `cursor-agent` joins Claude Code,
+  Codex, Antigravity, opencode, oh-my-pi and Crush in Settings › Providers: a
+  session of its own, resumed after a restart, run without permission prompts if
+  you turn that rung on, told which model to run, and confined by the sandbox
+  with its credentials, its MCP registrations and its chats still reachable.
+  If you have the lich plugin installed in Claude Code, a Cursor card also
+  refreshes its git status as it edits, with nothing to install: Cursor runs
+  every Claude Code hook on the machine, so it borrows that install and shows its
+  version. What Settings › Plugin installs for Cursor is the one thing that route
+  does not carry — lich's own tools — so a Cursor session can open, message and
+  close the sessions beside it. It refuses while Claude Code has no plugin, and
+  it offers no update of its own: that is the Claude Code row's button, one line
+  up. A Cursor card shows no spinner and no bell, and keeps the name you gave it:
+  the CLI raises no start-of-turn or end-of-turn event, so lich would have had a
+  spinner it could never turn off.
+- **A terminal entrypoint works on Windows.** Setting one on a shell card saved
+  the value and then opened a bare prompt anyway, with nothing on screen saying
+  the setting had not been used. The command now runs, and the prompt you land
+  in afterwards is the same shell process rather than a second one — so the
+  card's path line follows a `cd` the way it does everywhere else. On Windows
+  the command also sees your `$PROFILE`, which the Unix `-c` equivalent does not
+  load: an alias you defined there can be an entrypoint.
+
+### Changed
+
+- **A Windows session opens in PowerShell, not `cmd.exe`.** lich read `COMSPEC`
+  the way it reads `$SHELL` on Unix, and that variable is set on every Windows
+  box and always names `cmd.exe` — so the shell a Windows user got was never one
+  they chose, and there was no way to choose another. A shell session now opens
+  in PowerShell 7 (`pwsh.exe`) when it is installed and in the `powershell.exe`
+  that ships with Windows otherwise. `cmd.exe` is still what runs a provider
+  shipped as a `.cmd` or `.bat`, which is a limitation of `CreateProcess` rather
+  than a shell anyone is dropped into.
+- **What lich writes for a Windows shell is quoted for PowerShell.** A file
+  dropped on a session and a terminal editor opened from one both wrapped the
+  path in double quotes for `cmd.exe`. A path that `cmd` could not express at
+  all — one holding a `"` or a `%VAR%`, or ending in a backslash — was refused
+  outright, and Open in editor silently fell back to the file's default handler
+  instead. PowerShell can express all three, so the refusal is gone with the
+  shell it was written for. Copy send command follows the same rule: a card
+  named with an apostrophe now pastes back as one argument on Windows as it
+  already did everywhere else.
+
+## [0.40.1] - 2026-08-24
+
+### Fixed
+
+- **Settings › Antigravity no longer reports the binary it runs as missing.**
+  The Binary block asked $PATH for the provider's id, which is the command for
+  every provider but this one — Antigravity ships as `agy` — so a working
+  install opened on `not on $PATH — Sessions will not start until this is
+  fixed`, beside sessions that were starting perfectly well. The block now asks
+  for the executable a session actually spawns.
+
+## [0.40.0] - 2026-08-23
+
+
+### Added
+
 - **A session can open a real browser the agent drives.** Right-click a session
   card and pick **Browser tab** to open a Chromium window of that session's
   own — the same page `lich browser` and the `browser_*` MCP tools inspect,
@@ -522,10 +2073,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Delegate types a delegation, not a question.** Picking a session in
-  "Delegate to session…" used to put `Ask the "docs" session to ` at the
+  "Delegate to session…" used to put `Ask the "docs" session to` at the
   prompt, and whatever you typed next had to bend into "to <verb>" — a
   question or pasted context read wrong, and "Ask" was not even the button's
-  word. It now types `Delegate to the "docs" session: `, and anything can
+  word. It now types `Delegate to the "docs" session:`, and anything can
   follow the colon: an order, a question, a dump of context.
 
 - **A worker's answer no longer floods the orchestrator's prompt — it is
@@ -2753,7 +4304,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.40.1...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.49.0...HEAD
+[0.49.0]: https://github.com/omartelo/lich/compare/v0.48.1...v0.49.0
+[0.48.1]: https://github.com/omartelo/lich/compare/v0.48.0...v0.48.1
+[0.48.0]: https://github.com/omartelo/lich/compare/v0.47.1...v0.48.0
+[0.47.1]: https://github.com/omartelo/lich/compare/v0.47.0...v0.47.1
+[0.47.0]: https://github.com/omartelo/lich/compare/v0.46.0...v0.47.0
+[0.46.0]: https://github.com/omartelo/lich/compare/v0.45.0...v0.46.0
+[0.45.0]: https://github.com/omartelo/lich/compare/v0.44.0...v0.45.0
+[0.44.0]: https://github.com/omartelo/lich/compare/v0.43.1...v0.44.0
+[0.43.1]: https://github.com/omartelo/lich/compare/v0.43.0...v0.43.1
+[0.43.0]: https://github.com/omartelo/lich/compare/v0.42.0...v0.43.0
+[0.42.0]: https://github.com/omartelo/lich/compare/v0.41.0...v0.42.0
+[0.41.0]: https://github.com/omartelo/lich/compare/v0.40.1...v0.41.0
 [0.40.1]: https://github.com/omartelo/lich/compare/v0.40.0...v0.40.1
 [0.40.0]: https://github.com/omartelo/lich/compare/v0.39.0...v0.40.0
 [0.39.0]: https://github.com/omartelo/lich/compare/v0.38.0...v0.39.0

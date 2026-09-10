@@ -46,36 +46,41 @@ var commands = []command{
 		args: "[<ticket>] <answer>",
 		about: "Send <answer> back to whoever is waiting on <ticket>. This is what a\n" +
 			"relayed message asks you to run when you are done. Without a ticket it\n" +
-			"answers the request open against this session, for when the message\n" +
-			"carrying the number is no longer in reach.",
+			"answers the one request open against this session, for when the message\n" +
+			"carrying the number is no longer in reach; with two open it is refused,\n" +
+			"naming each ticket and what it asked, because nothing in an answer says\n" +
+			"which request it belongs to.",
 	},
 	{
 		name: "open",
-		args: "[--project <name>] [--kind <provider>] [--worktree <branch>]\n" +
+		args: "[--project <name-or-path>] [--kind <provider>] [--worktree <branch>]\n" +
 			"            [--base <branch>] [--model <model>] [--prompt <task>] [--json]",
-		about: "Open a new session and start it. --worktree creates a git worktree of\n" +
-			"that branch name first and roots the session in it. --model runs the\n" +
-			"provider on that model, in the provider's own spelling. --prompt hands\n" +
-			"the new session that task as soon as its agent is up, so opening a\n" +
-			"worker for a task is one command rather than two. Prints the name the\n" +
-			"new session is addressed by.",
+		about: "Open a new session and start it. --project takes a project already open,\n" +
+			"by name, or the absolute path of a directory, which is opened as a\n" +
+			"project first — one lich closed comes back with the sessions it was\n" +
+			"closed with. --worktree creates a git worktree of that branch name first\n" +
+			"and roots the session in it. --model runs the provider on that model, in\n" +
+			"the provider's own spelling. --prompt hands the new session that task as\n" +
+			"soon as its agent is up, so opening a worker for a task is one command\n" +
+			"rather than two. Prints the name the new session is addressed by.",
 	},
 	{
 		name: "close",
-		args: "[--project <name>] [--worktree keep|remove] [--force] [--json] <session>",
+		args: "[--project <name-or-path>] [--worktree keep|remove] [--force] [--json]\n" +
+			"            <session>",
 		about: "Close a session. Closing the last one in a worktree needs --worktree to\n" +
 			"say whether the checkout stays; removing a dirty one needs --force.",
 	},
 	{
 		name: "rename",
-		args: "[--project <name>] [--json] [<session>] <label>",
+		args: "[--project <name-or-path>] [--json] [<session>] <label>",
 		about: "Rename a session's card. With <session> it renames that one, with only a\n" +
 			"name it renames the session the command runs in. The name becomes the\n" +
 			"user's: the provider's auto-title never overwrites it again.",
 	},
 	{
 		name: "worktrees",
-		args: "[--project <name>] [--json]",
+		args: "[--project <name-or-path>] [--json]",
 		about: "List a project's git worktrees: what is uncommitted in each and which\n" +
 			"sessions are open in it.",
 	},
@@ -87,11 +92,24 @@ var commands = []command{
 			"reload, back, forward, scroll, list, close.",
 	},
 	{
+		name: "cost",
+		args: "[--project <name>] [--provider <provider>] [--since <window>]\n" +
+			"            [--json|--csv]",
+		about: "What the sessions lich remembers have cost, per project, at API prices.\n" +
+			"--since keeps the ones active in a window (7d, 24h, 90m). The total\n" +
+			"always says how many sessions it could not price: with any of those,\n" +
+			"it is a lower bound. The source column says whose arithmetic a row's\n" +
+			"money is — priced here, or reported by the provider that spent it.",
+	},
+
+	},
+	{
 		name: "mcp",
 		args: "",
-		about: "Serve the commands above as MCP tools over stdio. lich registers this\n" +
-			"itself for the providers that support it; you only run it by hand to\n" +
-			"point another MCP client at lich.",
+		about: "Serve the session commands above as MCP tools over stdio — cost is\n" +
+			"not one of them. lich registers this itself for the providers that\n" +
+			"support it; you only run it by hand to point another MCP client at\n" +
+			"lich.",
 	},
 	{
 		name: "rage",
@@ -116,6 +134,16 @@ const helpFooter = `
       Print the running build's version.
 
 Every command takes --help for its own flags.
+
+With no command, lich opens its window. Two flags belong to that launch:
+
+  lich --shell <path>
+      Open this window build instead of the one installed beside lich.
+      LICH_SHELL says the same thing; the flag wins. Either way lich fails
+      loudly when it is not there, rather than opening a different one.
+
+  lich -- <flags>
+      Pass everything after -- to the window (e.g. --ozone-platform=wayland).
 
 Run inside a lich session these address the sessions beside it. Run anywhere
 else on the machine they find the running lich on their own, and what they

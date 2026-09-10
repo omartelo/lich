@@ -40,7 +40,7 @@ func (s *Service) roster(fromID string) ([]candidate, error) {
 				ID: sess.ID,
 				Peer: Peer{
 					Label:   sess.Label,
-					Name:    RosterName(cwd, sess.ID),
+					Name:    RosterNameOf(s.term.AgentName(sess.ID), cwd, sess.ID),
 					Project: p.Name,
 					Kind:    sess.Kind,
 					State:   s.reportedState(sess.ID),

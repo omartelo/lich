@@ -1,0 +1,77 @@
+name: Window build toolchain
+description: >-
+  Rust, CEF's build dependencies and the caches the window (shell/, Rust on
+  CEF) needs, on Linux, Windows and macOS. Shared by ci.yml's shell job and
+  the release's linux, windows and mac jobs so a dependency or a cache key
+  changes in one place.
+inputs:
+  components:
+    description: rustup components to install on top of the toolchain (rustfmt, clippy)
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        components: ${{ inputs.components }}
+
+    # CMake and Ninja build CEF's C++ wrapper; the rest is what libcef.so
+    # links against.
+    - name: Install window build dependencies
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          cmake ninja-build pkg-config \
+          libgtk-3-dev libnss3-dev libnspr4-dev \
+          libasound2-dev libcups2-dev libdrm-dev libgbm-dev \
+          libxcomposite-dev libxdamage-dev libxfixes-dev libxrandr-dev \
+          libxkbcommon-dev libxss-dev libxtst-dev libwayland-dev
+
+    # The runner has CMake and MSVC; Ninja is the one piece missing, and the
+    # wrapper's CMake only finds MSVC from inside a developer prompt, which
+    # msvc-dev-cmd turns the job into.
+    - name: Install window build dependencies (Windows)
+      if: runner.os == 'Windows'
+      shell: bash
+      run: choco install ninja -y --no-progress
+
+    # The runner has CMake and the Xcode command line tools; Ninja is the one
+    # piece missing.
+    - name: Install window build dependencies (macOS)
+      if: runner.os == 'macOS'
+      shell: bash
+      run: brew install ninja
+
+    - uses: ilammy/msvc-dev-cmd@v1
+      if: runner.os == 'Windows'
+
+    # Under `shell: bash` Git's usr/bin sits ahead of MSVC on PATH, and it has
+    # a link.exe of its own (coreutils' link, which makes hard links): rustc
+    # then "links" every build script with it and fails. Naming MSVC's
+    # linker outright is what every cargo invocation in the job, task's
+    # included, honours.
+    - name: Point cargo at MSVC's linker
+      if: runner.os == 'Windows'
+      shell: bash
+      run: echo "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=${VCToolsInstallDir}bin\\HostX64\\x64\\link.exe" >> "$GITHUB_ENV"
+
+    # cef-rs downloads the CEF distribution (~200 MB) into CEF_PATH, which the
+    # calling job points at .cef. One distribution per OS.
+    - name: Cache CEF
+      uses: actions/cache@v4
+      with:
+        path: .cef
+        key: cef-${{ runner.os }}-${{ hashFiles('shell/Cargo.lock') }}
+
+    # shared-key: a release runs on a tag, and a tag can only read caches made
+    # on its own ref or on main — ci.yml's shell job on main is what makes
+    # them. The default key is per job, and the release job would never see
+    # it. With the CEF wrapper already built, cargo only compiles the crate
+    # itself: seconds, not the minutes a cold build costs.
+    - uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: shell
+        shared-key: shell

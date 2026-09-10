@@ -64,6 +64,12 @@ const (
 	// setup script runs for tens of seconds at least, so this only has to be
 	// quick against a human's patience, not against the machine.
 	readyPoll = 250 * time.Millisecond
+	// defaultSettleLimit caps how long a delivery waits for the target to finish
+	// taking a paste in before it presses Enter anyway (see awaitSettled). It
+	// only has to outlast a drain — the whole message is already in the PTY —
+	// and it sits well inside the receipt window, so a target that never goes
+	// quiet still gets its Enter in time to report reading it.
+	defaultSettleLimit = 5 * time.Second
 )
 
 // How lich's own MCP server (internal/cli) is registered and what it calls its
@@ -166,6 +172,10 @@ type RelayEvent struct {
 // may address. The store implements it.
 type Sessions interface {
 	LoadState() ([]store.Project, error)
+	// SetSessionSchedule clears a scheduled prompt once it has been typed at its
+	// session (see deliverDue). Only ever called to clear here: the window is
+	// what parks one.
+	SetSessionSchedule(sessionID string, at int64, prompt string) error
 }
 
 // Events is where the relay announces a request in flight. The app's event hub
@@ -182,6 +192,19 @@ type Terminal interface {
 	Live(id string) bool
 	Ready(id string) bool
 	Write(id, data string) error
+	// QuietFor is how long that session's PTY has produced nothing, which is
+	// how a delivery knows the target has finished taking the paste in before
+	// it presses Enter behind it (see awaitSettled).
+	QuietFor(id string) time.Duration
+	// AgentName is the name that session's agent answers to in its provider's
+	// peer roster, read out of the provider's own record. Empty when there is
+	// none, which is what leaves the roster on the derived name.
+	AgentName(id string) string
+	// HoldInput keeps what the person at that session types out of the
+	// submission this delivery is making, and hands it back at the prompt
+	// afterwards. The returned release is called once the Enter is through
+	// (see deliver).
+	HoldInput(id string) func()
 }
 
 // Peer is one session a caller may address: the label it is addressed by, the
@@ -231,12 +254,25 @@ type ticket struct {
 	created  time.Time
 	// delivered is when the message started going into the target's PTY — zero
 	// while the ticket is still waiting out the target's setup script. Turn
-	// accounting reads it twice over: a turn observed on the target says nothing
-	// about an undelivered message, and when one turn ends with several errands
-	// open, the oldest delivery is the one that turn belongs to.
+	// accounting reads it to tell an undelivered message apart from a live one;
+	// which of two live ones came first is deliverySeq's question, never this
+	// timestamp's.
 	delivered time.Time
-	done      chan struct{}
-	answer    string
+	// deliverySeq is the order this ticket was handed off in, counting from one.
+	// Two errands can share a delivered timestamp — Windows' clock only moves
+	// every ~15.6ms, and two messages land inside one tick easily — and "the
+	// oldest delivery" then fell to Go's randomised map iteration, closing the
+	// wrong errand about one time in ten. A counter is the order itself rather
+	// than a reading of it, so no clock's resolution can flatten it.
+	deliverySeq uint64
+	// asked is the opening of the prompt this errand carried, on one line. It is
+	// what names an errand to the agent working it: a session with more than one
+	// open request has to be shown which is which before it can pick the ticket
+	// its answer belongs to (see errandOfLocked). The whole prompt is not kept —
+	// it runs to promptLimit, and what a reader needs is the line they recognise.
+	asked  string
+	done   chan struct{}
+	answer string
 
 	// attended is how many callers are blocked on this ticket right now. An
 	// answer that lands while nobody is waiting has nowhere to be returned, so
@@ -280,6 +316,8 @@ type Service struct {
 	// outside s.mu. See announceInbox.
 	announceMu sync.Mutex
 	tickets    map[string]*ticket
+	// deliveries counts hand-offs, and stamps each ticket's deliverySeq.
+	deliveries uint64
 	// state is the last thing each session reported, so a delivery knows whether
 	// it is landing in the middle of a turn. Only sessions the relay has heard
 	// about appear; an unknown one is treated as not working, which is what a
@@ -324,6 +362,9 @@ type Service struct {
 	// nudgeDelay is the debounce before a nudge is typed (defaultNudgeDelay).
 	// A field for the same reason.
 	nudgeDelay time.Duration
+	// settleLimit caps the wait for a target to finish taking a paste in
+	// (defaultSettleLimit). A field for the same reason.
+	settleLimit time.Duration
 	// plugins answers what a provider's sessions can do, which depends on state
 	// this package has none of: whether the companion plugin is installed there,
 	// and whether it is new enough to carry lich's own operations. Nil — the
@@ -364,6 +405,7 @@ func New(sessions Sessions, term Terminal, events Events) *Service {
 		receiptWindow: defaultReceiptWindow,
 		deliveryLimit: defaultDeliveryLimit,
 		nudgeDelay:    defaultNudgeDelay,
+		settleLimit:   defaultSettleLimit,
 	}
 }
 
@@ -425,6 +467,7 @@ func (s *Service) Send(fromID, target, project, prompt string, waitSeconds int) 
 		targetID:    dest.ID,
 		target:      dest.Peer.Label,
 		created:     s.now(),
+		asked:       askedExcerpt(prompt),
 		done:        make(chan struct{}),
 		stalled:     make(chan struct{}),
 		unread:      make(chan struct{}),
@@ -479,6 +522,8 @@ func (s *Service) handOff(id string, t *ticket, kind, message string) error {
 	// on nothing; its done, and the skip meant for the turn already running is
 	// spent on the turn that carries the answer.
 	t.delivered = s.now()
+	s.deliveries++
+	t.deliverySeq = s.deliveries
 	s.mu.Unlock()
 
 	if err := s.deliver(t.targetID, message); err != nil {
@@ -543,541 +588,6 @@ func (s *Service) failDelivery(id string, t *ticket, cause error) {
 	s.clear(t)
 	if unattended {
 		s.stash(id, t, StatusUndelivered, "")
-	}
-}
-
-// deliver puts message at a session's prompt and sends it — two writes, a beat
-// apart, because the Enter has to arrive after the prompt has taken the paste
-// (see defaultSubmitDelay). It waits for a prompt that is free first: this
-// Enter sends everything on the line, including whatever the person at that
-// session had started typing.
-func (s *Service) deliver(sessionID, message string) error {
-	if err := s.awaitFree(sessionID); err != nil {
-		return err
-	}
-	if err := s.term.Write(sessionID, paste(message)); err != nil {
-		return err
-	}
-	time.Sleep(s.submitDelay)
-	return s.term.Write(sessionID, submit)
-}
-
-// awaitFree blocks while a session's prompt belongs to somebody else — the
-// checkout's setup script, or the user mid-sentence at it, both of which
-// terminal.Ready answers. Every write this package makes goes through deliver,
-// so this one gate covers the task, the nudge and the retry alike; a check at
-// each call site would be three places to forget it in and would still leave
-// the window between the check and the write open.
-//
-// It is bounded by the same budget a queued delivery gets and, in practice,
-// cannot spend it: unsent input goes stale on its own well inside that
-// (terminal.draftIdle), so somebody who walked away mid-word costs a delivery
-// its delay, never its outcome.
-func (s *Service) awaitFree(sessionID string) error {
-	deadline := s.now().Add(s.deliveryLimit)
-	for !s.term.Ready(sessionID) {
-		if !s.term.Live(sessionID) {
-			return fmt.Errorf("session stopped before its prompt was free")
-		}
-		if s.now().After(deadline) {
-			return fmt.Errorf("prompt was still not free after %s", s.deliveryLimit)
-		}
-		time.Sleep(readyPoll)
-	}
-	return nil
-}
-
-// awaitReady blocks until a target's agent is the program reading its PTY, and
-// errors when that will never happen: the session stopped, or it is still not
-// at a prompt by deadline.
-//
-// A session opened on a fresh worktree runs the project's setup script in that
-// PTY first, and the script can take minutes. It is live the whole time, and a
-// message typed into it reaches `pnpm install`, which reads and discards it —
-// so the request never existed, and the sender waits out a ticket nobody was
-// asked to answer. Seen on the first real run of a worktree session.
-//
-// What comes back is a cause for a log line and for the status the sender is
-// given, not prose for a person: whoever reads about this reads it in the
-// window or at an agent's prompt, where internal/cli words it.
-func (s *Service) awaitReady(dest candidate, deadline time.Time) error {
-	for {
-		time.Sleep(readyPoll)
-		if s.term.Ready(dest.ID) {
-			return nil
-		}
-		if !s.term.Live(dest.ID) {
-			return fmt.Errorf("%q stopped before its agent started", dest.Peer.Label)
-		}
-		if s.now().After(deadline) {
-			return fmt.Errorf(
-				"%q was still not at a prompt after %s: whatever holds that terminal — "+
-					"the project's worktree setup script, a provider that never came up — "+
-					"outlasted the wait",
-				dest.Peer.Label, s.deliveryLimit,
-			)
-		}
-	}
-}
-
-// reportsState is whether a provider tells lich what it is doing, which is what
-// makes its silence mean something (docs/hooks/session-state.md).
-func (s *Service) reportsState(kind string) bool {
-	return s.plugins != nil && s.plugins.Installed(kind)
-}
-
-// offersTools is whether the target can answer with a tool rather than with the
-// shell command. Naming a tool a session does not have is worse than naming the
-// command, which works everywhere — so an unknown answer is no.
-func (s *Service) offersTools(kind string) bool {
-	return s.plugins != nil && s.plugins.HasTools(kind)
-}
-
-// watchReceipt closes a ticket whose task nobody ever picked up.
-//
-// Delivery has always been provable — the bytes reached the PTY — and receipt
-// never was. Between the two sits everything that can be on a terminal instead
-// of a prompt: Claude Code asking whether a new directory is trusted, a
-// provider still taking over the tty, a dialog left open by whoever was here
-// last. The task is typed into that, and it is gone. Nothing fails: the sender
-// waits out a ticket nobody was asked to answer, and finds out an hour later
-// when it expires, which is how this feature's own first users found it.
-//
-// An agent that reads a prompt reports UserPromptSubmit within a second or two,
-// so the absence of that report inside the window is the answer. It is only
-// asked of providers that report at all — the rest have always been silent, and
-// silence has to mean something to be read as anything.
-//
-// Before the errand is written off, the task is typed in once more. The
-// commonest thing under an unread write is a provider that was still taking
-// over the tty when Ready's quiet heuristic cleared — opencode's startup pauses
-// long enough mid-splash to pass for a prompt, then flushes what was typed at
-// it — and by the time the window has run out that same provider has been
-// sitting at its real prompt for most of it. The second write is the manual
-// resend automated, it carries the same ticket, and it costs nothing new: a
-// terminal that swallows it was going to be reported unread anyway, and one
-// mid-dialog got the first write already.
-func (s *Service) watchReceipt(id string, t *ticket, kind, message string) {
-	timer := time.NewTimer(s.receiptWindow)
-	defer timer.Stop()
-	select {
-	case <-t.done:
-		return
-	case <-t.stalled:
-		return
-	case <-timer.C:
-	}
-
-	s.mu.Lock()
-	current, live := s.tickets[id]
-	if !live || current != t || t.sawBusy {
-		s.mu.Unlock()
-		return
-	}
-	if !t.redelivered && s.term.Ready(t.targetID) {
-		t.redelivered = true
-		s.mu.Unlock()
-		slog.Warn("relay: task was typed and nothing read it, typing it again", "target", t.target)
-		if err := s.handOff(id, t, kind, message); err == nil {
-			return
-		}
-		// The second write was refused — the session died under it. Nothing read
-		// the task, which is what unread says.
-		s.mu.Lock()
-		if current, live = s.tickets[id]; !live || current != t || t.sawBusy {
-			s.mu.Unlock()
-			return
-		}
-	}
-	delete(s.tickets, id)
-	close(t.unread)
-	unattended := t.attended == 0
-	s.mu.Unlock()
-
-	s.clear(t)
-	if unattended {
-		s.stash(id, t, StatusUnread, "")
-	}
-}
-
-// Wait blocks on an already-delivered ticket for another round, so a caller
-// whose first wait ran out can come back without sending the message twice.
-// An outcome already sitting in the inbox is handed over on the spot.
-func (s *Service) Wait(ticketID string, waitSeconds int) (Result, error) {
-	s.mu.Lock()
-	expired, senders := s.sweep()
-	if e, ok := s.ready[ticketID]; ok {
-		delete(s.ready, ticketID)
-		s.mu.Unlock()
-		s.clearAll(expired)
-		s.announceInboxAll(senders)
-		s.announceInbox(e.fromID)
-		return Result{Ticket: e.ticket, Target: e.target, Status: e.status, Answer: e.answer}, nil
-	}
-	t, ok := s.tickets[ticketID]
-	s.mu.Unlock()
-	s.clearAll(expired)
-	s.announceInboxAll(senders)
-	if !ok {
-		return Result{}, fmt.Errorf("unknown ticket %q — it was answered long ago, or expired", ticketID)
-	}
-	return s.await(ticketID, t, waitFor(waitSeconds)), nil
-}
-
-// Reply hands an answer back to whoever is waiting on ticketID. It is what the
-// message composed by Send asks the receiving agent to run.
-//
-// An empty ticketID answers the errand open against replierID instead, the way
-// an empty ticket collects everything waiting for a sender (see Collect). The
-// ticket is written down in one place only — the message typed at the target's
-// prompt — so an agent whose context no longer reaches that message would
-// otherwise be holding an answer with no route home, and the sender blocked on
-// a ticket nobody can name.
-func (s *Service) Reply(replierID, ticketID, answer string) error {
-	answer = sanitize(answer)
-	if len(answer) > answerLimit {
-		// The cut is in bytes and can land inside a rune; the tail is typed into
-		// a PTY, and half a rune there is garbage keystrokes, not text.
-		answer = strings.ToValidUTF8(answer[:answerLimit], "")
-	}
-
-	s.mu.Lock()
-	if ticketID == "" {
-		id, err := s.errandOfLocked(replierID)
-		if err != nil {
-			s.mu.Unlock()
-			return err
-		}
-		ticketID = id
-	}
-	t, ok := s.tickets[ticketID]
-	if !ok {
-		s.mu.Unlock()
-		return fmt.Errorf("unknown ticket %q — it was answered already, or expired", ticketID)
-	}
-	select {
-	case <-t.done:
-		s.mu.Unlock()
-		return fmt.Errorf("ticket %q was already answered", ticketID)
-	default:
-	}
-	t.answer = answer
-	t.answered = true
-	close(t.done)
-	// The errand is over the moment the answer lands, whether or not anyone is
-	// still waiting on it: a sender whose wait ran out has moved on, and the
-	// mark on both cards has to go with the ticket rather than with the waiter.
-	delete(s.tickets, ticketID)
-	unattended := t.attended == 0
-	s.mu.Unlock()
-
-	s.clear(t)
-	if unattended {
-		s.stash(ticketID, t, StatusAnswered, answer)
-	}
-	return nil
-}
-
-// errandOfLocked is the errand an answer that named no ticket belongs to: the
-// oldest message actually delivered to this session that is still open. Called
-// under s.mu.
-//
-// Oldest-delivered is the same rule turnErrand closes a turn by, and for the
-// same reason: every provider queues typed input, so a session handed several
-// tasks works through them in the order they arrived. It is a guess all the
-// same — an agent that answers its second task first pays it back on the third
-// — which is why the ticket is still named everywhere it is known, and why the
-// window now shows it. A queued task nobody has read yet is never picked: it is
-// not at that prompt, so no answer at that prompt can be about it.
-func (s *Service) errandOfLocked(replierID string) (string, error) {
-	if replierID == "" {
-		return "", fmt.Errorf(
-			"answering without a ticket needs a session of your own — name it instead: lich reply <ticket> \"<answer>\"")
-	}
-	var oldestID string
-	var oldest *ticket
-	for id, t := range s.tickets {
-		if t.targetID != replierID || t.delivered.IsZero() {
-			continue
-		}
-		if oldest == nil || t.delivered.Before(oldest.delivered) {
-			oldestID, oldest = id, t
-		}
-	}
-	if oldest == nil {
-		return "", fmt.Errorf("no open request to answer — nobody is waiting on this session")
-	}
-	return oldestID, nil
-}
-
-// await blocks on one ticket until it is answered or the wait runs out. It only
-// reads: the ticket is dropped by whoever closes it (Reply, or sweep), because
-// a wait that expired leaves an errand that is still open and still has to be
-// waitable, and an answer has to reach a caller who stopped waiting for it too.
-func (s *Service) await(id string, t *ticket, wait time.Duration) Result {
-	timer := time.NewTimer(wait)
-	defer timer.Stop()
-
-	s.mu.Lock()
-	t.attended++
-	s.mu.Unlock()
-
-	// An answer that is already in outranks everything: a target may reply and
-	// end its turn in the same breath, and a select over two ready channels
-	// picks between them at random.
-	select {
-	case <-t.done:
-		s.leave(t)
-		return Result{Ticket: id, Target: t.target, Status: StatusAnswered, Answer: t.answer}
-	default:
-	}
-
-	select {
-	case <-t.done:
-		s.leave(t)
-		return Result{Ticket: id, Target: t.target, Status: StatusAnswered, Answer: t.answer}
-	case <-t.stalled:
-		s.leave(t)
-		return Result{Ticket: id, Target: t.target, Status: StatusUnanswered}
-	case <-t.unread:
-		s.leave(t)
-		return Result{Ticket: id, Target: t.target, Status: StatusUnread}
-	case <-t.undelivered:
-		s.leave(t)
-		return Result{Ticket: id, Target: t.target, Status: StatusUndelivered}
-	case <-timer.C:
-		return Result{Ticket: id, Target: t.target, Status: s.giveUp(id, t)}
-	}
-}
-
-// leave drops this caller's claim on a ticket it is carrying the answer out of.
-func (s *Service) leave(t *ticket) {
-	s.mu.Lock()
-	t.attended--
-	s.mu.Unlock()
-}
-
-// giveUp drops the claim of a caller whose wait ran out and returns the status
-// that caller should hear. It catches the races that would lose what became of
-// the errand, all of the same shape: the ticket closing in the same instant,
-// seeing this caller still attending, and leaving the news for it — after it
-// had already stopped listening. Whoever leaves last owns what is left behind.
-//
-// A reply is stashed for the sender, because an answer outlives the wait it
-// missed. The three ways an errand ends without one — the receipt window
-// closing it unread, a turn ending with no answer, a message that never
-// reached a prompt — are told to the caller instead: it is still here to hear
-// them, and the alternative is reporting the errand as still in progress, on a
-// ticket already out of the map.
-func (s *Service) giveUp(id string, t *ticket) string {
-	s.mu.Lock()
-	t.attended--
-	last := t.attended == 0
-	orphaned := t.answered && last
-	unread, stalled, undelivered := false, false, false
-	if last && !t.answered {
-		select {
-		case <-t.unread:
-			unread = true
-		default:
-		}
-		select {
-		case <-t.stalled:
-			stalled = true
-		default:
-		}
-		select {
-		case <-t.undelivered:
-			undelivered = true
-		default:
-		}
-	}
-	s.mu.Unlock()
-	if orphaned {
-		s.stash(id, t, StatusAnswered, t.answer)
-	}
-	if unread {
-		return StatusUnread
-	}
-	if stalled {
-		return StatusUnanswered
-	}
-	if undelivered {
-		return StatusUndelivered
-	}
-	return StatusPending
-}
-
-// Observe takes one session-state report from the hooks the provider already
-// runs (docs/hooks/session-state.md). It exists for one case: a target that
-// works through a relayed request and then answers somewhere lich cannot read —
-// its provider's own peer channel, or simply out loud to the person watching.
-// Nothing would ever close that ticket, and the sender would sit out the full
-// wait learning nothing.
-//
-// A turn ending is only this request's turn when the target has been working
-// since the request arrived. Every provider queues typed input, so a message
-// handed to a busy session is answered a turn later; the ending of the turn
-// already in progress is skipped rather than mistaken for an answer that never
-// came. Getting that backwards would report "answered elsewhere" about a
-// request the target had not read yet, which is worse than saying nothing.
-func (s *Service) Observe(sessionID, state string) {
-	s.mu.Lock()
-	// waiting keeps the previous state on record. Mid-turn it means a permission
-	// prompt — the turn is still open, and a delivery now queues behind it, so it
-	// has to keep reading as busy: read as idle it would arm the receipt check
-	// against a target that cannot pick anything up until a human answers, and
-	// the errand would be reported unread with its message still queued. After
-	// done it is the provider's "your turn" nudge, and done is what must survive.
-	// idle is SessionEnd: an ended session reports nothing more, and keeping a
-	// row for it would grow the map by one dead entry per session for the life
-	// of the process — absent reads as "not working", which is what idle means.
-	switch state {
-	case stateWaiting:
-	case stateIdle:
-		delete(s.state, sessionID)
-	default:
-		s.state[sessionID] = state
-	}
-	// The roster publishes the report itself rather than the turn state above:
-	// waiting is exactly what a caller has to see, and idle drops the row for
-	// the same reason it does there — an ended session reports nothing more.
-	switch {
-	case state == stateIdle:
-		delete(s.reported, sessionID)
-	case state == stateWaiting && s.state[sessionID] != stateBusy:
-		// Except when that waiting is not a block at all. One Notification
-		// means both "I need a permission decision" and "I have been sitting at
-		// my prompt" (docs/hooks/session-state.md, and internal/terminal's
-		// turnLog, which keeps the card honest about the same pair). Only the
-		// first is a session a caller must not send work into; the second is
-		// the most available a session ever is, and publishing it as waiting
-		// tells every peer to hold off. The turn state above is what tells them
-		// apart, and it is left standing here.
-	default:
-		s.reported[sessionID] = state
-	}
-
-	type endedErrand struct {
-		id string
-		t  *ticket
-	}
-	var ended []endedErrand
-	switch state {
-	case stateBusy:
-		for _, t := range s.tickets {
-			// A ticket whose message is still held back by the target's setup
-			// has nothing in that PTY yet; whatever runs there is not about it.
-			if t.targetID == sessionID && !t.delivered.IsZero() {
-				t.sawBusy = true
-			}
-		}
-	case stateIdle:
-		// SessionEnd needs no turn to have run: the CLI has left the PTY and
-		// nothing there can answer anymore. A ticket still queued is left for
-		// awaitReady, which sees the session die and reports it undelivered —
-		// a different thing to be told, and its own message to be told it in.
-		for id, t := range s.tickets {
-			if t.targetID == sessionID && !t.delivered.IsZero() {
-				delete(s.tickets, id)
-				close(t.stalled)
-				ended = append(ended, endedErrand{id, t})
-			}
-		}
-	case stateDone:
-		if id, t := s.turnErrand(sessionID); t != nil {
-			delete(s.tickets, id)
-			close(t.stalled)
-			ended = append(ended, endedErrand{id, t})
-		}
-	}
-	// A waiter still holding the line carries the news out through its own
-	// select; an errand nobody is attending is stashed for the sender instead,
-	// the way an answer would be. Without it the promise a pending result makes
-	// — "news will arrive at your prompt" — is silently never kept.
-	var quiet []endedErrand
-	for _, e := range ended {
-		if e.t.attended == 0 {
-			quiet = append(quiet, e)
-		}
-	}
-	s.mu.Unlock()
-
-	for _, e := range ended {
-		s.clear(e.t)
-		if s.events != nil {
-			s.events.Emit(StalledEventName, StalledEvent{
-				ID: e.t.fromID, TargetID: e.t.targetID, Target: e.t.target,
-			})
-		}
-	}
-	for _, e := range quiet {
-		s.stash(e.id, e.t, StatusUnanswered, "")
-	}
-	// This session as a sender: its turn ending frees its prompt, which is what
-	// a nudge held back during the turn was waiting for.
-	if state == stateDone {
-		s.flushNudge(sessionID)
-	}
-}
-
-// turnErrand decides which of a target's errands the turn that just ended
-// belongs to, and returns it — nil when the turn was nobody's. A turn answers
-// for at most one errand: every provider queues typed input, so two messages
-// delivered to one session run as two turns, and a single done closing both
-// would report "answered elsewhere" about a request the target had not read
-// yet. The oldest delivery owns the turn; the rest wait for their own, their
-// busy marks reset so the next turn starts clean. Called under s.mu.
-func (s *Service) turnErrand(sessionID string) (string, *ticket) {
-	var oldestID string
-	var oldest *ticket
-	for id, t := range s.tickets {
-		if t.targetID != sessionID || t.delivered.IsZero() {
-			continue
-		}
-		// The turn that was already running when the message was delivered. Its
-		// own busy reports say nothing about this request either.
-		if t.skipTurns > 0 {
-			t.skipTurns--
-			t.sawBusy = false
-			continue
-		}
-		if !t.sawBusy {
-			continue
-		}
-		if oldest == nil || t.delivered.Before(oldest.delivered) {
-			oldestID, oldest = id, t
-		}
-	}
-	for _, t := range s.tickets {
-		if t.targetID == sessionID && t != oldest {
-			t.sawBusy = false
-		}
-	}
-	return oldestID, oldest
-}
-
-// announce raises or clears one session's mark. Called outside s.mu on every
-// path: Emit blocks on a stalled /events client, and holding the relay's lock
-// across it would stall every other errand behind one unread window.
-func (s *Service) announce(sessionID, peer, direction, ticketID string) {
-	if s.events == nil || sessionID == "" {
-		return
-	}
-	s.events.Emit(RelayEventName, RelayEvent{
-		ID: sessionID, Peer: peer, Direction: direction, Ticket: ticketID,
-	})
-}
-
-// clear takes down both ends' marks for a ticket that is over.
-func (s *Service) clear(t *ticket) {
-	s.announce(t.targetID, "", "", "")
-	s.announce(t.fromID, "", "", "")
-}
-
-func (s *Service) clearAll(tickets []*ticket) {
-	for _, t := range tickets {
-		s.clear(t)
 	}
 }
 

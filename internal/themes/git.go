@@ -14,11 +14,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/omartelo/lich/internal/gitutil"
 	"github.com/omartelo/lich/internal/semver"
+	"github.com/omartelo/lich/internal/winexec"
 )
 
 const (
-	cloneTimeout     = 90 * time.Second
+	cloneTimeout = 90 * time.Second
+	// cloneWait is how long past git's own exit the clone may still block on
+	// anything git left running on its output pipe. Without it cloneTimeout
+	// bounds git and not the call — see internal/project's waitDelay.
+	cloneWait        = 2 * time.Second
 	remoteMaxLength  = 512
 	maxThemesPerPack = 32
 )
@@ -179,14 +185,11 @@ func clone(ctx context.Context, url, dir string) error {
 		"-c", "protocol.ext.allow=never",
 		"-c", "credential.helper=",
 		"clone", "--depth", "1", "--single-branch", "--no-tags", "--", url, dir)
+	winexec.Hide(cmd)
 	// Without these a private repository stops on a credential prompt that has
 	// no terminal to answer it, and the install hangs until the timeout.
-	cmd.Env = append(os.Environ(),
-		"GIT_TERMINAL_PROMPT=0",
-		"GIT_ASKPASS=",
-		"SSH_ASKPASS=",
-		"GCM_INTERACTIVE=never",
-	)
+	cmd.Env = gitutil.NoPrompt(os.Environ())
+	cmd.WaitDelay = cloneWait
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		if ctx.Err() != nil {

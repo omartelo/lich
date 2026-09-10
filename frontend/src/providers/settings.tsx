@@ -1,10 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
 import type { ReactNode } from "react"
 import {
+  adoptStoredHotkeys,
   DEFAULT_HOTKEYS,
+  HOTKEYS_SETTING_KEY,
   isRecordingTarget,
-  loadHotkeys,
-  saveHotkeys,
+  LEGACY_HOTKEYS_KEY,
   type Combo,
   type HotkeyId,
   type Hotkeys,
@@ -15,50 +16,55 @@ import {
   parseNumberPref,
   parseOptionalBoolPref,
   readPref,
+  removePref,
   writePref,
 } from "@/lib/prefs"
 import { Store, Themes as ThemeRPC } from "@/lib/rpc"
+import { readFooterLayout, writeFooterLayout, type FooterLayout } from "@/lib/footer-layout"
+import { readFooterVisibility, type FooterVisibility } from "@/lib/footer-prefs"
 import {
-  adoptStoredSelections,
+  adoptStoredTheme,
   applyAppTheme,
   BUNDLED_THEMES,
   DARK_THEME_SCHEME,
-  DEFAULT_TERMINAL_THEME,
   DEFAULT_THEME,
   mergeImportedThemes,
   mergeThemes,
-  reconcileThemeSelections,
-  resolveTerminalTheme,
+  reconcileTheme,
   resolveTheme,
-  selectionsAfterThemeRemoval,
+  themeAfterRemoval,
   SYSTEM_THEME,
 } from "@/lib/themes"
-import type { TerminalTheme, Theme, ResolvedTheme } from "@/lib/themes"
+import type { Theme, ResolvedTheme } from "@/lib/themes"
 import type { ThemeDefinition, ThemeGitInstallResult, ThemeImportResult } from "@/lib/api-types"
 
-export type { TerminalTheme, Theme, ResolvedTheme } from "@/lib/themes"
-export { DEFAULT_TERMINAL_THEME, DEFAULT_THEME } from "@/lib/themes"
+export type { Theme, ResolvedTheme } from "@/lib/themes"
+export { DEFAULT_THEME } from "@/lib/themes"
 
 const FONT_STORAGE_KEY = "lich.terminal.font"
 const TERMINAL_FONT_SIZE_STORAGE_KEY = "lich.terminal.fontSize"
 const THEME_STORAGE_KEY = "lich.appearance.theme"
 const ZOOM_STORAGE_KEY = "lich.appearance.zoom"
-const TERMINAL_THEME_STORAGE_KEY = "lich.appearance.terminalTheme"
+// The terminal's own theme selection, from before one theme coloured both
+// surfaces. Nothing reads it, and it is dropped on every load rather than once:
+// a terminal theme that ever comes back needs a key of its own, because this one
+// would be cleared under it. Restoring a choice its user made when the two were
+// separate is what dropping it prevents.
+const LEGACY_TERMINAL_THEME_KEY = "lich.appearance.terminalTheme"
 const CONTEXT_USAGE_STORAGE_KEY = "lich.footer.contextUsage"
 const COST_BUDGET_STORAGE_KEY = "lich.footer.costBudget"
 const DESKTOP_NOTIFICATIONS_STORAGE_KEY = "lich.notifications.desktop"
 const FINISHED_TURN_NOTIFICATIONS_STORAGE_KEY = "lich.notifications.finishedTurn"
 
-// The workspace keys the two theme selections actually live under. The
-// localStorage pair above keeps them too, but only as the cache the first frame
-// paints from: it sits in the Chromium profile, which Chromium recreates from
-// scratch when its storage comes back damaged — a window killed rather than
-// closed (#209) is how that happened — taking every `lich.*` pref with it
-// (#236). The database is the same store the sessions survive in, and it is
-// where the "what's new" flag went for the same reason (#199).
+// The workspace key the theme selection actually lives under. The localStorage
+// pref above keeps it too, but only as the cache the first frame paints from:
+// it sits in the Chromium profile, which Chromium recreates from scratch when
+// its storage comes back damaged (a window killed rather than closed, #209, is
+// how that happened), taking every `lich.*` pref with it (#236). The database is
+// the same store the sessions survive in, and it is where the "what's new" flag
+// went for the same reason (#199).
 const THEME_SETTING_KEY = "appearance.theme"
-const TERMINAL_THEME_SETTING_KEY = "appearance.terminalTheme"
-// The selections answer for this install, not for a project.
+// The selection answers for this install, not for a project.
 const GLOBAL_SCOPE = ""
 
 // DEFAULT_FONT is the bundled FiraCode Nerd Font Mono. It is not installed via
@@ -100,13 +106,10 @@ const readTerminalFontSize = (): number =>
     clampTerminalFontSize,
   )
 
-// Both preferences are read raw: the stored id is an open value, and the only
-// check worth making is membership, which reconcileThemeSelections applies once
-// the theme list lands. Until then an unknown id resolves to the system theme.
+// Read raw: the stored id is an open value, and the only check worth making is
+// membership, which reconcileTheme applies once the theme list lands. Until then
+// an unknown id resolves to the system theme.
 const readTheme = (): Theme => readPref(THEME_STORAGE_KEY) ?? DEFAULT_THEME
-
-const readTerminalTheme = (): TerminalTheme =>
-  readPref(TERMINAL_THEME_STORAGE_KEY) ?? DEFAULT_TERMINAL_THEME
 
 const readZoom = (): number => parseNumberPref(readPref(ZOOM_STORAGE_KEY), DEFAULT_ZOOM, clampZoom)
 
@@ -166,18 +169,15 @@ interface SettingsValue {
   /** UI zoom factor applied to the whole app (1 = 100%). */
   zoom: number
   setZoom: (zoom: number) => void
-  /** Terminal background theme selection. */
-  terminalTheme: TerminalTheme
-  setTerminalTheme: (theme: TerminalTheme) => void
-  /** Terminal theme resolved to a concrete scheme (match already mapped). */
-  resolvedTerminalTheme: ResolvedTheme
   /** Configurable global keyboard shortcuts, keyed by action. */
   hotkeys: Hotkeys
   setHotkey: (id: HotkeyId, combo: Combo) => void
   resetHotkey: (id: HotkeyId) => void
   /** Whether the footer shows the active session's context-window usage. */
   showContextUsage: boolean
-  setShowContextUsage: (show: boolean) => void
+  footerVisibility: FooterVisibility
+  footerLayout: FooterLayout | null
+  setFooterLayout: (layout: FooterLayout) => void
   /** Spend ceiling in USD the footer cost readout colours against; 0 is none. */
   costBudget: number
   setCostBudget: (usd: number) => void
@@ -202,9 +202,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(readTheme)
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(BUNDLED_THEMES[0])
   const [zoom, setZoomState] = useState<number>(readZoom)
-  const [terminalTheme, setTerminalThemeState] = useState<TerminalTheme>(readTerminalTheme)
-  const [hotkeys, setHotkeys] = useState<Hotkeys>(loadHotkeys)
-  const [showContextUsage, setShowContextUsageState] = useState<boolean>(readContextUsage)
+  // The defaults until the stored bindings land: unlike the theme there is no
+  // page-side cache to paint from, and a chord pressed in that first moment is
+  // one the window has not claimed yet — it reaches the terminal, which is the
+  // harmless way round.
+  const [hotkeys, setHotkeys] = useState<Hotkeys>(DEFAULT_HOTKEYS)
+  const [showContextUsage] = useState<boolean>(readContextUsage)
+  const [footerLayout, setFooterLayoutState] = useState(readFooterLayout)
+  const [footerVisibility] = useState(() => readFooterVisibility(readContextUsage()))
   const [costBudget, setCostBudgetState] = useState<number>(readCostBudget)
   const [desktopNotifications, setDesktopNotificationsState] = useState<boolean | null>(
     readDesktopNotifications,
@@ -216,58 +221,87 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   // A selection the user (or a reconcile) has already written must not be
   // overwritten by the stored one still in flight, so the load below stands down
   // once anything has been persisted.
-  const selectionsTouched = useRef(false)
+  const selectionTouched = useRef(false)
+
+  // The same guard for the bindings: a rebind made before the stored ones land
+  // must not be overwritten by the read still in flight.
+  const hotkeysTouched = useRef(false)
 
   const persistTheme = useCallback((next: Theme) => {
-    selectionsTouched.current = true
+    selectionTouched.current = true
     writePref(THEME_STORAGE_KEY, next)
     // A failed write costs the selection only if the profile is later recreated
     // — the cache answers every ordinary launch — so it stays quiet.
     void Store.SetSetting(THEME_SETTING_KEY, GLOBAL_SCOPE, next).catch(() => {})
   }, [])
 
-  const persistTerminalTheme = useCallback((next: TerminalTheme) => {
-    selectionsTouched.current = true
-    writePref(TERMINAL_THEME_STORAGE_KEY, next)
-    void Store.SetSetting(TERMINAL_THEME_SETTING_KEY, GLOBAL_SCOPE, next).catch(() => {})
-  }, [])
-
-  // The stored selections land after the first paint, which the cache has
+  // The stored selection lands after the first paint, which the cache has
   // already answered for: a theme that is only in the database repaints once,
   // and a custom one waits for the theme list either way.
   useEffect(() => {
     let cancelled = false
-    const cached = { theme: readTheme(), terminalTheme: readTerminalTheme() }
-    Promise.all([
-      Store.GetSetting(THEME_SETTING_KEY, GLOBAL_SCOPE),
-      Store.GetSetting(TERMINAL_THEME_SETTING_KEY, GLOBAL_SCOPE),
-    ])
-      .then(([storedTheme, storedTerminalTheme]) => {
-        if (cancelled || selectionsTouched.current) return
-        const { selections, persist } = adoptStoredSelections(
-          { theme: storedTheme, terminalTheme: storedTerminalTheme },
-          cached,
-        )
-        if (selections.theme !== cached.theme) {
-          setThemeState(selections.theme)
-          writePref(THEME_STORAGE_KEY, selections.theme)
-        }
-        if (selections.terminalTheme !== cached.terminalTheme) {
-          setTerminalThemeState(selections.terminalTheme)
-          writePref(TERMINAL_THEME_STORAGE_KEY, selections.terminalTheme)
+    const cached = readTheme()
+    Store.GetSetting(THEME_SETTING_KEY, GLOBAL_SCOPE)
+      .then((stored) => {
+        if (cancelled || selectionTouched.current) return
+        const { theme: adopted, persist } = adoptStoredTheme(stored, cached)
+        if (adopted !== cached) {
+          setThemeState(adopted)
+          writePref(THEME_STORAGE_KEY, adopted)
         }
         if (persist) {
-          persistTheme(selections.theme)
-          persistTerminalTheme(selections.terminalTheme)
+          persistTheme(adopted)
         }
       })
       .catch((error) => {
-        console.warn("[settings] failed to load the stored theme selections", error)
+        console.warn("[settings] failed to load the stored theme selection", error)
       })
     return () => {
       cancelled = true
     }
-  }, [persistTheme, persistTerminalTheme])
+  }, [persistTheme])
+
+  useEffect(() => {
+    removePref(LEGACY_TERMINAL_THEME_KEY)
+  }, [])
+
+  const persistHotkeys = useCallback((next: Hotkeys) => {
+    hotkeysTouched.current = true
+    // Loud, unlike the theme's write: there is no page-side copy standing behind
+    // this one, so a write that fails is a rebind the next launch will not have.
+    void Store.SetSetting(HOTKEYS_SETTING_KEY, GLOBAL_SCOPE, JSON.stringify(next)).catch(
+      (error) => {
+        console.warn("[settings] failed to persist the hotkey bindings", error)
+      },
+    )
+  }, [])
+
+  // The stored bindings, and the one migration off the page's own storage. The
+  // state is only replaced when the answer differs from what is already on
+  // screen — the common case is an install with no rebinds, and handing every
+  // consumer a fresh (identical) map would repaint the window for nothing.
+  useEffect(() => {
+    let cancelled = false
+    Store.GetSetting(HOTKEYS_SETTING_KEY, GLOBAL_SCOPE)
+      .then((stored) => {
+        if (cancelled || hotkeysTouched.current) return
+        const { hotkeys: adopted, migrate } = adoptStoredHotkeys(
+          stored,
+          readPref(LEGACY_HOTKEYS_KEY),
+        )
+        setHotkeys((prev) => (adopted === prev ? prev : adopted))
+        if (migrate) {
+          persistHotkeys(adopted)
+          removePref(LEGACY_HOTKEYS_KEY)
+        }
+      })
+      .catch((error) => {
+        console.warn("[settings] failed to load the stored hotkey bindings", error)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [persistHotkeys])
 
   useEffect(() => {
     let cancelled = false
@@ -288,16 +322,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!themesLoaded) return
-    const reconciled = reconcileThemeSelections({ theme, terminalTheme }, themes)
-    if (reconciled.theme !== theme) {
-      setThemeState(reconciled.theme)
-      persistTheme(reconciled.theme)
+    const reconciled = reconcileTheme(theme, themes)
+    if (reconciled !== theme) {
+      setThemeState(reconciled)
+      persistTheme(reconciled)
     }
-    if (reconciled.terminalTheme !== terminalTheme) {
-      setTerminalThemeState(reconciled.terminalTheme)
-      persistTerminalTheme(reconciled.terminalTheme)
-    }
-  }, [theme, terminalTheme, themes, themesLoaded, persistTheme, persistTerminalTheme])
+  }, [theme, themes, themesLoaded, persistTheme])
 
   const setFont = useCallback((next: string) => {
     setFontState(next)
@@ -330,14 +360,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const zoomBy = useCallback((delta: number) => {
     setZoomState((prev) => clampZoom(prev + delta))
   }, [])
-
-  const setTerminalTheme = useCallback(
-    (next: TerminalTheme) => {
-      setTerminalThemeState(next)
-      persistTerminalTheme(next)
-    },
-    [persistTerminalTheme],
-  )
 
   const importTheme = useCallback(
     async (path: string, overwrite: boolean) => {
@@ -388,44 +410,46 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     async (id: string) => {
       await ThemeRPC.Remove(id)
       setThemes((prev) => mergeThemes(prev.filter((item) => item.id !== id)))
-      const next = selectionsAfterThemeRemoval(id, { theme, terminalTheme })
-      if (next.theme !== theme) {
-        setThemeState(next.theme)
-        persistTheme(next.theme)
-      }
-      if (next.terminalTheme !== terminalTheme) {
-        setTerminalThemeState(next.terminalTheme)
-        persistTerminalTheme(next.terminalTheme)
+      const next = themeAfterRemoval(id, theme)
+      if (next !== theme) {
+        setThemeState(next)
+        persistTheme(next)
       }
     },
-    [theme, terminalTheme, persistTheme, persistTerminalTheme],
+    [theme, persistTheme],
   )
 
-  const setHotkey = useCallback((id: HotkeyId, combo: Combo) => {
-    setHotkeys((prev) => {
-      const next = { ...prev, [id]: combo }
-      saveHotkeys(next)
-      return next
-    })
-  }, [])
+  const setHotkey = useCallback(
+    (id: HotkeyId, combo: Combo) => {
+      setHotkeys((prev) => {
+        const next = { ...prev, [id]: combo }
+        persistHotkeys(next)
+        return next
+      })
+    },
+    [persistHotkeys],
+  )
 
-  const resetHotkey = useCallback((id: HotkeyId) => {
-    setHotkeys((prev) => {
-      const next = { ...prev, [id]: DEFAULT_HOTKEYS[id] }
-      saveHotkeys(next)
-      return next
-    })
-  }, [])
-
-  const setShowContextUsage = useCallback((next: boolean) => {
-    setShowContextUsageState(next)
-    writePref(CONTEXT_USAGE_STORAGE_KEY, next)
-  }, [])
+  const resetHotkey = useCallback(
+    (id: HotkeyId) => {
+      setHotkeys((prev) => {
+        const next = { ...prev, [id]: DEFAULT_HOTKEYS[id] }
+        persistHotkeys(next)
+        return next
+      })
+    },
+    [persistHotkeys],
+  )
 
   const setCostBudget = useCallback((next: number) => {
     const clamped = clampCostBudget(next)
     setCostBudgetState(clamped)
     writePref(COST_BUDGET_STORAGE_KEY, clamped)
+  }, [])
+
+  const setFooterLayout = useCallback((next: FooterLayout) => {
+    writeFooterLayout(next)
+    setFooterLayoutState(next)
   }, [])
 
   // Writing either answer settles the question for good: a refusal is stored,
@@ -518,8 +542,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   }, [zoomBy, setZoom])
 
-  const resolvedTerminalTheme = resolveTerminalTheme(terminalTheme, resolvedTheme, themes)
-
   // Memoised for the same reason ProjectsProvider is: a literal here hands every
   // consumer a new object on every render of this provider, and one of those
   // consumers is TerminalView — one per spawned session. A Ctrl+wheel zoom is a
@@ -541,14 +563,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       resolvedTheme,
       zoom,
       setZoom,
-      terminalTheme,
-      setTerminalTheme,
-      resolvedTerminalTheme,
       hotkeys,
       setHotkey,
       resetHotkey,
       showContextUsage,
-      setShowContextUsage,
+      footerVisibility,
+      footerLayout,
+      setFooterLayout,
       costBudget,
       setCostBudget,
       desktopNotifications,
@@ -571,14 +592,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       resolvedTheme,
       zoom,
       setZoom,
-      terminalTheme,
-      setTerminalTheme,
-      resolvedTerminalTheme,
       hotkeys,
       setHotkey,
       resetHotkey,
       showContextUsage,
-      setShowContextUsage,
+      footerVisibility,
+      footerLayout,
+      setFooterLayout,
       costBudget,
       setCostBudget,
       desktopNotifications,

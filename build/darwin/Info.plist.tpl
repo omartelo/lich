@@ -2,13 +2,13 @@
 <!--
   Rendered by build/darwin/bundle.sh (@VERSION@ -> the release version).
 
-  lich is a pure-Go binary that never touches AppKit, so it never registers
-  with the window server: macOS shows a Dock tile while LaunchServices starts
-  it and drops that tile once the window belongs to the browser instead.
-  Measured on a Mac, LSUIElement does not suppress that launch tile — it is
-  here because an app that owns no window of its own has no business in the
-  Dock or in Cmd-Tab once it is running. The icon that matters is the one in
-  /Applications, Launchpad and Spotlight.
+  Two executables share this plist: lich, the pure-Go binary LaunchServices
+  starts, which never touches AppKit, and lich-shell, the window, which does.
+  macOS reads a process's bundle off its executable's path, so the window in
+  Contents/MacOS is Lich.app to the Dock, to Cmd-Tab and to the menu bar: its
+  icon is CFBundleIconFile and its name CFBundleName. The Intel build ships no
+  window and opens as a browser tab, so its Dock tile is the browser's;
+  LSUIElement made no measured difference to that on a Mac and is not here.
 -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -31,8 +31,6 @@
   <string>@VERSION@</string>
   <key>LSMinimumSystemVersion</key>
   <string>13.0</string>
-  <key>LSUIElement</key>
-  <true/>
   <key>NSHighResolutionCapable</key>
   <true/>
 </dict>

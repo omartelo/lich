@@ -10,17 +10,33 @@ url="https://github.com/omartelo/lich"
 license=('AGPL-3.0-only')
 provides=('lich')
 conflicts=('lich')
-optdepends=('chromium: app window (any Chromium-family browser works: chromium, google-chrome, brave)'
-            'zenity: native folder picker')
+# What the window links against; the same list, per format, lives in
+# build/linux/nfpm/nfpm.yaml.
+depends=('glibc' 'gcc-libs' 'nss' 'nspr' 'glib2' 'at-spi2-core' 'dbus' 'libcups'
+         'libx11' 'libxcomposite' 'libxdamage' 'libxext' 'libxfixes' 'libxrandr'
+         'libxcb' 'mesa' 'expat' 'libxkbcommon' 'cairo' 'pango' 'systemd-libs'
+         'alsa-lib')
+optdepends=('zenity: native folder picker')
 source=("lich-v${pkgver}-linux-amd64::${url}/releases/download/v${pkgver}/lich-v${pkgver}-linux-amd64"
+        "lich-v${pkgver}-linux-amd64-shell.tar.zst::${url}/releases/download/v${pkgver}/lich-v${pkgver}-linux-amd64-shell.tar.zst"
         "lich-${pkgver}.desktop::https://raw.githubusercontent.com/omartelo/lich/v${pkgver}/build/linux/lich.desktop"
         "lich-${pkgver}.png::https://raw.githubusercontent.com/omartelo/lich/v${pkgver}/build/appicon.png")
 sha256sums=('SKIP'
+            'SKIP'
             'SKIP'
             'SKIP')
 
 package() {
   install -Dm755 "lich-v${pkgver}-linux-amd64" "${pkgdir}/usr/bin/lich"
+  # The window (lich's own Chromium), unpacked by makepkg into shell/, where
+  # /usr/bin/lich looks for it: /usr/lib/lich/shell.
+  install -d "${pkgdir}/usr/lib/lich"
+  cp -a shell "${pkgdir}/usr/lib/lich/shell"
+  # Chromium's setuid sandbox helper, at the only path its zygote reads:
+  # beside lich-shell, root-owned (install under fakeroot) and 4755. Without
+  # it a desktop that denies unprivileged user namespaces opens the window
+  # with --no-sandbox. The tarball's own copy under cef/ is read by nothing.
+  install -m4755 shell/cef/chrome-sandbox "${pkgdir}/usr/lib/lich/shell/chrome-sandbox"
   install -Dm644 "lich-${pkgver}.desktop" "${pkgdir}/usr/share/applications/lich.desktop"
   install -Dm644 "lich-${pkgver}.png" "${pkgdir}/usr/share/icons/hicolor/128x128/apps/lich.png"
 }

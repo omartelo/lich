@@ -1,31 +1,23 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { LoaderCircle, RefreshCw, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SettingBlock } from "./SettingBlock"
 import { PatchNotesDialog } from "@/components/PatchNotesDialog"
 import { PluginSetting } from "./PluginSetting"
-import { AgentPlugin, PatchNotes } from "@/lib/rpc"
+import { PatchNotes } from "@/lib/rpc"
 import { runUpdateCheck } from "@/lib/update/update-check"
-import type { PatchNotes as PatchNotesData, PluginStatus } from "@/lib/api-types"
+import { useRemoteResource } from "@/lib/use-remote-resource"
+import type { PatchNotes as PatchNotesData } from "@/lib/api-types"
 
 export function UpdatesSettings() {
-  const [notes, setNotes] = useState<PatchNotesData | null>(null)
   const [notesOpen, setNotesOpen] = useState(false)
   const [checking, setChecking] = useState(false)
   const [checkResult, setCheckResult] = useState("")
-  const [plugin, setPlugin] = useState<PluginStatus[] | null>(null)
-
-  useEffect(() => {
-    void PatchNotes.Current()
-      .then(setNotes)
-      .catch(() => {})
-    void refreshPlugin()
-  }, [])
-
-  const refreshPlugin = async () => {
-    setPlugin(await AgentPlugin.Status())
-  }
-
+  const { data: notes } = useRemoteResource<PatchNotesData | null>(
+    "patch-notes",
+    () => PatchNotes.Current(),
+    { empty: null, cache: "settings.patchNotes" },
+  )
   const checkApp = async () => {
     setChecking(true)
     setCheckResult("")
@@ -81,7 +73,7 @@ export function UpdatesSettings() {
         )}
       </SettingBlock>
 
-      <PluginSetting statuses={plugin} onRefresh={refreshPlugin} />
+      <PluginSetting />
     </>
   )
 }

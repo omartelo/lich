@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"github.com/ncruces/zenity"
@@ -22,6 +23,9 @@ import (
 )
 
 type Service struct {
+	// mu guards env alone: a re-read of the login shell replaces it while the
+	// page is asking to open a file (SetEnv).
+	mu sync.RWMutex
 	// env is the resolved login-shell environment (see terminal.ResolveShellEnv),
 	// the source of $VISUAL/$EDITOR — a GUI launch never sourced the user's rc.
 	env []string
@@ -55,6 +59,16 @@ func New(env []string, logPath, version string, uncleanExit bool) *Service {
 	}
 	s.uncleanExit.Store(uncleanExit)
 	return s
+}
+
+// SetEnv replaces the resolved environment after a re-read of the login shell
+// (internal/providers.Service.RefreshPath): an $EDITOR exported by an rc file
+// the user edited while lich was open is found from the same re-check that
+// finds a newly installed agent, rather than from the next launch.
+func (s *Service) SetEnv(env []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.env = env
 }
 
 // TakeUncleanExit reports whether the run before this one ended without closing
@@ -153,7 +167,18 @@ func (s *Service) OpenExternal(rawURL string) error {
 	if err := ValidateExternalURL(rawURL); err != nil {
 		return err
 	}
-	return s.openURL(rawURL)
+	argv := urlOpenArgv(rawURL)
+	return s.run(argv[0], argv[1:]...)
+}
+
+// OpenURL hands a URL to the desktop's default browser, through the same
+// per-OS launcher OpenExternal uses. It is package-level because the launch
+// path needs it before any service exists: a Mac with no window of its own
+// degrades to a plain tab in whatever browser it does have (main.go). No scheme gate here — the only caller passes
+// lich's own loopback URL, not one a page handed it.
+func OpenURL(rawURL string) error {
+	argv := urlOpenArgv(rawURL)
+	return exec.Command(argv[0], argv[1:]...).Start()
 }
 
 // OpenInEditor decides how to open a work-tree file. rel is validated against
@@ -219,14 +244,8 @@ func (s *Service) openInEditor(full string, fallback func(string) error) (string
 		// The command runs in the session's shell, so the file path — the
 		// caller-influenced part — must survive spaces and metacharacters. The
 		// quoting rule is the shell's, and the session's shell is per-OS (see
-		// the open_* files). A path that shell cannot express at all opens with
-		// the default handler instead: a line that would run something else is
-		// worse than not using the editor.
-		quoted, ok := s.quoteForShell(full)
-		if !ok {
-			return "", fallback(full)
-		}
-		return editor + " " + quoted, nil
+		// the open_* files).
+		return editor + " " + s.quoteForShell(full), nil
 	}
 	if editor != "" {
 		return "", s.runEditor(editor, full, fallback)
@@ -266,28 +285,10 @@ func isTerminalEditor(editor string) bool {
 	return terminalEditors[filepath.Base(fields[0])]
 }
 
-// quoteCmdPath renders full as one argument of a cmd.exe command line, and
-// reports false when cmd cannot express it at all. Double quotes cover the
-// command separators (& | < >), the grouping parentheses, ^ and spaces — but
-// cmd has no escape for three cases, so they are refused rather than mangled:
-//
-//   - a literal " ends the quoted run and nothing puts one back;
-//   - % is expanded inside quotes too, so a defined variable's name between
-//     percents silently becomes a different path;
-//   - a trailing backslash escapes the closing quote for the target's own argv
-//     parser. filepath.Join cleans that away before we get here, so this is the
-//     belt to the caller's braces.
-//
-// Kept out of the build-tagged file so the rule is tested on any OS.
-func quoteCmdPath(full string) (string, bool) {
-	if strings.ContainsAny(full, `"%`) || strings.HasSuffix(full, `\`) {
-		return "", false
-	}
-	return `"` + full + `"`, true
-}
-
 // getenv reads a key from the resolved shell env, "" when absent.
 func (s *Service) getenv(key string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	prefix := key + "="
 	for _, kv := range s.env {
 		if strings.HasPrefix(kv, prefix) {

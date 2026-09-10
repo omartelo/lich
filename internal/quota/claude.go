@@ -21,14 +21,20 @@ const (
 	// claudeAPIVersion is the dated API contract the probe request is written
 	// against; the usage route above needs none.
 	claudeAPIVersion = "2023-06-01"
+	// claudeProfileURL names the account a login belongs to. It is a second
+	// request, taken beside the usage one and cached with it, because the access
+	// token itself is opaque (`sk-ant-oat01-`, no claims to read) — unlike the
+	// OIDC id tokens the other providers write beside theirs.
+	claudeProfileURL = "https://api.anthropic.com/api/oauth/profile"
 )
 
 // The environment variables a session's own process names its Claude login
 // with: a long-lived OAuth token, which wins over everything on disk, and the
 // config directory holding the credentials file when there is no token.
 const (
-	claudeTokenVar = "CLAUDE_CODE_OAUTH_TOKEN"
-	claudeDirVar   = "CLAUDE_CONFIG_DIR"
+	claudeTokenVar     = "CLAUDE_CODE_OAUTH_TOKEN"
+	claudeDirVar       = "CLAUDE_CONFIG_DIR"
+	claudeSecureDirVar = "CLAUDE_SECURESTORAGE_CONFIG_DIR"
 )
 
 // The quota probe: what lich sends when a session's login is a long-lived
@@ -76,6 +82,15 @@ func (c claudeCredentials) planLabel() string {
 	return name
 }
 
+// claudeProfile is the part of the OAuth profile route lich reads: the email of
+// the account this login spends. The organization and the two uuids beside it
+// are of no use to a gauge that has one line to name an account on.
+type claudeProfile struct {
+	Account struct {
+		Email string `json:"email"`
+	} `json:"account"`
+}
+
 // claudeUsage is the response of the OAuth usage route. Every field is optional:
 // the route is undocumented, its shape varies by plan, and it has already grown
 // one representation of the same windows (limits) beside the original pair.
@@ -86,14 +101,16 @@ type claudeUsage struct {
 }
 
 type claudeWindow struct {
-	Utilization float64 `json:"utilization"`
-	ResetsAt    string  `json:"resets_at"`
+	Utilization  float64 `json:"utilization"`
+	ResetsAt     string  `json:"resets_at"`
+	LockedReason string  `json:"locked_reason"`
 }
 
 type claudeLimit struct {
 	Kind     string   `json:"kind"`
 	Percent  *float64 `json:"percent"`
 	ResetsAt string   `json:"resets_at"`
+	IsActive bool     `json:"is_active"`
 	Scope    *struct {
 		Model *struct {
 			DisplayName string `json:"display_name"`
@@ -109,16 +126,13 @@ func (s *Service) claudePlan(a Account) Plan {
 	if a.hidden() || a.elsewhere() {
 		return unknown(p)
 	}
-	if token := a.Env[claudeTokenVar]; token != "" {
+	if token := a.lookup(claudeTokenVar); token != "" {
 		return s.claudeProbe(p, token)
 	}
-	path, ok := harnessFile(a, claudeDirVar, ".claude", ".credentials.json")
-	if !ok {
-		return failed(p)
-	}
-	var creds claudeCredentials
-	if !readCredentials(path, &creds) || creds.OAuth.AccessToken == "" {
-		return signedOut(p)
+	creds, status := s.claudeLogin(a)
+	if status != StatusOK {
+		p.Status = status
+		return p
 	}
 	p.Plan = creds.planLabel()
 
@@ -137,12 +151,36 @@ func (s *Service) claudePlan(a Account) Plan {
 	if len(p.Windows) == 0 {
 		return failed(p)
 	}
+	p.Account = s.claudeAccount(creds.OAuth.AccessToken)
 	return p
 }
 
+// claudeAccount names the account a credentials login spends. Every failure is
+// an unnamed account rather than a failed reading: the gauge is the answer the
+// user asked for and the name is the label on it, so a route that changed shape
+// or refused the token must not take the numbers down with it.
+//
+// It is only reached on the credentials path. A `claude setup-token` login
+// carries `user:inference` alone, which this route refuses exactly as the usage
+// one does, so asking would spend a round trip per cache window on a 403 that
+// is already known (docs/ceilings.md).
+func (s *Service) claudeAccount(token string) string {
+	var profile claudeProfile
+	if _, err := s.readJSON(s.profileURL, token, map[string]string{
+		"anthropic-beta": claudeBetaHeader,
+		"User-Agent":     claudeUserAgent,
+	}, &profile); err != nil {
+		return ""
+	}
+	return profile.Account.Email
+}
+
 // claudeProbe measures a token that can only infer: it sends the probe request
-// and reads the windows off the response headers. The plan name stays empty —
-// the headers carry the spend, never the subscription it is spent against.
+// and reads the windows off the response headers. The plan name and the account
+// both stay empty — the headers carry the spend, never the subscription it is
+// spent against nor whose it is. The reading says which of those it is, so the
+// gauge can name the absence rather than draw the blank a provider that names
+// nobody draws.
 func (s *Service) claudeProbe(p Plan, token string) Plan {
 	resp, authOK, err := s.send(http.MethodPost, s.probeURL, token, claudeProbeBody, map[string]string{
 		"anthropic-beta":    claudeBetaHeader,
@@ -164,6 +202,7 @@ func (s *Service) claudeProbe(p Plan, token string) Plan {
 	if len(p.Windows) == 0 {
 		return failed(p)
 	}
+	p.NoAccount = NoAccountTokenLogin
 	return p
 }
 
@@ -212,10 +251,12 @@ func (u claudeUsage) windows() []Window {
 			continue
 		}
 		out = append(out, Window{
-			Label:    label,
-			Seconds:  seconds,
-			Percent:  percent(*limit.Percent),
-			ResetsAt: timestamp(limit.ResetsAt),
+			Label:        label,
+			Seconds:      seconds,
+			Percent:      percent(*limit.Percent),
+			ResetsAt:     timestamp(limit.ResetsAt),
+			Active:       limit.IsActive,
+			LockedReason: u.lockedReason(limit.Kind),
 		})
 	}
 	if len(out) > 0 {
@@ -233,13 +274,32 @@ func (u claudeUsage) windows() []Window {
 			continue
 		}
 		out = append(out, Window{
-			Label:    w.label,
-			Seconds:  w.seconds,
-			Percent:  percent(w.window.Utilization),
-			ResetsAt: timestamp(w.window.ResetsAt),
+			Label:        w.label,
+			Seconds:      w.seconds,
+			Percent:      percent(w.window.Utilization),
+			ResetsAt:     timestamp(w.window.ResetsAt),
+			LockedReason: w.window.LockedReason,
 		})
 	}
 	return out
+}
+
+// lockedReason answers the top-level pair for a limits[] entry's kind:
+// locked_reason lives only on five_hour/seven_day, never on limits[] itself —
+// session mirrors five_hour and weekly_all mirrors seven_day. A model-scoped
+// weekly cap has no pair of its own and never reports a lock.
+func (u claudeUsage) lockedReason(kind string) string {
+	switch kind {
+	case "session":
+		if u.FiveHour != nil {
+			return u.FiveHour.LockedReason
+		}
+	case "weekly_all":
+		if u.SevenDay != nil {
+			return u.SevenDay.LockedReason
+		}
+	}
+	return ""
 }
 
 // window names one limit entry and gives its length. An empty label is an entry

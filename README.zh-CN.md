@@ -10,18 +10,19 @@
   <p>
     打开你的项目，在真实终端里运行 Claude Code、Codex、opencode 这样的智能体，
     并把 git —— worktree、diff 和 Pull Request —— 一并留在视野里，无需离开窗口。
-    单个静态 Go 二进制文件，没有 Electron：界面在你系统自带的 Chromium 系浏览器中以
-    <code>--app</code> 模式打开。
+    单个静态 Go 二进制文件，没有 Electron：在 Linux、Windows 和 Apple Silicon 上，
+    界面在 lich 自带的内嵌 Chromium 里打开；在 Intel Mac 上，则在你系统的
+    Chromium 系浏览器中打开。
   </p>
   <p>
     <a href="https://github.com/omartelo/lich/releases"><img alt="Release" src="https://img.shields.io/github/v/release/omartelo/lich?color=4285F4&label=release" /></a>
     <img alt="Go" src="https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white" />
-    <img alt="Shell" src="https://img.shields.io/badge/shell-Chromium%20--app-4285F4?logo=googlechrome&logoColor=white" />
+    <img alt="Shell" src="https://img.shields.io/badge/shell-embedded%20Chromium%20(CEF)-4285F4?logo=googlechrome&logoColor=white" />
     <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-333" />
     <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-blue" /></a>
     <a href="https://github.com/sponsors/omartelo"><img alt="Sponsor" src="https://img.shields.io/github/sponsors/omartelo?color=ea4aaa&logo=githubsponsors&label=sponsors" /></a>
   </p>
-  <img src="docs/media/session.png" alt="标签栏上的四个项目，侧栏里的五个会话 —— 各自带着 worktree、分支和 diff 徽标 —— 与此同时一个 Claude Code 会话正在终端里工作，底栏显示着模型和上下文圆环" width="900" />
+  <img src="docs/media/session.png" alt="同一面墙上并排的四个 Claude Code 会话，各自待在自己的 git worktree 里 —— 侧栏逐个列出它们的分支和 diff 徽标，底栏显示模型、套餐额度与分支" width="900" />
   <!-- sponsor-logos: company logos go here, between the screenshot and Why lich -->
 </div>
 
@@ -33,9 +34,13 @@
 
 - **用你已经有的智能体。** [Claude Code](https://www.anthropic.com/claude-code)、
   [Codex](https://github.com/openai/codex)、Antigravity、
-  [opencode](https://github.com/sst/opencode)、oh-my-pi 和
-  [Crush](https://github.com/charmbracelet/crush) 都是一等公民。把 lich
-  指向各自的二进制文件，这只需一次，之后选一个默认的，或者逐个会话单独指定。
+  [opencode](https://github.com/sst/opencode)、oh-my-pi、
+  [Crush](https://github.com/charmbracelet/crush)、
+  [Cursor CLI](https://cursor.com/docs/cli) 和
+  [Kiro CLI](https://kiro.dev/docs/cli/) 在这里都以同样的方式运行。把 lich
+  指向各自的二进制文件，这只需一次，之后选一个默认的，或者逐个会话单独指定。而
+  lich 能从一个会话里*读*回什么，则因智能体而异，
+  [各智能体支持到什么程度](#各智能体支持到什么程度)是那张表。
 - **留住一个真正的终端。** 由 PTY 支撑的 shell，每个项目可以开好几个，在 GPU 上渲染
   —— 滚动缓冲区可以搜索，还能挺过整页刷新。给其中一个设一个入口命令 —— `lazygit`、
   `k9s`、`pnpm dev` —— 它每次启动都会直接进到那个工具里。底栏跟随 `cd` 并标明分支
@@ -46,6 +51,10 @@
   走 MCP —— 其余的随插件获得。这整套能力同时也是任何 shell 里的 `lich` 命令，`--json`
   也在其中，所以脚本不需要智能体参与也能驱动一个会话
   （[`docs/cli.md`](docs/cli.md)）。
+- **一次看住好几个。** 把任意会话摆到你正在看的那个旁边，凑成一面墙，pane 怎么排由
+  lich 自己算 —— 依据有几个，以及窗口还剩多少地方：八个在超宽屏上是横四竖二，在笔记本
+  上则横着摆两个。一个把活派出去的会话，一次点击就能围着它把墙搭起来。每面墙都有名字，
+  一个项目想留多少面都行，每面墙在侧栏里各占一块，可以折叠、重命名，也可以拆掉。
 - **免去配置地分出一个 worktree。** 从任意基础分支开一个，lich 会把你被 gitignore 掉的
   `.env*` 文件播种进去，派给它一个既不与其他检出目录重合、也没被机器上任何进程占用的
   开发服务器端口，并在智能体启动前跑一遍按项目配置的初始化脚本。
@@ -67,6 +76,32 @@
 [Issues](https://github.com/omartelo/lich/issues)，每个版本改了什么见
 [CHANGELOG.md](CHANGELOG.md)。
 
+## 各智能体支持到什么程度
+
+每个智能体的启动方式都一样：在真实终端里拉起，按会话 id 恢复，用同一套沙箱隔离，也用
+同一套办法去找你的其他会话。不一样的是 lich 能从一个会话里**读**回什么，因为它读的是
+各家 CLI 自己写下来的东西，而没有两家写下的是同一批。
+
+| 你能看到什么 | Claude Code | Codex | Antigravity | opencode | oh-my-pi | Crush | Cursor CLI | Kiro CLI |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
+| 底栏里的上下文窗口 | 有 | 有 | 无 | 无 | 无 | 无 | 无 | 有 |
+| 底栏里的花费 | 有 | 有 | 无 | 有 | 有 | 有 | 无 | 按点数计 |
+| 套餐额度还剩多少 | 有 | 有 | 无 | 无 | 无 | 无 | 无 | 无 |
+| 一轮进行中转圈，结束后成环 | 有 | 有 | 有 | 有 | 有 | 无 | 无 | 有 |
+| 智能体卡在等你时响铃 | 有 | 有 | 无 | 有 | 无 | 无 | 无 | 无 |
+| 一轮跑着时不让机器进入空闲休眠 | 有 | 有 | 有 | 有 | 有 | 无 | 无 | 有 |
+| Review 页的 **Last turn**，带智能体自己的收尾话 | 有 | 有 | 有 | 有 | 有 | 无 | 无 | 有 |
+| 从命令面板搜索对话里说过的内容 | 有 | 有 | 有 | 有 | 有 | 有 | 无 | 有 |
+| 把一段对话分叉到新的 worktree | 有 | 有 | 无 | 有 | 无 | 无 | 无 | 无 |
+
+Crush 和 Cursor CLI 既不报告一轮的开始，也不报告结束，上面有四行是因此一起掉的：没有
+东西去开启那个窗口，卡片的转圈、响铃、Review 页的上一轮，以及让机器不休眠的那次占用，
+都无从谈起。Review 页会在会话上直接说明这一点，而不是让你自己去发现那个切换从来没出现
+过。Kiro CLI 按点数而不是按美元计费，所以那个数字只有它自己的底栏能看到。
+
+每一处缺口都是刻意的，没有一处是 lich 藏起了 CLI 已经报告的东西，
+[`docs/ceilings.md`](docs/ceilings.md) 写着每一处背后量到了什么。
+
 ## 安装
 
 一行命令 —— 识别你的发行版、校验校验和，并通过你的包管理器安装原生软件包及其依赖：
@@ -77,16 +112,17 @@ curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh
 
 | 平台 | 安装方式 | 运行时依赖 |
 | --- | --- | --- |
-| **Linux** | 上面的 `install.sh`，或 AUR 的 [`lich-bin`](https://aur.archlinux.org/packages/lich-bin)（`yay -S lich-bin`） | `PATH` 上有 chromium / google-chrome / brave，外加 `zenity` |
-| **macOS** *(实验性)* | `brew install --cask omartelo/tap/lich` | `/Applications` 里有 Chrome / Chromium / Edge / Brave |
-| **Windows** *(实验性)* | 从 [Releases](https://github.com/omartelo/lich/releases) 下载安装程序 | Chrome / Edge / Brave |
+| **Linux** | 上面的 `install.sh`，或 AUR 的 [`lich-bin`](https://aur.archlinux.org/packages/lich-bin)（`yay -S lich-bin`） | `zenity` —— 窗口随软件包一起附带 |
+| **macOS** *(实验性)* | `brew install --cask omartelo/tap/lich` | Apple Silicon 上无需任何东西 —— 窗口随应用一起附带；Intel 上 lich 会作为标签页开在你的默认浏览器里 |
+| **Windows** *(实验性)* | 从 [Releases](https://github.com/omartelo/lich/releases) 下载安装程序，或使用 Scoop：`scoop install https://github.com/omartelo/lich/releases/latest/download/lich.json` | 无需任何东西 —— 两种方式都自带窗口 |
 
 手动的分发版软件包和静态二进制文件见 [INSTALL.md](INSTALL.md)。macOS 和 Windows 的
 二进制文件未签名 —— 在公证/签名做好之前，Gatekeeper 和 SmartScreen 会发出警告。用
 Homebrew 安装可以绕开 Gatekeeper 的提示；从 Releases 页面下载的二进制文件则需要手动
 清除隔离标记。在 macOS 上，cask 会把 `Lich.app` 装进 `/Applications`，lich 因此有了
-自己的图标；而它运行期间，Dock 里显示的仍是持有那个窗口的浏览器。从旧的 formula 升级
-需要先 `brew uninstall lich`，[INSTALL.md](INSTALL.md) 里写了这一点。
+自己的图标；在 Apple Silicon 上，运行期间 Dock 里显示的也是它；在 Intel 上，Dock 里
+显示的是持有那个窗口的浏览器。从旧的 formula 升级需要先 `brew uninstall lich`，
+[INSTALL.md](INSTALL.md) 里写了这一点。
 
 ## 快速上手
 
@@ -110,26 +146,9 @@ Homebrew 安装可以绕开 Gatekeeper 的提示；从 Releases 页面下载的�
   Claude Code 和 Codex 两节的开头是你的套餐还剩多少，往下是底栏会说些什么的那一档梯子
   —— 上下文圆环，以及 Claude Code 才有的费用读数；费用那一档默认关闭，因为只有当你按
   token 计费时这个数字才有意义。
-- **沙箱** —— 每个 provider 那一节里，权限梯子旁边还有一条 **Sandbox** 梯子：Off、
-  Ask each time、Worktrees only、Everywhere。它按 provider 生效，项目可以设自己的一
-  档，而 New worktree 对话框里的 **Run confined** 复选框只为那一个会话覆盖这一档 ——
-  连同它此后每一次重新启动。Linux 需要 bubblewrap，macOS 需要 `sandbox-exec`；两者都
-  没有的机器上，以及 Windows 上，这个控件不会出现。
 - **Worktree** —— 项目仓库里的 `.lich/setup-worktree.sh` 会在新 worktree 的终端里
   先于智能体运行；New worktree 对话框会展示这个脚本，若仓库没有则给出检测到的建议。
   `.worktreeinclude` 文件用来调整哪些被 gitignore 的文件会被复制过去。
-- **版本控制** —— 一个项目可以指定 `gh` 以哪个 GitHub 账号运行（设置 › Version
-  Control），用于只有你其中一个账号看得见的仓库。它管的是 lich 从 GitHub 读到什么，
-  而不是 git 推送时用谁的身份。
-- **快捷键** —— `Ctrl`/`Cmd`+`/` 列出 lich 绑定的每一个快捷键，重新绑定则在设置 ›
-  Hotkeys 里：按下你想要的组合键就会存下来，也可以把某一行重置回 lich 的默认值。两个动
-  作可以持有同一个组合键，撞上的行会自己说明。重绑存在页面的 `localStorage` 里，所以清
-  掉 lich 的 Chromium 配置目录会把它们一并带走。
-- **外观** —— 主题和字体都在设置里；你选定的主题持久化在工作区数据库里，
-  其余 UI 偏好以 `lich.*` 为键持久化在 `localStorage`（位于 lich 的 Chromium 配置目录
-  `~/.config/lich/chromium-profile`），导入的主题则以 JSON 存在 `<config-dir>/lich/themes` 下。
-- **工作区** —— 项目和会话持久化在 SQLite 里，路径为 `<config-dir>/lich/lich.db`。
-  关闭一个会话并不会删除它。
 - **会话钩子** —— 在设置里装上 [lich 插件](https://github.com/omartelo/lich-plugin)
   之后，会话会给自己的卡片起标题，并在它写入文件的那一刻刷新 git。
 
@@ -163,6 +182,9 @@ task test     # Go 与前端测试套件
 ```bash
 task package   # bin/ 下生成 .deb + .rpm + Arch .pkg.tar.zst
 ```
+
+在 lich 已经跑着的八个之外再加一个智能体 CLI，是唯一一处会落到两个仓库、十几个文件里
+的改动：[`docs/adding-a-provider.md`](docs/adding-a-provider.md) 就是那张地图。
 
 ## 赞助
 

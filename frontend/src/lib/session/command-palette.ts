@@ -57,9 +57,12 @@ export function matchesQuery(haystack: string, query: string): boolean {
 }
 
 // PaletteHistory is one parked session as the History tab lists it: the store's
-// row plus the branch its checkout is on, which lives in git and not in the row
-// (internal/store.ClosedSession). Both are "" for a checkout that is gone —
-// which is also the row that cannot be resumed, so one absence explains both.
+// row (`matchedConversation` and its `snippet` saying when and where the
+// conversation is what matched) plus the branch its checkout is on *now*, read from git. That is not the
+// row's `parkedBranch`, which is the snapshot the close recorded for the search
+// to match — a branch moves inside a checkout, so only git can say what the row
+// shows. `branch` is "" for a checkout that is gone, which is also the row that
+// cannot be resumed, so one absence explains both.
 export interface PaletteHistory extends ClosedSession {
   branch: string
   /** The checkout is no longer on disk: this row forgets rather than resumes. */
@@ -85,9 +88,12 @@ export function historyRows(
 export interface PaletteResults {
   sessions: PaletteSession[]
   projects: Project[]
-  // The closed projects, which the reopen menu shows five of: past that the
-  // palette is the only way back to one.
+  // One page of the closed projects the store matched, which the reopen menu
+  // shows five of: past that the palette is the only way back to one.
   closed: Project[]
+  // Every closed project the term matched, so the group header can report a
+  // page that was cut instead of cutting it in silence.
+  closedTotal: number
   // The parked sessions — what the History tab lists, and the only group whose
   // rows are not in the workspace at all.
   history: PaletteHistory[]
@@ -99,19 +105,28 @@ export function filterPalette(
   projects: readonly Project[],
   closed: readonly Project[] = [],
   history: readonly PaletteHistory[] = [],
+  closedTotal = 0,
 ): PaletteResults {
   return {
+    closedTotal,
     sessions: allSessions.filter((s) =>
       matchesQuery(`${s.label} ${s.projectName} ${s.path}`, query),
     ),
     projects: projects.filter((p) => matchesQuery(`${p.name} ${p.path}`, query)),
     closed: closed.filter((p) => matchesQuery(`${p.name} ${p.path}`, query)),
-    // The branch is in the haystack because it is what a user remembers a piece
-    // of work by, and it is the one part of the row the path cannot stand in
-    // for: a worktree keeps the name it was created with while the branch moves
-    // on (lib/git/checkout-label.ts).
-    history: history.filter((h) =>
-      matchesQuery(`${h.label} ${h.projectName} ${h.branch} ${h.path}`, query),
+    // Both branches are in the haystack because they can disagree: the store
+    // matched the one it recorded at the close, and the row shows the one git
+    // reads now. Filtering on either alone would drop a row the other half of
+    // the search kept.
+    // A row the store matched on its conversation is kept without asking again:
+    // the snippet is one window onto a hit that may be a megabyte of prose — or
+    // no window at all, for a hit the index found by folding an accent — so
+    // re-testing the query against the row would drop the answer the search
+    // just gave.
+    history: history.filter(
+      (h) =>
+        h.matchedConversation ||
+        matchesQuery(`${h.label} ${h.projectName} ${h.branch} ${h.parkedBranch} ${h.path}`, query),
     ),
   }
 }
@@ -202,6 +217,9 @@ export interface PaletteGroup {
   // Rows the group holds before the All tab's cut, so its header can say what
   // it is leaving out. Equal to rows.length when nothing was cut.
   total: number
+  // What the header says instead of that page count, when there is something
+  // more urgent to say than which slice of a match is on screen.
+  note?: string
 }
 
 // rowKey identifies a row inside the list it is rendered in. A session and a
@@ -219,6 +237,21 @@ export function rowKey(row: PaletteRow): string {
   }
 }
 
+// INDEX_CAP_LABEL is terminal.indexTextBytes spelled the way a reader reads it,
+// and it is spelled here rather than sent with the row: the backend answers
+// whether the cap cut, which is the fact, and how big the cap is belongs to the
+// sentence the window writes. `command-palette.test.ts` pins the string, so the
+// two move together the way every other hand-owned mirror in this file does.
+export const INDEX_CAP_LABEL = "8 MB"
+
+// historyIndexNote is the line a parked session shows when its conversation was
+// indexed only in part: the cap kept the newest of it and dropped the oldest, so
+// a search that found nothing in this session found nothing in the part that was
+// kept. Undefined for every row indexed whole, which is nearly all of them.
+export function historyIndexNote(row: PaletteHistory): string | undefined {
+  return row.truncated ? `indexed: newest ${INDEX_CAP_LABEL}` : undefined
+}
+
 // historyAction is what Enter does with one history row, and what its hint bar
 // says. A checkout that is gone has nothing to resume into — the row is a
 // leftover PurgeWorktreeSessions never collected, because the removal never went
@@ -227,15 +260,27 @@ export function historyAction(row: PaletteHistory): "resume" | "forget" {
   return row.gone ? "forget" : "resume"
 }
 
-// cap of 0 means no cap — the tab that names one kind lists all of it.
-function group(label: string, rows: PaletteRow[], cap: number): PaletteGroup {
-  return { label, rows: cap > 0 ? rows.slice(0, cap) : rows, total: rows.length }
+// cap of 0 means no cap: the tab that names one kind lists all of it. `total`
+// is how many rows the group stands for, which is the caller's to say when the
+// backend cut the list before it got here; never fewer than the rows on screen.
+function group(label: string, rows: PaletteRow[], cap: number, total = rows.length): PaletteGroup {
+  return { label, rows: cap > 0 ? rows.slice(0, cap) : rows, total: Math.max(total, rows.length) }
 }
 
+// historyTotal is how many parked sessions matched the query in the store, which
+// is more than `results.history` holds whenever the store's page cut it. It
+// defaults to 0 for the callers that do not ask the store at all — the tests and
+// the tabs that list nothing parked — and the group falls back to its own rows.
+//
+// indexing is how many parked sessions the store has not read a conversation out
+// of yet, which is the other way the History list can be short, and the one the
+// user can do nothing about but wait, so the header says it.
 export function paletteGroups(
   tab: PaletteTab,
   results: PaletteResults,
   messages: readonly PaletteMessage[],
+  historyTotal = 0,
+  indexing = 0,
 ): PaletteGroup[] {
   const sessions = results.sessions.map((session): PaletteRow => ({ kind: "session", session }))
   const open = results.projects.map((project): PaletteRow => ({ kind: "project", project }))
@@ -248,11 +293,23 @@ export function paletteGroups(
       case "Sessions":
         return [group("Sessions", sessions, 0)]
       case "Projects":
-        return [group("Open", open, 0), group("Closed", closed, 0)]
+        return [group("Open", open, 0), group("Closed", closed, 0, results.closedTotal)]
       case "Messages":
         return [group("Messages", said, 0)]
       case "History":
-        return [group("Closed sessions", history, 0)]
+        // The cut this header reports happened in the store, not in the slice
+        // above: the query matched more parked sessions than one page carries.
+        // A backfill still reading parked conversations displaces it: a list
+        // that cannot see every session yet is worth saying before a page
+        // boundary is.
+        return [
+          {
+            ...group("Closed sessions", history, 0),
+            total: Math.max(historyTotal, history.length),
+            note:
+              indexing > 0 ? `indexing ${indexing} session${indexing === 1 ? "" : "s"}` : undefined,
+          },
+        ]
       // No closed projects or closed sessions here: bringing one back is not
       // what the palette is reached for mid-work, and the rows it costs are
       // rows the sessions and the open projects are cut to make room for. Their

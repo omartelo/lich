@@ -11,7 +11,9 @@ import type {
   BaseStatus,
   BinaryCheck,
   BranchRules,
-  ClosedSession,
+  ClosedHistory,
+  LastSaid,
+  LastTurn,
   Branches,
   BrowserHandle,
   CommitIdentity,
@@ -21,6 +23,8 @@ import type {
   DraftReviewComment,
   Attachment,
   DropItem,
+  FileListing,
+  Issue,
   MergeMethod,
   PatchNotes as PatchNotesData,
   PluginStatus,
@@ -116,33 +120,59 @@ export const Terminal = {
   ResumeAvailable: (kind: string, providerSessionID: string, cwd: string) =>
     call<boolean>("terminal.ResumeAvailable", [kind, providerSessionID, cwd]),
   /** resume: a provider session id to reopen (--resume); "" starts fresh.
-   * name: what the session answers to in its provider's peer roster (lib/session/peer-name);
-   * only Claude Code has one, every other kind ignores it.
+   * fork: branch that conversation instead of continuing it — the copy is this
+   * session's, the original is left where it is. Only for the three kinds whose
+   * CLI can (lib/session/sessions.forkableSession), and always with a resume id.
    * setup: run the project's worktree setup script ahead of the provider —
-   * passed once, by the first Start after the worktree is created. */
+   * passed once, by the first Start after the worktree is created.
+   *
+   * The empty string in the call is the peer-roster name (Claude Code's
+   * `/list-agents`), which the page does not pass: the backend reads the name
+   * the session already answers to and derives one only when there is none
+   * (internal/terminal.AgentName, internal/relay.RosterNameOf). Deriving it
+   * here too would be a second answer to police against that one. */
   Start: (
     id: string,
     projectID: string,
     cwd: string,
     kind: string,
     resume: string,
-    name: string,
+    fork: boolean,
     setup: boolean,
     cols: number,
     rows: number,
-  ) => call<null>("terminal.Start", [id, projectID, cwd, kind, resume, name, setup, cols, rows]),
+  ) =>
+    call<null>("terminal.Start", [id, projectID, cwd, kind, resume, "", fork, setup, cols, rows]),
   Write: (id: string, data: string) => call<null>("terminal.Write", [id, data]),
+  /** Whether this session can be given work: its provider is the program
+   * reading the PTY — not the checkout's setup script, not a TUI still taking
+   * the tty over — and the prompt is not half-filled by the person at it. False
+   * for a session that is not running, including one whose card exists but
+   * whose terminal has never been opened (lib/terminal/write-at-prompt). */
+  Ready: (id: string) => call<boolean>("terminal.Ready", [id]),
   Resize: (id: string, cols: number, rows: number) =>
     call<null>("terminal.Resize", [id, cols, rows]),
   SetVisible: (id: string, visible: boolean) => call<null>("terminal.SetVisible", [id, visible]),
   // Base64 tail of a session's output, to reseed scrollback after a reload.
   Replay: (id: string) => call<string>("terminal.Replay", [id]),
+  /** How long a session has been worked on, in whole seconds — typed at,
+   * reporting, or producing output for an open turn, minus every silence longer
+   * than the idle gap. 0 for a session nothing has been counted for yet, and up
+   * to one flush behind what has been measured (internal/terminal.handsOn). */
+  HandsOn: (id: string) => call<number>("terminal.HandsOn", [id]),
   /** Which of these sessions have talked about the query, and what they said.
    * Empty for a query under three characters, and for a session whose current
    * conversation the backend cannot read. */
   SearchTranscripts: (ids: string[], query: string) =>
     call<TranscriptMatch[] | null>("terminal.SearchTranscripts", [ids, query]),
   Close: (id: string) => call<null>("terminal.Close", [id]),
+  /** What changed on disk while this session's last finished turn ran — a
+   * window of time, not an attribution (see internal/terminal.LastTurnDiff). */
+  LastTurnDiff: (id: string) => call<LastTurn>("terminal.LastTurnDiff", [id]),
+  /** The last thing the agent said in this session's conversation — its own
+   * closing words, not a summary of them (see internal/terminal.LastTurnSaid).
+   * `text` is absent whenever there are none to show. */
+  LastTurnSaid: (id: string) => call<LastSaid>("terminal.LastTurnSaid", [id]),
 }
 
 export const DropService = {
@@ -188,17 +218,31 @@ export const ProjectService = {
    * collide on. null when the repository has no origin to measure against. */
   BaseStatus: (path: string) => call<BaseStatus | null>("project.BaseStatus", [path]),
   DiffText: (path: string) => call<string>("project.DiffText", [path]),
-  /** Tracked files, repo-relative and slash-separated, sorted (git ls-files). */
-  Tree: (path: string) => call<string[] | null>("project.Tree", [path]),
+  /** The checkout's files, repo-relative and slash-separated, sorted: git
+   * ls-files in a repository, a bounded walk in a plain folder, where `cut`
+   * reports the walk stopped at its cap. */
+  Tree: (path: string) => call<FileListing>("project.Tree", [path]),
   ReadFile: (path: string, rel: string) => call<string>("project.ReadFile", [path, rel]),
+  /** Lines from..to (1-based, inclusive) of one file for the diff's context
+   * expander. ref is the revision the diff's new side stands at: "" for the
+   * working tree, otherwise a git oid — a local object when the checkout has
+   * it, GitHub's copy when it does not (a pull request's head). The backend
+   * caps one answer, so a caller wanting more asks again from where it ended. */
+  FileLines: (path: string, rel: string, ref: string, from: number, to: number) =>
+    call<string[] | null>("project.FileLines", [path, rel, ref, from, to]),
   DiscardFile: (path: string, rel: string) => call<null>("project.DiscardFile", [path, rel]),
   ListBranches: (path: string) => call<Branches>("project.ListBranches", [path]),
-  /** The setup script a new worktree of this project will run, or the
-   * suggestion to offer when the repo ships none. */
+  /** The setup script a new worktree of this project will run (or the
+   * suggestion to offer when the repo ships none), and the run command its
+   * checkouts open a Run card on. */
   WorktreeSetup: (path: string) => call<WorktreeSetup>("project.WorktreeSetup", [path]),
   /** Write .lich/setup-worktree.sh in the project checkout ("" removes it). */
   SaveWorktreeSetup: (path: string, script: string) =>
     call<null>("project.SaveWorktreeSetup", [path, script]),
+  /** Write .lich/run-worktree.sh in the project checkout ("" removes it, which
+   * is how a project stops offering a Run card). */
+  SaveWorktreeRun: (path: string, script: string) =>
+    call<null>("project.SaveWorktreeRun", [path, script]),
   /** The logins gh is authenticated as, for the project's account picker;
    * errors when gh is missing or logged out. */
   GitHubAccounts: () => call<string[] | null>("project.GitHubAccounts", []),
@@ -216,6 +260,13 @@ export const ProjectService = {
   /** One open PR in full (title, body, checks): the given number, or 0 for the checkout's own branch. */
   PullRequestDetail: (path: string, number: number) =>
     call<PullRequestDetail | null>("project.PullRequestDetail", [path, number]),
+  /** Which files a conflicting PR collides with its base on — GitHub answers
+   * that a pull request conflicts and never where. A network round trip (it
+   * fetches both commits), so it is asked only once mergeable says CONFLICTING.
+   * `url` is the PR's own: it names the repository the PR lives on, which is not
+   * origin in a clone of a fork. */
+  PullRequestConflicts: (path: string, number: number, base: string, url: string) =>
+    call<string[] | null>("project.PullRequestConflicts", [path, number, base, url]),
   /** Merge a PR on GitHub (0 = the checkout's branch). The backend allow-lists
    * the method. `admin` merges with administrator privileges — GitHub's own
    * bypass of the rules on the base branch, and the only way gh calls GitHub at
@@ -287,12 +338,21 @@ export const ProjectService = {
       base,
       baseIsRemote,
     ]),
+  /** One GitHub issue, for the New worktree dialog: its title names the branch,
+   * its body is handed to the session. A pull request's number is refused. */
+  Issue: (path: string, number: number) => call<Issue>("project.Issue", [path, number]),
   /** Check a pull request's head branch out into its own worktree; rejects a fork PR. */
   CreateWorktreeFromPR: (projectPath: string, projectID: string, number: number) =>
     call<Worktree | null>("project.CreateWorktreeFromPR", [projectPath, projectID, number]),
-  RemoveWorktree: (projectPath: string, wtPath: string, force: boolean) =>
-    call<null>("project.RemoveWorktree", [projectPath, wtPath, force]),
+  /**
+   * Remove a worktree checkout. `adoptedAck` is the caller saying it has named
+   * the absolute path to the user and been told to go ahead, which is what one
+   * lich did not create needs on top of the usual answers.
+   */
+  RemoveWorktree: (projectPath: string, wtPath: string, force: boolean, adoptedAck: boolean) =>
+    call<null>("project.RemoveWorktree", [projectPath, wtPath, force, adoptedAck]),
   WorktreeDirty: (wtPath: string) => call<boolean>("project.WorktreeDirty", [wtPath]),
+  WorktreeAdopted: (wtPath: string) => call<boolean>("project.WorktreeAdopted", [wtPath]),
 }
 
 export const Store = {
@@ -300,8 +360,13 @@ export const Store = {
   AddProject: (id: string, name: string, path: string) =>
     call<null>("store.AddProject", [id, name, path]),
   CloseProject: (id: string) => call<null>("store.CloseProject", [id]),
-  /** The closed projects offered for reopening, newest first (capped backend-side). */
-  RecentProjects: () => call<RecentProject[] | null>("store.RecentProjects", []),
+  /** The closed projects matching `term` (every word in the name or the path),
+   * newest close first and capped backend-side. An empty term is the plain
+   * reopen list. */
+  RecentProjects: (term = "") => call<RecentProject[] | null>("store.RecentProjects", [term]),
+  /** How many closed projects `term` matches, page or no page: what a capped
+   * list says it is leaving out. */
+  ClosedProjectCount: (term = "") => call<number>("store.ClosedProjectCount", [term]),
   /** sandbox is whether this session runs confined ("on"/"off", "" to follow the
    * provider's rung). It rides the insert because the PTY reads it on the first
    * spawn — a second call would race the card this one puts on screen. */
@@ -348,9 +413,13 @@ export const Store = {
   /** Resume a parked worktree session under a fresh id, or null when none. */
   ReopenWorktreeSession: (projectID: string, path: string, newSessionID: string) =>
     call<StoredSession | null>("store.ReopenWorktreeSession", [projectID, path, newSessionID]),
-  /** The parked sessions, last closed first — the history the palette browses.
-   * Capped store-side, so this is also how far back a search can reach. */
-  ClosedSessions: () => call<ClosedSession[] | null>("store.ClosedSessions", []),
+  /** The parked sessions matching `term`, last closed first — the history the
+   * palette browses — with how many matched in all, so a page cut at the store's
+   * cap can say so. Every word of the term must appear in the session's name,
+   * its project's name, its path or the branch it was parked on; an empty term
+   * is the plain history. The search runs in the query, so it reaches past the
+   * page this answers with. */
+  ClosedSessions: (term: string) => call<ClosedHistory | null>("store.ClosedSessions", [term]),
   /** Resume one parked session by its own id, or null when it is no longer
    * parked — another window resumed it, or its worktree was removed. */
   ReopenSession: (sessionID: string, newSessionID: string) =>
@@ -367,6 +436,11 @@ export const Store = {
    * shell. The store refuses it on anything but a shell session. */
   SetSessionEntrypoint: (sessionID: string, entrypoint: string) =>
     call<null>("store.SetSessionEntrypoint", [sessionID, entrypoint]),
+  /** Park a prompt to be typed at a session later, at unix second `at`. A 0
+   * time, or an empty prompt, clears whatever was parked — a session holds one
+   * scheduled prompt at a time, and scheduling again replaces it. */
+  SetSessionSchedule: (sessionID: string, at: number, prompt: string) =>
+    call<null>("store.SetSessionSchedule", [sessionID, at, prompt]),
   /** Whether this one session runs confined, overriding the provider's rung for
    * it alone: "on", "off", or "" to follow the setting. Read on every later
    * spawn, so a reload and a resume keep the answer the session opened with. */
@@ -382,6 +456,11 @@ export const Store = {
   /** Re-attach a provider conversation id to a session row. */
   SetProviderSession: (sessionID: string, providerSessionID: string) =>
     call<null>("store.SetProviderSession", [sessionID, providerSessionID]),
+  /** Record whether a session's last finished turn is still waiting to be read.
+   * The window only ever clears it: the backend sets it at the turn's own end,
+   * where a session with no window attached can still earn one. */
+  SetSessionUnread: (sessionID: string, unread: boolean) =>
+    call<null>("store.SetSessionUnread", [sessionID, unread]),
   /** Pin (or unpin) a session: it sorts to the head of its project's list and
    * refuses to close until unpinned. */
   SetSessionPinned: (sessionID: string, pinned: boolean) =>
@@ -454,8 +533,11 @@ export const System = {
    * Shown beside the setting that hands the agent to a confined session: that
    * setting reads as "let it push with my GitHub key" and actually covers every
    * key in the list. Empty for no agent, no ssh-add, or an agent holding
-   * nothing — all three mean the same thing to whoever is deciding. */
-  SSHAgentKeys: () => call<string[]>("system.SSHAgentKeys", []),
+   * nothing — all three mean the same thing to whoever is deciding, and all
+   * three answer null rather than []: Go marshals a nil slice that way, so the
+   * type says so and the caller folds it into a list before reading a length
+   * off it. */
+  SSHAgentKeys: () => call<string[] | null>("system.SSHAgentKeys", []),
 }
 
 export const Providers = {
@@ -464,6 +546,11 @@ export const Providers = {
   /** Resolve a configured binary the way the spawn does, and report whether it
    * can be run. "" answers `empty` — the layer below is what will be used. */
   Verify: (bin: string) => call<BinaryCheck>("providers.Verify", [bin]),
+  /** Re-read the login shell's environment and replace the $PATH lich pinned at
+   * launch, so Detect and Verify answer from what is installed now. Rejects
+   * when the shell did not answer inside its bound, leaving the pin untouched —
+   * call it through lib/path-refresh, which owns that distinction. */
+  RefreshPath: () => call<null>("providers.RefreshPath", []),
 }
 
 export const Quota = {
@@ -477,6 +564,21 @@ export const Quota = {
 export const Browser = {
   /** Open or focus this session's visible Chromium window — not the lich UI. */
   OpenVisible: (owner: string) => call<BrowserHandle>("browser.OpenVisible", [owner]),
+}
+
+export const Spawn = {
+  /** Open the project's Run card in the checkout at cwd: a terminal session
+   * whose entrypoint is .lich/run-worktree.sh, its PTY started by the backend
+   * so the app is up whether or not the card is ever looked at. Rejects a
+   * project that ships no run script. The card arrives through session-opened,
+   * like every other session opened outside the window.
+   *
+   * One card per checkout: a checkout that already has one gets nothing new,
+   * and the window sends the menu item to that card instead of calling this
+   * (runCardIn). */
+  Run: (projectId: string, cwd: string) => call<null>("spawn.Run", [projectId, cwd]),
+}
+
 }
 
 export const Themes = {

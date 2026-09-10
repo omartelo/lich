@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -49,7 +48,7 @@ func runGH(timeout time.Duration, dir, token string, args ...string) ([]byte, er
 	cmd := commandContext(ctx, "gh", args...)
 	cmd.Dir = dir
 	if token != "" {
-		cmd.Env = append(os.Environ(), "GH_TOKEN="+token)
+		cmd.Env = append(cmd.Env, "GH_TOKEN="+token)
 	}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -99,6 +98,11 @@ type PRDetail struct {
 	// reports no login. GitHub refuses a review request addressed to them, which
 	// is what keeps them out of the picker.
 	Author string `json:"author"`
+	// AuthorLogin is the same account as Author, minus the fallback to a display
+	// name — the value a commit's login is compared against. Author cannot serve:
+	// a name matches no login, so a PR whose author gh reports without one would
+	// read as every commit landing under the wrong account.
+	AuthorLogin string `json:"authorLogin"`
 	// State is gh's OPEN | CLOSED | MERGED. Only a number-addressed lookup can
 	// return a non-OPEN one; the branch lookup still gates them out.
 	State     string `json:"state"`
@@ -134,11 +138,18 @@ type PRDetail struct {
 
 // PRCommit is one commit the pull request would land, split the way git itself
 // splits a message: the subject line, then the body (empty for a one-liner).
+//
+// Login and Name are kept apart because only one of them is evidence: Name is
+// free text, Login is the account GitHub resolved the author's email to against
+// every account's verified addresses — an answer lich cannot compute, and one
+// whose "" means the email belongs to nobody rather than "unknown".
 type PRCommit struct {
 	OID      string `json:"oid"`
 	Headline string `json:"headline"`
 	Body     string `json:"body"`
-	Author   string `json:"author"`
+	Login    string `json:"login"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
 	Date     string `json:"date"` // gh's ISO committedDate
 }
 
@@ -179,6 +190,10 @@ type ghCommit struct {
 type ghCommitAuthor struct {
 	Login string `json:"login"`
 	Name  string `json:"name"`
+	// Email is the address git recorded and GitHub resolved (or failed to). It
+	// is carried for the unresolved case alone: "this commit belongs to nobody"
+	// is only actionable next to the address that has to be added or corrected.
+	Email string `json:"email"`
 }
 
 // PullRequestDetail returns one open pull request in full: the given number, or
@@ -219,6 +234,7 @@ func parsePRDetail(out []byte, openOnly bool) (*PRDetail, error) {
 		Title:               v.Title,
 		Body:                v.Body,
 		Author:              firstNonEmpty(v.Author.Login, v.Author.Name),
+		AuthorLogin:         v.Author.Login,
 		State:               v.State,
 		IsDraft:             v.IsDraft,
 		Mergeable:           v.Mergeable,
@@ -245,15 +261,20 @@ func toCommits(commits []ghCommit) []PRCommit {
 	}
 	out := make([]PRCommit, 0, len(commits))
 	for _, c := range commits {
-		author := ""
+		// Never collapsed to one display string: both kinds of commit carry a
+		// name, so falling back to it makes an unattributed commit read exactly
+		// like an attributed one.
+		var author ghCommitAuthor
 		if len(c.Authors) > 0 {
-			author = firstNonEmpty(c.Authors[0].Login, c.Authors[0].Name)
+			author = c.Authors[0]
 		}
 		out = append(out, PRCommit{
 			OID:      c.OID,
 			Headline: c.MessageHeadline,
 			Body:     c.MessageBody,
-			Author:   author,
+			Login:    author.Login,
+			Name:     author.Name,
+			Email:    author.Email,
 			Date:     c.CommittedDate,
 		})
 	}

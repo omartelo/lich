@@ -21,6 +21,7 @@ import (
 
 	"github.com/omartelo/lich/internal/logging"
 	"github.com/omartelo/lich/internal/providers"
+	"github.com/omartelo/lich/internal/sandbox"
 	"github.com/omartelo/lich/internal/singleton"
 	"github.com/omartelo/lich/internal/store"
 )
@@ -70,7 +71,9 @@ type Doctor struct {
 	browser  func() (string, error)
 	detect   func() []providers.Detected
 	store    func() (io.Closer, error)
+	sandbox  func() (string, error)
 	lookPath func(string) (string, error)
+	getenv   func(string) string
 }
 
 // New returns a Doctor for this machine. configDir is the OS config dir, and
@@ -84,7 +87,9 @@ func New(configDir string, getenv func(string) string) *Doctor {
 		browser:   Browser,
 		detect:    Providers,
 		store:     func() (io.Closer, error) { return store.New() },
+		sandbox:   sandbox.Probe,
 		lookPath:  exec.LookPath,
+		getenv:    getenv,
 	}
 }
 
@@ -105,6 +110,7 @@ func (d *Doctor) Run() []Check {
 		{"store", func() (Status, string) { return d.checkStore(info, running) }},
 		{"browser", d.checkBrowser},
 		{"providers", d.checkProviders},
+		{"sandbox", d.checkSandbox},
 		{"git", func() (Status, string) { return d.checkTool("git", gitWithout) }},
 		{"gh", func() (Status, string) { return d.checkTool("gh", ghWithout) }},
 	}
@@ -184,8 +190,9 @@ func (d *Doctor) checkStore(info *singleton.Info, running bool) (Status, string)
 	return OK, "the workspace database opens and its schema is current"
 }
 
-// checkBrowser resolves the Chromium-family binary the window is. Its absence
-// is the one failure where lich runs perfectly and shows nothing.
+// checkBrowser resolves the window lich would open. Its absence is the one
+// failure where lich runs perfectly and shows nothing — a package missing its
+// window, or a bare binary with no LICH_SHELL pin.
 func (d *Doctor) checkBrowser() (Status, string) {
 	path, err := d.browser()
 	if err != nil {
@@ -196,6 +203,12 @@ func (d *Doctor) checkBrowser() (Status, string) {
 
 // checkProviders counts the harnesses a session could spawn. None is not a
 // launch failure — the window opens on an empty workspace — so it warns.
+//
+// The scan is $PATH alone: a diagnosis will not open the workspace database
+// while a lich is running (checkStore), so the binaries configured in Settings ›
+// Providers — which the app itself resolves and counts as installed — are not
+// read here. The warning says so, or an app that spawns agents fine would be
+// read as contradicting its own doctor.
 func (d *Doctor) checkProviders() (Status, string) {
 	found := d.detect()
 	var installed []string
@@ -205,10 +218,33 @@ func (d *Doctor) checkProviders() (Status, string) {
 		}
 	}
 	if len(installed) == 0 {
-		return Warn, "none on PATH — lich opens, but no session can spawn"
+		return Warn, "none on PATH; Settings overrides not read"
 	}
 	return OK, fmt.Sprintf("%d of %d on PATH: %s",
 		len(installed), len(found), strings.Join(installed, ", "))
+}
+
+// checkSandbox proves the sandbox instead of trusting the launcher being on
+// PATH, which is all a spawn-time Available can afford to ask. It opens one
+// confined child and reads two files through it: one in the checkout, which
+// proves the child ran, and one in the home the backend replaces, which must
+// not come back.
+//
+// Never a Fail: lich starts and every unconfined session spawns. What breaks is
+// a project with the sandbox turned on, where the backend's own error arrives
+// in a card that then has no session in it, which is the failure worth naming
+// before it happens rather than after.
+func (d *Doctor) checkSandbox() (Status, string) {
+	backend, err := d.sandbox()
+	switch {
+	case backend == "":
+		return Skip, "no sandbox backend on this platform, so sessions run unconfined"
+	case err != nil:
+		// The probe's own sentence, whole: the two ways to fail cost different
+		// things, and only it knows which one this was.
+		return Warn, err.Error()
+	}
+	return OK, backend + " confines a session here"
 }
 
 // What a machine loses with each version control tool missing. The same two

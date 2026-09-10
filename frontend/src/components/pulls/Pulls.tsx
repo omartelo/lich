@@ -1,8 +1,9 @@
-import { useMemo, useState, type ReactNode } from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { GitPullRequestArrow } from "lucide-react"
 import { toast } from "sonner"
 import { ProjectService, Store } from "@/lib/rpc"
+import type { Worktree } from "@/lib/api-types"
 import { useProjects } from "@/providers/projects"
 import { baseName } from "@/lib/paths"
 import { Notice } from "@/components/common/Notice"
@@ -14,10 +15,18 @@ import { closePulls, openPulls } from "@/lib/pulls-card-store"
 import { sessionsOf } from "@/lib/session/sessions"
 import { useActiveSession } from "@/lib/session/use-active-session"
 import { queueSetup } from "@/lib/terminal/setup-queue"
+import { writeAtPrompt } from "@/lib/terminal/write-at-prompt"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { useCheckouts } from "@/lib/git/use-checkouts"
 import { invalidatePullRequests } from "@/lib/pulls/pull-request-lookup"
-import { parsePullsQuery, readPullsSort, type PullsSort } from "@/lib/pulls/pull-request-list"
+import { sweepDrafts } from "@/lib/pulls/draft-store"
+import { PULLS_PAGE_LIMIT, parsePullsQuery } from "@/lib/pulls/pull-request-list"
+import {
+  readLastPull,
+  readPullsQuery,
+  writeLastPull,
+  writePullsQuery,
+} from "@/lib/pulls/pulls-prefs"
 import { usePullRequestConversation } from "@/lib/pulls/use-pull-request-conversation"
 import { usePullRequestDetail } from "@/lib/pulls/use-pull-request-detail"
 import { usePullRequests } from "@/lib/pulls/use-pull-requests"
@@ -80,7 +89,13 @@ export function Pulls({ list = false }: PullsProps) {
   // No number in the route means the PR of whatever branch this checkout is on
   // — the whole screen without the list, and the default row with it. A number
   // addresses one directly, which only the list can produce.
-  const selected = Number(number) || 0
+  //
+  // Every way back into the list route is the bare one, so a return would drop
+  // the pull request being read for the checkout's own. The remembered number
+  // stands in for the one the URL is missing — read once per project, never
+  // from the write below, so the selection cannot chase itself.
+  const remembered = useMemo(() => (list ? readLastPull(projectId ?? "") : 0), [list, projectId])
+  const selected = Number(number) || remembered
   const { detail, loading, error, refresh } = usePullRequestDetail(
     hasGH ? path : "",
     branch,
@@ -93,11 +108,22 @@ export function Pulls({ list = false }: PullsProps) {
   const conversation = usePullRequestConversation(path, detail?.number ?? 0, head)
   // The filter box lives here, not in the column: its `is:` state decides which
   // pull requests gh is asked for, and that is a fetch rather than a filter.
-  const [query, setQuery] = useState("")
+  // Remembered like the sort beside it: a review interrupted by another project
+  // is otherwise a query typed twice.
+  const [query, setQuery] = useState(() => readPullsQuery(projectId ?? ""))
   const parsedQuery = useMemo(() => parsePullsQuery(query), [query])
+  // Stored on every keystroke rather than on some settle: a box half-typed when
+  // the user walks off is still what they were about to search for, and one
+  // short localStorage write per character is cheaper than the timer that would
+  // avoid it.
+  const changeQuery = (next: string) => {
+    writePullsQuery(projectId ?? "", next)
+    setQuery(next)
+  }
   // An empty path is the hook's own "nothing to look up", so the single pull
   // request screen never spends a gh call on a list it does not show.
-  const pulls = usePullRequests(list && hasGH ? projectPath || path : "", parsedQuery.state)
+  const listPath = list && hasGH ? projectPath || path : ""
+  const pulls = usePullRequests(listPath, parsedQuery.state)
   const { checkouts, refresh: refreshCheckouts } = useCheckouts(projectPath)
   // Where the pull request's own branch already lives, if anywhere. Every
   // "work on this PR" decision hangs off it: whether to create a checkout,
@@ -106,8 +132,40 @@ export function Pulls({ list = false }: PullsProps) {
   // checkout of a branch just as hard when the project itself holds it.
   const checkedOut = checkouts.find((c) => c.name === detail?.headRefName)
   const inject = useInject(sessionId)
-  const [sort, setSort] = useState<PullsSort>(readPullsSort)
   const [opening, setOpening] = useState(false)
+
+  // Written from the selection rather than from the click, so a pull request
+  // reached by URL is remembered too.
+  useEffect(() => {
+    if (list && projectId && selected > 0) {
+      writeLastPull(projectId, selected)
+    }
+  }, [list, projectId, selected])
+
+  // Unsent prose outlives the screen it was typed on, so something has to
+  // retire it: this list is the only thing that knows a pull request has
+  // stopped being open (draft-store). An empty list is an answer like any
+  // other — a repository whose pull requests have all landed — which is why the
+  // guard is the path the lookup was given rather than the rows it came back
+  // with: no path is no answer at all, and sweeping against it would collect
+  // every draft in the project.
+  //
+  // Two more, each of which would otherwise take a draft that is still wanted:
+  // a query asking for merged or closed pull requests answers with a set that
+  // says nothing about the open ones, and an answer cut at the page limit is
+  // not the repository's whole list.
+  useEffect(() => {
+    if (!listPath || !projectId || pulls.loading || pulls.error) {
+      return
+    }
+    if (parsedQuery.state !== "open" || pulls.list.length >= PULLS_PAGE_LIMIT) {
+      return
+    }
+    sweepDrafts(
+      projectId,
+      pulls.list.map((pr) => pr.number),
+    )
+  }, [listPath, projectId, parsedQuery.state, pulls.list, pulls.loading, pulls.error])
 
   // This screen and the badges around it read the same pull request through two
   // separate lookups, so a change with HEAD standing still — a merge, a PR
@@ -123,8 +181,17 @@ export function Pulls({ list = false }: PullsProps) {
   // otherwise walk back to the sidebar for. Refuse a dirty worktree: whatever
   // was never committed lives only there, and the sidebar's flow is the one that
   // knows how to confirm discarding it.
-  const removeWorktree = async (wtPath: string) => {
+  //
+  // The offer is drawn from the filed checkout list and the toast it rides
+  // outlives the merge by ten seconds, so the click re-reads too: a checkout
+  // already gone is what the offer was asking for, not a failure to report.
+  const removeWorktree = async (wt: Worktree) => {
     if (!projectId) {
+      return
+    }
+    const wtPath = wt.path
+    if (!(await refreshCheckouts()).some((c) => c.path === wtPath)) {
+      toast.success(`${baseName(wtPath)} was already removed`)
       return
     }
     const occupants = sessionsOf(sessions, projectId).filter((s) => s.path === wtPath)
@@ -132,6 +199,15 @@ export function Pulls({ list = false }: PullsProps) {
     // exactly what the pin refuses.
     if (occupants.some((s) => s.pinned)) {
       toast.error("Worktree has a pinned session — unpin it first.")
+      return
+    }
+    // A checkout the user made by hand is theirs, so deleting it takes a
+    // confirmation naming the directory — which this screen has nowhere to put.
+    // Routed to the sidebar's close dialog, the way a dirty one is. Refused here
+    // rather than at the call, which is past the point where the sessions have
+    // already been discarded.
+    if (await ProjectService.WorktreeAdopted(wtPath).catch(() => true)) {
+      toast.error("lich did not create this worktree — remove it from the sidebar.")
       return
     }
     if (await ProjectService.WorktreeDirty(wtPath).catch(() => false)) {
@@ -152,12 +228,12 @@ export function Pulls({ list = false }: PullsProps) {
       navigate(`/projects/${projectId}`)
     }
     try {
-      await ProjectService.RemoveWorktree(projectPath, wtPath, false)
+      await ProjectService.RemoveWorktree(projectPath, wtPath, false, false)
       toast.success(`Removed ${baseName(wtPath)}`)
     } catch (err: unknown) {
       toast.error(`Failed to remove worktree: ${errorText(err)}`)
     }
-    refreshCheckouts()
+    void refreshCheckouts()
   }
 
   const onMerged = () => {
@@ -175,7 +251,7 @@ export function Pulls({ list = false }: PullsProps) {
     }
     toast.success(merged, {
       duration: CLEANUP_TOAST_MS,
-      action: { label: "Remove worktree", onClick: () => void removeWorktree(wt.path) },
+      action: { label: "Remove worktree", onClick: () => void removeWorktree(wt) },
     })
   }
 
@@ -183,42 +259,78 @@ export function Pulls({ list = false }: PullsProps) {
   // git refuses to check one branch out twice, so a checkout that already holds
   // it is reused rather than recreated — and that includes the project's own
   // directory, which is where a branch usually is.
-  const openInSession = async () => {
+  //
+  // Which of the two it is comes from a fresh read, never from the filed answer
+  // the button was drawn from: a checkout removed from a terminal while the user
+  // was on another screen would otherwise send this to a directory that is gone.
+  // Verify before acting, never before showing — the label goes on painting from
+  // the cache, and only the click pays the round trip.
+  //
+  // It answers with the session the work lands in, so a caller with something to
+  // hand that session knows where to write; "" when nothing was opened.
+  const openInSession = async (): Promise<string> => {
     if (!projectId || !detail) {
-      return
-    }
-    const existing = checkedOut
-    if (existing) {
-      const live = sessionsOf(sessions, projectId).find((s) => s.path === existing.path)
-      if (live) {
-        activateSession(projectId, live.id)
-      } else if (existing.path === projectPath) {
-        // The project's own checkout is not a worktree: it has no parked
-        // session to resume and must never be handed to the worktree flows.
-        newSession(projectId)
-      } else {
-        await reopenWorktreeSession(projectId, existing)
-      }
-      openPulls(existing.path)
-      navigate(`/projects/${projectId}`)
-      return
+      return ""
     }
     setOpening(true)
     try {
+      const existing = (await refreshCheckouts()).find((c) => c.name === detail.headRefName)
+      if (existing) {
+        const live = sessionsOf(sessions, projectId).find((s) => s.path === existing.path)
+        let target: string
+        if (live) {
+          activateSession(projectId, live.id)
+          target = live.id
+        } else if (existing.path === projectPath) {
+          // The project's own checkout is not a worktree: it has no parked
+          // session to resume and must never be handed to the worktree flows.
+          target = newSession(projectId)
+        } else {
+          target = await reopenWorktreeSession(projectId, existing)
+        }
+        openPulls(existing.path)
+        navigate(`/projects/${projectId}`)
+        return target
+      }
       const wt = await ProjectService.CreateWorktreeFromPR(projectPath, projectId, detail.number)
       if (!wt) {
-        return
+        return ""
       }
       // A fresh checkout is the one moment the project's setup script runs, and
       // the pull request card rides along so the session carries its PR.
-      queueSetup(newWorktreeSession(projectId, wt))
+      const target = newWorktreeSession(projectId, wt)
+      queueSetup(target)
       openPulls(wt.path)
-      refreshCheckouts()
+      void refreshCheckouts()
       navigate(`/projects/${projectId}`)
+      return target
     } catch (err: unknown) {
       toast.error(`Couldn’t open a session: ${errorText(err)}`)
+      return ""
     } finally {
       setOpening(false)
+    }
+  }
+
+  // The problem in the way, written at the prompt of the session that would fix
+  // it: the one on the pull request's own branch, opened here when there is
+  // none, and brought into view either way. The screen the click happened on
+  // cannot show what became of it, and a prompt filled in a session nobody is
+  // looking at is a click that did nothing — which is how this button was first
+  // used, back when it wrote into whichever session happened to be active.
+  //
+  // lich stops at the prompt. The text is there to read, edit and send, and the
+  // Enter is the user's: the relay is the one place lich presses it, for a
+  // sender that is not a person (internal/relay, submitDelay).
+  const handOff = async (prompt: string) => {
+    const target = await openInSession()
+    if (!target) {
+      return
+    }
+    try {
+      await writeAtPrompt(target, prompt)
+    } catch (err: unknown) {
+      toast.error(`Couldn’t hand this to the session: ${errorText(err)}`)
     }
   }
 
@@ -251,12 +363,14 @@ export function Pulls({ list = false }: PullsProps) {
     body = (
       <PullRequestView
         path={path}
+        projectId={projectId ?? ""}
         head={head}
         detail={detail}
         session={session}
         onRefresh={reload}
         onMerged={onMerged}
         onInject={inject}
+        onHandOff={handOff}
         conversation={conversation.conversation}
         conversationLoading={conversation.loading}
         onConversationRefresh={conversation.refresh}
@@ -277,10 +391,9 @@ export function Pulls({ list = false }: PullsProps) {
           error={pulls.error}
           selected={selected || (detail?.number ?? 0)}
           onSelect={(picked) => navigate(`/projects/${projectId}/pulls/all/${picked}`)}
-          sort={sort}
-          onSortChange={setSort}
+          projectId={projectId ?? ""}
           query={query}
-          onQueryChange={setQuery}
+          onQueryChange={changeQuery}
           parsed={parsedQuery}
           checkedOutBranches={new Set(checkouts.map((c) => c.name))}
         />

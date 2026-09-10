@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react"
-import { HashRouter, Outlet, Route, Routes, useMatch } from "react-router-dom"
+import { HashRouter, Outlet, Route, Routes, useLocation, useMatch } from "react-router-dom"
 import { SettingsProvider, useSettings } from "@/providers/settings"
 import { useHotkey } from "@/lib/use-hotkey"
 import { parseBoolPref, readPref, writePref } from "@/lib/prefs"
 import { ProjectsProvider, useProjects } from "@/providers/projects"
 import { activeSessionId, sessionsOf } from "@/lib/session/sessions"
+import { usePanes } from "@/lib/session/use-panes"
+import { Terminal as TerminalService } from "@/lib/rpc"
+import { reapTerminals } from "@/lib/terminal/terminal-registry"
 import {
   requestSessionIntent,
   requestWorktreeDialog,
@@ -14,6 +17,7 @@ import { ProjectTabs } from "@/components/tabs/ProjectTabs"
 import { SessionSidebar } from "@/components/sidebar/SessionSidebar"
 import { SidebarRail } from "@/components/sidebar/SidebarRail"
 import { TerminalHost } from "@/components/TerminalHost"
+import { ErrorBoundary } from "@/components/common/ErrorBoundary"
 import { RightDock, type DockTab } from "@/components/dock/RightDock"
 import { FooterBar } from "@/components/FooterBar"
 import { Home } from "@/components/Home"
@@ -42,6 +46,7 @@ function Layout() {
   const { hotkeys } = useSettings()
   const { sessions } = useProjects()
   const match = useMatch("/projects/:projectId/*")
+  const location = useLocation()
   const projectId = match?.params.projectId ?? ""
   const [dock, setDock] = useState<DockTab | null>(null)
   const [sidebar, setSidebar] = useState(() => parseBoolPref(readPref(SIDEBAR_KEY), true))
@@ -51,6 +56,14 @@ function Layout() {
   }
   const toggleSidebar = () => showSidebar(!sidebar)
   useHotkey(hotkeys.toggleSidebar, toggleSidebar)
+  // A session's PTY and terminal end when the session leaves the workspace,
+  // decided here and not in the view that drew it: that view is gone while
+  // the stage sits in an error boundary's fallback, and a close made from the
+  // sidebar meanwhile would otherwise leave the agent running unseen.
+  useEffect(() => {
+    const live = new Set(Object.values(sessions).flatMap((p) => p.sessions.map((s) => s.id)))
+    reapTerminals(live, (id) => void TerminalService.Close(id))
+  }, [sessions])
   // Both of these act on sidebar chrome — the worktree dialog, a card's rename
   // field — and the rail carries neither, so a collapsed sidebar is opened
   // first rather than letting the chord quietly do nothing. The request is a
@@ -91,6 +104,16 @@ function Layout() {
     }
   }, [dock])
   useHotkey(hotkeys.toggleDock, () => setDock((cur) => (cur ? null : lastTab.current)))
+  // Nothing left to show, no room left to show it in, or no second pane to move
+  // the cursor to: each declines rather than being swallowed for nothing, the
+  // rule every card shortcut above follows.
+  const panes = usePanes(projectId)
+  useHotkey(hotkeys.splitBeside, () => {
+    if (!panes.add()) {
+      return false
+    }
+  })
+  useHotkey(hotkeys.otherPane, () => panes.split && panes.focusStep(1))
   return (
     <div className="flex h-screen w-screen flex-col bg-background">
       <ProjectTabs />
@@ -107,10 +130,32 @@ function Layout() {
           {/* relative: RightDock overlays this area when in full screen. */}
           <div className="relative flex flex-1 overflow-hidden">
             <div className="relative flex-1 overflow-hidden">
-              <TerminalHost />
-              <Outlet />
+              {/* The stage's own chrome — the grid, the seams, the dialogs it
+                  owns. A pane's throw is caught closer, inside TerminalHost,
+                  so this fallback is for the layout around them. Retrying
+                  remounts the host, and every terminal re-attaches from the
+                  registry with its scrollback. A throw inside xterm's own
+                  render loop is not a React render, so nothing here sees it. */}
+              <ErrorBoundary
+                label="The stage"
+                retry="Reload the stage"
+                className="absolute inset-0"
+              >
+                <TerminalHost />
+              </ErrorBoundary>
+              <ErrorBoundary
+                label="This screen"
+                resetKey={location.pathname}
+                className="absolute inset-0 z-10"
+              >
+                <Outlet />
+              </ErrorBoundary>
             </div>
-            {dock && <RightDock tab={dock} onTab={setDock} onClose={() => setDock(null)} />}
+            {dock && (
+              <ErrorBoundary label="The panel" className="w-80 shrink-0 border-l border-border">
+                <RightDock tab={dock} onTab={setDock} onClose={() => setDock(null)} />
+              </ErrorBoundary>
+            )}
           </div>
           <FooterBar dock={dock} onDock={toggleDock} />
         </main>

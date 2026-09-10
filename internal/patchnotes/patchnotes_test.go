@@ -125,3 +125,66 @@ func TestSectionDropsEmptyGroups(t *testing.T) {
 		t.Fatalf("empty group not dropped:\n got %#v\nwant %#v", got, want)
 	}
 }
+
+const withHighlights = `## [0.45.0] - 2026-09-06
+
+> [!IMPORTANT]
+> **Linux users: lich now opens in its own window.** No browser needs to be
+> installed.
+
+> A plain quote is prose, not a highlight.
+
+> [!NOTE]
+> **NVIDIA under Wayland opens on XWayland by default.**
+
+> [!WARNING]
+
+### Added
+
+- **On Linux, lich now brings its own window.**
+
+> [!IMPORTANT]
+> Written under a group, so not a highlight.
+
+## [0.44.0] - 2026-08-30
+
+> [!IMPORTANT]
+> The previous release's headline.
+`
+
+func TestHighlightsReadsAlertBlocksBeforeTheFirstGroup(t *testing.T) {
+	got := Highlights(withHighlights, "v0.45.0")
+	want := []Highlight{
+		{Kind: "important", Text: "**Linux users: lich now opens in its own window.** No browser needs to be installed."},
+		{Kind: "note", Text: "**NVIDIA under Wayland opens on XWayland by default.**"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Highlights mismatch:\n got %#v\nwant %#v", got, want)
+	}
+}
+
+// The blocks are prose to the group parser: the "### Added" group must come
+// through exactly as it would without them.
+func TestHighlightsLeaveGroupsUntouched(t *testing.T) {
+	got := Section(withHighlights, "0.45.0")
+	want := []Group{{Label: "Added", Items: []string{"**On Linux, lich now brings its own window.**"}}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("groups changed by highlights:\n got %#v\nwant %#v", got, want)
+	}
+}
+
+func TestHighlightsAreNilWithoutBlocksOrSection(t *testing.T) {
+	if got := Highlights(sample, "0.11.0"); got != nil {
+		t.Fatalf("want nil for a section without blocks, got %#v", got)
+	}
+	if got := Highlights(withHighlights, "9.9.9"); got != nil {
+		t.Fatalf("want nil for an absent version, got %#v", got)
+	}
+}
+
+func TestCurrentCarriesHighlights(t *testing.T) {
+	got := New("v0.45.0", withHighlights).Current()
+	if len(got.Highlights) != 2 || got.Highlights[0].Kind != "important" {
+		t.Fatalf("Highlights = %#v, want the two blocks of 0.45.0", got.Highlights)
+	}
+}

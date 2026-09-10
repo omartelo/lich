@@ -34,6 +34,11 @@ var ghFailures = []toolFailure{
 			"Choose the account that can see it in Settings → Version Control.",
 	},
 	{"could not resolve to a pullrequest", "GitHub has no pull request with that number."},
+	// What `gh issue view` says for a number GitHub has never issued. Its
+	// wording names both kinds because GitHub numbers them in one sequence, but
+	// only the issue lookup can reach it — the pull request flows address a
+	// number gh already listed.
+	{"resolve to an issue or pull request", "GitHub has no issue with that number."},
 	{
 		"can not approve your own pull request",
 		"GitHub does not let an account approve its own pull request — this one was opened by the " +

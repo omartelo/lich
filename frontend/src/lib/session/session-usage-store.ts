@@ -4,6 +4,7 @@ import {
   isIdleEvent,
   isUsageEvent,
   usageCost,
+  usageCostMiss,
   type SessionEventSource,
   type SessionUsage,
 } from "./session-events"
@@ -20,7 +21,8 @@ const sameUsage = (a: SessionUsage | null, b: SessionUsage | null): boolean =>
     a.window === b.window &&
     a.model === b.model &&
     a.effort === b.effort &&
-    a.costUsd === b.costUsd)
+    a.costUsd === b.costUsd &&
+    a.costMiss === b.costMiss)
 
 // createSessionUsageStore keeps the last reported context-window usage of every
 // session, keyed by session id, fed by subscriptions taken at creation — before
@@ -44,6 +46,7 @@ export function createSessionUsageStore(
       model: data.model,
       effort: data.effort,
       costUsd: usageCost(data),
+      costMiss: usageCostMiss(data),
     })
   })
   agentSource((data) => {

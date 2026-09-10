@@ -16,9 +16,19 @@ import (
 type fakeSessions struct {
 	projects []store.Project
 	err      error
+	// schedule, when set, takes the scheduled-prompt writes deliverDue makes. A
+	// test that does not schedule anything leaves it nil, which accepts them.
+	schedule func(sessionID string, at int64, prompt string) error
 }
 
 func (f fakeSessions) LoadState() ([]store.Project, error) { return f.projects, f.err }
+
+func (f fakeSessions) SetSessionSchedule(sessionID string, at int64, prompt string) error {
+	if f.schedule == nil {
+		return nil
+	}
+	return f.schedule(sessionID, at, prompt)
+}
 
 // fakeTerminal records what was typed at which session, and answers Live from
 // an explicit set so a test can park a session without a PTY.
@@ -30,24 +40,54 @@ type fakeTerminal struct {
 	settingUp map[string]bool
 	// typing is whether the person at that session has a half-written line at its
 	// prompt, which the terminal service reports through the same Ready.
-	typing   map[string]bool
+	typing map[string]bool
+	// noisy is how many more QuietFor calls a session answers as still drawing,
+	// and drained counts the ones it spent.
+	noisy    map[string]int
+	drained  map[string]int
 	writes   map[string][]string
 	writeErr error
 	refused  int
 	// onWrite runs after a write is recorded, outside the fake's own lock, so a
 	// test can make the target report state from inside a delivery.
 	onWrite func(id, data string)
+	// names is what each session's agent has on record, standing in for the
+	// transcript the terminal service reads. Empty for a session nobody renamed,
+	// which is what puts the roster back on the derived name.
+	names map[string]string
+	// holding is whether a hold is open on that session right now, and inHold
+	// collects the writes that landed inside one — which is how a test asks
+	// whether the whole paste-to-Enter window was covered.
+	holding map[string]bool
+	inHold  map[string][]string
 }
 
 func newFakeTerminal(live ...string) *fakeTerminal {
 	t := &fakeTerminal{
 		live: map[string]bool{}, writes: map[string][]string{},
 		settingUp: map[string]bool{}, typing: map[string]bool{},
+		noisy: map[string]int{}, drained: map[string]int{},
+		names:   map[string]string{},
+		holding: map[string]bool{}, inHold: map[string][]string{},
 	}
 	for _, id := range live {
 		t.live[id] = true
 	}
 	return t
+}
+
+// AgentName answers with whatever renamed() recorded for that session.
+func (f *fakeTerminal) AgentName(id string) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.names[id]
+}
+
+// renamed makes a session answer to name the way a /rename inside it would.
+func (f *fakeTerminal) renamed(id, name string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.names[id] = name
 }
 
 func (f *fakeTerminal) Live(id string) bool {
@@ -81,6 +121,36 @@ func (f *fakeTerminal) setUp(id string, running bool) {
 	f.settingUp[id] = running
 }
 
+// QuietFor reports the terminal as settled unless a test says otherwise: the
+// fake has no TUI drawing into it, so there is nothing here to wait out.
+// noise makes one session busy for the next n answers, which is how a delivery
+// that has to wait for the drain is written.
+func (f *fakeTerminal) QuietFor(id string) time.Duration {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.noisy[id] > 0 {
+		f.noisy[id]--
+		f.drained[id]++
+		return 0
+	}
+	return time.Hour
+}
+
+// noise makes a session answer QuietFor as still drawing for the next n calls,
+// standing in for a TUI taking a paste in character by character.
+func (f *fakeTerminal) noise(id string, n int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.noisy[id] = n
+}
+
+// drains counts how many times a delivery found the session still drawing.
+func (f *fakeTerminal) drains(id string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.drained[id]
+}
+
 func (f *fakeTerminal) Write(id, data string) error {
 	f.mu.Lock()
 	err := f.writeErr
@@ -88,6 +158,9 @@ func (f *fakeTerminal) Write(id, data string) error {
 		f.refused++
 	} else {
 		f.writes[id] = append(f.writes[id], data)
+		if f.holding[id] {
+			f.inHold[id] = append(f.inHold[id], data)
+		}
 	}
 	hook := f.onWrite
 	f.mu.Unlock()
@@ -127,12 +200,42 @@ func (f *fakeTerminal) written(id string) string {
 	return strings.Join(f.writesTo(id), "")
 }
 
+// HoldInput stands in for the terminal service keeping the user's keystrokes
+// out of a delivery's own submission (terminal.HoldInput). The fake has no
+// keyboard, so what it records is the window itself: which writes happened
+// while the hold was open.
+func (f *fakeTerminal) HoldInput(id string) func() {
+	f.mu.Lock()
+	f.holding[id] = true
+	f.mu.Unlock()
+	return func() {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		f.holding[id] = false
+	}
+}
+
+// holdOpen is whether a delivery still has that session's keyboard.
+func (f *fakeTerminal) holdOpen(id string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.holding[id]
+}
+
+// heldWrites is what a session was written while a delivery held its prompt.
+func (f *fakeTerminal) heldWrites(id string) []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.inHold[id]...)
+}
+
 // fakeEvents records what the relay announced to the window, in order.
 type fakeEvents struct {
 	mu    sync.Mutex
 	sent  []RelayEvent
 	halts []StalledEvent
 	inbox []InboxEvent
+	marks []ScheduleEvent
 }
 
 func (f *fakeEvents) Emit(name string, data any) {
@@ -147,11 +250,22 @@ func (f *fakeEvents) Emit(name string, data any) {
 		if name == StalledEventName {
 			f.halts = append(f.halts, event)
 		}
+	case ScheduleEvent:
+		if name == ScheduleEventName {
+			f.marks = append(f.marks, event)
+		}
 	case InboxEvent:
 		if name == InboxEventName {
 			f.inbox = append(f.inbox, event)
 		}
 	}
+}
+
+// schedules is every scheduled-prompt mark the relay moved, in order.
+func (f *fakeEvents) schedules() []ScheduleEvent {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]ScheduleEvent(nil), f.marks...)
 }
 
 func (f *fakeEvents) stalled() []StalledEvent {
@@ -357,6 +471,77 @@ func TestPeersReportsAStoreFailure(t *testing.T) {
 	}
 }
 
+// TestTheEnterWaitsForTheTargetToFinishTakingThePasteIn pins the delivery to
+// the target's own quiet rather than to a wall-clock guess on this side. A
+// terminal that hands the TUI a paste one character at a time — every Windows
+// ConPTY, where the bracketed paste markers never survive — is still drawing
+// when a write here has returned, and an Enter pressed into that burst is read
+// as a newline inside the paste instead of as "send it".
+func TestTheEnterWaitsForTheTargetToFinishTakingThePasteIn(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := newRelay(workspace(), term, nil)
+	svc.submitDelay = time.Millisecond
+	term.noise("s2", 3)
+
+	go svc.Send("s1", "docs", "", "run the tests", 1)
+
+	if !awaitWritten(term, "s2", submit) {
+		t.Fatal("the Enter never arrived")
+	}
+	if got := term.drains("s2"); got != 3 {
+		t.Errorf("waited out %d draws, want 3 — the Enter did not wait for the target to settle", got)
+	}
+	writes := term.written("s2")
+	if !strings.HasSuffix(writes, submit) {
+		t.Errorf("last write = %q, want the Enter behind the paste", writes)
+	}
+}
+
+// The paste and the Enter behind it are one submission, and the target's own
+// keyboard is held for the whole of it: anything typed in that window would be
+// sent as part of a message the person at that prompt never wrote
+// (terminal.HoldInput). The window opens before the paste and closes after the
+// Enter, which is what this reads off the fake.
+func TestTheTargetsKeyboardIsHeldForTheWholeSubmission(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := newRelay(workspace(), term, nil)
+	svc.submitDelay = time.Millisecond
+	term.noise("s2", 3)
+
+	go svc.Send("s1", "docs", "", "run the tests", 1)
+
+	if !awaitWritten(term, "s2", submit) {
+		t.Fatal("the Enter never arrived")
+	}
+	held := term.heldWrites("s2")
+	if len(held) != 2 || !strings.HasPrefix(held[0], "\x1b[200~") || held[1] != submit {
+		t.Errorf("held writes = %q, want the paste and the Enter both inside the hold", held)
+	}
+	if term.holdOpen("s2") {
+		t.Error("the hold outlived the delivery: the prompt is the user's again")
+	}
+}
+
+// TestASilentTargetIsSentItsEnterAnyway pins the other half: a TUI that
+// repaints on a timer of its own would never go quiet, and an errand that hangs
+// on that is worse than one whose Enter is late.
+func TestASilentTargetIsSentItsEnterAnyway(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := newRelay(workspace(), term, nil)
+	svc.submitDelay = time.Millisecond
+	svc.settleLimit = 20 * time.Millisecond
+	term.noise("s2", 1_000_000)
+
+	start := time.Now()
+	svc.awaitSettled("s2")
+	if elapsed := time.Since(start); elapsed >= time.Second {
+		t.Fatalf("waited %s on a terminal that never settles, want it capped at %s", elapsed, svc.settleLimit)
+	}
+	if term.drains("s2") == 0 {
+		t.Error("gave up without waiting at all")
+	}
+}
+
 func TestSendDeliversAndReplyAnswers(t *testing.T) {
 	term := newFakeTerminal("s1", "s2")
 	svc := newRelay(workspace(), term, nil)
@@ -493,6 +678,46 @@ func TestARosterNameReachesTheSameSession(t *testing.T) {
 	}
 	if term.written("s2") == "" {
 		t.Error("the session the roster name points at was never typed at")
+	}
+}
+
+// TestARenamedSessionAnswersToItsNewName proves the read-back the roster rests
+// on: a session renamed from the inside answers to the name it now carries, and
+// no longer to the one lich derived — which is the string an agent reads out of
+// /list-agents and writes back at a prompt.
+func TestARenamedSessionAnswersToItsNewName(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	term.renamed("s2", "reviewer")
+	svc := newRelay(workspace(), term, nil)
+
+	go func() { _ = svc.Reply("", waitForTicket(svc), "ok") }()
+	got, err := svc.Send("s1", "reviewer", "", "hello", 30)
+	if err != nil {
+		t.Fatalf("Send by the renamed roster name: %v", err)
+	}
+	if got.Target != "docs" {
+		t.Errorf("target = %q, want the card label", got.Target)
+	}
+	if term.written("s2") == "" {
+		t.Error("the session the renamed name points at was never typed at")
+	}
+}
+
+// TestADerivedNameIsGoneOnceTheSessionRenames proves the other half of the same
+// read: the derived string stops addressing a session that renamed itself,
+// rather than reaching it under two names at once. Answering to both would put
+// the roster back where it was — an address lich mints and nothing keeps true.
+func TestADerivedNameIsGoneOnceTheSessionRenames(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	term.renamed("s2", "reviewer")
+	svc := newRelay(workspace(), term, nil)
+
+	_, err := svc.Send("s1", RosterName("/src/lich", "s2"), "", "hello", 30)
+	if err == nil {
+		t.Fatal("Send by the derived name = nil, want no session under it")
+	}
+	if !strings.Contains(err.Error(), "reviewer") {
+		t.Errorf("the error does not name what is reachable instead: %v", err)
 	}
 }
 
@@ -832,45 +1057,112 @@ func awaitDelivered(t *testing.T, svc *Service, n int) {
 	t.Fatalf("never saw %d delivered tickets", n)
 }
 
-// TestADoneClosesOnlyTheTurnsOwnErrand proves a turn answers for one errand.
-// Two messages delivered back to back — inside the second or two before the
-// target's busy report lands — queue as two turns; the first turn's end must
-// not report the second errand as answered elsewhere while its message is
-// still queued, unread.
-func TestADoneClosesOnlyTheTurnsOwnErrand(t *testing.T) {
-	svc := newRelay(workspace(), newFakeTerminal("s1", "s2", "s3"), nil)
+// TestADoneWithTwoErrandsOpenStallsBothAndAsksForTheTicket proves what a turn
+// ending says, and what it does not. Two messages delivered back to back —
+// inside the second or two before the target's busy report lands — queue as two
+// turns, and the end of the first says only that a turn ended without an answer
+// here. That is the same true thing about every errand it could have been, so
+// every one of them takes the stall path a single errand takes and every sender
+// hears what it would have heard alone. What nothing here can say is which of
+// them that turn was — so the answer is not put on one of them by delivery
+// order, and the worker is asked at its own prompt to name the ticket.
+func TestADoneWithTwoErrandsOpenStallsBothAndAsksForTheTicket(t *testing.T) {
+	term := newFakeTerminal("s1", "s2", "s3")
+	events := &fakeEvents{}
+	svc := newRelay(workspace(), term, events)
 
 	first := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Send("s1", "docs", "", "task one", 5)
+		got, _ := svc.Send("s1", "docs", "", "run the tests and report the failures", 5)
 		first <- got
 	}()
 	awaitDelivered(t, svc, 1)
 	second := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Send("s3", "docs", "", "task two", 5)
+		got, _ := svc.Send("s3", "docs", "", "build the docs", 5)
 		second <- got
 	}()
 	awaitDelivered(t, svc, 2)
+	delivery := len(term.writesTo("s2"))
+	tickets := openTickets(svc)
 
-	// The target picks the first task up and ends that turn without replying.
 	svc.Observe("s2", "busy")
 	svc.Observe("s2", "done")
-	if got := <-first; got.Status != StatusUnanswered {
-		t.Fatalf("first errand = %q, want %q", got.Status, StatusUnanswered)
+
+	for _, got := range []Result{<-first, <-second} {
+		if got.Status != StatusUnanswered {
+			t.Errorf("status = %q, want %q for both errands the turn could have been",
+				got.Status, StatusUnanswered)
+		}
 	}
-	select {
-	case got := <-second:
-		t.Fatalf("the first turn's end closed the second errand too: %+v", got)
-	case <-time.After(50 * time.Millisecond):
+	if halts := events.stalled(); len(halts) != 2 {
+		t.Errorf("stall events = %d, want one per sender", len(halts))
+	}
+	if left := openTickets(svc); len(left) != 0 {
+		t.Errorf("open tickets = %v, want both closed by the turn that ended", left)
 	}
 
-	// The queued second task runs as its own turn.
+	if !awaitWrites(term, "s2", delivery+2) {
+		t.Fatal("the worker was never asked to name the ticket")
+	}
+	notice := strings.Join(term.writesTo("s2")[delivery:], "")
+	for _, want := range []string{
+		"[lich]", "run the tests and report the failures", "build the docs",
+		"went back to their senders unanswered", "The next request you answer has to name its ticket",
+	} {
+		if !strings.Contains(notice, want) {
+			t.Errorf("the notice is missing %q:\n%s", want, notice)
+		}
+	}
+	// The tickets are named as what happened, never as somewhere to reply: the
+	// stall closed them, so a worker that ran a reply command out of this note
+	// would be told the ticket is unknown.
+	for _, id := range tickets {
+		if !strings.Contains(notice, id) {
+			t.Errorf("the notice does not name ticket %q:\n%s", id, notice)
+		}
+		if strings.Contains(notice, "lich reply "+id) {
+			t.Errorf("the notice invites a reply to closed ticket %q:\n%s", id, notice)
+		}
+	}
+}
+
+// A single errand is the case there is nothing to pick between: it is stalled
+// on its own, and the worker is not asked to name anything.
+func TestADoneWithOneErrandOpenStallsItWithoutANotice(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := newRelay(workspace(), term, &fakeEvents{})
+
+	only := make(chan Result, 1)
+	go func() {
+		got, _ := svc.Send("s1", "docs", "", "run the tests", 5)
+		only <- got
+	}()
+	awaitDelivered(t, svc, 1)
+	delivery := len(term.writesTo("s2"))
+
 	svc.Observe("s2", "busy")
 	svc.Observe("s2", "done")
-	if got := <-second; got.Status != StatusUnanswered {
-		t.Fatalf("second errand = %q, want %q", got.Status, StatusUnanswered)
+
+	if got := <-only; got.Status != StatusUnanswered {
+		t.Fatalf("status = %q, want %q", got.Status, StatusUnanswered)
 	}
+	time.Sleep(50 * time.Millisecond)
+	if got := len(term.writesTo("s2")); got != delivery {
+		t.Errorf("writes = %d, want no notice: there was only one errand to be", got)
+	}
+}
+
+// openTickets is every errand still on the table, for a test that has to know
+// what was closed and what the worker was told about.
+func openTickets(svc *Service) []string {
+	svc.mu.Lock()
+	defer svc.mu.Unlock()
+	ids := make([]string, 0, len(svc.tickets))
+	for id := range svc.tickets {
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 // TestASecondErrandQueuedMidTurnSurvivesTheFirstsEnd is the same guarantee with
@@ -1305,13 +1597,48 @@ func TestReplyRefusesUnknownAndRepeatedTickets(t *testing.T) {
 // reaches the ticket answers its own session's open request, and with several
 // open the oldest delivery is closed first — the order every provider hands
 // queued tasks to its agent in.
-func TestReplyWithoutATicketAnswersTheOldestErrandDelivered(t *testing.T) {
+// TestReplyWithoutATicketAnswersTheOneOpenErrand is the case the shorthand
+// exists for: an agent whose context was compacted past the message can still
+// send its answer home, because one open request needs no guessing.
+func TestReplyWithoutATicketAnswersTheOneOpenErrand(t *testing.T) {
+	events := &fakeEvents{}
+	svc := newRelay(workspace(), newFakeTerminal("s1", "s2"), events)
+
+	only := make(chan Result, 1)
+	go func() {
+		got, _ := svc.Send("s1", "docs", "", "run the tests", 30)
+		only <- got
+	}()
+	if !events.awaitMark("s1", DirectionOut) {
+		t.Fatal("the message was never delivered")
+	}
+
+	if err := svc.Reply("s2", "", "3 failures in foo_test"); err != nil {
+		t.Fatalf("Reply: %v", err)
+	}
+	select {
+	case got := <-only:
+		if got.Answer != "3 failures in foo_test" {
+			t.Errorf("answer = %q", got.Answer)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the open errand was never answered")
+	}
+}
+
+// TestReplyWithoutATicketIsRefusedWithTwoErrandsOpen pins the refusal that
+// replaced the guess. Nothing in an answer says which request it belongs to, so
+// a session working two tasks that answers the second one first used to send it
+// home as the answer to the first — two senders reading a confident report of
+// work nobody did. The refusal has to name both tickets and what each asked, or
+// the agent has nothing to retry with.
+func TestReplyWithoutATicketIsRefusedWithTwoErrandsOpen(t *testing.T) {
 	events := &fakeEvents{}
 	svc := newRelay(workspace(), newFakeTerminal("s1", "s2", "s3"), events)
 
 	first := make(chan Result, 1)
 	go func() {
-		got, _ := svc.Send("s1", "docs", "", "run the tests", 30)
+		got, _ := svc.Send("s1", "docs", "", "run the tests and report the failures", 30)
 		first <- got
 	}()
 	if !events.awaitMark("s1", DirectionOut) {
@@ -1326,30 +1653,83 @@ func TestReplyWithoutATicketAnswersTheOldestErrandDelivered(t *testing.T) {
 		t.Fatal("the second message was never delivered")
 	}
 
-	if err := svc.Reply("s2", "", "3 failures in foo_test"); err != nil {
-		t.Fatalf("Reply: %v", err)
+	err := svc.Reply("s2", "", "docs are built")
+	if err == nil {
+		t.Fatal("a ticketless answer was accepted with two errands open")
 	}
-	select {
-	case got := <-first:
-		if got.Answer != "3 failures in foo_test" {
-			t.Errorf("answer = %q", got.Answer)
+	ids := openTickets(svc)
+	if len(ids) != 2 {
+		t.Fatalf("open tickets = %v, want the two that were sent", ids)
+	}
+	for _, id := range ids {
+		if !strings.Contains(err.Error(), id) {
+			t.Errorf("the refusal does not name ticket %q:\n%s", id, err)
 		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("the oldest errand was not the one answered")
 	}
-	select {
-	case got := <-second:
-		t.Fatalf("the second errand was closed by the same answer: %+v", got)
-	default:
+	for _, asked := range []string{"run the tests and report the failures", "build the docs"} {
+		if !strings.Contains(err.Error(), asked) {
+			t.Errorf("the refusal does not say what %q asked:\n%s", asked, err)
+		}
 	}
 
-	// The next answer takes the next errand, which is what makes this usable
-	// twice over rather than only for a session with exactly one request open.
-	if err := svc.Reply("s2", "", "docs are built"); err != nil {
-		t.Fatalf("Reply: %v", err)
+	// Neither errand was closed by the refused answer, and naming the ticket is
+	// the retry the message asked for all along.
+	select {
+	case got := <-first:
+		t.Fatalf("the refused answer closed an errand anyway: %+v", got)
+	case got := <-second:
+		t.Fatalf("the refused answer closed an errand anyway: %+v", got)
+	default:
 	}
-	if got := <-second; got.Answer != "docs are built" {
-		t.Errorf("second answer = %q", got.Answer)
+	if err := svc.Reply("s2", ids[0], "answered by name"); err != nil {
+		t.Fatalf("Reply with a ticket: %v", err)
+	}
+}
+
+// TestAnErrandIsNamedByTheOpeningOfItsPrompt covers the line the refusal reads
+// by: whitespace collapsed onto one line, and a long prompt cut on a rune
+// boundary — the cut is in bytes, and half a rune is a replacement character in
+// the middle of the one line that tells two errands apart.
+func TestAnErrandIsNamedByTheOpeningOfItsPrompt(t *testing.T) {
+	if got := askedExcerpt("run the tests\n\nthen  report"); got != "run the tests then report" {
+		t.Errorf("excerpt = %q", got)
+	}
+	long := askedExcerpt(strings.Repeat("é", 200))
+	if !strings.HasSuffix(long, "…") {
+		t.Errorf("a prompt over the limit was not cut: %q", long)
+	}
+	if !utf8.ValidString(long) {
+		t.Errorf("the cut landed inside a rune: %q", long)
+	}
+}
+
+// TestErrandOrderSurvivesAClockThatCannotTellThemApart pins the tie the
+// timestamp could not break. Windows' clock only moves every ~15.6ms, so two
+// hand-offs inside one tick carry the same delivered time; ordering on that
+// timestamp then fell through to Go's randomised map iteration and closed the
+// wrong errand about one run in ten on the Windows runner.
+//
+// The two tickets here share a delivered time exactly, which is the case the
+// runner hits by accident: any ordering that reads the clock has nothing left
+// to choose by, and only the hand-off counter still answers. Nothing picks one
+// of two candidates anymore, but the order they are listed in is what a worker
+// reads to tell them apart, and a list that shuffles between two runs is one it
+// cannot.
+func TestErrandOrderSurvivesAClockThatCannotTellThemApart(t *testing.T) {
+	svc := newRelay(workspace(), newFakeTerminal("s1", "s2", "s3"), &fakeEvents{})
+	tick := time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC)
+
+	// Run it more than once: one pass can pick the right entry out of a map by
+	// luck, and luck is the thing being tested away.
+	for i := 0; i < 50; i++ {
+		svc.tickets = map[string]*ticket{
+			"second": {fromID: "s3", targetID: "s2", delivered: tick, deliverySeq: 2, sawBusy: true},
+			"first":  {fromID: "s1", targetID: "s2", delivered: tick, deliverySeq: 1, sawBusy: true},
+		}
+		got := svc.turnCandidates("s2")
+		if len(got) != 2 || got[0] != "first" {
+			t.Fatalf("candidates = %v, want the first delivered at the front", got)
+		}
 	}
 }
 

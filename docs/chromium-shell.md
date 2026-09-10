@@ -1,9 +1,11 @@
 # Decision: move the shell from WebKitGTK to Chromium
 
-**Status: spike VALIDATED (2026-07-15) on the reference machine — "é outro
-terminal", paint jank gone under Chromium with the identical terminal stack
-and an uncoalesced transport. The migration below is greenlit; option 2 is
-still deferred until the project grows.**
+**Status: option 1 shipped in v0.4.0 (2026-07-15). Option 2 shipped on Linux
+on 2026-09-05, then on Windows and Apple Silicon: lich bundles its own
+Chromium (CEF, through kurogane) and no browser is required — see the section
+at the end. The system-browser ladder option 1 built was removed once the
+window shipped everywhere it could: an Intel Mac, the one build with no
+window, opens lich as a plain tab in the default browser.**
 
 ## Why
 
@@ -61,10 +63,14 @@ Migration progress:
 2. **Chromium shell** — DONE (phase 2): `LICH_SHELL=chromium ./lich` serves
    the embedded frontend on the loopback listener (public mount; RPC/WS stay
    token-gated) and opens the system Chromium via `internal/chromium` on a
-   persistent profile (`~/.config/lich/chromium-profile` — localStorage lives
+   persistent profile, one per browser
+   (`~/.config/lich/chromium-profile/<name>-<digest>` — localStorage lives
    there, so the listener port is pinned to 47821, `LICH_LISTEN_PORT`
    overrides; NOT `LICH_PORT`, which is the per-session hook variable).
-   Window closed = app exit. Extra flags: `lich -- --ozone-platform=wayland`.
+   Window closed = app exit. Extra flags pass through after `--`. Under Wayland
+   the window is native Wayland whenever `WAYLAND_DISPLAY` is set, whatever the
+   GPU; `lich -- --ozone-platform=x11` forces XWayland if a driver's Wayland
+   path misbehaves (XWayland loses file drops on Hyprland, its issue #7800).
    Folder/file pickers go through zenity (`project.ZenityPicker`); clipboard
    paste prefers `navigator.clipboard` with the Wails clipboard as fallback.
    Known gap: no single-instance lock yet — run one at a time.
@@ -131,26 +137,46 @@ above. Files to delete when the decision lands: `cmd/spike/`,
 `frontend/spike.html`, `frontend/src/spike/`, the `spike` input in
 `frontend/vite.config.ts`.
 
-## Option 2 — embedded CEF via `energye/energy` (deferred)
+## Option 2 — embedded CEF (shipped on Linux 2026-09-05, Windows next)
 
-Chromium compiled into/shipped with the app (CEF), Go bindings through the
-`energy` framework. No dependency on a system browser; full control of the
-Chromium version; window is truly ours.
+Chromium shipped with the app (CEF). No dependency on a system browser, the
+Chromium version pinned per release, and a window that is lich's own: its
+WM_CLASS / app_id, its title, its keyboard, no browser prompts, no system
+extensions loading into it.
 
-Costs, and why it waits:
+What was written when this was deferred still holds, and is now the price
+paid: +100 MB per package download (~300 MB on disk), and a Rust toolchain
+with CMake in CI. What changed is the route. `energye/energy` (Go bindings,
+CGO) was never taken. The window is a **separate binary**, `shell/`, a Rust
+crate on [kurogane](https://github.com/0x48piraj/kurogane) (cef-rs
+underneath), and the Go binary launches it with the `internal/chromium.Args`
+argv — `--url=<url>`, `--class`, `--user-data-dir`, the user's `--` switches
+— plus `--exit-on-stdin-eof`: lich holds the write end of a pipe on the
+window's stdin for as long as it lives, and the window ends on the EOF, so a
+lich killed outright takes its window with it instead of leaving an orphan
+for the next launch to be forwarded to. `CGO_ENABLED=0` and the static binary
+stand.
+The migration path really was "swap who provides the window": the window
+first landed as one more rung in option 1's resolution ladder, above the
+desktop's default and below the pin, and once it shipped on every platform
+that can build it the ladder below it was removed. What resolves now is the
+`LICH_SHELL` pin (`task dev`, since `go run` has no window beside it) or the
+window beside the binary, and nothing else: a Linux or Windows install
+without one is reported, not worked around.
 
-- +150-200MB bundle (CEF binaries per-arch), CI packaging gets heavy.
-- `energy` is the only maintained Go/CEF route; ecosystem is thin and exotic
-  compared to plain `net/http` + a browser flag.
-- Every benefit it adds over option 1 only matters when lich stops being a
-  personal harness — i.e. distribution to machines we don't control, where
-  "install chromium" is unacceptable friction.
+Measured on the reference machine (RTX 3050, Hyprland, Chromium 150 in CEF
+against Helium 151 as the system browser): no perceptible difference, which
+is the point — same engine, same GPU path, WebGL on ANGLE over the NVIDIA
+driver in both. `seq 1 400000` into an xterm.js session paced at 84 rAF/s on
+a 100 Hz display. Native Wayland, XWayland and X11 all open with the class
+and title the Go side asks for.
 
-**Trigger to revisit**: the project grows an audience — packaging for users
-who won't install a browser dependency, or a hard requirement to pin the
-Chromium version, or a need to paint a page *inside* the lich window (an
-embedded tab). The migration path from option 1 is small: the whole app is
-already "Go server + browser window"; option 2 only swaps who provides the
-window. The session's agent browser is a separate Chromium process on
-`FindBrowser` + CDP (`internal/browser`) and does not wait on option 2; it
-must never attach to this `--app` window.
+**Trigger to revisit**: the project grows an audience — packaging for users who won't install a browser dependency, or a hard requirement to pin the Chromium version, or a need to paint a page *inside* the lich window (an embedded tab). The migration path from option 1 is small: the whole app is already "Go server + browser window"; option 2 only swaps who provides the window. The session's agent browser is a separate Chromium process on `FindBrowser` + CDP (`internal/browser`) and does not wait on option 2; it must never attach to this `--app` window.
+
+kurogane needed two things it did not have — a WM_CLASS / app_id and a title on the window it creates — so `shell/` builds against a fork carrying that patch (`App::window_class`, `App::window_title`; cef-rs drops an owned string on the way back into a CEF out-struct, so the fork allocates them through CEF itself). The patch is upstream as [kurogane#11](https://github.com/0x48piraj/kurogane/pull/11); the fork (`omartelo/kurogane`) is the pin until it lands.
+
+Windows ships the same window, flat beside `lich.exe` as `shell\` the way CEF lays itself out there, inside the installer (`build/windows/lich.iss`) and as a zip beside the portable exe. The update button downloads the release's installer when this window is present or when Inno Setup's `unins000.exe` sits beside `lich.exe` (an installer install from before the window, v0.10.0 to v0.45.x, carries only that mark), checks its SHA-256 against the release checksums, and runs it silently after closing lich; the same AppId means the setup upgrades that install in place, bringing the window, the Start Menu shortcut and the "Installed apps" entry up with the exe. A Scoop install (`apps\lich\current`) carries the window too, but Scoop owns it: the button offers `scoop update lich` followed by a `/restart` spelled for PowerShell, and never runs the installer into Scoop's directory. The per-user installer updates the same directory without elevation and reopens lich on its previous port. A failed installation shows its error; `.lich-update-setup.log` beside `lich.exe` records the install. The last downloaded installer is retained there as `.lich-update-setup.exe` for retry and replaced on the next update. The portable exe without `shell\lich-shell.exe` still swaps only itself and offers Restart.
+
+Two things the Linux window gets from its WM_CLASS come from elsewhere on Windows: the executable carries lich's icon and manifest as resources (`shell/build.rs`), and the process claims the AppUserModelID the Start Menu shortcut declares, which is what makes the taskbar group the running window under the pinned icon. The sandbox stays off there, as kurogane runs it, so the binary is a plain exe rather than CEF's `bootstrap.exe` loading a DLL; Linux is the one platform whose window runs sandboxed — from a package, where the deb, rpm and AUR install Chromium's setuid helper root-owned 4755 beside `lich-shell` for the desktops that deny unprivileged user namespaces (`docs/ceilings.md`). Built and smoke-tested on the CI runner only.
+
+macOS ships the same window inside `Lich.app`, Apple Silicon only: the release runner is arm64 and builds the window for itself, and the Intel bundle opens lich as a plain tab in the default browser instead (`main.go`, `openWithoutWindow`) — the same tab an Apple Silicon window that dies at startup falls back to. `lich-shell` sits beside `lich` in `Contents/MacOS`, because macOS reads a process's bundle off its executable's path and only a process inside the bundle is `Lich.app` to the Dock, to Cmd-Tab and to the menu bar; the framework goes to `Contents/Frameworks`, where kurogane looks for it (upstream's `seal-of-approval/distribution` branch, commit [53d51ba](https://github.com/0x48piraj/kurogane/commit/53d51ba7d234161f8709109dcb8d6395f38c7bb4), carried on the fork meanwhile; lich's #13 was closed as covered). CEF's subprocesses run as the five helper apps beside the framework (`Lich Helper` and the Renderer, GPU, Plugin and Alerts variants, each a copy of the binary under an `LSUIElement` plist), the way CEF's own samples lay them out, and kurogane points `browser_subprocess_path` at the base one (the same upstream commit; lich's #15 was closed as covered). Both halves were measured on the runner before they were written: re-executing the window binary itself gave every subprocess a Dock tile of its own (four tiles for one window, until [kurogane#14](https://github.com/0x48piraj/kurogane/pull/14) kept the `NSApplication` to the browser process) and, inside a bundle, never started a renderer at all, since Chromium derives the renderer's executable from the helper's path and finds nothing there. The bundle is ad-hoc signed innermost first (ANGLE's dylibs, the framework, the helpers, the window, the app), never notarized. The window keeps its cookie store unencrypted (`CredentialStorage::Basic`): Chromium keys it through the Keychain to one code identity, and an ad-hoc signature is a new identity per build, so the alternative is a Keychain prompt on every start. Built and smoke-tested on the CI runner only, like Windows.

@@ -89,6 +89,7 @@ func (s *Service) DeleteProject(id string) error {
 	if id == globalScope {
 		return fmt.Errorf("delete project: empty id")
 	}
+	s.noteForfeitedSchedules(`project_id = ?`, id)
 	return s.tx(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(`DELETE FROM settings WHERE project_id = ?`, id); err != nil {
 			return fmt.Errorf("delete project settings %q: %w", id, err)
@@ -169,6 +170,7 @@ func (s *Service) addSession(
 // DeleteSession removes a session for good and sets the project's active session
 // to activeID (the neighbor the frontend picked, or "" when none remain).
 func (s *Service) DeleteSession(projectID, sessionID, activeID string) error {
+	s.noteForfeitedSchedules(`id = ?`, sessionID)
 	if err := s.tx(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(`DELETE FROM sessions WHERE id = ?`, sessionID); err != nil {
 			return fmt.Errorf("delete session %q: %w", sessionID, err)
@@ -191,17 +193,56 @@ func (s *Service) DeleteSession(projectID, sessionID, activeID string) error {
 //
 // closed_at is stamped in the same statement rather than after it: it is what
 // orders the history the parked row exists to appear in, and a row parked
-// without one sorts as if it had been closed before everything else.
+// without one sorts as if it had been closed before everything else. The branch
+// is stamped with it, and this is the only place it ever is — the history search
+// runs in SQL, so a branch nothing wrote down cannot be typed to find the row
+// showing it.
+//
+// The conversation is indexed here too, and this is the only place it ever is:
+// a parked session's transcript is read once, bounded, and written into the FTS
+// index the history search matches on (transcripts.go). Doing it at the close is
+// what keeps a search off the disk entirely: the alternative is reading every
+// parked session's transcript on every character typed.
+//
+// git and the transcript are both asked before the transaction opens: the store
+// holds a single connection, and a subprocess or a 32 MB read under the write
+// lock stalls every other caller for as long as it takes.
 func (s *Service) CloseSession(projectID, sessionID, activeID string) error {
+	branch := s.parkedBranch(sessionID)
+	s.indexTranscript(sessionID)
 	return s.tx(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(
-			`UPDATE sessions SET is_open = 0, closed_at = ? WHERE id = ?`,
-			now().Unix(), sessionID,
+			`UPDATE sessions SET is_open = 0, closed_at = ?, parked_branch = ? WHERE id = ?`,
+			now().Unix(), branch, sessionID,
 		); err != nil {
 			return fmt.Errorf("close session %q: %w", sessionID, err)
 		}
 		return setActiveSession(tx, projectID, activeID)
 	})
+}
+
+// parkedBranch names the branch of the checkout a session is running in, for the
+// row about to be parked. A session with no path of its own runs in its
+// project's directory, which is then the checkout to ask about.
+//
+// Every failure answers "": a store without the wiring, a session id nothing
+// matches, a directory git cannot name a branch for. None of them is worth
+// refusing a close over — the row loses the branch as a search term and keeps
+// everything else.
+func (s *Service) parkedBranch(sessionID string) string {
+	if s.branchOf == nil {
+		return ""
+	}
+	var path string
+	if err := s.db.QueryRow(
+		`SELECT CASE WHEN s.path <> '' THEN s.path ELSE p.path END
+		   FROM sessions s JOIN projects p ON p.id = s.project_id
+		  WHERE s.id = ?`,
+		sessionID,
+	).Scan(&path); err != nil || path == "" {
+		return ""
+	}
+	return s.branchOf(path)
 }
 
 // ForgetSession deletes one parked session for good. It is the way out for the
@@ -214,6 +255,7 @@ func (s *Service) CloseSession(projectID, sessionID, activeID string) error {
 // was already gone is not an error, and only a delete that actually removed one
 // reports the session gone.
 func (s *Service) ForgetSession(sessionID string) error {
+	s.noteForfeitedSchedules(`id = ? AND is_open = 0`, sessionID)
 	res, err := s.db.Exec(`DELETE FROM sessions WHERE id = ? AND is_open = 0`, sessionID)
 	if err != nil {
 		return fmt.Errorf("forget session %q: %w", sessionID, err)
@@ -260,10 +302,10 @@ func (s *Service) ReopenSession(sessionID, newSessionID string) (*Session, error
 // reopen is the resume behind both doors: it finds one parked session with the
 // given WHERE clause and re-adds it to the workspace under a fresh id
 // (newSessionID), carrying over the old label, kind, path, provider session id,
-// label_auto flag, model, entrypoint, sandbox and origin. The fresh id is
-// deliberate: it makes the frontend treat the card as never-spawned, so its
-// resume prompt fires and the provider conversation continues instead of
-// starting cold.
+// label_auto flag, model, entrypoint, sandbox, pin, origin and scheduled prompt.
+// The fresh id is deliberate: it makes the frontend treat the card as
+// never-spawned, so its resume prompt fires and the provider conversation
+// continues instead of starting cold.
 func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, error) {
 	var restored *Session
 	err := s.tx(func(tx *sql.Tx) error {
@@ -279,19 +321,39 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		// shell — silently, on the one path where the card keeps its identity but
 		// not its id.
 		//
+		// The run mark rides along with the entrypoint it belongs to: a resumed
+		// Run card that came back unmarked would leave its checkout's slot free,
+		// and the next Run would open a second card onto the same port.
+		//
+		// The scheduled prompt rides along because the row is the only copy of
+		// what the user parked there: parking a session is not cancelling its
+		// reminder, and a resume that dropped it forfeited the prompt with
+		// nothing anywhere saying so. One that came due while the session was
+		// parked is typed on the resumed card's first free prompt, exactly like
+		// one that came due while lich was closed (internal/relay, deliverDue).
+		//
+		// The fork cost offset rides along with the ledgers it nets: the copied
+		// history is still in this session's transcript after a resume, so a row
+		// that came back without it would bill the fork for its parent again.
+		//
 		// project_id is read rather than passed: reopening by id knows only the
 		// session, and the row is what says where it belongs.
 		var labelAuto int
 		var projectID, model, entrypoint, sandbox string
+		var run bool
+		var forkOffset float64
 		row := tx.QueryRow(
 			`SELECT id, project_id, label, kind, path, provider_session_id, label_auto,
-			        model, entrypoint, sandbox, origin_session_id, origin_label
+			        model, entrypoint, run, sandbox, pinned, origin_session_id, origin_label,
+			        scheduled_at, scheduled_prompt, fork_cost_offset
 			   FROM sessions `+where,
 			args...,
 		)
 		if err := row.Scan(
 			&old.ID, &projectID, &old.Label, &old.Kind, &old.Path, &old.ProviderSessionID,
-			&labelAuto, &model, &entrypoint, &sandbox, &old.OriginSessionID, &old.OriginLabel,
+			&labelAuto, &model, &entrypoint, &run, &sandbox, &old.Pinned,
+			&old.OriginSessionID, &old.OriginLabel,
+			&old.ScheduledAt, &old.ScheduledPrompt, &forkOffset,
 		); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil // nothing parked; caller creates a new session
@@ -305,23 +367,39 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 		if err != nil {
 			return err
 		}
+		// Hands-on time rides along for the same reason, one row over: the work
+		// this session was worked through is the user's, and a resume that
+		// dropped it would restart the clock on a session they have been at all
+		// day.
+		handsOn, err := handsOnOf(tx, old.ID)
+		if err != nil {
+			return err
+		}
 		if _, err := tx.Exec(`DELETE FROM sessions WHERE id = ?`, old.ID); err != nil {
 			return fmt.Errorf("drop parked session %q: %w", old.ID, err)
 		}
 		// closed_at is left to its default: the reinserted row is open again, and
 		// a resume that carried the old stamp over would date the next close
 		// before it happened.
+		// pinned rides along too: the pin holds "until it is unpinned" (Session),
+		// and a park by `lich close` — the one close the sidebar's withheld
+		// affordance does not stop — is not that.
 		if _, err := tx.Exec(
 			`INSERT INTO sessions
 			   (id, project_id, label, kind, path, provider_session_id, label_auto,
-			    model, entrypoint, sandbox, origin_session_id, origin_label, position)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
+			    model, entrypoint, run, sandbox, pinned, origin_session_id, origin_label,
+			    scheduled_at, scheduled_prompt, fork_cost_offset, position)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, `+nextSessionPosition+`)`,
 			newSessionID, projectID, old.Label, old.Kind, old.Path, old.ProviderSessionID, labelAuto,
-			model, entrypoint, sandbox, old.OriginSessionID, old.OriginLabel, projectID,
+			model, entrypoint, run, sandbox, old.Pinned, old.OriginSessionID, old.OriginLabel,
+			old.ScheduledAt, old.ScheduledPrompt, forkOffset, projectID,
 		); err != nil {
 			return fmt.Errorf("reinsert session %q: %w", newSessionID, err)
 		}
 		if err := restoreCostLedgers(tx, newSessionID, ledgers); err != nil {
+			return err
+		}
+		if err := restoreHandsOn(tx, newSessionID, handsOn); err != nil {
 			return err
 		}
 		if err := setActiveSession(tx, projectID, newSessionID); err != nil {
@@ -334,9 +412,13 @@ func (s *Service) reopen(newSessionID, where string, args ...any) (*Session, err
 			Path:              old.Path,
 			ProviderSessionID: old.ProviderSessionID,
 			Entrypoint:        entrypoint,
+			Run:               run,
 			Sandbox:           sandbox,
+			Pinned:            old.Pinned,
 			OriginSessionID:   old.OriginSessionID,
 			OriginLabel:       old.OriginLabel,
+			ScheduledAt:       old.ScheduledAt,
+			ScheduledPrompt:   old.ScheduledPrompt,
 		}
 		return nil
 	})
@@ -356,6 +438,7 @@ func (s *Service) PurgeWorktreeSessions(projectID, path string) error {
 	if path == "" {
 		return nil
 	}
+	s.noteForfeitedSchedules(`project_id = ? AND path = ?`, projectID, path)
 	// Read before the delete, because what hangs off a session outside the
 	// database is keyed by id and the rows are about to be gone.
 	gone := s.sessionIDsAt(projectID, path)
@@ -422,15 +505,38 @@ func (s *Service) SetSessionPinned(sessionID string, pinned bool) error {
 	return nil
 }
 
+// SetSessionUnread records whether a session's last finished turn is still
+// waiting to be read: the mark behind the card's solid ring. Two writers, one
+// edge each. The terminal service sets it on a turn's own boundaries, so a turn
+// that ends with no window attached is still news when one opens; the window
+// clears it when the card is read, which is the only side that knows what the
+// user looked at.
+//
+// A session whose row is gone matches nothing, which is not an error: a card
+// closed between a turn ending and this write has no mark left to carry.
+func (s *Service) SetSessionUnread(sessionID string, unread bool) error {
+	if _, err := s.db.Exec(
+		`UPDATE sessions SET unread = ? WHERE id = ?`, unread, sessionID,
+	); err != nil {
+		return fmt.Errorf("set session %q unread: %w", sessionID, err)
+	}
+	return nil
+}
+
 // SetSessionTitle sets a session's label from the provider's ai-title reported
 // by the Stop hook, but only while the label is still automatic: a prior
 // RenameSession clears label_auto and makes this a no-op, so a user's own name
 // is never overwritten. Reports whether the label actually changed, so the
 // caller only pushes a UI update when it did.
+//
+// The label it already carries is excluded in SQL rather than compared here:
+// SQLite counts a row it processed even when the write changes nothing, and a
+// provider whose title is derived once and re-reported on every turn would
+// otherwise take the write lock and emit a title event per turn.
 func (s *Service) SetSessionTitle(sessionID, title string) (bool, error) {
 	res, err := s.db.Exec(
-		`UPDATE sessions SET label = ? WHERE id = ? AND label_auto = 1`,
-		title, sessionID,
+		`UPDATE sessions SET label = ? WHERE id = ? AND label_auto = 1 AND label != ?`,
+		title, sessionID, title,
 	)
 	if err != nil {
 		return false, fmt.Errorf("set session %q title: %w", sessionID, err)
@@ -499,6 +605,26 @@ func (s *Service) SetSessionEntrypoint(sessionID, entrypoint string) error {
 	return nil
 }
 
+// SetRunEntrypoint records the run script on a session row and marks that row as
+// the checkout's Run card, in one statement. The mark means "this card is what
+// .lich/run-worktree.sh opened into", and a row holding one half of that would
+// either be a run card nothing can find or a slot held by a bare shell.
+//
+// Only internal/spawn.Run calls it. A terminal the user aims at a command by
+// hand goes through SetSessionEntrypoint and stays an ordinary card, so it never
+// occupies the one Run card its checkout gets.
+//
+// The kind clause is SetSessionEntrypoint's, for the same reason.
+func (s *Service) SetRunEntrypoint(sessionID, entrypoint string) error {
+	if _, err := s.db.Exec(
+		`UPDATE sessions SET entrypoint = ?, run = 1 WHERE id = ? AND kind = 'shell'`,
+		strings.TrimSpace(entrypoint), sessionID,
+	); err != nil {
+		return fmt.Errorf("set run entrypoint on %q: %w", sessionID, err)
+	}
+	return nil
+}
+
 // SessionEntrypoint returns the command recorded for a session, or "" for none —
 // which is what every provider session has, and what leaves a terminal on a
 // plain shell. A read failure answers "" for the same reason SessionModel does:
@@ -555,6 +681,25 @@ func (s *Service) SessionSandbox(sessionID string) string {
 		return ""
 	}
 	return sandbox.String
+}
+
+// SessionExists reports whether a session's row is still there, open or
+// parked, the two states a row can be in; only a delete removes it. It is what
+// tells lich's dropped-file copies apart from the ones an unclean exit
+// orphaned (internal/drop): the copies of a session that still exists are
+// still worth keeping, whatever their age.
+//
+// A read that failed answers true: the row not being readable is not the row
+// being gone, and the caller deletes on a false.
+func (s *Service) SessionExists(sessionID string) bool {
+	var exists bool
+	if err := s.db.QueryRow(
+		`SELECT EXISTS (SELECT 1 FROM sessions WHERE id = ?)`, sessionID,
+	).Scan(&exists); err != nil {
+		slog.Warn("session exists", "session", sessionID, "err", err)
+		return true
+	}
+	return exists
 }
 
 // SetProviderSession records the provider conversation id running inside a lich

@@ -1,63 +1,54 @@
+import type { QuotaPlan } from "@/lib/api-types"
 import { Gauge } from "lucide-react"
-import { hottestWindow, shortWindow } from "@/lib/quota/quota-format"
-import { usePlanQuotaFor } from "@/lib/quota/use-plan-quota"
-import type { SessionKind } from "@/lib/session/sessions"
+import { accountLine, hottestWindow, shortWindow } from "@/lib/quota/quota-format"
 import { useNow } from "@/lib/use-now"
-import { cn } from "@/lib/utils"
-import { usageColor } from "./ContextRing"
 import { QuotaGauge } from "./QuotaGauge"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { usageColor } from "./ContextRing"
+import { FooterReadout } from "./FooterReadout"
 
 interface PlanQuotaProps {
-  /** Which provider the active session runs; "" when none is active. */
-  kind: SessionKind | ""
-  /** Whose plan to read: the active session, which may spend an account of its
-   * own when it runs a binary the user configured. */
-  sessionId: string
+  plan: QuotaPlan
 }
 
-// PlanQuota is the footer's plan-usage slot: how much of the active session's
-// subscription is spent, with every window behind a tooltip. Self-contained like
-// SessionModel — it resolves its own reading from the provider id.
-//
-// One window is shown, and it is the fullest one: a weekly cap about to run out
-// must not hide behind a session window that reset an hour ago. Nothing renders
-// at all for a provider that meters no subscription, while the reading is
-// signed out or failed — the Settings screen is where a login is fixed, and a
-// status strip is the wrong place to be told to run a command — or for a
-// session whose account lich could not identify, where any number would be
-// somebody else's.
-export function PlanQuota({ kind, sessionId }: PlanQuotaProps) {
-  const plan = usePlanQuotaFor(kind || undefined, sessionId)
-  const now = useNow()
-  const hottest = plan && plan.status === "ok" ? hottestWindow(plan) : null
-  if (!plan || !hottest) {
-    return null
-  }
-  const length = shortWindow(hottest.seconds)
+// A session can spend a different login from lich's own. Keep the account
+// beside its windows, and omit the name when the provider cannot identify it.
+export function PlanQuota({ plan }: PlanQuotaProps) {
+  // A locked window must remain visible even when another window is fuller.
+  const hottest =
+    plan.status === "ok"
+      ? (plan.windows?.find((window) => window.lockedReason) ?? hottestWindow(plan))
+      : null
+  if (!hottest) return null
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <span
-            className={cn("flex items-center gap-1.5 tabular-nums", usageColor(hottest.percent))}
-          />
-        }
-      >
-        <Gauge className="size-3.5 shrink-0" aria-hidden="true" />
-        {length && <span className="opacity-70">{length}</span>}
-        {hottest.percent}%
-      </TooltipTrigger>
-      <TooltipContent side="top" className="border border-border bg-card text-foreground">
-        <div className="flex min-w-52 flex-col gap-2.5">
-          <span className="font-medium">
-            {plan.plan ? `${plan.name} · ${plan.plan}` : plan.name}
-          </span>
-          {(plan.windows ?? []).map((w) => (
-            <QuotaGauge key={w.label} window={w} now={now} stacked />
-          ))}
+    <FooterReadout
+      label="Plan usage"
+      title={plan.plan ? `${plan.name} · ${plan.plan}` : plan.name}
+      tooltipClassName="py-3"
+      className={hottest.lockedReason ? "text-destructive" : usageColor(hottest.percent)}
+      detail={<PlanDetails plan={plan} />}
+    >
+      <Gauge className="size-3.5" aria-hidden="true" />
+      {shortWindow(hottest.seconds)} {hottest.lockedReason ? "Locked" : `${hottest.percent}%`}
+    </FooterReadout>
+  )
+}
+
+function PlanDetails({ plan }: PlanQuotaProps) {
+  const now = useNow()
+  const account = accountLine(plan)
+  return (
+    <div className="flex min-w-52 flex-col gap-2.5">
+      {(plan.windows ?? []).map((window) => (
+        <div key={window.label} className="flex flex-col gap-1">
+          <QuotaGauge window={window} now={now} stacked />
+          {window.lockedReason && <p className="text-xs text-destructive">{window.lockedReason}</p>}
         </div>
-      </TooltipContent>
-    </Tooltip>
+      ))}
+      {account && (
+        <span className="break-all border-t border-border pt-2 font-mono text-[0.6875rem] text-muted-foreground">
+          {account}
+        </span>
+      )}
+    </div>
   )
 }

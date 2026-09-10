@@ -1,8 +1,13 @@
 package terminal
 
 import (
+	"crypto/md5"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+
+	"github.com/omartelo/lich/internal/providers"
 )
 
 // globTranscript completes a transcript path under base: the parts lich does not
@@ -80,9 +85,9 @@ func codexTranscriptPath(providerSessionID string) (string, bool) {
 // honour here but the home itself.
 //
 // It is not a transcript: Antigravity files the conversation as SQLite and
-// writes its JSONL under `brain/<id>/`, a path the hook payload hands over
-// rather than one lich reconstructs. This resolves the one file whose existence
-// answers "can this id still be reopened".
+// writes its JSONL beside it under `brain/<id>/` (antigravityTranscriptPath).
+// This resolves the one file whose existence answers "can this id still be
+// reopened".
 func antigravityConversationPath(providerSessionID string) (string, bool) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -93,6 +98,84 @@ func antigravityConversationPath(providerSessionID string) (string, bool) {
 		return "", false
 	}
 	return path, true
+}
+
+// antigravityTranscriptPath locates the JSONL Antigravity writes a conversation
+// to, beside the SQLite file that proves the conversation exists.
+//
+// The directory under `brain/` is named after the conversation id itself, so the
+// path is reconstructed here rather than taken off a hook payload — measured
+// against 1.1.19, where every `conversations/<id>.db` had a `brain/<id>/` of its
+// own. `transcript_full.jsonl` sits next to it and is the same conversation with
+// nothing elided; the shorter file is the one read, for the same reason every
+// other provider's tail is bounded.
+func antigravityTranscriptPath(providerSessionID string) (string, bool) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", false
+	}
+	path := filepath.Join(home, ".gemini", "antigravity-cli", "brain", providerSessionID,
+		".system_generated", "logs", "transcript.jsonl")
+	if _, err := os.Stat(path); err != nil {
+		return "", false
+	}
+	return path, true
+}
+
+// kiroTranscriptPath is the conversation beside the metadata file
+// kiroSessionPath resolves: Kiro writes the turns to `<id>.jsonl` and the model
+// and context accounting to the `<id>.json` usage.go reads. Empty for anything
+// that is not that metadata path, so a caller can never turn some other
+// provider's file into a Kiro one by suffix alone.
+func kiroTranscriptPath(sessionPath string) string {
+	if !strings.HasSuffix(sessionPath, ".json") {
+		return ""
+	}
+	return strings.TrimSuffix(sessionPath, ".json") + ".jsonl"
+}
+
+// cursorChatStore is the database Cursor CLI keeps one chat in, under its own
+// config directory. It is not a transcript: the CLI files a chat as SQLite at
+// chats/<workspace>/<chatId>/store.db, which is the one file whose existence
+// answers "can this id still be reopened".
+//
+// The workspace segment is the md5 of the resolved directory the chat ran in,
+// which is why cwd is needed here the way it is for Crush: Cursor keeps its
+// chats per checkout, so the same id proves nothing about another one. False
+// without a cwd — a directory lich cannot name has no chat directory to ask.
+func cursorChatStore(providerSessionID, cwd string) (string, bool) {
+	base, ok := cursorConfigDir()
+	if !ok || cwd == "" {
+		return "", false
+	}
+	path := filepath.Join(base, "chats", cursorWorkspaceKey(cwd), providerSessionID, "store.db")
+	if _, err := os.Stat(path); err != nil {
+		return "", false
+	}
+	return path, true
+}
+
+// cursorWorkspaceKey is how Cursor names a checkout's chat directory: the hex
+// md5 of the absolute, cleaned path. md5 is the CLI's choice and this only has
+// to reproduce it — nothing here is a security decision.
+func cursorWorkspaceKey(cwd string) string {
+	abs, err := filepath.Abs(cwd)
+	if err != nil {
+		abs = filepath.Clean(cwd)
+	}
+	return fmt.Sprintf("%x", md5.Sum([]byte(abs)))
+}
+
+// cursorConfigDir is providers.CursorConfigDir against this machine's home, or
+// false when there is no home to hang it off. It does not go through harnessDir
+// because Cursor is not xdg-basedir — the resolver says why, and it is shared
+// with internal/sandbox, which binds the same directory into a confined session.
+func cursorConfigDir() (string, bool) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", false
+	}
+	return providers.CursorConfigDir(home), true
 }
 
 // ompTranscriptPath locates an oh-my-pi conversation by its id under omp's agent
@@ -121,4 +204,53 @@ func ompAgentDir() (string, bool) {
 		return filepath.Join(home, ".omp", "profiles", profile, "agent"), true
 	}
 	return harnessDir("PI_CODING_AGENT_DIR", filepath.Join(".omp", "agent"))
+}
+
+// kiroSessionPath is the file Kiro CLI keeps one conversation's metadata in,
+// under ~/.kiro — the CLI reads that root off the home directory alone, with no
+// environment variable to honour (2.21.0 resolves `$HOME/.kiro`, measured
+// against a throwaway home).
+//
+// It is not a transcript: Kiro writes the turns into the `.jsonl` beside it and
+// the metadata — model, context window, per-request context usage — into this
+// `.json`, which is the file usage.go reads and the one whose existence answers
+// "can this id still be reopened".
+//
+// Only the interactive store is resolved here, which is the only one a lich
+// session writes: `kiro-cli chat --no-interactive` files its conversation in the
+// classic SQLite store instead (~/.local/share/kiro-cli/data.sqlite3, keyed on
+// cwd), and lich always spawns the TUI.
+func kiroSessionPath(providerSessionID string) (string, bool) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", false
+	}
+	path := filepath.Join(home, ".kiro", "sessions", "cli", providerSessionID+".json")
+	if _, err := os.Stat(path); err != nil {
+		return "", false
+	}
+	return path, true
+}
+
+// kiroPluginAgent is the name of the agent lich spawns Kiro CLI with, or "" when
+// the plugin was never installed into it. Only the name crosses into the spawn
+// (command.go, agentArgs): the file it points at is written by
+// internal/agentplugin, which owns its contents, and both resolve it through
+// providers.KiroAgentPath so they cannot drift to different files.
+//
+// The check is a stat rather than a stored flag because the file is a user's to
+// delete: an agent lich still names after that is a warning line on every
+// session, and a session with no hooks either way.
+func kiroPluginAgent(kind string) string {
+	if kind != providers.Kiro {
+		return ""
+	}
+	path, err := providers.KiroAgentPath()
+	if err != nil {
+		return ""
+	}
+	if _, err := os.Stat(path); err != nil {
+		return ""
+	}
+	return providers.KiroAgentName
 }

@@ -436,6 +436,35 @@ func TestReplyWithoutATicketSendsTheSessionsOwnErrandHome(t *testing.T) {
 	}
 }
 
+// A ticketless answer with two requests open is refused by the app, and the
+// refusal is the only thing that tells the agent which tickets it has to choose
+// between — so it has to reach the terminal whole, list and newlines included.
+func TestTheRefusalOfATicketlessAnswerReachesTheAgent(t *testing.T) {
+	refusal := "2 requests are open against this session, and an answer that names no ticket " +
+		"would close the wrong one. Name the ticket the answer belongs to:\n" +
+		"  lich reply a1b2c3d4 \"<answer>\"   — run the tests\n" +
+		"  lich reply 5e6f7a8b \"<answer>\"   — build the docs"
+	body, err := json.Marshal(map[string]string{"error": refusal})
+	if err != nil {
+		t.Fatalf("encode the refusal: %v", err)
+	}
+	f := newFakeLich(t, string(body))
+	f.status = http.StatusInternalServerError
+
+	code, _, stderr := run(t, f, "reply", "3 failures in foo_test")
+	if code != 1 {
+		t.Fatalf("exit = %d, want 1", code)
+	}
+	for _, want := range []string{"a1b2c3d4", "5e6f7a8b", "run the tests", "build the docs"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr is missing %q:\n%s", want, stderr)
+		}
+	}
+	if strings.Count(stderr, "lich reply ") != 2 {
+		t.Errorf("the list of open errands did not survive:\n%s", stderr)
+	}
+}
+
 func TestWrongArgumentCountsFailWithUsage(t *testing.T) {
 	f := newFakeLich(t, `null`)
 
@@ -1069,5 +1098,29 @@ func TestWorktreesSaysWhenThereAreNone(t *testing.T) {
 	_, jsonOut, _ := run(t, empty, "worktrees", "--json")
 	if strings.TrimSpace(jsonOut) != "[]" {
 		t.Errorf("json = %q, want [] — a script should not have to handle null", jsonOut)
+	}
+}
+
+// The session's confinement is only in the text when there is one: an unconfined
+// session is what lich did before the sandbox existed, and a line about it on
+// every open is a line nobody reads by the third one.
+func TestOpenSaysWhenTheSessionRunsConfined(t *testing.T) {
+	unconfined := newFakeLich(t, openedBody)
+	_, plain, _ := run(t, unconfined, "open", "--worktree", "auth-fix")
+	if strings.Contains(plain, "confined") {
+		t.Errorf("an unconfined session was described as one:\n%s", plain)
+	}
+
+	f := newFakeLich(t, strings.TrimSuffix(openedBody, "}")+`,"confined":true}`)
+	code, stdout, stderr := run(t, f, "open", "--worktree", "auth-fix")
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+	// What the confinement costs the caller, not the word alone: nobody was here
+	// to answer the rung, so the session's limits have to arrive with it.
+	for _, phrase := range []string{"runs confined", "empty home", "read-only", "its checkout"} {
+		if !strings.Contains(stdout, phrase) {
+			t.Errorf("output is missing %q:\n%s", phrase, stdout)
+		}
 	}
 }

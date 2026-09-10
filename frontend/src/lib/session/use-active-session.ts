@@ -23,6 +23,9 @@ export function useActiveSession(): {
   projectId: string | null
   sessionId: string
   path: string
+  /** The foreground process hosting the session's shell out of reach — tmux,
+   * ssh, a container — "" whenever the path above is the real one. */
+  cwdHost: string
   /** The session's static checkout — what the sidebar keys a worktree's pull
    * request card on, so a `cd` cannot open a card no group can show. */
   checkout: string
@@ -30,19 +33,24 @@ export function useActiveSession(): {
   kind: SessionKind | ""
   /** Whether the active session's PTY runs confined (internal/sandbox). */
   sandboxed: boolean
+  /** Whether the backend holds a record of this session's last finished turn,
+   * read off the hydration so a restored card can be offered it. */
+  hasLastTurn: boolean
 } {
   const { projects, sessions } = useProjects()
   const match = useMatch({ path: "/projects/:projectId", end: false })
   const projectId = match?.params.projectId ?? null
   const projectPath = projects.find((p) => p.id === projectId)?.path ?? ""
   const target = activeTarget(sessions, projectId, projectPath)
-  const cwd = useSessionCwd(target.sessionId)
+  const { cwd, host } = useSessionCwd(target.sessionId)
   return {
     projectId,
     sessionId: target.sessionId,
     path: cwd || target.path,
+    cwdHost: host,
     checkout: target.path,
     kind: target.kind,
     sandboxed: target.sandboxed,
+    hasLastTurn: target.hasLastTurn,
   }
 }

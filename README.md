@@ -9,19 +9,20 @@
   <p>
     Open your projects, run agents like Claude Code, Codex and opencode in real
     terminals, and keep git — worktrees, diffs and pull requests — in view
-    without leaving the window. One static Go binary, no Electron: the UI opens
-    in your system's Chromium-family browser in <code>--app</code> mode.
+    without leaving the window. One static Go binary, no Electron: on Linux,
+    Windows and Apple Silicon the UI opens in lich's own embedded Chromium; on
+    an Intel Mac as a tab in your default browser.
   </p>
   <p><a href="https://omartelo.github.io/lich/"><strong>omartelo.github.io/lich</strong></a></p>
   <p>
     <a href="https://github.com/omartelo/lich/releases"><img alt="Release" src="https://img.shields.io/github/v/release/omartelo/lich?color=4285F4&label=release" /></a>
     <img alt="Go" src="https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white" />
-    <img alt="Shell" src="https://img.shields.io/badge/shell-Chromium%20--app-4285F4?logo=googlechrome&logoColor=white" />
+    <img alt="Shell" src="https://img.shields.io/badge/shell-embedded%20Chromium%20(CEF)-4285F4?logo=googlechrome&logoColor=white" />
     <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-333" />
     <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-blue" /></a>
     <a href="https://github.com/sponsors/omartelo"><img alt="Sponsor" src="https://img.shields.io/github/sponsors/omartelo?color=ea4aaa&logo=githubsponsors&label=sponsors" /></a>
   </p>
-  <img src="docs/media/session.png" alt="Four projects on the tab bar and five sessions in the sidebar — each with its worktree, branch and diff badge — while a Claude Code session works in the terminal and the footer shows the model and context ring" width="900" />
+  <img src="docs/media/session.png" alt="Four Claude Code sessions side by side on one wall, each in its own git worktree — the sidebar lists them with their branch and diff badge, and the footer shows the model, the plan and the branch" width="900" />
   <!-- sponsor-logos: company logos go here, between the screenshot and Why lich -->
 </div>
 
@@ -31,13 +32,21 @@ lich lets you:
 
 - **Run the agent you already have.** [Claude Code](https://www.anthropic.com/claude-code),
   [Codex](https://github.com/openai/codex), Antigravity,
-  [opencode](https://github.com/sst/opencode), oh-my-pi and
-  [Crush](https://github.com/charmbracelet/crush) are all first-class. Point lich at each binary once, then pick the default or choose
-  per session.
+  [opencode](https://github.com/sst/opencode), oh-my-pi,
+  [Crush](https://github.com/charmbracelet/crush), the
+  [Cursor CLI](https://cursor.com/docs/cli) and the
+  [Kiro CLI](https://kiro.dev/docs/cli/) all run here the same way. Point lich
+  at each binary once, then pick the default or choose per session. What lich
+  can read back *out* of a session differs by provider, and
+  [Provider support](#provider-support) is the table.
 - **Keep a real terminal.** PTY-backed shells, several per project, rendered on
   the GPU — searchable scrollback that survives a full page reload. Give one an
   entrypoint — `lazygit`, `k9s`, `pnpm dev` — and it opens straight into that
-  tool every time. The footer follows `cd` and names the branch — and, for a
+  tool every time, on Linux, macOS and Windows alike: no shell rc or PowerShell
+  profile is loaded first, so an entrypoint that works for you works for whoever
+  you share it with; write your dev server into `.lich/run-worktree.sh` and every
+  checkout gets a **Run** card for it, on the port lich reserved for that
+  worktree. The footer follows `cd` and names the branch — and, for a
   Claude Code or Codex session, the model, the context window in use and how
   much of your plan's rolling window is left; for Claude Code, if you ask, what
   the session has spent.
@@ -47,6 +56,12 @@ lich lets you:
   Code and Codex — or brought by the plugin. The whole surface doubles as the
   `lich` command in any shell, `--json` included, so a script can drive a
   session with no agent in the loop ([`docs/cli.md`](docs/cli.md)).
+- **Watch several of them at once.** Put any session on a wall beside the one
+  you are in and lich lays the panes out itself, from how many there are and how
+  much room the window has — eight land four across on an ultrawide and two
+  across on a laptop. A session that handed work to others builds the wall around
+  it in one click. Each wall is named, a project keeps as many as you like, and
+  each gets a block in the sidebar you can fold, rename or take apart.
 - **Branch off a worktree without the setup.** Spin one up from any base
   branch and lich seeds it with your gitignored `.env*` files, hands it a
   dev-server port no other checkout and no process on the machine is using, and
@@ -74,6 +89,36 @@ Development is active: bugs and feature requests belong in
 [Issues](https://github.com/omartelo/lich/issues), and what changed in each
 version is in [CHANGELOG.md](CHANGELOG.md).
 
+## Provider support
+
+Every provider is spawned in a real terminal, resumed by conversation id,
+confined by the same sandbox and handed the same way of reaching your other
+sessions. What differs is what lich can *read* back out of a session, because it
+reads what each CLI writes down and no two of them write down the same things.
+
+| What you get | Claude Code | Codex | Antigravity | opencode | oh-my-pi | Crush | Cursor CLI | Kiro CLI |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
+| Context window in the footer | yes | yes | no | no | no | no | no | yes |
+| Cost in the footer | yes | yes | no | yes | yes | yes | no | credits |
+| How much of your plan is left | yes | yes | no | no | no | no | no | no |
+| Spinner while a turn runs, ring when it ends | yes | yes | yes | yes | yes | no | no | yes |
+| Bell when the agent is blocked on you | yes | yes | no | yes | no | no | no | no |
+| Machine kept out of idle sleep while a turn runs | yes | yes | yes | yes | yes | no | no | yes |
+| Review tab's **Last turn**, with the agent's recap | yes | yes | yes | yes | yes | no | no | yes |
+| Search the conversation from the palette | yes | yes | yes | yes | yes | yes | no | yes |
+| Fork a conversation into a new worktree | yes | yes | no | yes | no | no | no | no |
+
+Crush and Cursor CLI report neither the start nor the end of a turn, and that is
+where four of those rows go at once: nothing opens a window for the card's
+spinner, for the bell, for the Review tab's last turn, or for the hold that keeps
+the machine awake. The Review tab says so on the session itself rather than
+leaving you to notice the switch never appeared. Kiro CLI meters spend in credits
+rather than dollars, so its own footer is the only place that figure can be read.
+
+Every gap is deliberate, none of them is lich withholding something the CLI
+reports, and [`docs/ceilings.md`](docs/ceilings.md) says what was measured behind
+each one.
+
 ## Install
 
 One line — detects your distro, verifies the checksum, and installs the native
@@ -85,18 +130,18 @@ curl -fsSL https://raw.githubusercontent.com/omartelo/lich/main/install.sh | sh
 
 | Platform | Get it | Needs at runtime |
 | --- | --- | --- |
-| **Linux** | `install.sh` above, or AUR [`lich-bin`](https://aur.archlinux.org/packages/lich-bin) (`yay -S lich-bin`) | chromium / google-chrome / brave on `PATH`, plus `zenity` |
-| **macOS** *(experimental)* | `brew install --cask omartelo/tap/lich` | Chrome / Chromium / Edge / Brave in `/Applications` |
-| **Windows** *(experimental)* | installer from [Releases](https://github.com/omartelo/lich/releases) | Chrome / Edge / Brave |
+| **Linux** | `install.sh` above, or AUR [`lich-bin`](https://aur.archlinux.org/packages/lich-bin) (`yay -S lich-bin`) | `zenity` — the window ships in the package |
+| **macOS** *(experimental)* | `brew install --cask omartelo/tap/lich` | nothing on Apple Silicon — the window ships in the app; Intel opens lich as a tab in your default browser |
+| **Windows** *(experimental)* | installer from [Releases](https://github.com/omartelo/lich/releases), or Scoop: `scoop install https://github.com/omartelo/lich/releases/latest/download/lich.json` | nothing — the window ships with both |
 
 Manual per-distro packages and the static binary: [INSTALL.md](INSTALL.md). The
 macOS and Windows binaries are unsigned — Gatekeeper and SmartScreen warn until
 notarization/signing ship. Homebrew installs sidestep the Gatekeeper prompt;
 a download from the Releases page needs its quarantine flag cleared by hand.
 On macOS the cask installs `Lich.app`, so lich has its own icon in
-`/Applications`; the Dock, while it runs, shows the browser that owns the
-window. Upgrading from the old formula needs `brew uninstall lich` first —
-[INSTALL.md](INSTALL.md) says why.
+`/Applications` and, on Apple Silicon, in the Dock while it runs; on Intel the
+Dock shows the browser that owns the window. Upgrading from the old formula
+needs `brew uninstall lich` first — [INSTALL.md](INSTALL.md) says why.
 
 ## Getting started
 
@@ -124,31 +169,10 @@ window. Upgrading from the old formula needs `brew uninstall lich` first —
   the footer says about a session — the context ring, plus the cost readout for
   Claude Code, that last rung off by default since the figure only means
   something when you are billed per token.
-- **Sandbox** — a **Sandbox** ladder sits beside the permission one in each
-  provider's section: Off, Ask each time, Worktrees only, Everywhere. It is per
-  provider, a project can set its own, and the New worktree dialog's **Run
-  confined** box overrides the rung for that session alone — every later spawn
-  of it included. Linux needs bubblewrap and macOS `sandbox-exec`; the control
-  is absent on a machine with neither, and on Windows.
 - **Worktrees** — `.lich/setup-worktree.sh` in the project checkout runs in a
   new worktree's terminal ahead of the agent; the New worktree dialog shows it
   and offers a detected suggestion when the repo ships none. A
   `.worktreeinclude` file tunes which gitignored files get copied over.
-- **Version control** — a project can name the GitHub account `gh` runs as
-  (Settings › Version Control), for a repository only one of your accounts can
-  see. It governs what lich reads from GitHub, not what git pushes.
-- **Hotkeys** — `Ctrl`/`Cmd`+`/` lists every shortcut lich binds, and Settings ›
-  Hotkeys is where you rebind one: press the combo you want and it is stored, or
-  reset the row to lich's default. Two actions may hold the same combo, and the
-  rows that do say so. Rebinds live in the page's `localStorage`, so wiping
-  lich's Chromium profile takes them with it.
-- **Appearance** — themes and fonts in Settings; the theme you pick persists in
-  the workspace database, the rest of the UI preferences in `localStorage` under
-  `lich.*` keys (inside lich's Chromium profile at
-  `~/.config/lich/chromium-profile`), and imported themes as JSON under
-  `<config-dir>/lich/themes`.
-- **Workspace** — projects and sessions persist in SQLite at
-  `<config-dir>/lich/lich.db`. Closing a session does not delete it.
 - **Session hooks** — with the
   [lich plugin](https://github.com/omartelo/lich-plugin) installed from Settings,
   a session titles its own card and refreshes git the moment it writes a file.
@@ -170,8 +194,10 @@ TypeScript / Vite frontend over a token-authenticated loopback listener (HTTP RP
 + WebSockets). Terminals are xterm.js with the WebGL addon; the code and diff
 surfaces are CodeMirror 6. The Chromium shell is a decision record:
 [`docs/chromium-shell.md`](docs/chromium-shell.md). Prerequisites are **Go
-1.27.0+**, **Node + pnpm** and **[Task](https://taskfile.dev)** — no C toolchain,
-no system dev libraries.
+1.27.0+**, **Node + pnpm** and **[Task](https://taskfile.dev)** — no C toolchain
+for the Go binary. The window (`shell/`, Rust on CEF) adds a Rust toolchain,
+CMake and Ninja, plus Chromium's dev libraries on Linux and MSVC on Windows;
+[CONTRIBUTING.md](CONTRIBUTING.md) lists them.
 
 ```bash
 task dev      # hot-reload dev mode (Vite on :9245)
@@ -187,7 +213,7 @@ Package a Linux release locally (needs
 task package   # .deb + .rpm + Arch .pkg.tar.zst in bin/
 ```
 
-Adding another agent CLI to the six lich runs is the one change that lands in a
+Adding another agent CLI to the eight lich runs is the one change that lands in a
 dozen files across two repositories:
 [`docs/adding-a-provider.md`](docs/adding-a-provider.md) is the map.
 

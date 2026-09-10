@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -112,14 +113,101 @@ func TestHookPublishesOnlyABlockingWait(t *testing.T) {
 	}
 }
 
-// hookStore answers the one question a status report asks of the store: every
+// The unread mark the card's ring is restored from after a page reload, written
+// at the turn's own edges: set when a turn ends, cleared when the next one
+// opens. The repeated `busy` is the point of the dedupe: a report per tool call
+// must not take the workspace database's write lock to change nothing.
+func TestHookRecordsTheUnreadMarkAtTurnEdges(t *testing.T) {
+	hub, _ := newProbeHub(t)
+	marks := &unreadStore{}
+	svc := New(marks, nil, hub)
+	if svc.wsErr != nil {
+		t.Fatalf("transport: %v", svc.wsErr)
+	}
+
+	for _, state := range []string{statusBusy, statusBusy, statusDone, statusBusy, statusDone} {
+		postHook(t, svc, "s1", state)
+	}
+
+	want := []bool{false, true, false, true}
+	if got := marks.written(); !slices.Equal(got, want) {
+		t.Fatalf("marks written = %v, want %v", got, want)
+	}
+}
+
+// The window clears the same column when the card is read, out of this process's
+// sight, so a finished turn is written every time it happens: a memo of the mark
+// would hand back a card with no ring for the turn after the one that was read.
+func TestHookWritesEveryFinishedTurn(t *testing.T) {
+	hub, _ := newProbeHub(t)
+	marks := &unreadStore{}
+	svc := New(marks, nil, hub)
+	if svc.wsErr != nil {
+		t.Fatalf("transport: %v", svc.wsErr)
+	}
+
+	for _, state := range []string{statusBusy, statusDone, statusDone} {
+		postHook(t, svc, "s1", state)
+	}
+
+	want := []bool{false, true, true}
+	if got := marks.written(); !slices.Equal(got, want) {
+		t.Fatalf("marks written = %v, want %v", got, want)
+	}
+}
+
+// A session end clears the mark, the way it clears the ring: a card with no
+// provider left in it has nothing to come back to.
+func TestHookClearsTheUnreadMarkOnSessionEnd(t *testing.T) {
+	hub, _ := newProbeHub(t)
+	marks := &unreadStore{}
+	svc := New(marks, nil, hub)
+	if svc.wsErr != nil {
+		t.Fatalf("transport: %v", svc.wsErr)
+	}
+
+	for _, state := range []string{statusBusy, statusDone, statusIdle} {
+		postHook(t, svc, "s1", state)
+	}
+
+	want := []bool{false, true, false}
+	if got := marks.written(); !slices.Equal(got, want) {
+		t.Fatalf("marks written = %v, want %v", got, want)
+	}
+}
+
+// unreadStore is hookStore that also records every unread mark written, in
+// order: the dedupe is half of what the writer promises, so the sequence is the
+// assertion and not the last value.
+type unreadStore struct {
+	hookStore
+	mu    sync.Mutex
+	marks []bool
+}
+
+func (s *unreadStore) SetSessionUnread(_ string, unread bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.marks = append(s.marks, unread)
+	return nil
+}
+
+func (s *unreadStore) written() []bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.marks)
+}
+
+// hookStore answers the two questions a status report asks of the store. Every
 // non-idle report refreshes the context readout, which looks up the session's
-// provider conversation. An empty one ends that lookup there. The rest of the
-// interface is embedded and nil, so a path that starts using it panics loudly
-// rather than being quietly stubbed out here.
+// provider conversation, and an empty one ends that lookup there; every
+// published report records whether the card is holding an unread turn. The rest
+// of the interface is embedded and nil, so a path that starts using it panics
+// loudly rather than being quietly stubbed out here.
 type hookStore struct{ Store }
 
 func (hookStore) ProviderSession(string) (string, error) { return "", nil }
+func (hookStore) SetSessionUnread(string, bool) error    { return nil }
 
 // postHook reports one state the way the companion plugin does, and fails the
 // test unless lich accepted it (docs/hooks/session-state.md).
@@ -207,6 +295,14 @@ func TestInterruptedTurnReachesTheWindow(t *testing.T) {
 
 	postHook(t, svc, "s1", statusBusy)
 	sendInput(t, svc, "s1", []byte{esc})
+	// The keystroke is handled on the transport's own goroutine, so the write
+	// returning says only that the frame was sent. The hook below travels a
+	// second connection and is answered by a third goroutine: posting it here
+	// without waiting is a race the test would lose on a slow enough machine,
+	// and the contract is that the provider's report outranks the guess, never
+	// that the two cannot arrive at once.
+	waitFor(t, func() bool { return slices.Contains(rec.statesOf("s1"), statusInterrupted) },
+		"the interrupt raised at the PTY to reach the window")
 	postHook(t, svc, "s1", statusDone)
 
 	hub.Emit(probeReadyEvent, nil)
@@ -262,4 +358,42 @@ func sendInput(t *testing.T, svc *Service, id string, data []byte) {
 	// recorded neither way, so this reads the turn without moving it.
 	waitFor(t, func() bool { return !svc.turns.report(id, statusWaiting) },
 		"the keystroke to end the turn")
+}
+
+// onOpen hears the open count after every report, interrupt and forget,
+// whether or not it changed: the consumer reads a level, and a `waiting` or
+// a repeated interrupt repeats the count rather than going silent.
+func TestTurnLogReportsOpenCount(t *testing.T) {
+	var got []int
+	l := &turnLog{onOpen: func(n int) { got = append(got, n) }}
+	l.report("a", statusBusy)
+	l.report("b", statusBusy)
+	l.report("a", statusWaiting)
+	l.report("a", statusDone)
+	l.interrupt("b")
+	l.interrupt("b")
+	l.report("c", statusBusy)
+	l.forget("c")
+	want := []int{1, 2, 2, 1, 0, 0, 1, 0}
+	if !slices.Equal(got, want) {
+		t.Fatalf("open counts %v, want %v", got, want)
+	}
+}
+
+// A closed card takes its turn with it: the count that keeps the machine
+// awake must not remember a session that no longer exists.
+func TestCloseForgetsOpenTurn(t *testing.T) {
+	s := &Service{sessions: map[string]*session{}, hub: events.New()}
+	var last int
+	s.turns.onOpen = func(n int) { last = n }
+	s.turns.report("gone", statusBusy)
+	if last != 1 {
+		t.Fatalf("open=%d before close, want 1", last)
+	}
+	if err := s.Close("gone"); err != nil {
+		t.Fatal(err)
+	}
+	if last != 0 {
+		t.Fatalf("open=%d after close, want 0", last)
+	}
 }

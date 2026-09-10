@@ -12,10 +12,10 @@ import (
 )
 
 // startDetached launches exe detached from this console and process group so it
-// outlives the restarting process. Windows installs self-apply through
-// internal/appupdate rather than this path, so this exists mainly to compile.
-func startDetached(exe string, env []string) error {
-	cmd := exec.Command(exe)
+// outlives the restarting process, including an installer that must wait for
+// this process to release its executable.
+func startDetached(exe string, env, args []string) error {
+	cmd := exec.Command(exe, args...)
 	cmd.Env = env
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		CreationFlags: windows.DETACHED_PROCESS | windows.CREATE_NEW_PROCESS_GROUP,

@@ -6,4 +6,4 @@ package terminal
 // directory the session started in.
 const cwdTracked = false
 
-func processCwd(int) string { return "" }
+func processCwd(int) (string, string) { return "", "" }

@@ -26,6 +26,9 @@ export function usePullRequests(path: string, state: PullsState): PullRequestLis
     {
       empty: NO_PULL_REQUESTS,
       refetchOnFocus: true,
+      // The state rides the cache key because it is what was asked for; the
+      // path, because two repositories are two lists.
+      cache: `pulls.list ${path} ${state}`,
       // Rows of the state being left have to go before the new ones arrive: the
       // column labels itself from the query, so keeping them would caption open
       // pull requests as merged for as long as gh takes to answer.

@@ -25,7 +25,7 @@ func TestASetupSpawnWithNoScriptIsReadyAnyway(t *testing.T) {
 	svc := New(stubBins{}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), KindShell, "", "", true, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), KindShell, "", "", false, true, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 
@@ -44,7 +44,7 @@ func TestASetupSpawnWithAScriptWaitsForItsMarker(t *testing.T) {
 	svc := New(stubBins{projectPath: projectWithSetup(t, "sleep 30")}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), KindShell, "", "", true, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), KindShell, "", "", false, true, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 
@@ -66,7 +66,7 @@ func TestTheSetupMarkerSurvivesASplitRead(t *testing.T) {
 	svc.mu.Unlock()
 
 	head, tail := setupDone[:8], setupDone[8:]
-	svc.noteOutput(sess, []byte("added 551 packages"+head))
+	svc.noteOutput("s1", sess, []byte("added 551 packages"+head))
 	svc.mu.Lock()
 	stillSettingUp := sess.settingUp
 	svc.mu.Unlock()
@@ -74,7 +74,7 @@ func TestTheSetupMarkerSurvivesASplitRead(t *testing.T) {
 		t.Fatal("half a marker ended the setup")
 	}
 
-	svc.noteOutput(sess, []byte(tail+"\x1b[?25l"))
+	svc.noteOutput("s1", sess, []byte(tail+"\x1b[?25l"))
 
 	svc.mu.Lock()
 	defer svc.mu.Unlock()
@@ -91,7 +91,7 @@ func TestAPartialMarkerNeverEndsTheSetup(t *testing.T) {
 	sess := &session{settingUp: true}
 
 	for range 3 {
-		svc.noteOutput(sess, []byte(setupDone[:len(setupDone)-1]))
+		svc.noteOutput("s1", sess, []byte(setupDone[:len(setupDone)-1]))
 	}
 
 	svc.mu.Lock()
@@ -110,7 +110,7 @@ func TestAPartialMarkerNeverEndsTheSetup(t *testing.T) {
 func TestStartReportsAPtyThatCannotSpawn(t *testing.T) {
 	svc := New(stubBins{bin: "/nonexistent/lich-test-provider"}, nil, events.New())
 
-	err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, 80, 24)
+	err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, false, 80, 24)
 
 	if err == nil {
 		t.Fatal("Start = nil, want the spawn failure")
@@ -130,7 +130,7 @@ func TestASpawnWithNoDirectoryStartsAtHome(t *testing.T) {
 	svc := New(stubBins{bin: stayAliveBin(t)}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	_, cwd, err := svc.spawnSession("s1", "p1", "", "claude", "", "", false, 80, 24)
+	_, cwd, err := svc.spawnSession("s1", "p1", "", "claude", "", "", false, false, 80, 24)
 	if err != nil {
 		t.Fatalf("spawnSession = %v, want nil", err)
 	}

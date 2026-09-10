@@ -50,6 +50,7 @@ func render(r Report) string {
 	row(&b, "config dir", r.ConfigDir)
 	row(&b, "log", logLine(r.LogPath))
 	row(&b, "browser", r.Browser)
+	row(&b, "sandbox", r.Sandbox)
 
 	b.WriteString("\n## Providers\n\n")
 	b.WriteString("| Provider | On PATH | Resolved to |\n|---|---|---|\n")

@@ -4,6 +4,7 @@ import type { PatchNotes } from "@/lib/api-types"
 
 const notes: PatchNotes = {
   version: "0.11.0",
+  highlights: null,
   groups: [{ label: "Added", items: ["**A thing.** It does stuff."] }],
 }
 
@@ -25,8 +26,14 @@ describe("decidePatchNotes", () => {
   })
 
   it("does nothing without a section — a dev build or unreleased version", () => {
-    expect(decidePatchNotes({ version: "dev", groups: null }, "0.10.0")).toEqual({ kind: "none" })
-    expect(decidePatchNotes({ version: "0.11.0", groups: [] }, "0.10.0")).toEqual({ kind: "none" })
-    expect(decidePatchNotes({ version: "", groups: null }, null)).toEqual({ kind: "none" })
+    expect(decidePatchNotes({ version: "dev", highlights: null, groups: null }, "0.10.0")).toEqual({
+      kind: "none",
+    })
+    expect(decidePatchNotes({ version: "0.11.0", highlights: null, groups: [] }, "0.10.0")).toEqual(
+      { kind: "none" },
+    )
+    expect(decidePatchNotes({ version: "", highlights: null, groups: null }, null)).toEqual({
+      kind: "none",
+    })
   })
 })

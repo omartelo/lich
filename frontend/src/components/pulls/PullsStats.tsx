@@ -8,7 +8,8 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react"
-import type { ChecksRollup } from "@/lib/api-types"
+import type { ChecksRollup, PullRequestDetail } from "@/lib/api-types"
+import { conflictsWithBase } from "@/lib/pulls/merge-gate"
 import { cn } from "@/lib/utils"
 
 // The pull request's status line, one reading per item: where it stands, what
@@ -113,28 +114,24 @@ export function ReviewStat({ decision }: { decision: string }) {
   )
 }
 
-export function MergeableStat({
-  mergeable,
-  base,
-  state,
-}: {
-  mergeable: string
-  base: string
-  state: string
-}) {
+export function MergeableStat({ detail }: { detail: PullRequestDetail }) {
   // gh reports UNKNOWN for a pull request that is over, and "Checking
   // mergeability…" against something already merged reads as a stuck screen.
-  if (state !== "OPEN") {
+  if (detail.state !== "OPEN") {
     return null
   }
-  if (mergeable === "CONFLICTING") {
+  // The pair, the way every other reader of a conflict reads it (merge-gate):
+  // the chip is what the conflicting-file list below it captions itself against,
+  // and a chip still checking mergeability over a list of colliding files is the
+  // screen disagreeing with itself.
+  if (conflictsWithBase(detail)) {
     return (
       <Stat icon={X} tone="fail">
-        Conflicts with {base}
+        Conflicts with {detail.baseRefName}
       </Stat>
     )
   }
-  if (mergeable === "MERGEABLE") {
+  if (detail.mergeable === "MERGEABLE") {
     return (
       <Stat icon={GitMerge} tone="pass">
         Mergeable

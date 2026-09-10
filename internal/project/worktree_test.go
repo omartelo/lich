@@ -265,8 +265,12 @@ func TestCreateWorktreeExistingBranch(t *testing.T) {
 	}
 }
 
-// TestCreateWorktreeRemoteBase proves a remote base is fetched and the new
-// branch tracks it.
+// TestCreateWorktreeRemoteBase proves a remote base is fetched, the new branch
+// starts at that remote ref, and it is left with no upstream — the base is
+// where the work starts, not what it merges with. Tracking the base would make
+// a plain `git pull` in the session's terminal merge the base into the work,
+// and `git status` read the work as "ahead of origin/feature"; which upstream
+// the branch gets belongs to its first push.
 func TestCreateWorktreeRemoteBase(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	repo, git := initRepo(t)
@@ -277,12 +281,112 @@ func TestCreateWorktreeRemoteBase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateWorktree(remote base): %v", err)
 	}
-	upstream, err := runGit(wt.Path, "rev-parse", "--abbrev-ref", "@{u}")
-	if err != nil {
-		t.Fatalf("rev-parse @{u}: %v", err)
+	if out, ok := gitQuiet(wt.Path, "rev-parse", "--abbrev-ref", "@{u}"); ok {
+		t.Errorf("upstream = %q, want none", strings.TrimSpace(out))
 	}
-	if got := strings.TrimSpace(upstream); got != "origin/feature" {
-		t.Errorf("upstream = %q, want origin/feature", got)
+	head, err := runGit(wt.Path, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("rev-parse HEAD: %v", err)
+	}
+	base, err := runGit(repo, "rev-parse", "refs/remotes/origin/feature")
+	if err != nil {
+		t.Fatalf("rev-parse origin/feature: %v", err)
+	}
+	if strings.TrimSpace(head) != strings.TrimSpace(base) {
+		t.Errorf("worktree HEAD = %s, want origin/feature at %s", strings.TrimSpace(head), strings.TrimSpace(base))
+	}
+}
+
+// TestCreateWorktreeRemoteBaseAmbiguousName proves the base is resolved as a
+// full refname. A repository may hold a local branch literally called
+// "origin/feature", and the shorthand then names two refs at once: git refuses
+// the whole worktree add with "ambiguous object name", which reaches the screen
+// as lich's generic "could not complete the operation" and leaves the person
+// with a base they picked from lich's own list and no way to use it.
+func TestCreateWorktreeRemoteBaseAmbiguousName(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	repo, git := initRepo(t)
+	addLocalOrigin(t, git)
+	// A second commit gives the decoy a different tip from the remote branch's,
+	// so resolving to the wrong one shows up as a different HEAD.
+	if err := os.WriteFile(filepath.Join(repo, "a.txt"), []byte("two\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git("commit", "-am", "second")
+	git("branch", "origin/feature", "HEAD")
+
+	svc := New(nil)
+	wt, err := svc.CreateWorktree(repo, "pid", "from-remote", "origin/feature", true)
+	if err != nil {
+		t.Fatalf("CreateWorktree(remote base): %v", err)
+	}
+	head, err := runGit(wt.Path, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("rev-parse HEAD: %v", err)
+	}
+	want, err := runGit(repo, "rev-parse", "refs/remotes/origin/feature")
+	if err != nil {
+		t.Fatalf("rev-parse refs/remotes/origin/feature: %v", err)
+	}
+	if strings.TrimSpace(head) != strings.TrimSpace(want) {
+		t.Errorf("worktree HEAD = %s, want the remote ref at %s (the local decoy branch won)",
+			strings.TrimSpace(head), strings.TrimSpace(want))
+	}
+}
+
+// TestCreateWorktreeRemoteBaseRefusesAStaleRefOffline proves a failed fetch is a
+// refusal even when refs/remotes/origin/feature is already there. It is only
+// there because an earlier fetch left it, so accepting it bases the worktree on
+// whatever the branch looked like the last time the machine had the remote —
+// silently, on a create the person asked for precisely to start from the remote
+// tip. The ref is tolerated after a failed fetch only when it *moved* during the
+// call, which is a concurrent fetch landing it rather than an old one.
+func TestCreateWorktreeRemoteBaseRefusesAStaleRefOffline(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	repo, git := initRepo(t)
+	addLocalOrigin(t, git)
+	if _, err := runGit(repo, "rev-parse", "--verify", "refs/remotes/origin/feature"); err != nil {
+		t.Fatalf("setup: want the ref an earlier fetch left behind: %v", err)
+	}
+	// The remote as an offline machine has it: a URL git cannot reach. A local
+	// path that is not a repository fails at once, with no network and no wait.
+	git("remote", "set-url", "origin", filepath.Join(t.TempDir(), "unreachable"))
+
+	svc := New(nil)
+	_, err := svc.CreateWorktree(repo, "pid", "from-remote", "origin/feature", true)
+
+	if err == nil {
+		t.Fatal("CreateWorktree(failed fetch, stale ref) = nil error, want a refusal")
+	}
+}
+
+// TestCreateWorktreeRemoteBaseNotFetched proves the guard is the ref, not git's
+// exit status. With the remote's refspec narrowed to one branch — what a
+// --single-branch clone or `remote add -t` leaves behind — `git fetch origin --
+// feature` writes the branch to FETCH_HEAD and exits 0 without ever creating
+// refs/remotes/origin/feature. The refusal has to name that ref: leaving it to
+// `worktree add` gets the person a derived "invalid reference" that says
+// nothing about the narrowed refspec that caused it.
+func TestCreateWorktreeRemoteBaseNotFetched(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	repo, git := initRepo(t)
+	origin, originGit := initRepo(t)
+	originGit("branch", "feature")
+	// -t main is the narrowed refspec: origin/feature is reachable to fetch and
+	// never written to refs/remotes.
+	git("remote", "add", "-t", "main", "origin", origin)
+	git("fetch", "origin")
+
+	svc := New(nil)
+	_, err := svc.CreateWorktree(repo, "pid", "from-remote", "origin/feature", true)
+	if err == nil {
+		t.Fatal("CreateWorktree(unfetchable remote base) = nil error, want a refusal")
+	}
+	if !strings.Contains(err.Error(), "refs/remotes/origin/feature") {
+		t.Errorf("error = %q, want it to name refs/remotes/origin/feature", err)
+	}
+	if strings.Contains(err.Error(), "invalid reference") {
+		t.Errorf("error = %q, want lich's own refusal, not worktree add's derived one", err)
 	}
 }
 
@@ -297,7 +401,7 @@ func TestRemoveWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateWorktree: %v", err)
 	}
-	if err := svc.RemoveWorktree(repo, wt.Path, false); err != nil {
+	if err := svc.RemoveWorktree(repo, wt.Path, false, false); err != nil {
 		t.Fatalf("RemoveWorktree(clean): %v", err)
 	}
 	if _, err := os.Stat(wt.Path); !os.IsNotExist(err) {
@@ -311,17 +415,122 @@ func TestRemoveWorktree(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dirty.Path, "a.txt"), []byte("changed\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.RemoveWorktree(repo, dirty.Path, false); err == nil {
+	if err := svc.RemoveWorktree(repo, dirty.Path, false, false); err == nil {
 		t.Error("RemoveWorktree(dirty) = nil error, want refusal")
 	}
 	if _, err := os.Stat(dirty.Path); err != nil {
 		t.Errorf("dirty worktree should remain on disk: %v", err)
 	}
-	if err := svc.RemoveWorktree(repo, dirty.Path, true); err != nil {
+	if err := svc.RemoveWorktree(repo, dirty.Path, true, false); err != nil {
 		t.Fatalf("RemoveWorktree(dirty, force): %v", err)
 	}
 	if _, err := os.Stat(dirty.Path); !os.IsNotExist(err) {
 		t.Errorf("dirty worktree still exists after forced remove")
+	}
+}
+
+// TestWorktreeAdopted pins where lich's own worktrees live. The root is spelled
+// out here instead of read back from worktreesRoot, so moving that layout has to
+// be a deliberate edit on both sides rather than a test that follows along.
+func TestWorktreeAdopted(t *testing.T) {
+	data := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", data)
+	svc := New(nil)
+
+	cases := []struct {
+		name    string
+		path    string
+		adopted bool
+	}{
+		{"one lich created", filepath.Join(data, "lich", "worktrees", "proj", "feature"), false},
+		{"the root itself", filepath.Join(data, "lich", "worktrees"), false},
+		{"a directory the user made", filepath.Join(data, "elsewhere", "feature"), true},
+		{"a sibling the root only prefixes", filepath.Join(data, "lich", "worktrees-old", "feature"), true},
+		{"one directory above the root", filepath.Join(data, "lich"), true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := svc.WorktreeAdopted(c.path); got != c.adopted {
+				t.Errorf("WorktreeAdopted(%q) = %v, want %v", c.path, got, c.adopted)
+			}
+		})
+	}
+}
+
+// TestRemoveWorktreeRefusesAnAdoptedCheckoutUnacknowledged proves a worktree the
+// user made by hand is never handed to `git worktree remove` on the say-so of a
+// caller that has not shown its path to anyone — not even with force, which is
+// the call that would take uncommitted work with it. git lists it like any
+// other, so nothing but its path outside the data dir tells lich to ask first.
+func TestRemoveWorktreeRefusesAnAdoptedCheckoutUnacknowledged(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	repo, git := initRepo(t)
+	adopted := filepath.Join(t.TempDir(), "by-hand")
+	git("worktree", "add", "-b", "by-hand", adopted, "main")
+
+	svc := New(nil)
+	for _, force := range []bool{false, true} {
+		if err := svc.RemoveWorktree(repo, adopted, force, false); err == nil {
+			t.Fatalf("RemoveWorktree(force=%v) = nil, want a refusal", force)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(adopted, "a.txt")); err != nil {
+		t.Errorf("the user's checkout is gone: %v", err)
+	}
+	// Still registered: no `git worktree remove` ran, so the picker keeps
+	// offering it — the refusal costs the removal, never the session.
+	branches, err := svc.ListBranches(repo)
+	if err != nil {
+		t.Fatalf("ListBranches: %v", err)
+	}
+	if !slices.ContainsFunc(branches.Worktrees, func(w Worktree) bool { return w.Name == "by-hand" }) {
+		t.Errorf("worktrees = %+v, want the adopted checkout still listed", branches.Worktrees)
+	}
+}
+
+// TestRemoveWorktreeAcknowledgedAdoptedCheckout proves the acknowledgement is
+// the whole difference: a caller that has named the absolute path to the user
+// gets the same removal any other checkout gets — and the uncommitted-work rule
+// is untouched by it, so a dirty one still needs force on top.
+func TestRemoveWorktreeAcknowledgedAdoptedCheckout(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	repo, git := initRepo(t)
+	svc := New(nil)
+
+	dirty := filepath.Join(t.TempDir(), "by-hand-dirty")
+	git("worktree", "add", "-b", "by-hand-dirty", dirty, "main")
+	if err := os.WriteFile(filepath.Join(dirty, "a.txt"), []byte("changed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.RemoveWorktree(repo, dirty, false, true); err == nil {
+		t.Error("RemoveWorktree(adopted, dirty) = nil error, want git's refusal")
+	}
+	if _, err := os.Stat(dirty); err != nil {
+		t.Errorf("dirty checkout should remain on disk: %v", err)
+	}
+	if err := svc.RemoveWorktree(repo, dirty, true, true); err != nil {
+		t.Fatalf("RemoveWorktree(adopted, dirty, force): %v", err)
+	}
+	if _, err := os.Stat(dirty); !os.IsNotExist(err) {
+		t.Error("dirty adopted checkout still exists after a forced remove")
+	}
+
+	clean := filepath.Join(t.TempDir(), "by-hand")
+	git("worktree", "add", "-b", "by-hand", clean, "main")
+	if err := svc.RemoveWorktree(repo, clean, false, true); err != nil {
+		t.Fatalf("RemoveWorktree(adopted, clean): %v", err)
+	}
+	if _, err := os.Stat(clean); !os.IsNotExist(err) {
+		t.Error("adopted checkout still exists after an acknowledged remove")
+	}
+	// Collected, not just deleted: the picker stops offering a checkout that is
+	// gone, which is the point of removing it through lich at all.
+	branches, err := svc.ListBranches(repo)
+	if err != nil {
+		t.Fatalf("ListBranches: %v", err)
+	}
+	if slices.ContainsFunc(branches.Worktrees, func(w Worktree) bool { return w.Name == "by-hand" }) {
+		t.Errorf("worktrees = %+v, want the removed checkout gone", branches.Worktrees)
 	}
 }
 

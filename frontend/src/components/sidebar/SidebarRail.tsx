@@ -2,7 +2,10 @@ import { useMatch, useNavigate } from "react-router-dom"
 import { PanelLeft, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useProjects } from "@/providers/projects"
-import { activeSessionId, sessionsOf, sidebarGroups, type Session } from "@/lib/session/sessions"
+import { activeSessionId, sessionsOf, type Session } from "@/lib/session/sessions"
+import { sidebarGroups } from "@/lib/session/sidebar-groups"
+import { resolveGroups } from "@/lib/session/panes"
+import { useStoredGroups } from "@/lib/session/panes-store"
 import { useSessionAgent } from "@/lib/session/use-session-agent"
 import { useSessionStatus, useSessionUnread } from "@/lib/session/use-session-status"
 import { SessionStatusIcon } from "./SessionStatusIcon"
@@ -14,6 +17,8 @@ interface RailSessionProps {
   // The project's own directory, the fallback for a session with no path of its
   // own and no cwd reported yet.
   projectPath: string
+  // The project this session sits in, the scope its sandbox rung is read in.
+  projectId: string
   active: boolean
   onSelect: () => void
 }
@@ -24,7 +29,7 @@ interface RailSessionProps {
 // drawn from the same component the card uses, not a second implementation.
 // Same for the tooltip: at this width it is the only place the card's words can
 // go, so it is the card's own tooltip, not a shortened one.
-function RailSession({ session, projectPath, active, onSelect }: RailSessionProps) {
+function RailSession({ session, projectPath, projectId, active, onSelect }: RailSessionProps) {
   const status = useSessionStatus(session.id)
   const unread = useSessionUnread(session.id)
   const agent = useSessionAgent(session.id)
@@ -45,7 +50,7 @@ function RailSession({ session, projectPath, active, onSelect }: RailSessionProp
       >
         <SessionStatusIcon kind={agent ?? session.kind} status={status} unread={unread} />
       </TooltipTrigger>
-      <SessionTooltip session={session} path={projectPath} />
+      <SessionTooltip session={session} path={projectPath} projectId={projectId} />
     </Tooltip>
   )
 }
@@ -67,13 +72,24 @@ export function SidebarRail({ onExpand }: SidebarRailProps) {
   const match = useMatch("/projects/:projectId/*")
   const projectId = match?.params.projectId
   const navigate = useNavigate()
+  // Subscribed rather than read: a pane mutation that touches no session state —
+  // the add shortcut, a pane's ×, a drag swap — notifies this store and nothing
+  // else, so a rail holding no listener would draw yesterday's blocks until some
+  // unrelated render came along. Resolved ahead of the no-project bail below:
+  // hooks cannot sit behind it.
+  const stored = useStoredGroups(projectId ?? "")
 
   if (!projectId) {
     return null
   }
 
   const path = projects.find((p) => p.id === projectId)?.path ?? ""
-  const groups = sidebarGroups(sessionsOf(sessions, projectId))
+  // Same order as the expanded sidebar, split's block and all: the rail is
+  // that list with the words taken out. Reconciled the same way too — the
+  // stored value is not the truth on its own, and a rail drawing a wall the
+  // open sidebar has already dropped is the same list disagreeing with itself.
+  const list = sessionsOf(sessions, projectId)
+  const groups = sidebarGroups(list, resolveGroups(stored, list))
   // Unlike the open sidebar, a full-screen route (Settings, Pulls) does not put
   // the highlight out: those screens have no card of their own here to carry
   // it, so dropping it would leave the rail with nothing lit at all.
@@ -127,6 +143,7 @@ export function SidebarRail({ onExpand }: SidebarRailProps) {
                 key={session.id}
                 session={session}
                 projectPath={path}
+                projectId={projectId}
                 active={session.id === activeId}
                 onSelect={() => select(session.id)}
               />

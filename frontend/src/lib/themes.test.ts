@@ -1,21 +1,19 @@
 import { describe, expect, it } from "vitest"
 import type { ThemeDefinition } from "./api-types"
 import {
-  adoptStoredSelections,
+  adoptStoredTheme,
   APP_COLOR_TOKENS,
   applyAppTheme,
   BUNDLED_THEMES,
   bundledThemes,
   customThemes,
-  DEFAULT_TERMINAL_THEME,
   DEFAULT_THEME,
   mergeImportedThemes,
   mergeThemes,
-  reconcileThemeSelections,
+  reconcileTheme,
   repoLabel,
-  resolveTerminalTheme,
   resolveTheme,
-  selectionsAfterThemeRemoval,
+  themeAfterRemoval,
   SYSTEM_THEME,
   THEME_TEMPLATE_FILENAME,
   themeSelectItems,
@@ -104,73 +102,33 @@ describe("themes", () => {
     expect(resolveTheme("missing", BUNDLED_THEMES, true).id).toBe("dark")
   })
 
-  it("resolves terminal match to the app theme", () => {
-    const appTheme = customTheme("custom")
-    expect(resolveTerminalTheme("match", appTheme, BUNDLED_THEMES)).toBe(appTheme)
-    expect(resolveTerminalTheme("dark", appTheme, BUNDLED_THEMES).id).toBe("dark")
-    expect(resolveTerminalTheme("missing", appTheme, BUNDLED_THEMES)).toBe(appTheme)
+  // One selection colors both surfaces, so the palette the terminal paints is
+  // the resolved theme's own, with nothing left to resolve separately.
+  it("carries a terminal palette on the theme the app resolved to", () => {
+    expect(resolveTheme("dark", BUNDLED_THEMES, false).terminal.background).toBeTruthy()
+    expect(resolveTheme(SYSTEM_THEME, BUNDLED_THEMES, true).terminal.foreground).toBeTruthy()
   })
 
-  it("reconciles missing stored selections after themes load", () => {
-    expect(
-      reconcileThemeSelections(
-        { theme: "missing-app", terminalTheme: "missing-terminal" },
-        BUNDLED_THEMES,
-      ),
-    ).toEqual({ theme: DEFAULT_THEME, terminalTheme: DEFAULT_TERMINAL_THEME })
-    expect(
-      reconcileThemeSelections({ theme: "dark", terminalTheme: "light" }, BUNDLED_THEMES),
-    ).toEqual({ theme: "dark", terminalTheme: "light" })
+  it("reconciles a missing stored selection after themes load", () => {
+    expect(reconcileTheme("missing-theme", BUNDLED_THEMES)).toBe(DEFAULT_THEME)
+    expect(reconcileTheme("dark", BUNDLED_THEMES)).toBe("dark")
+    expect(reconcileTheme(SYSTEM_THEME, BUNDLED_THEMES)).toBe(SYSTEM_THEME)
   })
 
-  it("prefers the stored selections over the boot cache", () => {
-    expect(
-      adoptStoredSelections(
-        { theme: "dracula", terminalTheme: "dark" },
-        { theme: SYSTEM_THEME, terminalTheme: DEFAULT_TERMINAL_THEME },
-      ),
-    ).toEqual({
-      selections: { theme: "dracula", terminalTheme: "dark" },
+  it("prefers the stored selection over the boot cache", () => {
+    expect(adoptStoredTheme("dracula", SYSTEM_THEME)).toEqual({
+      theme: "dracula",
       persist: false,
     })
   })
 
   it("adopts the boot cache and asks for a write-back when nothing is stored", () => {
-    expect(
-      adoptStoredSelections(
-        { theme: "", terminalTheme: "" },
-        { theme: "dracula", terminalTheme: "light" },
-      ),
-    ).toEqual({
-      selections: { theme: "dracula", terminalTheme: "light" },
-      persist: true,
-    })
+    expect(adoptStoredTheme("", "dracula")).toEqual({ theme: "dracula", persist: true })
   })
 
-  // The two keys are written together but read apart: an install that stored one
-  // selection before the other must not have the missing one left unwritten.
-  it("writes back when only one selection is stored", () => {
-    expect(
-      adoptStoredSelections(
-        { theme: "dracula", terminalTheme: "" },
-        { theme: SYSTEM_THEME, terminalTheme: "light" },
-      ),
-    ).toEqual({
-      selections: { theme: "dracula", terminalTheme: "light" },
-      persist: true,
-    })
-  })
-
-  it("resets only selections that use a removed theme", () => {
-    expect(
-      selectionsAfterThemeRemoval("custom", {
-        theme: "custom",
-        terminalTheme: "custom",
-      }),
-    ).toEqual({ theme: DEFAULT_THEME, terminalTheme: DEFAULT_TERMINAL_THEME })
-    expect(
-      selectionsAfterThemeRemoval("other", { theme: "custom", terminalTheme: "dark" }),
-    ).toEqual({ theme: "custom", terminalTheme: "dark" })
+  it("resets the selection only when the removed theme is the one in use", () => {
+    expect(themeAfterRemoval("custom", "custom")).toBe(DEFAULT_THEME)
+    expect(themeAfterRemoval("other", "custom")).toBe("custom")
   })
 
   it("applies every app token as a CSS variable", () => {

@@ -7,20 +7,18 @@ package terminal
 
 import (
 	"encoding/base64"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
-	"runtime"
 	"slices"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
+	"github.com/omartelo/lich/internal/awake"
 	"github.com/omartelo/lich/internal/events"
 	"github.com/omartelo/lich/internal/pricing"
-	"github.com/omartelo/lich/internal/project"
+	"github.com/omartelo/lich/internal/store"
 )
 
 // Event names. A terminal I/O event carries the session ID as a suffix (e.g.
@@ -58,12 +56,29 @@ const (
 	// clear so a respawned session never wears a dead agent's icon.
 	agentEventName = "session-agent"
 	// sandboxEventName carries whether a session's PTY runs confined ({id,
-	// confined}), emitted by every spawn. The card marks a confined session, and
-	// the answer is the spawn's own — it takes the provider's rung, the checkout
-	// and a per-session override to reach, so the window is told rather than
-	// asked to work it out again. Persisted with the row too (store.Session's
-	// Sandbox), which is what a page reload hydrates from.
+	// confined, skippedLinks}), emitted by every spawn. The card marks a confined
+	// session, and the answer is the spawn's own — it takes the provider's rung,
+	// the checkout and a per-session override to reach, so the window is told
+	// rather than asked to work it out again. skippedLinks is what that sandbox
+	// left out of the private home for being a symlink, which is the one absence
+	// a session has no other way of learning about. Both persisted with the row
+	// (store.Session's Sandbox and SandboxSkippedLinks), which is what a page
+	// reload hydrates from.
 	sandboxEventName = "session-sandbox"
+	// mcpEventName carries the MCP servers a session's provider could reach at
+	// its spawn ({id, servers}), emitted by every spawn. The card divides a tool
+	// name against them — two harnesses spell an MCP tool with a single
+	// underscore between the server and the tool, which nothing in the string
+	// divides (docs/hooks/session-state.md). Persisted with the row too
+	// (store.Session's MCPServers), which is what a page reload hydrates from:
+	// the PTY outlives the page, so there is no second spawn to report it again.
+	mcpEventName = "session-mcp"
+	// turnEventName carries the id of a session whose last finished turn has
+	// just been filed ({id}) — emitted when the closing snapshot lands, not when
+	// the turn's `done` is reported. The two are not the same moment: the
+	// snapshot runs on a worker, so a panel refreshed off the state report reads
+	// the record before it exists (see turnSnaps).
+	turnEventName = "session-turn"
 )
 
 // statusEvent is the payload of statusEventName: the session whose processing
@@ -117,11 +132,28 @@ type agentEvent struct {
 	Agent string `json:"agent"`
 }
 
-// sandboxEvent is the payload of sandboxEventName: the session and whether its
-// PTY is confined.
+// sandboxEvent is the payload of sandboxEventName: the session, whether its PTY
+// is confined, and the home paths that sandbox skipped for being symlinks,
+// relative to the home (nil for an unconfined spawn and for one that skipped
+// none).
 type sandboxEvent struct {
-	ID       string `json:"id"`
-	Confined bool   `json:"confined"`
+	ID           string   `json:"id"`
+	Confined     bool     `json:"confined"`
+	SkippedLinks []string `json:"skippedLinks"`
+}
+
+// mcpEvent is the payload of mcpEventName: the session and the MCP servers its
+// provider could reach when it was spawned.
+type mcpEvent struct {
+	ID      string   `json:"id"`
+	Servers []string `json:"servers"`
+}
+
+// turnEvent is the payload of turnEventName: the session whose last-turn record
+// just changed. It carries no diff — the panel asks for one only while it is on
+// screen, and a turn's diff is far larger than an event ought to be.
+type turnEvent struct {
+	ID string `json:"id"`
 }
 
 // session is a single running PTY-backed shell. done closes when the session
@@ -158,23 +190,30 @@ type session struct {
 	draftAt    time.Time
 	escPending []byte
 	pasting    bool
+	// holds is how many relayed deliveries own this prompt until the Enter each
+	// sends behind its paste is through, and held is what the user typed while
+	// they did — replayed at the fresh prompt rather than submitted with
+	// somebody else's message. Both guarded by the service's mu. See HoldInput.
+	holds int
+	held  []byte
 	// confined records whether this PTY was spawned inside the sandbox, so Start
-	// can report it once the spawn is out of the lock.
-	confined bool
+	// can report it once the spawn is out of the lock. sandboxLinks rides with
+	// it: what that sandbox skipped for being a symlink, resolved by the same
+	// call and reported in the same event.
+	confined     bool
+	sandboxLinks []string
 }
 
 // Store is the persistence the terminal service depends on: the binary to spawn
 // for a provider in a project (empty return spawns the provider's default),
-// whether a given session runs one of those rather than the provider's own,
 // whether that spawn drops the provider's permission prompts and whether it runs
 // confined, that project's own directory, the dev-server port reserved for each
 // checkout, where to record the provider session id a PTY reports through its
-// session-start hook, and the running cost accounting behind the footer readout
-// (CostReadout gates it — off, none of the rest is called). The store implements
-// them all.
+// session-start hook, where to record a finished turn nobody has read yet, and
+// the running cost accounting behind the footer readout (CostReadout gates it —
+// off, none of the rest is called). The store implements them all.
 type Store interface {
 	ProviderBin(providerID, projectID string) string
-	SessionCustomBin(sessionID string) bool
 	SkipPermissions(providerID, projectID, cwd string) bool
 	ProjectPath(projectID string) string
 	WorktreePorts() map[string]int
@@ -185,15 +224,23 @@ type Store interface {
 	SessionEntrypoint(sessionID string) string
 	SessionSandbox(sessionID string) string
 	SetSessionSandbox(sessionID, sandbox string) error
+	SetSessionMCPServers(sessionID string, servers []string) error
+	SetSessionSandboxLinks(sessionID string, links []string) error
 	SandboxDefault(providerID, projectID, cwd string) bool
 	SandboxSSHAgent(projectID string) bool
 	SandboxGHToken(projectID string) bool
 	GHAccountForPath(path string) string
 	SetSessionTitle(sessionID, title string) (bool, error)
+	SetSessionUnread(sessionID string, unread bool) error
 	CostReadout() bool
 	CostLedger(sessionID, transcriptID string) (int64, string, float64, error)
 	SaveCostLedger(sessionID, transcriptID string, offset int64, lastMessage string, cost float64) error
 	SessionCost(sessionID string) (float64, error)
+	SaveForkCostOffset(sessionID, forkedFrom string) error
+	AddHandsOn(sessionID string, seconds int64) error
+	HandsOn(sessionID string) (int64, error)
+	SaveTurnRecord(sessionID string, rec store.TurnRecord) error
+	TurnRecord(sessionID string) (store.TurnRecord, bool, error)
 }
 
 // Service manages PTY-backed shell sessions keyed by session ID.
@@ -227,12 +274,53 @@ type Service struct {
 	// browser hangs off it so a card that goes away takes its Chromium with it.
 	// Guarded by mu: wired after the transport is already serving.
 	onClose func(id string)
+
+	// spawns is how each live session's PTY was started — what it runs and where
+	// — keyed by session id. Read by providerKind, which is what stops a
+	// session-start report from repainting a card lich itself chose the provider
+	// for, by the state report's own filter, and by the cost readout, which asks
+	// where Crush keeps the database for this checkout.
+	//
+	// Deliberately not under mu, and that is the whole reason it is not simply a
+	// field on session: spawnSession holds mu across the PTY spawn, so a report
+	// that had to ask mu what a session runs would queue behind another
+	// session's spawn — which is exactly what the note on turns below forbids.
+	// Written once per spawn and read on every report, which is what sync.Map
+	// is for.
+	spawns sync.Map
+
 	// turns is which sessions have a turn open right now, which is what tells a
 	// `waiting` report that a human is blocking from one that only says the
 	// session is sitting at its prompt (see turnLog). It carries its own lock:
 	// nothing else about a report needs mu, and a hook must never queue behind a
 	// PTY spawn.
 	turns turnLog
+	// unread is the last unread mark written for each session, so the `busy`
+	// reported per tool call never reaches the database (see noteUnread). Not
+	// under mu for the reason spawns is not: it is read on every hook report,
+	// which must never queue behind a PTY spawn.
+	unread sync.Map
+	// hands is how long each session has been worked on, measured off the same
+	// three signals the card is already drawing — a state report, a keystroke,
+	// output while the agent is busy (see handsOn). It carries its own lock for
+	// the reason turns does: a hook must never queue behind a PTY spawn.
+	hands handsOn
+	// recap is where each session's provider transcript was last read to, so
+	// the Review panel's band walks what has been appended since rather than
+	// re-reading a bounded tail every poll (see saidCursors).
+	recap saidCursors
+	// todos is the same reading for the task list an agent writes for itself,
+	// kept apart from recap because the two are read on different clocks (see
+	// todoCursors). todoEmit orders what comes out of it: that event is emitted
+	// only when the count moves, so two reports landing out of order would
+	// leave the older count on the card (see emitTodo).
+	todos    todoCursors
+	todoEmit sync.Mutex
+	// snaps brackets each session's turn with a tree snapshot of its checkout,
+	// which is what the Review panel's "Last turn" mode diffs (see turnSnaps).
+	// It reads the same boundary turns does and carries its own lock for the
+	// same reason.
+	snaps turnSnaps
 	// lastCols/lastRows is the last terminal size the window reported, and the
 	// size a session spawned with none of its own is started at. See
 	// sizeFor. Guarded by mu.
@@ -303,72 +391,25 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 		sessions: make(map[string]*session),
 		store:    store,
 		hub:      hub,
-		// Clipped before the append: outside an AppImage childEnv hands back the
-		// caller's own slice, and appending into its spare capacity would write
-		// TERM into the array main still holds.
-		env:    append(slices.Clip(childEnv(env)), "TERM=xterm-256color"),
-		prices: pricing.New(),
+		env:      sessionBaseEnv(env),
+		prices:   pricing.New(),
 	}
-	ws, err := newTransport(
-		func(id string, data []byte) {
-			if s.noteInput(id, data) {
-				s.noteInterrupt(id)
-			}
-			if err := s.writeBytes(id, data); err != nil {
-				slog.Warn("terminal: input write failed", "session", id, "err", err)
-			}
-		},
-		func(req hookRequest) {
-			// The window is told what the report means, not what it said: a
-			// `waiting` outside a turn is a session idle at its prompt, and the
-			// card would draw it as a human being blocked (see turnLog).
-			if s.turns.report(req.SessionID, req.State) {
-				hub.Emit(statusEventName, statusEvent{
-					ID:     req.SessionID,
-					State:  req.State,
-					Tool:   req.Tool,
-					Detail: req.Detail,
-					Reason: req.Reason,
-				})
-			}
-			// The relay reads the stream raw: it keeps its own turn accounting,
-			// and a report held back from the window still moves an errand.
-			if watch := s.stateWatcher(); watch != nil {
-				watch(req.SessionID, req.State)
-			}
-			// Every non-idle state is a point where a fresh assistant usage line
-			// may have landed — a tool call mid-turn (busy), a prompt (waiting),
-			// or the turn's end (done) — so refresh the context window then, and
-			// off-thread so a stalled emit never blocks the hook's response. Skip
-			// idle (SessionEnd): the session is ending, nothing new to read.
-			if req.State != statusIdle {
-				go s.emitUsage(req.SessionID)
-			}
-		},
-		func(sessionID, providerSessionID, provider string) error {
-			if err := store.SetProviderSession(sessionID, providerSessionID); err != nil {
-				return err
-			}
-			// A SessionStart report is proof that provider's CLI is running in
-			// this PTY — whatever the card's kind, its icon can wear that
-			// provider's mark now.
-			hub.Emit(agentEventName, agentEvent{ID: sessionID, Agent: provider})
-			return nil
-		},
-		func(id, title string) error {
-			applied, err := store.SetSessionTitle(id, title)
-			if err != nil {
-				return err
-			}
-			if applied {
-				hub.Emit(titleEventName, titleEvent{ID: id, Label: title})
-			}
-			return nil
-		},
-		func(id string) {
-			hub.Emit(touchedEventName, touchedEvent{ID: id})
-		},
-	)
+	// Wired here rather than emitted from the hook's own goroutine: the record
+	// is filed on the snapshot worker, minutes-of-CPU later on a cold checkout,
+	// and the panel has no other way to learn that the answer it already asked
+	// for has changed.
+	s.snaps.filed = func(id string) {
+		hub.Emit(turnEventName, turnEvent{ID: id})
+	}
+	// What a turn recorded outlives the process that recorded it: a session
+	// restored at launch answers for its last turn straight away, instead of
+	// reading as unrecorded until its next one ends.
+	s.snaps.store = store
+	// While any turn is open the machine is kept from idling into sleep, the
+	// way a playing media player keeps it: a locked screen no longer pauses
+	// the agents (internal/awake).
+	s.turns.onOpen = awake.New().Set
+	ws, err := newTransport(s.onInput, s.onHookState, s.onSessionStart, s.onTitle, s.onTouched)
 	s.ws, s.wsErr = ws, err
 	if ws != nil {
 		// The transport is built before the service that owns the bridge, so the
@@ -376,6 +417,159 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 		ws.setFallback(s.emitData)
 	}
 	return s
+}
+
+// onInput is the transport's keyboard callback. Only this path, never
+// writeBytes, beats hands-on: what arrives here is the window's own input
+// frames, which is a person at the keyboard. A relayed message another session
+// pasted through Write is that session's work, not this one's.
+func (s *Service) onInput(id string, data []byte) {
+	s.beatHandsOn(id, 0)
+	// Held first, and before the beat is spent on nothing: a delivery in flight
+	// owns this prompt until its Enter is through, and what was typed at it
+	// reaches the PTY from releaseInput instead (see HoldInput).
+	if s.holdKeys(id, data) {
+		return
+	}
+	if s.noteInput(id, data) {
+		s.noteInterrupt(id)
+	}
+	if err := s.writeBytes(id, data); err != nil {
+		slog.Warn("terminal: input write failed", "session", id, "err", err)
+	}
+}
+
+// onHookState is the transport's state-report callback, one per hook a
+// session's provider fires.
+func (s *Service) onHookState(req hookRequest) {
+	// Ahead of every filter below, because a beat is not about what the
+	// card can draw: any hook naming a session is proof that session was
+	// being worked, whatever endpoint it arrived on and whether or not
+	// lich publishes it. That is why the other three callbacks beat too
+	// — a provider whose hooks report no state has no other way to say
+	// its agent is running. Cursor CLI's tool reports are dropped a line
+	// down for want of anything that could end the spinner they would
+	// start, and they are the only proof a Cursor turn is running at all
+	// (see closableState).
+	s.beatHandsOn(req.SessionID, 0)
+	// Dropped where the harness cannot close it, before the turn log
+	// ever sees it: a state nothing ends outlives what it describes.
+	if !closableState(s.kindOf(req.SessionID), req.State) {
+		return
+	}
+	// The window is told what the report means, not what it said: a
+	// `waiting` outside a turn is a session idle at its prompt, and the
+	// card would draw it as a human being blocked (see turnLog).
+	if s.turns.report(req.SessionID, req.State) {
+		s.noteUnread(req.SessionID, req.State == statusDone)
+		s.hub.Emit(statusEventName, statusEvent{
+			ID:     req.SessionID,
+			State:  req.State,
+			Tool:   req.Tool,
+			Detail: req.Detail,
+			Reason: req.Reason,
+		})
+	}
+	// The relay reads the stream raw: it keeps its own turn accounting,
+	// and a report held back from the window still moves an errand.
+	if watch := s.stateWatcher(); watch != nil {
+		watch(req.SessionID, req.State)
+	}
+	// The same boundary brackets the Review panel's "Last turn": `busy`
+	// opens the window, `done` closes it. Queued, never taken here — a
+	// snapshot on this goroutine would hold the hook's own response, and
+	// with it the agent's next step (see turnSnaps).
+	s.snaps.note(req.SessionID, req.State)
+	// Every non-idle state is a point where a fresh assistant usage line
+	// may have landed — a tool call mid-turn (busy), a prompt (waiting),
+	// or the turn's end (done) — so refresh the context window then, and
+	// off-thread so a stalled emit never blocks the hook's response. Skip
+	// idle (SessionEnd): the session is ending, nothing new to read.
+	if req.State != statusIdle {
+		// Both readouts taken off the transcript go out together, on one
+		// resolution of it: the context window, and the list the agent wrote
+		// itself. A `TodoWrite` lands mid-turn like a usage line, and the card
+		// that draws the count is looking at a session that has gone quiet, so
+		// the read has to have happened before the turn ends.
+		go s.emitReadouts(req.SessionID)
+	}
+	// A Kiro session's name is read here rather than reported, because Kiro
+	// hands its hooks no transcript path to read one from while it does file
+	// a title of its own (title_kiro.go). `done` is the turn end it raises,
+	// and the read is off-thread for the same reason the usage one is.
+	if req.State == statusDone {
+		go s.applyKiroTitle(req.SessionID)
+	}
+}
+
+// noteUnread persists whether this session's card is holding a finished turn
+// nobody has read, so the mark survives a page reload (docs/ceilings.md). It is
+// written from here rather than from the window because a turn can end with no
+// window attached at all: during a reload, or served as a tab.
+//
+// Only the clear is deduped, and it is the whole hot path: `busy` is reported
+// once per tool call, and without this every one of them would take the
+// workspace database's write lock to change nothing. The mark itself is written
+// on every finished turn, because the window clears that same column when the
+// card is read and this process never sees it: a memo of the mark would swallow
+// the next turn to end.
+func (s *Service) noteUnread(id string, unread bool) {
+	last, written := s.unread.Load(id)
+	if !unread && written && last == unread {
+		return
+	}
+	s.unread.Store(id, unread)
+	if err := s.store.SetSessionUnread(id, unread); err != nil {
+		slog.Warn("terminal: record unread", "session", id, "err", err)
+	}
+}
+
+// onSessionStart is the transport's session-start callback: the provider's
+// CLI reporting which conversation it runs.
+func (s *Service) onSessionStart(sessionID, providerSessionID, provider string) error {
+	// The beat above, on the one report Crush can make. Its only hook
+	// event is PreToolUse and neither script it registers there reports
+	// a state (docs/hooks/session-state.md), so this arrives once per
+	// tool call — measured 2026.09.03 against Crush 0.88.0 — and is the
+	// only proof a Crush turn is running.
+	s.beatHandsOn(sessionID, 0)
+	if err := s.store.SetProviderSession(sessionID, providerSessionID); err != nil {
+		return err
+	}
+	// A SessionStart report is proof that *a* provider's CLI is running
+	// in this PTY, and for a shell session that report is the only thing
+	// that knows which — so its icon wears the reported mark.
+	//
+	// For a session lich spawned as a provider, the kind is the better
+	// answer and it wins. A harness can run another harness's hooks:
+	// Cursor CLI executes every Claude Code hook on the machine, the
+	// user's own and each installed plugin's (measured on 2026.08.11,
+	// `hookSource: claude-plugin`), so the lich plugin's own script
+	// reports `claude` from inside a Cursor session and the card wore
+	// Claude's mark one turn in. What a hook says is a claim; what lich
+	// spawned is a fact.
+	s.hub.Emit(agentEventName, agentEvent{ID: sessionID, Agent: s.providerKind(sessionID, provider)})
+	return nil
+}
+
+// onTitle is the transport's ai-title callback.
+func (s *Service) onTitle(id, title string) error {
+	s.beatHandsOn(id, 0)
+	applied, err := s.store.SetSessionTitle(id, title)
+	if err != nil {
+		return err
+	}
+	if applied {
+		s.hub.Emit(titleEventName, titleEvent{ID: id, Label: title})
+	}
+	return nil
+}
+
+// onTouched is the transport's callback for a hook that names a session and
+// reports nothing else.
+func (s *Service) onTouched(id string) {
+	s.beatHandsOn(id, 0)
+	s.hub.Emit(touchedEventName, touchedEvent{ID: id})
 }
 
 // emitData puts one session's output on the /events bridge — where terminal
@@ -419,6 +613,10 @@ func (s *Service) noteInterrupt(id string) {
 		return
 	}
 	s.hub.Emit(statusEventName, statusEvent{ID: id, State: statusInterrupted})
+	// An interrupted turn is still a turn that ended, and it changed files like
+	// any other. Closing the window here is what keeps the panel from holding
+	// an older turn open until the next one finishes.
+	s.snaps.closeTurn(id)
 	// The relay keeps its own turn accounting off the same stream, and a turn
 	// that ended has to read as ended there too — a queued delivery waits on the
 	// target's prompt being free.
@@ -426,9 +624,11 @@ func (s *Service) noteInterrupt(id string) {
 		watch(id, statusInterrupted)
 	}
 	// An interrupted turn spent tokens like any other, and it may be the last
-	// one for a while: refresh the context readout off the transcript, off the
-	// caller's thread the way the hook path does.
-	go s.emitUsage(id)
+	// one for a while: refresh the readouts off the transcript, off the
+	// caller's thread the way the hook path does. The task list goes with the
+	// context window: an interrupted turn is exactly the one whose progress is
+	// worth reading.
+	go s.emitReadouts(id)
 }
 
 // SetSessionState wires fn to every session-state report the hooks deliver.
@@ -465,6 +665,26 @@ func (s *Service) SetRestart(fn func() error) {
 		return
 	}
 	s.ws.setRestart(fn)
+}
+
+// sessionBaseEnv is what every session starts from: the process environment
+// cleaned of AppImage runtime leakage, plus TERM. Clipped before the append —
+// outside an AppImage childEnv hands back the caller's own slice, and appending
+// into its spare capacity would write TERM into the array the caller still
+// holds.
+func sessionBaseEnv(env []string) []string {
+	return append(slices.Clip(childEnv(env)), "TERM=xterm-256color")
+}
+
+// SetEnv replaces what a session spawned from now on inherits, after a re-read
+// of the login shell replaced the environment lich booted with
+// (internal/providers.Service.RefreshPath). A session already running keeps the
+// environment it was born with: its PTY was handed a copy at spawn, and there
+// is no way to reach into a live process's environment anyway.
+func (s *Service) SetEnv(env []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.env = sessionBaseEnv(env)
 }
 
 // sessionEnv is the environment for one PTY: the shared base, the project this
@@ -517,367 +737,6 @@ var lichBin = sync.OnceValue(func() string {
 	return exe
 })
 
-// readBufSize is the chunk size read from a session's PTY per iteration.
-const readBufSize = 32 * 1024
-
-// Start spawns the binary for session id under project projectID — the user's
-// shell when kind is "shell", otherwise the provider binary for that kind
-// resolved from the project's settings (falling back to the provider's default
-// on $PATH) — attached to a new PTY sized to cols x rows and rooted at cwd, then
-// streams its output to the frontend. An empty cwd defaults to the user's home
-// directory. Starting a session that is already running is a no-op.
-//
-// A non-empty resume is a provider conversation id to reopen, spelled for the
-// session's kind by resumeArgs, which the frontend passes after the user
-// accepted the prompt to continue the session this card ran before the last
-// restart. The prompt is only raised for a conversation ResumeAvailable still
-// finds, so an id the provider no longer knows normally never reaches here; one
-// that slips through (pruned between the check and the spawn) fails in the PTY
-// like any other bad invocation — the user sees the provider's own error.
-//
-// name is what the session answers to in its provider's peer roster (Claude
-// Code's `/list-agents`), passed by the frontend so the roster names the card
-// the user sees. Only Claude Code has a roster; every other kind ignores it.
-//
-// setup is passed once, by the flow that just created this session's worktree:
-// it runs the project's worktree setup script (.lich/setup-worktree.sh, see
-// project.SetupScript) in the PTY before the provider, so a fresh checkout
-// installs its dependencies in view. A respawn or resume never sets it. The
-// script runs in the session's own environment, so it reads the same
-// LICH_WORKTREE_PORT the provider will.
-func (s *Service) Start(id, projectID, cwd, kind, resume, name string, setup bool, cols, rows int) error {
-	sess, cwd, err := s.spawnSession(id, projectID, cwd, kind, resume, name, setup, cols, rows)
-	if err != nil || sess == nil {
-		return err
-	}
-	// Emitted outside s.mu: Emit blocks on a stalled /events client, which
-	// would freeze every session's I/O. Both are unconditional so a respawn
-	// overwrites whatever the previous PTY left in the frontend's stores.
-	s.hub.Emit(cwdEventName, cwdEvent{ID: id, Cwd: cwd})
-	s.hub.Emit(agentEventName, agentEvent{ID: id, Agent: ""})
-	s.hub.Emit(sandboxEventName, sandboxEvent{ID: id, Confined: sess.confined})
-	go watchCwd(id, sess.pty.Pid(), cwd, sess.done, s.hub)
-	return nil
-}
-
-// spawnSession is the locked half of Start: dedupe, PTY spawn and session-map
-// registration. A nil session with a nil error means id was already running.
-// The returned cwd is the effective start directory (the input, or the
-// resolved home when it was empty).
-func (s *Service) spawnSession(id, projectID, cwd, kind, resume, name string, setup bool, cols, rows int) (*session, string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if _, running := s.sessions[id]; running {
-		return nil, "", nil
-	}
-	// Whatever the previous provider left open under this id died with its PTY,
-	// and the first report of the new one has to be read against its own turn.
-	s.turns.forget(id)
-	cols, rows = s.sizeFor(cols, rows)
-
-	if cwd == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, "", fmt.Errorf("failed to resolve home directory: %w", err)
-		}
-		cwd = home
-	}
-
-	// The MCP registration is withheld without a transport for the same reason
-	// the hook coordinates are: the server it points at would have nothing to
-	// talk to, so the session would carry tools that can only fail.
-	mcpBin := ""
-	if s.ws != nil {
-		mcpBin = lichBin()
-	}
-	skipPermissions := s.store.SkipPermissions(kind, projectID, cwd)
-	// The model is read from the row rather than passed in, so it survives every
-	// spawn this session ever gets: the window's first view, a respawn after a
-	// reload, and the resume of a parked worktree session all arrive here.
-	spec := ptySpec{
-		bin:  resolveCommand(kind, s.store.ProviderBin(kind, projectID), userShell()),
-		args: providerArgs(kind, name, resume, s.store.SessionModel(id), mcpBin, skipPermissions),
-		dir:  cwd,
-		env:  s.sessionEnv(id, projectID, cwd),
-		cols: cols,
-		rows: rows,
-	}
-	// Before wrapSetup, so a fresh worktree terminal carrying both runs the
-	// project's setup script first, then the entrypoint, then the shell.
-	spec = wrapEntrypoint(spec, kind, s.store.SessionEntrypoint(id), runtime.GOOS)
-	settingUp := false
-	if setup {
-		spec, settingUp = wrapSetup(spec, project.SetupScript(s.store.ProjectPath(projectID)), runtime.GOOS)
-	}
-	// Outermost, so the setup script and the entrypoint are confined with the
-	// session they run in front of.
-	inSandbox := confined(s.store, id, kind, projectID, cwd)
-	creds := s.sandboxCredentials(projectID, cwd, inSandbox)
-	spec = wrapSandbox(spec, kind, userHome(), sessionDropDir(s.dropDir, id, inSandbox), inSandbox, creds)
-	p, err := startPTY(spec)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to start pty for %q: %w", id, err)
-	}
-
-	box := newOutbox(func(data []byte) {
-		if s.ws != nil && s.ws.send(id, data) {
-			return
-		}
-		s.emitData(id, data)
-	}, outboxDepth)
-	out := newCoalescer(box.push, visibleFlushInterval, hiddenFlushInterval)
-	sess := &session{
-		pty:       p,
-		out:       out,
-		done:      make(chan struct{}),
-		replay:    newReplayBuffer(replayCapBytes),
-		outbox:    box,
-		settingUp: settingUp,
-		// Timed from the spawn, so a program that never writes anything still
-		// becomes ready once: quiet is the signal, and silence from the start
-		// is quiet too.
-		lastOut:  time.Now(),
-		confined: inSandbox,
-	}
-	s.sessions[id] = sess
-	go s.stream(id, sess)
-	return sess, cwd, nil
-}
-
-// stream copies PTY output to the frontend until the PTY is closed, then reaps
-// the process, drops the session and emits its exit event. Output goes through
-// the session's coalescer, which batches it on a short cadence while the
-// terminal is visible and a long one while it is hidden, and then through its
-// outbox, which delivers it off this goroutine.
-func (s *Service) stream(id string, sess *session) {
-	p := sess.pty
-	buf := make([]byte, readBufSize)
-	for {
-		n, err := p.Read(buf)
-		if n > 0 {
-			s.noteOutput(sess, buf[:n])
-			sess.replay.append(buf[:n])
-			sess.out.Write(buf[:n])
-		}
-		if err != nil {
-			break
-		}
-	}
-	code, _ := p.Wait()
-	// Release the PTY handle: on a natural child exit nobody else closes it
-	// (Close only reaps sessions still in the map), and after a user-driven
-	// Close this is the second one — a no-op each seam has to make safe, since
-	// the handles are already gone (see windowsPTY, where they are reissued).
-	_ = p.Close()
-	// Flush any batched output and wait for it to be delivered before the exit
-	// event, so the frontend always sees the final bytes ahead of the exit
-	// banner. Delivery now ends at the transport's writer rather than at the
-	// socket, so the wait runs one step further: the outbox for this session's
-	// own frames, then the connection's queue for the wire.
-	sess.out.Close()
-	sess.outbox.close()
-	if s.ws != nil {
-		s.ws.flush()
-	}
-
-	s.mu.Lock()
-	reaped := false
-	if current, ok := s.sessions[id]; ok && current.pty == p {
-		delete(s.sessions, id)
-		close(current.done)
-		reaped = true
-	}
-	s.mu.Unlock()
-
-	// Only the goroutine that actually evicted its own PTY owes an exit event:
-	// a reap that lost the race to a respawn under the same id would otherwise
-	// tell a live session it exited, and the frontend writes "[process exited]"
-	// into that terminal. Emitted outside s.mu for the reason Start gives —
-	// Emit blocks on a stalled /events client, and holding s.mu across it would
-	// freeze every session's I/O.
-	if reaped {
-		s.hub.Emit(exitEventPrefix+id, exitPayload(code))
-	}
-}
-
-// Write forwards keyboard input from the frontend to a session's PTY.
-func (s *Service) Write(id, data string) error {
-	return s.writeBytes(id, []byte(data))
-}
-
-// writeBytes delivers input bytes to a session's PTY; unknown sessions are a
-// no-op. It is the shared sink for the RPC Write and the WebSocket
-// transport's input frames.
-//
-// It loops until every byte is written. A single call is not enough:
-// ConPTY's input pipe (pty_windows.go) is a plain Windows anonymous pipe, and
-// WriteFile on one can legitimately return fewer bytes than given rather than
-// blocking for the rest — the caller is documented to retry. A large paste
-// landing exactly on that boundary lost its tail silently, closing bracket
-// and all, so bracketed paste never closed and the Enter that followed
-// landed inside it instead of submitting it. Unix's *os.File already loops
-// internally, so this is a no-op extra check there.
-func (s *Service) writeBytes(id string, data []byte) error {
-	p := s.ptyOf(id)
-	if p == nil {
-		return nil
-	}
-	for len(data) > 0 {
-		n, err := p.Write(data)
-		if err != nil {
-			return err
-		}
-		data = data[n:]
-	}
-	return nil
-}
-
-// SetVisible tells the session's output coalescer whether its terminal is on
-// screen. Hidden sessions batch output (~250ms per event); flipping to visible
-// flushes pending output immediately. Unknown sessions are a no-op.
-func (s *Service) SetVisible(id string, visible bool) error {
-	s.mu.Lock()
-	sess, ok := s.sessions[id]
-	s.mu.Unlock()
-	if !ok {
-		return nil
-	}
-	sess.out.SetVisible(visible)
-	return nil
-}
-
-// Replay returns the capped tail of a session's PTY output, base64-encoded, so a
-// reconnecting frontend can reseed its scrollback after a page reload discarded
-// the page-side buffer. Empty for an unknown session — a brand-new one has no
-// history yet. Base64 for the same reason the data event is: raw PTY bytes may
-// split a multi-byte UTF-8 sequence across the JSON envelope.
-func (s *Service) Replay(id string) (string, error) {
-	s.mu.Lock()
-	sess, ok := s.sessions[id]
-	s.mu.Unlock()
-	if !ok {
-		return "", nil
-	}
-	return base64.StdEncoding.EncodeToString(sess.replay.snapshot()), nil
-}
-
-// Resize updates a session's PTY window size. The frontend only calls this for
-// the visible terminal; a hidden terminal is resized on the next time it is
-// shown.
-func (s *Service) Resize(id string, cols, rows int) error {
-	// Recorded even when the session it names is gone: it is the window's own
-	// terminal being measured, and the next session spawned without one starts
-	// at that size (see sizeFor).
-	if cols > 0 && rows > 0 {
-		s.mu.Lock()
-		s.lastCols, s.lastRows = cols, rows
-		s.mu.Unlock()
-	}
-	p := s.ptyOf(id)
-	if p == nil {
-		return nil
-	}
-	return p.Resize(cols, rows)
-}
-
-// noteOutput reads one chunk of a session's output for the two things lich has
-// to know about it from outside: whether the worktree setup script is still the
-// program on the other end of this PTY (see setupDone), and whether that
-// program has ever stopped drawing (see Ready).
-func (s *Service) noteOutput(sess *session, chunk []byte) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	// The quiet is recorded as it passes, never sampled when somebody finally
-	// asks. A session settles seconds after it starts and is asked hours later,
-	// by then mid-turn: sampling there reads a spinner redrawing every few
-	// frames and calls a session that has been at its prompt all day unready.
-	//
-	// A setup script pauses too — between one package and the next — and that
-	// quiet belongs to a program the provider has not replaced yet, so it is
-	// not the provider's and does not count.
-	if !sess.settingUp && !sess.lastOut.IsZero() && time.Since(sess.lastOut) >= readySettle {
-		sess.ready = true
-	}
-	sess.lastOut = time.Now()
-	if sess.settingUp && sess.setupEnded(chunk) {
-		sess.settingUp = false
-		// The provider starts drawing from here, so the quiet this waits for is
-		// measured from the exec, not from the setup script's last line. The
-		// clock goes with the flag: the exec itself takes a second or two — the
-		// image is replaced, a runtime starts, a splash is composed — and that
-		// silence is nobody's quiet. Measured from the script's last line it
-		// would clear the settle on the provider's very first byte, mid-splash,
-		// which is the write that lands on screen as literal paste markers.
-		sess.ready = false
-		sess.lastOut = time.Time{}
-	}
-}
-
-// setupEnded reports whether chunk completes the wrapper's end marker, matching
-// across the seam between two reads: the wrapper prints the marker in one write,
-// but a PTY read can cut it anywhere, and neither half matches on its own — a
-// session that missed it waits out every relay it is ever sent.
-//
-// Called under s.mu.
-func (sess *session) setupEnded(chunk []byte) bool {
-	joined := sess.setupTail + string(chunk)
-	if strings.Contains(joined, setupDone) {
-		sess.setupTail = ""
-		return true
-	}
-	// One byte short of the marker is the most that can still be its beginning.
-	if keep := len(setupDone) - 1; len(joined) > keep {
-		joined = joined[len(joined)-keep:]
-	}
-	sess.setupTail = joined
-	return false
-}
-
-// Ready reports whether a session can be given work — whether what reads this
-// PTY is the provider rather than the project's setup script, and whether the
-// prompt is free rather than half-filled by the person sitting at it. False for
-// a session that is not running at all.
-//
-// Live is not this question. A session whose checkout is still installing its
-// dependencies has a PTY, appears in the roster, and accepts writes that go
-// straight into `pnpm install`'s stdin and are discarded before the provider
-// ever starts. It looked delivered to everyone involved: the sender waited out
-// its ticket on an agent that was never asked anything.
-func (s *Service) Ready(id string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	sess, ok := s.sessions[id]
-	if !ok || sess.settingUp {
-		return false
-	}
-	// Unlike the rest of this, being ready is not a state a session reaches and
-	// keeps: the user starts typing and the prompt is theirs again until they
-	// send it (see draft.go).
-	if sess.drafting(time.Now()) {
-		return false
-	}
-	if sess.ready {
-		return true
-	}
-	// A TUI that has stopped drawing is one that has taken the terminal and is
-	// waiting on input. Before that, a message is written into a program still
-	// setting the tty up, which discards what it finds there — the bracketed
-	// paste then lands on screen as literal text, ahead of a prompt that never
-	// received it.
-	//
-	// Quiet right now answers it too, for the session that has not produced a
-	// byte since its last one; a quiet that passed earlier was recorded when it
-	// happened (see noteOutput). Either way the session stays ready from then
-	// on. A busy agent draws continuously, and a target mid-turn has always
-	// been written to — its provider queues the input and answers a turn later.
-	if !sess.lastOut.IsZero() && time.Since(sess.lastOut) >= readySettle {
-		sess.ready = true
-		return true
-	}
-	return false
-}
-
 // Close terminates a session's shell, if any.
 func (s *Service) Close(id string) error {
 	s.mu.Lock()
@@ -888,7 +747,23 @@ func (s *Service) Close(id string) error {
 	}
 	onClose := s.onClose
 	s.mu.Unlock()
+	s.spawns.Delete(id)
+	// A turn dies with its session, and an open one left behind would keep the
+	// machine awake for a card that no longer exists.
+	s.turns.forget(id)
 
+	// Before the bail below, because a card is closed far more often than it is
+	// running: its row is deleted either way, so nothing will ever ask what its
+	// last turn changed — and its snapshot index would otherwise outlive it on
+	// disk for the rest of the machine's life.
+	s.snaps.forget(id)
+	s.recap.cursors.forget(id)
+	s.todos.cursors.forget(id)
+	// Synchronously, and before the row that the window is about to delete goes:
+	// a write that loses that race is dropped silently (store.AddHandsOn), and
+	// this is the last chance a closed card gets to keep what it was worked.
+	s.FlushHandsOn()
+	s.hands.forget(id)
 	if !ok {
 		return nil
 	}
@@ -896,6 +771,37 @@ func (s *Service) Close(id string) error {
 		onClose(id)
 	}
 	return sess.pty.Close()
+}
+
+// HandsOn is how long session id has been worked on, in whole seconds: the time
+// it was reporting, being typed at or producing output for an open turn, minus
+// every silence longer than handsOnIdleGap (see handsOn). Zero for a session
+// nothing has been counted for yet, and up to handsOnFlush behind what has
+// actually been measured — the readout is in minutes, so the debounce never
+// shows.
+func (s *Service) HandsOn(id string) (int64, error) {
+	return s.store.HandsOn(id)
+}
+
+// FlushHandsOn writes what every session has been worked since the last write.
+// Called off the debounce, when a card closes and once on the way out, so a
+// session's hours outlive the process that counted them.
+func (s *Service) FlushHandsOn() {
+	for id, seconds := range s.hands.drain() {
+		if err := s.store.AddHandsOn(id, seconds); err != nil {
+			s.hands.restore(id, seconds)
+			slog.Warn("terminal: save hands-on time", "session", id, "err", err)
+		}
+	}
+}
+
+// beatHandsOn records activity in session id, and writes the arrears off the
+// caller's goroutine once the debounce is up — a hook must never wait on
+// SQLite, and neither must the PTY reader.
+func (s *Service) beatHandsOn(id string, minGap time.Duration) {
+	if s.hands.beat(id, minGap) {
+		go s.FlushHandsOn()
+	}
 }
 
 // Live reports whether a session has a process running right now. It is the

@@ -42,6 +42,8 @@ func writeCreds(t *testing.T, claude, codex string) {
 	}
 	t.Setenv("CLAUDE_CONFIG_DIR", claudeDir)
 	t.Setenv("CODEX_HOME", codexDir)
+	unsetTestEnv(t, claudeSecureDirVar)
+	t.Setenv(claudeTokenVar, "")
 	// A developer machine that exports one of these bills an API key, and every
 	// reading below would correctly come back unknown. Clear them so the suite
 	// answers to the credentials written here and not to whoever runs it.
@@ -64,14 +66,19 @@ func serve(t *testing.T, status int, body string) (url string, calls *int) {
 }
 
 // newService builds a Service pointed at the given endpoints with a fixed clock.
+// newService points a Service at local servers. profileURL is left unset, so a
+// reading names no account unless the test asks for one — which is also the
+// production behaviour when the route cannot be reached, and keeps every test
+// about windows counting the requests it meant to.
 func newService(claudeURL, codexURL string, now time.Time) *Service {
 	return &Service{
-		http:      &http.Client{Timeout: httpTimeout},
-		claudeURL: claudeURL,
-		codexURL:  codexURL,
-		probeURL:  claudeURL,
-		now:       func() time.Time { return now },
-		cache:     make(map[string]reading),
+		http:        &http.Client{Timeout: httpTimeout},
+		claudeURL:   claudeURL,
+		codexURL:    codexURL,
+		probeURL:    claudeURL,
+		claudeLogin: readClaudeFile,
+		now:         func() time.Time { return now },
+		cache:       make(map[string]reading),
 	}
 }
 
@@ -147,14 +154,14 @@ func TestClaudeRequestCarriesTheHeadersTheEndpointDemands(t *testing.T) {
 
 func TestClaudeFallsBackToTheOriginalWindowPair(t *testing.T) {
 	writeCreds(t, claudeCredsJSON, "")
-	body := `{"five_hour":{"utilization":63,"resets_at":"2026-08-17T23:20:00Z"},
+	body := `{"five_hour":{"utilization":63,"resets_at":"2026-08-17T23:20:00Z","locked_reason":"past_limit"},
 		"seven_day":{"utilization":7,"resets_at":"2026-08-24T15:00:00Z"},"limits":[]}`
 	url, _ := serve(t, http.StatusOK, body)
 
 	got := newService(url, "", time.Now()).claudePlan(lichEnv())
 
 	want := []Window{
-		{Label: "Session", Seconds: 18000, Percent: 63, ResetsAt: "2026-08-17T23:20:00Z"},
+		{Label: "Session", Seconds: 18000, Percent: 63, ResetsAt: "2026-08-17T23:20:00Z", LockedReason: "past_limit"},
 		{Label: "Weekly", Seconds: 604800, Percent: 7, ResetsAt: "2026-08-24T15:00:00Z"},
 	}
 	if len(got.Windows) != 2 || got.Windows[0] != want[0] || got.Windows[1] != want[1] {
@@ -177,6 +184,37 @@ func TestClaudeSkipsEntriesItCannotDraw(t *testing.T) {
 
 	if len(got.Windows) != 1 || got.Windows[0].Label != "Session" {
 		t.Fatalf("windows = %+v, want only the session window", got.Windows)
+	}
+}
+
+func TestClaudeReadsIsActiveAndLockedReason(t *testing.T) {
+	writeCreds(t, claudeCredsJSON, "")
+	body := `{
+		"five_hour": {"utilization": 12, "resets_at": "2026-08-30T20:29:59Z", "locked_reason": "past_limit"},
+		"seven_day": {"utilization": 32, "resets_at": "2026-08-31T15:00:00Z", "locked_reason": null},
+		"limits": [
+			{"kind":"session","percent":12,"resets_at":"2026-08-30T20:29:59Z","is_active":false},
+			{"kind":"weekly_all","percent":32,"resets_at":"2026-08-31T15:00:00Z","is_active":true},
+			{"kind":"weekly_scoped","percent":7,"resets_at":"2026-08-31T14:59:59Z","is_active":false,
+			 "scope":{"model":{"display_name":"Fable"}}}
+		]
+	}`
+	url, _ := serve(t, http.StatusOK, body)
+
+	got := newService(url, "", time.Now()).claudePlan(lichEnv())
+
+	want := []Window{
+		{Label: "Session", Seconds: sessionWindow, Percent: 12, ResetsAt: "2026-08-30T20:29:59Z", LockedReason: "past_limit"},
+		{Label: "Weekly", Seconds: weeklyWindow, Percent: 32, ResetsAt: "2026-08-31T15:00:00Z", Active: true},
+		{Label: "Fable", Seconds: weeklyWindow, Percent: 7, ResetsAt: "2026-08-31T14:59:59Z"},
+	}
+	if len(got.Windows) != len(want) {
+		t.Fatalf("windows = %+v, want %+v", got.Windows, want)
+	}
+	for i, w := range want {
+		if got.Windows[i] != w {
+			t.Errorf("window %d = %+v, want %+v", i, got.Windows[i], w)
+		}
 	}
 }
 

@@ -13,7 +13,6 @@ import { SessionStatusIcon } from "@/components/sidebar/SessionStatusIcon"
 import {
   filterPalette,
   historyAction,
-  historyRows,
   nextTab,
   paletteGroups,
   paletteSessions,
@@ -21,20 +20,23 @@ import {
   PALETTE_TABS,
   rankSessions,
   rowKey,
+  historyIndexNote,
   type PaletteHistory,
   type PaletteMessage,
   type PaletteRow,
   type PaletteSession,
   type PaletteTab,
 } from "@/lib/session/command-palette"
+import { useClosedProjects } from "@/lib/session/use-closed-projects"
+import { useHistorySearch } from "@/lib/session/use-history-search"
 import { useTranscriptSearch } from "@/lib/session/use-transcript-search"
 import { toast } from "sonner"
 import { PickerDialog, PickerEmpty, PickerGroup, PickerRow } from "@/components/common/PickerDialog"
 import { agoLabel } from "@/lib/ago"
 import { displayPath } from "@/lib/paths"
 import { isSessionKind } from "@/lib/session/sessions"
-import type { ClosedSession, Project, RecentProject } from "@/lib/api-types"
-import { ProjectService, Store } from "@/lib/rpc"
+import type { Project } from "@/lib/api-types"
+import { Store } from "@/lib/rpc"
 import { cn, errorText } from "@/lib/utils"
 
 // CommandPalette is the app-wide quick switcher: one shortcut (Ctrl/Cmd+K by
@@ -54,11 +56,7 @@ export function CommandPalette() {
   const [query, setQuery] = useState("")
   const [tab, setTab] = useState<PaletteTab>("All")
   const [selected, setSelected] = useState(0)
-  const [closed, setClosed] = useState<RecentProject[]>([])
-  const [parked, setParked] = useState<ClosedSession[]>([])
-  const [branches, setBranches] = useState<Readonly<Record<string, string>>>({})
   const [running, setRunning] = useState<ReadonlySet<string>>(new Set())
-  const [missing, setMissing] = useState<ReadonlySet<string>>(new Set())
 
   useHotkey(hotkeys.commandPalette, () => {
     setOpen((v) => !v)
@@ -67,55 +65,27 @@ export function CommandPalette() {
     setSelected(0)
   })
 
-  // The closed projects and the parked sessions both live in the store, not in
-  // the workspace state, so they are fetched per opening — anything closed or
-  // reopened since the last one moves in or out of these lists. Their
-  // directories are read with them: a project whose folder moved is relocated
-  // rather than reopened, and a session whose checkout is gone says so.
-  //
-  // The branches are asked for in one batch rather than by subscribing each row
-  // to the git poller a live card uses: that poll is three calls per path per
-  // second, and this list is long and on screen for as long as it takes to type.
-  useEffect(() => {
-    if (!open) {
-      return
-    }
-    let live = true
-    void Promise.all([Store.RecentProjects(), Store.ClosedSessions()]).then(
-      ([recentRows, parkedRows]) => {
-        const recents = recentRows ?? []
-        const history = parkedRows ?? []
-        if (!live) {
-          return
-        }
-        setClosed(recents)
-        setParked(history)
-        // Asked for after the rows are up: what git and the filesystem say is
-        // what a row says about itself, and a failed check must not cost the
-        // palette its entries.
-        const paths = history.map((row) => row.path).filter(Boolean)
-        void ProjectService.Missing([...recents.map((row) => row.path), ...paths]).then((gone) => {
-          if (live) {
-            setMissing(new Set(gone ?? []))
-          }
-        })
-        void ProjectService.BranchesOf(paths).then((named) => {
-          if (live) {
-            setBranches(named ?? {})
-          }
-        })
-      },
-    )
-    return () => {
-      live = false
-    }
-  }, [open])
+  // The closed projects live in the store, not in the workspace state, and they
+  // are searched there rather than filtered here: past one page of the reopen
+  // list the palette is the only way back to one, so a term that only matches an
+  // older close still has to find it. Their directories come back with them, so
+  // a project whose folder moved is relocated rather than reopened.
+  const { rows: closed, total: closedTotal, missing } = useClosedProjects(query, open)
+
+  // The parked sessions are searched in the store rather than filtered here, so
+  // the History tab reaches a session parked further back than one page of it.
+  const {
+    rows: history,
+    total: historyTotal,
+    indexing,
+    forget: dropParked,
+  } = useHistorySearch(query, open)
 
   // Forgetting drops the row from the list in place rather than closing the
   // palette: the whole point of the action is that there are usually several of
   // them, left by worktrees removed outside lich.
   const forget = (session: PaletteHistory) => {
-    setParked((rows) => rows.filter((row) => row.id !== session.id))
+    dropParked(session.id)
     void Store.ForgetSession(session.id).catch((error: unknown) => {
       toast.error(`Could not forget ${session.label}: ${errorText(error)}`)
     })
@@ -134,16 +104,22 @@ export function CommandPalette() {
     }
   }, [open])
   const all = useMemo(() => rankSessions(flat, running), [flat, running])
-  const history = useMemo(() => historyRows(parked, branches, missing), [parked, branches, missing])
   const results = useMemo(
-    () => filterPalette(query, all, projects, closed, history),
-    [query, all, projects, closed, history],
+    () => filterPalette(query, all, projects, closed, history, closedTotal),
+    [query, all, projects, closed, history, closedTotal],
   )
   // What was said inside the sessions, not just their names. It arrives after
   // the name-matched groups (it is a disk read behind a debounce), so it is
   // listed last and never moves a row the user is already aiming at.
   const messages = useTranscriptSearch(query, all, open)
-  const groups = useMemo(() => paletteGroups(tab, results, messages), [tab, results, messages])
+  // The indexing note is held back until something is typed: with no term there
+  // is no search for it to be incomplete, and the backfill it reports is not
+  // running either: asking with a term is what starts one.
+  const backlog = query.trim() === "" ? 0 : indexing
+  const groups = useMemo(
+    () => paletteGroups(tab, results, messages, historyTotal, backlog),
+    [tab, results, messages, historyTotal, backlog],
+  )
   const counts = useMemo(
     () => PALETTE_TABS.map((t) => paletteTabCount(t, results, messages)),
     [results, messages],
@@ -266,7 +242,11 @@ export function CommandPalette() {
         // the query found nothing, the other says nothing has ever been closed.
         // The second is the only place the retention rule is stated, which is
         // where it belongs — the moment somebody wonders what this remembers.
-        tab === "History" && parked.length === 0 ? (
+        //
+        // Only an empty query can tell the two apart: the history is searched in
+        // the store, so once a term is typed an empty list is a search that
+        // missed, never an empty workspace.
+        tab === "History" && query.trim() === "" && history.length === 0 ? (
           <PickerEmpty>
             <span className="block text-foreground">Nothing closed yet</span>
             <span className="mx-auto mt-2 block max-w-[44ch] leading-relaxed">
@@ -286,7 +266,10 @@ export function CommandPalette() {
             key={group.label}
             label={group.label}
             trailing={
-              group.total > group.rows.length ? `${group.rows.length} of ${group.total}` : undefined
+              group.note ??
+              (group.total > group.rows.length
+                ? `${group.rows.length} of ${group.total}`
+                : undefined)
             }
           >
             {group.rows.map((row, i) => (
@@ -413,6 +396,15 @@ function ListRow({
 // branch moves on, and when it was closed, because that is what turns a list of
 // old work into one somebody can find something in.
 //
+// A row the search reached through the conversation rather than the name carries
+// the sentence that made it a hit, under the rest. It is the same thing a
+// Messages row leads with, and it sits last here because it is why this row is on
+// screen and not what identifies it.
+//
+// Under that again, for the rare session whose conversation was too long to
+// index whole, the part of it that was: a search that reached only the newer end
+// of a session has to be readable as that rather than as nothing being there.
+//
 // The provider mark carries no status ring: nothing is running in a closed
 // session, so the ring has nothing to report, and its absence is what tells a
 // history row from a live one at a glance. That is also why the unread flag is
@@ -430,6 +422,7 @@ function HistoryRow({
   onRun: () => void
 }) {
   const closedAt = agoLabel(session.closedAt)
+  const note = historyIndexNote(session)
   return (
     <PickerRow selected={selected} onSelect={onSelect} onRun={onRun}>
       <SessionStatusIcon
@@ -463,6 +456,14 @@ function HistoryRow({
             {displayPath(session.path)}
           </span>
         </span>
+        {session.snippet && (
+          <span className="truncate text-xs text-muted-foreground/80">{session.snippet}</span>
+        )}
+        {note && (
+          <span className="truncate font-mono text-[0.625rem] text-muted-foreground/70">
+            {note}
+          </span>
+        )}
       </span>
       {closedAt && (
         <span className="shrink-0 font-mono text-[0.625rem] tabular-nums text-muted-foreground">

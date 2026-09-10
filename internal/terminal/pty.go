@@ -3,7 +3,15 @@ package terminal
 import (
 	"path/filepath"
 	"strings"
+	"time"
 )
+
+// closeGrace is how long a close waits for the signalled child to leave on
+// its own before killing it. An agent killed outright never runs its own exit
+// path: Claude Code, for one, treats a session that dies within ten seconds of
+// its first frame as a fullscreen renderer that failed to start, and two of
+// those turn its fullscreen renderer off for every session on the machine.
+const closeGrace = time.Second
 
 // ptySpec describes the child process a session's PTY runs. It carries
 // everything the platform needs to spawn: ConPTY has no exec.Cmd (CreateProcess

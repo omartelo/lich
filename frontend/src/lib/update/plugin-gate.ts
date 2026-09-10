@@ -36,6 +36,14 @@ export const CRUSH_SCOPE_HINT =
 export const NO_APPROVAL_EVENT_HINT =
   "reports its status, name and git changes. It has no observed approval event, so a session waiting on your permission shows a spinner rather than a bell."
 
+// Cursor is the one provider lich ships no hooks to: it runs Claude Code's
+// installed plugin itself, so its reports and its version are that install's,
+// and what lich writes here is only the MCP registration Cursor takes from
+// nowhere else. Said here because the row reads as broken otherwise — its
+// version tracks another row's, and it offers no update of its own.
+export const CURSOR_SHARED_PLUGIN_HINT =
+  "runs the plugin installed in Claude Code, so it reports what that version reports and updates with it. lich adds only its own tools here. Like the two above, it raises no approval event, so a session waiting on your permission shows a spinner rather than a bell."
+
 // PluginAction is what the gate should do: an install prompt listing the
 // providers it can install into, an update prompt (with the target version and
 // the providers it covers), or nothing.

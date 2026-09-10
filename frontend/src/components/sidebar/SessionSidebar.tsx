@@ -4,10 +4,15 @@ import { useMatch, useNavigate } from "react-router-dom"
 import { DndContext, closestCenter } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { GitPullRequestArrow, PanelLeftClose, Plus, Search } from "lucide-react"
-import { ProjectService } from "@/lib/rpc"
+import { toast } from "sonner"
+import { ProjectService, Spawn, Terminal as TerminalService } from "@/lib/rpc"
+import { errorText } from "@/lib/utils"
 import { closeSettings, isSettingsOpen, subscribeSettingsCard } from "@/lib/settings-card-store"
 import { closePulls, openPulls } from "@/lib/pulls-card-store"
 import { delegateTargets } from "@/lib/session/delegate-targets"
+import { ConfirmDialog } from "@/components/ConfirmDialog"
+import { usePanes } from "@/lib/session/use-panes"
+import { useStageToggle } from "@/lib/session/use-stage-toggle"
 import {
   closePullsList,
   isPullsListOpen,
@@ -26,18 +31,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useProjects } from "@/providers/projects"
+import { queueFork } from "@/lib/terminal/fork-queue"
 import { queueSetup } from "@/lib/terminal/setup-queue"
+import { writeAtPrompt } from "@/lib/terminal/write-at-prompt"
 import { filterSessions } from "@/lib/session/session-filter"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
+import { activeSessionId, sessionsOf, type Session } from "@/lib/session/sessions"
 import {
-  activeSessionId,
-  orderGroups,
+  dragOrder,
   reorderSubset,
-  sessionsOf,
+  runCardIn,
   sidebarGroups,
-  type Session,
   type SidebarGroup,
-} from "@/lib/session/sessions"
+} from "@/lib/session/sidebar-groups"
 import { useSortableList, verticalAxis, withinList } from "@/lib/use-sortable-list"
 import { WorktreeCloseDialogs } from "./WorktreeCloseDialogs"
 import { SessionGroup } from "./SessionGroup"
@@ -46,7 +52,7 @@ import { useWorktreeClose } from "./useWorktreeClose"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { usePanelWidth } from "@/lib/use-panel-width"
 import { useWorktreeDialogIntent } from "@/lib/use-sidebar-intent"
-import { SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
+import { type RunMenuAction, SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
 
 // Named here like every other `lich.*` pref rather than spelled at the call
 // site. The bounds go with it: wide enough for a session label and its branch,
@@ -105,6 +111,36 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
     edge: "right",
   })
   const [worktreeOpen, setWorktreeOpen] = useState(false)
+  // Whether the project ships a run command, which is what puts Run in a
+  // checkout's + menu. Re-read when the worktree dialog closes, the one place
+  // inside lich that writes the file; edited on disk it goes stale until the
+  // project is reopened, exactly as the dialog's own reading of it does.
+  //
+  // Asked on Windows too, where the item is rendered dead under its reason
+  // (SessionLaunchMenuItems): whether the row can be clicked is that menu's
+  // call, and this one only knows whether there is a command at all.
+  const [runnable, setRunnable] = useState(false)
+  useEffect(() => {
+    if (!path || worktreeOpen) {
+      return
+    }
+    let stale = false
+    ProjectService.WorktreeSetup(path)
+      .then((info) => {
+        if (!stale) {
+          setRunnable(info.run !== "")
+        }
+      })
+      .catch(() => {})
+    return () => {
+      stale = true
+    }
+  }, [path, worktreeOpen])
+
+  // The session the open worktree dialog is forking, or null when it was opened
+  // to make an ordinary checkout. It is state rather than a flag because the
+  // dialog names the session, and the create below has to hand it over.
+  const [forking, setForking] = useState<Session | null>(null)
   // The filter over this project's cards. Deliberately neither persisted nor a
   // store: the sidebar's width and collapsed state survive a restart because
   // they are layout, but a filter is a lens held while working — a lich that
@@ -121,28 +157,60 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   // the menu item is disabled without a branch: git status may still be loading
   // on the render this mounts in, and the dialog reports git's own error in
   // place anyway.
-  useWorktreeDialogIntent(projectId ?? "", () => setWorktreeOpen(true))
+  useWorktreeDialogIntent(projectId ?? "", () => {
+    setForking(null)
+    setWorktreeOpen(true)
+  })
   // Resolved ahead of the no-project bail below: hooks cannot sit behind it.
   const list = sessionsOf(sessions, projectId ?? "")
   const worktreeClose = useWorktreeClose(projectId ?? "", path, list)
   const realActiveId = activeSessionId(sessions, projectId ?? "")
+  const panes = usePanes(projectId ?? "")
+  // The menu entry is a toggle on one card: a session already on the stage takes
+  // itself off it, any other joins it. Adding is refused — quietly, the way the
+  // shortcut is — when one more pane would leave them all too small to read.
+  // Adding a session that is already on another wall takes it off that one —
+  // somebody else's arrangement, changed by a click aimed at this one. So the
+  // decision goes to the user rather than being made under them; `add` refuses
+  // the move until they have answered.
+  const { moving, toggleStage, cancelMove, confirmMove } = useStageToggle(panes, list)
+  // Gathering an orchestrator and its workers is the one action that builds a
+  // whole wall at once. A delegate already on another wall stays there — it is
+  // the user's arrangement and taking it is the destructive reading — so the
+  // toast names how many were left rather than letting them go missing quietly.
+  const groupDelegates = (sessionId: string, delegateIds: string[]) => {
+    const skipped = panes.groupWith(sessionId, delegateIds)
+    if (skipped > 0) {
+      toast(
+        skipped === 1
+          ? "1 delegate could not be added to the split"
+          : `${skipped} delegates could not be added to the split`,
+      )
+    }
+  }
+
   // The query narrows the flat list before the groups are built from it, so
   // grouping, the pinned block and the stored order all keep working on the
   // survivors without knowing a filter exists.
   const filtering = query.trim() !== ""
   const { sessions: visible, matched } = filterSessions(list, query, path, realActiveId)
-  const groups = sidebarGroups(visible)
-  // The pinned block is out of the drag list entirely: it is always first, and
-  // the worktree blocks reorder among themselves. Dragging one moves its whole
-  // block of ids inside the flat list the groups are read back from — there is
-  // no separate group order to store — leaving the pinned sessions where they
-  // sit in it, so unpinning still drops a card among its old neighbours.
+  // The split's own block is built from the members, not from what is on screen:
+  // a parked wall is exactly the case the user could not see before.
+  const groups = sidebarGroups(visible, panes.groups)
+  // One drag list for every block that moves — walls and checkouts together, so
+  // a wall can be dragged below a worktree instead of being penned in a list of
+  // its own. Both kinds sit where their first card sits in the stored flat list,
+  // so a drop is one write: move that block's ids inside the list the groups are
+  // read back from.
+  //
+  // The pinned block is the only one out of it: it is always first. Its cards
+  // keep their slots in the flat list, so unpinning still drops a card among its
+  // old neighbours — which is why the drag only claims the ids its own blocks
+  // drew, and not simply every unpinned session (a pinned card on a wall is
+  // drawn in the wall, and its slot moves with it).
   const dragKeys = groups.filter((group) => !group.pinned).map((group) => group.key)
   const { sensors, onDragEnd } = useSortableList(dragKeys, (keys) =>
-    reorderSessions(
-      projectId ?? "",
-      reorderSubset(list, orderGroups(groups, keys), (session) => !session.pinned),
-    ),
+    reorderSessions(projectId ?? "", dragOrder(list, groups, keys)),
   )
   // Resolved once here, not per group: the list spans every open project, so
   // it is the same for every card in the sidebar. Memoised because the picker
@@ -185,15 +253,32 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
   // No session card highlights while a full-screen route (Settings, Pulls) owns
   // the view; its own sidebar entry reads as active instead.
   const activeId = onSettings || onPullsRoute ? "" : realActiveId
+  // Same rule as activeId: with a full-screen route over the terminals there are
+  // no panes on show, so no card wears the mark of one.
+  const stageIds = onSettings || onPullsRoute ? [] : panes.cells
 
   // A drag reorders one block only; hand its new order to that block's own
   // sessions inside the flat list and persist the whole thing. reorderSessions
   // bails on any id-set mismatch, so a close that raced the drop drops the
   // stale order.
   const commitGroupOrder = (group: SidebarGroup, ids: string[]) => {
-    const member = (session: Session) =>
-      group.pinned ? !!session.pinned : !session.pinned && (session.path ?? "") === group.path
-    reorderSessions(projectId, reorderSubset(list, ids, member))
+    // A split block is a wall, so a drag in it arranges that wall rather than
+    // the stored session list — the same arrangement the drag inside the stage
+    // itself makes, from the other end.
+    if (group.stage) {
+      panes.reorderCells(group.stage.id, ids)
+      return
+    }
+    // The slots the drag may fill are the cards this block drew, asked of the
+    // block itself rather than restated as a rule about pins and paths: a
+    // checkout whose sibling sits on a wall has that card in neither, and a
+    // predicate that claimed it anyway would hand reorderSubset one id too many
+    // — an id-set mismatch, which reorderSessions drops whole.
+    const drawn = new Set(group.sessions.map((session) => session.id))
+    reorderSessions(
+      projectId,
+      reorderSubset(list, ids, (session) => drawn.has(session.id)),
+    )
   }
 
   const createWorktree = async (
@@ -201,19 +286,145 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
     base: string,
     baseIsRemote: boolean,
     sandbox: string,
+    prompt: string,
   ) => {
     const wt = await ProjectService.CreateWorktree(path, projectId, name, base, baseIsRemote)
     if (wt) {
+      const opened = newWorktreeSession(projectId, wt, sandbox, forking)
+      // Queued before the card mounts, so the first spawn branches the parent's
+      // conversation instead of opening an empty one (fork-queue.ts).
+      if (forking?.providerSessionId) {
+        queueFork(opened, forking.providerSessionId)
+      }
       // A fresh checkout is the one moment the project's setup script runs;
       // reopening an existing worktree never queues it.
-      queueSetup(newWorktreeSession(projectId, wt, sandbox))
+      queueSetup(opened)
+      // The issue the worktree was named after, written at that session's
+      // prompt once it has one — the setup script and the provider's boot come
+      // first, which is what writeAtPrompt waits out. Not awaited: the dialog
+      // closes on a worktree that exists, and the wait can be minutes.
+      if (prompt) {
+        void writeAtPrompt(opened, prompt).catch((err: unknown) => {
+          toast.error(`Couldn’t hand the issue to the session: ${errorText(err)}`)
+        })
+      }
     }
     setWorktreeOpen(false)
+  }
+
+  // Fork a session's conversation into a checkout of its own. The dialog does
+  // the asking; the offer itself is the card's, and only for a provider that
+  // can branch a conversation at all (forkableSession).
+  //
+  // Whether the provider still has that conversation is asked here rather than
+  // on the card: it is a stat per call, and a card that asked on every render
+  // would ask for every session in the sidebar, forever. A conversation the
+  // provider has pruned dies in the PTY with its own error otherwise, after the
+  // user has already named a branch and made a checkout.
+  const forkSession = async (session: Session) => {
+    const cwd = session.path || path || ""
+    const conversation = session.providerSessionId ?? ""
+    if (!(await TerminalService.ResumeAvailable(session.kind, conversation, cwd))) {
+      toast.error(`${session.label} has no conversation left to fork — ${session.kind} pruned it.`)
+      return
+    }
+    setForking(session)
+    setWorktreeOpen(true)
   }
 
   const resumeWorktree = (wt: { name: string; path: string }) => {
     void reopenWorktreeSession(projectId, wt)
     setWorktreeOpen(false)
+  }
+
+  // The checkout's Run entry. One checkout gets one Run card, so once it has one
+  // the item goes to that card rather than asking for a second, which the
+  // backend would answer with the same card anyway (internal/spawn.Run). A card
+  // whose command has exited still counts: the shell the wrapper left in it is
+  // the retry, and only closing the card frees the slot.
+  //
+  // Asked of the unfiltered list: a Run card the query hid is still the one this
+  // checkout has.
+  const runAction = (group: SidebarGroup): RunMenuAction => {
+    const card = runCardIn(list, group.path)
+    if (card) {
+      return {
+        open: true,
+        onSelect: () => {
+          activateSession(projectId, card.id)
+          navigate(`/projects/${projectId}`)
+        },
+      }
+    }
+    return {
+      open: false,
+      onSelect: () => {
+        Spawn.Run(projectId, group.path || path).catch((error) => toast.error(errorText(error)))
+      },
+    }
+  }
+
+  // One block, rendered the same whichever drag list it belongs to.
+  const renderGroup = (group: SidebarGroup) => {
+    const groupActive = group.sessions.some((s) => s.id === realActiveId)
+    return (
+      <SessionGroup
+        // The project is in the React key, not only in the props: two
+        // projects both have a root block and a pinned one under the
+        // same key, so without it React reuses one project's group
+        // component for the other's — carrying its fold across with it,
+        // and never re-reading the fold the switched-to project stored.
+        key={`${projectId}:${group.key}`}
+        sortId={group.key}
+        pinned={group.pinned}
+        stage={group.stage}
+        onRenameGroup={(name) => group.stage && panes.rename(group.stage.id, name)}
+        onDissolveGroup={() => group.stage && panes.dissolve(group.stage.id)}
+        projectId={projectId}
+        path={group.path}
+        sessions={group.sessions}
+        projectPath={path}
+        activeId={activeId}
+        stageIds={stageIds}
+        onStageToggle={toggleStage}
+        onGroupDelegates={groupDelegates}
+        onFork={(session) => void forkSession(session)}
+        // The divider only earns its place once a worktree — or a pin
+        // — splits the list; a lone group keeps the old flat,
+        // header-less look. A filter is the exception: which checkout
+        // a surviving card sits in is the thing the query was typed to
+        // find out, so the title stays even for a lone group.
+        showHeader={groups.length > 1 || filtering}
+        // A drop computed from a filtered view hands reorderSubset an
+        // id set that does not name the group's members, and
+        // reorderSessions rejects the whole order — so the gesture
+        // would be a silent no-op. Take it away instead of leaving a
+        // dead one on screen.
+        sortable={!filtering}
+        onReorder={(ids) => commitGroupOrder(group, ids)}
+        onClose={worktreeClose.requestClose}
+        // Offered on a checkout's block alone: a wall and the pinned block
+        // gather cards from everywhere and have no directory to run one in.
+        run={runnable && !group.pinned && !group.stage ? runAction(group) : undefined}
+        pullsActive={onPullsRoute && groupActive}
+        onPulls={() => {
+          openPulls(group.path || path)
+          const target = groupActive ? realActiveId : group.sessions[0]?.id
+          if (target) {
+            activateSession(projectId, target)
+          }
+          navigate(`/projects/${projectId}/pulls`)
+        }}
+        onClosePulls={() => {
+          closePulls(group.path || path)
+          if (onPullsRoute && groupActive) {
+            navigate(`/projects/${projectId}`)
+          }
+        }}
+        delegateGroups={delegateGroups}
+        providers={enabled}
+      />
+    )
   }
 
   return (
@@ -240,10 +451,14 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
             <SessionLaunchMenuItems
               providers={enabled}
               terminalLabel="Terminal"
-              onNewSession={(kind) => newSession(projectId, kind)}
+              projectId={projectId}
+              onNewSession={(kind, sandbox) => newSession(projectId, kind, "", sandbox)}
               worktree={{
                 disabled: !git?.branch,
-                onSelect: () => setWorktreeOpen(true),
+                onSelect: () => {
+                  setForking(null)
+                  setWorktreeOpen(true)
+                },
               }}
             />
           </DropdownMenuContent>
@@ -331,6 +546,9 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
             No sessions match “{query.trim()}”. The active session stays.
           </Notice>
         )}
+        {/* Every block in one list, in the order sidebarGroups drew them: the
+            pinned one first and fixed, the rest — walls and checkouts alike —
+            sortable among each other. */}
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -338,52 +556,7 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
           onDragEnd={onDragEnd}
         >
           <SortableContext items={dragKeys} strategy={verticalListSortingStrategy}>
-            {groups.map((group) => {
-              const groupActive = group.sessions.some((s) => s.id === realActiveId)
-              return (
-                <SessionGroup
-                  key={group.key}
-                  sortId={group.key}
-                  pinned={group.pinned}
-                  projectId={projectId}
-                  path={group.path}
-                  sessions={group.sessions}
-                  projectPath={path}
-                  activeId={activeId}
-                  // The divider only earns its place once a worktree — or a pin
-                  // — splits the list; a lone group keeps the old flat,
-                  // header-less look. A filter is the exception: which checkout
-                  // a surviving card sits in is the thing the query was typed to
-                  // find out, so the title stays even for a lone group.
-                  showHeader={groups.length > 1 || filtering}
-                  // A drop computed from a filtered view hands reorderSubset an
-                  // id set that does not name the group's members, and
-                  // reorderSessions rejects the whole order — so the gesture
-                  // would be a silent no-op. Take it away instead of leaving a
-                  // dead one on screen.
-                  sortable={!filtering}
-                  onReorder={(ids) => commitGroupOrder(group, ids)}
-                  onClose={worktreeClose.requestClose}
-                  pullsActive={onPullsRoute && groupActive}
-                  onPulls={() => {
-                    openPulls(group.path || path)
-                    const target = groupActive ? realActiveId : group.sessions[0]?.id
-                    if (target) {
-                      activateSession(projectId, target)
-                    }
-                    navigate(`/projects/${projectId}/pulls`)
-                  }}
-                  onClosePulls={() => {
-                    closePulls(group.path || path)
-                    if (onPullsRoute && groupActive) {
-                      navigate(`/projects/${projectId}`)
-                    }
-                  }}
-                  delegateGroups={delegateGroups}
-                  providers={enabled}
-                />
-              )
-            })}
+            {groups.map(renderGroup)}
           </SortableContext>
         </DndContext>
       </div>
@@ -397,8 +570,36 @@ export function SessionSidebar({ onCollapse }: SessionSidebarProps) {
         currentBranch={git?.branch ?? ""}
         onCreate={createWorktree}
         onResume={resumeWorktree}
+        forkOf={forking}
       />
       <WorktreeCloseDialogs close={worktreeClose} />
+      <ConfirmDialog
+        open={!!moving}
+        onCancel={cancelMove}
+        // "this split" only when there is one: adding to no wall starts a new
+        // one around the active session, and naming a split the user cannot see
+        // is the same lie as the entry that promised to stop showing a card.
+        title={
+          panes.current
+            ? `Move ${moving?.session.label ?? ""} to this split?`
+            : `Show ${moving?.session.label ?? ""} beside this session?`
+        }
+        description={
+          moving?.from.cells.length === 2 ? (
+            <>
+              It is one of only two sessions in <strong>{moving.from.name}</strong>, so that group
+              ends when it leaves. No session is closed either way.
+            </>
+          ) : (
+            <>
+              It is on <strong>{moving?.from.name}</strong>, and a session can only be on one split
+              at a time — it leaves that one. No session is closed either way.
+            </>
+          )
+        }
+      >
+        <Button onClick={confirmMove}>Move it</Button>
+      </ConfirmDialog>
 
       <ResizeHandle edge="right" label="Resize sidebar" handleProps={handleProps} />
     </aside>

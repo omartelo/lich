@@ -1,8 +1,8 @@
 // UI preferences live in the page's localStorage (see the root CLAUDE.md:
-// the workspace is SQLite, the prefs are not). What each stored string means
-// is the parsing half, kept pure so the suite owns it; reading and writing the
-// key itself is the boundary half, and stays a two-line wrapper — the same
-// split parsePullsSort/readPullsSort already uses.
+// the workspace is SQLite, the prefs are not). What each stored string means is
+// the parsing half, kept pure so the suite owns it — the parseXPref helpers
+// below; reading and writing the key itself is the boundary half, and stays a
+// two-line wrapper (pulls/pulls-prefs.ts is the worked example).
 //
 // Every reader answers with the fallback for a key that is absent, or that
 // holds something this build no longer understands. A pref is a convenience:
@@ -18,6 +18,20 @@ export function writePref(key: string, value: string | number | boolean): void {
 
 export function removePref(key: string): void {
   localStorage.removeItem(key)
+}
+
+/** Every stored key under a prefix — what a family of keys nobody can name in
+ * advance is read and collected through (pulls/draft-store, one key per box of
+ * unsent prose). Snapshotted, so a caller may remove keys while walking it. */
+export function prefKeys(prefix: string): string[] {
+  const keys: string[] = []
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (key?.startsWith(prefix)) {
+      keys.push(key)
+    }
+  }
+  return keys
 }
 
 /** One of a known set — a theme, a sort. Anything else is a value from another

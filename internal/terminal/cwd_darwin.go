@@ -80,3 +80,18 @@ func readCwd(pid int) string {
 	}
 	return string(path)
 }
+
+// readComm returns pid's command name — p_comm, the executable's basename
+// truncated to 16 bytes — or "" when the process cannot be read. The same
+// sysctl foregroundPgrp uses, answering what Linux reads out of /proc/<pid>/comm.
+func readComm(pid int) string {
+	proc, err := unix.SysctlKinfoProc("kern.proc.pid", pid)
+	if err != nil {
+		return ""
+	}
+	comm := proc.Proc.P_comm[:]
+	if i := bytes.IndexByte(comm, 0); i >= 0 {
+		comm = comm[:i]
+	}
+	return string(comm)
+}

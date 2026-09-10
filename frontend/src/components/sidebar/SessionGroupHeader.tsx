@@ -1,5 +1,7 @@
-import type { ComponentPropsWithoutRef } from "react"
-import { ChevronRight, Plus } from "lucide-react"
+import { useState } from "react"
+import type { ComponentPropsWithoutRef, KeyboardEvent } from "react"
+import { ChevronRight, MoreHorizontal, Pencil, Plus, Ungroup } from "lucide-react"
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -8,24 +10,40 @@ import {
 } from "@/components/ui/dropdown-menu"
 import type { ProviderState } from "@/lib/providers-store"
 import type { ProviderKind } from "@/lib/session/sessions"
+import type { SandboxAnswer } from "@/lib/use-sandbox-choice"
 import { cn } from "@/lib/utils"
-import { SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
+import { type RunMenuAction, SessionLaunchMenuItems } from "./SessionLaunchMenuItems"
 
 interface SessionGroupHeaderProps {
   name: string
-  pinned: boolean
+  // A block that never moves among the others: the pinned sessions. It has no
+  // drag handle, so its title is a plain button.
+  fixed: boolean
+  // Whether the block can open a new session in itself — true for a checkout,
+  // false for the gathered blocks, which have no directory to open one in.
+  launch: boolean
+  // Present on a wall's header only: renaming happens in place, and dissolving
+  // takes the wall apart without touching a session in it.
+  onRename?: (name: string) => void
+  onDissolve?: () => void
   collapsed: boolean
   isDragging: boolean
   providers: ProviderState[]
+  // The project the launch menu opens into: it scopes the sandbox rung the menu
+  // reads before it puts the confinement question.
+  projectId: string
   activatorRef: (element: HTMLElement | null) => void
   activatorProps: ComponentPropsWithoutRef<"button">
   onToggle: () => void
-  onNewSession: (kind: ProviderKind | "shell") => void
+  onNewSession: (kind: ProviderKind | "shell", sandbox: SandboxAnswer) => void
+  // The checkout's Run entry: open its Run card, or go to the one it has.
+  // Absent when the project ships no run script.
+  run?: RunMenuAction
 }
 
 interface SessionGroupTitleButtonProps {
   name: string
-  pinned: boolean
+  fixed: boolean
   collapsed: boolean
   activatorRef: (element: HTMLElement | null) => void
   activatorProps: ComponentPropsWithoutRef<"button">
@@ -34,7 +52,7 @@ interface SessionGroupTitleButtonProps {
 
 function SessionGroupTitleButton({
   name,
-  pinned,
+  fixed,
   collapsed,
   activatorRef,
   activatorProps,
@@ -50,7 +68,7 @@ function SessionGroupTitleButton({
       onClick={onClick}
       className={cn(
         "group/collapse -ml-1 flex min-w-0 flex-1 items-center gap-1.5 rounded-sm px-1 py-0.5 text-left transition-colors hover:bg-accent/50",
-        pinned ? "cursor-pointer" : "cursor-grab",
+        fixed ? "cursor-pointer" : "cursor-grab",
       )}
     >
       <ChevronRight
@@ -59,7 +77,7 @@ function SessionGroupTitleButton({
           !collapsed && "rotate-90",
         )}
       />
-      <span className="min-w-0 truncate text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground/70 transition-colors group-hover/collapse:text-muted-foreground">
+      <span className="min-w-0 truncate text-2xs font-semibold uppercase tracking-wider text-muted-foreground/70 transition-colors group-hover/collapse:text-muted-foreground">
         {name}
       </span>
       <span className="h-px flex-1 bg-border" />
@@ -69,26 +87,68 @@ function SessionGroupTitleButton({
 
 export function SessionGroupHeader({
   name,
-  pinned,
+  fixed,
+  launch,
+  onRename,
+  onDissolve,
   collapsed,
   isDragging,
   providers,
+  projectId,
   activatorRef,
   activatorProps,
   onToggle,
   onNewSession,
+  run,
 }: SessionGroupHeaderProps) {
+  const [editing, setEditing] = useState(false)
+
+  const commit = (value: string) => {
+    setEditing(false)
+    const trimmed = value.trim()
+    if (trimmed && trimmed !== name) {
+      onRename?.(trimmed)
+    }
+  }
+
+  const onEditKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      commit(event.currentTarget.value)
+    }
+    if (event.key === "Escape") {
+      setEditing(false)
+    }
+  }
+
   return (
     <div className="flex items-center gap-1 px-1 pb-0.5 pt-1.5">
-      <SessionGroupTitleButton
-        name={name}
-        pinned={pinned}
-        collapsed={collapsed}
-        activatorRef={activatorRef}
-        activatorProps={activatorProps}
-        onClick={() => !isDragging && onToggle()}
-      />
-      {!pinned && (
+      {/* Only the title swaps for the field. Replacing the whole header would
+          unmount the menu the rename was chosen from, and the menu restores
+          focus to a trigger that is no longer there — which lands on the fresh
+          input as a blur, commits the name unchanged, and reads as a rename that
+          does nothing. */}
+      {editing ? (
+        <input
+          // biome-ignore lint/a11y/noAutofocus: the field replaces the title only once renaming starts.
+          autoFocus
+          defaultValue={name}
+          aria-label="Group name"
+          onFocus={(event) => event.currentTarget.select()}
+          onKeyDown={onEditKeyDown}
+          onBlur={(event) => commit(event.currentTarget.value)}
+          className="min-w-0 flex-1 rounded-sm bg-transparent px-1 py-0.5 text-2xs font-semibold uppercase tracking-wider text-foreground outline-none ring-1 ring-accent-foreground/30"
+        />
+      ) : (
+        <SessionGroupTitleButton
+          name={name}
+          fixed={fixed}
+          collapsed={collapsed}
+          activatorRef={activatorRef}
+          activatorProps={activatorProps}
+          onClick={() => !isDragging && onToggle()}
+        />
+      )}
+      {launch && (
         <DropdownMenu>
           <DropdownMenuTrigger
             aria-label={`New session in ${name}`}
@@ -101,8 +161,39 @@ export function SessionGroupHeader({
             <SessionLaunchMenuItems
               providers={providers}
               terminalLabel="New Terminal"
+              projectId={projectId}
               onNewSession={onNewSession}
+              run={run}
             />
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+      {/* A wall is the only block with anything to say about itself, and it says
+          it through a button rather than a right-click: the block beside it
+          carries a visible + for its own action, so a menu reachable only by
+          right-click is one nobody finds. */}
+      {(onRename || onDissolve) && (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label={`Options for ${name}`}
+            title={`Options for ${name}`}
+            render={<Button variant="ghost" size="icon-xs" />}
+          >
+            <MoreHorizontal />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {onRename && (
+              <DropdownMenuItem onClick={() => setEditing(true)}>
+                <Pencil />
+                Rename group
+              </DropdownMenuItem>
+            )}
+            {onDissolve && (
+              <DropdownMenuItem onClick={onDissolve}>
+                <Ungroup />
+                Ungroup
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       )}

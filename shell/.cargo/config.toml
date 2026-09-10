@@ -1,0 +1,16 @@
+# libcef.so is looked up beside the binary: in cef/ for the layout
+# build/linux/shell/assemble.sh produces, one level up for cargo's own
+# target/<profile>/deps/ test binaries (cef-rs copies the runtime into
+# target/<profile>/). An ELF rpath means nothing to link.exe, so this is the
+# Linux target's alone; Windows finds libcef.dll beside the executable. Named
+# by triple because cargo has no "any Linux" target key: an aarch64 build,
+# which lich does not ship, would need its own entry.
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-Wl,-rpath,$ORIGIN/cef:$ORIGIN/.."]
+
+# The C runtime linked in: vcruntime140.dll is not part of Windows, it comes
+# with the Visual C++ redistributable some other program may have installed,
+# and lich-shell.exe must open on a machine that has none. libcef.dll carries
+# its own (CEF's README lists no redistributable among its requirements).
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

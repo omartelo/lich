@@ -30,3 +30,10 @@ export function cannotConfineCopy(platform: SandboxPlatform): CannotConfineCopy 
     advice: "Install bubblewrap and reopen lich. Until then every session runs on the machine.",
   }
 }
+
+// What confinement costs a session, in the one wording every surface that puts
+// the question uses: the New worktree dialog's row and the New session menu's
+// item. "Its checkout" rather than "this worktree" because the menu also opens
+// sessions in the project's own directory.
+export const CONFINED_MEANS =
+  "An empty home holding only the agent's own state, the machine read-only, and writes only inside its checkout. The network stays on."

@@ -5,33 +5,42 @@ import {
   addSession,
   adoptSession,
   closeSession,
+  delegatesOf,
   dropClosedSession,
-  groupByWorktree,
+  forkableSession,
+  forkUnavailableReason,
   hasSession,
-  isLastWorktreeSession,
   isSessionKind,
-  neighborSessionId,
-  orderGroups,
-  PINNED_GROUP_KEY,
   projectOfSession,
-  ROOT_GROUP_KEY,
   removeProject,
   renameSession,
   reorderSessions,
-  reorderSubset,
   restoreSession,
   resumableSession,
   sessionOrigin,
   sessionsOf,
   setActiveSession,
   setSessionEntrypoint,
+  setSessionMCPServers,
   setSessionPinned,
   setSessionSandboxed,
-  sidebarGroups,
+  setSessionSchedule,
   type Session,
   type SessionKind,
   type SessionState,
 } from "./sessions"
+import {
+  dragOrder,
+  groupByWorktree,
+  isLastWorktreeSession,
+  neighborSessionId,
+  orderGroups,
+  PINNED_GROUP_KEY,
+  reorderSubset,
+  ROOT_GROUP_KEY,
+  runCardIn,
+  sidebarGroups,
+} from "./sidebar-groups"
 
 const P = "project-1"
 
@@ -47,7 +56,17 @@ function buildState(n: number): SessionState {
 
 describe("isSessionKind", () => {
   it("accepts every provider kind and the shell", () => {
-    for (const kind of ["claude", "codex", "antigravity", "opencode", "omp", "crush", "shell"]) {
+    for (const kind of [
+      "claude",
+      "codex",
+      "antigravity",
+      "opencode",
+      "omp",
+      "crush",
+      "cursor",
+      "kiro",
+      "shell",
+    ]) {
       expect(isSessionKind(kind)).toBe(true)
     }
   })
@@ -317,9 +336,76 @@ describe("reorderSessions", () => {
   })
 })
 
+describe("delegatesOf", () => {
+  const withOrigin = (state: SessionState, id: string, origin: string): SessionState => ({
+    ...state,
+    [P]: {
+      ...state[P],
+      sessions: state[P].sessions.map((s) => (s.id === id ? { ...s, originSessionId: origin } : s)),
+    },
+  })
+
+  it("answers the sessions this one handed work to, in the project's order", () => {
+    let state = buildState(4)
+    state = withOrigin(state, "s3", "s1")
+    state = withOrigin(state, "s2", "s1")
+    expect(delegatesOf(state, P, "s1").map((s) => s.id)).toEqual(["s2", "s3"])
+  })
+
+  // Direct delegates only: a grandchild is downstream of one the user watched
+  // being spawned, not one this session made.
+  it("does not walk past the sessions it made itself", () => {
+    let state = buildState(3)
+    state = withOrigin(state, "s2", "s1")
+    state = withOrigin(state, "s3", "s2")
+    expect(delegatesOf(state, P, "s1").map((s) => s.id)).toEqual(["s2"])
+  })
+
+  it("answers nothing for a session nobody was delegated from", () => {
+    expect(delegatesOf(buildState(2), P, "s1")).toEqual([])
+    expect(delegatesOf(buildState(2), P, "")).toEqual([])
+  })
+})
+
+describe("runCardIn", () => {
+  const card = (id: string, extra: Partial<Session> = {}): Session => ({
+    id,
+    label: id,
+    kind: "shell",
+    ...extra,
+  })
+
+  it("names the checkout's Run card, and nothing for a checkout without one", () => {
+    const sessions = [card("s1"), card("run", { run: true, path: "/wt/a" })]
+    expect(runCardIn(sessions, "/wt/a")?.id).toBe("run")
+    expect(runCardIn(sessions, "")).toBeUndefined()
+    expect(runCardIn(sessions, "/wt/b")).toBeUndefined()
+  })
+
+  it("finds the project's own checkout under the empty path", () => {
+    expect(runCardIn([card("run", { run: true })], "")?.id).toBe("run")
+  })
+
+  // A Run card that has been pinned or dragged onto a wall is drawn in one of the
+  // gathered blocks, and still holds its checkout's one slot.
+  it("finds a Run card the sidebar draws in another block", () => {
+    const pinned = [card("run", { run: true, path: "/wt/a", pinned: true })]
+    expect(runCardIn(pinned, "/wt/a")?.id).toBe("run")
+  })
+
+  // The mark is the backend's; a terminal the user aimed at a command by hand is
+  // an ordinary card and holds no slot.
+  it("ignores a terminal that merely has an entrypoint", () => {
+    expect(
+      runCardIn([card("term", { entrypoint: "pnpm dev", path: "/wt/a" })], "/wt/a"),
+    ).toBeUndefined()
+  })
+})
+
 describe("sidebarGroups", () => {
   const ids = (groups: ReturnType<typeof sidebarGroups>) =>
     groups.map((group) => [group.key, group.sessions.map((s) => s.id)])
+  const wall = (id: string, cells: string[]) => ({ id, name: id, cells, tracks: {} })
 
   it("draws one block per worktree when nothing is pinned", () => {
     let state = addSession({}, P, "s1")
@@ -350,6 +436,63 @@ describe("sidebarGroups", () => {
       [PINNED_GROUP_KEY, ["a1"]],
       [ROOT_GROUP_KEY, ["s1"]],
       ["/wt/b", ["b1"]],
+    ])
+  })
+
+  // The blocks answer the question a wall could not: which sessions are in it.
+  // They are built from the groups, not from what is on screen, so they stand
+  // whether or not any of those walls is the thing being drawn.
+  it("lifts a wall into a block of its own, in the order its panes are laid out", () => {
+    let state = addSession({}, P, "s1")
+    state = addSession(state, P, "a1", "claude", "/wt/a")
+    state = addSession(state, P, "b1", "claude", "/wt/b")
+    expect(ids(sidebarGroups(sessionsOf(state, P), [wall("g1", ["b1", "s1"])]))).toEqual([
+      ["g1", ["b1", "s1"]],
+      ["/wt/a", ["a1"]],
+    ])
+  })
+
+  // Several walls per project is the whole point: an orchestrator and the
+  // worktrees it spawned are one, the next investigation and its own another.
+  it("draws every wall, each as its own block", () => {
+    const state = buildState(4)
+    expect(
+      ids(
+        sidebarGroups(sessionsOf(state, P), [wall("g1", ["s1", "s3"]), wall("g2", ["s2", "s4"])]),
+      ),
+    ).toEqual([
+      ["g1", ["s1", "s3"]],
+      ["g2", ["s2", "s4"]],
+    ])
+  })
+
+  // A wall is not pinned to the top: it sits where its first card sits in the
+  // stored list, which is what lets a drag move it past a checkout's block.
+  it("puts a wall where its first card sits among the other blocks", () => {
+    let state = addSession({}, P, "a1", "claude", "/wt/a")
+    state = addSession(state, P, "s1")
+    state = addSession(state, P, "s2")
+    expect(ids(sidebarGroups(sessionsOf(state, P), [wall("g1", ["s1", "s2"])]))).toEqual([
+      ["/wt/a", ["a1"]],
+      ["g1", ["s1", "s2"]],
+    ])
+  })
+
+  // A pin promises the top of the list, so nothing is drawn above it — a wall
+  // included. Its own cards still come out of it: they are drawn in the wall.
+  it("draws the pinned block above the walls and takes their cards out of it", () => {
+    let state = setSessionPinned(buildState(3), P, "s1", true)
+    state = setSessionPinned(state, P, "s2", true)
+    expect(ids(sidebarGroups(sessionsOf(state, P), [wall("g1", ["s2", "s3"])]))).toEqual([
+      [PINNED_GROUP_KEY, ["s1"]],
+      ["g1", ["s2", "s3"]],
+    ])
+  })
+
+  it("draws no block for a wall with nothing live left in it", () => {
+    const state = buildState(2)
+    expect(ids(sidebarGroups(sessionsOf(state, P), [wall("g1", ["gone"])]))).toEqual([
+      [ROOT_GROUP_KEY, ["s1", "s2"]],
     ])
   })
 
@@ -499,6 +642,55 @@ describe("setSessionPinned", () => {
   })
 })
 
+describe("forkableSession", () => {
+  // The three the CLIs themselves branch (providers.SupportsFork).
+  it.each(["claude", "codex", "opencode"] as const)("offers a %s session", (kind) => {
+    const state = withClaudeSession(buildState(2), "s1", "conv-1", kind)
+    expect(forkableSession(state[P].sessions[0])).toMatchObject({ id: "s1", kind })
+  })
+
+  // The five with resume and no fork. Listed one by one rather than looped over
+  // the kind union: a provider that grows a fork must be added here on purpose,
+  // and a provider that loses one must fail here.
+  it.each(["antigravity", "omp", "crush", "cursor", "kiro", "shell"] as const)(
+    "withholds the offer from a %s session",
+    (kind) => {
+      const state = withClaudeSession(buildState(2), "s1", "conv-1", kind)
+      expect(forkableSession(state[P].sessions[0])).toBeNull()
+    },
+  )
+
+  // Nothing to branch: the card has never reported a conversation.
+  it("returns null without a provider session id", () => {
+    expect(forkableSession(buildState(2)[P].sessions[0])).toBeNull()
+  })
+})
+
+describe("forkUnavailableReason", () => {
+  // Spelled out rather than looped: the sentence is read at the menu item, so a
+  // provider renamed here is a provider misnamed on screen.
+  it.each([
+    ["antigravity", "Antigravity keeps no fork; resume only."],
+    ["omp", "oh-my-pi keeps no fork; resume only."],
+    ["crush", "Crush keeps no fork; resume only."],
+    ["cursor", "Cursor CLI keeps no fork; resume only."],
+    ["kiro", "Kiro CLI keeps no fork; resume only."],
+  ] as const)("names %s at the item", (kind, reason) => {
+    const state = withClaudeSession(buildState(2), "s1", "conv-1", kind)
+    expect(forkUnavailableReason(state[P].sessions[0])).toBe(reason)
+  })
+
+  // The three that fork have a working item, and a shell has no conversation of
+  // any kind — neither has a limit to explain.
+  it.each(["claude", "codex", "opencode", "shell"] as const)(
+    "has nothing to say about %s",
+    (kind) => {
+      const state = withClaudeSession(buildState(2), "s1", "conv-1", kind)
+      expect(forkUnavailableReason(state[P].sessions[0])).toBeNull()
+    },
+  )
+})
+
 describe("resumableSession", () => {
   it("returns a restored claude session carrying a claude session id", () => {
     const state = withClaudeSession(buildState(2), "s1", "claude-abc")
@@ -637,6 +829,7 @@ describe("activeTarget", () => {
       path: root,
       kind: "claude",
       sandboxed: false,
+      hasLastTurn: false,
     })
   })
 
@@ -652,6 +845,7 @@ describe("activeTarget", () => {
       path: "/repo/.worktrees/swift-rabbit",
       kind: "shell",
       sandboxed: false,
+      hasLastTurn: false,
     })
   })
 
@@ -669,12 +863,26 @@ describe("activeTarget", () => {
     expect(activeTarget(state, P, root).sandboxed).toBe(true)
   })
 
+  // What the Review panel's source switch is seeded from: the record travels
+  // with the session, so a card restored quiet is offered its last turn instead
+  // of the working tree alone.
+  it("reports a session that holds a last turn", () => {
+    const state = restoreSession(buildState(1), P, {
+      id: "wt1",
+      label: "swift-rabbit",
+      kind: "claude",
+      hasLastTurn: true,
+    })
+    expect(activeTarget(state, P, root).hasLastTurn).toBe(true)
+  })
+
   it("keeps the project root when there is no session at all", () => {
     expect(activeTarget({}, P, root)).toEqual({
       sessionId: "",
       path: root,
       kind: "",
       sandboxed: false,
+      hasLastTurn: false,
     })
   })
 
@@ -684,6 +892,7 @@ describe("activeTarget", () => {
       path: "",
       kind: "",
       sandboxed: false,
+      hasLastTurn: false,
     })
   })
 })
@@ -773,6 +982,47 @@ describe("orderGroups", () => {
   // drops the whole stale order instead of taking its sessions with it.
   it("contributes nothing for a key naming no group", () => {
     expect(orderGroups(groups, ["/wt/gone"])).toEqual([])
+  })
+})
+
+describe("dragOrder", () => {
+  const s = (id: string, extra: Partial<Session> = {}): Session => ({
+    id,
+    label: id,
+    kind: "shell",
+    ...extra,
+  })
+  const wall = (id: string, cells: string[]) => ({ id, name: id, cells, tracks: {} })
+
+  it("moves a wall past a checkout's block, carrying its cards", () => {
+    const stored = [s("a1", { path: "/wt/a" }), s("r1"), s("r2")]
+    const groups = sidebarGroups(stored, [wall("g1", ["r1", "r2"])])
+    expect(groups.map((g) => g.key)).toEqual(["/wt/a", "g1"])
+    expect(dragOrder(stored, groups, ["g1", "/wt/a"])).toEqual(["r1", "r2", "a1"])
+  })
+
+  // The pinned block never moves, so its cards keep their slots and an unpinned
+  // card still lands back among the neighbours it was lifted over.
+  it("leaves the pinned block's cards where the stored order has them", () => {
+    const stored = [s("p1", { pinned: true }), s("r1"), s("a1", { path: "/wt/a" })]
+    const groups = sidebarGroups(stored)
+    expect(dragOrder(stored, groups, ["/wt/a", ROOT_GROUP_KEY])).toEqual(["p1", "a1", "r1"])
+  })
+
+  // A pinned card on a wall is drawn in the wall, so its slot travels with the
+  // wall. Claiming only unpinned sessions would leave it out of the order and
+  // reorderSessions would drop the whole drop as an id-set mismatch.
+  it("carries a pinned card that is drawn on a wall", () => {
+    const stored = [s("p1", { pinned: true }), s("r1"), s("a1", { path: "/wt/a" })]
+    const groups = sidebarGroups(stored, [wall("g1", ["p1", "r1"])])
+    expect(groups.map((g) => g.key)).toEqual(["g1", "/wt/a"])
+    const ids = dragOrder(stored, groups, ["/wt/a", "g1"])
+    expect(ids).toEqual(["a1", "p1", "r1"])
+    expect(
+      reorderSessions({ [P]: { sessions: stored, activeId: "r1", nextSeq: 4 } }, P, ids)[
+        P
+      ].sessions.map((x) => x.id),
+    ).toEqual(["a1", "p1", "r1"])
   })
 })
 
@@ -897,6 +1147,39 @@ describe("dropClosedSession", () => {
   })
 })
 
+describe("setSessionSchedule", () => {
+  const state = () => buildState(2)
+
+  it("parks the prompt on the session it names, and nowhere else", () => {
+    const next = setSessionSchedule(state(), "s1", 1700000000, "run the checklist")
+    expect(next[P]?.sessions[0]?.scheduledAt).toBe(1700000000)
+    expect(next[P]?.sessions[0]?.scheduledPrompt).toBe("run the checklist")
+    expect(next[P]?.sessions[1]?.scheduledAt).toBeUndefined()
+  })
+
+  it("replaces what was parked rather than queueing behind it", () => {
+    const first = setSessionSchedule(state(), "s1", 1700000000, "first")
+    const next = setSessionSchedule(first, "s1", 1700000060, "second")
+    expect(next[P]?.sessions[0]?.scheduledAt).toBe(1700000060)
+    expect(next[P]?.sessions[0]?.scheduledPrompt).toBe("second")
+  })
+
+  // Both keys leave together — a cancel and a prompt the backend has just typed
+  // arrive the same way, and one field left behind would outlive the other.
+  it("leaves no key behind when it is cleared", () => {
+    const parked = setSessionSchedule(buildState(1), "s1", 1700000000, "run it")
+    const cleared = setSessionSchedule(parked, "s1", 0, "")
+    const session = cleared[P]?.sessions[0]
+    expect(session && "scheduledAt" in session).toBe(false)
+    expect(session && "scheduledPrompt" in session).toBe(false)
+  })
+
+  it("ignores a session it does not know", () => {
+    const current = state()
+    expect(setSessionSchedule(current, "gone", 1700000000, "run it")).toBe(current)
+  })
+})
+
 describe("setSessionSandboxed", () => {
   const state = () => buildState(2)
 
@@ -912,6 +1195,20 @@ describe("setSessionSandboxed", () => {
     expect(next[P]?.sessions[0]?.sandboxed).toBeUndefined()
   })
 
+  it("records what the sandbox left out of the private home", () => {
+    const next = setSessionSandboxed(state(), "s1", true, [".gitconfig", ".ssh"])
+    expect(next[P]?.sessions[0]?.sandboxSkippedLinks).toEqual([".gitconfig", ".ssh"])
+    expect(next[P]?.sessions[1]?.sandboxSkippedLinks).toBeUndefined()
+  })
+
+  it("clears the names when a respawn skips nothing", () => {
+    const skipped = setSessionSandboxed(state(), "s1", true, [".gitconfig"])
+    const next = setSessionSandboxed(skipped, "s1", true, [])
+    expect(next[P]?.sessions[0]?.sandboxed).toBe(true)
+    const session = next[P]?.sessions[0]
+    expect(session && "sandboxSkippedLinks" in session).toBe(false)
+  })
+
   // The event fires on every spawn, so an unchanged answer has to return the
   // same object: a new one re-renders every card in the project for nothing.
   it("returns the same state when nothing changed", () => {
@@ -919,11 +1216,65 @@ describe("setSessionSandboxed", () => {
     expect(setSessionSandboxed(current, "s1", false)).toBe(current)
     const confined = setSessionSandboxed(current, "s1", true)
     expect(setSessionSandboxed(confined, "s1", true)).toBe(confined)
+    const skipped = setSessionSandboxed(current, "s1", true, [".gitconfig"])
+    expect(setSessionSandboxed(skipped, "s1", true, [".gitconfig"])).toBe(skipped)
+  })
+
+  // Both halves of the verdict move a card: the names alone changing is still a
+  // change, and the same name count is not the same list.
+  it("moves when only the skipped names changed", () => {
+    const current = state()
+    expect(setSessionSandboxed(current, "s1", true, [".gitconfig"])).not.toBe(current)
+    const skipped = setSessionSandboxed(current, "s1", true, [".gitconfig"])
+    // Same length, different names - a comparison on length alone would miss it.
+    expect(setSessionSandboxed(skipped, "s1", true, [".ssh"])).not.toBe(skipped)
+    expect(setSessionSandboxed(skipped, "s1", true, [])).not.toBe(skipped)
   })
 
   it("ignores a session it does not know", () => {
     const current = state()
-    expect(setSessionSandboxed(current, "gone", true)).toBe(current)
+    expect(setSessionSandboxed(current, "gone", true, [".gitconfig"])).toBe(current)
+  })
+})
+
+describe("setSessionMCPServers", () => {
+  const state = () => buildState(2)
+
+  it("records the servers the spawn reported, on that session alone", () => {
+    const next = setSessionMCPServers(state(), "s1", ["ai-memory", "lich"])
+    expect(next[P]?.sessions[0]?.mcpServers).toEqual(["ai-memory", "lich"])
+    expect(next[P]?.sessions[1]?.mcpServers).toBeUndefined()
+  })
+
+  it("clears them when a respawn reaches none", () => {
+    const listed = setSessionMCPServers(state(), "s1", ["lich"])
+    const next = setSessionMCPServers(listed, "s1", [])
+    expect(next[P]?.sessions[0]?.mcpServers).toBeUndefined()
+  })
+
+  // The event fires on every spawn, so an unchanged list has to return the same
+  // object: a new one re-renders every card in the project for nothing.
+  it("returns the same state when the list did not change", () => {
+    const current = state()
+    expect(setSessionMCPServers(current, "s1", [])).toBe(current)
+    const listed = setSessionMCPServers(current, "s1", ["lich"])
+    expect(setSessionMCPServers(listed, "s1", ["lich"])).toBe(listed)
+    // Same length, different names — a comparison on length alone would miss it.
+    expect(setSessionMCPServers(listed, "s1", ["other"])).not.toBe(listed)
+  })
+
+  it("ignores a session it does not know", () => {
+    const current = state()
+    expect(setSessionMCPServers(current, "gone", ["lich"])).toBe(current)
+  })
+
+  // Dropped rather than set to an empty array, for the reason the sandbox mark
+  // is: hydration omits the key entirely.
+  it("leaves no mcpServers key on a session that reached none", () => {
+    const listed = setSessionMCPServers(buildState(1), "s1", ["lich"])
+    const cleared = setSessionMCPServers(listed, "s1", [])
+    const session = cleared[P]?.sessions[0]
+    expect(session && "mcpServers" in session).toBe(false)
   })
 })
 

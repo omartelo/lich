@@ -441,15 +441,20 @@ var mcpTools = []mcpTool{
 			"first and roots the new session in it, which is how you give a task its own " +
 			"checkout instead of sharing yours — and optionally hands it the task in the same " +
 			"call, so fanning work out costs one call per worker instead of two. Returns the " +
-			"names the new session is addressed by, and, when a task came with it, that task's " +
-			"outcome: the answer if it was quick, otherwise a ticket to carry on from, exactly " +
-			"as send_to_session returns one.",
+			"names the new session is addressed by, whether it runs confined — nobody is here " +
+			"to answer the sandbox's \"ask each time\" rung, so a session opened this way takes " +
+			"the confined side of it — and, when a task came with it, that task's outcome: the " +
+			"answer if it was quick, otherwise a ticket to carry on from, exactly as " +
+			"send_to_session returns one.",
 		Schema: schema(map[string]any{
 			"project": property("string",
-				"Project to open the session in, by name. Defaults to your own project."),
+				"Project to open the session in: the name of one already open, or the "+
+					"absolute path of a directory, which is opened as a project first — a "+
+					"directory lich closed comes back with the sessions it was closed with. "+
+					"Defaults to your own project."),
 			"kind": property("string",
-				"What the session runs: claude, codex, antigravity, opencode, omp, crush, or shell. "+
-					"Defaults to the same agent you are."),
+				"What the session runs: claude, codex, antigravity, opencode, omp, crush, "+
+					"cursor, kiro, or shell. Defaults to the same agent you are."),
 			"worktree": property("string",
 				"Branch name for a git worktree to root the session in. A branch that already "+
 					"exists is checked out as it stands; one that does not is created. Omit to "+
@@ -490,12 +495,15 @@ var mcpTools = []mcpTool{
 			"argument: keep it on disk (the session is parked, and opening a session on " +
 			"that branch again resumes its conversation) or remove it. A checkout with " +
 			"uncommitted work is only removed with force, because what that discards is in " +
-			"no commit and on no remote. You cannot close the session you are running in.",
+			"no commit and on no remote. A checkout lich did not create is removed from the " +
+			"window only, so \"remove\" on one is refused here. You cannot close the session " +
+			"you are running in.",
 		Schema: schema(map[string]any{
 			"session": property("string",
 				"The session to close, by the label on its card or the name it answers to."),
 			"project": property("string",
-				"Project to narrow to, when the same label exists in more than one."),
+				"Project to narrow to, by name or by directory path, when the same label "+
+					"exists in more than one."),
 			"worktree": property("string",
 				"Required when this is the last session in a worktree: \"keep\" leaves the "+
 					"checkout on disk, \"remove\" deletes it."),
@@ -528,7 +536,8 @@ var mcpTools = []mcpTool{
 				"Session to rename, by the label on its card or the name it answers to. "+
 					"Omit to rename the session you are running in."),
 			"project": property("string",
-				"Project to narrow to, when the same label exists in more than one."),
+				"Project to narrow to, by name or by directory path, when the same label "+
+					"exists in more than one."),
 		}, "label"),
 		Run: func(c *client, args mcpArgs) (string, error) {
 			var renamed spawn.Renamed
@@ -546,7 +555,8 @@ var mcpTools = []mcpTool{
 			"session on a branch (one that is already checked out is opened, not created) " +
 			"and before closing one (the last session in a checkout decides its fate).",
 		Schema: schema(map[string]any{
-			"project": property("string", "Project to list. Defaults to your own."),
+			"project": property("string",
+				"Project to list, by name or by directory path. Defaults to your own."),
 		}),
 		ReadOnly: true,
 		Run: func(c *client, args mcpArgs) (string, error) {
@@ -570,8 +580,10 @@ var mcpTools = []mcpTool{
 			"waiting on the ticket and reading nothing else.",
 		Schema: schema(map[string]any{
 			"ticket": property("string", "The ticket from the message you were given. "+
-				"Leave it out only if that message is no longer in your context — then the "+
-				"request open against this session is answered."),
+				"Leave it out only if that message is no longer in your context — then the one "+
+				"request open against this session is answered. With two open the call is "+
+				"refused, naming each ticket and what it asked, because nothing in an answer "+
+				"says which request it belongs to: retry with the ticket you mean."),
 			"answer": property("string", "Your answer, in full — nothing else is sent back."),
 		}, "answer"),
 		Run: func(c *client, args mcpArgs) (string, error) {

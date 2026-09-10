@@ -13,6 +13,10 @@ jobs:
   # linux and windows build in parallel; release fans in and publishes.
   linux:
     runs-on: ubuntu-latest
+    env:
+      # cef-rs downloads the CEF distribution into CEF_PATH at build time
+      # (~200 MB); the cache step below keeps it between runs.
+      CEF_PATH: ${{ github.workspace }}/.cef
     steps:
       - uses: actions/checkout@v7
         with:
@@ -36,8 +40,13 @@ jobs:
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 
-      # The binary is pure Go (CGO_ENABLED=0) — no C toolchain, no system
-      # libraries. Packaging needs nfpm only.
+      # The window is a Rust crate on CEF (shell/); the Go binary itself stays
+      # pure Go (CGO_ENABLED=0). The toolchain, CEF's build dependencies and the
+      # caches — restored from what ci.yml's shell job saves on main, the only
+      # caches a tag can read — are the composite action's.
+      - uses: ./.github/actions/shell-toolchain
+
+      # Packaging needs task and nfpm.
       #
       # GOTOOLCHAIN=auto only here: setup-go exports `local`, which is right for
       # building lich (it holds every go command to the go.mod line) but breaks
@@ -81,6 +90,12 @@ jobs:
           mv "lich.rpm"             "lich-${tag}-x86_64.rpm"
           mv "lich.pkg.tar.zst"     "lich-${tag}-x86_64.pkg.tar.zst"
           cp lich "lich-${tag}-linux-amd64"
+          # The window for the bare binary and the AUR package: the PKGBUILD
+          # unpacks it into /usr/lib/lich/shell. zstd's default level leaves
+          # ~30 MB on the table for a minute of CPU; the env is how tar's zstd
+          # takes a level. Threads spelled out: unlike -T0, ZSTD_NBTHREADS=0
+          # is one thread, and level 19 on one thread is three minutes.
+          ZSTD_CLEVEL=19 ZSTD_NBTHREADS="$(nproc)" tar --zstd -cf "lich-${tag}-linux-amd64-shell.tar.zst" shell
           ls -la lich-${tag}-*
 
       - name: Upload Linux assets
@@ -95,10 +110,16 @@ jobs:
       run:
         # bash (git-bash) keeps the steps byte-identical to the linux job's.
         shell: bash
+    env:
+      # The window's CEF distribution, as in the linux job.
+      CEF_PATH: ${{ github.workspace }}/.cef
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+
+      # The window's toolchain and caches; see the linux job.
+      - uses: ./.github/actions/shell-toolchain
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -137,12 +158,77 @@ jobs:
       - name: Backend tests (windows)
         run: bash .github/scripts/go-test-summary.sh windows
 
+      # End to end on the runner before the assets ship: the installer installs
+      # silently, lich.exe finds the window beside itself and opens it, the page
+      # it serves loads (read over CDP: alive alone is not proof, a crash keeps
+      # a process around while its dump is written), the window closes on a
+      # plain close request, which is what the restart flow sends, and lich
+      # exits with it. Its config lives under an APPDATA of its own.
+      - name: Install and run lich end to end
+        env:
+          MSYS_NO_PATHCONV: "1"
+        run: |
+          bin/lich-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG="$RUNNER_TEMP/setup.log"
+          app="$LOCALAPPDATA/Programs/lich"
+          test -f "$app/lich.exe" && test -f "$app/shell/lich-shell.exe" && test -f "$app/shell/libcef.dll"
+          # The C runtime is static: a machine without the Visual C++
+          # redistributable must open the window too.
+          dumpbin /DEPENDENTS "$app/shell/lich-shell.exe" > "$RUNNER_TEMP/deps.txt"
+          if grep -qi 'VCRUNTIME\|MSVCP' "$RUNNER_TEMP/deps.txt"; then
+            echo "::error::lich-shell.exe depends on the Visual C++ runtime"; cat "$RUNNER_TEMP/deps.txt"; exit 1
+          fi
+          # GUI subsystem, not console: a console-subsystem window gets its own
+          # console window allocated (lich.exe is -H=windowsgui and has none to
+          # lend), and closing that console kills the window. Invisible to the
+          # run below, which inherits this shell's console.
+          dumpbin /HEADERS "$app/shell/lich-shell.exe" > "$RUNNER_TEMP/headers.txt"
+          grep -q 'subsystem (Windows GUI)' "$RUNNER_TEMP/headers.txt" || {
+            echo "::error::lich-shell.exe is not a GUI-subsystem binary; it will pop a console window"
+            grep -i subsystem "$RUNNER_TEMP/headers.txt"; exit 1
+          }
+          export APPDATA="$RUNNER_TEMP/appdata" LICH_LISTEN_PORT=47899
+          mkdir -p "$APPDATA"
+          "$app/lich.exe" -- --remote-debugging-port=9334 &
+          for _ in $(seq 1 30); do
+            sleep 1
+            token=$(jq -r .token "$APPDATA/lich/runtime.json" 2>/dev/null) && break
+          done
+          test -n "$token" || { echo "::error::lich never wrote runtime.json"; cat "$APPDATA/lich/lich.log"; exit 1; }
+          grep -q 'the bundled window' "$APPDATA/lich/lich.log" || { echo "::error::lich did not resolve its own window"; cat "$APPDATA/lich/lich.log"; exit 1; }
+          for _ in $(seq 1 30); do
+            sleep 1
+            curl -sf http://127.0.0.1:9334/json > "$RUNNER_TEMP/pages.json" 2>/dev/null && grep -q '"title": *"lich"' "$RUNNER_TEMP/pages.json" && break
+          done
+          grep -q '"title": *"lich"' "$RUNNER_TEMP/pages.json" || { echo "::error::the window never loaded lich's page"; cat "$APPDATA/lich/lich.log"; exit 1; }
+          sleep 10
+          tasklist | grep -q lich-shell.exe || { echo "::error::the window died"; cat "$APPDATA/lich/lich.log"; exit 1; }
+          # A second launch: lich finds the first on its port and hands the
+          # window its URL, which CEF forwards to the running browser. The
+          # forward used to open a second browser in it, a page more on CDP
+          # and a process that outlived the window's close (#470); the window
+          # now raises itself and the page count stays at one.
+          "$app/lich.exe" || { echo "::error::the duplicate launch exited $?"; cat "$APPDATA/lich/lich.log"; exit 1; }
+          sleep 5
+          curl -sf http://127.0.0.1:9334/json > "$RUNNER_TEMP/pages.json"
+          pages=$(grep -c '"type": *"page"' "$RUNNER_TEMP/pages.json" || true)
+          [ "$pages" = 1 ] || { echo "::error::the forwarded launch left $pages pages in the window, expected one"; cat "$RUNNER_TEMP/pages.json"; cat "$APPDATA/lich/lich.log"; exit 1; }
+          # A close request, not a kill: the same WM_CLOSE the restart flow posts.
+          taskkill /IM lich-shell.exe > /dev/null
+          for _ in $(seq 1 15); do sleep 1; tasklist | grep -q '^lich.exe' || break; done
+          if tasklist | grep -q '^lich.exe'; then
+            echo "::error::lich.exe is still running after its window closed"; cat "$APPDATA/lich/lich.log"; exit 1
+          fi
+          grep -q 'window closed, exiting' "$APPDATA/lich/lich.log" || { echo "::error::lich did not log the window closing"; cat "$APPDATA/lich/lich.log"; exit 1; }
+          cat "$RUNNER_TEMP/pages.json"
+
       - name: Assemble Windows assets
         run: |
           cd bin
           tag="${GITHUB_REF_NAME//\//-}"
           mv lich.exe       "lich-${tag}-windows-amd64.exe"
           mv lich-setup.exe "lich-${tag}-windows-amd64-setup.exe"
+          # The window for the portable exe: unzipped beside it as shell\.
+          7z a -bso0 -bsp0 "lich-${tag}-windows-amd64-shell.zip" shell
           ls -la lich-${tag}-*
 
       - name: Upload Windows assets
@@ -153,10 +239,15 @@ jobs:
 
   mac:
     runs-on: macos-latest
+    env:
+      CEF_PATH: ${{ github.workspace }}/.cef
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+
+      # The window's toolchain and caches; see the linux job.
+      - uses: ./.github/actions/shell-toolchain
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -198,20 +289,39 @@ jobs:
       - name: Build macOS binaries
         run: task build:mac
 
+      # The window, for the runner's own architecture: Apple Silicon. The
+      # Intel bundle ships without one and opens a system browser.
+      - name: Build the window (arm64)
+        run: task build:shell
+
       # Two assets per arch: the .app the cask installs, and the bare binary the
       # in-app self-update and hand installs still download.
       - name: Assemble macOS assets
         run: |
           cd bin
           tag="${GITHUB_REF_NAME//\//-}"
+          ../build/darwin/bundle.sh lich-darwin-arm64 "${tag#v}" stage-arm64 shell
+          ../build/darwin/bundle.sh lich-darwin-amd64 "${tag#v}" stage-amd64
           for arch in arm64 amd64; do
-            ../build/darwin/bundle.sh "lich-darwin-${arch}" "${tag#v}" "stage-${arch}"
             # ditto, not zip: it is the archiver that keeps a bundle's symlinks,
             # permissions and signature intact for Homebrew Cask to unpack.
             ditto -c -k --keepParent "stage-${arch}/Lich.app" "lich-${tag}-darwin-${arch}.zip"
             mv "lich-darwin-${arch}" "lich-${tag}-darwin-${arch}"
           done
           ls -la lich-${tag}-*
+
+      # End to end on the runner before the assets ship; the script says what
+      # it proves.
+      - name: Run Lich.app end to end
+        run: bash .github/scripts/mac-e2e.sh bin/stage-arm64/Lich.app
+
+      - name: Upload end-to-end diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: lich-macos-e2e
+          path: ${{ runner.temp }}/diag
+          if-no-files-found: ignore
 
       - name: Upload macOS assets
         uses: actions/upload-artifact@v7
@@ -239,6 +349,31 @@ jobs:
           cd bin
           sha256sum lich-* > checksums.txt
           cat checksums.txt
+
+      # Rendered here rather than in a job of its own like the cask: the
+      # checksums are already in hand, and the manifest ships in the same
+      # `gh release create` as the assets it hashes, so a release never exists
+      # without it. The install URL is releases/latest/download/lich.json, so
+      # nothing on a branch has to move for Scoop to see a new tag.
+      - name: Render Scoop manifest
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          sum() {
+            awk -v file="$1" '$2 == file { print $1 }' bin/checksums.txt
+          }
+          exe="$(sum "lich-v${version}-windows-amd64.exe")"
+          shell="$(sum "lich-v${version}-windows-amd64-shell.zip")"
+          # An empty hash would publish a manifest that fails every install.
+          if [ -z "$exe" ] || [ -z "$shell" ]; then
+            echo "missing windows checksums in checksums.txt" >&2
+            cat bin/checksums.txt >&2
+            exit 1
+          fi
+          sed -e "s/@VERSION@/${version}/g" \
+              -e "s/@SHA_EXE@/${exe}/" \
+              -e "s/@SHA_SHELL@/${shell}/" \
+              build/windows/scoop/lich.json.tpl > bin/lich.json
+          jq . bin/lich.json
 
       # The notes open with the same banner the site and the social cards use.
       # It is addressed at this tag's tree, not at a branch, so a release keeps
@@ -275,7 +410,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            bin/lich-* bin/checksums.txt \
+            bin/lich-* bin/checksums.txt bin/lich.json \
             --title "$GITHUB_REF_NAME" \
             --notes-file notes.md
 

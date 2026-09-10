@@ -42,14 +42,26 @@ Both sides test against the payloads in
 
 ## Event → state mapping
 
-| Claude Code hook   | Codex hook          | Antigravity hook | opencode event           | oh-my-pi event | Crush hook | state     |
-|--------------------|---------------------|------------------|--------------------------|----------------|------------|-----------|
-| `UserPromptSubmit` | `UserPromptSubmit`  | `PreInvocation`  | `session.status` (`busy`) | `input`        | —          | `busy`    |
-| `PreToolUse`       | `PreToolUse`        | `PreToolUse`     | `tool.execute.before`    | `tool_call`    | —          | `busy` + `tool` |
-| `PostToolUse`      | `PostToolUse`       | —                | `tool.execute.after`     | `turn_start`   | —          | `busy`    |
-| `Notification`     | `PermissionRequest` | —                | any `*.asked`            | —              | —          | `waiting` + `reason` |
-| `Stop`             | `Stop`              | `Stop`           | `session.status` (`idle`) | `session_stop` | —          | `done`    |
-| `SessionEnd`       | —                   | —                | —                        | —              | —          | `idle`    |
+| Claude Code hook   | Codex hook          | Antigravity hook | opencode event           | oh-my-pi event | Crush hook | Cursor CLI hook    | Kiro CLI hook      | state     |
+|--------------------|---------------------|------------------|--------------------------|----------------|------------|--------------------|--------------------|-----------|
+| `UserPromptSubmit` | `UserPromptSubmit`  | `PreInvocation`  | `session.status` (`busy`) | `input`        | —          | —                  | `userPromptSubmit` | `busy`    |
+| `PreToolUse`       | `PreToolUse`        | `PreToolUse`     | `tool.execute.before`    | `tool_call`    | —          | dropped            | `preToolUse`       | `busy` + `tool` |
+| `PostToolUse`      | `PostToolUse`       | —                | `tool.execute.after`     | `turn_start`   | —          | dropped            | `postToolUse`      | `busy`    |
+| `Notification`     | `PermissionRequest` | —                | any `*.asked`            | —              | —          | —                  | —                  | `waiting` + `reason` |
+| `Stop`             | `Stop`              | `Stop`           | `session.status` (`idle`) | `session_stop` | —          | —                  | `stop`             | `done`    |
+| `SessionEnd`       | —                   | —                | —                        | —              | —          | `SessionEnd`       | —                  | `idle`    |
+
+**Kiro closes four of the six rows and neither of the other two.** It has no
+permission event, so a Kiro session waiting on a confirmation reads as `busy`
+rather than `waiting` — the card says it is working, which is true, and does not
+say what it is waiting for. It has no session-end event either, so the card keeps
+the provider's mark until the PTY itself goes (docs/providers/kiro.md).
+
+Kiro is also the one harness that reads a hook's **stdout back into the
+conversation as context** — that is what its hooks are for. Every report script
+is silent by contract already, which is what makes them observations; on Kiro
+that stops being a style choice, because anything printed would arrive in front
+of the model as if the user had typed it.
 
 opencode is the one harness that reports a state rather than an event: its
 `session.status` carries `busy`, `idle` or `retry` for the session named in the
@@ -153,9 +165,9 @@ part worth reading starts:
 |-------------------|---------------------------|-----------------------------------|
 | Claude Code       | `mcp__lich__open_session` | `lich · open_session`             |
 | Codex             | `mcp__srv__tool`          | `srv · tool`                      |
-| Antigravity       | `call_mcp_tool`           | `call_mcp_tool · lich/open_session` |
-| oh-my-pi          | `mcp__lich_list_sessions` | `lich_list_sessions`              |
-| opencode          | `lichprobe_list_sessions` | unchanged                         |
+| Antigravity       | `call_mcp_tool`           | `lich · open_session`             |
+| oh-my-pi          | `mcp__lich_list_sessions` | `lich · list_sessions`            |
+| opencode          | `lichprobe_list_sessions` | `lichprobe · list_sessions`       |
 
 Measured against opencode 1.18.18, omp 17.3.7 and Antigravity 1.1.19 by running
 each CLI against a `lich mcp` server and reading the name off the handler the
@@ -165,14 +177,21 @@ hook payload.
 **Antigravity is the one harness whose tool name is not the tool.** Every MCP
 call there is the single step `call_mcp_tool`, and which server and which tool
 are two of its arguments (`args.ServerName`, `args.ToolName`) — so the client
-reads them and sends them as `detail`, which is why that row is the only one
-whose card line is made of both fields.
+reads them and sends them as `detail`, spelled `<server>/<tool>`. That row is
+the only one whose card line is split out of the *other* field: the label takes
+the detail whole and nothing is drawn beside it. A `detail` shaped any other
+way, and a plugin too old to send one at all, leaves the step name on the card
+the way any name that cannot be split is left.
 
-Of the names that *are* the tool, only the doubled underscore can be split:
-omp's single one divides `mcp__lich_list_sessions` into `lich` + `list_sessions`
-or `lich_list` + `sessions` with nothing in the string to say which, so only its
-prefix comes off, and opencode's form carries no marker at all. Crush is absent
-because it reports no tool (see above).
+Of the names that *are* the tool, only the doubled underscore divides on the
+string alone: `mcp__lich_list_sessions` reads as `lich` + `list_sessions` or
+`lich_list` + `sessions`, and opencode's form carries no marker at all. What says
+which is the list of servers that session's own spawn found registered with its
+provider — read from the harness's own config documents and the session's
+directory, recorded on its row (`store.Session`'s `mcpServers`) and announced as
+`session-mcp`. The card takes the longest server name the tool name spells, and
+leaves a name no server claims whole. Crush is absent because it reports no tool
+(see above).
 
 `detail` is whatever identifies the call at a glance — the command line, the
 file path, the pattern, and on Antigravity the MCP tool its step name does not
@@ -274,6 +293,16 @@ missing reason never costs a bell.
   same rule as `turnLog`: a `waiting` inside a turn is published, because it is
   the state that means "do not send work here", and one outside a turn is not,
   because a session idle at its prompt is the most available it will ever be.
+- **The turn's window** — `internal/terminal/turnsnap.go`: reads the same stream
+  for a third question, what the turn changed on disk. `busy` opens a window and
+  `done` closes it, each taking a `git write-tree` snapshot of the session's
+  checkout; the Review panel diffs the pair. Only the first `busy` of a run opens
+  anything — the repeat every provider sends between tools would otherwise walk
+  the opening snapshot forward through the turn it is meant to precede — and
+  `idle` abandons an open window rather than closing it, there being no closing
+  report coming. lich's own `interrupted` closes one: a stopped turn is a turn
+  that ended, and it changed files like any other. A provider that reports no
+  state has no window here at all, which today is Crush and Cursor CLI.
 - **Store** — `frontend/src/lib/session/session-status-store.ts`: one subscription taken
   at page load keeps the last state of every session, keyed by id. The card
   cannot hold it: the sidebar only renders cards for the active project, so

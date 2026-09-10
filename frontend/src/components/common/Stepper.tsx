@@ -1,6 +1,6 @@
-import { RotateCcw } from "lucide-react"
 import type { ReactNode } from "react"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 interface StepperProps {
   value: number
@@ -9,8 +9,10 @@ interface StepperProps {
   min: number
   max: number
   step: number
-  /** What Reset returns to; the button greys out once value is already there. */
+  /** What clicking the value returns to. */
   fallback: number
+  /** The setting's name, for the reset control's label ("Reset the zoom"). */
+  name: string
   onChange: (next: number) => void
   /** Glyphs for decrement and increment — zoom uses magnifiers, size ∓. */
   decrementIcon: ReactNode
@@ -19,9 +21,11 @@ interface StepperProps {
   incrementLabel: string
 }
 
-// The numeric setting control: two icon buttons flanking a bordered value box,
-// with a Reset that disappears into disabled once the value is the default.
-// Both Appearance controls (interface zoom, terminal text size) are this.
+// The numeric setting control: two icon buttons flanking the value, which is
+// itself the reset. A Reset button beside it spent a permanent third control on
+// the rarest action, greyed out for as long as the value was the default, which
+// is most of the time. Both Appearance controls (interface zoom, terminal text
+// size) are this.
 export function Stepper({
   value,
   display,
@@ -29,12 +33,14 @@ export function Stepper({
   max,
   step,
   fallback,
+  name,
   onChange,
   decrementIcon,
   incrementIcon,
   decrementLabel,
   incrementLabel,
 }: StepperProps) {
+  const custom = value !== fallback
   return (
     <div className="flex items-center gap-2">
       <Button
@@ -46,9 +52,27 @@ export function Stepper({
       >
         {decrementIcon}
       </Button>
-      <div className="flex h-9 min-w-16 items-center justify-center rounded-lg border border-border px-3 text-sm tabular-nums text-foreground">
-        {display}
-      </div>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="outline"
+              // Not an icon button: the box is as wide as its longest reading,
+              // so stepping never shifts the controls around it. Never
+              // disabled either — the reading is what this box is for, and a
+              // disabled button greys the number out for as long as the value
+              // is the default, which is most of the time. At the default the
+              // click is simply a no-op.
+              className="min-w-16 tabular-nums"
+              aria-label={custom ? `Reset ${name}` : display}
+              onClick={() => custom && onChange(fallback)}
+            />
+          }
+        >
+          {display}
+        </TooltipTrigger>
+        <TooltipContent>{custom ? `Reset ${name}` : "Default"}</TooltipContent>
+      </Tooltip>
       <Button
         variant="outline"
         size="icon"
@@ -57,10 +81,6 @@ export function Stepper({
         onClick={() => onChange(value + step)}
       >
         {incrementIcon}
-      </Button>
-      <Button variant="ghost" disabled={value === fallback} onClick={() => onChange(fallback)}>
-        <RotateCcw />
-        Reset
       </Button>
     </div>
   )

@@ -17,6 +17,8 @@ export const PROVIDER_KINDS = [
   "opencode",
   "omp",
   "crush",
+  "cursor",
+  "kiro",
 ] as const
 export type ProviderKind = (typeof PROVIDER_KINDS)[number]
 
@@ -47,11 +49,21 @@ export interface Session {
   // every provider session — the store refuses to record one against a card
   // whose PTY runs an agent.
   entrypoint?: string
+  // Whether this card is its checkout's Run card (internal/spawn.Run). Absent
+  // for every other session, including a terminal the user aimed at a command by
+  // hand: the mark is the backend's, and it is what holds the one Run card a
+  // checkout gets (runCardIn).
+  run?: boolean
   // Whether this session's PTY runs inside the sandbox (internal/sandbox).
   // Absent means it does not — the spawn decides it, from the provider's rung,
   // the checkout and any per-session override, and reports the verdict back;
   // the card never re-derives it.
   sandboxed?: boolean
+  // The home paths that sandbox skipped for being symlinks, home-relative —
+  // what a confined session will not find where it expects it. Absent means
+  // none were skipped. Written by the same spawn report as sandboxed and read
+  // back on hydration.
+  sandboxSkippedLinks?: string[]
   // Kept at the head of the project's list and refused a close until unpinned.
   pinned?: boolean
   // The session that asked for this one, when it was opened by delegation:
@@ -61,6 +73,23 @@ export interface Session {
   // is closed. Read them through sessionOrigin, never on their own.
   originSessionId?: string
   originLabel?: string
+  // A prompt parked to be typed at this session later, and when it is due in
+  // unix seconds. Both absent when nothing is waiting; the backend types the
+  // prompt and clears the pair (internal/relay, deliverDue), which reaches the
+  // card as SCHEDULE_EVENT.
+  scheduledAt?: number
+  scheduledPrompt?: string
+  // Whether the backend holds a record of this session's last finished turn.
+  // Absent means none — a session that has never finished a turn, or one whose
+  // record was retracted. Only ever set on hydration: a turn closing in this
+  // run reaches the panel through the session's own state reports, which is the
+  // other half of what draws the switch (ReviewPanel).
+  hasLastTurn?: boolean
+  // The MCP servers this session's provider could reach when it was spawned,
+  // which is what toolLabel divides a tool name against. Absent means none were
+  // reported — the same answer as a name no server claims, so the card shows it
+  // whole. Written by the spawn (MCP_EVENT) and read back on hydration.
+  mcpServers?: string[]
 }
 
 export interface ProjectSessions {
@@ -254,19 +283,24 @@ export function renameSession(
   }
 }
 
-// setSessionSandboxed records whether a session's PTY runs confined, as the
-// spawn reported it. Unknown ids leave the state untouched, and a value that
+// setSessionSandboxed records whether a session's PTY runs confined and what
+// that sandbox left out of the private home for being a symlink, as the spawn
+// reported both. Unknown ids leave the state untouched, and a report that
 // already matches returns the same object — the event fires on every spawn, and
 // a re-render per respawn of an unchanged card is a card that flickers.
 export function setSessionSandboxed(
   state: SessionState,
   sessionId: string,
   sandboxed: boolean,
+  skippedLinks: string[] = [],
 ): SessionState {
   const projectId = projectOfSession(state, sessionId)
   const current = projectId ? state[projectId] : undefined
   const session = current?.sessions.find((s) => s.id === sessionId)
-  if (!projectId || !current || !session || (session.sandboxed ?? false) === sandboxed) {
+  const same =
+    (session?.sandboxed ?? false) === sandboxed &&
+    sameNames(session?.sandboxSkippedLinks, skippedLinks)
+  if (!projectId || !current || !session || same) {
     return state
   }
   return {
@@ -279,8 +313,80 @@ export function setSessionSandboxed(
         }
         // Dropped rather than set to undefined, so an unconfined session carries
         // no key at all — the shape the two hydration paths produce.
-        const { sandboxed: _was, ...rest } = s
-        return sandboxed ? { ...rest, sandboxed: true } : rest
+        const { sandboxed: _was, sandboxSkippedLinks: _links, ...rest } = s
+        const next = sandboxed ? { ...rest, sandboxed: true } : rest
+        return skippedLinks.length > 0 ? { ...next, sandboxSkippedLinks: skippedLinks } : next
+      }),
+    },
+  }
+}
+
+// setSessionMCPServers records the MCP servers a spawn reported for a session.
+// Unknown ids leave the state untouched, and a list that already matches returns
+// the same object — the event fires on every spawn, and a re-render per respawn
+// of an unchanged card is a card that flickers.
+export function setSessionMCPServers(
+  state: SessionState,
+  sessionId: string,
+  servers: string[],
+): SessionState {
+  const projectId = projectOfSession(state, sessionId)
+  const current = projectId ? state[projectId] : undefined
+  const session = current?.sessions.find((s) => s.id === sessionId)
+  if (!projectId || !current || !session || sameNames(session.mcpServers, servers)) {
+    return state
+  }
+  return {
+    ...state,
+    [projectId]: {
+      ...current,
+      sessions: current.sessions.map((s) => {
+        if (s.id !== sessionId) {
+          return s
+        }
+        // Dropped rather than set to an empty array, so a session that reached
+        // nothing carries no key at all — the shape hydration produces.
+        const { mcpServers: _was, ...rest } = s
+        return servers.length > 0 ? { ...rest, mcpServers: servers } : rest
+      }),
+    },
+  }
+}
+
+// Two spawn-reported lists read the same, in order. Shared by both reports that
+// carry one: an event fires on every spawn, and a list that has not moved must
+// not be a state change.
+function sameNames(a: string[] | undefined, b: string[]): boolean {
+  return (a ?? []).length === b.length && (a ?? []).every((name, i) => name === b[i])
+}
+
+// setSessionSchedule parks a prompt on a session, or takes one off it: at 0
+// clears both keys, which is what a cancel and a delivered prompt both are.
+// Unknown ids leave the state untouched.
+export function setSessionSchedule(
+  state: SessionState,
+  sessionId: string,
+  at: number,
+  prompt: string,
+): SessionState {
+  const projectId = projectOfSession(state, sessionId)
+  const current = projectId ? state[projectId] : undefined
+  if (!projectId || !current || !current.sessions.some((s) => s.id === sessionId)) {
+    return state
+  }
+  return {
+    ...state,
+    [projectId]: {
+      ...current,
+      sessions: current.sessions.map((s) => {
+        if (s.id !== sessionId) {
+          return s
+        }
+        // Dropped rather than zeroed, for the reason setSessionSandboxed drops
+        // its key: a session with nothing scheduled is the shape hydration
+        // produces, and one field left behind would outlive the other.
+        const { scheduledAt: _at, scheduledPrompt: _prompt, ...rest } = s
+        return at > 0 && prompt ? { ...rest, scheduledAt: at, scheduledPrompt: prompt } : rest
       }),
     },
   }
@@ -320,91 +426,6 @@ export function setSessionEntrypoint(
       ),
     },
   }
-}
-
-// The pinned block's stand-in id, for the same reason ROOT_GROUP_KEY exists: it
-// is not a path. The block gathers sessions from every checkout, so it can
-// collide with no worktree — those paths are absolute.
-export const PINNED_GROUP_KEY = "__pinned__"
-
-// One block of the sidebar: the pinned sessions, or one worktree's.
-export interface SidebarGroup {
-  key: string
-  // True for the pinned block. It is not a checkout — no path of its own, no
-  // pull request, and it never moves: it is always drawn first.
-  pinned: boolean
-  // The checkout root ("" for the project's own directory), empty for pinned.
-  path: string
-  sessions: Session[]
-}
-
-// sidebarGroups splits a project's sessions into the blocks the sidebar draws:
-// the pinned ones first, in one block of their own, then one block per worktree
-// in first-appearance order. Each block keeps the stored (drag) order inside.
-//
-// Pinning never rewrites the stored list — it only lifts a card into this first
-// block — which is what lets an unpinned session drop back among its old
-// neighbours instead of being stranded on top. The store hands that same order
-// back, so a reload draws what the pin did live.
-export function sidebarGroups(sessions: Session[]): SidebarGroup[] {
-  const groups: SidebarGroup[] = groupByWorktree(sessions.filter((s) => !s.pinned)).map(
-    (group) => ({
-      key: groupKey(group.path),
-      pinned: false,
-      path: group.path,
-      sessions: group.sessions,
-    }),
-  )
-  const pinned = sessions.filter((s) => s.pinned)
-  if (pinned.length === 0) {
-    return groups
-  }
-  return [{ key: PINNED_GROUP_KEY, pinned: true, path: "", sessions: pinned }, ...groups]
-}
-
-// reorderSubset returns the full id order that hands `ids` to the sessions the
-// predicate picks and leaves every other session exactly where it is. A drag
-// inside one block must not move the blocks around it, and the pinned block is
-// not even contiguous in the stored list — it is a filter over it.
-//
-// An `ids` that does not name that subset exactly yields a list with a repeat
-// (or a gap), which reorderSessions rejects wholesale — the same way it rejects
-// an order a close has raced.
-export function reorderSubset(
-  stored: Session[],
-  ids: string[],
-  member: (session: Session) => boolean,
-): string[] {
-  const queue = [...ids]
-  return stored.map((session) => (member(session) ? (queue.shift() ?? session.id) : session.id))
-}
-
-// neighborSessionId returns the session one step from `sessionId` in the order
-// the sidebar draws, wrapping at both ends. "" means there is nowhere to go —
-// unknown project, no sessions, or a single one — and the caller leaves focus
-// alone. A `sessionId` no longer in the list (its session was closed) lands on
-// the end the step comes from, so the press still moves somewhere.
-//
-// The order is the grouped one, not the stored flat list: a session opened in
-// the project root after a worktree one sits between its own group's cards in
-// the state and under them on screen, so walking the flat list would jump a
-// divider and come back. Pinned cards are walked where they are drawn — in the
-// block at the top, not in the worktree they belong to.
-export function neighborSessionId(
-  state: SessionState,
-  projectId: string,
-  sessionId: string,
-  step: 1 | -1,
-): string {
-  const sessions = sidebarGroups(sessionsOf(state, projectId)).flatMap((group) => group.sessions)
-  if (sessions.length < 2) {
-    return ""
-  }
-  const index = sessions.findIndex((s) => s.id === sessionId)
-  if (index === -1) {
-    return step === 1 ? sessions[0].id : sessions[sessions.length - 1].id
-  }
-  return sessions[(index + step + sessions.length) % sessions.length].id
 }
 
 // setSessionPinned pins or unpins a session, leaving the list order alone —
@@ -467,7 +488,52 @@ const RESUMABLE_KINDS: readonly SessionKind[] = [
   "omp",
   "opencode",
   "crush",
+  "cursor",
+  "kiro",
 ]
+
+// The provider kinds whose CLI can branch a conversation rather than only
+// reopen it, mirrored from providers.SupportsFork (Go) — keep in sync. Three of
+// the eight, and the rest is not a gap lich can close from this side: the offer
+// is withheld where the CLI has no verb for it.
+const FORKABLE_KINDS: readonly SessionKind[] = ["claude", "codex", "opencode"]
+
+// The five whose CLI resumes but never forks, under the name a user reads in
+// Settings. Written out one by one rather than derived from the kind union, so
+// a provider added to lich has to answer this question on purpose instead of
+// inheriting a sentence about a limit nobody measured.
+const NO_FORK_PROVIDERS: Partial<Record<SessionKind, string>> = {
+  antigravity: "Antigravity",
+  omp: "oh-my-pi",
+  crush: "Crush",
+  cursor: "Cursor CLI",
+  kiro: "Kiro CLI",
+}
+
+// forkUnavailableReason is the sentence the Fork item wears on a card whose
+// provider cannot branch a conversation, and null wherever the item carries no
+// explanation: the three that fork, and a shell, which has no conversation to
+// begin with. A missing row answers nothing — a user who forks a Claude Code
+// card and looks for the same thing on a Crush one has to read why it is dead.
+export function forkUnavailableReason(session: Session): string | null {
+  const name = NO_FORK_PROVIDERS[session.kind]
+  return name === undefined ? null : `${name} keeps no fork; resume only.`
+}
+
+// forkableSession returns the session a "Fork to worktree" offer can be made
+// for: one running a provider that forks, carrying the conversation to branch.
+// Null for every other card, which is what keeps the menu item off it — a row
+// that could only fail is worse than no row.
+//
+// Whether that conversation is still on disk is the backend's answer
+// (ResumeAvailable), asked by the caller when the offer is taken up rather than
+// on every render of every card.
+export function forkableSession(session: Session): Session | null {
+  if (!FORKABLE_KINDS.includes(session.kind) || !session.providerSessionId) {
+    return null
+  }
+  return session
+}
 
 // resumableSession returns the session whose PTY should ask before it spawns,
 // because it carries the provider conversation it ran before the last restart.
@@ -504,9 +570,15 @@ export function activeTarget(
   state: SessionState,
   projectId: string | null,
   projectPath: string,
-): { sessionId: string; path: string; kind: SessionKind | ""; sandboxed: boolean } {
+): {
+  sessionId: string
+  path: string
+  kind: SessionKind | ""
+  sandboxed: boolean
+  hasLastTurn: boolean
+} {
   if (!projectId) {
-    return { sessionId: "", path: projectPath, kind: "", sandboxed: false }
+    return { sessionId: "", path: projectPath, kind: "", sandboxed: false, hasLastTurn: false }
   }
   const sessionId = activeSessionId(state, projectId)
   const session = sessionsOf(state, projectId).find((s) => s.id === sessionId)
@@ -515,63 +587,8 @@ export function activeTarget(
     path: session?.path || projectPath,
     kind: session?.kind ?? "",
     sandboxed: session?.sandboxed ?? false,
+    hasLastTurn: session?.hasLastTurn ?? false,
   }
-}
-
-// A worktree's sessions under one roof. `path` is the checkout root ("" for the
-// project's own directory); `sessions` keeps the group's flat relative order.
-export interface SessionGroup {
-  path: string
-  sessions: Session[]
-}
-
-// groupByWorktree buckets sessions by their static checkout path (session.path;
-// "" = the project root), keeping first-appearance order for the groups and flat
-// order within each. It keys off the spawn-time path, never a live cwd, so a `cd`
-// deeper into a checkout never moves a card to another group.
-export function groupByWorktree(sessions: Session[]): SessionGroup[] {
-  const groups: SessionGroup[] = []
-  const byPath = new Map<string, SessionGroup>()
-  for (const session of sessions) {
-    const path = session.path ?? ""
-    let group = byPath.get(path)
-    if (!group) {
-      group = { path, sessions: [] }
-      byPath.set(path, group)
-      groups.push(group)
-    }
-    group.sessions.push(session)
-  }
-  return groups
-}
-
-// The project root group's stand-in id. Its path is the empty string, which a
-// dnd-kit sortable id cannot be.
-export const ROOT_GROUP_KEY = "__root__"
-
-function groupKey(path: string): string {
-  return path || ROOT_GROUP_KEY
-}
-
-// orderGroups returns the flat session-id order that lays the groups out in the
-// given key order, each group keeping its own internal order. Group order is not
-// stored anywhere — groupByWorktree reads it off the flat list — so moving a
-// group means moving its whole block of ids. A key naming no group contributes
-// nothing, which makes the result fail reorderSessions' id-set check rather than
-// silently drop that group's sessions.
-export function orderGroups(groups: SidebarGroup[], keys: string[]): string[] {
-  const byKey = new Map(groups.map((group) => [group.key, group]))
-  return keys.flatMap((key) => byKey.get(key)?.sessions.map((session) => session.id) ?? [])
-}
-
-// True only for the last session in a worktree checkout. Removing a checkout a
-// sibling session still occupies would throw away its work, so only the last
-// occupant gets offered the keep/remove prompt.
-export function isLastWorktreeSession(sessions: Session[], session: Session): boolean {
-  if (!session.path) {
-    return false
-  }
-  return !sessions.some((s) => s.id !== session.id && s.path === session.path)
 }
 
 // hasSession reports whether the workspace still holds a session, under any
@@ -598,6 +615,22 @@ export function sessionOrigin(state: SessionState, session: Session): string {
   const projectId = projectOfSession(state, session.originSessionId)
   const parent = state[projectId]?.sessions.find((s) => s.id === session.originSessionId)
   return parent?.label ?? session.originLabel ?? ""
+}
+
+// delegatesOf returns the sessions this one handed work to, in the project's own
+// order. Direct delegates only: `originSessionId` records who asked, and walking
+// the chain further would gather grandchildren the user never watched being
+// spawned — "its delegates" is the ones it made, not everything downstream of
+// them.
+//
+// Scoped to one project, unlike sessionOrigin: a wall draws sessions of the
+// project it belongs to, so a delegate in another project is not something the
+// stage could show even if the delegation crossed over.
+export function delegatesOf(state: SessionState, projectId: string, sessionId: string): Session[] {
+  if (!sessionId) {
+    return []
+  }
+  return sessionsOf(state, projectId).filter((session) => session.originSessionId === sessionId)
 }
 
 export function activeSessionId(state: SessionState, projectId: string): string {

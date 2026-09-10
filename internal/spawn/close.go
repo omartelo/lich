@@ -65,7 +65,7 @@ func (s *Service) Close(fromID, target, projectName, worktree string, force bool
 	if err != nil {
 		return Closed{}, fmt.Errorf("read the workspace: %w", err)
 	}
-	found, err := findSession(projects, target, projectName)
+	found, err := findSession(projects, s.term.AgentName, target, projectName)
 	if err != nil {
 		return Closed{}, err
 	}
@@ -93,14 +93,6 @@ func (s *Service) Close(fromID, target, projectName, worktree string, force bool
 	}
 
 	active := neighborOf(found.project, found.session.ID)
-	if last && worktree == KeepWorktree {
-		if err := s.sessions.CloseSession(found.project.ID, found.session.ID, active); err != nil {
-			return Closed{}, err
-		}
-		closed.Kept = true
-		s.finish(found, active)
-		return closed, nil
-	}
 	if last && worktree == RemoveWorktree {
 		if err := s.removeCheckout(found, active, force); err != nil {
 			return Closed{}, err
@@ -114,10 +106,12 @@ func (s *Service) Close(fromID, target, projectName, worktree string, force bool
 	// session. The row carries the conversation, the cost ledgers and the name
 	// the user gave it, and it is what puts the session in the history a resume
 	// reads back — the same close the window performs (projects.tsx,
-	// closeSession). Only a checkout's removal takes a row with it.
+	// closeSession). Only a checkout's removal takes a row with it. For the
+	// last session of a worktree this is the keep answer, and the row says so.
 	if err := s.sessions.CloseSession(found.project.ID, found.session.ID, active); err != nil {
 		return Closed{}, err
 	}
+	closed.Kept = last
 	s.finish(found, active)
 	return closed, nil
 }
@@ -130,6 +124,20 @@ func (s *Service) Close(fromID, target, projectName, worktree string, force bool
 // the checkout does — one left behind would offer a resume into a directory that
 // no longer exists.
 func (s *Service) removeCheckout(found located, active string, force bool) error {
+	// The window offers this removal behind a confirmation naming the directory;
+	// here there is nobody to show it to, so an adopted checkout stays the user's.
+	// Asked before anything is taken apart, not after: the removal itself is
+	// refused too (project.RemoveWorktree), but by then the terminal is closed
+	// and the rows are gone, and the session would be lost to keep a directory
+	// that was never at risk.
+	if s.worktrees.WorktreeAdopted(found.session.Path) {
+		return fmt.Errorf(
+			"the worktree %s was not created by lich, so closing this session cannot delete it: "+
+				"say %q instead, which parks the session and leaves the checkout where it is, "+
+				"or remove it from the window, which asks first",
+			found.session.Path, KeepWorktree,
+		)
+	}
 	// A check that cannot answer costs the message, never the work: `git worktree
 	// remove` without --force refuses a dirty checkout on its own
 	// (project.RemoveWorktree), so an unreadable status ends in git's own refusal
@@ -151,7 +159,7 @@ func (s *Service) removeCheckout(found located, active string, force bool) error
 	if err := s.sessions.PurgeWorktreeSessions(found.project.ID, found.session.Path); err != nil {
 		return err
 	}
-	return s.worktrees.RemoveWorktree(found.project.Path, found.session.Path, force)
+	return s.worktrees.RemoveWorktree(found.project.Path, found.session.Path, force, false)
 }
 
 // finish takes down the PTY and the card. The terminal close is repeated for
@@ -192,15 +200,28 @@ type located struct {
 //
 // Whether the caller's own session is a legal answer is the caller's rule, not
 // this one's: a close refuses it, a rename is the main thing it is asked for.
-func findSession(projects []store.Project, target, projectName string) (located, error) {
+//
+// nameOf is the roster name read back off the provider's own record
+// (terminal.AgentName), for the same reason the relay reads it: a session that
+// renamed itself answers to the new name and to nothing lich could derive.
+func findSession(
+	projects []store.Project, nameOf func(id string) string, target, projectName string,
+) (located, error) {
 	target = strings.TrimSpace(target)
 	if target == "" {
 		return located{}, fmt.Errorf("no session given to close")
 	}
 
+	// Resolved once rather than per project: a path argument stats the
+	// directory it names, and this loop runs over every project open.
+	inProject, err := projectFilter(projectName)
+	if err != nil {
+		return located{}, err
+	}
+
 	var byLabel, byName []located
 	for _, p := range projects {
-		if projectName != "" && !strings.EqualFold(p.Name, projectName) {
+		if !inProject(p) {
 			continue
 		}
 		for _, sess := range p.Sessions {
@@ -211,7 +232,7 @@ func findSession(projects []store.Project, target, projectName string) (located,
 			switch {
 			case strings.EqualFold(sess.Label, target):
 				byLabel = append(byLabel, located{project: p, session: sess})
-			case strings.EqualFold(relay.RosterName(cwd, sess.ID), target):
+			case strings.EqualFold(relay.RosterNameOf(nameOf(sess.ID), cwd, sess.ID), target):
 				byName = append(byName, located{project: p, session: sess})
 			}
 		}

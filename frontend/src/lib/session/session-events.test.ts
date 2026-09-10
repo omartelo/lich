@@ -4,8 +4,11 @@ import {
   decideStatusNotice,
   isAgentEvent,
   isCwdEvent,
+  isForfeitedScheduleEvent,
+  isMCPEvent,
   isIdEvent,
   isIdleEvent,
+  isSandboxEvent,
   isStatusEvent,
   isTitleEvent,
   isUsageEvent,
@@ -135,13 +138,75 @@ describe("isTitleEvent", () => {
 describe("isCwdEvent", () => {
   it("accepts a payload carrying a string id and cwd", () => {
     expect(isCwdEvent({ id: "s1", cwd: "/home/user" })).toBe(true)
+    expect(isCwdEvent({ id: "s1", cwd: "/home/user", host: "" })).toBe(true)
+    expect(isCwdEvent({ id: "s1", cwd: "", host: "tmux" })).toBe(true)
   })
 
   it("rejects a payload missing either half", () => {
     expect(isCwdEvent({ id: "s1" })).toBe(false)
     expect(isCwdEvent({ cwd: "/home/user" })).toBe(false)
     expect(isCwdEvent({ id: "s1", cwd: 2 })).toBe(false)
+    expect(isCwdEvent({ id: "s1", cwd: "/home/user", host: 2 })).toBe(false)
     expect(isCwdEvent(null)).toBe(false)
+  })
+})
+
+describe("isMCPEvent", () => {
+  it("accepts a payload carrying a string id and a list of names", () => {
+    expect(isMCPEvent({ id: "s1", servers: ["lich"] })).toBe(true)
+    // A session that reached nothing still reports, and the empty list is the
+    // report — the card has to clear whatever the last spawn left it.
+    expect(isMCPEvent({ id: "s1", servers: [] })).toBe(true)
+  })
+
+  it("rejects a payload that is not one", () => {
+    expect(isMCPEvent({ id: "s1" })).toBe(false)
+    expect(isMCPEvent({ servers: ["lich"] })).toBe(false)
+    expect(isMCPEvent({ id: "s1", servers: "lich" })).toBe(false)
+    expect(isMCPEvent({ id: "s1", servers: ["lich", 2] })).toBe(false)
+    expect(isMCPEvent(null)).toBe(false)
+  })
+})
+
+describe("isSandboxEvent", () => {
+  it("accepts a payload carrying a string id, a verdict and no names", () => {
+    expect(isSandboxEvent({ id: "s1", confined: true })).toBe(true)
+    expect(isSandboxEvent({ id: "s1", confined: false })).toBe(true)
+    // A nil list marshals as null, and an empty one is what a sandbox that
+    // skipped nothing reports; both still carry the verdict.
+    expect(isSandboxEvent({ id: "s1", confined: true, skippedLinks: null })).toBe(true)
+    expect(isSandboxEvent({ id: "s1", confined: true, skippedLinks: [] })).toBe(true)
+    expect(isSandboxEvent({ id: "s1", confined: true, skippedLinks: [".gitconfig"] })).toBe(true)
+  })
+
+  it("rejects a payload that is not one", () => {
+    expect(isSandboxEvent({ id: "s1" })).toBe(false)
+    expect(isSandboxEvent({ confined: true })).toBe(false)
+    expect(isSandboxEvent({ id: "s1", confined: "yes" })).toBe(false)
+    expect(isSandboxEvent({ id: "s1", confined: true, skippedLinks: ".gitconfig" })).toBe(false)
+    expect(isSandboxEvent({ id: "s1", confined: true, skippedLinks: [".gitconfig", 2] })).toBe(
+      false,
+    )
+    expect(isSandboxEvent(null)).toBe(false)
+  })
+})
+
+describe("isForfeitedScheduleEvent", () => {
+  it("accepts a payload carrying a label, a due time and the prompt", () => {
+    expect(isForfeitedScheduleEvent({ label: "w", at: 1700000000, prompt: "run it" })).toBe(true)
+    // The session is already gone, so an id is exactly what it cannot carry.
+    expect(isForfeitedScheduleEvent({ label: "", at: 0, prompt: "" })).toBe(true)
+  })
+
+  it("rejects a payload that is not one", () => {
+    // The toast holds the last surviving copy of the prompt, so a payload typed
+    // wrong has to be dropped rather than drawn with a blank where it was.
+    expect(isForfeitedScheduleEvent({ label: "w", at: "soon", prompt: "x" })).toBe(false)
+    expect(isForfeitedScheduleEvent({ label: "w", at: 1700000000 })).toBe(false)
+    expect(isForfeitedScheduleEvent({ at: 1700000000, prompt: "x" })).toBe(false)
+    expect(isForfeitedScheduleEvent({ label: 2, at: 1700000000, prompt: "x" })).toBe(false)
+    expect(isForfeitedScheduleEvent({ label: "w", at: 1700000000, prompt: 2 })).toBe(false)
+    expect(isForfeitedScheduleEvent(null)).toBe(false)
   })
 })
 
@@ -322,9 +387,17 @@ describe("toOpenedSession", () => {
       kind: "claude",
       path: "/wt/auth-fix",
       nextSeq: 5,
+      run: false,
       originSessionId: "s1",
       originLabel: "planner",
     })
+  })
+
+  // The mark is what sends the next Run to this card instead of opening a second
+  // one, so it has to survive the narrowing (internal/spawn.Run).
+  it("keeps the run mark of a Run card", () => {
+    expect(toOpenedSession({ ...payload, run: true })?.run).toBe(true)
+    expect(toOpenedSession({ ...payload, run: "yes" })?.run).toBe(false)
   })
 
   // A session opened from the window, or by `lich open` from a plain shell, has

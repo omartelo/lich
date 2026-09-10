@@ -21,6 +21,7 @@ import (
 	"github.com/omartelo/lich/internal/events"
 	"github.com/omartelo/lich/internal/providers"
 	"github.com/omartelo/lich/internal/shquote"
+	"github.com/omartelo/lich/internal/store"
 )
 
 // stubBins is a Store returning a fixed binary path and project directory,
@@ -49,11 +50,30 @@ type stubBins struct {
 	costOn          bool
 	ledgers         map[string]stubLedger
 	ports           map[string]int
-	// One field per cost method, because the three failures are three different
-	// stories: a ledger that cannot be read, one that cannot be written, and a
-	// total that cannot be summed. A single error field would let a test claim
-	// the path it never reached.
-	ledgerErr, saveLedgerErr, sessionCostErr error
+	// Whole seconds per session, the shape store.AddHandsOn accumulates into.
+	// Nil until a test cares: the flush only ever writes for a session the
+	// accumulator actually counted something for.
+	handsOn map[string]int64
+	// The last finished turn per session, the shape store.SaveTurnRecord files.
+	// Nil until a test cares, and then it stands in for the workspace database
+	// across a restart.
+	turns map[string]store.TurnRecord
+	// The MCP servers the spawn recorded per session, the shape
+	// store.SetSessionMCPServers writes. Nil until a test cares.
+	mcpServers map[string][]string
+	// The home paths the spawn's sandbox skipped for being symlinks, per
+	// session, the shape store.SetSessionSandboxLinks writes. Nil until a test
+	// cares; sandboxLinksErr is that write refusing, which a spawn survives.
+	sandboxLinks    map[string][]string
+	sandboxLinksErr error
+	// What each session inherited from the conversation it was forked from, the
+	// shape store.SaveForkCostOffset writes. Nil until a test cares.
+	forkOffsets map[string]float64
+	// One field per cost method, because the four failures are four different
+	// stories: a ledger that cannot be read, one that cannot be written, a
+	// total that cannot be summed, and a fork's offset that cannot be recorded.
+	// A single error field would let a test claim the path it never reached.
+	ledgerErr, saveLedgerErr, sessionCostErr, forkOffsetErr error
 }
 
 // projectWithSetup is a project checkout shipping .lich/setup-worktree.sh —
@@ -87,14 +107,31 @@ func newCostStore(providerSession string) stubBins {
 	}
 }
 
-func (s stubBins) ProviderBin(_, _ string) string       { return s.bin }
-func (s stubBins) SessionCustomBin(_ string) bool       { return s.bin != "" }
-func (s stubBins) SkipPermissions(_, _, _ string) bool  { return s.skipPerms }
-func (s stubBins) ProjectPath(_ string) string          { return s.projectPath }
-func (s stubBins) SessionModel(_ string) string         { return s.model }
-func (s stubBins) SessionEntrypoint(_ string) string    { return s.entrypoint }
-func (s stubBins) SessionSandbox(_ string) string       { return s.sandbox }
-func (s stubBins) SetSessionSandbox(_, _ string) error  { return nil }
+func (s stubBins) ProviderBin(_, _ string) string      { return s.bin }
+func (s stubBins) SkipPermissions(_, _, _ string) bool { return s.skipPerms }
+func (s stubBins) ProjectPath(_ string) string         { return s.projectPath }
+func (s stubBins) SessionModel(_ string) string        { return s.model }
+func (s stubBins) SessionEntrypoint(_ string) string   { return s.entrypoint }
+func (s stubBins) SessionSandbox(_ string) string      { return s.sandbox }
+func (s stubBins) SetSessionSandbox(_, _ string) error { return nil }
+
+func (s stubBins) SetSessionMCPServers(id string, servers []string) error {
+	if s.mcpServers != nil {
+		s.mcpServers[id] = servers
+	}
+	return nil
+}
+
+func (s stubBins) SetSessionSandboxLinks(id string, links []string) error {
+	if s.sandboxLinksErr != nil {
+		return s.sandboxLinksErr
+	}
+	if s.sandboxLinks != nil {
+		s.sandboxLinks[id] = links
+	}
+	return nil
+}
+
 func (s stubBins) SandboxDefault(_, _, _ string) bool   { return s.sandboxOn }
 func (s stubBins) SandboxSSHAgent(_ string) bool        { return s.sshAgent }
 func (s stubBins) SandboxGHToken(_ string) bool         { return s.ghToken }
@@ -119,6 +156,7 @@ func (s stubBins) ProviderSession(_ string) (string, error) {
 	return s.providerSession, s.providerErr
 }
 func (s stubBins) SetSessionTitle(_, _ string) (bool, error) { return false, nil }
+func (s stubBins) SetSessionUnread(_ string, _ bool) error   { return nil }
 
 func (s stubBins) CostReadout() bool { return s.costOn }
 
@@ -140,6 +178,25 @@ func (s stubBins) SaveCostLedger(
 	return nil
 }
 
+// SaveForkCostOffset mirrors the store's own arithmetic: the offset is the raw
+// ledger cost of the conversation being forked, whichever session ran it.
+func (s stubBins) SaveForkCostOffset(sessionID, forkedFrom string) error {
+	if s.forkOffsetErr != nil {
+		return s.forkOffsetErr
+	}
+	if s.forkOffsets == nil {
+		return nil
+	}
+	offset := 0.0
+	for key, ledger := range s.ledgers {
+		if strings.HasSuffix(key, "\x00"+forkedFrom) {
+			offset += ledger.cost
+		}
+	}
+	s.forkOffsets[sessionID] = offset
+	return nil
+}
+
 func (s stubBins) SessionCost(sessionID string) (float64, error) {
 	if s.sessionCostErr != nil {
 		return 0, s.sessionCostErr
@@ -150,7 +207,28 @@ func (s stubBins) SessionCost(sessionID string) (float64, error) {
 			total += ledger.cost
 		}
 	}
-	return total, nil
+	return max(0, total-s.forkOffsets[sessionID]), nil
+}
+
+func (s stubBins) AddHandsOn(sessionID string, seconds int64) error {
+	if s.handsOn != nil {
+		s.handsOn[sessionID] += seconds
+	}
+	return nil
+}
+
+func (s stubBins) HandsOn(sessionID string) (int64, error) { return s.handsOn[sessionID], nil }
+
+func (s stubBins) SaveTurnRecord(sessionID string, rec store.TurnRecord) error {
+	if s.turns != nil {
+		s.turns[sessionID] = rec
+	}
+	return nil
+}
+
+func (s stubBins) TurnRecord(sessionID string) (store.TurnRecord, bool, error) {
+	rec, ok := s.turns[sessionID]
+	return rec, ok, nil
 }
 
 // TestChildEnvStripsAppImageVars proves the AppImage runtime variables that break
@@ -350,7 +428,7 @@ func TestStartIsNoopWhenAlreadyRunning(t *testing.T) {
 	sess := spawnSession(t)
 	svc.sessions["s1"] = sess
 
-	if err := svc.Start("s1", "p1", "", "", "", "", false, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", "", "", "", "", false, false, 80, 24); err != nil {
 		t.Errorf("Start(running) = %v, want nil", err)
 	}
 	if svc.sessions["s1"] != sess {
@@ -402,7 +480,7 @@ func TestStartPassesResumeToTheProcess(t *testing.T) {
 	svc := New(stubBins{bin: bin}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "abc-123", "", false, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "abc-123", "", false, false, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 
@@ -417,6 +495,67 @@ func TestStartPassesResumeToTheProcess(t *testing.T) {
 	spawnPins(t, got, want...)
 }
 
+// TestStartForksIntoItsOwnConversation proves the fork reaches argv with the
+// parent's id — and that the fork is *named*, which is the one place a spawn
+// carrying a resume id still gets --name (nameArgs).
+func TestStartForksIntoItsOwnConversation(t *testing.T) {
+	bin := stayAliveBin(t)
+	svc := New(stubBins{bin: bin}, nil, events.New())
+	t.Cleanup(func() { _ = svc.Close("s1") })
+
+	err := svc.Start("s1", "p1", t.TempDir(), "claude", "abc-123", "lich-9c1b", true, false, 80, 24)
+	if err != nil {
+		t.Fatalf("Start = %v, want nil", err)
+	}
+
+	svc.mu.Lock()
+	got := spawnedArgs(t, svc, "s1")
+	svc.mu.Unlock()
+
+	if name := spawnName(got); name != "lich-9c1b" {
+		t.Errorf("fork spawned under %q, want the name the caller gave it", name)
+	}
+	want := []string{bin, "--resume", "abc-123", "--fork-session", "--mcp-config"}
+	spawnPins(t, got, want...)
+}
+
+// TestStartRefusesAForkTheProviderCannotSpell proves the guard sits in Start,
+// not in the frontend's copy of the list: a fork for a kind with no verb would
+// otherwise reopen the parent's own conversation under a second card, which
+// is the one outcome a fork promises against. Nothing is spawned.
+func TestStartRefusesAForkTheProviderCannotSpell(t *testing.T) {
+	bin := stayAliveBin(t)
+	svc := New(stubBins{bin: bin}, nil, events.New())
+	t.Cleanup(func() { _ = svc.Close("s1") })
+
+	err := svc.Start("s1", "p1", t.TempDir(), "crush", "abc-123", "", true, false, 80, 24)
+	if err == nil {
+		t.Fatal("Start = nil, want a refusal for a kind that cannot fork")
+	}
+	if !strings.Contains(err.Error(), "crush") {
+		t.Errorf("Start error = %q, want it to name the kind", err)
+	}
+	if svc.Live("s1") {
+		t.Error("session spawned despite the refusal")
+	}
+}
+
+// TestStartRefusesAForkWithNothingToBranch: a fork carries the parent's id or
+// it is not a fork — without one resumeArgs would start fresh and the card
+// would claim a conversation it never copied.
+func TestStartRefusesAForkWithNothingToBranch(t *testing.T) {
+	bin := stayAliveBin(t)
+	svc := New(stubBins{bin: bin}, nil, events.New())
+	t.Cleanup(func() { _ = svc.Close("s1") })
+
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", true, false, 80, 24); err == nil {
+		t.Fatal("Start = nil, want a refusal for a fork with no resume id")
+	}
+	if svc.Live("s1") {
+		t.Error("session spawned despite the refusal")
+	}
+}
+
 // TestStartWithoutResumeSpawnsBare proves a session with no id to resume spawns
 // the binary alone, with no dangling flag.
 func TestStartWithoutResumeSpawnsBare(t *testing.T) {
@@ -424,7 +563,7 @@ func TestStartWithoutResumeSpawnsBare(t *testing.T) {
 	svc := New(stubBins{bin: bin}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, false, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 
@@ -448,7 +587,7 @@ func TestStartCarriesTheBriefingIntoTheSpawn(t *testing.T) {
 	svc := New(stubBins{bin: bin}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, false, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 
@@ -473,7 +612,7 @@ func TestStartWithSetupWrapsTheSpawn(t *testing.T) {
 	svc := New(stubBins{bin: bin, projectPath: projectWithSetup(t, "echo setup-ran")}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", true, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, true, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 
@@ -498,7 +637,7 @@ func TestStartWithSetupButNoScriptSpawnsBare(t *testing.T) {
 	svc := New(stubBins{bin: bin}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", true, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, true, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 
@@ -552,35 +691,130 @@ func TestResolveCommand(t *testing.T) {
 	}
 }
 
+// TestProviderKindOutranksTheReport proves a session-start report cannot repaint
+// a card lich itself chose the provider for. A harness can run another harness's
+// hooks — Cursor CLI executes every Claude Code hook on the machine, the user's
+// own and each installed plugin's — so the lich plugin's own script reports
+// `claude` from inside a Cursor session. What lich spawned wins; only a shell,
+// where lich genuinely does not know what is running inside, wears the report.
+func TestProviderKindOutranksTheReport(t *testing.T) {
+	svc := &Service{}
+	for id, kind := range map[string]string{
+		"cursor-card": providers.Cursor,
+		"shell-card":  KindShell,
+		"odd-card":    "something-else",
+	} {
+		svc.spawns.Store(id, spawn{kind: kind})
+	}
+	cases := []struct {
+		name, id, reported, want string
+	}{
+		{"a provider card keeps its own kind", "cursor-card", providers.Claude, providers.Cursor},
+		{"and does so even when the report agrees", "cursor-card", providers.Cursor, providers.Cursor},
+		{"a shell wears what reported", "shell-card", providers.Claude, providers.Claude},
+		{"an unregistered kind is no answer", "odd-card", providers.Claude, providers.Claude},
+		{"a report that raced the PTY's exit", "gone-card", providers.Claude, providers.Claude},
+	}
+	for _, tc := range cases {
+		if got := svc.providerKind(tc.id, tc.reported); got != tc.want {
+			t.Errorf("%s: providerKind(%q, %q) = %q, want %q",
+				tc.name, tc.id, tc.reported, got, tc.want)
+		}
+	}
+}
+
+// The invariant the note on Service.turns states: a hook must never queue behind
+// a PTY spawn. spawnSession holds mu across startPTY, so asking mu what a
+// session runs would hold the report — and with it the agent's next step — for
+// however long another session takes to spawn.
+func TestAReportNeverQueuesBehindASpawn(t *testing.T) {
+	svc := &Service{}
+	svc.spawns.Store("s1", spawn{kind: providers.Cursor})
+
+	// Stands in for a spawn in flight: the same lock, held by another session.
+	svc.mu.Lock()
+	defer svc.mu.Unlock()
+
+	answered := make(chan string, 1)
+	go func() { answered <- svc.kindOf("s1") }()
+	select {
+	case got := <-answered:
+		if got != providers.Cursor {
+			t.Errorf("kindOf = %q, want %q", got, providers.Cursor)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a state report queued behind a PTY spawn")
+	}
+}
+
+// A kind that outlived its PTY would have providerKind answering for a session
+// that is gone, which is the one case the report is the better answer.
+func TestClosingASessionDropsItsKind(t *testing.T) {
+	svc := &Service{sessions: map[string]*session{}}
+	svc.spawns.Store("s1", spawn{kind: providers.Cursor})
+	if err := svc.Close("s1"); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if got := svc.kindOf("s1"); got != "" {
+		t.Errorf("a closed session still runs %q", got)
+	}
+}
+
 // TestResumeArgs proves each provider resumes in its own spelling — a flag of
-// its own for Claude Code, Antigravity and oh-my-pi, a subcommand for Codex, one
-// they happen to share for opencode and Crush — and that a kind with none wired
-// never grows one: a shell must not be handed a stray id.
+// its own for Claude Code, Antigravity, oh-my-pi and Cursor CLI, a subcommand
+// for Codex, one they happen to share for opencode and Crush — and that a kind
+// with none wired never grows one: a shell must not be handed a stray id.
 func TestResumeArgs(t *testing.T) {
 	cases := []struct {
 		name, kind, resume string
+		fork               bool
 		want               []string
 	}{
-		{"claude fresh", "claude", "", nil},
-		{"claude resume", "claude", "abc-123", []string{"--resume", "abc-123"}},
-		{"codex fresh", "codex", "", nil},
-		{"codex resume", "codex", "abc-123", []string{"resume", "abc-123"}},
-		{"antigravity fresh", "antigravity", "", nil},
-		{"antigravity resume", "antigravity", "abc-123", []string{"--conversation", "abc-123"}},
-		{"omp fresh", "omp", "", nil},
-		{"omp resume", "omp", "abc-123", []string{"-r", "abc-123"}},
-		{"opencode fresh", "opencode", "", nil},
-		{"opencode resume", "opencode", "ses_0031a382dffe", []string{"--session", "ses_0031a382dffe"}},
-		{"crush fresh", "crush", "", nil},
-		{"crush resume", "crush", "abc-123", []string{"--session", "abc-123"}},
-		{"shell never resumes", KindShell, "abc-123", nil},
-		{"shell fresh", KindShell, "", nil},
+		{"claude fresh", "claude", "", false, nil},
+		{"claude resume", "claude", "abc-123", false, []string{"--resume", "abc-123"}},
+		{"claude fork", "claude", "abc-123", true,
+			[]string{"--resume", "abc-123", "--fork-session"}},
+		{"codex fresh", "codex", "", false, nil},
+		{"codex resume", "codex", "abc-123", false, []string{"resume", "abc-123"}},
+		// Codex's fork replaces the subcommand rather than adding a flag, so a
+		// forked spawn must not carry `resume` at all.
+		{"codex fork", "codex", "abc-123", true, []string{"fork", "abc-123"}},
+		{"antigravity fresh", "antigravity", "", false, nil},
+		{"antigravity resume", "antigravity", "abc-123", false,
+			[]string{"--conversation", "abc-123"}},
+		{"omp fresh", "omp", "", false, nil},
+		{"omp resume", "omp", "abc-123", false, []string{"-r", "abc-123"}},
+		{"opencode fresh", "opencode", "", false, nil},
+		{"opencode resume", "opencode", "ses_0031a382dffe", false,
+			[]string{"--session", "ses_0031a382dffe"}},
+		{"opencode fork", "opencode", "ses_0031a382dffe", true,
+			[]string{"--session", "ses_0031a382dffe", "--fork"}},
+		{"crush fresh", "crush", "", false, nil},
+		{"crush resume", "crush", "abc-123", false, []string{"--session", "abc-123"}},
+		// A fork asked of a provider with no verb for it resumes instead of
+		// growing an invented flag, which would kill the spawn: the offer is
+		// withheld upstream (providers.SupportsFork), and a stray true that
+		// slips through must still land on a command the CLI accepts.
+		{"crush fork falls back to resume", "crush", "abc-123", true,
+			[]string{"--session", "abc-123"}},
+		{"kiro fork falls back to resume", "kiro", "abc-123", true,
+			[]string{"--resume-id", "abc-123"}},
+		{"cursor fresh", "cursor", "", false, nil},
+		// Cursor spells it exactly as Claude Code does, and is pinned here for
+		// the same reason Antigravity's skip-permissions flag is: a shared
+		// literal is what makes a lookup returning the wrong provider's flag
+		// invisible everywhere else. Its own value is optional — `--resume`
+		// alone opens a picker — so an empty id must never reach argv.
+		{"cursor resume", "cursor", "abc-123", false, []string{"--resume", "abc-123"}},
+		{"shell never resumes", KindShell, "abc-123", false, nil},
+		{"shell never forks", KindShell, "abc-123", true, nil},
+		{"shell fresh", KindShell, "", false, nil},
 	}
 	for _, tc := range cases {
-		got := resumeArgs(tc.kind, tc.resume)
+		got := resumeArgs(tc.kind, tc.resume, tc.fork)
 		if !slices.Equal(got, tc.want) {
-			t.Errorf("%s: resumeArgs(%q, %q) = %v, want %v",
-				tc.name, tc.kind, tc.resume, got, tc.want)
+			t.Errorf("%s: resumeArgs(%q, %q, %v) = %v, want %v",
+				tc.name, tc.kind, tc.resume, tc.fork, got, tc.want)
 		}
 	}
 }
@@ -593,23 +827,32 @@ func TestResumeArgs(t *testing.T) {
 func TestNameArgs(t *testing.T) {
 	cases := []struct {
 		name, kind, peer, resume string
+		fork                     bool
 		want                     []string
 	}{
-		{"claude named", "claude", "lich-4f2a", "", []string{"--name", "lich-4f2a"}},
-		{"claude unnamed", "claude", "", "", nil},
-		{"claude blank name", "claude", "   ", "", nil},
-		{"claude name trimmed", "claude", " lich-4f2a ", "", []string{"--name", "lich-4f2a"}},
-		{"claude flag-like name", "claude", "--dangerously-skip-permissions", "", nil},
-		{"claude resuming keeps its own name", "claude", "lich-4f2a", "conv-1", nil},
-		{"codex has no roster", "codex", "lich-4f2a", "", nil},
-		{"opencode has no roster", "opencode", "lich-4f2a", "", nil},
-		{"shell has no roster", KindShell, "lich-4f2a", "", nil},
+		{"claude named", "claude", "lich-4f2a", "", false, []string{"--name", "lich-4f2a"}},
+		{"claude unnamed", "claude", "", "", false, nil},
+		{"claude blank name", "claude", "   ", "", false, nil},
+		{"claude name trimmed", "claude", " lich-4f2a ", "", false,
+			[]string{"--name", "lich-4f2a"}},
+		{"claude flag-like name", "claude", "--dangerously-skip-permissions", "", false, nil},
+		{"claude resuming keeps its own name", "claude", "lich-4f2a", "conv-1", false, nil},
+		// A fork carries a resume id and is still a birth: the conversation the
+		// provider is about to write has no /rename in it to overwrite, and the
+		// copy inherits the parent's name unless this one lands.
+		{"claude fork is named", "claude", "lich-9c1b", "conv-1", true,
+			[]string{"--name", "lich-9c1b"}},
+		{"claude fork with no usable name", "claude", "  ", "conv-1", true, nil},
+		{"codex has no roster", "codex", "lich-4f2a", "", false, nil},
+		{"codex fork has no roster", "codex", "lich-4f2a", "conv-1", true, nil},
+		{"opencode has no roster", "opencode", "lich-4f2a", "", false, nil},
+		{"shell has no roster", KindShell, "lich-4f2a", "", false, nil},
 	}
 	for _, tc := range cases {
-		got := nameArgs(tc.kind, tc.peer, tc.resume)
+		got := nameArgs(tc.kind, tc.peer, tc.resume, tc.fork)
 		if !slices.Equal(got, tc.want) {
-			t.Errorf("%s: nameArgs(%q, %q, %q) = %v, want %v",
-				tc.name, tc.kind, tc.peer, tc.resume, got, tc.want)
+			t.Errorf("%s: nameArgs(%q, %q, %q, %v) = %v, want %v",
+				tc.name, tc.kind, tc.peer, tc.resume, tc.fork, got, tc.want)
 		}
 	}
 }
@@ -638,6 +881,15 @@ func TestSkipPermissionArgs(t *testing.T) {
 		{"crush on", "crush", true, []string{"--yolo"}},
 		{"oh-my-pi off", "omp", false, nil},
 		{"oh-my-pi on", "omp", true, []string{"--auto-approve"}},
+		// --yolo is Cursor's own alias for --force; lich passes the canonical
+		// spelling, which is not the one Crush answers to above.
+		{"cursor off", "cursor", false, nil},
+		{"cursor on", "cursor", true, []string{"--force"}},
+		// Kiro's is the only one that is not a "dangerous"/"yolo"/"force" word,
+		// and it does not fully deliver: with it on, Kiro's TUI still opens on a
+		// confirmation the user has to accept once (docs/providers/kiro.md).
+		{"kiro off", "kiro", false, nil},
+		{"kiro on", "kiro", true, []string{"--trust-all-tools"}},
 		{"shell is never wired", KindShell, true, nil},
 	}
 	for _, tc := range cases {
@@ -658,7 +910,7 @@ func TestStartPassesSkipPermissionsToTheProcess(t *testing.T) {
 	svc := New(stubBins{bin: bin, skipPerms: true}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, false, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 
@@ -673,24 +925,63 @@ func TestStartPassesSkipPermissionsToTheProcess(t *testing.T) {
 	spawnPins(t, got, want...)
 }
 
-// TestStartPassesNameToTheProcess proves the peer name reaches the spawned
-// binary's argv when a session is born, in the order claude parses.
-func TestStartPassesNameToTheProcess(t *testing.T) {
-	bin := stayAliveBin(t)
-	svc := New(stubBins{bin: bin}, nil, events.New())
-	t.Cleanup(func() { _ = svc.Close("s1") })
-
-	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "lich-4f2a", false, 80, 24); err != nil {
-		t.Fatalf("Start = %v, want nil", err)
+// TestStartNamesASessionByWhatItAnswersTo proves the three rungs Start picks a
+// peer name off, and that the winner reaches the spawned binary's argv in the
+// order claude parses. The recorded name is the one that matters: a card whose
+// conversation was renamed from the inside is respawned under that name rather
+// than back under lich's derivation, which is the whole reason the read exists.
+func TestStartNamesASessionByWhatItAnswersTo(t *testing.T) {
+	const recorded = `{"type":"agent-name","agentName":"reviewer"}` + "\n"
+	tests := []struct {
+		name       string
+		asked      string
+		transcript string
+		want       string
+	}{
+		{name: "the caller's own name", asked: "lich-4f2a", want: "lich-4f2a"},
+		{name: "derived when the caller named none", want: "-s1"},
+		{name: "the recorded name beats both", asked: "lich-4f2a", transcript: recorded, want: "reviewer"},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bin := stayAliveBin(t)
+			store := stubBins{bin: bin}
+			if tt.transcript != "" {
+				writeTranscript(t, "uuid-abc", tt.transcript)
+				store.providerSession = "uuid-abc"
+			}
+			svc := New(store, nil, events.New())
+			t.Cleanup(func() { _ = svc.Close("s1") })
 
-	svc.mu.Lock()
-	got := spawnedArgs(t, svc, "s1")
-	svc.mu.Unlock()
+			err := svc.Start("s1", "p1", t.TempDir(), "claude", "", tt.asked, false, false, 80, 24)
+			if err != nil {
+				t.Fatalf("Start = %v, want nil", err)
+			}
 
-	// As above: the registration follows, pinned by its own test.
-	want := []string{bin, "--name", "lich-4f2a", "--mcp-config"}
-	spawnPins(t, got, want...)
+			svc.mu.Lock()
+			got := spawnedArgs(t, svc, "s1")
+			svc.mu.Unlock()
+
+			// The derived name ends in the session id, and starts with a temporary
+			// directory nothing here can spell — a suffix is the whole of what that
+			// case owns. RosterName's own suite pins the rest.
+			if name := spawnName(got); !strings.HasSuffix(name, tt.want) {
+				t.Errorf("spawned under %q, want %q", name, tt.want)
+			}
+			// As above: the registration follows, pinned by its own test.
+			spawnPins(t, got, bin, "--mcp-config")
+		})
+	}
+}
+
+// spawnName is the roster name in a spawn's argv, empty when it carries none.
+// spawnPins drops the pair, so a test that owns the name reads it back here.
+func spawnName(got []string) string {
+	at := slices.Index(got, claudeNameFlag)
+	if at < 0 || at+1 >= len(got) {
+		return ""
+	}
+	return got[at+1]
 }
 
 // TestModelArgs pins each provider's own flag, and the two kinds that must never
@@ -715,6 +1006,8 @@ func TestModelArgs(t *testing.T) {
 		{"oh-my-pi, a fuzzy match", providers.OMP, "opus", []string{"--model", "opus"}},
 		{"antigravity, a full name", providers.Antigravity, "gemini-3.7-flash-high",
 			[]string{"--model", "gemini-3.7-flash-high"}},
+		{"cursor, a parameterized name", providers.Cursor, "claude-opus-4-8[effort=high]",
+			[]string{"--model", "claude-opus-4-8[effort=high]"}},
 		{"crush takes none at spawn", providers.Crush, "opus", nil},
 		{"a shell is not a provider", KindShell, "opus", nil},
 		{"no model named", providers.Claude, "", nil},
@@ -757,7 +1050,7 @@ func TestStartPassesTheStoredModelToTheProcess(t *testing.T) {
 	svc := New(stubBins{bin: bin, model: "opus"}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, false, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 
@@ -881,16 +1174,18 @@ func TestSessionEnvInjectsCoordinates(t *testing.T) {
 // flags in this order, and ends with the MCP registration plus its one config
 // value.
 //
-// lich's own briefing is dropped before the comparison. Every Claude Code spawn
-// carries it, and each of these tests owns one flag of its own — pinning the
-// briefing's presence six more times would only mean six failures the day its
-// wording moves. What it says is pinned once, by
-// TestTheBriefingGoesToTheProvidersThatTakeOne.
+// lich's own briefing and the session's roster name are dropped before the
+// comparison. Every Claude Code spawn carries both — the name because Start now
+// resolves one for every session rather than taking whatever the caller passed
+// — and each of these tests owns one flag of its own; pinning those two here as
+// well would only mean a failure per test the day either moves. What the
+// briefing says is pinned by TestTheBriefingGoesToTheProvidersThatTakeOne, and
+// what the name resolves to by TestStartNamesASessionByWhatItAnswersTo.
 func spawnPins(t *testing.T, got []string, want ...string) {
 	t.Helper()
 	trimmed := make([]string, 0, len(got))
 	for i := 0; i < len(got); i++ {
-		if got[i] == "--append-system-prompt" {
+		if got[i] == "--append-system-prompt" || got[i] == claudeNameFlag {
 			i++ // and the text it carries
 			continue
 		}
@@ -906,7 +1201,7 @@ func spawnPins(t *testing.T, got []string, want ...string) {
 func TestProviderArgsRegistersTheMCPServer(t *testing.T) {
 	const bin = "/usr/bin/lich"
 
-	claude := providerArgs(providers.Claude, "", "", "", bin, false)
+	claude := providerArgs(providers.Claude, "", "", "", bin, "", false, false)
 	at := slices.Index(claude, "--mcp-config")
 	if at < 0 || at+1 >= len(claude) {
 		t.Fatalf("claude args = %v", claude)
@@ -931,7 +1226,7 @@ func TestProviderArgsRegistersTheMCPServer(t *testing.T) {
 		t.Errorf("a secret reached the argv, which /proc exposes: %q", claude[at+1])
 	}
 
-	codex := providerArgs(providers.Codex, "", "", "", bin, false)
+	codex := providerArgs(providers.Codex, "", "", "", bin, "", false, false)
 	want := []string{
 		"-c", `mcp_servers.lich.command="/usr/bin/lich"`,
 		"-c", `mcp_servers.lich.args=["mcp"]`,
@@ -946,7 +1241,7 @@ func TestProviderArgsRegistersTheMCPServer(t *testing.T) {
 // follows it, and Codex reads resume as a subcommand that every global option
 // must precede.
 func TestProviderArgsOrdersEachProvidersConstraint(t *testing.T) {
-	claude := providerArgs(providers.Claude, "lich-4f2a", "conv-1", "", "/usr/bin/lich", true)
+	claude := providerArgs(providers.Claude, "lich-4f2a", "conv-1", "", "/usr/bin/lich", "", false, true)
 	if claude[len(claude)-2] != "--mcp-config" {
 		t.Errorf("--mcp-config is not last, so it eats what follows: %v", claude)
 	}
@@ -958,7 +1253,7 @@ func TestProviderArgsOrdersEachProvidersConstraint(t *testing.T) {
 
 	// A resuming session is not named (nameArgs), so --name is pinned on the
 	// spawn that carries it: a session being born.
-	born := providerArgs(providers.Claude, "lich-4f2a", "", "", "/usr/bin/lich", true)
+	born := providerArgs(providers.Claude, "lich-4f2a", "", "", "/usr/bin/lich", "", false, true)
 	if born[len(born)-2] != "--mcp-config" {
 		t.Errorf("--mcp-config is not last, so it eats what follows: %v", born)
 	}
@@ -966,7 +1261,7 @@ func TestProviderArgsOrdersEachProvidersConstraint(t *testing.T) {
 		t.Errorf("claude args lost --name: %v", born)
 	}
 
-	codex := providerArgs(providers.Codex, "", "conv-1", "", "/usr/bin/lich", false)
+	codex := providerArgs(providers.Codex, "", "conv-1", "", "/usr/bin/lich", "", false, false)
 	resume := slices.Index(codex, "resume")
 	if resume < 0 {
 		t.Fatalf("codex args lost the resume subcommand: %v", codex)
@@ -982,7 +1277,7 @@ func TestProviderArgsOrdersEachProvidersConstraint(t *testing.T) {
 	// (`codex resume --help` lists it), and it goes after: a flag the resumed
 	// conversation's own parser accepts is one less thing riding on where the
 	// global options end.
-	resumed := providerArgs(providers.Codex, "", "conv-1", "gpt-5.2", "/usr/bin/lich", false)
+	resumed := providerArgs(providers.Codex, "", "conv-1", "gpt-5.2", "/usr/bin/lich", "", false, false)
 	model := slices.Index(resumed, "--model")
 	if model < 0 || model < slices.Index(resumed, "resume") {
 		t.Errorf("codex args = %v, want --model after the resume subcommand", resumed)
@@ -1011,7 +1306,7 @@ func TestProviderArgsWithoutARegistration(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			args := providerArgs(tt.kind, "", "", "", tt.bin, false)
+			args := providerArgs(tt.kind, "", "", "", tt.bin, "", false, false)
 			if tt.bare && len(args) != 0 {
 				t.Errorf("args = %v, want none", args)
 			}
@@ -1036,7 +1331,7 @@ func TestTheBriefingGoesToTheProvidersThatTakeOne(t *testing.T) {
 	}
 	for kind, want := range briefed {
 		t.Run(kind, func(t *testing.T) {
-			args := providerArgs(kind, "", "", "", "/usr/bin/lich", false)
+			args := providerArgs(kind, "", "", "", "/usr/bin/lich", "", false, false)
 			flag := slices.Index(args, "--append-system-prompt")
 			if flag < 0 || flag+1 >= len(args) {
 				t.Fatalf("args = %v, want a briefing", args)
@@ -1049,7 +1344,7 @@ func TestTheBriefingGoesToTheProvidersThatTakeOne(t *testing.T) {
 
 	for _, kind := range []string{providers.Codex, providers.OpenCode, providers.Crush, KindShell} {
 		t.Run(kind+" takes none", func(t *testing.T) {
-			args := providerArgs(kind, "", "", "", "/usr/bin/lich", false)
+			args := providerArgs(kind, "", "", "", "/usr/bin/lich", "", false, false)
 			if slices.Contains(args, "--append-system-prompt") {
 				t.Errorf("args = %v, want no briefing: %s has no flag that appends one", args, kind)
 			}
@@ -1274,10 +1569,10 @@ func TestStartWithoutASizeCopiesTheWindow(t *testing.T) {
 	svc := New(stubBins{bin: bin}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1"); _ = svc.Close("s2") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, 174, 51); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, false, 174, 51); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
-	if err := svc.Start("s2", "p1", t.TempDir(), "claude", "", "", false, 0, 0); err != nil {
+	if err := svc.Start("s2", "p1", t.TempDir(), "claude", "", "", false, false, 0, 0); err != nil {
 		t.Fatalf("Start without a size = %v, want nil", err)
 	}
 
@@ -1297,7 +1592,7 @@ func TestReadyWaitsForTheSetupScript(t *testing.T) {
 	svc := New(stubBins{bin: bin, projectPath: projectWithSetup(t, "echo installing")}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", true, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, true, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 	if !svc.Live("s1") {
@@ -1310,7 +1605,7 @@ func TestReadyWaitsForTheSetupScript(t *testing.T) {
 	svc.mu.Lock()
 	sess := svc.sessions["s1"]
 	svc.mu.Unlock()
-	svc.noteOutput(sess, []byte("Progress: resolved 551"+setupDone))
+	svc.noteOutput("s1", sess, []byte("Progress: resolved 551"+setupDone))
 
 	// The marker is the exec, not the prompt: the provider draws its opening
 	// screen from here, and a message written into that is the one that landed
@@ -1331,7 +1626,7 @@ func TestReadyWaitsForTheProviderToStopDrawing(t *testing.T) {
 	svc := New(stubBins{}, nil, events.New())
 	sess := &session{}
 
-	svc.noteOutput(sess, []byte("Claude Code v2.1.227"))
+	svc.noteOutput("s1", sess, []byte("Claude Code v2.1.227"))
 	svc.mu.Lock()
 	svc.sessions["s1"] = sess
 	svc.mu.Unlock()
@@ -1358,7 +1653,7 @@ func TestReadyStaysTrueThroughABusyTurn(t *testing.T) {
 	if !svc.Ready("s1") {
 		t.Fatal("a settled session was not ready")
 	}
-	svc.noteOutput(sess, []byte("...thinking..."))
+	svc.noteOutput("s1", sess, []byte("...thinking..."))
 	if !svc.Ready("s1") {
 		t.Error("a session that started working again stopped accepting work")
 	}
@@ -1377,9 +1672,9 @@ func TestTheWaitForTheProviderToStartIsNotItsQuiet(t *testing.T) {
 	svc.sessions["s1"] = sess
 	svc.mu.Unlock()
 
-	svc.noteOutput(sess, []byte("Progress: resolved 551"+setupDone))
+	svc.noteOutput("s1", sess, []byte("Progress: resolved 551"+setupDone))
 	time.Sleep(readySettle + 100*time.Millisecond)
-	svc.noteOutput(sess, []byte("Claude Code v2.1.227"))
+	svc.noteOutput("s1", sess, []byte("Claude Code v2.1.227"))
 	if svc.Ready("s1") {
 		t.Error("the wait for the provider to start was credited as the provider going quiet")
 	}
@@ -1404,12 +1699,12 @@ func TestReadyRemembersAQuietThatAlreadyPassed(t *testing.T) {
 	svc.sessions["s1"] = sess
 	svc.mu.Unlock()
 
-	svc.noteOutput(sess, []byte("Claude Code v2.1.227"))
+	svc.noteOutput("s1", sess, []byte("Claude Code v2.1.227"))
 	time.Sleep(readySettle + 100*time.Millisecond)
 	// The turn starts. From here the PTY never goes quiet again, and this is the
 	// first time anyone asks whether the session can be given work.
-	svc.noteOutput(sess, []byte("...thinking..."))
-	svc.noteOutput(sess, []byte("...thinking..."))
+	svc.noteOutput("s1", sess, []byte("...thinking..."))
+	svc.noteOutput("s1", sess, []byte("...thinking..."))
 
 	if !svc.Ready("s1") {
 		t.Error("a session that sat at its prompt for a whole turn was refused work")
@@ -1421,7 +1716,7 @@ func TestReadyWaitsOnlyTheSettleWithoutASetupScript(t *testing.T) {
 	svc := New(stubBins{bin: bin}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
 
-	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, false, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 	// No setup script to wait out, but the provider still has to take the
@@ -1450,5 +1745,57 @@ func TestSandboxCredentialsAreOnlyForConfinedSessions(t *testing.T) {
 	}
 	if got := svc.sandboxCredentials("p1", "/repo", true); !got.sshAgent {
 		t.Error("a confined session was refused the agent its project turned on")
+	}
+}
+
+// TestClosableState pins which reports survive per provider. Cursor CLI is the
+// only one filtered, because it is the only one whose reports lich does not
+// register: it runs Claude Code's installed plugin, which registers all of them,
+// while the CLI itself delivers only SessionStart, PreToolUse, PostToolUse and
+// SessionEnd. A `busy` from a tool call would therefore never be followed by the
+// `done` that ends it, and the spinner would stay on the card for the rest of
+// the session.
+func TestClosableState(t *testing.T) {
+	cases := []struct {
+		name, kind, state string
+		want              bool
+	}{
+		{"a claude turn begins", providers.Claude, statusBusy, true},
+		{"and ends", providers.Claude, statusDone, true},
+		{"crush reports what it can", providers.Crush, statusBusy, true},
+		// The two Cursor delivers but cannot end.
+		{"a cursor tool call does not begin a turn", providers.Cursor, statusBusy, false},
+		{"nor does anything else", providers.Cursor, statusDone, false},
+		{"cursor raises no approval event either", providers.Cursor, statusWaiting, false},
+		// SessionEnd is the one Cursor both reports and means.
+		{"a cursor session ending is reported", providers.Cursor, statusIdle, true},
+		{"a shell is not filtered", KindShell, statusBusy, true},
+		{"nor is a session already gone", "", statusBusy, true},
+	}
+	for _, tc := range cases {
+		if got := closableState(tc.kind, tc.state); got != tc.want {
+			t.Errorf("%s: closableState(%q, %q) = %v, want %v",
+				tc.name, tc.kind, tc.state, got, tc.want)
+		}
+	}
+}
+
+// TestSetEnvMovesTheSpawnBase pins the third reader of a re-read PATH: a
+// session opened after the re-check is spawned with the resolved environment,
+// not the one lich booted with (providers.Service.RefreshPath).
+func TestSetEnvMovesTheSpawnBase(t *testing.T) {
+	s := &Service{env: sessionBaseEnv([]string{"PATH=/orig"}), store: stubBins{}}
+
+	s.SetEnv([]string{"PATH=/late/install:/orig"})
+
+	env := s.sessionEnv("sess", "p1", "")
+	if !slices.Contains(env, "PATH=/late/install:/orig") {
+		t.Fatalf("spawn env kept the boot PATH: %v", env)
+	}
+	if slices.Contains(env, "PATH=/orig") {
+		t.Fatalf("spawn env still carries the boot PATH: %v", env)
+	}
+	if !slices.Contains(env, "TERM=xterm-256color") {
+		t.Fatalf("spawn env lost TERM: %v", env)
 	}
 }

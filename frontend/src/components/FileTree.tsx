@@ -23,6 +23,13 @@ interface FileTreeProps {
    * where a match has to be visible without opening its ancestors first. The
    * toggles are only suspended, so clearing the filter restores the browse. */
   expandAll?: boolean
+  /** The folders toggled *away* from `defaultOpen`, for a caller that has to
+   * outlive its own tree: the dock's browser is unmounted on every flip to the
+   * Review tab, so its folds are held outside it (file-browse). Left out — the
+   * pull request's tree, which lives as long as the tab it is on — the tree
+   * holds them itself and they go when it does. */
+  toggled?: ReadonlySet<string>
+  onToggled?: (toggled: ReadonlySet<string>) => void
   /** Per-file diff counts keyed by path; a row with an entry shows its +/-. */
   stats?: Map<string, DiffFile>
   /** Right-click → Open in editor. Absent = no file context menu, which is the
@@ -41,6 +48,8 @@ export function FileTree({
   active = null,
   defaultOpen = false,
   expandAll = false,
+  toggled: lifted,
+  onToggled: onLifted,
   stats,
   onEditor,
   className,
@@ -48,38 +57,38 @@ export function FileTree({
 }: FileTreeProps) {
   // The set holds the rows toggled *away* from defaultOpen, so a folder's state
   // survives its parent closing and reopening.
-  const [toggled, setToggled] = useState<Set<string>>(new Set())
+  const [own, setOwn] = useState<ReadonlySet<string>>(() => new Set())
+  const toggled = lifted ?? own
+  const publish = onLifted ?? setOwn
   const isOpen = (path: string) => expandAll || toggled.has(path) !== defaultOpen
 
-  const toggle = (path: string) =>
-    setToggled((prev) => {
-      const next = new Set(prev)
-      if (!next.delete(path)) {
-        next.add(path)
-      }
-      return next
-    })
+  const toggle = (path: string) => {
+    const next = new Set(toggled)
+    if (!next.delete(path)) {
+      next.add(path)
+    }
+    publish(next)
+  }
 
   // Expand/collapse a directory and every directory beneath it, the scope a
   // right-click on that folder implies. Entries are deviations from defaultOpen,
   // so "expand" adds or removes depending on which way that default points.
-  const setSubtree = (node: TreeNode, expand: boolean) =>
-    setToggled((prev) => {
-      const next = new Set(prev)
-      const walk = (n: TreeNode) => {
-        if (n.type !== "dir") {
-          return
-        }
-        if (expand === defaultOpen) {
-          next.delete(n.path)
-        } else {
-          next.add(n.path)
-        }
-        n.children.forEach(walk)
+  const setSubtree = (node: TreeNode, expand: boolean) => {
+    const next = new Set(toggled)
+    const walk = (n: TreeNode) => {
+      if (n.type !== "dir") {
+        return
       }
-      walk(node)
-      return next
-    })
+      if (expand === defaultOpen) {
+        next.delete(n.path)
+      } else {
+        next.add(n.path)
+      }
+      n.children.forEach(walk)
+    }
+    walk(node)
+    publish(next)
+  }
 
   return (
     // Names run past the panel's width on a deep tree; the rows size to their

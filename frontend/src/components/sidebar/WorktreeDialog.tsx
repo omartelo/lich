@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react"
 import type { KeyboardEvent } from "react"
 import { ProjectService } from "@/lib/rpc"
-import type { Branches, Worktree } from "@/lib/api-types"
+import type { Branches, Issue, Worktree } from "@/lib/api-types"
 import { SearchInput } from "@/components/common/SearchInput"
 import { WorktreeSandboxRow } from "@/components/sidebar/WorktreeSandboxRow"
-import { WorktreeSetupRow } from "@/components/sidebar/WorktreeSetupRow"
+import { WorktreeScriptRows } from "@/components/sidebar/WorktreeScriptRows"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -17,9 +17,15 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { isValidBranchName } from "@/lib/git/branch-name"
+import { toBranchName } from "@/lib/git/branch-name"
+import { issueBrief, issueName, parseIssueRef } from "@/lib/issue"
 import { useSandboxChoice, type SandboxAnswer } from "@/lib/use-sandbox-choice"
 import { cn, errorText } from "@/lib/utils"
+
+// How long the field has to settle before the issue behind a reference is
+// looked up. Every keystroke of "#381" is a valid reference on its way to the
+// one that was meant, so without this one issue costs three gh calls.
+const ISSUE_LOOKUP_MS = 400
 
 interface WorktreeDialogProps {
   open: boolean
@@ -33,15 +39,24 @@ interface WorktreeDialogProps {
   currentBranch: string
   /** Create the worktree and open its session; rejections show in the dialog.
    * sandbox is the confinement answer for that session ("on"/"off", "" when the
-   * machine cannot confine and nothing was asked). */
+   * machine cannot confine and nothing was asked). prompt is what that session
+   * is handed once it comes up — the issue this worktree is for, or "" when the
+   * name was not one. */
   onCreate: (
     name: string,
     base: string,
     baseIsRemote: boolean,
     sandbox: SandboxAnswer,
+    prompt: string,
   ) => Promise<void>
   /** Reopen a session on an already-existing worktree. */
   onResume: (wt: { name: string; path: string }) => void
+  /** The session whose conversation this worktree's session will carry, when
+   * the dialog was opened by a fork rather than by the + button. It only
+   * changes what the dialog says: the branching itself is the caller's, and
+   * the base list, the setup row and the confinement row are the same either
+   * way. */
+  forkOf?: { label: string } | null
 }
 
 // Row values carry their group so one string identifies the selection:
@@ -88,7 +103,7 @@ function Group({ title, items, base, onSelect }: GroupProps) {
   }
   return (
     <div>
-      <div className="px-2 pb-1 pt-2 text-[0.625rem] font-semibold tracking-wider text-muted-foreground uppercase">
+      <div className="px-2 pb-1 pt-2 text-2xs font-semibold tracking-wider text-muted-foreground uppercase">
         {title} <span className="font-normal">({items.length})</span>
       </div>
       {items.map((item) => (
@@ -110,10 +125,10 @@ function Group({ title, items, base, onSelect }: GroupProps) {
   )
 }
 
-// WorktreeDialog collects a worktree name (blank = random adjective-noun) and a
-// base picked from a searchable list — existing worktrees to resume, then local
-// and remote branches (remote bases are fetched and tracked). It stays open on
-// failure so git's error is readable in place.
+// WorktreeDialog collects a worktree name (blank = random adjective-noun, plain
+// words = a slug of them) and a base picked from a searchable list — existing
+// worktrees to resume, then local and remote branches (remote bases are fetched
+// and tracked). It stays open on failure so git's error is readable in place.
 export function WorktreeDialog({
   open,
   onOpenChange,
@@ -123,9 +138,12 @@ export function WorktreeDialog({
   currentBranch,
   onCreate,
   onResume,
+  forkOf = null,
 }: WorktreeDialogProps) {
   const [branches, setBranches] = useState<Branches | null>(null)
   const [name, setName] = useState("")
+  const [issue, setIssue] = useState<Issue | null>(null)
+  const [issueError, setIssueError] = useState("")
   const [base, setBase] = useState("")
   const [filter, setFilter] = useState("")
   const [loadError, setLoadError] = useState("")
@@ -138,8 +156,22 @@ export function WorktreeDialog({
   const vis = filterBranches(branches, filter)
   const flat = flatValues(vis)
   const noMatches = branches !== null && flat.length === 0
-  const trimmed = name.trim()
-  const nameInvalid = trimmed !== "" && !isValidBranchName(trimmed)
+  // The issue the field names, if it names one. The reference is what was
+  // typed; the issue is what GitHub answered for it, and only that carries the
+  // title the branch is named after.
+  const issueRef = parseIssueRef(name)
+  const lookingUp = issueRef !== null && !issue && !issueError
+  // What the typed name creates: itself when git takes it, a slug of the first
+  // few words when it is a phrase, blank when nothing usable was typed.
+  //
+  // A reference is never named by the "#381" that was typed, resolved or not.
+  // git accepts "#381" as a branch name, and most shells read the "#" as the
+  // start of a comment — `git checkout #381` is `git checkout`. So the issue
+  // names it once GitHub has answered, and its bare number until then, which is
+  // also what is left when the lookup fails and the worktree is made anyway.
+  const newBranch = toBranchName(
+    issue ? issueName(issue) : issueRef !== null ? String(issueRef) : name,
+  )
   const isResume = base.startsWith("worktree:")
 
   // Keep the selected base in view as it changes — the preselected current
@@ -147,6 +179,36 @@ export function WorktreeDialog({
   useEffect(() => {
     listRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" })
   }, [base, branches])
+
+  // The issue behind the typed reference, looked up while the field is still
+  // being typed in. A failure is shown but never blocks: the branch under the
+  // field is still a branch, and creating the worktree without the issue's text
+  // is a worse outcome than not creating it at all only if lich decides so.
+  useEffect(() => {
+    setIssue(null)
+    setIssueError("")
+    if (issueRef === null) {
+      return
+    }
+    let stale = false
+    const timer = setTimeout(() => {
+      ProjectService.Issue(projectPath, issueRef)
+        .then((found) => {
+          if (!stale) {
+            setIssue(found)
+          }
+        })
+        .catch((err: unknown) => {
+          if (!stale) {
+            setIssueError(errorText(err))
+          }
+        })
+    }, ISSUE_LOOKUP_MS)
+    return () => {
+      stale = true
+      clearTimeout(timer)
+    }
+  }, [issueRef, projectPath])
 
   useEffect(() => {
     if (!open) {
@@ -208,7 +270,7 @@ export function WorktreeDialog({
       move(-1)
     } else if (event.key === "Enter") {
       event.preventDefault()
-      if (!nameInvalid && base && !submitting) {
+      if (base && !submitting) {
         void submit()
       }
     }
@@ -228,7 +290,13 @@ export function WorktreeDialog({
     setSubmitting(true)
     setSubmitError("")
     try {
-      await onCreate(trimmed, id, group === "remote", sandbox.answer)
+      await onCreate(
+        newBranch,
+        id,
+        group === "remote",
+        sandbox.answer,
+        issue ? issueBrief(issue) : "",
+      )
     } catch (err) {
       setSubmitError(errorText(err))
       setSubmitting(false)
@@ -239,13 +307,32 @@ export function WorktreeDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Fixed-height dialog: the base-branch section takes the leftover row
         (minmax(0,1fr)) so its list scrolls instead of growing the modal. */}
-      <DialogContent className="h-[85vh] grid-rows-[auto_auto_minmax(0,1fr)_auto_auto_auto] sm:max-w-2xl">
+      <DialogContent
+        className={cn(
+          "h-[85vh] sm:max-w-2xl",
+          forkOf
+            ? "grid-rows-[auto_auto_auto_minmax(0,1fr)_auto_auto_auto]"
+            : "grid-rows-[auto_auto_minmax(0,1fr)_auto_auto_auto]",
+        )}
+      >
         <DialogHeader>
-          <DialogTitle>New worktree</DialogTitle>
+          <DialogTitle>
+            {forkOf ? `Fork ${forkOf.label} to a new worktree` : "New worktree"}
+          </DialogTitle>
           <DialogDescription>
             Pick a base branch and (optionally) a name for the new worktree.
           </DialogDescription>
         </DialogHeader>
+
+        {forkOf && (
+          <div className="border-l-2 border-primary/60 pl-3">
+            <div className="text-sm font-medium">Carries the conversation</div>
+            <span className="text-xs text-muted-foreground">
+              The new session opens on a copy of {forkOf.label}&rsquo;s history and keeps going from
+              there. The original card is untouched.
+            </span>
+          </div>
+        )}
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="worktree-name" className="text-xs uppercase tracking-wide">
@@ -255,20 +342,27 @@ export function WorktreeDialog({
             id="worktree-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Leave blank to auto-generate (e.g. swift-rabbit)"
+            placeholder="A branch name, an issue (#128), or the task in plain words"
             disabled={isResume}
-            aria-invalid={nameInvalid || undefined}
             autoFocus
           />
-          {nameInvalid ? (
-            <span className="text-xs text-destructive">Invalid branch name</span>
-          ) : (
-            <span className="font-mono text-xs text-muted-foreground">
-              {isResume
-                ? "Opens the selected worktree"
-                : `Branch: ${trimmed || "<auto-generated>"}`}
-            </span>
-          )}
+          <div className="flex flex-col font-mono text-xs text-muted-foreground">
+            {isResume ? (
+              <span>Opens the selected worktree</span>
+            ) : lookingUp ? (
+              <span>Looking up #{issueRef}…</span>
+            ) : (
+              <>
+                {issue && (
+                  <span className="text-foreground">
+                    #{issue.number} {issue.title}
+                  </span>
+                )}
+                {issueError && <span className="font-sans text-destructive">{issueError}</span>}
+                <span>Branch: {newBranch || "<auto-generated>"}</span>
+              </>
+            )}
+          </div>
         </div>
 
         <div className="flex min-h-0 flex-col gap-1.5">
@@ -296,10 +390,14 @@ export function WorktreeDialog({
           >
             <Group
               title="Worktrees"
-              items={vis.worktrees.map((wt) => ({
-                value: rowValue("worktree", wt.path),
-                label: wt.name,
-              }))}
+              items={
+                forkOf
+                  ? []
+                  : vis.worktrees.map((wt) => ({
+                      value: rowValue("worktree", wt.path),
+                      label: wt.name,
+                    }))
+              }
               base={base}
               onSelect={setBase}
             />
@@ -336,7 +434,7 @@ export function WorktreeDialog({
           </div>
         </div>
 
-        <WorktreeSetupRow projectPath={projectPath} />
+        <WorktreeScriptRows projectPath={projectPath} />
 
         <WorktreeSandboxRow choice={sandbox} />
 
@@ -346,8 +444,14 @@ export function WorktreeDialog({
 
         <DialogFooter>
           <DialogClose render={<Button variant="ghost" />}>Cancel</DialogClose>
-          <Button onClick={() => void submit()} disabled={nameInvalid || !base || submitting}>
-            {submitting ? "Creating…" : isResume ? "Open worktree" : "Create worktree"}
+          <Button onClick={() => void submit()} disabled={!base || submitting}>
+            {submitting
+              ? "Creating…"
+              : isResume
+                ? "Open worktree"
+                : forkOf
+                  ? "Fork"
+                  : "Create worktree"}
           </Button>
         </DialogFooter>
       </DialogContent>

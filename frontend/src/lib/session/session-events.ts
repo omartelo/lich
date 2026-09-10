@@ -5,6 +5,7 @@
 // alone. Kept pure (no bindings, no React) so the provider and the card only
 // wire it up.
 
+import type { StoredProject, StoredSession } from "@/lib/api-types"
 import { isSessionKind, projectOfSession, type SessionKind, type SessionState } from "./sessions"
 
 // A subscription to one of the global session events, injected so every store
@@ -31,9 +32,17 @@ export const TITLE_EVENT = "session-title"
 // (see terminal.touchedEventName). Payload: { id }.
 export const TOUCHED_EVENT = "session-touched"
 
+// Global event the backend emits once a session's last-turn record has changed
+// (see terminal.turnEventName). Payload: { id }. Not the same moment as the
+// turn's `done`: the record is filed on a snapshot worker, so a panel that
+// refreshed off the status report would read the answer before it exists.
+export const TURN_EVENT = "session-turn"
+
 // Global event the backend emits with a session's live working directory (see
 // terminal.cwdEventName): once with the directory the PTY starts in, then on
-// every change the cwd watcher observes. Payload: { id, cwd }.
+// every change the cwd watcher observes. Payload: { id, cwd, host } — a
+// non-empty host names the foreground process the directory cannot be read
+// through (tmux, ssh, a container) and arrives with an empty cwd.
 export const CWD_EVENT = "session-cwd"
 
 // Global event the backend emits when a provider CLI starts inside a session's
@@ -42,11 +51,20 @@ export const CWD_EVENT = "session-cwd"
 export const AGENT_EVENT = "session-agent"
 
 // Global event the backend emits on every spawn with whether that PTY runs
-// inside the sandbox (see terminal.sandboxEventName). Payload: { id, confined }.
-// The verdict is the spawn's — it resolves the provider's rung, the checkout and
-// any per-session override — and it is persisted with the row too, which is what
-// a page reload hydrates from.
+// inside the sandbox (see terminal.sandboxEventName). Payload:
+// { id, confined, skippedLinks } — the last being the home paths that sandbox
+// left out for being symlinks, which is the one absence a confined session has
+// no other way of learning about. The verdict is the spawn's — it resolves the
+// provider's rung, the checkout and any per-session override — and both are
+// persisted with the row too, which is what a page reload hydrates from.
 export const SANDBOX_EVENT = "session-sandbox"
+
+// Global event the backend emits on every spawn with the MCP servers that
+// session's provider could reach (see terminal.mcpEventName). Payload:
+// { id, servers }. The spawn is what resolves them — from the harness's own
+// config documents and the session's directory — and they are persisted with the
+// row too, which is what a page reload hydrates from.
+export const MCP_EVENT = "session-mcp"
 
 // Global event the backend emits after a turn ends with the session's
 // context-window usage (see terminal.usageEventName). Payload: { id, percent,
@@ -55,8 +73,29 @@ export const SANDBOX_EVENT = "session-sandbox"
 // model its id, effort the reasoning level ("" when the turn records none) —
 // plus an optional costUsd, which is present only when the cost readout is on
 // and every model in the session has a known price. Its absence is the answer,
-// not a zero.
+// not a zero — and an optional costMiss names the one kind of absence the user
+// has to know about: lich cannot price this conversation, as opposed to lich
+// not pricing it (the readout is off, which is the whole design on a
+// subscription).
+//
+// All five context fields are zero for a provider that records a turn's spend
+// and no window to take it against, and a zero window is what tells the footer
+// to draw the cost without a ring (docs/ceilings.md).
 export const USAGE_EVENT = "session-usage"
+
+// Global event the backend emits when a session's scheduled prompt has been
+// typed at it (see relay.ScheduleEventName). Payload: { id, at } — at is 0,
+// because the prompt has just been delivered and nothing is waiting anymore.
+// The window is the only other writer of that row and already knows what it
+// wrote; this is what the clock did.
+export const SCHEDULE_EVENT = "session-schedule"
+
+// Global event the backend emits when a scheduled prompt was lost with the
+// session it was parked on — deleted, forgotten, purged with its worktree, or
+// taken by a deleted project (see store.ScheduleForfeitEventName). Payload:
+// { label, at, prompt }. It carries no session id because there is no row left
+// to route to: the label is the only name that session ever had.
+export const SCHEDULE_FORFEIT_EVENT = "session-schedule-forfeited"
 
 // Global event the backend emits while one session has a request open with
 // another (see relay.RelayEventName). Payload: { id, peer, direction, ticket } —
@@ -70,6 +109,16 @@ export const RELAY_EVENT = "session-relay"
 // Payload: the whole session, because the card is drawn from it rather than
 // looked up: the row is already written and its PTY is already running.
 export const OPENED_EVENT = "session-opened"
+
+// Global event the backend emits when a project was opened outside the window —
+// an agent naming a directory rather than a project already on screen (see
+// spawn.ProjectOpenedEventName). Payload: the whole store.Project, sessions
+// included, because the tab is drawn from it rather than looked up — and because
+// a project reopened from the history comes back with the cards it was closed
+// with. It arrives before the session event that follows it, and has to be
+// applied without waiting on anything: a session-opened whose project is not on
+// screen yet is dropped (adoptSession).
+export const PROJECT_OPENED_EVENT = "project-opened"
 
 // Global event the backend emits when a session was closed outside the window —
 // an agent running `lich close` or its MCP tool (see spawn.ClosedEventName).
@@ -141,10 +190,19 @@ export function toSessionRelay(data: unknown): SessionRelay | null {
   }
 }
 
+// Why a session has no cost figure, when the reason is one the user can do
+// nothing about and no turn will heal — the backend's costMiss (see
+// internal/terminal/usage_cost.go). Every other absence sends nothing.
+const COST_MISSES = ["mixed-models", "unpriced-model"] as const
+
+export type CostMiss = (typeof COST_MISSES)[number]
+
 // A session's context-window occupancy as the footer shows it, and what the
 // session has cost so far. costUsd is null whenever the backend sent no number:
 // the setting is off (the case on a subscription, where the figure is noise) or
-// a model has no price yet. Nothing is rendered for it then.
+// a model has no price yet. costMiss is that second kind of absence, named — a
+// money readout that simply vanishes is read as zero spend — and stays null for
+// the first, where there is nothing to say.
 export interface SessionUsage {
   percent: number
   tokens: number
@@ -152,6 +210,7 @@ export interface SessionUsage {
   model: string
   effort: string
   costUsd: number | null
+  costMiss: CostMiss | null
 }
 
 // The states a card renders an indicator for. The contract also defines "idle"
@@ -187,6 +246,44 @@ export function toInboxCount(data: unknown): number {
   return Math.floor(count)
 }
 
+// Global event the backend emits when a session's agent moved through the task
+// list it wrote for itself (see terminal.todoEventName). Payload:
+// { id, done, total }, the whole list either way, so the rule for what is worth
+// drawing lives on the card rather than in the backend.
+//
+// Only Claude Code writes a list lich can read (terminal.todoReaderFor names
+// what every other provider does instead), and it carries what the agent last
+// wrote rather than what is true: a list abandoned unfinished keeps its count.
+export const TODO_EVENT = "session-todo"
+
+// A session's progress through its agent's task list.
+export interface SessionTodo {
+  done: number
+  total: number
+}
+
+// The shortest list worth a line on the card. An agent that writes a single
+// item is narrating what it is doing, which the tool line already says.
+const MIN_TODO_ITEMS = 2
+
+// toSessionTodo narrows a todo payload to a list worth drawing, or null for
+// everything else: a malformed payload, a shape from another build, a list too
+// short to be a plan, and a finished list, whose count is over and would
+// otherwise sit on the card as news forever.
+export function toSessionTodo(data: unknown): SessionTodo | null {
+  const { done, total } = (data ?? {}) as { done?: unknown; total?: unknown }
+  if (typeof done !== "number" || typeof total !== "number") {
+    return null
+  }
+  if (!Number.isFinite(done) || !Number.isFinite(total)) {
+    return null
+  }
+  if (total < MIN_TODO_ITEMS || done < 0 || done >= total) {
+    return null
+  }
+  return { done: Math.floor(done), total: Math.floor(total) }
+}
+
 // session-touched carries only a session id.
 export function isIdEvent(data: unknown): data is { id: string } {
   return (
@@ -194,8 +291,46 @@ export function isIdEvent(data: unknown): data is { id: string } {
   )
 }
 
-export function isSandboxEvent(data: unknown): data is { id: string; confined: boolean } {
-  return isIdEvent(data) && typeof (data as { confined?: unknown }).confined === "boolean"
+export function isScheduleEvent(data: unknown): data is { id: string; at: number } {
+  return isIdEvent(data) && typeof (data as { at?: unknown }).at === "number"
+}
+
+// session-schedule-forfeited names a session that is already gone, so the label
+// stands where every other event carries an id.
+export function isForfeitedScheduleEvent(
+  data: unknown,
+): data is { label: string; at: number; prompt: string } {
+  if (typeof data !== "object" || data === null) {
+    return false
+  }
+  const event = data as { label?: unknown; at?: unknown; prompt?: unknown }
+  return (
+    typeof event.label === "string" &&
+    typeof event.at === "number" &&
+    typeof event.prompt === "string"
+  )
+}
+
+// The shape both spawn reports carry a list of names in: every element a
+// string, so one bad entry rejects the payload rather than reaching a card.
+function isNames(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((name) => typeof name === "string")
+}
+
+// skippedLinks is optional rather than required: a nil list marshals as null,
+// and an event carrying no names must still land the confinement verdict.
+export function isSandboxEvent(
+  data: unknown,
+): data is { id: string; confined: boolean; skippedLinks?: string[] | null } {
+  if (!isIdEvent(data) || typeof (data as { confined?: unknown }).confined !== "boolean") {
+    return false
+  }
+  const links = (data as { skippedLinks?: unknown }).skippedLinks
+  return links === undefined || links === null || isNames(links)
+}
+
+export function isMCPEvent(data: unknown): data is { id: string; servers: string[] } {
+  return isIdEvent(data) && isNames((data as { servers?: unknown }).servers)
 }
 
 export function isStatusEvent(data: unknown): data is { id: string; state: string } {
@@ -248,6 +383,11 @@ export interface OpenedSession {
   kind: SessionKind
   path: string
   nextSeq: number
+  // Whether the card is its checkout's Run card (internal/spawn.Run). It rides
+  // the event because the mark is what sends the next Run to this card: a card
+  // adopted without it would leave the menu offering a second one until the next
+  // reload read the row.
+  run: boolean
   // The session that asked for this one, and what it was called at the time.
   // Both "" when the opener was not a session — `lich open` from a plain shell.
   originSessionId: string
@@ -263,12 +403,13 @@ export function toOpenedSession(data: unknown): OpenedSession | null {
   if (!isIdEvent(data)) {
     return null
   }
-  const { projectId, label, kind, path, nextSeq, originSessionId, originLabel } = data as {
+  const { projectId, label, kind, path, nextSeq, run, originSessionId, originLabel } = data as {
     projectId?: unknown
     label?: unknown
     kind?: unknown
     path?: unknown
     nextSeq?: unknown
+    run?: unknown
     originSessionId?: unknown
     originLabel?: unknown
   }
@@ -285,8 +426,45 @@ export function toOpenedSession(data: unknown): OpenedSession | null {
     kind,
     path: typeof path === "string" ? path : "",
     nextSeq: typeof nextSeq === "number" ? nextSeq : 1,
+    run: run === true,
     originSessionId: typeof originSessionId === "string" ? originSessionId : "",
     originLabel: typeof originLabel === "string" ? originLabel : "",
+  }
+}
+
+// toOpenedProject narrows a project-opened payload to the row the workspace
+// draws a tab from, or null when it names no project this window can place.
+// Everything past the identity is left to buildSessionState, which already
+// tolerates a missing session list and a kind this build does not know; a card
+// with no id is dropped here, because that is the one field nothing downstream
+// can do without.
+export function toOpenedProject(data: unknown): StoredProject | null {
+  // isIdEvent only asks for a string; an empty one would key the workspace's
+  // session state under "" and put a tab on screen that no session can reach.
+  if (!isIdEvent(data) || data.id === "") {
+    return null
+  }
+  const { name, path, nextSeq, activeSessionId, defaultProvider, sessions } = data as {
+    name?: unknown
+    path?: unknown
+    nextSeq?: unknown
+    activeSessionId?: unknown
+    defaultProvider?: unknown
+    sessions?: unknown
+  }
+  if (typeof name !== "string" || name === "" || typeof path !== "string" || path === "") {
+    return null
+  }
+  return {
+    id: data.id,
+    name,
+    path,
+    nextSeq: typeof nextSeq === "number" ? nextSeq : 1,
+    activeSessionId: typeof activeSessionId === "string" ? activeSessionId : "",
+    defaultProvider: typeof defaultProvider === "string" ? defaultProvider : "",
+    sessions: Array.isArray(sessions)
+      ? (sessions as StoredSession[]).filter((s) => typeof s?.id === "string" && s.id !== "")
+      : null,
   }
 }
 
@@ -313,8 +491,12 @@ export function isTitleEvent(data: unknown): data is { id: string; label: string
   return isIdEvent(data) && typeof (data as { label?: unknown }).label === "string"
 }
 
-export function isCwdEvent(data: unknown): data is { id: string; cwd: string } {
-  return isIdEvent(data) && typeof (data as { cwd?: unknown }).cwd === "string"
+export function isCwdEvent(data: unknown): data is { id: string; cwd: string; host?: string } {
+  if (!isIdEvent(data) || typeof (data as { cwd?: unknown }).cwd !== "string") {
+    return false
+  }
+  const host = (data as { host?: unknown }).host
+  return host === undefined || typeof host === "string"
 }
 
 export function isAgentEvent(data: unknown): data is { id: string; agent: string } {
@@ -329,6 +511,7 @@ export function isUsageEvent(data: unknown): data is {
   model: string
   effort: string
   costUsd?: number
+  costMiss?: string
 } {
   return (
     isIdEvent(data) &&
@@ -346,6 +529,16 @@ export function isUsageEvent(data: unknown): data is {
 // a total is either trustworthy or not rendered.
 export function usageCost(data: { costUsd?: unknown }): number | null {
   return typeof data.costUsd === "number" && Number.isFinite(data.costUsd) ? data.costUsd : null
+}
+
+// usageCostMiss reads the named absence off a usage payload. A reason this
+// build has no sentence for — one added by a newer backend — reads as no
+// reason: an unlabelled marker says less than the missing number already does.
+export function usageCostMiss(data: { costMiss?: unknown }): CostMiss | null {
+  const { costMiss } = data
+  return typeof costMiss === "string" && (COST_MISSES as readonly string[]).includes(costMiss)
+    ? (costMiss as CostMiss)
+    : null
 }
 
 // shouldToastAttention decides whether a session needing the user deserves the

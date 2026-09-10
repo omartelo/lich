@@ -32,6 +32,7 @@ func collector(t *testing.T, configDir string, info *singleton.Info, alive bool)
 	c.detect = func() []providers.Detected {
 		return []providers.Detected{{ID: "claude", Name: "Claude Code", Installed: true, Path: "/usr/bin/claude"}}
 	}
+	c.confine = func() (string, error) { return "bubblewrap", nil }
 	c.plugin = func() []agentplugin.Status {
 		return []agentplugin.Status{{Provider: "claude", Name: "Claude Code", Available: true, Installed: true, InstalledVersion: "0.2.0"}}
 	}

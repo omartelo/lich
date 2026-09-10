@@ -79,6 +79,40 @@ jobs:
       - name: Backend tests
         run: bash .github/scripts/go-test-summary.sh linux
 
+  # The window (shell/, Rust on CEF): format, lint and the crate's suite, on
+  # the three OSes that ship it. Linking needs the CEF distribution, so this
+  # carries the same toolchain and caches the release build does; --release
+  # shares one CEF wrapper build between clippy and the tests.
+  shell:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      CEF_PATH: ${{ github.workspace }}/.cef
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/shell-toolchain
+        with:
+          components: rustfmt, clippy
+
+      - name: Format
+        working-directory: shell
+        run: cargo fmt --check
+
+      - name: Clippy
+        working-directory: shell
+        run: cargo clippy --release --all-targets -- -D warnings
+
+      - name: Tests
+        working-directory: shell
+        run: cargo test --release
+
   # The backend suite on the OSes the linux job cannot speak for. The
   # cross-compile step above proves every target still builds; only a real runner
   # proves it still passes — v0.18.0 shipped a path guard that read a rooted path
@@ -131,3 +165,9 @@ jobs:
 
       - name: Backend tests
         run: bash .github/scripts/go-test-summary.sh ${{ matrix.os }}
+
+      - name: Windows installer self-update end to end
+        if: runner.os == 'Windows'
+        env:
+          CGO_ENABLED: "0"
+        run: go test -tags installer_e2e -run '^TestWindowsInstallerE2E$' -v -timeout 10m ./internal/appupdate

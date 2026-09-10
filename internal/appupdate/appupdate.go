@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/minio/selfupdate"
@@ -43,6 +44,15 @@ const (
 	// rendered into the pasted text — it stays a shell env reference expanded at
 	// run time, not a literal baked into scrollback.
 	restartChain = ` && curl -fsS --max-time 5 -X POST "http://127.0.0.1:$LICH_PORT/restart?token=$LICH_TOKEN"`
+	// scoopPackage is the manifest name a Scoop install updates through; Scoop
+	// owns its copy under apps\lich\current, so lich never swaps it itself.
+	scoopPackage = "lich"
+	// restartChainPwsh is restartChain for the PowerShell a Windows session runs:
+	// `;` because Windows PowerShell 5.1 has no `&&`, and the env references in
+	// its own syntax. Scoop keeps the old version's directory until `scoop
+	// cleanup`, so the update lands while lich runs and the restart picks it up
+	// through the repointed junction.
+	restartChainPwsh = `; Invoke-RestMethod -Method Post "http://127.0.0.1:$env:LICH_PORT/restart?token=$env:LICH_TOKEN"`
 	// defaultOSRelease is where the distro identity lives; a Service field points
 	// tests elsewhere.
 	defaultOSRelease = "/etc/os-release"
@@ -61,6 +71,12 @@ const (
 // Service reports lich's own update state and applies self-updates where the
 // binary is writable.
 type Service struct {
+	mu      sync.Mutex
+	install func(string) error
+	// emit publishes Apply's progress to the app's event hub (ProgressEventName);
+	// nil leaves the update working and silent.
+	emit func(name string, data any)
+
 	http *http.Client
 	// download carries the release-asset GET; separate from http so the short
 	// metadata timeout never applies to the body. Nil falls back to http
@@ -88,10 +104,13 @@ type Service struct {
 }
 
 // New returns a service that reports version as the running build and polls
-// GitHub for the latest release.
-func New(version string) *Service {
+// GitHub for the latest release. install runs a downloaded Windows installer;
+// emit is the app's event hub.
+func New(version string, install func(string) error, emit func(name string, data any)) *Service {
 	exe, _ := os.Executable() // "" if unresolved — canSelfApply then stays false.
 	return &Service{
+		install:       install,
+		emit:          emit,
 		http:          &http.Client{Timeout: httpTimeout},
 		download:      &http.Client{Timeout: downloadTimeout},
 		version:       version,
@@ -143,10 +162,12 @@ func (s *Service) Status() Status {
 	return st
 }
 
-// Apply downloads the latest release binary for this platform, verifies its
-// SHA-256 against the release checksums, and atomically swaps it over the
-// running executable. Only valid where CanSelfApply is true.
+// Apply verifies the latest release against its SHA-256 checksum, then swaps
+// the portable executable or hands a windowed Windows install to its installer.
+// The installer closes and relaunches lich. Only valid where CanSelfApply is true.
 func (s *Service) Apply() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if !canSelfApply(s.goos, s.exePath) {
 		return fmt.Errorf("self-apply not supported on this install")
 	}
@@ -154,7 +175,7 @@ func (s *Service) Apply() error {
 	if latest == "" {
 		return fmt.Errorf("could not resolve the latest release")
 	}
-	asset := assetName(s.goos, s.goarch, latest)
+	asset := s.assetName(latest)
 	if asset == "" {
 		return fmt.Errorf("no release asset for %s/%s", s.goos, s.goarch)
 	}
@@ -172,7 +193,11 @@ func (s *Service) Apply() error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download %s: status %d", asset, resp.StatusCode)
 	}
-	if err := s.applyBinary(io.LimitReader(resp.Body, assetLimit), sum); err != nil {
+	if s.installerUpdate() {
+		return s.applyInstaller(s.progressReader(resp.Body, resp.ContentLength, phaseInstaller), sum)
+	}
+	body := s.progressReader(resp.Body, resp.ContentLength, phaseInstall)
+	if err := s.applyBinary(io.LimitReader(body, assetLimit), sum); err != nil {
 		return fmt.Errorf("apply update: %w", err)
 	}
 	return nil
@@ -207,10 +232,38 @@ func canSelfApply(goos, exePath string) bool {
 	if exePath == "" {
 		return false
 	}
-	if brewOwned(exePath) || bundled(exePath) {
+	if brewOwned(exePath) || bundled(exePath) || scoopOwned(exePath) {
 		return false
 	}
 	return dirWritable(filepath.Dir(exePath))
+}
+
+// scoopOwned reports whether exePath is a Scoop install: <root>\apps\lich\
+// <version or current>\lich.exe, whichever way the junction was resolved. The
+// directory is writable and, since the manifest ships the window, carries
+// shell\, so the checks above would send it to the Inno Setup installer —
+// which would register a second lich in "Installed apps" and write into the
+// version directory Scoop tracks.
+func scoopOwned(exePath string) bool {
+	segments := strings.Split(filepath.ToSlash(exePath), "/")
+	n := len(segments)
+	return n >= 4 && strings.EqualFold(segments[n-4], "apps") && strings.EqualFold(segments[n-3], scoopPackage)
+}
+
+// installerOwned recognizes the Windows installer layout by either mark it
+// leaves beside the exe: the window under shell\, or the uninstaller Inno Setup
+// writes to every install. The uninstaller is the only mark an install from
+// before the window carries (v0.10.0 to v0.45.x); swapping the bare exe there
+// left a lich that opened a system browser, with the shortcut and the
+// "Installed apps" entry stuck at the old version.
+func installerOwned(exePath string) bool {
+	dir := filepath.Dir(exePath)
+	for _, mark := range []string{filepath.Join("shell", "lich-shell.exe"), "unins000.exe"} {
+		if _, err := os.Stat(filepath.Join(dir, mark)); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // brewOwned reports whether exePath is a Homebrew formula install. The Cellar
@@ -238,6 +291,8 @@ func bundled(exePath string) bool {
 
 // installCommand is the shell command the UI pastes to update this install, or
 // "" on the self-apply platforms (they swap the binary through the button).
+// A Scoop install is package-manager owned like Arch's, and its restart is
+// spelled for PowerShell.
 // Arch goes through its AUR helper plus an explicit restart — yay knows nothing
 // about lich's /restart — while every other distro uses install.sh, which
 // restarts itself. A Homebrew install is package-manager owned like Arch's, on
@@ -248,6 +303,9 @@ func (s *Service) installCommand() string {
 	}
 	if brewOwned(s.exePath) {
 		return "brew upgrade " + brewPackage + restartChain
+	}
+	if scoopOwned(s.exePath) {
+		return "scoop update " + scoopPackage + restartChainPwsh
 	}
 	if s.goos != "linux" {
 		return ""

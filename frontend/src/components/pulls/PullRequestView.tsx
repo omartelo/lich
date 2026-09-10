@@ -9,6 +9,7 @@ import {
   MessageSquare,
   RefreshCw,
   SquareTerminal,
+  Wrench,
   X,
 } from "lucide-react"
 import { ProjectService, System } from "@/lib/rpc"
@@ -31,6 +32,8 @@ import {
   mergeBlockedReason,
   mergeRuleNote,
 } from "@/lib/pulls/merge-gate"
+import { readPullsTab, writePullsTab, type PullsTab } from "@/lib/pulls/pulls-prefs"
+import { pullRequestHandoff } from "@/lib/pulls/pr-handoff"
 import { useBranchRules } from "@/lib/pulls/use-branch-rules"
 import { cn, errorText } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -44,6 +47,7 @@ import {
 import { MergeMessageDialog, mergeEditFor, type MergeEdit } from "./MergeMessageDialog"
 import { PullsChecks } from "./PullsChecks"
 import { PullsCommits } from "./PullsCommits"
+import { PullsConflicts } from "./PullsConflicts"
 import { PullsConversation } from "./PullsConversation"
 import { PullsFiles } from "./PullsFiles"
 import { PullsOverview } from "./PullsOverview"
@@ -61,8 +65,6 @@ export interface SessionAction {
   busy: boolean
   run: () => void
 }
-
-type Tab = "overview" | "commits" | "files" | "conversation" | "checks"
 
 const MERGE_LABELS: Record<MergeMethod, string> = {
   squash: "Squash and merge",
@@ -84,6 +86,10 @@ function failingChecks(failed: number): string | undefined {
 
 interface PullRequestViewProps {
   path: string
+  /** Which project's screen this is. Only the unsent prose on it needs one —
+   * the drafts are filed per project, so the list column can retire the ones
+   * whose pull request has closed (draft-store). */
+  projectId: string
   /** The checkout's HEAD; changing it refetches the diff under the Files tab. */
   head: string
   detail: PullRequestDetail
@@ -94,6 +100,9 @@ interface PullRequestViewProps {
   onMerged: () => void
   /** Write into the session's terminal; false when no session took it. */
   onInject: (text: string) => boolean
+  /** Hand the pull request's problem to a session on its branch — opening one
+   * and going there, so the prompt is written where it can be read. */
+  onHandOff: (prompt: string) => Promise<void>
   /** What has been said about this pull request, and how to re-read it after a
    * reply, a resolve or a submitted review. */
   conversation: PullRequestConversation | null
@@ -107,21 +116,31 @@ interface PullRequestViewProps {
 // what a merge means for the worktree it lives in, stay the screen's.
 export function PullRequestView({
   path,
+  projectId,
   head,
   detail,
   session,
   onRefresh,
   onMerged,
   onInject,
+  onHandOff,
   conversation,
   conversationLoading,
   onConversationRefresh,
 }: PullRequestViewProps) {
   const [merging, setMerging] = useState(false)
+  const [handingOff, setHandingOff] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [verdict, setVerdict] = useState<ReviewEvent | null>(null)
   const [edit, setEdit] = useState<MergeEdit | null>(null)
-  const [tab, setTab] = useState<Tab>("overview")
+  // Which tab is a habit, not a fact about this pull request: a reviewer who
+  // lives in Files changed should land there on the next one too, and on the
+  // same one after a detour into another project.
+  const [tab, setTab] = useState<PullsTab>(readPullsTab)
+  const showTab = (next: PullsTab) => {
+    writePullsTab(next)
+    setTab(next)
+  }
   // Read here rather than threaded down from the screen: it is keyed by the
   // base branch, which only exists once the detail has resolved — and this is
   // the one place that is guaranteed.
@@ -135,6 +154,24 @@ export function PullRequestView({
   const editableMethods = methods.filter((method) => method !== "rebase")
   const ruleNote = mergeRuleNote(detail, rules)
   const bypass = canAdminOverride(detail, rules)
+  const handoff = pullRequestHandoff(detail)
+
+  // The problem in the way, written at the agent's prompt and nothing more:
+  // lich pastes it and stops there — no run, no watch, no second attempt when
+  // the checks come back red again. Where it goes, and what it takes to get a
+  // session there, is the screen's (Pulls, handOff); the flag is only so the
+  // button says the session is coming while a worktree is being made.
+  const handOff = async () => {
+    if (!handoff) {
+      return
+    }
+    setHandingOff(true)
+    try {
+      await onHandOff(handoff.prompt)
+    } finally {
+      setHandingOff(false)
+    }
+  }
 
   const merge = async (method: MergeMethod, subject = "", body = "", admin = false) => {
     setMerging(true)
@@ -233,6 +270,25 @@ export function PullRequestView({
                 {session.busy ? "Opening…" : session.label}
               </Button>
             </span>
+            {/* Whatever is wrong with this pull request, handed to the session
+                that would fix it — a conflict first, red CI after it. Nothing
+                is drawn when nothing is wrong: that state is the Merge button's
+                to own. Blocked for the same reason opening a session is, and
+                with the same sentence: a fork that refuses maintainer edits has
+                nowhere to put the work. */}
+            {handoff && (
+              <span title={session.blocked ?? undefined}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={handingOff || session.blocked !== null}
+                  onClick={() => void handOff()}
+                >
+                  <Wrench />
+                  {handingOff ? "Opening session…" : handoff.label}
+                </Button>
+              </span>
+            )}
             {/* With nothing written, reviewing is the one-click approval it has
                 always been. The moment a comment is waiting, the same control
                 becomes the way to send the review it belongs to — and says how
@@ -373,7 +429,7 @@ export function PullRequestView({
           {detail.checks.total > 0 ? (
             <button
               type="button"
-              onClick={() => setTab("checks")}
+              onClick={() => showTab("checks")}
               className="rounded-sm transition-opacity hover:opacity-80"
             >
               <ChecksStat checks={detail.checks} />
@@ -381,36 +437,37 @@ export function PullRequestView({
           ) : (
             <ChecksStat checks={detail.checks} />
           )}
-          <MergeableStat
-            mergeable={detail.mergeable}
-            base={detail.baseRefName}
-            state={detail.state}
-          />
+          <MergeableStat detail={detail} />
           <ReviewStat decision={detail.reviewDecision} />
         </div>
 
+        {/* Keyed by the pull request: whether the whole list is unfolded is a
+            reading of this one, and carrying it to the next PR opened would
+            unfold a list nobody asked to see. */}
+        <PullsConflicts key={detail.url} path={path} detail={detail} />
+
         <div role="tablist" className="mt-4 flex gap-1">
-          <TabButton active={tab === "overview"} onClick={() => setTab("overview")}>
+          <TabButton active={tab === "overview"} onClick={() => showTab("overview")}>
             Overview
           </TabButton>
-          <TabButton active={tab === "commits"} onClick={() => setTab("commits")}>
+          <TabButton active={tab === "commits"} onClick={() => showTab("commits")}>
             Commits
             {commitCount > 0 && (
               <span className="tabular-nums text-muted-foreground">{commitCount}</span>
             )}
           </TabButton>
-          <TabButton active={tab === "files"} onClick={() => setTab("files")}>
+          <TabButton active={tab === "files"} onClick={() => showTab("files")}>
             Files changed
             {detail.changedFiles > 0 && (
               <span className="tabular-nums text-muted-foreground">{detail.changedFiles}</span>
             )}
           </TabButton>
-          <TabButton active={tab === "conversation"} onClick={() => setTab("conversation")}>
+          <TabButton active={tab === "conversation"} onClick={() => showTab("conversation")}>
             Conversation
             {talk > 0 && <span className="tabular-nums text-muted-foreground">{talk}</span>}
           </TabButton>
           {detail.checks.total > 0 && (
-            <TabButton active={tab === "checks"} onClick={() => setTab("checks")}>
+            <TabButton active={tab === "checks"} onClick={() => showTab("checks")}>
               Checks
               <span className="tabular-nums text-muted-foreground">{detail.checks.total}</span>
             </TabButton>
@@ -423,6 +480,10 @@ export function PullRequestView({
           <PullsFiles
             path={path}
             number={detail.number}
+            projectId={projectId}
+            // The last commit is the head: gh lists them oldest first, and the
+            // detail already carries them, so the expander costs no extra call.
+            headOid={detail.commits?.[detail.commits.length - 1]?.oid ?? ""}
             head={head}
             pullRequest={detail.url}
             onInject={onInject}
@@ -432,9 +493,12 @@ export function PullRequestView({
         ) : (
           <div className="h-full overflow-y-auto">
             {tab === "checks" && <PullsChecks checks={detail.checkRuns} />}
-            {tab === "commits" && <PullsCommits commits={detail.commits} />}
+            {tab === "commits" && (
+              <PullsCommits commits={detail.commits} authorLogin={detail.authorLogin} />
+            )}
             {tab === "conversation" && (
               <PullsConversation
+                pull={{ projectId, number: detail.number }}
                 conversation={conversation}
                 loading={conversationLoading}
                 actions={actions}
@@ -442,7 +506,12 @@ export function PullRequestView({
               />
             )}
             {tab === "overview" && (
-              <PullsOverview path={path} detail={detail} onRefresh={onRefresh} />
+              <PullsOverview
+                path={path}
+                projectId={projectId}
+                detail={detail}
+                onRefresh={onRefresh}
+              />
             )}
           </div>
         )}

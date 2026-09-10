@@ -10,6 +10,7 @@ import {
   HOTKEY_ACTIONS,
   HOTKEY_GROUPS,
   sameCombo,
+  terminalCost,
   UNASSIGNED,
   type HotkeyAction,
   type HotkeyId,
@@ -19,6 +20,7 @@ import { Button } from "@/components/ui/button"
 import { ShortcutLine } from "@/components/common/ShortcutLine"
 import { isMac, isWindows } from "@/lib/platform"
 import { cn } from "@/lib/utils"
+import { GroupProvider, useHighlight } from "./setting-highlight"
 
 // A dense list rather than one setting block per action: the bindings read as a
 // table of rows, and a block each would be a column of near-empty cards.
@@ -28,7 +30,7 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
       <h2 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </h2>
-      {children}
+      <GroupProvider value={label}>{children}</GroupProvider>
     </section>
   )
 }
@@ -43,9 +45,16 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
 function HotkeyRow({ action, conflicts }: { action: HotkeyAction; conflicts?: HotkeyId[] }) {
   const { hotkeys, setHotkey, resetHotkey } = useSettings()
   const [recording, setRecording] = useState(false)
+  // A shortcut is a searchable setting like any block, so it lights up the same
+  // way when the search sends someone to it.
+  const { lit, ref } = useHighlight<HTMLDivElement>(action.label)
   const combo = hotkeys[action.id]
   const isDefault = sameCombo(combo, DEFAULT_HOTKEYS[action.id])
   const isUnassigned = !combo.key
+  // What this binding costs the terminal underneath. Said rather than refused:
+  // the chord is the user's to spend, and until now nothing connected the
+  // rebind to the shell command that stopped working.
+  const cost = terminalCost(combo)
 
   const onKeyDown = (event: React.KeyboardEvent) => {
     if (!recording) return
@@ -63,7 +72,13 @@ function HotkeyRow({ action, conflicts }: { action: HotkeyAction; conflicts?: Ho
   }
 
   return (
-    <div className="flex items-center gap-4 rounded-md px-2 py-1.5 hover:bg-accent/50">
+    <div
+      ref={ref}
+      className={cn(
+        "flex items-center gap-4 rounded-md px-2 py-1.5 transition-colors duration-700 hover:bg-accent/50",
+        lit && "bg-accent/60",
+      )}
+    >
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-sm text-foreground">{action.label}</span>
         {conflicts && (
@@ -74,6 +89,7 @@ function HotkeyRow({ action, conflicts }: { action: HotkeyAction; conflicts?: Ho
             Also bound to {conflicts.map(hotkeyLabel).join(", ")}
           </span>
         )}
+        {cost && <span className="mt-0.5 text-xs text-muted-foreground">{cost}</span>}
       </div>
       <button
         type="button"

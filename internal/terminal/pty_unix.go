@@ -12,13 +12,6 @@ import (
 	"github.com/creack/pty"
 )
 
-// closeGrace is how long a hang-up waits for the signalled child to leave on
-// its own before killing it. An agent killed outright never runs its own exit
-// path: Claude Code, for one, treats a session that dies within ten seconds of
-// its first frame as a fullscreen renderer that failed to start, and two of
-// those turn its fullscreen renderer off for every session on the machine.
-const closeGrace = time.Second
-
 // startPTY starts spec's child attached to a fresh PTY sized cols x rows.
 func startPTY(spec ptySpec) (ptyHandle, error) {
 	cmd := exec.Command(spec.bin, spec.args...)

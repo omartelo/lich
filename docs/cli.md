@@ -95,8 +95,8 @@ guess at the one it resembles, and exit 1 — a typo does not open a window.
 Arguments the app itself takes still do: bare `lich`, and `lich --` with the
 Chromium flags behind it.
 
-`--json` on `sessions`, `send`, `wait`, `open`, `close` and `worktrees` replaces
-the prose with one JSON line: the peer array, the result object and the session
+`--json` on `sessions`, `send`, `wait`, `open`, `close`, `worktrees` and `cost`
+replaces the prose with one JSON line: the peer array, the result object and the session
 object exactly as this document describes them. An empty roster is `[]`, never
 `null` — a script should not have to tell those apart. One line is the contract:
 `open --prompt` does two things and still prints one object (see below).
@@ -130,24 +130,24 @@ hook (`docs/hooks/session-state.md`), and it is the same thing its card shows:
   would sit behind the prompt, unread, for as long as nobody is at that screen.
 - `-` (`""` in `--json`) — **not reported**, which is not the same as idle.
   Only providers whose companion plugin reports state have one at all (Crush
-  reports none, and a session that has not had a turn yet has said nothing
+  reports none, a Cursor session reports only where the plugin is installed in
+  Claude Code, and a session that has not had a turn yet has said nothing
   either), so an empty state says nothing about whether that session is free.
 
 ### `lich send [--project <name>] [--timeout <seconds>] <session> <prompt>`
 
 Types `<prompt>` at `<session>`'s prompt, submits it, and waits.
 
-- `<session>` is the label on the card, **or** the roster name lich derived for
-  it at spawn (`myrepo-a1b2`, the one passed as `--name` and written at a prompt
-  by a mention). Both name the same session and both are accepted, because an
-  agent holding one of them should never have to know which door it is standing
-  at — offering one name and accepting the other is what once made an agent
-  treat a single session as two and use both channels at once. The label wins a
-  tie. lich derives the roster name rather than reading it back, so a `/rename`
-  typed inside a Claude Code session moves the name *that* roster answers to and
-  not this one: the derived string keeps reaching the session here, and stops
-  reaching it through Claude Code's own messaging. `/list-agents`, in the
-  session, is what prints the name that side is using.
+- `<session>` is the label on the card, **or** the roster name that session
+  answers to (`myrepo-a1b2`, the one lich passes as `--name` and a mention
+  writes at a prompt). Both name the same session and both are accepted, because
+  an agent holding one of them should never have to know which door it is
+  standing at — offering one name and accepting the other is what once made an
+  agent treat a single session as two and use both channels at once. The label
+  wins a tie. A `/rename` typed inside a Claude Code session moves that name,
+  and lich reads it back off the session's own record, so both sides go on
+  naming it the same thing; the name lich derived at spawn stops addressing it,
+  exactly as it stops addressing it in `/list-agents`.
 - Labels are unique within a project, not across them: a label two live sessions
   answer to is an error naming both, and `--project` is what narrows it.
   Guessing which session a prompt lands in is the one mistake this must not
@@ -181,7 +181,13 @@ Types `<prompt>` at `<session>`'s prompt, submits it, and waits.
   there. The window raises a toast that opens the card. A sender that had
   already stopped waiting is told at its own prompt instead, the same way an
   answer would arrive — a pending result promises that prompt news, and a stall
-  is that news.
+  is that news. A session working two requests at once ends a turn that says
+  this about both — it finished a turn and answered neither here — so both
+  senders are told it, which is what each would have been told alone. Which of
+  the two that turn actually was is the part nothing outside that session can
+  say, so it is not decided: a note at the worker's own prompt names the
+  requests that went home unanswered, and says the next one it answers has to
+  name its ticket.
 
 ```
 docs is still working. The errand is open — a message that session was not ready
@@ -229,17 +235,28 @@ This is what a relayed message asks the receiving agent to run. An answer is
 capped at 64 KiB. Replying twice to one ticket is an error — the first answer
 already went home.
 
-Called with the answer alone it hands it to the request open against the
-calling session: the oldest message actually delivered there and still
-unanswered. The ticket is written down in one place only — the message typed at
-the target's prompt — so an agent whose context was compacted past that message
-would otherwise be holding an answer with no route home. With several requests
-open the oldest delivery is closed first, the order every provider hands queued
-tasks to its agent in; a task still queued for a prompt that has not received it
-is never picked. Outside a session, or with nothing open, it is an error rather
-than a guess, and the ticket is still the way to name a specific errand.
+Called with the answer alone it hands it to the one request open against the
+calling session: a message actually delivered there and still unanswered. The
+ticket is written down in one place only — the message typed at the target's
+prompt — so an agent whose context was compacted past that message would
+otherwise be holding an answer with no route home. A task still queued for a
+prompt that has not received it is never picked.
 
-### `lich open [--project <name>] [--kind <provider>] [--worktree <branch>] [--base <branch>] [--model <model>] [--prompt <task>]`
+With two or more open it is refused, because nothing in an answer says which
+request it belongs to and closing the wrong one sends both senders a confident
+report of work they never asked for. The refusal lists every open ticket with
+the opening of what it asked, so the retry names the right one:
+
+```
+lich: 2 requests are open against this session, and an answer that names no ticket would close the wrong one. Name the ticket the answer belongs to:
+  lich reply 1a2b3c4d "<answer>"   — run the tests and report the failures
+  lich reply 5e6f7a8b "<answer>"   — build the docs
+```
+
+Outside a session, or with nothing open, it is an error rather than a guess, and
+the ticket is still the way to name a specific errand.
+
+### `lich open [--project <name-or-path>] [--kind <provider>] [--worktree <branch>] [--base <branch>] [--model <model>] [--prompt <task>]`
 
 Opens a new session, starts it, and prints the two names it is addressed by:
 
@@ -251,8 +268,24 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
 - `--project` names the project it lands in; the default is the caller's own.
   **Outside a session there is no default** and the project must be named — the
   error lists what is open.
+  It takes a **name or a directory path**, and a path is the only way to reach a
+  project the window is not already holding: lich opens the directory as a
+  project first, then the session in it. A directory it had open before comes
+  back the way reopening it from the window does — same id, same name, and the
+  sessions it was closed with parked on their cards — because the row is matched
+  by path through the workspace's history rather than created again. A directory
+  it has never seen becomes a new project, and its tab appears without a reload.
+  The path must be **absolute**: there is no shell at lich's end, so a relative
+  one would resolve against the directory the window was launched from rather
+  than the caller's, and open a project somewhere else without saying so. A
+  leading `~` is expanded, because an MCP tool call reaches lich through no
+  shell at all. A bare word with no separator in it is always read as a project
+  name, never as a path.
+  Every other `--project` — `close`, `rename`, `worktrees` — takes a path in the
+  same spelling, but only narrows with it: opening a project is something only
+  `open` does.
 - `--kind` is what the session runs: any provider id (`claude`, `codex`,
-  `antigravity`, `opencode`, `omp`, `crush`) or `shell`. The default is the caller's own
+  `antigravity`, `opencode`, `omp`, `crush`, `cursor`, `kiro`) or `shell`. The default is the caller's own
   provider, so an agent opening a worker gets another of itself; a caller that
   is not a session at all gets Claude Code.
 - `--worktree` is the **branch name** of a git worktree, created off `--base`
@@ -273,6 +306,13 @@ It answers to "auth-fix" and to "auth-fix-9f8e". Its agent may still be starting
   branch off a typo that names a revision, leaving a checkout nobody asked for.
   It is **ignored when `--worktree` names a branch that already exists**: a base
   says where a branch starts, and that one already started.
+- **Confinement is the rung's own answer**, and the output says so when the
+  answer is yes. Nobody is at this end to answer `Ask each time` — the rung that
+  puts the question in the New session menu and the New worktree dialog — so a
+  session opened here takes its confined side, the same as `Everywhere` and as
+  `Worktrees only` on a worktree. What that costs the session is in
+  Settings › Sandbox; there is no flag to override it, because the rung is the
+  user's answer and this end is the agent's.
 - `--model` is the model the session's provider starts on. The value is whatever
   that provider's own `--model` takes — an alias, a full name, a
   `provider/model` pair — and lich passes it through unchecked: the accepted
@@ -405,9 +445,7 @@ checkout every project has and the one that cannot be removed.
 
 ### `lich browser <verb> [args]`
 
-Drives **this session's** browser — the same Chromium window **Browser tab**
-opens on the card. It is not the lich UI. Run it inside a session
-(`LICH_SESSION_ID`); outside one it exits 1.
+Drives **this session's** browser — the same Chromium window **Browser tab** opens on the card. It is not the lich UI. Run it inside a session (`LICH_SESSION_ID`); outside one it exits 1.
 
 | Verb | What it does |
 |------|----------------|
@@ -424,9 +462,53 @@ opens on the card. It is not the lich UI. Run it inside a session
 
 See [`browser-tab.md`](browser-tab.md).
 
+### `lich cost [--project <name>] [--provider <provider>] [--since <window>] [--json|--csv]`
+
+What the sessions lich still remembers have cost, at API prices, one row per project and a total under them:
+
+```
+project	sessions	unpriced	source	cost
+lich	12	2	mixed	$4.31
+revu	3	0	priced	$0.88
+total	15	2	mixed	$5.19
+9 priced by lich, 4 reported by their provider.
+Lower bound: 2 unpriced of 15 sessions — their spend is not in this total.
+```
+
+**The last line is the contract.** A session lich never priced holds no ledger row and contributes nothing, so a sum over a unit containing one is a *lower bound* — and nothing else on screen would say so. The count travels with the money on every surface: the `unpriced` column, the line under the table, the `unpriced` field in `--json`, the `unpriced` column in `--csv`. With none, the line reads `Complete: every session in this total is priced.` instead.
+
+Why a session has no price is not reported here. That is the live scan's `costMiss` (`internal/terminal/usage_cost.go`), decided per turn and never persisted, so the ledger can only say a session carries no price — an unreadable transcript, an unpriced model, a provider lich has no reader for (Antigravity and Cursor CLI), or a session that ran while the readout was off all land in the same count.
+
+**The `source` column is the other half of that contract.** The money comes from two kinds of accounting and reads identically either way: `priced` is lich's own arithmetic over the token counts Claude Code and Codex write down, `reported` is the figure oh-my-pi, opencode or Crush computed themselves and handed over, with the omission their own accounting has. A row that ran both reads `mixed`, and a total that mixes them adds the line above the last one, splitting the counted sessions between the two. A row with no money to attribute — every session in it unpriced, or its spend earned by a provider CLI started by hand inside a shell session — reads `—` and claims no rung. `docs/ceilings.md` has what each rung's own figure leaves out.
+
+With the cost readout switched off, no transcript is ever summed and every session is unpriced, so the total can only be `$0.00`. That case adds a second line naming the setting, because a zero on a machine that was never asked to count reads exactly like a machine that spent nothing.
+
+The filters:
+
+- `--project <name>` — one project, matched case-insensitively the way every other command matches one. A name no session sits under is **refused**, not answered with a zero: about money, a typo that reads as "that project cost nothing" is worse than no answer.
+- `--provider <provider>` — one session kind (`claude`, `codex`, `crush`, …). Combined with the total line this is what a provider cost across the machine. An unknown provider is not refused; it matches nothing and the report is empty.
+- `--since <window>` — `7d`, `24h`, `90m`. Sessions **active** in the window, counted whole: a session's activity is its last counted turn, and a session that ran through the boundary brings all of its cost with it. The ledger is a running total with no per-turn history behind it, so this is a filter over sessions, never a slice of the money by day. A session with nothing counted is dated by when it was parked, or by now while it is still open.
+
+`--csv` writes the per-project rows and no total — the totals are a sum of the columns, `unpriced` included, so the bound survives the export:
+
+```
+project,sessions,unpriced,source,cost_usd
+lich,12,2,mixed,4.312500
+revu,3,0,priced,0.880000
+```
+
+A row with no rung leaves the `source` cell empty rather than carrying the table's dash: to a script a blank is the absence, and the dash is a thing to print.
+
+`--json` is the whole report on one line — `projects`, the summed `sessions`, `unpriced` and `costUsd`, the total's own `source` with the `priced` and `reported` session counts behind it, and `readout` for whether anything is being counted at all.
+
+It is not registered as an MCP tool. Every tool definition is in the prompt of every session lich spawns whether or not it is used (see the ceiling below), and a total nobody asked for is not worth that on every turn — an agent that wants it runs the command.
+
+There is no `--model` breakdown. The ledger records what a `(session, transcript)` pair cost and never which model each priced turn ran under, and the model on a session row is the one selected now — so a per-model total would have to be a second accounting path, not a filter on this one.
+
 ### `lich mcp`
 
-Serves the commands above as MCP tools over stdio: one JSON-RPC 2.0 message per
+Serves the session commands above as MCP tools over stdio — `cost` is not one
+of them: one JSON-RPC 2.0 message per
 line, `initialize` / `tools/list` / `tools/call` / `ping`. stdout carries
 protocol and nothing else.
 
@@ -439,8 +521,8 @@ at lich.
 | `list_sessions` | The live sessions that can be given work, as JSON — each with the state it last reported, `waiting` among them. |
 | `send_to_session` | `session`, `prompt`, optional `project` and `timeout_seconds`. |
 | `wait_for_answer` | optional `ticket` and `timeout_seconds` — with a ticket, `lich wait <ticket>`; without one, the collect: everything ready at once. |
-| `reply_to_session` | `answer`, optional `ticket` — what a relayed message asks for; without a ticket, the request open against the calling session. |
-| `open_session` | optional `project`, `kind`, `worktree`, `base`, `model` — `lich open` — plus optional `prompt` — `lich open --prompt`, the same hand-off in the same call. |
+| `reply_to_session` | `answer`, optional `ticket` — what a relayed message asks for; without a ticket, the one request open against the calling session, and a refusal naming each open ticket when there are two. |
+| `open_session` | optional `project` (a name, or an absolute directory path, which is opened as a project first), `kind`, `worktree`, `base`, `model` — `lich open` — plus optional `prompt` — `lich open --prompt`, the same hand-off in the same call. |
 | `close_session` | `session`, optional `project`, `worktree` (`keep`/`remove`), `force`. |
 | `rename_session` | `label`, optional `session` (omitted renames the caller's own) and `project` — `lich rename`. |
 | `list_worktrees` | optional `project` — the checkouts, as JSON. |
@@ -486,7 +568,7 @@ collects say where the process is stuck.
 
 | Entry | What it holds |
 |-------|---------------|
-| `report.md` | Version and build, platform, instance state, browser, providers on PATH, plugin state per provider, and the config directory one level deep. |
+| `report.md` | Version and build, platform, instance state, browser, whether a confined session would actually be confined here, providers on PATH, plugin state per provider, and the config directory one level deep. |
 | `env.txt` | Every `LICH_*` variable plus a fixed allowlist (`SHELL`, `PATH`, `EDITOR`, the desktop ones). Anything named like a token, key, secret or password is `<SET>` / `<UNSET>`, never a value. |
 | `logs/` | `lich.log` and the rotated `lich.log.old`, each carrying at most its last 4 MiB. |
 | `goroutines.txt` | Every stack in the running instance, blocked ones included — only when one is running. A lich that holds its port but will not answer within 5s leaves that sentence here instead, which is the finding. |
@@ -509,8 +591,9 @@ lich v0.25.0 — linux/amd64
   ok    listener     <1ms  port 47821 is held by the running lich (pid 4242)
   skip  store        <1ms  held by the running lich (pid 4242)
   ok    browser       2ms  /usr/bin/chromium
-  ok    providers     3ms  4 of 6 on PATH: claude, codex, opencode, crush
-        total         6ms
+  ok    providers     3ms  4 of 8 on PATH: claude, codex, opencode, crush
+  ok    sandbox      11ms  bubblewrap confines a session here
+        total        17ms
 
 lich starts here — nothing is in the way.
 ```
@@ -523,8 +606,9 @@ The checks are in boot order, and each carries its own verdict:
 | `log` | — | The log file will not open; lich would run on stderr only. |
 | `listener` | The pinned port (`LICH_LISTEN_PORT`, else 47821) cannot be bound and no live lich holds it. | — |
 | `store` | The workspace database will not open or migrate. Skipped while an instance is running — a second process migrating the store is not a price a diagnosis may charge. | It will not close cleanly. |
-| `browser` | No Chromium-family browser resolves. lich would run and show nothing. | — |
+| `browser` | No window resolves — neither one beside the binary nor a `LICH_SHELL` pin. lich would run and show nothing. | — |
 | `providers` | — | None on PATH: the window opens, but no session can spawn. |
+| `sandbox` | — | The backend will not start (an AppArmor policy denying user namespaces, say), so a session opened with the sandbox on will not start either; or it starts and confines nothing, so a session marked confined runs on the machine. Skipped where the platform has no backend at all. |
 
 A `fail` exits 1 and a clean run exits 0, which is the automation surface here —
 there is no `--json`. It needs no TTY, no running instance and no network.
@@ -533,6 +617,17 @@ Two things it does on purpose, because a launch does them too: it creates
 `<config-dir>/lich` and an empty log file if they are missing, and — only when
 no instance is running — it opens the workspace database, creating it on a
 first run.
+
+The `sandbox` check is the one that cannot be answered by a lookup, so it opens
+a confined child and reads two files through it: one in the checkout, which
+must come back, and one in the private home the backend replaces, which must
+not. Both halves are needed. A backend whose ruleset silently applied nothing
+would start perfectly and confine nothing, and on Ubuntu and Debian an AppArmor
+policy denies unprivileged user namespaces, so bubblewrap is installed, resolves
+on `PATH`, and every confined session dies on its error. The spawn is bounded at
+two seconds and killed, so a kernel that blocks the request cannot hang the
+report. It never turns a session confined or unconfined: `internal/sandbox`
+answers that at spawn time, and this only says what the answer would be worth.
 
 ## Registration
 
@@ -553,6 +648,8 @@ own command line (`providers.AcceptsMCPServer`):
 | Crush | an `mcp add` line in the block the plugin install writes into `crushrc` | with the plugin |
 | opencode | its plugin defines the original seven as tools of its own — a plugin there cannot register an MCP server, so the session browser tools are absent | with the plugin |
 | oh-my-pi | a `lich` entry merged into `mcp.json` beside the extension the plugin install writes | with the plugin |
+| Cursor CLI | a `lich` entry merged into `~/.cursor/mcp.json` by the install — its `mcp` subcommand only lists, enables and disables what is already there | with the plugin |
+| Kiro CLI | a `kiro-cli mcp add --agent lich` the plugin install runs, so the entry lands in the agent lich owns rather than in the user's global `mcp.json` | with the plugin |
 
 Only the first two can be told on their own command line, which is what makes
 their registration per-session and secret-free. The rest arrive with the plugin
@@ -634,7 +731,8 @@ speaking, and the two are not the same kind of "not your user".
 A target that **has** lich's tools is offered one first — Claude Code and Codex
 always, Antigravity, opencode, oh-my-pi and Crush once the installed plugin is
 new enough to carry them
-(`agentplugin.HasTools`). A session pointed at a tool it does not have loses the
+(`agentplugin.HasTools`) — Cursor among them, whose tools come from the document
+its install writes rather than from the plugin it borrows from Claude Code. A session pointed at a tool it does not have loses the
 turn to an error, where the command works everywhere:
 
 ```
@@ -726,10 +824,11 @@ then waited on a lich ticket nobody would ever close.
 Three things keep that from repeating, and none of them asks the user to choose:
 
 1. **One address space.** The relay answers to the card label *and* to the peer
-   roster name (`internal/relay/rostername.go`, the Go half of
-   `frontend/src/lib/session/peer-name.ts` — a divergence there delivers a
-   message to the wrong terminal). A mention that slips into lich's tool works
-   instead of erroring.
+   roster name — the one the session's own record carries, read back per lookup
+   (`internal/terminal.AgentName`) and falling back to lich's derivation when
+   there is nothing to read (`internal/relay/rostername.go`). A mention that
+   slips into lich's tool works instead of erroring, and goes on working after a
+   `/rename`.
 2. **Both names travel.** `list_sessions` and every miss report the label and
    the roster name together, so an agent sees one session with two names.
 3. **One route home.** The relayed message says the ticket is the only way back
@@ -743,6 +842,10 @@ whoever asked.
 
 ## Known ceilings
 
+- **`cost` only sees the sessions lich still holds a row for.** A session
+  deleted for good took its ledger with it (`ON DELETE CASCADE`), so its spend
+  is in no total and in no unpriced count either — it is not excluded, it is
+  invisible. A parked session is still counted; a removed one never happened.
 - **Closing has no undo.** The window offers one for ten seconds after a close;
   nothing here does. A removed checkout is gone from disk, and a deleted session
   row with it. `--force` on a dirty checkout is the only step that asks for

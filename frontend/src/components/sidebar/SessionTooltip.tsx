@@ -1,15 +1,21 @@
 import {
   ArrowLeft,
   ArrowRight,
+  Clock,
   GitBranch,
   GitPullRequestArrow,
   Play,
   Shield,
+  ShieldOff,
   TriangleAlert,
 } from "lucide-react"
+import { unknownCwd } from "@/lib/paths"
+import { sandboxDrift } from "@/lib/providers-store"
 import type { Session } from "@/lib/session/sessions"
+import { useSandboxRung } from "@/lib/use-sandbox-rung"
 import { useSessionCwd } from "@/lib/session/use-session-cwd"
 import { useSessionRelay } from "@/lib/session/use-session-relay"
+import { scheduledFor } from "@/lib/session/schedule"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { baseReadout } from "@/lib/git/base-status"
 import { usePullRequest } from "@/lib/pulls/use-pull-request"
@@ -21,6 +27,10 @@ interface SessionTooltipProps {
   // The project's own directory: the fallback for a session with neither a
   // checkout of its own nor a reported cwd.
   path: string
+  // The project this session sits in — the scope its provider's sandbox rung is
+  // read in. The rail is the reason it is a prop: collapsed, this tooltip is the
+  // only text a session has, so it cannot be the half that stops explaining.
+  projectId: string
 }
 
 // Everything a session card knows, in words — its directory, its branch and how
@@ -29,25 +39,32 @@ interface SessionTooltipProps {
 // so this is where the text goes, and two versions of it would mean the rail
 // quietly telling you less.
 //
-// The peer-roster name is deliberately not among them: lich derives it at spawn
-// and never reads it back, so a /rename typed in the session leaves the derived
-// one naming nobody. `/list-agents` is where that name is true.
+// The peer-roster name is deliberately not among them: it addresses a session
+// from inside another one, which is not something the person reading this
+// tooltip is doing. `/list-agents` and lich's own list_sessions are where an
+// agent meets it.
 //
 // It resolves its own readouts instead of taking them as props. The stores
 // behind them are keyed by path and shared (one git poller per repository), so
 // the second reader costs a subscription, not a second poll.
-export function SessionTooltip({ session, path }: SessionTooltipProps) {
-  const liveCwd = useSessionCwd(session.id)
+export function SessionTooltip({ session, path, projectId }: SessionTooltipProps) {
+  const { cwd: liveCwd, host: cwdHost } = useSessionCwd(session.id)
   const relay = useSessionRelay(session.id)
   const shownPath = liveCwd || session.path || path
   const git = useGitStatus(shownPath)
   const pr = usePullRequest(shownPath, git?.branch ?? "", git?.head ?? "")
   const base = baseReadout(git?.base ?? null)
+  const rung = useSandboxRung(session.kind, projectId)
+  const confined = session.sandboxed ?? false
+  const skippedLinks = session.sandboxSkippedLinks ?? []
+  const drift = rung === null ? "" : sandboxDrift(rung, !!session.path, confined)
   return (
     <TooltipContent side="right" className="max-w-xs border border-border bg-card text-foreground">
       <div className="flex flex-col gap-1.5">
         <span className="font-medium">{session.label}</span>
-        <span className="break-all font-mono text-muted-foreground">{shownPath}</span>
+        <span className="break-all font-mono text-muted-foreground">
+          {cwdHost ? unknownCwd(cwdHost) : shownPath}
+        </span>
         {/* The open request, and the ticket it runs on. The card already draws
             the arrow and the peer; the number is the part that exists nowhere
             else a person can read it — it is typed once, into the target's
@@ -80,6 +97,26 @@ export function SessionTooltip({ session, path }: SessionTooltipProps) {
             )}
           </span>
         )}
+        {/* The prompt parked on this session. The card counts down to it; the
+            day and the wording are here, because "in 2d" is not a time anyone
+            can plan around and the prompt itself is the part the user has to
+            recognise to know whether to leave it there. */}
+        {session.scheduledAt && (
+          <span className="flex flex-col gap-0.5">
+            <span className="flex items-center gap-1.5 text-muted-foreground">
+              <Clock className="size-3 shrink-0" />
+              <span>
+                Scheduled for{" "}
+                <span className="font-medium text-foreground">
+                  {scheduledFor(session.scheduledAt, new Date())}
+                </span>
+              </span>
+            </span>
+            <span className="line-clamp-2 text-muted-foreground italic">
+              {session.scheduledPrompt}
+            </span>
+          </span>
+        )}
         {/* The command this terminal opens into. The card's label already says
             it while the label is still automatic — this is the only place it is
             named once the user has renamed the card. */}
@@ -92,19 +129,42 @@ export function SessionTooltip({ session, path }: SessionTooltipProps) {
         {/* What the shield on the card means. Directly under the path, because
             what it says is about that path: the sandbox is the difference
             between a session that can write anywhere and one that can write
-            here. The last line is the part nothing else says — the answer was
-            taken when the session opened, and moving the rung in Settings will
-            not move this card. */}
-        {session.sandboxed && (
+            here. The second line is the part nothing else says: the answer
+            was taken when the session opened, and moving the rung in Settings
+            will not move this card.
+
+            An unconfined session is silent here unless the rung has since moved
+            past it, which is the one time its lack of a shield is news.
+
+            The last line names what the sandbox left out of the private home
+            for being a symlink. Every path it binds is taken as it is on disk
+            and a link is skipped, so a ~/.gitconfig kept in a dotfiles
+            repository is not in there — an absence the session would otherwise
+            only meet as a command that behaves differently inside the sandbox
+            than outside it. Nothing skipped draws nothing. */}
+        {(confined || drift) && (
           <span className="flex flex-col gap-0.5">
             <span className="flex items-center gap-1.5">
-              <Shield className="size-3 shrink-0" />
-              Sandboxed
+              {confined ? (
+                <Shield className="size-3 shrink-0" />
+              ) : (
+                <ShieldOff className="size-3 shrink-0" />
+              )}
+              {confined ? "Sandboxed" : "Not sandboxed"}
             </span>
             <span className="text-muted-foreground">
-              Empty home, machine read-only, writes only in this checkout. Set when the session
-              opened; reopen it to change.
+              {confined
+                ? "Empty home, machine read-only, writes only in this checkout. "
+                : "This session runs on the machine. "}
+              {drift
+                ? "Opened before the sandbox setting changed; reopen the session to apply it."
+                : "Set when the session opened; reopen it to change."}
             </span>
+            {skippedLinks.length > 0 && (
+              <span className="text-muted-foreground">
+                Not mounted (symlinks): {skippedLinks.join(", ")}
+              </span>
+            )}
           </span>
         )}
         {git?.branch && (

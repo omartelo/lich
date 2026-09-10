@@ -1,0 +1,627 @@
+package store
+
+import (
+	"fmt"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+	"unicode/utf8"
+)
+
+// indexed wires a store to a fixed set of conversations, keyed by the provider
+// session id a row carries. It stands in for terminal.TranscriptText, whose own
+// reading of a provider's transcript is tested where it lives.
+func indexed(t testing.TB, svc *Service, texts map[string]string) {
+	t.Helper()
+	svc.SetTranscriptOf(func(providerSessionID, cwd string) (string, bool) {
+		return texts[providerSessionID], false
+	})
+}
+
+// indexedAndCut is indexed for a conversation the cap dropped the oldest of,
+// which is the answer the row has to carry through to the window.
+func indexedAndCut(t testing.TB, svc *Service, texts map[string]string) {
+	t.Helper()
+	svc.SetTranscriptOf(func(providerSessionID, cwd string) (string, bool) {
+		return texts[providerSessionID], true
+	})
+}
+
+// parkWithConversation adds a session, records the provider id its conversation
+// is filed under and closes it, which is what writes the index.
+func parkWithConversation(t testing.TB, svc *Service, sessionID, label, providerSessionID string) {
+	t.Helper()
+	if err := svc.AddSession("p1", sessionID, label, "claude", "", 2, ""); err != nil {
+		t.Fatalf("AddSession(%q): %v", sessionID, err)
+	}
+	if err := svc.SetProviderSession(sessionID, providerSessionID); err != nil {
+		t.Fatalf("SetProviderSession(%q): %v", sessionID, err)
+	}
+	if err := svc.CloseSession("p1", sessionID, ""); err != nil {
+		t.Fatalf("CloseSession(%q): %v", sessionID, err)
+	}
+}
+
+// TestClosedSessionsFindsWhatWasSaid is the whole feature: a parked session
+// whose name says nothing about the work is found by a phrase from inside the
+// conversation, and the row carries the words that made it a hit.
+func TestClosedSessionsFindsWhatWasSaid(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	indexed(t, svc, map[string]string{
+		"uuid-a": "we traced the worktree adoption guard and shipped it",
+		"uuid-b": "unrelated chatter about the release notes",
+	})
+	parkWithConversation(t, svc, "s-a", "Session 4", "uuid-a")
+	parkWithConversation(t, svc, "s-b", "Session 5", "uuid-b")
+
+	closed := mustClosed(t, svc, "adoption")
+	if len(closed) != 1 || closed[0].ID != "s-a" {
+		t.Fatalf("ClosedSessions(adoption) = %+v, want only s-a", closed)
+	}
+	if !strings.Contains(closed[0].Snippet, "adoption") {
+		t.Errorf("Snippet = %q, want the matched stretch of the conversation", closed[0].Snippet)
+	}
+}
+
+// TestClosedSessionsMatchesNameOrConversation pins the OR the query is built
+// around. A row matched on its name carries no snippet: there is no sentence
+// behind that hit, and inventing one would say the conversation matched.
+func TestClosedSessionsMatchesNameOrConversation(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	indexed(t, svc, map[string]string{
+		"uuid-a": "nothing in here about the label",
+		"uuid-b": "we traced the worktree adoption guard",
+	})
+	parkWithConversation(t, svc, "s-named", "worktree adoption", "uuid-a")
+	parkWithConversation(t, svc, "s-said", "Session 5", "uuid-b")
+
+	closed := mustClosed(t, svc, "worktree adoption")
+	if len(closed) != 2 {
+		t.Fatalf("got %d rows, want the name match and the conversation match", len(closed))
+	}
+	byID := map[string]ClosedSession{}
+	for _, row := range closed {
+		byID[row.ID] = row
+	}
+	if snippet := byID["s-named"].Snippet; snippet != "" {
+		t.Errorf("name-matched Snippet = %q, want none", snippet)
+	}
+	if snippet := byID["s-said"].Snippet; !strings.Contains(snippet, "adoption") {
+		t.Errorf("conversation-matched Snippet = %q, want the matched stretch", snippet)
+	}
+}
+
+// TestClosedSessionsCarriesNoSnippetWithoutATerm covers the list the palette
+// opens with: nothing was searched for, so no row has a sentence to show.
+func TestClosedSessionsCarriesNoSnippetWithoutATerm(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	indexed(t, svc, map[string]string{"uuid-a": "we traced the worktree adoption guard"})
+	parkWithConversation(t, svc, "s-a", "Session 4", "uuid-a")
+
+	closed := mustClosed(t, svc, "")
+	if len(closed) != 1 {
+		t.Fatalf("got %d rows, want the one parked session", len(closed))
+	}
+	if closed[0].Snippet != "" {
+		t.Errorf("Snippet = %q, want none for a query that matched nothing in particular", closed[0].Snippet)
+	}
+}
+
+// TestForgettingASessionForgetsItsConversation is the purge. A row deleted for
+// good must take its conversation with it, or the index outlives the session and
+// keeps answering searches with an id nothing can route to.
+func TestForgettingASessionForgetsItsConversation(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	indexed(t, svc, map[string]string{"uuid-a": "we traced the worktree adoption guard"})
+	parkWithConversation(t, svc, "s-a", "Session 4", "uuid-a")
+
+	if err := svc.ForgetSession("s-a"); err != nil {
+		t.Fatalf("ForgetSession: %v", err)
+	}
+	if closed := mustClosed(t, svc, "adoption"); len(closed) != 0 {
+		t.Errorf("ClosedSessions(adoption) = %+v after forgetting, want nothing", closed)
+	}
+	if n := indexRows(t, svc); n != 0 {
+		t.Errorf("%d index rows survived the delete, want 0", n)
+	}
+}
+
+// TestClosingASessionAgainReplacesItsConversation covers the row that comes
+// back: a resumed session is parked a second time, and appending rather than
+// replacing would leave the search matching a conversation that has moved on.
+func TestClosingASessionAgainReplacesItsConversation(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	texts := map[string]string{"uuid-a": "the first close talked about adoption"}
+	indexed(t, svc, texts)
+	parkWithConversation(t, svc, "s-a", "Session 4", "uuid-a")
+
+	texts["uuid-a"] = "the second close talked about ceilings"
+	if err := svc.CloseSession("p1", "s-a", ""); err != nil {
+		t.Fatalf("CloseSession: %v", err)
+	}
+	if closed := mustClosed(t, svc, "adoption"); len(closed) != 0 {
+		t.Errorf("ClosedSessions(adoption) = %+v, want the replaced conversation gone", closed)
+	}
+	if closed := mustClosed(t, svc, "ceilings"); len(closed) != 1 {
+		t.Errorf("ClosedSessions(ceilings) = %+v, want the session it was said in", closed)
+	}
+	if n := indexRows(t, svc); n != 1 {
+		t.Errorf("%d index rows for one session, want 1", n)
+	}
+}
+
+// TestBackfillIndexesSessionsParkedBeforeTheIndex is the lazy catch-up: a
+// workspace that parked its sessions before this version has no index for them,
+// and the first search carrying a term is what starts reading them. The count
+// goes back with the answer, so a list that cannot see every session yet says so
+// instead of answering short in silence.
+func TestBackfillIndexesSessionsParkedBeforeTheIndex(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	// Parked with nothing wired, which is what a row closed by an older lich
+	// looks like: a session with a conversation on disk and no index row.
+	parkWithConversation(t, svc, "s-a", "Session 4", "uuid-a")
+
+	history, err := svc.ClosedSessions("adoption")
+	if err != nil {
+		t.Fatalf("ClosedSessions: %v", err)
+	}
+	if history.Indexing != 1 {
+		t.Fatalf("Indexing = %d before anything is wired, want 1", history.Indexing)
+	}
+
+	indexed(t, svc, map[string]string{"uuid-a": "we traced the worktree adoption guard"})
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		history, err = svc.ClosedSessions("adoption")
+		if err != nil {
+			t.Fatalf("ClosedSessions: %v", err)
+		}
+		if history.Indexing == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("backfill still reports %d unindexed sessions", history.Indexing)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(history.Sessions) != 1 || history.Sessions[0].ID != "s-a" {
+		t.Errorf("ClosedSessions(adoption) = %+v after the backfill, want s-a", history.Sessions)
+	}
+}
+
+// TestBackfillMarksASessionItCannotRead is what keeps the backfill from running
+// forever: a session whose conversation cannot be read is written down as read,
+// so the next search does not go back to the same disk for the same nothing.
+func TestBackfillMarksASessionItCannotRead(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	indexed(t, svc, map[string]string{})
+	if err := svc.AddSession("p1", "s-shell", "Home", "shell", "", 2, ""); err != nil {
+		t.Fatalf("AddSession: %v", err)
+	}
+	if err := svc.CloseSession("p1", "s-shell", ""); err != nil {
+		t.Fatalf("CloseSession: %v", err)
+	}
+
+	history, err := svc.ClosedSessions("anything")
+	if err != nil {
+		t.Fatalf("ClosedSessions: %v", err)
+	}
+	if history.Indexing != 0 {
+		t.Errorf("Indexing = %d for a shell with no conversation, want 0", history.Indexing)
+	}
+}
+
+// TestFTSQuery pins the translation from what somebody types to what FTS5 is
+// asked. A term is split the way the tokenizer splits the text it searches, and
+// nothing that means something to the MATCH grammar survives the quoting.
+func TestFTSQuery(t *testing.T) {
+	tests := []struct {
+		name string
+		term string
+		want string
+	}{
+		{name: "one word is a prefix phrase", term: "adopt", want: `"adopt"*`},
+		{name: "words are ANDed", term: "worktree guard", want: `"worktree"* "guard"*`},
+		{
+			name: "a hyphenated name splits the way the index does",
+			term: "use-history-search",
+			want: `"use"* "history"* "search"*`,
+		},
+		{name: "the MATCH grammar is not reachable", term: `a OR "b" NEAR(c)`, want: `"a"* "OR"* "b"* "NEAR"* "c"*`},
+		{name: "nothing to match on", term: "  -- ", want: ""},
+		{name: "an empty term", term: "", want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ftsQuery(tt.term); got != tt.want {
+				t.Errorf("ftsQuery(%q) = %q, want %q", tt.term, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestClosedSessionsSurvivesATermOfPunctuation is what the quoting above buys:
+// a term FTS5 could read as an operator reaches the query as a search, not as a
+// syntax error that costs the list every row.
+func TestClosedSessionsSurvivesATermOfPunctuation(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	indexed(t, svc, map[string]string{"uuid-a": "we traced the worktree adoption guard"})
+	parkWithConversation(t, svc, "s-a", "Session 4", "uuid-a")
+
+	for _, term := range []string{`"`, `*`, `(worktree`, `NOT`, `adoption OR ceilings`} {
+		if _, err := svc.ClosedSessions(term); err != nil {
+			t.Errorf("ClosedSessions(%q): %v", term, err)
+		}
+	}
+}
+
+// indexRows counts the conversations the index holds, which is the only way to
+// see a row that survived a delete or a close that should have replaced it.
+func indexRows(t *testing.T, svc *Service) int {
+	t.Helper()
+	var n int
+	if err := svc.db.QueryRow(`SELECT COUNT(*) FROM session_texts`).Scan(&n); err != nil {
+		t.Fatalf("count index rows: %v", err)
+	}
+	return n
+}
+
+// windowOf parks one conversation and asks the query for the stretch it cuts
+// around the first mention of word, which is what the snippet is cut out of.
+func windowOf(t *testing.T, body, word string) (string, bool) {
+	t.Helper()
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	indexed(t, svc, map[string]string{"uuid-a": body})
+	parkWithConversation(t, svc, "s-a", "Session 4", "uuid-a")
+
+	window, ok := svc.conversationWindows([]string{"s-a"}, word)["s-a"]
+	return window, ok
+}
+
+// TestConversationWindowsCutsAroundTheMention covers the window the query cuts:
+// it only has to land the mention inside a bounded stretch of the conversation,
+// wherever in it the mention falls, and it must never hand back a half rune for
+// the snippet to draw as a replacement character.
+func TestConversationWindowsCutsAroundTheMention(t *testing.T) {
+	filler := strings.Repeat("filler ", 2000)
+
+	t.Run("keeps the mention and its surroundings", func(t *testing.T) {
+		window, ok := windowOf(t, filler+"the ADOPTION guard "+filler, "adoption")
+		if !ok {
+			t.Fatal("no window for a conversation that mentions the word")
+		}
+		if !strings.Contains(window, "ADOPTION guard") {
+			t.Errorf("window = %.80q…, want the mention and what follows it", window)
+		}
+		if n := utf8.RuneCountInString(window); n > windowChars {
+			t.Errorf("window is %d characters, want at most %d", n, windowChars)
+		}
+	})
+
+	t.Run("windows a mention at either end of the conversation", func(t *testing.T) {
+		for name, body := range map[string]string{
+			"first words": "the adoption guard " + filler,
+			"last words":  filler + "the adoption guard",
+		} {
+			window, ok := windowOf(t, body, "adoption")
+			if !ok {
+				t.Fatalf("%s: no window", name)
+			}
+			if !strings.Contains(window, "adoption guard") {
+				t.Errorf("%s: window = %.80q…, want the mention", name, window)
+			}
+		}
+	})
+
+	t.Run("cuts on rune boundaries", func(t *testing.T) {
+		accents := strings.Repeat("é", 4000)
+		window, ok := windowOf(t, accents+"adoption"+accents, "adoption")
+		if !ok {
+			t.Fatal("no window for a conversation that mentions the word")
+		}
+		if strings.ContainsRune(window, '\uFFFD') {
+			t.Error("window holds a replacement character, so an edge fell inside a rune")
+		}
+		if !utf8.ValidString(window) {
+			t.Error("window is not valid UTF-8")
+		}
+		if n := utf8.RuneCountInString(window); n != windowChars {
+			t.Errorf("window is %d characters, want the full %d", n, windowChars)
+		}
+	})
+
+	t.Run("leaves out a conversation that does not mention the word", func(t *testing.T) {
+		// What an accent fold in the index looks like from here: the search
+		// matched "cion" against "ción", and the row keeps its place with no
+		// snippet under it.
+		if window, ok := windowOf(t, "una decisión importante", "cion"); ok {
+			t.Errorf("window = %q, want none", window)
+		}
+	})
+}
+
+// TestConversationWindowsBoundThePage is the cost the window exists for: the
+// rows of a page are matched on conversations of megabytes each, and what the
+// search reads out of them is the window per row and nothing more.
+func TestConversationWindowsBoundThePage(t *testing.T) {
+	const rows, size = 20, 512 * 1024
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	parkConversations(t, svc, rows, conversationOfSize(size))
+
+	ids := make([]string, rows)
+	for i := range ids {
+		ids[i] = fmt.Sprintf("s-%d", i)
+	}
+	windows := svc.conversationWindows(ids, "session")
+
+	if len(windows) != rows {
+		t.Fatalf("windowed %d of %d conversations", len(windows), rows)
+	}
+	read := 0
+	for _, window := range windows {
+		read += len(window)
+	}
+	if want := rows * windowChars; read > want {
+		t.Errorf("page read %d bytes of %d indexed, want at most %d",
+			read, rows*size, want)
+	}
+}
+
+// TestTheCapCuttingReachesTheRow carries the flag the whole way: the reader
+// reports the cap dropped the oldest of a conversation, the close writes it down
+// beside the body, and the history row the window draws says so. Nothing else
+// can tell a session searched whole from one searched in part.
+func TestTheCapCuttingReachesTheRow(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	indexedAndCut(t, svc, map[string]string{"uuid-a": "we traced the worktree adoption guard"})
+	parkWithConversation(t, svc, "s-cut", "Session 4", "uuid-a")
+	indexed(t, svc, map[string]string{"uuid-b": "a short conversation about ceilings"})
+	parkWithConversation(t, svc, "s-whole", "Session 5", "uuid-b")
+
+	byID := map[string]ClosedSession{}
+	for _, row := range mustClosed(t, svc, "") {
+		byID[row.ID] = row
+	}
+	if !byID["s-cut"].Truncated {
+		t.Error("the row of a conversation the cap cut does not say so")
+	}
+	if byID["s-whole"].Truncated {
+		t.Error("a conversation indexed whole reports itself cut")
+	}
+	// It rides on the row whether the search touched the conversation or not:
+	// what it explains is a search that missed, which has no snippet either.
+	if !mustClosedRow(t, svc, "adoption", "s-cut").Truncated {
+		t.Error("the flag is lost when the row is matched on its conversation")
+	}
+}
+
+// mustClosedRow is mustClosed narrowed to the one row a test is about.
+func mustClosedRow(t *testing.T, svc *Service, term, sessionID string) ClosedSession {
+	t.Helper()
+	for _, row := range mustClosed(t, svc, term) {
+		if row.ID == sessionID {
+			return row
+		}
+	}
+	t.Fatalf("ClosedSessions(%q) returned no row %q", term, sessionID)
+	return ClosedSession{}
+}
+
+// TestClosedSessionsKeepsARowMatchedByAFold: the index folds accents, so
+// "decision" finds a conversation that says "decisión", and the plain text has
+// no snippet to cut for it. The row still answers, and says which half of the
+// search it answered on — that flag, not the snippet, is what the window keeps
+// it on.
+func TestClosedSessionsKeepsARowMatchedByAFold(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	indexed(t, svc, map[string]string{"uuid-a": "una decisión importante"})
+	parkWithConversation(t, svc, "s-a", "Session 4", "uuid-a")
+
+	row := mustClosedRow(t, svc, "decision", "s-a")
+
+	if !row.MatchedConversation {
+		t.Error("a row the index matched does not say so")
+	}
+	if row.Snippet != "" {
+		t.Errorf("Snippet = %q, want none for a hit the plain text does not hold", row.Snippet)
+	}
+	if named := mustClosedRow(t, svc, "Session", "s-a"); named.MatchedConversation {
+		t.Error("a row matched by name alone claims its conversation matched")
+	}
+}
+
+// TestClosedSessionsSnippetsATermSplitOnPunctuation pins the two halves of the
+// conversation search reading a term the same way: the index is asked for
+// "worktree/port" as two words, so the snippet has to look for two words too, or
+// the hit the index found shows nothing under it.
+func TestClosedSessionsSnippetsATermSplitOnPunctuation(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	indexed(t, svc, map[string]string{"uuid-a": "we traced the worktree port hash"})
+	parkWithConversation(t, svc, "s-a", "Session 4", "uuid-a")
+
+	row := mustClosedRow(t, svc, "worktree/port", "s-a")
+
+	if !strings.Contains(row.Snippet, "worktree") {
+		t.Errorf("Snippet = %q, want the matched stretch of the conversation", row.Snippet)
+	}
+}
+
+// TestResumingASessionDropsItsIndexRow: a resume reinserts the row under a new
+// id and deletes the old one, and the conversation has to go with it — a body
+// of up to eight megabytes left under an id nothing refers to is a leak that
+// grows by one on every resume, and a search still walks it.
+func TestResumingASessionDropsItsIndexRow(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	indexed(t, svc, map[string]string{"uuid-a": "we traced the worktree adoption guard"})
+	parkWithConversation(t, svc, "s-a", "Session 4", "uuid-a")
+
+	if _, err := svc.ReopenSession("s-a", "s-a2"); err != nil {
+		t.Fatalf("ReopenSession: %v", err)
+	}
+
+	if n := indexRows(t, svc); n != 0 {
+		t.Errorf("%d index rows for a session that is open again, want 0", n)
+	}
+	if n := ftsHits(t, svc, "adoption"); n != 0 {
+		t.Errorf("the index still answers %d hits for a conversation whose row is gone", n)
+	}
+	if err := svc.CloseSession("p1", "s-a2", ""); err != nil {
+		t.Fatalf("CloseSession: %v", err)
+	}
+	if n := indexRows(t, svc); n != 1 {
+		t.Errorf("%d index rows after the second park, want 1", n)
+	}
+}
+
+// TestForgettingAProjectForgetsItsConversations: the project's sessions go
+// through the schema's cascade and never through a code path, so the
+// conversations have to ride the same clause.
+func TestForgettingAProjectForgetsItsConversations(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	indexed(t, svc, map[string]string{"uuid-a": "we traced the worktree adoption guard"})
+	parkWithConversation(t, svc, "s-a", "Session 4", "uuid-a")
+
+	if err := svc.DeleteProject("p1"); err != nil {
+		t.Fatalf("DeleteProject: %v", err)
+	}
+
+	if n := indexRows(t, svc); n != 0 {
+		t.Errorf("%d index rows survived the project, want 0", n)
+	}
+	if n := ftsHits(t, svc, "adoption"); n != 0 {
+		t.Errorf("the index still answers %d hits for a project that is gone", n)
+	}
+}
+
+// TestCloseWaitsOutTheBackfill: the backfill writes through the store's one
+// connection, so Close has to wait for the session it is on rather than pull
+// the database from under it — and a backfill asked for after Close has begun
+// must start nothing at all.
+func TestCloseWaitsOutTheBackfill(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "test.db")
+	svc, err := open(path)
+	if err != nil {
+		t.Fatalf("open test store: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.Close() })
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	parkWithConversation(t, svc, "s-a", "Session 4", "uuid-a")
+	reading, release := make(chan struct{}), make(chan struct{})
+	svc.SetTranscriptOf(func(string, string) (string, bool) {
+		close(reading)
+		<-release
+		return "we traced the worktree adoption guard", false
+	})
+	if _, err := svc.ClosedSessions("adoption"); err != nil {
+		t.Fatalf("ClosedSessions: %v", err)
+	}
+	<-reading
+
+	closed := make(chan error, 1)
+	go func() { closed <- svc.Close() }()
+	select {
+	case err := <-closed:
+		t.Fatalf("Close returned %v with a backfill mid-read", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(release)
+	select {
+	case err := <-closed:
+		if err != nil {
+			t.Fatalf("Close: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Close never returned after the backfill let go")
+	}
+	// Read back through a second handle: the first is closed, and the write
+	// it waited for has to be on disk.
+	reopened, err := open(path)
+	if err != nil {
+		t.Fatalf("reopen test store: %v", err)
+	}
+	defer func() { _ = reopened.Close() }()
+	if n := indexRows(t, reopened); n != 1 {
+		t.Errorf("%d index rows after the store closed under a backfill, want the 1 it was writing", n)
+	}
+	// Started after Close: the guard has to turn it into nothing, or the
+	// WaitGroup is added to under a Wait that already returned.
+	svc.backfill()
+	if svc.backfilling.Load() {
+		t.Error("a backfill started after the store closed")
+	}
+}
+
+// ftsHits asks the index directly, past the join to sessions that hides an
+// orphan from the history list: it is the only way to see a body the triggers
+// left in the index after its row was gone.
+func ftsHits(t *testing.T, svc *Service, term string) int {
+	t.Helper()
+	var n int
+	if err := svc.db.QueryRow(
+		`SELECT COUNT(*) FROM session_texts_fts WHERE session_texts_fts MATCH ?`, ftsQuery(term),
+	).Scan(&n); err != nil {
+		t.Fatalf("count index hits: %v", err)
+	}
+	return n
+}
+
+// conversationOfSize is the prose the cost measurements run on: a session that
+// talked about one thing all the way through, so the term is mentioned
+// thousands of times, which is the shape FTS5's own snippet() walks and the
+// shape the window has to cut cheaply.
+func conversationOfSize(size int) string {
+	const paragraph = "we traced the session through the worktree adoption guard " +
+		"and wrote down what the store said before parking the session again. "
+	var b strings.Builder
+	for b.Len() < size {
+		b.WriteString(paragraph)
+	}
+	return b.String()
+}
+
+// parkConversations parks n sessions holding the same conversation, which is the
+// synthetic workspace #539 measured its worst case on.
+func parkConversations(t testing.TB, svc *Service, n int, body string) {
+	t.Helper()
+	texts := make(map[string]string, n)
+	for i := range n {
+		texts[fmt.Sprintf("uuid-%d", i)] = body
+	}
+	indexed(t, svc, texts)
+	for i := range n {
+		parkWithConversation(t, svc, fmt.Sprintf("s-%d", i), "Session", fmt.Sprintf("uuid-%d", i))
+	}
+}
+
+// BenchmarkClosedSessionsSnippets is #539's synthetic worst case: two hundred
+// parked sessions of 434 KB with a term matching every one of them, answered as
+// one page of a hundred rows carrying a snippet each. What it measures is what
+// the page reads, which the allocation per search says better than the clock.
+func BenchmarkClosedSessionsSnippets(b *testing.B) {
+	svc := newTestStore(b)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	parkConversations(b, svc, 200, conversationOfSize(434*1024))
+
+	for b.Loop() {
+		if _, err := svc.ClosedSessions("session"); err != nil {
+			b.Fatalf("ClosedSessions: %v", err)
+		}
+	}
+}

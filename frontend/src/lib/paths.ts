@@ -13,3 +13,12 @@ export function baseName(path: string): string {
   const segments = path.split(/[/\\]+/).filter(Boolean)
   return segments[segments.length - 1] ?? ""
 }
+
+// unknownCwd is what a path readout says when the backend reported a host
+// instead of a directory: the session's shell runs inside tmux, over ssh or in
+// a container, and the last local path it knew is a real directory the user is
+// not in. Saying nothing would read as "still there" — the readout has to say
+// it does not know, and what is in the way.
+export function unknownCwd(host: string): string {
+  return `cwd unknown · inside ${host}`
+}

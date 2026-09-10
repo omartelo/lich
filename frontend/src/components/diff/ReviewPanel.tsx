@@ -1,10 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { Notice } from "@/components/common/Notice"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import type { LastSaid, LastTurn } from "@/lib/api-types"
+import { onAppEvent } from "@/lib/app-events"
+import { readDiffSource, writeDiffSource, type DiffSource } from "@/lib/dock-prefs"
 import { discardTargets, parseDiff, type DiffFile } from "@/lib/git/diff"
+import {
+  lastTurnNotice,
+  saidNote,
+  turnSwitchable,
+  turnUnavailableReason,
+} from "@/lib/git/last-turn"
 import { addReviewComment } from "@/lib/review-comments"
-import { ProjectService } from "@/lib/rpc"
+import { ProjectService, Terminal } from "@/lib/rpc"
 import { useActiveSession } from "@/lib/session/use-active-session"
+import { formatAge, subscribeAge } from "@/lib/session/session-age"
+import { isIdEvent, TURN_EVENT } from "@/lib/session/session-events"
+import { useSessionEverReported, useSessionStatus } from "@/lib/session/use-session-status"
 import { useGitStatus } from "@/lib/git/use-git-status"
 import { useInject } from "@/lib/use-inject"
 import { errorText } from "@/lib/utils"
@@ -21,19 +34,64 @@ import { FileDiff } from "./FileDiff"
 // counts stood still — not one tick, but indefinitely.
 const DIFF_POLL_MS = 2_000
 
-// ReviewPanel is the Review tab's body: the active session's uncommitted diff,
-// one collapsible file at a time. Context-menu actions write file/line
-// references into the session's PTY, mirroring the footer's attach-file button,
-// or hold a comment on the selection for the batch at the panel's foot.
+// Said in full on the option itself, because the card cannot: the pair of
+// snapshots brackets wall-clock time, so every hand that touched the checkout
+// while the turn ran is inside it. Nothing here can attribute a line, and the
+// wording must not imply otherwise.
+const LAST_TURN_HINT =
+  "What changed on disk while the last turn ran — including edits from a formatter, your editor, or you."
+
+// ReviewPanel is the Review tab's body: the active session's diff, one
+// collapsible file at a time, read either from the working tree or from the
+// session's last finished turn. Context-menu actions write file/line references
+// into the session's PTY, mirroring the footer's attach-file button, or hold a
+// comment on the selection for the batch at the panel's foot.
 // It follows the active session — a worktree session reviews its checkout, not
 // the project root. The dock (RightDock) owns the surrounding chrome: width,
 // full screen, the tab bar and the close button.
 export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
-  const { sessionId, path } = useActiveSession()
+  const { sessionId, path, kind, hasLastTurn } = useActiveSession()
   const inject = useInject(sessionId)
   const status = useGitStatus(path)
+  // The source switch is earned, not assumed: a provider that never reports its
+  // state and holds no record has no turn to bracket, so it is offered the
+  // working tree alone (turnSwitchable).
+  const reported = useSessionEverReported(sessionId)
+  // Where that is standing rather than momentary, the strip is still drawn and
+  // the dead option carries the reason, so the absence is read once instead of
+  // being inferred from a control that never appears (turnUnavailableReason).
+  const unavailable = turnUnavailableReason(kind)
+  // The recap band reads the last thing the agent said, which mid-turn is the
+  // previous turn's, and the band says so rather than leaving the reader to the
+  // card's spinner (saidNote).
+  const sessionStatus = useSessionStatus(sessionId)
+  const switchable = turnSwitchable(reported, hasLastTurn)
+  // The source the reviewer picked, read back on every mount because the dock
+  // has no shortage of them: it is a ternary between two component types, so
+  // each flip to the Code tab unmounts this panel whole (dock-prefs).
+  const [wanted, setWanted] = useState<DiffSource>(readDiffSource)
+  // A source the session cannot answer for must never be the one on screen: it
+  // would sit on an empty panel with no control anywhere to leave it by. So the
+  // guard makes what is *shown*, and nothing writes "worktree" back over the
+  // choice — a session that holds no record starts unswitchable after a reload
+  // and turns true only when it next reports, so a reset would fire first and
+  // throw the remembered choice away before the switch ever appeared.
+  const source: DiffSource = switchable ? wanted : "worktree"
+  const changeSource = (next: DiffSource) => {
+    writeDiffSource(next)
+    setWanted(next)
+  }
   const [files, setFiles] = useState<DiffFile[] | null>(null)
   const [failed, setFailed] = useState(false)
+  const [turnState, setTurnState] = useState<LastTurn["state"] | null>(null)
+  const [endedAt, setEndedAt] = useState<number | null>(null)
+  // The agent's own closing words for the shown turn; "" whenever there are
+  // none, which is also every state the working tree is in.
+  const [said, setSaid] = useState("")
+  // The revision the shown diff's new side stands at, which is what the
+  // expander reads unchanged lines from: "" is the working tree, and a turn
+  // carries the snapshot tree it ended on.
+  const [ref, setRef] = useState("")
   const [pendingDiscard, setPendingDiscard] = useState<DiffFile | null>(null)
 
   // The text behind what is on screen, and the id of the newest read — a reply
@@ -51,11 +109,35 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
     }
     const mine = ++seq.current
     try {
-      const text = await ProjectService.DiffText(path)
+      // The working tree wears the same shape rather than branching the whole
+      // read: it is always "ok", it has no window to date, and every line below
+      // then reads one source.
+      //
+      // The words are read beside the diff rather than after it — they are two
+      // reads of the same moment — and their own failure is swallowed: a recap
+      // lich could not find is a band that does not appear, never a panel that
+      // reports it could not read the turn.
+      let turn: LastTurn
+      let words = ""
+      if (source === "turn") {
+        const [diff, said] = await Promise.all([
+          Terminal.LastTurnDiff(sessionId),
+          Terminal.LastTurnSaid(sessionId).catch(() => ({}) as LastSaid),
+        ])
+        turn = diff
+        words = said.text ?? ""
+      } else {
+        turn = { state: "ok", diff: await ProjectService.DiffText(path) }
+      }
       if (mine !== seq.current) {
         return
       }
       setFailed(false)
+      setTurnState(turn.state)
+      setEndedAt(turn.endedAt ?? null)
+      setSaid(words)
+      setRef(source === "turn" ? (turn.after ?? "") : "")
+      const text = turn.diff ?? ""
       if (text === lastText.current) {
         return
       }
@@ -68,17 +150,53 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
       lastText.current = null
       setFiles([])
       setFailed(true)
+      setRef("")
     }
-  }, [path])
+  }, [path, sessionId, source])
+
+  // Switching source — or checkout — invalidates the held text rather than
+  // trusting the identity check below it: two sources legitimately produce the
+  // same string, most often "", and the short-circuit would leave the previous
+  // source's files on screen under the new source's name.
+  useEffect(() => {
+    lastText.current = null
+    setFiles(null)
+    setTurnState(null)
+    setEndedAt(null)
+    setSaid("")
+    setRef("")
+  }, [source, path, sessionId])
 
   // Two signals feeding one read: the status counts move the instant a file is
   // touched, so they invalidate immediately, and the interval covers the edits
   // they are blind to (see DIFF_POLL_MS).
+  //
+  // A finished turn has neither problem — it cannot change once it is over — so
+  // that source is not polled at all. TURN_EVENT is what moves it, and it has to
+  // be that rather than the session's state: the record is filed on a snapshot
+  // worker well after the `done` that closed the turn, so a read taken on the
+  // state report answers with the turn before this one.
   useEffect(() => {
     void refresh()
+    if (source === "turn") {
+      return onAppEvent(TURN_EVENT, (data) => {
+        if (isIdEvent(data) && data.id === sessionId) {
+          void refresh()
+        }
+      })
+    }
     const timer = setInterval(() => void refresh(), DIFF_POLL_MS)
     return () => clearInterval(timer)
-  }, [refresh, status?.files, status?.added, status?.deleted])
+  }, [refresh, source, sessionId, status?.files, status?.added, status?.deleted])
+
+  // A turn's diff is against a snapshot, so it is expandable only once that
+  // snapshot's oid has arrived — reading the working tree instead would show
+  // lines the diff was never computed against, and say nothing about it.
+  const expandable = source === "worktree" || ref !== ""
+  const expand = useCallback(
+    (rel: string, from: number, to: number) => ProjectService.FileLines(path, rel, ref, from, to),
+    [path, ref],
+  )
 
   // Reverting a rename touches both paths (new removed, old restored); the
   // panel refreshes immediately instead of waiting for the next poll tick.
@@ -100,13 +218,28 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
 
   return (
     <div className="flex h-full flex-col">
+      {(switchable || unavailable !== "") && (
+        <SourceRow
+          source={source}
+          onSource={changeSource}
+          endedAt={endedAt}
+          unavailable={switchable ? "" : unavailable}
+        />
+      )}
+      {source === "turn" && said !== "" && <SaidBand text={said} note={saidNote(sessionStatus)} />}
       <div className="flex-1 overflow-y-auto">
         <PanelBody
+          source={source}
+          turnState={turnState}
           files={files}
           failed={failed}
           onInject={inject}
           onSessionComment={(file, lines, text) => addReviewComment(path, file, lines, text)}
-          onDiscard={setPendingDiscard}
+          // Discarding is an edit to the working tree, so it belongs to the
+          // working tree's own view. Offered on a finished turn it would read as
+          // an undo for that turn, which is not what it does.
+          onDiscard={source === "worktree" ? setPendingDiscard : undefined}
+          onExpand={expandable ? expand : undefined}
           bulk={bulk}
         />
       </div>
@@ -120,23 +253,173 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
   )
 }
 
+// SaidBand is the agent's own closing words for the shown turn, above the files
+// it changed, under a label naming which turn spoke them whenever that is not
+// the turn below (see saidNote). A band rather than a card: it shares the
+// panel's edges and is set apart by its ground alone, because the diff below is
+// the object that carries the hierarchy.
+//
+// It sits outside the scrolling body and scrolls in its own right, so a turn
+// that ended in a long report cannot push the file list off screen. The text is
+// rendered as text — the agent writes markdown, and a panel that parsed it would
+// be claiming to know which provider's flavour this is.
+function SaidBand({ text, note }: { text: string; note: string }) {
+  return (
+    <div className="flex shrink-0 flex-col gap-1 border-b border-border bg-muted px-2.5 pt-2 pb-2.5">
+      <span className="flex items-baseline gap-1.5">
+        <span className="text-2xs font-medium tracking-wider text-muted-foreground uppercase">
+          Said
+        </span>
+        {/* Which turn is speaking: the one thing the words themselves cannot
+            say, and the diff beside them has no window to date while it runs. */}
+        {note !== "" && <span className="text-2xs text-muted-foreground">{note}</span>}
+      </span>
+      <p className="max-h-32 overflow-y-auto whitespace-pre-wrap text-xs">{text}</p>
+    </div>
+  )
+}
+
+interface SourceRowProps {
+  source: DiffSource
+  onSource: (source: DiffSource) => void
+  /** When the shown turn's window closed (unix ms), or null when none is. */
+  endedAt: number | null
+  /** Why "Last turn" is dead here, "" while it is live (turnUnavailableReason). */
+  unavailable: string
+}
+
+// SourceRow is the strip above the file list holding the source switch — the
+// same shape the Code tab gives its filter field, so the two tabs read as
+// siblings rather than as two different panels.
+function SourceRow({ source, onSource, endedAt, unavailable }: SourceRowProps) {
+  const age = useAge(source === "turn" ? endedAt : null)
+  const dead = unavailable !== ""
+  return (
+    // The reason goes on a line of its own rather than beside the switch: the
+    // dock resizes down to MIN_REM, where a sentence sharing the row with the
+    // toggle group has nowhere to go but through it.
+    <div className="flex shrink-0 flex-col gap-1 border-b border-border p-1.5">
+      <div className="flex items-center gap-2">
+        <ToggleGroup
+          value={[source]}
+          onValueChange={(next) => next[0] && onSource(next[0] as DiffSource)}
+          spacing={1}
+          aria-label="Which changes to show"
+          className="border border-border p-[0.1875rem]"
+        >
+          <ToggleGroupItem value="worktree" size="sm" className="h-6 px-2.5 text-xs">
+            Working tree
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="turn"
+            size="sm"
+            className="h-6 px-2.5 text-xs"
+            disabled={dead}
+            title={dead ? unavailable : LAST_TURN_HINT}
+          >
+            Last turn
+          </ToggleGroupItem>
+        </ToggleGroup>
+        {/* The one thing the panel can state without claiming authorship: when
+            the window closed. Absent while there is no window to date, which is
+            also what tells an empty turn from an unrecorded one at a glance. */}
+        {age !== "" && (
+          <span className="ml-auto shrink-0 pr-1 text-[0.6875rem] text-muted-foreground">
+            ended {age} ago
+          </span>
+        )}
+      </div>
+      {dead && (
+        <span className="px-1 pb-0.5 text-[0.6875rem] text-muted-foreground">{unavailable}</span>
+      )}
+    </div>
+  )
+}
+
+// useAge renders how long ago a moment was, on the sidebar's shared clock — one
+// timer for every readout on screen, and none at all while there is nothing to
+// count (see subscribeAge).
+function useAge(from: number | null): string {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (from === null) {
+      return
+    }
+    return subscribeAge(from, setNow)
+  }, [from])
+  return from === null ? "" : formatAge(now - from)
+}
+
 interface PanelBodyProps {
+  source: DiffSource
+  /** The last turn's own answer, null while showing the working tree or before
+   * the first read lands. */
+  turnState: LastTurn["state"] | null
   files: DiffFile[] | null
   failed: boolean
   onInject: (text: string) => void
   onSessionComment: (path: string, lines: string, text: string) => void
-  onDiscard: (file: DiffFile) => void
+  /** Absent when discarding does not belong to this source. */
+  onDiscard?: (file: DiffFile) => void
+  /** Read a file's unchanged lines at the revision this source shows. */
+  onExpand?: (path: string, from: number, to: number) => Promise<string[] | null>
   bulk: DiffBulk
 }
 
-function PanelBody({ files, failed, onInject, onSessionComment, onDiscard, bulk }: PanelBodyProps) {
+function PanelBody({
+  source,
+  turnState,
+  files,
+  failed,
+  onInject,
+  onSessionComment,
+  onDiscard,
+  onExpand,
+  bulk,
+}: PanelBodyProps) {
   if (failed) {
-    return <Notice>Not a git repository</Notice>
+    // The two sources fail for different reasons, and the working tree's answer
+    // — read for a path that is not a checkout — says nothing true about a turn
+    // lich could not render.
+    return (
+      <Notice>{source === "turn" ? "Could not read the last turn" : "Not a git repository"}</Notice>
+    )
   }
   if (files === null) {
     return <Notice>Loading…</Notice>
   }
-  if (files.length === 0) {
+  if (source === "turn") {
+    // A turn that changed nothing, a turn nobody recorded and a turn whose
+    // record lich lost are three different answers, and each says which one it
+    // is. Conflating them would have the panel report "nothing happened" — or
+    // "nothing ran" — for a snapshot it simply lost, which is why the weighing
+    // is pure and tested (lastTurnNotice).
+    const notice = lastTurnNotice(turnState, files.length)
+    if (notice === "empty") {
+      return (
+        <Notice>
+          <span className="block text-foreground">Nothing changed in this window.</span>
+          No file on disk moved between the last turn starting and ending.
+        </Notice>
+      )
+    }
+    if (notice === "unrecorded") {
+      return (
+        <Notice>
+          <span className="block text-foreground">No last turn recorded.</span>
+          This fills in when a turn ends here.
+        </Notice>
+      )
+    }
+    if (notice === "lost") {
+      return (
+        <Notice>
+          <span className="block text-foreground">This turn’s record was lost.</span>A turn ended
+          here and lich could not snapshot the checkout for it. The next one is recorded as usual.
+        </Notice>
+      )
+    }
+  } else if (files.length === 0) {
     return <Notice>No uncommitted changes</Notice>
   }
   return (
@@ -147,7 +430,8 @@ function PanelBody({ files, failed, onInject, onSessionComment, onDiscard, bulk 
           file={file}
           onInject={onInject}
           onSessionComment={onSessionComment}
-          onDiscard={() => onDiscard(file)}
+          onDiscard={onDiscard && (() => onDiscard(file))}
+          onExpand={onExpand}
           bulk={bulk}
         />
       ))}

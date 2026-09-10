@@ -37,6 +37,8 @@ function RunningSessionDialog({ session, onCancel, onCloseAnyway }: RunningSessi
 interface CloseWorktreeDialogProps {
   /** The worktree session being closed, or null when the dialog is hidden. */
   session: Session | null
+  /** Whether lich adopted that checkout rather than creating it. */
+  adopted: boolean
   onCancel: () => void
   /** Close the session, leaving the worktree on disk. */
   onKeep: () => void
@@ -47,18 +49,37 @@ interface CloseWorktreeDialogProps {
 // CloseWorktreeDialog asks what to do with the worktree a closing session lives
 // in: keep it on disk (it reappears in the new-worktree picker) or remove the
 // checkout via git. The branch is never deleted either way.
-function CloseWorktreeDialog({ session, onCancel, onKeep, onRemove }: CloseWorktreeDialogProps) {
+//
+// A checkout lich adopted is removable too, but the directory is the user's own
+// — made outside lich and only listed by it — so the wording names the absolute
+// path and says lich did not make it. That sentence is the acknowledgement the
+// backend asks for (project.RemoveWorktree): without it a caller that never
+// showed the path is refused.
+function CloseWorktreeDialog({
+  session,
+  adopted,
+  onCancel,
+  onKeep,
+  onRemove,
+}: CloseWorktreeDialogProps) {
+  const path = <span className="break-all font-mono">{session?.path}</span>
   return (
     <ConfirmDialog
       open={session !== null}
       onCancel={onCancel}
       title="Close worktree session"
       description={
-        <>
-          Keep or remove the worktree at{" "}
-          <span className="break-all font-mono">{session?.path}</span>? Removing deletes the
-          checkout but keeps its branch.
-        </>
+        adopted ? (
+          <>
+            lich did not create the worktree at {path}. Keep it, or remove the checkout? Removing
+            deletes that directory but keeps its branch.
+          </>
+        ) : (
+          <>
+            Keep or remove the worktree at {path}? Removing deletes the checkout but keeps its
+            branch.
+          </>
+        )
       }
     >
       <Button variant="outline" onClick={onKeep}>
@@ -120,6 +141,7 @@ export function WorktreeCloseDialogs({ close }: { close: WorktreeClose }) {
       />
       <CloseWorktreeDialog
         session={close.pendingClose}
+        adopted={close.pendingAdopted}
         onCancel={close.cancel}
         onKeep={close.keep}
         onRemove={close.remove}

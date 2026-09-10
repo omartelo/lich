@@ -1,23 +1,28 @@
 import { describe, expect, it, vi } from "vitest"
-import type { DetectedProvider } from "./api-types"
+import type { BinaryCheck, DetectedProvider } from "./api-types"
 import {
   binKey,
   binOffKey,
+  climbsToRiskier,
   createProvidersStore,
   enabledKey,
   enabledProviders,
-  footerReadout,
-  footerReadoutPair,
   readEnabled,
+  noProviderInstalled,
+  NO_AGENT_REASON,
   resolveDefaultProvider,
+  resolveImplicitSessionKind,
   resolveProjectDefaultProvider,
   sandboxDefaultFor,
+  sandboxDrift,
   sandboxKey,
   sandboxLevel,
   skipLevel,
   skipLevelPair,
   skipPermissionFlags,
   skipPermissionsKey,
+  SANDBOX_RISK_ORDER,
+  SKIP_RISK_ORDER,
   type ProviderState,
   type SandboxLevel,
 } from "./providers-store"
@@ -59,6 +64,14 @@ describe("provider setting keys", () => {
     expect(skipPermissionFlags.opencode).toBe("--auto")
     expect(skipPermissionFlags.omp).toBe("--auto-approve")
     expect(skipPermissionFlags.crush).toBe("--yolo")
+    // --yolo is Cursor's own alias for it; lich passes the canonical spelling,
+    // which is not the one Crush answers to above.
+    expect(skipPermissionFlags.cursor).toBe("--force")
+    // Kiro's is the one spelling here that does not fully deliver: with it on,
+    // its TUI still opens on a confirmation the user accepts once
+    // (docs/providers/kiro.md). The switch is still offered, because the flag
+    // is real.
+    expect(skipPermissionFlags.kiro).toBe("--trust-all-tools")
     expect(skipPermissionFlags.shell).toBeUndefined()
   })
 })
@@ -93,33 +106,45 @@ describe("the skip-permissions ladder", () => {
   })
 })
 
-describe("the footer readout ladder", () => {
-  it("folds the stored pair into a rung", () => {
-    expect(footerReadout(false, false)).toBe("off")
-    expect(footerReadout(true, false)).toBe("context")
-    expect(footerReadout(true, true)).toBe("cost")
+describe("the confirmation gate on a standing safety setting", () => {
+  it("asks on the way up the skip ladder", () => {
+    expect(climbsToRiskier(SKIP_RISK_ORDER, "never", "worktrees")).toBe(true)
+    expect(climbsToRiskier(SKIP_RISK_ORDER, "never", "everywhere")).toBe(true)
+    expect(climbsToRiskier(SKIP_RISK_ORDER, "worktrees", "everywhere")).toBe(true)
   })
 
-  // The pair nothing offers any more: the cost on its own, with no model and no
-  // ring beside it. The cost was always the addition, so it reads as the rung
-  // that carries it.
-  it("reads the pair no rung writes as the cost rung", () => {
-    expect(footerReadout(false, true)).toBe("cost")
+  // The whole point of the gate: taking the automation away is never the harder
+  // direction, so every step down writes straight through.
+  it("never asks on the way down the skip ladder", () => {
+    expect(climbsToRiskier(SKIP_RISK_ORDER, "everywhere", "worktrees")).toBe(false)
+    expect(climbsToRiskier(SKIP_RISK_ORDER, "everywhere", "never")).toBe(false)
+    expect(climbsToRiskier(SKIP_RISK_ORDER, "worktrees", "never")).toBe(false)
   })
 
-  it("writes both settings for the chosen rung", () => {
-    expect(footerReadoutPair("off")).toEqual({ context: false, cost: false })
-    expect(footerReadoutPair("context")).toEqual({ context: true, cost: false })
-    expect(footerReadoutPair("cost")).toEqual({ context: true, cost: true })
+  // Less confinement is more exposure, so the sandbox ladder is read backwards
+  // from the order it is drawn in: "off" is its riskiest rung, not its first.
+  it("reads the sandbox ladder safest first", () => {
+    expect([...SANDBOX_RISK_ORDER]).toEqual(["everywhere", "worktrees", "ask", "off"])
+    expect(climbsToRiskier(SANDBOX_RISK_ORDER, "everywhere", "off")).toBe(true)
+    expect(climbsToRiskier(SANDBOX_RISK_ORDER, "worktrees", "ask")).toBe(true)
+    expect(climbsToRiskier(SANDBOX_RISK_ORDER, "off", "everywhere")).toBe(false)
+    expect(climbsToRiskier(SANDBOX_RISK_ORDER, "ask", "worktrees")).toBe(false)
   })
 
-  it("round-trips every rung", () => {
-    for (const level of ["off", "context", "cost"] as const) {
-      const pair = footerReadoutPair(level)
-      expect(footerReadout(pair.context, pair.cost)).toBe(level)
+  // Pressing the rung already chosen is not a move, and a dialog about a write
+  // that changes nothing is the cost the gate exists to avoid paying twice.
+  it("does not ask for the rung already chosen", () => {
+    for (const level of SKIP_RISK_ORDER) {
+      expect(climbsToRiskier(SKIP_RISK_ORDER, level, level)).toBe(false)
+    }
+    for (const level of SANDBOX_RISK_ORDER) {
+      expect(climbsToRiskier(SANDBOX_RISK_ORDER, level, level)).toBe(false)
     }
   })
 })
+
+// Contract changed: independent global footer choices replace the provider
+// ladder. Legacy visibility and persistence are covered in footer-prefs.test.ts.
 
 describe("readEnabled", () => {
   it("honors an explicit flag over the default", () => {
@@ -140,7 +165,9 @@ describe("enabledProviders", () => {
     name: id,
     binary: id,
     installed,
+    source: installed ? "path" : "",
     enabled,
+    docs: `https://example.test/${id}`,
   })
 
   it("keeps enabled providers regardless of install state", () => {
@@ -156,7 +183,9 @@ describe("resolveDefaultProvider", () => {
     name: id,
     binary: id,
     installed: true,
+    source: "path",
     enabled,
+    docs: `https://example.test/${id}`,
   })
 
   it("uses the stored default when it names an enabled provider", () => {
@@ -181,7 +210,9 @@ describe("resolveProjectDefaultProvider", () => {
     name: id,
     binary: id,
     installed: true,
+    source: "path",
     enabled,
+    docs: `https://example.test/${id}`,
   })
 
   it("prefers an enabled project override to the global default", () => {
@@ -200,6 +231,106 @@ describe("resolveProjectDefaultProvider", () => {
   })
 })
 
+// The zero-agent machine: every fallback below still lands on Claude, so the
+// gate in front of them is what stops an implicit session opening on
+// `claude: command not found`.
+describe("noProviderInstalled / resolveImplicitSessionKind", () => {
+  const p = (
+    id: string,
+    installed: boolean,
+    enabled: boolean,
+    source: ProviderState["source"] = installed ? "path" : "",
+  ): ProviderState => ({
+    id: id as ProviderState["id"],
+    name: id,
+    binary: id,
+    installed,
+    source,
+    enabled,
+    docs: `https://example.test/${id}`,
+  })
+
+  it("reads an empty list as detection not having answered, never as a bare machine", () => {
+    expect(noProviderInstalled([])).toBe(false)
+    expect(resolveImplicitSessionKind([], "", "")).toBe("claude")
+  })
+
+  it("spots the machine with nothing on PATH", () => {
+    expect(noProviderInstalled([p("claude", false, true), p("codex", false, false)])).toBe(true)
+    expect(noProviderInstalled([p("claude", false, true), p("codex", true, false)])).toBe(false)
+  })
+
+  // Claude is enabled by default (readEnabled) even with no binary anywhere, so
+  // this is the exact list a first run on a bare machine produces.
+  it("spawns a shell when no provider is installed, whatever the stored default says", () => {
+    const bare = [p("claude", false, true), p("codex", false, false)]
+    expect(resolveImplicitSessionKind(bare, "", "")).toBe("shell")
+    expect(resolveImplicitSessionKind(bare, "claude", "codex")).toBe("shell")
+  })
+
+  it("defers to the project resolution the moment one provider is installed", () => {
+    const list = [p("claude", true, true), p("codex", true, true)]
+    expect(resolveImplicitSessionKind(list, "claude", "codex")).toBe("codex")
+    expect(resolveImplicitSessionKind(list, "codex", "")).toBe("codex")
+  })
+
+  it("still resolves the enabled provider once anything else is on PATH", () => {
+    const list = [p("claude", false, true), p("crush", true, false)]
+    expect(resolveImplicitSessionKind(list, "claude", "")).toBe("claude")
+  })
+
+  // The trap this gate used to set: nothing on PATH, one agent reached through
+  // the binary setting. Detection resolves that setting now (providers.Detect),
+  // so the row arrives installed and the implicit session is the agent — the
+  // terminal was the whole surprise.
+  it("spawns the agent a machine only knows about from its binary setting", () => {
+    const configured = [p("claude", true, true, "setting"), p("codex", false, false)]
+    expect(noProviderInstalled(configured)).toBe(false)
+    expect(resolveImplicitSessionKind(configured, "", "")).toBe("claude")
+    expect(resolveImplicitSessionKind(configured, "claude", "")).toBe("claude")
+  })
+
+  // The other half of the same trap: the override is in one project's scope, so
+  // detection — which answers for the machine and takes no project — cannot see
+  // it. The page composes it in.
+  it("spawns the provider a project's own binary setting points at", () => {
+    const bare = [p("claude", false, true), p("crush", false, true)]
+    expect(resolveImplicitSessionKind(bare, "", "", new Set(["crush"]))).toBe("crush")
+    // …and not the enabled-flag fallback, which on this machine names a binary
+    // that is not there. Claude is the stored default and still loses.
+    expect(resolveImplicitSessionKind(bare, "claude", "", new Set(["crush"]))).toBe("crush")
+    // The project default wins among the ones it can actually run.
+    expect(resolveImplicitSessionKind(bare, "", "claude", new Set(["claude", "crush"]))).toBe(
+      "claude",
+    )
+  })
+
+  it("keeps the shell for a project whose override is disabled or absent", () => {
+    const bare = [p("claude", false, true), p("crush", false, false)]
+    expect(resolveImplicitSessionKind(bare, "", "", new Set())).toBe("shell")
+    // crush is turned off, so a binary configured for it is one nothing offers.
+    expect(resolveImplicitSessionKind(bare, "", "", new Set(["crush"]))).toBe("shell")
+  })
+
+  // A machine with an agent of its own resolves exactly as it always did: the
+  // project layer is consulted only where it can change the answer.
+  it("ignores the project layer once anything is installed machine-wide", () => {
+    const list = [p("claude", true, true), p("crush", false, true)]
+    expect(resolveImplicitSessionKind(list, "claude", "", new Set(["crush"]))).toBe("claude")
+  })
+})
+
+describe("NO_AGENT_REASON", () => {
+  // Pinned as a literal rather than read back off the export: this is the one
+  // sentence that explains a terminal the user did not ask for, and a test that
+  // compares the constant to itself would pass through any rewrite of it.
+  it("names both the reason and where the machine is told about an agent", () => {
+    expect(NO_AGENT_REASON).toBe(
+      "No agent found on PATH, so this opens a terminal — set one in Settings › Providers.",
+    )
+  })
+})
+
 describe("createProvidersStore", () => {
   const detected: DetectedProvider[] = [
     {
@@ -208,25 +339,61 @@ describe("createProvidersStore", () => {
       binary: "claude",
       installed: true,
       path: "/usr/bin/claude",
+      source: "path",
+      docs: "https://code.claude.com/docs/en/setup",
     },
     // A binary that is not the id, which is what antigravity ships as.
-    { id: "codex", name: "Codex", binary: "cdx", installed: false, path: "" },
-    { id: "mystery", name: "Mystery", binary: "mystery", installed: true, path: "/x" }, // unknown id
+    {
+      id: "codex",
+      name: "Codex",
+      binary: "cdx",
+      installed: false,
+      path: "",
+      source: "",
+      docs: "https://d/codex",
+    },
+    // unknown id
+    {
+      id: "mystery",
+      name: "Mystery",
+      binary: "mystery",
+      installed: true,
+      path: "/x",
+      source: "path",
+      docs: "",
+    },
   ]
 
-  function build(enabledValues: Record<string, string> = {}, defaultValue = "") {
+  function build(
+    enabledValues: Record<string, string> = {},
+    defaultValue = "",
+    options: {
+      detected?: DetectedProvider[]
+      projectSettings?: Record<string, string>
+      runnable?: string[]
+    } = {},
+  ) {
     const persistEnabled = vi.fn()
     const persistDefault = vi.fn()
     const persistProjectDefault = vi.fn()
+    const verifyBin = vi.fn(
+      async (bin: string): Promise<BinaryCheck> =>
+        options.runnable?.includes(bin)
+          ? { path: bin, status: "ok" }
+          : { path: "", status: "not-found" },
+    )
     const store = createProvidersStore({
-      detect: async () => detected,
+      detect: async () => options.detected ?? detected,
       getEnabled: async (id) => enabledValues[id] ?? "",
+      getProjectSetting: async (key, projectId) =>
+        options.projectSettings?.[`${key}\n${projectId}`] ?? "",
+      verifyBin,
       persistEnabled,
       getDefault: async () => defaultValue,
       persistDefault,
       persistProjectDefault,
     })
-    return { store, persistEnabled, persistDefault, persistProjectDefault }
+    return { store, persistEnabled, persistDefault, persistProjectDefault, verifyBin }
   }
 
   it("loads only known providers with their install + default enabled state", async () => {
@@ -272,6 +439,8 @@ describe("createProvidersStore", () => {
       detect,
       getEnabled: async () => "",
       persistEnabled: vi.fn(),
+      getProjectSetting: async () => "",
+      verifyBin: async () => ({ path: "", status: "not-found" }) as const,
       getDefault: async () => "",
       persistDefault: vi.fn(),
       persistProjectDefault: vi.fn(),
@@ -280,6 +449,167 @@ describe("createProvidersStore", () => {
     store.ensureLoaded()
     await vi.waitFor(() => expect(store.getSnapshot().length).toBe(2))
     expect(detect).toHaveBeenCalledTimes(1)
+  })
+
+  it("carries each provider's install page onto the snapshot", async () => {
+    const { store } = build()
+    await store.load()
+    expect(store.getSnapshot().find((p) => p.id === "claude")?.docs).toBe(
+      "https://code.claude.com/docs/en/setup",
+    )
+  })
+
+  // The whole point of the button: a provider installed while lich is open shows
+  // up without a relaunch.
+  it("refresh re-probes PATH and notifies", async () => {
+    let probe: DetectedProvider[] = [
+      {
+        id: "claude",
+        name: "Claude Code",
+        binary: "claude",
+        installed: false,
+        path: "",
+        source: "",
+        docs: "d",
+      },
+    ]
+    const store = createProvidersStore({
+      detect: async () => probe,
+      getEnabled: async () => "",
+      persistEnabled: vi.fn(),
+      getProjectSetting: async () => "",
+      verifyBin: async () => ({ path: "", status: "not-found" }) as const,
+      getDefault: async () => "",
+      persistDefault: vi.fn(),
+      persistProjectDefault: vi.fn(),
+    })
+    await store.load()
+    expect(store.getSnapshot()[0].installed).toBe(false)
+
+    const seen = vi.fn()
+    store.subscribe(seen)
+    probe = [
+      {
+        id: "claude",
+        name: "Claude Code",
+        binary: "claude",
+        installed: true,
+        path: "/usr/bin/claude",
+        source: "path",
+        docs: "d",
+      },
+    ]
+    await store.refresh()
+    expect(store.getSnapshot()[0].installed).toBe(true)
+    expect(seen).toHaveBeenCalledTimes(1)
+  })
+
+  // A toggle persists through a fire-and-forget write, so re-reading the settings
+  // on every refresh would let a slow write flip the switch back under the user.
+  it("refresh keeps the enabled flags and the default it already has", async () => {
+    const getEnabled = vi.fn(async () => "")
+    const store = createProvidersStore({
+      detect: async () => detected,
+      getEnabled,
+      persistEnabled: vi.fn(),
+      getProjectSetting: async () => "",
+      verifyBin: async () => ({ path: "", status: "not-found" }) as const,
+      getDefault: async () => "codex",
+      persistDefault: vi.fn(),
+      persistProjectDefault: vi.fn(),
+    })
+    await store.load()
+    store.setEnabled("codex", true)
+    const reads = getEnabled.mock.calls.length
+
+    await store.refresh()
+    expect(store.getSnapshot().find((p) => p.id === "codex")?.enabled).toBe(true)
+    expect(store.getDefaultSnapshot()).toBe("codex")
+    expect(getEnabled).toHaveBeenCalledTimes(reads)
+  })
+
+  it("refresh drops a provider id this build does not know", async () => {
+    const { store } = build()
+    await store.refresh()
+    expect(store.getSnapshot().map((p) => p.id)).toEqual(["claude", "codex"])
+  })
+
+  it("getProjectSessionKind falls to the shell only while nothing is installed", async () => {
+    const { store } = build({ claude: "1" })
+    await store.load()
+    // codex is the only not-installed row; claude is on PATH, so a project with
+    // no override gets the provider.
+    expect(store.getProjectSessionKind("proj")).toBe("claude")
+  })
+
+  // End to end through the store: nothing on the machine, one project pointing
+  // crush at a wrapper it can run. The project's implicit session is crush, and
+  // every other project still gets the shell.
+  it("reads a project's binary override and spawns that provider", async () => {
+    const bare: DetectedProvider[] = [
+      {
+        id: "claude",
+        name: "Claude Code",
+        binary: "claude",
+        installed: false,
+        path: "",
+        source: "",
+        docs: "",
+      },
+      {
+        id: "crush",
+        name: "Crush",
+        binary: "crush",
+        installed: false,
+        path: "",
+        source: "",
+        docs: "",
+      },
+    ]
+    const { store, verifyBin } = build({ crush: "1" }, "", {
+      detected: bare,
+      projectSettings: { "provider.crush.bin\nproj": "/opt/agents/crush" },
+      runnable: ["/opt/agents/crush"],
+    })
+    await store.load()
+    store.hydrateProjectDefaults([{ id: "proj", defaultProvider: "" }])
+    await vi.waitFor(() => expect(store.getProjectSessionKind("proj")).toBe("crush"))
+    expect(store.getProjectSessionKind("other")).toBe("shell")
+    expect(verifyBin).toHaveBeenCalledWith("/opt/agents/crush")
+  })
+
+  // Mirrors store.ProviderBin in Go: the switch beside the path parks the layer,
+  // and a parked project layer resolves as if it were unset.
+  it("skips a project override whose layer is parked", async () => {
+    const bare: DetectedProvider[] = [
+      {
+        id: "claude",
+        name: "Claude Code",
+        binary: "claude",
+        installed: false,
+        path: "",
+        source: "",
+        docs: "",
+      },
+    ]
+    const { store } = build({}, "", {
+      detected: bare,
+      projectSettings: { "claude.bin\nproj": "/opt/agents/claude", "claude.bin.off\nproj": "true" },
+      runnable: ["/opt/agents/claude"],
+    })
+    await store.load()
+    store.hydrateProjectDefaults([{ id: "proj", defaultProvider: "" }])
+    await vi.waitFor(() => expect(store.getProjectSessionKind("proj")).toBe("shell"))
+  })
+
+  // The read costs a request per provider per project, so it is spent only where
+  // it can change an answer: a machine with an agent of its own never asks.
+  it("does not read project settings while anything is installed machine-wide", async () => {
+    const { store, verifyBin } = build({ claude: "1" })
+    await store.load()
+    store.hydrateProjectDefaults([{ id: "proj", defaultProvider: "" }])
+    expect(store.getProjectSessionKind("proj")).toBe("claude")
+    expect(verifyBin).not.toHaveBeenCalled()
   })
 
   it("loads the stored default provider", async () => {
@@ -327,6 +657,8 @@ describe("createProvidersStore", () => {
       detect,
       getEnabled: async () => "",
       persistEnabled: vi.fn(),
+      getProjectSetting: async () => "",
+      verifyBin: async () => ({ path: "", status: "not-found" }) as const,
       getDefault: async () => "claude",
       persistDefault: vi.fn(),
       persistProjectDefault: vi.fn(),
@@ -345,6 +677,8 @@ describe("createProvidersStore", () => {
       detect,
       getEnabled: async () => "",
       persistEnabled: vi.fn(),
+      getProjectSetting: async () => "",
+      verifyBin: async () => ({ path: "", status: "not-found" }) as const,
       getDefault: async () => "claude",
       persistDefault: vi.fn(),
       persistProjectDefault: vi.fn(),
@@ -420,8 +754,11 @@ describe("sandbox rung", () => {
     const cases: [SandboxLevel, boolean, boolean][] = [
       ["off", false, false],
       ["off", true, false],
-      ["ask", false, false],
-      ["ask", true, false],
+      // Contract change: "ask" confines on either checkout, matching the Go
+      // side. It is the rung where nobody being asked confines the session, so
+      // the box that does the asking opens on that side.
+      ["ask", false, true],
+      ["ask", true, true],
       ["worktrees", false, false],
       ["worktrees", true, true],
       ["everywhere", false, true],
@@ -429,6 +766,36 @@ describe("sandbox rung", () => {
     ]
     for (const [level, worktree, want] of cases) {
       expect(sandboxDefaultFor(level, worktree)).toBe(want)
+    }
+  })
+
+  // The card compares the answer frozen on its row against the rung the project
+  // is on now. Agreement is silence in both directions; the two disagreements
+  // are what the shield never said.
+  it("names which way a card and its rung disagree", () => {
+    const cases: [SandboxLevel, boolean, boolean, string][] = [
+      ["everywhere", false, true, ""],
+      ["off", false, false, ""],
+      ["worktrees", true, true, ""],
+      ["worktrees", false, false, ""],
+      ["everywhere", false, false, "would-confine"],
+      ["worktrees", true, false, "would-confine"],
+      ["off", false, true, "would-release"],
+      ["worktrees", false, true, "would-release"],
+    ]
+    for (const [level, worktree, confined, want] of cases) {
+      expect(sandboxDrift(level, worktree, confined)).toBe(want)
+    }
+  })
+
+  // "Ask" hands the decision to whoever opened the session, so a ticked box is
+  // not a card out of step with the ladder — there is no ladder answer to be
+  // out of step with.
+  it("never claims drift on the rung that asks", () => {
+    for (const worktree of [false, true]) {
+      for (const confined of [false, true]) {
+        expect(sandboxDrift("ask", worktree, confined)).toBe("")
+      }
     }
   })
 })

@@ -16,8 +16,8 @@ import { useProjects } from "@/providers/projects"
 
 // MENU_LIMIT is how many closed projects the menu offers. Five is what fits
 // above the picker entry without turning the menu into a second project list;
-// the store returns a longer list than this and the command palette searches
-// the rest of it.
+// the palette searches every closed project there has ever been, and the footer
+// line below says so once there are more than these.
 const MENU_LIMIT = 5
 
 // OpenProjectMenu is the top strip's "+": the projects closed earlier, newest
@@ -28,6 +28,9 @@ export function OpenProjectMenu() {
   const { projects, openProject, openRecent } = useProjects()
   const [recents, setRecents] = useState<RecentProject[]>([])
   const [missing, setMissing] = useState<ReadonlySet<string>>(new Set())
+  // The closed projects this menu does not list. They are not unreachable, but
+  // nothing here said where they went until this number did.
+  const [more, setMore] = useState(0)
 
   // The open projects are exactly what the recent ones are not, so the list is
   // refetched whenever they change: closing a tab adds one, opening removes it.
@@ -41,11 +44,17 @@ export function OpenProjectMenu() {
         return
       }
       setRecents(shown)
-      // Asked for after the list is up: the mark is what a row says about
-      // itself, and a failed check must not cost the menu its entries.
+      // Asked for after the list is up: the mark and the count are what the
+      // list says about itself, and a failed check must not cost the menu its
+      // entries.
       void ProjectService.Missing(shown.map((row) => row.path)).then((gone) => {
         if (live) {
           setMissing(new Set(gone ?? []))
+        }
+      })
+      void Store.ClosedProjectCount().then((count) => {
+        if (live) {
+          setMore(Math.max(0, count - shown.length))
         }
       })
     })
@@ -116,6 +125,11 @@ export function OpenProjectMenu() {
           <FolderOpen className="size-4 shrink-0 text-muted-foreground" />
           Open folder…
         </DropdownMenuItem>
+        {more > 0 && (
+          <div className="px-2 pt-1.5 text-xs text-muted-foreground">
+            {more} more closed project{more === 1 ? "" : "s"} — search the palette
+          </div>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

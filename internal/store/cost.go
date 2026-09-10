@@ -4,6 +4,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
+
+	"github.com/omartelo/lich/internal/providers"
 )
 
 // CostLedger returns how far a session's cost accounting has read into one of
@@ -35,7 +38,9 @@ func (s *Service) CostLedger(sessionID, transcriptID string) (int64, string, flo
 	return offset, lastMessage, cost, nil
 }
 
-// SaveCostLedger records the position and total of one transcript's accounting.
+// SaveCostLedger records the position and total of one transcript's accounting,
+// stamped with the moment it was written — the only date a session's spend ever
+// carries, and what CostTotals windows on.
 // The SELECT ... WHERE EXISTS writes nothing for a session whose row is already
 // gone (closed while its last turn was still being counted) instead of letting
 // the foreign key raise: that is a race, not a failure, and it is the same
@@ -44,12 +49,15 @@ func (s *Service) SaveCostLedger(
 	sessionID, transcriptID string, offset int64, lastMessage string, cost float64,
 ) error {
 	_, err := s.db.Exec(
-		`INSERT INTO session_costs (session_id, transcript_id, byte_offset, last_message_id, cost_usd)
-		 SELECT ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM sessions WHERE id = ?)
+		`INSERT INTO session_costs
+		     (session_id, transcript_id, byte_offset, last_message_id, cost_usd, updated_at)
+		 SELECT ?, ?, ?, ?, ?, CAST(strftime('%s', 'now') AS INTEGER)
+		 WHERE EXISTS (SELECT 1 FROM sessions WHERE id = ?)
 		 ON CONFLICT(session_id, transcript_id) DO UPDATE SET
 		     byte_offset = excluded.byte_offset,
 		     last_message_id = excluded.last_message_id,
-		     cost_usd = excluded.cost_usd`,
+		     cost_usd = excluded.cost_usd,
+		     updated_at = excluded.updated_at`,
 		sessionID, transcriptID, offset, lastMessage, cost, sessionID,
 	)
 	if err != nil {
@@ -65,12 +73,16 @@ type costRow struct {
 	offset       int64
 	lastMessage  string
 	cost         float64
+	// When the row was last counted. Carried rather than re-stamped: a resume
+	// moves old spend onto a new session id, and re-dating it would move that
+	// money into today's window.
+	updatedAt int64
 }
 
 // costLedgers reads every ledger a session holds.
 func costLedgers(tx *sql.Tx, sessionID string) ([]costRow, error) {
 	rows, err := tx.Query(
-		`SELECT transcript_id, byte_offset, last_message_id, cost_usd
+		`SELECT transcript_id, byte_offset, last_message_id, cost_usd, updated_at
 		   FROM session_costs WHERE session_id = ?`, sessionID,
 	)
 	if err != nil {
@@ -81,7 +93,9 @@ func costLedgers(tx *sql.Tx, sessionID string) ([]costRow, error) {
 	var ledgers []costRow
 	for rows.Next() {
 		var row costRow
-		if err := rows.Scan(&row.transcriptID, &row.offset, &row.lastMessage, &row.cost); err != nil {
+		if err := rows.Scan(
+			&row.transcriptID, &row.offset, &row.lastMessage, &row.cost, &row.updatedAt,
+		); err != nil {
 			return nil, fmt.Errorf("scan cost ledger for %q: %w", sessionID, err)
 		}
 		ledgers = append(ledgers, row)
@@ -93,9 +107,10 @@ func costLedgers(tx *sql.Tx, sessionID string) ([]costRow, error) {
 func restoreCostLedgers(tx *sql.Tx, sessionID string, ledgers []costRow) error {
 	for _, row := range ledgers {
 		if _, err := tx.Exec(
-			`INSERT INTO session_costs (session_id, transcript_id, byte_offset, last_message_id, cost_usd)
-			 VALUES (?, ?, ?, ?, ?)`,
-			sessionID, row.transcriptID, row.offset, row.lastMessage, row.cost,
+			`INSERT INTO session_costs
+			     (session_id, transcript_id, byte_offset, last_message_id, cost_usd, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?)`,
+			sessionID, row.transcriptID, row.offset, row.lastMessage, row.cost, row.updatedAt,
 		); err != nil {
 			return fmt.Errorf("restore cost ledger for %q: %w", sessionID, err)
 		}
@@ -103,17 +118,258 @@ func restoreCostLedgers(tx *sql.Tx, sessionID string, ledgers []costRow) error {
 	return nil
 }
 
+// SaveForkCostOffset records, on a session just forked from the conversation
+// forkedFrom, what lich had counted that conversation to cost at this moment —
+// which is the stretch the fork's own transcript carries a copy of and the
+// ledger is about to count a second time. SessionCost and CostTotals take it
+// back off, so the pair adds up to what was actually spent.
+//
+// The offset is a snapshot in dollars, not in tokens, because the ledger it is
+// read out of is one: a counted stretch is never re-priced (scanTranscriptCost
+// resumes past it), so the parent's own figure does not move when a price
+// refresh lands either, and a token offset re-priced later would drift away from
+// the number the parent still shows.
+//
+// It is the raw ledger row rather than the parent's readout, which is what makes
+// a fork of a fork right: the parent's row holds the gross cost of its own
+// transcript, history included, and that whole stretch is what the copy repeats.
+// A conversation lich has counted nothing for offsets nothing.
+func (s *Service) SaveForkCostOffset(sessionID, forkedFrom string) error {
+	_, err := s.db.Exec(
+		`UPDATE sessions SET fork_cost_offset = COALESCE(
+		     (SELECT SUM(cost_usd) FROM session_costs WHERE transcript_id = ?), 0)
+		 WHERE id = ?`,
+		forkedFrom, sessionID,
+	)
+	if err != nil {
+		return fmt.Errorf("save fork cost offset for %q: %w", sessionID, err)
+	}
+	return nil
+}
+
 // SessionCost is what a session has cost so far: the sum of every transcript it
-// has run through. Zero for a session that has counted nothing yet — whether
-// that zero is worth showing is the caller's call, since an unpriced model must
-// read as "no number", never as free.
+// has run through, less what a fork inherited from the conversation it was
+// branched from (SaveForkCostOffset). Zero for a session that has counted
+// nothing yet — whether that zero is worth showing is the caller's call, since
+// an unpriced model must read as "no number", never as free.
+//
+// The subtraction is floored at zero: a fork whose ledger has not caught up with
+// its inherited history yet would otherwise report money back.
 func (s *Service) SessionCost(sessionID string) (float64, error) {
-	var cost sql.NullFloat64
+	var cost, offset sql.NullFloat64
 	err := s.db.QueryRow(
-		`SELECT SUM(cost_usd) FROM session_costs WHERE session_id = ?`, sessionID,
-	).Scan(&cost)
+		`SELECT (SELECT SUM(cost_usd) FROM session_costs WHERE session_id = ?),
+		        (SELECT fork_cost_offset FROM sessions WHERE id = ?)`,
+		sessionID, sessionID,
+	).Scan(&cost, &offset)
 	if err != nil {
 		return 0, fmt.Errorf("read session cost for %q: %w", sessionID, err)
 	}
-	return cost.Float64, nil
+	return max(0, cost.Float64-offset.Float64), nil
+}
+
+// CostSourceMixed labels a total whose money came off both rungs — some of it
+// priced here, some of it reported by the provider that spent it. It is a fact
+// of the sum rather than of any provider, which is why it is not one of
+// providers.CostSource's answers.
+const CostSourceMixed = "mixed"
+
+// CostTotal is what one project's sessions have cost. Sessions is every session
+// in the unit; Unpriced is how many of them carry no price at all, so the money
+// covers Sessions-Unpriced of them.
+//
+// Source is whose arithmetic that money is: providers.CostSourcePriced when
+// lich derived every dollar of it from token counts, providers.CostSourceReported
+// when the providers that spent it handed their own figures over, and
+// CostSourceMixed when the row spans both. Empty is a row with nothing to
+// attribute — every session in it unpriced, or its spend earned by a provider
+// CLI run by hand inside a shell session, which lich never spawned a rung for.
+type CostTotal struct {
+	Project  string  `json:"project"`
+	Sessions int     `json:"sessions"`
+	Unpriced int     `json:"unpriced"`
+	Source   string  `json:"source"`
+	CostUSD  float64 `json:"costUsd"`
+}
+
+// CostReport is CostTotals' answer: a row per project, and the same numbers
+// summed across every row.
+//
+// The money is a **lower bound** whenever Unpriced is not zero. A session lich
+// never priced holds no ledger row at all — its provider files its conversation
+// where lich has no reader, a model in it has no price, or the readout was off
+// while it ran — and nothing here can guess what it spent. Shipping that count
+// beside the sum
+// is the whole difference between "this is what it cost" and "this is what lich
+// could add up", and a total that omitted it in silence would be the one
+// failure mode that makes the number not worth reading.
+//
+// Why the row is missing is not in here on purpose: that is costMiss
+// (internal/terminal/usage_cost.go), which is decided by the live scan and
+// never persisted, so the ledger can only say that a session has no price —
+// not which of the reasons it was.
+//
+// Priced and Reported are how many counted sessions each rung contributed, and
+// they are what lets a reader weigh the total: the sum is the one place the
+// difference between the two is invisible, since both arrive as dollars.
+//
+// Readout is whether the cost readout is on at all. Off, no transcript is ever
+// summed, so every session is unpriced and the total can only be zero — which a
+// caller has to be able to say instead of printing a $0.00 that reads as free.
+type CostReport struct {
+	Projects []CostTotal `json:"projects"`
+	Sessions int         `json:"sessions"`
+	Unpriced int         `json:"unpriced"`
+	Priced   int         `json:"priced"`
+	Reported int         `json:"reported"`
+	Source   string      `json:"source"`
+	CostUSD  float64     `json:"costUsd"`
+	Readout  bool        `json:"readout"`
+}
+
+// projectRow accumulates one project's groups while the query is walked. The
+// two tallies are session counts per rung, kept out of CostTotal because the
+// report publishes them summed once rather than per row.
+type projectRow struct {
+	CostTotal
+	priced   int
+	reported int
+}
+
+// count folds one (project, kind) group in. Only counted sessions land on a
+// rung: an unpriced one carries no money to attribute to anybody's arithmetic.
+func (r *projectRow) count(kind string, sessions, unpriced int, cost float64) {
+	r.Sessions += sessions
+	r.Unpriced += unpriced
+	r.CostUSD += cost
+	switch providers.CostSourceOf(kind) {
+	case providers.CostSourcePriced:
+		r.priced += sessions - unpriced
+	case providers.CostSourceReported:
+		r.reported += sessions - unpriced
+	}
+}
+
+// costSource labels a unit's money by the rungs that reached it. See CostTotal
+// for what each answer means, empty included.
+func costSource(priced, reported int) string {
+	switch {
+	case priced > 0 && reported > 0:
+		return CostSourceMixed
+	case priced > 0:
+		return string(providers.CostSourcePriced)
+	case reported > 0:
+		return string(providers.CostSourceReported)
+	}
+	return string(providers.CostSourceNone)
+}
+
+// CostTotals sums the ledger by project. project narrows it to one by name,
+// case-insensitively; provider to one session kind; either empty means all of
+// them. since, in unix seconds, keeps only the sessions active on or after it,
+// and 0 keeps every session lich still remembers.
+//
+// A session's activity is its last counted turn, because that is the only date
+// the ledger carries — the row is a running total with no per-turn history
+// behind it. So a window selects *sessions active in it*, counted whole, rather
+// than slicing each session's money by day: a session that ran through the
+// boundary brings all of its cost with it. A session with nothing counted is
+// dated by when it was parked, or by now while it is open, so an unpriced
+// session that is still running is unpriced in every window ending today.
+//
+// Only sessions lich still holds a row for are in reach at all: a deleted
+// session took its ledger with it (ON DELETE CASCADE) and is in no total,
+// neither counted nor excluded.
+func (s *Service) CostTotals(project, provider string, since int64) (CostReport, error) {
+	// Read before the rows are open: the store holds a single connection, and a
+	// second query while one is being walked waits on a connection its own
+	// caller is holding.
+	report := CostReport{Projects: []CostTotal{}, Readout: s.CostReadout()}
+	rows, err := s.costRows(project, provider, since)
+	if err != nil {
+		return CostReport{}, err
+	}
+	for _, row := range rows {
+		row.Source = costSource(row.priced, row.reported)
+		report.Projects = append(report.Projects, row.CostTotal)
+		report.Sessions += row.Sessions
+		report.Unpriced += row.Unpriced
+		report.CostUSD += row.CostUSD
+		report.Priced += row.priced
+		report.Reported += row.reported
+	}
+	report.Source = costSource(report.Priced, report.Reported)
+	// The expensive project reads first. A stable sort over rows the query
+	// ordered by name keeps the name as the tiebreak between equal spends.
+	sort.SliceStable(report.Projects, func(i, j int) bool {
+		return report.Projects[i].CostUSD > report.Projects[j].CostUSD
+	})
+	// A name that matched nothing is refused rather than answered with a zero:
+	// this is money, and a typo that reads as "that project cost nothing" is
+	// worse than no answer at all.
+	if project != "" && len(report.Projects) == 0 {
+		return CostReport{}, fmt.Errorf("no sessions in a project named %q", project)
+	}
+	return report, nil
+}
+
+// costRows reads the ledger grouped by project *and session kind*, folded into
+// one row per project. The kind is in the grouping because whose arithmetic a
+// session's dollars are is a fact of the provider that spent them
+// (providers.CostSourceOf) and the ledger itself records nothing about it.
+//
+// A forked session's money is netted the same way the live readout nets it
+// (SessionCost), per session and floored at zero — MAX over a NULL cost is NULL,
+// so a session with nothing counted stays uncounted rather than becoming a zero
+// the sum would swallow.
+func (s *Service) costRows(project, provider string, since int64) ([]*projectRow, error) {
+	rows, err := s.db.Query(
+		`SELECT p.name,
+		        s.kind,
+		        COUNT(*),
+		        SUM(CASE WHEN c.cost IS NULL THEN 1 ELSE 0 END),
+		        COALESCE(SUM(MAX(c.cost - s.fork_cost_offset, 0)), 0)
+		   FROM sessions s
+		   JOIN projects p ON p.id = s.project_id
+		   LEFT JOIN (SELECT session_id, SUM(cost_usd) AS cost, MAX(updated_at) AS seen
+		                FROM session_costs GROUP BY session_id) c ON c.session_id = s.id
+		  WHERE (? = '' OR LOWER(p.name) = LOWER(?))
+		    AND (? = '' OR s.kind = ?)
+		    AND (? = 0 OR COALESCE(
+		                    NULLIF(c.seen, 0),
+		                    CASE WHEN s.is_open = 1
+		                         THEN CAST(strftime('%s', 'now') AS INTEGER)
+		                         ELSE s.closed_at END) >= ?)
+		  GROUP BY p.id, p.name, s.kind
+		  ORDER BY p.name`,
+		project, project, provider, provider, since, since,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("read cost totals: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var order []*projectRow
+	byName := map[string]*projectRow{}
+	for rows.Next() {
+		var (
+			name, kind         string
+			sessions, unpriced int
+			cost               float64
+		)
+		if err := rows.Scan(&name, &kind, &sessions, &unpriced, &cost); err != nil {
+			return nil, fmt.Errorf("scan cost total: %w", err)
+		}
+		row := byName[name]
+		if row == nil {
+			row = &projectRow{CostTotal: CostTotal{Project: name}}
+			byName[name] = row
+			order = append(order, row)
+		}
+		row.count(kind, sessions, unpriced, cost)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate cost totals: %w", err)
+	}
+	return order, nil
 }

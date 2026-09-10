@@ -72,13 +72,28 @@ finished turn is still unread, `emerald-500/30` once the user has watched that c
 - **FiraCode Nerd Font Mono** — the terminal, and every monospace context: file paths, code/diff, palette
   subtitles, dense meta. Bundled woff2; the terminal awaits `document.fonts` before opening.
 - Scale is small and tight. Titles `text-sm`/`text-2xl` for screen headers; body `text-sm`; meta/paths
-  `text-xs`. Section labels are uppercase with `tracking-wide` and `text-muted-foreground`.
+  `text-xs`. One named rung sits below `text-xs`: `text-2xs` (`--text-2xs` in `index.css`, 0.65625rem), the
+  uppercase section label (`tracking-wide`, `text-muted-foreground`) that heads a group of rows. Sidebar
+  groups, palette and picker groups, dialog groups, the shortcuts overlay, the settings search count, the
+  plan usage table's header, the review panel's Said band and the file preview's read-only tag all wear it.
+  A label never invents a size of its own.
+- Four sizes stay off that rung deliberately, none of them a label: `text-[0.625rem]` for monospace meta
+  (`<kbd>`, palette counts, the tab's "relocate" tag), `text-[0.6875rem]` for a compact detail line
+  (the account under the plan gauges, "ended … ago", a sandbox probe's detail, a theme card's caption),
+  `text-[0.5625rem]` for the diff language badge, which crams two or three letters into a 20px box, and
+  `text-[0.8125rem]`, a compact body size rather than a label.
+- **Every size is written in rem, never px.** The zoom control moves the root font size, so a rem-based
+  utility follows it while a `px` arbitrary value stays frozen. xterm and CodeMirror size their own text and
+  are the measured exceptions. `frontend/lint/no-px-sizes.grit` fails the biome gate on the arbitrary-value
+  form (`text-[11px]`, `h-[88px]`, `p-[3px]`).
 - Line up digits with `tabular-nums` wherever they change (zoom %, diff counts, clock).
 
 ### Radius, spacing, icons
 
-- `--radius: 0.45rem`. Use the Tailwind `rounded-*` scale that derives from it; don't sprinkle `rounded-lg`
-  everywhere. Small controls (list rows, menu items, ghost buttons) sit around `rounded-md`.
+- Radius is Tailwind's own scale and nothing else: `rounded-sm` 4px, `rounded-md` 6px, `rounded-lg` 8px,
+  `rounded-xl` 12px. lich has no radius token of its own, and the one place that reaches for a variable
+  (`ui/button.tsx`) reads Tailwind's `--radius-md`. Small controls (list rows, menu items, ghost buttons)
+  sit at `rounded-md`; don't sprinkle `rounded-lg` everywhere.
 - Density is high but breathing: list rows `~9px` vertical padding, `gap-1`–`gap-1.5` between them.
 - Icons are **lucide** at `size-3.5`/`size-4`; `size-3` inside dense meta. Provider marks come from
   `ProviderIcon.tsx`, file-type logos from `devicons-react` (`FileIcon.tsx`).
@@ -117,8 +132,15 @@ Short specs; the code is the detail. All follow the idiom above.
   primary + ghost cancel.
 - **Segmented control** — a bordered track holding ghost options; the chosen option is an `bg-accent` fill.
 - **Stepper / numeric field** — icon buttons flanking a bordered value box (`tabular-nums`).
-- **Switch** — off `bg-accent`, on `bg-primary`.
+- **Switch** — off `bg-input` (`bg-input/80` in dark), on `bg-primary`.
 - **Toast** (sonner) — popover surface, hairline, semantic glyph.
+- **Footer** — two independently ordered sides, configured globally in Appearance › Footer. Actions default
+  left; checkout, model, context, plan usage and hands-on time default right. Cost stays opt-in. The editor
+  offers full-width Available/Left/Right drop areas, compact items, menus for keyboard moves, and a
+  single-line preview. Editor items wrap when needed so none require horizontal scrolling to reach. Use
+  spacing and hairline seams to define drop areas; selected items use a subtle fill. Readings remain inline
+  and wrap when needed, never into an overflow menu. Branch and path are plain selectable text, with full
+  values on hover, not popover triggers. Plan usage keeps its provider/plan heading and wide window gauges.
 
 ## Fixed by decision — do not "fix" these
 

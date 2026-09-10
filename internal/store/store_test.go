@@ -13,7 +13,7 @@ import (
 )
 
 // newTestStore opens a throwaway database under the test's temp directory.
-func newTestStore(t *testing.T) *Service {
+func newTestStore(t testing.TB) *Service {
 	t.Helper()
 	svc, err := open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
@@ -21,6 +21,59 @@ func newTestStore(t *testing.T) *Service {
 	}
 	t.Cleanup(func() { _ = svc.Close() })
 	return svc
+}
+
+// TestSessionExistsSpansParkedRows: the answer is what internal/drop asks
+// before ageing a dropped-file copy out, and a parked session is one a resume
+// walks straight back into, so its copies are still worth keeping and parking
+// must not read as gone. Only the delete does.
+func TestSessionExistsSpansParkedRows(t *testing.T) {
+	svc := newTestStore(t)
+	if err := svc.AddProject("p1", "alpha", "/tmp/alpha"); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if err := svc.AddSession("p1", "s1", "one", providers.Claude, "", 0, ""); err != nil {
+		t.Fatalf("AddSession: %v", err)
+	}
+
+	if !svc.SessionExists("s1") {
+		t.Error("an open session reads as gone")
+	}
+	if err := svc.CloseSession("p1", "s1", ""); err != nil {
+		t.Fatalf("CloseSession: %v", err)
+	}
+	if !svc.SessionExists("s1") {
+		t.Error("a parked session reads as gone")
+	}
+	if err := svc.DeleteSession("p1", "s1", ""); err != nil {
+		t.Fatalf("DeleteSession: %v", err)
+	}
+	if svc.SessionExists("s1") {
+		t.Error("a deleted session still reads as there")
+	}
+	if svc.SessionExists("never-existed") {
+		t.Error("an unknown id reads as there")
+	}
+}
+
+// A read that cannot be made is not a row that is gone: internal/drop deletes
+// on a false, and answering one for a store that is merely unreadable would
+// take a live session's dropped files with it.
+func TestSessionExistsFailsOpenOnAnUnreadableStore(t *testing.T) {
+	svc := newTestStore(t)
+	if err := svc.AddProject("p1", "alpha", "/tmp/alpha"); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if err := svc.AddSession("p1", "s1", "one", providers.Claude, "", 0, ""); err != nil {
+		t.Fatalf("AddSession: %v", err)
+	}
+	if err := svc.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	if !svc.SessionExists("s1") {
+		t.Error("a store that cannot be read reads as a session that is gone")
+	}
 }
 
 func TestLoadStateRestoresOpenProjectsAndSessions(t *testing.T) {
@@ -363,6 +416,33 @@ func TestSetSessionTitleRespectsManualRename(t *testing.T) {
 	}
 	if got := mustLoadSessions(t, svc)[0].Label; got != "my build" {
 		t.Errorf("manual label was stomped: %q", got)
+	}
+}
+
+// The Stop hook re-reports the same derived title on every turn for providers
+// that never change it. An unchanged label is not applied, so the caller does
+// not take the write lock and push a UI update per turn.
+func TestSetSessionTitleReportsAnUnchangedLabelUnapplied(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2, "")
+
+	applied, err := svc.SetSessionTitle("s1", "Fixing the auth bug")
+	if err != nil {
+		t.Fatalf("SetSessionTitle: %v", err)
+	}
+	if !applied {
+		t.Fatal("the first title = false, want true")
+	}
+	applied, err = svc.SetSessionTitle("s1", "Fixing the auth bug")
+	if err != nil {
+		t.Fatalf("SetSessionTitle again: %v", err)
+	}
+	if applied {
+		t.Fatal("the same title again = true, want false")
+	}
+	if got := mustLoadSessions(t, svc)[0].Label; got != "Fixing the auth bug" {
+		t.Errorf("label = %q, want the title still on the row", got)
 	}
 }
 
@@ -829,6 +909,45 @@ CREATE TABLE sessions (
 	}
 }
 
+// TestOpenDropsTheTerminalThemeSetting: one theme colours both the app and the
+// terminal now, and the selection the terminal used to keep is read by nothing.
+// It is deleted on the way past so that whoever gives the terminal its own
+// theme again starts from the default, rather than silently restoring a choice
+// its user made when the two were separate.
+func TestOpenDropsTheTerminalThemeSetting(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "themed.db")
+	before, err := open(path)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	if err := before.SetSetting("appearance.terminalTheme", "", "emerald"); err != nil {
+		t.Fatalf("SetSetting: %v", err)
+	}
+	// The same leftover under a project scope, and the live selection beside it.
+	_ = before.SetSetting("appearance.terminalTheme", "p1", "emerald")
+	_ = before.SetSetting("appearance.theme", "", "rose-pine")
+	_ = before.Close()
+
+	after, err := open(path)
+	if err != nil {
+		t.Fatalf("reopen store: %v", err)
+	}
+	defer after.Close()
+
+	for _, scope := range []string{"", "p1"} {
+		got, err := after.GetSetting("appearance.terminalTheme", scope)
+		if err != nil {
+			t.Fatalf("GetSetting(scope %q): %v", scope, err)
+		}
+		if got != "" {
+			t.Errorf("terminal theme in scope %q = %q, want it gone", scope, got)
+		}
+	}
+	if got, _ := after.GetSetting("appearance.theme", ""); got != "rose-pine" {
+		t.Errorf("app theme = %q, want it untouched", got)
+	}
+}
+
 // TestOpenRenamesClaudeSessionColumn proves the multi-provider rename carries
 // stored ids over instead of stranding them: a database still on the
 // claude_session_id column comes back with its values readable under
@@ -1109,7 +1228,7 @@ func TestRecentProjectsListsClosedOnesNewestFirst(t *testing.T) {
 		}
 	}
 
-	recents, err := svc.RecentProjects()
+	recents, err := svc.RecentProjects("")
 	if err != nil {
 		t.Fatalf("RecentProjects: %v", err)
 	}
@@ -1131,7 +1250,7 @@ func TestRecentProjectsListsClosedOnesNewestFirst(t *testing.T) {
 	}
 }
 
-// TestRecentProjectsStopAtTwentyFive pins the cap the palette searches within:
+// TestRecentProjectsStopAtTwentyFive pins the page the store answers with:
 // one project past it is closed, and the one that falls off is the oldest close,
 // never the newest. The number is written out rather than read from the constant
 // so moving the constant has to move this line too.
@@ -1169,7 +1288,7 @@ func TestRecentProjectsStopAtTwentyFive(t *testing.T) {
 // recentIDs is the reopen menu's list reduced to what its order is asserted on.
 func recentIDs(t *testing.T, svc *Service) []string {
 	t.Helper()
-	recents, err := svc.RecentProjects()
+	recents, err := svc.RecentProjects("")
 	if err != nil {
 		t.Fatalf("RecentProjects: %v", err)
 	}
@@ -1271,7 +1390,7 @@ func TestReopeningARecentProjectRestoresItsSessions(t *testing.T) {
 	if err := svc.AddProject("p1", "alpha", "/tmp/alpha"); err != nil {
 		t.Fatalf("AddProject (reopen): %v", err)
 	}
-	recents, err := svc.RecentProjects()
+	recents, err := svc.RecentProjects("")
 	if err != nil {
 		t.Fatalf("RecentProjects: %v", err)
 	}
@@ -1298,7 +1417,7 @@ func TestDeleteProjectRemovesItsSessions(t *testing.T) {
 	if err := svc.DeleteProject("p1"); err != nil {
 		t.Fatalf("DeleteProject: %v", err)
 	}
-	recents, err := svc.RecentProjects()
+	recents, err := svc.RecentProjects("")
 	if err != nil {
 		t.Fatalf("RecentProjects: %v", err)
 	}
@@ -1364,5 +1483,55 @@ func TestSessionGoneReportsEveryRowOfARemovedWorktree(t *testing.T) {
 	slices.Sort(gone)
 	if want := []string{"wtA", "wtA2"}; !slices.Equal(gone, want) {
 		t.Fatalf("reported %v, want %v", gone, want)
+	}
+}
+
+// The mark behind a card's solid ring is workspace state: a finished turn
+// nobody has read has to come back unread after a page reload, and a turn the
+// user already read has to come back read.
+func TestSessionUnreadSurvivesHydration(t *testing.T) {
+	svc := newTestStore(t)
+	if err := svc.AddProject("p1", "alpha", "/tmp/alpha"); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if err := svc.AddSession("p1", "s1", "Session 1", "", "", 2, ""); err != nil {
+		t.Fatalf("AddSession: %v", err)
+	}
+
+	unreadOf := func(t *testing.T) bool {
+		t.Helper()
+		projects, err := svc.LoadState()
+		if err != nil {
+			t.Fatalf("LoadState: %v", err)
+		}
+		if len(projects) != 1 || len(projects[0].Sessions) != 1 {
+			t.Fatalf("LoadState = %+v, want one project with one session", projects)
+		}
+		return projects[0].Sessions[0].Unread
+	}
+
+	if unreadOf(t) {
+		t.Error("a session that has never finished a turn hydrated unread")
+	}
+	if err := svc.SetSessionUnread("s1", true); err != nil {
+		t.Fatalf("SetSessionUnread(true): %v", err)
+	}
+	if !unreadOf(t) {
+		t.Error("a finished turn nobody read hydrated read")
+	}
+	if err := svc.SetSessionUnread("s1", false); err != nil {
+		t.Fatalf("SetSessionUnread(false): %v", err)
+	}
+	if unreadOf(t) {
+		t.Error("a turn the user read hydrated unread")
+	}
+}
+
+// A card closed between its turn ending and the write has no mark left to
+// carry, and the writer must not turn that into an error the caller logs.
+func TestSetSessionUnreadIgnoresAMissingSession(t *testing.T) {
+	svc := newTestStore(t)
+	if err := svc.SetSessionUnread("ghost", true); err != nil {
+		t.Fatalf("SetSessionUnread on a missing session: %v", err)
 	}
 }

@@ -1,9 +1,7 @@
-import { readPref, writePref } from "@/lib/prefs"
-
-// Global keyboard shortcuts. Combos are user-configurable and persisted to
-// localStorage, matching every other setting (see settings.tsx). `mod` is the
-// platform primary modifier — Ctrl on Windows/Linux, Cmd on macOS — so a single
-// stored combo works on both.
+// Global keyboard shortcuts. Combos are user-configurable and persisted to the
+// workspace database, the way the theme selection is (see settings.tsx). `mod`
+// is the platform primary modifier — Ctrl on Windows/Linux, Cmd on macOS — so a
+// single stored combo works on both.
 
 // Zoom is deliberately absent: those chords shadow Chromium's own accelerators,
 // which are bound to physical keys, so they are matched on event.code in
@@ -24,6 +22,8 @@ export type HotkeyId =
   | "prevProject"
   | "toggleSidebar"
   | "toggleDock"
+  | "splitBeside"
+  | "otherPane"
   | "settings"
   | "pulls"
   | "shortcuts"
@@ -67,7 +67,10 @@ export interface HotkeyAction {
 //   (Ctrl+R search, Ctrl+U kill, Ctrl+W erase word) — never take one.
 // - Ctrl+Shift+letter reaches the PTY as *nothing at all*: xterm's control-code
 //   mapping requires Shift to be up, so no TUI can bind it and the chord is free.
-//   It is the family to reach for, minus the letters Chromium keeps for itself.
+//   It is the family to reach for, minus the letters Chromium keeps for itself:
+//   lich's own window hands the page every Ctrl chord before Chromium acts on
+//   it (shell/src/main.rs), but a browser tab, which is what an Intel Mac
+//   opens, never does.
 // - Ctrl+Shift+arrow arrives as a real sequence (CSI 1;6A…D), so it does cost
 //   the TUI something. It is spent only where the direction *is* the meaning.
 // - Ctrl+Alt+arrow is the desktop's workspace switch on Linux and would never
@@ -84,7 +87,7 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
   },
   // B for branch: the dialog's whole subject is which branch the checkout is
   // cut from. Ctrl+Shift+W would have read better and is Chromium's close
-  // window, which a page cannot take back.
+  // window, which a page opened in a browser cannot take back.
   {
     id: "newWorktree",
     label: "New worktree session",
@@ -172,6 +175,25 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
     group: "view",
     combo: { mod: true, shift: true, alt: false, key: "d" },
   },
+  // G for the grid the stage lays out, F for the focus moving along it. Letters
+  // on purpose: the family note above is measured for Ctrl+Shift+*letter*, and
+  // the chord this pair wants to spell — Ctrl+Shift+\, the editors' split — is
+  // not one, so whether xterm's mapping lets it through is a question nobody
+  // here has put to a `cat -v`. G and F are what the list above leaves: O reads
+  // better for "open beside" and is Chromium's own, and Ctrl+F without Shift is
+  // the terminal's find, which is a different chord and stays the terminal's.
+  {
+    id: "splitBeside",
+    label: "Show another session beside this one",
+    group: "view",
+    combo: { mod: true, shift: true, alt: false, key: "g" },
+  },
+  {
+    id: "otherPane",
+    label: "Focus the next pane",
+    group: "view",
+    combo: { mod: true, shift: true, alt: false, key: "f" },
+  },
   {
     id: "commandPalette",
     label: "Command palette",
@@ -214,7 +236,16 @@ export type KeyState = Pick<
 >
 
 const MODIFIER_KEYS = new Set(["Control", "Meta", "Shift", "Alt", "AltGraph"])
-const STORAGE_KEY = "lich.hotkeys"
+
+// The workspace key the bindings live under, global scope: a rebind answers for
+// this install rather than for one project, exactly like the theme selection.
+export const HOTKEYS_SETTING_KEY = "hotkeys.bindings"
+
+// Where the bindings lived before that: an entry in the page's own storage,
+// which sits in the Chromium profile. A profile Chromium recreates from scratch
+// (#209) comes back without it, and every rebind was gone with no sign on screen
+// that anything had been lost. Read once, migrated, and dropped.
+export const LEGACY_HOTKEYS_KEY = "lich.hotkeys"
 
 // normalizeKey folds "=" into "+" (same physical key) and lowercases single
 // characters so casing from Shift does not change the identity of the combo.
@@ -306,6 +337,51 @@ export function hotkeyConflicts(hotkeys: Hotkeys): Partial<Record<HotkeyId, Hotk
   return conflicts
 }
 
+// What the terminal side already spends a chord on, keyed by the combo's key.
+// The list is Ctrl+letter and nothing else on purpose: xterm's control-code
+// mapping needs Shift up, so Ctrl+Shift+anything reaches no TUI at all and
+// costs nothing (measured in a live session against `cat -v`, and the reason
+// every default above is in that family).
+//
+// It is what the defaults' own note has always known and no rebind was ever
+// held to: a bound chord is caught in the window capture phase and stopped
+// there, so it never reaches the PTY. lich does not veto the user's choice —
+// the recorder only has to say what the choice costs.
+const TERMINAL_CHORDS: Record<string, string> = {
+  a: "the shell's move to the start of the line",
+  c: "the shell's interrupt",
+  d: "the shell's end of input",
+  e: "the shell's move to the end of the line",
+  k: "the shell's kill to the end of the line",
+  l: "the shell's clear screen",
+  q: "the shell's resume output",
+  r: "the shell's history search",
+  s: "the shell's stop output",
+  u: "the shell's kill to the start of the line",
+  w: "the shell's erase word",
+  z: "the shell's suspend",
+  // Not the shell's: the two the session terminal spends for itself, and the
+  // one a provider binds inside it (shortcuts.ts, terminal/term-keys.ts).
+  f: "the session terminal's own search",
+  v: "the image paste lich sends the agent",
+  Backspace: "the erase word lich sends the agent",
+}
+
+// terminalCost is the one line the recorder shows for a chord the terminal side
+// already spends, and "" for one the PTY never sees anyway.
+//
+// The chord is spelled Ctrl even on macOS, where formatCombo prints ⌘: what a
+// TUI reads is the control code, and matchesCombo folds Cmd and Ctrl into one
+// `mod`, so binding ⌘R there swallows ^R too. Naming ⌘ would point at the wrong
+// key — the same reason shortcuts.ts spells its rows out by hand.
+export function terminalCost(combo: Combo): string {
+  if (!combo.mod || combo.shift || combo.alt) {
+    return ""
+  }
+  const spent = TERMINAL_CHORDS[combo.key]
+  return spent ? `Ctrl+${formatKey(combo.key)} is ${spent}; sessions will no longer see it.` : ""
+}
+
 function formatKey(key: string): string {
   if (key === " ") return "Space"
   if (key.startsWith("Arrow")) return key.slice("Arrow".length)
@@ -356,15 +432,32 @@ export function mergeHotkeys(overrides: unknown): Hotkeys {
   return result
 }
 
-export function loadHotkeys(): Hotkeys {
+// parseHotkeys reads one stored value, from either store. A persisted binding
+// must never be able to break a launch: the value is a string somebody can
+// hand-edit, and half of one is what an interrupted write leaves, so anything
+// that does not parse reads as the defaults.
+export function parseHotkeys(raw: string): Hotkeys {
   try {
-    const raw = readPref(STORAGE_KEY)
     return raw ? mergeHotkeys(JSON.parse(raw)) : DEFAULT_HOTKEYS
   } catch {
     return DEFAULT_HOTKEYS
   }
 }
 
-export function saveHotkeys(hotkeys: Hotkeys): void {
-  writePref(STORAGE_KEY, JSON.stringify(hotkeys))
+// adoptStoredHotkeys resolves the bindings a launch starts from against the two
+// stores, mirroring adoptStoredTheme: the workspace copy is the durable one and
+// wins, and the page copy is what an install that predates the move still has.
+// `migrate` reports that copy still being the only record — it is written to the
+// database once and then removed, so the profile no longer owns the answer.
+export function adoptStoredHotkeys(
+  stored: string,
+  legacy: string | null,
+): { hotkeys: Hotkeys; migrate: boolean } {
+  if (stored) {
+    return { hotkeys: parseHotkeys(stored), migrate: false }
+  }
+  if (legacy === null) {
+    return { hotkeys: DEFAULT_HOTKEYS, migrate: false }
+  }
+  return { hotkeys: parseHotkeys(legacy), migrate: true }
 }

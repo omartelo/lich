@@ -68,12 +68,44 @@ func TestCanSelfApply(t *testing.T) {
 		{"unwritable dir", "darwin", filepath.Join("/nonexistent-abc123", "lich"), false},
 		{"homebrew cellar is brew's", "darwin", cellarExe(t), false},
 		{"app bundle keeps its signature", "darwin", bundleExe(t), false},
+		{"installer layout self-applies", "windows", windowedExe(t), true},
+		{"scoop install is scoop's", "windows", scoopExe(t), false},
 	}
 	for _, tc := range tests {
 		if got := canSelfApply(tc.goos, tc.exePath); got != tc.want {
 			t.Errorf("canSelfApply(%q,%q) = %v, want %v", tc.goos, tc.exePath, got, tc.want)
 		}
 	}
+}
+
+// windowedExe returns a writable path with lich's window installed beside it,
+// the way the Windows installer lays it out.
+func windowedExe(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	shell := filepath.Join(dir, "shell")
+	if err := os.MkdirAll(shell, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(shell, "lich-shell.exe"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return filepath.Join(dir, "lich.exe")
+}
+
+// scoopExe returns a writable path shaped like a Scoop install
+// (<root>\apps\lich\current\lich.exe) with the window beside it, the way the
+// manifest lays it out.
+func scoopExe(t *testing.T) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "Scoop", "apps", "lich", "current")
+	if err := os.MkdirAll(filepath.Join(dir, "shell"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "shell", "lich-shell.exe"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return filepath.Join(dir, "lich.exe")
 }
 
 // cellarExe returns a writable path shaped like a Homebrew formula install
@@ -225,6 +257,8 @@ func TestInstallCommand(t *testing.T) {
 		{"darwin self-apply", "darwin", "", "", ""},
 		{"homebrew install", "darwin", cellarExe(t), "", brew},
 		{"cask install", "darwin", bundleExe(t), "", cask},
+		{"scoop install", "windows", scoopExe(t), "", "scoop update lich" + restartChainPwsh},
+		{"scoop version dir", "windows", filepath.Join("C:", "scoop", "apps", "lich", "0.47.0", "lich.exe"), "", "scoop update lich" + restartChainPwsh},
 		{"arch by ID", "linux", "", "ID=arch\n", arch},
 		{"arch quoted ID", "linux", "", "ID=\"arch\"\n", arch},
 		{"arch derivative via ID_LIKE", "linux", "", "ID=manjaro\nID_LIKE=arch\n", arch},
@@ -250,7 +284,7 @@ func TestInstallCommand(t *testing.T) {
 }
 
 func TestApplyRejectedWhenNotSelfApply(t *testing.T) {
-	s := New("0.7.0")
+	s := New("0.7.0", nil, nil)
 	s.exePath = "" // forces canSelfApply false regardless of platform
 	if err := s.Apply(); err == nil {
 		t.Fatal("Apply() = nil, want an error when self-apply is unsupported")
@@ -284,6 +318,28 @@ func applyServer(t *testing.T, assetStatus int) *httptest.Server {
 
 // applyService is a Service pinned to darwin/arm64 — the self-apply path driven
 // off whatever host runs the suite.
+func TestApplyReportsProgress(t *testing.T) {
+	body := "verified release asset"
+	srv := windowsReleaseFixture(t, "lich-v0.8.0-darwin-arm64", body)
+	defer srv.Close()
+	s := applyService(t, srv, func(r io.Reader, _ []byte) error { _, err := io.ReadAll(r); return err })
+	s.downloadBase = srv.URL + "/"
+	var steps []Progress
+	s.emit = func(_ string, data any) { steps = append(steps, data.(Progress)) }
+	if err := s.Apply(); err != nil {
+		t.Fatal(err)
+	}
+	if len(steps) < 3 {
+		t.Fatalf("steps = %+v", steps)
+	}
+	if first := steps[0]; first != (Progress{Phase: phaseDownload, Received: 0, Total: int64(len(body))}) {
+		t.Errorf("first = %+v", first)
+	}
+	if last := steps[len(steps)-1]; last != (Progress{Phase: phaseInstall}) {
+		t.Errorf("last = %+v", last)
+	}
+}
+
 func applyService(t *testing.T, srv *httptest.Server, apply func(io.Reader, []byte) error) *Service {
 	t.Helper()
 	return &Service{
@@ -417,7 +473,7 @@ func TestFetchChecksum(t *testing.T) {
 }
 
 func TestNewResolvesExe(t *testing.T) {
-	s := New("0.7.0")
+	s := New("0.7.0", nil, nil)
 	if s.version != "0.7.0" {
 		t.Fatalf("version = %q", s.version)
 	}

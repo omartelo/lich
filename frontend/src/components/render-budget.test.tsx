@@ -20,11 +20,21 @@
 // The harness has to be imported before anything that reaches react-dom, which
 // is why it is first here (see @/test/render-budget).
 import { mountBudget } from "@/test/render-budget"
+// Loading these pulls in most of the app's module graph. Left to a dynamic
+// import inside the first test, that load was billed to that test: it cost 4.4s
+// of the 5s a test is given on a busy machine and timed out, while every test
+// after it, handed a warm registry, mounted in 40ms. Imported here the cost is
+// the file's, which is whose it always was.
+import { SessionSidebar } from "./sidebar/SessionSidebar"
+import { FooterBar } from "./FooterBar"
+import { TerminalHost } from "./TerminalHost"
+import { SettingsProvider } from "@/providers/settings"
+import { writeGroups } from "@/lib/session/panes-store"
 import { createElement, useEffect } from "react"
 import { HashRouter } from "react-router-dom"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 import { ProjectsContext, type ProjectsValue } from "@/providers/projects-context"
-import { STATUS_EVENT, USAGE_EVENT } from "@/lib/session/session-events"
+import { STATUS_EVENT, TODO_EVENT, USAGE_EVENT } from "@/lib/session/session-events"
 
 // The /events channel, as the app sees it: the stores subscribe at import, and a
 // test publishes to the same registry the backend socket would. Mocked rather
@@ -99,6 +109,24 @@ vi.mock("@/components/TerminalView", () => ({
   },
 }))
 
+// jsdom reports every element at zero, and the terminal stage lays its panes out
+// from its own measured width — unmeasured, it draws the focused session alone.
+// So the observer answers with a window big enough for the grid to be a grid;
+// which layout that produces is panes.test.ts's business, not this file's.
+const STAGE = { width: 1200, height: 800 }
+class FakeResizeObserver {
+  constructor(private readonly callback: ResizeObserverCallback) {}
+  observe() {
+    this.callback(
+      [{ contentRect: STAGE } as unknown as ResizeObserverEntry],
+      this as unknown as ResizeObserver,
+    )
+  }
+  unobserve() {}
+  disconnect() {}
+}
+vi.stubGlobal("ResizeObserver", FakeResizeObserver)
+
 // HashRouter follows history, not the hash property, so a test moves the route
 // the way the browser's back button does.
 const navigate = (to: string) => {
@@ -134,7 +162,7 @@ const workspace: ProjectsValue = {
   closeProject: noop,
   newSession: () => "",
   newWorktreeSession: () => "",
-  reopenWorktreeSession: async () => {},
+  reopenWorktreeSession: async () => "",
   resumeClosedSession: async () => {},
   closeSession: noop,
   discardSession: noop,
@@ -142,6 +170,7 @@ const workspace: ProjectsValue = {
   activateSession: noop,
   renameSession: noop,
   setEntrypoint: noop,
+  scheduleSession: noop,
   pinSession: noop,
   reorderProjects: noop,
   reorderSessions: noop,
@@ -156,6 +185,19 @@ const usageEvent = (id: string) => ({
   effort: "",
 })
 
+// What the cost-only rung reports: oh-my-pi, opencode and Crush record what a
+// turn spent and no window to take it against, so every context field arrives
+// zeroed (docs/ceilings.md).
+const costOnlyUsageEvent = (id: string) => ({
+  id,
+  percent: 0,
+  tokens: 0,
+  window: 0,
+  model: "",
+  effort: "",
+  costUsd: 0.25,
+})
+
 // A busy card counts how long it has been busy, on a shared 1s clock (see
 // session-age). Left running it lands a repaint of its own in the middle of a
 // budget, so the clock is frozen. Only the timers: faking the microtask queue
@@ -165,13 +207,13 @@ beforeEach(() => {
 })
 afterEach(() => {
   vi.useRealTimers()
+  // The split is a pref, so a test that opens one would otherwise hand the next
+  // one a stage already divided.
+  localStorage.clear()
 })
 
 async function mountSidebar() {
   window.location.hash = "#/projects/p1"
-  const { SessionSidebar } = await import("./sidebar/SessionSidebar")
-  const { FooterBar } = await import("./FooterBar")
-  const { SettingsProvider } = await import("@/providers/settings")
   const budget = await mountBudget(
     createElement(
       HashRouter,
@@ -228,6 +270,35 @@ test("a status event repaints that session's card and nothing else", async () =>
   await budget.unmount()
 })
 
+test("a todo event repaints that session's card and nothing else", async () => {
+  const budget = await mountSidebar()
+  await budget.act(() => bus.emit(TODO_EVENT, { id: "s2", done: 3, total: 7 }))
+  expect(budget.take()).toEqual({ "SessionCard#s2": 1, ...CARD_CHROME })
+  await budget.unmount()
+})
+
+// Not a budget: the rung itself. The count draws on a card that has gone quiet
+// and never on one mid-turn, where the tool line is what says the session is
+// moving, and this file is where a card is mounted for real (the rest of the
+// gate is node-only, so a throw in that branch would pass everywhere else).
+test("the task list draws on a quiet card and never on a busy one", async () => {
+  const budget = await mountSidebar()
+  await budget.act(() => {
+    bus.emit(STATUS_EVENT, { id: "s2", state: "busy", tool: "Edit", detail: "SessionCard.tsx" })
+    bus.emit(TODO_EVENT, { id: "s2", done: 3, total: 7 })
+  })
+  expect(document.body.textContent).toContain("Edit")
+  expect(document.body.textContent).not.toContain("3 of 7")
+
+  await budget.act(() => bus.emit(STATUS_EVENT, { id: "s2", state: "done" }))
+  expect(document.body.textContent).toContain("3 of 7 done")
+
+  // A finished list is an answer, not news.
+  await budget.act(() => bus.emit(TODO_EVENT, { id: "s2", done: 7, total: 7 }))
+  expect(document.body.textContent).not.toContain("7 of 7")
+  await budget.unmount()
+})
+
 test("a usage event for a background session repaints nothing", async () => {
   const budget = await mountSidebar()
   await budget.act(() => bus.emit(USAGE_EVENT, usageEvent("s3")))
@@ -240,34 +311,39 @@ test("a usage event for a background session repaints nothing", async () => {
 test("a usage event for the active session repaints the footer, not the sidebar", async () => {
   const budget = await mountSidebar()
   await budget.act(() => bus.emit(USAGE_EVENT, usageEvent("s1")))
-  // The whole footer re-renders for a token count, segments that know nothing
-  // about usage included — that is the measured cost, not an endorsement of it.
-  // No SessionCard appears, which is what this pins.
+  // Contract changed: readings can be placed independently on either side.
+  // Only the model/context readers repaint; actions, time and cards stay absent.
   expect(budget.take()).toEqual({
-    FooterBar: 1,
-    FooterButton: 2,
-    ContextRing: 1,
+    SessionContext: 1,
     SessionModel: 1,
-    PlanQuota: 1,
     ProviderIcon: 1,
     BrandIcon: 1,
-    Separator: 4,
-    Tooltip: 4,
-    TooltipRoot: 4,
-    TooltipTrigger: 8,
-    TooltipContent: 4,
-    TooltipPortal: 4,
-    Paperclip: 1,
-    Folder: 1,
-    Code: 1,
-    Anonymous: 3,
+    ContextReadout: 1,
+    ContextRing: 1,
+    FooterReadout: 1,
+    Tooltip: 1,
+    TooltipRoot: 1,
+    TooltipTrigger: 2,
+    TooltipContent: 1,
+    TooltipPortal: 1,
+  })
+  await budget.unmount()
+})
+
+test("a usage event with no context window draws no ring", async () => {
+  const budget = await mountSidebar()
+  await budget.act(() => bus.emit(USAGE_EVENT, costOnlyUsageEvent("s1")))
+  // Cost-only readings keep their missing model and context absent. Cost is
+  // off in this rig because its stored setting has not answered.
+  expect(budget.take()).toEqual({
+    SessionContext: 1,
+    SessionModel: 1,
   })
   await budget.unmount()
 })
 
 test("switching project re-renders the mounted terminals but never remounts one", async () => {
   window.location.hash = "#/projects/p1"
-  const { TerminalHost } = await import("./TerminalHost")
   const budget = await mountBudget(
     createElement(
       HashRouter,
@@ -284,12 +360,14 @@ test("switching project re-renders the mounted terminals but never remounts one"
 
   // Two commits: the route moves, then p2's session clears its spawn gate and
   // mounts. Three TerminalView renders across them — s1 in both, s4 in the
-  // second — because nothing under TerminalHost is memoized.
+  // second — because nothing under TerminalHost is memoized. Each pane wears an
+  // ErrorBoundary of its own, so it repaints alongside the view it wraps.
   await budget.act(() => navigate("/projects/p2"))
   expect(budget.take()).toEqual({
     HashRouter: 1,
     Router: 1,
     TerminalHost: 2,
+    ErrorBoundary: 3,
     TerminalView: 3,
     ResumeSessionDialog: 2,
     WorktreeCloseDialogs: 2,
@@ -311,6 +389,7 @@ test("switching project re-renders the mounted terminals but never remounts one"
     HashRouter: 1,
     Router: 1,
     TerminalHost: 1,
+    ErrorBoundary: 2,
     TerminalView: 2,
     ResumeSessionDialog: 1,
     WorktreeCloseDialogs: 1,
@@ -326,5 +405,41 @@ test("switching project re-renders the mounted terminals but never remounts one"
   // The point of the whole test: two round trips, one mount each. A terminal
   // that remounted would have thrown away its PTY and its scrollback.
   expect(terminalMounts.counts).toEqual({ s1: 1, s4: 1 })
+  await budget.unmount()
+})
+
+test("adding a pane mounts its terminal and never remounts the ones already up", async () => {
+  window.location.hash = "#/projects/p1"
+  const budget = await mountBudget(
+    createElement(
+      HashRouter,
+      null,
+      createElement(
+        ProjectsContext.Provider,
+        { value: workspace },
+        createElement(TerminalHost, null),
+      ),
+    ),
+  )
+  budget.take()
+  // A delta rather than the whole map: the mounts counter is module state shared
+  // with the tests above, and what this pins is what *this* action did to it.
+  const before = { ...terminalMounts.counts }
+
+  await budget.act(() =>
+    writeGroups("p1", [{ id: "g1", name: "wall", cells: ["s1", "s2"], tracks: {} }]),
+  )
+
+  // The second pane's terminal is born once, and the first pane's is not thrown
+  // away and rebuilt around it — a split that re-keyed its layers would kill the
+  // very PTY it was opened to watch, and a remount is indistinguishable from a
+  // re-render without this counter.
+  expect(terminalMounts.counts).toEqual({ ...before, s2: (before.s2 ?? 0) + 1 })
+  // And the stage really divided: two cells drawn side by side on a 1200px
+  // stage, with a column seam between them. The node-environment gate cannot
+  // render, so this file is where the stage's own chrome gets to prove it draws
+  // at all.
+  expect(document.querySelectorAll("[data-pane]")).toHaveLength(2)
+  expect(document.querySelector('[aria-label="Resize the columns"]')).not.toBeNull()
   await budget.unmount()
 })

@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { useMatch, useNavigate } from "react-router-dom"
+import { useEffect, useState } from "react"
+import { useLocation, useMatch, useNavigate } from "react-router-dom"
 import { GitPullRequestArrow, Settings } from "lucide-react"
 import { DndContext, closestCenter } from "@dnd-kit/core"
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable"
@@ -12,6 +12,7 @@ import { runningSessions } from "@/lib/session/use-session-status"
 import type { Project } from "@/lib/api-types"
 import { openSettings } from "@/lib/settings-card-store"
 import { openPullsList } from "@/lib/pulls-list-card-store"
+import { projectRoute, rememberProjectRoute } from "@/lib/project-route"
 import { useSettings } from "@/providers/settings"
 import { useHotkey } from "@/lib/use-hotkey"
 import { NotificationsButton } from "./NotificationsButton"
@@ -30,7 +31,22 @@ export function ProjectTabs() {
   const [pending, setPending] = useState<{ project: Project; running: number } | null>(null)
   // The project the settings gear targets: whichever one is in view, falling
   // back to Home when the app is on the bare landing screen.
-  const activeProjectId = useMatch("/projects/:projectId/*")?.params.projectId ?? homeId
+  const routedProjectId = useMatch("/projects/:projectId/*")?.params.projectId
+  const activeProjectId = routedProjectId ?? homeId
+  // Every tab remembers the screen its project was last on, so leaving a project
+  // to glance at another and coming back lands where it was left — its Settings,
+  // a pull request — instead of dropping onto its terminals every time.
+  const { pathname } = useLocation()
+  useEffect(() => {
+    if (routedProjectId) {
+      rememberProjectRoute(routedProjectId, pathname)
+    }
+  }, [routedProjectId, pathname])
+  // The active tab points at the live location rather than what was remembered
+  // for it: the memory is written a render later, and a tab that navigated away
+  // from the screen under it would be a click that undoes itself.
+  const tabRoute = (projectId: string) =>
+    projectId === routedProjectId ? pathname : projectRoute(projectId)
   const onSettings = !!useMatch("/projects/:projectId/settings")
   const onPulls = !!useMatch("/projects/:projectId/pulls/all/*")
 
@@ -81,7 +97,9 @@ export function ProjectTabs() {
     <>
       <div className="flex h-10 shrink-0 items-center gap-1 border-b border-border bg-sidebar px-2">
         <div className="flex flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden">
-          {showHome && homeId && <HomeTab projectId={homeId} />}
+          {showHome && homeId && (
+            <HomeTab to={tabRoute(homeId)} active={homeId === routedProjectId} />
+          )}
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -94,6 +112,8 @@ export function ProjectTabs() {
                   key={project.id}
                   project={project}
                   sessionIds={sessionsOf(sessions, project.id).map((s) => s.id)}
+                  to={tabRoute(project.id)}
+                  active={project.id === routedProjectId}
                   onClose={() => requestClose(project)}
                 />
               ))}

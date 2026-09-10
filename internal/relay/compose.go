@@ -92,6 +92,23 @@ func replyInstruction(hasTools bool, ticketID string) string {
 		"and the detail is in your commits and files anyway."
 }
 
+// pickTicketNudge is what a worker is told at its own prompt after a turn that
+// ended with none of its errands answered. Those errands are over by the time it
+// reads this — every one the turn could have been went home unanswered, which is
+// the same true thing about each of them — so they are named as history and not
+// as somewhere to reply: a ticket the relay has closed answers "unknown ticket",
+// and a note that invites that is worse than no note. What it asks for is the
+// next answer, which is the one that can still name its ticket.
+func pickTicketNudge(count int, errands string) string {
+	return fmt.Sprintf(
+		"[lich] Your turn ended with no answer sent, so %d requests went back to their senders "+
+			"unanswered:\n%s\nNothing outside this session can say which of them that turn was, "+
+			"which is why none of them could be answered for you. The next request you answer has "+
+			"to name its ticket: lich reply <ticket> \"<answer>\".",
+		count, errands,
+	)
+}
+
 // nudgeNotice is the one line typed at a sender's prompt when results are
 // waiting and nobody is holding the line for them. It replaces typing the
 // results themselves: N results landing as N prompt submissions each restart
@@ -145,19 +162,21 @@ func paste(text string) string {
 // submit is the Enter that sends what paste put at the prompt.
 const submit = "\r"
 
-// defaultSubmitDelay is how long the relay waits between the paste and the
-// Enter that sends it.
+// defaultSubmitDelay is how long a target's PTY has to stay quiet before the
+// relay presses the Enter that sends what it pasted (see awaitSettled).
 //
 // Everything else lich pastes into a prompt is left for the user to send, so
 // this is the only place that presses Enter itself — and a carriage return
-// riding in the same write as the paste is swallowed. Claude Code collapses a
-// multi-line paste into a "[Pasted text #2 +7 lines]" placeholder, and the
-// Enter arriving inside that same burst goes into building the placeholder
-// rather than sending it: the message sat unsent at the target's prompt, seen
-// only when someone opened that session by hand. Nothing here can read the
-// target's screen to know when it has settled, so the delay is the instrument,
-// and it is generous on purpose — a tenth of a second nobody notices against a
-// message that otherwise never arrives.
+// arriving while the TUI is still taking the paste in is swallowed. Claude Code
+// collapses a multi-line paste into a "[Pasted text #2 +7 lines]" placeholder
+// and the Enter goes into building the placeholder rather than sending it;
+// Codex, on a terminal that gave it no paste event, spends 120ms deciding
+// whether an Enter belongs inside the burst. Both were the same bug on screen:
+// the message sitting unsent at the target's prompt, seen only when someone
+// opened that session by hand.
+//
+// It has to outlast the longest of those windows, and it is what a settled
+// terminal is measured against, so it is the whole instrument in both roles.
 const defaultSubmitDelay = 150 * time.Millisecond
 
 // sanitize strips the control characters that would either break out of the

@@ -25,11 +25,22 @@ type added struct {
 type fakeSessions struct {
 	projects []store.Project
 	loadErr  error
-	rows     []added
-	addErr   error
+	// closed is the workspace's history: projects with is_open = 0, which
+	// RecentProjects offers back and AddProject reopens with their sessions
+	// intact, exactly as the store does.
+	closed     []store.Project
+	recentErr  error
+	addProjErr error
+	rows       []added
+	addErr     error
 	// models records the model written on each session row, keyed by session id.
 	models   map[string]string
 	modelErr error
+	// entrypoints records the run command written on each session row, keyed by
+	// session id. Only a Run card gets one from this service, so a row in here is
+	// also a row marked as one.
+	entrypoints   map[string]string
+	entrypointErr error
 	// deleted/parked/purged record what a close asked the store to do, and
 	// against which active session it left the project.
 	deleted []closedRow
@@ -39,6 +50,11 @@ type fakeSessions struct {
 	// renameErr is the write refusing.
 	renamed   map[string]string
 	renameErr error
+	// confines is the rung's own answer for a caller with nobody to ask, and
+	// sandboxAsked records the (provider, project, cwd) each Open resolved it
+	// for — the trio the real store scopes the rung by.
+	confines     bool
+	sandboxAsked [][3]string
 }
 
 // closedRow is one session the store was asked to take out of the workspace.
@@ -78,6 +94,42 @@ func (f *fakeSessions) LoadState() ([]store.Project, error) {
 	return f.projects, f.loadErr
 }
 
+func (f *fakeSessions) RecentProjects(string) ([]store.Recent, error) {
+	if f.recentErr != nil {
+		return nil, f.recentErr
+	}
+	recents := make([]store.Recent, 0, len(f.closed))
+	for _, p := range f.closed {
+		recents = append(recents, store.Recent{ID: p.ID, Name: p.Name, Path: p.Path})
+	}
+	return recents, nil
+}
+
+// AddProject mirrors the store's upsert: a closed project's row is reopened as
+// it stands — its sessions, its label counter and its name all come back — and
+// an id nothing holds opens as a new project.
+func (f *fakeSessions) AddProject(id, name, path string) error {
+	if f.addProjErr != nil {
+		return f.addProjErr
+	}
+	for i, p := range f.projects {
+		if p.ID == id {
+			f.projects[i].Name, f.projects[i].Path = name, path
+			return nil
+		}
+	}
+	for i, p := range f.closed {
+		if p.ID == id {
+			p.Name, p.Path = name, path
+			f.closed = append(f.closed[:i], f.closed[i+1:]...)
+			f.projects = append(f.projects, p)
+			return nil
+		}
+	}
+	f.projects = append(f.projects, store.Project{ID: id, Name: name, Path: path, NextSeq: 1})
+	return nil
+}
+
 func (f *fakeSessions) AddSessionFrom(
 	projectID, sessionID, label, kind, path string, nextSeq int, originID, originLabel string,
 ) error {
@@ -97,6 +149,11 @@ func (f *fakeSessions) AddSessionFrom(
 	return nil
 }
 
+func (f *fakeSessions) SandboxDefault(providerID, projectID, cwd string) bool {
+	f.sandboxAsked = append(f.sandboxAsked, [3]string{providerID, projectID, cwd})
+	return f.confines
+}
+
 func (f *fakeSessions) SetSessionModel(sessionID, model string) error {
 	if f.modelErr != nil {
 		return f.modelErr
@@ -105,6 +162,17 @@ func (f *fakeSessions) SetSessionModel(sessionID, model string) error {
 		f.models = map[string]string{}
 	}
 	f.models[sessionID] = model
+	return nil
+}
+
+func (f *fakeSessions) SetRunEntrypoint(sessionID, entrypoint string) error {
+	if f.entrypointErr != nil {
+		return f.entrypointErr
+	}
+	if f.entrypoints == nil {
+		f.entrypoints = map[string]string{}
+	}
+	f.entrypoints[sessionID] = entrypoint
 	return nil
 }
 
@@ -130,6 +198,8 @@ type fakeWorktrees struct {
 	dirty     map[string]bool
 	removed   []removedWorktree
 	removeErr error
+	// adopted names the checkouts the fixture says lich did not create.
+	adopted map[string]bool
 }
 
 type removedWorktree struct {
@@ -145,7 +215,9 @@ func (f *fakeWorktrees) WorktreeDirty(path string) (bool, error) {
 	return f.dirty[path], nil
 }
 
-func (f *fakeWorktrees) RemoveWorktree(_, path string, force bool) error {
+func (f *fakeWorktrees) WorktreeAdopted(path string) bool { return f.adopted[path] }
+
+func (f *fakeWorktrees) RemoveWorktree(_, path string, force, _ bool) error {
 	f.removed = append(f.removed, removedWorktree{path, force})
 	return f.removeErr
 }
@@ -183,7 +255,12 @@ type fakeTerminal struct {
 	err      error
 	closed   []string
 	closeErr error
+	// names is what each session's agent has on record, standing in for the
+	// transcript the terminal service reads. Empty for a session nobody renamed.
+	names map[string]string
 }
+
+func (f *fakeTerminal) AgentName(id string) string { return f.names[id] }
 
 func (f *fakeTerminal) Close(id string) error {
 	f.closed = append(f.closed, id)
@@ -191,7 +268,7 @@ func (f *fakeTerminal) Close(id string) error {
 }
 
 func (f *fakeTerminal) Start(
-	id, projectID, cwd, kind, _, name string, setup bool, cols, rows int,
+	id, projectID, cwd, kind, _, name string, _, setup bool, cols, rows int,
 ) error {
 	f.spawns = append(f.spawns, started{id, projectID, cwd, kind, name, setup, cols, rows})
 	return f.err
@@ -781,5 +858,47 @@ func TestSessionIDsDoNotRepeat(t *testing.T) {
 	}
 	if sessions.rows[0].sessionID == sessions.rows[1].sessionID {
 		t.Fatal("two sessions took the same id — the second would overwrite the first's row")
+	}
+}
+
+// Nobody is at this end of an open_session or a `lich open` to answer the
+// sandbox's "ask each time" rung, so the store resolves it and the caller is
+// told which side it landed on — the empty home and the read-only machine are
+// not something to discover from a failure inside the session.
+func TestOpenReportsTheConfinementTheRungResolvedTo(t *testing.T) {
+	svc, sessions, _, _, events := newService(t)
+	sessions.confines = true
+
+	opened, err := svc.Open("s1", "", "", "auth-fix", "", "")
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	if !opened.Confined {
+		t.Error("the rung confined the session and the caller was not told")
+	}
+	// Scoped by the trio the rung is keyed on, and by the checkout the session
+	// actually starts in rather than the project's own directory: a worktree is
+	// the side "Worktrees only" confines.
+	if got := sessions.sandboxAsked; len(got) != 1 || got[0] != [3]string{"codex", "p1", "/wt/auth-fix"} {
+		t.Errorf("resolved the rung for %v, want the new session's provider, project and checkout", got)
+	}
+	// The window draws the card from this payload, so a confinement the caller
+	// was told about has to be in it too.
+	if len(events.events) != 1 || events.events[0].data != any(opened) {
+		t.Errorf("the window was told %+v, the caller %+v", events.events, opened)
+	}
+}
+
+func TestOpenReportsNoConfinementWhenTheRungLeavesTheSessionOut(t *testing.T) {
+	svc, sessions, _, _, _ := newService(t)
+	sessions.confines = false
+
+	opened, err := svc.Open("s1", "", "", "", "", "")
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if opened.Confined {
+		t.Error("reported a confinement no rung asked for")
 	}
 }

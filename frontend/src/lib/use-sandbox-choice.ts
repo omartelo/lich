@@ -59,8 +59,9 @@ export function useSandboxChoice(
       setAvailable(canConfine)
       setChoice(sandboxDefaultFor(sandboxLevel(scoped || global), worktree))
     }
-    // A settings read that fails leaves the row absent and the session
-    // unconfined, which is what lich did before the sandbox existed.
+    // A settings read that fails leaves the row absent, which hands the session
+    // back to the rung's own answer at spawn time (store.SandboxDefault) rather
+    // than to a box that never loaded.
     void load().catch(() => undefined)
     return () => {
       stale = true

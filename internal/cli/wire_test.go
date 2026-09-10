@@ -32,6 +32,9 @@ func (wiredSessions) LoadState() ([]store.Project, error) {
 	}}}, nil
 }
 
+// Nothing here schedules a prompt; the relay only ever calls this to clear one.
+func (wiredSessions) SetSessionSchedule(string, int64, string) error { return nil }
+
 type wiredTerminal struct {
 	mu    sync.Mutex
 	typed string
@@ -42,6 +45,15 @@ type wiredTerminal struct {
 func (*wiredTerminal) Live(string) bool { return true }
 
 func (*wiredTerminal) Ready(string) bool { return true }
+
+func (*wiredTerminal) QuietFor(string) time.Duration { return time.Hour }
+
+// Nothing renamed itself in these tests, so the roster stays on the name lich
+// derives — which is the one the wiring under test addresses.
+func (*wiredTerminal) AgentName(string) string { return "" }
+
+// Nobody is typing at these sessions, so the hold has nothing to keep back.
+func (*wiredTerminal) HoldInput(string) func() { return func() {} }
 
 func (w *wiredTerminal) Write(_, data string) error {
 	w.mu.Lock()
@@ -146,6 +158,8 @@ type spawnStore struct {
 	model string
 	// renamed is the session id and label the last rename wrote.
 	renamed [2]string
+	// confines is what the sandbox rung answers a caller with nobody to ask.
+	confines bool
 }
 
 func (*spawnStore) LoadState() ([]store.Project, error) {
@@ -169,6 +183,14 @@ func (s *spawnStore) SetSessionModel(_, model string) error {
 	return nil
 }
 
+func (s *spawnStore) SetRunEntrypoint(_, _ string) error { return nil }
+
+func (s *spawnStore) SandboxDefault(_, _, _ string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.confines
+}
+
 func (s *spawnStore) DeleteSession(_, _, _ string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -184,6 +206,12 @@ func (s *spawnStore) RenameSession(sessionID, label string) error {
 }
 
 func (*spawnStore) CloseSession(_, _, _ string) error { return nil }
+
+func (*spawnStore) RecentProjects(string) ([]store.Recent, error) { return nil, nil }
+
+// The wire tests never open a project: what they prove is the arguments a
+// command posts, and the workspace this fixture answers with is already open.
+func (*spawnStore) AddProject(_, _, _ string) error { return nil }
 
 func (*spawnStore) PurgeWorktreeSessions(_, _ string) error { return nil }
 
@@ -208,12 +236,14 @@ func (*spawnGit) CreateWorktree(_, _, _, _ string, _ bool) (*project.Worktree, e
 
 func (g *spawnGit) ListCheckouts(string) ([]project.Worktree, error) { return g.checkouts, nil }
 
-func (g *spawnGit) RemoveWorktree(_, path string, force bool) error {
+func (g *spawnGit) RemoveWorktree(_, path string, force, _ bool) error {
 	g.removed, g.forced = path, force
 	return nil
 }
 
 func (g *spawnGit) WorktreeDirty(string) (bool, error) { return g.dirty, nil }
+
+func (*spawnGit) WorktreeAdopted(string) bool { return false }
 
 type spawnTerminal struct {
 	mu     sync.Mutex
@@ -222,12 +252,16 @@ type spawnTerminal struct {
 	closed string
 }
 
-func (s *spawnTerminal) Start(_, _, cwd, kind, _, _ string, _ bool, _, _ int) error {
+func (s *spawnTerminal) Start(_, _, cwd, kind, _, _ string, _, _ bool, _, _ int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cwd, s.kind = cwd, kind
 	return nil
 }
+
+// Nothing renamed itself here either, so a session is addressed by the name
+// lich derives for it.
+func (*spawnTerminal) AgentName(string) string { return "" }
 
 func (s *spawnTerminal) Close(id string) error {
 	s.mu.Lock()

@@ -11,6 +11,20 @@ module instead, which is a difference in packaging, not in what a report is.
 The contracts are provider-agnostic: lich injects the same variables into every
 PTY it spawns, so what changes per provider is only which of its lifecycle
 events maps onto a report — each contract's mapping table has a column per
+harness. **Cursor CLI's column is the one nobody installs**: lich installs no
+plugin there, and the CLI executes every Claude Code hook on the machine — the
+user's own and each installed plugin's — so those columns fire from the Claude
+Code install or not at all, and a machine without that install has a Cursor
+session that reports nothing. Of the nine that install registers, Cursor delivers
+`SessionStart`, `PreToolUse`, `PostToolUse` and `SessionEnd` and no others
+(measured 2026.08.11, against hooks in its own format and in Claude Code's
+alike). "dropped" in the state table is lich refusing a report it would have no
+way to end: without `Stop` a `busy` never becomes `done`, so
+`terminal.closableState` keeps everything but `idle` off a Cursor card. Reports
+also arrive naming `claude`, the argument Claude Code's own registration passes;
+lich answers from the kind it spawned instead (`terminal.providerKind`).
+[`../providers/cursor.md`](../providers/cursor.md) carries what all of that
+costs, and [`../providers/`](../providers/) holds the same page for every other
 harness.
 
 This directory is the **canonical, contract-first source** for those hooks:
@@ -51,7 +65,8 @@ exports `LICH_WORKTREE_PORT`, a dev-server port belonging to the session's
 checkout, and `LICH_PROJECT_DIR`, the project's own directory (the main
 checkout, which for a session running in a worktree is somewhere else entirely).
 Neither addresses anything in lich and no hook reads them — they exist for the
-project's own setup script and commands (`PORT=$LICH_WORKTREE_PORT pnpm dev`,
+project's own setup and run scripts and for commands typed in a card
+(`PORT=$LICH_WORKTREE_PORT pnpm dev`,
 `cp --reflink=auto -r "$LICH_PROJECT_DIR/node_modules" .`).
 
 `LICH_BIN` is the fourth: the path of the lich this session belongs to, which

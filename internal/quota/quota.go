@@ -20,6 +20,12 @@
 // read that from, yet knows runs a binary it did not choose, is reported as
 // StatusUnknown: a gauge drawn for the wrong account is worse than no gauge.
 //
+// That login is also named where the provider will say: Claude's own profile
+// route, and the OIDC id token Codex writes beside its access token. Neither is
+// a second reading — both ride the cache the windows do. A provider that names
+// nobody reports an empty Plan.Account, which is the gauge lich has always
+// drawn, not a failure.
+//
 // lich reads those credentials and never writes them. Token rotation belongs to
 // the CLI that owns the login: a refresh whose write-back fails spends the
 // stored refresh token and logs the user out of their agent, which is a far
@@ -57,7 +63,8 @@ const (
 // duration itself and is read from the payload.
 const (
 	sessionWindow = 5 * 60 * 60
-	weeklyWindow  = 7 * 24 * 60 * 60
+	dailyWindow   = 24 * 60 * 60
+	weeklyWindow  = 7 * dailyWindow
 )
 
 // A plan's Status. Anything other than StatusOK carries no windows: the reading
@@ -69,11 +76,8 @@ const (
 	// provider's own login, so they are one state, not two.
 	StatusSignedOut = "signed-out"
 	StatusError     = "error"
-	// StatusUnknown is "this session does not spend the account lich can read":
-	// it runs a binary the user configured, and lich cannot see the environment
-	// that binary set up (no live process, or a platform that exposes no other
-	// process's environment). The alternative would be the default account's
-	// numbers under a session spending someone else's plan.
+	// StatusUnknown withholds readings when the session environment or its
+	// selected credential source cannot be read. Never borrow another login.
 	StatusUnknown = "unknown"
 )
 
@@ -85,12 +89,20 @@ var redirectVars = []string{
 	"ANTHROPIC_AUTH_TOKEN",
 }
 
+// accountUserVar names the Keychain account Claude Code stores its credentials
+// under on macOS (claude_storage_darwin.go). Spelled once so the cache key and
+// the reader cannot drift apart.
+const accountUserVar = "USER"
+
 // accountVars are the environment variables that decide which account a session
 // spends: Claude's own token and config dir, Codex's config dir, and the three
 // that redirect Claude away from the subscription.
 var accountVars = append([]string{
 	claudeTokenVar,
 	claudeDirVar,
+	claudeSecureDirVar,
+	accountHomeVar,
+	accountUserVar,
 	codexHomeVar,
 }, redirectVars...)
 
@@ -101,52 +113,74 @@ var accountVars = append([]string{
 // the display name of the model a scoped window belongs to. Seconds is its
 // length, so the frontend can print the window it is looking at; 0 when the
 // provider does not report one. ResetsAt is RFC 3339, empty when unreported.
+// Active is the provider's own verdict on which window is the binding one, when
+// it reports one at all. LockedReason is non-empty only when the provider says
+// this window cannot be spent past regardless of its percentage. Ahead is
+// lich's own reading of the rate rather than the provider's — see pace.go.
 type Window struct {
-	Label    string `json:"label"`
-	Seconds  int    `json:"seconds"`
-	Percent  int    `json:"percent"`
-	ResetsAt string `json:"resetsAt,omitempty"`
+	Label        string `json:"label"`
+	Seconds      int    `json:"seconds"`
+	Percent      int    `json:"percent"`
+	ResetsAt     string `json:"resetsAt,omitempty"`
+	Active       bool   `json:"active,omitempty"`
+	LockedReason string `json:"lockedReason,omitempty"`
+	Ahead        bool   `json:"ahead,omitempty"`
 }
 
 // Plan is one provider's quota reading. Provider is a providers.Registry id, so
 // the frontend resolves the icon and the login command it already knows.
+//
+// Account names the login the windows were read against — the whole point of
+// the custom-binary path being that a session can spend an account lich's own
+// environment does not name. It is empty whenever the provider will not say
+// which, which is a reading without a name and never an error: a gauge that
+// cannot name its account is exactly what lich drew before this field existed.
+//
+// NoAccount carries why it is empty, for the one absence a reader can act on.
+// Left empty, an unnamed account is drawn the same whether the provider names
+// nobody or the session's own login is one lich may not ask about, and nothing
+// on the gauge told the two apart.
 type Plan struct {
-	Provider string   `json:"provider"`
-	Name     string   `json:"name"`
-	Plan     string   `json:"plan,omitempty"`
-	Windows  []Window `json:"windows,omitempty"`
-	Status   string   `json:"status"`
+	Provider  string   `json:"provider"`
+	Name      string   `json:"name"`
+	Plan      string   `json:"plan,omitempty"`
+	Account   string   `json:"account,omitempty"`
+	NoAccount string   `json:"noAccount,omitempty"`
+	Windows   []Window `json:"windows,omitempty"`
+	Status    string   `json:"status"`
 }
+
+// NoAccountTokenLogin is the one reason an empty Account has a name: the
+// session's login is a long-lived OAuth token, whose scope keeps the profile
+// route out of reach, so lich never asks who it belongs to. Every other unnamed
+// account is a provider that names nobody, which needs no reason of its own.
+const NoAccountTokenLogin = "token-login"
 
 // Account is what a lich session's own process says about the account it
 // spends. Env is that process's environment — where a wrapper binary puts a
 // config dir or a token of its own — and Read is false when lich could not read
-// it at all. Custom reports a session spawned from a binary the user
-// configured, which is the only case where an unreadable environment is worth
-// withholding a reading over: every other session spends the login lich reads.
+// it at all. An unreadable session never borrows the machine-wide login.
 type Account struct {
-	Env    map[string]string
-	Custom bool
-	Read   bool
+	Env  map[string]string
+	Read bool
 }
 
 // hidden reports an account lich cannot identify.
-func (a Account) hidden() bool { return a.Custom && !a.Read }
+func (a Account) hidden() bool { return !a.Read }
 
-// lookup resolves one account-deciding variable: the session's own process
-// wins, else lich's own environment. Every helper that decides which account a
-// reading belongs to has to resolve through this one, because a helper reading
-// only Env is blind on the two paths that matter most — the machine-wide
-// reading Settings asks for carries no session environment, and on macOS and
-// Windows no session's environment is readable at all (internal/terminal's
-// envReadable). Let two of them disagree and the gauge comes back wrong rather
-// than absent: harnessFile finds lich's own credentials file while elsewhere
-// cannot see the API key saying that login is never billed.
-func (a Account) lookup(name string) string {
-	if v := a.Env[name]; v != "" {
-		return v
+// A readable process environment is authoritative, including absent and empty
+// variables. Only the machine-wide reading (nil Env) inherits lich's values.
+func (a Account) lookupEnv(name string) (string, bool) {
+	if a.Env != nil {
+		value, defined := a.Env[name]
+		return value, defined
 	}
-	return os.Getenv(name)
+	return os.LookupEnv(name)
+}
+
+func (a Account) lookup(name string) string {
+	value, _ := a.lookupEnv(name)
+	return value
 }
 
 // elsewhere reports an account pointed at something other than the user's own
@@ -169,11 +203,17 @@ type Sessions func(sessionID string) Account
 // Service reads plan quota, caching one reading per account.
 type Service struct {
 	http *http.Client
-	// claudeURL, codexURL and probeURL are the endpoints, fields so tests drive
-	// the parsers against a local server.
-	claudeURL string
-	codexURL  string
-	probeURL  string
+	// claudeURL, codexURL, probeURL and profileURL are the endpoints, fields so
+	// tests drive the parsers against a local server.
+	claudeURL  string
+	codexURL   string
+	probeURL   string
+	profileURL string
+
+	// claudeLogin reads the credentials a session's Claude login is stored in,
+	// a field so tests of quota responses supply a file login without reaching
+	// for the machine's Keychain. New wires it to readClaudeCredentials.
+	claudeLogin func(Account) (claudeCredentials, string)
 
 	// now is time.Now, a field so a test can age the cache without sleeping.
 	now func() time.Time
@@ -198,12 +238,14 @@ type reading struct {
 // New returns a Service pointed at the live endpoints.
 func New() *Service {
 	return &Service{
-		http:      &http.Client{Timeout: httpTimeout},
-		claudeURL: claudeUsageURL,
-		codexURL:  codexUsageURL,
-		probeURL:  claudeProbeURL,
-		now:       time.Now,
-		cache:     make(map[string]reading),
+		http:        &http.Client{Timeout: httpTimeout},
+		claudeURL:   claudeUsageURL,
+		codexURL:    codexUsageURL,
+		probeURL:    claudeProbeURL,
+		profileURL:  claudeProfileURL,
+		claudeLogin: readClaudeCredentials,
+		now:         time.Now,
+		cache:       make(map[string]reading),
 	}
 }
 
@@ -230,7 +272,9 @@ func (s *Service) Plans(sessionID string) []Plan {
 		return cached.plans
 	}
 	plans := []Plan{s.claudePlan(account), s.codexPlan(account)}
-	s.cache[key] = reading{plans: plans, at: s.now()}
+	at := s.now()
+	pace(plans, at)
+	s.cache[key] = reading{plans: plans, at: at}
 	return plans
 }
 
@@ -239,19 +283,16 @@ func (s *Service) Plans(sessionID string) []Plan {
 // instead of being served someone else's numbers. Every account lich cannot
 // identify shares the one key whose reading needs no request at all.
 //
-// It keys on the session's own values alone, not on lookup: the fallback half
-// of lookup is lich's own environment, one constant for every account in the
-// process, so folding it in would lengthen every key without telling one more
-// pair of accounts apart. The account naming none of these — the machine-wide
-// reading, and every session on a platform whose environment lich cannot read
-// — keys empty, which is what puts it and Settings on one reading.
+// Include presence as well as value: a defined empty secure-storage directory
+// selects the default Keychain item, while an absent one inherits config dir.
 func cacheKey(a Account) string {
 	if a.hidden() {
 		return "?"
 	}
 	values := make([]string, 0, len(accountVars))
 	for _, name := range accountVars {
-		values = append(values, a.Env[name])
+		value, defined := a.lookupEnv(name)
+		values = append(values, fmt.Sprintf("%t:%s", defined, value))
 	}
 	return strings.Join(values, "\x00")
 }
@@ -293,11 +334,14 @@ func unknown(p Plan) Plan {
 func harnessFile(a Account, homeVar, sub string, name ...string) (string, bool) {
 	base := a.lookup(homeVar)
 	if base == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
+		home := a.lookup(accountHomeVar)
+		if home == "" {
 			return "", false
 		}
 		base = filepath.Join(home, sub)
+	}
+	if !filepath.IsAbs(base) {
+		return "", false
 	}
 	return filepath.Join(append([]string{base}, name...)...), true
 }

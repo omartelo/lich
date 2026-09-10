@@ -16,14 +16,19 @@ const NO_CHECKOUTS: Worktree[] = []
 // through refresh() right after this screen creates one itself. An error yields
 // an empty list: the worst it costs is a checkout attempt that gh refuses with
 // its own message, which is why the error itself is dropped here.
+//
+// refresh answers with the list it read, and that is what an action must use.
+// The filed answer paints the button, so it may be a round trip behind a
+// checkout removed from a terminal; deciding what the click *does* on a fresh
+// read is what keeps "Go to session" from pointing at a directory that is gone.
 export function useCheckouts(projectPath: string): {
   checkouts: Worktree[]
-  refresh: () => void
+  refresh: () => Promise<Worktree[]>
 } {
   const { data, refresh } = useRemoteResource(
     projectPath,
     () => ProjectService.ListCheckouts(projectPath).then((list) => list ?? NO_CHECKOUTS),
-    { empty: NO_CHECKOUTS, refetchOnFocus: true },
+    { empty: NO_CHECKOUTS, refetchOnFocus: true, cache: `git.checkouts ${projectPath}` },
   )
   return { checkouts: data, refresh }
 }

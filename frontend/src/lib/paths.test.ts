@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { baseName, displayPath } from "./paths"
+import { baseName, displayPath, unknownCwd } from "./paths"
 
 describe("displayPath", () => {
   it("collapses a POSIX home prefix to ~", () => {
@@ -37,5 +37,19 @@ describe("baseName", () => {
   it("returns empty for a root or empty path", () => {
     expect(baseName("/")).toBe("")
     expect(baseName("")).toBe("")
+  })
+})
+
+describe("unknownCwd", () => {
+  it("names what stands between the readout and a directory", () => {
+    expect(unknownCwd("tmux")).toBe("cwd unknown · inside tmux")
+    expect(unknownCwd("ssh")).toBe("cwd unknown · inside ssh")
+    expect(unknownCwd("distrobox-enter")).toBe("cwd unknown · inside distrobox-enter")
+  })
+
+  it("says it does not know before it says what is in the way", () => {
+    // The line is read at a glance beside real paths, so "cwd unknown" leads:
+    // a reader who takes in nothing else must not come away with a location.
+    expect(unknownCwd("tmux").startsWith("cwd unknown")).toBe(true)
   })
 })

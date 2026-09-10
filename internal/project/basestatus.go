@@ -89,7 +89,7 @@ func readBaseStatus(path, head, base string) *BaseStatus {
 	// collide with — and skipping merge-tree here is what keeps the common case
 	// (every worktree, most of the day) down to one extra subprocess.
 	if behind > 0 {
-		status.Conflicts = mergeConflicts(path, base, head)
+		status.Conflicts, _ = mergeConflicts(path, base, head)
 	}
 	return &status
 }
@@ -118,18 +118,26 @@ func commitsBehind(path, base, head string) (int, bool) {
 
 // mergeConflicts lists the files a merge of base into head would conflict on,
 // without touching the worktree, the index or HEAD: merge-tree computes the
-// merge in the object database alone. Exit status 1 is its answer for "merged
-// with conflicts" and the only status carrying a file list; anything else —
-// including a git too old to know --write-tree — reports none, which degrades
-// the readout to ahead/behind rather than failing it.
-func mergeConflicts(dir, base, head string) []string {
+// merge in the object database alone. Exit status 0 is a clean merge and 1 is
+// "merged with conflicts", the only status carrying a file list.
+//
+// The bool separates those two answers from a merge-tree that never answered —
+// a git too old to know --write-tree exits 129, measured. Both come back with
+// no files, and the difference decides whether a caller may say so out loud:
+// the polled readout degrades to ahead/behind (it has a second reading to fall
+// back on), while a screen whose whole answer is this list has to report that
+// it could not be computed rather than call the merge clean.
+func mergeConflicts(dir, base, head string) ([]string, bool) {
 	out, err := command("git", "-C", dir,
 		"merge-tree", "--write-tree", "--name-only", "-z", base, head).Output()
+	if err == nil {
+		return nil, true
+	}
 	var exit *exec.ExitError
 	if !errors.As(err, &exit) || exit.ExitCode() != 1 {
-		return nil
+		return nil, false
 	}
-	return conflictPaths(string(out))
+	return conflictPaths(string(out)), true
 }
 
 // conflictPaths reads merge-tree's -z output: the merged tree's OID, then the

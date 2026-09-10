@@ -25,7 +25,7 @@ func TestSessionAccountReadsWhatTheWrapperExecsInto(t *testing.T) {
 	}
 	svc := New(stubBins{bin: bin}, nil, events.New())
 	t.Cleanup(func() { _ = svc.Close("s1") })
-	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, 80, 24); err != nil {
+	if err := svc.Start("s1", "p1", t.TempDir(), "claude", "", "", false, false, 80, 24); err != nil {
 		t.Fatalf("Start = %v, want nil", err)
 	}
 
@@ -33,7 +33,7 @@ func TestSessionAccountReadsWhatTheWrapperExecsInto(t *testing.T) {
 	var env map[string]string
 	var read bool
 	for range 200 {
-		env, _, read = svc.SessionAccount("s1")
+		env, read = svc.SessionAccount("s1")
 		if read && env["CLAUDE_CONFIG_DIR"] == dir {
 			break
 		}

@@ -1,7 +1,9 @@
+import { TrendingUp } from "lucide-react"
 import type { QuotaWindow } from "@/lib/api-types"
 import { formatWindow, timeLeft } from "@/lib/quota/quota-format"
 import { cn } from "@/lib/utils"
 import { usageColor } from "./ContextRing"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 // Every column is fixed but the bar's. Sized to its own text, the readout gave a
 // window with no reset time the width the rows beside it spent on "6d 18h", and
@@ -30,7 +32,12 @@ interface QuotaGaugeProps {
 export function QuotaGauge({ window: quota, now, stacked }: QuotaGaugeProps) {
   const length = formatWindow(quota.seconds)
   const left = timeLeft(quota.resetsAt, now)
-  const label = length ? `${quota.label} · ${length}` : quota.label
+  const label = (
+    <>
+      <span className="truncate">{length ? `${quota.label} · ${length}` : quota.label}</span>
+      {quota.ahead && <AheadMark />}
+    </>
+  )
   const bar = (
     <span className="h-1.5 overflow-hidden rounded-full bg-muted">
       <span
@@ -39,14 +46,20 @@ export function QuotaGauge({ window: quota, now, stacked }: QuotaGaugeProps) {
       />
     </span>
   )
+  const reading = quota.lockedReason ? (
+    <LockedReading reason={quota.lockedReason} />
+  ) : (
+    `${quota.percent}%`
+  )
 
   if (stacked) {
     return (
       <div className={cn("flex flex-col gap-1 text-xs", usageColor(quota.percent))}>
         <div className="flex items-baseline justify-between gap-3">
-          <span className="text-muted-foreground">{label}</span>
+          <span className="flex min-w-0 items-center gap-1 text-muted-foreground">{label}</span>
           <span className="tabular-nums">
-            {quota.percent}%{left && ` · ${left}`}
+            {reading}
+            {left && ` · ${left}`}
           </span>
         </div>
         {bar}
@@ -55,10 +68,47 @@ export function QuotaGauge({ window: quota, now, stacked }: QuotaGaugeProps) {
   }
   return (
     <div className={cn(gaugeGrid, "text-xs", usageColor(quota.percent))}>
-      <span className="truncate text-muted-foreground">{label}</span>
+      <span className="flex min-w-0 items-center gap-1 text-muted-foreground">{label}</span>
       {bar}
-      <span className="text-right tabular-nums">{quota.percent}%</span>
+      <span className="text-right tabular-nums">{reading}</span>
       <span className="text-right tabular-nums text-muted-foreground">{left}</span>
     </div>
+  )
+}
+
+// AheadMark is the pace marker: this weekly window is being spent faster than
+// its own clock runs. It sits in the label column rather than beside the
+// percentage because the two numeric columns are fixed-width so that stacked
+// gauges end in the same place, and it carries no colour of its own — the row
+// already wears usageColor, and a hue here would say something the ramp does
+// not.
+function AheadMark() {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className="flex cursor-help items-center" />}>
+        <TrendingUp className="size-3 shrink-0" role="img" aria-label="Ahead of pace" />
+      </TooltipTrigger>
+      <TooltipContent side="top" className="border border-border bg-card text-foreground">
+        Spending ahead of this window's pace.
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+// LockedReading replaces the bare percentage when the provider says a window
+// is locked regardless of how full it reads — the percentage alone would look
+// like headroom that spending cannot actually reach. The reason travels to a
+// tooltip rather than inline, since the provider's wording is not written for
+// the width a gauge row has.
+function LockedReading({ reason }: { reason: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className="cursor-help underline decoration-dotted" />}>
+        Locked
+      </TooltipTrigger>
+      <TooltipContent side="top" className="border border-border bg-card text-foreground">
+        {reason}
+      </TooltipContent>
+    </Tooltip>
   )
 }

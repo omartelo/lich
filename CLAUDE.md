@@ -25,7 +25,9 @@ lives in the code, `docs/` and `CHANGELOG.md` — never restate any of it here.
 
 ## Rules of the codebase
 
-- Go 1.27, pure Go: `CGO_ENABLED=0` and a fully static binary are a constraint, not a default.
+- Go 1.27, pure Go: `CGO_ENABLED=0` and a fully static binary are a constraint, not a default. The Linux
+  window is a *separate* binary, `shell/` (Rust on CEF via a kurogane fork), launched with the same argv as a
+  system browser plus one switch of its own — nothing about it reaches the Go build (`docs/chromium-shell.md`).
 - OS-specific code is selected by build tags behind small seams, never by runtime checks — the PTY is the model
   (`internal/terminal`).
 - Service shapes are hand-owned in `frontend/src/lib/api-types.ts`: touch a Go struct's JSON tags and that mirror
@@ -34,8 +36,13 @@ lives in the code, `docs/` and `CHANGELOG.md` — never restate any of it here.
 ## Local Gate (before every commit / PR)
 
 - `gofmt -l .` clean (fix with `gofmt -w .`) and `go vet ./...` clean.
-- `cd frontend && pnpm check` clean — biome is the frontend's gofmt + vet (fix with `pnpm format`).
+- `cd frontend && pnpm exec biome ci .` **exit 0** — biome is the frontend's gofmt + vet (fix with
+  `pnpm format`). Read the exit code, never the last lines: `pnpm check` ends on the same
+  "Some errors were emitted" banner whether the count is one error or none, and the standing 17 a11y
+  warnings sit right above it. A single unformatted file has reached `main` this way.
 - `go test ./...` (backend) and `cd frontend && pnpm test` (frontend) green — or `task test` for both.
+- Touched `shell/`? `cd shell && cargo fmt --check && cargo clippy --release --all-targets -- -D warnings &&
+  cargo test --release` clean (`--release` shares the CEF build with `task build:shell`).
 - `cd frontend && pnpm build` succeeds (tsc typecheck + vite).
 - Shipped anything a user can see? Its `CHANGELOG.md` `[Unreleased]` entry lands in the same PR — the release notes
   are read from there, so an entry written later is an entry that missed its release.
@@ -63,11 +70,13 @@ Non-negotiable rules. A violation means the work is not done.
    nesting deeper than 4 levels; comments only for the *why*; errors handled explicitly, never swallowed; no magic
    values; no secrets in source.
 5. **A session feature is traced across every provider.** `internal/providers.Registry` is the checklist —
-   Claude Code, Codex, Antigravity, opencode, oh-my-pi, Crush. Anything a session touches (spawn flags, hooks,
-   resume, transcripts, plugin install, MCP) is designed against all six, and `docs/adding-a-provider.md` is the
-   map of every file one lands in. Equal behaviour is not always possible — but the gap must be deliberate and
-   written down in the same PR: a `docs/ceilings.md` bullet naming which providers are out and why. A feature
-   that silently works on a single provider is not done.
+   Claude Code, Codex, Antigravity, opencode, oh-my-pi, Crush, Cursor CLI, Kiro CLI. Anything a session
+   touches (spawn flags, hooks, resume, transcripts, plugin install, MCP) is designed against all eight, and
+   `docs/adding-a-provider.md` is the map of every file one lands in. Equal behaviour is not always possible —
+   but the gap must be deliberate and written down in the same PR, in both places: a `docs/ceilings.md` bullet
+   naming which providers are out and why, and a row in the Provider support table of `README.md` and
+   `README.zh-CN.md`, written in what the user sees. A feature that silently works on a single provider is not
+   done, and neither is one whose gap only a contributor can find.
 
 ## Releases
 
@@ -80,4 +89,10 @@ The version comes from the git tag (`git describe` in the Taskfile, env `VERSION
       greps `^## \[X.Y.Z\]` and ships empty notes if it misses. Keep the sections in their canonical order
       (Added, Changed, Deprecated, Removed, Fixed, Security), and refresh the compare links, `[Unreleased]`
       included.
+- [ ] Want the release to announce itself? Write GitHub alert blocks right under its heading, before the first
+      `###`: `> [!IMPORTANT]` is the release's headline and opens the What's new dialog (one per release — a
+      second one is demoted to a callout, which is the signal to fold it into the groups); `> [!WARNING]` is
+      something the reader must do or avoid; `> [!NOTE]` is a detail worth a line. One or two sentences each,
+      opening with a bold sentence that names its audience. The same blocks render as callouts on the release
+      page. Most releases carry none.
 - [ ] Push the `vX.Y.Z` tag — `.github/workflows/release.yml` does the rest, and reads the notes from that section.

@@ -1,31 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it } from "vitest"
 import type { PullRequestSummary } from "@/lib/api-types"
 import {
   checkVerdict,
   filterCounts,
   filterPullRequests,
   parsePullsQuery,
-  parsePullsSort,
-  readPullsSort,
   sortPullRequests,
   updatedAgo,
-  writePullsSort,
 } from "./pull-request-list"
-
-// The suite runs in node, which has no localStorage; the sort is a UI pref that
-// has to survive leaving the screen, so the storage is stubbed and the round-trip
-// through it is what is checked.
-const stored = new Map<string, string>()
-
-vi.stubGlobal("localStorage", {
-  getItem: (key: string) => stored.get(key) ?? null,
-  setItem: (key: string, value: string) => {
-    stored.set(key, value)
-  },
-  removeItem: (key: string) => {
-    stored.delete(key)
-  },
-})
 
 function pr(over: Partial<PullRequestSummary> = {}): PullRequestSummary {
   return {
@@ -212,16 +194,6 @@ describe("updatedAgo", () => {
   })
 })
 
-describe("parsePullsSort", () => {
-  it("keeps a stored sort this build knows", () => {
-    expect(parsePullsSort("failing")).toBe("failing")
-  })
-
-  it.each([null, "", "by-vibes"])("falls back to recently updated for %j", (raw) => {
-    expect(parsePullsSort(raw)).toBe("updated")
-  })
-})
-
 describe("parsePullsQuery", () => {
   it("defaults to the open pull requests and no other constraint", () => {
     expect(parsePullsQuery("")).toEqual({
@@ -325,29 +297,5 @@ describe("filtering by qualifier", () => {
   it("ands the qualifiers with the quick filter and the text", () => {
     expect(filterPullRequests(list, "drafts", q("is:ready"))).toEqual([])
     expect(filterPullRequests(list, "all", q("review:approved #2"))).toEqual([])
-  })
-})
-
-describe("the stored sort", () => {
-  beforeEach(() => {
-    stored.clear()
-  })
-
-  it("reads the default with nothing stored", () => {
-    expect(readPullsSort()).toBe("updated")
-  })
-
-  it("round-trips a chosen sort", () => {
-    writePullsSort("failing")
-
-    expect(readPullsSort()).toBe("failing")
-  })
-
-  // A pref must never be able to break a launch: a sort from another build, or a
-  // hand-edited one, reads as the default rather than as an unsortable column.
-  it("reads a value this build does not know as the default", () => {
-    stored.set("lich.pulls.sort", "by-vibes")
-
-    expect(readPullsSort()).toBe("updated")
   })
 })

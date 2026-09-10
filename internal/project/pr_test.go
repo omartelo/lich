@@ -57,6 +57,24 @@ func TestParsePRDetail(t *testing.T) {
 		}
 	})
 
+	// AuthorLogin is what a commit's login is compared against, so it must stay
+	// empty rather than borrow the display name: a name can never equal a login,
+	// and a borrowed one would report every commit as landing under another
+	// account.
+	t.Run("the author login never falls back to a display name", func(t *testing.T) {
+		out := []byte(`{"number":4,"state":"OPEN","author":{"name":"Ada Lovelace"}}`)
+		pr, err := parsePRDetail(out, true)
+		if err != nil || pr == nil {
+			t.Fatalf("unexpected parse result: %+v, %v", pr, err)
+		}
+		if pr.Author != "Ada Lovelace" {
+			t.Errorf("the printed author still falls back: %q", pr.Author)
+		}
+		if pr.AuthorLogin != "" {
+			t.Errorf("AuthorLogin borrowed the name: %q", pr.AuthorLogin)
+		}
+	})
+
 	t.Run("draft flag survives", func(t *testing.T) {
 		pr, err := parsePRDetail([]byte(`{"number":9,"state":"OPEN","isDraft":true}`), true)
 		if err != nil {
@@ -258,7 +276,9 @@ func TestToCommits(t *testing.T) {
 				MessageHeadline: "fix: retire the badge",
 				MessageBody:     "The footer badge only looked up again on HEAD moves.",
 				CommittedDate:   "2026-07-25T22:32:47Z",
-				Authors:         []ghCommitAuthor{{Login: "omartelo", Name: "omartelo"}},
+				Authors: []ghCommitAuthor{
+					{Login: "omartelo", Name: "omartelo", Email: "meopedevts@proton.me"},
+				},
 			},
 			{OID: "f55ebe9", MessageHeadline: "docs: changelog"},
 		})
@@ -269,26 +289,39 @@ func TestToCommits(t *testing.T) {
 		if first.OID != "a4dbc1f" || first.Headline != "fix: retire the badge" {
 			t.Errorf("wrong header: %+v", first)
 		}
-		if !strings.Contains(first.Body, "HEAD moves") || first.Author != "omartelo" {
-			t.Errorf("lost body or author: %+v", first)
+		if !strings.Contains(first.Body, "HEAD moves") || first.Login != "omartelo" {
+			t.Errorf("lost body or login: %+v", first)
+		}
+		if first.Email != "meopedevts@proton.me" {
+			t.Errorf("lost the author email: %q", first.Email)
 		}
 		if first.Date != "2026-07-25T22:32:47Z" {
 			t.Errorf("wrong date: %q", first.Date)
 		}
 		// A one-line commit has no body and a web-flow merge commit no author;
 		// both are rows, not errors.
-		if got[1].Body != "" || got[1].Author != "" {
+		if got[1].Body != "" || got[1].Login != "" || got[1].Name != "" {
 			t.Errorf("second commit should be bare: %+v", got[1])
 		}
 	})
 
-	t.Run("a nameless login falls back to the name", func(t *testing.T) {
+	// Contract change: the login used to fall back to the name, which made a
+	// commit GitHub could not attribute read exactly like one it could. The two
+	// now stay apart, and an empty login is the answer "no account owns this
+	// email" rather than a missing value.
+	t.Run("an unattributed author keeps its name and reports no login", func(t *testing.T) {
 		got := toCommits([]ghCommit{{
 			OID:     "c0ffee0",
-			Authors: []ghCommitAuthor{{Name: "Ada Lovelace"}},
+			Authors: []ghCommitAuthor{{Name: "Ada Lovelace", Email: "ada@analytical.example"}},
 		}})
-		if len(got) != 1 || got[0].Author != "Ada Lovelace" {
-			t.Errorf("author fallback failed: %+v", got)
+		if len(got) != 1 {
+			t.Fatalf("want 1 commit, got %+v", got)
+		}
+		if got[0].Login != "" {
+			t.Errorf("a name must never be reported as a login: %+v", got[0])
+		}
+		if got[0].Name != "Ada Lovelace" || got[0].Email != "ada@analytical.example" {
+			t.Errorf("lost the git author: %+v", got[0])
 		}
 	})
 }

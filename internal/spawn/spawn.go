@@ -38,6 +38,14 @@ import (
 // is the workspace state, which outlives any one card.
 const OpenedEventName = "session-opened"
 
+// ProjectOpenedEventName carries a project opened outside the window — an agent
+// naming a directory rather than a project already on screen — so its tab
+// appears without a reload. Its payload is the whole store.Project, sessions
+// included: a reopened project brings back the cards it was closed with, and the
+// session this open is about to announce lands in a tab the window has to be
+// holding already (frontend/src/lib/session/sessions.ts, adoptSession).
+const ProjectOpenedEventName = "project-opened"
+
 // ClosedEventName carries a session closed outside the window, so the card goes
 // away without a reload. Its payload is ClosedEvent.
 const ClosedEventName = "session-closed"
@@ -70,10 +78,14 @@ const (
 // a later resume. The store implements it.
 type Sessions interface {
 	LoadState() ([]store.Project, error)
+	RecentProjects(term string) ([]store.Recent, error)
+	AddProject(id, name, path string) error
 	AddSessionFrom(
 		projectID, sessionID, label, kind, path string, nextSeq int, originID, originLabel string,
 	) error
+	SandboxDefault(providerID, projectID, cwd string) bool
 	SetSessionModel(sessionID, model string) error
+	SetRunEntrypoint(sessionID, entrypoint string) error
 	RenameSession(sessionID, label string) error
 	DeleteSession(projectID, sessionID, activeID string) error
 	CloseSession(projectID, sessionID, activeID string) error
@@ -86,16 +98,21 @@ type Worktrees interface {
 	ListBranches(path string) (project.Branches, error)
 	ListCheckouts(path string) ([]project.Worktree, error)
 	CreateWorktree(projectPath, projectID, name, base string, baseIsRemote bool) (*project.Worktree, error)
-	RemoveWorktree(projectPath, wtPath string, force bool) error
+	RemoveWorktree(projectPath, wtPath string, force, adoptedAck bool) error
 	WorktreeDirty(wtPath string) (bool, error)
+	WorktreeAdopted(wtPath string) bool
 }
 
 // Terminal is the PTY side: the same spawn the window asks for when a card is
 // first viewed, and the same close it asks for when a card goes away. The
 // terminal service implements it.
 type Terminal interface {
-	Start(id, projectID, cwd, kind, resume, name string, setup bool, cols, rows int) error
+	Start(id, projectID, cwd, kind, resume, name string, fork, setup bool, cols, rows int) error
 	Close(id string) error
+	// AgentName is the name that session's agent answers to in its provider's
+	// peer roster, read out of the provider's own record. Empty when there is
+	// none, which is what leaves `lich close` matching the derived name.
+	AgentName(id string) string
 }
 
 // Events is where an opened session is announced to the window. A nil one leaves
@@ -116,6 +133,10 @@ type Events interface {
 // the store's own spelling. NextSeq is the project's label counter after this
 // session took its number. OriginSessionID and OriginLabel name the session that
 // asked for this one — empty when the caller was not a session at all.
+// Confined is whether the session opened inside the sandbox. Nobody is at this
+// end to be asked, so it is the rung's own answer (store.SandboxDefault), and
+// saying it is what keeps a caller from discovering the empty home and the
+// read-only machine by running into them.
 type Session struct {
 	ID              string `json:"id"`
 	ProjectID       string `json:"projectId"`
@@ -127,6 +148,11 @@ type Session struct {
 	NextSeq         int    `json:"nextSeq"`
 	OriginSessionID string `json:"originSessionId"`
 	OriginLabel     string `json:"originLabel"`
+	Confined        bool   `json:"confined"`
+	// Run marks a checkout's Run card, so the window can find it again and send
+	// the menu item to it rather than opening a second one (Run). Only Run sets
+	// it; every session opened any other way is a card of its own.
+	Run bool `json:"run"`
 }
 
 // Service opens sessions on behalf of a caller outside the window.
@@ -156,6 +182,10 @@ func New(sessions Sessions, worktrees Worktrees, term Terminal, events Events) *
 // request that created it: the card says where it came from for as long as it
 // exists.
 //
+// projectName is a project already on screen, by name, or a directory path — and
+// a path is the only way to reach a project the window is not holding, which is
+// what opening one from the command line means. See ensureProject.
+//
 // worktree, when given, is the branch name of a new git worktree created off
 // base (the project's current branch when base is empty); the session is rooted
 // there, labelled after it, and runs the project's worktree setup script before
@@ -183,7 +213,7 @@ func (s *Service) Open(fromID, projectName, kind, worktree, base, model string) 
 	if err != nil {
 		return Session{}, fmt.Errorf("read the workspace: %w", err)
 	}
-	target, err := resolveProject(projects, fromID, projectName)
+	projects, target, err := s.ensureProject(projects, fromID, projectName)
 	if err != nil {
 		return Session{}, err
 	}
@@ -232,6 +262,7 @@ func (s *Service) Open(fromID, projectName, kind, worktree, base, model string) 
 		NextSeq:         target.NextSeq + 1,
 		OriginSessionID: originID,
 		OriginLabel:     originLabel,
+		Confined:        s.sessions.SandboxDefault(kind, target.ID, cwd),
 	}
 	if err := s.sessions.AddSessionFrom(
 		target.ID, id, label, kind, stored, opened.NextSeq, originID, originLabel,
@@ -261,7 +292,7 @@ func (s *Service) Open(fromID, projectName, kind, worktree, base, model string) 
 			)
 		}
 	}
-	if err := s.term.Start(id, target.ID, cwd, kind, "", opened.Name, setup, startCols, startRows); err != nil {
+	if err := s.term.Start(id, target.ID, cwd, kind, "", opened.Name, false, setup, startCols, startRows); err != nil {
 		return Session{}, fmt.Errorf("session %q was created but its terminal did not start: %w", label, err)
 	}
 	if modelErr != nil {
@@ -365,7 +396,9 @@ func (s *Service) resolveBase(target store.Project, base string) (string, bool, 
 }
 
 // resolveProject picks the project the session lands in: the one named, or the
-// caller's own when nothing is named.
+// caller's own when nothing is named. A name reaches only the projects the
+// window is holding, and so does a path — opening one that is not on screen is
+// ensureProject's, and only an open does it.
 func resolveProject(projects []store.Project, fromID, name string) (store.Project, error) {
 	if name == "" {
 		for _, p := range projects {
@@ -381,9 +414,13 @@ func resolveProject(projects []store.Project, fromID, name string) (store.Projec
 		)
 	}
 
+	match, err := projectFilter(name)
+	if err != nil {
+		return store.Project{}, err
+	}
 	var matches []store.Project
 	for _, p := range projects {
-		if strings.EqualFold(p.Name, name) {
+		if match(p) {
 			matches = append(matches, p)
 		}
 	}
@@ -391,6 +428,9 @@ func resolveProject(projects []store.Project, fromID, name string) (store.Projec
 	case 1:
 		return matches[0], nil
 	case 0:
+		if looksLikePath(name) {
+			return store.Project{}, fmt.Errorf("no open project at %q. %s", name, knownProjects(projects))
+		}
 		return store.Project{}, fmt.Errorf("no open project named %q. %s", name, knownProjects(projects))
 	default:
 		return store.Project{}, fmt.Errorf(

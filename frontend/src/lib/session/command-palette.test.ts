@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   filterPalette,
   historyAction,
+  historyIndexNote,
   historyRows,
   matchesQuery,
   nextTab,
@@ -149,6 +150,24 @@ describe("paletteGroups", () => {
     expect(paletteGroups("Sessions", results, messages)[0]?.rows).toHaveLength(3)
   })
 
+  it("says how many closed projects the store matched past the page it sent", () => {
+    const cut = filterPalette("", all, projects, closed, [], 63)
+    const groups = paletteGroups("Projects", cut, messages)
+    const closedGroup = groups.find((g) => g.label === "Closed")
+    // The header reads "4 of 63": the cut happened in the store, so the rows in
+    // hand cannot report it on their own.
+    expect(closedGroup?.rows).toHaveLength(4)
+    expect(closedGroup?.total).toBe(63)
+  })
+
+  it("never reports a total under the rows it is showing", () => {
+    // A stale total from the query before this one must not read as a group
+    // that shrank below its own rows.
+    const stale = filterPalette("", all, projects, closed, [], 1)
+    const closedGroup = paletteGroups("Projects", stale, messages).find((g) => g.label === "Closed")
+    expect(closedGroup?.total).toBe(4)
+  })
+
   it("drops a group with no rows", () => {
     const empty = filterPalette("nothing-matches-this", all, projects, closed)
     expect(paletteGroups("All", empty, [])).toEqual([])
@@ -277,7 +296,11 @@ const parked: ClosedSession[] = [
     label: "Wire the relay inbox",
     kind: "claude",
     path: "/home/u/wt/lich/relay-inbox",
+    parkedBranch: "feat/relay-inbox",
     closedAt: 1_700_000_200,
+    matchedConversation: false,
+    snippet: "",
+    truncated: false,
   },
   {
     id: "h2",
@@ -287,7 +310,13 @@ const parked: ClosedSession[] = [
     label: "Conpty handle recycling",
     kind: "claude",
     path: "/home/u/wt/lich/conpty",
+    // Parked on one branch, sitting on another now: the checkout moved on after
+    // the close, which is the disagreement the two fields exist to hold.
+    parkedBranch: "fix/conpty-first-try",
     closedAt: 1_700_000_100,
+    matchedConversation: false,
+    snippet: "",
+    truncated: false,
   },
   {
     id: "h3",
@@ -297,7 +326,11 @@ const parked: ClosedSession[] = [
     label: "vitest --ui",
     kind: "shell",
     path: "/home/u/wt/revu/gone",
+    parkedBranch: "chore/vitest-ui",
     closedAt: 1_700_000_000,
+    matchedConversation: false,
+    snippet: "",
+    truncated: false,
   },
 ]
 
@@ -336,6 +369,16 @@ describe("history search", () => {
     expect(hit.map((h) => h.id)).toEqual(["h2"])
   })
 
+  it("narrows on the parked branch too, which is the one the store matched", () => {
+    // h2's checkout has moved since it was parked, so the term the store found
+    // it by is not the branch on screen — and the filter must not drop the row
+    // the store just answered with.
+    expect(filterPalette("first-try", [], [], [], rows).history.map((h) => h.id)).toEqual(["h2"])
+    // h3's checkout is gone, so git names no branch at all and the snapshot is
+    // the only branch that row has.
+    expect(filterPalette("vitest-ui", [], [], [], rows).history.map((h) => h.id)).toEqual(["h3"])
+  })
+
   it("narrows on the label, the project and the path too", () => {
     expect(filterPalette("relay", [], [], [], rows).history.map((h) => h.id)).toEqual(["h1"])
     expect(filterPalette("revu", [], [], [], rows).history.map((h) => h.id)).toEqual(["h3"])
@@ -352,6 +395,41 @@ describe("history search", () => {
 
   it("is empty rather than everything when no history was loaded", () => {
     expect(filterPalette("relay", [], [], []).history).toEqual([])
+  })
+
+  it("keeps a row the store matched on its conversation, whatever the row says", () => {
+    // The store found "handle recycling" a megabyte into a conversation and cut
+    // one window out of it. Nothing on the row carries the words, so re-testing
+    // the query here would drop the row the search just answered with.
+    const said = historyRows(
+      [
+        {
+          ...(parked[1] as ClosedSession),
+          matchedConversation: true,
+          snippet: "…the ConPTY handle was recycled…",
+        },
+      ],
+      parkedBranches,
+      new Set(),
+    )
+    expect(filterPalette("recycled", [], [], [], said).history.map((h) => h.id)).toEqual(["h2"])
+    // Two words that matched paragraphs apart: only one of them is in the
+    // window, and the row is still the answer.
+    expect(filterPalette("recycled zombie", [], [], [], said).history.map((h) => h.id)).toEqual([
+      "h2",
+    ])
+  })
+
+  it("keeps a conversation match that has no snippet to show", () => {
+    // The index folds accents, so "decision" found a session that said
+    // "decisión" and the plain text had nothing to cut. The flag is what the
+    // row is kept on; an empty snippet must not read as "matched by name".
+    const folded = historyRows(
+      [{ ...(parked[1] as ClosedSession), matchedConversation: true, snippet: "" }],
+      parkedBranches,
+      new Set(),
+    )
+    expect(filterPalette("decision", [], [], [], folded).history.map((h) => h.id)).toEqual(["h2"])
   })
 })
 
@@ -378,6 +456,45 @@ describe("the History tab", () => {
   it("draws no group at all when nothing has ever been closed", () => {
     const none = filterPalette("", [], projects, closed, [])
     expect(paletteGroups("History", none, [])).toEqual([])
+  })
+
+  it("says how many matched when the store cut the page", () => {
+    // The rows in hand are one page; the number beside them is the whole match,
+    // which is what the header turns into "3 of 143".
+    const group = paletteGroups("History", results, [], 143)[0]
+    expect(group?.rows).toHaveLength(3)
+    expect(group?.total).toBe(143)
+  })
+
+  it("says what it cannot see yet while the store is still indexing", () => {
+    // The note displaces the page count: a list that is missing sessions
+    // outright matters more than which slice of a match is on screen.
+    expect(paletteGroups("History", results, [], 143, 12)[0]?.note).toBe("indexing 12 sessions")
+    expect(paletteGroups("History", results, [], 143, 1)[0]?.note).toBe("indexing 1 session")
+    expect(paletteGroups("History", results, [], 143, 0)[0]?.note).toBeUndefined()
+  })
+
+  it("reports its own rows when nothing was cut", () => {
+    // total === rows.length is what the header reads as "not cut" — and a count
+    // that arrived stale, behind the rows, must never claim less than is drawn.
+    expect(paletteGroups("History", results, [], 3)[0]?.total).toBe(3)
+    expect(paletteGroups("History", results, [], 0)[0]?.total).toBe(3)
+  })
+})
+
+describe("historyIndexNote", () => {
+  const rows = historyRows(parked, parkedBranches, new Set())
+
+  it("says nothing for a session indexed whole, which is nearly all of them", () => {
+    expect(historyIndexNote(rows[0] as PaletteHistory)).toBeUndefined()
+  })
+
+  it("names how much of a session was indexed when the cap cut it", () => {
+    // The size is spelled in the window and the fact in the backend, so this is
+    // the line that fails when terminal.indexTextBytes moves and the sentence
+    // does not.
+    const cut = { ...(rows[0] as PaletteHistory), truncated: true }
+    expect(historyIndexNote(cut)).toBe("indexed: newest 8 MB")
   })
 })
 

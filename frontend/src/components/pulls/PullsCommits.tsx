@@ -2,18 +2,36 @@ import { useState } from "react"
 import { ChevronRight } from "lucide-react"
 import { Notice } from "@/components/common/Notice"
 import type { PullRequestCommit } from "@/lib/api-types"
+import { commitAuthorNotice, commitMetaLine } from "@/lib/pulls/commit-authors"
 import { cn } from "@/lib/utils"
 
 // PullsCommits is the "Commits" tab of the Pulls screen: every commit the pull
 // request would land, oldest first as gh lists them — the story of the branch,
 // which the diff never tells. A row is its subject line and clicking it opens
 // the message body, so a branch of fifteen commits stays a list you can scan.
-export function PullsCommits({ commits }: { commits: PullRequestCommit[] | null }) {
+//
+// It is also where the account lich runs gh as and the identity the commits
+// landed under are finally compared (commit-authors.ts): the two drift in
+// silence, and this is the last surface before a merge makes the wrong author
+// permanent.
+export function PullsCommits({
+  commits,
+  authorLogin,
+}: {
+  commits: PullRequestCommit[] | null
+  authorLogin: string
+}) {
   if (!commits || commits.length === 0) {
     return <Notice className="px-6 py-5 text-sm">No commits.</Notice>
   }
+  const notice = commitAuthorNotice(commits, authorLogin)
   return (
     <div className="flex flex-col py-1">
+      {notice && (
+        <p className="mx-6 mb-1 mt-2 border-l-2 border-amber-500 pl-3 text-xs leading-relaxed text-muted-foreground">
+          {notice}
+        </p>
+      )}
       {commits.map((commit) => (
         <CommitRow key={commit.oid} commit={commit} />
       ))}
@@ -40,7 +58,7 @@ function CommitRow({ commit }: { commit: PullRequestCommit }) {
           <span className="block truncate text-sm font-medium" title={commit.headline}>
             {commit.headline}
           </span>
-          <span className="block text-xs text-muted-foreground">{commitMeta(commit)}</span>
+          <span className="block text-xs text-muted-foreground">{commitMetaLine(commit)}</span>
         </span>
         {body !== "" && (
           <ChevronRight
@@ -61,16 +79,4 @@ function CommitRow({ commit }: { commit: PullRequestCommit }) {
       )}
     </div>
   )
-}
-
-// Who landed it and when, in git's own phrasing. Either half can be missing — a
-// merge commit from the web flow carries no author — so the line is built from
-// what is there instead of printing an empty "committed on".
-function commitMeta(commit: PullRequestCommit): string {
-  const at = new Date(commit.date)
-  const date = Number.isNaN(at.getTime()) ? "" : at.toLocaleDateString()
-  if (commit.author && date) {
-    return `${commit.author} committed ${date}`
-  }
-  return commit.author || (date && `Committed ${date}`) || ""
 }

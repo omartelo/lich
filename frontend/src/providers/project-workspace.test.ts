@@ -1,18 +1,27 @@
 import { describe, expect, it } from "vitest"
 import type { StoredProject, StoredSession } from "@/lib/api-types"
+import { toOpenedProject } from "@/lib/session/session-events"
+import { adoptSession } from "@/lib/session/sessions"
 import { buildSessionState, toProject } from "./project-workspace"
 
 const storedSession = (overrides: Partial<StoredSession> = {}): StoredSession => ({
   id: "s1",
   label: "Session 1",
   kind: "claude",
+  scheduledAt: 0,
+  scheduledPrompt: "",
   path: "",
   providerSessionId: "",
   entrypoint: "",
+  run: false,
   sandbox: "",
   pinned: false,
   originSessionId: "",
   originLabel: "",
+  hasLastTurn: false,
+  unread: false,
+  mcpServers: null,
+  sandboxSkippedLinks: null,
   ...overrides,
 })
 
@@ -45,6 +54,22 @@ describe("buildSessionState", () => {
   it("reads a null session list as a project with no sessions", () => {
     const state = buildSessionState([storedProject({ sessions: null })])
     expect(state.p1).toEqual({ sessions: [], activeId: "", nextSeq: 2 })
+  })
+
+  // The seed the Review panel's source switch is drawn from: without it a card
+  // restored quiet is offered the working tree alone, and the turn the backend
+  // read back has no control to reach it by.
+  it("carries which sessions hold a last turn, and leaves the field off the rest", () => {
+    const state = buildSessionState([
+      storedProject({
+        sessions: [
+          storedSession({ id: "s1", hasLastTurn: true }),
+          storedSession({ id: "s2", hasLastTurn: false }),
+        ],
+      }),
+    ])
+    expect(state.p1.sessions[0].hasLastTurn).toBe(true)
+    expect(state.p1.sessions[1]).not.toHaveProperty("hasLastTurn")
   })
 
   it("restores a terminal's entrypoint, and leaves the field off a plain shell", () => {
@@ -145,5 +170,107 @@ describe("confined sessions", () => {
       ])
       expect(state.p1?.sessions[0]?.sandboxed).toBeUndefined()
     }
+  })
+})
+
+// A page reload finds the PTY already running, so the row is the only route
+// these names take back to the card.
+describe("MCP servers on hydration", () => {
+  it("carries the servers the spawn recorded", () => {
+    const state = buildSessionState([
+      storedProject({ sessions: [storedSession({ id: "s1", mcpServers: ["lich", "srv"] })] }),
+    ])
+    expect(state.p1?.sessions[0]?.mcpServers).toEqual(["lich", "srv"])
+  })
+
+  // null is a row nothing has spawned yet, and [] a session that reached
+  // nothing. The card does the same thing with both, so both drop the key.
+  it("leaves no key for a row that names none", () => {
+    for (const mcpServers of [null, []]) {
+      const state = buildSessionState([
+        storedProject({ sessions: [storedSession({ id: "s1", mcpServers })] }),
+      ])
+      const session = state.p1?.sessions[0]
+      expect(session && "mcpServers" in session).toBe(false)
+    }
+  })
+})
+
+// The same route, for the paths the sandbox skipped: the tooltip is redrawn on
+// every reload and the spawn that resolved them is long gone.
+describe("skipped sandbox links on hydration", () => {
+  it("carries the links the spawn recorded", () => {
+    const state = buildSessionState([
+      storedProject({
+        sessions: [storedSession({ id: "s1", sandboxSkippedLinks: [".gitconfig"] })],
+      }),
+    ])
+    expect(state.p1?.sessions[0]?.sandboxSkippedLinks).toEqual([".gitconfig"])
+  })
+
+  // An unconfined session and one whose sandbox skipped nothing both draw no
+  // line, so neither carries the key.
+  it("leaves no key for a row that skipped none", () => {
+    for (const sandboxSkippedLinks of [null, []]) {
+      const state = buildSessionState([
+        storedProject({ sessions: [storedSession({ id: "s1", sandboxSkippedLinks })] }),
+      ])
+      const session = state.p1?.sessions[0]
+      expect(session && "sandboxSkippedLinks" in session).toBe(false)
+    }
+  })
+})
+
+// The two halves of an agent opening a project it had to put on screen first:
+// the tab arrives as a payload rather than a reload, and the session event right
+// behind it has to find the project already there — adoptSession drops a card
+// whose project it does not know.
+describe("a project opened outside the window", () => {
+  const payload = (): unknown => ({
+    id: "p9",
+    name: "revu",
+    path: "/src/revu",
+    nextSeq: 7,
+    activeSessionId: "parked",
+    defaultProvider: "",
+    sessions: [storedSession({ id: "parked", label: "Session 6" })],
+  })
+
+  it("takes the tab in with the sessions it was closed with", () => {
+    const project = toOpenedProject(payload())
+    expect(project).not.toBeNull()
+    const state = buildSessionState([project as StoredProject])
+    expect(state.p9).toMatchObject({ activeId: "parked", nextSeq: 7 })
+    expect(state.p9?.sessions).toHaveLength(1)
+  })
+
+  it("holds the session that follows it", () => {
+    const project = toOpenedProject(payload()) as StoredProject
+    const state = { ...buildSessionState([project]) }
+    const next = adoptSession(state, "p9", { id: "new", label: "Session 7", kind: "claude" }, 8)
+    expect(next.p9?.sessions.map((s) => s.id)).toEqual(["parked", "new"])
+    expect(next.p9?.nextSeq).toBe(8)
+  })
+
+  it("refuses a payload with no project in it", () => {
+    expect(toOpenedProject({ id: "", name: "revu", path: "/src/revu" })).toBeNull()
+    expect(toOpenedProject({ id: "p9", name: "", path: "/src/revu" })).toBeNull()
+    expect(toOpenedProject({ id: "p9", name: "revu", path: "" })).toBeNull()
+  })
+
+  // A brand-new project has no sessions, and they cross as null rather than []
+  // — a nil slice in Go.
+  it("reads a project with no sessions", () => {
+    const project = toOpenedProject({
+      ...(payload() as object),
+      sessions: null,
+      activeSessionId: "",
+      nextSeq: 1,
+    })
+    expect(buildSessionState([project as StoredProject]).p9).toMatchObject({
+      sessions: [],
+      activeId: "",
+      nextSeq: 1,
+    })
   })
 })

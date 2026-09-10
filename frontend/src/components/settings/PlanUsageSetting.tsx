@@ -1,4 +1,5 @@
 import type { QuotaPlan } from "@/lib/api-types"
+import { accountLine } from "@/lib/quota/quota-format"
 import { usePlanQuotaFor } from "@/lib/quota/use-plan-quota"
 import { useNow } from "@/lib/use-now"
 import { QuotaGauge, gaugeGrid } from "@/components/QuotaGauge"
@@ -64,9 +65,7 @@ function PlanBody({ plan, now }: { plan: QuotaPlan; now: Date }) {
     <div className="flex max-w-prose flex-col gap-2">
       {/* The plan doubles as the table's left header, which is what keeps it from
           floating above the rows as a line of its own. */}
-      <div
-        className={cn(gaugeGrid, "text-[11px] uppercase tracking-wide text-muted-foreground/80")}
-      >
+      <div className={cn(gaugeGrid, "text-2xs uppercase tracking-wide text-muted-foreground/80")}>
         <span className="truncate normal-case tracking-normal text-muted-foreground">
           {plan.plan}
         </span>
@@ -77,6 +76,13 @@ function PlanBody({ plan, now }: { plan: QuotaPlan; now: Date }) {
       {(plan.windows ?? []).map((window) => (
         <QuotaGauge key={window.label} window={window} now={now} />
       ))}
+      {/* The login this reading was taken against. Settings asks the machine-wide
+          question, so this is lich's own — never a session's wrapper binary. */}
+      {accountLine(plan) && (
+        <span className="break-all font-mono text-[0.6875rem] text-muted-foreground">
+          {accountLine(plan)}
+        </span>
+      )}
     </div>
   )
 }

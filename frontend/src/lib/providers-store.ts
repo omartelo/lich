@@ -1,15 +1,17 @@
 // Shared provider state: which providers are installed on the machine and which
 // the user enabled. Both the New Session menu and the Settings screen read it,
 // so a toggle in one place is reflected in the other without a refetch. Detection
-// runs once (providers.Detect); enabled flags are global settings ("1"/"0").
+// runs on first use and again on demand (providers.Detect, refresh); enabled
+// flags are global settings ("1"/"0").
 //
 // The store is a dependency-injected factory (its RPC calls are passed in) so it
 // is testable without React or the network, mirroring git-status-store. A module
 // singleton wires it to the real RPC, and useProviders is the React wrapper.
 import { useCallback, useEffect, useSyncExternalStore } from "react"
-import type { DetectedProvider } from "./api-types"
+import type { BinaryCheck, DetectedProvider } from "./api-types"
 import { Providers, Store } from "./rpc"
-import { PROVIDER_KINDS, type ProviderKind } from "@/lib/session/sessions"
+import { errorText } from "./utils"
+import { PROVIDER_KINDS, type ProviderKind, type SessionKind } from "@/lib/session/sessions"
 
 const GLOBAL_SCOPE = ""
 
@@ -58,6 +60,8 @@ export const skipPermissionFlags: Record<string, string> = {
   opencode: "--auto",
   omp: "--auto-approve",
   crush: "--yolo",
+  cursor: "--force",
+  kiro: "--trust-all-tools",
 }
 
 // How far a provider runs without asking, as one ladder ordered by risk. The
@@ -83,6 +87,23 @@ export function skipLevelPair(level: SkipLevel): { here: boolean; worktrees: boo
   return { here: level === "everywhere", worktrees: level !== "never" }
 }
 
+// The skip ladder read as exposure, safest first — which is the order it is
+// already declared in. Both standing safety settings are gated against their own
+// order by climbsToRiskier below.
+export const SKIP_RISK_ORDER: readonly SkipLevel[] = ["never", "worktrees", "everywhere"]
+
+// climbsToRiskier answers whether a click moves toward more exposure, the only
+// direction a standing safety setting asks about: turning an automation off must
+// never be the harder direction. Re-clicking the chosen rung is not a move and
+// answers false, so nothing is confirmed that changes nothing.
+export function climbsToRiskier<T extends string>(
+  order: readonly T[],
+  current: T,
+  next: T,
+): boolean {
+  return order.indexOf(next) > order.indexOf(current)
+}
+
 // sandboxKey holds which sessions of a provider run confined (mirrors
 // store.sandboxKey in Go, which is what the spawn reads). Scoped like binKey —
 // a project value wins over the global one — because the checkout full of
@@ -105,8 +126,8 @@ export const SSH_AGENT_KEY = "sandbox.ssh-agent"
 export const GH_TOKEN_KEY = "sandbox.gh-token"
 
 // Which sessions of a provider run confined, as one ladder ordered by how much
-// of the machine a session can reach. "ask" sits second because a session
-// nobody answered for runs unconfined, exactly like "off" — it moves who
+// of the machine a session can reach. "ask" sits second because it is the rung
+// a user can answer their way to "off" on, one session at a time — it moves who
 // decides, not what the sandbox is. Mirrors the Sandbox* constants in Go.
 export type SandboxLevel = "off" | "ask" | "worktrees" | "everywhere"
 
@@ -120,35 +141,51 @@ export function sandboxLevel(value: string): SandboxLevel {
   return SANDBOX_LEVELS.find((level) => level === value) ?? "off"
 }
 
-// sandboxDefaultFor is what the new-session dialog arrives showing: the rung
-// applied to the checkout the session will start in. It is the frontend's copy
-// of store.SandboxDefault in Go — the dialog has to show the same answer the
-// spawn would reach on its own, or the box the user leaves untouched means
-// something other than what it shows.
+// SANDBOX_LEVELS read the other way round: exposure is the inverse of
+// confinement, so the safest rung is "everywhere" and the riskiest is "off".
+// Derived rather than written out twice — a rung added to the ladder is a rung
+// the gate already knows the risk of.
+export const SANDBOX_RISK_ORDER: readonly SandboxLevel[] = [...SANDBOX_LEVELS].reverse()
+
+// sandboxDefaultFor is what a confinement box arrives showing: the rung applied
+// to the checkout the session will start in. It is the frontend's copy of
+// store.SandboxDefault in Go — the box has to show the same answer the spawn
+// would reach on its own, or the one the user leaves untouched means something
+// other than what it shows.
+//
+// "ask" answers true on either checkout, as the Go side does: it is the rung
+// where nobody being asked confines the session, so the box that is asking
+// opens on that side.
 export function sandboxDefaultFor(level: SandboxLevel, worktree: boolean): boolean {
-  if (level === "everywhere") return true
+  if (level === "everywhere" || level === "ask") return true
   return level === "worktrees" && worktree
 }
 
-// How much of a session's own accounting the footer carries, as one ladder
-// ordered by how much it says. The two settings keys stay exactly as they are —
-// this is the shape the user chooses in, not the shape lich stores.
-export type FooterReadout = "off" | "context" | "cost"
+// What a card's frozen answer reads as against the rung its project is on now.
+// "" is agreement — and the answer for everything that cannot be compared at
+// all, which is what keeps a mark off a card lich has nothing to say about.
+export type SandboxDrift = "" | "would-confine" | "would-release"
 
-// footerReadout folds the stored pair into a rung. The fourth combination — the
-// cost without the model and the ring — is a readout nobody chose: the cost
-// setting was always the extra one, offered beside a readout that was already
-// there. It reads as the top rung, and choosing that rung back turns both on.
-export function footerReadout(context: boolean, cost: boolean): FooterReadout {
-  if (cost) {
-    return "cost"
+// sandboxDrift compares the answer a session opened with against the one the
+// rung would give it today. The spawn freezes its answer on the row, so moving
+// the ladder never reaches a card already open (internal/terminal/sandbox.go) —
+// this is how the card says which side of that move it is on.
+//
+// "Ask" never drifts: it hands the decision to whoever opened the session, so
+// there is no rung answer to disagree with — only the box that was ticked.
+export function sandboxDrift(
+  level: SandboxLevel,
+  worktree: boolean,
+  confined: boolean,
+): SandboxDrift {
+  if (level === "ask") {
+    return ""
   }
-  return context ? "context" : "off"
-}
-
-// footerReadoutPair is the inverse: the pair a chosen rung writes back.
-export function footerReadoutPair(level: FooterReadout): { context: boolean; cost: boolean } {
-  return { context: level !== "off", cost: level === "cost" }
+  const now = sandboxDefaultFor(level, worktree)
+  if (now === confined) {
+    return ""
+  }
+  return now ? "would-confine" : "would-release"
 }
 
 // readEnabled interprets the stored flag: Claude is enabled by default (it was
@@ -166,12 +203,19 @@ export interface ProviderState {
   /** The executable a session spawns — a provider id is not its command. */
   binary: string
   installed: boolean
+  /** Which layer the binary was found at: "path" or "setting" (the binary
+   * configured in Settings › Providers). Empty when nothing was found. */
+  source: DetectedProvider["source"]
   enabled: boolean
+  /** The page documenting how to install this CLI — offered on the rows that
+   * found nothing, which are the only rows that need it. */
+  docs: string
 }
 
 // enabledProviders are the ones offered in New Session. Not filtered by install
-// state on purpose: a Claude with a custom bin path (so "claude" is not on PATH)
-// must still appear — a genuinely missing binary surfaces as a PTY error.
+// state on purpose: a provider whose binary is configured in a single project's
+// scope is not one detection can see, and a genuinely missing binary surfaces as
+// a PTY error.
 export function enabledProviders(list: ProviderState[]): ProviderState[] {
   return list.filter((p) => p.enabled)
 }
@@ -200,13 +244,77 @@ export function resolveProjectDefaultProvider(
   return chosen?.id ?? resolveDefaultProvider(list, globalDefaultId)
 }
 
+// noProviderInstalled reports the one machine state in which spawning the
+// resolved default is guaranteed to fail: detection has answered and found no
+// binary at all, at any layer. An empty list is detection not having answered
+// yet — never this, exactly as in decideProviderSetup.
+export function noProviderInstalled(list: ProviderState[]): boolean {
+  return list.length > 0 && !list.some((provider) => provider.installed)
+}
+
+// NO_AGENT_REASON is what the empty screen says when its own button will open a
+// terminal rather than an agent. A shell nobody asked for is the surprise this
+// sentence exists to remove, so it names both the reason and where the machine
+// is told about an agent lich could not find on its own.
+export const NO_AGENT_REASON =
+  "No agent found on PATH, so this opens a terminal — set one in Settings › Providers."
+
+// No project binaries known — a project nothing was read for, and every caller
+// asking the machine-wide question. Frozen and shared so the default argument is
+// one allocation rather than one per call.
+const NO_PROJECT_BINARIES: ReadonlySet<string> = new Set<string>()
+
+// resolveImplicitSessionKind is what a session nobody picked a kind for spawns:
+// the empty screen's button, the new-session hotkey, a new worktree. It is
+// resolveProjectDefaultProvider with one gate in front, because on a machine
+// with no agent installed every fallback below still lands on Claude — readEnabled
+// leaves Claude enabled by default, so the card opens on `claude: command not
+// found`. A shell spawns with zero providers, and it is where the install command
+// from the provider's docs link gets pasted. Detection resolves the global binary
+// setting too (providers.Detect), so an agent lich only knows about because the
+// user typed its path is an agent this gate lets through.
+//
+// projectBinaries names the providers this project points a working binary at in
+// its own scope, which detection cannot see: Detect answers for the machine and
+// takes no project. It is consulted only on the bare machine — where nothing is
+// installed, the enabled-flag fallback would name a binary that is not there, so
+// the choice is made among the ones this project can actually run.
+export function resolveImplicitSessionKind(
+  list: ProviderState[],
+  globalDefaultId: string,
+  projectDefaultId: string,
+  projectBinaries: ReadonlySet<string> = NO_PROJECT_BINARIES,
+): SessionKind {
+  if (!noProviderInstalled(list)) {
+    return resolveProjectDefaultProvider(list, globalDefaultId, projectDefaultId)
+  }
+  const usable = enabledProviders(list).filter((provider) => projectBinaries.has(provider.id))
+  if (usable.length === 0) {
+    return "shell"
+  }
+  const resolved = resolveProjectDefaultProvider(list, globalDefaultId, projectDefaultId)
+  return usable.find((provider) => provider.id === resolved)?.id ?? usable[0].id
+}
+
 function isProviderKind(id: string): id is ProviderKind {
   return (PROVIDER_KINDS as readonly string[]).includes(id)
+}
+
+// A provider the backend knows and this build does not is dropped rather than
+// carried as a kind nothing can spawn.
+function isDetectedKind(provider: DetectedProvider): boolean {
+  return isProviderKind(provider.id)
 }
 
 export interface ProvidersDeps {
   detect: () => Promise<DetectedProvider[] | null>
   getEnabled: (id: string) => Promise<string>
+  /** One stored setting in one project's scope — the binary override and the
+   * switch that parks it, which is all this store reads per project. */
+  getProjectSetting: (key: string, projectId: string) => Promise<string>
+  /** Resolve a binary the way the spawn does. The same providers.Verify the
+   * Settings binary block asks, so the two cannot disagree about a path. */
+  verifyBin: (bin: string) => Promise<BinaryCheck>
   persistEnabled: (id: string, value: string) => void
   getDefault: () => Promise<string>
   persistDefault: (id: string) => void
@@ -221,6 +329,7 @@ export interface HydratedProjectDefault {
 export interface ProvidersStore {
   load: () => Promise<void>
   ensureLoaded: () => void
+  refresh: () => Promise<void>
   setEnabled: (id: ProviderKind, enabled: boolean) => void
   setDefault: (id: ProviderKind) => void
   hydrateProjectDefaults: (projects: readonly HydratedProjectDefault[]) => void
@@ -230,12 +339,22 @@ export interface ProvidersStore {
   getDefaultSnapshot: () => string
   getProjectDefaultSnapshot: (projectId: string) => string
   getProjectProviderKind: (projectId: string) => ProviderKind
+  getProjectSessionKind: (projectId: string) => SessionKind
 }
 
 class ProviderStoreImpl implements ProvidersStore {
   private providers: ProviderState[] = []
   private defaultId = ""
   private projectDefaultIds = new Map<string, string>()
+  // Per project, the providers its own binary setting points at something
+  // runnable. Read lazily and only on the bare machine (ensureProjectBinaries),
+  // because that is the only state in which the answer changes anything.
+  private projectBinaries = new Map<string, ReadonlySet<string>>()
+  private projectBinaryLoads = new Map<string, Promise<void>>()
+  // One verdict per path, so eight providers pointed at one wrapper cost one
+  // round trip. Dropped whole on a refresh: a re-read of $PATH restates every
+  // verdict on screen, and a stale one here would survive it.
+  private verdicts = new Map<string, boolean>()
   private state: "idle" | "loading" | "ready" = "idle"
   private providerLoad: Promise<void> | null = null
   private listeners = new Set<() => void>()
@@ -266,6 +385,30 @@ class ProviderStoreImpl implements ProvidersStore {
     void this.load().catch(() => undefined)
   }
 
+  // refresh re-probes PATH and nothing else: the enabled flags and the default
+  // stay as they are in memory, so a toggle the user just made cannot be undone
+  // by a settings read racing its own write. Re-reading the PATH itself is a
+  // step in front of this one, run by whoever offers the re-check
+  // (lib/path-refresh).
+  refresh = async (): Promise<void> => {
+    const detected = (await this.deps.detect()) ?? []
+    this.projectBinaries.clear()
+    this.projectBinaryLoads.clear()
+    this.verdicts.clear()
+    const enabled = new Map(this.providers.map((provider) => [provider.id, provider.enabled]))
+    this.providers = detected.filter(isDetectedKind).map((provider) => ({
+      id: provider.id as ProviderKind,
+      name: provider.name,
+      binary: provider.binary,
+      installed: provider.installed,
+      source: provider.source,
+      docs: provider.docs,
+      enabled: enabled.get(provider.id as ProviderKind) ?? readEnabled(provider.id, ""),
+    }))
+    this.sweepProjectBinaries()
+    this.emit()
+  }
+
   setEnabled = (id: ProviderKind, enabled: boolean): void => {
     this.providers = this.providers.map((p) => (p.id === id ? { ...p, enabled } : p))
     this.emit()
@@ -282,6 +425,7 @@ class ProviderStoreImpl implements ProvidersStore {
     for (const project of projects) {
       this.projectDefaultIds.set(project.id, project.defaultProvider)
     }
+    this.sweepProjectBinaries()
     this.emit()
   }
 
@@ -308,6 +452,84 @@ class ProviderStoreImpl implements ProvidersStore {
       this.defaultId,
       this.getProjectDefaultSnapshot(projectId),
     )
+  getProjectSessionKind = (projectId: string): SessionKind => {
+    // Asked from render and from the spawn itself, so the read it may start is
+    // fire-and-forget: the answer below is the machine-wide one until it lands,
+    // and landing emits.
+    this.ensureProjectBinaries(projectId)
+    return resolveImplicitSessionKind(
+      this.providers,
+      this.defaultId,
+      this.getProjectDefaultSnapshot(projectId),
+      this.projectBinaries.get(projectId) ?? NO_PROJECT_BINARIES,
+    )
+  }
+
+  // sweepProjectBinaries reads every project lich already knows about. Called
+  // wherever the answer could have changed — detection landing, a refresh, a
+  // project arriving — and cheap everywhere else, because ensureProjectBinaries
+  // declines on any machine that has an agent of its own.
+  private sweepProjectBinaries(): void {
+    for (const projectId of this.projectDefaultIds.keys()) {
+      this.ensureProjectBinaries(projectId)
+    }
+  }
+
+  // ensureProjectBinaries reads a project's own binary overrides, once. It is
+  // gated on the bare machine because that is the only state where a project
+  // override decides anything: with an agent on $PATH the implicit kind is
+  // resolved by the enabled flags alone, and asking would spend a request per
+  // provider per project to change no answer.
+  private ensureProjectBinaries(projectId: string): void {
+    if (projectId === "" || !noProviderInstalled(this.providers)) {
+      return
+    }
+    if (this.projectBinaries.has(projectId) || this.projectBinaryLoads.has(projectId)) {
+      return
+    }
+    const load = this.readProjectBinaries(projectId)
+      .then((found) => {
+        this.projectBinaries.set(projectId, found)
+        this.emit()
+      })
+      // A failed read leaves the project unanswered rather than answered "none":
+      // a later sweep retries, and until then the machine-wide reading stands.
+      .catch(() => undefined)
+      .finally(() => {
+        this.projectBinaryLoads.delete(projectId)
+      })
+    this.projectBinaryLoads.set(projectId, load)
+  }
+
+  // readProjectBinaries mirrors store.ProviderBin's project layer in Go: the
+  // override counts unless the switch beside it parks the layer, and it counts
+  // only if the backend can run what it names.
+  private async readProjectBinaries(projectId: string): Promise<ReadonlySet<string>> {
+    const answers = await Promise.all(
+      this.providers.map(async (provider) => {
+        const bin = (await this.deps.getProjectSetting(binKey(provider.id), projectId)).trim()
+        if (bin === "") {
+          return null
+        }
+        const parked = await this.deps.getProjectSetting(binOffKey(provider.id), projectId)
+        if (parked === "true") {
+          return null
+        }
+        return (await this.verify(bin)) ? provider.id : null
+      }),
+    )
+    return new Set(answers.filter((id): id is ProviderKind => id !== null))
+  }
+
+  private async verify(bin: string): Promise<boolean> {
+    const cached = this.verdicts.get(bin)
+    if (cached !== undefined) {
+      return cached
+    }
+    const ok = (await this.deps.verifyBin(bin)).status === "ok"
+    this.verdicts.set(bin, ok)
+    return ok
+  }
 
   private async performLoad(): Promise<void> {
     const [detected, storedDefault] = await Promise.all([
@@ -315,18 +537,19 @@ class ProviderStoreImpl implements ProvidersStore {
       this.deps.getDefault(),
     ])
     this.providers = await Promise.all(
-      detected
-        .filter((provider) => isProviderKind(provider.id))
-        .map(async (provider) => ({
-          id: provider.id as ProviderKind,
-          name: provider.name,
-          binary: provider.binary,
-          installed: provider.installed,
-          enabled: readEnabled(provider.id, await this.deps.getEnabled(provider.id)),
-        })),
+      detected.filter(isDetectedKind).map(async (provider) => ({
+        id: provider.id as ProviderKind,
+        name: provider.name,
+        binary: provider.binary,
+        installed: provider.installed,
+        source: provider.source,
+        docs: provider.docs,
+        enabled: readEnabled(provider.id, await this.deps.getEnabled(provider.id)),
+      })),
     )
     this.defaultId = storedDefault
     this.state = "ready"
+    this.sweepProjectBinaries()
     this.emit()
   }
 
@@ -344,6 +567,8 @@ export function createProvidersStore(deps: ProvidersDeps): ProvidersStore {
 const store = createProvidersStore({
   detect: () => Providers.Detect(),
   getEnabled: (id) => Store.GetSetting(enabledKey(id), GLOBAL_SCOPE),
+  getProjectSetting: (key, projectId) => Store.GetSetting(key, projectId),
+  verifyBin: (bin) => Providers.Verify(bin),
   persistEnabled: (id, value) => {
     void Store.SetSetting(enabledKey(id), GLOBAL_SCOPE, value)
   },
@@ -368,6 +593,20 @@ export function loadProviders(): Promise<void> {
   return store.load()
 }
 
+// refreshProviders re-probes PATH for the surfaces that offer it: the first-run
+// dialog and Settings › Providers. It lives here rather than in either caller so
+// both get the same answer without either owning the scan.
+//
+// The failure is named here rather than at the button: a bare transport error
+// under a control labelled "Check again" reads as "nothing was installed".
+export async function refreshProviders(): Promise<void> {
+  try {
+    await store.refresh()
+  } catch (error) {
+    throw new Error(`Couldn't check for providers: ${errorText(error)}`)
+  }
+}
+
 // hydrateProjectProviderDefaults accepts the overrides delivered with workspace
 // state. It is synchronous so restoring projects never waits on provider
 // detection or performs one settings request per project.
@@ -384,6 +623,14 @@ export function setProjectProviderDefault(projectId: string, id: ProviderKind | 
 // disabled override delegates to the same global fallback rules.
 export function projectDefaultProviderKind(projectId: string): ProviderKind {
   return store.getProjectProviderKind(projectId)
+}
+
+// projectNewSessionKind is what an implicit new session spawns in this project.
+// Every implicit entry point routes through it — the empty screen, the hotkey, a
+// new worktree — so a machine with no agent installed opens a shell everywhere
+// rather than in whichever caller remembered to check.
+export function projectNewSessionKind(projectId: string): SessionKind {
+  return store.getProjectSessionKind(projectId)
 }
 
 // useProviders returns the known providers with their install + enabled state,
@@ -411,6 +658,17 @@ export function useDefaultProvider(): ProviderKind {
   const defaultId = useSyncExternalStore(store.subscribe, store.getDefaultSnapshot)
   useEffect(store.ensureLoaded, [])
   return resolveDefaultProvider(providers, defaultId)
+}
+
+// useProjectSessionKind is what this project's implicit new session will spawn —
+// the same answer projectNewSessionKind gives the button, read reactively. A
+// surface that says what the button is about to do reads it here rather than
+// re-deriving it, so the label cannot promise an agent the spawn has not got.
+export function useProjectSessionKind(projectId: string): SessionKind {
+  const getSnapshot = useCallback(() => store.getProjectSessionKind(projectId), [projectId])
+  const kind = useSyncExternalStore(store.subscribe, getSnapshot)
+  useEffect(store.ensureLoaded, [])
+  return kind
 }
 
 // useStoredProjectDefaultProvider returns the unresolved project value. Empty

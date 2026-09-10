@@ -11,6 +11,10 @@ import { AppUpdate, System } from "@/lib/rpc"
 import { useProjects } from "@/providers/projects"
 import { queuePaste } from "@/lib/terminal/paste-queue"
 import { readPref, writePref } from "@/lib/prefs"
+import { onAppEvent } from "@/lib/app-events"
+import type { AppUpdateProgress } from "@/lib/api-types"
+import { UpdateProgressToast } from "@/components/UpdateProgressToast"
+import { failureText, isUpdateProgress, UPDATE_PROGRESS_EVENT } from "@/lib/update/update-progress"
 import { registerUpdateChecker } from "@/lib/update/update-check"
 import { errorText } from "@/lib/utils"
 
@@ -93,23 +97,42 @@ export function AppUpdateGate() {
   const promptSelfApply = (version: string) => {
     toast(`lich ${version} is available`, {
       duration: Infinity,
-      action: { label: "Update & install", onClick: () => void runApply() },
+      action: { label: "Update & install", onClick: () => void runApply(version) },
       cancel: { label: "Later", onClick: () => dismiss(version) },
     })
   }
 
-  // Download + verify + swap, then a persistent toast whose Restart button
-  // relaunches lich in place. Kept persistent so the button stays available if
-  // the user doesn't restart right away.
-  const runApply = async () => {
-    const id = toast.loading("Downloading lich update…")
+  // Download + verify + swap, drawn step by step off the progress events Apply
+  // emits, then a persistent toast whose Restart button relaunches lich in
+  // place. Kept persistent so the button stays available if the user doesn't
+  // restart right away. A failure names the phase it died in and offers the
+  // whole thing again; there is no resume.
+  const runApply = async (version: string) => {
+    let last: AppUpdateProgress | null = null
+    const show = (progress: AppUpdateProgress | null, id?: string | number) =>
+      toast.custom(() => <UpdateProgressToast version={version} progress={progress} />, {
+        id,
+        duration: Infinity,
+      })
+    const id = show(null)
+    const unsubscribe = onAppEvent(UPDATE_PROGRESS_EVENT, (data) => {
+      if (!isUpdateProgress(data)) return
+      last = data
+      show(data, id)
+    })
     try {
       await AppUpdate.Apply()
     } catch (error) {
-      toast.error(`Update failed: ${errorText(error)}`, { id })
+      unsubscribe()
+      toast.error(failureText(last, errorText(error)), {
+        id,
+        duration: Infinity,
+        action: { label: "Retry", onClick: () => void runApply(version) },
+      })
       return
     }
-    toast.success("lich updated", {
+    unsubscribe()
+    toast.success(`lich updated to ${version}`, {
       id,
       duration: Infinity,
       action: { label: "Restart", onClick: () => void runRestart() },

@@ -25,6 +25,7 @@ import (
 	"github.com/omartelo/lich/internal/doctor"
 	"github.com/omartelo/lich/internal/logging"
 	"github.com/omartelo/lich/internal/providers"
+	"github.com/omartelo/lich/internal/sandbox"
 	"github.com/omartelo/lich/internal/singleton"
 )
 
@@ -49,6 +50,11 @@ type Report struct {
 	ConfigDir string
 	LogPath   string
 	Browser   string
+	// Sandbox is what a confined session would actually get on this machine,
+	// proved rather than looked up: a backend installed and refused by the
+	// kernel is a whole class of report where the session never opened and the
+	// log holds only the launcher's error.
+	Sandbox   string
 	Providers []providers.Detected
 	Plugin    []agentplugin.Status
 	Entries   []Entry
@@ -63,9 +69,9 @@ type Entry struct {
 	Dir  bool
 }
 
-// Collector gathers a Report. The five probes are fields because each one
-// reaches the machine — PATH, the provider CLIs, the network, the running
-// instance — and a test must answer for all of them.
+// Collector gathers a Report. The six probes are fields because each one
+// reaches the machine (PATH, the provider CLIs, a confined spawn, the network,
+// the running instance), and a test must answer for all of them.
 type Collector struct {
 	configDir string
 	version   string
@@ -73,6 +79,7 @@ type Collector struct {
 
 	browser func() (string, error)
 	detect  func() []providers.Detected
+	confine func() (string, error)
 	plugin  func() []agentplugin.Status
 	probe   func() (*singleton.Info, bool)
 	dump    func(port int, token string) ([]byte, error)
@@ -88,10 +95,25 @@ func New(configDir, version string, environ []string) *Collector {
 		environ:   environ,
 		browser:   doctor.Browser,
 		detect:    doctor.Providers,
+		confine:   sandbox.Probe,
 		plugin:    func() []agentplugin.Status { return agentplugin.New(pathBins{}).Status() },
 		probe:     func() (*singleton.Info, bool) { return doctor.Instance(configDir) },
 		dump:      fetchGoroutines,
 	}
+}
+
+// sandboxLine renders the probe's answer as the one line report.md carries. The
+// failure is the fact worth reporting: a backend that starts and confines
+// nothing, or one the kernel refuses, is why a session in that report has no
+// card behind it.
+func sandboxLine(backend string, err error) string {
+	switch {
+	case backend == "":
+		return "no backend on this platform"
+	case err != nil:
+		return err.Error()
+	}
+	return backend + " (confined)"
 }
 
 // dumpTimeout bounds the goroutine fetch. A lich that stopped answering is the
@@ -231,6 +253,7 @@ func (c *Collector) collect() (Report, *singleton.Info) {
 	if err != nil {
 		report.Browser = err.Error()
 	}
+	report.Sandbox = sandboxLine(c.confine())
 
 	info, alive := c.probe()
 	switch {

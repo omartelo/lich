@@ -24,6 +24,16 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+    /* The one text rung below text-xs: the uppercase label that heads a group
+       of rows (DESIGN.md). Font size only, as the arbitrary value it replaced. */
+    --text-2xs: 0.65625rem;
+    /* The update toast's bar while the download has no total: a third of the
+       track sliding across, the way an indeterminate bar reads everywhere. */
+    --animate-update-indeterminate: update-indeterminate 1.4s ease-in-out infinite;
+    @keyframes update-indeterminate {
+        from { transform: translateX(-100%); }
+        to { transform: translateX(300%); }
+    }
     --font-heading: var(--font-sans);
     --font-sans: 'Geist Variable', sans-serif;
     --color-sidebar-ring: var(--sidebar-ring);
@@ -86,7 +96,6 @@
     --chart-3: oklch(0.442 0.017 285.786);
     --chart-4: oklch(0.37 0.013 285.805);
     --chart-5: oklch(0.274 0.006 286.033);
-    --radius: 0.45rem;
     --sidebar: oklch(0.98 0.002 286.32);
     --sidebar-foreground: oklch(0.21 0.006 285.885);
     --sidebar-primary: oklch(0.21 0.006 285.885);
@@ -183,6 +192,29 @@
     var(--border) calc(50% + 0.5px),
     transparent calc(50% + 0.5px)
   );
+}
+
+/* A separator carrying an expander drops the rule: the button says what the
+   line is, and a rule behind its text reads as a strikethrough. */
+.cm-diff-sep.cm-diff-gap {
+  background-image: none;
+}
+
+/* The expander itself — the unchanged lines git left out, one click away. Prose
+   in a code viewer, so it takes the app's font like a review thread does. */
+.cm-diff-expand {
+  border-radius: 0.25rem;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  line-height: 1.2;
+  padding: 0 0.375rem;
+}
+
+.cm-diff-expand:hover {
+  background-color: var(--accent);
+  color: var(--accent-foreground);
 }
 
 /* Syntax highlighting palette for @lezer/highlight's classHighlighter.

@@ -2,9 +2,11 @@ package terminal
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -123,6 +125,33 @@ func TestResolveShellEnv(t *testing.T) {
 	}
 }
 
+// TestResolveShellEnvTTYGuardedRC pins the pty fix: rc files commonly guard
+// their body on `[ -t 0 ]`/`tty -s` (nvm and fnm both ship this), and a shell
+// spawned with pipe stdio never satisfies that guard — the export it gates
+// never runs, and neither does the PATH mutation a version manager adds.
+// Measured on this repo's dev machine before the fix:
+// `zsh -lic '[ -t 0 ] && echo yes || echo no' </dev/null` prints "no".
+func TestResolveShellEnvTTYGuardedRC(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("real zsh rig is not runnable on Windows")
+	}
+	zsh, err := exec.LookPath("zsh")
+	if err != nil {
+		t.Skip("zsh not installed")
+	}
+	home := t.TempDir()
+	rc := "[ -t 0 ] || return\nexport LICH_TTY_PROBE=yes\n"
+	if err := os.WriteFile(filepath.Join(home, ".zshrc"), []byte(rc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SHELL", zsh)
+
+	got := ResolveShellEnv([]string{"HOME=" + home})
+	if !slices.Contains(got, "LICH_TTY_PROBE=yes") {
+		t.Fatalf("tty-guarded rc export missing: %v", got)
+	}
+}
+
 func TestResolveShellEnvNoShell(t *testing.T) {
 	t.Setenv("SHELL", "")
 	base := []string{"A=1"}
@@ -152,5 +181,101 @@ func TestPinPathWithoutPATH(t *testing.T) {
 	PinPath([]string{"A=1"})
 	if got := os.Getenv("PATH"); got != "/orig" {
 		t.Fatalf("PATH = %q, want it untouched", got)
+	}
+}
+
+// TestReresolveShellEnvRepinsPATH pins the re-check's whole point: a directory
+// the launch PATH did not carry is on the process PATH after a re-read, so
+// exec.LookPath — which is what provider detection and the git/gh checks run
+// through — finds what was installed while lich was open.
+func TestReresolveShellEnvRepinsPATH(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake POSIX $SHELL script is not runnable on Windows")
+	}
+	dir := t.TempDir()
+	fake := filepath.Join(dir, "fakeshell")
+	script := "#!/bin/sh\n" +
+		"echo " + shellEnvSentinel + "\n" +
+		"echo PATH=/late/install:/orig\n"
+	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SHELL", fake)
+	t.Setenv("PATH", "/orig")
+
+	got, err := ReresolveShellEnv([]string{"PATH=/orig"})
+	if err != nil {
+		t.Fatalf("ReresolveShellEnv: %v", err)
+	}
+	PinPath(got)
+	if got := os.Getenv("PATH"); got != "/late/install:/orig" {
+		t.Fatalf("PATH = %q, want the re-resolved one", got)
+	}
+}
+
+// TestReresolveShellEnvFailureKeepsPin pins the other half: a shell that will
+// not answer must leave the pinned PATH alone rather than hand back a re-scan
+// of it, because the surface has to be able to tell the two apart.
+func TestReresolveShellEnvFailureKeepsPin(t *testing.T) {
+	t.Setenv("SHELL", filepath.Join(t.TempDir(), "does-not-exist"))
+	t.Setenv("PATH", "/orig")
+
+	got, err := ReresolveShellEnv([]string{"PATH=/shell/bin"})
+	if err == nil {
+		t.Fatal("ReresolveShellEnv with a broken shell: want an error")
+	}
+	if got != nil {
+		t.Fatalf("ReresolveShellEnv = %v, want nothing to pin", got)
+	}
+	if path := os.Getenv("PATH"); path != "/orig" {
+		t.Fatalf("PATH = %q, want it untouched", path)
+	}
+}
+
+// TestReresolveShellEnvWithoutShellRepinsLaunchPATH covers Windows, where SHELL
+// is normally unset: nothing there was ever resolved from a login shell, so the
+// re-check answers from the launch environment and the scan that follows reads
+// the same process PATH it did before — the whole answer on that machine.
+func TestReresolveShellEnvWithoutShellRepinsLaunchPATH(t *testing.T) {
+	t.Setenv("SHELL", "")
+	base := []string{"PATH=/launch", "A=1"}
+
+	got, err := ReresolveShellEnv(base)
+	if err != nil {
+		t.Fatalf("ReresolveShellEnv without SHELL: %v", err)
+	}
+	if !slices.Equal(got, base) {
+		t.Fatalf("ReresolveShellEnv without SHELL = %v, want %v", got, base)
+	}
+}
+
+func TestShellDumpDigestRedactsAssignments(t *testing.T) {
+	got := shellDumpDigest("zsh: no such file\nAWS_SECRET_ACCESS_KEY=hunter2\n")
+	if strings.Contains(got, "hunter2") {
+		t.Fatalf("digest leaked a value: %q", got)
+	}
+	if !strings.Contains(got, "AWS_SECRET_ACCESS_KEY=...") {
+		t.Errorf("digest dropped the key: %q", got)
+	}
+	// The rc file's own words are the whole point: they say where it stopped.
+	if !strings.Contains(got, "zsh: no such file") {
+		t.Errorf("digest dropped the shell's message: %q", got)
+	}
+}
+
+func TestShellDumpDigestBounds(t *testing.T) {
+	if got := shellDumpDigest(""); got != "printed nothing" {
+		t.Errorf("empty dump = %q", got)
+	}
+	if got := shellDumpDigest("\n \r\n"); got != "printed nothing" {
+		t.Errorf("blank dump = %q", got)
+	}
+	many := shellDumpDigest(strings.Repeat("line\n", 10))
+	if strings.Count(many, "line") != shellDumpDigestLines {
+		t.Errorf("digest kept more than %d lines: %q", shellDumpDigestLines, many)
+	}
+	long := shellDumpDigest(strings.Repeat("x", shellDumpDigestWidth+50))
+	if !strings.Contains(long, "...") || len(long) > shellDumpDigestWidth+80 {
+		t.Errorf("digest did not truncate a long line: %q", long)
 	}
 }

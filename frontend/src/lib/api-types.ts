@@ -107,8 +107,14 @@ export interface PullRequestCommit {
   headline: string
   /** The rest of the message; "" for a one-line commit. */
   body: string
-  /** The first author's login, or their name; "" when gh reports none. */
-  author: string
+  /** The GitHub account GitHub itself resolved the author's email to, and ""
+   * when it resolved none: the email belongs to no account, so the commit is
+   * attributed to nobody. Never falls back to the name — that is the fact. */
+  login: string
+  /** git's author name: free text, and no evidence of who landed the commit. */
+  name: string
+  /** git's author email, which is what GitHub did or did not resolve. */
+  email: string
   /** gh's ISO committedDate. */
   date: string
 }
@@ -140,6 +146,9 @@ export interface PullRequestDetail {
   body: string
   /** Who opened it: a login, or a display name when gh reports no login. */
   author: string
+  /** The same account without that fallback: "" rather than a display name, so
+   * it can be compared against a commit's login without inventing a mismatch. */
+  authorLogin: string
   /** gh: OPEN | CLOSED | MERGED. Only a number-addressed lookup returns a
    * non-OPEN one; the branch lookup still hides them. */
   state: string
@@ -259,6 +268,20 @@ export interface DraftReviewComment {
 /** The verdict a submitted review carries. */
 export type ReviewEvent = "approve" | "comment" | "request_changes"
 
+/** internal/project.FileListing: one listing of a checkout's files for the
+ * Files panel, plus what the panel owes the reader about how they were
+ * gathered. In a repository it is git's own list, and neither `cut` nor
+ * `hidden` is ever set; in a plain folder it is a bounded walk that says where
+ * it stopped and which directories it stepped over. */
+export interface FileListing {
+  files: string[] | null
+  cut: boolean
+  /** The ignored directory names this folder actually had (`node_modules`,
+   * `build`, …), sorted and deduped. Always empty in a repository, where
+   * .gitignore does the filtering and lich names nothing. */
+  hidden: string[] | null
+}
+
 /** internal/project.Worktree — a git worktree checkout: branch and path. */
 export interface Worktree {
   name: string
@@ -273,11 +296,23 @@ export interface Branches {
   worktrees: Worktree[] | null
 }
 
+/** internal/project.Issue — the little of a GitHub issue the New-worktree
+ * dialog needs: the title names the branch, the body is what the session it
+ * opens finds at its prompt. The body arrives already cut (maxIssueBody). */
+export interface Issue {
+  number: number
+  title: string
+  body: string
+  url: string
+}
+
 /** internal/project.WorktreeSetup — what the New-worktree dialog shows about
  * the project's setup: the .lich/setup-worktree.sh content, or a suggestion
  * detected from the repository root when the file is absent. */
 export interface WorktreeSetup {
   script: string
+  /** The run command every checkout of the project opens a Run card on. */
+  run: string
   suggestion?: string
   /** The files behind suggestion, e.g. "pnpm-lock.yaml". */
   detected?: string
@@ -302,6 +337,10 @@ export interface StoredSession {
   providerSessionId: string
   /** The command a terminal session opens into; always "" for a provider one. */
   entrypoint: string
+  /** Whether this row is its checkout's Run card (internal/spawn.Run). The one
+   * per checkout: the Run menu item goes to this card instead of opening a
+   * second one, and only closing the card frees the slot. */
+  run: boolean
   /** Whether this session runs confined: "on", "off", or "" for a row nothing
    * has spawned yet. Written by the spawn, which is what resolves the rung. */
   sandbox: string
@@ -310,12 +349,34 @@ export interface StoredSession {
   originSessionId: string
   /** What that session was called at the time; all that survives its close. */
   originLabel: string
+  /** When the prompt below is due, in unix seconds; 0 for a session with
+   * nothing waiting. One slot per session — scheduling again replaces it. */
+  scheduledAt: number
+  /** The prompt to type at this session when that time comes, as the user
+   * wrote it. Empty when nothing is scheduled. */
+  scheduledPrompt: string
+  /** Whether a last-turn record survives for this session. It rides the
+   * hydration so the Review panel can offer the "Last turn" source to a
+   * restored card, instead of withholding the switch until that session
+   * next reports (internal/store.SaveTurnRecord). */
+  hasLastTurn: boolean
+  /** Whether this session's last finished turn is still waiting to be read: the
+   * card's solid ring, restored from here after a reload. */
+  unread: boolean
+  /** The MCP servers this session's provider could reach when it was spawned —
+   * what the card divides a tool name carrying no separator of its own against.
+   * null for a row nothing has spawned yet. */
+  mcpServers: string[] | null
+  /** The paths under the home this session's sandbox skipped for being
+   * symlinks, home-relative (".gitconfig", ".ssh/known_hosts") — what the
+   * tooltip names as not mounted. null for an unconfined session and for one
+   * whose sandbox skipped nothing. */
+  sandboxSkippedLinks: string[] | null
 }
 
 /** internal/store.ClosedSession — one parked session offered for resuming. What
  * identifies it in a list somebody is browsing: the project rides along because
- * history spans every project at once, closed ones included. No branch — it
- * lives in git and the window reads it off the checkout (ProjectService.Branches). */
+ * history spans every project at once, closed ones included. */
 export interface ClosedSession {
   id: string
   projectId: string
@@ -326,9 +387,41 @@ export interface ClosedSession {
   label: string
   kind: string
   path: string
+  /** The branch the checkout was on when the session was parked, "" for a row
+   * parked before lich recorded one. It is the searchable snapshot — the store
+   * matches it in SQL — and never what the row shows: the branch on screen is
+   * read live off the checkout (ProjectService.BranchesOf), because a branch
+   * moves inside a worktree while the directory keeps its name. */
+  parkedBranch: string
   /** Unix seconds; 0 for a row parked before lich recorded the close, which
    * sorts last and is drawn as no date rather than as 1970. */
   closedAt: number
+  /** The search reached this row through its conversation, out of the index the
+   * close wrote. What keeps the row in the list, apart from the snippet: a hit
+   * the index found by folding an accent, or a term it split on punctuation, has
+   * nothing to show under the row and is still the answer. */
+  matchedConversation: boolean
+  /** The stretch of the parked conversation that matched the search. "" for a
+   * row matched by name alone, for one matched by a fold (above), and for every
+   * row of an empty query, which matched nothing in particular. */
+  snippet: string
+  /** The cap on one session's index dropped the oldest of this conversation, so
+   * a search over it reaches only the newer part. The row says so, because a
+   * search that cannot see the whole session must not read as an absence. */
+  truncated: boolean
+}
+
+/** internal/store.ClosedHistory — one page of parked sessions and the size of
+ * the match it was cut from, so a list holding the store's cap can say so
+ * instead of presenting it as the whole answer. */
+export interface ClosedHistory {
+  sessions: ClosedSession[]
+  total: number
+  /** Parked sessions whose conversation is not indexed yet: a workspace that
+   * predates the index, catching up in the background. The History header reports
+   * it so a search that cannot see every session yet says so; 0 is the steady
+   * state. */
+  indexing: number
 }
 
 /** internal/terminal.TranscriptMatch — a session whose conversation mentions a
@@ -378,6 +471,18 @@ export interface AppUpdateStatus {
 }
 
 /**
+ * internal/appupdate.Progress — one step of Apply, on the "appupdate-progress"
+ * event: bytes of the download (total -1 without a Content-Length), then the
+ * phase with no percentage — install swaps the binary in place, installer
+ * hands over to the Windows installer and closes lich.
+ */
+export interface AppUpdateProgress {
+  phase: "download" | "install" | "installer"
+  received: number
+  total: number
+}
+
+/**
  * internal/drop.Item — one entry of a terminal file drop, described by the
  * only thing Chromium tells the page about a local file. mtime is
  * File.lastModified (milliseconds); size is 0 for a directory, whose reported
@@ -390,12 +495,13 @@ export interface DropItem {
   dir: boolean
 }
 
-/** internal/drop.Attachment — the path the picker produced, and whether it is a
- * copy's (a confined session cannot open a file outside its checkout). Both
- * empty for a cancelled dialog. */
+/** internal/drop.Attachment: the path the picker produced, and the line that
+ * goes under it when the path is a copy's (a confined session cannot open a
+ * file outside its checkout); the notice is empty otherwise, and both are for a
+ * cancelled dialog. */
 export interface Attachment {
   path: string
-  copied: boolean
+  notice: string
 }
 
 /** internal/themes.Theme — a color theme for the UI tokens and xterm. */
@@ -443,9 +549,19 @@ export interface PatchNotesGroup {
   items: string[]
 }
 
+/** internal/patchnotes.Highlight — one GitHub alert block under the version heading. */
+export interface PatchNotesHighlight {
+  /** The alert type lowercased: "important", "warning", "note". */
+  kind: string
+  /** Text with markdown bold/code markers intact, rendered by the dialog. */
+  text: string
+}
+
 /** internal/patchnotes.Notes — the running build's changelog section. */
 export interface PatchNotes {
   version: string
+  /** null when the section carries no alert blocks. */
+  highlights: PatchNotesHighlight[] | null
   /** null when no section matches (a dev build, or a version not in the changelog). */
   groups: PatchNotesGroup[] | null
 }
@@ -468,6 +584,12 @@ export interface DetectedProvider {
   binary: string
   installed: boolean
   path: string
+  /** Which layer `path` came from: `"path"` for a $PATH hit, `"setting"` for the
+   * binary configured in Settings › Providers. Empty when nothing was found. */
+  source: "path" | "setting" | ""
+  /** The page documenting how to install this CLI. Carried on every entry: the
+   * row with somewhere to send the user is the one that found nothing. */
+  docs: string
 }
 
 /** internal/browser.Handle — this session's Chromium sidecar. */
@@ -494,16 +616,60 @@ export interface QuotaWindow {
   seconds: number
   percent: number
   resetsAt?: string
+  /** The provider's own verdict on which window is binding, when it reports
+   * one at all — absent (false) means it didn't say. */
+  active?: boolean
+  /** Present only when the provider says this window is locked regardless of
+   * its percentage; the reason travels to the tooltip verbatim. */
+  lockedReason?: string
+  /** lich's own reading, not the provider's: this weekly window is being spent
+   * faster than its own clock runs. Only weekly windows carry it. */
+  ahead?: boolean
 }
 
 /** internal/quota.Plan — one provider's quota reading. Windows are empty for
- * every status other than "ok"; "unknown" is a session lich cannot identify the
- * account of — it runs a binary the user configured whose environment is out of
- * reach — where the default account's numbers would be the wrong ones. */
+ * every status other than "ok"; "unknown" withholds the reading when the
+ * session environment or its selected credential source cannot be read, where
+ * the default account's numbers would be the wrong ones. */
 export interface QuotaPlan {
   provider: string
   name: string
   plan?: string
+  /** The login the windows were read against, where the provider names one —
+   * absent is an unnamed account, never a failed reading. */
+  account?: string
+  /** Why `account` is absent, for the one absence that has a reason worth
+   * reading: the session's login is a long-lived OAuth token lich may not ask
+   * the profile route about. Absent for a provider that simply names nobody. */
+  noAccount?: "token-login"
   windows?: QuotaWindow[]
   status: "ok" | "signed-out" | "error" | "unknown"
+}
+
+/** internal/terminal.LastTurn — what changed on disk in the window this
+ * session's last finished turn ran in. `diff` is unified-diff text (parseDiff
+ * reads it) and is present only for "ok"; `endedAt` is unix ms and present only
+ * when there is a window to date.
+ *
+ * The four states are kept apart on purpose: "empty" is a turn that ran and
+ * changed nothing, "unavailable" is no turn on record at all — none has
+ * finished here yet — and "lost" is a turn that ran and whose snapshot lich
+ * dropped. The panel must never show one as another. */
+export interface LastTurn {
+  state: "ok" | "empty" | "unavailable" | "lost"
+  diff?: string
+  endedAt?: number
+  /** The snapshot tree the diff's new side stands at — the revision the panel
+   * expands unchanged lines against (ProjectService.FileLines). Present only
+   * with a diff. */
+  after?: string
+}
+
+/** internal/terminal.LastSaid — the prose the agent ended its last turn with,
+ * read out of the provider's own transcript. Absent for every absence there is:
+ * a turn that ended on a tool call, a provider whose conversation lich cannot
+ * read, a transcript still being written. The panel draws nothing either way,
+ * which is why there is no reason field to render. */
+export interface LastSaid {
+  text?: string
 }

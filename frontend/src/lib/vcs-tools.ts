@@ -28,9 +28,3 @@ export const GH: VcsTool = {
   url: "https://cli.github.com",
   without: "Pull requests, checks and PR checkouts are unavailable without it.",
 }
-
-// lich resolves the login shell's $PATH once, at launch, and pins it into its
-// own process (terminal.PinPath). A tool installed while lich is open is
-// therefore still missing to the running one — which reads as the install
-// having failed unless every surface offering it says otherwise.
-export const RESTART_HINT = "Installed it already? Restart lich — the $PATH is read at launch."

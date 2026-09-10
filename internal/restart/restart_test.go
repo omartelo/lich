@@ -2,8 +2,11 @@ package restart
 
 import (
 	"errors"
+	"io"
 	"os"
+	"path/filepath"
 	"slices"
+	"strconv"
 	"testing"
 )
 
@@ -75,7 +78,7 @@ func TestDoSpawnsThenTerminates(t *testing.T) {
 	c := &Coordinator{
 		exePath: "/usr/local/bin/lich",
 		env:     []string{"PATH=/bin"},
-		spawn: func(_ string, env []string) error {
+		spawn: func(_ string, env, _ []string) error {
 			spawnedEnv = env
 			order = append(order, "spawn")
 			return nil
@@ -107,7 +110,7 @@ func TestDoIsIdempotent(t *testing.T) {
 	spawns, terminates := 0, 0
 	c := &Coordinator{
 		exePath:   "/usr/local/bin/lich",
-		spawn:     func(string, []string) error { spawns++; return nil },
+		spawn:     func(string, []string, []string) error { spawns++; return nil },
 		terminate: func(*os.Process) error { terminates++; return nil },
 	}
 	c.SetWindow(&os.Process{})
@@ -126,7 +129,7 @@ func TestDoWithoutWindowStillSpawns(t *testing.T) {
 	spawned := false
 	c := &Coordinator{
 		exePath:   "/usr/local/bin/lich",
-		spawn:     func(string, []string) error { spawned = true; return nil },
+		spawn:     func(string, []string, []string) error { spawned = true; return nil },
 		terminate: func(*os.Process) error { t.Fatal("terminate called with no window"); return nil },
 	}
 	if err := c.Do(); err != nil {
@@ -139,7 +142,7 @@ func TestDoWithoutWindowStillSpawns(t *testing.T) {
 
 func TestDoErrors(t *testing.T) {
 	t.Run("no exe path", func(t *testing.T) {
-		c := &Coordinator{spawn: func(string, []string) error { return nil }}
+		c := &Coordinator{spawn: func(string, []string, []string) error { return nil }}
 		if err := c.Do(); err == nil {
 			t.Fatal("Do() = nil, want error when exe path is unknown")
 		}
@@ -148,7 +151,7 @@ func TestDoErrors(t *testing.T) {
 	t.Run("spawn failure propagates", func(t *testing.T) {
 		c := &Coordinator{
 			exePath: "/usr/local/bin/lich",
-			spawn:   func(string, []string) error { return errors.New("boom") },
+			spawn:   func(string, []string, []string) error { return errors.New("boom") },
 		}
 		if err := c.Do(); err == nil {
 			t.Fatal("Do() = nil, want spawn error")
@@ -159,7 +162,7 @@ func TestDoErrors(t *testing.T) {
 		calls := 0
 		c := &Coordinator{
 			exePath: "/usr/local/bin/lich",
-			spawn: func(string, []string) error {
+			spawn: func(string, []string, []string) error {
 				calls++
 				if calls == 1 {
 					return errors.New("boom")
@@ -177,4 +180,60 @@ func TestDoErrors(t *testing.T) {
 			t.Fatalf("spawn calls = %d, want 2 (failure must not latch)", calls)
 		}
 	})
+}
+
+func TestInstallLaunchesBeforeShutdown(t *testing.T) {
+	var order []string
+	c := New(filepath.Join(t.TempDir(), "lich.exe"), []string{"LICH_LISTEN_PORT=47821"})
+	c.spawn = func(exe string, env, args []string) error {
+		if exe != "verified-setup.exe" {
+			t.Fatalf("spawned %q instead of installer", exe)
+		}
+		want := []string{"/SILENT", "/NORESTART", "/CLOSEAPPLICATIONS", "/NORESTARTAPPLICATIONS",
+			"/DIR=" + filepath.Dir(c.exePath), "/UPDATEPID=" + strconv.Itoa(os.Getpid()),
+			"/LOG=" + filepath.Join(filepath.Dir(c.exePath), ".lich-update-setup.log")}
+		if !slices.Equal(args, want) {
+			t.Fatalf("installer args = %v, want %v", args, want)
+		}
+		if !slices.Contains(env, "LICH_LISTEN_PORT=47821") || !slices.Contains(env, WaitEnv+"=1") {
+			t.Fatalf("installer lost restart environment: %v", env)
+		}
+		order = append(order, "launch")
+		return nil
+	}
+	c.terminate = func(*os.Process) error { order = append(order, "shutdown"); return nil }
+	c.SetWindow(&os.Process{})
+	if err := c.Install("verified-setup.exe"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Do(); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(order, []string{"launch", "shutdown"}) {
+		t.Fatalf("shutdown order = %v", order)
+	}
+}
+
+func TestInstallerLaunchFailureKeepsWindow(t *testing.T) {
+	c := New("lich.exe", nil)
+	c.spawn = func(string, []string, []string) error { return io.ErrClosedPipe }
+	c.terminate = func(*os.Process) error { t.Fatal("closed window after launch failure"); return nil }
+	c.SetWindow(&os.Process{})
+	if err := c.Install("setup.exe"); !errors.Is(err, io.ErrClosedPipe) {
+		t.Fatalf("launch error = %v", err)
+	}
+}
+
+func TestInstallWithoutWindowExitsCleanly(t *testing.T) {
+	c := New("lich.exe", nil)
+	var order []string
+	c.spawn = func(string, []string, []string) error { order = append(order, "launch"); return nil }
+	c.terminate = func(*os.Process) error { t.Fatal("must not taskkill the backend"); return nil }
+	c.SetStop(func() { order = append(order, "stop") })
+	if err := c.Install("setup.exe"); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(order, []string{"launch", "stop"}) {
+		t.Fatalf("order = %v", order)
+	}
 }

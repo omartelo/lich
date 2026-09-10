@@ -1,0 +1,265 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "lich \u00b7 Session Spawn",
+    "locale": "en",
+    "output": "lich-session-spawn.html",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1000,
+      1040
+    ],
+    "column_fit": "spread"
+  },
+  "participants": [
+    {
+      "id": "caller",
+      "type": "external",
+      "label": "Caller",
+      "sublabel": "SPA \u00b7 lich open \u00b7 MCP"
+    },
+    {
+      "id": "spawn",
+      "type": "backend",
+      "label": "Spawn",
+      "sublabel": "internal/spawn"
+    },
+    {
+      "id": "git",
+      "type": "backend",
+      "label": "Worktrees",
+      "sublabel": "internal/project"
+    },
+    {
+      "id": "store",
+      "type": "database",
+      "label": "Store",
+      "sublabel": "SQLite"
+    },
+    {
+      "id": "hub",
+      "type": "messagebus",
+      "label": "Event Hub",
+      "sublabel": "internal/events"
+    },
+    {
+      "id": "pty",
+      "type": "backend",
+      "label": "Terminal",
+      "sublabel": "internal/terminal"
+    },
+    {
+      "id": "cli",
+      "type": "external",
+      "label": "Agent CLI",
+      "sublabel": "claude, codex\u2026"
+    }
+  ],
+  "segments": [
+    {
+      "from": 160,
+      "to": 440,
+      "label": "Resolve + checkout"
+    },
+    {
+      "from": 452,
+      "to": 672,
+      "label": "Row before PTY"
+    },
+    {
+      "from": 684,
+      "to": 960,
+      "label": "Spawn + stream"
+    }
+  ],
+  "messages": [
+    {
+      "id": "open-call",
+      "from": "caller",
+      "to": "spawn",
+      "y": 185,
+      "label": "open session (RPC, token)",
+      "variant": "emphasis"
+    },
+    {
+      "id": "load-state",
+      "from": "spawn",
+      "to": "store",
+      "y": 243,
+      "label": "LoadState",
+      "variant": "default",
+      "note": "resolve project, kind, model"
+    },
+    {
+      "id": "workspace",
+      "from": "store",
+      "to": "spawn",
+      "y": 301,
+      "label": "workspace",
+      "variant": "return"
+    },
+    {
+      "id": "resolve-checkout",
+      "from": "spawn",
+      "to": "git",
+      "y": 359,
+      "label": "existing checkout? else create off base",
+      "variant": "default"
+    },
+    {
+      "id": "checkout-path",
+      "from": "git",
+      "to": "spawn",
+      "y": 417,
+      "label": "path \u00b7 fresh \u2192 run setup",
+      "variant": "return"
+    },
+    {
+      "id": "add-row",
+      "from": "spawn",
+      "to": "store",
+      "y": 475,
+      "label": "AddSessionFrom (row + origin)",
+      "variant": "emphasis"
+    },
+    {
+      "id": "emit-opened",
+      "from": "spawn",
+      "to": "hub",
+      "y": 533,
+      "label": "Emit Opened",
+      "variant": "emphasis"
+    },
+    {
+      "id": "card-appears",
+      "from": "hub",
+      "to": "caller",
+      "y": 591,
+      "label": "WS: card appears",
+      "variant": "return"
+    },
+    {
+      "id": "set-model",
+      "from": "spawn",
+      "to": "store",
+      "y": 649,
+      "label": "SetSessionModel (optional)",
+      "variant": "dashed"
+    },
+    {
+      "id": "term-start",
+      "from": "spawn",
+      "to": "pty",
+      "y": 707,
+      "label": "Start(cwd, kind, name, setup)",
+      "variant": "emphasis"
+    },
+    {
+      "id": "exec-provider",
+      "from": "pty",
+      "to": "cli",
+      "y": 765,
+      "label": "exec provider",
+      "variant": "emphasis",
+      "note": "fresh worktree runs setup script first"
+    },
+    {
+      "id": "cli-output",
+      "from": "cli",
+      "to": "pty",
+      "y": 823,
+      "label": "output",
+      "variant": "return"
+    },
+    {
+      "id": "stream",
+      "from": "pty",
+      "to": "hub",
+      "y": 881,
+      "label": "terminal stream",
+      "variant": "default"
+    },
+    {
+      "id": "xterm",
+      "from": "hub",
+      "to": "caller",
+      "y": 939,
+      "label": "WS: xterm renders",
+      "variant": "return"
+    }
+  ],
+  "activations": [
+    {
+      "participant": "spawn",
+      "from": 180,
+      "to": 715,
+      "type": "backend"
+    },
+    {
+      "participant": "git",
+      "from": 352,
+      "to": 424,
+      "type": "backend"
+    },
+    {
+      "participant": "store",
+      "from": 237,
+      "to": 308,
+      "type": "database"
+    },
+    {
+      "participant": "store",
+      "from": 470,
+      "to": 660,
+      "type": "database"
+    },
+    {
+      "participant": "hub",
+      "from": 528,
+      "to": 955,
+      "type": "messagebus"
+    },
+    {
+      "participant": "pty",
+      "from": 700,
+      "to": 955,
+      "type": "backend"
+    },
+    {
+      "participant": "cli",
+      "from": 760,
+      "to": 955,
+      "type": "external"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Order is deliberate",
+      "items": [
+        "Row and card are announced before the spawn: a session only the database knows about is one the user cannot reach",
+        "A failed model write must not hide the session \u2014 it is reported once the terminal is running",
+        "One lock spans checkout + write + spawn: a duplicate label is the expensive bug, not the cheap PTY"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Checkout rules",
+      "items": [
+        "An existing checkout for the branch is opened, not recreated \u2014 only a fresh one runs the setup script",
+        "A base without a worktree is refused rather than dropped in silence",
+        "The card takes the branch name unless a live session already answers to it \u2014 then the project counter"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Birth facts",
+      "items": [
+        "The session is named at birth (--name, relay roster) \u2014 rename later never changes the spawn name",
+        "The origin session is recorded on the row and outlives the request that created it",
+        "Model, when given, is recorded so every later spawn repeats it \u2014 in the provider's own spelling"
+      ]
+    }
+  ]
+}

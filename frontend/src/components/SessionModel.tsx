@@ -15,17 +15,26 @@ interface SessionModelProps {
 // it reads its own data by id, so the slot can grow with more per-session detail
 // without touching FooterBar. A provider started inside a shell wins over the
 // card's persisted kind, matching the session card itself.
+//
+// A report can carry a cost and no model: the cost-only rung reads what a
+// conversation spent without naming what spent it (docs/ceilings.md). The slot
+// stays empty then rather than putting a provider glyph beside nothing.
 export function SessionModel({ sessionId, kind }: SessionModelProps) {
   const usage = useSessionUsage(sessionId)
   const provider = useSessionAgent(sessionId) ?? kind
-  if (!usage || !provider) {
+  if (!usage?.model || !provider) {
     return null
   }
   return (
-    <span className="flex items-center gap-1.5">
+    <span
+      className="flex min-w-0 max-w-64 items-center gap-1.5"
+      title={`${usage.model}${usage.effort ? ` · ${usage.effort}` : ""}`}
+    >
       <ProviderIcon kind={provider} size={14} />
-      {formatModel(usage.model)}
-      {usage.effort ? ` · ${usage.effort}` : ""}
+      <span className="truncate">
+        {formatModel(usage.model)}
+        {usage.effort ? ` · ${usage.effort}` : ""}
+      </span>
     </span>
   )
 }
