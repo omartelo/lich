@@ -36,16 +36,14 @@ import { queueSetup } from "@/lib/terminal/setup-queue"
 import { writeAtPrompt } from "@/lib/terminal/write-at-prompt"
 import { filterSessions } from "@/lib/session/session-filter"
 import { requestTerminalFocus } from "@/lib/terminal/focus-request"
+import { activeSessionId, sessionsOf, type Session } from "@/lib/session/sessions"
 import {
-  activeSessionId,
   dragOrder,
   reorderSubset,
-  type Session,
   runCardIn,
-  sessionsOf,
   sidebarGroups,
   type SidebarGroup,
-} from "@/lib/session/sessions"
+} from "@/lib/session/sidebar-groups"
 import { useSortableList, verticalAxis, withinList } from "@/lib/use-sortable-list"
 import { WorktreeCloseDialogs } from "./WorktreeCloseDialogs"
 import { SessionGroup } from "./SessionGroup"

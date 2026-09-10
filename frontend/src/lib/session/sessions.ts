@@ -8,24 +8,6 @@
 
 import { applyOrder } from "@/lib/reorder"
 
-// The sidebar's grouping and ordering live in ./sidebar-groups, re-exported
-// here so a caller reading both a session's shape and how it is drawn keeps one
-// import site.
-export {
-  dragOrder,
-  groupByWorktree,
-  isLastWorktreeSession,
-  neighborSessionId,
-  orderGroups,
-  PINNED_GROUP_KEY,
-  reorderSubset,
-  ROOT_GROUP_KEY,
-  runCardIn,
-  sidebarGroups,
-  type SessionGroup,
-  type SidebarGroup,
-} from "./sidebar-groups"
-
 // Provider ids that can back a session, mirrored from internal/providers.Registry
 // (Go) — keep in sync. A session's kind is one of these or the plain shell.
 export const PROVIDER_KINDS = [

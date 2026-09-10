@@ -11,7 +11,6 @@ import {
   addSession,
   closeSession as removeSession,
   isSessionKind,
-  neighborSessionId,
   removeProject,
   renameSession as relabelSession,
   reorderSessions as rearrangeSessions,
@@ -25,6 +24,7 @@ import {
   type SessionKind,
   type SessionState,
 } from "@/lib/session/sessions"
+import { neighborSessionId } from "@/lib/session/sidebar-groups"
 import { applyOrder, pinFirst } from "@/lib/reorder"
 import { displayPath } from "@/lib/paths"
 import { errorText } from "@/lib/utils"

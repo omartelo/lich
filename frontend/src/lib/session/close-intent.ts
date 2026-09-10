@@ -1,4 +1,5 @@
-import { isLastWorktreeSession, type Session } from "./sessions"
+import type { Session } from "./sessions"
+import { isLastWorktreeSession } from "./sidebar-groups"
 
 // What closing a session asks for before its row can go.
 export type CloseIntent =
