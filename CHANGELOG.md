@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The update toast shows the download.** Pressing Update & install used to
+  leave one spinner turning until the whole thing was over, a minute or more
+  where the Windows installer is the asset. The toast now draws a bar with the
+  percent and the megabytes received of the total while the release downloads,
+  then a spinner naming the install, and says on Windows that lich closes and
+  reopens on its own. A failure says which of the two it died in and how far
+  the download got, and offers Retry.
+
 ### Changed
 
 - **An Intel Mac opens lich as a tab in the default browser.** It is the one
@@ -26,16 +36,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`lich --no-window` and `LICH_NO_WINDOW`.** The tab was a choice for a
   machine whose owner would rather not run a Chromium-family browser; with lich's
   own window there is no browser to avoid.
-
-### Added
-
-- **The update toast shows the download.** Pressing Update & install used to
-  leave one spinner turning until the whole thing was over, a minute or more
-  where the Windows installer is the asset. The toast now draws a bar with the
-  percent and the megabytes received of the total while the release downloads,
-  then a spinner naming the install, and says on Windows that lich closes and
-  reopens on its own. A failure says which of the two it died in and how far
-  the download got, and offers Retry.
 
 ### Fixed
 
@@ -58,6 +58,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   into Scoop's directory and registered a second lich in "Installed apps". A
   Scoop install is now Scoop's, like a Homebrew one: the button opens a shell
   with `scoop update lich` and a restart pasted, never run.
+- **Deleting a session or a project no longer freezes lich while it says what was
+  lost.** A parked prompt is reported as it goes, and the report was raised while the
+  read that found it still held the workspace database's only connection: a desktop
+  notification takes about four tenths of a second, so a project with a handful of
+  parked prompts locked every other read behind it. The prompts are read first and
+  reported after, so the delete is as quick as the delete.
+- **A Claude login lich cannot make sense of says so again.** A `.credentials.json` that
+  is there but empty or malformed read as a session whose account could not be
+  identified, which draws an empty panel; it now reads as signed out, which is the state
+  the `claude login` it suggests actually fixes. A file lich cannot open at all is still
+  unknown, because that one really is unreadable rather than empty.
+- **A folder lich could not hand over says where it looked.** The refusal had been
+  shortened to one sentence about the checkout, but an unconfined session searches your
+  home as well, so the sentence named the wrong reason for every session that is not
+  sandboxed.
+- **A late scheduled prompt rounds into the next unit instead of past it.** One that
+  was 59 minutes and 40 seconds late read `60m`, and one 23 hours and 40 minutes late
+  read `24h`. They read `1h` and `1d`.
+- **The window no longer closes on a read that failed.** It ends with the lich that
+  opened it by watching a pipe for end of file, and any error on that pipe was taken for
+  the end: a signal arriving mid read was enough to close a window whose lich was fine.
+  Only a real end of file closes it now.
+
+### Security
+
+- **Text written by strangers can no longer type at your agent's prompt.** Everything
+  lich puts at a session's prompt goes in wrapped as a bracketed paste, which is what
+  leaves it unsent for you to read and send yourself. A body carrying the escape that
+  ends that wrapper closed it early, and every byte after it arrived as keys the agent
+  ran instead. Anyone who can file an issue on a public repository could write those
+  bytes, and so could a review comment, a CI log, or a file committed with a newline in
+  its name; quoting never helped, because the terminal consumes the sequence before a
+  shell sees it. Both ways into a session's terminal now drop the control characters a
+  terminal acts on and keep the ones a prompt legitimately holds, which is the rule the
+  backend already applied to relayed messages.
 
 ## [0.48.1] - 2026-09-09
 
