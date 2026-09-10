@@ -160,6 +160,10 @@ func TestLateNoticeWordsTheDelay(t *testing.T) {
 		"most of an hour":        {late: 45 * 60, want: "45m"},
 		"three hours":            {late: 3 * 60 * 60, want: "3h"},
 		"two days":               {late: 2 * 24 * 60 * 60, want: "2d"},
+		// Rounding carries into the next unit: the rung has to follow it, or
+		// the card reads "60m" and "24h", which no clock ever shows.
+		"minutes that round to an hour": {late: 59*60 + 40, want: "1h"},
+		"hours that round to a day":     {late: 23*60*60 + 40*60, want: "1d"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
