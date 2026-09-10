@@ -151,24 +151,41 @@ func TestTodoReadReportsOnlyChanges(t *testing.T) {
 	}
 }
 
-// TestTodoReadWalksTheWholeFileOnce pins the seed: a list written further back
-// than the tail the cursor starts at is still found, which is what a session
-// resumed at launch depends on.
-func TestTodoReadWalksTheWholeFileOnce(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "transcript.jsonl")
+// TestTodoReadLooksNoFurtherBackThanTheTail pins the bound this read is worth:
+// a list inside the tail a new cursor seeds at is found, and one behind it is
+// not looked for. The recap walks the whole file in that case; this read
+// happens on the first report of every session instead of on a panel somebody
+// opened, and the transcripts it would walk run to hundreds of MB.
+func TestTodoReadLooksNoFurtherBackThanTheTail(t *testing.T) {
 	filler := strings.Repeat(
 		`{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{}}]}}`+"\n",
 		searchTailBytes/90+40,
 	)
-	body := todoLine(todoItemJSON("completed"), todoItemJSON("pending"), todoItemJSON("pending")) + "\n" + filler
-	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	src := usageSource{kind: providers.Claude, path: path, id: "x"}
-	list, changed := new(todoCursors).read("s1", src)
-	if !changed || list != (todoList{done: 1, total: 3}) {
-		t.Errorf("read = %+v, changed %v; want 1 of 3, changed", list, changed)
-	}
+	list := todoLine(todoItemJSON("completed"), todoItemJSON("pending"), todoItemJSON("pending"))
+
+	t.Run("inside the tail", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "transcript.jsonl")
+		if err := os.WriteFile(path, []byte(filler+list+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		src := usageSource{kind: providers.Claude, path: path, id: "x"}
+		got, changed := new(todoCursors).read("s1", src)
+		if !changed || got != (todoList{done: 1, total: 3}) {
+			t.Errorf("read = %+v, changed %v; want 1 of 3, changed", got, changed)
+		}
+	})
+
+	t.Run("behind the tail", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "transcript.jsonl")
+		if err := os.WriteFile(path, []byte(list+"\n"+filler), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		src := usageSource{kind: providers.Claude, path: path, id: "s1"}
+		got, changed := new(todoCursors).read("s1", src)
+		if changed || got != (todoList{}) {
+			t.Errorf("read = %+v, changed %v; want no list, unchanged", got, changed)
+		}
+	})
 }
 
 // TestTodoReadRereadsAReplacedTranscript pins that a cursor whose file is no

@@ -262,11 +262,14 @@ export interface SessionTodo {
   total: number
 }
 
+// The shortest list worth a line on the card. An agent that writes a single
+// item is narrating what it is doing, which the tool line already says.
+const MIN_TODO_ITEMS = 2
+
 // toSessionTodo narrows a todo payload to a list worth drawing, or null for
-// everything else: a malformed payload, a shape from another build, a list of
-// one (an agent that writes a single item is narrating, not planning), and a
-// finished list, whose count is over and would otherwise sit on the card as
-// news forever.
+// everything else: a malformed payload, a shape from another build, a list too
+// short to be a plan, and a finished list, whose count is over and would
+// otherwise sit on the card as news forever.
 export function toSessionTodo(data: unknown): SessionTodo | null {
   const { done, total } = (data ?? {}) as { done?: unknown; total?: unknown }
   if (typeof done !== "number" || typeof total !== "number") {
@@ -275,7 +278,7 @@ export function toSessionTodo(data: unknown): SessionTodo | null {
   if (!Number.isFinite(done) || !Number.isFinite(total)) {
     return null
   }
-  if (total < 2 || done < 0 || done >= total) {
+  if (total < MIN_TODO_ITEMS || done < 0 || done >= total) {
     return null
   }
   return { done: Math.floor(done), total: Math.floor(total) }

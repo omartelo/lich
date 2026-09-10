@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"strings"
-	"sync"
 
 	"github.com/omartelo/lich/internal/providers"
 )
@@ -148,37 +147,28 @@ func countTodos(raw json.RawMessage) (todoList, bool) {
 const todoStatusDone = "completed"
 
 // todoCursors is where each session's transcript was last read to for a task
-// list, on the same reasoning saidCursors keeps its own place: a transcript is
-// append-only, so remembering the offset turns every read after the first into
-// a walk of what has been written since.
+// list (see transcriptCursors).
 //
 // Kept apart from the recap's cursor because the two are read on different
 // clocks: this one runs off the state hook on every report, the recap only
 // while a panel is open, and a shared offset would let either consume the lines
 // the other has not read yet.
-//
-// In memory, per run of lich: what the cursor saves is the reading, never the
-// answer. A window reloaded mid-turn draws no progress until the session's next
-// report, which for a running agent is its next tool call.
 type todoCursors struct {
-	mu sync.Mutex
-	at map[string]*todoCursor
-}
-
-// todoCursor is one session's place in one transcript: the file's identity, how
-// far it has been read, and the last list found there. The identity is what
-// tells an ordinary append apart from a file this cursor no longer belongs to
-// (a forked conversation, or a rewritten one).
-type todoCursor struct {
-	info   os.FileInfo
-	offset int64
-	list   todoList
+	cursors transcriptCursors[todoList]
 }
 
 // read answers with the task list this session's agent last wrote, and whether
 // that pair just changed. Only a change is worth an event: a report lands on
 // every tool call, and re-emitting the same two numbers would re-render the
 // card through a whole turn to say nothing.
+//
+// A list further back than the tail a new cursor is seeded at is not looked
+// for. The recap pays a walk of the whole file in that case, but this read
+// happens on the first report of every session rather than on a panel somebody
+// opened, and a session that never writes a list is exactly the one that would
+// never find anything: transcripts here run to 168MB, and the tail is 4MB of
+// conversation. What it costs is a resumed session drawing no progress until
+// its agent writes the list again, which the per-run cursor gives up on anyway.
 func (c *todoCursors) read(id string, src usageSource) (todoList, bool) {
 	path, reader, ok := todoReaderFor(src)
 	if !ok {
@@ -193,52 +183,19 @@ func (c *todoCursors) read(id string, src usageSource) (todoList, bool) {
 	if err != nil {
 		return todoList{}, false
 	}
-	// The lock spans the read: its only contenders are two reports of the same
-	// session, which would be reading the same bytes anyway.
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	cur, fresh := c.cursor(id, info)
-	lines, end := readLines(f, cur.offset, info.Size())
-	list, found := lastTodo(lines, reader)
-	// A seeded tail holding no list is the case worth a full walk: a list
-	// written before the tail begins is the one a session resumed at launch
-	// would otherwise never show. Once per session, since the cursor lands at
-	// the end of the file either way.
-	if !found && fresh && cur.offset > 0 {
-		lines, end = readLines(f, 0, info.Size())
-		list, found = lastTodo(lines, reader)
-	}
-	cur.info, cur.offset = info, end
-	if !found {
-		return cur.list, false
-	}
-	changed := list != cur.list
-	cur.list = list
+	var list todoList
+	var changed bool
+	c.cursors.under(id, info, func(cur *transcriptCursor[todoList], _ bool) {
+		lines, end := readLines(f, cur.offset, info.Size())
+		found, ok := lastTodo(lines, reader)
+		cur.info, cur.offset = info, end
+		if ok {
+			changed = found != cur.value
+			cur.value = found
+		}
+		list = cur.value
+	})
 	return list, changed
-}
-
-// cursor answers with this session's place in info, seeding a new one at the
-// file's tail: a conversation running for hours is tens of MB, and the first
-// read is paying for a report that has an agent waiting on it. fresh says the
-// cursor was made here.
-func (c *todoCursors) cursor(id string, info os.FileInfo) (*todoCursor, bool) {
-	if cur, ok := c.at[id]; ok && os.SameFile(cur.info, info) && info.Size() >= cur.offset {
-		return cur, false
-	}
-	if c.at == nil {
-		c.at = make(map[string]*todoCursor)
-	}
-	cur := &todoCursor{offset: max(0, info.Size()-searchTailBytes)}
-	c.at[id] = cur
-	return cur, true
-}
-
-// forget drops a closed session's cursor. Nothing will ask about its transcript
-// again, and a card is closed far more often than lich is.
-func (c *todoCursors) forget(id string) {
-	c.mu.Lock()
-	delete(c.at, id)
-	c.mu.Unlock()
 }
 
 // lastTodo keeps the last task list written in a run of transcript lines. false
@@ -255,22 +212,31 @@ func lastTodo(lines []byte, read todoReader) (todoList, bool) {
 	return last, found
 }
 
-// emitTodo reads the task list of the conversation running in session id and
-// pushes it to the frontend when it has moved. Called off the status hook next
-// to emitUsage, and silent on every miss (no provider id yet, no transcript, a
-// provider that writes no list) so the card keeps the count it has.
-func (s *Service) emitTodo(id string) {
-	providerSessionID, err := s.store.ProviderSession(id)
-	if err != nil || providerSessionID == "" {
-		return
-	}
-	src, ok := usageSourceFor(providerSessionID, s.spawnOf(id).cwd)
-	if !ok {
-		return
-	}
+// sessionTodo resolves the event emitTodo would push for session id, and
+// whether the pair moved since the last read. Split from the emit so the
+// reading is testable without a connected window, the way sessionUsage is.
+func (s *Service) sessionTodo(id string, src usageSource) (todoEvent, bool) {
 	list, changed := s.todos.read(id, src)
 	if !changed {
-		return
+		return todoEvent{}, false
 	}
-	s.hub.Emit(todoEventName, todoEvent{ID: id, Done: list.done, Total: list.total})
+	return todoEvent{ID: id, Done: list.done, Total: list.total}, true
+}
+
+// emitTodo reads the task list of the conversation running in session id and
+// pushes it to the frontend when it has moved. Silent on every miss (a provider
+// that writes no list, an unreadable transcript, a list that has not changed),
+// so the card keeps the count it has.
+//
+// The lock spans the read and the push, which is what keeps two reports of the
+// same session from landing out of order: this event is emitted only when the
+// pair moves, so an older count arriving last would sit on the card until the
+// list changes again. The contended window is one Emit, and every read here is
+// already serialised by the cursor behind it.
+func (s *Service) emitTodo(id string, src usageSource) {
+	s.todoEmit.Lock()
+	defer s.todoEmit.Unlock()
+	if event, ok := s.sessionTodo(id, src); ok {
+		s.hub.Emit(todoEventName, event)
+	}
 }

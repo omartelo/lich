@@ -299,8 +299,11 @@ type Service struct {
 	recap saidCursors
 	// todos is the same reading for the task list an agent writes for itself,
 	// kept apart from recap because the two are read on different clocks (see
-	// todoCursors).
-	todos todoCursors
+	// todoCursors). todoEmit orders what comes out of it: that event is emitted
+	// only when the count moves, so two reports landing out of order would
+	// leave the older count on the card (see emitTodo).
+	todos    todoCursors
+	todoEmit sync.Mutex
 	// snaps brackets each session's turn with a tree snapshot of its checkout,
 	// which is what the Review panel's "Last turn" mode diffs (see turnSnaps).
 	// It reads the same boundary turns does and carries its own lock for the
@@ -465,12 +468,12 @@ func (s *Service) onHookState(req hookRequest) {
 	// off-thread so a stalled emit never blocks the hook's response. Skip
 	// idle (SessionEnd): the session is ending, nothing new to read.
 	if req.State != statusIdle {
-		go s.emitUsage(req.SessionID)
-		// The same read, for the list the agent wrote itself: a `TodoWrite`
-		// lands mid-turn like a usage line, and the card that draws the count
-		// is looking at a session that has gone quiet, so the read has to have
-		// happened before the turn ends.
-		go s.emitTodo(req.SessionID)
+		// Both readouts taken off the transcript go out together, on one
+		// resolution of it: the context window, and the list the agent wrote
+		// itself. A `TodoWrite` lands mid-turn like a usage line, and the card
+		// that draws the count is looking at a session that has gone quiet, so
+		// the read has to have happened before the turn ends.
+		go s.emitReadouts(req.SessionID)
 	}
 	// A Kiro session's name is read here rather than reported, because Kiro
 	// hands its hooks no transcript path to read one from while it does file
@@ -603,11 +606,11 @@ func (s *Service) noteInterrupt(id string) {
 		watch(id, statusInterrupted)
 	}
 	// An interrupted turn spent tokens like any other, and it may be the last
-	// one for a while: refresh the context readout off the transcript, off the
-	// caller's thread the way the hook path does. The task list goes with it:
-	// an interrupted turn is exactly the one whose progress is worth reading.
-	go s.emitUsage(id)
-	go s.emitTodo(id)
+	// one for a while: refresh the readouts off the transcript, off the
+	// caller's thread the way the hook path does. The task list goes with the
+	// context window: an interrupted turn is exactly the one whose progress is
+	// worth reading.
+	go s.emitReadouts(id)
 }
 
 // SetSessionState wires fn to every session-state report the hooks deliver.
@@ -726,8 +729,8 @@ func (s *Service) Close(id string) error {
 	// last turn changed — and its snapshot index would otherwise outlive it on
 	// disk for the rest of the machine's life.
 	s.snaps.forget(id)
-	s.recap.forget(id)
-	s.todos.forget(id)
+	s.recap.cursors.forget(id)
+	s.todos.cursors.forget(id)
 	// Synchronously, and before the row that the window is about to delete goes:
 	// a write that loses that race is dropped silently (store.AddHandsOn), and
 	// this is the last chance a closed card gets to keep what it was worked.
