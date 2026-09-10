@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The two sandbox grants say what they hand over.** In Settings › Sandbox, the
+  SSH agent switch now names the whole of it — every identity in your agent,
+  against any host, for as long as the session runs — and the GitHub token switch
+  says the agent can read the token out of its environment and spend it outside
+  this repository. The list of loaded keys is also re-read whenever the window
+  regains focus, so a key added with `ssh-add` after the pane was opened is no
+  longer handed over by a switch that never named it.
+
 ### Fixed
 
 - **A session name that wrapped, or followed a wide character, stopped being a

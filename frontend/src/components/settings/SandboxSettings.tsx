@@ -68,19 +68,21 @@ function useSandboxBackend() {
   })
 }
 
-// useAgentKeys lists what is loaded in the user's ssh agent, read when the pane
-// opens. It is the sentence the switch below it cannot say on its own: that
-// switch is read as "let it push with my GitHub key", and it hands over every
-// identity in this list. A key added after this read is handed over by a control
-// that never named it — reopening the pane refetches, which is the cheap answer
-// to that, and the filed list is only what stands on screen while it does.
+// useAgentKeys lists what is loaded in the user's ssh agent. It is the sentence
+// the switch below it cannot say on its own: that switch is read as "let it push
+// with my GitHub key", and it hands over every identity in this list.
+//
+// Re-read on focus, because `ssh-add` is run in a terminal outside this window
+// and the tab back is the frame where the list has to be right: read once at
+// pane open, a key loaded a moment ago is handed over by a control that never
+// named it. The filed list is what stands on screen while the re-read runs.
 function useAgentKeys(): string[] {
   const { data } = useRemoteResource(
     "ssh-agent-keys",
     // Folded rather than trusted: a machine with no agent answers null, not [],
     // and this list is read for a length.
     () => System.SSHAgentKeys().then((keys) => keys ?? NO_KEYS),
-    { empty: NO_KEYS, cache: "settings.sshAgentKeys" },
+    { empty: NO_KEYS, refetchOnFocus: true, cache: "settings.sshAgentKeys" },
   )
   return data
 }
@@ -156,14 +158,14 @@ export function SandboxSettings({ projectId }: { projectId?: string }) {
       <SettingBlock title="What a confined session may carry in">
         <Grant
           title="SSH agent"
-          description="git push works inside. Signs with every identity in your agent, for any host."
+          description="git push works inside. Signs with every identity in your agent, against any host, for as long as the session runs."
           detail={agentKeys.length > 0 ? `Loaded: ${agentKeys.join(" · ")}` : "Nothing loaded."}
           checked={sshAgent === "true"}
           onChange={(next) => setSSHAgent(String(next))}
         />
         <Grant
           title="GitHub token"
-          description="gh works inside. The agent can read the token out of its environment."
+          description="gh works inside. The agent can read the token out of its environment and spend it outside this repository."
           detail={accountLine(account)}
           checked={ghToken === "true"}
           onChange={(next) => setGHToken(String(next))}
@@ -275,9 +277,11 @@ function StatusStrip({ backend }: { backend: string }) {
 }
 
 // Grant is one credential handed back to a confined session. The description
-// carries the half nobody assumes — every identity, any host; a token the agent
-// can read straight out of its environment — because without it each switch reads
-// as a smaller promise than it makes.
+// carries the half nobody assumes — every identity, any host, for the whole life
+// of the session; a token the agent can read straight out of its environment and
+// spend anywhere that account reaches — because without it each switch reads as a
+// smaller promise than it makes, next to a sandbox whose whole pitch is that the
+// user's credentials are not in there.
 function Grant({
   title,
   description,

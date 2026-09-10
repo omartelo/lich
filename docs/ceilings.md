@@ -367,31 +367,35 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   X11 socket and its cookie instead, the wider of the two — X clients are not isolated from one another —
   and macOS gets neither, its pasteboard being a mach service rather than a socket, so a confined session
   there has no clipboard at all. macOS has no hardware here — its profile is unit-tested and has never run.
-- **The two sandbox grants hand over more than what they are read as** (`internal/store/settings.go`,
-  `internal/sandbox`, `internal/terminal/sandbox.go`): a confined session reaches the network as the user only
-  where the project turned one of them on, and each is all-or-nothing. The ssh agent is handed over as a socket,
-  so nothing private enters the sandbox — but the session signs with **every** identity loaded in that agent,
-  against any host it can reach, for as long as it runs. OpenSSH can pin a key to one destination, and only when
-  the key is added on the host (`ssh-add -h`); lich is given a socket that is already populated and can only
-  pass it on whole. The socket does not travel alone: `~/.ssh/known_hosts` is mounted read-only beside it,
-  because without it ssh cannot verify github.com, has no tty to ask on, and fails with "Host key
-  verification failed" before the key is ever offered — the grant would hand over the credential and not the
-  push. That file is public host keys, never a secret; what a confined session learns from it is the list of
-  machines the user connects to. Read-only, so a host the user has never connected to *outside* the sandbox
-  still fails inside it and cannot be learned there — blind trust-on-first-use is not a thing to grant an
-  unattended agent. And a `known_hosts` symlinked out of a dotfiles repository is dropped like every other
-  link in the home (`internal/sandbox`'s `existing`), which takes the whole grant down with it. That is why Settings lists what is in the agent — and the list is read when the pane opens,
-  so a key added afterwards is handed over by a switch that never named it. The GitHub token is one account's,
-  the project's own (`vcs.account`), and it rides in the session's environment: the agent can read it back out
-  of its own environment and spend it on anything that account's scopes allow, this repository or not. Neither
-  grant is keyed by provider — a grant describes what is inside the sandbox, not who runs in it — so turning
-  one on turns it on for every provider confined in that project. It is
+- **The two sandbox grants are all-or-nothing** (`internal/store/settings.go`, `internal/sandbox`,
+  `internal/terminal/sandbox.go`): a confined session reaches the network as the user only where the project
+  turned one of them on, and each is all-or-nothing. The ssh agent is handed over as a socket, so nothing
+  private enters the sandbox — but the session signs with **every** identity loaded in that agent, against any
+  host it can reach, for as long as it runs. OpenSSH can pin a key to one destination, and only when the key
+  is added on the host (`ssh-add -h`); lich is given a socket that is already populated and can only pass it
+  on whole. The socket does not travel alone: `~/.ssh/known_hosts` is mounted read-only beside it, because
+  without it ssh cannot verify github.com, has no tty to ask on, and fails with "Host key verification failed"
+  before the key is ever offered — the grant would hand over the credential and not the push. That file is
+  public host keys, never a secret; what a confined session learns from it is the list of machines the user
+  connects to. Read-only, so a host the user has never connected to *outside* the sandbox still fails inside
+  it and cannot be learned there — blind trust-on-first-use is not a thing to grant an unattended agent. And a
+  `known_hosts` symlinked out of a dotfiles repository is dropped like every other link in the home
+  (`internal/sandbox`'s `existing`), which takes the whole grant down with it. That is why Settings lists what
+  is in the agent, and re-reads the list every time the window regains focus: `ssh-add` is run in a terminal
+  outside lich, so the tab back is the frame where a key loaded a moment ago has to already be named by the
+  switch that hands it over. The GitHub token is one account's, the project's own (`vcs.account`), and it
+  rides in the session's environment: the agent can read it back out of its own environment and spend it on
+  anything that account's scopes allow, this repository or not. Both switches say that much in the sentence
+  under them — a grant is decided in a settings pane beside a sandbox whose whole promise is that the user's
+  credentials are not in there, and a switch read as "let it push with my GitHub key" is read as a smaller
+  promise than it makes. Neither grant is keyed by provider — a grant describes what is inside the sandbox,
+  not who runs in it — so turning one on turns it on for every provider confined in that project. It is
   resolved once per spawn, so a token gh rotates mid-session goes stale with nothing saying so, and a `gh auth
   token` that fails leaves the session with no token rather than failing the spawn. Both are off by default,
-  and both are Linux in practice: the macOS profile denies reads *inside* the home while a launchd agent socket
-  and gh's keyring live outside it, so a confined macOS session never lost either and the switches change
-  nothing there — they are inert rather than hidden, and there is no macOS hardware here to prove it further.
-  Windows has no sandbox backend, so neither switch exists.
+  and both are Linux in practice: the macOS profile denies reads *inside* the home while a launchd agent
+  socket and gh's keyring live outside it, so a confined macOS session never lost either and the switches
+  change nothing there — they are inert rather than hidden, and there is no macOS hardware here to prove it
+  further. Windows has no sandbox backend, so neither switch exists.
 - **The macOS floor is the toolchain's, not lich's** (`build/darwin/Info.plist.tpl`,
   `build/darwin/homebrew/lich.rb.tpl`): nothing in lich needs macOS 13, but Go 1.27 dropped every
   release before Ventura, so a binary built from this module cannot run on Big Sur or Monterey. The
