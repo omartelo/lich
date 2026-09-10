@@ -1,16 +1,15 @@
 import { Folder, GitBranch } from "lucide-react"
 import { baseName, displayPath, unknownCwd } from "@/lib/paths"
 
-interface FooterCheckoutProps {
-  path: string
-  branch: string
-  display?: "branch" | "path"
-  /** Set when the session's shell runs somewhere lich cannot read into: the
-   * readout says so rather than naming the checkout, which is a directory the
-   * user has left. Passed to the path readout only — the branch beside it is a
-   * fact about the checkout and stays true wherever the shell went. */
-  host?: string
-}
+/** host is set when the session's shell runs somewhere lich cannot read into:
+ * the readout says so rather than naming the checkout, which is a directory the
+ * user has left. The union is what confines it to the path readout: the branch
+ * beside it is a fact about the checkout, true wherever the shell went, so a
+ * host on a branch readout would draw "cwd unknown" under a GitBranch glyph. */
+type FooterCheckoutProps = { path: string; branch: string } & (
+  | { display: "path"; host?: string }
+  | { display?: "branch" | "path"; host?: never }
+)
 
 export function FooterCheckout({
   path,

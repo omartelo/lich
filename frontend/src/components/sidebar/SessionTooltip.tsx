@@ -129,9 +129,9 @@ export function SessionTooltip({ session, path, projectId }: SessionTooltipProps
         {/* What the shield on the card means. Directly under the path, because
             what it says is about that path: the sandbox is the difference
             between a session that can write anywhere and one that can write
-            here. The last line is the part nothing else says — the answer was
-            taken when the session opened, and moving the rung in Settings will
-            not move this card.
+            here. The second line is the part nothing else says: the answer
+            was taken when the session opened, and moving the rung in Settings
+            will not move this card.
 
             An unconfined session is silent here unless the rung has since moved
             past it, which is the one time its lack of a shield is news.
