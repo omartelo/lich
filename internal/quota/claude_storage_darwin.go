@@ -5,6 +5,7 @@ package quota
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os/exec"
 	"os/user"
 	"regexp"
@@ -12,6 +13,9 @@ import (
 )
 
 const (
+	// keychainTimeout bounds the /usr/bin/security call, which runs while Plans
+	// holds the cache lock: every other session's reading waits behind it, so a
+	// Keychain prompting for an unlock must cost a gauge, never the panel.
 	keychainTimeout      = 2 * time.Second
 	keychainItemNotFound = 44
 )
@@ -30,7 +34,7 @@ func readClaudeKeychain(a Account, run func(...string) ([]byte, error)) (claudeC
 	var creds claudeCredentials
 	// UZ in the cited CLI selects USER, then os.userInfo().username, sanitizing
 	// unsupported names to claude-code-user. Match the account as well as service.
-	name := a.lookup("USER")
+	name := a.lookup(accountUserVar)
 	if name == "" {
 		current, err := user.Current()
 		if err != nil {
@@ -46,7 +50,8 @@ func readClaudeKeychain(a Account, run func(...string) ([]byte, error)) (claudeC
 		// security truncates errSecItemNotFound (-25300) to exit status 44.
 		// Only an absent item allows Claude's plaintext fallback; a locked or
 		// refused Keychain must never send a different file login's quota.
-		if exit, ok := err.(*exec.ExitError); ok && exit.ExitCode() == keychainItemNotFound {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) && exit.ExitCode() == keychainItemNotFound {
 			return readClaudeFile(a)
 		}
 		return creds, StatusUnknown

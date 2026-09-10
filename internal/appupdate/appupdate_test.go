@@ -68,7 +68,7 @@ func TestCanSelfApply(t *testing.T) {
 		{"unwritable dir", "darwin", filepath.Join("/nonexistent-abc123", "lich"), false},
 		{"homebrew cellar is brew's", "darwin", cellarExe(t), false},
 		{"app bundle keeps its signature", "darwin", bundleExe(t), false},
-		{"installer layout carries the window", "windows", windowedExe(t), true},
+		{"installer layout self-applies", "windows", windowedExe(t), true},
 		{"scoop install is scoop's", "windows", scoopExe(t), false},
 	}
 	for _, tc := range tests {
