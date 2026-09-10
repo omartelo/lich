@@ -306,6 +306,27 @@ func TestSaidCursorContinuesWhereItStopped(t *testing.T) {
 	}
 }
 
+// TestSaidCursorStandsOnAnUnchangedTranscript is the panel's steady state: the
+// band polls every couple of seconds, and between two turns the transcript has
+// not grown by a byte. That second walk reads nothing at all — not tool output,
+// nothing — and the answer already on record is the whole reason the sticky
+// cursor exists. Every other cursor test appends before it re-walks, so this is
+// the one that pins a walk with no growth behind it.
+func TestSaidCursorStandsOnAnUnchangedTranscript(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "t.jsonl")
+	writeLines(t, path, saidLine("Three failures in parser_test.go."))
+	var cursors saidCursors
+	if got := cursors.walk("s1", path, claudeTurn); got != "Three failures in parser_test.go." {
+		t.Fatalf("first walk = %q", got)
+	}
+
+	for range 3 {
+		if got := cursors.walk("s1", path, claudeTurn); got != "Three failures in parser_test.go." {
+			t.Errorf("walk over an unchanged transcript = %q, want the answer to stand", got)
+		}
+	}
+}
+
 // TestSaidCursorKeepsWordsBehindTheTailBound is the bound itself gone. A turn
 // whose closing words end up behind more tool output than a tail read holds
 // (one tool result is enough) used to leave the band empty, which is what a turn

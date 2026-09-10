@@ -242,3 +242,39 @@ func TestWrapSandboxAddsNoTokenWithoutOne(t *testing.T) {
 		t.Errorf("GH_TOKEN set without the flag: %v", got.env)
 	}
 }
+
+// TestWrapSandboxNamesTheLinksItSkipped is the second return the card's tooltip
+// is built from. A dotfile the profile lists and the home answers with a
+// symlink is dropped from the mounts (internal/sandbox), so a confined session
+// simply does not have it — and the only moment anything knows which ones is
+// this call. Asserting only the spec, as the rest of this file does, would let
+// wrapSandbox hand back nil and leave a session unable to find its own
+// ~/.gitconfig with nothing to read about why.
+func TestWrapSandboxNamesTheLinksItSkipped(t *testing.T) {
+	if !sandbox.Available() {
+		t.Skip("no sandbox backend on this machine")
+	}
+	home := t.TempDir()
+	target := filepath.Join(t.TempDir(), "gitconfig")
+	if err := os.WriteFile(target, []byte("[user]\n"), 0o600); err != nil {
+		t.Fatalf("write link target: %v", err)
+	}
+	if err := os.Symlink(target, filepath.Join(home, ".gitconfig")); err != nil {
+		t.Fatalf("symlink .gitconfig: %v", err)
+	}
+
+	_, links := wrapSandbox(baseSpec(), providers.Claude, home, "", true, sandboxCreds{})
+
+	if !slices.Contains(links, ".gitconfig") {
+		t.Errorf("skipped links = %v, want them to name .gitconfig", links)
+	}
+}
+
+// An unconfined spawn skips nothing, because it mounts nothing: the links are
+// the sandbox's own answer, and reporting one for a session running on the
+// machine would put a warning on a card that has no sandbox to warn about.
+func TestWrapSandboxSkipsNoLinksWhenUnconfined(t *testing.T) {
+	if _, links := wrapSandbox(baseSpec(), providers.Claude, t.TempDir(), "", false, sandboxCreds{}); links != nil {
+		t.Errorf("an unconfined spawn reported skipped links %v", links)
+	}
+}

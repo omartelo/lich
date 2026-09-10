@@ -118,3 +118,53 @@ func TestSetupSkippedNotice(t *testing.T) {
 		}
 	}
 }
+
+// TestAnnounceReachesBothTheReplayAndTheWindow is the notice's delivery, which
+// is the only user-visible half of the skipped-setup feature: a Windows session
+// that says nothing is a checkout whose dependencies are missing for a reason
+// nobody can find. Both destinations are asserted because they answer different
+// moments — the coalescer is the window that is already open, the replay is the
+// one opened after a reload — and a line in only one of them is a line half the
+// users never see.
+//
+// Driven off announce rather than off a spawn: the notice is composed for
+// Windows (setupSkippedNotice above pins that), and the suite's spawns are
+// Unix-only, so a test that went through spawnSession would assert this
+// nowhere.
+func TestAnnounceReachesBothTheReplayAndTheWindow(t *testing.T) {
+	var written []byte
+	sess := &session{
+		replay: newReplayBuffer(replayCapBytes),
+		out:    newCoalescer(func(data []byte) { written = append(written, data...) }, 0, 0),
+	}
+
+	notice := setupSkippedNotice("pnpm i", "windows")
+	sess.announce(notice)
+
+	if got := string(sess.replay.snapshot()); got != notice {
+		t.Errorf("replay holds %q, want the notice %q", got, notice)
+	}
+	if string(written) != notice {
+		t.Errorf("the window was written %q, want the notice %q", written, notice)
+	}
+}
+
+// Nothing to say writes nothing: every Unix spawn calls announce with the empty
+// notice, and a blank line pushed into a fresh session's scrollback would be a
+// line the user has to account for.
+func TestAnnounceWritesNothingWithoutALine(t *testing.T) {
+	emitted := false
+	sess := &session{
+		replay: newReplayBuffer(replayCapBytes),
+		out:    newCoalescer(func([]byte) { emitted = true }, 0, 0),
+	}
+
+	sess.announce("")
+
+	if len(sess.replay.snapshot()) != 0 {
+		t.Errorf("replay holds %q, want nothing", sess.replay.snapshot())
+	}
+	if emitted {
+		t.Error("an empty notice was pushed to the window")
+	}
+}

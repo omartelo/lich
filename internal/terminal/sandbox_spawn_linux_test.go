@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -71,5 +72,44 @@ func TestAConfinedSessionRunsInItsPTY(t *testing.T) {
 	}
 	if strings.Contains(answer, "other-work") {
 		t.Errorf("the host home reached into the sandbox: %q", answer)
+	}
+}
+
+// TestAConfinedSpawnRecordsWhatItsSandboxSkipped closes the journey the links
+// take: resolved by wrapSandbox, carried on the session, and written to the row
+// by Start. Only the spawn ever resolves them and the PTY outlives the page, so
+// a reload has no second spawn to hear them from — a card whose session cannot
+// find its own ~/.gitconfig would then have nothing to say about why.
+func TestAConfinedSpawnRecordsWhatItsSandboxSkipped(t *testing.T) {
+	if !sandbox.Available() {
+		t.Skip("no sandbox backend on this machine")
+	}
+	t.Setenv("SHELL", "sh")
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cwd := filepath.Join(home, "checkout")
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatalf("mkdir checkout: %v", err)
+	}
+	// The shape a dotfile manager leaves behind, and the one the sandbox has to
+	// drop: a bind of a symlink is what fails the spawn.
+	target := filepath.Join(t.TempDir(), "gitconfig")
+	if err := os.WriteFile(target, []byte("[user]\n"), 0o600); err != nil {
+		t.Fatalf("write link target: %v", err)
+	}
+	if err := os.Symlink(target, filepath.Join(home, ".gitconfig")); err != nil {
+		t.Fatalf("symlink .gitconfig: %v", err)
+	}
+
+	recorded := map[string][]string{}
+	svc := New(stubBins{sandboxOn: true, sandboxLinks: recorded}, nil, events.New())
+	t.Cleanup(func() { _ = svc.Close("s1") })
+
+	if err := svc.Start("s1", "p1", cwd, KindShell, "", "", false, false, 80, 24); err != nil {
+		t.Fatalf("Start = %v, want nil", err)
+	}
+
+	if !slices.Contains(recorded["s1"], ".gitconfig") {
+		t.Errorf("the row recorded %v, want it to name the skipped .gitconfig", recorded["s1"])
 	}
 }

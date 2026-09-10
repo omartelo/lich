@@ -98,3 +98,58 @@ func TestReadCommOfDeadPidIsEmpty(t *testing.T) {
 		t.Errorf("readComm(dead) = %q, want empty", got)
 	}
 }
+
+// TestProcessCwdNamesAShellHostInTheForeground is the other half of the read
+// the foreground group exists for: when the job the user started is one of the
+// wrappers whose shell lives somewhere unreadable (shellHosts), the answer is
+// that name and no path. Nothing else proves the wiring reads the foreground
+// process rather than the PTY child — the two agree on every ordinary job, and
+// the child is never named tmux.
+//
+// A copy of /bin/sh under the name is what makes it testable: comm answers what
+// was executed, so the copy reads as "tmux" to the very seam a real tmux would,
+// without a multiplexer, a socket or a server process in the test.
+func TestProcessCwdNamesAShellHostInTheForeground(t *testing.T) {
+	fake := filepath.Join(t.TempDir(), "tmux")
+	sh, err := os.ReadFile("/bin/sh")
+	if err != nil {
+		t.Skipf("no /bin/sh to copy: %v", err)
+	}
+	if err := os.WriteFile(fake, sh, 0o755); err != nil {
+		t.Fatalf("write %s: %v", fake, err)
+	}
+
+	cmd := exec.Command("/bin/sh", "-i")
+	cmd.Dir = physical(t, t.TempDir())
+	// See TestProcessCwdFollowsForegroundJob: a stranger's $ENV must not decide
+	// whether this passes.
+	cmd.Env = []string{"PATH=/bin:/usr/bin", "TERM=dumb", "ENV=", "PS1=$ "}
+	ptmx, err := pty.Start(cmd)
+	if err != nil {
+		t.Fatalf("pty.Start: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = ptmx.Close()
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	})
+	go func() { _, _ = io.Copy(io.Discard, ptmx) }()
+
+	// Typed, so the outer shell's job control hands the terminal to the copy.
+	if _, err := ptmx.WriteString(fake + " -i\n"); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	pid := cmd.Process.Pid
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		got, host := processCwd(pid)
+		if host == "tmux" && got == "" {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("processCwd(%d) = (%q, %q), want no path and the host \"tmux\"", pid, got, host)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
