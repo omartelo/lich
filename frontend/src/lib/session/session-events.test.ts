@@ -4,9 +4,11 @@ import {
   decideStatusNotice,
   isAgentEvent,
   isCwdEvent,
+  isForfeitedScheduleEvent,
   isMCPEvent,
   isIdEvent,
   isIdleEvent,
+  isSandboxEvent,
   isStatusEvent,
   isTitleEvent,
   isUsageEvent,
@@ -163,6 +165,48 @@ describe("isMCPEvent", () => {
     expect(isMCPEvent({ id: "s1", servers: "lich" })).toBe(false)
     expect(isMCPEvent({ id: "s1", servers: ["lich", 2] })).toBe(false)
     expect(isMCPEvent(null)).toBe(false)
+  })
+})
+
+describe("isSandboxEvent", () => {
+  it("accepts a payload carrying a string id, a verdict and no names", () => {
+    expect(isSandboxEvent({ id: "s1", confined: true })).toBe(true)
+    expect(isSandboxEvent({ id: "s1", confined: false })).toBe(true)
+    // A nil list marshals as null, and an empty one is what a sandbox that
+    // skipped nothing reports; both still carry the verdict.
+    expect(isSandboxEvent({ id: "s1", confined: true, skippedLinks: null })).toBe(true)
+    expect(isSandboxEvent({ id: "s1", confined: true, skippedLinks: [] })).toBe(true)
+    expect(isSandboxEvent({ id: "s1", confined: true, skippedLinks: [".gitconfig"] })).toBe(true)
+  })
+
+  it("rejects a payload that is not one", () => {
+    expect(isSandboxEvent({ id: "s1" })).toBe(false)
+    expect(isSandboxEvent({ confined: true })).toBe(false)
+    expect(isSandboxEvent({ id: "s1", confined: "yes" })).toBe(false)
+    expect(isSandboxEvent({ id: "s1", confined: true, skippedLinks: ".gitconfig" })).toBe(false)
+    expect(isSandboxEvent({ id: "s1", confined: true, skippedLinks: [".gitconfig", 2] })).toBe(
+      false,
+    )
+    expect(isSandboxEvent(null)).toBe(false)
+  })
+})
+
+describe("isForfeitedScheduleEvent", () => {
+  it("accepts a payload carrying a label, a due time and the prompt", () => {
+    expect(isForfeitedScheduleEvent({ label: "w", at: 1700000000, prompt: "run it" })).toBe(true)
+    // The session is already gone, so an id is exactly what it cannot carry.
+    expect(isForfeitedScheduleEvent({ label: "", at: 0, prompt: "" })).toBe(true)
+  })
+
+  it("rejects a payload that is not one", () => {
+    // The toast holds the last surviving copy of the prompt, so a payload typed
+    // wrong has to be dropped rather than drawn with a blank where it was.
+    expect(isForfeitedScheduleEvent({ label: "w", at: "soon", prompt: "x" })).toBe(false)
+    expect(isForfeitedScheduleEvent({ label: "w", at: 1700000000 })).toBe(false)
+    expect(isForfeitedScheduleEvent({ at: 1700000000, prompt: "x" })).toBe(false)
+    expect(isForfeitedScheduleEvent({ label: 2, at: 1700000000, prompt: "x" })).toBe(false)
+    expect(isForfeitedScheduleEvent({ label: "w", at: 1700000000, prompt: 2 })).toBe(false)
+    expect(isForfeitedScheduleEvent(null)).toBe(false)
   })
 })
 
