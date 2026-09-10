@@ -8,7 +8,6 @@ import (
 	"os"
 	"slices"
 	"strings"
-	"sync"
 
 	"github.com/omartelo/lich/internal/providers"
 )
@@ -114,29 +113,13 @@ func transcriptReaderFor(src usageSource) (string, turnReader, bool) {
 	return "", nil, false
 }
 
-// saidCursors is where each session's transcript was last read to. A transcript
-// is append-only, so remembering the offset one read ended at turns the next
-// into a walk of what has been written since, and a turn is then read whole
-// however large it is, where a bounded tail re-read every poll (searchTailBytes,
-// still what the palette's search does) loses the turn whose closing words fall
+// saidCursors is where each session's transcript was last read to for the
+// closing words of a turn (see transcriptCursors). A turn is read whole however
+// large it is, where a bounded tail re-read every poll (searchTailBytes, still
+// what the palette's search does) loses the turn whose closing words fall
 // behind more tool output than the bound holds.
-//
-// In memory, per run of lich: what the cursor saves is the reading, never the
-// answer, so a session restored at launch simply seeds itself again.
 type saidCursors struct {
-	mu sync.Mutex
-	at map[string]*saidCursor
-}
-
-// saidCursor is one session's place in one transcript: the file's identity, how
-// far it has been read, and the last prose found there. The identity is what
-// tells an ordinary append apart from a file this cursor no longer belongs to
-// (a forked conversation, or a rewritten one), where the offset would otherwise
-// count into bytes nobody read.
-type saidCursor struct {
-	info   os.FileInfo
-	offset int64
-	text   string
+	cursors transcriptCursors[string]
 }
 
 // said reads one conversation's closing words out of whatever the provider files
@@ -170,51 +153,26 @@ func (c *saidCursors) walk(id, path string, read turnReader) string {
 	if err != nil {
 		return ""
 	}
-	// The lock spans the read: its only contenders are two polls of the same
-	// panel, which would be reading the same bytes anyway.
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	cur, fresh := c.cursor(id, info)
-	lines, end := readLines(f, cur.offset, info.Size())
-	text, found := lastSaid(lines, read)
-	// A tail holding no prose at all is the one case worth a full walk: it takes
-	// a single tool result larger than the bound, and the words behind it are
-	// exactly the turn the band exists to catch up on. Once per session: the
-	// cursor lands at the end of the file either way.
-	if !found && fresh && cur.offset > 0 {
-		lines, end = readLines(f, 0, info.Size())
-		text, found = lastSaid(lines, read)
-	}
-	cur.info, cur.offset = info, end
-	if found {
-		cur.text = text
-	}
-	return cur.text
-}
-
-// cursor answers with this session's place in info, seeding a new one at the
-// file's tail: a conversation running for hours is tens of MB, and a first read
-// is paying for a panel somebody just opened. fresh says the cursor was made
-// here: nothing read before this, or a file the previous read's offset does not
-// belong to (see saidCursor).
-func (c *saidCursors) cursor(id string, info os.FileInfo) (*saidCursor, bool) {
-	if cur, ok := c.at[id]; ok && os.SameFile(cur.info, info) && info.Size() >= cur.offset {
-		return cur, false
-	}
-	if c.at == nil {
-		c.at = make(map[string]*saidCursor)
-	}
-	cur := &saidCursor{offset: max(0, info.Size()-searchTailBytes)}
-	c.at[id] = cur
-	return cur, true
-}
-
-// forget drops a closed session's cursor. Nothing will ask about its transcript
-// again, and a card is closed far more often than lich is.
-func (c *saidCursors) forget(id string) {
-	c.mu.Lock()
-	delete(c.at, id)
-	c.mu.Unlock()
+	var answer string
+	c.cursors.under(id, info, func(cur *transcriptCursor[string], fresh bool) {
+		lines, end := readLines(f, cur.offset, info.Size())
+		text, found := lastSaid(lines, read)
+		// A tail holding no prose at all is the one case worth a full walk: it
+		// takes a single tool result larger than the bound, and the words behind
+		// it are exactly the turn the band exists to catch up on. Once per
+		// session: the cursor lands at the end of the file either way, and the
+		// panel this pays for is one somebody just opened.
+		if !found && fresh && cur.offset > 0 {
+			lines, end = readLines(f, 0, info.Size())
+			text, found = lastSaid(lines, read)
+		}
+		cur.info, cur.offset = info, end
+		if found {
+			cur.value = text
+		}
+		answer = cur.value
+	})
+	return answer
 }
 
 // readLines returns the complete lines between start and the end of an open

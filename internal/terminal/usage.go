@@ -52,27 +52,64 @@ type usageEvent struct {
 // transcript, an unreadable or half-written file — so the readout keeps its last
 // value instead of flickering.
 func (s *Service) emitUsage(id string) {
-	if event, ok := s.sessionUsage(id); ok {
+	if src, ok := s.transcriptSource(id); ok {
+		s.emitUsageFrom(id, src)
+	}
+}
+
+// emitUsageFrom is emitUsage once the transcript behind it is known.
+func (s *Service) emitUsageFrom(id string, src usageSource) {
+	if event, ok := s.usageFrom(id, src); ok {
 		s.hub.Emit(usageEventName, event)
 	}
+}
+
+// emitReadouts pushes both readouts a state report refreshes, off one
+// resolution of the transcript they are read from: the context window and cost,
+// then the agent's own task list. Called on the hook's own path (in a goroutine
+// of its own, since a stalled emit must never hold the agent's next step up),
+// and silent on every miss so a readout keeps its last value rather than
+// flickering.
+func (s *Service) emitReadouts(id string) {
+	src, ok := s.transcriptSource(id)
+	if !ok {
+		return
+	}
+	s.emitUsageFrom(id, src)
+	s.emitTodo(id, src)
 }
 
 // sessionUsage resolves the event emitUsage would push for session id, or
 // ok=false for every miss the doc above lists. Split from the emit so the
 // resolution is testable without a connected window — pollCwd's pattern.
 func (s *Service) sessionUsage(id string) (usageEvent, bool) {
-	providerSessionID, err := s.store.ProviderSession(id)
-	if err != nil {
-		slog.Warn("terminal: read provider session", "session", id, "err", err)
-		return usageEvent{}, false
-	}
-	if providerSessionID == "" {
-		return usageEvent{}, false
-	}
-	src, ok := usageSourceFor(providerSessionID, s.spawnOf(id).cwd)
+	src, ok := s.transcriptSource(id)
 	if !ok {
 		return usageEvent{}, false
 	}
+	return s.usageFrom(id, src)
+}
+
+// transcriptSource resolves the conversation a session is running: its recorded
+// provider session, then the file that provider files it in. false for a
+// session with no provider id yet and for a provider lich cannot read.
+//
+// Every readout taken off a transcript goes through here, so a report that
+// feeds two of them resolves once rather than once each (see emitReadouts).
+func (s *Service) transcriptSource(id string) (usageSource, bool) {
+	providerSessionID, err := s.store.ProviderSession(id)
+	if err != nil {
+		slog.Warn("terminal: read provider session", "session", id, "err", err)
+		return usageSource{}, false
+	}
+	if providerSessionID == "" {
+		return usageSource{}, false
+	}
+	return usageSourceFor(providerSessionID, s.spawnOf(id).cwd)
+}
+
+// usageFrom is sessionUsage once the transcript behind it is known.
+func (s *Service) usageFrom(id string, src usageSource) (usageEvent, bool) {
 	u, ok, supported := contextUsageFor(src)
 	// A provider whose window lich can read but has not read yet — a transcript
 	// still being written, a conversation before its first assistant line — keeps

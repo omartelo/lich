@@ -246,6 +246,44 @@ export function toInboxCount(data: unknown): number {
   return Math.floor(count)
 }
 
+// Global event the backend emits when a session's agent moved through the task
+// list it wrote for itself (see terminal.todoEventName). Payload:
+// { id, done, total }, the whole list either way, so the rule for what is worth
+// drawing lives on the card rather than in the backend.
+//
+// Only Claude Code writes a list lich can read (terminal.todoReaderFor names
+// what every other provider does instead), and it carries what the agent last
+// wrote rather than what is true: a list abandoned unfinished keeps its count.
+export const TODO_EVENT = "session-todo"
+
+// A session's progress through its agent's task list.
+export interface SessionTodo {
+  done: number
+  total: number
+}
+
+// The shortest list worth a line on the card. An agent that writes a single
+// item is narrating what it is doing, which the tool line already says.
+const MIN_TODO_ITEMS = 2
+
+// toSessionTodo narrows a todo payload to a list worth drawing, or null for
+// everything else: a malformed payload, a shape from another build, a list too
+// short to be a plan, and a finished list, whose count is over and would
+// otherwise sit on the card as news forever.
+export function toSessionTodo(data: unknown): SessionTodo | null {
+  const { done, total } = (data ?? {}) as { done?: unknown; total?: unknown }
+  if (typeof done !== "number" || typeof total !== "number") {
+    return null
+  }
+  if (!Number.isFinite(done) || !Number.isFinite(total)) {
+    return null
+  }
+  if (total < MIN_TODO_ITEMS || done < 0 || done >= total) {
+    return null
+  }
+  return { done: Math.floor(done), total: Math.floor(total) }
+}
+
 // session-touched carries only a session id.
 export function isIdEvent(data: unknown): data is { id: string } {
   return (

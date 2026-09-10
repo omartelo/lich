@@ -34,7 +34,7 @@ import { createElement, useEffect } from "react"
 import { HashRouter } from "react-router-dom"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 import { ProjectsContext, type ProjectsValue } from "@/providers/projects-context"
-import { STATUS_EVENT, USAGE_EVENT } from "@/lib/session/session-events"
+import { STATUS_EVENT, TODO_EVENT, USAGE_EVENT } from "@/lib/session/session-events"
 
 // The /events channel, as the app sees it: the stores subscribe at import, and a
 // test publishes to the same registry the backend socket would. Mocked rather
@@ -267,6 +267,35 @@ test("a status event repaints that session's card and nothing else", async () =>
   // s2 is a background card: the sidebar, the two cards beside it and the footer
   // are all absent, which is the invariant.
   expect(budget.take()).toEqual({ "SessionCard#s2": 1, ...CARD_CHROME })
+  await budget.unmount()
+})
+
+test("a todo event repaints that session's card and nothing else", async () => {
+  const budget = await mountSidebar()
+  await budget.act(() => bus.emit(TODO_EVENT, { id: "s2", done: 3, total: 7 }))
+  expect(budget.take()).toEqual({ "SessionCard#s2": 1, ...CARD_CHROME })
+  await budget.unmount()
+})
+
+// Not a budget: the rung itself. The count draws on a card that has gone quiet
+// and never on one mid-turn, where the tool line is what says the session is
+// moving, and this file is where a card is mounted for real (the rest of the
+// gate is node-only, so a throw in that branch would pass everywhere else).
+test("the task list draws on a quiet card and never on a busy one", async () => {
+  const budget = await mountSidebar()
+  await budget.act(() => {
+    bus.emit(STATUS_EVENT, { id: "s2", state: "busy", tool: "Edit", detail: "SessionCard.tsx" })
+    bus.emit(TODO_EVENT, { id: "s2", done: 3, total: 7 })
+  })
+  expect(document.body.textContent).toContain("Edit")
+  expect(document.body.textContent).not.toContain("3 of 7")
+
+  await budget.act(() => bus.emit(STATUS_EVENT, { id: "s2", state: "done" }))
+  expect(document.body.textContent).toContain("3 of 7 done")
+
+  // A finished list is an answer, not news.
+  await budget.act(() => bus.emit(TODO_EVENT, { id: "s2", done: 7, total: 7 }))
+  expect(document.body.textContent).not.toContain("7 of 7")
   await budget.unmount()
 })
 

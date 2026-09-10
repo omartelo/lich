@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reopens on its own. A failure says which of the two it died in and how far
   the download got, and offers Retry.
 
+- **A finished card says how much its agent stopped short of.** When a Claude
+  Code session ends a turn with an unfinished task list of its own, its card
+  reads "3 of 7 done" on the line that already carries what the session is up
+  to. It draws only while the card is quiet, so nothing takes the line from the
+  tool a running turn is in, and it goes away when the list is finished. No
+  other provider writes a list lich can read, so no other card grows a line.
+
 ### Changed
 
 - **Two baked prices corrected.** An offline install billed Claude 3 Haiku's
