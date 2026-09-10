@@ -64,17 +64,9 @@ func main() {
 		os.Exit(code)
 	}
 
-	// --shell is carried in the environment rather than passed down: the
-	// restart successor inherits it (it is re-executed with no arguments), and
-	// `lich doctor` then reports the window a launch here would really open.
 	// Everything after `--` is the window's.
 	pinnedShell, chromiumArgs := chromium.ParseFlags(os.Args[1:])
-	if pinnedShell != "" {
-		if err := os.Setenv(chromium.OverrideEnv, pinnedShell); err != nil {
-			slog.Error("set "+chromium.OverrideEnv, "err", err)
-			os.Exit(1)
-		}
-	}
+	pinShellFlag(pinnedShell)
 
 	configDir, err := os.UserConfigDir()
 	if err != nil {
@@ -98,26 +90,7 @@ func main() {
 		defer closer.Close()
 	}
 
-	// Snapshot before any env tweaks: spawned terminal sessions must inherit
-	// what the user launched lich with (see terminal.childEnv). ResolveShellEnv
-	// recovers the rc-exported vars a GUI launch misses (see its doc). The
-	// snapshot is kept because a re-check resolves from it again, exactly as
-	// this line does (providers.Service.RefreshPath).
-	launchEnv := os.Environ()
-	env := terminal.ResolveShellEnv(launchEnv)
-	// The slice above is what children inherit; exec.LookPath reads the process
-	// PATH instead, so the resolved one has to land there too (see PinPath).
-	terminal.PinPath(env)
-
-	// Pinned in the environment, not just resolved: the restart successor and
-	// every spawned session inherit it, so they all agree on the origin the
-	// page's localStorage is keyed by (singleton.DefaultPort).
-	if os.Getenv("LICH_LISTEN_PORT") == "" {
-		if err := os.Setenv("LICH_LISTEN_PORT", strconv.Itoa(singleton.DefaultPort)); err != nil {
-			slog.Error("set LICH_LISTEN_PORT", "err", err)
-			os.Exit(1)
-		}
-	}
+	launchEnv, env := resolveEnv()
 
 	db, err := store.New()
 	if err != nil {
@@ -134,6 +107,62 @@ func main() {
 	// session was worked in this run is still in memory until something writes
 	// it (internal/terminal.handsOn).
 	defer term.FlushHandsOn()
+	coord := registerServices(db, term, hub, configDir, logPath, env, launchEnv)
+
+	term.SetRestart(coord.Do)
+
+	runChromium(term, configDir, chromiumArgs, coord)
+}
+
+// pinShellFlag carries --shell in the environment rather than passing it down:
+// the restart successor inherits it (it is re-executed with no arguments), and
+// `lich doctor` then reports the window a launch here would really open.
+func pinShellFlag(pinnedShell string) {
+	if pinnedShell == "" {
+		return
+	}
+	if err := os.Setenv(chromium.OverrideEnv, pinnedShell); err != nil {
+		slog.Error("set "+chromium.OverrideEnv, "err", err)
+		os.Exit(1)
+	}
+}
+
+// resolveEnv returns the environment lich was launched in and the one its
+// children get, and pins the listener port into both.
+//
+// The launch environment is snapshotted before any tweak, because spawned
+// terminal sessions must inherit what the user launched lich with (see
+// terminal.childEnv) and because a re-check resolves from it again, exactly as
+// this does (providers.Service.RefreshPath). ResolveShellEnv recovers the
+// rc-exported vars a GUI launch misses (see its doc); its slice is what
+// children inherit, and exec.LookPath reads the process PATH instead, so the
+// resolved one has to land there too (see PinPath).
+//
+// The port is pinned rather than only resolved so the restart successor and
+// every spawned session agree on the origin the page's localStorage is keyed by
+// (singleton.DefaultPort).
+func resolveEnv() (launchEnv, env []string) {
+	launchEnv = os.Environ()
+	env = terminal.ResolveShellEnv(launchEnv)
+	terminal.PinPath(env)
+	if os.Getenv("LICH_LISTEN_PORT") == "" {
+		if err := os.Setenv("LICH_LISTEN_PORT", strconv.Itoa(singleton.DefaultPort)); err != nil {
+			slog.Error("set LICH_LISTEN_PORT", "err", err)
+			os.Exit(1)
+		}
+	}
+	return launchEnv, env
+}
+
+// registerServices wires every service the window reaches over the loopback RPC,
+// in the order main built them: a service that hands another one a callback has
+// to exist first. It is lifted out of main only for its length; nothing here
+// runs anywhere else.
+//
+// It returns the restart coordinator because the terminal takes it after the
+// mounts below, and main is where the run ends.
+func registerServices(db *store.Service, term *terminal.Service, hub *events.Hub,
+	configDir, logPath string, env, launchEnv []string) *restart.Coordinator {
 	proj := project.New(project.ZenityPicker{})
 	// gh has one active account per host; a project can name a different one.
 	proj.SetAccounts(db.GHAccountForPath)
@@ -257,10 +286,7 @@ func main() {
 	term.Mount("/rpc/", dispatcher)
 	term.Mount("/drop", http.HandlerFunc(drops.Upload))
 	term.Mount("/events", hub)
-
-	term.SetRestart(coord.Do)
-
-	runChromium(term, configDir, chromiumArgs, coord)
+	return coord
 }
 
 // denyInternal hides the methods that exist for Go callers inside this process
