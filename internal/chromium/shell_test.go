@@ -2,6 +2,7 @@ package chromium
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -186,5 +187,21 @@ func TestFindShellResolvesASymlinkedBinary(t *testing.T) {
 
 	if got := findShell(link, os.Stat); got != window {
 		t.Fatalf("findShell = %q, want %q", got, window)
+	}
+}
+
+// The switch is a bare literal on both sides of a language boundary: nothing
+// links a Go const to a Rust match arm, so renaming one leaves the window
+// reading a stdin nobody closes and lich holding a pipe nobody reads. The
+// launcher itself is a documented coverage exception, which leaves this as the
+// only thing that fails when the two drift.
+func TestExitOnStdinEOFIsTheSwitchTheWindowParses(t *testing.T) {
+	src, err := os.ReadFile(filepath.Join("..", "..", "shell", "src", "main.rs"))
+	if err != nil {
+		t.Skipf("window source unavailable: %v", err) // an install, not a checkout
+	}
+	arm := fmt.Sprintf("%q =>", strings.TrimPrefix(exitOnStdinEOF, "--"))
+	if !strings.Contains(string(src), arm) {
+		t.Fatalf("shell/src/main.rs has no %s arm for %s", arm, exitOnStdinEOF)
 	}
 }
