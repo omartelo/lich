@@ -304,6 +304,8 @@ type ForfeitedSchedule struct {
 // forfeitClock is how a forfeit notice spells the time the prompt was due:
 // local, to the minute, with the date. The log line beside it keeps RFC3339 —
 // that one is read by whoever is grepping, this one by whoever is at the desk.
+// Its twin is internal/relay (later.go), which spells a deadline the same way
+// for the same reader.
 const forfeitClock = "2006-01-02 15:04"
 
 // Notice words one forfeit for a desktop notification: the headline names the
