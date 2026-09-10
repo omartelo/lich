@@ -94,4 +94,27 @@ func TestDescribeLeavesBinaryDirsUnnamed(t *testing.T) {
 	if slices.Contains(spec.SkippedLinks, ".tools") {
 		t.Errorf("a binary directory was named as skipped: %v", spec.SkippedLinks)
 	}
+	// The other half of the same pass: exempt from being named is not exempt
+	// from the rule, or the spawn dies on the mount bubblewrap resolves through.
+	if slices.Contains(spec.Read, filepath.Join(home, ".tools")) {
+		t.Errorf("a symlinked binary directory was mounted: %v", spec.Read)
+	}
+}
+
+// The writable list runs the same rule: a build cache answered by a link is
+// dropped from the mounts and named, exactly as a read-only dotfile is.
+func TestDescribeNamesSkippedLinksInTheWritableList(t *testing.T) {
+	clearHarnessEnv(t)
+	home := t.TempDir()
+	link(t, home, filepath.Join(".cargo", "registry"))
+
+	spec := Describe(providers.Claude, home, filepath.Join(home, "checkout"), "", nil, false)
+
+	if slices.Contains(spec.Write, filepath.Join(home, ".cargo", "registry")) {
+		t.Errorf("a symlinked cache was mounted writable: %v", spec.Write)
+	}
+	want := filepath.Join(".cargo", "registry")
+	if !slices.Contains(spec.SkippedLinks, want) {
+		t.Errorf("SkippedLinks = %v, want it to name %s", spec.SkippedLinks, want)
+	}
 }
