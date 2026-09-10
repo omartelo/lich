@@ -93,8 +93,9 @@ export function FooterBar({ dock, onDock }: FooterBarProps) {
       }
       // Composed the way a drop is: quoted, so a path with a space stays one
       // argument, bracketed, so the prompt takes it unsent, and carrying the
-      // backend's line when the path is a copy's.
-      const paste = composeDroppedPaths([file], isWindows, notice ? [notice] : [])
+      // backend's line when the path is a copy's — empty when it is not, which
+      // composeDroppedPaths drops for the drag path too.
+      const paste = composeDroppedPaths([file], isWindows, [notice])
       void TerminalService.Write(sessionId, paste)
     } catch (err) {
       // The backend's own sentence when it has one — it names the ceiling a

@@ -61,6 +61,8 @@ Filename: "{app}\{#AppExe}"; Flags: nowait runascurrentuser; Check: IsUpdate
 const
   SynchronizeAccess = $00100000;
   WaitObject0 = 0;
+  { Budget for lich to close its window and flush its database. Past it the
+    update aborts rather than replacing files a live process still holds. }
   ShutdownTimeout = 60000;
 
 function OpenProcess(Access: LongWord; Inherit: Boolean; PID: LongWord): THandle;

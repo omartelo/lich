@@ -103,6 +103,9 @@ func (s *Service) deliverDue() {
 // scheduleClock is how the notice spells the moment a prompt was parked for:
 // local time, to the minute, with the date — an overdue prompt is often days
 // old, and a clock alone would say nothing about which day it was meant for.
+//
+// store.forfeitClock is the same layout for the same reason, on the other half
+// of a parked prompt's life. The two are read side by side and move together.
 const scheduleClock = "2006-01-02 15:04"
 
 // lateNotice is the line put in front of a prompt that missed its time, and ""
@@ -128,13 +131,16 @@ func lateNotice(at, now int64) string {
 // "2d". The same three rungs the card counts down on (frontend, timeUntil): the
 // reader wants the scale, and a prompt that is two days late is not helped by
 // the minutes on the end of it.
+//
+// The rung is picked off the rounded figure, not the raw one: 59m40s is under
+// the hour but rounds to 60 minutes, and printing that in minutes puts a "60m"
+// on the card no clock ever shows.
 func lateBy(d time.Duration) string {
-	switch {
-	case d < time.Hour:
-		return fmt.Sprintf("%dm", int(d.Round(time.Minute)/time.Minute))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh", int(d.Round(time.Hour)/time.Hour))
-	default:
-		return fmt.Sprintf("%dd", int(d.Round(24*time.Hour)/(24*time.Hour)))
+	if minutes := d.Round(time.Minute); minutes < time.Hour {
+		return fmt.Sprintf("%dm", int(minutes/time.Minute))
 	}
+	if hours := d.Round(time.Hour); hours < 24*time.Hour {
+		return fmt.Sprintf("%dh", int(hours/time.Hour))
+	}
+	return fmt.Sprintf("%dd", int(d.Round(24*time.Hour)/(24*time.Hour)))
 }

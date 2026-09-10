@@ -181,6 +181,34 @@ func TestDeletingASessionReportsTheForfeitedSchedule(t *testing.T) {
 	}
 }
 
+// The store holds a single connection, so a report raised while the read that
+// found it is still walking its rows waits for a connection that read will not
+// give back. What SetScheduleForfeited wires is a websocket write and a desktop
+// notification, both free to read the store: this callback does, and would hang
+// the delete if the cursor were still open.
+func TestForfeitIsReportedAfterTheReadIsDone(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "base", "Session 1", "claude", "", 2, "")
+	_ = svc.AddSession("p1", "wt1", "worker", "claude", "/wt/foo", 3, "")
+	_ = svc.SetSessionSchedule("wt1", 1700000000, "run the release checklist")
+
+	read := make(chan bool, 1)
+	svc.SetScheduleForfeited(func(ForfeitedSchedule) { read <- svc.SessionExists("wt1") })
+
+	done := make(chan error, 1)
+	go func() { done <- svc.DeleteSession("p1", "wt1", "base") }()
+
+	select {
+	case <-read:
+	case <-time.After(5 * time.Second):
+		t.Fatal("a report that reads the store never returned: the rows are still open")
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("DeleteSession: %v", err)
+	}
+}
+
 // The desktop channel is what reaches a forfeit nobody was at the window for,
 // and it has two lines to say it in (internal/system, Notify): the session in
 // the headline, the prompt and its time under it.

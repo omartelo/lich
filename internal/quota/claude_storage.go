@@ -53,11 +53,17 @@ func readClaudeFile(a Account) (claudeCredentials, string) {
 	if os.IsNotExist(err) {
 		return creds, StatusSignedOut
 	}
-	if err != nil || json.Unmarshal(data, &creds) != nil {
+	// A file lich is not allowed to open is the one case it cannot answer for:
+	// the login may well be good behind those permissions.
+	if err != nil {
 		return creds, StatusUnknown
 	}
-	if creds.OAuth.AccessToken == "" {
-		return creds, StatusSignedOut
+	// A file that parses to no token is a login the user has to redo, exactly
+	// like no file at all: a half-written or truncated credentials file is the
+	// common shape of that, and "Run `claude login`" is the instruction it
+	// needs. Same answer codexPlan gives for the same file (codex.go).
+	if json.Unmarshal(data, &creds) != nil || creds.OAuth.AccessToken == "" {
+		return claudeCredentials{}, StatusSignedOut
 	}
 	return creds, StatusOK
 }

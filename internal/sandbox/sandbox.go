@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/omartelo/lich/internal/providers"
@@ -238,50 +239,11 @@ func Describe(providerID, home, cwd, gitCommon string, extraRead []string, sshAg
 	if sshAgent {
 		read = append(read, AgentSocket(), knownHosts(home))
 	}
-	// Over this package's own two lists and not extraRead: the binaries are the
-	// exception to the symlink rule (BinaryDirs walks their chains), so naming
-	// one would report a link that is in fact mounted.
-	spec.SkippedLinks = skippedLinks(home, write, read)
-	spec.Write = existing(write)
-	spec.Read = existing(append(read, extraRead...))
+	m := mounts{home: home}
+	spec.Write = m.keep(write)
+	spec.Read = m.keep(read, extraRead)
+	spec.SkippedLinks = m.links
 	return spec
-}
-
-// skippedLinks names the paths existing is about to drop for being symlinks,
-// relative to home — the dotfiles a confined session will not find where it
-// expects them, so the card can say which ones rather than leave a
-// ~/.gitconfig quietly absent.
-//
-// Only paths under home are named. Everything else in a Spec is either not a
-// link by construction (the display socket and the ssh agent are checked as
-// sockets) or is one on purpose, and a path outside the home has no short name
-// a person reading a tooltip would recognise.
-//
-// A path that is not there at all says nothing: a machine without Rust has no
-// ~/.cargo, and its absence is not news. Duplicates are dropped and order is
-// kept, so the line reads in the order the profile lists them.
-func skippedLinks(home string, lists ...[]string) []string {
-	prefix := home + string(filepath.Separator)
-	seen := make(map[string]bool)
-	var out []string
-	for _, list := range lists {
-		for _, path := range list {
-			if !strings.HasPrefix(path, prefix) {
-				continue
-			}
-			name := path[len(prefix):]
-			if seen[name] {
-				continue
-			}
-			info, err := os.Lstat(path)
-			if err != nil || info.Mode()&os.ModeSymlink == 0 {
-				continue
-			}
-			seen[name] = true
-			out = append(out, name)
-		}
-	}
-	return out
 }
 
 // Backend names what confines a session on this machine, or "" when nothing can.
@@ -400,8 +362,11 @@ func under(base string, names []string) []string {
 	return out
 }
 
-// existing drops duplicates, paths that are not on disk, and symlinks. Order is
-// kept: a backend that mounts in order needs the parent before the child.
+// mounts is the single pass over the paths a Spec mounts. Both of its answers
+// come out of the one Lstat: what a backend binds, and the names of the links
+// that Lstat refused. Two passes over the same lists would be two copies of one
+// decision, free to drift the day the rule takes in something other than
+// symlinks.
 //
 // Symlinks are refused rather than followed, for two reasons that point the same
 // way. A link under a directory this list already mounts is a mount destination
@@ -413,23 +378,66 @@ func under(base string, names []string) []string {
 // whatever the user's dotfile manager happens to point at.
 //
 // The cost is real and deliberate: a `~/.gitconfig` symlinked out of a dotfiles
-// repository is not in a confined session. What it is not is silent — the same
-// pass names them (skippedLinks) and the card says which ones are missing. The
-// binaries the session runs are the exception, and they are handled by mounting
-// directories instead (BinaryDirs).
-func existing(paths []string) []string {
-	seen := make(map[string]bool, len(paths))
-	out := make([]string, 0, len(paths))
-	for _, path := range paths {
-		if path == "" || seen[path] {
-			continue
+// repository is not in a confined session. What it is not is silent — links is
+// what the card reads to say which ones are missing.
+type mounts struct {
+	home string
+	// links names the refused paths relative to home, in the order the profile
+	// lists them, without duplicates.
+	links []string
+}
+
+// keep filters one of the Spec's lists, dropping duplicates, paths that are not
+// on disk and symlinks. Order is kept: a backend that mounts in order needs the
+// parent before the child.
+//
+// exempt lists are filtered the same way but never reach links. That is the
+// binaries: their symlink chains are walked and every hop's directory is mounted
+// (BinaryDirs), so naming one would report a link that is in fact mounted. They
+// go through this call rather than one of their own because deduplication has to
+// span them and the list they extend.
+func (m *mounts) keep(named []string, exempt ...[]string) []string {
+	seen := make(map[string]bool, len(named))
+	out := make([]string, 0, len(named))
+	filter := func(paths []string, name bool) {
+		for _, path := range paths {
+			if path == "" || seen[path] {
+				continue
+			}
+			seen[path] = true
+			info, err := os.Lstat(path)
+			if err != nil {
+				continue
+			}
+			if info.Mode()&os.ModeSymlink != 0 {
+				if name {
+					m.nameLink(path)
+				}
+				continue
+			}
+			out = append(out, path)
 		}
-		seen[path] = true
-		info, err := os.Lstat(path)
-		if err != nil || info.Mode()&os.ModeSymlink != 0 {
-			continue
-		}
-		out = append(out, path)
+	}
+	filter(named, true)
+	for _, list := range exempt {
+		filter(list, false)
 	}
 	return out
+}
+
+// nameLink records a refused path for the card, under the short name a person
+// reading a tooltip would recognise.
+//
+// Only paths under home get one. Everything else in a Spec is either not a link
+// by construction (the display socket and the ssh agent are checked as sockets)
+// or is one on purpose, and a path outside the home has no such name.
+func (m *mounts) nameLink(path string) {
+	prefix := m.home + string(filepath.Separator)
+	if !strings.HasPrefix(path, prefix) {
+		return
+	}
+	name := path[len(prefix):]
+	if !slices.Contains(m.links, name) {
+		m.links = append(m.links, name)
+	}
 }

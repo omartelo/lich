@@ -56,6 +56,26 @@ func TestSessionExistsSpansParkedRows(t *testing.T) {
 	}
 }
 
+// A read that cannot be made is not a row that is gone: internal/drop deletes
+// on a false, and answering one for a store that is merely unreadable would
+// take a live session's dropped files with it.
+func TestSessionExistsFailsOpenOnAnUnreadableStore(t *testing.T) {
+	svc := newTestStore(t)
+	if err := svc.AddProject("p1", "alpha", "/tmp/alpha"); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if err := svc.AddSession("p1", "s1", "one", providers.Claude, "", 0, ""); err != nil {
+		t.Fatalf("AddSession: %v", err)
+	}
+	if err := svc.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	if !svc.SessionExists("s1") {
+		t.Error("a store that cannot be read reads as a session that is gone")
+	}
+}
+
 func TestLoadStateRestoresOpenProjectsAndSessions(t *testing.T) {
 	svc := newTestStore(t)
 
@@ -396,6 +416,33 @@ func TestSetSessionTitleRespectsManualRename(t *testing.T) {
 	}
 	if got := mustLoadSessions(t, svc)[0].Label; got != "my build" {
 		t.Errorf("manual label was stomped: %q", got)
+	}
+}
+
+// The Stop hook re-reports the same derived title on every turn for providers
+// that never change it. An unchanged label is not applied, so the caller does
+// not take the write lock and push a UI update per turn.
+func TestSetSessionTitleReportsAnUnchangedLabelUnapplied(t *testing.T) {
+	svc := newTestStore(t)
+	_ = svc.AddProject("p1", "alpha", "/tmp/alpha")
+	_ = svc.AddSession("p1", "s1", "Session 1", "", "", 2, "")
+
+	applied, err := svc.SetSessionTitle("s1", "Fixing the auth bug")
+	if err != nil {
+		t.Fatalf("SetSessionTitle: %v", err)
+	}
+	if !applied {
+		t.Fatal("the first title = false, want true")
+	}
+	applied, err = svc.SetSessionTitle("s1", "Fixing the auth bug")
+	if err != nil {
+		t.Fatalf("SetSessionTitle again: %v", err)
+	}
+	if applied {
+		t.Fatal("the same title again = true, want false")
+	}
+	if got := mustLoadSessions(t, svc)[0].Label; got != "Fixing the auth bug" {
+		t.Errorf("label = %q, want the title still on the row", got)
 	}
 }
 

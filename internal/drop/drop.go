@@ -49,6 +49,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/omartelo/lich/internal/rpc"
 
@@ -460,8 +461,23 @@ func (s *Service) copyIn(sessionID, path string) (string, error) {
 // name, a session id off the query — reduced to its last element so it can only
 // ever name something inside the copies directory. Empty when nothing usable is
 // left, which the callers refuse.
+//
+// The control characters go first because the name leaves again in copyNotice,
+// which the page writes into the session's terminal inside a bracketed paste:
+// an ESC of the name's own closes that paste early and every byte after it
+// arrives as keystrokes the agent runs, and a bare newline forges a line of
+// lich's own at the prompt. They are replaced rather than refused so a file
+// still reaches the session it was dropped on — the name it lands under is
+// worth less than the drop — and replaced rather than dropped so no pair of
+// them can close up into the ".." this function exists to refuse.
 func element(raw string) string {
-	name := filepath.Base(filepath.FromSlash(raw))
+	safe := strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return '_'
+		}
+		return r
+	}, raw)
+	name := filepath.Base(filepath.FromSlash(safe))
 	if name == "." || name == ".." || name == string(filepath.Separator) {
 		return ""
 	}

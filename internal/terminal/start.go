@@ -186,15 +186,26 @@ func (s *Service) spawnSession(
 	// Outside mu's protection by design (see Service.spawns), and stored with the
 	// registration so no report can arrive for a session whose kind is unknown.
 	s.spawns.Store(id, spawn{kind: kind, cwd: cwd})
-	// Written the way stream writes the PTY's own bytes, and before the reader
-	// that would race it: into the replay so a reload still finds the line, and
-	// through the coalescer so an attached window has it now.
-	if skipped != "" {
-		sess.replay.append([]byte(skipped))
-		sess.out.Write([]byte(skipped))
-	}
+	sess.announce(skipped)
 	go s.stream(id, sess)
 	return sess, cwd, nil
+}
+
+// announce puts a line lich wrote itself into a session, the way stream puts
+// the PTY's own bytes there and before the reader that would race it: into the
+// replay so a reload still finds it, and through the coalescer so an attached
+// window has it now. Nothing to say writes nothing.
+//
+// Its one caller is the setup-skipped notice (setupSkippedNotice), whose
+// composition is a Windows answer and whose delivery is not: kept apart so the
+// delivery is exercised wherever the suite runs, rather than only where the
+// notice is non-empty.
+func (sess *session) announce(line string) {
+	if line == "" {
+		return
+	}
+	sess.replay.append([]byte(line))
+	sess.out.Write([]byte(line))
 }
 
 // providerKind resolves which provider mark a session-start report puts on a

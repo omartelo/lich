@@ -89,6 +89,39 @@ func TestClaudeFileUsesSecureStorageOnWindowsAndLinux(t *testing.T) {
 	}
 }
 
+// A credentials file that carries no usable token answers signed out, which is
+// the instruction that fixes it; only a file lich may not open stays unknown.
+func TestClaudeFileWithoutAUsableTokenIsSignedOut(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+	}{
+		{"truncated", ""},
+		{"malformed", "{not json"},
+		{"no token", `{"claudeAiOauth":{"subscriptionType":"max"}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a := Account{Read: true, Env: map[string]string{claudeDirVar: credsDir(t, tc.body)}}
+			creds, status := readClaudeFile(a)
+			if status != StatusSignedOut || creds.OAuth.AccessToken != "" {
+				t.Fatalf("status = %q, want %q", status, StatusSignedOut)
+			}
+		})
+	}
+}
+
+func TestUnopenableClaudeFileStaysUnknown(t *testing.T) {
+	// A directory in the credentials file's place fails os.ReadFile for every
+	// uid, which a mode-000 file does not do for root.
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, ".credentials.json"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	a := Account{Read: true, Env: map[string]string{claudeDirVar: dir}}
+	if _, status := readClaudeFile(a); status != StatusUnknown {
+		t.Fatalf("status = %q, want %q", status, StatusUnknown)
+	}
+}
+
 func TestUnreadableDefaultSessionIsAlsoUnknown(t *testing.T) {
 	writeCreds(t, claudeCredsJSON, codexCredsJSON)
 	s := newService("", "", time.Now())

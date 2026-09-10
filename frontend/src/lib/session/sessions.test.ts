@@ -1,44 +1,46 @@
 import { describe, expect, it } from "vitest"
 import {
-  forkableSession,
-  forkUnavailableReason,
   activeSessionId,
-  dragOrder,
   activeTarget,
   addSession,
   adoptSession,
   closeSession,
+  delegatesOf,
   dropClosedSession,
-  groupByWorktree,
+  forkableSession,
+  forkUnavailableReason,
   hasSession,
-  isLastWorktreeSession,
   isSessionKind,
-  neighborSessionId,
-  orderGroups,
-  PINNED_GROUP_KEY,
   projectOfSession,
-  ROOT_GROUP_KEY,
   removeProject,
   renameSession,
   reorderSessions,
-  reorderSubset,
   restoreSession,
   resumableSession,
-  runCardIn,
   sessionOrigin,
   sessionsOf,
   setActiveSession,
   setSessionEntrypoint,
-  setSessionPinned,
   setSessionMCPServers,
+  setSessionPinned,
   setSessionSandboxed,
   setSessionSchedule,
-  delegatesOf,
-  sidebarGroups,
   type Session,
   type SessionKind,
   type SessionState,
 } from "./sessions"
+import {
+  dragOrder,
+  groupByWorktree,
+  isLastWorktreeSession,
+  neighborSessionId,
+  orderGroups,
+  PINNED_GROUP_KEY,
+  reorderSubset,
+  ROOT_GROUP_KEY,
+  runCardIn,
+  sidebarGroups,
+} from "./sidebar-groups"
 
 const P = "project-1"
 
@@ -1193,6 +1195,20 @@ describe("setSessionSandboxed", () => {
     expect(next[P]?.sessions[0]?.sandboxed).toBeUndefined()
   })
 
+  it("records what the sandbox left out of the private home", () => {
+    const next = setSessionSandboxed(state(), "s1", true, [".gitconfig", ".ssh"])
+    expect(next[P]?.sessions[0]?.sandboxSkippedLinks).toEqual([".gitconfig", ".ssh"])
+    expect(next[P]?.sessions[1]?.sandboxSkippedLinks).toBeUndefined()
+  })
+
+  it("clears the names when a respawn skips nothing", () => {
+    const skipped = setSessionSandboxed(state(), "s1", true, [".gitconfig"])
+    const next = setSessionSandboxed(skipped, "s1", true, [])
+    expect(next[P]?.sessions[0]?.sandboxed).toBe(true)
+    const session = next[P]?.sessions[0]
+    expect(session && "sandboxSkippedLinks" in session).toBe(false)
+  })
+
   // The event fires on every spawn, so an unchanged answer has to return the
   // same object: a new one re-renders every card in the project for nothing.
   it("returns the same state when nothing changed", () => {
@@ -1200,11 +1216,24 @@ describe("setSessionSandboxed", () => {
     expect(setSessionSandboxed(current, "s1", false)).toBe(current)
     const confined = setSessionSandboxed(current, "s1", true)
     expect(setSessionSandboxed(confined, "s1", true)).toBe(confined)
+    const skipped = setSessionSandboxed(current, "s1", true, [".gitconfig"])
+    expect(setSessionSandboxed(skipped, "s1", true, [".gitconfig"])).toBe(skipped)
+  })
+
+  // Both halves of the verdict move a card: the names alone changing is still a
+  // change, and the same name count is not the same list.
+  it("moves when only the skipped names changed", () => {
+    const current = state()
+    expect(setSessionSandboxed(current, "s1", true, [".gitconfig"])).not.toBe(current)
+    const skipped = setSessionSandboxed(current, "s1", true, [".gitconfig"])
+    // Same length, different names - a comparison on length alone would miss it.
+    expect(setSessionSandboxed(skipped, "s1", true, [".ssh"])).not.toBe(skipped)
+    expect(setSessionSandboxed(skipped, "s1", true, [])).not.toBe(skipped)
   })
 
   it("ignores a session it does not know", () => {
     const current = state()
-    expect(setSessionSandboxed(current, "gone", true)).toBe(current)
+    expect(setSessionSandboxed(current, "gone", true, [".gitconfig"])).toBe(current)
   })
 })
 

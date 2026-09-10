@@ -6,12 +6,25 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 )
 
 // credsDir writes a Claude credentials file into a fresh directory and returns
 // the directory — the shape a session's own CLAUDE_CONFIG_DIR points at.
+// inheritedEnv is the account environment of a session spawned from lich: every
+// variable a reading turns on, with the values lich's own process carries.
+func inheritedEnv() map[string]string {
+	env := make(map[string]string, len(accountVars))
+	for _, name := range accountVars {
+		if value, defined := os.LookupEnv(name); defined {
+			env[name] = value
+		}
+	}
+	return env
+}
+
 func credsDir(t *testing.T, body string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -308,16 +321,24 @@ func TestAnApiKeyInLichOwnEnvironmentWithholdsTheReading(t *testing.T) {
 	}
 }
 
-func TestASessionWithNoEnvironmentOfItsOwnSharesTheMachineReading(t *testing.T) {
+// A session that inherited lich's own environment names the same login, and
+// must not cost a second request. Its Env is a real map: terminal.SessionAccount
+// reports Read as `env != nil`, so a readable session never carries a nil one.
+func TestASessionOnTheSameLoginSharesTheMachineReading(t *testing.T) {
 	writeCreds(t, claudeCredsJSON, "")
 	url, calls := serve(t, http.StatusOK, claudeLimitsBody)
 	s := newService(url, "", time.Now())
-	// A nil environment explicitly requests the machine-wide login.
-	s.SetSessions(func(string) Account { return Account{Read: true} })
+	s.SetSessions(func(string) Account { return Account{Read: true, Env: inheritedEnv()} })
 
-	s.Plans("")
-	s.Plans("session-1")
+	machine := s.Plans("")[0]
+	session := s.Plans("session-1")[0]
 
+	if machine.Status != StatusOK {
+		t.Fatalf("machine reading = %+v, want an ok one to share", machine)
+	}
+	if !reflect.DeepEqual(session, machine) {
+		t.Errorf("session reading = %+v, want the machine's %+v", session, machine)
+	}
 	if *calls != 1 {
 		t.Errorf("calls = %d, want 1: both readings are the same account", *calls)
 	}

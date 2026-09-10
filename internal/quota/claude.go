@@ -129,11 +129,7 @@ func (s *Service) claudePlan(a Account) Plan {
 	if token := a.lookup(claudeTokenVar); token != "" {
 		return s.claudeProbe(p, token)
 	}
-	readLogin := s.claudeLogin
-	if readLogin == nil {
-		readLogin = readClaudeCredentials
-	}
-	creds, status := readLogin(a)
+	creds, status := s.claudeLogin(a)
 	if status != StatusOK {
 		p.Status = status
 		return p

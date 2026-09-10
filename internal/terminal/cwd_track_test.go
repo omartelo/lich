@@ -250,3 +250,38 @@ func TestShellHostNamesOnlyKnownHosts(t *testing.T) {
 		}
 	}
 }
+
+// TestPollCwdSkipsAReadThatAnswersNothing pins the doc comment's own promise: a
+// read with neither a directory nor a host is the process on its way out, and
+// publishing it would blank the card's path line for the moment between the
+// exit and the card closing — a session's last visible state would be that it
+// is nowhere.
+func TestPollCwdSkipsAReadThatAnswersNothing(t *testing.T) {
+	readings := make(chan emitted, 4)
+	tick := make(chan time.Time)
+	done := make(chan struct{})
+	emits := make(chan emitted, 4)
+	go pollCwd("/repo", tick, done,
+		func() (string, string) { r := <-readings; return r.cwd, r.host },
+		func(cwd, host string) { emits <- emitted{cwd, host} })
+	t.Cleanup(func() { close(done) })
+
+	// The dead process, twice: nothing published either time.
+	readings <- emitted{"", ""}
+	tick <- time.Time{}
+	readings <- emitted{"", ""}
+	tick <- time.Time{}
+	select {
+	case e := <-emits:
+		t.Fatalf("a dead process was published as %+v", e)
+	default:
+	}
+
+	// And the skip left no trace: the next real move is still news, which it
+	// would not be had the empty read been taken as the last published state.
+	readings <- emitted{"/repo/sub", ""}
+	tick <- time.Time{}
+	if got := waitEmit(t, emits); got != (emitted{"/repo/sub", ""}) {
+		t.Errorf("emitted %+v, want the directory the session moved to", got)
+	}
+}

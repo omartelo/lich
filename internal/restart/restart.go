@@ -74,6 +74,10 @@ func (c *Coordinator) Install(installer string) error {
 	return c.launch(installer, installerArgs(filepath.Dir(c.exePath), os.Getpid()))
 }
 
+// installerArgs is half of a contract with build/windows/lich.iss. /UPDATEPID is
+// no Inno switch: the script reads it back as {param:UPDATEPID|0} to tell an
+// update from a fresh install and to wait for this process to release its exe.
+// Rename it on one side only and the installer stops waiting, silently.
 func installerArgs(dir string, pid int) []string {
 	return []string{"/SILENT", "/NORESTART", "/CLOSEAPPLICATIONS", "/NORESTARTAPPLICATIONS",
 		"/DIR=" + dir, "/UPDATEPID=" + strconv.Itoa(pid),

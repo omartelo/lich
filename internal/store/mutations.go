@@ -2,7 +2,6 @@ package store
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -166,46 +165,6 @@ func (s *Service) addSession(
 		}
 		return nil
 	})
-}
-
-// noteForfeitedSchedules reports every prompt still parked on a session about to
-// be deleted for good. A close parks the row and the schedule comes back with
-// the card (see reopen); a delete is the one exit where the prompt is lost
-// rather than delayed, and the row is the only copy of what the user wrote, so
-// this is the last place it exists. Read before the delete, because after it
-// there is nothing left to read.
-//
-// It reports twice, and neither is the other's fallback: the log line is the
-// record, and whatever SetScheduleForfeited wired is what puts it in front of
-// the person who parked the prompt — the card's menu is the only way to park
-// one, so that person is the user at the window.
-//
-// A failed read costs the report, never the delete: nothing here is allowed to
-// stand between the user and removing a session.
-func (s *Service) noteForfeitedSchedules(where string, args ...any) {
-	rows, err := s.db.Query(
-		`SELECT label, scheduled_at, scheduled_prompt
-		   FROM sessions WHERE scheduled_at != 0 AND `+where,
-		args...,
-	)
-	if err != nil {
-		slog.Warn("read schedules of deleted sessions", "err", err)
-		return
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var label, prompt string
-		var at int64
-		if err := rows.Scan(&label, &at, &prompt); err != nil {
-			slog.Warn("scan schedule of deleted session", "err", err)
-			return
-		}
-		slog.Warn("scheduled prompt forfeited with deleted session",
-			"session", label, "due", time.Unix(at, 0).Format(time.RFC3339), "prompt", prompt)
-		if s.scheduleForfeited != nil {
-			s.scheduleForfeited(ForfeitedSchedule{Label: label, At: at, Prompt: prompt})
-		}
-	}
 }
 
 // DeleteSession removes a session for good and sets the project's active session
@@ -569,10 +528,15 @@ func (s *Service) SetSessionUnread(sessionID string, unread bool) error {
 // RenameSession clears label_auto and makes this a no-op, so a user's own name
 // is never overwritten. Reports whether the label actually changed, so the
 // caller only pushes a UI update when it did.
+//
+// The label it already carries is excluded in SQL rather than compared here:
+// SQLite counts a row it processed even when the write changes nothing, and a
+// provider whose title is derived once and re-reported on every turn would
+// otherwise take the write lock and emit a title event per turn.
 func (s *Service) SetSessionTitle(sessionID, title string) (bool, error) {
 	res, err := s.db.Exec(
-		`UPDATE sessions SET label = ? WHERE id = ? AND label_auto = 1`,
-		title, sessionID,
+		`UPDATE sessions SET label = ? WHERE id = ? AND label_auto = 1 AND label != ?`,
+		title, sessionID, title,
 	)
 	if err != nil {
 		return false, fmt.Errorf("set session %q title: %w", sessionID, err)
@@ -657,38 +621,6 @@ func (s *Service) SetRunEntrypoint(sessionID, entrypoint string) error {
 		strings.TrimSpace(entrypoint), sessionID,
 	); err != nil {
 		return fmt.Errorf("set run entrypoint on %q: %w", sessionID, err)
-	}
-	return nil
-}
-
-// schedulePromptLimit bounds a scheduled prompt. It is typed into a TUI a
-// character at a time when it comes due — the same delivery a relayed message
-// gets, and the same reason that one is bounded (internal/relay, promptLimit):
-// a megabyte of it is a hang, not a prompt. Checked here rather than at
-// delivery so the person writing it is told while they can still shorten it.
-const schedulePromptLimit = 8192
-
-// SetSessionSchedule parks a prompt to be typed at a session later. at is unix
-// seconds; 0, or an empty prompt, clears whatever was there — there is nothing
-// else to cancel, because a session holds one scheduled prompt at a time and
-// scheduling again replaces it.
-//
-// A session whose row is gone matches nothing and is not an error: the schedule
-// belongs to the card, and a card that is gone has taken its schedule with it.
-func (s *Service) SetSessionSchedule(sessionID string, at int64, prompt string) error {
-	prompt = strings.TrimSpace(prompt)
-	if len(prompt) > schedulePromptLimit {
-		return fmt.Errorf("scheduled prompt is %d bytes, over the %d limit",
-			len(prompt), schedulePromptLimit)
-	}
-	if at <= 0 || prompt == "" {
-		at, prompt = 0, ""
-	}
-	if _, err := s.db.Exec(
-		`UPDATE sessions SET scheduled_at = ?, scheduled_prompt = ? WHERE id = ?`,
-		at, prompt, sessionID,
-	); err != nil {
-		return fmt.Errorf("set schedule on %q: %w", sessionID, err)
 	}
 	return nil
 }
@@ -860,60 +792,4 @@ func (s *Service) tx(fn func(*sql.Tx) error) error {
 		return fmt.Errorf("commit transaction: %w", err)
 	}
 	return nil
-}
-
-// SetSessionMCPServers records the MCP servers a session's provider could reach
-// at the spawn that just happened. The window divides a tool name against them
-// (frontend/src/lib/session/tool-label.ts), and the row is what a page reload
-// comes back to — the PTY is still running by then, so there is no second spawn
-// to report it again.
-//
-// An empty list clears the row rather than parking "[]": a session that reached
-// nothing and a session nobody has spawned read the same way, and both mean the
-// card shows a tool name whole.
-func (s *Service) SetSessionMCPServers(sessionID string, servers []string) error {
-	return s.setSessionList(sessionID, "mcp_servers", servers)
-}
-
-// SetSessionSandboxLinks records the home paths this session's sandbox skipped
-// for being symlinks, home-relative — what the card names as not mounted, so a
-// ~/.gitconfig symlinked out of a dotfiles repository is an absence the session
-// is told about rather than one it discovers by failing. Written by the spawn
-// that resolved them, and read back on hydration for the reason above: the PTY
-// outlives the page.
-func (s *Service) SetSessionSandboxLinks(sessionID string, links []string) error {
-	return s.setSessionList(sessionID, "sandbox_links", links)
-}
-
-// setSessionList writes a JSON array into one of the session's list columns.
-// column is a literal from the two callers above and never anything a caller
-// outside this file names.
-func (s *Service) setSessionList(sessionID, column string, values []string) error {
-	encoded := ""
-	if len(values) > 0 {
-		body, err := json.Marshal(values)
-		if err != nil {
-			return fmt.Errorf("encode %s for %q: %w", column, sessionID, err)
-		}
-		encoded = string(body)
-	}
-	if _, err := s.db.Exec(
-		fmt.Sprintf(`UPDATE sessions SET %s = ? WHERE id = ?`, column), encoded, sessionID,
-	); err != nil {
-		return fmt.Errorf("set %s on %q: %w", column, sessionID, err)
-	}
-	return nil
-}
-
-// decodeStrings reads back what setSessionList wrote. A row lich cannot parse
-// answers nil, which is the same answer an unspawned row gives.
-func decodeStrings(encoded string) []string {
-	if encoded == "" {
-		return nil
-	}
-	var values []string
-	if err := json.Unmarshal([]byte(encoded), &values); err != nil {
-		return nil
-	}
-	return values
 }

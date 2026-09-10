@@ -17,18 +17,15 @@ func readEnv(pid int) map[string]string {
 	if pid <= 0 {
 		return nil
 	}
-	h, err := windows.OpenProcess(windows.PROCESS_QUERY_INFORMATION|windows.PROCESS_VM_READ, false, uint32(pid))
+	h, err := openForRead(pid)
 	if err != nil {
 		return nil
 	}
 	defer func() { _ = windows.CloseHandle(h) }()
-	// A WOW64 PEB has 32-bit pointers. Do not interpret it as our native layout.
-	var childWOW64, selfWOW64 bool
-	if windows.IsWow64Process(h, &childWOW64) != nil ||
-		windows.IsWow64Process(windows.CurrentProcess(), &selfWOW64) != nil || childWOW64 != selfWOW64 {
-		return nil
-	}
 	params := readProcessParameters(h)
+	// Under 4 bytes because EnvironmentSize 0 would size data to nothing and
+	// take &data[0] straight into a panic, on the bare goroutine serving an
+	// RPC; 2 is a lone UTF-16 terminator, which no variable fits inside.
 	if params == nil || params.Environment == nil || params.EnvironmentSize < 4 ||
 		params.EnvironmentSize > maxProcessEnvBytes || params.EnvironmentSize%2 != 0 {
 		return nil

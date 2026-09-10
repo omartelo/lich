@@ -610,9 +610,9 @@ export interface QuotaWindow {
 }
 
 /** internal/quota.Plan — one provider's quota reading. Windows are empty for
- * every status other than "ok"; "unknown" is a session lich cannot identify the
- * account of — it runs a binary the user configured whose environment is out of
- * reach — where the default account's numbers would be the wrong ones. */
+ * every status other than "ok"; "unknown" withholds the reading when the
+ * session environment or its selected credential source cannot be read, where
+ * the default account's numbers would be the wrong ones. */
 export interface QuotaPlan {
   provider: string
   name: string

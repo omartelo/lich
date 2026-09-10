@@ -203,6 +203,15 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   (Git Bash, a POSIX-ish shell reached through PATH), that path still runs over a pipe, so an rc guarded the
   same way is skipped there exactly as it was everywhere before this fix, with no ConPTY wired in to close the
   gap.
+- **A session's cwd readout names the host it cannot see into, and only Unix has one to name**
+  (`internal/terminal/cwd.go`, `cwd_unix.go`, `cwd_windows.go`): the directory is polled off the terminal's
+  foreground process group, and a foreground job that is itself hosting the shell somewhere else (tmux, ssh, a
+  container) has a directory of its own that is readable and wrong. The unix readers match that job's comm
+  against `shellHosts` and publish the host with no path, so the card, its tooltip and the footer draw
+  `cwd unknown · inside tmux` rather than a real local directory nobody is standing in. Windows has no
+  foreground process group to read a comm from and so has no host to report: a session hosted elsewhere there
+  goes on naming a local path that is not where the user is typing, with nothing on screen saying so. There is
+  no Windows hardware here to build the replacement against.
 - **The worktree setup script answers to the main checkout, never the new branch**
   (`internal/project/setup.go`): improve `.lich/setup-worktree.sh` on a feature branch and fresh worktrees keep
   running the old one until the change reaches the checkout the project points at.
@@ -385,6 +394,14 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   cask's `depends_on` and the bundle's `LSMinimumSystemVersion` say 13.0 because the compiler does —
   both move with the next Go bump, and a machine below the floor is refused by Homebrew rather than
   by a crash.
+- **A history snippet folds case in ASCII, so a shouted accented word is a hit with no snippet**
+  (`internal/store/transcripts.go`, `firstMention`): the window around a match is cut in the query rather than
+  out of the whole conversation, which is what keeps a page of a hundred rows off the megabytes behind it. The
+  fold that locates the match inside that body is SQLite's `lower()`, which leaves everything outside ASCII
+  alone: measured, `index` finds `INDEX` but `índice` does not find `Índice`. The row still lists, because the
+  FTS index has an accent fold of its own and matched it, so what the reader loses is the line under the row,
+  not the row. Folding in Go over the returned window would close it, and is now cheap because the window is
+  4096 characters rather than the whole conversation.
 - **The history's branch is read live, so a row whose checkout is gone has none** (`internal/project.BranchesOf`):
   the branch a row shows is not the one it stores — a worktree keeps the name it was created with while an
   agent moves the branch inside it, so the stored snapshot dates the close and only git can say what the

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { PINNED_GROUP_KEY, ROOT_GROUP_KEY } from "./sessions"
+import { PINNED_GROUP_KEY, ROOT_GROUP_KEY } from "./sidebar-groups"
 import { readGroupCollapsed, writeGroupCollapsed } from "./group-prefs"
 
 // The suite runs in node, which has no localStorage. A fold has to survive

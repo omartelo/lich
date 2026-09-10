@@ -47,9 +47,9 @@ type Provider struct {
 // conversation by id (terminal.resumeArgs); all but Cursor CLI also have the
 // companion plugin installed into them (agentplugin.supported) — Cursor runs it
 // anyway, because it executes every Claude Code hook on the machine, which
-// docs/providers/cursor.md names along with what that costs. What still differs per
-// provider is spelled at each of those tables, and AcceptsMCPServer below is
-// the one split this file owns.
+// docs/providers/cursor.md names along with what that costs. What still differs
+// per provider is spelled at each of those tables, and AcceptsMCPServer below
+// is the one split this file owns.
 var Registry = []Provider{
 	{ID: Claude, Name: "Claude Code", Binaries: []string{"claude"}, Docs: "https://code.claude.com/docs/en/setup"},
 	{ID: Codex, Name: "Codex", Binaries: []string{"codex"}, Docs: "https://learn.chatgpt.com/docs/codex/cli"},

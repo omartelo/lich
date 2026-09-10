@@ -273,6 +273,12 @@ export function isForfeitedScheduleEvent(
   )
 }
 
+// The shape both spawn reports carry a list of names in: every element a
+// string, so one bad entry rejects the payload rather than reaching a card.
+function isNames(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((name) => typeof name === "string")
+}
+
 // skippedLinks is optional rather than required: a nil list marshals as null,
 // and an event carrying no names must still land the confinement verdict.
 export function isSandboxEvent(
@@ -282,19 +288,11 @@ export function isSandboxEvent(
     return false
   }
   const links = (data as { skippedLinks?: unknown }).skippedLinks
-  return (
-    links === undefined ||
-    links === null ||
-    (Array.isArray(links) && links.every((name) => typeof name === "string"))
-  )
+  return links === undefined || links === null || isNames(links)
 }
 
 export function isMCPEvent(data: unknown): data is { id: string; servers: string[] } {
-  if (!isIdEvent(data)) {
-    return false
-  }
-  const servers = (data as { servers?: unknown }).servers
-  return Array.isArray(servers) && servers.every((name) => typeof name === "string")
+  return isIdEvent(data) && isNames((data as { servers?: unknown }).servers)
 }
 
 export function isStatusEvent(data: unknown): data is { id: string; state: string } {

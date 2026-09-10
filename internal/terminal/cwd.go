@@ -43,6 +43,15 @@ const cwdPollInterval = 300 * time.Millisecond
 // shell you are watching is not mine": the pane, the container and the remote
 // host are all invisible from here. A wrapper nobody listed still reads as an
 // ordinary job.
+//
+// The match is on the bare command, so the four runtimes with subcommands cost
+// a false positive too: `docker ps` in a session hosts no shell and still
+// blanks the path until it exits. Accepted rather than narrowed, because the
+// only thing that separates `docker ps` from `docker exec -it x sh` is argv,
+// and argv is what this seam already refuses to read — a process rewrites its
+// own (tmux does), and reaching it costs a second per-OS mechanism. A path
+// that goes unknown for the length of a command is recoverable; one that names
+// the wrong directory with confidence is the failure this list exists for.
 var shellHosts = map[string]bool{
 	"tmux":            true,
 	"screen":          true,

@@ -100,11 +100,37 @@ func TestInstallerVerificationAndFailures(t *testing.T) {
 	if err != nil || len(files) != 1 {
 		t.Fatalf("retained downloads = %v, %v", files, err)
 	}
-	if err := stageInstaller(strings.NewReader(body), sum[:], filepath.Join(t.TempDir(), "missing", "setup.exe")); err == nil {
+	if err := stageInstaller(strings.NewReader(body), sum[:], filepath.Join(t.TempDir(), "missing", "setup.exe"), installerLimit); err == nil {
 		t.Fatal("unwritable staging directory must fail")
 	}
-	if err := stageInstaller(failingReader{}, sum[:], filepath.Join(t.TempDir(), "setup.exe")); err != io.ErrUnexpectedEOF {
+	if err := stageInstaller(failingReader{}, sum[:], filepath.Join(t.TempDir(), "setup.exe"), installerLimit); err != io.ErrUnexpectedEOF {
 		t.Fatalf("read error = %v", err)
+	}
+}
+
+func TestInstallerSizeCap(t *testing.T) {
+	body := "installer"
+	sum := sha256.Sum256([]byte(body))
+	limit := int64(len(body))
+
+	path := filepath.Join(t.TempDir(), "setup.exe")
+	if err := stageInstaller(strings.NewReader(body), sum[:], path, limit); err != nil {
+		t.Fatalf("an asset exactly at the limit must stage: %v", err)
+	}
+	if err := stageInstaller(strings.NewReader(body+"!"), sum[:], path, limit); err == nil {
+		t.Fatal("an asset past the limit must be refused")
+	}
+}
+
+// A windowed layout on an arch the installer does not ship for must stay on the
+// portable path: applyInstaller would run a bare exe with Inno's own flags.
+func TestWindowedNonAmd64IsNotAnInstallerUpdate(t *testing.T) {
+	s := &Service{goos: "windows", goarch: "arm64", exePath: windowedExe(t)}
+	if s.installerUpdate() {
+		t.Fatal("windows/arm64 routed to the installer")
+	}
+	if got := s.assetName("0.8.0"); got != "" {
+		t.Fatalf("assetName = %q, want none: no arm64 asset ships", got)
 	}
 }
 

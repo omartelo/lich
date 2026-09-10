@@ -89,6 +89,11 @@ var redirectVars = []string{
 	"ANTHROPIC_AUTH_TOKEN",
 }
 
+// accountUserVar names the Keychain account Claude Code stores its credentials
+// under on macOS (claude_storage_darwin.go). Spelled once so the cache key and
+// the reader cannot drift apart.
+const accountUserVar = "USER"
+
 // accountVars are the environment variables that decide which account a session
 // spends: Claude's own token and config dir, Codex's config dir, and the three
 // that redirect Claude away from the subscription.
@@ -96,9 +101,8 @@ var accountVars = append([]string{
 	claudeTokenVar,
 	claudeDirVar,
 	claudeSecureDirVar,
-	"HOME",
-	"USERPROFILE",
-	"USER",
+	accountHomeVar,
+	accountUserVar,
 	codexHomeVar,
 }, redirectVars...)
 
@@ -206,7 +210,9 @@ type Service struct {
 	probeURL   string
 	profileURL string
 
-	// Tests of quota responses supply a file login without accessing Keychain.
+	// claudeLogin reads the credentials a session's Claude login is stored in,
+	// a field so tests of quota responses supply a file login without reaching
+	// for the machine's Keychain. New wires it to readClaudeCredentials.
 	claudeLogin func(Account) (claudeCredentials, string)
 
 	// now is time.Now, a field so a test can age the cache without sleeping.
@@ -232,13 +238,14 @@ type reading struct {
 // New returns a Service pointed at the live endpoints.
 func New() *Service {
 	return &Service{
-		http:       &http.Client{Timeout: httpTimeout},
-		claudeURL:  claudeUsageURL,
-		codexURL:   codexUsageURL,
-		probeURL:   claudeProbeURL,
-		profileURL: claudeProfileURL,
-		now:        time.Now,
-		cache:      make(map[string]reading),
+		http:        &http.Client{Timeout: httpTimeout},
+		claudeURL:   claudeUsageURL,
+		codexURL:    codexUsageURL,
+		probeURL:    claudeProbeURL,
+		profileURL:  claudeProfileURL,
+		claudeLogin: readClaudeCredentials,
+		now:         time.Now,
+		cache:       make(map[string]reading),
 	}
 }
 

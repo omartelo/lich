@@ -57,9 +57,11 @@ func (s *Service) indexTranscript(sessionID string) {
 }
 
 // attachSnippets fills in the words that made each of these rows a hit, for the
-// ids the search matched on their conversation. It runs over the page and not
-// over the match: a snippet costs reading part of the conversation it is cut out
-// of, and a term can match more sessions than one page carries.
+// ids the search matched on their conversation. Every id is one of sessions:
+// the caller collects them out of the same loop that fills the page. It runs
+// over the page and not over the match: a snippet costs reading part of the
+// conversation it is cut out of, and a term can match more sessions than one
+// page carries.
 //
 // One query per word of the term, over the rows still without a snippet: a term
 // is almost always one word, and a session is windowed on the first of them its
@@ -85,16 +87,12 @@ func (s *Service) attachSnippets(sessions []ClosedSession, ids []string, term st
 		windows := s.conversationWindows(pending, word)
 		var missed []string
 		for _, id := range pending {
-			i, ok := row[id]
-			if !ok {
-				continue
-			}
 			cut, ok := snippet.Around(windows[id], word)
 			if !ok {
 				missed = append(missed, id)
 				continue
 			}
-			sessions[i].Snippet = cut
+			sessions[row[id]].Snippet = cut
 		}
 		pending = missed
 	}
