@@ -195,8 +195,7 @@ func (c *saidCursors) walk(id, path string, read turnReader) string {
 // cursor answers with this session's place in info, seeding a new one at the
 // file's tail: a conversation running for hours is tens of MB, and a first read
 // is paying for a panel somebody just opened. fresh says the cursor was made
-// here: nothing read before this, or a file the previous read's offset does
-// not
+// here: nothing read before this, or a file the previous read's offset does not
 // belong to (see saidCursor).
 func (c *saidCursors) cursor(id string, info os.FileInfo) (*saidCursor, bool) {
 	if cur, ok := c.at[id]; ok && os.SameFile(cur.info, info) && info.Size() >= cur.offset {
