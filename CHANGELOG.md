@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Two baked prices corrected.** An offline install billed Claude 3 Haiku's
+  hour-long cache writes at 12x Anthropic's rate, and had no price at all for
+  Claude 3 Opus's — which withheld that session's whole cost rather than
+  under-report it. The floor is now repriced from LiteLLM's table by
+  `task pricing:refresh` instead of by hand.
+
 - **An Intel Mac opens lich as a tab in the default browser.** It is the one
   build with no window of its own, and it no longer looks for Chrome, Chromium,
   Edge, Brave or Vivaldi to open a window in: lich serves itself, hands the URL

@@ -1,0 +1,75 @@
+name: pricing
+
+# The baked price floor (internal/pricing/prices.json) is what an offline install
+# bills with, so it drifts from the day it ships and nothing in a normal run
+# notices. This reprices it from LiteLLM once a month and opens a pull request
+# when a rate actually moved — never a gate, so a rate change upstream cannot
+# turn somebody else's pull request red.
+on:
+  schedule:
+    # 06:00 UTC on the 1st. Cadence is generous on purpose: published rates move
+    # rarely, and the pull request is a review, not an alert.
+    - cron: "0 6 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      # genfloor is a //go:build ignore program: it needs no frontend/dist,
+      # because it never imports the package that embeds it.
+      - name: Reprice the floor
+        run: go run internal/pricing/genfloor.go
+
+      - name: Stop when nothing moved
+        id: diff
+        run: git diff --quiet internal/pricing/prices.json && echo "changed=false" >> "$GITHUB_OUTPUT" || echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      # The suite reads the floor, so a table that arrived malformed enough to
+      # survive the parser is caught here rather than in the pull request.
+      - name: Backend pricing suite
+        if: steps.diff.outputs.changed == 'true'
+        run: go test ./internal/pricing/
+
+      - name: Open the pull request
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          branch="pricing/refresh"
+          git switch -c "$branch"
+          git add internal/pricing/prices.json
+          git commit -m "chore: reprice the baked floor from LiteLLM"
+          # Force: the branch is a rolling snapshot of the current table, not a
+          # history. A month with no review leaves one branch, not twelve.
+          git push -f origin "$branch"
+          # A pull request already open on this branch has just been updated by
+          # that push; opening a second one would fail the job for no reason.
+          if [ -n "$(gh pr list --head "$branch" --state open --json number --jq '.[].number')" ]; then
+            exit 0
+          fi
+          cat > /tmp/pr-body.md <<'BODY'
+          `task pricing:refresh`, run on a schedule. The floor is what an install with
+          no network bills with, so what changed here is what an offline session was
+          charging at the wrong rate.
+
+          Read the diff as prices, not as a bump: a rate that moved is a user-visible
+          change, and its `CHANGELOG.md` entry is yours to write before this merges.
+          BODY
+          gh pr create --head "$branch" \
+            --title "chore: reprice the baked floor from LiteLLM" \
+            --body-file /tmp/pr-body.md

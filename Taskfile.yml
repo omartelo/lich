@@ -178,6 +178,14 @@ tasks:
       - cmd: cd frontend && pnpm test
       - task: test:shell
 
+  pricing:refresh:
+    desc: Reprice internal/pricing/prices.json from LiteLLM — run it when cutting a release
+    cmds:
+      # The baked floor is what an offline install prices with, so it drifts from
+      # the day it ships. This only reprices the ids already in the file; which
+      # models the floor carries stays a hand-picked list.
+      - cmd: go run internal/pricing/genfloor.go
+
   mutation:
     desc: Mutation tests via gremlins — .gremlins.yaml, scope with -- ./internal/pkg/
     preconditions:
