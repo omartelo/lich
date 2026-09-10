@@ -13,6 +13,13 @@ describe("lastTurnNotice", () => {
     expect(lastTurnNotice("unavailable", 0)).toBe("unrecorded")
   })
 
+  // The turn ran, and the snapshot that would have shown it was dropped. Read
+  // as unrecorded it would claim the card has never had a turn; read as empty
+  // it would claim the agent changed nothing.
+  it("keeps a turn whose record was lost apart from both", () => {
+    expect(lastTurnNotice("lost", 0)).toBe("lost")
+  })
+
   // Before the first read lands, and for a session whose provider never
   // reported: neither is an empty turn.
   it("reads no answer at all as unrecorded", () => {

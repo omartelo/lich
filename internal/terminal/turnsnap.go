@@ -17,18 +17,22 @@ import (
 // diff is a panel that says so, where a stalled hook is an agent that stops.
 const snapQueueDepth = 32
 
-// The three answers LastTurnDiff can give, kept apart on the wire because the
+// The four answers LastTurnDiff can give, kept apart on the wire because the
 // panel must never dress one as another: a turn that changed nothing is a real
-// answer, and no turn on record is the absence of one.
+// answer, no turn on record is the absence of one, and a turn whose snapshot
+// lich lost is neither — it happened, and only the panel saying so tells it
+// from a turn that has yet to run.
 const (
 	turnDiffOK          = "ok"
 	turnDiffEmpty       = "empty"
 	turnDiffUnavailable = "unavailable"
+	turnDiffLost        = "lost"
 )
 
 // LastTurn is what the Review panel's "Last turn" mode reads. Diff is empty for
 // every state but "ok", and EndedAt (unix ms) is set only when there is a window
-// to date — its absence is the second signal that nothing is on record.
+// to date — its absence is the second signal that nothing is on record. "lost"
+// is the one state with a turn behind it and nothing to show for it.
 type LastTurn struct {
 	State   string `json:"state"`
 	Diff    string `json:"diff,omitempty"`
@@ -51,6 +55,9 @@ type turnPair struct {
 // snapState is one session's snapshot accounting. seq numbers the turns so a
 // snapshot landing late is filed against the turn it was taken for and no other;
 // before is the opening tree of turn seq, still empty while its job is queued.
+// lost is set by the turn that closed without leaving a record — the queue
+// dropped a job, or git refused one — and cleared by the next turn that files
+// one, so the panel can say a turn ran here rather than that none did.
 type snapState struct {
 	dir    string
 	index  string
@@ -58,6 +65,7 @@ type snapState struct {
 	open   bool
 	before string
 	last   *turnPair
+	lost   bool
 }
 
 // turnSnaps records what each session's last finished turn changed on disk, by
@@ -228,7 +236,7 @@ func (t *turnSnaps) closeTurn(id string) {
 	seq, dir, index := state.seq, state.dir, state.index
 	t.mu.Unlock()
 
-	t.submit(func() {
+	if !t.submit(func() {
 		oid, err := project.SnapshotTree(dir, index)
 		if err != nil {
 			slog.Warn("turnsnap: closing snapshot failed", "session", id, "err", err)
@@ -237,6 +245,13 @@ func (t *turnSnaps) closeTurn(id string) {
 		state, ok := t.sessions[id]
 		if ok && state.seq == seq && err == nil && state.before != "" {
 			state.last = &turnPair{before: state.before, after: oid, endedAt: time.Now()}
+		}
+		// Whichever half went missing — this snapshot, or the opening one the
+		// queue dropped — the turn ran and lich cannot show it. Saying that is
+		// the difference between a panel that reports a gap and one that reads
+		// like a session which has never had a turn.
+		if ok && state.seq == seq {
+			state.lost = state.last == nil
 		}
 		// The same seq guard the record itself answers to: a session re-tracked
 		// while this job was queued is no longer the one that asked for it, and
@@ -266,7 +281,28 @@ func (t *turnSnaps) closeTurn(id string) {
 		if filed != nil {
 			filed(id)
 		}
-	})
+	}) {
+		// The queue was full, so the job above never runs and nothing else will
+		// speak for this turn. Marked here for the same reason the record is
+		// cleared here: a dropped job leaves no goroutine behind to do it.
+		t.markLost(id, seq)
+	}
+}
+
+// markLost records that the turn numbered seq ended with no record, and tells
+// the panel to ask again. A session re-tracked since is left alone, the same
+// guard every late write in this file answers to.
+func (t *turnSnaps) markLost(id string, seq uint64) {
+	t.mu.Lock()
+	state, ok := t.sessions[id]
+	if ok && state.seq == seq {
+		state.lost = true
+	}
+	filed := t.filed
+	t.mu.Unlock()
+	if ok && filed != nil {
+		filed(id)
+	}
 }
 
 // dropTurn abandons a turn nothing will close — the CLI left mid-run. The last
@@ -295,7 +331,8 @@ func (t *turnSnaps) forget(id string) {
 
 // pair answers with the session's last closed turn and the checkout to render it
 // against. ok is false when there is nothing on record — no turn has finished
-// here, or the one that did lost a snapshot.
+// here, or the one that did lost a snapshot (see lostTurn, which tells those
+// two apart).
 func (t *turnSnaps) pair(id string) (turnPair, string, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -306,10 +343,22 @@ func (t *turnSnaps) pair(id string) (turnPair, string, bool) {
 	return *state.last, state.dir, true
 }
 
-// submit hands one snapshot to the worker, starting it on first use. A full
-// queue drops the job: the turn it belonged to then reads as unavailable, which
-// is the honest answer and not the one that says nothing changed.
-func (t *turnSnaps) submit(job func()) {
+// lostTurn is whether the last turn to close here ended without a record. Only
+// asked once pair has said there is none, which is the one moment the two are
+// worth telling apart.
+func (t *turnSnaps) lostTurn(id string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	state, ok := t.sessions[id]
+	return ok && state.lost
+}
+
+// submit hands one snapshot to the worker, starting it on first use, and
+// reports whether it was taken. A full queue drops the job, and the caller is
+// the only one left that can say so: the turn it belonged to then reads as
+// lost, which is neither the answer that says nothing changed nor the one that
+// says nothing ran.
+func (t *turnSnaps) submit(job func()) bool {
 	t.mu.Lock()
 	if t.jobs == nil {
 		t.jobs = make(chan func(), snapQueueDepth)
@@ -324,8 +373,10 @@ func (t *turnSnaps) submit(job func()) {
 
 	select {
 	case jobs <- job:
+		return true
 	default:
 		slog.Warn("turnsnap: snapshot queue full, dropping a turn's snapshot")
+		return false
 	}
 }
 
@@ -361,6 +412,9 @@ func (t *turnSnaps) indexPath(id string) (string, error) {
 func (s *Service) LastTurnDiff(id string) (LastTurn, error) {
 	pair, dir, ok := s.snaps.pair(id)
 	if !ok {
+		if s.snaps.lostTurn(id) {
+			return LastTurn{State: turnDiffLost}, nil
+		}
 		return LastTurn{State: turnDiffUnavailable}, nil
 	}
 	ended := pair.endedAt.UnixMilli()

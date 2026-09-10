@@ -200,6 +200,11 @@ type Terminal interface {
 	// peer roster, read out of the provider's own record. Empty when there is
 	// none, which is what leaves the roster on the derived name.
 	AgentName(id string) string
+	// HoldInput keeps what the person at that session types out of the
+	// submission this delivery is making, and hands it back at the prompt
+	// afterwards. The returned release is called once the Enter is through
+	// (see deliver).
+	HoldInput(id string) func()
 }
 
 // Peer is one session a caller may address: the label it is addressed by, the

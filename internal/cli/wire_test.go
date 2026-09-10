@@ -52,6 +52,9 @@ func (*wiredTerminal) QuietFor(string) time.Duration { return time.Hour }
 // derives — which is the one the wiring under test addresses.
 func (*wiredTerminal) AgentName(string) string { return "" }
 
+// Nobody is typing at these sessions, so the hold has nothing to keep back.
+func (*wiredTerminal) HoldInput(string) func() { return func() {} }
+
 func (w *wiredTerminal) Write(_, data string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()

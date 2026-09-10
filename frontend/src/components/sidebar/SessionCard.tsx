@@ -12,6 +12,7 @@ import {
   FolderOpen,
   GitBranch,
   GitPullRequestArrow,
+  Hourglass,
   Inbox,
   ListChecks,
   Pencil,
@@ -42,6 +43,7 @@ import { useSessionRelay } from "@/lib/session/use-session-relay"
 import { useSessionInbox } from "@/lib/session/use-session-inbox"
 import { useSessionTool } from "@/lib/session/use-session-tool"
 import { useSessionTodo } from "@/lib/session/use-session-todo"
+import { useHandoffHeld } from "@/lib/terminal/handoff-store"
 import { toolGlyph } from "@/lib/session/tool-glyph"
 import { toolLine } from "@/lib/session/tool-label"
 import { useGitStatus } from "@/lib/git/use-git-status"
@@ -202,6 +204,11 @@ export function SessionCard({
   // a message lands in a PTY and cleared when it is answered. null the rest of
   // the time, which is nearly always.
   const relay = useSessionRelay(session.id)
+  // Text handed to this session — a pull request's conflict, the issue a
+  // worktree was named after — still waiting for a prompt free enough to take
+  // it. The wait can be minutes, and until it ends the card looks exactly like
+  // one nothing was handed to (write-at-prompt.ts).
+  const handoffHeld = useHandoffHeld(session.id)
   // How many results this session has waiting in the relay's inbox: results of
   // tasks it delegated, uncollected. Zero — the usual case — draws nothing.
   const inbox = useSessionInbox(session.id)
@@ -463,8 +470,9 @@ export function SessionCard({
                   </span>
                 </span>
               )}
-              {/* One line, seven rungs: an open request, then a session blocked
-                  on the user, then results waiting to be collected, then how far
+              {/* One line, eight rungs: an open request, then a session blocked
+                  on the user, then a handoff waiting for this prompt, then
+                  results waiting to be collected, then how far
                   a quiet card got through its task list, then the
                   tool, then a prompt scheduled for later, then where the session
                   came from. A request in flight
@@ -473,7 +481,10 @@ export function SessionCard({
                   elsewhere in the list. A block outranks the rest for the
                   reason it needs words at all: the amber ring differs from the
                   emerald one by hue alone, so nothing else on the card says the
-                  session wants an answer. The inbox sits under those and over
+                  session wants an answer. A held handoff sits under the block
+                  and over the rest: text was handed to this session and is not
+                  at its prompt, which without a rung is indistinguishable from a
+                  click that did nothing. The inbox sits under those and over
                   the tool: mid-turn the live tool is the news, and the count
                   takes the rung when the card goes quiet — the same rule the
                   relay's own nudge follows. Task-list progress answers to that
@@ -519,6 +530,11 @@ export function SessionCard({
                   <span className="truncate font-medium text-amber-500">
                     {waitingReason || "Waiting on you"}
                   </span>
+                </span>
+              ) : handoffHeld ? (
+                <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                  <Hourglass className="size-3 shrink-0" />
+                  <span className="truncate">Something is waiting for this prompt</span>
                 </span>
               ) : status !== "busy" && inbox > 0 ? (
                 <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">

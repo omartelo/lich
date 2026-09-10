@@ -1,4 +1,5 @@
 import { Terminal } from "@/lib/rpc"
+import { handoffHolds } from "./handoff-store"
 
 // Text written into a session the moment its card exists lands wherever that
 // PTY has got to — the checkout's setup script, a provider still taking the tty
@@ -19,6 +20,10 @@ import { Terminal } from "@/lib/rpc"
 // the worse of the two, and the draft releases itself (`internal/terminal`,
 // draftIdle).
 //
+// Whatever the reason, the wait says so on the card it is waiting for
+// (handoff-store): a handoff that is held looks exactly like one that never
+// happened, and a minute of that is long enough to go looking for the bug.
+//
 // Polled from here rather than waited on in Go: the wait can be minutes, and a
 // request held open for that long is one of the browser's handful of
 // connections to this backend. A short call every quarter second is the cheaper
@@ -38,11 +43,18 @@ const LIMIT_MS = 5 * 60 * 1000
  */
 export async function writeAtPrompt(sessionId: string, text: string): Promise<void> {
   const deadline = Date.now() + LIMIT_MS
-  while (!(await Terminal.Ready(sessionId))) {
-    if (Date.now() >= deadline) {
-      throw new Error("the session never reached a prompt")
+  try {
+    while (!(await Terminal.Ready(sessionId))) {
+      handoffHolds.set(sessionId, true)
+      if (Date.now() >= deadline) {
+        throw new Error("the session never reached a prompt")
+      }
+      await new Promise((resolve) => setTimeout(resolve, POLL_MS))
     }
-    await new Promise((resolve) => setTimeout(resolve, POLL_MS))
+    await Terminal.Write(sessionId, text)
+  } finally {
+    // Whatever became of it: the mark is about text still waiting, and a
+    // handoff that landed, failed or timed out is not waiting anymore.
+    handoffHolds.set(sessionId, false)
   }
-  await Terminal.Write(sessionId, text)
 }

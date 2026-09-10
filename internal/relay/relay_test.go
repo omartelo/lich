@@ -55,6 +55,11 @@ type fakeTerminal struct {
 	// transcript the terminal service reads. Empty for a session nobody renamed,
 	// which is what puts the roster back on the derived name.
 	names map[string]string
+	// holding is whether a hold is open on that session right now, and inHold
+	// collects the writes that landed inside one — which is how a test asks
+	// whether the whole paste-to-Enter window was covered.
+	holding map[string]bool
+	inHold  map[string][]string
 }
 
 func newFakeTerminal(live ...string) *fakeTerminal {
@@ -62,7 +67,8 @@ func newFakeTerminal(live ...string) *fakeTerminal {
 		live: map[string]bool{}, writes: map[string][]string{},
 		settingUp: map[string]bool{}, typing: map[string]bool{},
 		noisy: map[string]int{}, drained: map[string]int{},
-		names: map[string]string{},
+		names:   map[string]string{},
+		holding: map[string]bool{}, inHold: map[string][]string{},
 	}
 	for _, id := range live {
 		t.live[id] = true
@@ -152,6 +158,9 @@ func (f *fakeTerminal) Write(id, data string) error {
 		f.refused++
 	} else {
 		f.writes[id] = append(f.writes[id], data)
+		if f.holding[id] {
+			f.inHold[id] = append(f.inHold[id], data)
+		}
 	}
 	hook := f.onWrite
 	f.mu.Unlock()
@@ -189,6 +198,35 @@ func (f *fakeTerminal) writesTo(id string) []string {
 
 func (f *fakeTerminal) written(id string) string {
 	return strings.Join(f.writesTo(id), "")
+}
+
+// HoldInput stands in for the terminal service keeping the user's keystrokes
+// out of a delivery's own submission (terminal.HoldInput). The fake has no
+// keyboard, so what it records is the window itself: which writes happened
+// while the hold was open.
+func (f *fakeTerminal) HoldInput(id string) func() {
+	f.mu.Lock()
+	f.holding[id] = true
+	f.mu.Unlock()
+	return func() {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		f.holding[id] = false
+	}
+}
+
+// holdOpen is whether a delivery still has that session's keyboard.
+func (f *fakeTerminal) holdOpen(id string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.holding[id]
+}
+
+// heldWrites is what a session was written while a delivery held its prompt.
+func (f *fakeTerminal) heldWrites(id string) []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.inHold[id]...)
 }
 
 // fakeEvents records what the relay announced to the window, in order.
@@ -456,6 +494,31 @@ func TestTheEnterWaitsForTheTargetToFinishTakingThePasteIn(t *testing.T) {
 	writes := term.written("s2")
 	if !strings.HasSuffix(writes, submit) {
 		t.Errorf("last write = %q, want the Enter behind the paste", writes)
+	}
+}
+
+// The paste and the Enter behind it are one submission, and the target's own
+// keyboard is held for the whole of it: anything typed in that window would be
+// sent as part of a message the person at that prompt never wrote
+// (terminal.HoldInput). The window opens before the paste and closes after the
+// Enter, which is what this reads off the fake.
+func TestTheTargetsKeyboardIsHeldForTheWholeSubmission(t *testing.T) {
+	term := newFakeTerminal("s1", "s2")
+	svc := newRelay(workspace(), term, nil)
+	svc.submitDelay = time.Millisecond
+	term.noise("s2", 3)
+
+	go svc.Send("s1", "docs", "", "run the tests", 1)
+
+	if !awaitWritten(term, "s2", submit) {
+		t.Fatal("the Enter never arrived")
+	}
+	held := term.heldWrites("s2")
+	if len(held) != 2 || !strings.HasPrefix(held[0], "\x1b[200~") || held[1] != submit {
+		t.Errorf("held writes = %q, want the paste and the Enter both inside the hold", held)
+	}
+	if term.holdOpen("s2") {
+		t.Error("the hold outlived the delivery: the prompt is the user's again")
 	}
 }
 
