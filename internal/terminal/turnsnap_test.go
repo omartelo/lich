@@ -185,8 +185,9 @@ func TestAQuietTurnDoesNotFallBackToTheOneBefore(t *testing.T) {
 
 // The same rule against a lost snapshot rather than a quiet turn: a turn whose
 // opening tree never landed — a dropped job, a git that failed — clears the
-// record instead of leaving the previous turn standing as if it were this one.
-func TestATurnWithNoOpeningSnapshotClearsTheRecord(t *testing.T) {
+// record instead of leaving the previous turn standing as if it were this one,
+// and says a turn ran here rather than that none did.
+func TestATurnWithNoOpeningSnapshotReadsAsLost(t *testing.T) {
 	svc, repo := snapRepo(t)
 	svc.snaps.track("s1", repo)
 
@@ -202,7 +203,48 @@ func TestATurnWithNoOpeningSnapshotClearsTheRecord(t *testing.T) {
 	svc.snaps.sessions["s1"].before = ""
 	svc.snaps.mu.Unlock()
 
-	closeAndWait(t, svc, "s1", turnDiffUnavailable)
+	closeAndWait(t, svc, "s1", turnDiffLost)
+}
+
+// The bullet this state exists for: the snapshot worker is busy and the queue
+// behind it is full, so the closing job is refused and nothing is ever recorded
+// for a turn that ran and changed files. It has to read as a turn whose record
+// was lost — never as a session that has not had one.
+func TestASnapshotTheQueueDroppedReadsAsLost(t *testing.T) {
+	svc, repo := snapRepo(t)
+	svc.snaps.track("s1", repo)
+
+	openAndWait(t, svc, "s1")
+	writeIn(t, repo, "a.txt", "work with nothing to show for it\n")
+
+	// One job on the worker and snapQueueDepth behind it: the next submit is
+	// dropped rather than queued.
+	held := make(chan struct{})
+	svc.snaps.submit(func() { <-held })
+	for range snapQueueDepth {
+		svc.snaps.submit(func() {})
+	}
+
+	// Read straight after the report: a dropped job leaves nothing running to
+	// wait for, which is the whole problem.
+	svc.snaps.note("s1", statusDone)
+	turn, err := svc.LastTurnDiff("s1")
+	if err != nil {
+		t.Fatalf("LastTurnDiff: %v", err)
+	}
+	if turn.State != turnDiffLost {
+		t.Errorf("a dropped snapshot reads as %q, want %q", turn.State, turnDiffLost)
+	}
+
+	// And the next turn that files a record takes the mark back down. The
+	// backlog has to clear first: a drain submitted into a queue still full is
+	// dropped like anything else.
+	close(held)
+	waitFor(t, func() bool { return len(svc.snaps.jobs) == 0 }, "the backlog to clear")
+	drainSnaps(t, svc)
+	openAndWait(t, svc, "s1")
+	writeIn(t, repo, "a.txt", "recorded like any other\n")
+	closeAndWait(t, svc, "s1", turnDiffOK)
 }
 
 // A session whose first turn is still running has nothing to show, and a
@@ -566,7 +608,7 @@ func TestARetractedTurnIsNotRestored(t *testing.T) {
 	svc.snaps.sessions["s1"].seq++
 	svc.snaps.sessions["s1"].before = ""
 	svc.snaps.mu.Unlock()
-	closeAndWait(t, svc, "s1", turnDiffUnavailable)
+	closeAndWait(t, svc, "s1", turnDiffLost)
 	drainSnaps(t, svc)
 
 	next := relaunch(t, db)

@@ -164,8 +164,11 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   disagree about which files exist), so a turn that only touched ignored files reports itself as having
   changed nothing. Every snapshot in the app runs on one FIFO worker, because git refuses a second `add`
   against an index another holds — so one session's first snapshot of a large checkout delays the next
-  session's, and a queue past `snapQueueDepth` drops a job, costing that turn its record with only the log
-  saying so. A checkout whose *first* snapshot fails is dropped outright and never asked again — the
+  session's, and a queue past `snapQueueDepth` drops a job, costing that turn its record — the panel reads
+  "lost" for it, which is a turn that ran and cannot be shown, never the "no last turn recorded" of a card
+  that has not had one. It says so for that turn alone: the next one to close files a record like any other,
+  and nothing carries the gap into the workspace database, so a lich relaunched between the two answers
+  "unrecorded" for a turn it lost before the restart. A checkout whose *first* snapshot fails is dropped outright and never asked again — the
   ordinary reason is a session opened outside a repository, but a transient failure at spawn reads the same
   and leaves that card with no last turn until it respawns. A pair read back at launch names loose objects
   no ref reaches, so a `git gc --prune` in that checkout between one run and the next leaves the panel
@@ -278,16 +281,22 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   holds the delivery back while the user has unsent input there. What it counts is printable input since the last
   Enter, escape sequences skipped — it cannot see the line, so an edit that leaves it empty by another route
   (Ctrl+W, a click into the middle of it) reads as a draft that is still there, and a delivery waits out
-  `draftIdle` for nothing. The stale-draft release is what keeps that a delay instead of a wedged relay. Two gaps
-  stay open: input arriving between the paste and its Enter still rides along — a window that is `defaultSubmitDelay`
-  at best and lasts until the target's PTY goes quiet at worst (`internal/relay`, `awaitSettled`) — and a provider
-  that takes keystrokes through anything other than this PTY is invisible here. The pull request and issue handoffs
-  wait on the same answer (`frontend/src/lib/terminal/write-at-prompt.ts`) with no Enter of their own to justify it:
-  hand a conflict to a session you left half a sentence in, and nothing appears at that prompt until the draft goes
-  stale.
+  `draftIdle` for nothing. The stale-draft release is what keeps that a delay instead of a wedged relay, and the
+  wait says so where it is happening: the pull request and issue handoffs
+  (`frontend/src/lib/terminal/write-at-prompt.ts`) wait on the same answer with no Enter of their own to justify
+  it, so while one is held its target's card carries a rung saying something is waiting for that prompt — hand a
+  conflict to a session you left half a sentence in and the card says where it went, rather than the click reading
+  as having done nothing. The mark lives in the page that is waiting, so it is only ever on the window that started
+  the handoff, and the relay's own hold is not drawn at all: a delivery held there answers to its sender, through
+  the ticket. What stays open is the provider that takes keystrokes through anything other than this PTY, which is
+  invisible to every part of this.
 - **A relayed Enter is timed against silence, not against the target** (`internal/relay`, `awaitSettled`): lich
   presses Enter once the target's PTY has been quiet for `defaultSubmitDelay`, because nothing here can read a TUI's
-  screen to know it has taken the paste in. On Windows that quiet is the whole instrument — ConPTY hands a child key
+  screen to know it has taken the paste in. The window that opens on the target's own keyboard is closed rather
+  than lived with: from the paste to the Enter its keystrokes are held and written at the prompt the Enter leaves
+  behind (`terminal.HoldInput`), so what a person types there is late by the length of the window instead of
+  submitted inside somebody else's message. Held, not dropped — but held is still not typed: an interrupt reached
+  for in that window lands after the delivery, on the turn the delivery started. On Windows that quiet is the whole instrument — ConPTY hands a child key
   events rather than bytes, the bracketed paste markers do not survive, and every provider TUI then guesses at where
   a paste ends from timing alone. A target that repaints on a timer of its own never goes quiet and gets its Enter
   at `defaultSettleLimit` regardless, which is the case this cannot tell from a paste still arriving.

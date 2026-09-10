@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"bytes"
+	"log/slog"
 	"time"
 )
 
@@ -27,6 +28,11 @@ const (
 	// budget a held-back delivery has to wait it out (relay's deliveryLimit).
 	draftIdle = time.Minute
 
+	// holdLimit bounds what HoldInput keeps back. The window is seconds and a
+	// keyboard fills nothing in that time, so anything near this is a paste —
+	// and a paste that big is being dropped by the TUI at the other end anyway.
+	holdLimit = 1 << 20
+
 	esc   = 0x1b
 	ctrlC = 0x03
 	// maxEscape bounds what is held waiting for the rest of a sequence. The
@@ -44,6 +50,79 @@ var (
 	pasteStart = []byte("\x1b[200~")
 	pasteEnd   = []byte("\x1b[201~")
 )
+
+// HoldInput keeps the person at this session's keyboard out of a submission
+// that is not theirs, and returns the release that hands their keystrokes back.
+//
+// A relayed delivery is two writes a beat apart — the paste, then the Enter
+// that sends it (internal/relay, deliver) — and everything typed in between
+// lands on the same line and is submitted as part of the relayed message.
+// Unlike a delivery that waits out a draft, this is not an omission: it is the
+// user's own text going somewhere they never sent it, and the window is theirs
+// to lose from the moment the paste lands until the target's PTY goes quiet.
+//
+// So the keystrokes are held rather than dropped, and written the moment the
+// Enter is gone: they land on the fresh prompt the relayed message left behind,
+// which is where the user was typing them. Unknown sessions hand back a release
+// that does nothing.
+//
+// Holds count rather than latch, because two senders can deliver into one
+// target at the same time and the first Enter through must not hand the second
+// delivery's window back to the keyboard. Each release is to be called once.
+func (s *Service) HoldInput(id string) func() {
+	s.mu.Lock()
+	sess, ok := s.sessions[id]
+	if ok {
+		sess.holds++
+	}
+	s.mu.Unlock()
+	if !ok {
+		return func() {}
+	}
+	return func() { s.releaseInput(id) }
+}
+
+// releaseInput ends one hold and, once it was the last, replays what was typed
+// under them in the order it arrived. The replay goes through the ordinary
+// input path — the draft clock and the interrupt reading both answer to when
+// the keys reach the PTY, not to when the window took them.
+func (s *Service) releaseInput(id string) {
+	s.mu.Lock()
+	sess, ok := s.sessions[id]
+	if !ok {
+		s.mu.Unlock()
+		return
+	}
+	sess.holds--
+	if sess.holds > 0 {
+		s.mu.Unlock()
+		return
+	}
+	held := sess.held
+	sess.held, sess.holds = nil, 0
+	s.mu.Unlock()
+	if len(held) > 0 {
+		s.onInput(id, held)
+	}
+}
+
+// holdKeys files this write against the hold, and reports whether it took it.
+// Called before anything else looks at the bytes: a keystroke that is being
+// held has not happened yet as far as the rest of this file is concerned.
+func (s *Service) holdKeys(id string, data []byte) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sess, ok := s.sessions[id]
+	if !ok || sess.holds == 0 {
+		return false
+	}
+	if len(sess.held)+len(data) > holdLimit {
+		slog.Warn("terminal: too much typed during a delivery, dropping the rest", "session", id)
+		return true
+	}
+	sess.held = append(sess.held, data...)
+	return true
+}
 
 // noteInput records whether the user is composing something at this session's
 // prompt right now, so a relayed message is not pasted into the middle of it

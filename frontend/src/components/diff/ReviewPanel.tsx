@@ -361,10 +361,11 @@ function PanelBody({
     return <Notice>Loading…</Notice>
   }
   if (source === "turn") {
-    // A turn that changed nothing and a turn nobody recorded are different
-    // answers, and each says which one it is. Conflating them would have the
-    // panel report "nothing happened" for a snapshot it simply lost, which is
-    // why the weighing is pure and tested (lastTurnNotice).
+    // A turn that changed nothing, a turn nobody recorded and a turn whose
+    // record lich lost are three different answers, and each says which one it
+    // is. Conflating them would have the panel report "nothing happened" — or
+    // "nothing ran" — for a snapshot it simply lost, which is why the weighing
+    // is pure and tested (lastTurnNotice).
     const notice = lastTurnNotice(turnState, files.length)
     if (notice === "empty") {
       return (
@@ -379,6 +380,14 @@ function PanelBody({
         <Notice>
           <span className="block text-foreground">No last turn recorded.</span>
           This fills in when a turn ends here.
+        </Notice>
+      )
+    }
+    if (notice === "lost") {
+      return (
+        <Notice>
+          <span className="block text-foreground">This turn’s record was lost.</span>A turn ended
+          here and lich could not snapshot the checkout for it. The next one is recorded as usual.
         </Notice>
       )
     }

@@ -633,12 +633,12 @@ export interface QuotaPlan {
  * reads it) and is present only for "ok"; `endedAt` is unix ms and present only
  * when there is a window to date.
  *
- * The three states are kept apart on purpose: "empty" is a turn that ran and
- * changed nothing, "unavailable" is no turn on record at all — no turn has
- * finished here yet, or its snapshot was lost. The panel must never show one as
- * the other. */
+ * The four states are kept apart on purpose: "empty" is a turn that ran and
+ * changed nothing, "unavailable" is no turn on record at all — none has
+ * finished here yet — and "lost" is a turn that ran and whose snapshot lich
+ * dropped. The panel must never show one as another. */
 export interface LastTurn {
-  state: "ok" | "empty" | "unavailable"
+  state: "ok" | "empty" | "unavailable" | "lost"
   diff?: string
   endedAt?: number
   /** The snapshot tree the diff's new side stands at — the revision the panel

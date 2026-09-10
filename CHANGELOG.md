@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **What you type while a message is being relayed into your session no longer
+  goes out with it.** A relayed message is pasted at the prompt and an Enter is
+  sent behind it, and anything typed between the two was submitted as part of
+  it. Those keystrokes are now held for the length of that window and written at
+  the prompt the message leaves behind, where they were being typed.
+
+- **A handoff that is waiting for a prompt says so on the card it is waiting
+  for.** Handing a pull request's conflicts or an issue to a session writes at
+  its prompt once there is one, and a session still installing its dependencies
+  — or one you left half a sentence at — can hold that for minutes with nothing
+  on screen to show for it. The card now carries a line saying something is
+  waiting for that prompt until it lands.
+
+- **A turn whose snapshot lich dropped reads as a turn, not as a card that never
+  had one.** Every snapshot in the app runs on one worker, and a busy enough
+  queue drops a job, leaving the Review panel's "Last turn" with nothing to
+  show. It said "No last turn recorded", the same words a fresh session gets;
+  it now says the record was lost and that the next turn is recorded as usual.
+
 - **A session name that wrapped, or followed a wide character, stopped being a
   link.** The terminal looked for other sessions' names one screen row at a
   time and counted one character per column, so a long name broken across two

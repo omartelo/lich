@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -176,5 +177,70 @@ func TestInterruptForAnUnknownSessionIsANoOp(t *testing.T) {
 	svc, _ := settled(t)
 	if svc.noteInput("nobody", []byte{ctrlC}) {
 		t.Fatal("a keystroke for a session lich does not run read as an interrupt")
+	}
+}
+
+// The window between a relayed paste and the Enter behind it. What the person
+// at that keyboard types inside it would be submitted as part of a message they
+// never sent, so it is held and written at the prompt the Enter leaves behind.
+func TestKeystrokesDuringADeliveryLandAfterIt(t *testing.T) {
+	svc, sess := settled(t)
+	pty := &shortWritePTY{chunk: 4096}
+	svc.mu.Lock()
+	sess.pty = pty
+	svc.mu.Unlock()
+
+	release := svc.HoldInput("s1")
+	if err := svc.Write("s1", "\x1b[200~relayed\x1b[201~"); err != nil {
+		t.Fatalf("the paste was refused: %v", err)
+	}
+	svc.onInput("s1", []byte("mine"))
+	if strings.Contains(pty.received.String(), "mine") {
+		t.Fatal("what the user typed went in with the relayed message")
+	}
+	if err := svc.Write("s1", "\r"); err != nil {
+		t.Fatalf("the Enter was refused: %v", err)
+	}
+	release()
+
+	want := "\x1b[200~relayed\x1b[201~\rmine"
+	if got := pty.received.String(); got != want {
+		t.Errorf("the PTY received %q, want %q", got, want)
+	}
+	// Handed back through the ordinary input path, so it is a draft at the new
+	// prompt like anything else typed there: the next delivery waits for it.
+	if svc.Ready("s1") {
+		t.Error("the handed-back keystrokes left the prompt free")
+	}
+}
+
+// A hold on a session that has gone leaves nothing behind, and its release is
+// safe to call: a delivery races the PTY exiting under it like any other write.
+func TestHoldingAGoneSessionIsHarmless(t *testing.T) {
+	svc, _ := settled(t)
+	svc.HoldInput("gone")()
+}
+
+// Two senders can deliver into the same target at once. The first Enter through
+// must not hand the keyboard back while the second delivery is still between
+// its own paste and Enter, or the keystrokes ride along with that one instead.
+func TestOverlappingDeliveriesKeepTheKeyboardHeld(t *testing.T) {
+	svc, sess := settled(t)
+	pty := &shortWritePTY{chunk: 4096}
+	svc.mu.Lock()
+	sess.pty = pty
+	svc.mu.Unlock()
+
+	first := svc.HoldInput("s1")
+	second := svc.HoldInput("s1")
+	svc.onInput("s1", []byte("mine"))
+
+	first()
+	if strings.Contains(pty.received.String(), "mine") {
+		t.Fatal("the first delivery's release handed the keys to the second one's submission")
+	}
+	second()
+	if !strings.Contains(pty.received.String(), "mine") {
+		t.Error("the keystrokes were never handed back")
 	}
 }

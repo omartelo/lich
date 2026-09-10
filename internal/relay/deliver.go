@@ -15,6 +15,10 @@ func (s *Service) deliver(sessionID, message string) error {
 	if err := s.awaitFree(sessionID); err != nil {
 		return err
 	}
+	// From here to the Enter, the prompt is this message's. Anything typed at it
+	// in between would be submitted as part of the message, so it is held and
+	// handed back at the prompt the Enter leaves behind (terminal.HoldInput).
+	defer s.term.HoldInput(sessionID)()
 	if err := s.term.Write(sessionID, paste(message)); err != nil {
 		return err
 	}

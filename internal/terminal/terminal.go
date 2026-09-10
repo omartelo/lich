@@ -190,6 +190,12 @@ type session struct {
 	draftAt    time.Time
 	escPending []byte
 	pasting    bool
+	// holds is how many relayed deliveries own this prompt until the Enter each
+	// sends behind its paste is through, and held is what the user typed while
+	// they did — replayed at the fresh prompt rather than submitted with
+	// somebody else's message. Both guarded by the service's mu. See HoldInput.
+	holds int
+	held  []byte
 	// confined records whether this PTY was spawned inside the sandbox, so Start
 	// can report it once the spawn is out of the lock. sandboxLinks rides with
 	// it: what that sandbox skipped for being a symlink, resolved by the same
@@ -413,6 +419,12 @@ func New(store Store, env []string, hub *events.Hub) *Service {
 // pasted through Write is that session's work, not this one's.
 func (s *Service) onInput(id string, data []byte) {
 	s.beatHandsOn(id, 0)
+	// Held first, and before the beat is spent on nothing: a delivery in flight
+	// owns this prompt until its Enter is through, and what was typed at it
+	// reaches the PTY from releaseInput instead (see HoldInput).
+	if s.holdKeys(id, data) {
+		return
+	}
 	if s.noteInput(id, data) {
 		s.noteInterrupt(id)
 	}
