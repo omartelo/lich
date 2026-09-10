@@ -13,6 +13,7 @@ import {
   GitBranch,
   GitPullRequestArrow,
   Inbox,
+  ListChecks,
   Pencil,
   Columns2,
   Pin,
@@ -40,6 +41,7 @@ import { useSessionAgent } from "@/lib/session/use-session-agent"
 import { useSessionRelay } from "@/lib/session/use-session-relay"
 import { useSessionInbox } from "@/lib/session/use-session-inbox"
 import { useSessionTool } from "@/lib/session/use-session-tool"
+import { useSessionTodo } from "@/lib/session/use-session-todo"
 import { toolGlyph } from "@/lib/session/tool-glyph"
 import { toolLine } from "@/lib/session/tool-label"
 import { useGitStatus } from "@/lib/git/use-git-status"
@@ -203,6 +205,10 @@ export function SessionCard({
   // How many results this session has waiting in the relay's inbox: results of
   // tasks it delegated, uncollected. Zero — the usual case — draws nothing.
   const inbox = useSessionInbox(session.id)
+  // How far the agent got through the task list it wrote for itself. null for
+  // most sessions: no list, a finished one, or a provider whose list lich
+  // cannot read (terminal.todoReaderFor).
+  const todo = useSessionTodo(session.id)
   const ToolGlyph = tool && toolGlyph(tool.name)
   // The two halves of the line, which are not always the two fields the report
   // sent: on Antigravity the tool's identity arrives in the detail, and drawing
@@ -457,8 +463,9 @@ export function SessionCard({
                   </span>
                 </span>
               )}
-              {/* One line, six rungs: an open request, then a session blocked
-                  on the user, then results waiting to be collected, then the
+              {/* One line, seven rungs: an open request, then a session blocked
+                  on the user, then results waiting to be collected, then how far
+                  a quiet card got through its task list, then the
                   tool, then a prompt scheduled for later, then where the session
                   came from. A request in flight
                   explains the whole turn — a card working because another
@@ -469,7 +476,12 @@ export function SessionCard({
                   session wants an answer. The inbox sits under those and over
                   the tool: mid-turn the live tool is the news, and the count
                   takes the rung when the card goes quiet — the same rule the
-                  relay's own nudge follows. The origin is last precisely
+                  relay's own nudge follows. Task-list progress answers to that
+                  rule for a reason of its own: the tool changes at every step
+                  and is how a card proves it is moving, while a count can sit
+                  still for minutes, so it waits for the turn to end and then
+                  answers the question a finished card leaves open, which is how
+                  much the agent stopped short of. The origin is last precisely
                   because it is never news: it says something that has been true
                   since the card was created, so it surfaces only once the card
                   is quiet, which is when somebody scanning the sidebar is
@@ -513,6 +525,16 @@ export function SessionCard({
                   <Inbox className="size-3 shrink-0" />
                   <span className="truncate font-medium text-foreground">
                     {inbox === 1 ? "1 result ready" : `${inbox} results ready`}
+                  </span>
+                </span>
+              ) : status !== "busy" && todo ? (
+                <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                  <ListChecks className="size-3 shrink-0" />
+                  <span className="truncate">
+                    <span className="font-medium tabular-nums text-foreground">
+                      {`${todo.done} of ${todo.total}`}
+                    </span>
+                    {" done"}
                   </span>
                 </span>
               ) : tool ? (
