@@ -107,8 +107,14 @@ export interface PullRequestCommit {
   headline: string
   /** The rest of the message; "" for a one-line commit. */
   body: string
-  /** The first author's login, or their name; "" when gh reports none. */
-  author: string
+  /** The GitHub account GitHub itself resolved the author's email to, and ""
+   * when it resolved none: the email belongs to no account, so the commit is
+   * attributed to nobody. Never falls back to the name — that is the fact. */
+  login: string
+  /** git's author name: free text, and no evidence of who landed the commit. */
+  name: string
+  /** git's author email, which is what GitHub did or did not resolve. */
+  email: string
   /** gh's ISO committedDate. */
   date: string
 }
@@ -140,6 +146,9 @@ export interface PullRequestDetail {
   body: string
   /** Who opened it: a login, or a display name when gh reports no login. */
   author: string
+  /** The same account without that fallback: "" rather than a display name, so
+   * it can be compared against a commit's login without inventing a mismatch. */
+  authorLogin: string
   /** gh: OPEN | CLOSED | MERGED. Only a number-addressed lookup returns a
    * non-OPEN one; the branch lookup still hides them. */
   state: string

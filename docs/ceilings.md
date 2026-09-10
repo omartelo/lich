@@ -8,9 +8,25 @@ work when nobody knows it and that the call site never shows. The mechanism and 
 - **A project's gh account governs gh, not git**: `vcs.account` (`internal/project/ghaccount.go`) puts one
   account's token in `GH_TOKEN` for every gh call lich makes for that project. A push still rides the remote's
   ssh key and signs with the global `user.email`, so a PR can be *read* by one account and its commits *land*
-  under another, with no error anywhere. The Version Control settings print both identities and never compare
-  them: noreply forms, vanity domains and org aliases make a mismatch warning a false-positive farm. lich never
-  writes `user.email`.
+  under another. lich never writes `user.email`, and the Version Control settings still print both identities
+  without comparing them — noreply forms, vanity domains and org aliases make a string comparison a
+  false-positive farm.
+  The Commits tab of the Pulls screen is where the two are finally reconciled, and only there
+  (`frontend/src/lib/pulls/commit-authors.ts`): GitHub has already resolved each commit's author email against
+  the verified addresses of every account, so its answer is set membership, not a guess. **The window is after
+  the push and before the merge.** Nothing reads before a push — the resolution does not exist until GitHub has
+  the commit — so a branch can still be built entirely under the wrong identity and only say so once its pull
+  request is open. Two things keep it there: `gh api user/emails` would answer for an unpushed commit, but it
+  needs the `user` scope that gh's own login does not request (measured: `repo, read:org, gist`) and its refusal
+  is an HTTP 404 indistinguishable from any other not-found, on a path where gh's stderr never reaches the UI;
+  and a commit's *signature* is a second identity this compares nothing about, so a commit signed by a key the
+  account does not list reads as clean.
+  The reading is also about the pull request, not about you: it compares each commit against whoever opened the
+  PR, the one identity the payload already carries. So a branch somebody else built collaboratively — a
+  teammate's commit, a Copilot-authored branch — reads as commits under another account on a PR you are only
+  reviewing. The statement is true and the tone is factual rather than an alarm, but the line does speak on pull
+  requests where nothing is wrong. Narrowing it to *your* pull requests means resolving which account lich runs
+  gh as, which `vcs.account` only answers when the project has named one.
 - **`LICH_WORKTREE_PORT` is reserved, never held** (`internal/terminal/worktreeport.go`): the number is a name the
   checkout owns, nothing binds it, and anything on the machine can take the port before the dev server starts. A
   Run card shortens that window rather than closing it — the process it starts is what binds the port, and

@@ -8,6 +8,7 @@ const detail = (over: Partial<PullRequestDetail> = {}): PullRequestDetail => ({
   title: "feat: something",
   body: "",
   author: "omartelo",
+  authorLogin: "omartelo",
   state: "OPEN",
   isDraft: false,
   mergeable: "MERGEABLE",

@@ -26,6 +26,7 @@ const DETAIL: PullRequestDetail = {
   title: "A pull request",
   body: "",
   author: "someone",
+  authorLogin: "someone",
   state: "OPEN",
   isDraft: false,
   mergeable: "MERGEABLE",
