@@ -64,9 +64,10 @@ func TestSessionMCPServersClearsOnAnEmptyList(t *testing.T) {
 	}
 }
 
-// A row written by a lich that spelled this column differently is not a crash
-// and not a guess: it reads as no servers, which is what an unspawned row says.
-func TestDecodeMCPServersRefusesWhatItCannotRead(t *testing.T) {
+// A row written by a lich that spelled one of these columns differently is not
+// a crash and not a guess: it reads as nothing, which is what an unspawned row
+// says. Both list columns are decoded through here.
+func TestDecodeStringsRefusesWhatItCannotRead(t *testing.T) {
 	for _, encoded := range []string{"", "not json", `{"lich":true}`} {
 		if got := decodeStrings(encoded); got != nil {
 			t.Errorf("decodeStrings(%q) = %v, want none", encoded, got)
