@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.49.0] - 2026-09-09
+
+> [!WARNING]
+> **If you launch lich with `--no-window`, `--browser`, `LICH_NO_WINDOW` or
+> `LICH_BROWSER`, those are gone.** lich opens only its own window now, and an
+> install that has none says so in a dialog instead of falling back to a browser
+> on the machine; `--shell` and `LICH_SHELL` point it at a window build of your own.
+
 ### Added
 
 - **The update toast shows the download.** Pressing Update & install used to
@@ -4732,7 +4740,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.48.1...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.49.0...HEAD
+[0.49.0]: https://github.com/omartelo/lich/compare/v0.48.1...v0.49.0
 [0.48.1]: https://github.com/omartelo/lich/compare/v0.48.0...v0.48.1
 [0.48.0]: https://github.com/omartelo/lich/compare/v0.47.1...v0.48.0
 [0.47.1]: https://github.com/omartelo/lich/compare/v0.47.0...v0.47.1
