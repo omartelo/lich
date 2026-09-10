@@ -59,6 +59,14 @@ describe("composeDroppedPaths", () => {
     expect(paste).toBe(`${PASTE_START}/cfg/dropped/b.png\n[lich] copy of b.png; …\n${PASTE_END}`)
   })
 
+  // The attach button has an empty notice whenever the session opens the file
+  // where it lies, and a blank line under the path is not what that means.
+  it("writes no line for a path that is the session's own", () => {
+    expect(composeDroppedPaths(["/home/u/a.ts"], false, [""])).toBe(
+      `${PASTE_START}/home/u/a.ts ${PASTE_END}`,
+    )
+  })
+
   it("keeps one line per copy in a mixed drop", () => {
     const paste = composeDroppedPaths(["/home/u/a.ts", "/cfg/dropped/b.png"], false, ["copy of b"])
 
@@ -206,17 +214,20 @@ describe("resolveDroppedFiles", () => {
 
   // A folder is the one drop with no answer: no path, and no copy to make of a
   // tree, so the refusal has to be said out loud rather than left as a drop
-  // that did nothing. Same sentence confined or not: what the session can reach
-  // is its checkout either way.
-  it.each([false, true])("says a folder cannot be handed over (confined: %s)", async (confined) => {
+  // that did nothing. One sentence per search: an unconfined session's home is
+  // searched too, and a folder under it does come back with a path, so the
+  // refusal there is that nothing was found and not that the checkout is the
+  // limit.
+  it.each([
+    [false, "folder not found under this session or your home; drop files"],
+    [true, "folders outside this sandboxed session's checkout cannot be handed over; drop files"],
+  ])("says why a folder yields no path (confined: %s)", async (confined, why) => {
     resolve.mockResolvedValue([""])
     const folder: DroppedFile = { name: "docs", size: 0, mtime: 1, dir: true, blob: null }
 
-    const result = await resolveDroppedFiles(target(confined), [folder])
+    const result = await resolveDroppedFiles(target(confined as boolean), [folder])
 
-    expect(result.skipped).toEqual([
-      "docs (folders outside the checkout cannot be handed over; drop files)",
-    ])
+    expect(result.skipped).toEqual([`docs (${why})`])
     expect(result.paths).toEqual([])
   })
 

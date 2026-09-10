@@ -111,7 +111,7 @@ export async function resolveDroppedFiles(
     // to paste the copy's path is not the drop the user made. Saying so is the
     // whole answer for a folder: it is the one drop that yields no path at all.
     if (entry.dir || !entry.blob) {
-      skipped.push(`${entry.name} (${FOLDER_REFUSED})`)
+      skipped.push(`${entry.name} (${folderRefused(target.confined)})`)
       continue
     }
     if (entry.blob.size > MAX_UPLOAD_BYTES) {
@@ -129,11 +129,21 @@ export async function resolveDroppedFiles(
   return { paths, skipped, notices }
 }
 
-// FOLDER_REFUSED is why a dropped folder yields no path. Copying a tree to
-// paste the copy's path is not the drop the user made, and a folder the session
-// cannot reach is the one drop lich has no answer for, so it says so instead
-// of dropping the entry on the floor.
-const FOLDER_REFUSED = "folders outside the checkout cannot be handed over; drop files"
+// folderRefused is why a dropped folder yields no path. Copying a tree to paste
+// the copy's path is not the drop the user made, and a folder the session
+// cannot reach is the one drop lich has no answer for, so it says so instead of
+// dropping the entry on the floor.
+//
+// Two sentences because two searches: an unconfined session's home is searched
+// too and a folder under it does come back with a path (internal/drop Resolve,
+// matches), so naming only the checkout would refuse a folder the session can
+// in fact reach. A confined session's home is never searched, so the reverse
+// sentence would name a search that did not happen.
+function folderRefused(confined: boolean): string {
+  return confined
+    ? "folders outside this sandboxed session's checkout cannot be handed over; drop files"
+    : "folder not found under this session or your home; drop files"
+}
 
 // uploadDroppedFile stores one file's bytes on the backend and answers with the
 // path of the copy and the line that goes under it. Its own endpoint, not the
@@ -179,10 +189,14 @@ export function composeDroppedPaths(
     return ""
   }
   const line = paths.map((path) => quotePath(path, isWindows)).join(" ")
-  if (notices.length === 0) {
+  // A path that is the session's own has no line to carry, and both callers
+  // have one of those: an empty notice here would paste a blank line under the
+  // path rather than nothing.
+  const lines = notices.filter((notice) => notice !== "")
+  if (lines.length === 0) {
     return bracketedPaste(`${line} `)
   }
-  return bracketedPaste(`${line}\n${notices.join("\n")}\n`)
+  return bracketedPaste(`${line}\n${lines.join("\n")}\n`)
 }
 
 // quotePath keeps a path with spaces — or anything else a shell would act on —
