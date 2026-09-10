@@ -1,5 +1,6 @@
 import type { LastTurn } from "@/lib/api-types"
 import type { SessionStatus } from "@/lib/session/session-events"
+import type { SessionKind } from "@/lib/session/sessions"
 
 // What the Review panel draws for the session's last finished turn. The four
 // answers are kept apart because conflating them is the one mistake this
@@ -37,6 +38,37 @@ export function lastTurnNotice(state: LastTurn["state"] | null, fileCount: numbe
 // offered the working tree alone, which is the whole point of the gate.
 export function turnSwitchable(everReported: boolean, hasLastTurn: boolean): boolean {
   return everReported || hasLastTurn
+}
+
+// The two providers whose CLI reports neither the start nor the end of a turn,
+// under the name a user reads in Settings, mirrored from
+// docs/hooks/session-state.md (keep in sync). Crush registers no state at all,
+// and Cursor CLI's reports are dropped by closableState, so on both of them
+// nothing ever opens a window for the panel to bracket.
+//
+// Written out one by one rather than derived, for the same reason
+// NO_FORK_PROVIDERS is (sessions.ts): a provider added to lich has to answer
+// this question on purpose instead of inheriting a claim nobody measured.
+const NO_TURN_PROVIDERS: Partial<Record<SessionKind, string>> = {
+  crush: "Crush",
+  cursor: "Cursor CLI",
+}
+
+// turnUnavailableReason is the sentence the Review panel wears where the "Last
+// turn" source is dead, and "" wherever the absence is not the provider's: a
+// shell, and a session whose provider does report but has yet to say anything.
+// That second one is a switch about to appear, and naming a provider there
+// would be a lie half a second long.
+//
+// The panel draws the dead switch under this rather than dropping the strip,
+// exactly as the card's Fork item does (SessionForkItem): a user who reviews a
+// Claude Code turn and finds no such control on their Crush card has no way to
+// learn the offer was withheld rather than missing.
+export function turnUnavailableReason(kind: SessionKind | ""): string {
+  const name = kind === "" ? undefined : NO_TURN_PROVIDERS[kind]
+  return name === undefined
+    ? ""
+    : `${name} reports neither the start nor the end of a turn, so there is no window to bracket.`
 }
 
 // saidNote is what the recap band says about whose words it is showing. The

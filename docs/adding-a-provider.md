@@ -157,6 +157,13 @@ Not optional, and all in the same PR:
   released build.
 - **`README.md`, `README.zh-CN.md`, `CLAUDE.md`** — the provider list, which is
   also the checklist rule 5 points at.
+- **The Provider support table in both READMEs** — a column, and an answer in
+  every row of it. That table is what a stranger reads before choosing a binary,
+  and nothing derives it from the code, so a column left out of it reads as a
+  provider that gives you nothing. `turnUnavailableReason`
+  (`frontend/src/lib/git/last-turn.ts`) is a hand-written list of the same shape:
+  a provider that reports no session state belongs in it, and one that starts
+  reporting has to leave.
 
 ## The gate
 

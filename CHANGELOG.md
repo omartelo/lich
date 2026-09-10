@@ -21,6 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   author's, a line above the list names the accounts they landed under and the
   addresses no account owns, while the branch can still be fixed.
 
+- **The README says what each agent actually gives you.** All eight providers run
+  the same way, but what lich can read back out of a session depends on what that
+  CLI writes down, and until now the only record of the difference was a
+  contributor document. A Provider support table now sits beside the provider
+  list, in what you see: the footer's context window, cost and plan gauge, the
+  card's spinner and bell, whether the machine stays awake, the Review tab's last
+  turn, palette search, and forking a conversation into a worktree.
+
 ### Changed
 
 - **The two sandbox grants say what they hand over.** In Settings › Sandbox, the
@@ -30,6 +38,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   this repository. The list of loaded keys is also re-read whenever the window
   regains focus, so a key added with `ssh-add` after the pane was opened is no
   longer handed over by a switch that never named it.
+
+- **The Review tab says when a provider has no last turn, instead of hiding the
+  switch.** On a Crush or Cursor CLI session the Working tree / Last turn control
+  simply never appeared, which reads the same as a bug. It is now drawn with
+  Last turn dead and a line saying that the provider reports neither the start
+  nor the end of a turn. A session whose provider does report is unchanged: its
+  switch appears as soon as it says anything.
 
 ### Fixed
 

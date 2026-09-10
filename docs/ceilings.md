@@ -190,9 +190,12 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   no ref reaches, so a `git gc --prune` in that checkout between one run and the next leaves the panel
   reporting a failure rather than an absent turn. And the boundary is the session-state contract, so
   **Crush and Cursor CLI have no last turn at all**: neither reports a state
-  (`docs/hooks/session-state.md`), so nothing ever opens or closes a window there, and neither the switch nor
-  the recap band beside it is ever drawn — a rule read off the session's own reports, not a list of providers,
-  so it corrects itself the day either one starts reporting.
+  (`docs/hooks/session-state.md`), so nothing ever opens or closes a window there, and the recap band beside it
+  is never drawn either. Whether the switch is *offered* is read off the session's own reports and corrects
+  itself the day either one starts reporting (`turnSwitchable`), but the sentence under the dead switch naming
+  the provider is a hand-written list (`turnUnavailableReason`,
+  `frontend/src/lib/git/last-turn.ts`): the two disagree, and the panel names a provider that has since started
+  reporting, until that list is moved with the contract.
 - **A finished turn is unread until its own card is watched** (`frontend/src/lib/session/session-status-store.ts`,
   `frontend/src/providers/projects.tsx`): the solid emerald ring means "back from the agent, not read yet", and it
   fades only for the session whose terminal is on screen **while the window has focus**. A card left focused in a

@@ -37,8 +37,10 @@
   [opencode](https://github.com/sst/opencode)、oh-my-pi、
   [Crush](https://github.com/charmbracelet/crush)、
   [Cursor CLI](https://cursor.com/docs/cli) 和
-  [Kiro CLI](https://kiro.dev/docs/cli/) 都是一等公民。把 lich
-  指向各自的二进制文件，这只需一次，之后选一个默认的，或者逐个会话单独指定。
+  [Kiro CLI](https://kiro.dev/docs/cli/) 在这里都以同样的方式运行。把 lich
+  指向各自的二进制文件，这只需一次，之后选一个默认的，或者逐个会话单独指定。而
+  lich 能从一个会话里*读*回什么，则因智能体而异，
+  [各智能体支持到什么程度](#各智能体支持到什么程度)是那张表。
 - **留住一个真正的终端。** 由 PTY 支撑的 shell，每个项目可以开好几个，在 GPU 上渲染
   —— 滚动缓冲区可以搜索，还能挺过整页刷新。给其中一个设一个入口命令 —— `lazygit`、
   `k9s`、`pnpm dev` —— 它每次启动都会直接进到那个工具里。底栏跟随 `cd` 并标明分支
@@ -73,6 +75,32 @@
 项目处于活跃开发中：bug 和功能需求请提到
 [Issues](https://github.com/omartelo/lich/issues)，每个版本改了什么见
 [CHANGELOG.md](CHANGELOG.md)。
+
+## 各智能体支持到什么程度
+
+每个智能体的启动方式都一样：在真实终端里拉起，按会话 id 恢复，用同一套沙箱隔离，也用
+同一套办法去找你的其他会话。不一样的是 lich 能从一个会话里**读**回什么，因为它读的是
+各家 CLI 自己写下来的东西，而没有两家写下的是同一批。
+
+| 你能看到什么 | Claude Code | Codex | Antigravity | opencode | oh-my-pi | Crush | Cursor CLI | Kiro CLI |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
+| 底栏里的上下文窗口 | 有 | 有 | 无 | 无 | 无 | 无 | 无 | 有 |
+| 底栏里的花费 | 有 | 有 | 无 | 有 | 有 | 有 | 无 | 按点数计 |
+| 套餐额度还剩多少 | 有 | 有 | 无 | 无 | 无 | 无 | 无 | 无 |
+| 一轮进行中转圈，结束后成环 | 有 | 有 | 有 | 有 | 有 | 无 | 无 | 有 |
+| 智能体卡在等你时响铃 | 有 | 有 | 无 | 有 | 无 | 无 | 无 | 无 |
+| 一轮跑着时不让机器进入空闲休眠 | 有 | 有 | 有 | 有 | 有 | 无 | 无 | 有 |
+| Review 页的 **Last turn**，带智能体自己的收尾话 | 有 | 有 | 有 | 有 | 有 | 无 | 无 | 有 |
+| 从命令面板搜索对话里说过的内容 | 有 | 有 | 有 | 有 | 有 | 有 | 无 | 有 |
+| 把一段对话分叉到新的 worktree | 有 | 有 | 无 | 有 | 无 | 无 | 无 | 无 |
+
+Crush 和 Cursor CLI 既不报告一轮的开始，也不报告结束，上面有四行是因此一起掉的：没有
+东西去开启那个窗口，卡片的转圈、响铃、Review 页的上一轮，以及让机器不休眠的那次占用，
+都无从谈起。Review 页会在会话上直接说明这一点，而不是让你自己去发现那个切换从来没出现
+过。Kiro CLI 按点数而不是按美元计费，所以那个数字只有它自己的底栏能看到。
+
+每一处缺口都是刻意的，没有一处是 lich 藏起了 CLI 已经报告的东西，
+[`docs/ceilings.md`](docs/ceilings.md) 写着每一处背后量到了什么。
 
 ## 安装
 
@@ -155,7 +183,7 @@ task test     # Go 与前端测试套件
 task package   # bin/ 下生成 .deb + .rpm + Arch .pkg.tar.zst
 ```
 
-在 lich 已经跑着的七个之外再加一个智能体 CLI，是唯一一处会落到两个仓库、十几个文件里
+在 lich 已经跑着的八个之外再加一个智能体 CLI，是唯一一处会落到两个仓库、十几个文件里
 的改动：[`docs/adding-a-provider.md`](docs/adding-a-provider.md) 就是那张地图。
 
 ## 赞助

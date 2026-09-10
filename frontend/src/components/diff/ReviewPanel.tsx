@@ -6,7 +6,12 @@ import type { LastSaid, LastTurn } from "@/lib/api-types"
 import { onAppEvent } from "@/lib/app-events"
 import { readDiffSource, writeDiffSource, type DiffSource } from "@/lib/dock-prefs"
 import { discardTargets, parseDiff, type DiffFile } from "@/lib/git/diff"
-import { lastTurnNotice, saidNote, turnSwitchable } from "@/lib/git/last-turn"
+import {
+  lastTurnNotice,
+  saidNote,
+  turnSwitchable,
+  turnUnavailableReason,
+} from "@/lib/git/last-turn"
 import { addReviewComment } from "@/lib/review-comments"
 import { ProjectService, Terminal } from "@/lib/rpc"
 import { useActiveSession } from "@/lib/session/use-active-session"
@@ -45,13 +50,17 @@ const LAST_TURN_HINT =
 // the project root. The dock (RightDock) owns the surrounding chrome: width,
 // full screen, the tab bar and the close button.
 export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
-  const { sessionId, path, hasLastTurn } = useActiveSession()
+  const { sessionId, path, kind, hasLastTurn } = useActiveSession()
   const inject = useInject(sessionId)
   const status = useGitStatus(path)
   // The source switch is earned, not assumed: a provider that never reports its
   // state and holds no record has no turn to bracket, so it is offered the
   // working tree alone (turnSwitchable).
   const reported = useSessionEverReported(sessionId)
+  // Where that is standing rather than momentary, the strip is still drawn and
+  // the dead option carries the reason, so the absence is read once instead of
+  // being inferred from a control that never appears (turnUnavailableReason).
+  const unavailable = turnUnavailableReason(kind)
   // The recap band reads the last thing the agent said, which mid-turn is the
   // previous turn's, and the band says so rather than leaving the reader to the
   // card's spinner (saidNote).
@@ -209,7 +218,14 @@ export function ReviewPanel({ bulk }: { bulk: DiffBulk }) {
 
   return (
     <div className="flex h-full flex-col">
-      {switchable && <SourceRow source={source} onSource={changeSource} endedAt={endedAt} />}
+      {(switchable || unavailable !== "") && (
+        <SourceRow
+          source={source}
+          onSource={changeSource}
+          endedAt={endedAt}
+          unavailable={switchable ? "" : unavailable}
+        />
+      )}
       {source === "turn" && said !== "" && <SaidBand text={said} note={saidNote(sessionStatus)} />}
       <div className="flex-1 overflow-y-auto">
         <PanelBody
@@ -268,41 +284,53 @@ interface SourceRowProps {
   onSource: (source: DiffSource) => void
   /** When the shown turn's window closed (unix ms), or null when none is. */
   endedAt: number | null
+  /** Why "Last turn" is dead here, "" while it is live (turnUnavailableReason). */
+  unavailable: string
 }
 
 // SourceRow is the strip above the file list holding the source switch — the
 // same shape the Code tab gives its filter field, so the two tabs read as
 // siblings rather than as two different panels.
-function SourceRow({ source, onSource, endedAt }: SourceRowProps) {
+function SourceRow({ source, onSource, endedAt, unavailable }: SourceRowProps) {
   const age = useAge(source === "turn" ? endedAt : null)
+  const dead = unavailable !== ""
   return (
-    <div className="flex shrink-0 items-center gap-2 border-b border-border p-1.5">
-      <ToggleGroup
-        value={[source]}
-        onValueChange={(next) => next[0] && onSource(next[0] as DiffSource)}
-        spacing={1}
-        aria-label="Which changes to show"
-        className="border border-border p-[0.1875rem]"
-      >
-        <ToggleGroupItem value="worktree" size="sm" className="h-6 px-2.5 text-xs">
-          Working tree
-        </ToggleGroupItem>
-        <ToggleGroupItem
-          value="turn"
-          size="sm"
-          className="h-6 px-2.5 text-xs"
-          title={LAST_TURN_HINT}
+    // The reason goes on a line of its own rather than beside the switch: the
+    // dock resizes down to MIN_REM, where a sentence sharing the row with the
+    // toggle group has nowhere to go but through it.
+    <div className="flex shrink-0 flex-col gap-1 border-b border-border p-1.5">
+      <div className="flex items-center gap-2">
+        <ToggleGroup
+          value={[source]}
+          onValueChange={(next) => next[0] && onSource(next[0] as DiffSource)}
+          spacing={1}
+          aria-label="Which changes to show"
+          className="border border-border p-[0.1875rem]"
         >
-          Last turn
-        </ToggleGroupItem>
-      </ToggleGroup>
-      {/* The one thing the panel can state without claiming authorship: when
-          the window closed. Absent while there is no window to date, which is
-          also what tells an empty turn from an unrecorded one at a glance. */}
-      {age !== "" && (
-        <span className="ml-auto shrink-0 pr-1 text-[0.6875rem] text-muted-foreground">
-          ended {age} ago
-        </span>
+          <ToggleGroupItem value="worktree" size="sm" className="h-6 px-2.5 text-xs">
+            Working tree
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="turn"
+            size="sm"
+            className="h-6 px-2.5 text-xs"
+            disabled={dead}
+            title={dead ? unavailable : LAST_TURN_HINT}
+          >
+            Last turn
+          </ToggleGroupItem>
+        </ToggleGroup>
+        {/* The one thing the panel can state without claiming authorship: when
+            the window closed. Absent while there is no window to date, which is
+            also what tells an empty turn from an unrecorded one at a glance. */}
+        {age !== "" && (
+          <span className="ml-auto shrink-0 pr-1 text-[0.6875rem] text-muted-foreground">
+            ended {age} ago
+          </span>
+        )}
+      </div>
+      {dead && (
+        <span className="px-1 pb-0.5 text-[0.6875rem] text-muted-foreground">{unavailable}</span>
       )}
     </div>
   )

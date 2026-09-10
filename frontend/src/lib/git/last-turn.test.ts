@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { lastTurnNotice, saidNote, turnSwitchable } from "./last-turn"
+import { lastTurnNotice, saidNote, turnSwitchable, turnUnavailableReason } from "./last-turn"
 
 describe("lastTurnNotice", () => {
   it("draws the diff only when there is one to draw", () => {
@@ -52,6 +52,36 @@ describe("turnSwitchable", () => {
   // on record there is none to show: the working tree alone.
   it("withholds the switch from a session with neither", () => {
     expect(turnSwitchable(false, false)).toBe(false)
+  })
+})
+
+describe("turnUnavailableReason", () => {
+  // The two the session-state contract leaves out, each named so the panel says
+  // whose limit this is rather than reporting a blank of its own.
+  it("names the provider on the two that report no turn", () => {
+    expect(turnUnavailableReason("crush")).toContain("Crush")
+    expect(turnUnavailableReason("cursor")).toContain("Cursor CLI")
+  })
+
+  // The sentence has to say what is missing, not only who is missing it: a name
+  // alone beside a dead control explains nothing.
+  it("says what the absence costs", () => {
+    expect(turnUnavailableReason("crush")).toContain("no window to bracket")
+  })
+
+  // A provider that does report is silent here even before its first report:
+  // its switch is seconds away, and a sentence blaming it would be wrong by the
+  // time it was read.
+  it("says nothing for a provider that reports", () => {
+    expect(turnUnavailableReason("claude")).toBe("")
+    expect(turnUnavailableReason("kiro")).toBe("")
+  })
+
+  // A shell has no agent whose turns could be missed, and no active session at
+  // all is not a provider limit either.
+  it("says nothing where there is no provider to blame", () => {
+    expect(turnUnavailableReason("shell")).toBe("")
+    expect(turnUnavailableReason("")).toBe("")
   })
 })
 
