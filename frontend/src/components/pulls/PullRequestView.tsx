@@ -493,7 +493,9 @@ export function PullRequestView({
         ) : (
           <div className="h-full overflow-y-auto">
             {tab === "checks" && <PullsChecks checks={detail.checkRuns} />}
-            {tab === "commits" && <PullsCommits commits={detail.commits} />}
+            {tab === "commits" && (
+              <PullsCommits commits={detail.commits} authorLogin={detail.authorLogin} />
+            )}
             {tab === "conversation" && (
               <PullsConversation
                 pull={{ projectId, number: detail.number }}

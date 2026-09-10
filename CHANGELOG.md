@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The Commits tab says which GitHub account each commit actually landed
+  under.** A project's GitHub account governs what lich asks `gh`; it has never
+  governed the push, which still signs with your global `user.email`. So a pull
+  request could be read by one account and its commits land under another, or
+  under no account at all, and nothing said a word. Each commit row now shows
+  the account GitHub itself resolved the author's email to — GitHub checks it
+  against every account's verified addresses, so noreply forms, vanity domains
+  and organisation aliases all resolve correctly — and a commit belonging to no
+  account is marked as one. When the commits are not all the pull request
+  author's, a line above the list names the accounts they landed under and the
+  addresses no account owns, while the branch can still be fixed.
+
 ### Changed
 
 - **The two sandbox grants say what they hand over.** In Settings › Sandbox, the
