@@ -579,12 +579,15 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   that mode from their install script, since nfpm cannot mark one file of the window's tree setuid, so `rpm -V`
   and `pacman -Qkk` report a mode mismatch on it; the AUR package carries the mode itself. Where it has
   neither, the browser process would abort at its zygote, so
-  the shell asks first, the way Chromium does (a fork trying `CLONE_NEWUSER`, the helper checked for root and
-  4755, never as root; the `CHROME_DEVEL_SANDBOX` helper Chromium also accepts for a binary the user owns is
-  not asked) and opens with `--no-sandbox`. Only a package can own that helper root: a tarball unpacked as
-  the user cannot, and an AppImage's squashfs mounts nosuid. On a desktop that denies unprivileged user
-  namespaces — Ubuntu's AppArmor policy, over every unconfined binary — either install therefore runs
-  unsandboxed and carries Chrome's "stability and security will suffer" bar, which is the truth about it.
+  the shell asks first, the way Chromium does (a fork that enters a user namespace, denies setgroups, maps
+  its own uid and gid, drops its capabilities and enters another; the helper checked for root and 4755;
+  never as root; the `CHROME_DEVEL_SANDBOX` helper Chromium also accepts for a binary the user owns is not
+  asked) and opens with `--no-sandbox`. Every step of the fork counts: Ubuntu's AppArmor policy, over every
+  unconfined binary, lets the first `unshare` succeed and denies the maps, so a probe that stops at
+  `CLONE_NEWUSER` promises a sandbox Chromium then refuses. Only a package can own that helper root: a
+  tarball unpacked as the user cannot, and an AppImage's squashfs mounts nosuid. On such a desktop either
+  install therefore runs unsandboxed and carries Chrome's "stability and security will suffer" bar, which
+  is the truth about it.
   Windows and macOS run with `no_sandbox` and the same bar everywhere: the Windows sandbox needs
   `cef_sandbox` linked into the executable and the macOS one a helper app initialising it, and neither is
   wired.
