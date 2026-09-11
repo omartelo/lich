@@ -74,6 +74,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   combining accent underlined the wrong columns. The match now runs over the
   whole logical line and maps back to the cells the characters really occupy.
 
+- **The dock resizes from its whole edge while a file is open.** Opening a file
+  in the Code tab laid its preview over the panel's drag handle, so only the
+  strip beside the tabs still resized the dock. The handle now sits above the
+  preview.
+
 ## [0.49.0] - 2026-09-09
 
 > [!WARNING]
