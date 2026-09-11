@@ -66,6 +66,7 @@ type Page interface {
 	Info(ctx context.Context) (PageInfo, error)
 	Click(ctx context.Context, t Target) error
 	Type(ctx context.Context, text string, clear bool, t Target) error
+	Press(ctx context.Context, key string, t Target) error
 	Screenshot(ctx context.Context, dest string) error
 	Reload(ctx context.Context) error
 	Back(ctx context.Context) error

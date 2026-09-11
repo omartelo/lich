@@ -75,6 +75,23 @@ var browserTools = []mcpTool{
 		},
 	},
 	{
+		Name: "browser_press",
+		Description: "Press one named key in this session's browser (Enter, Tab, Escape, " +
+			"Backspace, Delete, Space, ArrowUp/Down/Left/Right, Home, End, PageUp, PageDown). " +
+			"Real key event, not typed text — use browser_type for that. Optional target " +
+			"focuses first, as for browser_type.",
+		Schema: schema(map[string]any{
+			"key":      property("string", "Named key: Enter, Tab, Escape, …"),
+			"index":    property("integer", "Index from the last browser_info."),
+			"selector": property("string", "CSS selector."),
+			"x":        property("number", "Viewport X."),
+			"y":        property("number", "Viewport Y."),
+		}, "key"),
+		Run: func(c *client, a mcpArgs) (string, error) {
+			return mcpBrowserVoid(c, "browser.Press", []any{a.text("key"), mcpTarget(a)}, shortCall)
+		},
+	},
+	{
 		Name: "browser_screenshot",
 		Description: "Capture this session's page to a PNG file and return the path. Do not " +
 			"inline the bytes. Optional path; otherwise lich writes one next to the browser profile.",

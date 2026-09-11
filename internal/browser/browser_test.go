@@ -158,6 +158,9 @@ func TestActionsNeedABrowserAndRecordOnThePage(t *testing.T) {
 	if err := s.Type("s", "hello", true, Target{}); err != nil {
 		t.Fatal(err)
 	}
+	if err := s.Press("s", "Enter", Target{}); err != nil {
+		t.Fatal(err)
+	}
 	dest, err := s.Screenshot("s", "")
 	if err != nil {
 		t.Fatal(err)
@@ -187,6 +190,9 @@ func TestActionsNeedABrowserAndRecordOnThePage(t *testing.T) {
 	if len(p.typed) != 1 || p.typed[0].text != "hello" || !p.typed[0].clear {
 		t.Fatalf("typed = %+v", p.typed)
 	}
+	if len(p.pressed) != 1 || p.pressed[0].key != "Enter" {
+		t.Fatalf("pressed = %+v", p.pressed)
+	}
 	if p.reloads != 1 || p.backs != 1 || p.forwards != 1 {
 		t.Fatalf("nav = reload %d back %d forward %d", p.reloads, p.backs, p.forwards)
 	}
@@ -202,6 +208,19 @@ func TestClickRequiresATarget(t *testing.T) {
 	}
 	if err := s.Click("s", Target{}); err == nil {
 		t.Fatal("click with no target succeeded")
+	}
+}
+
+func TestPressRejectsUnknownKey(t *testing.T) {
+	s := testService(t, &fakeLauncher{})
+	if _, err := s.Open("s", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Press("s", "Ctrl+A", Target{}); err == nil {
+		t.Fatal("unknown key was allowed")
+	}
+	if err := s.Press("s", "", Target{}); err == nil {
+		t.Fatal("empty key was allowed")
 	}
 }
 

@@ -45,6 +45,44 @@ func TestBrowserClickSendsATarget(t *testing.T) {
 	}
 }
 
+func TestBrowserPressSendsKeyAndOptionalTarget(t *testing.T) {
+	f := newFakeLich(t, `null`)
+
+	code, _, stderr := run(t, f, "browser", "press", "--index", "2", "Enter")
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+	call := f.only(t)
+	if call.method != "browser.Press" {
+		t.Errorf("method = %q", call.method)
+	}
+	if len(call.args) != 3 || call.args[0] != "s1" || call.args[1] != "Enter" {
+		t.Errorf("args = %v", call.args)
+	}
+	target, _ := call.args[2].(map[string]any)
+	if target["index"] != float64(2) {
+		t.Errorf("target = %v", call.args[2])
+	}
+}
+
+func TestMCPBrowserPressCallsPress(t *testing.T) {
+	f := newFakeLich(t, `null`)
+
+	replies := speak(t, f, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
+		{"name":"browser_press","arguments":{"key":"Tab"}}}`)
+	text, failed := textOf(t, replies[0])
+	if failed {
+		t.Fatalf("tool reported a failure: %s", text)
+	}
+	call := f.only(t)
+	if call.method != "browser.Press" {
+		t.Errorf("method = %q", call.method)
+	}
+	if len(call.args) != 3 || call.args[0] != "s1" || call.args[1] != "Tab" {
+		t.Errorf("args = %v", call.args)
+	}
+}
+
 func TestBrowserRefusesWithoutASession(t *testing.T) {
 	f := newFakeLich(t, `null`)
 	var stdout, stderr bytes.Buffer

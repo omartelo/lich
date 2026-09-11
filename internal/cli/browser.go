@@ -26,6 +26,8 @@ func (c *client) browser(args []string) error {
 		return c.browserClick(args[1:])
 	case "type":
 		return c.browserType(args[1:])
+	case "press":
+		return c.browserPress(args[1:])
 	case "screenshot":
 		return c.browserScreenshot(args[1:])
 	case "navigate":
@@ -112,6 +114,23 @@ func (c *client) browserType(args []string) error {
 		return err
 	}
 	return c.call("browser.Type", []any{owner, text, *clear, tf.target()}, shortCall, nil)
+}
+
+func (c *client) browserPress(args []string) error {
+	flags := newFlagSet("browser")
+	tf := registerTarget(flags)
+	if err := c.parse(flags, args); err != nil {
+		return err
+	}
+	key := strings.Join(flags.Args(), " ")
+	if key == "" {
+		return usageError("browser")
+	}
+	owner, err := c.browserOwner()
+	if err != nil {
+		return err
+	}
+	return c.call("browser.Press", []any{owner, key, tf.target()}, shortCall, nil)
 }
 
 func (c *client) browserScreenshot(args []string) error {

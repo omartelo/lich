@@ -96,7 +96,7 @@ Never poll for results. A send that outlives its wait hands back a ticket and yo
 
 When a [lich] message carrying a ticket arrives at YOUR prompt, you are the worker: do the task, then answer with ` + relay.ToolReply + ` — a concise report (what was done, where, what remains), never a transcript.
 
-This session also has a browser of its own (browser_* tools): the same Chromium window Browser tab opens on this card, not the lich UI. Open it, read the page, click, type, screenshot. Screenshots are files — never paste their bytes into a reply.`
+This session also has a browser of its own (browser_* tools): the same Chromium window Browser tab opens on this card, not the lich UI. Open it, read the page, click, type, press named keys (Enter/Tab/Escape/…), screenshot. Screenshots are files — never paste their bytes into a reply.`
 
 // serveMCP runs the stdio server until its input ends.
 func (c *client) serveMCP(args []string) error {

@@ -229,6 +229,7 @@ func TestMCPListsEveryTool(t *testing.T) {
 		"browser_info":       {},
 		"browser_click":      {},
 		"browser_type":       {"text"},
+		"browser_press":      {"key"},
 		"browser_screenshot": {},
 		"browser_navigate":   {"url"},
 		"browser_reload":     {},
@@ -237,7 +238,7 @@ func TestMCPListsEveryTool(t *testing.T) {
 		"browser_scroll":     {},
 		"browser_list":       {},
 		"browser_close":      {},
-		"rename_session": {"label"},
+		"rename_session":     {"label"},
 	}
 	// The read-only ones, which a client may auto-allow. wait_for_answer is
 	// not among them: collecting drains the inbox.

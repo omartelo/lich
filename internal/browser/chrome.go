@@ -101,6 +101,19 @@ func (p *chromePage) Type(ctx context.Context, text string, clear bool, t Target
 	}))
 }
 
+func (p *chromePage) Press(ctx context.Context, key string, t Target) error {
+	seq, err := keySequence(key)
+	if err != nil {
+		return err
+	}
+	if !t.empty() {
+		if err := p.Click(ctx, t); err != nil {
+			return err
+		}
+	}
+	return p.run(ctx, chromedp.KeyEvent(seq))
+}
+
 func (p *chromePage) Screenshot(ctx context.Context, dest string) error {
 	var buf []byte
 	if err := p.run(ctx, chromedp.FullScreenshot(&buf, 90)); err != nil {

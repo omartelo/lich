@@ -86,6 +86,17 @@ func (s *Service) Type(id, text string, clear bool, t Target) error {
 	})
 }
 
+// Press sends one named key (Enter, Tab, Escape, …) as a real key event.
+// An optional target is focused first, the same way Type focuses before typing.
+func (s *Service) Press(id, key string, t Target) error {
+	if _, err := keySequence(key); err != nil {
+		return err
+	}
+	return s.act(id, func(p Page, ctx context.Context) error {
+		return p.Press(ctx, key, t)
+	})
+}
+
 // Screenshot writes a PNG to dest (created if empty: inside the profile dir)
 // and returns that path. The bytes stay off the transcript.
 func (s *Service) Screenshot(id, dest string) (string, error) {

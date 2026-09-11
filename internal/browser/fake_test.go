@@ -15,6 +15,7 @@ type fakePage struct {
 	navigations []string
 	clicks      []Target
 	typed       []typed
+	pressed     []pressed
 	reloads     int
 	backs       int
 	forwards    int
@@ -30,6 +31,11 @@ type typed struct {
 	text  string
 	clear bool
 	t     Target
+}
+
+type pressed struct {
+	key string
+	t   Target
 }
 
 func (p *fakePage) Alive() bool {
@@ -83,6 +89,13 @@ func (p *fakePage) Type(_ context.Context, text string, clear bool, t Target) er
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.typed = append(p.typed, typed{text: text, clear: clear, t: t})
+	return nil
+}
+
+func (p *fakePage) Press(_ context.Context, key string, t Target) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.pressed = append(p.pressed, pressed{key: key, t: t})
 	return nil
 }
 

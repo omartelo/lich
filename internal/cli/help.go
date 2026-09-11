@@ -88,7 +88,7 @@ var commands = []command{
 		name: "browser",
 		args: "<verb> [args]",
 		about: "Drive this session's browser — the same window Browser tab opens.\n" +
-			"Verbs: open [url], info, click, type, screenshot [path], navigate <url>,\n" +
+			"Verbs: open [url], info, click, type, press <key>, screenshot [path], navigate <url>,\n" +
 			"reload, back, forward, scroll, list, close.",
 	},
 	{

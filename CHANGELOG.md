@@ -12,9 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A session can open a real browser the agent drives.** Right-click a session
   card and pick **Browser tab** to open a Chromium window of that session's
   own — the same page `lich browser` and the `browser_*` MCP tools inspect,
-  click, type and screenshot. It is a second Chromium on the machine (never
-  lich-shell / the UI window), and closing it does not quit lich. `file:` and
-  `javascript:` URLs are refused, and form values never enter the transcript.
+  click, type, press named keys (Enter, Tab, Escape, …) and screenshot. It is
+  a second Chromium on the machine (never lich-shell / the UI window), and
+  closing it does not quit lich. `file:` and `javascript:` URLs are refused,
+  and form values never enter the transcript.
 
 - **The Commits tab says which GitHub account each commit actually landed
   under.** A project's GitHub account governs what lich asks `gh`; it has never

@@ -36,7 +36,9 @@ target `LICH_SESSION_ID`, not a pool of ids.
 `http`, `https`, `about:blank`. Not `file:`, `javascript:`, `data:`, `chrome:`.
 Page-info never serializes form control values (passwords, recovery phrases);
 agents get `filled` / `checked`. Screenshots are files, not base64 in the
-transcript. Click and type are real input events, not `element.click()`.
+transcript. Click, type and press are real input events, not `element.click()`
+or `el.value = …`. `press` is named keys only (Enter, Tab, Escape, arrows, …);
+text still goes through `type`.
 
 ## Providers
 
