@@ -574,7 +574,11 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   `lich doctor` names the window a launch would open.
 - **The window's own sandbox needs an install a package manager made** (`shell/src/main.rs`, the kurogane
   fork's `no_sandbox`): Chromium confines the window's subprocesses in a user namespace, or through the
-  setuid helper beside `lich-shell`. Where it has neither, the browser process would abort at its zygote, so
+  setuid helper in `cef/`, beside `libcef.so` (not beside `lich-shell`: a helper there that is not root-owned
+  4755 aborts the browser process whatever sits elsewhere). The packages nfpm builds (deb, rpm, archlinux) set
+  that mode from their install script, since nfpm cannot mark one file of the window's tree setuid, so `rpm -V`
+  and `pacman -Qkk` report a mode mismatch on it; the AUR package carries the mode itself. Where it has
+  neither, the browser process would abort at its zygote, so
   the shell asks first, the way Chromium does (a fork trying `CLONE_NEWUSER`, the helper checked for root and
   4755, never as root; the `CHROME_DEVEL_SANDBOX` helper Chromium also accepts for a binary the user owns is
   not asked) and opens with `--no-sandbox`. Only a package can own that helper root: a tarball unpacked as
