@@ -407,8 +407,8 @@ func runChromium(term *terminal.Service, configDir string, extra []string, coord
 		// doing nothing (#409). Best effort — where no dialog backend answers,
 		// the log line above still has the story.
 		_ = zenity.Error(fmt.Sprintf(
-			"lich could not open its window.\n\n%v\n\nLog: %s",
-			err, logging.Path(filepath.Join(configDir, "lich"))),
+			"lich could not open its window.\n\n%s\n\nLog: %s",
+			chromium.Why(err), logging.Path(filepath.Join(configDir, "lich"))),
 			zenity.Title("lich"))
 		os.Exit(1)
 	}

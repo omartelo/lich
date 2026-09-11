@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A theme whose name does not fit its card can be read in full.** The theme
+  picker cuts long names and repository captions to the width of the card, and
+  nothing showed the rest. Hovering a card now shows both in a tooltip.
+
+- **The line above Version Control in Settings is a straight rule.** It was the
+  top border of the entry itself, so it bent at the entry's rounded corners and
+  the highlight of the open section filled the gap above it. It is a separator
+  of its own now.
+
+## [0.50.0] - 2026-09-11
+
 ### Added
 
 - **The Commits tab says which GitHub account each commit actually landed
@@ -74,10 +87,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   combining accent underlined the wrong columns. The match now runs over the
   whole logical line and maps back to the cells the characters really occupy.
 
+- **The window opens on Ubuntu instead of dying at launch.** Where the desktop
+  denies unprivileged user namespaces, which is Ubuntu's AppArmor policy,
+  Chromium confines the window through its setuid sandbox helper. The deb, rpm
+  and AUR packages installed that helper root-owned and 4755 beside the
+  window's binary, but Chromium reads the copy beside its own library, found it
+  without the setuid bit and aborted: no window, and `trace/breakpoint trap` in
+  lich's log. The packages now set the mode on the copy Chromium reads;
+  installing the release over the previous one is enough.
+
+- **The window opens from a tarball on Ubuntu instead of dying at launch.**
+  Ubuntu 23.10 and later let a program enter a user namespace and then refuse
+  what a sandbox does inside it. The window only checked the first part, so it
+  expected Chromium's sandbox to work; Chromium checked the rest, fell back to
+  its setuid helper, which a tarball you unpacked cannot own as root, and
+  aborted with `trace/breakpoint trap` in lich's log. The window now asks every
+  question Chromium asks and, where the sandbox cannot run, opens without it
+  under Chrome's "stability and security will suffer" bar.
+
 - **The dock resizes from its whole edge while a file is open.** Opening a file
   in the Code tab laid its preview over the panel's drag handle, so only the
   strip beside the tabs still resized the dock. The handle now sits above the
   preview.
+
+- **A window that fails to open says why.** When lich's window died on start,
+  the error dialog and `lich.log` named only the signal it died of, such as
+  "trace/breakpoint trap", while the reason the window printed went to a
+  terminal that a launch from the app menu does not have. The dialog now shows
+  the line the window died on, and the log keeps the last lines it wrote, so a
+  `lich rage` bundle carries them too. A second launch that fails to bring the
+  open window forward logs them the same way.
 
 ## [0.49.0] - 2026-09-09
 
@@ -4812,7 +4851,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.49.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.50.0...HEAD
+[0.50.0]: https://github.com/omartelo/lich/compare/v0.49.0...v0.50.0
 [0.49.0]: https://github.com/omartelo/lich/compare/v0.48.1...v0.49.0
 [0.48.1]: https://github.com/omartelo/lich/compare/v0.48.0...v0.48.1
 [0.48.0]: https://github.com/omartelo/lich/compare/v0.47.1...v0.48.0

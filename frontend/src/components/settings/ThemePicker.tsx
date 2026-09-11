@@ -238,31 +238,34 @@ interface ThemeCardProps {
 function ThemeCard({ name, caption, selected, preview, onSelect, actions }: ThemeCardProps) {
   return (
     <div className="group relative w-[9.5rem] shrink-0">
-      <button
-        type="button"
-        onClick={onSelect}
-        aria-current={selected}
-        className={cn(
-          "block w-full rounded-md text-left outline-none",
-          "focus-visible:ring-2 focus-visible:ring-ring",
-        )}
-      >
-        {/* The ring belongs to the interface, not to the theme being previewed,
-            so it is drawn on the padding around the miniature and in the
-            interface's own foreground. Over the miniature and in --ring it
-            vanished on any theme whose ring is close to its own background,
-            which is most of them. The padding is always there, so selecting a
-            card never resizes it. */}
-        <span
-          className={cn("block rounded-lg p-1", selected && "ring-2 ring-inset ring-foreground/70")}
+      <Tooltip>
+        <TooltipTrigger
+          type="button"
+          onClick={onSelect}
+          aria-current={selected}
+          className={cn(
+            "block w-full rounded-md text-left outline-none",
+            "focus-visible:ring-2 focus-visible:ring-ring",
+          )}
         >
-          <span className="block overflow-hidden rounded-md">{preview}</span>
-        </span>
-        <span className="mt-1.5 flex items-baseline gap-1.5">
-          <span className="truncate text-xs font-medium text-foreground">{name}</span>
-          <span className="truncate text-[0.6875rem] text-muted-foreground">{caption}</span>
-        </span>
-      </button>
+          <span
+            className={cn(
+              "block rounded-lg p-1",
+              selected && "ring-2 ring-inset ring-foreground/70",
+            )}
+          >
+            <span className="block overflow-hidden rounded-md">{preview}</span>
+          </span>
+          <span className="mt-1.5 flex items-baseline gap-1.5">
+            <span className="truncate text-xs font-medium text-foreground">{name}</span>
+            <span className="truncate text-[0.6875rem] text-muted-foreground">{caption}</span>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          {name}
+          <span className="opacity-70">{caption}</span>
+        </TooltipContent>
+      </Tooltip>
       {/* Update and remove ride the card rather than a row of their own: they
           belong to one theme, and only an imported theme has them. */}
       {actions && (

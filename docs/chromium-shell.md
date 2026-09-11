@@ -205,7 +205,7 @@ taskbar group the running window under the pinned icon. The sandbox stays
 off there, as kurogane runs it, so the binary is a plain exe rather than CEF's
 `bootstrap.exe` loading a DLL; Linux is the one platform whose window runs
 sandboxed — from a package, where the deb, rpm and AUR install Chromium's
-setuid helper root-owned 4755 beside `lich-shell` for the desktops that deny
+setuid helper root-owned 4755 beside `libcef.so` for the desktops that deny
 unprivileged user namespaces (`docs/ceilings.md`). Built and smoke-tested on
 the CI runner only.
 

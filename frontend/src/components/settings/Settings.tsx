@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { Fragment, useEffect, useMemo, useState } from "react"
 import type { ComponentType, KeyboardEvent, ReactNode } from "react"
 import { useParams } from "react-router-dom"
 import {
@@ -21,6 +21,7 @@ import { VcsToolsSetting } from "./VcsToolsSetting"
 import { UpdatesSettings } from "./UpdatesSettings"
 import { HelpSettings } from "./HelpSettings"
 import { SearchInput } from "@/components/common/SearchInput"
+import { Separator } from "@/components/ui/separator"
 import {
   readSettingsProvider,
   readSettingsQuery,
@@ -206,23 +207,24 @@ export function Settings() {
   const providerName = providers.find((provider) => provider.id === openProvider)?.name ?? ""
 
   const navButton = (section: Section) => (
-    <button
-      key={section.id}
-      type="button"
-      onClick={() => openSection(section.id)}
-      className={cn(
-        "flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-accent-foreground",
-        section.seam && "mt-2 border-t border-border pt-3",
-        current.id === section.id && "bg-accent text-accent-foreground",
-      )}
-    >
-      <section.icon className="size-4 shrink-0" />
-      {sectionLabel(section.id)}
-      {/* Where you are, when the pane goes a level deeper than the nav does. */}
-      {section.id === "providers" && current.id === "providers" && providerName && (
-        <span className="ml-auto truncate text-xs opacity-70">{providerName}</span>
-      )}
-    </button>
+    <Fragment key={section.id}>
+      {section.seam && <Separator className="my-1.5" />}
+      <button
+        type="button"
+        onClick={() => openSection(section.id)}
+        className={cn(
+          "flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-accent-foreground",
+          current.id === section.id && "bg-accent text-accent-foreground",
+        )}
+      >
+        <section.icon className="size-4 shrink-0" />
+        {sectionLabel(section.id)}
+        {/* Where you are, when the pane goes a level deeper than the nav does. */}
+        {section.id === "providers" && current.id === "providers" && providerName && (
+          <span className="ml-auto truncate text-xs opacity-70">{providerName}</span>
+        )}
+      </button>
+    </Fragment>
   )
 
   return (

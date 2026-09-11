@@ -572,15 +572,32 @@ work when nobody knows it and that the call site never shows. The mechanism and 
   no window, and an Apple Silicon window that exits with an error inside `startupGrace` (30 s, because a
   segfault is reported only after its core dump is written) hands the URL to the default browser instead.
   `lich doctor` names the window a launch would open.
+- **Only a window that exits with an error leaves its stderr in the log** (`internal/chromium/stderr.go`): the
+  window's stderr still reaches lich's own, and a failed exit, of the window or of the launch that focuses it,
+  carries its last 20 lines into `lich.log`, with the first three FATAL or "Check failed" lines kept ahead of
+  them once they scroll out; the dialog shows only those lines, or the last three. Nothing is logged as it
+  comes, because a healthy start already writes Fontconfig, GPU and D-Bus warnings, so a window that misbehaves
+  and keeps running leaves nothing behind. The stream is a pipe the window's subprocesses inherit, and a clean
+  close waits up to `stderrDrain` (2 s) for them to let go of it (10 ms, measured on Linux). Windows takes the
+  same path unmeasured: whether Chromium writes its FATAL lines to stderr there, rather than only to its own
+  debug log, has not been seen, so the tail may hold no more than `lich-shell` prints itself;
+  `lich -- --enable-logging=stderr` asks Chromium for them.
 - **The window's own sandbox needs an install a package manager made** (`shell/src/main.rs`, the kurogane
   fork's `no_sandbox`): Chromium confines the window's subprocesses in a user namespace, or through the
-  setuid helper beside `lich-shell`. Where it has neither, the browser process would abort at its zygote, so
-  the shell asks first, the way Chromium does (a fork trying `CLONE_NEWUSER`, the helper checked for root and
-  4755, never as root; the `CHROME_DEVEL_SANDBOX` helper Chromium also accepts for a binary the user owns is
-  not asked) and opens with `--no-sandbox`. Only a package can own that helper root: a tarball unpacked as
-  the user cannot, and an AppImage's squashfs mounts nosuid. On a desktop that denies unprivileged user
-  namespaces — Ubuntu's AppArmor policy, over every unconfined binary — either install therefore runs
-  unsandboxed and carries Chrome's "stability and security will suffer" bar, which is the truth about it.
+  setuid helper in `cef/`, beside `libcef.so` (not beside `lich-shell`: a helper there that is not root-owned
+  4755 aborts the browser process whatever sits elsewhere). The packages nfpm builds (deb, rpm, archlinux) set
+  that mode from their install script, since nfpm cannot mark one file of the window's tree setuid, so `rpm -V`
+  and `pacman -Qkk` report a mode mismatch on it; the AUR package carries the mode itself. Where it has
+  neither, the browser process would abort at its zygote, so
+  the shell asks first, the way Chromium does (a fork that enters a user namespace, denies setgroups, maps
+  its own uid and gid, drops its capabilities and enters another; the helper checked for root and 4755;
+  never as root; the `CHROME_DEVEL_SANDBOX` helper Chromium also accepts for a binary the user owns is not
+  asked) and opens with `--no-sandbox`. Every step of the fork counts: Ubuntu's AppArmor policy, over every
+  unconfined binary, lets the first `unshare` succeed and denies the maps, so a probe that stops at
+  `CLONE_NEWUSER` promises a sandbox Chromium then refuses. Only a package can own that helper root: a
+  tarball unpacked as the user cannot, and an AppImage's squashfs mounts nosuid. On such a desktop either
+  install therefore runs unsandboxed and carries Chrome's "stability and security will suffer" bar, which
+  is the truth about it.
   Windows and macOS run with `no_sandbox` and the same bar everywhere: the Windows sandbox needs
   `cef_sandbox` linked into the executable and the macOS one a helper app initialising it, and neither is
   wired.

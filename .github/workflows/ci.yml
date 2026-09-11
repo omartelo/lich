@@ -113,6 +113,35 @@ jobs:
         working-directory: shell
         run: cargo test --release
 
+      # This runner enforces Ubuntu's AppArmor policy on user namespaces, the
+      # desktop the window died on at launch: the namespace can be entered and
+      # the id maps inside it are denied. Nobody can make an assembled tree's
+      # helper setuid, so the window has to open unsandboxed and stay up rather
+      # than abort at its zygote with 133.
+      - name: Window opens under Ubuntu's user namespace policy
+        if: runner.os == 'Linux'
+        working-directory: shell
+        run: |
+          if [ "$(sysctl -n kernel.apparmor_restrict_unprivileged_userns)" != 1 ]; then
+            echo "::error::the runner no longer restricts user namespaces, so this step proves nothing"
+            exit 1
+          fi
+          # rust-cache can restore a target/ without the runtime the build script copies.
+          test -f target/release/libcef.so || cargo clean --release -p cef-dll-sys
+          cargo build --release
+          ../build/linux/shell/assemble.sh target/release "$RUNNER_TEMP/shell"
+          log="$RUNNER_TEMP/shell.log"
+          status=0
+          timeout 20 env -u DISPLAY -u WAYLAND_DISPLAY "$RUNNER_TEMP/shell/lich-shell" \
+            --ozone-platform=headless --user-data-dir="$RUNNER_TEMP/profile" --url=about:blank \
+            > "$log" 2>&1 || status=$?
+          # 124 is timeout's own: the window was still up after 20 seconds.
+          if [ "$status" != 124 ] || ! grep -q "opening the window unsandboxed" "$log"; then
+            echo "::error::the window did not open unsandboxed (exit $status)"
+            cat "$log"
+            exit 1
+          fi
+
   # The backend suite on the OSes the linux job cannot speak for. The
   # cross-compile step above proves every target still builds; only a real runner
   # proves it still passes — v0.18.0 shipped a path guard that read a rooted path
