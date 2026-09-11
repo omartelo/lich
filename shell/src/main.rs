@@ -317,22 +317,34 @@ fn helper_path(exe: &std::path::Path) -> std::path::PathBuf {
     exe.with_file_name("cef").join("chrome-sandbox")
 }
 
-/// Chromium's own probe (sandbox::Credentials::CanCreateProcessInNewUserNS):
-/// a child tries to enter a new user namespace, and its exit status is the
-/// answer. Asked from a process, not read from a sysctl, because what denies
-/// the namespace on Ubuntu is an AppArmor policy on unconfined processes, which
-/// is what lich-shell is and a probe binary with a profile of its own is not.
+/// Chromium's own probe (sandbox::Credentials::CanCreateProcessInNewUserNS),
+/// step for step: a child enters a new user namespace, denies setgroups, maps
+/// its own gid and uid into it, drops every capability and enters one more; its
+/// exit status is the answer. Entering alone answers nothing: Ubuntu's AppArmor
+/// policy lets the unshare through and denies the maps inside it. Asked from a
+/// process, not read from a sysctl, because that policy covers unconfined
+/// processes, which is what lich-shell is and a probe binary with a profile of
+/// its own is not.
 #[cfg(target_os = "linux")]
 fn can_create_user_namespace() -> bool {
+    // Everything that allocates or stats happens before the fork.
+    // SAFETY: geteuid and getegid have no preconditions.
+    let (uid_map, gid_map) = unsafe { (id_map(libc::geteuid()), id_map(libc::getegid())) };
+    let deny_setgroups = std::path::Path::new("/proc/self/setgroups").exists();
     // SAFETY: called before CEF starts, while this is the only thread, so the
-    // child is a clean copy; it calls nothing but unshare and _exit.
+    // child is a clean copy; it makes nothing but raw syscalls and _exit.
     unsafe {
         let pid = libc::fork();
         if pid < 0 {
             return false;
         }
         if pid == 0 {
-            let entered = libc::unshare(libc::CLONE_NEWUSER) == 0;
+            let entered = libc::unshare(libc::CLONE_NEWUSER) == 0
+                && (!deny_setgroups || write_proc(c"/proc/self/setgroups", b"deny"))
+                && write_proc(c"/proc/self/gid_map", gid_map.as_bytes())
+                && write_proc(c"/proc/self/uid_map", uid_map.as_bytes())
+                && drop_capabilities()
+                && libc::unshare(libc::CLONE_NEWUSER) == 0;
             libc::_exit(if entered { 0 } else { 1 });
         }
         let mut status = 0;
@@ -340,6 +352,51 @@ fn can_create_user_namespace() -> bool {
             && libc::WIFEXITED(status)
             && libc::WEXITSTATUS(status) == 0
     }
+}
+
+/// The one line an unprivileged process may write to its own id map: the id
+/// inside the namespace is the id outside it, one wide (user_namespaces(7)).
+#[cfg(target_os = "linux")]
+fn id_map(id: u32) -> String {
+    format!("{id} {id} 1\n")
+}
+
+/// One write to a /proc file, all of it or nothing, with async-signal-safe
+/// calls only: it runs in the probe's forked child.
+#[cfg(target_os = "linux")]
+fn write_proc(path: &std::ffi::CStr, content: &[u8]) -> bool {
+    // SAFETY: path is NUL-terminated and content outlives the write.
+    unsafe {
+        let fd = libc::open(path.as_ptr(), libc::O_WRONLY | libc::O_CLOEXEC);
+        if fd < 0 {
+            return false;
+        }
+        let written = libc::write(fd, content.as_ptr().cast(), content.len());
+        libc::close(fd);
+        usize::try_from(written).is_ok_and(|n| n == content.len())
+    }
+}
+
+/// capset(2) with every set empty, so the probe's second unshare is asked by a
+/// process holding none of the capabilities its first namespace granted.
+#[cfg(target_os = "linux")]
+fn drop_capabilities() -> bool {
+    // linux/capability.h: version 3 reads two data blocks of three u32 sets
+    // (effective, permitted, inheritable); pid 0 is the calling process.
+    const LINUX_CAPABILITY_VERSION_3: u32 = 0x2008_0522;
+    #[repr(C)]
+    struct Header {
+        version: u32,
+        pid: libc::c_int,
+    }
+    let header = Header {
+        version: LINUX_CAPABILITY_VERSION_3,
+        pid: 0,
+    };
+    let data = [0u32; 6];
+    // SAFETY: header and data follow the kernel's version 3 layout and outlive
+    // the call.
+    unsafe { libc::syscall(libc::SYS_capset, &raw const header, data.as_ptr()) == 0 }
 }
 
 /// The AppUserModelID is Windows's WM_CLASS: the taskbar groups a process's
@@ -503,6 +560,13 @@ mod tests {
             helper_path(std::path::Path::new("/usr/lib/lich/shell/lich-shell")),
             std::path::Path::new("/usr/lib/lich/shell/cef/chrome-sandbox")
         );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn maps_only_its_own_id_into_the_namespace() {
+        assert_eq!(id_map(1000), "1000 1000 1\n");
+        assert_eq!(id_map(u32::MAX - 1), "4294967294 4294967294 1\n");
     }
 
     #[test]

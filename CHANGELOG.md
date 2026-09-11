@@ -83,6 +83,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lich's log. The packages now set the mode on the copy Chromium reads;
   installing the release over the previous one is enough.
 
+- **The window opens from a tarball on Ubuntu instead of dying at launch.**
+  Ubuntu 23.10 and later let a program enter a user namespace and then refuse
+  what a sandbox does inside it. The window only checked the first part, so it
+  expected Chromium's sandbox to work; Chromium checked the rest, fell back to
+  its setuid helper, which a tarball you unpacked cannot own as root, and
+  aborted with `trace/breakpoint trap` in lich's log. The window now asks every
+  question Chromium asks and, where the sandbox cannot run, opens without it
+  under Chrome's "stability and security will suffer" bar.
+
 - **The dock resizes from its whole edge while a file is open.** Opening a file
   in the Code tab laid its preview over the panel's drag handle, so only the
   strip beside the tabs still resized the dock. The handle now sits above the
