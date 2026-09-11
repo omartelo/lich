@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A theme whose name does not fit its card can be read in full.** The theme
+  picker cuts long names and repository captions to the width of the card, and
+  nothing showed the rest. Hovering a card now shows both in a tooltip.
+
+- **The line above Version Control in Settings is a straight rule.** It was the
+  top border of the entry itself, so it bent at the entry's rounded corners and
+  the highlight of the open section filled the gap above it. It is a separator
+  of its own now.
+
 ## [0.50.0] - 2026-09-11
 
 ### Added
