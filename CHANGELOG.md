@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.50.0] - 2026-09-11
+
 ### Added
 
 - **The Commits tab says which GitHub account each commit actually landed
@@ -96,15 +98,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in the Code tab laid its preview over the panel's drag handle, so only the
   strip beside the tabs still resized the dock. The handle now sits above the
   preview.
-
-- **The window opens on Ubuntu instead of dying at launch.** Where the desktop
-  denies unprivileged user namespaces, which is Ubuntu's AppArmor policy,
-  Chromium confines the window through its setuid sandbox helper. The deb, rpm
-  and AUR packages installed that helper root-owned and 4755 beside the
-  window's binary, but Chromium reads the copy beside its own library, found it
-  without the setuid bit and aborted: no window, and `trace/breakpoint trap` in
-  lich's log. The packages now set the mode on the copy Chromium reads;
-  installing the release over the previous one is enough.
 
 - **A window that fails to open says why.** When lich's window died on start,
   the error dialog and `lich.log` named only the signal it died of, such as
@@ -4847,7 +4840,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU, costing ~40ms per frame in a full-size window. Under Xwayland typing is
   stall-free at full frame rate.
 
-[Unreleased]: https://github.com/omartelo/lich/compare/v0.49.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich/compare/v0.50.0...HEAD
+[0.50.0]: https://github.com/omartelo/lich/compare/v0.49.0...v0.50.0
 [0.49.0]: https://github.com/omartelo/lich/compare/v0.48.1...v0.49.0
 [0.48.1]: https://github.com/omartelo/lich/compare/v0.48.0...v0.48.1
 [0.48.0]: https://github.com/omartelo/lich/compare/v0.47.1...v0.48.0
