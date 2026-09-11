@@ -217,10 +217,9 @@ dies at startup falls back to. `lich-shell` sits beside `lich` in
 `Contents/MacOS`, because macOS reads a process's bundle off its executable's
 path and only a process inside the bundle is `Lich.app` to the Dock, to
 Cmd-Tab and to the menu bar; the framework goes to `Contents/Frameworks`,
-where kurogane looks for it (upstream's `seal-of-approval/distribution`
-branch, commit
-[53d51ba](https://github.com/0x48piraj/kurogane/commit/53d51ba7d234161f8709109dcb8d6395f38c7bb4),
-carried on the fork meanwhile; lich's #13 was closed as covered). CEF's
+where kurogane looks for it (upstream master since
+[53d51ba](https://github.com/0x48piraj/kurogane/commit/53d51ba7d234161f8709109dcb8d6395f38c7bb4);
+lich's #13 was closed as covered). CEF's
 subprocesses run as the five helper apps beside the framework (`Lich
 Helper` and the Renderer, GPU, Plugin and Alerts variants, each a copy of
 the binary under an `LSUIElement` plist), the way CEF's own samples lay
